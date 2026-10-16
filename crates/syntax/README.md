@@ -148,7 +148,9 @@ App Server 从旧 Rope 快照生成这些范围的 UTF-16 facts edits，避免�
 结构范围，再补缩进和 region。`*.tags.scm` 使用 `@definition.*` 与 `@name` 提供语法大纲。
 HTML/Markdown 等嵌入语言的编辑器折叠和大纲复用高亮的 included-range parser，坐标保持在宿主文档中。
 Git rebase、ignore、Bazelrc 等逐行格式提供大纲，不制造没有结构意义的折叠。
-本 crate 编译时嵌入查询，并由 Cargo 依赖静态链接 grammar。
+本 crate 编译时嵌入 Ash 查询，通过固定版本的 `ash-grammars` 绑定静态链接预编译语法库。
+构建入口统一下载、校验目标平台资源；不再编译各个语法的 C 源码。详见
+[`third_party/ash-grammars`](../../third_party/ash-grammars/README.md)。
 
 ## Rope 坐标与原子更新
 

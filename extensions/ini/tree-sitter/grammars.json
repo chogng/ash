@@ -1,21 +1,9 @@
 [
   {
     "name": "ini",
-    "source": {
-      "crate": "tree-sitter-ini",
-      "version": "1.4.0",
-      "root": "."
-    },
-    "wasm": {
-      "path": "tree-sitter/ini.wasm",
-      "sha256": "8b83c303fda1f353b91a682c58f2edf1e27c90966521c6d49f8233d7ffc9206a"
-    },
     "highlights": ["queries/ini.scm"],
     "tags": ["queries/ini.tags.scm"],
     "injections": [],
-    "rust": {
-      "language": "tree_sitter_ini::LANGUAGE"
-    },
     "languages": [
       {
         "id": "ini",
@@ -29,21 +17,9 @@
   },
   {
     "name": "properties",
-    "source": {
-      "crate": "tree-sitter-properties",
-      "version": "0.3.0",
-      "root": "."
-    },
-    "wasm": {
-      "path": "tree-sitter/properties.wasm",
-      "sha256": "0663dbf04ef6514814e17ef4e95e51f69972d716f3d10879440febc02178aa94"
-    },
     "highlights": ["queries/properties.scm"],
     "tags": ["queries/properties.tags.scm"],
     "injections": [],
-    "rust": {
-      "language": "tree_sitter_properties::LANGUAGE"
-    },
     "languages": [
       {
         "id": "properties",

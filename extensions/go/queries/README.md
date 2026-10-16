@@ -9,8 +9,7 @@ The Web host loads the packaged WASM assets. Rust links the grammar dependencies
 - Upstream: [tree-sitter/tree-sitter-go](https://github.com/tree-sitter/tree-sitter-go)
 - Revision: `1547678a9da59885853f5f5cc8a99cc203fa2e2c`
 - Grammar version: `0.25.0`
-- Rust dependency: `tree-sitter-go`
-- WASM: [`../tree-sitter/go.wasm`](../tree-sitter/go.wasm)
+- Parser artifacts: [pinned Ash grammar release](../../../third_party/ash-grammars/README.md)
 - License: [go.LICENSE.txt](go.LICENSE.txt)
 
 | Local file                 | Upstream source                                                                                                                              |

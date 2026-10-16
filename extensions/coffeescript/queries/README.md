@@ -6,7 +6,7 @@ Rust and browser hosts use the same pinned parser and composed queries. WASM is 
 - Revision: `3bb4dbd68ca926c76b3baadb529da4de3726ea37`
 - Source: `tree-sitter-coffeescript@0.0.1`
 - License: [coffeescript.LICENSE.txt](coffeescript.LICENSE.txt)
-- WASM: [coffeescript.wasm](../tree-sitter/coffeescript.wasm)
+- Parser artifacts: [pinned Ash grammar release](../../../third_party/ash-grammars/README.md)
 
 The upstream binding targets Tree-sitter 0.20; a local LanguageFn binding serves the same parser in Rust and WASM. Ash maintains these compatibility fixes in the package-owned grammar and scanner:
 

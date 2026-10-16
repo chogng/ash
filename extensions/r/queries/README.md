@@ -7,7 +7,7 @@ Rust and browser hosts use the same pinned parser and composed queries. WASM is 
 - Source: `tree-sitter-r@1.3.0`
 - Source archive SHA-256: `ffc9954ec870dcad6cffdd302b405306c68cf031ed79a78cd9746f6740d9fe20`
 - License: [r.LICENSE.txt](r.LICENSE.txt)
-- WASM: [r.wasm](../tree-sitter/r.wasm)
+- Parser artifacts: [pinned Ash grammar release](../../../third_party/ash-grammars/README.md)
 
 Highlights retain upstream capture names.
 

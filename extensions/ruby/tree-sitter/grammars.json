@@ -1,22 +1,10 @@
 [
   {
     "name": "ruby",
-    "source": {
-      "crate": "tree-sitter-ruby",
-      "version": "0.23.1",
-      "root": "."
-    },
-    "wasm": {
-      "path": "tree-sitter/ruby.wasm",
-      "sha256": "9cbc1c8d9f16d079e2df65b335bd313265a955441416f5c96aafbc1ec9e8ea7e"
-    },
     "highlights": ["queries/ruby.scm"],
     "tags": ["queries/ruby.tags.scm"],
     "folds": ["queries/ruby.folds.scm"],
     "injections": [],
-    "rust": {
-      "language": "tree_sitter_ruby::LANGUAGE"
-    },
     "languages": [
       {
         "id": "ruby",

@@ -57,12 +57,7 @@ impl LanguageConfiguration {
             "highlights",
             definition.highlights,
         )?;
-        let tags = query(
-            syntax_language,
-            &language,
-            "tags",
-            &definition.tags.join("\n"),
-        )?;
+        let tags = query(syntax_language, &language, "tags", &(definition.tags)())?;
         let editor_highlights = query(
             syntax_language,
             &language,
@@ -118,7 +113,8 @@ impl LanguageConfiguration {
 struct LanguageDefinition {
     language: Language,
     highlights: &'static str,
-    tags: &'static [&'static str],
+    // Resolve upstream bundle queries only when compiling an uncached configuration.
+    tags: fn() -> String,
     editor_highlights: &'static str,
     injections: &'static str,
     folds: &'static str,

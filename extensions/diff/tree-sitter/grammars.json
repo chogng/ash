@@ -1,21 +1,9 @@
 [
   {
     "name": "diff",
-    "source": {
-      "crate": "tree-sitter-diff",
-      "version": "0.1.0",
-      "root": "."
-    },
-    "wasm": {
-      "path": "tree-sitter/diff.wasm",
-      "sha256": "ea63bb8738c8923e4a359ecbd255cc34f2f9195ce9852ea21bd0fa809d181619"
-    },
     "highlights": ["queries/diff.scm"],
     "tags": ["queries/diff.tags.scm"],
     "injections": ["queries/diff.injections.scm"],
-    "rust": {
-      "language": "tree_sitter_diff::LANGUAGE"
-    },
     "languages": [
       {
         "id": "diff",

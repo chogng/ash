@@ -1,22 +1,10 @@
 [
   {
     "name": "java",
-    "source": {
-      "crate": "tree-sitter-java",
-      "version": "0.23.5",
-      "root": "."
-    },
-    "wasm": {
-      "path": "tree-sitter/java.wasm",
-      "sha256": "17086690536c498d31ce4523df71fc04320f7c6d1ba6b8dd9d3a09914b035e9d"
-    },
     "highlights": ["queries/java.scm"],
     "tags": ["queries/java.tags.scm"],
     "folds": ["queries/java.folds.scm"],
     "injections": [],
-    "rust": {
-      "language": "tree_sitter_java::LANGUAGE"
-    },
     "languages": [
       {
         "id": "java",

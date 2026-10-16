@@ -74,6 +74,10 @@
     {
       "source": "third_party/livekit-rust-sdks/NOTICE",
       "destination": "ash-resources/licenses/livekit-rust-sdks/NOTICE"
+    },
+    {
+      "source": "third_party/ash-grammars/THIRD_PARTY_NOTICES.txt",
+      "destination": "ash-resources/licenses/ash-grammars/THIRD_PARTY_NOTICES.txt"
     }
   ]
 }

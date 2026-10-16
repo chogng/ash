@@ -9,8 +9,7 @@ The Web host loads the packaged WASM assets. Rust links the grammar dependencies
 - Upstream: [DerekStride/tree-sitter-sql](https://github.com/DerekStride/tree-sitter-sql)
 - Revision: `7b51ecda191d36b92f5a90a8d1bc3faef1c7b8b8`
 - Grammar version: `0.3.11`
-- Rust dependency: `tree-sitter-sequel`
-- WASM: [`../tree-sitter/sql.wasm`](../tree-sitter/sql.wasm)
+- Parser artifacts: [pinned Ash grammar release](../../../third_party/ash-grammars/README.md)
 - License: [sql.LICENSE.txt](sql.LICENSE.txt)
 
 | Local file                         | Upstream source                                                                                                                               |

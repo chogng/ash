@@ -1,21 +1,9 @@
 [
   {
     "name": "starlark",
-    "source": {
-      "crate": "tree-sitter-starlark",
-      "version": "1.3.0",
-      "root": "."
-    },
-    "wasm": {
-      "path": "tree-sitter/starlark.wasm",
-      "sha256": "5b584a36ef5618f6dae83a8a71d766ebf5fcb0a79f37e72bac9a765d931341a6"
-    },
     "highlights": ["queries/starlark.scm"],
     "tags": ["queries/starlark.tags.scm"],
     "injections": ["queries/starlark.injections.scm"],
-    "rust": {
-      "language": "tree_sitter_starlark::LANGUAGE"
-    },
     "languages": [
       {
         "id": "starlark",
@@ -29,21 +17,9 @@
   },
   {
     "name": "bazelrc",
-    "source": {
-      "crate": "tree-sitter-bazelrc",
-      "version": "0.1.0",
-      "root": "."
-    },
-    "wasm": {
-      "path": "tree-sitter/bazelrc.wasm",
-      "sha256": "ed08603b090a7706f0ac3111b92c0cb2b0fed7d4cc4d2db24c46e1e261ba193d"
-    },
     "highlights": ["queries/bazelrc.scm"],
     "tags": ["queries/bazelrc.tags.scm"],
     "injections": [],
-    "rust": {
-      "language": "tree_sitter_bazelrc::LANGUAGE"
-    },
     "languages": [
       {
         "id": "bazelrc",

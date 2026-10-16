@@ -1,6 +1,6 @@
 # Tree-sitter resources
 
-Rust and the browser use the same versioned parsers and query files. WASM assets are built with Tree-sitter CLI 0.26.3 and wasi-sdk 29.
+Rust and the browser use the same versioned parsers and query files. WASM assets are prepared from the pinned Ash grammar release.
 
 ## c
 
@@ -10,7 +10,7 @@ Rust and the browser use the same versioned parsers and query files. WASM assets
 - Source archive SHA-256: `a9b2eb57a55fed6b00812912e730b7a275cf4fe98bfd6a5d76263d4438371728`
 - Highlight query: [queries/highlights.scm](https://github.com/tree-sitter/tree-sitter-c/blob/b780e47fc780ddc8da13afa35a3f4ed5c157823d/queries/highlights.scm)
 - Local highlight query: [c.scm](c.scm)
-- WASM: [c.wasm](../tree-sitter/c.wasm)
+- Parser artifacts: [pinned Ash grammar release](../../../third_party/ash-grammars/README.md)
 - License: [c.LICENSE.txt](c.LICENSE.txt)
 
 ## cpp
@@ -21,7 +21,7 @@ Rust and the browser use the same versioned parsers and query files. WASM assets
 - Source archive SHA-256: `df2196ea9d47b4ab4a31b9297eaa5a5d19a0b121dceb9f118f6790ad0ab94743`
 - Highlight query: [queries/highlights.scm](https://github.com/tree-sitter/tree-sitter-cpp/blob/f41e1a044c8a84ea9fa8577fdd2eab92ec96de02/queries/highlights.scm)
 - Local highlight query: [cpp.scm](cpp.scm)
-- WASM: [cpp.wasm](../tree-sitter/cpp.wasm)
+- Parser artifacts: [pinned Ash grammar release](../../../third_party/ash-grammars/README.md)
 - License: [cpp.LICENSE.txt](cpp.LICENSE.txt)
 
 C++ composes the C highlight query before its C++ additions.

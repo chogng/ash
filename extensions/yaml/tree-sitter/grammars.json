@@ -1,21 +1,9 @@
 [
   {
     "name": "yaml",
-    "source": {
-      "crate": "tree-sitter-yaml",
-      "version": "0.7.2",
-      "root": "."
-    },
-    "wasm": {
-      "path": "tree-sitter/yaml.wasm",
-      "sha256": "5615959407f7c14b60ddd9deaa3638642930df40e6315271441fe2aea1627114"
-    },
     "highlights": ["queries/yaml.scm"],
     "tags": ["queries/yaml.tags.scm"],
     "injections": [],
-    "rust": {
-      "language": "tree_sitter_yaml::LANGUAGE"
-    },
     "languages": [
       {
         "id": "dockercompose",

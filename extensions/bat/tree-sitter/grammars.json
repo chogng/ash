@@ -1,22 +1,10 @@
 [
   {
     "name": "batch",
-    "source": {
-      "crate": "tree-sitter-batch",
-      "version": "0.11.1",
-      "root": "."
-    },
-    "wasm": {
-      "path": "tree-sitter/batch.wasm",
-      "sha256": "b29b491e24dfe0484ff7c4075a52ba77c72ef218d3fa93b68bf1d0e318ee5bed"
-    },
     "highlights": ["queries/batch.scm"],
     "tags": [],
     "folds": ["queries/batch.folds.scm"],
     "injections": [],
-    "rust": {
-      "language": "tree_sitter_batch::LANGUAGE"
-    },
     "languages": [
       {
         "id": "bat",

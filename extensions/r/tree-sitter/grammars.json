@@ -1,22 +1,10 @@
 [
   {
     "name": "r",
-    "source": {
-      "crate": "tree-sitter-r",
-      "version": "1.3.0",
-      "root": "."
-    },
-    "wasm": {
-      "path": "tree-sitter/r.wasm",
-      "sha256": "ff8a430fad783481e9205a0a83573dddef353b5a15cd0202e136994eecd47066"
-    },
     "highlights": ["queries/r.scm"],
     "tags": ["queries/r.tags.scm"],
     "folds": ["queries/r.folds.scm"],
     "injections": [],
-    "rust": {
-      "language": "tree_sitter_r::LANGUAGE"
-    },
     "languages": [
       {
         "id": "r",

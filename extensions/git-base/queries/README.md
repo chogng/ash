@@ -9,8 +9,7 @@ The Web host loads the packaged WASM assets. Rust links the grammar dependencies
 - Upstream: [gbprod/tree-sitter-gitcommit](https://github.com/gbprod/tree-sitter-gitcommit)
 - Revision: `33fe8548abcc6e374feaac5724b5a2364bf23090`
 - Grammar version: `0.5.0`
-- Rust dependency: `tree-sitter-gitcommit`
-- WASM: [`../tree-sitter/gitcommit.wasm`](../tree-sitter/gitcommit.wasm)
+- Parser artifacts: [pinned Ash grammar release](../../../third_party/ash-grammars/README.md)
 - License: [gitcommit.LICENSE.txt](gitcommit.LICENSE.txt)
 
 | Local file                                           | Upstream source                                                                                                                                |
@@ -23,8 +22,7 @@ The Web host loads the packaged WASM assets. Rust links the grammar dependencies
 - Upstream: [the-mikedavis/tree-sitter-git-rebase](https://github.com/the-mikedavis/tree-sitter-git-rebase)
 - Revision: `32686d6b72980b36f876ae2d07719c9c3ed154e2`
 - Grammar version: `0.1.0`
-- Rust dependency: `tree-sitter-git-rebase`
-- WASM: [`../tree-sitter/git-rebase.wasm`](../tree-sitter/git-rebase.wasm)
+- Parser artifacts: [pinned Ash grammar release](../../../third_party/ash-grammars/README.md)
 - License: [git-rebase.LICENSE.txt](git-rebase.LICENSE.txt)
 
 | Local file                       | Upstream source                                                                                                                                        |
@@ -36,8 +34,7 @@ The Web host loads the packaged WASM assets. Rust links the grammar dependencies
 - Upstream: [shunsambongi/tree-sitter-gitignore](https://github.com/shunsambongi/tree-sitter-gitignore)
 - Revision: `f4685bf11ac466dd278449bcfe5fd014e94aa504`
 - Grammar version: `0.1.0`
-- Rust dependency: `tree-sitter-gitignore`
-- WASM: [`../tree-sitter/gitignore.wasm`](../tree-sitter/gitignore.wasm)
+- Parser artifacts: [pinned Ash grammar release](../../../third_party/ash-grammars/README.md)
 - License: [gitignore.LICENSE.txt](gitignore.LICENSE.txt)
 
 | Local file                     | Upstream source |

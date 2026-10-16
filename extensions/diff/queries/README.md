@@ -9,8 +9,7 @@ The Web host loads the packaged WASM assets. Rust links the grammar dependencies
 - Upstream: [tree-sitter-grammars/tree-sitter-diff](https://github.com/tree-sitter-grammars/tree-sitter-diff)
 - Revision: `4867e8470e1b0ad7364c4e3ffab762c361bbb635`
 - Grammar version: `0.1.0`
-- Rust dependency: `tree-sitter-diff`
-- WASM: [`../tree-sitter/diff.wasm`](../tree-sitter/diff.wasm)
+- Parser artifacts: [pinned Ash grammar release](../../../third_party/ash-grammars/README.md)
 - License: [diff.LICENSE.txt](diff.LICENSE.txt)
 
 | Local file                                 | Upstream source                                                                                                                                         |

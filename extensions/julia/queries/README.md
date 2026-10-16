@@ -7,7 +7,7 @@ Rust and browser hosts use the same pinned parser and composed queries. WASM is 
 - Source: `tree-sitter-julia@0.23.1`
 - Source archive SHA-256: `4144731a178812ee867619b1e98b3b91e54c1652304b26e5ebe3175b701de323`
 - License: [julia.LICENSE.txt](julia.LICENSE.txt)
-- WASM: [julia.wasm](../tree-sitter/julia.wasm)
+- Parser artifacts: [pinned Ash grammar release](../../../third_party/ash-grammars/README.md)
 
 The upstream ancestor-dependent begin/end builtin capture is omitted because the shared runtime does not evaluate that custom predicate. Ordinary identifiers retain their normal capture.
 

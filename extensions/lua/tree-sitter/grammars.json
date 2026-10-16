@@ -1,22 +1,10 @@
 [
   {
     "name": "lua",
-    "source": {
-      "crate": "tree-sitter-lua",
-      "version": "0.5.0",
-      "root": "."
-    },
-    "wasm": {
-      "path": "tree-sitter/lua.wasm",
-      "sha256": "79958139a6b1a796d0c1eff24fbf4c45a035ed1dac7c3f30470553d53b79c56f"
-    },
     "highlights": ["queries/lua.scm"],
     "tags": ["queries/lua.tags.scm"],
     "folds": ["queries/lua.folds.scm"],
     "injections": [],
-    "rust": {
-      "language": "tree_sitter_lua::LANGUAGE"
-    },
     "languages": [
       {
         "id": "lua",

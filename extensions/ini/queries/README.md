@@ -9,8 +9,7 @@ The Web host loads the packaged WASM assets. Rust links the grammar dependencies
 - Upstream: [justinmk/tree-sitter-ini](https://github.com/justinmk/tree-sitter-ini)
 - Revision: `d1f6ae18e86de3c21bb6ab634ff9ab549ceb1249`
 - Grammar version: `1.4.0`
-- Rust dependency: `tree-sitter-ini`
-- WASM: [`../tree-sitter/ini.wasm`](../tree-sitter/ini.wasm)
+- Parser artifacts: [pinned Ash grammar release](../../../third_party/ash-grammars/README.md)
 - License: [ini.LICENSE.txt](ini.LICENSE.txt)
 
 | Local file                     | Upstream source                                                                                                                            |
@@ -23,8 +22,7 @@ The Web host loads the packaged WASM assets. Rust links the grammar dependencies
 - Upstream: [tree-sitter-grammars/tree-sitter-properties](https://github.com/tree-sitter-grammars/tree-sitter-properties)
 - Revision: `579b62f5ad8d96c2bb331f07d1408c92767531d9`
 - Grammar version: `0.3.0`
-- Rust dependency: `tree-sitter-properties`
-- WASM: [`../tree-sitter/properties.wasm`](../tree-sitter/properties.wasm)
+- Parser artifacts: [pinned Ash grammar release](../../../third_party/ash-grammars/README.md)
 - License: [properties.LICENSE.txt](properties.LICENSE.txt)
 
 | Local file                                 | Upstream source                                                                                                                                               |

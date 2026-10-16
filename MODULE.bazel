@@ -207,6 +207,43 @@ crate.from_cargo(
 )
 use_repo(crate, "crates")
 
+# Bazel links the same precompiled grammar C as Cargo. The binding build script
+# only validates/links prepared inputs, so Bazel supplies that link edge directly.
+grammar_archives = use_extension("//third_party/ash-grammars:repositories.bzl", "grammars")
+use_repo(
+    grammar_archives,
+    "ash_grammars_aarch64_apple_darwin",
+    "ash_grammars_aarch64_pc_windows_msvc",
+    "ash_grammars_aarch64_unknown_linux_gnu",
+    "ash_grammars_aarch64_unknown_linux_musl",
+    "ash_grammars_x86_64_apple_darwin",
+    "ash_grammars_x86_64_pc_windows_msvc",
+    "ash_grammars_x86_64_unknown_linux_gnu",
+    "ash_grammars_x86_64_unknown_linux_musl",
+)
+
+crate.annotation(
+    crate = "ash-grammars",
+    gen_build_script = "off",
+    repositories = ["crates"],
+    deps = ["@ash_grammar_targets//:library"],
+)
+
+inject_repo(crate, "ash_grammar_targets")
+
+# Both speech crates share a nested Cargo workspace in the pinned source tree.
+[
+    crate.annotation(
+        crate = name,
+        repositories = ["crates"],
+        workspace_cargo_toml = "sherpa-onnx/rust/Cargo.toml",
+    )
+    for name in [
+        "sherpa-onnx",
+        "sherpa-onnx-sys",
+    ]
+]
+
 # Keep liblzma inside the build action instead of discovering a host installation.
 crate.annotation(
     crate = "lzma-sys",
@@ -324,6 +361,13 @@ http_archive(
 
 
 new_local_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:local.bzl", "new_local_repository")
+
+new_local_repository(
+    name = "ash_grammar_targets",
+    build_file = "//third_party/ash-grammars:targets.BUILD.bazel",
+    path = "third_party/ash-grammars",
+)
+
 
 new_local_repository(
     name = "ash_v8_targets",

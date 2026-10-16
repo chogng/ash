@@ -69,7 +69,11 @@ pub(crate) fn discover(
     let members: HashSet<_> = metadata.workspace_members.into_iter().collect();
     let mut parser = Parser::new();
     parser
-        .set_language(&tree_sitter_rust::LANGUAGE.into())
+        .set_language(
+            &ash_grammars::language("rust")
+                .expect("bundled Rust grammar")
+                .into(),
+        )
         .map_err(|error| TestingError::Failed(error.to_string()))?;
     let mut tests = Vec::new();
     for package in metadata

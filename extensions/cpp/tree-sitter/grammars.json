@@ -1,22 +1,10 @@
 [
   {
     "name": "c",
-    "source": {
-      "crate": "tree-sitter-c",
-      "version": "0.24.2",
-      "root": "."
-    },
-    "wasm": {
-      "path": "tree-sitter/c.wasm",
-      "sha256": "3c3a2e6692634961259c8506cb3e7077ec5d37c25d3982d17585b59deb2ecef0"
-    },
     "highlights": ["queries/c.scm"],
     "tags": ["queries/c.tags.scm"],
     "folds": ["queries/c.folds.scm"],
     "injections": [],
-    "rust": {
-      "language": "tree_sitter_c::LANGUAGE"
-    },
     "languages": [
       {
         "id": "c",
@@ -29,22 +17,10 @@
   },
   {
     "name": "cpp",
-    "source": {
-      "crate": "tree-sitter-cpp",
-      "version": "0.23.4",
-      "root": "."
-    },
-    "wasm": {
-      "path": "tree-sitter/cpp.wasm",
-      "sha256": "0bc06e3e82a23dc1adb462c1199e4678b2349a179423747331ac3cd07fde3280"
-    },
     "highlights": ["queries/c.scm", "queries/cpp.scm"],
     "tags": ["queries/cpp.tags.scm"],
     "folds": ["queries/cpp.folds.scm"],
     "injections": [],
-    "rust": {
-      "language": "tree_sitter_cpp::LANGUAGE"
-    },
     "languages": [
       {
         "id": "cpp",

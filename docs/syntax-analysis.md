@@ -83,9 +83,9 @@ parser。
 现有 18 个语言包全部使用 Tree-sitter；不再需要 `preferTreeSitter` 开关。
 语言配置与 snippets 仍在各扩展中，对应 TextMate grammar 文件及注册已移除。
 完整语言列表和资源维护命令见 [extensions](../extensions/README.md)。
-语言包的 `tree-sitter/grammars.json` 是 Rust/Web 注册的唯一声明。生成器同时输出
+语言包的 `tree-sitter/grammars.json` 是 Rust/Web 语言映射与查询注册的唯一声明。语法编译产物由公开的 `ash-grammars` Release 提供，版本和校验值统一锁定在 `third_party/ash-grammars/runtime-lock.json`。生成器同时输出
 Rust `SyntaxLanguage` 与 query 组合、协议 `SyntaxLanguageDto`、服务端映射，以及 Web 的
-语言 ID/别名和 WASM/query 注册；正常准备构建时生成，`tree-sitter:verify` 检查生成物漂移。
+语言 ID/别名和 WASM/query 注册；正常准备构建时生成并准备已锁定的 WASM，`tree-sitter:verify` 离线检查生成物漂移和资源完整性。
 Token 检查命令读取当前版本的后台 capture 缓存、主题作用域与实际语法样式，内嵌代码同时
 显示其编辑器语言 ID；报告和无障碍视图共用同一份本地化文本。
 

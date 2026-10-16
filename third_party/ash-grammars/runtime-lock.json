@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "sourceLockSha256": "824f93a3f8696e3f61e903d64092d5769a78ff325598c2081d29ea21567b4099",
+  "targets": {
+    "aarch64-apple-darwin": {
+      "name": "ash-grammars-v0.1.0-aarch64-apple-darwin.tar.gz",
+      "sha256": "4e0220d76ca4800f110c14dcc81f97fc70e96d2cb8d18aac991d9a34272b1205",
+      "size": 4900887
+    },
+    "aarch64-pc-windows-msvc": {
+      "name": "ash-grammars-v0.1.0-aarch64-pc-windows-msvc.tar.gz",
+      "sha256": "d66413045950ffa457bdb49f93c2584d02ff53a57f3fee8e0f7f58f816a98678",
+      "size": 6191621
+    },
+    "aarch64-unknown-linux-gnu": {
+      "name": "ash-grammars-v0.1.0-aarch64-unknown-linux-gnu.tar.gz",
+      "sha256": "551d1fc580a50d42b78dd940e30a383c7a49b5cf657c05d2ccd35fbc5309dac7",
+      "size": 4860853
+    },
+    "aarch64-unknown-linux-musl": {
+      "name": "ash-grammars-v0.1.0-aarch64-unknown-linux-musl.tar.gz",
+      "sha256": "d5c666c4bba036ac16688cf76e751f42fedde5c99467244daf19ceb52bcba3c4",
+      "size": 4860578
+    },
+    "x86_64-apple-darwin": {
+      "name": "ash-grammars-v0.1.0-x86_64-apple-darwin.tar.gz",
+      "sha256": "c86eb8899d26e24ceb6a3f8ee5f1d50578f6fa3242564f954de1d04d6da92c88",
+      "size": 4817168
+    },
+    "x86_64-pc-windows-msvc": {
+      "name": "ash-grammars-v0.1.0-x86_64-pc-windows-msvc.tar.gz",
+      "sha256": "ba1993dcb4cb1d769325c848055535142683f1b4ea45f8f839fb7e5cec9e4c82",
+      "size": 5795562
+    },
+    "x86_64-unknown-linux-gnu": {
+      "name": "ash-grammars-v0.1.0-x86_64-unknown-linux-gnu.tar.gz",
+      "sha256": "fc5acdd05d9a0519b87fc85d52f2f4c0190895c2c453c6be4db76c27ee4f998d",
+      "size": 4997236
+    },
+    "x86_64-unknown-linux-musl": {
+      "name": "ash-grammars-v0.1.0-x86_64-unknown-linux-musl.tar.gz",
+      "sha256": "139b7fbc7fa599adff6bf469e942bbdf8090eac5b981111dddf1d3adf7dc3033",
+      "size": 4996770
+    }
+  },
+  "version": "0.1.0",
+  "wasm": {
+    "name": "ash-grammars-v0.1.0-wasm.tar.gz",
+    "sha256": "5e78374abe0902de2f0705fc28acbfeced3ca804a2397708d82f34c2b40e1b20",
+    "size": 4647857
+  }
+}

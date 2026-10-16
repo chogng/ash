@@ -7,7 +7,7 @@ Rust and browser hosts use the same pinned parser and composed queries. WASM is 
 - Source: `tree-sitter-perl@1.1.2`
 - Source archive SHA-256: `e79d4ae71b42e595c24c354b59905ade8162bd400ebc53ab916ea8aec54da92d`
 - License: [perl.LICENSE.txt](perl.LICENSE.txt)
-- WASM: [perl.wasm](../tree-sitter/perl.wasm)
+- Parser artifacts: [pinned Ash grammar release](../../../third_party/ash-grammars/README.md)
 
 The source archive ships no highlight queries. Ash-authored queries cover comments/POD, strings, variables, declarations, numbers, and control flow.
 
