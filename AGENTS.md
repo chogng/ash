@@ -37,5 +37,5 @@ If need, read the local refers: `../mxc`, `../tgrep`, `../vscode`, `../codex`, `
 
 - Do not generate staged workflow records unless the user explicitly invokes `/develop`.
 - Modify the requested checkout; do not substitute another checkout or only a remote branch. Preserve unrelated changes.
-- Before committing or publishing, pass `just commit-check <base-ref>` as defined in the [commit workflow](.agents/skills/commit-pr/SKILL.md#prepare-the-exact-change). CI checks the full repository.
+- Before committing or publishing, run `just commit-check <base-ref>` and handle its result as defined in the [commit workflow](.agents/skills/commit-pr/SKILL.md#prepare-the-exact-change). CI checks the full repository.
 - A PR is optional for repository-owner changes; use PR review for external contributions or security-sensitive changes.

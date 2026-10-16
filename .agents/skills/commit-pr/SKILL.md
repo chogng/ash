@@ -20,7 +20,10 @@ If the repository or publication target is unclear, ask before committing or pub
 3. Format only task-owned files with `just fmt <paths...>` before staging. Never use a repository-wide write or collect all dirty paths for automatic fixes. When a file mixes task and unrelated edits, review formatter output and preserve unrelated hunks.
 4. Complete any missing checks required by [Testing Guidelines](../../../.github/instructions/testing.instructions.md) before staging.
 5. Stage explicit paths or reviewed hunks. Do not use `git add -A`, `git add .`, or `git commit -a` to collect a dirty tree. Review `git diff --cached` immediately before committing; the entire staged diff must belong to this task.
-6. Run `just commit-check <base-ref>` once after staging, using the destination branch as `<base-ref>` (normally `origin/main`). This [repository commit gate](../../../AGENTS.md#development-workflow) already runs incremental formatting and both working-tree and staged whitespace checks; do not run a separate `just fmt-check --changed <base-ref>` before it. Add `--full` when formatter configuration changes. Stop on failure, fix only task-owned files, restage the reviewed changes, and rerun the gate. Report failures in unrelated work without modifying it. Further edits or staging invalidate the result.
+6. Run `just commit-check <base-ref>` once after staging, using the destination branch as `<base-ref>` (normally `origin/main`). This [repository commit gate](../../../AGENTS.md#development-workflow) already runs incremental formatting and both working-tree and staged whitespace checks; do not run a separate `just fmt-check --changed <base-ref>` before it. Add `--full` when formatter configuration changes. Attribute failures to the exact staged change:
+   - For failures in staged files or caused by the staged change, fix only task-owned content, restage, and rerun the affected checks and gate. If attribution is unclear, investigate before committing.
+   - When failures are proven to affect only files outside the commit and are not caused by the staged change, continue the requested local commit without asking for confirmation. Report those failures without modifying, staging, or waiting for unrelated work. Run any required checks for the staged change that an early gate failure prevented from executing; never report the failed gate as passed. For example, an unstaged voice file's formatting error does not block a settings-only commit.
+   Further edits or staging invalidate the checked result. This exception authorizes the local commit only; publication still requires the passing gate described below.
 7. For immediate publication after committing, reuse the passing gate only when the commit tree exactly matches the checked staged tree, working-tree contents and formatter inputs/tools remain unchanged, and fetching leaves the comparison ref unchanged. Otherwise rerun it; publication of existing commits without a matching verified result requires the gate.
 
 ## Write and verify the commit
@@ -29,7 +32,7 @@ Fill [the shared change template](../../../.github/pull_request_template.md) wit
 
 Commit messages and PR titles and descriptions must focus exclusively on Ash and never mention other projects.
 
-After committing, inspect the diff and SHA with `git show` and recheck `git status`. Do not bypass a failed hook. Verify that the commit excludes unrelated work and that unrelated working-tree changes remain intact. Stop here for commit-only requests.
+After committing, inspect the diff and SHA with `git show` and recheck `git status`. Apply step 6's failure attribution to hooks too: never bypass a hook failure affecting the staged change; bypass only an unrelated failing check when necessary to complete the requested local commit, and report it. Verify that the commit excludes unrelated work and that unrelated working-tree changes remain intact. Stop here for commit-only requests.
 
 ## Publish to main
 
