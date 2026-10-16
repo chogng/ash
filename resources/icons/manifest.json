@@ -547,6 +547,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "follow",
+      "file": "follow.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "fork",
       "file": "fork.svg",
       "rendering": "symbolic"
