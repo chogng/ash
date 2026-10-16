@@ -31,7 +31,7 @@ const MAX_MANIFEST_FIELD_LENGTH: usize = 256;
 pub enum ExtensionPackagesReload {
     /// Return the previous snapshot, scanning only when no snapshot exists yet.
     Cached,
-    /// Rescan all configured roots, publishing a new generation only when contents change.
+    /// Rescan mutable roots and check the live dynamic authority, publishing only changed contents.
     Refresh,
 }
 
@@ -150,9 +150,11 @@ pub struct ExtensionPackages {
     discovered: BTreeMap<String, DiscoveredExtension>,
 }
 
+#[derive(Clone)]
 struct DiscoveredExtension {
-    package: ExtensionPackageSnapshot,
+    package: Arc<ExtensionPackageSnapshot>,
     descriptor: ExtensionDescriptor,
+    dynamic_source: Option<DynamicExtensionPackageSource>,
 }
 
 impl ExtensionPackages {
@@ -207,6 +209,7 @@ impl ExtensionPackages {
         let dynamic_error = dynamic.as_ref().and_then(|result| result.as_ref().err());
         let (extensions, diagnostics, discovered) =
             self.scan(dynamic_snapshot, dynamic_error.map(String::as_str));
+        self.discovered = discovered;
         self.dynamic_generation = dynamic_snapshot.map(|snapshot| snapshot.generation);
         // Independent renderers and contribution loaders refresh the same catalog.
         // A scan alone must not invalidate their in-flight frozen-resource reads.
@@ -221,7 +224,6 @@ impl ExtensionPackages {
             .generation
             .checked_add(1)
             .expect("extension catalog generation overflow");
-        self.discovered = discovered;
         let snapshot = ExtensionPackagesSnapshot {
             generation: self.generation,
             extensions,
@@ -310,6 +312,11 @@ impl ExtensionPackages {
             }
             scan_dynamic_packages(
                 &dynamic.packages,
+                if self.dynamic_generation == Some(dynamic.generation) {
+                    Some(&self.discovered)
+                } else {
+                    None
+                },
                 &mut extensions,
                 &mut diagnostics,
                 &mut discovered,
@@ -448,6 +455,7 @@ fn scan_root(
 
 fn scan_dynamic_packages(
     sources: &[DynamicExtensionPackageSource],
+    previous: Option<&BTreeMap<String, DiscoveredExtension>>,
     extensions: &mut Vec<ExtensionDescriptor>,
     diagnostics: &mut Vec<ExtensionDiagnostic>,
     discovered: &mut BTreeMap<String, DiscoveredExtension>,
@@ -460,11 +468,12 @@ fn scan_dynamic_packages(
             .then_with(|| left.path.cmp(&right.path))
     });
     for source in sources {
+        let dynamic_source = source.clone();
         let DynamicExtensionPackageSource {
             subject,
             path,
             kind,
-            normalized_manifest_json,
+            ..
         } = source;
         let root_path = path
             .parent()
@@ -480,6 +489,31 @@ fn scan_dynamic_packages(
                 catalog_limit_diagnostic(&root, Some(subject), limit),
             );
             break;
+        }
+        // The live authority is checked on every list. Its unchanged immutable source may
+        // reuse the already validated bytes, while mutable roots still get a full rescan.
+        if let Some(extension) = previous.and_then(|previous| {
+            previous
+                .values()
+                .find(|extension| extension.dynamic_source.as_ref() == Some(&dynamic_source))
+        }) {
+            if extension.package.total_bytes() > budget.remaining_snapshot_bytes() {
+                let (code, message) =
+                    package_snapshot_error(PackageSnapshotError::PackageSetTooLarge);
+                budget
+                    .push_diagnostic(diagnostics, diagnostic(&root, Some(subject), code, message));
+                continue;
+            }
+            publish_discovered(
+                &root,
+                subject,
+                extension.clone(),
+                extensions,
+                diagnostics,
+                discovered,
+                budget,
+            );
+            continue;
         }
         let canonical_root = match fs::canonicalize(&root.path) {
             Ok(path) => path,
@@ -501,7 +535,7 @@ fn scan_dynamic_packages(
             &canonical_root,
             subject,
             &path,
-            normalized_manifest_json.as_deref(),
+            Some(dynamic_source),
             extensions,
             diagnostics,
             discovered,
@@ -516,7 +550,7 @@ fn publish_package(
     canonical_root: &Path,
     subject: String,
     package_path: &Path,
-    normalized_manifest_json: Option<&str>,
+    dynamic_source: Option<DynamicExtensionPackageSource>,
     extensions: &mut Vec<ExtensionDescriptor>,
     diagnostics: &mut Vec<ExtensionDiagnostic>,
     discovered: &mut BTreeMap<String, DiscoveredExtension>,
@@ -526,41 +560,64 @@ fn publish_package(
         root,
         canonical_root,
         package_path,
-        normalized_manifest_json,
+        dynamic_source
+            .as_ref()
+            .and_then(|source| source.normalized_manifest_json.as_deref()),
         PackageSnapshotLimits {
             max_total_bytes: budget.remaining_snapshot_bytes(),
         },
     ) {
-        Ok(extension) => {
-            if discovered.contains_key(&extension.descriptor.id) {
-                budget.push_diagnostic(
-                    diagnostics,
-                    diagnostic(
-                        root,
-                        Some(subject),
-                        ExtensionDiagnosticCode::DuplicateExtension,
-                        "extension ID is already registered",
-                    ),
-                );
-                return;
-            }
-            if let Err(limit) = budget.claim_published_extension(
-                extension.package.total_bytes(),
-                extension.descriptor.manifest_json.len(),
-            ) {
-                budget.push_diagnostic(
-                    diagnostics,
-                    catalog_limit_diagnostic(root, Some(subject), limit),
-                );
-                return;
-            }
-            extensions.push(extension.descriptor.clone());
-            discovered.insert(extension.descriptor.id.clone(), extension);
+        Ok(mut extension) => {
+            extension.dynamic_source = dynamic_source;
+            publish_discovered(
+                root,
+                subject,
+                extension,
+                extensions,
+                diagnostics,
+                discovered,
+                budget,
+            );
         }
         Err((code, message)) => {
             budget.push_diagnostic(diagnostics, diagnostic(root, Some(subject), code, message));
         }
     }
+}
+
+fn publish_discovered(
+    root: &ExtensionRoot,
+    subject: String,
+    extension: DiscoveredExtension,
+    extensions: &mut Vec<ExtensionDescriptor>,
+    diagnostics: &mut Vec<ExtensionDiagnostic>,
+    discovered: &mut BTreeMap<String, DiscoveredExtension>,
+    budget: &mut PackageBudget,
+) {
+    if discovered.contains_key(&extension.descriptor.id) {
+        budget.push_diagnostic(
+            diagnostics,
+            diagnostic(
+                root,
+                Some(subject),
+                ExtensionDiagnosticCode::DuplicateExtension,
+                "extension ID is already registered",
+            ),
+        );
+        return;
+    }
+    if let Err(limit) = budget.claim_published_extension(
+        extension.package.total_bytes(),
+        extension.descriptor.manifest_json.len(),
+    ) {
+        budget.push_diagnostic(
+            diagnostics,
+            catalog_limit_diagnostic(root, Some(subject), limit),
+        );
+        return;
+    }
+    extensions.push(extension.descriptor.clone());
+    discovered.insert(extension.descriptor.id.clone(), extension);
 }
 
 fn catalog_limit_diagnostic(
@@ -690,7 +747,8 @@ fn discover_package(
     let manifest_sha256 = format!("sha256:{:x}", Sha256::digest(canonical_manifest.as_bytes()));
     let package_sha256 = package.sha256().to_owned();
     Ok(DiscoveredExtension {
-        package,
+        package: Arc::new(package),
+        dynamic_source: None,
         descriptor: ExtensionDescriptor {
             id,
             name,

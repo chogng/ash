@@ -1,3 +1,4 @@
+import { localize } from '../../../../nls.js';
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Color } from "../../../../base/common/color.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
@@ -68,7 +69,11 @@ export class ExtensionThemeRegistry extends Disposable implements ExtensionTheme
 
 /** Parses the declarative subset of a VS Code color-theme document. */
 export function parseExtensionTheme(value: unknown, id: string, extensionId: string, label: string, uiTheme: string | undefined, owner: string): ExtensionThemeDefinition {
-	const document = extensionThemeDocument(value);
+	const document = parseColorThemeDocument(extensionThemeDocument(value));
+	return themeFromDocument(document, id, extensionId, label, uiTheme, owner);
+}
+
+function themeFromDocument(document: ColorThemeDocument, id: string, extensionId: string, label: string, uiTheme: string | undefined, owner: string): ExtensionThemeDefinition {
 	const colors = document.colors === undefined ? Object.freeze({}) : parseColors(document.colors, `${owner}.colors`);
 	const documentName = document.name === undefined ? undefined : boundedText(document.name, `${owner}.name`, 256);
 	const resolvedLabel = /^%[^%]+%$/u.test(label) && documentName !== undefined ? documentName : label;
@@ -95,16 +100,19 @@ export async function loadExtensionTheme(
 		const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
 		return extensionThemeDocument(parseJsonc(text, `Extension '${extensionId}' theme '${resource}'`));
 	});
-	return parseExtensionTheme(document, extensionWorkbenchThemeId(extensionId, contribution.id, index), extensionId, contribution.label, contribution.uiTheme, `Extension '${extensionId}' theme '${contribution.path}'`);
+	// Includes can compose individually valid documents beyond the single-theme
+	// budget. Check that aggregate bound without reparsing its validated fields.
+	if (JSON.stringify(document).length > 1_048_576) throw new Error(localize('theme.documentTooLarge', 'Theme exceeds the 1 MiB document limit'));
+	return themeFromDocument(document, extensionWorkbenchThemeId(extensionId, contribution.id, index), extensionId, contribution.label, contribution.uiTheme, `Extension '${extensionId}' theme '${contribution.path}'`);
 }
 
-/** VS Code consumes known theme fields and ignores publisher metadata. Normalize that external
- * format before applying Ash's complete-value validator; user theme documents remain strict. */
-function extensionThemeDocument(value: unknown): ColorThemeDocument {
+/** Ignore publisher metadata before the resource owner validates the external document.
+ * Includes are each validated there; the merged typed document needs no second schema pass. */
+function extensionThemeDocument(value: unknown): unknown {
 	if (!isRecord(value)) { throw new TypeError('Invalid color theme: expected an object'); }
-	if (Object.hasOwn(value, 'tokenColors')) return parseColorThemeDocument(value);
+	if (Object.hasOwn(value, 'tokenColors')) return value;
 	const document = Object.fromEntries(Object.entries(value).filter(([key]) => Object.hasOwn(colorThemeSchema.properties!, key)));
-	return parseColorThemeDocument(document);
+	return document;
 }
 
 /** Produces the stable Workbench theme identity owned by one manifest contribution. */

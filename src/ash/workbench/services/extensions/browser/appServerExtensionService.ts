@@ -30,7 +30,7 @@ import type { ILanguageConfigurationService } from '../../../../editor/common/la
 import { parseLanguageConfiguration } from "./languageConfigurationParser.js";
 import type { LanguageDescriptionContribution, LanguageDescriptionRegistration } from "../../../../editor/common/services/languagesRegistry.js";
 import type { IAshLanguageService } from '../../../../editor/common/languages/language.js';
-import type { IExtensionApi, ExtensionCatalog as TransportExtensionCatalog, ExtensionDescriptor as TransportExtensionDescriptor } from "../../../../platform/extensions/common/extensionApi.js";
+import type { IExtensionApi, ExtensionCatalogReload, ExtensionCatalog as TransportExtensionCatalog, ExtensionDescriptor as TransportExtensionDescriptor } from "../../../../platform/extensions/common/extensionApi.js";
 import type { IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
 import { DebugAdapterFactoriesRegistry, createStaticDebugAdapterFactory, type DebugAdapterFactory, type DebugAdapterFactoryRegistration } from "../../debug/common/debugAdapterFactory.js";
 import { parseJsonc } from "../common/jsonc.js";
@@ -78,7 +78,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 	private loading: Promise<void> | undefined;
 	private activeCatalogSignature: string | undefined;
 	private activationHandler: ((event: string, signal?: AbortSignal) => Promise<void>) | undefined;
-	private reloadQueued = false;
+	private reloadQueued: ExtensionCatalogReload | undefined;
 	private readonly languageRegistration: LanguageDescriptionRegistration | undefined;
 	private languageConfigurationRegistrations = new DisposableStore();
 	private snippetHandler: ((files: readonly ExtensionSnippetFile[]) => ExtensionSnippetActivation) | undefined;
@@ -117,10 +117,10 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 	constructor(private readonly options: AppServerExtensionServiceOptions, @ILanguagePackService private readonly languagePacks: ILanguagePackService) {
 		super();
 		if (options.api.onDidChange) {
-			this._register(options.api.onDidChange(() => { void this.reload().catch(error => console.error('Extension enablement refresh failed', error)); }));
+			this._register(options.api.onDidChange(() => { void this.requestReload('cached').catch(error => console.error('Extension enablement refresh failed', error)); }));
 		}
 		this._register(toDisposable(() => {
-			this.reloadQueued = false;
+			this.reloadQueued = undefined;
 			this.activationHandler = undefined;
 			this.snippetHandler?.([]).commit();
 			this.snippetHandler = undefined;
@@ -168,7 +168,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 				} else {
 					return;
 				}
-				void this.reload().catch(error => console.error("Declarative extension refresh failed", error));
+				void this.requestReload('cached').catch(error => console.error("Declarative extension refresh failed", error));
 			});
 			this._register(toDisposable(() => subscription.dispose()));
 		}
@@ -180,13 +180,19 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 	}
 
 	start(): Promise<void> {
+		// Theme startup already requested a source scan. Read the backend's current
+		// snapshot; Cached still checks managed package generations and scans if absent.
 		this.assertNotDisposed();
-		return this.reload();
+		return this.loading ?? this.requestReload('cached');
 	}
 
 	reload(): Promise<void> {
+		return this.requestReload('refresh');
+	}
+
+	private requestReload(reload: ExtensionCatalogReload): Promise<void> {
 		this.assertNotDisposed();
-		this.reloadQueued = true;
+		if (this.reloadQueued !== 'refresh') this.reloadQueued = reload;
 		if (this.loading) return this.loading;
 		const operation = this.drainReloads();
 		this.loading = operation;
@@ -202,7 +208,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		this.assertNotDisposed();
 		// Await the catalog owner, without rescanning packages for every variable.
 		if (this.loading) await this.loading;
-		else if (this.activeCatalogSignature === undefined) await this.reload();
+		else if (this.activeCatalogSignature === undefined) await this.start();
 		this.assertNotDisposed();
 		return this.catalog.extensions.find(extension => extension.id.toLowerCase() === id.toLowerCase());
 	}
@@ -226,13 +232,13 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		if (this.snippetHandler) throw new Error('A snippet contribution owner is already registered');
 		this.snippetHandler = handler;
 		this.snippetOwnerRevision++;
-		if (this.loading) this.reloadQueued = true;
+		if (this.loading) this.reloadQueued ??= 'cached';
 		return toDisposable(() => {
 			if (this.snippetHandler !== handler) return;
 			this.snippetHandler = undefined;
 			this.snippetOwnerRevision++;
 			if (!this.isDisposed) {
-				if (this.loading) this.reloadQueued = true;
+				if (this.loading) this.reloadQueued ??= 'cached';
 				this.fileTemplateRegistry.replace([]);
 			}
 		});
@@ -241,10 +247,11 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 	private async drainReloads(): Promise<void> {
 		let failure: ExtensionServiceFailure | undefined;
 		while (!this.isDisposed && this.reloadQueued) {
-			this.reloadQueued = false;
+			const reload = this.reloadQueued;
+			this.reloadQueued = undefined;
 			// A source may change while generation-bound resources are loading. Callers
 			// await the final queued catalog, including its successful atomic commit.
-			failure = await this.loadAndRegister();
+			failure = await this.loadAndRegister(reload);
 		}
 		if (!this.isDisposed && failure) {
 			this.failureEmitter.fire(failure);
@@ -252,7 +259,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		}
 	}
 
-	private async loadAndRegister(): Promise<ExtensionServiceFailure | undefined> {
+	private async loadAndRegister(reload: ExtensionCatalogReload): Promise<ExtensionServiceFailure | undefined> {
 		const themeContributions: ThemeContributions = { colors: [], icons: [], fonts: [], types: [], modifiers: [] };
 		const languages: LanguageDescriptionContribution[] = [];
 		const languageConfigurations: LanguageConfigurationContribution[] = [];
@@ -274,7 +281,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		const editorPanes: IEditorPaneDescriptor[] = [];
 		let activeExtension: ExtensionDescriptor | undefined;
 		try {
-			const transportCatalog = await this.options.api.list("refresh");
+			const transportCatalog = await this.options.api.list(reload);
 			if (this.isDisposed) return;
 			const snippetOwnerRevision = this.snippetOwnerRevision;
 			// Frozen package digests identify every resource in this snapshot. An
@@ -282,13 +289,66 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			const signature = getNLSLanguage() + '\0' + JSON.stringify(transportCatalog);
 			if (signature === this.activeCatalogSignature && snippetOwnerRevision === this.activeSnippetOwnerRevision) return;
 			const catalog = projectExtensionCatalog(transportCatalog);
+			const preparedManifests = new Map<string, ExtensionManifest>();
+			let nextExtension = 0;
+			const preparationFailures = new Map<number, ExtensionServiceFailure>();
+			// Package resources are independent, but publishing contributions is one
+			// ordered transaction. Bound I/O here instead of serializing every small
+			// file's open/read/release round trips on the startup critical path.
+			await Promise.all(Array.from({ length: Math.min(8, transportCatalog.extensions.length) }, async () => {
+				while (!this.isDisposed && preparationFailures.size === 0 && nextExtension < transportCatalog.extensions.length) {
+					const index = nextExtension++;
+					const extension = transportCatalog.extensions[index]!;
+					try {
+						await verifyExtensionManifestDigest(extension);
+						if (this.isDisposed) return;
+						const manifestJson = await this.localizeManifest(extension, catalog.generation, resources);
+						if (this.isDisposed) return;
+						const manifest = parseExtensionManifest(manifestJson, extension);
+						preparedManifests.set(extension.id, manifest);
+						const paths = new Set([
+							...(this.options.languageService ? manifest.contributes.languages.flatMap(language => language.configuration ? [language.configuration] : []) : []),
+							...(this.options.languageService ? manifest.contributes.snippets.map(snippet => snippet.path) : []),
+							...manifest.contributes.themes.map(theme => theme.path),
+							...manifest.contributes.iconThemes.map(theme => theme.path),
+							...manifest.contributes.productIconThemes.map(theme => theme.path),
+							...manifest.contributes.icons.flatMap(icon => typeof icon.defaults === 'string' ? [] : [icon.defaults.fontPath]),
+						]);
+						for (const path of paths) {
+							if (this.isDisposed || preparationFailures.size > 0) return;
+							await this.loadResource(resources, catalog.generation, extension.id, path);
+						}
+					} catch (error) {
+						preparationFailures.set(index, Object.freeze({ extension: projectExtensionDescriptor(extension), error }));
+					}
+				}
+			}));
+			if (this.isDisposed) return;
+			if (preparationFailures.size > 0) return preparationFailures.get(Math.min(...preparationFailures.keys()));
+			// Resolve independent include chains before ordered materialization and
+			// atomic publication; one theme must not serialize the remaining themes.
+			const preparedThemes = new Map<string, ExtensionThemeDefinition>();
+			const themeLoads = transportCatalog.extensions.flatMap(extension =>
+				preparedManifests.get(extension.id)!.contributes.themes.map((theme, index) => ({ extension, theme, index }))
+			);
+			let nextTheme = 0;
+			await Promise.all(Array.from({ length: Math.min(8, themeLoads.length) }, async () => {
+				while (!this.isDisposed && preparationFailures.size === 0 && nextTheme < themeLoads.length) {
+					const position = nextTheme++;
+					const { extension, theme, index } = themeLoads[position]!;
+					try {
+						const definition = await loadExtensionTheme(path => this.loadResource(resources, catalog.generation, extension.id, path), extension.id, theme, index);
+						preparedThemes.set(`${extension.id}\0${index}`, definition);
+					} catch (error) {
+						preparationFailures.set(position, Object.freeze({ extension: projectExtensionDescriptor(extension), error }));
+					}
+				}
+			}));
+			if (this.isDisposed) return;
+			if (preparationFailures.size > 0) return preparationFailures.get(Math.min(...preparationFailures.keys()));
 			for (const extension of transportCatalog.extensions) {
 				activeExtension = projectExtensionDescriptor(extension);
-				await verifyExtensionManifestDigest(extension);
-				if (this.isDisposed) return;
-				const manifestJson = await this.localizeManifest(extension, catalog.generation, resources);
-				if (this.isDisposed) return;
-				const manifest = parseExtensionManifest(manifestJson, extension);
+				const manifest = preparedManifests.get(extension.id)!;
 				manifests.push({ description: activeExtension, manifest });
 				welcome.push(...manifest.contributes.viewsWelcome.map(entry => [entry.view, { content: entry.contents, when: entry.when ? ContextKeyExpr.deserialize(entry.when) : undefined, precondition: entry.precondition ? ContextKeyExpr.deserialize(entry.precondition) : undefined, group: entry.group, order: entry.order }] as Parameters<typeof ViewsRegistry.registerViewWelcomeContent>));
 				configurations.push(...manifest.contributes.configuration);
@@ -380,9 +440,8 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 						content,
 					}));
 				}
-				for (const [themeIndex, theme] of manifest.contributes.themes.entries()) {
-					const definition = await loadExtensionTheme(path => this.loadResource(resources, catalog.generation, extension.id, path), extension.id, theme, themeIndex);
-					themes.push(definition);
+				for (const themeIndex of manifest.contributes.themes.keys()) {
+					themes.push(preparedThemes.get(`${extension.id}\0${themeIndex}`)!);
 					if (this.isDisposed) return;
 				}
 				for (const theme of manifest.contributes.iconThemes) {
@@ -407,7 +466,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 
 			}
 			if (snippetOwnerRevision !== this.snippetOwnerRevision) {
-				this.reloadQueued = true;
+				this.reloadQueued ??= 'cached';
 				return;
 			}
 			if (snippetResources.length > 0 && !this.snippetHandler) {
@@ -432,7 +491,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			// A synchronous contribution owner can replace itself or dispose this service.
 			if (this.isDisposed) return;
 			if (snippetOwnerRevision !== this.snippetOwnerRevision) {
-				this.reloadQueued = true;
+				this.reloadQueued ??= 'cached';
 				return;
 			}
 			try {
@@ -580,6 +639,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 	}
 
 	private loadResource(resources: Map<string, Promise<Uint8Array>>, generation: number, extensionId: string, path: string): Promise<Uint8Array> {
+		this.assertNotDisposed();
 		const key = `${extensionId}\0${path}`;
 		const cached = resources.get(key);
 		if (cached) return cached;

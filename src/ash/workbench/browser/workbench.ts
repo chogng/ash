@@ -413,10 +413,17 @@ export async function startWorkbench({
 }: IStartWorkbenchOptions): Promise<Workbench> {
 	const themes = new ExtensionColorThemeService(api.extensions, api.events);
 	const logger = createLogService();
+	const wasInert = container.inert;
+	container.inert = true;
+	performance.mark('ash.workbench.themes-start');
+	const themesReady = themes.start().then(() => { performance.mark('ash.workbench.themes-ready'); });
+	// Startup owns the eventual failure; storage awaits must not leave an early
+	// theme rejection unobserved before the Workbench can take ownership.
+	void themesReady.catch(() => undefined);
+	let workbench: Workbench | undefined;
 	let storage: Awaited<ReturnType<IStartWorkbenchOptions['createStorageService']>> | undefined;
 	let userDataFiles: IFileSystemProvider & IDisposable | undefined;
 	try {
-		await themes.start();
 		const ownerWindow = container.ownerDocument.defaultView;
 		if (!ownerWindow) { throw new Error('Workbench requires an owner window'); }
 		storage = await createStorageService({ ownerWindow, workspaceId: workspace.id });
@@ -427,7 +434,7 @@ export async function startWorkbench({
 			using settings = new UserSettings(URI.from({ scheme: Schemas.vscodeUserData, path: '/user/settings.json' }), {}, extUriBiasedIgnorePathCase, profileFiles, new NullLoggerService());
 			initialConfiguration = (await settings.loadConfiguration()).toJSON();
 		}
-		return new Workbench(
+		workbench = new Workbench(
 			productName,
 			defaultLayout,
 			api,
@@ -451,6 +458,7 @@ export async function startWorkbench({
 			workspaceFileSystemProvider,
 			webWorkspaceClient,
 			themes,
+			themesReady,
 			storage,
 			logger,
 			createWorkingCopyBackupService,
@@ -462,13 +470,18 @@ export async function startWorkbench({
 			serviceCollection,
 			contributionIds,
 		);
+		await themesReady;
+		return workbench;
 	} catch (error) {
 		userDataFiles?.dispose();
 		logger.error('startup', 'Workbench startup failed', error);
+		workbench?.dispose();
 		logger.dispose();
 		storage?.dispose();
 		themes.dispose();
 		throw error;
+	} finally {
+		container.inert = wasInert;
 	}
 }
 
@@ -521,6 +534,7 @@ export class Workbench extends Disposable {
 		workspaceFileSystemProvider: (IFileSystemProvider & IDisposable) | undefined,
 		webWorkspaceClient: IWebWorkspaceClient | undefined,
 		themes: ExtensionColorThemeService,
+		themesReady: Promise<void>,
 		storageService: IStorageService & IDisposable & { switchWorkspace(workspaceId: string): void | Promise<void>; },
 		logger: LogService,
 		createWorkingCopyBackupService: IStartWorkbenchOptions['createWorkingCopyBackupService'],
@@ -1197,7 +1211,6 @@ export class Workbench extends Disposable {
 		// Extension adapters require the completed editor and view service graph.
 		installWorkbenchServiceContributions({ container: services, register: value => this._register(value), blockRestorationUntil: operation => serviceContributionReady.push(operation) });
 		performance.mark('ash.workbench.services-ready');
-		contributions.advance(WorkbenchPhase.BlockStartup);
 		// Workspace switches reuse this operation; startup marks describe only its first run.
 		let isStartupRestoration = true;
 		this.restoreActiveViewContainers = async () => {
@@ -1220,11 +1233,19 @@ export class Workbench extends Disposable {
 			await Promise.all(openings);
 			if (isStartup) { performance.mark('ash.workbench.views-restored'); }
 		};
-		performance.mark('ash.workbench.shell-ready');
-		const paneRestoration = this.restoreActiveViewContainers();
-		lifecycleService.phase = LifecyclePhase.Ready;
-		contributions.advance(WorkbenchPhase.BlockRestore);
-		layoutService.layout();
+		// Construct services and Parts while theme resources are in flight. Keep
+		// view creation and the splash's first layout behind the verified theme,
+		// so overlapping startup does not expose a temporary fallback appearance.
+		const paneRestoration = themesReady.then(async () => {
+			if (this.isDisposed) return;
+			contributions.advance(WorkbenchPhase.BlockStartup);
+			performance.mark('ash.workbench.shell-ready');
+			const viewsReady = this.restoreActiveViewContainers!();
+			lifecycleService.phase = LifecyclePhase.Ready;
+			contributions.advance(WorkbenchPhase.BlockRestore);
+			layoutService.layout();
+			await viewsReady;
+		});
 		this.whenRestored = this.completeStartupRestoration([keybindingsReady, extensionReady, paneRestoration, recentWorkspaces.initialize(), ...serviceContributionReady], workingCopyBackups, editor, editorParts, contributions, saveFontInfo);
 		if (createWindow) {
 			this._register(createWindow(services));

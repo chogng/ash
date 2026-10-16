@@ -1,4 +1,5 @@
 import { Event } from '../../../base/common/event.js';
+import { LRUCache } from '../../../base/common/map.js';
 import type { IGlobalExtensionEnablementService } from '../../extensionManagement/common/extensionManagement.js';
 import type { ExtensionCatalog, ExtensionResourceRequest, IExtensionApi } from '../common/extensionApi.js';
 import { normalizeExtensionCatalog, MAX_EXTENSION_RESOURCE_BYTES } from '../common/extensionApi.js';
@@ -41,7 +42,10 @@ export function withEnabledBuiltInExtensions(packages: IExtensionApi, enablement
 export function createAppServerExtensionApi(connection: AppServerProtocolClient, resourceApi: IResourceApi): IExtensionApi {
 	let published: { connectionGeneration: number; backendGeneration: number; catalog: ExtensionCatalog; } | undefined;
 	let generation = 0;
-	let pending: Promise<unknown> = Promise.resolve();
+	let pending: Promise<ExtensionCatalog> | undefined;
+	// Small immutable resources are shared by theme, declaration and executable loaders.
+	// Bound retained bytes to 64 × 128 KiB; large browser bundles remain uncached.
+	const resources = new LRUCache<string, Promise<Uint8Array>>(64);
 	const retired = () => new Error(localize('extensions.resources.retired', 'Extension resource generation has retired.'));
 	return {
 		// An interrupted activation must retry against the newly initialized catalog.
@@ -49,24 +53,40 @@ export function createAppServerExtensionApi(connection: AppServerProtocolClient,
 			if (state === 'ready') { listener.call(thisArgs); }
 		}),
 		list(reload) {
-			const next = pending.then(async () => {
+			const load = async () => {
 				const incarnation = resourceApi.connectionGeneration;
 				const catalog = normalizeExtensionCatalog(await appServerRequest(connection, 'extensions/list', { reload }));
 				if (incarnation !== resourceApi.connectionGeneration) { throw retired(); }
 				if (published?.connectionGeneration === incarnation && published.backendGeneration === catalog.generation) { return published.catalog; }
 				const exposed = Object.freeze({ ...catalog, generation: ++generation });
+				resources.clear();
 				published = { connectionGeneration: incarnation, backendGeneration: catalog.generation, catalog: exposed };
 				return exposed;
-			});
-			pending = next.catch(() => undefined);
+			};
+			// Dispatch the idle queue synchronously: callers may construct the entire
+			// Workbench before yielding, while the backend can already load its catalog.
+			const next = pending ? pending.then(load, load) : load();
+			pending = next;
+			const settled = () => { if (pending === next) pending = undefined; };
+			void next.then(settled, settled);
 			return next;
 		},
 		resources: new ExtensionResourceLoaderService(async request => {
 			const snapshot = published;
 			if (!snapshot || request.generation !== snapshot.catalog.generation || snapshot.connectionGeneration !== resourceApi.connectionGeneration) { throw retired(); }
-			const bytes = await readExtensionResource(connection, resourceApi, { ...request, generation: snapshot.backendGeneration });
+			const key = `${request.extensionId}\0${request.path}`;
+			let operation = resources.get(key);
+			if (!operation) {
+				operation = readExtensionResource(connection, resourceApi, { ...request, generation: snapshot.backendGeneration });
+				resources.set(key, operation);
+				const current = operation;
+				const forget = () => { if (resources.peek(key) === current) resources.delete(key); };
+				void operation.then(bytes => { if (bytes.byteLength > 128 * 1024) forget(); }, forget);
+			}
+			const bytes = await operation;
 			if (published !== snapshot || snapshot.connectionGeneration !== resourceApi.connectionGeneration) { throw retired(); }
-			return bytes;
+			// Callers may edit their buffer; the verified cached bytes remain private.
+			return Uint8Array.from(bytes);
 		}, {
 			template: async () => {
 				if (connection.capabilities?.contracts.extensionGalleryResources?.version !== 1) { return undefined; }

@@ -340,3 +340,41 @@ test('startup index accepts source-qualified package identities and rejects dama
 	assert.equal(parseLanguagePackIndexEntry({ ...entry, digest: 'unverified' }), undefined);
 	assert.equal(parseLanguagePackIndexEntry({ ...entry, locale: 'de' }), undefined);
 });
+
+
+test('extension translations wait only for the pinned local index while installed synchronization is pending', async () => {
+	const cache = new DeferredPromise<Awaited<ReturnType<ILanguagePackStore['readIndex']>>>();
+	const installed = new DeferredPromise<void>();
+	const englishRead = new DeferredPromise<void>();
+	const extensions = createExtensions([]);
+	extensions.listInstalled = async () => { await installed.p; return []; };
+	const catalog: LanguagePackCatalog = {
+		schemaVersion: 1, locale: 'fr', languageName: 'French', localizedLanguageName: 'Français', catalogVersion: 'ash-1',
+		bundles: { ash: { hello: 'Bonjour' } }, extensionTranslations: { example: { package: { title: 'Bonjour' }, bundle: {} } },
+	};
+	using service = createService(extensions, { readIndex: () => cache.p });
+	let ready = false;
+	void service.whenReady.then(() => { ready = true; });
+	try {
+		let english: unknown = 'pending';
+		const readingEnglish = service.getBuiltInExtensionTranslationsUri('example', 'en').then(value => { english = value; void englishRead.complete(); });
+		await Promise.resolve();
+		assert.equal(english, undefined, 'English lookup must complete even while the local index is pending');
+		await englishRead.p;
+		await readingEnglish;
+		let localized = false;
+		const readingFrench = service.getBuiltInExtensionTranslationsUri('example', 'fr-CA').then(value => { localized = true; return value; });
+		await Promise.resolve();
+		assert.equal(localized, false, 'Cached language provenance must load before localized labels');
+		await cache.complete([{ locale: 'fr', extensionId: 'example/localization-fr-0', version: '1.0.0', digest: `sha256:${'a'.repeat(64)}`, catalog }]);
+		const uri = await readingFrench;
+		assert.deepEqual(JSON.parse(uri!.path.slice('application/json,'.length)).contents, catalog.extensionTranslations!.example);
+		const chinese = await service.getBuiltInExtensionTranslationsUri('ash.git', 'zh-CN');
+		assert.ok(chinese?.path.includes('分支'));
+		assert.equal(ready, false, 'Neither translation needs the pending installed-package synchronization');
+	} finally {
+		if (!cache.isSettled) await cache.complete([]);
+		await installed.complete();
+		await service.whenReady;
+	}
+});

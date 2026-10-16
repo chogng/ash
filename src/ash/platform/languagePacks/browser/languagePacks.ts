@@ -68,8 +68,11 @@ export class WebLanguagePacksService extends Disposable implements ILanguagePack
 	}
 
 	public async getBuiltInExtensionTranslationsUri(id: string, language: string): Promise<URI | undefined> {
-		await this.whenReady;
 		let locale = normalizeLocale(language);
+		if (!locale || locale === 'en') return undefined;
+		// Extension labels use the pinned startup snapshot. Synchronizing installed
+		// packs updates the next startup, so it must not block these local lookups.
+		await this.initializeCache();
 		while (locale && locale !== 'en') {
 			const translations = this.startupCatalogs.get(locale)?.extensionTranslations?.[id.toLowerCase()];
 			if (translations) {

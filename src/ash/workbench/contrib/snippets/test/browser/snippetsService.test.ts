@@ -203,6 +203,19 @@ test('file-template defaults remain available without duplicating templates for 
 	assert.equal(fixture.snippets.getSnippetsSync('typescript').length, 2);
 });
 
+test('startup commits snippet resources before the completion contribution is created', async () => {
+	using fixture = createFixture({ Class: { prefix: 'class', body: 'class ${1:Name} {}', isFileTemplate: true } }, false, undefined, false);
+	assert.equal(fixture.features.completionProvider.providerCatalog.providers.length, 0);
+	await fixture.extensions.start();
+	const catalog = fixture.extensions.currentCatalog;
+	assert.deepEqual(fixture.extensions.fileTemplates.currentCatalog.templates.map(template => [template.label, template.body]), [['Class', 'class Name {}']]);
+	assert.equal(fixture.reads.length, 1);
+	fixture.contributions.advance(WorkbenchPhase.BlockStartup);
+	assert.equal(fixture.features.completionProvider.providerCatalog.providers.length, 1);
+	assert.equal(fixture.extensions.currentCatalog, catalog);
+	assert.equal(fixture.reads.length, 1);
+});
+
 test('extension disposal clears the snippet owner and contribution disposal removes its provider', async () => {
 	using fixture = createFixture({ Log: { prefix: 'log', body: '$1' } });
 	await fixture.extensions.start();
@@ -220,7 +233,7 @@ test('production creation rejects missing required services and duplicate snippe
 	assert.throws(() => fixture.services.createInstance(descriptor), /already registered/);
 });
 
-function createFixture(initial: Record<string, unknown>, duplicateResource = false, configurationProperties?: () => Record<string, unknown>) {
+function createFixture(initial: Record<string, unknown>, duplicateResource = false, configurationProperties?: () => Record<string, unknown>, startCompletionProvider = true) {
 	const resources = new DisposableStore();
 	const languages = resources.add(new LanguageService());
 	const features = resources.add(new TestLanguageFeaturesService());
@@ -255,7 +268,7 @@ function createFixture(initial: Record<string, unknown>, duplicateResource = fal
 	services.registerCollection(new ServiceCollection([ISnippetsService, registration]));
 	const snippets = services.get(ISnippetsService);
 	const contributions = resources.add(WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['workbench.contrib.snippets']));
-	contributions.advance(WorkbenchPhase.BlockStartup);
+	if (startCompletionProvider) contributions.advance(WorkbenchPhase.BlockStartup);
 	return {
 		extensions, features, services, snippets, contributions, reads, requests,
 		nextResource(value: Uint8Array | Error): void { nextResource = value; },

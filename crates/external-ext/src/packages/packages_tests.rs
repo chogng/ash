@@ -340,6 +340,100 @@ fn authority_generation_changes_preserve_unchanged_extension_contents() {
 }
 
 #[test]
+fn refresh_reuses_frozen_dynamic_bytes_but_scans_mutable_roots() {
+    let immutable_root = tempfile::tempdir().expect("immutable package parent");
+    let package = write_package(immutable_root.path(), "1.0.0");
+    fs::write(package.join("resource.json"), b"frozen").unwrap();
+    let sources = vec![DynamicExtensionPackageSource::plugin(
+        "demo",
+        package.clone(),
+    )];
+    let provider = Arc::new(TestDynamicSourceProvider::new(1, sources.clone()));
+    let user_root = tempfile::tempdir().expect("user root");
+    let mut catalog = ExtensionPackages::new(vec![ExtensionRoot::user(user_root.path())])
+        .with_dynamic_sources(provider.clone());
+    let first = catalog.list(ExtensionPackagesReload::Refresh);
+
+    // A filesystem replacement cannot alter bytes from a live immutable authority generation.
+    // This also proves Refresh did not rescan the previously frozen package.
+    fs::remove_dir_all(&package).unwrap();
+    let _ = write_package(user_root.path(), "2.0.0");
+    let refreshed = catalog.list(ExtensionPackagesReload::Refresh);
+    assert_eq!(refreshed.extensions, first.extensions);
+    assert_eq!(refreshed.diagnostics.len(), 1);
+    assert_eq!(
+        refreshed.diagnostics[0].code,
+        ExtensionDiagnosticCode::DuplicateExtension
+    );
+    assert_eq!(
+        catalog
+            .open_resource(refreshed.generation, "ash.demo", "resource.json")
+            .unwrap()
+            .bytes,
+        b"frozen"
+    );
+
+    // Advancing the authority must validate its source again, even if the path is unchanged.
+    provider.replace(2, sources);
+    let changed = catalog.list(ExtensionPackagesReload::Refresh);
+    assert_eq!(changed.extensions[0].version, "2.0.0");
+    assert!(changed.generation > refreshed.generation);
+    assert_eq!(
+        changed.diagnostics[0].code,
+        ExtensionDiagnosticCode::InvalidManifest
+    );
+
+    // Revocation removes the frozen package, and rebinding cannot inherit the old cache.
+    provider.replace(3, Vec::new());
+    let removed = catalog.list(ExtensionPackagesReload::Refresh);
+    assert!(removed.diagnostics.is_empty());
+    catalog.bind_dynamic_sources(Arc::new(TestDynamicSourceProvider::new(
+        1,
+        vec![DynamicExtensionPackageSource::plugin("demo", package)],
+    )));
+    assert_eq!(
+        catalog.list(ExtensionPackagesReload::Refresh).extensions[0].version,
+        "2.0.0"
+    );
+}
+
+#[test]
+fn refresh_revalidates_source_identity_and_discards_unavailable_authority() {
+    let first_root = tempfile::tempdir().unwrap();
+    let second_root = tempfile::tempdir().unwrap();
+    let first_package = write_package(first_root.path(), "1.0.0");
+    let second_package = write_package(second_root.path(), "2.0.0");
+    let provider = Arc::new(TestDynamicSourceProvider::new(
+        1,
+        vec![DynamicExtensionPackageSource::plugin("demo", first_package)],
+    ));
+    let mut catalog = ExtensionPackages::new(Vec::new()).with_dynamic_sources(provider.clone());
+    let first = catalog.list(ExtensionPackagesReload::Refresh);
+    // An incorrectly unchanged generation still cannot authorize a different source identity.
+    provider.replace(
+        1,
+        vec![DynamicExtensionPackageSource::plugin(
+            "demo",
+            second_package,
+        )],
+    );
+    let changed = catalog.list(ExtensionPackagesReload::Refresh);
+    assert_eq!(changed.extensions[0].version, "2.0.0");
+    assert!(changed.generation > first.generation);
+    *provider.snapshot.lock().unwrap() = Err("authority unavailable".into());
+    let unavailable = catalog.list(ExtensionPackagesReload::Refresh);
+    assert!(unavailable.extensions.is_empty());
+    assert_eq!(
+        unavailable.diagnostics[0].code,
+        ExtensionDiagnosticCode::SourceUnavailable
+    );
+    assert_eq!(
+        catalog.open_resource(changed.generation, "ash.demo", "package.json"),
+        Err(ExtensionPackagesError::GenerationConflict)
+    );
+}
+
+#[test]
 fn plugin_authority_packages_precede_user_roots_and_refresh_on_generation_change() {
     let plugin_root = tempfile::tempdir().expect("plugin package parent");
     let plugin_package = write_package(plugin_root.path(), "2.0.0");
@@ -378,32 +472,32 @@ fn plugin_authority_packages_precede_user_roots_and_refresh_on_generation_change
 }
 
 struct TestDynamicSourceProvider {
-    snapshot: Mutex<DynamicExtensionSourceSnapshot>,
+    snapshot: Mutex<Result<DynamicExtensionSourceSnapshot, String>>,
 }
 
 impl TestDynamicSourceProvider {
     fn new(generation: u64, packages: Vec<DynamicExtensionPackageSource>) -> Self {
         Self {
-            snapshot: Mutex::new(DynamicExtensionSourceSnapshot {
+            snapshot: Mutex::new(Ok(DynamicExtensionSourceSnapshot {
                 generation,
                 packages,
                 diagnostics: Vec::new(),
-            }),
+            })),
         }
     }
 
     fn replace(&self, generation: u64, packages: Vec<DynamicExtensionPackageSource>) {
-        *self.snapshot.lock().unwrap() = DynamicExtensionSourceSnapshot {
+        *self.snapshot.lock().unwrap() = Ok(DynamicExtensionSourceSnapshot {
             generation,
             packages,
             diagnostics: Vec::new(),
-        };
+        });
     }
 }
 
 impl DynamicExtensionSourceProvider for TestDynamicSourceProvider {
     fn snapshot(&self) -> Result<DynamicExtensionSourceSnapshot, String> {
-        Ok(self.snapshot.lock().unwrap().clone())
+        self.snapshot.lock().unwrap().clone()
     }
 }
 

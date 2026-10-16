@@ -643,33 +643,39 @@ impl ExtensionHostRuntime {
     }
 
     pub(super) fn close_owner(&self, owner: u64) {
-        let Ok(_gate) = self.inner.reconcile_gate.lock() else {
-            return;
+        let (entries, handles) = {
+            let Ok(_gate) = self.inner.reconcile_gate.lock() else {
+                return;
+            };
+            let entries = self
+                .inner
+                .state
+                .lock()
+                .map(|mut state| state.windows.remove(&owner).unwrap_or_default())
+                .unwrap_or_default();
+            let handles = self
+                .inner
+                .sessions
+                .lock()
+                .map(|mut sessions| sessions.detach_owner(owner, CancelReason::Shutdown))
+                .unwrap_or_default();
+            if let Ok(mut state) = self.inner.state.lock() {
+                if let Ok(published) = self.inner.refresh_generation_locked(&mut state) {
+                    drop(state);
+                    self.inner.publish(published);
+                }
+            }
+            (entries, handles)
         };
-        let entries = self
-            .inner
-            .state
-            .lock()
-            .map(|mut state| state.windows.remove(&owner).unwrap_or_default())
-            .unwrap_or_default();
+        // Retire the owner's registrations and invocation sessions before any blocking I/O.
+        // A slow deactivate/exit belongs to this window; it must not hold the fleet gate
+        // needed by a reloaded window or another client's activation. Cleanup still joins.
+        cancel_handles(handles, CancelReason::Shutdown);
         for entry in entries.into_values() {
             if let Some(supervisor) = entry.supervisor {
                 let _ = supervisor.shutdown();
             }
         }
-        if let Ok(mut state) = self.inner.state.lock() {
-            if let Ok(published) = self.inner.refresh_generation_locked(&mut state) {
-                drop(state);
-                self.inner.publish(published);
-            }
-        }
-        let handles = self
-            .inner
-            .sessions
-            .lock()
-            .map(|mut sessions| sessions.detach_owner(owner, CancelReason::Shutdown))
-            .unwrap_or_default();
-        cancel_handles(handles, CancelReason::Shutdown);
         let resolvers = self
             .inner
             .state

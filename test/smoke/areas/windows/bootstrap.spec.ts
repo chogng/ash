@@ -1,4 +1,5 @@
 import { _electron, chromium, expect, test, type TestInfo } from '@playwright/test';
+import { test as ashTest } from '../../../automation/test.js';
 import type { Menu, Tray } from 'electron';
 import { spawn } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -75,6 +76,32 @@ for (const scenario of [
 		} finally {
 			await application.close();
 		}
+	});
+}
+
+for (const theme of ['ash-dark', 'ash-high-contrast-light']) {
+	ashTest.describe(`Startup theme ${theme}`, () => {
+		ashTest.use({ electronUserSettings: { 'workbench.colorTheme': theme, 'window.autoDetectColorScheme': false, 'window.autoDetectHighContrast': false } });
+		ashTest(`Desktop waits for the selected ${theme} theme before exposing the restored shell`, { tag: ['@electron-app-server'] }, async ({ workbench }) => {
+			const source = JSON.parse(await readFile(join(desktop, 'extensions/theme-defaults/themes', `${theme}.json`), 'utf8'));
+			const page = workbench.page;
+			const errors: string[] = [];
+			page.on('pageerror', error => errors.push(error.message));
+			for (let iteration = 0; iteration < 2; iteration++) {
+				if (iteration) await page.reload();
+				await workbench.waitForReady();
+				await expect(page.locator('.ash-workbench')).not.toHaveAttribute('inert');
+				await expect(page.locator('#ash-parts-splash')).toHaveCount(0);
+				const state = await page.evaluate(() => {
+					const marks = Object.fromEntries(performance.getEntriesByType('mark').map(mark => [mark.name, mark.startTime]));
+					return { marks, background: getComputedStyle(document.querySelector('.ash-workbench')!).getPropertyValue('--ash-workbench-background').trim() };
+				});
+				expect(state.background).toBe(source.colors['workbench.background'].toLowerCase());
+				expect(state.marks['ash.workbench.shell-ready']).toBeGreaterThanOrEqual(state.marks['ash.workbench.themes-ready']);
+				expect(state.marks['ash.splash.removed']).toBeGreaterThanOrEqual(state.marks['ash.workbench.themes-ready']);
+			}
+			expect(errors).toEqual([]);
+		});
 	});
 }
 

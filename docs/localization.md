@@ -87,6 +87,11 @@ Remote SSH, Media Preview and Markdown. Each extension target uses
 The generated Ash catalog embeds these targets in `extensionTranslations`; the distributable
 package also includes the declared JSON resources.
 
+Extension translation lookup waits only for the validated local startup index, not the installed-package
+synchronization. English needs neither. Installed synchronization still runs once at startup and on
+installation or connection-policy changes; it prepares future startup resources without blocking the
+current window's pinned translation snapshot.
+
 `MainThreadLocalization` resolves these resources from the pinned startup catalog. Manifest
 `%key%` labels use the pack's `package` dictionary after the extension's own English and locale
 resources. The public `vscode.l10n` API receives the `bundle` dictionary before module evaluation;

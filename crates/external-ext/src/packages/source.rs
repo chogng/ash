@@ -108,7 +108,9 @@ pub struct DynamicExtensionSourceSnapshot {
 /// Supplies exact extension package directories without transferring lifecycle ownership.
 ///
 /// Implementations must return only immutable paths selected by their own live authority. The
-/// catalog revalidates and freezes every package before exposing descriptors or resource bytes.
+/// catalog validates and freezes each package before exposing descriptors or resource bytes. An
+/// unchanged generation and exact source may reuse those frozen bytes, including on refresh.
+/// Change the generation whenever the authorized package set or its contents change.
 pub trait DynamicExtensionSourceProvider: Send + Sync {
     /// Returns the current authority generation and exact package sources.
     fn snapshot(&self) -> Result<DynamicExtensionSourceSnapshot, String>;

@@ -97,8 +97,12 @@ theme 和 debugger 字段由产品 host 解释。
 
 首次 `Cached` query 在没有 snapshot 时执行扫描；已有 snapshot 且 dynamic authority generation 未变时
 直接 clone 当前结果。dynamic generation 改变时，即使请求 `Cached` 也会重新扫描。
-`Refresh` 总会重新扫描；只有 descriptor（含完整 package digest）或 diagnostics 变化时才发布新的
-单调 generation，并原子替换当前 discovered map。内容相同的重复刷新保留当前 snapshot 和 generation，
+`Refresh` 总会检查 live dynamic authority，并完整重扫可变 roots。已成功冻结的 dynamic package，
+仅在 authority generation 和 exact source identity（subject、path、provenance、normalized manifest）
+均未变化时复用其已校验的内存 bytes；候选数、字节和重复 ID 预算仍重新核算。来源失效、撤销、重绑或
+代次改变时不复用；新增和上次失败的 package 仍执行完整校验。上游必须在更新包内容时发布新代次。
+只有 descriptor（含完整 package digest）或 diagnostics 变化时才发布新的单调 generation；discovered map
+在扫描完成后原子替换。内容相同的重复刷新保留当前 snapshot 和 generation，
 避免多个窗口或贡献加载器在启动时互相打断资源读取。仅资源 bytes 变化也会通过 package digest 推进
 generation；上游 dynamic generation 改变但目录内容未变时保持当前 generation。资源读取必须携带当前
 generation；旧代返回 `GenerationConflict`。Catalog 不保留多代 bytes，也不把旧 descriptor 隐式绑定

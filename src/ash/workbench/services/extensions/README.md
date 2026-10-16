@@ -19,7 +19,10 @@ filesystem access.
 `IExtensionApi.resources` is the same service registered in the window scope. The App Server adapter
 binds its source callbacks; disconnected clients report unavailability. Contribution loaders keep their
 candidate resource caches, and test pages explicitly inject the prepared resource fixture.
-Installed reads retain the catalog generation. Gallery reads use the configured Open VSX URL contract
+Installed reads retain the catalog generation. The App Server adapter coalesces identical reads and
+retains up to 64 verified resources of at most 128 KiB each (8 MiB total). It clears them on catalog
+or connection replacement, never retains failures or larger resources, and returns independent byte
+buffers. Gallery reads use the configured Open VSX URL contract
 and Rust-verified VSIX contents without installing, enabling or executing the package. The backend
 returns a connection-owned resource handle; the existing bounded read path verifies and releases it.
 Only universal Open VSX packages are supported, matching the existing provider.
@@ -132,7 +135,7 @@ styles, external references, and paths outside the package are rejected before r
 ## Execution and refresh path
 
 ```text
-IExtensionApi.list("refresh")
+IExtensionApi.list("cached" | "refresh")
   -> adapt transport descriptors to Workbench candidates
   -> parseExtensionManifest
   -> load/parse language configurations, snippets, color themes, and SVG icon themes
@@ -141,13 +144,23 @@ IExtensionApi.list("refresh")
   -> dispose previous registrations
 ```
 
-Only one runner loads at a time. Calls arriving during an active load set one queued refresh; all
-waiters resolve after the runner and that coalesced follow-up drain. Disposal prevents in-flight
-work from committing or emitting a regular failure and suppresses any queued follow-up.
+Theme startup requests the initial source scan. Declarative startup, enablement changes and backend
+package notifications read the authoritative Rust snapshot with `cached`, which still checks managed
+package generations and discovers sources when no snapshot exists. Explicit `reload()` uses `refresh`
+to detect source edits outside package management. No renderer-owned catalog replaces backend checks.
+
+Only one runner loads at a time. Concurrent `start()` readiness checks share its current transaction;
+refresh requests and source notifications still queue one follow-up read. A forced source refresh takes
+precedence over a cached read. All waiters resolve after that follow-up drains. An idle transport queue
+sends the first catalog request immediately so backend work overlaps synchronous Workbench construction.
+The snippet transaction owner is constructed on its initial service lookup, before the catalog starts;
+its completion contribution can be created later without invalidating prepared resources.
+Disposal prevents in-flight work from committing or emitting a regular failure and suppresses any
+queued follow-up.
 
 The Workbench composition root retains the initial `start()` promise and waits for it before
 restoring working-copy backups and advancing to `AfterRestored`. A transition from any non-`ready`
-App Server state to `ready` calls `reload()` and therefore uses the same queue. The transport API
+App Server state to `ready` requests a new backend snapshot through the same queue. The transport API
 does not expose cancellation, so disposal suppresses commit and follow-up work but cannot physically
 abort an already dispatched RPC.
 
@@ -158,8 +171,14 @@ the same candidate generation. A synchronous commit failure discards buffered ca
 restores the previous generation.
 
 `ExtensionColorThemeService` loads color-theme contributions through the same generation-bound
-resource loader and owns their Workbench registrations. Code and Sessions await its initial load
-before constructing their theme service. The UI-only transport serves a build-generated copy of
+resource loader and owns their Workbench registrations. Independent themes and their include chains
+load through a pool of at most eight tasks and publish in manifest order after all admitted work settles.
+External documents are validated once by their resource owner; materializing their merged typed theme
+does not repeat the document schema pass.
+
+Desktop constructs services and Parts while the initial theme load runs. Its container stays inert,
+and startup contributions, view restoration, first layout and `Ready` wait for that theme promise;
+startup failure disposes the constructed Workbench. Sessions still awaits themes before construction. The UI-only transport serves a build-generated copy of
 `extensions/theme-defaults`; connected windows read the packaged extension resources. Both use
 the same manifest parser, `include` resolver, and registry. The metadata catalog above does not
 register color themes a second time. Active-theme changes reach the shared Tree-sitter theme adapter through `IThemeService`.

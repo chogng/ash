@@ -324,6 +324,57 @@ test("rejects a catalog whose canonical manifest digest does not match", async (
 	assert.equal(service.currentCatalog.generation, 0);
 });
 
+test('startup reads the authoritative snapshot while an explicit reload rescans sources', async () => {
+	const modes: string[] = [];
+	const api: IExtensionApi = {
+		list: async mode => { modes.push(mode); return emptyCatalog(modes.length); },
+		resources: new ExtensionResourceLoaderService(async () => new Uint8Array()),
+	};
+	using service = new AppServerExtensionService({ api }, createEmptyTestLanguagePacks());
+	await service.start();
+	await service.reload();
+	assert.deepEqual(modes, ['cached', 'refresh']);
+	assert.equal(service.currentCatalog.generation, 2);
+});
+
+test('concurrent startup readiness checks share the current transaction without queuing another catalog read', async () => {
+	const first = deferred<ExtensionCatalog>();
+	const modes: string[] = [];
+	const api: IExtensionApi = {
+		list: async mode => { modes.push(mode); return modes.length === 1 ? first.promise : emptyCatalog(2); },
+		resources: new ExtensionResourceLoaderService(async () => new Uint8Array()),
+	};
+	using service = new AppServerExtensionService({ api }, createEmptyTestLanguagePacks());
+	const initial = service.start();
+	assert.equal(service.start(), initial);
+	first.resolve(emptyCatalog(1));
+	await initial;
+	assert.deepEqual(modes, ['cached']);
+	await service.start();
+	assert.deepEqual(modes, ['cached', 'cached'], 'A later connection readiness check still reads the backend snapshot');
+});
+
+test('enablement updates cannot downgrade a queued source refresh', async () => {
+	const changes = new Emitter<void>();
+	using changeOwner = changes;
+	const first = deferred<ExtensionCatalog>();
+	const modes: string[] = [];
+	const api: IExtensionApi = {
+		onDidChange: changes.event,
+		list: async mode => { modes.push(mode); return modes.length === 1 ? first.promise : emptyCatalog(2); },
+		resources: new ExtensionResourceLoaderService(async () => new Uint8Array()),
+	};
+	using service = new AppServerExtensionService({ api }, createEmptyTestLanguagePacks());
+	const starting = service.start();
+	changes.fire();
+	assert.equal(service.reload(), starting);
+	changes.fire();
+	first.resolve(emptyCatalog(1));
+	await starting;
+	assert.deepEqual(modes, ['cached', 'refresh']);
+	assert.equal(service.currentCatalog.generation, 2);
+});
+
 test("coalesces concurrent reload requests into one queued follow-up refresh", async () => {
 	const first = deferred<ExtensionCatalog>();
 	let listCalls = 0;
@@ -393,6 +444,7 @@ test('queued reloads report the final failure and retain the last committed cata
 
 test("reloads declarations for Plugin activation and Extensions installation changes", async () => {
 	let generation = 0;
+	const modes: string[] = [];
 	let listener: ((event: ServerNotification) => void) | undefined;
 	const eventApi: IServerEventApi = {
 		subscribe(next) {
@@ -401,7 +453,7 @@ test("reloads declarations for Plugin activation and Extensions installation cha
 		},
 	};
 	const api: IExtensionApi = {
-		list: async () => emptyCatalog(++generation),
+		list: async mode => { modes.push(mode); return emptyCatalog(++generation); },
 		resources: new ExtensionResourceLoaderService(async () => new Uint8Array()),
 	};
 	using service = new AppServerExtensionService({ api, eventApi, }, createEmptyTestLanguagePacks());
@@ -426,6 +478,7 @@ test("reloads declarations for Plugin activation and Extensions installation cha
 	using restartChange = service.onDidChange(next => { if (next.generation === 4) restarted.resolve(next); });
 	listener?.({ method: 'extensions/changed', params: { instanceId: 'manager-2', generation: 1 } });
 	assert.equal((await restarted.promise).generation, 4, 'a new manager instance can start at a lower generation');
+	assert.deepEqual(modes, ['cached', 'cached', 'cached', 'cached'], 'notifications read the new backend snapshot without rescanning unchanged sources');
 });
 
 test("dispose suppresses a queued reload and ignores the in-flight result", async () => {
@@ -635,6 +688,127 @@ function digestText(value: string): string {
 function emptyCatalog(generation: number): ExtensionCatalog {
 	return Object.freeze({ generation, extensions: Object.freeze([]), diagnostics: Object.freeze([]) });
 }
+
+test('prepares extension resources with bounded concurrency and commits in catalog order', async () => {
+	const entries = Array.from({ length: 24 }, (_, index) => {
+		const name = `parallel-${index}`;
+		return Object.freeze({
+			...descriptorWithManifest({ name, publisher: 'ash', version: '1.0.0', contributes: { themes: [{ id: name, label: name, path: 'theme.json', uiTheme: 'vs-dark' }] } }),
+			id: `ash.${name}`, name,
+		});
+	});
+	const firstBatch = deferred<void>();
+	const release = deferred<void>();
+	let active = 0;
+	let peak = 0;
+	const reads: string[] = [];
+	const api: IExtensionApi = {
+		list: async () => ({ generation: 1, extensions: entries, diagnostics: [] }),
+		resources: new ExtensionResourceLoaderService(async request => {
+			reads.push(request.extensionId);
+			peak = Math.max(peak, ++active);
+			if (active === 8) firstBatch.resolve();
+			try {
+				await release.promise;
+				return new TextEncoder().encode('{"colors":{},"semanticTokenColors":{}}');
+			} finally { active--; }
+		}),
+	};
+	using service = new AppServerExtensionService({ api }, createEmptyTestLanguagePacks());
+	const loading = service.start();
+	await firstBatch.promise;
+	assert.equal(reads.length, 8);
+	assert.equal(service.currentCatalog.generation, 0);
+	assert.equal(service.themes.currentCatalog.themes.length, 0);
+	release.resolve();
+	await loading;
+	assert.equal(peak, 8);
+	assert.equal(reads.length, 24, 'assembly reuses prepared resources');
+	assert.deepEqual(service.themes.currentCatalog.themes.map(theme => theme.label), entries.map(entry => entry.name));
+});
+
+test('themes in one package prepare their includes concurrently without exposing a partial catalog', async () => {
+	const entry = descriptorWithManifest({
+		name: 'demo', publisher: 'ash', version: '1.0.0', contributes: {
+			themes: Array.from({ length: 12 }, (_, index) => ({ id: `theme-${index}`, label: `Theme ${index}`, path: `themes/${index}.json`, uiTheme: 'vs-dark' })),
+		}
+	});
+	const firstBatch = deferred<void>();
+	const release = deferred<void>();
+	let active = 0;
+	let peak = 0;
+	const reads: string[] = [];
+	const api: IExtensionApi = {
+		list: async () => ({ generation: 1, extensions: [entry], diagnostics: [] }),
+		resources: new ExtensionResourceLoaderService(async ({ path }) => {
+			reads.push(path);
+			if (!path.includes('/base-')) return new TextEncoder().encode(JSON.stringify({ include: './base-' + path.split('/')[1] }));
+			peak = Math.max(peak, ++active);
+			if (active === 8) firstBatch.resolve();
+			try {
+				await release.promise;
+				return new TextEncoder().encode(JSON.stringify({ colors: { 'editor.background': '#123456' } }));
+			} finally { active--; }
+		}),
+	};
+	using service = new AppServerExtensionService({ api }, createEmptyTestLanguagePacks());
+	const loading = service.start();
+	await firstBatch.promise;
+	assert.equal(reads.length, 20);
+	assert.equal(service.currentCatalog.generation, 0);
+	assert.equal(service.themes.currentCatalog.themes.length, 0);
+	release.resolve();
+	await loading;
+	assert.equal(peak, 8);
+	assert.equal(reads.filter(path => path.includes('/base-')).length, 12);
+	assert.deepEqual(service.themes.currentCatalog.themes.map(theme => [theme.label, theme.colors]),
+		Array.from({ length: 12 }, (_, index) => [`Theme ${index}`, { 'editor.background': '#123456' }]));
+});
+
+test('failed or disposed resource preparation stops admitting packages and observes in-flight reads', async () => {
+	for (const action of ['fail', 'dispose'] as const) {
+		const entries = Array.from({ length: 24 }, (_, index) => {
+			const name = `pending-${index}`;
+			return Object.freeze({
+				...descriptorWithManifest({ name, publisher: 'ash', version: '1.0.0', contributes: { themes: [{ id: name, label: name, path: 'theme.json', uiTheme: 'vs-dark' }] } }),
+				id: `ash.${name}`, name,
+			});
+		});
+		const firstBatch = deferred<void>();
+		const release = deferred<void>();
+		let generation = 1;
+		let reads = 0;
+		const failure = new Error('Package resource unavailable');
+		const api: IExtensionApi = {
+			list: async () => ({ generation, extensions: generation === 1 ? [entries[0]!] : entries, diagnostics: [] }),
+			resources: new ExtensionResourceLoaderService(async request => {
+				if (generation === 2) {
+					if (++reads === 8) firstBatch.resolve();
+					await release.promise;
+					if (action === 'fail' && request.extensionId === entries[0]!.id) throw failure;
+				}
+				return new TextEncoder().encode('{"colors":{},"semanticTokenColors":{}}');
+			}),
+		};
+		using service = new AppServerExtensionService({ api }, createEmptyTestLanguagePacks());
+		await service.start();
+		const committed = service.currentCatalog;
+		const themes = service.themes.currentCatalog;
+		generation = 2;
+		const loading = service.reload();
+		await firstBatch.promise;
+		if (action === 'dispose') service.dispose();
+		release.resolve();
+		if (action === 'fail') {
+			await assert.rejects(loading, error => error === failure);
+			assert.equal(service.currentCatalog, committed);
+			assert.equal(service.themes.currentCatalog, themes);
+		} else {
+			await assert.doesNotReject(loading);
+		}
+		assert.equal(reads, 8, action);
+	}
+});
 
 
 function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T) => void; } {

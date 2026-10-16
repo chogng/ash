@@ -2,4 +2,5 @@ import { registerSingleton, InstantiationType } from '../../../../platform/insta
 import { ISnippetsService } from './snippets.js';
 import { SnippetsService } from './snippetsService.js';
 
-registerSingleton(ISnippetsService, SnippetsService, InstantiationType.Delayed);
+// The declaration transaction needs its snippet owner before view/completion startup.
+registerSingleton(ISnippetsService, SnippetsService, InstantiationType.Eager);

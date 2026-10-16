@@ -76,24 +76,41 @@ export class ExtensionColorThemeService extends Disposable {
 		const themes: IColorTheme[] = [];
 		const resources = new Map<string, Promise<Uint8Array>>();
 		const sourceFiles = new Set<string>();
+		const loads: (() => Promise<IColorTheme>)[] = [];
 		for (const extension of catalog.extensions) {
 			await verifyExtensionManifestDigest(extension);
+			if (this.isDisposed) return;
 			const manifest = parseExtensionManifest(extension.manifestJson, extension);
 			for (const [index, contribution] of manifest.contributes.themes.entries()) {
-				const read = (path: string): Promise<Uint8Array> => {
-					if (extension.extensionLocation) sourceFiles.add(URI.joinPath(URI.parse(extension.extensionLocation), path).toString());
-					const key = `${extension.id}\0${path}`;
-					let bytes = resources.get(key);
-					if (!bytes) {
-						bytes = this.api.resources.readExtensionResourceBytes({ generation: catalog.generation, extensionId: extension.id, path });
-						resources.set(key, bytes);
-					}
-					return bytes;
-				};
-				const definition = await loadExtensionTheme(read, extension.id, contribution, index);
-				themes.push(createExtensionWorkbenchColorTheme(definition));
+				loads.push(async () => {
+					const read = (path: string): Promise<Uint8Array> => {
+						this.assertNotDisposed();
+						if (extension.extensionLocation) sourceFiles.add(URI.joinPath(URI.parse(extension.extensionLocation), path).toString());
+						const key = `${extension.id}\0${path}`;
+						let bytes = resources.get(key);
+						if (!bytes) {
+							bytes = this.api.resources.readExtensionResourceBytes({ generation: catalog.generation, extensionId: extension.id, path });
+							resources.set(key, bytes);
+						}
+						return bytes;
+					};
+					return createExtensionWorkbenchColorTheme(await loadExtensionTheme(read, extension.id, contribution, index));
+				});
 			}
 		}
+		// Includes remain ordered within a theme; independent themes share a bounded
+		// pool. Wait for admitted reads before reporting a failure or replacing state.
+		const failures = new Map<number, unknown>();
+		let next = 0;
+		await Promise.all(Array.from({ length: Math.min(8, loads.length) }, async () => {
+			while (!this.isDisposed && failures.size === 0 && next < loads.length) {
+				const index = next++;
+				try { themes[index] = await loads[index]!(); }
+				catch (error) { failures.set(index, error); }
+			}
+		}));
+		if (this.isDisposed) return;
+		if (failures.size) throw failures.get(Math.min(...failures.keys()));
 		if (!this.isDisposed) {
 			this.sourceFiles = sourceFiles;
 			this.registration.replace(themes);

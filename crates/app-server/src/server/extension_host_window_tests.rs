@@ -405,6 +405,80 @@ fn standard_extensions_keep_window_facts_callbacks_and_lifetimes_separate() {
     runtime.close_owner(22);
 }
 
+#[test]
+fn slow_window_shutdown_does_not_block_another_windows_reconciliation() {
+    let directory = tempfile::tempdir().unwrap();
+    let (launcher, deployment) = install_node_fixture(directory.path());
+    let entry = directory.path().join("extension/extension.cjs");
+    let source = std::fs::read_to_string(&entry).unwrap();
+    std::fs::write(
+        &entry,
+        format!(
+            r#"{source}
+exports.deactivate = async () => {{
+    require('node:fs').writeFileSync('deactivating', '');
+    while (!require('node:fs').existsSync('release')) {{
+        await new Promise(resolve => setTimeout(resolve, 5));
+    }}
+}};
+"#
+        ),
+    )
+    .unwrap();
+    let grant = Grant::for_environment(
+        Dir::open_local(directory.path()).unwrap(),
+        GrantSource::ExplicitUser,
+        Permissions::new([Permission::DiscoverPlugins]),
+    );
+    let client = Arc::new(crate::client_host::ClientHost::default());
+    let _peer = EditorPeer::start(client.clone(), 11, "first");
+    let runtime = runtime_with_recipe(launcher, deployment, &grant, client);
+    runtime
+        .activate_by_event(
+            11,
+            "test.node",
+            7,
+            ActivationEvent::Command("test.node".into()),
+            None,
+            Err(test_files_unavailable()),
+        )
+        .unwrap();
+    runtime.inner.client_host.unregister(11);
+    let closing = runtime.clone();
+    let close = std::thread::spawn(move || closing.close_owner(11));
+    let deadline = Instant::now() + Duration::from_secs(3);
+    let flag = directory.path().join("extension/deactivating");
+    while !flag.exists() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let deactivating = flag.exists();
+    let (tx, rx) = std::sync::mpsc::channel();
+    let other = runtime.clone();
+    let progress = std::thread::spawn(move || {
+        let _ = tx.send(other.reconcile_for(22, super::super::ExtensionHostReconcileMode::Refresh));
+    });
+    let result = rx.recv_timeout(Duration::from_millis(500));
+    let retired =
+        runtime.snapshot_for(11).extensions[0].lifecycle == ExtensionHostLifecycle::Dormant;
+    // Always release and join before asserting, including the negative control.
+    std::fs::write(directory.path().join("extension/release"), b"").unwrap();
+    close.join().unwrap();
+    progress.join().unwrap();
+    assert!(
+        deactivating,
+        "the real extension reached its delayed deactivate callback"
+    );
+    assert!(
+        result.is_ok(),
+        "another window was blocked by this window's process shutdown"
+    );
+    assert!(
+        retired,
+        "the old owner must lose its registrations before slow cleanup"
+    );
+    runtime.shutdown();
+}
+
 struct DeniedActivation;
 
 impl ash_external_ext::ActivationAuthority for DeniedActivation {

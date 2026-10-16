@@ -1,3 +1,4 @@
+import { DeferredPromise } from '../../../../../base/common/async.js';
 import { ExtensionResourceLoaderService } from '../../../../../platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
@@ -141,4 +142,95 @@ test('the renderer loads a portable Extensions theme and rejects invalid declara
 		assert.equal(WorkbenchThemesRegistry.getColorTheme(themeId)?.colorScheme, ColorScheme.Light);
 	}
 	assert.equal(WorkbenchThemesRegistry.getColorTheme(themeId), undefined);
+});
+
+
+test('independent themes load concurrently with includes and publish once in manifest order', async () => {
+	const manifestJson = JSON.stringify({
+		name: 'parallel-theme', publisher: 'ash', version: '1.0.0', contributes: {
+			themes: Array.from({ length: 12 }, (_, index) => ({ id: `theme-${index}`, label: `Theme ${index}`, uiTheme: 'vs-dark', path: `themes/${index}.json` })),
+		}
+	});
+	const firstBatch = new DeferredPromise<void>();
+	const release = new DeferredPromise<void>();
+	let active = 0;
+	let peak = 0;
+	const reads: string[] = [];
+	const api: IExtensionApi = {
+		list: async () => ({
+			generation: 1, diagnostics: [], extensions: [{
+				id: 'ash.parallel-theme', name: 'parallel-theme', publisher: 'ash', version: '1.0.0', displayName: 'Parallel themes', sourceKind: 'user',
+				manifestJson, manifestSha256: `sha256:${createHash('sha256').update(manifestJson).digest('hex')}`, packageSha256: `sha256:${'a'.repeat(64)}`,
+			}]
+		}),
+		resources: new ExtensionResourceLoaderService(async ({ path }) => {
+			reads.push(path);
+			peak = Math.max(peak, ++active);
+			if (active === 8) void firstBatch.complete();
+			try {
+				await release.p;
+				return new TextEncoder().encode(JSON.stringify(path === 'themes/base.json'
+					? { colors: { 'editor.background': '#123456' } } : { include: './base.json' }));
+			} finally { active--; }
+		}),
+	};
+	const ids = Array.from({ length: 12 }, (_, index) => `extension-ash-parallel-theme-theme-${index}`);
+	using service = new ExtensionColorThemeService(api, { subscribe: () => ({ dispose() { } }) });
+	const loading = service.start();
+	await firstBatch.p;
+	assert.equal(reads.length, 8);
+	assert.equal(WorkbenchThemesRegistry.getColorTheme(ids[0]), undefined);
+	await release.complete();
+	await loading;
+	assert.equal(peak, 8);
+	assert.equal(reads.filter(path => path === 'themes/base.json').length, 1);
+	assert.deepEqual(WorkbenchThemesRegistry.getColorThemes().filter(theme => ids.includes(theme.id)).map(theme => [theme.id, theme.getColorCss(editorBackground)]),
+		ids.map(id => [id, '#123456']));
+});
+
+
+test('disposing during theme reads drains admitted tasks without reading their includes or publishing', async () => {
+	const manifestJson = JSON.stringify({
+		name: 'disposed-theme', publisher: 'ash', version: '1.0.0', contributes: {
+			themes: Array.from({ length: 12 }, (_, index) => ({ id: `theme-${index}`, label: `Theme ${index}`, uiTheme: 'vs-dark', path: `themes/${index}.json` })),
+		}
+	});
+	const firstBatch = new DeferredPromise<void>();
+	const release = new DeferredPromise<void>();
+	const reads: string[] = [];
+	const api: IExtensionApi = {
+		list: async () => ({
+			generation: 1, diagnostics: [], extensions: [{
+				id: 'ash.disposed-theme', name: 'disposed-theme', publisher: 'ash', version: '1.0.0', displayName: 'Disposed themes', sourceKind: 'user',
+				manifestJson, manifestSha256: `sha256:${createHash('sha256').update(manifestJson).digest('hex')}`, packageSha256: `sha256:${'a'.repeat(64)}`,
+			}]
+		}),
+		resources: new ExtensionResourceLoaderService(async ({ path }) => {
+			reads.push(path);
+			if (reads.length === 8) void firstBatch.complete();
+			await release.p;
+			return new TextEncoder().encode('{"include":"./base.json"}');
+		}),
+	};
+	using service = new ExtensionColorThemeService(api, { subscribe: () => ({ dispose() { } }) });
+	const loading = service.start();
+	await firstBatch.p;
+	service.dispose();
+	await release.complete();
+	await loading;
+	assert.deepEqual(reads, Array.from({ length: 8 }, (_, index) => `themes/${index}.json`));
+	assert.equal(WorkbenchThemesRegistry.getColorTheme('extension-ash-disposed-theme-theme-0'), undefined);
+});
+
+
+test('theme includes retain the aggregate document budget after individual resource validation', async () => {
+	const { loadExtensionTheme } = await import('../../common/extensionTheme.js');
+	const colors = (prefix: string) => Object.fromEntries(Array.from({ length: 3000 }, (_, index) => [`${prefix}${'x'.repeat(170)}${index}`, '#112233']));
+	const files: Record<string, string> = {
+		'themes/child.json': JSON.stringify({ include: './base.json', colors: colors('child') }),
+		'themes/base.json': JSON.stringify({ colors: colors('base') }),
+	};
+	assert.ok(Object.values(files).every(source => source.length < 1_048_576));
+	await assert.rejects(loadExtensionTheme(async path => new TextEncoder().encode(files[path]),
+		'ash.bounded-theme', { id: 'bounded', label: 'Bounded', uiTheme: 'vs-dark', path: 'themes/child.json' }, 0), /1 MiB/);
 });
