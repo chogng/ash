@@ -882,6 +882,8 @@ test('settingsLayout is the single projection from registered settings to catego
 		'editor-diff',
 		'editor-opening',
 		'editor-files',
+		'accessibilitySignals',
+		'accessibility',
 		'explorer',
 		'search',
 		'source-control',
@@ -899,7 +901,23 @@ test('settingsLayout is the single projection from registered settings to catego
 		'hooks',
 	]);
 	assert.deepEqual(model.settings.map(setting => setting.id), defaults.all.map(setting => setting.id));
-	assert.equal(findSettingCategory(layout, AccessibilityConfiguration.underlineLinks), 'general');
+	assert.equal(findSettingCategory(layout, AccessibilityConfiguration.underlineLinks), 'accessibility');
+	for (const id of ['editor.accessibilitySupport', 'workbench.reduceMotion', 'workbench.reduceTransparency']) {
+		assert.equal(findSettingCategory(layout, id), 'accessibility');
+	}
+	const accessibilitySettings = defaults.all.filter(setting => !setting.configuration.source && setting.id.startsWith('accessibility.'));
+	assert.ok(accessibilitySettings.some(setting => setting.id.startsWith('accessibility.signals.')));
+	assert.ok(accessibilitySettings.some(setting => setting.id.startsWith('accessibility.verbosity.')));
+	assert.ok(accessibilitySettings.some(setting => setting.id === 'accessibility.signalOptions.volume'));
+	for (const setting of accessibilitySettings) {
+		assert.equal(findSettingCategory(layout, setting.id), setting.id.startsWith('accessibility.signal') ? 'accessibilitySignals' : 'accessibility', setting.id);
+		assert.equal(layout.flatMap(category => category.groups.flatMap(group => group.settings)).filter(item => item.id === setting.id).length, 1, setting.id);
+	}
+	using tree = new SettingsTreeModel<ISetting | SettingsContentItem>();
+	tree.setChildren(settingsRootNodes(layout));
+	const features = new TOCTreeModel(tree).children.find(node => node.element.id === 'group.features');
+	assert.ok(features);
+	assert.deepEqual([...features.children!].slice(0, 2).map(node => node.element.id), ['accessibilitySignals', 'accessibility']);
 	assert.equal(findSettingCategory(layout, LocalizationConfiguration.locale), 'general');
 	assert.equal(findSettingCategory(layout, 'workbench.commandPalette.history'), 'general');
 	assert.equal(findSettingCategory(layout, 'workbench.externalUriOpeners'), 'browser');
@@ -1004,7 +1022,7 @@ test('settingsLayout is the single projection from registered settings to catego
 	model.dispose();
 });
 
-test('terminal settings navigation and group capture the language initialized before module loading', async () => {
+test('feature settings navigation and groups capture the language initialized before module loading', async () => {
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	try {
 		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
@@ -1016,6 +1034,16 @@ test('terminal settings navigation and group capture the language initialized be
 		const group = layout.createSettingsLayout(new DefaultSettings().all).find(category => category.id === 'terminal')?.groups[0];
 		assert.equal(group?.title, '终端');
 		assert.equal(group?.description, category.description);
+		for (const [id, title, description] of [
+			['accessibilitySignals', '辅助功能信号', '设置工作台事件的声音提示和播报。'],
+			['accessibility', '辅助功能', '设置屏幕阅读器支持、辅助功能帮助、动态效果、透明度和链接可见性。'],
+		]) {
+			const feature = layout.createSettingsLayout(new DefaultSettings().all).find(category => category.id === id)!;
+			assert.equal(feature.descriptor.label, title);
+			assert.equal(feature.descriptor.description, description);
+			assert.equal(feature.groups[0]?.title, title);
+			assert.equal(feature.groups[0]?.description, description);
+		}
 		resetNlsResolver();
 		assert.equal(category.label, '终端', 'loaded navigation retains its startup language');
 	} finally {
@@ -1643,6 +1671,18 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(agentsGroup.closest('.ash-tree-row')?.getAttribute('aria-expanded'), 'false');
 	assert.equal(root.querySelector('[data-settings-category-id="models"]'), null);
 	await nextTurn();
+	await preferences.openSettings({ section: 'accessibilitySignals' });
+	assert.equal(root.querySelector('[data-settings-category-id="accessibilitySignals"]')?.textContent, 'Accessibility Signals');
+	assert.ok(root.querySelector('[data-settings-item-id="accessibility.signalOptions.volume"]'));
+	assert.ok(root.querySelector('[data-settings-item-id^="accessibility.signals."]'));
+	assert.equal(root.querySelector('[data-settings-item-id^="accessibility.verbosity."]'), null);
+	await preferences.openSettings({ section: 'accessibility' });
+	assert.equal(root.querySelector('[data-settings-category-id="accessibility"]')?.textContent, 'Accessibility');
+	assert.ok(root.querySelector('[data-settings-item-id="editor.accessibilitySupport"]'));
+	assert.ok(root.querySelector('[data-settings-item-id="workbench.reduceMotion"]'));
+	assert.ok(root.querySelector(`[data-settings-item-id="${AccessibilityConfiguration.underlineLinks}"]`));
+	assert.ok(root.querySelector('[data-settings-item-id^="accessibility.verbosity."]'));
+	assert.equal(root.querySelector('[data-settings-item-id^="accessibility.signal"]'), null);
 	await preferences.openSettings({ section: 'terminal' });
 	assert.equal(root.querySelector('[data-settings-category-id="terminal"]')?.textContent, 'Terminal');
 	assert.equal(root.querySelectorAll('[data-settings-item-id^="terminal.integrated."]').length, 11);
@@ -1683,7 +1723,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(searchEngine.textContent, 'ripgrep');
 	assert.equal((searchEngine as HTMLButtonElement).disabled, false);
 	await preferences.openSettings({ section: 'general' });
-	assert.ok(root.querySelector(`[data-settings-item-id="${AccessibilityConfiguration.underlineLinks}"]`));
+	assert.equal(root.querySelector(`[data-settings-item-id="${AccessibilityConfiguration.underlineLinks}"]`), null);
 	assert.ok(root.querySelector(`[data-settings-item-id="${HoverConfiguration.delay}"]`));
 	const languageControl = root.querySelector<HTMLElement>('[data-configuration-key="workbench.locale"] [role="combobox"]');
 	assert.ok(languageControl);
@@ -1775,7 +1815,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		configurationRegistry.updateConfigurations({ add: [], remove: extensionNodes });
 	}
 
-	await preferences.openSettings({ section: 'general' });
+	await preferences.openSettings({ section: 'accessibility' });
 	const underline = root.querySelector<HTMLInputElement>(`[data-configuration-key="${AccessibilityConfiguration.underlineLinks}"]`);
 	assert.ok(underline);
 	assert.equal(underline.getAttribute('role'), 'switch');
@@ -1788,6 +1828,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(underlineIndicator?.hidden, true);
 	assert.equal(underlineIndicator?.textContent, '');
 
+	await preferences.openSettings({ section: 'general' });
 	const hoverDelay = root.querySelector<HTMLInputElement>(`[data-configuration-key="${HoverConfiguration.delay}"]`);
 	assert.ok(hoverDelay);
 	hoverDelay.value = '750';

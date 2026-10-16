@@ -43,12 +43,12 @@ export const SettingsNavigation = [
 	{
 		id: 'general',
 		label: localize({ bundle: 'ash.settings', key: 'groups.general.label' }, 'General'),
-		description: localize({ bundle: 'ash.settings', key: 'groups.general.description' }, 'Configure core application behavior and accessibility.'),
+		description: localize({ bundle: 'ash.settings', key: 'groups.general.description' }, 'Configure core application behavior.'),
 		categories: [
 			{
 				id: 'general',
 				label: localize({ bundle: 'ash.settings', key: 'categories.general.label' }, 'Application'),
-				description: localize({ bundle: 'ash.settings', key: 'categories.general.description' }, 'Configure core application behavior and accessibility.'),
+				description: localize({ bundle: 'ash.settings', key: 'categories.general.description' }, 'Configure core application behavior.'),
 				presentation: 'general',
 				groups: [
 					{
@@ -62,12 +62,6 @@ export const SettingsNavigation = [
 						label: localize('update.settingsGroup', 'Updates'),
 						description: localize('update.settingsGroupDescription', 'Choose how Ash checks for updates and synchronizes language packs.'),
 						settings: ['update.policy', 'network.meteredConnection'],
-					},
-					{
-						id: 'accessibility',
-						label: 'Accessibility',
-						description: 'Adjust screen-reader behavior, motion, transparency, and link visibility.',
-						settings: ['accessibility.*', 'editor.accessibilitySupport', 'workbench.reduceMotion', 'workbench.reduceTransparency'],
 					},
 					{
 						id: 'interaction',
@@ -347,6 +341,31 @@ export const SettingsNavigation = [
 		label: localize({ bundle: 'ash.settings', key: 'groups.features.label' }, 'Features'),
 		description: localize({ bundle: 'ash.settings', key: 'groups.features.description' }, 'Configure individual Workbench features.'),
 		categories: [
+			{
+				id: 'accessibilitySignals',
+				label: localize({ bundle: 'ash.settings', key: 'categories.accessibilitySignals.label' }, 'Accessibility Signals'),
+				description: localize({ bundle: 'ash.settings', key: 'categories.accessibilitySignals.description' }, 'Configure sounds and announcements for Workbench events.'),
+				presentation: 'general',
+				groups: [{
+					id: 'accessibilitySignals',
+					label: localize({ bundle: 'ash.settings', key: 'categories.accessibilitySignals.label' }, 'Accessibility Signals'),
+					description: localize({ bundle: 'ash.settings', key: 'categories.accessibilitySignals.description' }, 'Configure sounds and announcements for Workbench events.'),
+					// Claim signals and signalOptions before the broader accessibility category.
+					settings: ['accessibility.signal*'],
+				}],
+			},
+			{
+				id: 'accessibility',
+				label: localize({ bundle: 'ash.settings', key: 'categories.accessibility.label' }, 'Accessibility'),
+				description: localize({ bundle: 'ash.settings', key: 'categories.accessibility.description' }, 'Configure screen-reader support, accessibility help, motion, transparency, and link visibility.'),
+				presentation: 'general',
+				groups: [{
+					id: 'accessibility',
+					label: localize({ bundle: 'ash.settings', key: 'categories.accessibility.label' }, 'Accessibility'),
+					description: localize({ bundle: 'ash.settings', key: 'categories.accessibility.description' }, 'Configure screen-reader support, accessibility help, motion, transparency, and link visibility.'),
+					settings: ['accessibility.*', 'editor.accessibilitySupport', 'workbench.reduceMotion', 'workbench.reduceTransparency'],
+				}],
+			},
 			{
 				id: 'explorer',
 				label: localize({ bundle: 'ash.settings', key: 'categories.explorer.label' }, 'Explorer'),
