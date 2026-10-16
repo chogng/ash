@@ -182,7 +182,7 @@ test('cloud dictation rejects an unknown provider before starting capture', asyn
 	assert.deepEqual(client.requests, []);
 });
 
-for (const backend of ['local', 'cloud']) {
+for (const backend of ['local', 'cloud', 'codex']) {
 	test(`dictation forwards the selected microphone and uses language hints only in ${backend} capture`, async () => {
 		const client = new Client();
 		using services = new InstantiationService();
@@ -192,10 +192,49 @@ for (const backend of ['local', 'cloud']) {
 		using service = services.createInstance(AppServerDictationService, client as unknown as AppServerProtocolClient);
 		const session = await service.start(() => { }, () => { });
 		const request = client.requests[0]!;
-		assert.deepEqual({ device: request.inputDevice, language: request.language }, { device: 'mic-2', language: backend === 'cloud' ? 'zh' : null });
+		assert.deepEqual({ device: request.inputDevice, language: request.language }, { device: 'mic-2', language: backend === 'local' ? null : 'zh' });
 		await session.stop();
 	});
 }
+
+test('Codex subscription records without a model selection and returns final text once', async () => {
+	const client = new Client(); client.stopText = '订阅听写文字';
+	using services = new InstantiationService();
+	registerLocalTranscriptionService(services, client as unknown as AppServerProtocolClient);
+	using settings = configuration('{"dictation.backend":"codex"}');
+	services.registerInstance(IConfigurationService, settings);
+	using service = services.createInstance(AppServerDictationService, client as unknown as AppServerProtocolClient);
+	const phrases: string[] = [];
+	const session = await service.start(text => phrases.push(text), () => { });
+	assert.deepEqual(client.requests[0]!.backend, { type: 'codex' });
+	assert.equal(await service.getPreparation(), undefined);
+	await session.stop();
+	client.emit({ method: 'dictation/transcript', params: { resourceId: client.requests[0]!.resourceId, text: '订阅听写文字', isFinal: true } });
+	assert.deepEqual(phrases, ['订阅听写文字']);
+});
+
+test('cancelling Codex upload interrupts stop and ignores its late result', async () => {
+	const client = new Client(); client.stopText = 'discard this';
+	const stop = new DeferredPromise<void>();
+	const request = client.request.bind(client);
+	client.request = async (method, params) => {
+		const result = await request(method, params);
+		if (method.method === 'dictation/stop') { await stop.p; }
+		if (method.method === 'dictation/cancel') { await stop.complete(); }
+		return result;
+	};
+	using services = new InstantiationService();
+	registerLocalTranscriptionService(services, client as unknown as AppServerProtocolClient);
+	using settings = configuration('{"dictation.backend":"codex"}');
+	services.registerInstance(IConfigurationService, settings);
+	using service = services.createInstance(AppServerDictationService, client as unknown as AppServerProtocolClient);
+	const phrases: string[] = [];
+	const session = await service.start(text => phrases.push(text), () => { });
+	const stopped = session.stop();
+	await session.cancel(); await stopped;
+	assert.deepEqual(client.requests.map(request => request.method), ['dictation/start', 'dictation/stop', 'dictation/cancel']);
+	assert.deepEqual(phrases, []);
+});
 
 test('dictation options query uses the configured provider without opening capture', async () => {
 	const client = new Client();

@@ -59,7 +59,7 @@ const dictation: DictationService | undefined = parameters.has('dictation') ? {
 	getOptions: async () => ({ inputDevices: [], languages: [] }),
 	start: async (onTranscript, onEnded) => {
 		transcript = onTranscript;
-		return { stop: async () => { dictationStops++; onTranscript('final words', true); onEnded(); } };
+		return { stop: async () => { dictationStops++; onTranscript('final words', true); onEnded(); }, cancel: async () => { dictationStops++; onEnded(); } };
 	},
 } : undefined;
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);

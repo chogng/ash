@@ -178,6 +178,7 @@ impl Recognizer for TestRecognizer {
     fn start(
         &self,
         _request: DictationRequest,
+        _cancellation: async_utils::CancellationToken,
         on_event: EventSink,
     ) -> Result<Box<dyn RecognitionSession>, String> {
         *self.sink.lock().unwrap() = Some(on_event);
@@ -221,6 +222,73 @@ fn request() -> DictationRequest {
         network: http_client::OutboundNetworkSnapshot::new(http_client::HttpClientConfig::new())
             .unwrap(),
     })
+}
+
+#[test]
+fn cancel_discards_late_transcripts_and_releases_only_the_owner() {
+    let (manager, sink, stops) = manager();
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let received = Arc::clone(&events);
+    manager
+        .start(1, "cancelled".into(), request(), move |event| {
+            received.lock().unwrap().push(event)
+        })
+        .unwrap();
+    assert!(manager.cancel(2, "cancelled").is_err());
+    manager.cancel(1, "cancelled").unwrap();
+    sink.lock().unwrap().as_ref().unwrap()(DictationEvent::Transcript {
+        text: "discarded".into(),
+        is_final: true,
+    });
+    assert!(events.lock().unwrap().is_empty());
+    assert_eq!(stops.load(Ordering::SeqCst), 1);
+    manager.start(2, "next".into(), request(), |_| {}).unwrap();
+}
+
+#[test]
+fn cancellation_can_interrupt_a_worker_already_owned_by_stop() {
+    struct BlockingRecognizer(std::sync::mpsc::Sender<()>);
+    struct BlockingSession(async_utils::CancellationToken, std::sync::mpsc::Sender<()>);
+    impl Recognizer for BlockingRecognizer {
+        fn start(
+            &self,
+            _request: DictationRequest,
+            token: async_utils::CancellationToken,
+            _sink: EventSink,
+        ) -> Result<Box<dyn RecognitionSession>, String> {
+            Ok(Box::new(BlockingSession(token, self.0.clone())))
+        }
+    }
+    impl RecognitionSession for BlockingSession {
+        fn stop(&mut self) {
+            self.1.send(()).unwrap();
+            let started = std::time::Instant::now();
+            while !self.0.is_cancelled() {
+                assert!(
+                    started.elapsed() < std::time::Duration::from_secs(3),
+                    "cancel did not reach upload"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+        }
+    }
+    let (send, receive) = std::sync::mpsc::channel();
+    let manager = Arc::new(DictationManager {
+        recognizer: Box::new(BlockingRecognizer(send)),
+        active: Mutex::new(None),
+    });
+    manager
+        .start(1, "upload".into(), request(), |_| {})
+        .unwrap();
+    let stopping = Arc::clone(&manager);
+    let stop = std::thread::spawn(move || stopping.stop(1, "upload"));
+    receive
+        .recv_timeout(std::time::Duration::from_secs(3))
+        .unwrap();
+    assert!(manager.cancel(2, "upload").is_err());
+    manager.cancel(1, "upload").unwrap();
+    assert_eq!(stop.join().unwrap().unwrap(), None);
+    assert!(!manager.is_active());
 }
 
 #[test]

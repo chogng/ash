@@ -27,6 +27,7 @@ use realtime_voice::CloudTranscriptionProvider;
 use realtime_voice::DictationEvent;
 use realtime_voice::DictationRequest;
 use realtime_voice::LocalDictationRequest;
+use realtime_voice::SubscriptionDictationRequest;
 use serde_json::Value;
 use std::sync::Arc;
 
@@ -97,6 +98,20 @@ impl AppServer {
         let audio_host = super::call_runtime::executable("ASH_VOICE_HOST_PATH", "ash-voice-host")
             .map_err(dictation_error)?;
         let request = match params.backend {
+            DictationBackend::Codex {} => {
+                let runtime = self.provider_runtime.as_ref().ok_or_else(|| {
+                    dictation_error("CodexDictationAuthenticationRequired".into())
+                })?;
+                let dictation = runtime
+                    .codex_dictation()
+                    .map_err(|error| dictation_error(error.to_string()))?;
+                DictationRequest::Subscription(SubscriptionDictationRequest {
+                    dictation: Arc::new(dictation),
+                    audio_host,
+                    input_device: params.input_device,
+                    language: params.language,
+                })
+            }
             DictationBackend::Local { model_id } => {
                 DictationRequest::Local(LocalDictationRequest {
                     model_id,
@@ -165,7 +180,7 @@ impl AppServer {
         let resource_id = params.resource_id.clone();
         let model_id = match &request {
             DictationRequest::Local(request) => Some(request.model_id.clone()),
-            DictationRequest::Cloud(_) => None,
+            DictationRequest::Cloud(_) | DictationRequest::Subscription(_) => None,
         };
         let notifications = connection.outbound_notifications.clone();
         self.dictation
@@ -216,6 +231,18 @@ impl AppServer {
             .stop(connection.connection_id, &params.resource_id)
             .map_err(dictation_error)?;
         result(&DictationStopResult { text })
+    }
+
+    pub(super) fn dictation_cancel(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: DictationResourceParams = decode(params)?;
+        self.dictation
+            .cancel(connection.connection_id, &params.resource_id)
+            .map_err(dictation_error)?;
+        result(&())
     }
 
     pub(super) fn dictation_model_read(
@@ -394,6 +421,7 @@ impl AppServer {
 
 fn languages(backend: &DictationBackend) -> &'static [&'static str] {
     match backend {
+        DictationBackend::Codex {} => &["en", "zh", "es", "fr", "de", "ja", "ko", "pt", "it", "ar"],
         DictationBackend::Local { .. } => &[],
         DictationBackend::Cloud {
             provider: DictationCloudProvider::OpenAi,

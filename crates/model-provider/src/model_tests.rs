@@ -1,5 +1,7 @@
 use super::*;
 
+#[path = "subscription_voice_live_tests.rs"]
+mod subscription_voice_live;
 #[path = "websocket_session_tests.rs"]
 mod websocket_sessions;
 use ash_api::{ModelRequest, ModelStreamEvent, StopReason, ToolDefinition, ToolName};

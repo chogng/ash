@@ -14,6 +14,7 @@ mod semantic_runtime;
 
 pub use ash_api::ApiError;
 pub use ash_api::ApiProtocol;
+pub use ash_chatgpt::ChatGptDictation;
 pub use ash_model_tokenizer::HttpTokenizerAssetDownloader;
 pub use ash_model_tokenizer::LocalTokenCount;
 pub use ash_model_tokenizer::LocalTokenizationOutcome;

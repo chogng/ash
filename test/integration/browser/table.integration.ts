@@ -214,7 +214,7 @@ const speechExtensions = resources.add(new TestExtensionService({
 services.registerInstance(IExtensionService, speechExtensions);
 services.registerInstance(IDictationService, new URLSearchParams(location.search).has('extensionOnly') ? undefined : {
 	onDidChangePreparation: Event.None, getOptions: async () => ({ inputDevices: [{ id: 'microphone-1', label: 'Test microphone', isDefault: true }], languages: ['en', 'zh'] }), getPreparation: async () => undefined, prepareModel: async () => { }, cancelPreparation: async () => { },
-	start: async (onTranscript: (text: string, isFinal: boolean) => void) => { starts++; transcript = onTranscript; await captureReady; return { stop: async () => { stops++; } }; },
+	start: async (onTranscript: (text: string, isFinal: boolean) => void) => { starts++; transcript = onTranscript; await captureReady; return { stop: async () => { stops++; }, cancel: async () => { stops++; } }; },
 });
 services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 registerTestDictationOnboarding(services);

@@ -4544,6 +4544,11 @@ client_methods! {
         response: DictationStopResult,
         serialization: ConnectionExclusive("dictation"),
     },
+    DictationCancel => "dictation/cancel" {
+        params: DictationResourceParams,
+        response: (),
+        serialization: None,
+    },
     DictationModelRead => "dictation/model/read" {
         params: DictationModelParams,
         response: DictationModelStatus,

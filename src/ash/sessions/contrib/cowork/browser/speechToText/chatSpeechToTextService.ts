@@ -41,6 +41,7 @@ interface Recording {
 	starting?: Promise<void>;
 	handle?: IDictationSession;
 	stopping?: Promise<string | undefined>;
+	cancelling?: Promise<void>;
 	finalizedText: string;
 	cancelled: boolean;
 }
@@ -119,7 +120,7 @@ export class ChatSpeechToTextService extends Disposable implements IChatSpeechTo
 					this.setState(ChatSpeechToTextState.Idle);
 				}
 			});
-			if (this.recording !== recording || this.isDisposed) { await handle.stop(); }
+			if (this.recording !== recording || this.isDisposed) { await handle.cancel(); }
 			else { recording.handle = handle; }
 		} catch (error) {
 			if (this.recording === recording) {
@@ -140,15 +141,21 @@ export class ChatSpeechToTextService extends Disposable implements IChatSpeechTo
 	}
 
 	public async cancel(): Promise<void> {
-		if (this.recording) { this.recording.cancelled = true; }
-		await this.stopAndTranscribe();
+		const recording = this.recording;
+		if (recording) { recording.cancelled = true; }
+		if (recording?.handle) { recording.cancelling ??= recording.handle.cancel(); }
+		await Promise.all([recording?.cancelling, this.stopAndTranscribe()]);
 	}
 
 	private async stopRecording(recording: Recording): Promise<string | undefined> {
 		try {
 			await recording.starting;
-			await recording.handle?.stop();
+			if (recording.cancelled && recording.handle) { await (recording.cancelling ??= recording.handle.cancel()); }
+			else { await recording.handle?.stop(); }
 			return recording.cancelled ? undefined : recording.finalizedText || undefined;
+		} catch (error) {
+			if (recording.cancelled) { return undefined; }
+			throw error;
 		} finally {
 			if (this.recording === recording) {
 				this.recording = undefined;

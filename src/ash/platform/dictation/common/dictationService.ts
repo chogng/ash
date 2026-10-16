@@ -8,6 +8,8 @@ export const IDictationService = createDecorator<IDictationService | undefined>(
 /** One microphone session delivers recognized phrases to the owning input. */
 export interface IDictationSession {
 	stop(): Promise<void>;
+	/** Discards the recording and interrupts any pending transcription upload. */
+	cancel(): Promise<void>;
 }
 
 export interface IDictationService {

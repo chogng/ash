@@ -7,6 +7,8 @@ mod local;
 mod model_package;
 mod models;
 #[cfg(feature = "cloud")]
+mod subscription;
+#[cfg(feature = "cloud")]
 mod xai;
 
 use http_client::OutboundNetworkSnapshot;
@@ -52,6 +54,15 @@ pub struct CloudDictationRequest {
     pub language: Option<String>,
 }
 
+/// Subscription authority is admitted before capture and rechecked before upload and delivery.
+#[cfg(feature = "cloud")]
+pub struct SubscriptionDictationRequest {
+    pub dictation: Arc<model_provider::ChatGptDictation>,
+    pub audio_host: PathBuf,
+    pub input_device: Option<String>,
+    pub language: Option<String>,
+}
+
 /// Language hints declared by the shipping transcription adapters, independent of UI locale.
 #[cfg(feature = "cloud")]
 pub fn transcription_languages(provider: CloudTranscriptionProvider) -> &'static [&'static str] {
@@ -74,6 +85,8 @@ pub enum DictationRequest {
     Local(LocalDictationRequest),
     #[cfg(feature = "cloud")]
     Cloud(CloudDictationRequest),
+    #[cfg(feature = "cloud")]
+    Subscription(SubscriptionDictationRequest),
 }
 
 /// A local microphone session either fills a draft or emits completed spoken turns.
@@ -166,6 +179,7 @@ trait Recognizer: Send + Sync {
     fn start(
         &self,
         request: DictationRequest,
+        cancellation: async_utils::CancellationToken,
         on_event: Box<dyn Fn(DictationEvent) + Send + Sync>,
     ) -> Result<Box<dyn RecognitionSession>, String>;
 }
@@ -186,6 +200,7 @@ impl Recognizer for SessionRecognizer {
     fn start(
         &self,
         request: DictationRequest,
+        cancellation: async_utils::CancellationToken,
         on_event: Box<dyn Fn(DictationEvent) + Send + Sync>,
     ) -> Result<Box<dyn RecognitionSession>, String> {
         let (stop, mut stopped) = oneshot::channel();
@@ -199,6 +214,9 @@ impl Recognizer for SessionRecognizer {
                     .map_err(|error| error.to_string())
                     .and_then(|runtime| {
                         runtime.block_on(async {
+                            if cancellation.is_cancelled() {
+                                return Ok(());
+                            }
                             match request {
                                 DictationRequest::Local(request) => {
                                     local::run(request, &mut stopped, Arc::clone(&on_event)).await
@@ -206,6 +224,16 @@ impl Recognizer for SessionRecognizer {
                                 #[cfg(feature = "cloud")]
                                 DictationRequest::Cloud(request) => {
                                     cloud::run(request, &mut stopped, on_event.as_ref()).await
+                                }
+                                #[cfg(feature = "cloud")]
+                                DictationRequest::Subscription(request) => {
+                                    subscription::run(
+                                        request,
+                                        &mut stopped,
+                                        cancellation,
+                                        on_event.as_ref(),
+                                    )
+                                    .await
                                 }
                             }
                         })
@@ -236,7 +264,8 @@ impl RecognitionSession for WorkerSession {
 struct ActiveDictation {
     owner: u64,
     resource_id: String,
-    session: Box<dyn RecognitionSession>,
+    session: Option<Box<dyn RecognitionSession>>,
+    cancellation: async_utils::CancellationSource,
     ended: Arc<AtomicBool>,
     outcome: Arc<Mutex<DictationOutcome>>,
 }
@@ -317,12 +346,15 @@ impl DictationManager {
             .active
             .lock()
             .map_err(|_| "Dictation state unavailable")?;
-        if active
-            .as_ref()
-            .is_some_and(|session| session.ended.load(Ordering::Acquire))
-        {
+        if active.as_ref().is_some_and(|session| {
+            session.session.is_some() && session.ended.load(Ordering::Acquire)
+        }) {
             let mut completed = active.take().expect("validated completed dictation");
-            completed.session.stop();
+            completed
+                .session
+                .as_mut()
+                .expect("completed session")
+                .stop();
         }
         if active.is_some() {
             return Err("The microphone is already in use for dictation".into());
@@ -331,9 +363,17 @@ impl DictationManager {
         let event_ended = Arc::clone(&ended);
         let outcome = Arc::new(Mutex::new(DictationOutcome::default()));
         let event_outcome = Arc::clone(&outcome);
+        let cancellation = async_utils::CancellationSource::new();
+        let event_cancellation = cancellation.token();
         let session = self.recognizer.start(
             request,
+            cancellation.token(),
             Box::new(move |event| {
+                if event_cancellation.is_cancelled()
+                    && matches!(event, DictationEvent::Transcript { .. })
+                {
+                    return;
+                }
                 if let Ok(mut outcome) = event_outcome.lock() {
                     match &event {
                         DictationEvent::Transcript {
@@ -358,7 +398,8 @@ impl DictationManager {
         *active = Some(ActiveDictation {
             owner,
             resource_id,
-            session,
+            session: Some(session),
+            cancellation,
             ended,
             outcome,
         });
@@ -378,18 +419,63 @@ impl DictationManager {
         {
             return Err("Dictation session not found".into());
         }
-        let mut session = active.take().expect("validated active dictation");
-        session.session.stop();
-        // Ended precedes the stop response. Retain worker failures in that response so
-        // clients waiting to submit a draft cannot mistake a failed download for success.
-        let outcome = session
-            .outcome
+        let session = active.as_mut().expect("validated active dictation");
+        let mut worker = session
+            .session
+            .take()
+            .ok_or("Dictation is already stopping")?;
+        let outcome = Arc::clone(&session.outcome);
+        // Keep the cancellation authority discoverable while stop waits for the upload.
+        drop(active);
+        worker.stop();
+        let mut active = self
+            .active
             .lock()
             .map_err(|_| "Dictation state unavailable")?;
+        if active
+            .as_ref()
+            .is_some_and(|session| session.owner == owner && session.resource_id == resource_id)
+        {
+            active.take();
+        }
+        drop(active);
+        // Ended precedes the stop response. Retain worker failures in that response so
+        // clients waiting to submit a draft cannot mistake a failed download for success.
+        let outcome = outcome.lock().map_err(|_| "Dictation state unavailable")?;
         match &outcome.error {
             Some(error) => Err(error.clone()),
             None => Ok(outcome.final_text.clone()),
         }
+    }
+
+    /// Cancels capture or an in-flight upload without waiting behind the stop RPC.
+    pub fn cancel(&self, owner: u64, resource_id: &str) -> Result<(), String> {
+        let mut active = self
+            .active
+            .lock()
+            .map_err(|_| "Dictation state unavailable")?;
+        let session = active
+            .as_mut()
+            .filter(|session| session.owner == owner && session.resource_id == resource_id)
+            .ok_or("Dictation session not found")?;
+        session.cancellation.cancel();
+        let worker = session.session.take();
+        // If stop owns the worker, it removes this record after joining it.
+        drop(active);
+        if let Some(mut worker) = worker {
+            worker.stop();
+            let mut active = self
+                .active
+                .lock()
+                .map_err(|_| "Dictation state unavailable")?;
+            if active
+                .as_ref()
+                .is_some_and(|session| session.owner == owner && session.resource_id == resource_id)
+            {
+                active.take();
+            }
+        }
+        Ok(())
     }
 
     pub fn close(&self, owner: u64) {
@@ -405,7 +491,10 @@ impl DictationManager {
             None
         };
         if let Some(session) = session.as_mut() {
-            session.session.stop();
+            session.cancellation.cancel();
+            if let Some(worker) = session.session.as_mut() {
+                worker.stop();
+            }
         }
     }
 }

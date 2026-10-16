@@ -3,6 +3,14 @@ use super::DictationStartParams;
 use serde_json::json;
 
 #[test]
+fn subscription_dictation_has_no_model_or_credentials_on_the_wire() {
+    let request = json!({"resourceId":"subscription", "inputDevice":null, "language":"zh", "backend":{"type":"codex"}});
+    let decoded: DictationStartParams = serde_json::from_value(request.clone()).unwrap();
+    assert_eq!(serde_json::to_value(decoded).unwrap(), request);
+    assert!(serde_json::from_value::<DictationStartParams>(json!({"resourceId":"subscription", "backend":{"type":"codex", "modelId":"gpt-live-transcribe"}})).is_err());
+}
+
+#[test]
 fn cloud_start_requires_a_declared_provider_and_model() {
     let request = json!({
         "resourceId": "speech-1",

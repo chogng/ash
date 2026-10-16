@@ -3176,6 +3176,9 @@ impl AppServer {
                 self.dictation_options(connection, &request.params)
             }
             Some(ClientMethod::DictationStop) => self.dictation_stop(connection, &request.params),
+            Some(ClientMethod::DictationCancel) => {
+                self.dictation_cancel(connection, &request.params)
+            }
             Some(ClientMethod::DictationModelRead) => {
                 self.dictation_model_read(connection, &request.params)
             }

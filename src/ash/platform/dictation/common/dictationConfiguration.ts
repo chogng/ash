@@ -7,9 +7,9 @@ export const DEFAULT_LOCAL_DICTATION_MODEL = 'paraformer-large-online-ec6a3c64';
 export const CLOUD_DICTATION_MODEL = 'gpt-live-transcribe';
 export const XAI_DICTATION_MODEL = 'grok-voice-transcribe-2.0';
 
-function parseBackend(value: unknown): 'local' | 'cloud' {
-	if (value === 'local' || value === 'cloud') { return value; }
-	throw new TypeError('dictation.backend must be local or cloud');
+function parseBackend(value: unknown): 'local' | 'cloud' | 'codex' {
+	if (value === 'local' || value === 'cloud' || value === 'codex') { return value; }
+	throw new TypeError('dictation.backend must be local, cloud or codex');
 }
 
 function parseLocalModel(value: unknown): string {
@@ -22,8 +22,9 @@ function parseCloudProvider(value: unknown): 'openAi' | 'xai' {
 	throw new TypeError('dictation.cloudProvider must be openAi or xai');
 }
 
-export function dictationBackend(configuration: Pick<IConfigurationService, 'getValue'>): { readonly type: 'local'; readonly modelId: string; } | { readonly type: 'cloud'; readonly provider: 'openAi' | 'xai'; readonly modelId: string; } {
+export function dictationBackend(configuration: Pick<IConfigurationService, 'getValue'>): { readonly type: 'codex'; } | { readonly type: 'local'; readonly modelId: string; } | { readonly type: 'cloud'; readonly provider: 'openAi' | 'xai'; readonly modelId: string; } {
 	const type = parseBackend(configuration.getValue(DictationConfiguration.backend) ?? 'local');
+	if (type === 'codex') { return { type }; }
 	if (type === 'local') {
 		return { type, modelId: parseLocalModel(configuration.getValue(DictationConfiguration.localModel) ?? DEFAULT_LOCAL_DICTATION_MODEL) };
 	}
@@ -43,7 +44,7 @@ function parseLanguage(value: unknown): string {
 	throw new TypeError('dictation.language must be auto or a language code');
 }
 
-export function dictationInputOptions(configuration: Pick<IConfigurationService, 'getValue'>, backend: 'local' | 'cloud'): { inputDevice: string | null; language: string | null; } {
+export function dictationInputOptions(configuration: Pick<IConfigurationService, 'getValue'>, backend: 'local' | 'cloud' | 'codex'): { inputDevice: string | null; language: string | null; } {
 	const inputDevice = parseInputDevice(configuration.getValue('dictation.inputDevice') ?? '');
 	const language = parseLanguage(configuration.getValue('dictation.language') ?? 'auto');
 	return { inputDevice: inputDevice || null, language: backend === 'local' || language === 'auto' ? null : language };
@@ -56,17 +57,18 @@ export const DictationConfiguration = Object.freeze({
 	language: registry.registerConfiguration<string>({
 		key: 'dictation.language', defaultValue: 'auto', parse: parseLanguage,
 	}),
-	backend: registry.registerConfiguration<'local' | 'cloud'>({
+	backend: registry.registerConfiguration<'local' | 'cloud' | 'codex'>({
 		key: 'dictation.backend',
 		defaultValue: 'local',
 		parse: parseBackend,
 		setting: {
 			valueType: 'select',
 			title: localize({ bundle: 'ash', key: 'dictation.backend.title' }, 'Dictation service'),
-			description: localize({ bundle: 'ash', key: 'dictation.backend.description' }, 'Choose local or cloud transcription for voice input.'),
+			description: localize({ bundle: 'ash', key: 'dictation.backend.description' }, 'Choose local transcription, a cloud API, or your Codex subscription for voice input.'),
 			options: [
 				{ value: 'local', label: localize({ bundle: 'ash', key: 'dictation.backend.local' }, 'Local') },
 				{ value: 'cloud', label: localize({ bundle: 'ash', key: 'dictation.backend.cloud' }, 'Cloud') },
+				{ value: 'codex', label: localize({ bundle: 'ash', key: 'dictation.backend.codex' }, 'Codex subscription') },
 			],
 		},
 	}),

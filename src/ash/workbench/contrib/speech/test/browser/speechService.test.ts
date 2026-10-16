@@ -63,7 +63,7 @@ suite('Workbench speech ownership', () => {
 		const fixture = services(owner, async (onTranscript, onEnded) => {
 			transcript = onTranscript;
 			ended = onEnded;
-			return { stop: async () => { stops++; transcript('second', true); ended(); } };
+			return { stop: async () => { stops++; transcript('second', true); ended(); }, cancel: async () => { stops++; } };
 		});
 		assert.equal(fixture.speech.hasSpeechProvider, false);
 		const first = owner.add(fixture.services.createChild());
@@ -108,7 +108,7 @@ suite('Workbench speech ownership', () => {
 		const starting = fixture.speech.createSpeechToTextSession(CancellationToken.None);
 		assert.equal(fixture.speech.isStarting, true);
 		const cancelled = fixture.speech.cancel();
-		acquired({ stop: async () => { stops++; transcript('discarded', true); } });
+		acquired({ stop: async () => { stops++; transcript('discarded', true); }, cancel: async () => { stops++; } });
 		await assert.rejects(starting, isCancellationError);
 		await cancelled;
 		assert.equal(stops, 1);
@@ -121,7 +121,7 @@ suite('Workbench speech ownership', () => {
 		let fail = true;
 		const fixture = services(owner, async () => {
 			if (fail) { throw new Error('microphone unavailable'); }
-			return { stop: async () => { } };
+			return { stop: async () => { }, cancel: async () => { } };
 		});
 		await assert.rejects(fixture.speech.createSpeechToTextSession(CancellationToken.None), /microphone unavailable/);
 		assert.equal(fixture.speech.state, SpeechToTextState.Idle);
@@ -134,7 +134,7 @@ suite('Workbench speech ownership', () => {
 	test('a pre-cancelled token never opens media, and a rejected busy caller cannot cancel the actual owner', async () => {
 		using owner = new DisposableStore();
 		let starts = 0; let stops = 0;
-		const fixture = services(owner, async () => { starts++; return { stop: async () => { stops++; } }; });
+		const fixture = services(owner, async () => { starts++; return { stop: async () => { stops++; }, cancel: async () => { stops++; } }; });
 		using preCancelled = new CancellationTokenSource(); preCancelled.cancel();
 		await assert.rejects(fixture.speech.createSpeechToTextSession(preCancelled.token), isCancellationError);
 		assert.equal(starts, 0);
@@ -159,7 +159,7 @@ suite('Workbench speech ownership', () => {
 		const fixture = services(owner, async onTranscript => {
 			transcript = onTranscript;
 			onTranscript('early', true); onTranscript('pending', false);
-			return { stop: async () => { onTranscript('final', true); } };
+			return { stop: async () => { onTranscript('final', true); }, cancel: async () => { } };
 		});
 		const session = await fixture.speech.createSpeechToTextSession(CancellationToken.None, 'chat');
 		const events: ISpeechToTextEvent[] = [];
@@ -270,7 +270,7 @@ suite('Workbench speech ownership', () => {
 
 	test('a declared provider activates on first recognition and never opens the fallback capture', async () => {
 		using owner = new DisposableStore(); const extensions = await declaredExtensions(owner);
-		let captures = 0; const speech = owner.add(new SpeechService({ onDidChangePreparation: Event.None, getPreparation: async () => undefined, prepareModel: async () => { }, cancelPreparation: async () => { }, getOptions: async () => ({ inputDevices: [], languages: [] }), start: async () => { captures++; return { stop: async () => { } }; } }, extensions));
+		let captures = 0; const speech = owner.add(new SpeechService({ onDidChangePreparation: Event.None, getPreparation: async () => undefined, prepareModel: async () => { }, cancelPreparation: async () => { }, getOptions: async () => ({ inputDevices: [], languages: [] }), start: async () => { captures++; return { stop: async () => { }, cancel: async () => { } }; } }, extensions));
 		assert.equal(speech.hasSpeechProvider, true); assert.equal(await speech.getOptions(), undefined);
 		const events = owner.add(new Emitter<ISpeechToTextEvent>()); const activations: string[] = [];
 		owner.add(extensions.registerActivationHandler(async (event, signal) => {
@@ -299,7 +299,7 @@ suite('Workbench speech ownership', () => {
 
 	test('a declared provider which fails to register rejects instead of using the builtin microphone', async () => {
 		using owner = new DisposableStore(); const extensions = await declaredExtensions(owner); let captures = 0;
-		const speech = owner.add(new SpeechService({ onDidChangePreparation: Event.None, getPreparation: async () => undefined, prepareModel: async () => { }, cancelPreparation: async () => { }, getOptions: async () => ({ inputDevices: [], languages: [] }), start: async () => { captures++; return { stop: async () => { } }; } }, extensions));
+		const speech = owner.add(new SpeechService({ onDidChangePreparation: Event.None, getPreparation: async () => undefined, prepareModel: async () => { }, cancelPreparation: async () => { }, getOptions: async () => ({ inputDevices: [], languages: [] }), start: async () => { captures++; return { stop: async () => { }, cancel: async () => { } }; } }, extensions));
 		owner.add(extensions.registerActivationHandler(async () => { }));
 		await assert.rejects(speech.createSpeechToTextSession(CancellationToken.None), /No speech extension provider/);
 		assert.equal(captures, 0); assert.equal(speech.isStarting, false);
@@ -363,7 +363,7 @@ suite('Workbench speech ownership', () => {
 
 	test('synchronous Cancel from Recording publication prevents microphone acquisition', async () => {
 		using owner = new DisposableStore(); let captures = 0;
-		const fixture = services(owner, async () => { captures++; return { stop: async () => { } }; });
+		const fixture = services(owner, async () => { captures++; return { stop: async () => { }, cancel: async () => { } }; });
 		owner.add(fixture.speech.onDidChangeState(state => {
 			if (state === SpeechToTextState.Recording) void fixture.speech.cancel();
 		}));

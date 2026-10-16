@@ -54,6 +54,8 @@ pub struct DictationOptions {
     deny_unknown_fields
 )]
 pub enum DictationBackend {
+    /// Subscription file transcription uses the connected Codex account and has no model selector.
+    Codex {},
     Local {
         model_id: String,
     },

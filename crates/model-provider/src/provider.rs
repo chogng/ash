@@ -979,6 +979,15 @@ pub struct ModelProviderRuntime {
 }
 
 impl ModelProviderRuntime {
+    /// Admits subscription dictation independently of the selected text model or API key.
+    pub fn codex_dictation(&self) -> Result<ash_chatgpt::ChatGptDictation, ModelProviderError> {
+        let auth = self.chatgpt_oauth.as_ref().ok_or_else(|| {
+            ModelProviderError::Credential("CodexDictationAuthenticationRequired".into())
+        })?;
+        ash_chatgpt::ChatGptDictation::new(Arc::clone(auth))
+            .map_err(|error| ModelProviderError::Credential(error.to_string()))
+    }
+
     /// Resolves a connection through the same registry used by model requests.
     pub fn connection_endpoint(
         &self,

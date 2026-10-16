@@ -3,6 +3,7 @@
 mod account;
 mod credential;
 mod device_flow;
+mod dictation;
 mod maintenance;
 mod oauth;
 mod plan;
@@ -13,6 +14,8 @@ pub use maintenance::ChatGptAuthManagement;
 pub use plan::CHATGPT_PLAN_PROVIDER_ID;
 pub use plan::ChatGptPlanOAuth;
 
+pub use dictation::ChatGptDictation;
+pub use dictation::ChatGptDictationError;
 pub use storage::codex_home;
 
 pub use account::ChatGptAccount;

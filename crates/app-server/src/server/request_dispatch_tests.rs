@@ -1209,3 +1209,15 @@ fn registered_cancel_methods_have_reserved_control_execution() {
         );
     }
 }
+
+#[test]
+fn subscription_dictation_upload_cannot_occupy_its_cancellation_lane() {
+    assert_eq!(
+        RequestLane::for_message("dictation/stop", &json!({})),
+        RequestLane::Background
+    );
+    assert_eq!(
+        RequestLane::for_message("dictation/cancel", &json!({})),
+        RequestLane::Control
+    );
+}

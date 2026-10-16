@@ -13,6 +13,8 @@ interface DictationCallbacks {
 	readonly onTranscript: (text: string, isFinal: boolean) => void;
 	readonly onEnded: (error?: string) => void;
 	stopping: boolean;
+	cancelled: boolean;
+	cancelling?: Promise<void>;
 	endedError?: string;
 }
 
@@ -52,15 +54,16 @@ export class AppServerDictationService extends Disposable implements IDictationS
 			const active = this.active;
 			if (!active || active.source !== 'cloud') { return; }
 			if (notification.method === 'dictation/transcript' && notification.params.resourceId === active.resourceId) {
+				if (active.cancelled) { return; }
 				if (notification.params.isFinal) { active.finalDelivered = true; }
 				active.onTranscript(notification.params.text, notification.params.isFinal);
 			} else if (notification.method === 'dictation/ended' && notification.params.resourceId === active.resourceId) {
 				if (active.stopping) {
-					active.endedError = notification.params.error ?? undefined;
+					active.endedError = active.cancelled ? undefined : dictationError(notification.params.error ?? undefined);
 					return;
 				}
 				this.active = undefined;
-				active.onEnded(notification.params.error ?? undefined);
+				active.onEnded(dictationError(notification.params.error ?? undefined));
 				if (!active.stopping) { void this.client.request(APP_SERVER_METHODS['dictation/stop'], { resourceId: active.resourceId }).catch(() => undefined); }
 			}
 		}));
@@ -100,22 +103,22 @@ export class AppServerDictationService extends Disposable implements IDictationS
 			const backend = dictationBackend(document);
 			const options = dictationInputOptions(document, backend.type);
 			this.assertNotDisposed();
-			const callbacks: DictationCallbacks = { onTranscript, onEnded, stopping: false };
+			const callbacks: DictationCallbacks = { onTranscript, onEnded, stopping: false, cancelled: false };
 			const active: ActiveDictation = backend.type === 'local'
 				? { ...callbacks, source: 'local' }
 				: { ...callbacks, source: 'cloud', resourceId: generateUuid(), finalDelivered: false };
 			this.active = active;
 			try {
-				if (active.source === 'local') {
+				if (backend.type === 'local') {
 					await this.localTranscription.start({ model: backend.modelId, inputDevice: options.inputDevice ?? undefined });
-				} else {
+				} else if (active.source === 'cloud') {
 					await this.client.request(APP_SERVER_METHODS['dictation/start'], { resourceId: active.resourceId, backend, ...options });
 				}
 			} catch (error) {
 				if (this.active === active) { this.active = undefined; }
-				throw error;
+				throw new Error(dictationError(String(error)));
 			}
-			return { stop: () => this.stop(active) };
+			return { stop: () => this.stop(active), cancel: () => this.cancel(active) };
 		} finally {
 			this.starting = false;
 		}
@@ -134,7 +137,7 @@ export class AppServerDictationService extends Disposable implements IDictationS
 				return;
 			}
 			const result = await this.client.request(APP_SERVER_METHODS['dictation/stop'], { resourceId: active.resourceId });
-			if (!active.finalDelivered && result.text !== null) {
+			if (!active.cancelled && !active.finalDelivered && result.text !== null) {
 				active.finalDelivered = true;
 				active.onTranscript(result.text, true);
 			}
@@ -144,7 +147,23 @@ export class AppServerDictationService extends Disposable implements IDictationS
 			}
 		} catch (error) {
 			if (this.active === active) { this.active = undefined; }
-			throw error;
+			if (!active.cancelled) { throw new Error(dictationError(String(error))); }
+		}
+	}
+
+	private cancel(active: ActiveDictation): Promise<void> {
+		if (active.cancelling) { return active.cancelling; }
+		if (this.active !== active) { return Promise.resolve(); }
+		active.cancelled = active.stopping = true;
+		return active.cancelling = this.cancelRecording(active);
+	}
+
+	private async cancelRecording(active: ActiveDictation): Promise<void> {
+		try {
+			if (active.source === 'local') { await this.localTranscription.cancel(); }
+			else { await this.client.request(APP_SERVER_METHODS['dictation/cancel'], { resourceId: active.resourceId }); }
+		} finally {
+			if (this.active === active) { this.active = undefined; active.onEnded(); }
 		}
 	}
 
@@ -154,8 +173,20 @@ export class AppServerDictationService extends Disposable implements IDictationS
 		if (active?.source === 'local') {
 			void this.localTranscription.cancel().catch(() => undefined);
 		} else if (active) {
-			void this.client.request(APP_SERVER_METHODS['dictation/stop'], { resourceId: active.resourceId }).catch(() => undefined);
+			void this.client.request(APP_SERVER_METHODS['dictation/cancel'], { resourceId: active.resourceId }).catch(() => undefined);
 		}
 		super.disposeCore();
 	}
+}
+
+function dictationError(message: string | undefined): string | undefined {
+	if (!message) { return message; }
+	if (message.includes('CodexDictationAuthenticationRequired')) { return localize('dictation.codex.authenticationRequired', 'Connect your Codex account in Models. If its login has expired, sign in again.'); }
+	if (message.includes('CodexDictationAccessDenied')) { return localize('dictation.codex.accessDenied', 'This Codex account cannot currently use subscription dictation. Check the account or choose another dictation service.'); }
+	if (message.includes('CodexDictationAccountChanged')) { return localize('dictation.codex.accountChanged', 'The Codex account changed during recording. Record again with the current account.'); }
+	if (message.includes('CodexDictationAudioTooLong')) { return localize('dictation.codex.audioTooLong', 'Codex dictation recordings can be up to 3 minutes long.'); }
+	if (message.includes('CodexDictationRateLimited')) { return localize('dictation.codex.rateLimited', 'Codex dictation is temporarily rate limited. Try again later.'); }
+	if (message.includes('CodexDictationCancelled')) { return localize('dictation.codex.cancelled', 'Codex dictation was cancelled.'); }
+	if (/CodexDictation(?:InvalidAudio|InvalidResponse|RequestFailed)/.test(message)) { return localize('dictation.codex.failed', 'Could not transcribe this recording with Codex. Record again and try once more.'); }
+	return message;
 }

@@ -45,6 +45,7 @@ interface Recording {
 	starting?: Promise<void>;
 	handle?: IDictationSession;
 	stopping?: Promise<string | undefined>;
+	cancelling?: Promise<void>;
 	finalizedText: string;
 	cancelled: boolean;
 }
@@ -305,7 +306,7 @@ export class SpeechService extends Disposable implements ISpeechService {
 				recording.lifetime.add(toDisposable(() => source.dispose(true)));
 				const session = entry.provider.createSpeechToTextSession(source.token, { language: speechLanguageConfigToLanguage(this.configuration?.getValue(SPEECH_LANGUAGE_CONFIG) ?? 'auto') });
 				if (source.token.isCancellationRequested) throw canceled();
-				recording.handle = { stop: async () => { source.cancel(); } };
+				recording.handle = { stop: async () => { source.cancel(); }, cancel: async () => { source.cancel(); } };
 				const listener = session.onDidChange(event => {
 					if (this.recording !== recording || recording.cancelled || this.isDisposed) return;
 					if (event.status === SpeechToTextStatus.Started) {
@@ -341,7 +342,7 @@ export class SpeechService extends Disposable implements ISpeechService {
 					this.setState(SpeechToTextState.Idle);
 				}
 			});
-			if (this.recording !== recording || this.isDisposed) { await handle.stop(); }
+			if (this.recording !== recording || this.isDisposed) { await handle.cancel(); }
 			else {
 				recording.handle = handle;
 				if (!recording.cancelled) { recording.started = true; this.started.fire(); }
@@ -381,14 +382,17 @@ export class SpeechService extends Disposable implements ISpeechService {
 	}
 
 	public async cancel(): Promise<void> {
-		if (this.recording) { this.recording.cancelled = true; }
-		await this.stopAndTranscribe();
+		const recording = this.recording;
+		if (recording) { recording.cancelled = true; }
+		if (recording?.handle) { recording.cancelling ??= recording.handle.cancel(); }
+		await Promise.all([recording?.cancelling, this.stopAndTranscribe()]);
 	}
 
 	private async stopRecording(recording: Recording): Promise<string | undefined> {
 		try {
 			await recording.starting;
-			await recording.handle?.stop();
+			if (recording.cancelled && recording.handle) { await (recording.cancelling ??= recording.handle.cancel()); }
+			else { await recording.handle?.stop(); }
 			return recording.cancelled ? undefined : recording.finalizedText || undefined;
 		} catch (error) {
 			if (recording.cancelled || isCancellationError(error)) return undefined;

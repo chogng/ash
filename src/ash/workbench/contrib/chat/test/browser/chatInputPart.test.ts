@@ -427,7 +427,7 @@ test('Chat keeps model preparation in settings and reads it only when dictation 
 		getPreparation: async () => { reads++; return snapshot; },
 		prepareModel: async () => { prepared++; },
 		cancelPreparation: async () => { cancelled++; },
-		start: async () => { starts++; return { stop: async () => { } }; },
+		start: async () => { starts++; return { stop: async () => { }, cancel: async () => { } }; },
 	}, 'agent', { openModelSettings: async category => { categories.push(category); settingsOpened(); }, send: async text => { sent.push(text); } });
 	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	assert.equal(part.element.querySelector('.ash-chat-model-preparation'), null);
@@ -461,7 +461,7 @@ test('Chat dictation session failure appears in notifications and releases the m
 	using part = inputPart(notifications, {
 		start: async (_onTranscript, onEnded) => {
 			endSession = onEnded;
-			return { stop: async () => { } };
+			return { stop: async () => { }, cancel: async () => { } };
 		}
 	});
 	const microphone = part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mic"] button');
@@ -484,7 +484,7 @@ test('Dictation replaces the selection and submission waits for final transcript
 	using part = inputPart(sharedNotifications, {
 		start: async (onTranscript, onEnded) => {
 			transcript = onTranscript;
-			return { stop: async () => { await new Promise<void>(resolve => { finishStop = resolve; }); transcript('replacement', true); onEnded(); } };
+			return { stop: async () => { await new Promise<void>(resolve => { finishStop = resolve; }); transcript('replacement', true); onEnded(); }, cancel: async () => { } };
 		},
 	}, 'agent', { send: async text => { sent.push(text); } });
 	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
@@ -505,14 +505,14 @@ test('Dictation replaces the selection and submission waits for final transcript
 });
 
 test('Closing an input during microphone acquisition closes the resulting session', async () => {
-	let completeStart!: (session: { stop(): Promise<void>; }) => void;
+	let completeStart!: (session: { stop(): Promise<void>; cancel(): Promise<void>; }) => void;
 	let stopped = 0;
 	const part = inputPart(sharedNotifications, { start: () => new Promise(resolve => { completeStart = resolve; }) });
 	part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mic"] button')!.click();
 	await Promise.resolve();
 	assert.equal(part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mic"] button')!.disabled, true);
 	part.dispose();
-	completeStart({ stop: async () => { stopped++; } });
+	completeStart({ stop: async () => { stopped++; }, cancel: async () => { stopped++; } });
 	await new Promise(resolve => setTimeout(resolve, 0));
 	assert.equal(stopped, 1);
 });
@@ -531,7 +531,7 @@ test('Shared dictation only changes its owning input and returns the complete tr
 		start: async (onTranscript, onEnded) => {
 			transcript = onTranscript;
 			ended = onEnded;
-			return { stop: async () => { stops++; transcript('second', true); ended(); } };
+			return { stop: async () => { stops++; transcript('second', true); ended(); }, cancel: async () => { stops++; } };
 		},
 	};
 	services.registerInstance(IDictationService, backend);
@@ -571,7 +571,8 @@ test('Hiding the recording input discards stop-time text and permits another inp
 		cancelPreparation: async () => { },
 		start: async onTranscript => {
 			transcript = onTranscript;
-			return { stop: () => new Promise<void>(resolve => { finishStop = () => { transcript('discarded', true); resolve(); }; stopRequested(); }) };
+			const finish = () => new Promise<void>(resolve => { finishStop = () => { transcript('discarded', true); resolve(); }; stopRequested(); });
+			return { stop: finish, cancel: finish };
 		},
 	};
 	services.registerInstance(IDictationService, backend);
@@ -614,7 +615,7 @@ test('A failed shared session notifies its owning input only', async () => {
 		getPreparation: async () => undefined,
 		prepareModel: async () => { },
 		cancelPreparation: async () => { },
-		start: async (_onTranscript: (text: string, final: boolean) => void, onEnded: (error?: string) => void) => { ended = onEnded; return { stop: async () => { } }; },
+		start: async (_onTranscript: (text: string, final: boolean) => void, onEnded: (error?: string) => void) => { ended = onEnded; return { stop: async () => { }, cancel: async () => { } }; },
 	});
 	services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 	registerTestDictationOnboarding(services);

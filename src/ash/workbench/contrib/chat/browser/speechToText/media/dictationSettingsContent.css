@@ -1,13 +1,29 @@
-.ash-dictation-cloud-connection {
+.ash-dictation-cloud-connection,
+.ash-dictation-subscription {
 	display: flex;
 	flex-direction: column;
 	align-items: flex-start;
 	gap: var(--ash-spacing-size80);
 	padding: var(--ash-spacing-size120) var(--ash-spacing-size160);
 }
-.ash-dictation-cloud-connection > p {
+.ash-dictation-cloud-connection > p,
+.ash-dictation-subscription > p {
 	margin: 0;
 	color: var(--ash-description-foreground);
+}
+
+.ash-dictation-subscription {
+	min-width: 0;
+}
+
+.ash-dictation-subscription > p {
+	overflow-wrap: anywhere;
+}
+
+.ash-dictation-subscription > h5 {
+	margin: 0;
+	font-size: var(--ash-fontSize-body1);
+	font-weight: var(--ash-fontWeight-semiBold);
 }
 
 .ash-dictation-input-options {

@@ -58,7 +58,7 @@ impl RequestLane {
                 | ClientMethod::TerminalClose
                 | ClientMethod::DebugAdapterClose
                 | ClientMethod::AttachmentUploadCancel
-                | ClientMethod::DictationStop
+                | ClientMethod::DictationCancel
                 | ClientMethod::McpOAuthCancel
                 | ClientMethod::ConnectorOAuthCancel
                 | ClientMethod::ConnectorDeviceOAuthCancel,
@@ -86,6 +86,8 @@ impl RequestLane {
                 | ClientMethod::IssueReporterSubmit
                 | ClientMethod::ProviderProbe
                 | ClientMethod::ProviderModelsList
+                // Stop may upload a full recording; keep cancellation workers available.
+                | ClientMethod::DictationStop
                 // Catalog I/O can outlive navigation and must not occupy the workers used by Settings reads.
                 | ClientMethod::ExtensionsSearch
                 | ClientMethod::ExtensionsSearchPage

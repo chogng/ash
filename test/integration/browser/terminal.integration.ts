@@ -334,7 +334,7 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 		services.registerInstance(ITerminalService, terminals);
 		let transcript!: (text: string, isFinal: boolean) => void;
 		let stops = 0;
-		services.registerInstance(IDictationService, { onDidChangePreparation: Event.None, getPreparation: async () => undefined, getOptions: async () => ({ inputDevices: [], languages: [] }), prepareModel: async () => { }, cancelPreparation: async () => { }, start: async (callback) => { transcript = callback; return { stop: async () => { stops++; } }; } });
+		services.registerInstance(IDictationService, { onDidChangePreparation: Event.None, getPreparation: async () => undefined, getOptions: async () => ({ inputDevices: [], languages: [] }), prepareModel: async () => { }, cancelPreparation: async () => { }, start: async (callback) => { transcript = callback; return { stop: async () => { stops++; }, cancel: async () => { stops++; } }; } });
 		services.registerInstance(IContextKeyService, context);
 		services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 		services.registerInstance(IViewsService, { openView: () => pane, getViewWithId: () => pane, focusView: () => { pane.focus(); return true; } } as unknown as IViewsService);
@@ -891,7 +891,7 @@ if (new URLSearchParams(location.search).has('input')) {
 			services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 			registerTestDictationOnboarding(services);
 			services.registerInstance(IPreferencesService, { openSettings: async () => { } } as unknown as IPreferencesService);
-			services.registerInstance(IDictationService, { onDidChangePreparation: Event.None, getPreparation: async () => undefined, getOptions: async () => ({ inputDevices: [], languages: [] }), prepareModel: async () => { }, cancelPreparation: async () => { }, start: async () => ({ stop: async () => { } }) });
+			services.registerInstance(IDictationService, { onDidChangePreparation: Event.None, getPreparation: async () => undefined, getOptions: async () => ({ inputDevices: [], languages: [] }), prepareModel: async () => { }, cancelPreparation: async () => { }, start: async () => ({ stop: async () => { }, cancel: async () => { } }) });
 			services.registerInstance(IMenuService, new MenuService(commands, services.get(IContextKeyService)));
 			const layout = Object.assign(store.add(new BrowserLayoutService({ root })), {
 				onDidChangePartVisibility: Event.None, isPartVisible: () => true, hidePart: () => { }, hasFocus: () => false,

@@ -6,7 +6,7 @@ import { Emitter } from '../../../../../base/common/event.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../nls.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import { DictationConfiguration } from '../../../../../platform/dictation/common/dictationConfiguration.js';
+import { DictationConfiguration, dictationBackend } from '../../../../../platform/dictation/common/dictationConfiguration.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
 import { DefaultSettings } from '../../../../services/preferences/common/settingsModels.js';
@@ -50,6 +50,10 @@ export class DictationSettingsContent extends Disposable implements SettingsCont
 	public readonly onDidChange = this.changed.event;
 	private readonly controls: LocalTranscriptionModelControls;
 	private readonly cloud: HTMLElement;
+	private readonly cloudModel: HTMLElement;
+	private readonly subscription: HTMLElement;
+	private readonly subscriptionTitle: string;
+	private readonly subscriptionDescription: string;
 	private readonly connectionStatus: HTMLElement;
 	private readonly inputOptions: HTMLElement;
 	private readonly microphone: SelectBox;
@@ -83,11 +87,26 @@ export class DictationSettingsContent extends Disposable implements SettingsCont
 		};
 		this.cloud = h(document, 'div');
 		this.cloud.className = 'ash-dictation-cloud-connection';
+		this.cloudModel = h(document, 'span');
 		this.connectionStatus = h(document, 'p');
 		this.connectionStatus.setAttribute('role', 'status');
 		this.cloud.append(this.connectionStatus);
 		const connections = this._register(new Button(this.cloud, { label: localize('dictation.connections.manage', 'Manage API connections'), presentation: 'secondary' }));
 		this._register(connections.onDidClick(() => { void preferences.openSettings({ section: 'models' }); }));
+		this.subscriptionTitle = localize('dictation.subscription.title', 'Codex subscription dictation');
+		this.subscriptionDescription = localize('dictation.subscription.description', 'Use your Codex login from Models. Record up to 3 minutes, then stop to transcribe and insert the text. No separate API key is needed.');
+		this.subscription = h(document, 'div');
+		this.subscription.className = 'ash-dictation-subscription';
+		this.subscription.setAttribute('role', 'group');
+		const title = h(document, 'h5', this.subscriptionTitle);
+		title.id = `dictation-subscription-${generateUuid()}`;
+		const description = h(document, 'p', this.subscriptionDescription);
+		description.id = `${title.id}-description`;
+		this.subscription.setAttribute('aria-labelledby', title.id);
+		this.subscription.setAttribute('aria-describedby', description.id);
+		this.subscription.append(title, description);
+		const account = this._register(new Button(this.subscription, { label: localize('dictation.subscription.manage', 'Manage Codex account'), presentation: 'secondary' }));
+		this._register(account.onDidClick(() => { void preferences.openSettings({ section: 'models' }); }));
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(AccessibilityVerbositySettingId.DictationModels)) { updateHint(); }
 			if (event.affectsConfiguration(DictationConfiguration.backend) || event.affectsConfiguration(DictationConfiguration.cloudProvider)) {
@@ -137,8 +156,17 @@ export class DictationSettingsContent extends Disposable implements SettingsCont
 				value: { domNode: this.inputOptions },
 			}
 		}];
-		if (this.configuration.getValue(DictationConfiguration.backend) === 'cloud') {
+		const backend = dictationBackend(this.configuration);
+		if (backend.type === 'cloud') {
 			children.push(settingNode(DictationConfiguration.cloudProvider), {
+				element: {
+					kind: 'item', id: 'dictation.cloudModel',
+					title: localize('dictation.cloudModel.title', 'Transcription model'),
+					description: localize('dictation.cloudModel.description', 'The transcription model follows the selected service. Voice input is independent of the chat model.'),
+					keywords: [backend.modelId, 'model', 'transcription'],
+					value: { domNode: this.cloudModel },
+				},
+			}, {
 				element: {
 					kind: 'item', id: 'dictation.connection',
 					title: localize('dictation.connections.title', 'Cloud connection'),
@@ -146,7 +174,7 @@ export class DictationSettingsContent extends Disposable implements SettingsCont
 					value: { domNode: this.cloud },
 				},
 			});
-		} else {
+		} else if (backend.type === 'local') {
 			children.push({
 				element: {
 					kind: 'item', id: DictationConfiguration.localModel,
@@ -154,6 +182,16 @@ export class DictationSettingsContent extends Disposable implements SettingsCont
 					description: localize('dictation.model.tableDescription', 'Install a model, select it for dictation, or uninstall it.'),
 					keywords: ['model', 'install', 'import', 'uninstall'],
 					value: { domNode: this.controls.domNode },
+				},
+			});
+		} else {
+			children.push({
+				element: {
+					kind: 'item', id: 'dictation.subscription',
+					title: this.subscriptionTitle,
+					description: this.subscriptionDescription,
+					keywords: ['Codex', 'ChatGPT', 'subscription'],
+					value: { domNode: this.subscription },
 				},
 			});
 		}
@@ -171,8 +209,10 @@ export class DictationSettingsContent extends Disposable implements SettingsCont
 
 	private updateVisibility(): void {
 		this.requestVersion++;
-		const cloud = this.configuration.getValue(DictationConfiguration.backend) === 'cloud';
-		this.controls.setVisible(this.visible && !cloud);
+		const backend = dictationBackend(this.configuration);
+		const cloud = backend.type === 'cloud';
+		this.cloudModel.textContent = backend.type === 'cloud' ? backend.modelId : '';
+		this.controls.setVisible(this.visible && backend.type === 'local');
 		if (this.visible && cloud) { void this.readConnection(this.requestVersion); }
 		if (this.visible) { void this.readInputOptions(this.requestVersion); }
 	}
@@ -216,7 +256,7 @@ export class DictationSettingsContent extends Disposable implements SettingsCont
 			const provider = providers.find(provider => provider.connection === connection);
 			this.connectionStatus.textContent = provider?.apiKeyConfigured
 				? localize('dictation.connections.configured', 'API key configured. This connection is shared with chat.')
-				: localize('dictation.connections.missing', 'An API key is required. Configure it in API connections. Chat subscriptions do not grant dictation access.');
+				: localize('dictation.connections.missing', 'This cloud API service requires an API key. Configure it in Models.');
 		} catch {
 			if (version === this.requestVersion && !this.isDisposed) { this.connectionStatus.textContent = localize('dictation.connections.failed', 'Could not read the dictation connection.'); }
 		}
