@@ -7,6 +7,8 @@ description: Investigate Ash performance or memory with a repeatable Ash scenari
 
 Define a warmup action, a repeatable iteration, and an observable settled state. Run a small scenario first, then collect only the measurements needed to investigate the suspected growth or latency. Check that the intended workflow completed before interpreting memory data.
 
+For typing, undo, large-file editing, folding or outline latency, use [editor-perf-optimize](../editor-perf-optimize/SKILL.md) for the editor's input-to-readiness measurements and renderer/backend/extension investigation.
+
 ## Run an Ash scenario
 
 Use the existing `test/scenario/src/runScenario.ts` entrypoint and [scenario guide](../validate-ui-scenario/SKILL.md) for the scenario contract, preparation, and evidence output. Inspect that guide when launching a real application. Reuse preparation that still covers the current source.
