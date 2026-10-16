@@ -5,6 +5,7 @@ import { SystemPolicyService } from '../../platform/policy/node/systemPolicyServ
 import { FilePolicyService } from '../../platform/policy/common/filePolicyService.js';
 import { PolicyChannel } from '../../platform/policy/common/policyIpc.js';
 import { randomUUID } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 import { WebviewProtocolProvider } from '../../platform/webview/electron-main/webviewProtocolProvider.js';
 import { isAdmin, performShellCommand } from '../../platform/native/electron-main/nativeHostMainService.js';
 import { ChecksumService, checksumChannel } from '../../platform/checksum/node/checksumService.js';
@@ -164,6 +165,9 @@ interface PersistentServices {
 	readonly userKeyboardLayout: UserKeyboardLayoutMainService;
 }
 
+// Connection failures and HTTP error responses can occur while the dev server restarts.
+const developmentLoadErrors = new Set([-100, -101, -102, -103, -106, -324, -379]);
+
 interface RendererEntry {
 	readonly file: string;
 	readonly url: string;
@@ -209,6 +213,7 @@ const AGENTS_WINDOW_KEY = 'agents';
 /** Owns the Electron application's persistent services, Workbench windows, IPC, and shutdown. */
 export class AshApplication extends Disposable {
 	private readonly rendererRoot: string;
+	private readonly rendererLoads = new WeakMap<BrowserWindow, Promise<void>>();
 	private readonly chatGPTChannels = new Map<string, IServerChannel<string>>();
 	private readonly appServerStartupMode: AppServerStartupMode;
 	private readonly disposableTracker: DisposableTracker | undefined;
@@ -1570,6 +1575,17 @@ export class AshApplication extends Disposable {
 		windowDisposables.add(toDisposable(() => webContents.off('will-navigate', preventNavigation)));
 		webContents.on('did-create-window', onDidCreateWindow);
 		windowDisposables.add(toDisposable(() => webContents.off('did-create-window', onDidCreateWindow)));
+		const onDidFailLoad = (_event: ElectronEvent, code: number, description: string, url: string, mainFrame: boolean): void => {
+			if (!mainFrame || code === -3) return;
+			this.logService.error('window', 'Renderer navigation failed', { windowId: window.id, code, description, url });
+			// An error document has lost Vite's reconnect script. Recovery must live
+			// in Main and may reload only one of this host's exact development entries.
+			if (app.isPackaged || !process.env.ASH_RENDERER_URL || !developmentLoadErrors.has(code)) return;
+			const entry = (['workbench', 'sessions'] as const).map(kind => this.resolveRendererEntry(kind)).find(entry => entry.url === url);
+			if (entry) void this.loadRendererEntry(window, entry).catch(error => this.logService.error('window', 'Renderer recovery failed', error));
+		};
+		webContents.on('did-fail-load', onDidFailLoad);
+		windowDisposables.add(toDisposable(() => webContents.off('did-fail-load', onDidFailLoad)));
 	}
 
 	private getBrowserHostChannel(context: string): IServerChannel<string> {
@@ -1865,12 +1881,58 @@ export class AshApplication extends Disposable {
 		};
 	}
 
-	private async loadRendererEntry(window: BrowserWindow, entry: RendererEntry): Promise<void> {
-		if (entry.useDevelopmentUrl || new URL(entry.url).search.length > 0) {
-			await window.loadURL(entry.url);
-			return;
+	private loadRendererEntry(window: BrowserWindow, entry: RendererEntry): Promise<void> {
+		if (!entry.useDevelopmentUrl) {
+			return new URL(entry.url).search.length > 0 ? window.loadURL(entry.url) : window.loadFile(entry.file);
 		}
-		await window.loadFile(entry.file);
+		const pending = this.rendererLoads.get(window);
+		if (pending) return pending;
+		// Publish the operation before loadURL can emit did-fail-load, so an
+		// initial failure and a later HMR failure share one recovery operation.
+		const operation = Promise.resolve().then(async () => {
+			const closed = new AbortController();
+			const onClosed = (): void => closed.abort();
+			window.once('closed', onClosed);
+			let waiting = false;
+			try {
+				while (!window.isDestroyed()) {
+					// Gate both startup and recovery on the actual HTML response. An HMR
+					// socket can be listening while the page still returns an HTTP error.
+					let ready = false;
+					let reason: string | number | undefined;
+					try {
+						const response = await fetch(entry.url, { redirect: 'error', signal: AbortSignal.any([closed.signal, AbortSignal.timeout(2_000)]) });
+						ready = response.ok;
+						reason = response.status;
+						await response.body?.cancel();
+					} catch (error) {
+						reason = error instanceof Error ? `${error.message}: ${String(error.cause)}` : String(error);
+					}
+					if (!ready) {
+						if (!waiting) this.logService.warn('window', 'Waiting for development renderer', { windowId: window.id, url: entry.url, reason });
+						waiting = true;
+						await delay(500, undefined, { signal: closed.signal });
+						continue;
+					}
+					try {
+						await window.loadURL(entry.url);
+						return;
+					} catch (error) {
+						if (closed.signal.aborted) return;
+						if (!isRecord(error) || typeof error.errno !== 'number' || !developmentLoadErrors.has(error.errno)) throw error;
+						await delay(500, undefined, { signal: closed.signal });
+					}
+				}
+			} catch (error) {
+				if (!closed.signal.aborted) throw error;
+			} finally {
+				window.off('closed', onClosed);
+			}
+		});
+		this.rendererLoads.set(window, operation);
+		const complete = (): void => { this.rendererLoads.delete(window); };
+		void operation.then(complete, complete);
+		return operation;
 	}
 
 	private createSandboxWebPreferences() {
