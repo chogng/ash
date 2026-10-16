@@ -10,7 +10,7 @@ test.afterAll(async () => { await Promise.all([parser?.dispose(), chinese?.dispo
 test.beforeEach(async ({ page }) => {
 	await page.route('**/__markdown_extension?*', async route => {
 		const extension = new URL(route.request().url()).searchParams.get('locale') === 'zh-CN' ? chinese : parser;
-		await route.fulfill({ json: { generation: 1, extensions: [{ id: 'vscode.markdown-language-features', version: '1.0.0', packageDigest: `sha256:${'a'.repeat(64)}`, runtimeApiVersion: 1, activationGeneration: 1, incarnation: 1, lifecycle: 'ready', failure: null, stderr: '', outputEvents: [], registrations: extension.registrations }] } });
+		await route.fulfill({ json: { generation: 1, extensions: [{ id: 'ash.markdown-language-features', version: '1.0.0', packageDigest: `sha256:${'a'.repeat(64)}`, runtimeApiVersion: 1, activationGeneration: 1, incarnation: 1, lifecycle: 'ready', failure: null, stderr: '', outputEvents: [], registrations: extension.registrations }] } });
 	});
 	await page.route('**/__markdown_render**', async route => {
 		try {

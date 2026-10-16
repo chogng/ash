@@ -19,7 +19,7 @@ pub struct MathExtension;
 
 impl Extension for MathExtension {
     fn id(&self) -> &str {
-        "vscode.markdown-math"
+        "ash.markdown-math"
     }
 
     fn activate(&mut self, context: &mut ExtensionContext) -> Result<(), ExtensionError> {

@@ -441,7 +441,7 @@ test('Built-in Git, Markdown and Media settings localize, persist and reset thro
 	const defaults = new DefaultSettings(registry);
 	const layout = createSettingsLayout(defaults.all);
 	assert.deepEqual(layout.filter(category => category.id.startsWith('extension.')).map(category => [category.id, category.groups.flatMap(group => group.settings).length]), [
-		['extension.ash.git', 105], ['extension.vscode.markdown-language-features', 13], ['extension.ash.media-preview', 2],
+		['extension.ash.git', 105], ['extension.ash.markdown-language-features', 13], ['extension.ash.media-preview', 2],
 	]);
 	assert.equal(defaults.get('mediaPreview.video.loop').title, '循环播放视频');
 	assert.equal(defaults.get('markdown.validate.enabled').title, '检查链接');

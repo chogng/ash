@@ -95,7 +95,7 @@ export class MarkedKatexSupport extends Disposable {
 
 	private async getSnapshot(): Promise<ExtensionHostFleetSnapshot> {
 		const pending = this.snapshot ??= this.host.list().then(snapshot => {
-			const runtime = snapshot.extensions.find(entry => entry.id === 'vscode.markdown-math');
+			const runtime = snapshot.extensions.find(entry => entry.id === 'ash.markdown-math');
 			return !this.isDisposed && this.configuration.getValue<boolean>('markdown.math.enabled') !== false && runtime?.lifecycle === 'dormant' ? this.host.activateByEvent({
 				extensionId: runtime.id, activationGeneration: runtime.activationGeneration,
 				event: { type: 'capability', capability: 'math.render.v2' },
@@ -104,7 +104,7 @@ export class MarkedKatexSupport extends Disposable {
 		try {
 			const snapshot = await pending;
 			if (this.isDisposed || this.snapshot !== pending) { throw new Error('Math provider changed'); }
-			const runtime = snapshot.extensions.find(entry => entry.id === 'vscode.markdown-math');
+			const runtime = snapshot.extensions.find(entry => entry.id === 'ash.markdown-math');
 			const identity = JSON.stringify([runtime?.activationGeneration, runtime?.incarnation, runtime?.lifecycle, runtime?.registrations]);
 			if (identity !== this.providerIdentity) { this.clearBatches(); this.providerIdentity = identity; }
 			return snapshot;
@@ -230,7 +230,7 @@ export class MarkedKatexSupport extends Disposable {
 			}
 		};
 		const provider = (snapshot: ExtensionHostFleetSnapshot): ExtensionHostRuntime | undefined =>
-			snapshot.extensions.find(runtime => runtime.id === 'vscode.markdown-math');
+			snapshot.extensions.find(runtime => runtime.id === 'ash.markdown-math');
 		const providerIdentity = (runtime: ExtensionHostRuntime | undefined): string =>
 			JSON.stringify([runtime?.activationGeneration, runtime?.incarnation, runtime?.lifecycle, runtime?.registrations]);
 		const refresh = async (force = false): Promise<void> => {

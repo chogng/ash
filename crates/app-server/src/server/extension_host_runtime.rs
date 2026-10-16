@@ -147,6 +147,7 @@ enum EditorClientScope {
 }
 
 struct RuntimeEntry {
+    scope: source::EditorExtensionScope,
     activation_gate: Arc<Mutex<()>>,
     version: String,
     workspace_read: source::WorkspaceReadAccess,
@@ -589,16 +590,12 @@ impl ExtensionHostRuntime {
         state
             .entries
             .iter()
-            .filter(|(_, entry)| {
-                entry.window_deployment.as_ref().is_some_and(|deployment| {
-                    deployment.scope == source::EditorExtensionScope::Product
-                })
-            })
-            .map(|(id, _)| {
-                let running = state
-                    .windows
-                    .values()
-                    .filter_map(|entries| entries.get(id))
+            .filter(|(_, entry)| entry.scope == source::EditorExtensionScope::Product)
+            .map(|(id, entry)| {
+                // Shared Rust providers and per-window providers belong to the same
+                // product catalog; neither execution scope implies enablement.
+                let running = std::iter::once(entry)
+                    .chain(state.windows.values().filter_map(|entries| entries.get(id)))
                     .any(|entry| {
                         entry.supervisor.as_ref().is_some_and(|supervisor| {
                             supervisor.snapshot().status

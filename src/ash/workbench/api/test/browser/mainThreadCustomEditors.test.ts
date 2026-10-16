@@ -237,7 +237,7 @@ test('packaged Markdown extension activates Chinese labels and renders the suppl
 	const { registrations, handlers } = await loadMarkdown('zh-CN', [], {}, [], async request => { if (request.operation === 'executeCommand') { commands.push([request.command, ...request.arguments!]); return { result: 'command', value: null, hasValue: false }; } return { result: 'done' }; });
 	const normalized = normalizeExtensionHostSnapshot({
 		generation: 1, extensions: [{
-			id: 'vscode.markdown-language-features', activationGeneration: 1, incarnation: 1, lifecycle: 'ready',
+			id: 'ash.markdown-language-features', activationGeneration: 1, incarnation: 1, lifecycle: 'ready',
 			version: '1.0.0', packageDigest: `sha256:${'b'.repeat(64)}`, runtimeApiVersion: 1,
 			stderr: '', failure: null, registrations, outputEvents: [],
 		}]

@@ -47,7 +47,7 @@ const packageChanges = lifetime.add(new Emitter<void>());
 const packages: IExtensionApi = {
 	onDidChange: packageChanges.event,
 	resources: fixture.resources,
-	list: async mode => { const catalog = await fixture.list(mode); return { ...catalog, extensions: catalog.extensions.filter(extension => extension.id === 'vscode.markdown-language-features') }; },
+	list: async mode => { const catalog = await fixture.list(mode); return { ...catalog, extensions: catalog.extensions.filter(extension => extension.id === 'ash.markdown-language-features') }; },
 };
 services.registerInstance(IExtensionApi, packages);
 const host = {

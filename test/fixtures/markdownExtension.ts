@@ -94,10 +94,10 @@ async function startExtensionProcess(binary: string, extensionId: string, capabi
 
 /** Both implementations are real Rust programs; the fixture supplies their host route. */
 export async function startMarkdownExtension(language = 'en', documents: readonly any[] = [], configuration: any = {}, folders: readonly string[] = [], clientRequest: ClientRequest = async () => ({ result: 'done' }), mathEnabled = true) {
-	let math = mathEnabled ? await startExtensionProcess('ash-markdown-math', 'vscode.markdown-math', ['dataChannel'], language, [], {}, [], clientRequest) : undefined;
+	let math = mathEnabled ? await startExtensionProcess('ash-markdown-math', 'ash.markdown-math', ['dataChannel'], language, [], {}, [], clientRequest) : undefined;
 	let runtime: Awaited<ReturnType<typeof startExtensionProcess>>;
 	try {
-		runtime = await startExtensionProcess('ash-markdown-language-features', 'vscode.markdown-language-features', ['command', 'customTextEditor', 'languageProvider'], language, documents, configuration, folders, async operation => {
+		runtime = await startExtensionProcess('ash-markdown-language-features', 'ash.markdown-language-features', ['command', 'customTextEditor', 'languageProvider'], language, documents, configuration, folders, async operation => {
 			if (operation.operation === 'backendRequest' && operation.capability === 'math.render.v2' && operation.method === 'receiveData') {
 				if (!math) throw new Error('Math capability unavailable');
 				return { result: 'value', value: await math.invoke('math.render.v2', 'receiveData', operation.params) };
@@ -114,7 +114,7 @@ export async function startMarkdownExtension(language = 'en', documents: readonl
 			const result = await invoke(registrationId, 'resolveCustomTextEditor', payload);
 			if (result.resources) {
 				const fixture = JSON.parse(await readFile(resolve(root, '.build/builtin/fixture.json'), 'utf8'));
-				const resources = fixture.resources['vscode.markdown-language-features'];
+				const resources = fixture.resources['ash.markdown-language-features'];
 				result.html = `<style>${Buffer.from(resources[result.resources.style], 'base64').toString()}</style>${result.html}<script>${Buffer.from(resources[result.resources.script], 'base64').toString().replaceAll(/<\/script/gi, '<\\/script')}</script>`;
 				delete result.resources;
 			}
@@ -127,5 +127,5 @@ export async function startMarkdownExtension(language = 'en', documents: readonl
 
 /** Exposes the same optional math process to chat-renderer consumers. */
 export function startMarkdownMathExtension() {
-	return startExtensionProcess('ash-markdown-math', 'vscode.markdown-math', ['dataChannel'], 'en', [], {}, [], async () => ({ result: 'done' }));
+	return startExtensionProcess('ash-markdown-math', 'ash.markdown-math', ['dataChannel'], 'en', [], {}, [], async () => ({ result: 'done' }));
 }

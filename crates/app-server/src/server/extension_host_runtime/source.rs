@@ -246,7 +246,7 @@ pub(super) fn product_markdown_math_deployment(
         "sha256:{:x}",
         Sha256::digest(format!("{manifest}\0{source}\0{contract}"))
     );
-    let id = "vscode.markdown-math".to_owned();
+    let id = "ash.markdown-math".to_owned();
     Ok(EditorExtensionDeployment {
         scope: EditorExtensionScope::Product,
         id: id.clone(),
@@ -267,7 +267,7 @@ pub(super) fn product_markdown_math_deployment(
             initialization: None,
             extension_id: id,
             package: PackageBinding {
-                package_id: "vscode.markdown-math@1.0.0".into(),
+                package_id: "ash.markdown-math@1.0.0".into(),
                 package_digest: digest,
                 entrypoint: "ash-markdown-math".into(),
             },
@@ -332,7 +332,7 @@ fn product_markdown_deployment(
     );
     Ok(EditorExtensionDeployment {
         scope: EditorExtensionScope::Product,
-        id: "vscode.markdown-language-features".into(),
+        id: "ash.markdown-language-features".into(),
         version: "1.0.0".into(),
         package_digest: digest.clone(),
         command: ExtensionLaunchCommand::new(
@@ -360,9 +360,9 @@ fn product_markdown_deployment(
         }),
         params: ActivateParams {
             initialization: None,
-            extension_id: "vscode.markdown-language-features".into(),
+            extension_id: "ash.markdown-language-features".into(),
             package: PackageBinding {
-                package_id: "vscode.markdown-language-features@1.0.0".into(),
+                package_id: "ash.markdown-language-features@1.0.0".into(),
                 package_digest: digest,
                 entrypoint: "ash-markdown-language-features".into(),
             },

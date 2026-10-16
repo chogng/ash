@@ -84,9 +84,9 @@ fn start() -> Running {
     let activation = ExtensionActivationSpec::new(
         ActivateParams {
             initialization: None,
-            extension_id: "vscode.markdown-math".into(),
+            extension_id: "ash.markdown-math".into(),
             package: PackageBinding {
-                package_id: "vscode.markdown-math@1.0.0".into(),
+                package_id: "ash.markdown-math@1.0.0".into(),
                 package_digest: format!("sha256:{}", "a".repeat(64)),
                 entrypoint: "ash-markdown-math".into(),
             },

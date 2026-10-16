@@ -1,6 +1,6 @@
 {
   "name": "markdown-language-features",
-  "publisher": "vscode",
+  "publisher": "ash",
   "version": "1.0.0",
   "type": "module",
   "displayName": "%displayName%",
@@ -461,7 +461,7 @@
     "kind": "rust",
     "entrypoint": "ash-markdown-language-features",
     "requires": {
-      "math.render.v2": "vscode.markdown-math"
+      "math.render.v2": "ash.markdown-math"
     },
     "webviews": [
       {

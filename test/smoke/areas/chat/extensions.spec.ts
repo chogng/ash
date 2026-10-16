@@ -55,19 +55,30 @@ for (const window of ['Code', 'Agents']) {
 }
 
 for (const window of ['Code', 'Agents']) {
-	test(`Built-in extension details open in the registered Editor in ${window}`, async ({ target, workbench }) => {
+	test(`Built-in extension details open in the registered Editor in ${window}`, { tag: ['@electron-app-server'] }, async ({ target, workbench }, testInfo) => {
 		const page = window === 'Code' ? workbench.page : await workbench.openAgentsWindow(target.kind);
-		await new QuickAccess(page).runCommand(window === 'Code' ? 'ash.extensions.open' : 'workbench.action.chat.configure.skills');
+		await new QuickAccess(page).runCommand('ash.extensions.manageBuiltIn');
 		const extensions = page.locator('[data-view-id="ash.extensions.view"]');
-		await extensions.getByRole('button', { name: 'Built-in', exact: true }).click();
-		await extensions.getByRole('option').filter({ hasText: 'vscode.markdown-language-features' }).click();
-		const editor = page.locator('.ash-extension-editor');
-		await expect(editor.locator('.extension-detail-header h1')).toBeVisible();
-		await expect(editor.getByRole('tab', { name: 'Details', exact: true })).toHaveAttribute('aria-selected', 'true');
-		await expect(editor.getByRole('complementary', { name: 'Additional information', exact: true })).toContainText('vscode.markdown-language-features');
-		await editor.getByRole('tab', { name: 'Features', exact: true }).click();
-		await expect(editor.getByRole('tabpanel', { name: 'Features', exact: true })).toContainText('commands');
-		await expect(page.locator('.ash-settings-editor')).toHaveCount(0);
+		for (const id of ['ash.markdown-language-features', 'ash.markdown-math']) {
+			await extensions.getByRole('option').filter({ hasText: id }).click();
+			// Details inputs retain their panes; only the selected extension is visible.
+			const editor = page.locator('.ash-extension-editor:visible');
+			await expect(editor.locator('.extension-detail-header h1')).toBeVisible();
+			await editor.getByRole('tab', { name: 'Details', exact: true }).click();
+			await expect(editor.getByRole('tab', { name: 'Details', exact: true })).toHaveAttribute('aria-selected', 'true');
+			await expect(editor.getByRole('complementary', { name: 'Additional information', exact: true }).getByText(id, { exact: true })).toBeVisible();
+			await expect(editor).not.toContainText(id.replace('ash.', 'vscode.'));
+			await editor.getByRole('tab', { name: 'Features', exact: true }).click();
+			await expect(editor.getByRole('tabpanel', { name: 'Features', exact: true })).toBeVisible();
+			await expect(editor.getByRole('status')).toHaveText(/^Enabled · (running|starts on demand)$/u);
+			if (id === 'ash.markdown-math') {
+				await expect(editor.getByRole('tabpanel', { name: 'Features', exact: true })).toContainText('math.render.v2');
+			}
+			await expect(page.locator('.ash-settings-editor')).toHaveCount(0);
+			const screenshot = testInfo.outputPath(`${window}-${id}.png`);
+			await editor.screenshot({ path: screenshot });
+			await testInfo.attach(`${window}-${id}`, { path: screenshot, contentType: 'image/png' });
+		}
 	});
 }
 

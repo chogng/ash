@@ -24,7 +24,7 @@ pub(crate) fn invalid(message: &str) -> ExtensionError {
 
 impl Extension for MarkdownExtension {
     fn id(&self) -> &str {
-        "vscode.markdown-language-features"
+        "ash.markdown-language-features"
     }
 
     fn activate(&mut self, context: &mut ExtensionContext) -> Result<(), ExtensionError> {

@@ -120,6 +120,10 @@ fn declared_capability_calls_activate_the_exact_real_provider_and_obey_cancellat
         .unwrap()
         .entries
         .insert(deployment.id.clone(), entry);
+    assert_eq!(
+        runtime.product_extension_states(),
+        [("ash.markdown-math".into(), false)]
+    );
     let mut binding = super::EditorClientBinding {
         runtime: Arc::downgrade(&runtime.inner),
         backend_channels: BTreeMap::new(),
@@ -127,7 +131,7 @@ fn declared_capability_calls_activate_the_exact_real_provider_and_obey_cancellat
         credential_services: Arc::new(Mutex::new(BTreeMap::new())),
         client_host: Arc::new(crate::client_host::ClientHost::default()),
         owner: 7,
-        extension_id: "vscode.markdown-language-features".into(),
+        extension_id: "ash.markdown-language-features".into(),
         workspace_read: super::source::WorkspaceReadAccess::Denied,
         files: Err(test_files_unavailable()),
     };
@@ -166,6 +170,10 @@ fn declared_capability_calls_activate_the_exact_real_provider_and_obey_cancellat
         runtime.inner.state.lock().unwrap().entries[&deployment.id]
             .pending_activation
             .is_none()
+    );
+    assert_eq!(
+        runtime.product_extension_states(),
+        [("ash.markdown-math".into(), true)]
     );
     enabled.store(false, Ordering::Release);
     assert!(matches!(
@@ -208,7 +216,7 @@ fn markdown_product_registration_owns_views_and_obeys_profile_policy() {
     .unwrap();
     let markdown = deployments
         .iter()
-        .find(|entry| entry.id == "vscode.markdown-language-features")
+        .find(|entry| entry.id == "ash.markdown-language-features")
         .unwrap();
     assert_eq!(
         markdown.params.capabilities,
@@ -238,11 +246,11 @@ fn markdown_product_registration_owns_views_and_obeys_profile_policy() {
             .backend_channels
             .get("math.render.v2")
             .map(String::as_str),
-        Some("vscode.markdown-math")
+        Some("ash.markdown-math")
     );
     let math = deployments
         .iter()
-        .find(|entry| entry.id == "vscode.markdown-math")
+        .find(|entry| entry.id == "ash.markdown-math")
         .unwrap();
     assert_eq!(
         math.params.capabilities,
@@ -253,6 +261,36 @@ fn markdown_product_registration_owns_views_and_obeys_profile_policy() {
     ));
     assert!(math.backend_channels.is_empty());
     assert!(!math.authority.authorizes());
+    for (deployment, manifest) in [
+        (
+            markdown,
+            include_str!("../../../../extensions/markdown-language-features/package.json"),
+        ),
+        (
+            math,
+            include_str!("../../../../extensions/markdown-math/package.json"),
+        ),
+    ] {
+        let manifest: serde_json::Value = serde_json::from_str(manifest).unwrap();
+        assert_eq!(manifest["publisher"], "ash");
+        assert_eq!(
+            deployment.id,
+            format!("ash.{}", manifest["name"].as_str().unwrap())
+        );
+        assert_eq!(deployment.params.extension_id, deployment.id);
+        assert_eq!(
+            deployment.params.package.package_id,
+            format!(
+                "{}@{}",
+                deployment.id,
+                manifest["version"].as_str().unwrap()
+            )
+        );
+        assert_eq!(
+            deployment.params.package.entrypoint,
+            manifest["ashRuntime"]["entrypoint"].as_str().unwrap()
+        );
+    }
 }
 
 #[test]
@@ -733,6 +771,14 @@ fn product_ssh_is_available_without_a_directory_and_is_rebound_after_unbind() {
         Default::default(),
     )
     .unwrap();
+    let product_states = runtime.product_extension_states();
+    for id in ["ash.markdown-language-features", "ash.markdown-math"] {
+        assert!(
+            product_states
+                .iter()
+                .any(|(extension_id, _)| extension_id == id)
+        );
+    }
     let initial = runtime.inner.snapshot();
     let initial_ssh = initial
         .extensions
@@ -860,6 +906,7 @@ fn assert_lazy_activation_fence(event: super::source::ActivationEvent) {
         state.entries.insert(
             "lazy".into(),
             super::RuntimeEntry {
+                scope: super::source::EditorExtensionScope::Workspace,
                 backend_channels: std::collections::BTreeMap::new(),
                 activation_gate: Arc::new(std::sync::Mutex::new(())),
                 client_scope: super::EditorClientScope::Unsupported,

@@ -300,6 +300,7 @@ fn runtime_with_recipe(
     runtime.inner.state.lock().unwrap().entries.insert(
         deployment.id.clone(),
         RuntimeEntry {
+            scope: deployment.scope,
             activation_gate: Arc::new(std::sync::Mutex::new(())),
             version: deployment.version.clone(),
             workspace_read: WorkspaceReadAccess::Denied,

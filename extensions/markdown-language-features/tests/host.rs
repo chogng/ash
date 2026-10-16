@@ -110,9 +110,9 @@ fn start() -> Running {
     let activation = ExtensionActivationSpec::new(
         ActivateParams {
             initialization: None,
-            extension_id: "vscode.markdown-language-features".into(),
+            extension_id: "ash.markdown-language-features".into(),
             package: PackageBinding {
-                package_id: "vscode.markdown-language-features@1.0.0".into(),
+                package_id: "ash.markdown-language-features@1.0.0".into(),
                 package_digest: format!("sha256:{}", "a".repeat(64)),
                 entrypoint: "ash-markdown-language-features".into(),
             },

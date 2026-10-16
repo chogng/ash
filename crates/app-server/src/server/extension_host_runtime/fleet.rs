@@ -151,6 +151,7 @@ impl RuntimeInner {
             return RuntimeEntry {
                 activation_gate: Arc::new(std::sync::Mutex::new(())),
                 version,
+                scope: deployment.scope,
                 workspace_read: deployment.workspace_read,
                 backend_channels: deployment.backend_channels.clone(),
                 supervisor: None,
@@ -268,6 +269,7 @@ impl RuntimeInner {
                 RuntimeEntry {
                     activation_gate: Arc::new(std::sync::Mutex::new(())),
                     version,
+                    scope: deployment.scope,
                     workspace_read: deployment.workspace_read,
                     backend_channels: deployment.backend_channels.clone(),
                     supervisor: Some(supervisor),
@@ -285,6 +287,7 @@ impl RuntimeInner {
             Err(error) => RuntimeEntry {
                 activation_gate: Arc::new(std::sync::Mutex::new(())),
                 version,
+                scope: deployment.scope,
                 workspace_read: deployment.workspace_read,
                 backend_channels: deployment.backend_channels.clone(),
                 supervisor: None,

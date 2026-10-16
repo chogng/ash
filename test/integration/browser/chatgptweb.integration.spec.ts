@@ -276,7 +276,7 @@ async function installMathProvider(page: Page): Promise<{ lists: number; renders
 				await route.fulfill({
 					json: {
 						generation: 1, extensions: [{
-							id: 'vscode.markdown-math', version: '1', packageDigest: `sha256:${'a'.repeat(64)}`, runtimeApiVersion: 1,
+							id: 'ash.markdown-math', version: '1', packageDigest: `sha256:${'a'.repeat(64)}`, runtimeApiVersion: 1,
 							activationGeneration: 1, incarnation: 1, lifecycle: 'ready', stderr: '', failure: null, outputEvents: [], registrations: math!.registrations,
 						}]
 					}

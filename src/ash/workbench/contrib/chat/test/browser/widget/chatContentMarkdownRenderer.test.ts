@@ -26,7 +26,7 @@ import { ChatContentMarkdownRenderer } from '../../../browser/widget/chatContent
 let math: Awaited<ReturnType<typeof startMarkdownMathExtension>>;
 const snapshot = (): ExtensionHostFleetSnapshot => ({
 	generation: 1, extensions: [{
-		id: 'vscode.markdown-math', version: '1', packageDigest: `sha256:${'a'.repeat(64)}`, runtimeApiVersion: 1,
+		id: 'ash.markdown-math', version: '1', packageDigest: `sha256:${'a'.repeat(64)}`, runtimeApiVersion: 1,
 		activationGeneration: 1, incarnation: 1, lifecycle: 'ready', stderr: '', failure: undefined, outputEvents: [],
 		registrations: [{ kind: 'dataChannel', registrationId: 'math.render.v2', channelId: 'math.render.v2' }],
 	}]
