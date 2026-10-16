@@ -1,5 +1,5 @@
-import type { IDisposable } from "../../../base/common/lifecycle.js";
-import { Event } from '../../../base/common/event.js';
+import { Disposable, type IDisposable } from "../../../base/common/lifecycle.js";
+import { Emitter, Event } from '../../../base/common/event.js';
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
 
 export const LogLevel = Object.freeze({
@@ -37,16 +37,77 @@ export interface ILogService {
 }
 
 export interface ILogServiceHost extends ILogService {
-	registerSink(sink: ILogSink): IDisposable;
+	registerSink(sink: ILogSink, replay?: boolean): IDisposable;
 }
 
 export const ILogService = createServiceIdentifier<ILogService>("logService");
 export const ILoggerService = createServiceIdentifier<ILoggerService>("loggerService");
 
 export interface ILoggerService {
-	createLogger(category: string): ILogger;
+	createLogger(id: string, options?: ILoggerOptions): ILogger;
+	getLogger(id: string): ILogger | undefined;
+	getRegisteredLoggers(): Iterable<ILoggerResource>;
+	readonly onDidChangeLoggers: Event<DidChangeLoggersEvent>;
+	readonly onDidChangeVisibility: Event<readonly [string, boolean]>;
+	setVisibility(id: string, visible: boolean): void;
 	/** Host-owned saved logs, when this runtime has persistent logging. */
 	readonly files?: ILogFileService;
+}
+
+export interface ILoggerOptions {
+	readonly name?: string;
+	readonly hidden?: boolean;
+}
+
+export interface ILoggerResource extends ILoggerOptions {
+	readonly id: string;
+}
+
+export interface DidChangeLoggersEvent {
+	readonly added: Iterable<ILoggerResource>;
+	readonly removed: Iterable<ILoggerResource>;
+}
+
+/** Owns logger identity and lifetime; hosts choose only the persistence sinks. */
+export abstract class AbstractLoggerService<T extends ILogger = ILogger> extends Disposable implements ILoggerService {
+	private readonly loggers = new Map<string, { logger: T; info: ILoggerResource; subscription: IDisposable; }>();
+	private readonly loggersChanged = this._register(new Emitter<DidChangeLoggersEvent>());
+	readonly onDidChangeLoggers = this.loggersChanged.event;
+	private readonly visibilityChanged = this._register(new Emitter<readonly [string, boolean]>());
+	readonly onDidChangeVisibility = this.visibilityChanged.event;
+
+	createLogger(id: string, options: ILoggerOptions = {}): T {
+		if (!id.trim() || id.length > 512 || id.includes('\0')) throw new TypeError('Invalid logger id');
+		if (this.isDisposed) throw new ReferenceError('Logger service is disposed');
+		const existing = this.loggers.get(id);
+		if (existing) return existing.logger;
+		const logger = this.doCreateLogger(id);
+		const info = Object.freeze({ ...options, id });
+		const subscription = logger.onDidDispose(() => {
+			const current = this.loggers.get(id)!;
+			this.loggers.delete(id);
+			subscription.dispose();
+			this.loggersChanged.fire({ added: [], removed: [current.info] });
+		});
+		this.loggers.set(id, { logger, info, subscription });
+		this.loggersChanged.fire({ added: [info], removed: [] });
+		return logger;
+	}
+
+	protected abstract doCreateLogger(id: string): T;
+	getLogger(id: string): T | undefined { return this.loggers.get(id)?.logger; }
+	*getRegisteredLoggers(): Iterable<ILoggerResource> { for (const { info } of this.loggers.values()) yield info; }
+	setVisibility(id: string, visible: boolean): void {
+		const entry = this.loggers.get(id);
+		if (!entry || Boolean(entry.info.hidden) === !visible) return;
+		entry.info = Object.freeze({ ...entry.info, hidden: !visible });
+		this.visibilityChanged.fire([id, visible]);
+	}
+	protected override disposeCore(): void {
+		for (const { logger, subscription } of this.loggers.values()) { subscription.dispose(); logger.dispose(); }
+		this.loggers.clear();
+		super.disposeCore();
+	}
 }
 
 export interface ILogFile {
@@ -76,7 +137,8 @@ export interface ILogFileService {
 }
 
 /** A logger owns its filtering and the lifetime of its sink subscriptions. */
-export interface ILogger extends ILogService, IDisposable {
+export interface ILogger extends ILogServiceHost, IDisposable {
+	readonly onDidDispose: Event<void>;
 	readonly onDidChangeLogLevel: Event<LogLevel>;
 	getLevel(): LogLevel;
 	setLevel(level: LogLevel): void;
@@ -119,6 +181,12 @@ export class ConsoleLogger implements ILogService {
 
 export class NullLoggerService implements ILogServiceHost, ILoggerService, ILogger {
 	readonly onDidChangeLogLevel = Event.None;
+	readonly onDidDispose = Event.None;
+	readonly onDidChangeLoggers = Event.None;
+	readonly onDidChangeVisibility = Event.None;
+	getLogger(_id: string): ILogger | undefined { return undefined; }
+	getRegisteredLoggers(): Iterable<ILoggerResource> { return []; }
+	setVisibility(_id: string, _visible: boolean): void { }
 	getLevel(): LogLevel { return LogLevel.Off; }
 	setLevel(_level: LogLevel): void { }
 	async flush(): Promise<void> { }

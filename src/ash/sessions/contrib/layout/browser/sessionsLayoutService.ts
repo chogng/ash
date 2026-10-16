@@ -1,3 +1,5 @@
+import { IOutputService } from '../../../../workbench/services/output/common/output.js';
+import { ViewContainerLocation, WorkbenchViewContainerId } from '../../../../workbench/common/views.js';
 import { ICustomViewService } from '../../../services/customView/browser/customViewService.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Emitter } from '../../../../base/common/event.js';
@@ -61,6 +63,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		@IEditorPart private readonly editor: IEditorPart,
 		@IEditorService private readonly editors: IEditorService,
 		@IViewsService private readonly views: IViewsService,
+		@IOutputService output: IOutputService,
 		@ILayoutService private readonly layout: IAgentWorkbenchLayoutService,
 		@IStorageService private readonly storage: IStorageService,
 		@IContextKeyService private readonly contextKeys: IContextKeyService,
@@ -100,6 +103,21 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		}
 		this.controller = this._register(instantiation.createInstance(DesktopLayoutController, this.pageGroupId, this));
 		this.controller.start();
+		this._register(output.onDidRequestShowChannel(() => {
+			this.layout.updateParts(() => {
+				this.layout.setPartAvailable('panel', true);
+				this.layout.showPart('panel');
+			});
+		}));
+		this._register(views.onDidChangeViewContainerVisibility(event => {
+			if (!event.visible || event.location !== ViewContainerLocation.Panel || event.id !== WorkbenchViewContainerId.Output) return;
+			// Output is a diagnostic surface for the current conversation as well as documents.
+			// Revealing it must not navigate away or clear the selected session.
+			this.layout.updateParts(() => {
+				this.layout.setPartAvailable('panel', true);
+				this.layout.showPart('panel');
+			});
+		}));
 		this._register(instantiation.createInstance(EditorTitleMenuBridgeContribution, this.controller, this));
 		this._register(storage.onWillSaveState(() => this.saveVisibility()));
 		this._register(lifecycle.onWillShutdown(event => event.join(this.navigationQueue.then(() => this.saveVisibility()), 'Sessions entry layout')));

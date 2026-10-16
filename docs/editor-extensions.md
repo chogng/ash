@@ -939,7 +939,11 @@ Host exit、invalid protocol 或 unknown outcome 会清空旧 registration，终
 | 完整 VS Code 扩展 API                                            | 尚未完成                       | 真实 Node 已接入；完整 ExtensionContext、扩展间导出与部分运行行为仍需补齐                                             |
 | 扩展直接使用 Node / Electron 能力                                | 分运行时                       | 精确授权的标准 Node 包具有用户级 IO；V8 的 Node API 覆盖仍有限，所有扩展均隔离产品 Electron/IPC                       |
 
-Node 模块加载由真实 Node 负责。当前不支持完整公共 OutputChannel、publisher signature/revocation feed、
+JavaScript 的 `window.createOutputChannel` 支持 languageId 和 `{ log: true }` 重载、hide、
+LogLevel、分级日志和记录级别变更事件。Output 的记录控制通过绑定 incarnation 的 `outputEvents`
+回调通知扩展；频道内容仍由原有 Output owner 管理。
+
+Node 模块加载由真实 Node 负责。当前不支持 publisher signature/revocation feed、
 per-platform artifact selector、跨重启 invocation 恢复或多个扩展共享一个 Host process。完整 test tree、
 任意 Webview/UI contribution、任意 App Server method registration 和扩展直接 filesystem/network access
 也不属于 v1 provider bridge。

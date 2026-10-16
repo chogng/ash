@@ -27,6 +27,8 @@ export class OutputAccessibilityHelp implements IAccessibleViewImplementation {
 					localize('output.help.overview', 'Output is a read-only editor. New output updates this view and any editor opened for the same channel.'),
 					localize('output.help.navigation', 'Use arrow keys to read output, Shift with arrow keys to select text, and Ctrl+C or Command+C to copy. Ctrl+F or Command+F opens Find.'),
 					localize('output.help.controls', 'Use Tab and Shift+Tab to reach the channel selector, filters, Clear Output, Auto Scroll, and More Output Actions. Separate alternative text filters with commas and prefix exclusions with !. Spaces and - are literal. Severity and category filters only affect this view.'),
+					localize('output.help.filterLayout', 'The filter is in the title bar. In narrow views with enough height, it moves above the output. The Auto Scroll button uses the Follow icon and stays selected while following new output; turn it off to read earlier messages.'),
+					localize('agentOutput.help', 'The Agent channel shows execution summaries for the Session named in its channel selector. Show Agent Output in the conversation menu selects the current Session explicitly. Switching conversations does not replace the reviewed output. Use an execution link to open the saved event in Execution Trace. Clear Output keeps the saved trace, and Auto Scroll never changes execution or recording.'),
 					localize('output.help.categories', 'Category choices apply to the selected channel. Older saved category choices apply to all channels until you change each category; only that category moves to the selected channel. Reset Filters clears category choices for all channels.'),
 				];
 				if (filters.textFilterNotice === 'restored') {

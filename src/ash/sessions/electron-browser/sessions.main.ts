@@ -1,3 +1,4 @@
+import { ILoggerService } from '../../platform/log/common/log.js';
 import '../../workbench/contrib/url/browser/url.contribution.js';
 import { IPolicyService } from '../../platform/policy/common/policy.js';
 import { PolicyChannelClient } from '../../platform/policy/common/policyIpc.js';
@@ -110,7 +111,8 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 		serviceCollection.set(IPolicyService, sessions.add(new PolicyChannelClient(mainProcessService.getChannel('policy'))));
 		serviceCollection.set(IPlaywrightService, playwrightService);
 		serviceCollection.set(IBrowserViewService, ProxyChannel.toService<IBrowserViewService>(mainProcessService.getChannel(ipcBrowserViewChannelName)));
-		logger = profileServices.createInstance(LoggerChannelClient);
+		logger = sessions.add(profileServices.createInstance(LoggerChannelClient));
+		serviceCollection.set(ILoggerService, logger);
 		api = await createElectronRendererApi([client => { documentClient = client; return {}; }, client => registerLocalTranscriptionService(transcriptionServices, client)], { browser: true, textDocuments: true, appTools: true }, permissionDialog, mainProcessService);
 	}
 	catch (error) { sessions.dispose(); return showStartupError(error, text => invoke<void>('ash:host:writeClipboard', text)); }
@@ -170,6 +172,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 				'workbench.contrib.chatEnablement',
 				'workbench.contrib.dataChannels',
 				'workbench.contrib.output',
+				'workbench.contrib.logs',
 				'workbench.contrib.githubLinkPresentations',
 				'workbench.contrib.url',
 				'workbench.contrib.externalUriOpener',
@@ -183,7 +186,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 				'workbench.contrib.speechAccessibilitySignal',
 				'workbench.contrib.saveAccessibilitySignals',
 			],
-			createLogService: () => logger.createLogger('agents'),
+			createLogService: () => logger.createLogger('agents', { hidden: true }),
 			createStorageService: async options => {
 				const storage = profileServices.createInstance(NativeWorkbenchStorageService, options);
 				try { await storage.initialize(); return storage; }

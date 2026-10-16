@@ -88,7 +88,7 @@ export class DesktopMain extends Disposable {
 			// The scope releases its dependent services before closing their Main connection.
 			profileServices.registerSingleton(IMainProcessService, () => profileServices.createInstance(ElectronIPCMainProcessService, windowId as number));
 			const mainProcessService = profileServices.get(IMainProcessService);
-			const logger = profileServices.createInstance(LoggerChannelClient);
+			const logger = this._register(profileServices.createInstance(LoggerChannelClient));
 			const playwrightService = profileServices.get(IPlaywrightService);
 			const resolver = this._register(profileServices.createInstance(RemoteAuthorityResolverService));
 			profileServices.registerInstance(IRemoteAuthorityResolverService, resolver);
@@ -154,7 +154,7 @@ export class DesktopMain extends Disposable {
 					return hosts;
 				} : undefined,
 				createBrowserHost: documentClient ? services => registerAppServerBrowserHost(documentClient!, playwrightService, mainProcessService, services.get(IConfigurationService)) : undefined,
-				createLogService: () => logger.createLogger('workbench'),
+				createLogService: () => logger.createLogger('workbench', { hidden: true }),
 				createWorkingCopyBackupService: (services, workspaceId) => {
 					if (!api.backup) return new IndexedDbWorkingCopyBackupService(workspaceId);
 					return services.createChild(new ServiceCollection([IBackupService, api.backup])).createInstance(WorkingCopyBackupService);

@@ -176,7 +176,7 @@ for (const locale of ['en', 'zh-CN']) test(`Automations management stays selecte
 	await expect(page.locator('.ash-sessions-list-item.selected')).toHaveCount(1);
 });
 
-test('Code defaults stay in document groups after visiting a retained Trace page', async ({ page }) => {
+test('Code defaults stay in document groups after opening the Trace editor', async ({ page }) => {
 	await new QuickAccess(page).runCommand('sessions.trace.import');
 	await expect(page.locator('.ash-agent-trace')).toBeVisible();
 	const navigation = page.locator('.ash-sessions-activity-content');
@@ -185,7 +185,8 @@ test('Code defaults stay in document groups after visiting a retained Trace page
 	await expect(tabs.getByRole('tab', { name: 'Files', exact: true })).toBeVisible();
 	await expect(tabs.getByRole('tab', { name: 'Changes', exact: true })).toBeVisible();
 	await expect(page.locator('[data-part="auxiliarybar"] [data-view-id="sessions.files.explorer.empty"]')).toBeFocused();
-	await navigation.getByRole('button', { name: 'Trace', exact: true }).click();
+	await expect(navigation.getByRole('button', { name: 'Trace', exact: true })).toHaveCount(0);
+	await new QuickAccess(page).runCommand('sessions.open.trace');
 	await expect(page.locator('.ash-agent-trace')).toBeVisible();
 	await expect(page.locator('.ash-agent-trace').locator('.ash-editor-title-control')).toHaveCount(0);
 });

@@ -32,12 +32,12 @@ test('macOS development runtime brands Main and Helpers without changing the ins
 	const executable = prepareDevelopmentElectron(root);
 	assert.equal(resolveDevelopmentElectronExecutable(root), executable);
 	assert.notEqual(executable, upstream);
-	assert.equal(executable.endsWith(`/Ash.app/Contents/MacOS/${AshApplicationName}`), true);
+	assert.equal(executable.endsWith('/Ash.app/Contents/MacOS/Electron'), true);
 	const bundle = resolve(dirname(executable), '../..');
 	const metadata = plist(bundle);
 	assert.equal(metadata.CFBundleName, AshApplicationName);
 	assert.equal(metadata.CFBundleDisplayName, AshApplicationName);
-	assert.equal(metadata.CFBundleExecutable, AshApplicationName);
+	assert.equal(metadata.CFBundleExecutable, 'Electron');
 	assert.equal(metadata.CFBundleIdentifier, `${AshApplicationId}.development`);
 	assertIcon(bundle, root);
 	const frameworks = join(bundle, 'Contents/Frameworks');

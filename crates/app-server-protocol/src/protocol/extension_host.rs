@@ -350,6 +350,8 @@ pub enum ExtensionHostRegistrationKindDto {
         providers: Vec<Value>,
     },
     WorkspaceEvents {},
+    /// Producer log level updates sent by the owning editor window.
+    OutputEvents {},
     RemoteConnectionResolver {
         #[schemars(length(min = 1, max = 64))]
         authority_prefix: String,

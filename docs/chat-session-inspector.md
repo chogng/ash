@@ -28,11 +28,18 @@ Workbench 通用 Agent Sidebar 不受影响。
 Sessions 的“查看执行 Trace”（`sessions.trace.open`）取得当前 Session 与 Thread，并用已有 agent tree
 中的最近 Turn 身份定位，打开独立 Trace 页面；没有当前会话时仍可导入 Trace。
 
-Workbench 和 Sessions 默认只注册命令。显式打开 Trace 或恢复此前打开的页面后，按需加载编辑器、导航、解析器和样式，并显示 Activity Bar 的独立入口，复用同一个编辑器。Sessions 的
+Trace 从对话菜单或命令面板打开，按需加载完整编辑器，不注册 Activity Bar 或侧栏导航入口。Sessions 的
 `sessions.open.trace` 恢复上次复查的 Session／Thread／Turn，不会因切换 Chat 自动替换复查上下文。
-侧栏显示当前复查身份；“查看当前对话”显式定位当前 Chat，“打开离线捕获”打开导入页。
-导航位置随窗口恢复；导入文件正文只保留在编辑器生命周期内，关闭窗口后需要重新导入。
+“查看执行 Trace”显式定位当前 Chat；`sessions.trace.import` 打开导入页。复查位置随窗口恢复；
+导入文件正文只保留在编辑器生命周期内，关闭窗口后需要重新导入。
 Workbench 的 `ash.agentTrace.resume` 同样恢复有效位置；无有效位置时打开导入页。
+
+Sessions 的 Output 提供 Agent 通道，标明被查看的会话标题与 ID。首次有会话时绑定该会话，之后只通过
+对话菜单或命令面板的“显示 Agent 输出”（`sessions.trace.showOutput`）显式切换。通道只在被选中且
+Output 可见时，分页读取已有 Trace 服务的执行事实，显示模型尝试、循环决策、工具调用、子任务、
+失败、取消及已有耗时摘要；不读取请求/响应正文或关系图，也不改变记录设置。每条事件附带精确的
+Trace 定位链接。有界文本缓存由 Output 拥有；隐藏或关闭停止读取，晚到结果不会覆盖新的会话。
+清空保留读取游标与持久 Trace，包括跳过尚未读完的旧历史；跟随只控制滚动，不影响执行或采集。
 
 页面逐页查找目标，命中后选中并滚动到事件；读取完成仍没有对应事实时明确显示未找到，不自动用第一条
 事件替代。定位事件被全文或错误筛选隐藏时，保留它的详情并显示隐藏原因；方向键或点击仍可选择其他事件。

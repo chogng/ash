@@ -55,7 +55,12 @@ registerAction2(class OpenSavedLogsAction extends Action2 {
 
 registerAction2(class ShowOutputAction extends Action2 {
 	constructor() { super({ id: SHOW_OUTPUT_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.ShowOutputAction' }, "View: Show Output"), f1: true }); }
-	override run(accessor: ServicesAccessor): Promise<boolean> { return accessor.get(IViewsService).focusView(OUTPUT_VIEW_ID); }
+	override async run(accessor: ServicesAccessor): Promise<boolean> {
+		const channel = accessor.get(IOutputService).activeChannel;
+		if (!channel) return accessor.get(IViewsService).focusView(OUTPUT_VIEW_ID);
+		channel.show({ focus: 'take' });
+		return true;
+	}
 });
 
 registerAction2(class ShowOutputChannelsAction extends Action2 {

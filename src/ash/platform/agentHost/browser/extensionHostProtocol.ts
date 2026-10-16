@@ -267,7 +267,7 @@ function normalizeRegistration(value: unknown): ExtensionHostRegistration {
 		exactKeys(input, 'Extension status bar registration', ['kind', 'registrationId', 'revision', 'entries']);
 		return Object.freeze({ kind, registrationId: statusBarIdentifier(registrationId), revision: positiveSafeInteger(input.revision, 'Status bar revision'), entries: normalizeExtensionStatusBarEntries(input.entries) });
 	}
-	if (kind === 'workspaceEvents' || kind === 'textDocumentEvents' || kind === 'taskEvents' || kind === 'debugEvents') {
+	if (kind === 'outputEvents' || kind === 'workspaceEvents' || kind === 'textDocumentEvents' || kind === 'taskEvents' || kind === 'debugEvents') {
 		exactKeys(input, 'Extension document events registration', ['kind', 'registrationId']);
 		return Object.freeze({ kind, registrationId });
 	}

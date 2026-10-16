@@ -1,6 +1,6 @@
-import { Disposable, toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
+import { toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
 import { Emitter } from '../../../base/common/event.js';
-import { canLog, DEFAULT_LOG_LEVEL, LogLevel, type ILogger, type ILoggerService, type ILogServiceHost, type ILogSink, type LogEntry, type LogEntryLevel } from "./log.js";
+import { AbstractLoggerService, canLog, DEFAULT_LOG_LEVEL, LogLevel, type ILogger, type ILoggerService, type ILogServiceHost, type ILogSink, type LogEntry, type LogEntryLevel } from "./log.js";
 
 export interface LogServiceOptions {
 	readonly sinks?: readonly ILogSink[];
@@ -12,8 +12,12 @@ export interface LogServiceOptions {
 }
 
 /** Multiplexes structured entries to runtime-selected sinks. */
-export class LogService extends Disposable implements ILogServiceHost, ILogger, ILoggerService {
+export class LogService extends AbstractLoggerService<LogService> implements ILogServiceHost, ILogger, ILoggerService {
 	private level: LogLevel;
+	private readonly disposed = this._register(new Emitter<void>());
+	readonly onDidDispose = this.disposed.event;
+	private readonly history: LogEntry[] = [];
+	private historyBytes = 0;
 	private readonly levelChanged = this._register(new Emitter<LogLevel>());
 	readonly onDidChangeLogLevel = this.levelChanged.event;
 	private readonly sinks = new Set<ILogSink>();
@@ -38,7 +42,7 @@ export class LogService extends Disposable implements ILogServiceHost, ILogger, 
 
 	async flush(): Promise<void> { await this.options.flush?.(); }
 
-	createLogger(category: string): LogService {
+	protected doCreateLogger(category: string): LogService {
 		if (!category.trim()) throw new TypeError('Log category must not be empty');
 		return new LogService({
 			category,
@@ -50,8 +54,9 @@ export class LogService extends Disposable implements ILogServiceHost, ILogger, 
 		});
 	}
 
-	registerSink(sink: ILogSink): IDisposable {
+	registerSink(sink: ILogSink, replay = false): IDisposable {
 		this.sinks.add(sink);
+		if (replay) for (const entry of this.history) sink.log(entry);
 		return toDisposable(() => this.sinks.delete(sink));
 	}
 
@@ -81,8 +86,22 @@ export class LogService extends Disposable implements ILogServiceHost, ILogger, 
 		this.dispatch(entry);
 	}
 
+	protected override disposeCore(): void {
+		this.disposed.fire();
+		this.history.length = 0;
+		super.disposeCore();
+	}
+
 	private dispatch(entry: LogEntry): void {
 		if (this.isDisposed) return;
+		// Late subscribers need text diagnostics, never retained exception object graphs.
+		const error = entry.error instanceof Error ? entry.error.stack ?? entry.error.message : entry.error === undefined ? undefined : String(entry.error);
+		this.history.push(Object.freeze({ ...entry, error }));
+		this.historyBytes += entry.message.length + (error?.length ?? 0);
+		while (this.historyBytes > 512 * 1024 || this.history.length > 2000) {
+			const removed = this.history.shift()!;
+			this.historyBytes -= removed.message.length + String(removed.error ?? '').length;
+		}
 		for (const sink of this.sinks) {
 			try { sink.log(entry); }
 			catch (sinkError) { this.onSinkError(entry, sinkError); }

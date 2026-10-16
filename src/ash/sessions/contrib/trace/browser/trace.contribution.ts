@@ -1,18 +1,15 @@
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize2 } from '../../../../nls.js';
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
-import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
+import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
+import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
+import { AgentTraceOutput, IAgentTraceOutput } from './agentTraceOutput.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
-import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
-import { ViewContainerLocation } from '../../../../workbench/common/views.js';
 import { URI } from '../../../../base/common/uri.js';
-import { Menus } from '../../../browser/menus.js';
-import { SessionsViewRegistry } from '../../../common/views.js';
 import { ISessionsLayoutService } from '../../../services/layout/common/sessionsLayoutService.js';
 import { createAgentTraceInput, readLastAgentTraceResource, rememberAgentTraceResource } from '../../../../workbench/contrib/trace/common/trace.js';
-import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import { createAgentTraceResource } from '../../../../workbench/contrib/trace/common/trace.js';
+import { createAgentTraceResource, type AgentTraceLocation } from '../../../../workbench/contrib/trace/common/trace.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import type { AgentTreeNode } from '../../../services/sessions/common/session.js';
 
@@ -27,8 +24,8 @@ registerAction2(class OpenAgentTrace extends Action2 {
 		});
 	}
 
-	public override async run(accessor: ServicesAccessor): Promise<void> {
-		await openTraceEntry(accessor, currentTraceResource(accessor));
+	public override async run(accessor: ServicesAccessor, target?: AgentTraceLocation): Promise<void> {
+		await openTraceEntry(accessor, target ? createAgentTraceResource(target) : currentTraceResource(accessor));
 	}
 });
 
@@ -42,21 +39,10 @@ function findTurn(nodes: readonly AgentTreeNode[], threadId: string): string | u
 }
 
 
-const TraceNavigationContainerId = 'sessions.navigation.trace';
-let navigationRegistration: Promise<void> | undefined;
-function ensureTraceNavigation(): Promise<void> {
-	return navigationRegistration ??= import('../../../../workbench/contrib/trace/browser/agentTraceNavigation.js').then(({ AgentTraceNavigationView }) => {
-		SessionsViewRegistry.registerStaticViewContainer({ id: TraceNavigationContainerId, title: 'Trace', localizationKey: { bundle: 'ash', key: 'agentTrace.navigationTitle' }, location: ViewContainerLocation.Sidebar, mergeViewWithContainerWhenSingleView: true, order: 6 });
-		SessionsViewRegistry.registerStaticViews(TraceNavigationContainerId, [{ id: TraceNavigationContainerId + '.view', title: 'Trace', localizationKey: { bundle: 'ash', key: 'agentTrace.navigationTitle' }, canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(AgentTraceNavigationView, [{ resume: 'sessions.open.trace', offline: 'sessions.trace.import', current: 'sessions.trace.open' }]) }]);
-
-	}).catch(error => { navigationRegistration = undefined; throw error; });
-}
-
 registerAction2(class OpenTraceNavigation extends Action2 {
 	constructor() {
 		super({
 			id: 'sessions.open.trace', title: localize2('agentTrace.navigationTitle', 'Trace'), f1: true, icon: Lxicon.history,
-			toggled: ContextKeyExpr.has('sessions.activity.traceSelected'), menu: { id: Menus.ActivityBar, group: 'navigation', order: 60, when: ContextKeyExpr.has('sessions.traceAvailable') }
 		});
 	}
 	public override async run(accessor: ServicesAccessor, source?: unknown): Promise<void> {
@@ -80,13 +66,18 @@ function currentTraceResource(accessor: ServicesAccessor): URI {
 async function openTraceEntry(accessor: ServicesAccessor, resource: URI, source?: 'restore'): Promise<void> {
 	const storage = accessor.get(IStorageService);
 	const layout = accessor.get(ISessionsLayoutService);
-	const contextKeys = accessor.get(IContextKeyService);
-	await ensureTraceNavigation();
-	contextKeys.createKey<boolean>('sessions.traceAvailable', true).set(true);
 	await layout.openEntry({
 		id: 'trace', activityContext: 'sessions.activity.traceSelected', content: 'editor',
-		sidebarContainerId: TraceNavigationContainerId, restoreCommand: 'sessions.open.trace', focus: 'editor',
+		showEditorTabs: true, restoreCommand: 'sessions.open.trace', focus: 'editor',
 		editorInput: createAgentTraceInput(resource),
 	}, undefined, source ? { source } : undefined);
 	rememberAgentTraceResource(storage, resource);
 }
+
+registerSingleton(IAgentTraceOutput, AgentTraceOutput, InstantiationType.Delayed);
+registerWorkbenchContribution('sessions.contrib.agentOutput', WorkbenchPhase.AfterRestored, accessor => accessor.get(IAgentTraceOutput));
+
+registerAction2(class ShowAgentOutput extends Action2 {
+	constructor() { super({ id: 'sessions.trace.showOutput', title: localize2('agentOutput.show', 'Show Agent Output'), f1: true, menu: { id: MenuId.ChatTitle, group: '2_trace', order: 1 } }); }
+	public override run(accessor: ServicesAccessor): void { accessor.get(IAgentTraceOutput).showCurrent(); }
+});

@@ -62,7 +62,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 	const remoteConnection = await createRemoteAgentApi().getConnection();
 	const connectionServices = resources.add(new InstantiationService());
 	connectionServices.registerInstance(IMainProcessService, mainProcessService);
-	const connectionLogger = resources.add(connectionServices.createInstance(LoggerChannelClient).createLogger('app-server'));
+	const connectionLogger = resources.add(connectionServices.createInstance(LoggerChannelClient)).createLogger('app-server', { hidden: true });
 	connectionServices.registerInstance(ILogService, connectionLogger);
 	connectionServices.registerSingleton(IRemoteSocketFactoryService, () => connectionServices.createInstance(RemoteSocketFactoryService));
 	const factories = connectionServices.get(IRemoteSocketFactoryService);

@@ -1,3 +1,6 @@
+import { IViewsService } from '../../services/views/common/viewsService.js';
+import { canLog, isLogLevel, log, LogLevel } from '../../../platform/log/common/log.js';
+import { LogService } from '../../../platform/log/common/logServiceImpl.js';
 import { IAdapterManager, type DebugAdapterFactory, type DebugAdapterFactoryRegistration, IDebugService, type IDebugConfigurationProvider, type DebugConfigurationProviderRegistration, type IDebugAdapterTrackerFactory, type DebugAdapterTrackerFactoryRegistration } from '../../contrib/debug/common/debug.js';
 import { MainThreadSpeech } from './mainThreadSpeech.js';
 import { MainThreadTerminalService, type ExtensionTerminalProfileRegistration, type ExtensionTerminalEnvironmentRegistration } from './mainThreadTerminalService.js';
@@ -27,7 +30,7 @@ import { normalizeExtensionHostPayload } from '../../../platform/agentHost/brows
 import { ILanguageFeaturesService, type LanguageProviderBatch, type LanguageProviderBatchRegistration } from '../../../editor/common/services/languageFeatures.js';
 import { ITaskService, type TaskProvider, type TaskProviderRegistration } from '../../services/tasks/common/taskService.js';
 import { ITestingService, type TestProfileProvider, type TestProfileProviderRegistration } from '../../services/testing/common/testingService.js';
-import { IOutputService, type IOutputChannel, type OutputEntrySeverity } from '../../services/output/common/output.js';
+import { IOutputService, OUTPUT_VIEW_ID, type IOutputChannel, type OutputEntrySeverity } from '../../services/output/common/output.js';
 import { createExtensionHostLanguageProviderBatch, extensionHostLanguageProviderId, unsupportedExtensionHostLanguageOperations, type ExtensionHostProviderInvoker } from './extensionHostLanguageBridge.js';
 import { createExtensionHostDebugAdapterFactory, createExtensionHostDebugAdapterTrackerFactory, createExtensionHostDebugConfigurationProvider, createExtensionHostTaskProvider, createExtensionHostTestProfileProvider, extensionHostCanonicalTaskId, extensionHostWorkflowProviderId } from './extensionHostWorkflowBridge.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
@@ -110,6 +113,8 @@ export class MainThreadExtensionApi extends Disposable {
 	private readonly extensionOutputs = this._register(new DisposableMap<string, IOutputChannel>());
 	private readonly outputCursors = new Map<string, ExtensionOutputCursor>();
 	private readonly namedOutputChannels = this._register(new DisposableMap<string, IOutputChannel>());
+	private readonly outputLoggers = this._register(new DisposableMap<string, LogService>());
+	private readonly outputLevelBindings = this._register(new DisposableMap<string, DisposableStore>());
 	private readonly namedOutputCursors = new Map<string, ExtensionNamedOutputCursor>();
 	private readonly customEditors: MainThreadCustomEditors;
 	private readonly documents: MainThreadDocuments;
@@ -148,6 +153,7 @@ export class MainThreadExtensionApi extends Disposable {
 		@IDialogService private readonly dialogs: IDialogService,
 		@IHostService private readonly host: IHostService,
 		@IAdapterManager adapters: IAdapterManager,
+		@IViewsService private readonly views: IViewsService,
 	) {
 		super();
 		this.messages = this._register(instantiation.createInstance(MainThreadMessageService));
@@ -351,6 +357,7 @@ export class MainThreadExtensionApi extends Disposable {
 			if (runtime.lifecycle === 'ready' && runtime.registrations.some(registration => (registration.kind === 'remoteConnectionResolver' || registration.kind === 'remoteAuthorityResolver'))) { this.remoteSources.set(runtime.id, runtime); }
 		}
 		this.projectOutput(snapshot);
+		this.updateOutputLevels(snapshot);
 		this.speechApi.update(snapshot);
 		this.customEditors.update(snapshot);
 		this.diagnostics.update(snapshot);
@@ -479,7 +486,7 @@ export class MainThreadExtensionApi extends Disposable {
 			}
 			if (runtime.lifecycle !== "ready" || runtime.incarnation === undefined) continue;
 			for (const registration of runtime.registrations) {
-				if (registration.kind === 'remoteAuthorityResolver' || registration.kind === 'workspaceEvents' || registration.kind === 'statusBar' || registration.kind === 'sourceControl' || registration.kind === 'textDocumentEvents' || registration.kind === 'taskEvents' || registration.kind === 'debugEvents' || registration.kind === 'customTextEditor' || registration.kind === 'dataChannel' || registration.kind === 'speechProvider' || registration.kind === 'linkPresentationProvider' || registration.kind === 'externalUriOpener') {
+				if (registration.kind === 'outputEvents' || registration.kind === 'remoteAuthorityResolver' || registration.kind === 'workspaceEvents' || registration.kind === 'statusBar' || registration.kind === 'sourceControl' || registration.kind === 'textDocumentEvents' || registration.kind === 'taskEvents' || registration.kind === 'debugEvents' || registration.kind === 'customTextEditor' || registration.kind === 'dataChannel' || registration.kind === 'speechProvider' || registration.kind === 'linkPresentationProvider' || registration.kind === 'externalUriOpener') {
 					continue;
 				}
 				const runtimeId = runtime.id;
@@ -694,9 +701,15 @@ export class MainThreadExtensionApi extends Disposable {
 	}
 
 	private projectOutput(snapshot: ExtensionHostFleetSnapshot): void {
-		const activeExtensions = new Set(snapshot.extensions.filter(runtime => runtime.lifecycle === 'ready').map(runtime => runtime.id));
-		for (const extensionId of this.namedOutputCursors.keys()) {
-			if (!activeExtensions.has(extensionId)) this.disposeNamedOutputChannels(extensionId);
+		const runtimes = new Map(snapshot.extensions.map(runtime => [runtime.id, runtime]));
+		for (const [extensionId, cursor] of this.namedOutputCursors) {
+			const runtime = runtimes.get(extensionId);
+			// Activation callbacks can create Output before the ready snapshot reaches this window.
+			// Only retirement or a different process fence invalidates those registrations.
+			if (!runtime || runtime.lifecycle === 'stopped' || runtime.lifecycle === 'failed' || runtime.lifecycle === 'crashLoop' || runtime.lifecycle === 'recovering'
+				|| runtime.activationGeneration !== cursor.activationGeneration || runtime.incarnation !== undefined && runtime.incarnation !== cursor.incarnation) {
+				this.disposeNamedOutputChannels(extensionId);
+			}
 		}
 		for (const runtime of snapshot.extensions) {
 			const channel = this.extensionOutput(runtime.id);
@@ -725,18 +738,75 @@ export class MainThreadExtensionApi extends Disposable {
 		if (value.action === 'create') {
 			if (this.namedOutputChannels.has(key)) throw new TypeError('Output channel is already registered');
 			if ([...this.namedOutputChannels].filter(([, channel]) => channel.descriptor.extensionId === source.extensionId).length >= 128) throw new RangeError('Too many extension output channels');
-			this.namedOutputChannels.set(key, this.outputService.createChannel({ id: `extension.${encodeURIComponent(source.extensionId)}.${encodeURIComponent(id)}`, label: text(value.label, 512), kind: 'output', source: 'extension', extensionId: source.extensionId }));
+			const label = text(value.label, 512).trim();
+			if (!label || value.kind !== undefined && value.kind !== 'log' && value.kind !== 'output') throw new TypeError('Invalid output channel metadata');
+			const languageId = value.languageId === undefined ? undefined : text(value.languageId, 256).trim();
+			if (languageId === '') throw new TypeError('Invalid output channel language');
+			const logger = value.kind === 'log' ? new LogService({ sinks: [{ log: entry => channel.appendLine({ text: entry.message, timestamp: entry.timestampMillis, severity: entry.level }) }] }) : undefined;
+			const channel = this.outputService.createChannel({ id: `extension.${encodeURIComponent(source.extensionId)}.${encodeURIComponent(id)}`, label, kind: value.kind === 'log' ? 'log' : 'output', languageId, source: 'extension', extensionId: source.extensionId, logger: logger ? { label, control: logger } : undefined });
+			this.namedOutputChannels.set(key, channel);
+			if (logger) {
+				this.outputLoggers.set(key, logger);
+				const disposal = channel.onDidDispose(() => {
+					disposal.dispose();
+					this.outputLoggers.deleteAndDispose(key);
+				});
+			}
 			return true;
 		}
 		const channel = this.namedOutputChannels.get(key);
 		if (!channel) throw new TypeError('Output channel is unavailable');
-		if (value.action === 'append') channel.append({ text: text(value.text, 524_288) });
+		const logger = this.outputLoggers.get(key);
+		if (value.action === 'log') {
+			if (!logger || !isLogLevel(value.severity) || value.severity === LogLevel.Off) throw new TypeError('Invalid extension log entry');
+			const message = text(value.text, 524_288);
+			if (message.trim()) log(logger, value.severity, message);
+		}
+		else if (value.action === 'append') {
+			const message = text(value.text, 524_288);
+			if (!logger || canLog(logger.getLevel(), LogLevel.Info)) channel.append({ text: message, severity: logger ? 'information' : 'log' });
+		}
 		else if (value.action === 'replace') channel.replace({ text: text(value.text, 524_288) });
 		else if (value.action === 'clear') channel.clear();
 		else if (value.action === 'show') channel.show({ focus: value.preserveFocus === true ? 'preserve' : 'take' });
 		else if (value.action === 'dispose') this.namedOutputChannels.deleteAndDispose(key);
-		else if (value.action !== 'hide') throw new TypeError('Invalid extension output operation');
+		else if (value.action === 'hide') { if (this.outputService.activeChannel === channel && this.views.isViewVisible(OUTPUT_VIEW_ID)) this.views.closeView(OUTPUT_VIEW_ID); }
+		else throw new TypeError('Invalid extension output operation');
 		return true;
+	}
+
+	private updateOutputLevels(snapshot: ExtensionHostFleetSnapshot): void {
+		const retained = new Set<string>();
+		for (const runtime of snapshot.extensions) {
+			if (runtime.lifecycle !== 'ready' || runtime.incarnation === undefined) continue;
+			const registration = runtime.registrations.find(entry => entry.kind === 'outputEvents');
+			if (!registration) continue;
+			for (const [key, logger] of this.outputLoggers) {
+				const channel = this.namedOutputChannels.get(key);
+				if (channel?.descriptor.extensionId !== runtime.id) continue;
+				const identity = JSON.stringify([key, runtime.incarnation, runtime.activationGeneration, registration.registrationId]);
+				retained.add(identity);
+				if (this.outputLevelBindings.has(identity)) continue;
+				const lifetime = new DisposableStore();
+				const controller = new AbortController();
+				lifetime.add(toDisposable(() => controller.abort()));
+				let queue = Promise.resolve();
+				const { id: extensionId, incarnation, activationGeneration } = runtime;
+				const channelId = key.slice(extensionId.length + 1);
+				const send = (level: LogLevel): void => {
+					const numericLevel = [LogLevel.Off, LogLevel.Trace, LogLevel.Debug, LogLevel.Info, LogLevel.Warning, LogLevel.Error].indexOf(level);
+					queue = queue.then(async () => {
+						if (controller.signal.aborted) return;
+						await this.api.invoke({ extensionId, incarnation, activationGeneration, registrationId: registration.registrationId, operation: 'outputEvent', payload: { channelId, level: numericLevel }, deadlineUnixMillis: Date.now() + this.invocationTimeoutMillis }, controller.signal);
+					}).catch(error => { if (!controller.signal.aborted) this.fleetOutput.appendLine({ severity: 'error', text: String(error) }); });
+				};
+				lifetime.add(logger.onDidChangeLogLevel(send));
+				lifetime.add(channel.onDidDispose(() => this.outputLevelBindings.deleteAndDispose(identity)));
+				this.outputLevelBindings.set(identity, lifetime);
+				send(logger.getLevel());
+			}
+		}
+		for (const key of this.outputLevelBindings.keys()) if (!retained.has(key)) this.outputLevelBindings.deleteAndDispose(key);
 	}
 
 	private projectNamedOutput(runtime: ExtensionHostRuntime): void {
@@ -816,7 +886,7 @@ function runtimeContributionIdentity(runtime: ExtensionHostRuntime): string {
 	return JSON.stringify({
 		id: runtime.id, version: runtime.version, packageDigest: runtime.packageDigest, runtimeApiVersion: runtime.runtimeApiVersion,
 		activationGeneration: runtime.activationGeneration, incarnation: runtime.incarnation, lifecycle: runtime.lifecycle, activation: runtime.activation, failure: runtime.failure,
-		registrations: runtime.registrations.filter(registration => registration.kind !== 'statusBar'),
+		registrations: runtime.registrations.filter(registration => registration.kind !== 'statusBar' && registration.kind !== 'outputEvents'),
 	});
 }
 

@@ -10,19 +10,66 @@
 	border-bottom: var(--ash-strokeThickness) solid var(--ash-border);
 }
 
+.ash-output-filter-bar[hidden] {
+	display: none;
+}
+
+.ash-output-title-actions {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+
+.ash-output-filter-widget {
+	display: flex;
+	align-items: center;
+	min-width: 0;
+	min-height: 24px;
+	box-sizing: border-box;
+	color: var(--ash-input-foreground);
+	background: var(--ash-input-background);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-input-border, var(--ash-contrastBorder));
+	border-radius: var(--ash-cornerRadius-small);
+}
+
+.ash-output-title-actions > .ash-output-filter-widget {
+	width: 280px;
+	flex: 1 1 280px;
+}
+
+.ash-output-filter-widget > .ash-toolbar,
+.ash-output-title-actions > .ash-toolbar {
+	flex-shrink: 0;
+}
+
 .ash-output-filter-input {
 	width: 100%;
+	min-width: 0;
+	flex: 1;
 	box-sizing: border-box;
 	min-height: 24px;
 	padding: 2px 8px;
-	color: var(--ash-input-foreground);
-	background: var(--ash-input-background);
-	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+	font: inherit;
+	color: inherit;
+	background: transparent;
+	border: none;
 	outline: none;
 }
 
-.ash-output-filter-input:focus {
+.ash-output-filter-widget:has(:focus-visible) {
 	border-color: var(--ash-focusBorder);
+}
+
+.ash-output-filter-widget.filtered .ash-button {
+	background: var(--ash-actionBar-toggledBackground);
+	outline: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
+	outline-offset: -1px;
+}
+
+.ash-output-filter-widget.filtered .ash-button:focus-visible {
+	outline-color: var(--ash-focusBorder);
 }
 
 .ash-output-content {

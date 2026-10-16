@@ -2,16 +2,17 @@ import type { IChannel } from '../../../base/parts/ipc/common/ipc.js';
 import { isRecord } from '../../../base/common/types.js';
 import { IMainProcessService } from '../../ipc/common/mainProcessService.js';
 import { ConsoleLogSink } from './consoleLogSink.js';
-import { isLogLevel, LogLevel, type ILoggerService, type ILogSink, type LogEntry, type ILogFileService, type ILogFile, type ILogFileReadResult } from './log.js';
+import { isLogLevel, LogLevel, AbstractLoggerService, type ILogSink, type LogEntry, type ILogFileService, type ILogFile, type ILogFileReadResult } from './log.js';
 import { LogService } from './logServiceImpl.js';
 
 /** The authenticated channel supplies the source window; entries cannot choose files. */
-export class LoggerChannelClient implements ILoggerService, ILogSink {
+export class LoggerChannelClient extends AbstractLoggerService<LogService> implements ILogSink {
 	private readonly channel: IChannel;
 	private writes: Promise<void> = Promise.resolve();
 	readonly files: ILogFileService;
 
 	constructor(@IMainProcessService mainProcessService: IMainProcessService) {
+		super();
 		this.channel = mainProcessService.getChannel('logger');
 		this.files = {
 			list: async () => {
@@ -33,7 +34,7 @@ export class LoggerChannelClient implements ILoggerService, ILogSink {
 		};
 	}
 
-	public createLogger(category: string): LogService {
+	protected doCreateLogger(category: string): LogService {
 		if (!category.trim()) { throw new TypeError('Invalid logger category'); }
 		return new LogService({
 			flush: () => this.flush(),

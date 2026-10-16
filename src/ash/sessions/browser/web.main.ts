@@ -86,6 +86,7 @@ export class SessionsBrowserMain extends Disposable {
 					'workbench.contrib.chatEnablement',
 					'workbench.contrib.dataChannels',
 					'workbench.contrib.output',
+					'workbench.contrib.logs',
 					'workbench.contrib.githubLinkPresentations',
 					'workbench.contrib.url',
 					'workbench.contrib.chatAccessibilitySignals',

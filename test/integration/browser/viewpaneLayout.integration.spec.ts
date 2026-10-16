@@ -1,27 +1,6 @@
 import { expect, test } from '@playwright/test';
 
 for (const locale of ['en', 'zh-CN']) {
-	test(`Trace form scrolls and retains keyboard actions in a short pane (${locale})`, async ({ page }, testInfo) => {
-		const errors: string[] = [];
-		page.on('pageerror', error => errors.push(error.message));
-		await page.goto(`/viewpaneLayout.html?locale=${locale}&hc`);
-		await expect.poll(async () => ({ ready: await page.locator('body').getAttribute('data-ready'), errors })).toEqual({ ready: 'true', errors: [] });
-		const body = page.locator('.ash-agent-trace-navigation-view');
-		await body.hover();
-		await page.mouse.wheel(0, 1000);
-		await expect.poll(() => body.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
-		const offline = body.getByRole('button').last();
-		await expect(offline).toBeInViewport({ ratio: 1 });
-		await body.getByRole('button').first().focus();
-		await page.keyboard.press('Tab');
-		await page.keyboard.press('Tab');
-		await expect(offline).toBeFocused();
-		await expect(offline).toBeInViewport({ ratio: 1 });
-		await offline.press('Enter');
-		await expect.poll(() => page.evaluate(() => window.viewpaneLayoutIntegration.commands.at(-1))).toBe('fixture.offline');
-		await testInfo.attach('short-trace-pane', { body: await page.locator('#root').screenshot(), contentType: 'image/png' });
-		expect(errors).toEqual([]);
-	});
 	test(`Symphony form scrolls and submits from the keyboard in a short pane (${locale})`, async ({ page }, testInfo) => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));

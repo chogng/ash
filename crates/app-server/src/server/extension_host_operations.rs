@@ -501,6 +501,7 @@ fn registration_dto(
             RegistrationKind::WorkspaceEvents {} => {
                 ExtensionHostRegistrationKindDto::WorkspaceEvents {}
             }
+            RegistrationKind::OutputEvents {} => ExtensionHostRegistrationKindDto::OutputEvents {},
             RegistrationKind::TextDocumentEvents {} => {
                 ExtensionHostRegistrationKindDto::TextDocumentEvents {}
             }

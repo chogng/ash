@@ -1,8 +1,9 @@
+import { Workbench } from '../../../automation/workbench.js';
 import { execFile } from 'node:child_process';
 import { writeFile, mkdir, readdir, readFile, appendFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import { expect, test } from '../../../automation/test.js';
+import { expect, test, writeEditorExtensionFixture } from '../../../automation/test.js';
 import type { ElectronApplication } from '@playwright/test';
 import { readStorageEntries, seedStorageOnNextLoad } from '../../../automation/storage.js';
 import { StorageScope, StorageTarget } from '../../../../src/ash/platform/storage/common/storage.js';
@@ -35,7 +36,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await selectWindow();
 			const output = page.locator('[data-view-id="ash.output"]');
 			const visible = output.locator('.view-lines');
-			const filter = output.getByRole('searchbox');
+			const filter = page.locator('.ash-output-title-actions, [data-view-id="ash.output"]').getByRole('searchbox');
 			await filter.fill(labels.ready);
 			await expect(visible).toContainText(labels.ready);
 			await expect(visible).toContainText('[information] [logs]');
@@ -151,7 +152,7 @@ test.describe('Git-backed ordinary Output', () => {
 			await workbench.quickaccess.runCommand('git.showOutput');
 		};
 		const output = page.locator('[data-view-id="ash.output"]');
-		const filter = output.getByRole('searchbox', { name: 'Filter Output', exact: true });
+		const filter = page.locator('.ash-output-title-actions, [data-view-id="ash.output"]').getByRole('searchbox', { name: 'Filter Output', exact: true });
 		const visibleLines = async (): Promise<string[]> => (await output.locator('.view-line').allTextContents()).map(line => line.replaceAll('\u00a0', ' ')).filter(Boolean);
 
 		// Real workspace changes reach the existing Git status owner and channel;
@@ -230,7 +231,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await workbench.quickaccess.select('App Server');
 		};
 		const output = page.locator('[data-view-id="ash.output"]');
-		const filter = output.getByRole('searchbox', { name: labels.filter, exact: true });
+		const filter = page.locator('.ash-output-title-actions, [data-view-id="ash.output"]').getByRole('searchbox', { name: labels.filter, exact: true });
 		await page.addInitScript(() => {
 			const seed = sessionStorage.getItem('ash.test.output.seed');
 			if (seed === null) { return; }
@@ -584,7 +585,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await seedStorageOnNextLoad(application, page, identity, { 'output.filterState': { value: future, target: StorageTarget.MACHINE } });
 		await reloadSeededOwner();
 		await select('Window');
-		await expect(output().getByRole('searchbox', { name: labels.filter, exact: true })).toHaveAttribute('title', labels.unsupported);
+		await expect(page.locator('.ash-output-title-actions, [data-view-id="ash.output"]').getByRole('searchbox', { name: labels.filter, exact: true })).toHaveAttribute('title', labels.unsupported);
 		await category('lifecycle', true, true);
 		await expect.poll(async () => (await lines()).join('')).not.toContain('Workbench restored');
 		await select('Extension Host');
@@ -596,3 +597,100 @@ for (const locale of ['en', 'zh-CN']) {
 		await testInfo.attach(`output-channel-categories-${locale}`, { body: JSON.stringify({ backend: 'real extensionHost/reconcile or list', hostBaseline, rawWindow, legacy, migrated, untouchedFuture: await savedFilter(), identity: 'channel and category JSON tuple', finalHost: await lines() }), contentType: 'application/json' });
 	});
 }
+
+for (const windowMode of ['workbench', 'agents']) test(`Output wiring reaches real extension, logger and language producers (${windowMode})`, { tag: ['@electron-app-server', '@darwin'] }, async ({ application, target, workbench, testWorkspace, reloadWorkbench }, testInfo) => {
+	test.setTimeout(120_000);
+	const root = join(testWorkspace.directory, 'output-extension');
+	await mkdir(join(root, '.ash-plugin'), { recursive: true });
+	await writeFile(join(root, '.ash-plugin', 'plugin.json'), JSON.stringify({
+		schemaVersion: 1, id: 'acme/output-smoke', version: '1.0.0', displayName: 'Output wiring smoke', compatibility: { ash: '>=0.1.0' },
+		contributions: { editorExtensions: [{ id: 'output', runtime: 'javascript', api: 'vscode', entrypoint: 'extension.js', runtimeApiVersion: 1, activationEvents: [{ type: 'onCommand', id: 'acme.output.start' }], capabilities: ['command'] }] },
+		permissions: [{ type: 'directory', access: 'read' }],
+	}));
+	await writeEditorExtensionFixture(root, `const vscode = require('vscode'); const { commands, window } = vscode;
+exports.activate = context => {
+ const text = window.createOutputChannel('Extension Text', 'typescript');
+ const logs = window.createOutputChannel('Extension Logs', { log: true });
+ const levels = [];
+ context.subscriptions.push(logs.onDidChangeLogLevel(level => levels.push(level)));
+ context.subscriptions.push(commands.registerCommand('acme.output.start', () => { text.append('first '); text.appendLine('second'); logs.info('READY %s', 'output'); logs.trace('TRACE output'); logs.show(true); }));
+ context.subscriptions.push(commands.registerCommand('acme.output.emit', () => { logs.info('LEVEL=' + logs.logLevel + ';EVENTS=' + levels.join(',')); logs.trace('NEW TRACE output'); }));
+ context.subscriptions.push(commands.registerCommand('acme.output.hideOther', () => text.hide()));
+ context.subscriptions.push(commands.registerCommand('acme.output.hide', () => logs.hide()));
+ context.subscriptions.push(commands.registerCommand('acme.output.show', () => logs.show()));
+ context.subscriptions.push(commands.registerCommand('acme.output.dispose', () => { text.dispose(); logs.dispose(); }));
+};`);
+	const manifestPath = join(root, 'package.json');
+	const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+	for (const command of manifest.contributes.commands) command.title = 'Output wiring: ' + command.command.split('.').at(-1);
+	await writeFile(manifestPath, JSON.stringify(manifest));
+	await workbench.quickaccess.runCommand('ash.extensions.installLocal');
+	const install = workbench.page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
+	await install.getByRole('textbox').fill('output-extension');
+	await workbench.dialogs.expectMessage(application, 'Information', () => install.getByRole('textbox').press('Enter'));
+	await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
+	await workbench.page.getByRole('listbox', { name: 'Installed Extensions', exact: true }).getByRole('option').filter({ has: workbench.page.getByText('Output wiring smoke', { exact: true }) }).click();
+	const details = workbench.page.locator('.ash-extension-editor');
+	await expect(details.getByRole('heading', { name: 'Output wiring smoke', exact: true })).toBeVisible();
+	await details.getByRole('button', { name: 'Enable', exact: true }).click();
+	await expect(details.getByRole('button', { name: 'Disable', exact: true })).toBeVisible();
+	await workbench.dialogs.confirm(application, 'Output wiring smoke', 'Grant permissions', () => details.getByRole('button', { name: 'Grant permissions', exact: true }).click());
+
+	await expect(details.getByRole('button', { name: 'Revoke permissions', exact: true })).toBeVisible();
+	({ workbench, application } = await reloadWorkbench());
+	for (const mode of [windowMode]) {
+		const host = mode === 'workbench' ? workbench : new Workbench(await workbench.openAgentsWindow(target.kind));
+		const page = host.page;
+		const output = page.locator('[data-view-id="ash.output"]');
+		const visible = output.locator('.view-lines');
+		const select = async (name: string): Promise<void> => {
+			await host.quickaccess.runCommand('workbench.action.output.showChannels');
+			await host.quickaccess.search(name);
+			await page.getByRole('option').filter({ has: page.getByText(name, { exact: true }) }).click({ timeout: 5_000 });
+		};
+		await host.quickaccess.runCommand('acme.output.start');
+		await expect(visible).toContainText('READY output');
+		await expect(visible).not.toContainText('TRACE output');
+		await select('Extension Text');
+		await expect(visible).toContainText('first second');
+		await select('Extension Logs');
+		await host.menus.select(application, () => page.locator('[data-action-id="ash.output.more"] button').click(), ['Set Extension Logs Recording Level', 'Trace']);
+		await expect(async () => {
+			await host.quickaccess.runCommand('acme.output.emit');
+			await expect(visible).toContainText('LEVEL=1;EVENTS=1');
+		}).toPass();
+		await expect(visible).toContainText('NEW TRACE output');
+		await host.quickaccess.runCommand('workbench.action.output.clear');
+		await expect(visible).toHaveText('');
+		await host.quickaccess.runCommand('acme.output.emit');
+		await expect(visible).toContainText('NEW TRACE output');
+		await expect(visible).not.toContainText('READY output');
+		await host.quickaccess.runCommand('acme.output.hideOther');
+		await expect(output).toBeVisible();
+		await host.quickaccess.runCommand('acme.output.hide');
+		await expect(output).toBeHidden();
+		await host.quickaccess.runCommand('acme.output.show');
+		await expect(visible).toContainText('NEW TRACE output');
+		await testInfo.attach(`output-wiring-${mode}`, { body: await page.screenshot(), contentType: 'image/png' });
+		await host.quickaccess.runCommand('acme.output.dispose');
+		await host.quickaccess.runCommand('workbench.action.output.showChannels');
+		await host.quickaccess.search('Extension ');
+		await expect(page.getByRole('option').filter({ hasText: /^Extension (Logs|Text)/u })).toHaveCount(0);
+		await host.quickaccess.close();
+		await select('Window');
+		await expect(visible).toContainText('Window logging initialized.');
+		await host.quickaccess.runCommand('workbench.action.terminal.focus');
+		await select('Terminal');
+		await host.menus.select(application, () => page.locator('[data-action-id="ash.output.more"] button').click(), ['Set Terminal Recording Level', 'Trace']);
+		await host.quickaccess.runCommand('workbench.action.terminal.focus');
+		await host.terminal.runCommand("printf 'OUTPUT_LOG_PROBE\\n'");
+		await select('Terminal');
+		await expect(visible).toContainText('Shell integration sequence:');
+		await host.quickaccess.open('main.rs');
+		await host.quickaccess.select('main.rs');
+		await expect(async () => {
+			await select('rust-analyzer');
+			await expect(visible).toContainText('ASH_OUTPUT_LSP_MESSAGE');
+		}).toPass({ timeout: 15_000 });
+	}
+});

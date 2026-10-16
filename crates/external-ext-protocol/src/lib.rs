@@ -380,6 +380,8 @@ pub enum RegistrationKind {
     },
     /// Window facts are read-only; their configuration/workspace owners remain in the editor.
     WorkspaceEvents {},
+    /// Producer log level updates sent by the owning editor window.
+    OutputEvents {},
     /// Selects an existing saved target; distinct from a transport endpoint resolver.
     RemoteConnectionResolver {
         authority_prefix: String,

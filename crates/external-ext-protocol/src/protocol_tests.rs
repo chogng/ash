@@ -976,10 +976,16 @@ fn window_fact_observers_do_not_borrow_an_execution_capability() {
     let response = ExtensionHostResponse {
         context: request.context,
         response: HostResponseKind::Success(HostSuccess::Activated(ActivateResult {
-            registrations: vec![RegistrationDescriptor {
-                registration_id: "window.facts".into(),
-                kind: RegistrationKind::WorkspaceEvents {},
-            }],
+            registrations: vec![
+                RegistrationDescriptor {
+                    registration_id: "window.facts".into(),
+                    kind: RegistrationKind::WorkspaceEvents {},
+                },
+                RegistrationDescriptor {
+                    registration_id: "output.levels".into(),
+                    kind: RegistrationKind::OutputEvents {},
+                },
+            ],
         })),
     };
     response

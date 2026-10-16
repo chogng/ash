@@ -1296,26 +1296,84 @@ export function createApi(configuration, initialization) {
 		return result;
 	});
 	let outputSequence = 0;
-	function createOutputChannel(name) {
-		if (typeof name !== 'string' || !name || name.length > 512 || name.includes('\0')) throw new TypeError('Invalid output channel label');
+	const logChannels = new Map();
+	const outputFlushes = new Set();
+	let outputEvents;
+	const LogLevel = Object.freeze({ Trace: 1, Debug: 2, Info: 3, Warning: 4, Error: 5, Off: 0 });
+	function ensureOutputEvents() {
+		if (!outputEvents) {
+			outputEvents = ashRuntime.registerContribution({ kind: 'outputEvents', registrationId: 'vscode.output.events' }, 'outputEvent', (_call, event) => invoke(() => {
+				if (!event || typeof event.channelId !== 'string' || !Number.isInteger(event.level) || event.level < 0 || event.level > 5) throw new TypeError('Invalid output log level');
+				logChannels.get(event.channelId)?.(event.level);
+			}));
+			subscriptions.push(outputEvents);
+		}
+	}
+
+	function createOutputChannel(name, options) {
+		if (typeof name !== 'string' || !name.trim() || name.length > 512 || name.includes('\0')) throw new TypeError('Invalid output channel label');
+		name = name.trim();
+		const logging = typeof options === 'object' && options !== null && options.log === true;
+		if (options !== undefined && !logging && (typeof options !== 'string' || !options.trim() || options.length > 256 || options.includes('\0'))) throw new TypeError('Invalid output channel options');
 		const channelId = `output.${++outputSequence}`;
 		let disposed = false;
+		let level = LogLevel.Info;
+		const changed = logging ? new EventEmitter() : undefined;
+
+		if (logging) logChannels.set(channelId, next => {
+			if (level === next) return;
+			level = next;
+			changed.fire(level);
+		});
 		let pending = Promise.resolve();
 		const send = operation => {
-			pending = pending.then(() => request({ operation: 'editorOperation', payload: { method: 'output', channelId, ...operation } }, 'value'));
+			pending = pending.catch(() => undefined).then(() => request({ operation: 'editorOperation', payload: { method: 'output', channelId, ...operation } }, 'value'));
+			// Retain the entire queue before a callback returns, including chained writes.
+			const settled = pending.then(() => undefined, () => undefined);
+			outputFlushes.add(settled);
+			void settled.then(() => outputFlushes.delete(settled));
+			serviceOwner()?.push(settled);
 			void pending.catch(error => console.error('Output channel failed', error));
 		};
-		send({ action: 'create', label: name });
-		const channel = Object.freeze({
+		send({ action: 'create', label: name, kind: logging ? 'log' : 'output', ...(typeof options === 'string' ? { languageId: options } : {}) });
+		const writeLog = (severity, message, args) => {
+			if (disposed) return;
+			if (message instanceof Error) message = message.stack ?? message.message;
+			if (typeof message !== 'string') throw new TypeError('Log message must be a string or Error');
+			const formatted = message.replace(/%[sdj%]/g, token => {
+				if (token === '%%') return '%';
+				if (!args.length) return token;
+				const value = args.shift();
+				return token === '%j' ? JSON.stringify(value) : token === '%d' ? String(Number(value)) : String(value);
+			});
+			send({ action: 'log', severity, text: [formatted, ...args.map(value => typeof value === 'string' ? value : value instanceof Error ? value.stack ?? value.message : JSON.stringify(value))].join(' ') });
+		};
+		const channel = {
 			name,
 			append(text) { if (!disposed) send({ action: 'append', text: String(text) }); },
 			appendLine(text) { if (!disposed) send({ action: 'append', text: String(text) + '\n' }); },
 			replace(text) { if (!disposed) send({ action: 'replace', text: String(text) }); },
 			clear() { if (!disposed) send({ action: 'clear' }); },
-			show(preserveFocus = false) { if (!disposed) send({ action: 'show', preserveFocus: preserveFocus === true }); },
-			hide() { return unsupported('OutputChannel.hide'); },
-			dispose() { if (disposed) return; disposed = true; send({ action: 'dispose' }); },
-		});
+			show(preserveFocus = false) { if (!disposed) send({ action: 'show', preserveFocus: typeof preserveFocus === 'number' ? arguments[1] === true : preserveFocus === true }); },
+			hide() { if (!disposed) send({ action: 'hide' }); },
+			...(logging ? {
+				onDidChangeLogLevel: changed.event,
+				trace(message, ...args) { writeLog('trace', message, args); },
+				debug(message, ...args) { writeLog('debug', message, args); },
+				info(message, ...args) { writeLog('information', message, args); },
+				warn(message, ...args) { writeLog('warning', message, args); },
+				error(message, ...args) { writeLog('error', message, args); },
+			} : {}),
+			dispose() {
+				if (disposed) return;
+				disposed = true;
+				logChannels.delete(channelId);
+				changed?.dispose();
+				send({ action: 'dispose' });
+			},
+		};
+		if (logging) Object.defineProperty(channel, 'logLevel', { enumerable: true, get: () => level });
+		Object.freeze(channel);
 		subscriptions.push(channel);
 		return channel;
 	}
@@ -1326,6 +1384,7 @@ export function createApi(configuration, initialization) {
 		editors: Object.freeze({ request: payload => request({ operation: 'editorOperation', payload }, 'value').then(result => result.value) }),
 	});
 	const api = contract('vscode', {
+		LogLevel,
 		SpeechToTextStatus: Object.freeze({ Started: 1, Recognizing: 2, Recognized: 3, Stopped: 4, Error: 5 }),
 		TextToSpeechStatus: Object.freeze({ Started: 1, Stopped: 2, Error: 3 }),
 		KeywordRecognitionStatus: Object.freeze({ Recognized: 1, Stopped: 2 }),
@@ -1710,6 +1769,7 @@ export function createApi(configuration, initialization) {
 		api,
 		activate(context, callback, receiver, capabilities) {
 			subscriptions = context.subscriptions;
+			ensureOutputEvents();
 			environmentAdmitted = capabilities.includes('terminalProfileProvider');
 			speechAdmitted = capabilities.includes('speechProvider');
 			if (environmentAdmitted) subscriptions.push(ashTerminals.registerEnvironmentVariableCollection('vscode.terminalEnvironment', snapshotEnvironment));
@@ -1751,7 +1811,8 @@ export function createApi(configuration, initialization) {
 				extension,
 				asAbsolutePath(relativePath) { return Uri.joinPath(extensionUri, relativePath).fsPath; },
 			});
-			activationPromise = Promise.resolve().then(() => callback.call(receiver, publicContext)).then(result => {
+			activationPromise = Promise.resolve().then(() => callback.call(receiver, publicContext)).then(async result => {
+				while (outputFlushes.size) await Promise.all([...outputFlushes]);
 				activationExports = result;
 				statusActive = true;
 				return result;

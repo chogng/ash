@@ -1317,6 +1317,7 @@ fn registration_allows_operation(registration: &RegistrationKind, operation: &st
         RegistrationKind::SourceControl { .. } => operation == "scm",
         RegistrationKind::StatusBar { .. } => false,
         RegistrationKind::WorkspaceEvents {} => operation == "workspaceEvent",
+        RegistrationKind::OutputEvents {} => operation == "outputEvent",
         RegistrationKind::TextDocumentEvents {} => operation == "documentEvent",
         RegistrationKind::DebugEvents {} => operation == "debugEvent",
         RegistrationKind::TaskEvents {} => matches!(

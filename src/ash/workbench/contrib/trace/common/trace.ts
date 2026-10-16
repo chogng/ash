@@ -58,7 +58,6 @@ export function readAgentTraceLocation(resource: URI): AgentTraceLocation | unde
 
 export const agentTraceEditorId = 'ash.agentTrace';
 export const traceEditorId = 'workbench.editor.trace';
-export const AgentTraceViewContainerId = 'workbench.view.trace';
 export const ResumeAgentTraceCommandId = 'ash.agentTrace.resume';
 const lastResourceKey = 'agentTrace.lastResource';
 

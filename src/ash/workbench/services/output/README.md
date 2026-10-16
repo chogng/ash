@@ -50,8 +50,8 @@ specific filtering here would signal an ownership regression.
 
 Executable extensions use the process-fenced stream documented in
 [`../../../../../../crates/external-ext/README.md`](../../../../../crates/external-ext/README.md).
-`AppServerExtensionHostService` alone translates those transport events into
-caller-owned channels; the generic Output service does not know Host RPC DTOs.
+`MainThreadExtensionApi` translates those transport events and JavaScript editor
+callbacks into caller-owned channels; the generic Output service does not know Host RPC DTOs.
 
 The channel retains bounded entries independently of its resolved text model.
 Closing the last model reference disposes the text model; reopening reconstructs
@@ -92,3 +92,25 @@ recording-level menu controls the Workbench logger, while independently owned
 loggers in the same file retain their own levels. Historical and raw-file sources
 do not advertise recording-level control. Loggers default to Info unless their
 owner explicitly requests another level.
+
+Both Workbench and Agents windows install the shared MainThread extension API
+bridge and its domain services, along with `SystemOutputService`,
+`AppServerLanguageServerStatusService` and `LogsContribution`. The latter observes
+`ILoggerService`'s initial registry, additions, removals and visibility. Logger
+identity and recording levels stay with the logger service. Each logger retains
+at most 2,000 entries / 512 Ki characters for late subscribers; Output borrows its
+sink and never replays that history after Clear. Desktop persistence still uses
+the authenticated host log files, rather than accepting arbitrary logger paths.
+Window-owned root loggers are hidden from the generic registry view because
+`SystemOutputService` already owns their file-backed channel.
+Both editors acquire documents through `AppServerLanguageDiagnosticsService`,
+so opening a supported file starts the owning language service and its real
+messages reach Output through the shared status service.
+
+JavaScript `createOutputChannel` supports the language-id and `{ log: true }`
+overloads. Log channels expose the VS Code `LogLevel` enum, severity methods,
+`logLevel` and `onDidChangeLogLevel`. Output's recording control filters at the
+producer bridge and notifies the exact extension incarnation through its
+`outputEvents` registration. Display filters never change that recording level.
+Hide closes Output only when the calling channel is active; disposal removes
+that producer's channel, logger, pending callbacks and level subscriptions.

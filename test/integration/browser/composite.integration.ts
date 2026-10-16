@@ -4,6 +4,14 @@ import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/co
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { emptyEditorServiceState } from '../../../src/ash/workbench/test/common/testEditorService.js';
 import { registerProblemsView } from '../../../src/ash/workbench/contrib/problems/browser/problems.contribution.js';
+import { registerOutputView } from '../../../src/ash/workbench/contrib/output/browser/output.contribution.js';
+import { IOutputService } from '../../../src/ash/workbench/services/output/common/output.js';
+import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
+import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
+import { AgentTraceOutput } from '../../../src/ash/sessions/contrib/trace/browser/agentTraceOutput.js';
+import { ISessionsService, type SessionsViewSelection } from '../../../src/ash/sessions/services/sessions/browser/sessionsService.js';
+import { ITraceService } from '../../../src/ash/workbench/services/trace/common/traceService.js';
+import { observableValue, type IReader } from '../../../src/ash/base/common/observable.js';
 import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { addDisposableListener, h } from '../../../src/ash/base/browser/dom.js';
 import { Lxicon } from '../../../src/ash/base/common/lxicons.js';
@@ -138,6 +146,12 @@ declare global {
 			toggleBadge(): void;
 			readonly events: readonly string[];
 			readonly copiedProblems: readonly string[];
+			outputState(): { text: string; filter: string; };
+			appendOutput(text: string): void;
+			showAgentOutput(): void;
+			changeAgentSession(id: string): void;
+			appendAgentEvent(): void;
+			readonly openedAgentEvents: readonly unknown[];
 			state(): readonly CompositeState[];
 			open(id: string, focus?: boolean): Promise<void>;
 			resize(width: number, height: number): void;
@@ -214,13 +228,45 @@ services.registerInstance(IStorageService, storage);
 services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, _key, source) => source });
 services.registerInstance(IViewDescriptorService, resources.add(services.createInstance(ViewDescriptorService, { registry })));
 const commands = resources.add(new CommandService(services));
+const openedAgentEvents: unknown[] = [];
+const agentSession = observableValue<SessionsViewSelection | undefined>('agentSession', undefined);
+const agentEvents = [{ eventId: 'event-1', sequence: 1, recordedAt: 1, event: { type: 'turnStarted', threadId: 'root', turnId: 'turn' } }];
+let agentOutput: AgentTraceOutput | undefined;
 services.registerInstance(IMenuService, new MenuService(commands, contexts));
-// The content-focus fixtures reject menus; Problems exercises the real menu host below.
-if (!new URLSearchParams(location.search).has('problems')) services.registerInstance(IContextMenuService, {
+// The content-focus fixtures reject menus; Problems and Output exercise real menus.
+if (!new URLSearchParams(location.search).has('problems') && !new URLSearchParams(location.search).has('output')) services.registerInstance(IContextMenuService, {
 	contextMenuStyle: 'custom',
 	onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None,
 	showContextMenu: () => { throw new Error('Unexpected context menu'); }, hideContextMenu() { },
 });
+if (new URLSearchParams(location.search).has('output')) {
+	await import('../../../src/ash/base/browser/ui/styles.css');
+	await import('../../../src/ash/workbench/browser/parts/panel/panelActions.js');
+	registerOutputView(registry);
+	if (new URLSearchParams(location.search).has('agentOutput')) {
+		await import('../../../src/ash/editor/contrib/links/browser/links.js');
+		services.registerInstance(ICommandService, {
+			onWillExecuteCommand: Event.None, onDidExecuteCommand: Event.None, executeCommand: async <T>(id: string, ...args: unknown[]) => {
+				if (id === 'sessions.trace.open') { openedAgentEvents.push(args[0]); return undefined as T; }
+				return commands.executeCommand<T>(id, ...args);
+			}
+		});
+		services.registerInstance(ISessionsService, { getSelection: (reader?: IReader) => ({ activeSelection: agentSession.read(reader), visibleSelections: [] }), get activeSelection() { return agentSession.get(); } } as unknown as ISessionsService);
+		services.registerInstance(ITraceService, {
+			readTrace: async (sessionId, after) => ({ trace: { formatVersion: 3, sessionId, historyPrefixes: [], threads: [{ threadId: 'root', events: agentEvents.filter(event => event.sequence > (after.root ?? 0)) }] }, cursors: { root: agentEvents.at(-1)!.sequence }, hasMore: false }),
+			readTraceDiagnostics: async () => ({ diagnostics: { formatVersion: 2, captureId: null, recordingStatus: 'disabled', droppedRecords: 0, pendingRecords: 0, events: [] }, cursor: 0, hasMore: false }),
+			readTracePayload: async () => { throw new Error('Output must not read model bodies'); },
+			readTraceGraph: async () => { throw new Error('Output must not read the execution graph'); },
+		});
+		agentSession.set({ kind: 'session', active: { session: { sessionId: 'first', title: 'Agent output fixture' }, threadId: 'root' } } as SessionsViewSelection, undefined);
+	}
+	registerCodeEditorServices(services);
+	services.registerInstance(IAccessibleViewService, { ...toDisposable(() => { }), show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { } });
+	const output = services.get(IOutputService);
+	const channel = resources.add(output.createChannel({ id: 'window', label: 'Window', kind: 'log' }));
+	channel.appendLine({ text: 'unavailable', severity: 'error', category: 'application' });
+	channel.appendLine({ text: 'Workbench restored', severity: 'information', category: 'lifecycle' });
+}
 const copiedProblems: string[] = [];
 if (new URLSearchParams(location.search).has('problems')) {
 	await import('../../../src/ash/base/browser/ui/styles.css');
@@ -305,6 +351,7 @@ services.registerInstance(IWorkbenchLayoutService, {
 const panes = resources.add(services.createInstance(PaneCompositePartService, new Map([[ViewContainerLocation.Panel, panel]])));
 services.registerInstance(IPaneCompositePartService, panes);
 services.registerInstance(IViewsService, resources.add(services.createInstance(ViewsService)));
+if (new URLSearchParams(location.search).has('agentOutput')) agentOutput = resources.add(services.createInstance(AgentTraceOutput));
 const views = services.get(IViewsService);
 const composites = new Map<string, IComposite>();
 const events: string[] = [];
@@ -526,6 +573,15 @@ window.ashCompositeIntegration = {
 	toggleBadge: () => { badgeBars[0]!.toggleBadgeEnablement('first'); },
 	events,
 	copiedProblems,
+	outputState: () => {
+		const output = services.get(IOutputService);
+		return { text: output.activeChannel?.getText() ?? '', filter: output.filters.text };
+	},
+	appendOutput: text => services.get(IOutputService).activeChannel?.appendLine({ text }),
+	showAgentOutput: () => agentOutput!.showCurrent(),
+	changeAgentSession: id => agentSession.set({ kind: 'session', active: { session: { sessionId: id, title: 'Agent output ' + id }, threadId: 'root' } } as SessionsViewSelection, undefined),
+	appendAgentEvent: () => { const sequence = agentEvents.length + 1; agentEvents.push({ eventId: 'event-' + sequence, sequence, recordedAt: sequence, event: { type: 'turnCompleted', threadId: 'root', turnId: 'turn' } }); },
+	openedAgentEvents,
 	editorEvents,
 	partEvents,
 	resize: (width, height) => {

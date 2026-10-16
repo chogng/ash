@@ -1,6 +1,108 @@
 import { test, expect } from '@playwright/test';
 import type { } from './composite.integration.js';
 
+for (const locale of ['en', 'zh-CN']) {
+	test(`Agent Output keeps session identity, clears only its text and opens exact Trace events (${locale})`, async ({ page }, testInfo) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await page.goto(`/composite.html?output&agentOutput&locale=${locale}`);
+		await page.waitForFunction(() => !!window.ashCompositeIntegration);
+		await page.evaluate(async () => {
+			await window.ashCompositeIntegration.open('ash.panel.output');
+			window.ashCompositeIntegration.resize(1200, 360);
+			window.ashCompositeIntegration.showAgentOutput();
+		});
+		const channel = page.locator('[data-action-id="ash.output.selectChannel"] button');
+		await expect(channel).toContainText('Agent output fixture');
+		const output = page.locator('[data-view-id="ash.output"]');
+		await expect(output).toContainText(locale === 'en' ? 'Turn started' : 'Turn 已开始');
+		await page.evaluate(() => window.ashCompositeIntegration.changeAgentSession('second'));
+		await expect(channel).toContainText('Agent output fixture');
+		const link = output.locator('.view-line').filter({ hasText: 'eventId=event-1' }).locator('span').last();
+		await link.click({ modifiers: ['ControlOrMeta'] });
+		await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.openedAgentEvents)).toEqual([{ sessionId: 'first', threadId: 'root', turnId: 'turn', eventId: 'event-1' }]);
+		await page.locator('[data-action-id="ash.output.clear"] button').click();
+		await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.outputState().text)).toBe('');
+		const follow = page.locator('[data-action-id="ash.output.autoScroll"] button');
+		if (await follow.getAttribute('aria-pressed') === 'true') await follow.click();
+		await page.evaluate(() => window.ashCompositeIntegration.appendAgentEvent());
+		await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.outputState().text)).toContain('eventId=event-2');
+		expect(await page.evaluate(() => window.ashCompositeIntegration.outputState().text)).not.toContain('eventId=event-1');
+		await expect(follow).toHaveAttribute('aria-pressed', 'false');
+		await page.evaluate(() => window.ashCompositeIntegration.showAgentOutput());
+		await expect(channel).toContainText('Agent output second');
+		await page.locator('.ash-workbench-panel').screenshot({ path: testInfo.outputPath(`agent-output-${locale}.png`) });
+		expect(errors).toEqual([]);
+	});
+}
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`Output moves its filter between the title and body without losing focus (${locale})`, async ({ page }, testInfo) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await page.goto(`/composite.html?output&locale=${locale}`);
+		await page.waitForFunction(() => !!window.ashCompositeIntegration);
+		await page.evaluate(async () => {
+			await window.ashCompositeIntegration.open('ash.panel.output');
+			window.ashCompositeIntegration.resize(1200, 320);
+		});
+		const panel = page.locator('.ash-workbench-panel');
+		const title = panel.locator('.ash-panel-title-control');
+		const input = panel.locator('.ash-output-filter-input');
+		const filter = panel.locator('[data-action-id="ash.output.filter"] button');
+		const follow = title.locator('[data-action-id="ash.output.autoScroll"] button');
+		const clear = title.locator('[data-action-id="ash.output.clear"] button');
+		await expect(title.locator('.ash-output-filter-input')).toBeVisible();
+		await expect(input).toHaveAttribute('aria-label', locale === 'en' ? 'Filter Output' : '筛选输出');
+		await expect(clear.locator('[data-ash-icon-id="clear-all"]')).toBeVisible();
+		await expect(follow.locator('[data-ash-icon-id="follow"]')).toBeVisible();
+		await expect(follow).toHaveAttribute('aria-pressed', 'true');
+		await follow.click();
+		await expect(follow).toHaveAttribute('aria-pressed', 'false');
+		await page.evaluate(() => window.ashCompositeIntegration.appendOutput('new message while following is off'));
+		await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.outputState().text)).toContain('new message while following is off');
+		await expect(follow.locator('[data-ash-icon-id="follow"]')).toBeVisible();
+		await follow.press('Enter');
+		await expect(follow).toHaveAttribute('aria-pressed', 'true');
+		await input.fill('restored');
+		await input.evaluate(element => (element as HTMLInputElement).setSelectionRange(2, 5));
+		for (const [width, inHeader] of [[480, false], [800, true], [420, false], [1200, true]] as const) {
+			const height = 320;
+			await page.evaluate(({ width, height }) => window.ashCompositeIntegration.resize(width, height), { width, height });
+			await expect(input).toBeFocused();
+			await expect(input).toHaveValue('restored');
+			expect(await input.evaluate(element => [(element as HTMLInputElement).selectionStart, (element as HTMLInputElement).selectionEnd])).toEqual([2, 5]);
+			await expect(title.locator('.ash-output-filter-input')).toHaveCount(inHeader ? 1 : 0);
+			await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.outputState().filter)).toBe('restored');
+			await expect.poll(() => title.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+			if (width === 480) await panel.screenshot({ path: testInfo.outputPath(`output-${locale}-narrow.png`) });
+		}
+		for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-light', 'ash-high-contrast-dark']) {
+			await page.evaluate(theme => window.ashCompositeIntegration.setEditorTheme(theme), theme);
+			const colors = await input.evaluate(element => {
+				const style = getComputedStyle(element.parentElement!);
+				return { foreground: style.color, background: style.backgroundColor, border: style.borderTopColor };
+			});
+			expect(colors.foreground).not.toBe(colors.background);
+			expect(colors.border).not.toBe('rgba(0, 0, 0, 0)');
+			await panel.screenshot({ path: testInfo.outputPath(`output-${locale}-${theme}.png`) });
+		}
+		await input.press('Escape');
+		await expect(input).toHaveValue('');
+		await input.press('Tab');
+		await expect(filter).toBeFocused();
+		await filter.press('Enter');
+		const errorOption = page.getByRole('menuitemcheckbox', { name: locale === 'en' ? 'Error' : '错误', exact: true });
+		await expect(errorOption).toBeVisible();
+		await errorOption.click();
+		await expect(filter).toHaveAttribute('aria-label', locale === 'en' ? 'Filter Output (Filters Active)' : '筛选输出（已启用筛选条件）');
+		await clear.click();
+		await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.outputState().text)).toBe('');
+		await expect(clear).toBeDisabled();
+		expect(errors).toEqual([]);
+	});
+}
+
 test.beforeEach(async ({ page }) => {
 	await page.goto('/composite.html');
 	await page.waitForFunction(() => !!window.ashCompositeIntegration);

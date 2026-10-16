@@ -1,3 +1,17 @@
+import { BrowserProgressService } from '../../platform/progress/browser/progressService.js';
+import { IProgressService } from '../../platform/progress/common/progress.js';
+import { IRemoteConnectionApi, IRemoteConnectionService, RemoteConnectionService, UnavailableRemoteConnectionApi } from '../../platform/remote/common/remoteConnectionService.js';
+import { IDebugAdapterProcessService } from '../../platform/debug/common/debugAdapterProcessService.js';
+import { ITestExecutionService } from '../../platform/testing/common/testExecutionService.js';
+import { SystemOutputService } from '../../workbench/services/output/browser/systemOutputService.js';
+import { AppServerLanguageServerStatusService } from '../../workbench/services/language/browser/appServerLanguageServerStatusService.js';
+import { AppServerLanguageDiagnosticsService } from '../../workbench/services/language/browser/appServerLanguageDiagnosticsService.js';
+import { AppServerLanguageProviders } from '../../workbench/services/language/browser/appServerLanguageProviders.js';
+import { ILanguageDiagnosticsService } from '../../workbench/services/language/common/languageDiagnosticsService.js';
+import { LanguageDiagnosticsMarkerBridge } from '../../workbench/services/language/browser/languageDiagnosticsMarkerBridge.js';
+import { WorkbenchLanguageFeatures } from '../../workbench/services/language/browser/workbenchLanguageFeatures.js';
+import { IOutputService } from '../../workbench/services/output/common/output.js';
+import { IStatusbarService, StatusbarService } from '../../workbench/services/statusbar/browser/statusbar.js';
 import type { IConfigurationModel } from '../../platform/configuration/common/configuration.js';
 import { ISecretStorageStatusService } from '../../platform/secrets/common/secrets.js';
 import { IAgentVoiceService } from '../../platform/agentHost/common/agentService.js';
@@ -422,6 +436,10 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IExtensionResourceLoaderService, enabledExtensions.resources);
 		services.registerInstance(IExtensionApi, enabledExtensions);
 		services.registerInstance(IExtensionBackendApi, options.api.extensionBackend);
+		services.registerInstance(IDebugAdapterProcessService, options.api.debugAdapter);
+		services.registerInstance(ITestExecutionService, options.api.testing);
+		services.registerInstance(IRemoteConnectionApi, options.api.remoteConnections ?? UnavailableRemoteConnectionApi);
+		services.registerSingleton(IRemoteConnectionService, () => services.createInstance(RemoteConnectionService));
 		services.registerInstance(IAgentModelsService, options.api.model);
 		services.registerInstance(ISecretStorageStatusService, options.api.secretStorage);
 		services.registerInstance(IAgentExecutionSettingsService, options.api.executionSettings);
@@ -512,6 +530,12 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IMcpServerManagementService, options.api.mcpServerManagement);
 		services.registerInstance(IWorkspaceTrustApi, options.api.workspaceTrust);
 		services.registerInstance(IWorkspaceTrustManagementService, this._register(services.createInstance(WorkspaceTrustManagementService)));
+		this._register(services.createInstance(WorkbenchLanguageFeatures));
+		const checkWorkspaceTrust = !!options.nativeHostApi;
+		if (options.api.hasAppServer) this._register(services.createInstance(AppServerLanguageProviders, options.api.language, { checkWorkspaceTrust }));
+		const languageDiagnosticsService = this._register(services.createInstance(AppServerLanguageDiagnosticsService, options.api.language, undefined, checkWorkspaceTrust));
+		services.registerInstance(ILanguageDiagnosticsService, languageDiagnosticsService);
+		this._register(new LanguageDiagnosticsMarkerBridge(languageDiagnosticsService, services.get(IMarkerService)));
 		services.registerInstance(IAppServerHookApi, options.api.hooks);
 		services.registerInstance(ITraceSettingsService, options.api.traceSettings);
 		const localization = this._register(new WorkbenchLocalizationService());
@@ -540,6 +564,11 @@ export abstract class Workbench extends Disposable {
 		this._register(toDisposable(() => this.domNode.remove()));
 		const dialogs = services.get(IDialogService) as DialogService;
 		services.registerInstance(IDialogsModel, dialogs.model);
+		const output = services.get(IOutputService);
+		const systemOutput = this._register(new SystemOutputService(output, options.api.appServer, logger, services.get(ILoggerService).files));
+		this._register(logger.registerSink(systemOutput, true));
+		if (!services.has(IStatusbarService)) services.registerInstance(IStatusbarService, this._register(new StatusbarService()));
+		this._register(new AppServerLanguageServerStatusService(options.api.events, dialogs, output, services.get(IStatusbarService), workspace));
 		services.registerInstance(ILocaleService, this._register(services.createInstance(WorkbenchLocaleService)));
 		this._register(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(this.domNode)));
 
@@ -553,6 +582,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(INotificationService, notificationService);
 		const feedbackHost = h(ownerDocument, "div");
 		feedbackHost.className = "ash-feedback-host";
+		services.registerInstance(IProgressService, this._register(new BrowserProgressService(feedbackHost)));
 		this.domNode.append(feedbackHost);
 		this._register(toDisposable(() => feedbackHost.remove()));
 		const openerService = this._register(services.createInstance(OpenerService));
@@ -702,7 +732,7 @@ export abstract class Workbench extends Disposable {
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.SessionsActivityBar,
 					{ type: AccessibleViewType.Help },
-					() => localize('sessions.chatgpt.activityHelp', 'On Desktop, ChatGPT opens conversations in the window sidebar and a shared chat editor. Selection and unsent drafts are retained when switching product entries or Agent sessions. Press Alt+F1 in the sidebar or editor for accessibility help. Right-click the ChatGPT icon, or press Shift+F10 on it, then choose Reload to refresh the current chat. Use ChatGPT: Toggle Scrolling Optimization in the Command Palette to change offscreen rendering.') + ' ' + localize('sessions.activity.help', 'Sessions Activity Bar\nUse Tab and Shift+Tab to enter navigation and Accounts. Use arrow keys, Home and End to move between actions. Press Enter or Space to open the focused action. Drag icons to reorder them, or choose Move earlier and Move later with the Context Menu key or Shift+F10. Navigation order is saved across restarts and Activity Bar positions. The menu also offers position and size options. Chat focuses the sessions list. Custom group headings organize tasks; use Tab to reach a task and Enter to open it. Application tools can create, rename and remove groups without deleting tasks. Chat and Code share the selected session, navigation history, unsent text and attachments; switching changes the layout. Each session restores its editor tabs. Toggle Code panel shows or hides the bottom tools. Toggle details, Hide editor and Show editor change the side panel. Toggle Code side panel closes and reopens the composition. Changes and Files tabs remain available in Details-only mode. Use arrow keys on separators to resize. Collaboration opens Teams in the sidebar. Library and Creator are product pages selected from the Activity Bar. Library retains its search, categories and view choice. Creator opens seven workspaces. Creator home returns to the mode list. Each workspace retains its document, selection and viewport. Code retains its own file and comparison tabs when you leave the page. Accounts opens the account menu, which includes Return to Workbench.') + ' ' + localize('automations.activityHelp', 'Automations opens schedules and run history. Create or edit a plan, run it now, pause future runs, or open a result in its conversation.') + ' ' + localize('symphony.activityHelp', 'Symphony schedules tasks inside Ash. The monitor shows conversation messages, status, cumulative tokens and runtime.') + ' ' + localize('agentTrace.activityHelp', 'Trace opens saved execution in its own page. Resume keeps the last reviewed location; the View Execution Trace command and View current conversation explicitly locate the selected Thread and latest recorded Turn.'),
+					() => localize('sessions.chatgpt.activityHelp', 'On Desktop, ChatGPT opens conversations in the window sidebar and a shared chat editor. Selection and unsent drafts are retained when switching product entries or Agent sessions. Press Alt+F1 in the sidebar or editor for accessibility help. Right-click the ChatGPT icon, or press Shift+F10 on it, then choose Reload to refresh the current chat. Use ChatGPT: Toggle Scrolling Optimization in the Command Palette to change offscreen rendering.') + ' ' + localize('sessions.activity.help', 'Sessions Activity Bar\nUse Tab and Shift+Tab to enter navigation and Accounts. Use arrow keys, Home and End to move between actions. Press Enter or Space to open the focused action. Drag icons to reorder them, or choose Move earlier and Move later with the Context Menu key or Shift+F10. Navigation order is saved across restarts and Activity Bar positions. The menu also offers position and size options. Chat focuses the sessions list. Custom group headings organize tasks; use Tab to reach a task and Enter to open it. Application tools can create, rename and remove groups without deleting tasks. Chat and Code share the selected session, navigation history, unsent text and attachments; switching changes the layout. Each session restores its editor tabs. Toggle Code panel shows or hides the bottom tools. Toggle details, Hide editor and Show editor change the side panel. Toggle Code side panel closes and reopens the composition. Changes and Files tabs remain available in Details-only mode. Use arrow keys on separators to resize. Collaboration opens Teams in the sidebar. Library and Creator are product pages selected from the Activity Bar. Library retains its search, categories and view choice. Creator opens seven workspaces. Creator home returns to the mode list. Each workspace retains its document, selection and viewport. Code retains its own file and comparison tabs when you leave the page. Accounts opens the account menu, which includes Return to Workbench.') + ' ' + localize('automations.activityHelp', 'Automations opens schedules and run history. Create or edit a plan, run it now, pause future runs, or open a result in its conversation.') + ' ' + localize('symphony.activityHelp', 'Symphony schedules tasks inside Ash. The monitor shows conversation messages, status, cumulative tokens and runtime.') + ' ' + localize('agentTrace.activityHelp', 'View Execution Trace opens saved execution from the conversation menu or Command Palette. Show Agent Output opens a bounded live summary in Output; its channel identifies the reviewed Session. Switching conversations keeps that reader on its selected Session until Show Agent Output is invoked again. Output links open the exact execution event. Clear Output only clears the text view, and Auto Scroll only controls following new output.'),
 					() => focused.focus(),
 					AccessibilityVerbositySettingId.SessionsActivityBar,
 				);
@@ -763,6 +793,7 @@ export abstract class Workbench extends Disposable {
 			languageResolver: languageService,
 			languageFeaturesService: services.get(ILanguageFeaturesService),
 			diffService,
+			languageDiagnosticsService,
 			workingCopyService: workingCopies,
 			accessibilityService: services.get(IAccessibilityService),
 			dialogService: dialogs,

@@ -2,10 +2,9 @@ import { appendFile, mkdir, readdir, rename, rm, open, realpath, lstat } from 'n
 import { constants } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { isAbsolute, join, relative, resolve } from 'node:path';
-import { Disposable } from '../../../base/common/lifecycle.js';
 import { isRecord } from '../../../base/common/types.js';
 import { ConsoleLogSink } from '../common/consoleLogSink.js';
-import type { ILoggerService, LogEntry, ILogFile, ILogFileCursor, ILogFileReadResult } from '../common/log.js';
+import { AbstractLoggerService, type LogEntry, type ILogFile, type ILogFileCursor, type ILogFileReadResult } from '../common/log.js';
 import { LogService } from '../common/logServiceImpl.js';
 
 interface LoggerOptions {
@@ -21,7 +20,7 @@ const LogFileName = /^(main|window-[1-9]\d*)\.log(?:\.[12])?$/;
 const MaxReadBytes = 1024 * 1024;
 
 /** Owns Desktop log files and their retention; all writes and maintenance share one queue. */
-export class LoggerService extends Disposable implements ILoggerService {
+export class LoggerService extends AbstractLoggerService<LogService> {
 	public readonly sessionPath: string;
 	private readonly fileSizes = new Map<string, number>();
 	private readonly logsHome: string;
@@ -53,7 +52,7 @@ export class LoggerService extends Disposable implements ILoggerService {
 		this.initialized = true;
 	}
 
-	public createLogger(category: string): LogService {
+	protected doCreateLogger(category: string): LogService {
 		if (!category.trim()) { throw new TypeError('Invalid logger category'); }
 		return new LogService({
 			flush: () => this.flush(),

@@ -706,6 +706,73 @@ test("projects ordered extension-created named Output channels without replaying
 	assert.equal(output.getChannel(channelId), undefined);
 });
 
+test('extension log Output controls recording, reports levels to its exact host and hides only the active channel', async () => {
+	const api = new FakeExtensionHostApi(snapshot(1, 'acme.run', [{ kind: 'outputEvents', registrationId: 'output-events' }]));
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+	const output = services.get(IOutputService);
+	let closed = 0;
+	services.get(IViewsService).isViewVisible = () => true;
+	services.get(IViewsService).closeView = () => { closed++; };
+	using service = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
+	await service.start();
+	const source = { extensionId: 'acme.demo', incarnation: 3, activationGeneration: 11 };
+	const send = (channelId: string, payload: Record<string, JsonValue>) => api.clientHandler!({ operation: 'editorOperation', payload: { method: 'output', channelId, ...payload } }, new AbortController().signal, source);
+	await send('source', { action: 'create', label: 'Source', languageId: 'typescript' });
+	await send('logs', { action: 'create', label: 'Logs', kind: 'log' });
+	const channel = output.channels.find(channel => channel.label === 'Logs')!;
+	assert.equal(output.channels.find(channel => channel.label === 'Source')!.descriptor.languageId, 'typescript');
+	assert.equal(channel.kind, 'log');
+	await send('logs', { action: 'log', severity: 'trace', text: 'filtered' });
+	await send('logs', { action: 'log', severity: 'warning', text: 'retained' });
+	assert.deepEqual(channel.entries.map(entry => entry.severity), ['warning']);
+	api.emitChanged(1);
+	await waitFor(() => api.invocations.some(request => request.operation === 'outputEvent'));
+	channel.descriptor.logger!.control.setLevel('trace');
+	await waitFor(() => api.invocations.some(request => request.operation === 'outputEvent' && (request.payload as { level: number; }).level === 1));
+	const event = api.invocations.find(request => request.operation === 'outputEvent')!;
+	assert.deepEqual([event.extensionId, event.incarnation, event.activationGeneration], ['acme.demo', 3, 11]);
+	await send('logs', { action: 'clear' });
+	await send('logs', { action: 'log', severity: 'trace', text: 'new trace' });
+	assert.match(channel.getText(), /new trace/);
+	assert.doesNotMatch(channel.getText(), /retained/);
+	await send('logs', { action: 'show', preserveFocus: true });
+	await send('source', { action: 'hide' });
+	assert.equal(closed, 0);
+	await send('logs', { action: 'hide' });
+	assert.equal(closed, 1);
+	const id = channel.id;
+	await send('logs', { action: 'dispose' });
+	assert.equal(output.getChannel(id), undefined);
+	assert.equal(api.invocationSignals.filter((_, index) => api.invocations[index]!.operation === 'outputEvent').every(signal => signal.aborted), true);
+});
+
+test('Output created during activation survives same-process startup snapshots and retires on stop', async () => {
+	const ready = snapshot(1, 'acme.run');
+	const runtime = ready.extensions[0]!;
+	const phase = (generation: number, lifecycle: 'handshaking' | 'ready' | 'stopped'): ExtensionHostFleetSnapshot => ({ ...ready, generation, extensions: [{ ...runtime, lifecycle, registrations: lifecycle === 'ready' ? runtime.registrations : [] }] });
+	const api = new FakeExtensionHostApi(phase(1, 'handshaking'));
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+	const output = services.get(IOutputService);
+	using service = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
+	await service.start();
+	const source = { extensionId: runtime.id, incarnation: runtime.incarnation!, activationGeneration: runtime.activationGeneration };
+	const send = (payload: Record<string, JsonValue>) => api.clientHandler!({ operation: 'editorOperation', payload: { method: 'output', channelId: 'activation', ...payload } }, new AbortController().signal, source);
+	await send({ action: 'create', label: 'Activation Output', kind: 'log' });
+	const channel = output.channels.find(entry => entry.label === 'Activation Output')!;
+	api.current = phase(2, 'handshaking'); api.emitChanged(2);
+	await waitFor(() => service.currentSnapshot.fleetGeneration === 2);
+	assert.equal(output.getChannel(channel.id), channel);
+	api.current = phase(3, 'ready'); api.emitChanged(3);
+	await waitFor(() => service.currentSnapshot.fleetGeneration === 3);
+	await send({ action: 'log', severity: 'information', text: 'activation completed' });
+	assert.match(channel.getText(), /activation completed/);
+	api.current = phase(4, 'stopped'); api.emitChanged(4);
+	await waitFor(() => service.currentSnapshot.fleetGeneration === 4);
+	assert.equal(output.getChannel(channel.id), undefined);
+});
+
 test('extension API requires its domain services before registering any contributions', () => {
 	using services = new InstantiationService();
 	using outputResources = new DisposableStore();
@@ -892,7 +959,7 @@ class FakeExtensionHostApi implements IExtensionHostApi {
 		this.invocations.push(request);
 		this.invocationSignals.push(signal);
 		if (this.invocationResult) return this.invocationResult;
-		if (request.operation === 'documentEvent' || request.operation === 'workspaceEvent') return null;
+		if (request.operation === 'outputEvent' || request.operation === 'documentEvent' || request.operation === 'workspaceEvent') return null;
 		if (request.operation === 'resolveConnection') return { connectionName: 'build' };
 		if (request.operation === "execute") return Object.freeze({ executed: true });
 		if (request.operation === 'createDebugAdapterDescriptor') return { program: 'hosted-adapter', arguments: ['', ' literal '] };

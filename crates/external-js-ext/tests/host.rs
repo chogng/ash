@@ -160,12 +160,17 @@ fn vscode_activation_only_registers_observers_within_the_admitted_ceiling() {
             .collect::<Vec<_>>();
         let expected = if task_access {
             vec![
+                "vscode.output.events",
                 "vscode.workspace.events",
                 "vscode.tasks.events",
                 "example.hello",
             ]
         } else {
-            vec!["vscode.workspace.events", "example.hello"]
+            vec![
+                "vscode.output.events",
+                "vscode.workspace.events",
+                "example.hello",
+            ]
         };
         assert_eq!(registrations, expected);
         assert_eq!(
@@ -1700,7 +1705,7 @@ fn cancelling_a_pending_hover_retires_its_isolate_and_restores_the_provider_in_a
 #[test]
 fn activates_standard_commonjs_and_releases_subscriptions_without_node_io() {
     let running = start(include_str!("fixtures/main.js")).unwrap();
-    assert_eq!(running.supervisor.snapshot().registrations.len(), 16);
+    assert_eq!(running.supervisor.snapshot().registrations.len(), 17);
     assert_eq!(
         run(&running, "globals", json!([])).unwrap(),
         json!(["function", "undefined", "undefined", "undefined"])
@@ -3711,4 +3716,56 @@ fn vscode_speech_registration_requires_the_admitted_capability() {
             .err()
             .unwrap();
     assert!(error.to_string().contains("speechProvider"));
+}
+
+#[test]
+fn vscode_output_channels_keep_order_and_log_metadata_in_the_confined_runtime() {
+    let running = start_vscode(r#"
+        const v = require('vscode');
+        exports.activate = context => context.subscriptions.push(v.commands.registerCommand('example.hello', () => {
+            const text = v.window.createOutputChannel('Source', 'typescript');
+            const logs = v.window.createOutputChannel('Logs', { log: true });
+            text.append('first'); text.appendLine('second'); text.hide();
+            logs.info('ready %s', 'agent'); logs.trace('trace');
+            text.dispose(); logs.dispose();
+            return { off: v.LogLevel.Off, level: logs.logLevel };
+        }));
+    "#).unwrap();
+    let mut calls = Vec::new();
+    let result = running
+        .supervisor
+        .begin_invoke(invocation("hello", json!([]), Duration::from_secs(5)))
+        .unwrap()
+        .wait_with_client(|operation, _, _| {
+            let ExtensionClientOperation::EditorOperation { payload } = operation else {
+                panic!("Expected Output operation");
+            };
+            calls.push(payload);
+            Ok(ExtensionClientResult::Value { value: Value::Null })
+        })
+        .unwrap();
+    assert_eq!(result.payload, json!({"off": 0, "level": 3}));
+    assert_eq!(
+        calls
+            .iter()
+            .filter(|value| value["channelId"] == "output.1")
+            .filter_map(|value| value["action"].as_str())
+            .collect::<Vec<_>>(),
+        vec!["create", "append", "append", "hide", "dispose"]
+    );
+    assert_eq!(
+        calls
+            .iter()
+            .filter(|value| value["channelId"] == "output.2")
+            .filter_map(|value| value["action"].as_str())
+            .collect::<Vec<_>>(),
+        vec!["create", "log", "log", "dispose"]
+    );
+    assert_eq!(calls[0]["languageId"], "typescript");
+    assert_eq!(calls[1]["kind"], "log");
+    assert!(
+        calls
+            .iter()
+            .any(|value| value["severity"] == "information" && value["text"] == "ready agent")
+    );
 }

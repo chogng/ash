@@ -629,6 +629,10 @@ fn invocation_operations_are_brokered_by_registration_kind() {
     assert!(!registration_allows_operation(&debug_events, "execute"));
     let documents = RegistrationKind::TextDocumentEvents {};
     let window = RegistrationKind::WorkspaceEvents {};
+    let output = RegistrationKind::OutputEvents {};
+    assert!(registration_allows_operation(&output, "outputEvent"));
+    assert!(!registration_allows_operation(&output, "execute"));
+    assert!(!registration_allows_operation(&output, "workspaceEvent"));
     assert!(registration_allows_operation(&window, "workspaceEvent"));
     assert!(!registration_allows_operation(&window, "execute"));
     assert!(!registration_allows_operation(&window, "documentEvent"));

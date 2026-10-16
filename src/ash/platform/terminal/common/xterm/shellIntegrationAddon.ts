@@ -1,3 +1,4 @@
+import { localize } from '../../../../nls.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import {
@@ -50,6 +51,7 @@ export class ShellIntegrationAddon extends Disposable implements IShellIntegrati
 		if (!this.terminal || this.isDisposed) {
 			return;
 		}
+		this.log.trace(localize('terminal.shellIntegration.sequence', 'Shell integration sequence: {0}', event.type));
 		if (event.type === 'outputGap') {
 			this.command?.invalidateCurrentCommand();
 			this.environment?.setEnvironment(undefined, false);

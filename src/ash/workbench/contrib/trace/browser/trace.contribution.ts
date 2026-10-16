@@ -1,7 +1,5 @@
-import { Lxicon } from '../../../../base/common/lxicons.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
-import { ViewContainerLocation, ViewsRegistry } from '../../../common/views.js';
-import { AgentTraceViewContainerId, ResumeAgentTraceCommandId, createAgentTraceInput, readLastAgentTraceResource, rememberAgentTraceResource, agentTraceEditorId, traceEditorId } from '../common/trace.js';
+import { ResumeAgentTraceCommandId, createAgentTraceInput, readLastAgentTraceResource, rememberAgentTraceResource, agentTraceEditorId, traceEditorId } from '../common/trace.js';
 import { isHTMLElement } from '../../../../base/browser/dom.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import type { AgentTraceEditor } from './agentTraceEditor.js';
@@ -65,7 +63,7 @@ registerEditorPane({
 	canOpen: input => input.resource.scheme === 'ash-agent-trace' ? EditorPaneMatch.Default : EditorPaneMatch.None,
 	create: async options => {
 		if (!options.instantiationService) { throw new Error('Execution Trace requires Workbench services'); }
-		const [{ AgentTraceEditor }] = await Promise.all([import('./agentTraceEditor.js'), ensureTraceNavigation()]);
+		const { AgentTraceEditor } = await import('./agentTraceEditor.js');
 		return options.instantiationService.createInstance(AgentTraceEditor);
 	},
 });
@@ -124,7 +122,6 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 async function openAgentTrace(accessor: ServicesAccessor, resource: URI): Promise<void> {
 	const storage = accessor.get(IStorageService);
 	const editors = accessor.get(IEditorService);
-	await ensureTraceNavigation();
 	await editors.openEditor(createAgentTraceInput(resource), { pinned: true });
 	rememberAgentTraceResource(storage, resource);
 }
@@ -134,23 +131,4 @@ registerAction2(class ResumeAgentTrace extends Action2 {
 	public override async run(accessor: ServicesAccessor): Promise<void> {
 		await openAgentTrace(accessor, readLastAgentTraceResource(accessor.get(IStorageService)) ?? createAgentTraceResource());
 	}
-});
-
-let navigationRegistration: Promise<void> | undefined;
-function ensureTraceNavigation(): Promise<void> {
-	return navigationRegistration ??= import('./agentTraceNavigation.js').then(({ AgentTraceNavigationView }) => {
-		ViewsRegistry.registerStaticViewContainer({ id: AgentTraceViewContainerId, title: 'Trace', localizationKey: { bundle: 'ash', key: 'agentTrace.navigationTitle' }, location: ViewContainerLocation.Sidebar, mergeViewWithContainerWhenSingleView: true, icon: Lxicon.history, order: 9 });
-		ViewsRegistry.registerStaticViews(AgentTraceViewContainerId, [{ id: AgentTraceViewContainerId + '.navigation', title: 'Trace', localizationKey: { bundle: 'ash', key: 'agentTrace.navigationTitle' }, canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(AgentTraceNavigationView, [{ resume: ResumeAgentTraceCommandId, offline: OpenAgentTraceCommandId }]) }]);
-
-	}).catch(error => { navigationRegistration = undefined; throw error; });
-}
-
-AccessibleViewRegistry.register({
-	type: AccessibleViewType.Help, priority: 100, name: 'agentTraceNavigationHelp', when: ContextKeyExpr.has('agentTraceNavigationFocused'),
-	getProvider: accessor => {
-		const focused = accessor.get(ILayoutService).mainContainer.ownerDocument.activeElement;
-		return new AccessibleContentProvider(AccessibleViewProviderId.AgentTrace, { type: AccessibleViewType.Help },
-			() => localize('agentTrace.navigationHelp', 'Trace is an independent Activity Bar destination. Resume restores the last saved Session, Thread and Turn location. View current conversation opens the selected conversation at its current Thread and latest recorded Turn. Changing the conversation does not silently change the trace being reviewed. Open offline capture opens the import page; imported file contents stay in the editor and must be imported again after closing the window. Tab moves between navigation actions. Enter or Space activates an action. Use the Trace tree and detail tabs to read saved evidence. Escape closes this help.'),
-			() => { if (isHTMLElement(focused) && focused.isConnected) { focused.focus(); } }, AccessibilityVerbositySettingId.AgentTrace);
-	},
 });

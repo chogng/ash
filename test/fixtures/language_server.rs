@@ -18,6 +18,10 @@ fn main() {
                 || message.contains("\"method\":\"textDocument/didChange\"")
             {
                 publish_diagnostics(&mut stdout, &message);
+                write_message(
+                    &mut stdout,
+                    r#"{"jsonrpc":"2.0","method":"window/logMessage","params":{"type":3,"message":"ASH_OUTPUT_LSP_MESSAGE"}}"#,
+                );
             }
             continue;
         };

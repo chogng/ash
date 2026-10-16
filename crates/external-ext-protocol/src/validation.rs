@@ -94,7 +94,7 @@ pub(super) fn validate_registrations(
                 }
                 ExtensionCapability::SourceControl
             }
-            RegistrationKind::WorkspaceEvents {} => continue,
+            RegistrationKind::WorkspaceEvents {} | RegistrationKind::OutputEvents {} => continue,
             RegistrationKind::RemoteAuthorityResolver { authority_prefix }
             | RegistrationKind::RemoteConnectionResolver { authority_prefix } => {
                 if authority_prefix.is_empty()

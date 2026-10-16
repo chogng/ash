@@ -1,3 +1,5 @@
+import { IOutputService } from '../../../../../workbench/services/output/common/output.js';
+import { ViewContainerLocation, WorkbenchViewContainerId } from '../../../../../workbench/common/views.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { CustomViewService, ICustomViewService } from '../../../../services/customView/browser/customViewService.js';
@@ -40,6 +42,19 @@ import { SessionsLayoutService, documentEntry } from '../../browser/sessionsLayo
 import type { ISessionsEntry } from '../../../../services/layout/common/sessionsLayoutService.js';
 
 suite('SessionsLayoutService lifecycle and focus', () => {
+	test('reveals Output beside the current conversation without navigating to another entry', async () => {
+		using fixture = new EntryFixture();
+		await fixture.service.openEntry({ id: 'chat', activityContext: 'sessions.activity.chatSelected', content: 'conversation', focus: 'conversation', restoreCommand: 'sessions.open.chat' });
+		fixture.partChanges.length = 0;
+		fixture.viewVisibility.fire({ id: WorkbenchViewContainerId.Output, location: ViewContainerLocation.Panel, visible: true });
+		assert.equal(fixture.visible.get('panel'), true);
+		assert.equal(fixture.service.isDocumentContent, false);
+		assert.deepEqual(fixture.partChanges, ['available:panel', 'show:panel']);
+		fixture.visible.set('panel', false);
+		fixture.outputReveal.fire();
+		assert.equal(fixture.visible.get('panel'), true);
+	});
+
 	ensureNoDisposablesAreLeakedInTestSuite();
 
 	test('disposal during conversation preparation stops queued entries and Part mutations', async () => {
@@ -197,6 +212,8 @@ class EntryFixture extends Disposable {
 	public activeInput: IResourceEditorInput | undefined;
 	public modalVisible = false;
 	public readonly service: SessionsLayoutService;
+	public readonly outputReveal = this._register(new Emitter<void>());
+	public readonly viewVisibility = this._register(new Emitter<{ id: string; location: ViewContainerLocation; visible: boolean; }>());
 	constructor(savedVisibility?: unknown) {
 		super();
 		this._register(toDisposable(() => this.dom.window.close()));
@@ -234,7 +251,9 @@ class EntryFixture extends Disposable {
 				await this.conversationGate;
 			}
 		});
+		this.services.registerInstance(IOutputService, { onDidRequestShowChannel: this.outputReveal.event } as unknown as IOutputService);
 		this.services.registerInstance(IViewsService, {
+			onDidChangeViewContainerVisibility: this.viewVisibility.event,
 			openViewContainer: async (id: string, focus?: boolean) => {
 				this.opened.push({ id, focus });
 				if (!this.navigationStarted.isSettled) { await this.navigationStarted.complete(); }

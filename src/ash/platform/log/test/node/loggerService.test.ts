@@ -31,7 +31,7 @@ suite('Desktop log files', () => {
 				}),
 				registerChannel: () => { throw new Error('Unexpected channel registration'); },
 			});
-			const client = services.createInstance(LoggerChannelClient);
+			using client = services.createInstance(LoggerChannelClient);
 			using logger = client.createLogger('agents');
 			logger.info('connection', 'ready', { generation: 2 });
 			logger.error('connection', 'crashed', new Error('carrier exited'));

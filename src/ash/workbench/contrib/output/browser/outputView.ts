@@ -17,7 +17,7 @@ import type { ActionViewItem, ActionViewItemOptions } from "../../../../base/bro
 import { DropdownMenuActionViewItem } from "../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js";
 import { Separator, SubmenuAction, type IAction } from "../../../../base/common/actions.js";
 import type { Icon } from "../../../../base/common/icon.js";
-import { MutableDisposable, toDisposable, type IDisposable, type IReference } from "../../../../base/common/lifecycle.js";
+import { MutableDisposable, DisposableStore, toDisposable, type IDisposable, type IReference } from "../../../../base/common/lifecycle.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
 import { LogLevel } from '../../../../platform/log/common/log.js';
 import { CONTEXT_SAVED_LOGS_AVAILABLE, OPEN_SAVED_LOGS_COMMAND_ID } from '../../../services/output/common/output.js';
@@ -51,6 +51,10 @@ export class OutputViewPane extends ViewPane {
 	private focusRequested = false;
 	private readonly filters: IOutputViewFilters;
 	private readonly filterInput: HTMLInputElement;
+	private readonly filterBar: HTMLDivElement;
+	private readonly filterWidget: HTMLDivElement;
+	private readonly filterToolbar: ActionBar;
+	private readonly titleControls: HTMLDivElement;
 	private readonly content: HTMLDivElement;
 	private readonly titleActions: ActionBar;
 	private autoScroll: boolean;
@@ -73,17 +77,27 @@ export class OutputViewPane extends ViewPane {
 		this.contentElement.classList.add("ash-output");
 		this.filters = outputService.filters;
 		this.autoScroll = storageService.getBoolean(AutoScrollStorageKey, StorageScope.WORKSPACE, true);
-		this.titleActions = this._register(new ActionBar(this.headerActionsElement, { ariaLabel: localize('output.actions', 'Output actions'), highlightToggledItems: true, actionViewItemProvider: (action, actionOptions) => this.createActionViewItem(action, actionOptions) }));
-		this.titleActions.element.classList.add("ash-toolbar", "ash-output-title-actions");
-		const filterBar = h(container.ownerDocument, "div");
-		filterBar.className = "ash-output-filter-bar";
+		this.titleControls = h(container.ownerDocument, "div");
+		this.titleControls.className = "ash-output-title-actions";
+		this.headerActionsElement.append(this.titleControls);
+		this._register(toDisposable(() => this.titleControls.remove()));
+		this.titleActions = this._register(new ActionBar(this.titleControls, { ariaLabel: localize('output.actions', 'Output actions'), highlightToggledItems: true, actionViewItemProvider: (action, actionOptions) => this.createActionViewItem(action, actionOptions) }));
+		this.titleActions.element.classList.add("ash-toolbar");
+		this.filterBar = h(container.ownerDocument, "div");
+		this.filterBar.className = "ash-output-filter-bar";
+		this.filterBar.hidden = true;
+		this.filterWidget = h(container.ownerDocument, "div");
+		this.filterWidget.className = "ash-output-filter-widget";
 		this.filterInput = h(container.ownerDocument, "input");
 		this.filterInput.className = "ash-output-filter-input";
 		this.filterInput.type = "search";
 		this.filterInput.placeholder = localize('output.filterPlaceholder', 'Filter Output (text1,text2,!exclude)');
 		this.filterInput.setAttribute("aria-label", localize('output.filter', 'Filter Output'));
 		this.filterInput.value = this.filters.text;
-		filterBar.append(this.filterInput);
+		this.filterWidget.append(this.filterInput);
+		this.filterToolbar = this._register(new ActionBar(this.filterWidget, { ariaLabel: localize('output.filter', 'Filter Output'), highlightToggledItems: true, actionViewItemProvider: (action, actionOptions) => this.createActionViewItem(action, actionOptions) }));
+		this.filterToolbar.element.classList.add("ash-toolbar");
+		this.titleControls.prepend(this.filterWidget);
 		this.content = h(container.ownerDocument, "div");
 		this.content.className = "ash-output-content";
 		const hint = accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.Output);
@@ -96,11 +110,14 @@ export class OutputViewPane extends ViewPane {
 		this.decorations = this.editor.createDecorationsCollection();
 		const focused = CONTEXT_IN_OUTPUT.bindTo(contextKeys);
 		this._register(toDisposable(() => focused.reset()));
-		this._register(addDisposableListener(this.contentElement, 'focusin', () => focused.set(true)));
-		this._register(addDisposableListener<FocusEvent>(this.contentElement, 'focusout', event => {
-			if (!this.contentElement.contains(event.relatedTarget as Node | null)) focused.set(false);
-		}));
-		this.contentElement.append(filterBar, this.content);
+		for (const root of [this.contentElement, this.titleControls]) {
+			this._register(addDisposableListener(root, 'focusin', () => focused.set(true)));
+			this._register(addDisposableListener<FocusEvent>(root, 'focusout', event => {
+				const next = event.relatedTarget as Node | null;
+				if (!this.contentElement.contains(next) && !this.titleControls.contains(next)) focused.set(false);
+			}));
+		}
+		this.contentElement.append(this.filterBar, this.content);
 		this._register(addDisposableListener(this.filterInput, "input", () => this.filters.setText(this.filterInput.value)));
 		this._register(addDisposableListener(this.filterInput, "keydown", event => {
 			if (event.key !== "Escape" || !this.filterInput.value) return;
@@ -123,7 +140,7 @@ export class OutputViewPane extends ViewPane {
 		void this.bindActiveChannel(outputService.activeChannel);
 	}
 
-	override get partTitleProjection(): PartTitleProjection { return { actions: this.titleActions.element }; }
+	override get partTitleProjection(): PartTitleProjection { return { actions: this.titleControls }; }
 
 	public override focus(): void {
 		this.focusRequested = this.editor.getModel() === null;
@@ -131,7 +148,20 @@ export class OutputViewPane extends ViewPane {
 	}
 
 	protected override layoutBody(height: number, width: number): void {
-		this.editor.layout({ width, height: Math.max(0, height - this.filterInput.parentElement!.offsetHeight) });
+		// Match the Output layout policy: narrow panes reserve a body row unless height is scarce.
+		const inHeader = width >= 600 || height <= 100;
+		const host = inHeader ? this.titleControls : this.filterBar;
+		this.filterBar.hidden = inHeader;
+		if (this.filterWidget.parentElement !== host) {
+			const active = this.filterWidget.ownerDocument.activeElement;
+			const focused = this.filterWidget.contains(active) ? active as HTMLElement : undefined;
+			const { selectionStart, selectionEnd, selectionDirection } = this.filterInput;
+			host.insertBefore(this.filterWidget, inHeader ? this.titleActions.element : null);
+			// Reparent the existing control so its value, caret and keyboard focus survive resizing.
+			focused?.focus({ preventScroll: true });
+			if (focused === this.filterInput) this.filterInput.setSelectionRange(selectionStart, selectionEnd, selectionDirection ?? undefined);
+		}
+		this.editor.layout({ width, height: Math.max(0, height - this.filterBar.offsetHeight) });
 	}
 
 	private async bindActiveChannel(channel: IOutputChannel | undefined): Promise<void> {
@@ -144,7 +174,12 @@ export class OutputViewPane extends ViewPane {
 			this.modelReference.clear();
 			// Rendering can itself emit diagnostics. Coalesce channel events and yield
 			// between passes; disposing this pane cancels the owned pending refresh.
-			this.activeChannelListener.value = channel?.onDidChange(() => this.renderScheduler.schedule());
+			const listeners = new DisposableStore();
+			if (channel) {
+				listeners.add(channel.onDidChange(() => this.renderScheduler.schedule()));
+				if (channel.descriptor.logger) listeners.add(channel.descriptor.logger.control.onDidChangeLogLevel(() => this.renderScheduler.schedule()));
+			}
+			this.activeChannelListener.value = listeners;
 		});
 		this.render();
 		if (!channel) {
@@ -197,10 +232,14 @@ export class OutputViewPane extends ViewPane {
 	private renderContent(): void {
 		const active = this.outputService.activeChannel;
 		const categories = active ? categoriesOf(active.entries) : [];
-		const titleStateKey = [this.outputService.channels.map(channel => channel.id).join("\0"), active?.id ?? "", (active?.entries.length ?? 0) > 0, this.autoScroll, this.filters.text, ...OutputSeverities.map(severity => this.filters.isSeverityVisible(severity)), ...categories.map(category => `${category}:${this.filters.isCategoryVisible(category, active!.id)}`)].join("\u0001");
+		const titleStateKey = [this.outputService.channels.map(channel => channel.id).join("\0"), active?.id ?? "", (active?.entries.length ?? 0) > 0, this.autoScroll, active?.descriptor.logger?.control.getLevel() ?? "", this.filters.text, ...OutputSeverities.map(severity => this.filters.isSeverityVisible(severity)), ...categories.map(category => `${category}:${this.filters.isCategoryVisible(category, active!.id)}`)].join("\u0001");
 		if (titleStateKey !== this.titleStateKey) {
 			this.titleStateKey = titleStateKey;
 			this.titleActions.updateActions(this.createTitleActions(active));
+			const filtered = OutputSeverities.some(severity => !this.filters.isSeverityVisible(severity)) || categories.some(category => !this.filters.isCategoryVisible(category, active!.id));
+			this.filterWidget.classList.toggle('filtered', filtered);
+			const filterLabel = filtered ? localize('output.filterActive', 'Filter Output (Filters Active)') : localize('output.filter', 'Filter Output');
+			this.filterToolbar.updateActions([this.action(FilterActionId, filterLabel, filterLabel, Lxicon.filter, Boolean(active), undefined, () => undefined)]);
 		}
 		this.filterInput.value = this.filters.text;
 		let description: string | undefined;
@@ -255,9 +294,8 @@ export class OutputViewPane extends ViewPane {
 	private createTitleActions(active: IOutputChannel | undefined): readonly IAction[] {
 		return [
 			this.action(SelectChannelActionId, active?.label ?? localize('output.selectChannel', 'Select Output Channel'), active ? localize('output.selectNamedChannel', 'Select Output Channel: {0}', active.label) : localize('output.selectChannel', 'Select Output Channel'), undefined, this.outputService.channels.length > 0, undefined, () => undefined),
-			this.action(FilterActionId, localize('output.filter', 'Filter Output'), localize('output.filter', 'Filter Output'), Lxicon.filter, Boolean(active), undefined, () => undefined),
-			this.action(ClearChannelActionId, localize('output.clear', 'Clear Output'), active ? localize('output.clearChannel', 'Clear {0}', active.label) : localize('output.clear', 'Clear Output'), Lxicon.eraser, (active?.entries.length ?? 0) > 0, undefined, () => active?.clear()),
-			this.action(AutoScrollActionId, localize('output.autoScroll', 'Auto Scroll'), this.autoScroll ? localize('output.pauseFollow', 'Pause Following Output') : localize('output.resumeFollow', 'Follow New Output'), this.autoScroll ? Lxicon.pause : Lxicon.arrowDown, Boolean(active), this.autoScroll, () => this.toggleAutoScroll()),
+			this.action(ClearChannelActionId, localize('output.clear', 'Clear Output'), active ? localize('output.clearChannel', 'Clear {0}', active.label) : localize('output.clear', 'Clear Output'), Lxicon.clearAll, (active?.entries.length ?? 0) > 0, undefined, () => active?.clear()),
+			this.action(AutoScrollActionId, localize('output.autoScroll', 'Auto Scroll'), this.autoScroll ? localize('output.pauseFollow', 'Pause Following Output') : localize('output.resumeFollow', 'Follow New Output'), Lxicon.follow, Boolean(active), this.autoScroll, () => this.toggleAutoScroll()),
 			this.action(MoreActionId, localize('output.more', 'More Output Actions'), localize('output.more', 'More Output Actions'), Lxicon.ellipsis, Boolean(active), undefined, () => undefined),
 		];
 	}

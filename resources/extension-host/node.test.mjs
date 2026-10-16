@@ -674,3 +674,29 @@ exports.activate = context => context.subscriptions.push(
 	assert.equal((await invoke('closeSpeechSession', second).result).status, 'success');
 	assert.equal((await h.invoke('test.node', []).result).body.body.payload, 2);
 });
+
+
+test('Output channels preserve ordered writes, language, log levels and disposal through the real runtime', { timeout: 15000 }, async t => {
+	const calls = [];
+	const h = await host(t, `const v = require('vscode');
+exports.activate = context => {
+ const text = v.window.createOutputChannel('  Source  ', 'typescript');
+ const logs = v.window.createOutputChannel('Logs', { log: true });
+ const levels = [];
+ context.subscriptions.push(logs.onDidChangeLogLevel(level => levels.push(level)));
+ text.append('first'); text.appendLine('second'); text.replace('replacement'); text.show(true); text.hide();
+ logs.info('ready %s %d', 'agent', 2); logs.error(new Error('failure'));
+ context.subscriptions.push(v.commands.registerCommand('test.node', () => ({ level: logs.logLevel, levels, off: v.LogLevel.Off })));
+ context.subscriptions.push(v.commands.registerCommand('test.second', () => { text.dispose(); logs.dispose(); logs.info('ignored'); }));
+};`, 'extension.cjs', ['command'], frame => { calls.push(frame.operation.payload); return { result: 'value', value: null }; });
+	assert.deepEqual(calls.filter(call => call.channelId === 'output.1').map(call => call.action), ['create', 'append', 'append', 'replace', 'show', 'hide']);
+	assert.deepEqual(calls[0], { method: 'output', channelId: 'output.1', action: 'create', label: 'Source', kind: 'output', languageId: 'typescript' });
+	assert.equal(calls.find(call => call.action === 'log').text, 'ready agent 2');
+	assert.match(calls.filter(call => call.action === 'log')[1].text, /failure/);
+	const reply = await h.request('invoke', { extensionId: 'test.node', registrationId: 'vscode.output.events', operation: 'outputEvent', payload: { channelId: 'output.2', level: 1 }, deadlineUnixMillis: Date.now() + 30000 }).result;
+	assert.equal(reply.status, 'success', h.stderr());
+	assert.deepEqual((await h.invoke('test.node', []).result).body.body.payload, { level: 1, levels: [1], off: 0 });
+	await h.invoke('test.second', []).result;
+	assert.equal(calls.filter(call => call.action === 'dispose').length, 2);
+	assert.equal(calls.some(call => call.text === 'ignored'), false);
+});

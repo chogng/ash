@@ -981,7 +981,8 @@ fn dispatch_client(
             | ExtensionClientOperation::ShowQuickPick { .. }
             | ExtensionClientOperation::SetDiagnostics { .. }
             | ExtensionClientOperation::SetStatusBarEntries { .. }
-    ) {
+    ) && !matches!(&operation, ExtensionClientOperation::EditorOperation { payload } if payload.get("method").and_then(Value::as_str) == Some("output"))
+    {
         return Err("operation is outside JavaScript host contract v1".into());
     }
     let resolver = v8::PromiseResolver::new(scope).ok_or("cannot allocate host promise")?;

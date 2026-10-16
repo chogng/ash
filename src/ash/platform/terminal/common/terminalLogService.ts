@@ -1,5 +1,6 @@
+import { localize } from '../../../nls.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
-import { ILoggerService, LogLevel, type ILogger } from '../../log/common/log.js';
+import { ILoggerService, LogLevel, type ILogger, type ILogSink } from '../../log/common/log.js';
 import { IWorkspaceContextService } from '../../workspace/common/workspace.js';
 import type { ITerminalLogService } from './terminal.js';
 
@@ -7,15 +8,19 @@ import type { ITerminalLogService } from './terminal.js';
 export class TerminalLogService extends Disposable implements ITerminalLogService {
 	private readonly logger: ILogger;
 	readonly onDidChangeLogLevel;
+	readonly onDidDispose;
 
 	constructor(
 		@ILoggerService loggers: ILoggerService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 	) {
 		super();
-		this.logger = this._register(loggers.createLogger('terminal'));
+		this.logger = this._register(loggers.createLogger('terminal', { name: localize('terminal.editor.title', 'Terminal') }));
 		this.onDidChangeLogLevel = this.logger.onDidChangeLogLevel;
+		this.onDidDispose = this.logger.onDidDispose;
 	}
+
+	registerSink(sink: ILogSink, replay = false) { return this.logger.registerSink(sink, replay); }
 
 	getLevel(): LogLevel { return this.logger.getLevel(); }
 	setLevel(level: LogLevel): void { this.logger.setLevel(level); }

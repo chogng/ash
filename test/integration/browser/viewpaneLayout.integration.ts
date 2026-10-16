@@ -22,7 +22,6 @@ import { lightColorTheme, darkColorTheme, highContrastLightColorTheme, highContr
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { SymphonyTasksView } from '../../../src/ash/sessions/contrib/symphony/browser/symphonyViews.js';
 import { type ISymphonyService, type SymphonyViewState } from '../../../src/ash/sessions/contrib/symphony/browser/symphonyService.js';
-import { AgentTraceNavigationView } from '../../../src/ash/workbench/contrib/trace/browser/agentTraceNavigation.js';
 import { type IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
 import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
@@ -160,14 +159,11 @@ const pane = resources.add(view === 'empty'
 										onDidChange: Event.None, selectSession: () => { }, clear: () => { }, evaluate: async () => { throw new Error('Evaluation failed. '.repeat(12)); },
 									}
 								} as unknown as IDebugService)
-								: view === 'symphony'
-									? new SymphonyTasksView(root, { id: 'fixture.symphony', title: 'Symphony' }, symphony, configuration, contextKeys,
-										{ showOpenDialog: async () => { throw new Error('File picking is outside this fixture'); } } as unknown as IFileDialogService)
-									: new AgentTraceNavigationView({ resume: 'fixture.resume', current: 'fixture.current', offline: 'fixture.offline' }, root,
-										{ id: 'fixture.trace', title: 'Trace' }, { onWillExecuteCommand: Event.None, onDidExecuteCommand: Event.None, executeCommand: async <T>(id: string) => { commands.push(id); return undefined as T; } }, editors, storage, notifications, contextKeys));
+								: new SymphonyTasksView(root, { id: 'fixture.symphony', title: 'Symphony' }, symphony, configuration, contextKeys,
+									{ showOpenDialog: async () => { throw new Error('File picking is outside this fixture'); } } as unknown as IFileDialogService));
 const panes = resources.add(new PaneView(root));
 panes.addPane(pane, 180);
-if (view !== 'symphony' && view !== null) {
+if (view !== 'symphony') {
 	panes.addPane(resources.add(new Pane(root, { id: 'fixture.sibling', title: 'Other view', minimumBodySize: 0 })), 0);
 }
 panes.layout(180, 280);

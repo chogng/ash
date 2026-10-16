@@ -922,7 +922,7 @@ export class Workbench extends Disposable {
 		}));
 		const outputService = services.get(IOutputService);
 		const systemOutputService = this._register(new SystemOutputService(outputService, api.appServer, logService, services.get(ILoggerService).files));
-		this._register(logService.registerSink(systemOutputService));
+		this._register(logService.registerSink(systemOutputService, true));
 		const serviceContributionReady: Promise<void>[] = [];
 		services.registerInstance(IAccessibleViewInformationService, this._register(new AccessibleViewInformationService(storage)));
 		services.registerInstance(IUserThemeService, userThemeService ?? UnavailableUserThemeService);
