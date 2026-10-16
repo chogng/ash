@@ -121,7 +121,9 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 			getHeight: () => 22,
 			findMode: 'filter',
 			compressionEnabled: configurationService.getValue<boolean>('explorer.compactFolders'),
-			isIncompressible: item => item.kind !== FileKind.Directory || workspaceContextService.getWorkspace().folders.some(folder => extUriBiasedIgnorePathCase.isEqual(folder.uri, item.resource)),
+			// Keep workspace roots and their immediate children out of eager compact-chain resolution.
+			isIncompressible: item => item.kind !== FileKind.Directory || workspaceContextService.getWorkspace().folders.some(folder =>
+				extUriBiasedIgnorePathCase.isEqual(folder.uri, item.resource) || extUriBiasedIgnorePathCase.isEqual(folder.uri, dirname(item.resource))),
 			collapseByDefault: item => item.kind !== FileKind.File,
 			expandOnlyOnTwistieClick: () => configurationService.getValue<TreeExpandMode>(ListConfiguration.treeExpandMode) === "doubleClick",
 			identityProvider: { getId: (node) => node.resource.toString() },

@@ -58,10 +58,13 @@
 }
 
 .ash-icon-label-text.multiple {
-	display: inline-flex;
-	min-width: 0;
-	align-items: center;
-	gap: 4px;
+	/* Keep the path in one text flow so the row has one trailing ellipsis. */
+	display: block;
+}
+
+.ash-icon-label-separator {
+	margin: 0 var(--ash-spacing-size20);
+	opacity: 0.5;
 }
 
 .ash-icon-label-description {

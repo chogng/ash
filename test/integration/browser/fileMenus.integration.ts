@@ -54,9 +54,24 @@ const componentServices = lifetime.add(createTestEditorServices(configuration));
 const services = lifetime.add(componentServices.createChild());
 const root = URI.file('/workspace');
 const resource = URI.file('/workspace/main.ts');
+const compactFolders = new URLSearchParams(location.search).has('compactFolders');
+if (compactFolders) await configuration.updateValue('explorer.compactFolders', true);
 const profiles = new UserDataProfileService();
 const provider: IFileSystemProvider = new MemoryFileService([[resource, 'const value = 1;'], [profiles.currentProfile.keybindingsResource, '[]']]);
-provider.readDirectory = async folder => folder.path === root.path ? [{ resource, name: 'main.ts', kind: FileKind.File }] : [];
+const directoryReads: string[] = [];
+const compactDirectories: Record<string, readonly [string, FileKind][]> = {
+	'/workspace': [['examples', FileKind.Directory], ['services', FileKind.Directory], ['main.ts', FileKind.File]],
+	'/workspace/examples': [['extensions', FileKind.Directory]],
+	'/workspace/examples/extensions': [['inspector-with-a-long-folder-name', FileKind.Directory]],
+	'/workspace/examples/extensions/inspector-with-a-long-folder-name': [['first.ts', FileKind.File], ['second.ts', FileKind.File]],
+	'/workspace/services': [['github-auth', FileKind.Directory]],
+	'/workspace/services/github-auth': [['first.ts', FileKind.File], ['second.ts', FileKind.File]],
+};
+provider.readDirectory = async folder => {
+	directoryReads.push(folder.path);
+	if (compactFolders) return (compactDirectories[folder.path] ?? []).map(([name, kind]) => ({ resource: URI.joinPath(folder, name), name, kind }));
+	return folder.path === root.path ? [{ resource, name: 'main.ts', kind: FileKind.File }] : [];
+};
 services.registerInstance(IFileService, lifetime.add(createTestFileService(provider)));
 services.registerInstance(IWorkspaceContextService, lifetime.add(new WorkspaceContextService({ id: 'file-menus-integration', uri: root })));
 const contexts = services.get(IContextKeyService);
@@ -107,6 +122,8 @@ editorButton.addEventListener('contextmenu', openEditorMenu);
 lifetime.add(toDisposable(() => editorButton.removeEventListener('contextmenu', openEditorMenu)));
 
 const integration = {
+	directoryReads: () => [...directoryReads],
+	setCompactFolders: (enabled: boolean) => configuration.updateValue('explorer.compactFolders', enabled),
 	clipboard: () => [...clipboard], opened: () => [...opened],
 	bindings: () => Object.fromEntries(['copyFilePath', 'copyRelativeFilePath', 'explorer.openToSide'].map(command => [command,
 		getKeybindingLabel(keybindings.lookupKeybinding(command)!, KeybindingLabelStyle.UserSettings)
