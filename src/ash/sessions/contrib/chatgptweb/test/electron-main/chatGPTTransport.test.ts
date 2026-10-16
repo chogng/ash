@@ -146,6 +146,40 @@ suite('ChatGPT transport', () => {
 		assert.equal(current.get('ChatGPT-Account-Id'), '');
 		assert.equal(disposed, 0);
 	}));
+	test('sidebar and management routes preserve their HTTP method and reject writes outside the operation contract', async () => fixture(async file => {
+		const calls: { method: string; path: string; }[] = [];
+		using transport = new ChatGPTTransport({
+			credentialFile: file, readVerificationScript: async () => '', createRuntime: () => runtime((async (url, init) => {
+				calls.push({ method: init!.method!, path: new URL(String(url)).pathname });
+				return Response.json({ success: true });
+			}) as typeof fetch)
+		});
+		const channel = transport.getChannel();
+		for (const [method, path, body] of [
+			['GET', '/pins?item_type=conversation', undefined],
+			['POST', '/conversation/id/chat/rename', { title: 'Renamed' }],
+			['PATCH', '/conversation/chat', { is_starred: true }],
+			['PATCH', '/conversation/chat', { is_archived: true }],
+			['PATCH', '/conversation/chat', { gizmo_id: 'g-p-project' }],
+			['DELETE', '/conversation/id/chat', undefined],
+			['POST', '/share/v2/create', { conversation_id: 'chat', current_node_id: 'reply', is_anonymous: true }],
+		] as const) {
+			const id = randomUUID();
+			await channel.call('', 'request', [id, { path: '/service/backend-api' + path, method, headers: {}, ...(body ? { body: JSON.stringify(body) } : {}) }]);
+			await channel.call('', 'cancel', [id]);
+		}
+		assert.deepEqual(calls.map(call => call.method), ['GET', 'POST', 'PATCH', 'PATCH', 'PATCH', 'DELETE', 'POST']);
+		for (const [method, path, body] of [
+			['POST', '/pins', '{}'],
+			['DELETE', '/models', undefined], ['POST', '/conversation/chat', '{}'], ['PATCH', '/conversation/chat', '{"is_visible":false}'],
+			['PATCH', '/conversation/chat', '{"is_starred":true,"gizmo_id":"g-p-project"}'],
+			['PATCH', '/conversation/chat', '{"gizmo_id":"../../other"}'], ['DELETE', '/conversation/id/chat', '{}'],
+		] as const) {
+			await assert.rejects(channel.call('', 'request', [randomUUID(), { path: '/service/backend-api' + path, method, headers: {}, body }]), TypeError);
+		}
+		assert.equal(calls.length, 7);
+	}));
+
 	test('validates IPC routes, methods, headers, sizes and operation shapes', async () => fixture(async file => {
 		using transport = new ChatGPTTransport({ credentialFile: file, readVerificationScript: async () => '', createRuntime: () => runtime(fetch) });
 		const channel = transport.getChannel();

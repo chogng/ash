@@ -2,7 +2,8 @@ import { localize } from '../../../../nls.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { escapeMarkdownSyntaxTokens } from '../../../../base/common/htmlContent.js';
 import { getMediaOrTextMime } from '../../../../base/common/mime.js';
-export interface ChatGPTConversation { readonly id: string; readonly title: string; }
+export interface ChatGPTConversation { readonly id: string; readonly title: string; readonly pinned?: boolean; readonly projectId?: string; }
+export interface ChatGPTProject { readonly id: string; readonly title: string; }
 
 /** A product model family and its selectable presets from the web model picker. */
 export interface ChatGPTModel {
@@ -114,11 +115,77 @@ export class ChatGPTClient {
 		return { models, defaultModel: models.find(model => defaultModelSlug !== undefined && model.modelIds.includes(defaultModelSlug))?.id ?? models[0]!.id };
 	}
 
-	async conversations(offset: number, signal: AbortSignal): Promise<{ items: readonly ChatGPTConversation[]; hasMore: boolean; }> {
-		const value = await this.json(`/conversations?offset=${offset}&limit=50&order=updated`, signal);
+	async conversations(offset: number, signal: AbortSignal): Promise<{ items: readonly ChatGPTConversation[]; hasMore: boolean; nextOffset: number; }> {
+		const value = await this.json(`/conversations?offset=${offset}&limit=50&order=updated&hide_snorlax=false`, signal);
 		if (!isRecord(value) || !Array.isArray(value.items)) { throw this.invalidResponse(); }
-		const items = value.items.flatMap(item => isRecord(item) && typeof item.id === 'string' && typeof item.title === 'string' ? [{ id: item.id, title: item.title }] : []);
-		return { items, hasMore: typeof value.total === 'number' ? offset + value.items.length < value.total : value.items.length === 50 };
+		const items = value.items.flatMap(item => isRecord(item) && typeof item.id === 'string' && typeof item.title === 'string' ? [{ id: item.id, title: item.title, pinned: item.is_starred === true, projectId: typeof item.gizmo_id === 'string' ? item.gizmo_id : undefined }] : []);
+		return { items, nextOffset: offset + value.items.length, hasMore: value.items.length > 0 && (typeof value.total === 'number' ? offset + value.items.length < value.total : value.items.length === 50) };
+	}
+
+	async pinnedConversations(signal: AbortSignal): Promise<readonly ChatGPTConversation[]> {
+		const value = await this.json('/pins?item_type=conversation', signal);
+		if (!Array.isArray(value)) { throw this.invalidResponse(); }
+		return value.flatMap(pin => {
+			const item = isRecord(pin) ? pin.item : undefined;
+			return isRecord(item) && typeof item.id === 'string' && typeof item.title === 'string'
+				? [{ id: item.id, title: item.title, pinned: true, projectId: typeof item.gizmo_id === 'string' ? item.gizmo_id : undefined }] : [];
+		});
+	}
+
+	async projects(signal: AbortSignal): Promise<readonly ChatGPTProject[]> {
+		const projects = new Map<string, ChatGPTProject>();
+		const cursors = new Set<string>();
+		let cursor: string | undefined;
+		do {
+			const query = new URLSearchParams({ conversations_per_gizmo: '0', limit: '100', owned_only: 'false', ...(cursor ? { cursor } : {}) });
+			const value = await this.json('/gizmos/snorlax/sidebar?' + query, signal);
+			if (!isRecord(value) || !Array.isArray(value.items) || (value.cursor != null && typeof value.cursor !== 'string')) { throw this.invalidResponse(); }
+			for (const item of value.items) {
+				if (!isRecord(item) || !isRecord(item.gizmo) || !isRecord(item.gizmo.display) || typeof item.gizmo.id !== 'string'
+					|| typeof item.gizmo.display.name !== 'string' || item.gizmo.gizmo_snorlax_type === 'locked_chats') { continue; }
+				projects.set(item.gizmo.id, { id: item.gizmo.id, title: item.gizmo.display.name });
+			}
+			cursor = value.cursor || undefined;
+			if (cursor && cursors.has(cursor)) { throw this.invalidResponse(); }
+			if (cursor) { cursors.add(cursor); }
+		} while (cursor);
+		return [...projects.values()];
+	}
+
+	async rename(id: string, title: string, signal: AbortSignal): Promise<void> {
+		await this.consume(`/conversation/id/${encodeURIComponent(id)}/rename`, signal, 'POST', { title });
+	}
+
+	async updateConversation(id: string, change: { is_starred: boolean; } | { is_archived: true; } | { gizmo_id: string; }, signal: AbortSignal): Promise<void> {
+		await this.consume(`/conversation/${encodeURIComponent(id)}`, signal, 'PATCH', change);
+	}
+
+	async deleteConversation(id: string, signal: AbortSignal): Promise<void> {
+		await this.consume(`/conversation/id/${encodeURIComponent(id)}`, signal, 'DELETE');
+	}
+
+	async share(id: string, signal: AbortSignal): Promise<string> {
+		const history = await this.history(id, signal);
+		const response = await this.request('/share/v2/create', signal, {
+			method: 'POST', headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ conversation_id: id, current_node_id: history.parentId, is_anonymous: true }),
+		});
+		const value: unknown = await response.json();
+		if (!isRecord(value) || typeof value.share_url !== 'string') { throw this.invalidResponse(); }
+		const url = new URL(value.share_url);
+		if (url.origin !== 'https://chatgpt.com' || !url.pathname.startsWith('/share/') || url.username || url.password || url.hash) { throw this.invalidResponse(); }
+		return url.href;
+	}
+
+	private async consume(path: string, signal: AbortSignal, method: string, body?: object): Promise<void> {
+		const response = await this.request(path, signal, { method, ...(body ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}) });
+		if (response.status !== 204) {
+			const text = await response.text();
+			if (text) {
+				const value: unknown = JSON.parse(text);
+				if (!isRecord(value) || value.success === false) { throw this.invalidResponse(); }
+			}
+		}
 	}
 
 	async history(id: string, signal: AbortSignal): Promise<ChatGPTHistory> {

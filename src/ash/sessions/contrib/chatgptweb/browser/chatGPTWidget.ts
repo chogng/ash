@@ -92,7 +92,7 @@ export class ChatGPTWidget extends Disposable {
 		this.welcome.hidden = state.messages.length > 0;
 		this.error.textContent = state.error;
 		this.error.hidden = !state.error;
-		this.status.textContent = state.busy ? localize('sessions.chatgpt.loading', 'Loading…') : state.sending ? localize('sessions.chatgpt.replying', 'ChatGPT is replying…') :
+		this.status.textContent = state.sending ? localize('sessions.chatgpt.replying', 'ChatGPT is replying…') :
 			state.stopped ? localize('sessions.chatgpt.replyStopped', 'Reply stopped') : '';
 		this.status.hidden = !this.status.textContent;
 		this.messages.setAttribute('aria-busy', String(state.sending || state.busy));

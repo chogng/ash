@@ -1,4 +1,4 @@
-import type { IChatGPTTransport } from '../common/chatGPTTransport.js';
+import type { ChatGPTRequest, IChatGPTTransport } from '../common/chatGPTTransport.js';
 import { VSBuffer } from '../../../../base/common/buffer.js';
 
 /** Adapt the contribution's pull-based IPC transport to the client's HTTP/stream parser. */
@@ -23,7 +23,7 @@ export function createChatGPTFetch(transport: IChatGPTTransport): typeof fetch {
 		signal?.addEventListener('abort', abort, { once: true });
 		try {
 			const response = await transport.request(id, {
-				path: input, method: (init?.method ?? 'GET') as 'GET' | 'POST' | 'PUT',
+				path: input, method: (init?.method ?? 'GET') as ChatGPTRequest['method'],
 				headers: Object.fromEntries(new Headers(init?.headers)), body: requestBody,
 			});
 			signal?.throwIfAborted();

@@ -227,6 +227,8 @@ When a row has both fixed-size elements (icons, action buttons) and flexible tex
 
 This is the standard pattern for tree rows, list items, tab labels, and view pane headers.
 
+For temporary row actions, follow the shared [hover overlay and edge fade guidance](../design-philosophy/SKILL.md#hover-overlays).
+
 ### Hover for Full Text
 
 When text is truncated with ellipsis, the **full text must be accessible** via hover tooltip. Use `IHoverService.setupDelayedHover()` with the full untruncated text so users can read it:

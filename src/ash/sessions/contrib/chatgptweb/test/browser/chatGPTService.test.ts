@@ -27,12 +27,128 @@ function fixture(respond: (path: string, signal: AbortSignal, request: ChatGPTRe
 function response(path: string): Response {
 	assert.ok(!path.endsWith('/me'), 'The chat must not request an account identity');
 	if (path.includes('/models?')) { return Response.json(simpleChatGPTModelCatalog([{ slug: 'model', title: 'Model' }])); }
+	if (path.includes('/pins?')) { return Response.json([]); }
+	if (path.includes('/gizmos/snorlax/sidebar?')) { return Response.json({ items: [], cursor: null }); }
 	if (path.includes('/conversations?')) { return Response.json({ items: [{ id: 'one', title: 'One' }, { id: 'two', title: 'Two' }], total: 2 }); }
 	const id = path.split('/').at(-1)!;
 	return Response.json({ title: id, current_node: 'reply', mapping: { reply: { parent: null, message: { id: 'reply', author: { role: 'assistant' }, content: { parts: [id + ' reply'] } } } } });
 }
 suite('ChatGPT shared service', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+	test('pinned history merges once without advancing recent pagination, including after an archive', async () => {
+		const offsets: number[] = [];
+		using chat = fixture(async (path, _signal, request) => {
+			if (request.method === 'PATCH') { return Response.json({ success: true }); }
+			if (path.includes('/pins?')) { return Response.json([{ item: { id: 'old-pin', title: 'Old pin' } }, { item: { id: 'one', title: 'One' } }]); }
+			if (path.includes('/gizmos/snorlax/sidebar?')) { return Response.json({ items: [{ gizmo: { id: 'g-p-project', display: { name: 'Project' } } }], cursor: null }); }
+			if (path.includes('/conversations?')) {
+				const query = new URL(path, 'https://test.invalid').searchParams;
+				const offset = Number(query.get('offset')); offsets.push(offset);
+				assert.equal(query.get('hide_snorlax'), 'false');
+				return Response.json({ items: offset ? [{ id: 'three', title: 'Three', gizmo_id: 'g-p-project' }] : [{ id: 'one', title: 'One' }, { id: 'two', title: 'Two' }], total: 3 });
+			}
+			return response(path);
+		});
+		await chat.reload();
+		assert.deepEqual(chat.state.get().conversations.map(item => [item.id, item.pinned]), [['one', true], ['two', false], ['old-pin', true]]);
+		assert.deepEqual(chat.state.get().projects, [{ id: 'g-p-project', title: 'Project' }]);
+		await chat.archive('two');
+		await chat.loadMore();
+		assert.deepEqual(offsets, [0, 1]);
+		assert.equal(chat.state.get().conversations.filter(item => item.id === 'one').length, 1);
+		assert.equal(chat.state.get().conversations.find(item => item.id === 'three')?.projectId, 'g-p-project');
+	});
+
+	test('project and pin failures leave recent chats usable and report the error', async () => {
+		using chat = fixture(async path => path.includes('/pins?') || path.includes('/gizmos/snorlax/sidebar?') ? new Response(null, { status: 503 }) : response(path));
+		await chat.reload();
+		assert.equal(chat.state.get().connected, true);
+		assert.equal(chat.state.get().conversations.length, 2);
+		assert.match(chat.state.get().error, /503/);
+		await chat.select('one');
+		assert.equal(chat.state.get().conversationId, 'one');
+	});
+	test('conversation actions commit after confirmation and keep drafts and selected title consistent', async () => {
+		const writes: { method: string; path: string; body: unknown; }[] = [];
+		let reject = false;
+		using chat = fixture(async (path, _signal, request) => {
+			if (request.method !== 'GET') {
+				writes.push({ method: request.method, path, body: request.body ? JSON.parse(String(request.body)) : undefined });
+				return reject ? new Response(null, { status: 500 }) : Response.json({ success: true });
+			}
+			return response(path);
+		});
+		await chat.reload();
+		await chat.select('one');
+		chat.setDraft('Keep my draft');
+		await chat.rename('one', 'Renamed');
+		assert.equal(chat.state.get().title, 'Renamed');
+		assert.equal(chat.state.get().conversations[0]!.title, 'Renamed');
+		await chat.setPinned('one', true);
+		assert.equal(chat.state.get().conversations[0]!.pinned, true);
+		await chat.moveToProject('one', 'g-p-project');
+		assert.equal(chat.state.get().conversations[0]!.projectId, 'g-p-project');
+		reject = true;
+		await chat.archive('one');
+		assert.equal(chat.state.get().conversations.length, 2);
+		assert.equal(chat.state.get().conversationId, 'one');
+		assert.equal(chat.state.get().draft, 'Keep my draft');
+		assert.match(chat.state.get().error, /500/);
+		reject = false;
+		await chat.archive('one');
+		assert.deepEqual(chat.state.get().conversations.map(item => item.id), ['two']);
+		assert.equal(chat.state.get().conversationId, undefined);
+		await chat.select('one');
+		assert.equal(chat.state.get().draft, 'Keep my draft');
+		await chat.deleteConversation('two');
+		assert.equal(chat.state.get().conversations.length, 0);
+		assert.deepEqual(writes.map(item => [item.method, item.body]), [
+			['POST', { title: 'Renamed' }], ['PATCH', { is_starred: true }], ['PATCH', { gizmo_id: 'g-p-project' }],
+			['PATCH', { is_archived: true }], ['PATCH', { is_archived: true }], ['DELETE', undefined],
+		]);
+		assert.ok(writes[0]!.path.endsWith('/conversation/id/one/rename'));
+		assert.ok(writes.at(-1)!.path.endsWith('/conversation/id/two'));
+	});
+
+	test('pending management fences duplicate writes and navigation without aborting the accepted request', async () => {
+		let finish!: () => void;
+		let entered!: () => void;
+		const started = new Promise<void>(resolve => entered = resolve);
+		let writes = 0;
+		using chat = fixture(async (path, signal, request) => {
+			if (request.method === 'PATCH') {
+				writes++; entered(); await new Promise<void>(resolve => finish = resolve);
+				assert.equal(signal.aborted, false);
+				return Response.json({ success: true });
+			}
+			return response(path);
+		});
+		await chat.reload(); await chat.select('one');
+		const pending = chat.setPinned('one', true); await started;
+		assert.equal(chat.state.get().managing, true);
+		await chat.setPinned('one', true); await chat.select('two'); chat.newChat(); await chat.reload();
+		assert.equal(writes, 1);
+		assert.equal(chat.state.get().conversationId, 'one');
+		finish(); await pending;
+		assert.equal(chat.state.get().managing, false);
+		assert.equal(chat.state.get().conversations[0]!.pinned, true);
+	});
+
+	test('project menus read every server page and share links reject a foreign origin', async () => {
+		using chat = fixture(async (path, _signal, request) => {
+			if (path.includes('/gizmos/snorlax/sidebar?')) {
+				const next = new URL(path, 'https://test.invalid').searchParams.get('cursor');
+				return Response.json({ items: [{ gizmo: { id: next ? 'g-p-two' : 'g-p-one', display: { name: next ? 'Two' : 'One' } } }], cursor: next ? null : 'next' });
+			}
+			if (request.method === 'POST' && path.endsWith('/share/v2/create')) { return Response.json({ share_url: 'https://other.test/share/one' }); }
+			return response(path);
+		});
+		assert.deepEqual(await chat.listProjects(new AbortController().signal), [{ id: 'g-p-one', title: 'One' }, { id: 'g-p-two', title: 'Two' }]);
+		await chat.reload();
+		assert.equal(await chat.share('one'), undefined);
+		assert.match(chat.state.get().error, /unsupported/);
+	});
+
 	test('all five presets send their mapped targets and family changes preserve the product level', async () => {
 		const sent: Record<string, unknown>[] = [];
 		let catalog = chatGPTModelCatalog();

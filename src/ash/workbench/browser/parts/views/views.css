@@ -9,6 +9,16 @@
 .ash-view-pane-container[hidden] {
 	display: none;
 }
+
+.ash-view-pane-scrollable {
+	flex: 1 1 auto;
+	min-height: 0;
+}
+
+.ash-view-pane-container.content-sized .ash-pane-view-container {
+	flex: none;
+	overflow: hidden;
+}
 .ash-view-pane-placeholder {
 	margin: 0;
 	padding: 8px;

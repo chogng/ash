@@ -5,7 +5,7 @@
 	gap: 12px;
 	min-height: 0;
 	min-width: 0;
-	padding: 20px 12px;
+	padding-top: 20px;
 	background: var(--ash-sideBar-background, ButtonFace);
 	color: var(--ash-foreground, CanvasText);
 	font:
@@ -17,13 +17,15 @@
 	box-sizing: border-box;
 }
 
-.ash-chatgpt-navigation button,
+.ash-chatgpt-navigation
+	:is(.ash-chatgpt-new-chat, .ash-chatgpt-conversation, .ash-action-label),
 .ash-chatgpt-navigation input {
 	font: inherit;
 	color: inherit;
 }
 
-.ash-chatgpt-navigation button {
+.ash-chatgpt-navigation
+	:is(.ash-chatgpt-new-chat, .ash-chatgpt-conversation, .ash-action-label) {
 	min-height: 36px;
 	padding: 6px 12px;
 	border: var(--ash-strokeThickness, 1px) solid transparent;
@@ -33,18 +35,32 @@
 	text-align: left;
 }
 
-.ash-chatgpt-navigation button:hover,
-.ash-chatgpt-navigation button[aria-current] {
+.ash-chatgpt-navigation
+	:is(
+		.ash-chatgpt-new-chat,
+		.ash-chatgpt-conversation,
+		.ash-action-label
+	):hover,
+.ash-chatgpt-navigation
+	:is(
+		.ash-chatgpt-new-chat,
+		.ash-chatgpt-conversation,
+		.ash-action-label
+	)[aria-current] {
 	background: var(--ash-list-hoverBackground, ButtonFace);
 }
 
-.ash-chatgpt-navigation button[aria-current] {
+.ash-chatgpt-navigation
+	:is(
+		.ash-chatgpt-new-chat,
+		.ash-chatgpt-conversation,
+		.ash-action-label
+	)[aria-current] {
 	font-weight: var(--ash-fontWeight-semiBold, 600);
 	border-color: var(--ash-contrastBorder, transparent);
 }
 
 .ash-chatgpt-navigation input {
-	width: 100%;
 	min-height: 36px;
 	padding: 8px 12px;
 	border: var(--ash-strokeThickness, 1px) solid
@@ -53,34 +69,114 @@
 	background: transparent;
 }
 
-.ash-chatgpt-navigation :is(button, input):focus-visible {
+.ash-chatgpt-navigation > :is(button, input) {
+	flex-shrink: 0;
+	margin-inline: 12px;
+}
+
+.ash-chatgpt-navigation
+	:is(
+		.ash-chatgpt-new-chat,
+		.ash-chatgpt-conversation,
+		.ash-action-label,
+		input
+	):focus-visible {
 	outline: var(--ash-strokeThickness, 1px) solid
 		var(--ash-focusBorder, Highlight);
 	outline-offset: -1px;
 }
 
-.ash-chatgpt-navigation button:disabled {
+.ash-chatgpt-navigation
+	:is(
+		.ash-chatgpt-new-chat,
+		.ash-chatgpt-conversation,
+		.ash-action-label
+	):disabled {
 	opacity: 0.5;
 	cursor: default;
 }
 
-.ash-chatgpt-navigation-scrollable {
-	flex: 1;
-	min-height: 0;
+.ash-chatgpt-navigation-list {
+	/* Keep content inset while the scroll track reaches the sidebar edge. */
+	padding: 0 12px 20px;
 }
 
-.ash-chatgpt-navigation-list {
+.ash-chatgpt-navigation-row {
+	position: relative;
+	border-radius: var(--ash-cornerRadius-large, 8px);
+}
+
+.ash-chatgpt-navigation-rows {
 	display: flex;
 	flex-direction: column;
 	gap: 4px;
 }
 
-.ash-chatgpt-navigation-list button {
+.ash-chatgpt-navigation-row:is(:hover, :focus-within, .menu-open) {
+	background: var(--ash-list-hoverBackground, ButtonFace);
+}
+
+.ash-chatgpt-navigation .ash-chatgpt-conversation {
+	width: 100%;
 	flex-shrink: 0;
-	min-height: 48px;
+	min-height: var(--ash-list-rowHeight, 24px);
+	padding-block: 0;
 	overflow: hidden;
 	white-space: nowrap;
 	text-overflow: ellipsis;
+}
+
+.ash-chatgpt-conversation-actions {
+	/* Overlay the title when revealed instead of reserving room in every row. */
+	position: absolute;
+	z-index: 1;
+	inset-block-start: 0;
+	inset-inline-end: 0;
+	gap: 0;
+	border-radius: inherit;
+	border-start-start-radius: 0;
+	border-end-start-radius: 0;
+	background-color: var(--ash-sideBar-background, ButtonFace);
+	background-image: linear-gradient(
+		var(--ash-list-hoverBackground, ButtonFace),
+		var(--ash-list-hoverBackground, ButtonFace)
+	);
+	opacity: 0;
+	pointer-events: none;
+}
+
+.ash-chatgpt-conversation-actions::before {
+	content: "";
+	position: absolute;
+	inset-block: 0;
+	inset-inline-end: 100%;
+	width: var(--ash-spacing-size160, 16px);
+	background: inherit;
+	mask-image: linear-gradient(to right, transparent, currentColor);
+	pointer-events: none;
+}
+
+.ash-chatgpt-conversation-actions:dir(rtl)::before {
+	mask-image: linear-gradient(to left, transparent, currentColor);
+}
+
+.ash-chatgpt-navigation-row:is(:hover, :focus-within, .menu-open)
+	> .ash-chatgpt-conversation-actions {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.ash-chatgpt-conversation-actions .ash-action-label {
+	width: var(--ash-toolbar-actionSize, 24px);
+	height: var(--ash-toolbar-actionSize, 24px);
+	min-height: 0;
+	padding: 0;
+	gap: 0;
+	border-radius: var(--ash-cornerRadius-small, 4px);
+}
+
+.ash-chatgpt-conversation-actions .ash-action-label-text {
+	display: none;
 }
 
 .ash-chatgpt-navigation [hidden] {
@@ -88,7 +184,12 @@
 }
 
 @media (forced-colors: active) {
-	.ash-chatgpt-navigation button {
+	.ash-chatgpt-navigation
+		:is(
+			.ash-chatgpt-new-chat,
+			.ash-chatgpt-conversation,
+			.ash-action-label
+		) {
 		border: var(--ash-strokeThickness, 1px) solid CanvasText;
 	}
 	.ash-chatgpt-navigation-list button[aria-current] {

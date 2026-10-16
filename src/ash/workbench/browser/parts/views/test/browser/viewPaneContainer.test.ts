@@ -31,6 +31,54 @@ function createStorage(workspaceId: string) {
 	return new BrowserStorageService({ ownerWindow: browserEnvironment.window as unknown as Window, workspaceId, backend: browserEnvironment.window.localStorage, flushInterval: 0 });
 }
 
+test('content-sized ViewPanes retain profile collapse state across workspaces without persisting content heights', async () => {
+	const { ViewPane } = await import('../../../../../../workbench/browser/parts/views/viewPane.js');
+	const { SyncDescriptor } = await import('../../../../../../platform/instantiation/common/descriptors.js');
+	const { WorkbenchViewRegistry } = await import('../../../../../../workbench/common/views.js');
+	const { ViewDescriptorService } = await import('../../../../../../workbench/services/views/browser/viewDescriptorService.js');
+	const { StorageScope } = await import('../../../../../../platform/storage/common/storage.js');
+	class ContentView extends ViewPane {
+		constructor(parent: HTMLElement, options: import('../../../../../../workbench/browser/parts/views/viewPane.js').IViewPaneOptions) { super(parent, { ...options, minimumBodySize: 80 }); }
+		override get maximumSize(): number { return this.minimumSize; }
+		setContentHeight(height: number): void { this.minimumBodySize = height; }
+	}
+	using registry = new WorkbenchViewRegistry();
+	const descriptor = { id: 'content-sizing', title: 'Content', location: ViewContainerLocation.Sidebar };
+	using registration = registry.registerViewContainer(descriptor);
+	using views = registry.registerViews(descriptor.id, ['first', 'second'].map(id => ({ id, title: id, ctorDescriptor: new SyncDescriptor(ContentView) })));
+	const create = (workspace: string) => {
+		const resources = new DisposableStore();
+		const storage = resources.add(createStorage(workspace));
+		const services = resources.add(new InstantiationService());
+		const contextKeys = resources.add(new ContextKeyService());
+		services.registerInstance(IStorageService, storage);
+		services.registerInstance(IContextKeyService, contextKeys);
+		const descriptors = resources.add(services.createInstance(ViewDescriptorService, { registry }));
+		const container = resources.add(registerContainerServices(services).createInstance(ViewPaneContainer, browserEnvironment.window.document.body, {
+			viewContainer: descriptor, model: descriptors.getViewContainerModel(descriptor.id)!, contextKeyService: contextKeys, instantiationService: services,
+			paneLayout: 'content', stateScope: StorageScope.PROFILE,
+		}));
+		container.layout({ height: 100, width: 300 });
+		return { resources, container, storage };
+	};
+	const first = create('content-one');
+	try {
+		const pane = first.container.getView('first') as ContentView;
+		assert.equal(first.container.getViewSize(pane), 108);
+		pane.setExpanded(false);
+		assert.equal(first.container.getViewSize(pane), 28);
+		const second = first.container.getView('second') as ContentView;
+		second.setContentHeight(160);
+		assert.equal(first.container.getViewSize(second), 188);
+		assert.equal(first.storage.getBoolean('workbench.viewContainer.content-sizing.first.collapsed', StorageScope.PROFILE), true);
+		assert.equal(first.storage.get('workbench.viewContainer.content-sizing.second.size', StorageScope.PROFILE), undefined);
+		assert.equal(first.storage.get('workbench.viewContainer.content-sizing.first.collapsed', StorageScope.WORKSPACE), undefined);
+	} finally { first.resources.dispose(); }
+	const restored = create('content-two');
+	try { assert.equal(restored.container.getView('first')!.isExpanded(), false); }
+	finally { restored.resources.dispose(); }
+});
+
 test("ViewPaneContainer opens a fixed visible view without toggling its visibility", () => {
 	using storage = createStorage("fixed");
 	using services = new InstantiationService();

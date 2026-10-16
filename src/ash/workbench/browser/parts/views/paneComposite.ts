@@ -15,7 +15,7 @@ export interface PaneCompositeOptions extends ViewPaneContainerOptions {
 }
 
 export type PaneHeaderVisibility = "visible" | "hidden";
-export type PaneLayout = "stack" | "fill";
+export type PaneLayout = NonNullable<ViewPaneContainerOptions['paneLayout']>;
 
 /**
  * Activatable Composite whose content is assembled from registered ViewPanes.
