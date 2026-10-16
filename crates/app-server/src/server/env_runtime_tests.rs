@@ -1496,7 +1496,7 @@ fn browser_tools_follow_capable_connection_lifecycle_with_explicit_permissions()
                 "params": {
                     "clientInfo": { "name": "desktop-test-2", "version": "1" },
                     "capabilities": {
-                        "browser": { "version": 3, "observe": true, "input": true }
+                        "browser": { "version": 4, "observe": true, "input": true }
                     }
                 }
             })
