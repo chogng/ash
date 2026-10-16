@@ -215,7 +215,12 @@ export class ModelPickerWidget extends Disposable {
 		rail.setAttribute('aria-hidden', 'true');
 		const thumb = h(popup.ownerDocument, 'div');
 		thumb.className = 'ash-sessions-model-picker-thumb';
-		rail.append(thumb);
+		// Translate a rail-sized element so percentages describe the travel distance,
+		// while the visible thumb keeps its fixed size without animating layout.
+		const position = h(popup.ownerDocument, 'div');
+		position.className = 'ash-sessions-model-picker-thumb-position';
+		position.append(thumb);
+		rail.append(position);
 		track.append(fill, ticks, rail, slider);
 		popup.append(track);
 		let renderedLevels: NonNullable<ModelPickerPresentation['thinking']>['levels'] | undefined;

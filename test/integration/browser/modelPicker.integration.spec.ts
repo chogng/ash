@@ -128,6 +128,42 @@ test('Sessions thinking slider follows the pointer continuously, snaps on releas
 	await expect(page.getByRole('dialog')).toBeVisible();
 });
 
+test('Sessions thinking slider moves visually without changing the thumb layout position', async ({ page }) => {
+	await page.goto('/modelPicker.html');
+	await page.evaluate(() => window.ashModelPickerIntegration.configure({ thinking: true }));
+	await page.locator('.ash-sessions-model-picker').click();
+	const slider = page.getByRole('slider');
+	await slider.press('Home');
+	const thumb = page.locator('.ash-sessions-model-picker-thumb');
+	const rail = page.locator('.ash-sessions-model-picker-thumb-rail');
+	await expect.poll(async () => {
+		const box = (await thumb.boundingBox())!;
+		return Math.abs(box.x + box.width / 2 - (await rail.boundingBox())!.x);
+	}).toBeLessThan(1);
+	const positions = await page.evaluate(() => {
+		const popup = document.querySelector<HTMLElement>('.ash-sessions-model-picker-popup')!;
+		const slider = popup.querySelector('input')!;
+		slider.value = slider.max;
+		slider.dispatchEvent(new Event('input', { bubbles: true }));
+		// Resolve styles, then sample the real transitions at deterministic points.
+		const thumb = popup.querySelector<HTMLElement>('.ash-sessions-model-picker-thumb')!;
+		thumb.getBoundingClientRect();
+		const animations = popup.getAnimations({ subtree: true }).filter(animation => animation instanceof CSSTransition);
+		for (const animation of animations) { animation.pause(); }
+		return [0, 0.25, 0.5, 0.75, 1].map(progress => {
+			for (const animation of animations) { animation.currentTime = Number(animation.effect!.getTiming().duration) * progress; }
+			const bounds = thumb.getBoundingClientRect();
+			return { x: bounds.x + bounds.width / 2, layoutX: thumb.offsetLeft };
+		});
+	});
+	const bounds = (await rail.boundingBox())!;
+	expect(Math.abs(positions[0]!.x - bounds.x)).toBeLessThan(1);
+	expect(Math.abs(positions.at(-1)!.x - bounds.x - bounds.width)).toBeLessThan(1);
+	expect(positions[1]!.x).toBeGreaterThan(positions[0]!.x);
+	expect(positions[1]!.x).toBeLessThan(positions.at(-1)!.x);
+	expect(new Set(positions.map(position => position.layoutX)).size).toBe(1);
+});
+
 test('Sessions model picker keeps one popup through view transitions and honors reduced motion', async ({ page }) => {
 	await page.emulateMedia({ reducedMotion: 'reduce' });
 	await page.goto('/modelPicker.html');

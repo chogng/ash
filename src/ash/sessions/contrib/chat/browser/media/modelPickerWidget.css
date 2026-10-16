@@ -63,7 +63,7 @@
 	color: var(--ash-foreground);
 	box-shadow: 0 4px 16px var(--ash-widget-shadow);
 	transform-origin: bottom right;
-	animation: ash-model-picker-enter var(--ash-animation-durationSlow)
+	animation: ash-model-picker-enter var(--ash-animation-durationNormal)
 		cubic-bezier(0.23, 1, 0.32, 1) both;
 }
 
@@ -75,8 +75,8 @@
 	position: relative;
 	max-height: calc(100vh - 26px);
 	overflow: hidden;
-	transition: height var(--ash-animation-durationSlow)
-		cubic-bezier(0.19, 1, 0.22, 1);
+	transition: height var(--ash-animation-durationNormal)
+		cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .ash-sessions-model-picker-page {
@@ -87,8 +87,8 @@
 	transition:
 		opacity var(--ash-animation-durationNormal)
 			cubic-bezier(0.23, 1, 0.32, 1),
-		translate var(--ash-animation-durationSlow)
-			cubic-bezier(0.19, 1, 0.22, 1);
+		translate var(--ash-animation-durationNormal)
+			cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .ash-sessions-model-picker-page[data-active="false"] {
@@ -96,12 +96,12 @@
 	top: 0;
 	left: 0;
 	opacity: 0;
-	translate: 0 -10px;
+	translate: 0 -6px;
 	pointer-events: none;
 }
 
 .ash-sessions-model-picker-page:first-child[data-active="false"] {
-	translate: 0 10px;
+	translate: 0 6px;
 }
 
 .ash-sessions-model-picker-page[data-active="true"] {
@@ -199,7 +199,7 @@
 			(var(--ash-model-picker-position) - 1) * (100% - 28px) - 14px
 		)
 		0;
-	transition: translate var(--ash-animation-durationSlow)
+	transition: translate var(--ash-animation-durationNormal)
 		cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -221,7 +221,7 @@
 		0;
 	transition:
 		opacity var(--ash-animation-durationNormal) ease,
-		translate var(--ash-animation-durationSlow)
+		translate var(--ash-animation-durationNormal)
 			cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -300,10 +300,18 @@
 	pointer-events: none;
 }
 
+.ash-sessions-model-picker-thumb-position {
+	position: absolute;
+	inset: 0;
+	translate: calc(var(--ash-model-picker-position) * 100%) 0;
+	transition: translate var(--ash-animation-durationNormal)
+		cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 .ash-sessions-model-picker-thumb {
 	position: absolute;
 	top: 50%;
-	left: calc(var(--ash-model-picker-position) * 100%);
+	left: 0;
 	box-sizing: border-box;
 	width: 28px;
 	height: 28px;
@@ -312,9 +320,7 @@
 	background: var(--ash-input-background);
 	box-shadow: 0 2px 4px var(--ash-widget-shadow);
 	translate: -50% -50%;
-	transition:
-		left var(--ash-animation-durationSlow) cubic-bezier(0.16, 1, 0.3, 1),
-		scale var(--ash-animation-durationFast) ease;
+	transition: scale var(--ash-animation-durationFast) ease;
 }
 
 .ash-sessions-model-picker-track:not([data-disabled="true"]):hover
@@ -323,7 +329,7 @@
 }
 
 .ash-sessions-model-picker-track[data-dragging="true"]
-	.ash-sessions-model-picker-thumb,
+	.ash-sessions-model-picker-thumb-position,
 .ash-sessions-model-picker-track[data-dragging="true"]
 	.ash-sessions-model-picker-fill::before,
 .ash-sessions-model-picker-track[data-dragging="true"]
@@ -369,6 +375,7 @@
 		.ash-sessions-model-picker-surface,
 		.ash-sessions-model-picker-pages,
 		.ash-sessions-model-picker-page,
+		.ash-sessions-model-picker-thumb-position,
 		.ash-sessions-model-picker-thumb,
 		.ash-sessions-model-picker-maximum-effects
 	),
