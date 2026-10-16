@@ -1,6 +1,6 @@
 # Ash Agent Instructions
 
-Local Refers: `../mxc`, `../tgrep`, `../vscode`, `../codex`, `../zed`, `../warp`, `../livekit`
+If need, read the local refers: `../mxc`, `../tgrep`, `../vscode`, `../codex`, `../zed`, `../warp`, `../livekit`
 
 ## Repository ownership
 
