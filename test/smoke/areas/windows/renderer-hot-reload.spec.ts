@@ -74,7 +74,7 @@ for (const chatSurface of ['code', 'cowork'] as const) {
 			return { name, file, original, written: original };
 		}));
 		const profile = await mkdtemp(join(tmpdir(), 'ash-ui-widgets-hmr-'));
-		const server = await createServer({ configFile: resolve(desktopDirectory, 'build/desktop/vite/editor.vite.config.ts'), optimizeDeps: { include: ['vscode-oniguruma', 'vscode-textmate'] }, server: { port: 5195, strictPort: true } });
+		const server = await createServer({ configFile: resolve(desktopDirectory, 'build/desktop/vite/editor.vite.config.ts'), server: { port: 5195, strictPort: true } });
 		let electron: ElectronApplication | undefined;
 		let browser: Awaited<ReturnType<typeof playwright.chromium.launch>> | undefined;
 		try {

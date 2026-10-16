@@ -77,13 +77,13 @@ impl CodebaseOverlay {
             }
             return Ok(snapshot_from_state(&state));
         }
-        let chunking = chunk_source(document.language, &document.content, limits);
+        let chunking = chunk_source(&document.language, &document.content, limits);
         let source = MaterializedSource {
             reference: IndexedSourceReference {
                 root_id: root_id.clone(),
                 relative_path: document.relative_path.clone(),
                 source_revision: revision.clone(),
-                language: document.language,
+                language: document.language.clone(),
                 source_bytes: document.content.len(),
             },
             content: document.content,
@@ -100,7 +100,7 @@ impl CodebaseOverlay {
                     content_hash: chunk.content_hash,
                     span: chunk.span,
                 },
-                language: document.language,
+                language: document.language.clone(),
                 content: chunk.content,
             })
             .collect();
@@ -193,7 +193,7 @@ impl CodebaseOverlay {
                     .sum::<usize>();
                 Some(SearchHit {
                     reference: chunk.reference.clone(),
-                    language: chunk.language,
+                    language: chunk.language.clone(),
                     content: chunk.content.clone(),
                     score: 1_000_000.0 + occurrences as f64,
                 })
@@ -271,7 +271,7 @@ fn materialize_overlay_excerpt(
     }
     Ok(MaterializedExcerpt {
         reference: reference.clone(),
-        language: document.source.reference.language,
+        language: document.source.reference.language.clone(),
         content: content.to_owned(),
     })
 }

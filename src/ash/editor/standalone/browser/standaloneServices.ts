@@ -1,3 +1,4 @@
+import type { ModelServiceTokenizationOptions } from '../../common/services/modelService.js';
 import { getSingletonServiceDescriptors } from '../../../platform/instantiation/common/extensions.js';
 import { ResolvedKeybindingItem } from '../../../platform/keybinding/common/resolvedKeybindingItem.js';
 import { KeybindingsRegistry, KeybindingRuleKind } from '../../../platform/keybinding/common/keybindingsRegistry.js';
@@ -149,6 +150,8 @@ export interface StandaloneServiceOverrides {
 	readonly languageFeaturesService?: ILanguageFeaturesService;
 	readonly editorWorkerFactory?: VersionedEditorWorkerFactory;
 	readonly syntaxWorkerFactory?: SyntaxWorkerFactory;
+	/** Host-owned shared parser backend, also used by the Workbench. */
+	readonly tokenization?: ModelServiceTokenizationOptions;
 	/** Explicit Worker authority that replaces the local completion provider registry. */
 	readonly completionWorkerFactory?: LanguageCompletionWorkerFactory;
 }
@@ -227,7 +230,7 @@ export class StandaloneServiceCollection extends InstantiationService {
 			accessor.get(ILanguageService),
 			accessor.get(ILanguageFeaturesService),
 			accessor.get(ILanguageConfigurationService),
-			{ syntaxService: { workerFactory: this.syntaxWorkerFactory } },
+			{ ...overrides.tokenization, syntaxService: { workerFactory: this.syntaxWorkerFactory } },
 		));
 		this.modelService = this.get(IModelService) as ModelService;
 		this.registerSingleton(ITextModelService, () => this.createInstance(InMemoryTextModelService));

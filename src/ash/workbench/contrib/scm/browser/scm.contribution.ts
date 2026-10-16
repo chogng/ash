@@ -330,7 +330,6 @@ registerEditorPane({
 			minimap: { enabled: false },
 			workingCopyService: options.workingCopyService,
 			accessibilityService: options.accessibilityService,
-			textMateService: options.textMateService,
 			languageDiagnosticsService: options.languageDiagnosticsService,
 		});
 		return instantiationService.createInstance(ScmMergeEditorPane, resultEditor);

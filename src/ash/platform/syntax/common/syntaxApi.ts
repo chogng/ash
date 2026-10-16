@@ -1,6 +1,27 @@
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
+import type { Event } from '../../../base/common/event.js';
 
-export type SyntaxLanguage = "javascript" | "javascriptreact" | "json" | "jsonc" | "rust" | "shell" | "typescript" | "typescriptreact";
+import { syntaxLanguageDefinitions } from './syntaxLanguages.generated.js';
+
+export type SyntaxLanguage = typeof syntaxLanguageDefinitions[number]['id'];
+export const syntaxLanguages: readonly SyntaxLanguage[] = syntaxLanguageDefinitions.map(language => language.id);
+export const syntaxEditorLanguageIds: readonly string[] = syntaxLanguageDefinitions.flatMap(language => [...language.editorIds]);
+const aliases = new Map<string, SyntaxLanguage>();
+const editorLanguages = new Map<SyntaxLanguage, string>();
+for (const language of syntaxLanguageDefinitions) {
+	for (const id of [language.id, ...language.editorIds, ...language.aliases]) aliases.set(id, language.id);
+	editorLanguages.set(language.id, language.editorLanguage);
+}
+
+/** Normalize editor IDs and code-fence aliases before crossing the syntax boundary. */
+export function syntaxLanguageForEditorLanguage(languageId: string): SyntaxLanguage | undefined {
+	return aliases.get(languageId.toLowerCase());
+}
+
+/** Resolve the editor configuration for an embedded parser. */
+export function editorLanguageForSyntaxLanguage(language: SyntaxLanguage): string {
+	return editorLanguages.get(language)!;
+}
 
 export interface SyntaxPosition {
 	readonly lineIndex: number;
@@ -88,11 +109,55 @@ export interface SyntaxCloseParams {
 	readonly documentId: string;
 }
 
+/** Viewport queries and bulk facts share the already synchronized parser document. */
+export interface SyntaxQueryParams extends SyntaxAnalyzeParams {
+	readonly kind: 'highlight' | 'facts' | 'preview';
+	readonly factsRevision?: number;
+	readonly factsTabSize?: number;
+	readonly ranges: readonly { startLineIndex: number; endLineIndex: number; }[];
+	readonly tabSize: number;
+	readonly lineIndex?: number;
+	readonly lines: readonly string[];
+}
+export interface SyntaxQueryResult {
+	readonly revision: number;
+	readonly rows: readonly { row: number; tokens: readonly { start: number; end: number; name: string; languageId?: string | null; }[]; }[];
+	readonly facts: SyntaxFactsDelta | null;
+	readonly brackets: readonly { range: SyntaxRange; opening: SyntaxRange; closing: SyntaxRange | null; text: string; closeText: string | null; level: number; equalLevel: number; minIndent: number; }[];
+	readonly parseMs: number;
+	readonly queryMs: number;
+	readonly incremental: boolean;
+}
+
+/** A source-ordered replacement after translating the previous result through text edits. */
+export interface SyntaxFactsSplice<T> {
+	readonly start: number;
+	readonly deleteCount: number;
+	readonly items: readonly T[];
+}
+export interface SyntaxEditorFold {
+	readonly startLineIndex: number;
+	readonly endLineIndex: number;
+	readonly kind?: 'comment' | 'region';
+}
+export interface SyntaxFactsDelta {
+	readonly baseRevision: number | null;
+	readonly edits: readonly { range: SyntaxRange; end: SyntaxPosition; }[];
+	readonly symbols: SyntaxFactsSplice<SyntaxSymbol>;
+	readonly folds: SyntaxFactsSplice<SyntaxEditorFold>;
+	readonly diagnostics: SyntaxFactsSplice<SyntaxDiagnostic>;
+}
+
 /** Transport-neutral entry point for bounded, authoritative source syntax analysis. */
 export interface ISyntaxApi {
 	readonly generation: number;
-	open(params: SyntaxOpenParams): Promise<void>;
+	/** Only an initialized connection can own a Rust syntax document. */
+	readonly isAvailable: boolean;
+	/** Availability changes invalidate derived handles; the editor retains its text and history. */
+	readonly onDidChangeConnection: Event<void>;
+	open(params: SyntaxOpenParams, analysis?: 'shared'): Promise<void>;
 	update(params: SyntaxUpdateParams): Promise<void>;
+	query(params: SyntaxQueryParams, signal: AbortSignal): Promise<SyntaxQueryResult>;
 	analyze(params: SyntaxAnalyzeParams): Promise<SyntaxAnalyzeResult>;
 	selectionRanges(params: SyntaxSelectionRangesParams): Promise<SyntaxSelectionRangesResult>;
 	close(params: SyntaxCloseParams): Promise<void>;

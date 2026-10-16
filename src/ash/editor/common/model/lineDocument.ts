@@ -251,7 +251,7 @@ export function createLineDocumentSnapshot(input: LineDocumentSnapshotInput): Li
 		facets,
 		regions,
 		relations,
-		metadata: freezeAttributes(input.metadata),
+		metadata: freezeLineSemanticAttributes(input.metadata),
 		getText: () => text,
 	});
 }
@@ -270,7 +270,7 @@ function freezeMark(mark: PersistentMark): PersistentMark {
 		kind: mark.kind,
 		from: freezePoint(mark.from),
 		to: freezePoint(mark.to),
-		attrs: freezeAttributes(mark.attrs),
+		attrs: freezeLineSemanticAttributes(mark.attrs),
 	});
 }
 
@@ -283,7 +283,7 @@ function freezeAtom(atom: InlineAtom): InlineAtom {
 		kind: atom.kind,
 		position: freezePoint(atom.position),
 		display: atom.display,
-		attrs: freezeAttributes(atom.attrs),
+		attrs: freezeLineSemanticAttributes(atom.attrs),
 	});
 }
 
@@ -291,7 +291,7 @@ function freezeFacet(facet: LineFacet): LineFacet {
 	assertIdentity(facet.id, 'Facet');
 	assertKind(facet.kind, 'Facet');
 	assertIdentity(facet.lineId, 'Line');
-	return Object.freeze({ id: facet.id, kind: facet.kind, lineId: facet.lineId, attrs: freezeAttributes(facet.attrs) });
+	return Object.freeze({ id: facet.id, kind: facet.kind, lineId: facet.lineId, attrs: freezeLineSemanticAttributes(facet.attrs) });
 }
 
 function freezeRegion(region: LineRegion): LineRegion {
@@ -306,7 +306,7 @@ function freezeRegion(region: LineRegion): LineRegion {
 		startLineId: region.startLineId,
 		endLineId: region.endLineId,
 		...(region.parentRegionId === undefined ? {} : { parentRegionId: region.parentRegionId }),
-		attrs: freezeAttributes(region.attrs),
+		attrs: freezeLineSemanticAttributes(region.attrs),
 	});
 }
 
@@ -322,7 +322,7 @@ function freezeRelation(relation: LineRelation): LineRelation {
 		source: freezeRelationTarget(relation.source),
 		target: freezeRelationTarget(relation.target),
 		...(relation.unresolved === undefined ? {} : { unresolved: relation.unresolved }),
-		attrs: freezeAttributes(relation.attrs),
+		attrs: freezeLineSemanticAttributes(relation.attrs),
 	});
 }
 
@@ -351,8 +351,12 @@ function freezeRelationTarget(target: LineRelationTarget): LineRelationTarget {
 	}
 }
 
-function freezeAttributes(attrs: LineSemanticAttributes | undefined): LineSemanticAttributes {
+const validatedAttributes = new WeakSet<LineSemanticAttributes>();
+
+/** Clones external attributes once; immutable values issued here remain trusted. */
+export function freezeLineSemanticAttributes(attrs: LineSemanticAttributes | undefined): LineSemanticAttributes {
 	if (attrs === undefined) return EMPTY_ATTRIBUTES;
+	if (validatedAttributes.has(attrs)) return attrs;
 	if (!attrs || typeof attrs !== 'object' || Array.isArray(attrs)) throw new TypeError('Line semantic attributes must be an object');
 	const prototype = Object.getPrototypeOf(attrs);
 	if (prototype !== Object.prototype && prototype !== null) throw new TypeError('Line semantic attributes must be a plain object');
@@ -360,7 +364,9 @@ function freezeAttributes(attrs: LineSemanticAttributes | undefined): LineSemant
 	const seen = new WeakSet<object>();
 	seen.add(attrs);
 	for (const [key, value] of Object.entries(attrs)) result[key] = freezeSemanticValue(value, key, seen);
-	return Object.freeze(result);
+	const frozen = Object.freeze(result);
+	validatedAttributes.add(frozen);
+	return frozen;
 }
 
 function freezeSemanticValue(value: LineSemanticValue, owner: string, seen: WeakSet<object>): LineSemanticValue {

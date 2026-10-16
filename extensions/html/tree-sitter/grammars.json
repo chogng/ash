@@ -1,0 +1,30 @@
+[
+  {
+    "name": "html",
+    "source": {
+      "crate": "tree-sitter-html",
+      "version": "0.23.2",
+      "root": "."
+    },
+    "wasm": {
+      "path": "tree-sitter/html.wasm",
+      "sha256": "0a9e1d46ccc2df616d77e7c07bb744e92ee5b2257d4364ea327c09c0ee067058"
+    },
+    "highlights": ["queries/html.scm"],
+    "tags": ["queries/html.tags.scm"],
+    "injections": ["queries/html.injections.scm"],
+    "rust": {
+      "language": "tree_sitter_html::LANGUAGE"
+    },
+    "languages": [
+      {
+        "id": "html",
+        "variant": "Html",
+        "editorLanguage": "html",
+        "editorIds": ["html"],
+        "aliases": []
+      }
+    ],
+    "folds": ["queries/html.folds.scm"]
+  }
+]

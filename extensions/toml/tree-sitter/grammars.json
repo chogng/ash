@@ -1,0 +1,30 @@
+[
+  {
+    "name": "toml",
+    "source": {
+      "crate": "tree-sitter-toml-ng",
+      "version": "0.7.0",
+      "root": "."
+    },
+    "wasm": {
+      "path": "tree-sitter/toml.wasm",
+      "sha256": "a831f2ded723580751a7f092efb1bb99fe0d5dccfe8ef779fbbe11ee81c60381"
+    },
+    "highlights": ["queries/toml.scm"],
+    "tags": ["queries/toml.tags.scm"],
+    "injections": [],
+    "rust": {
+      "language": "tree_sitter_toml_ng::LANGUAGE"
+    },
+    "languages": [
+      {
+        "id": "toml",
+        "variant": "Toml",
+        "editorLanguage": "toml",
+        "editorIds": ["toml"],
+        "aliases": []
+      }
+    ],
+    "folds": ["queries/toml.folds.scm"]
+  }
+]

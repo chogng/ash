@@ -218,7 +218,7 @@ impl CodebaseSemanticService {
             for (index, embedding) in batch.iter().copied().zip(response.into_vectors()) {
                 cached.push(EmbeddedCodeChunk {
                     reference: chunks[index].reference.clone(),
-                    language: chunks[index].language,
+                    language: chunks[index].language.clone(),
                     content: chunks[index].content.clone(),
                     embedding: embedding.clone(),
                 });
@@ -336,7 +336,7 @@ impl CodebaseSemanticService {
                 .map(|candidate| {
                     code_document_from_parts(
                         &candidate.chunk.reference.relative_path,
-                        candidate.chunk.language,
+                        &candidate.chunk.language,
                         &candidate.chunk.content,
                     )
                 })
@@ -453,18 +453,18 @@ fn elapsed_millis(started: Instant) -> u64 {
 fn code_document(chunk: &MaterializedChunk) -> String {
     code_document_from_parts(
         &chunk.reference.relative_path,
-        chunk.language,
+        &chunk.language,
         &chunk.content,
     )
 }
 
 fn code_document_from_parts(
     path: &std::path::Path,
-    language: crate::IndexedLanguage,
+    language: &ash_language::LanguageId,
     content: &str,
 ) -> String {
     format!(
-        "path: {}\nlanguage: {language:?}\n\n{content}",
+        "path: {}\nlanguage: {language}\n\n{content}",
         path.display()
     )
 }

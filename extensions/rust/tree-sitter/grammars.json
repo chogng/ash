@@ -1,0 +1,31 @@
+[
+  {
+    "name": "rust",
+    "source": {
+      "crate": "tree-sitter-rust",
+      "version": "0.24.2",
+      "root": "."
+    },
+    "wasm": {
+      "package": "@vscode/tree-sitter-wasm/wasm/tree-sitter-rust.wasm"
+    },
+    "highlights": ["queries/rust.scm"],
+    "tags": ["queries/rust.tags.scm"],
+    "injections": [],
+    "rust": {
+      "language": "tree_sitter_rust::LANGUAGE",
+      "snapshotHighlights": ["tree_sitter_rust::HIGHLIGHTS_QUERY"],
+      "snapshotTags": ["tree_sitter_rust::TAGS_QUERY"]
+    },
+    "languages": [
+      {
+        "id": "rust",
+        "variant": "Rust",
+        "editorLanguage": "rust",
+        "editorIds": ["rust"],
+        "aliases": ["rs"]
+      }
+    ],
+    "folds": ["queries/rust.folds.scm"]
+  }
+]

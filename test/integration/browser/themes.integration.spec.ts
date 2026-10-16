@@ -1,4 +1,5 @@
-import { expect, test } from '@playwright/test';
+import { test } from './rustSyntaxProcessFixture.js';
+import { expect } from '@playwright/test';
 
 test('size tokens preserve camelCase and resolve in every color theme', async ({ page }) => {
 	await page.goto('/themes.html');
@@ -214,12 +215,12 @@ test('keyboard focus remains visible across themed controls', async ({ page }) =
 	}
 });
 
-test('TextMate Worker registers its provider at startup and restores current catalogs after restart', async ({ page }) => {
+test('Tree-sitter applies current theme rules after edits and in a new document', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
 	await page.goto('/themes.html');
 	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
-	expect(await page.evaluate(() => window.tokenizeInTextMateWorker())).toEqual([
+	expect(await page.evaluate(() => window.tokenizeWithRustSyntax())).toEqual([
 		{ type: 'keyword', modifiers: [] },
 		{ type: 'keyword', modifiers: ['declaration'] },
 		{ type: 'keyword', modifiers: ['declaration'], presentation: { foreground: '#ff0000', fontStyle: ['italic'] } },
@@ -341,12 +342,12 @@ test('SVG icon select box filters, navigates, selects, and follows product icon 
 });
 
 
-test('TextMate Worker tokenizes hypothetical lines in context without changing the document', async ({ page }) => {
+test('Tree-sitter tokenizes hypothetical lines in context without changing the document', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
 	await page.goto('/themes.html');
 	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
-	expect(await page.evaluate(() => window.previewInTextMateWorker())).toEqual({ preview: ['[)":2', 'if:0'], unchanged: true, text: '"start\nend"\nif' });
+	expect(await page.evaluate(() => window.previewWithRustSyntax())).toEqual({ hasString: true, hasKeyword: true, unchanged: true, text: 'const text = `start\nend`;\nif (true) {}' });
 	expect(errors).toEqual([]);
 });
 

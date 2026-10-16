@@ -323,3 +323,55 @@ const TEST_FONT_INFO = new FontInfo({
 	wsmiddotWidth: 10,
 	maxDigitWidth: 10,
 }, true);
+
+test('unwrapped views keep 100000 lines lazy across content changes and still honor injected text', () => {
+	using model = new TextModel(Array.from({ length: 100_000 }, () => 'const value = 1;').join('\n'));
+	const getLineContent = model.getLineContent;
+	let reads = 0;
+	model.getLineContent = line => { reads++; return getLineContent.call(model, line); };
+	try {
+		using lines = createViewModelLines(model, new FixedTextMeasurer(), { wrapping: EditorLineWrapping.Off });
+		assert.equal(reads, 0, 'opening an unwrapped view does not read every line');
+		model.applyOperations([{ range: new Range(1, 7, 1, 7), text: 'New' }]);
+		assert.ok(reads < 10, `a one-line edit read ${reads} lines`);
+		assert.equal(lines.getViewLineCount(), 100_000);
+		assert.equal(lines.getViewLineContent(1), 'const Newvalue = 1;');
+		assert.equal(lines.getViewLineContent(99_999), 'const value = 1;');
+	} finally {
+		model.getLineContent = getLineContent;
+	}
+
+	using injected = new TextModel('abc');
+	injected.deltaDecorations([], [{ range: new Range(1, 2, 1, 2), options: { description: 'unwrapped-injection', after: { content: 'XX' } } }]);
+	using lines = createViewModelLines(injected, new FixedTextMeasurer(), { wrapping: EditorLineWrapping.Off });
+	assert.equal(lines.getViewLineContent(1), 'aXXbc', 'injected text keeps the measured path with wrapping off');
+});
+
+
+test('unwrapped 100000-line views measure sparse injected rows without scanning untouched lines', () => {
+	using model = new TextModel(Array.from({ length: 100_000 }, () => 'abc').join('\n'));
+	model.deltaDecorations([], [
+		{ range: new Range(40_000, 2, 40_000, 2), options: { description: 'swatch', after: { content: 'XX' } } },
+		{ range: new Range(100_000, 1, 100_000, 1), options: { description: 'tail', before: { content: 'Y' } } },
+	]);
+	const original = model.getLineContent;
+	let reads = 0;
+	model.getLineContent = line => { reads++; return original.call(model, line); };
+	try {
+		using lines = createViewModelLines(model, new FixedTextMeasurer(), { wrapping: EditorLineWrapping.Off });
+		assert.ok(reads < 10, `sparse injection creation read ${reads} lines`);
+		assert.equal(lines.getViewLineCount(), 100_000);
+		assert.equal(lines.getViewLineContent(40_000), 'aXXbc');
+		assert.equal(lines.getViewLineContent(100_000), 'Yabc');
+		const coordinates = lines.createCoordinatesConverter();
+		assert.deepEqual(coordinates.convertViewPositionToModelPosition(new Position(40_000, 5)), new Position(40_000, 3));
+		reads = 0;
+		model.applyOperations([{ range: new Range(1, 1, 1, 1), text: 'new' }]);
+		assert.ok(reads < 15, `editing another line read ${reads} lines`);
+		assert.equal(lines.getViewLineContent(40_000), 'aXXbc');
+		lines.setHiddenAreas([new Range(2, 1, 4, 1)]);
+		assert.equal(lines.getViewLineCount(), 99_997);
+		assert.equal(lines.getViewLineContent(39_997), 'aXXbc');
+		assert.deepEqual(lines.createCoordinatesConverter().convertViewPositionToModelPosition(new Position(39_997, 5)), new Position(40_000, 3));
+	} finally { model.getLineContent = original; }
+});

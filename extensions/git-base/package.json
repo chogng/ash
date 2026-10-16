@@ -51,23 +51,6 @@
           "**/.config/git/ignore"
         ]
       }
-    ],
-    "grammars": [
-      {
-        "language": "git-commit",
-        "scopeName": "text.git-commit",
-        "path": "./syntaxes/git-commit.tmLanguage.json"
-      },
-      {
-        "language": "git-rebase",
-        "scopeName": "text.git-rebase",
-        "path": "./syntaxes/git-rebase.tmLanguage.json"
-      },
-      {
-        "language": "ignore",
-        "scopeName": "source.ignore",
-        "path": "./syntaxes/ignore.tmLanguage.json"
-      }
     ]
   }
 }

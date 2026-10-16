@@ -166,6 +166,9 @@ overrides:
   katex: 0.18.2
   vscode-markdown-languageservice>picomatch: ^4.0.5
 
+patchedDependencies:
+  '@vscode/tree-sitter-wasm@0.3.1': db89542b8b2621108d0481133f35856d6d703ac84f0714bf86a745bffc68b1d9
+
 importers:
 
   .:
@@ -216,6 +219,9 @@ importers:
       '@types/vscode':
         specifier: 1.110.0
         version: 1.110.0
+      '@vscode/tree-sitter-wasm':
+        specifier: 0.3.1
+        version: 0.3.1(patch_hash=db89542b8b2621108d0481133f35856d6d703ac84f0714bf86a745bffc68b1d9)
       '@webgpu/types':
         specifier: 0.1.66
         version: 0.1.66
@@ -273,12 +279,6 @@ importers:
       vite:
         specifier: 8.0.13
         version: 8.0.13(@types/node@24.13.3)(esbuild@0.27.3)(jiti@2.7.0)(terser@5.50.0)(yaml@2.9.1)
-      vscode-oniguruma:
-        specifier: 1.7.0
-        version: 1.7.0
-      vscode-textmate:
-        specifier: 9.3.2
-        version: 9.3.2
       wait-on:
         specifier: ^9.1.0
         version: 9.1.0(debug@4.4.3(supports-color@8.1.1))(supports-color@8.1.1)
@@ -1099,6 +1099,9 @@ packages:
 
   '@vscode/l10n@0.0.18':
     resolution: {integrity: sha512-KYSIHVmslkaCDyw013pphY+d7x1qV8IZupYfeIfzNA+nsaWHbn5uPuQRvdRFsa9zFzGeudPuoGoZ1Op4jrJXIQ==}
+
+  '@vscode/tree-sitter-wasm@0.3.1':
+    resolution: {integrity: sha512-RJFoomET6FajjG511fmQxeBQfU6M24a0aFZPqpid+ttIxanWf1VGytBG0UmsGjt07qmIPJS8U31D+aecuCucsQ==}
 
   '@webgpu/types@0.1.66':
     resolution: {integrity: sha512-YA2hLrwLpDsRueNDXIMqN9NTzD6bCDkuXbOSe0heS+f8YE8usA6Gbv1prj81pzVHrbaAma7zObnIC+I6/sXJgA==}
@@ -2226,12 +2229,6 @@ packages:
     resolution: {integrity: sha512-+DDXukKWtIHvJtj6tXeLqj8iREnylDQw4yRjY3ldv2J66/oiKRJyLLUy4YhMhfBm9Edjci6VhOSpE84AU3ZFXA==}
     engines: {node: '>=22'}
 
-  vscode-oniguruma@1.7.0:
-    resolution: {integrity: sha512-L9WMGRfrjOhgHSdOYgCt/yRMsXzLDJSL7BPrOZt73gU0iWO4mpqzqQzOz5srxqTvMBaR0XZTSrVWo4j55Rc6cA==}
-
-  vscode-textmate@9.3.2:
-    resolution: {integrity: sha512-n2uGbUcrjhUEBH16uGA0TvUfhWwliFZ1e3+pTjrkim1Mt7ydB41lV08aUvsi70OlzDWp6X7Bx3w/x3fAXIsN0Q==}
-
   vscode-uri@3.2.0:
     resolution: {integrity: sha512-m2gXo3bn0G1kT9InzMf07fTbqMbGtyckj3bH5ktLO+1Ssv+yiATZ4dhwaQv9UZWxJh6E9IFGnQyjgWVDWVBDrg==}
 
@@ -2869,6 +2866,8 @@ snapshots:
       '@typescript/old': typescript@6.0.3
 
   '@vscode/l10n@0.0.18': {}
+
+  '@vscode/tree-sitter-wasm@0.3.1(patch_hash=db89542b8b2621108d0481133f35856d6d703ac84f0714bf86a745bffc68b1d9)': {}
 
   '@webgpu/types@0.1.66': {}
 
@@ -3864,10 +3863,6 @@ snapshots:
       vscode-languageserver-protocol: 3.18.4
       vscode-languageserver-textdocument: 1.0.15
       vscode-uri: 3.2.0
-
-  vscode-oniguruma@1.7.0: {}
-
-  vscode-textmate@9.3.2: {}
 
   vscode-uri@3.2.0: {}
 

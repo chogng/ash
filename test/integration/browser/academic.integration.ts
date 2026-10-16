@@ -52,7 +52,6 @@ import { withEnabledBuiltInExtensions } from '../../../src/ash/platform/extensio
 import { GlobalExtensionEnablementService } from '../../../src/ash/platform/extensionManagement/common/extensionEnablementService.js';
 import { AppServerExtensionService } from '../../../src/ash/workbench/services/extensions/browser/appServerExtensionService.js';
 import { createEmptyTestLanguagePacks } from '../../../src/ash/workbench/services/localization/test/common/localizationTestUtils.js';
-import type { ITextMateService } from '../../../src/ash/workbench/services/textMate/common/textMateService.js';
 import { EditorPanes } from '../../../src/ash/workbench/browser/editor.js';
 import { DocumentTypes } from '../../../src/ash/workbench/services/documentEditor/common/documentTypes.js';
 import { toDisposable } from '../../../src/ash/base/common/lifecycle.js';
@@ -195,13 +194,7 @@ if (new URLSearchParams(location.search).has('academicExtension')) {
 		resources: fixture.resources,
 	}, academicEnablement);
 	academicExtensionService = disposables.add(new AppServerExtensionService({
-		api, textMateService: {
-			grammars: {
-				registerGrammars: () => ({ replace: () => { }, ...toDisposable(() => { }) }),
-				prepareGrammars: async () => ({ commit: () => ({}) }),
-				whenReady: async () => ({}),
-			},
-		} as unknown as ITextMateService
+		api,
 	}, createEmptyTestLanguagePacks()));
 	await academicExtensionService.start();
 }

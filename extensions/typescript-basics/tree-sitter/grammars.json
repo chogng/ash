@@ -1,0 +1,79 @@
+[
+  {
+    "name": "typescript",
+    "source": {
+      "crate": "tree-sitter-typescript",
+      "version": "0.23.2",
+      "root": "typescript"
+    },
+    "wasm": {
+      "package": "@vscode/tree-sitter-wasm/wasm/tree-sitter-typescript.wasm"
+    },
+    "highlights": [
+      "@javascript/queries/javascript.scm",
+      "queries/typescript.scm"
+    ],
+    "tags": [
+      "@javascript/queries/javascript.tags.scm",
+      "queries/typescript.tags.scm"
+    ],
+    "injections": [],
+    "rust": {
+      "language": "tree_sitter_typescript::LANGUAGE_TYPESCRIPT",
+      "snapshotHighlights": ["tree_sitter_typescript::HIGHLIGHTS_QUERY"],
+      "snapshotTags": [
+        "tree_sitter_javascript::TAGS_QUERY",
+        "tree_sitter_typescript::TAGS_QUERY"
+      ]
+    },
+    "languages": [
+      {
+        "id": "typescript",
+        "variant": "Typescript",
+        "editorLanguage": "typescript",
+        "editorIds": ["typescript"],
+        "aliases": ["ts"]
+      }
+    ],
+    "folds": ["queries/typescript.folds.scm"]
+  },
+  {
+    "name": "tsx",
+    "source": {
+      "crate": "tree-sitter-typescript",
+      "version": "0.23.2",
+      "root": "tsx"
+    },
+    "wasm": {
+      "package": "@vscode/tree-sitter-wasm/wasm/tree-sitter-tsx.wasm"
+    },
+    "highlights": [
+      "@javascript/queries/javascript.scm",
+      "@javascript/queries/jsx.scm",
+      "queries/typescript.scm"
+    ],
+    "tags": [
+      "@javascript/queries/javascript.tags.scm",
+      "queries/typescript.tags.scm"
+    ],
+    "injections": [],
+    "rust": {
+      "language": "tree_sitter_typescript::LANGUAGE_TSX",
+      "snapshotHighlights": ["tree_sitter_typescript::HIGHLIGHTS_QUERY"],
+      "snapshotTags": [
+        "tree_sitter_javascript::TAGS_QUERY",
+        "tree_sitter_typescript::TAGS_QUERY"
+      ]
+    },
+    "languages": [
+      {
+        "id": "typescriptreact",
+        "variant": "Typescriptreact",
+        "editorLanguage": "typescriptreact",
+        "editorIds": ["typescriptreact"],
+        "aliases": ["tsx"]
+      }
+    ],
+    "folds": ["queries/tsx.folds.scm"]
+  }
+]

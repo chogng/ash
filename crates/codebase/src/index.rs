@@ -33,7 +33,6 @@ use crate::SearchHit;
 use crate::SourceExcerptReference;
 use crate::chunker::CHUNKER_VERSION;
 use crate::chunker::end_line_exclusive;
-use crate::chunker::language_for_path;
 use crate::chunker::line_at;
 use crate::chunker::line_starts;
 use crate::chunker::source_revision;
@@ -45,6 +44,7 @@ use crate::scanner::scan_dir;
 use crate::store::CodebaseIndexStore;
 use crate::store::FileUpdate;
 use crate::store::StoredSource;
+use ash_language::detect_language;
 
 /// One directory Codebase backed by rebuildable local data.
 pub struct Codebase {
@@ -304,7 +304,7 @@ impl Codebase {
         }
         Ok(MaterializedExcerpt {
             reference: reference.clone(),
-            language: language_for_path(Path::new(&reference.relative_path)),
+            language: detect_language(Path::new(&reference.relative_path), source.lines().next()),
             content: content.to_owned(),
         })
     }
@@ -330,7 +330,7 @@ impl Codebase {
         };
         Ok(MaterializedExcerpt {
             reference,
-            language: source.language,
+            language: source.language.clone(),
             content: content.to_owned(),
         })
     }
@@ -378,7 +378,7 @@ impl Codebase {
             let source = read_source_for_verification(&absolute_path, self.limits.max_file_bytes)?;
             for reference in path_references {
                 let mut chunk = materialize_chunk_from_source(&reference.reference, &source)?;
-                chunk.language = reference.language;
+                chunk.language = reference.language.clone();
                 materialized.push(chunk);
             }
         }
@@ -491,7 +491,7 @@ fn materialize_chunk_from_source(
     }
     Ok(MaterializedChunk {
         reference: reference.clone(),
-        language: language_for_path(Path::new(&reference.relative_path)),
+        language: detect_language(Path::new(&reference.relative_path), source.lines().next()),
         content: content.to_owned(),
     })
 }

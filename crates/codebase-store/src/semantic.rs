@@ -8,7 +8,6 @@ use ash_codebase::ChunkKey;
 use ash_codebase::ChunkReference;
 use ash_codebase::ChunkSpan;
 use ash_codebase::IndexRootId;
-use ash_codebase::IndexedLanguage;
 use ash_codebase::MaterializedChunk;
 use ash_codebase::SourceRevision;
 use ash_model_provider::EmbeddingVector;
@@ -94,7 +93,7 @@ impl CodebaseVectorStore for SqliteCodebaseVectorStore {
                             storage_path(&chunk.reference.relative_path),
                             chunk.reference.key.as_str(),
                             chunk.reference.content_hash.as_str(),
-                            chunk.language.id(),
+                            chunk.language.as_str(),
                         ],
                         |row| row.get::<_, Vec<u8>>(0),
                     )
@@ -187,7 +186,7 @@ impl CodebaseVectorStore for SqliteCodebaseVectorStore {
                     chunk.reference.source_revision.as_str(),
                     chunk.reference.key.as_str(),
                     chunk.reference.content_hash.as_str(),
-                    chunk.language.id(),
+                    chunk.language.as_str(),
                     to_i64(chunk.reference.span.start_byte),
                     to_i64(chunk.reference.span.end_byte),
                     to_i64(chunk.reference.span.start_line),
@@ -330,7 +329,7 @@ fn cache_embeddings(
                 storage_path(&chunk.reference.relative_path),
                 chunk.reference.key.as_str(),
                 chunk.reference.content_hash.as_str(),
-                chunk.language.id(),
+                chunk.language.as_str(),
                 pack_embedding(&chunk.embedding),
             ])
             .map_err(store_error)?;
@@ -526,7 +525,7 @@ fn search_hit(
                     end_line_exclusive: to_usize(end_line_exclusive),
                 },
             },
-            language: parse_language(&language),
+            language: crate::read_language_id(&language).map_err(store_error)?,
             content,
             embedding,
         },
@@ -608,20 +607,6 @@ fn cosine_similarity(left: &[f32], right: &[f32]) -> Result<f32, CodebaseVectorS
 
 fn storage_path(path: &Path) -> String {
     path.to_string_lossy().into_owned()
-}
-
-fn parse_language(value: &str) -> IndexedLanguage {
-    match value {
-        "javascript" => IndexedLanguage::Javascript,
-        "javascriptreact" => IndexedLanguage::JavascriptReact,
-        "json" => IndexedLanguage::Json,
-        "jsonc" => IndexedLanguage::Jsonc,
-        "rust" => IndexedLanguage::Rust,
-        "shell" => IndexedLanguage::Shell,
-        "typescript" => IndexedLanguage::TypeScript,
-        "typescriptreact" => IndexedLanguage::TypeScriptReact,
-        _ => IndexedLanguage::PlainText,
-    }
 }
 
 fn to_i64(value: usize) -> i64 {

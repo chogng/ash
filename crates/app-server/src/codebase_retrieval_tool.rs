@@ -227,7 +227,7 @@ impl ToolService for CodebaseRetrievalTool {
                     "path": hit.reference.relative_path,
                     "start_line": hit.reference.span.start_line,
                     "end_line_exclusive": hit.reference.span.end_line_exclusive,
-                    "language": hit.language.id(),
+                    "language": hit.language.as_str(),
                     "content": hit.content,
                     "origins": hit.origins.into_iter().map(|origin| format!("{origin:?}")).collect::<Vec<_>>(),
                 })

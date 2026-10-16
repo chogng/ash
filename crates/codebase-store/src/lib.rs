@@ -20,6 +20,13 @@ use semantic::SqliteCodebaseVectorStore;
 use source::SqliteCodebaseIndexStore;
 use symbol::SqliteSymbolIndexStore;
 
+/// SQLite is a persistence boundary: malformed identities must not silently become plain text.
+fn read_language_id(value: &str) -> rusqlite::Result<ash_language::LanguageId> {
+    ash_language::LanguageId::parse(value).map_err(|error| {
+        rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(error))
+    })
+}
+
 /// Physical placement for rebuildable Codebase SQLite data.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum CodebaseStoreStorage {

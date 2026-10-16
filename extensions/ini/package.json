@@ -44,18 +44,6 @@
         ],
         "configuration": "./properties.language-configuration.json"
       }
-    ],
-    "grammars": [
-      {
-        "language": "ini",
-        "scopeName": "source.ini",
-        "path": "./syntaxes/ini.tmLanguage.json"
-      },
-      {
-        "language": "properties",
-        "scopeName": "source.properties",
-        "path": "./syntaxes/properties.tmLanguage.json"
-      }
     ]
   }
 }

@@ -154,7 +154,7 @@ fn dirty_overlay_symbols_replace_persistent_symbols_for_the_same_path() {
         .synchronize_overlay(CodebaseOverlayDocument {
             relative_path: "service.rs".into(),
             editor_revision: 2,
-            language: crate::IndexedLanguage::Rust,
+            language: ash_language::LanguageId::RUST,
             content: "fn unsaved_name() {}\n".into(),
         })
         .expect("overlay");

@@ -89,12 +89,11 @@
     "inspectEditorTokens.color": "语法颜色：{0}",
     "inspectEditorTokens.font": "语法字体样式：{0}",
     "inspectEditorTokens.regular": "常规",
-    "inspectEditorTokens.scopes": "TextMate 作用域（从外到内）：",
-    "inspectEditorTokens.noGrammar": "该语言尚未注册 TextMate 语法。",
+    "inspectEditorTokens.scopes": "主题作用域：",
     "inspectEditorTokens.report": "编辑器词法单元检查",
     "inspectEditorTokens.title": "编辑器词法单元和作用域",
     "inspectEditorTokens.close": "关闭",
-    "inspectEditorTokens.help": "此报告显示编辑器光标处的词法单元、语法颜色、字体样式及 TextMate 作用域层级。将作用域复制到 editor.tokenColorCustomizations.textMateRules 即可调整样式。使用 Tab 和 Shift+Tab 在报告与关闭按钮之间移动，按 Escape 返回编辑器。",
+    "inspectEditorTokens.help": "此报告显示编辑器光标处的词法单元、语法颜色、字体样式，以及 Tree-sitter 捕获和主题作用域。将主题作用域复制到 editor.tokenColorCustomizations.textMateRules 即可调整样式。使用 Tab 和 Shift+Tab 在报告与关闭按钮之间移动，按 Escape 返回编辑器。",
     "inspectEditorTokens.invalidVerbosity": "词法单元检查的无障碍提示设置必须为布尔值",
     "inspectEditorTokens.verbosityTitle": "词法单元检查无障碍帮助",
     "inspectEditorTokens.verbosityDescription": "在词法单元检查中提示如何打开无障碍帮助。",
@@ -804,7 +803,12 @@
     "extension.editor.saveFiles": "保存文件",
     "extension.editor.commitDiagnostics": "提交前请解决 {0} 个诊断。",
     "progress.region": "进度",
-    "progress.cancel": "取消"
+    "progress.cancel": "取消",
+    "inspectEditorTokens.embeddedLanguage": "内嵌语言：{0}",
+    "inspectEditorTokens.engine": "语法引擎：{0}",
+    "inspectEditorTokens.captures": "Tree-sitter 捕获：",
+    "inspectEditorTokens.noCaptures": "此位置没有 Tree-sitter 捕获。",
+    "inspectEditorTokens.noScopes": "此位置没有主题作用域。"
   },
   "ash.editor.clipboard": {
     "selection.title": "选区剪贴板",

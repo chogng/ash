@@ -45,18 +45,6 @@
         ],
         "configuration": "./bazelrc-language-configuration.json"
       }
-    ],
-    "grammars": [
-      {
-        "language": "starlark",
-        "scopeName": "source.starlark",
-        "path": "./syntaxes/starlark.tmLanguage.json"
-      },
-      {
-        "language": "bazelrc",
-        "scopeName": "source.bazelrc",
-        "path": "./syntaxes/bazelrc.tmLanguage.json"
-      }
     ]
   }
 }

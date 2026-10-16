@@ -1,0 +1,198 @@
+[
+  {
+    "language": "javascript",
+    "text": "const value = \"hello\";",
+    "lexeme": "const",
+    "capture": "keyword",
+    "tokenType": "keyword"
+  },
+  {
+    "language": "javascriptreact",
+    "text": "const view = <div>hello</div>;",
+    "lexeme": "div",
+    "capture": "entity.name.tag",
+    "tokenType": "tag"
+  },
+  {
+    "language": "typescript",
+    "text": "const value: number = 42;",
+    "lexeme": "const",
+    "capture": "keyword",
+    "tokenType": "keyword"
+  },
+  {
+    "language": "typescriptreact",
+    "text": "const view = <div>hello</div>;",
+    "lexeme": "div",
+    "capture": "entity.name.tag",
+    "tokenType": "tag"
+  },
+  {
+    "language": "rust",
+    "text": "fn main() {}",
+    "lexeme": "fn",
+    "capture": "keyword",
+    "tokenType": "keyword"
+  },
+  {
+    "language": "python",
+    "text": "def greet(name):\n    return \"你好🙂\"\n",
+    "lexeme": "def",
+    "capture": "keyword",
+    "tokenType": "keyword"
+  },
+  {
+    "language": "css",
+    "text": "body { color: red; }",
+    "lexeme": "color",
+    "capture": "property",
+    "tokenType": "variable"
+  },
+  {
+    "language": "scss",
+    "text": "$color: red; body { color: $color; }",
+    "lexeme": "color",
+    "capture": "property",
+    "tokenType": "variable"
+  },
+  {
+    "language": "less",
+    "text": "@color: red; body { color: @color; }",
+    "lexeme": "color",
+    "capture": "property",
+    "tokenType": "variable"
+  },
+  {
+    "language": "go",
+    "text": "package main\nfunc main() {}",
+    "lexeme": "func",
+    "capture": "keyword",
+    "tokenType": "keyword"
+  },
+  {
+    "language": "html",
+    "text": "<div class=\"a\">text</div>",
+    "lexeme": "div",
+    "capture": "tag",
+    "tokenType": "tag"
+  },
+  {
+    "language": "json",
+    "text": "{\"name\": 42}",
+    "lexeme": "42",
+    "capture": "number",
+    "tokenType": "number"
+  },
+  {
+    "language": "jsonc",
+    "text": "// hello\n{\"value\": 42}",
+    "lexeme": "// hello",
+    "capture": "comment",
+    "tokenType": "comment"
+  },
+  {
+    "language": "shellscript",
+    "text": "if true; then echo \"$HOME\"; fi\n",
+    "lexeme": "if",
+    "capture": "keyword",
+    "tokenType": "keyword"
+  },
+  {
+    "language": "ini",
+    "text": "[section]\nkey=value\n",
+    "lexeme": "section",
+    "capture": "type",
+    "tokenType": "type"
+  },
+  {
+    "language": "properties",
+    "text": "key=value\n",
+    "lexeme": "key",
+    "capture": "property",
+    "tokenType": "variable"
+  },
+  {
+    "language": "markdown",
+    "text": "# Title\n\nSome **text**.\n",
+    "lexeme": "Title",
+    "capture": "text.title",
+    "tokenType": "source"
+  },
+  {
+    "language": "sql",
+    "text": "SELECT name FROM users;",
+    "lexeme": "SELECT",
+    "capture": "keyword",
+    "tokenType": "keyword"
+  },
+  {
+    "language": "toml",
+    "text": "[section]\nkey = \"value\"\n",
+    "lexeme": "\"value\"",
+    "capture": "string",
+    "tokenType": "string"
+  },
+  {
+    "language": "xml",
+    "text": "<root key=\"value\">text</root>",
+    "lexeme": "root",
+    "capture": "tag",
+    "tokenType": "tag"
+  },
+  {
+    "language": "xsl",
+    "text": "<xsl:stylesheet xmlns:xsl=\"http://www.w3.org/1999/XSL/Transform\" version=\"1.0\"></xsl:stylesheet>",
+    "lexeme": "xsl:stylesheet",
+    "capture": "tag",
+    "tokenType": "tag"
+  },
+  {
+    "language": "yaml",
+    "text": "name: value\n",
+    "lexeme": "value",
+    "capture": "string",
+    "tokenType": "string"
+  },
+  {
+    "language": "diff",
+    "text": "diff --git a/a b/a\n--- a/a\n+++ b/a\n@@ -1 +1 @@\n-old\n+new\n",
+    "lexeme": "+new",
+    "capture": "string",
+    "tokenType": "string"
+  },
+  {
+    "language": "git-commit",
+    "text": "feat: add language resources\n\nDescription.\n",
+    "lexeme": "feat",
+    "capture": "keyword",
+    "tokenType": "keyword"
+  },
+  {
+    "language": "git-rebase",
+    "text": "pick 0123456 Commit message\n",
+    "lexeme": "pick",
+    "capture": "keyword",
+    "tokenType": "keyword"
+  },
+  {
+    "language": "ignore",
+    "text": "# comment\n*.log\n!keep.log\n",
+    "lexeme": "# comment",
+    "capture": "comment",
+    "tokenType": "comment"
+  },
+  {
+    "language": "starlark",
+    "text": "load(\"//:defs.bzl\", \"rule\")\nrule(name = \"test\")\n",
+    "lexeme": "load",
+    "capture": "function",
+    "tokenType": "function"
+  },
+  {
+    "language": "bazelrc",
+    "text": "build --jobs=4\n",
+    "lexeme": "build",
+    "capture": "keyword",
+    "tokenType": "keyword"
+  }
+]

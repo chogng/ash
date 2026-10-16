@@ -1,0 +1,38 @@
+[
+  {
+    "name": "javascript",
+    "source": {
+      "crate": "tree-sitter-javascript",
+      "version": "0.25.0",
+      "root": "."
+    },
+    "wasm": {
+      "package": "@vscode/tree-sitter-wasm/wasm/tree-sitter-javascript.wasm"
+    },
+    "highlights": ["queries/javascript.scm", "queries/jsx.scm"],
+    "tags": ["queries/javascript.tags.scm"],
+    "injections": [],
+    "rust": {
+      "language": "tree_sitter_javascript::LANGUAGE",
+      "snapshotHighlights": ["tree_sitter_javascript::HIGHLIGHT_QUERY"],
+      "snapshotTags": ["tree_sitter_javascript::TAGS_QUERY"]
+    },
+    "languages": [
+      {
+        "id": "javascript",
+        "variant": "Javascript",
+        "editorLanguage": "javascript",
+        "editorIds": ["javascript"],
+        "aliases": ["js"]
+      },
+      {
+        "id": "javascriptreact",
+        "variant": "Javascriptreact",
+        "editorLanguage": "javascriptreact",
+        "editorIds": ["javascriptreact", "jsx-tags"],
+        "aliases": ["jsx"]
+      }
+    ],
+    "folds": ["queries/javascript.folds.scm"]
+  }
+]

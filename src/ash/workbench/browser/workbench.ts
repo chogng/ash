@@ -1,3 +1,5 @@
+import { TreeSitterLibraryService, TreeSitterSyntaxProviders, createTreeSitterSyntaxTokenBackend } from '../services/treeSitter/browser/treeSitterLibraryService.js';
+import { ITreeSitterLibraryService } from '../../editor/common/services/treeSitter/treeSitterLibraryService.js';
 import { UserSettings } from '../../platform/configuration/common/configurationModels.js';
 import { extUriBiasedIgnorePathCase } from '../../base/common/resources.js';
 import { NullLoggerService } from '../../platform/log/common/log.js';
@@ -226,8 +228,8 @@ import { BrowserAuxiliaryWindowService, IAuxiliaryWindowService } from "../servi
 import { ITerminalProcessService } from "../../platform/terminal/common/terminal.js";
 import { ITextFileService } from "../services/textfile/common/textfiles.js";
 import { TextFileService } from "../services/textfile/browser/textFileService.js";
-import { ITextMateService } from "../services/textMate/common/textMateService.js";
-import { BrowserTextMateService } from "../services/textMate/browser/browserTextMateService.js";
+import { TextMateScopeThemeModel } from "../services/textMate/common/textMateScopeTheme.js";
+import { Event } from "../../base/common/event.js";
 import { AppServerExtensionService } from "../services/extensions/browser/appServerExtensionService.js";
 import { IExtensionService } from "../services/extensions/common/extensionService.js";
 import { ISnippetsService } from '../contrib/snippets/browser/snippets.js';
@@ -717,15 +719,23 @@ export class Workbench extends Disposable {
 		services.registerSingleton(ICodeEditorService, () => services.createInstance(CodeEditorService), { instantiation: InstantiationType.Delayed });
 		services.registerSingleton(IInlineCompletionsService, () => services.createInstance(InlineCompletionsService));
 		services.registerSingleton(ILanguageFeatureDebounceService, () => services.createInstance(LanguageFeatureDebounceService));
-		const textMateService = this._register(new BrowserTextMateService());
-		services.registerInstance(ITextMateService, textMateService);
+		const treeSitterLibrary = this._register(services.createInstance(TreeSitterLibraryService));
+		services.registerInstance(ITreeSitterLibraryService, treeSitterLibrary);
+		this._register(new TreeSitterSyntaxProviders(languageFeaturesService));
+		const syntaxTheme = this._register(new TextMateScopeThemeModel());
 		const textResourceStore = getBrowserTextResourceStore(textFileService);
 		const textModelService = this._register(getBrowserTextModelService(textResourceStore, services, {
 			languageService,
 			languageConfigurationService,
 			languageFeaturesService,
-			syntaxService: { workerFactory: textMateService.syntaxWorkerFactory },
-			onDidChangeLanguageSupport: textMateService.onDidChange,
+			createSyntaxTokenBackend: model => createTreeSitterSyntaxTokenBackend(model, configuration, treeSitterLibrary, syntaxTheme),
+			onDidChangeSyntaxBackend: Event.any(
+				treeSitterLibrary.onDidChange,
+				Event.map(syntaxTheme.onDidChangeTheme, () => undefined),
+				(listener, thisArgs, disposables) => configuration.onDidChangeConfiguration(event => {
+					if (event.affectsConfiguration('editor.experimental.treeSitterTelemetry')) listener.call(thisArgs, undefined);
+				}, undefined, disposables),
+			),
 		}));
 		services.registerInstance(ITextModelResourceService, textModelService);
 		services.registerInstance(IFileTextModelService, textModelService);
@@ -747,7 +757,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IMarkerService, markerService);
 		services.registerSingleton(IMarkerDecorationsService, () => services.createInstance(MarkerDecorationsService));
 		this._register(new LanguageDiagnosticsMarkerBridge(languageDiagnosticsService, markerService));
-		const extensionService = this._register(services.createInstance(AppServerExtensionService, { api: enabledExtensions, eventApi: api.events, textMateService, languageService, languageConfigurationService }));
+		const extensionService = this._register(services.createInstance(AppServerExtensionService, { api: enabledExtensions, eventApi: api.events, languageService, languageConfigurationService }));
 		services.registerInstance(IExtensionService, extensionService);
 		services.get(ISnippetsService);
 		const extensionReady = extensionService.start();
@@ -899,8 +909,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IAccessibleViewInformationService, this._register(new AccessibleViewInformationService(storage)));
 		let textMateThemeRevision = 0;
 		const updateTextMateTheme = (): void => {
-			const model = textMateService.mutableScopeTheme;
-			if (!model) return;
+			const model = syntaxTheme;
 			const activeTheme = themeService.getColorTheme();
 			try { model.replace(projectColorThemeTokens(activeTheme, ++textMateThemeRevision)); }
 			catch (error) { logService.error("theme", "Failed to apply extension token theme", error); }
@@ -1055,7 +1064,6 @@ export class Workbench extends Disposable {
 			keyboardLayoutService: services.get(IKeyboardLayoutService),
 			fileService,
 			textFileService,
-			textMateService,
 			languageResolver: languageService,
 			diffService,
 			accessibilityService,

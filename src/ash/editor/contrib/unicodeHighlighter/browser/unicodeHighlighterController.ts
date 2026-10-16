@@ -1,3 +1,4 @@
+import { RunOnceScheduler } from '../../../../base/common/async.js';
 import "./unicodeHighlighter.css";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type TextDecorationCollection } from "../../../common/model/decorationCollection.js";
@@ -10,12 +11,15 @@ import { TrackedRangeStickiness } from '../../../common/model.js';
 /** Maintains Unicode warning ranges as a feature-owned decoration collection. */
 export class UnicodeHighlighterController extends Disposable {
 	private lastVersion = -1;
+	// Dispatch the worker after the editor has attached; the initial snapshot
+	// encoding must not extend that synchronous layout task.
+	private readonly updateScheduler = this._register(new RunOnceScheduler(() => this.update(), 0));
 
 	constructor(private readonly model: TextModel, readonly decorations: TextDecorationCollection<UnicodeHighlight>, private readonly editorWorker: IVersionedEditorWorkerClient, private readonly onError: (error: unknown) => void) {
 		super();
 		if (decorations.textModel !== model) throw new TypeError("Stanza Unicode highlighter dependencies must share a text model");
-		this._register(model.onDidChangeContent(() => this.update()));
-		this.update();
+		this._register(model.onDidChangeContent(() => this.updateScheduler.schedule()));
+		this.updateScheduler.schedule();
 	}
 
 	private update(): void {

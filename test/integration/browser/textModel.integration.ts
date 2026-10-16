@@ -1,3 +1,6 @@
+import { TreeSitterLibraryService, TreeSitterSyntaxProviders, createTreeSitterSyntaxTokenBackend } from '../../../src/ash/workbench/services/treeSitter/browser/treeSitterLibraryService.js';
+import { rustSyntaxFixture } from './rustSyntaxHostFixture.js';
+import { TextMateScopeThemeModel } from '../../../src/ash/workbench/services/textMate/common/textMateScopeTheme.js';
 import { SnippetsService } from '../../../src/ash/workbench/contrib/snippets/browser/snippetsService.js';
 import { SnippetCompletionProvider } from '../../../src/ash/workbench/contrib/snippets/browser/snippetCompletionProvider.js';
 import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js';
@@ -7,7 +10,6 @@ import { asCssVariableName } from '../../../src/ash/platform/theme/common/sizeUt
 import { cornerRadiusSmall } from '../../../src/ash/platform/theme/common/sizes/baseSizes.js';
 import { ITextModelService } from '../../../src/ash/editor/common/services/resolverService.js';
 import { TextModelResolverService } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResolverService.js';
-import { BrowserTextMateService } from '../../../src/ash/workbench/services/textMate/browser/browserTextMateService.js';
 import { createLanguageExtensions } from './languageExtensions.js';
 import { ContextKeyService, IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { IMarkerService } from '../../../src/ash/platform/markers/common/markers.js';
@@ -134,21 +136,25 @@ const languageService = disposables.add(new LanguageService());
 const configurationService = disposables.add(new WorkbenchConfigurationService());
 const languageConfigurationService = disposables.add(new LanguageConfigurationService(configurationService, languageService));
 const languageFeaturesService = disposables.add(new LanguageFeaturesService());
-const textMateService = disposables.add(new BrowserTextMateService());
-const extensions = disposables.add(await createLanguageExtensions({ textMateService, languageService, languageConfigurationService }));
+const syntaxTheme = disposables.add(new TextMateScopeThemeModel());
+const library = disposables.add(new TreeSitterLibraryService(await rustSyntaxFixture()));
+const extensions = disposables.add(await createLanguageExtensions({ languageService, languageConfigurationService }));
 const snippets = disposables.add(new SnippetsService(extensions));
 disposables.add(new SnippetCompletionProvider(snippets, languageFeaturesService));
 await extensions.start();
 const models = disposables.add(uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {
 	languageService, languageConfigurationService, languageFeaturesService,
-	syntaxService: { workerFactory: textMateService.syntaxWorkerFactory },
-	onDidChangeLanguageSupport: textMateService.onDidChange,
+	createSyntaxTokenBackend: (model: TextModel) => createTreeSitterSyntaxTokenBackend(model, configurationService, library, syntaxTheme),
+	onDidChangeSyntaxBackend: (listener: () => void) => syntaxTheme.onDidChangeTheme(() => listener()),
 }));
+disposables.add(new TreeSitterSyntaxProviders(languageFeaturesService));
 let syntaxAnalysisCount = 0;
 disposables.add(new AppServerSyntaxProviders(languageFeaturesService, {
+	isAvailable: true, onDidChangeConnection: Event.None,
 	generation: 1,
 	open: async () => { },
 	update: async () => { },
+	query: async () => { throw new Error('The legacy fixture API must not receive shared-tree queries'); },
 	analyze: async params => {
 		syntaxAnalysisCount += 1;
 		return {
@@ -286,7 +292,7 @@ window.ashTextModelIntegration = {
 	}),
 	setTheme: theme => themeService.setColorTheme({ dark: darkColorTheme, light: lightColorTheme, contrast: highContrastDarkColorTheme, contrastLight: highContrastLightColorTheme }[theme]),
 	setSyntaxColor: color => {
-		const scopeTheme = textMateService.mutableScopeTheme!;
+		const scopeTheme = syntaxTheme;
 		scopeTheme.replace({ revision: scopeTheme.currentTheme.revision + 1, rules: [{ selector: '*', foreground: color }] });
 	},
 	setSelectionColors: colors => themeService.setColorTheme(createColorTheme({

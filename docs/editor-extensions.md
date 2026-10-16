@@ -605,7 +605,7 @@ flowchart TD
     parse --> prepare["准备语言、snippet、theme、grammar、debugger 注册"]
     prepare -->|任一步失败| previous["保留上一批可用注册并报告失败"]
     prepare --> commit["在统一事件屏障内提交 Workbench 注册"]
-    commit --> consumers["Stanza / TextMate Worker / Debug service"]
+    commit --> consumers["Editor / Tree-sitter session / Debug service"]
 ```
 
 内置包源码位于根目录 `extensions/`。产品安装中的 `ash-resources/extensions` 由 Rust 扫描，
@@ -881,8 +881,7 @@ Workbench 刷新采用 single-runner 队列。同一时间只有一次装载；�
 Manifest、配置、snippet、theme 和 debugger 解析及注册组成一条失败安全的激活序列；失败时释放
 候选注册并尝试恢复上一批可用状态。提交阶段使用同步事件屏障：各领域 registry 先更新状态，全部
 成功后才依次投递已缓冲事件，因此监听者查询其他 registry 时会看到同一扩展代次。同步提交失败会
-丢弃候选事件并恢复上一批可用状态。TextMate grammar 的 bytes 解析和 catalog materialization 仍由
-`TextMateGrammarService` 拥有；Worker 运行期的后续故障属于 TextMate 自身生命周期。
+丢弃候选事件并恢复上一批可用状态。旧 TextMate grammar 声明只保留为校验后的元数据，不再读取其资源或等待 grammar catalog。语法由已注册的 Tree-sitter grammar 与共享后台会话提供。
 
 扩展 snippet 的资源读取与 UTF-8 边界属于 `AppServerExtensionService`；它通过
 `IExtensionService.registerSnippetHandler` 将候选资源交给 `SnippetsService`，在提交前完成验证，

@@ -16,7 +16,6 @@ use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::language::LanguagePositionDto;
 use ash_app_server_protocol::protocol::language::LanguageRangeDto;
 use ash_codebase::CodebaseOverlayDocument;
-use ash_codebase::IndexedLanguage;
 use ash_codebase::IndexedSourceReference;
 use ash_codebase::SymbolIndexError;
 use ash_codebase::SymbolIndexQuery;
@@ -24,6 +23,7 @@ use ash_codebase::SymbolIndexSnapshot;
 use ash_codebase::SymbolKind;
 use ash_codebase::SymbolRange;
 use ash_codebase::SymbolSearchHit;
+use ash_language::LanguageId;
 use serde_json::Value;
 
 use super::AppServer;
@@ -69,7 +69,8 @@ impl AppServer {
             .synchronize_overlay(CodebaseOverlayDocument {
                 relative_path: params.document.path,
                 editor_revision: params.document.revision,
-                language: indexed_language(&params.document.language_id),
+                language: LanguageId::parse(&params.document.language_id)
+                    .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?,
                 content: params.document.text,
             })
             .map_err(codebase_overlay_error)?;
@@ -152,7 +153,7 @@ fn project_verified_hits(
                     root_id: reference.root_id.clone(),
                     relative_path: reference.relative_path.clone(),
                     source_revision: reference.source_revision.clone(),
-                    language: reference.language,
+                    language: reference.language.clone(),
                     source_bytes: reference.source_bytes,
                 }])
                 .ok()
@@ -176,7 +177,7 @@ fn project_verified_hits(
             kind: project_kind(hit.symbol.kind),
             container_name: hit.symbol.container_name,
             path: reference.relative_path.clone(),
-            language: reference.language.id().to_owned(),
+            language: reference.language.as_str().to_owned(),
             source_revision: reference.source_revision.as_str().to_owned(),
             declaration_range,
             selection_range,
@@ -243,20 +244,6 @@ fn project_kind(kind: SymbolKind) -> SymbolKindDto {
         SymbolKind::Trait => SymbolKindDto::Trait,
         SymbolKind::Type => SymbolKindDto::Type,
         SymbolKind::Variable => SymbolKindDto::Variable,
-    }
-}
-
-fn indexed_language(language_id: &str) -> IndexedLanguage {
-    match language_id {
-        "javascript" => IndexedLanguage::Javascript,
-        "javascriptreact" => IndexedLanguage::JavascriptReact,
-        "json" => IndexedLanguage::Json,
-        "jsonc" => IndexedLanguage::Jsonc,
-        "rust" => IndexedLanguage::Rust,
-        "shell" => IndexedLanguage::Shell,
-        "typescript" => IndexedLanguage::TypeScript,
-        "typescriptreact" => IndexedLanguage::TypeScriptReact,
-        _ => IndexedLanguage::PlainText,
     }
 }
 

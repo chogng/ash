@@ -2,8 +2,8 @@ use std::num::NonZeroUsize;
 use std::path::PathBuf;
 
 use crate::IndexRootId;
-use crate::IndexedLanguage;
 use crate::SourceRevision;
+use ash_language::LanguageId;
 
 const DEFAULT_MAX_SYMBOLS_PER_SOURCE: usize = 50_000;
 const DEFAULT_MAX_TOTAL_SYMBOLS: usize = 1_000_000;
@@ -84,7 +84,7 @@ pub struct SymbolReference {
     pub root_id: IndexRootId,
     pub relative_path: PathBuf,
     pub source_revision: SourceRevision,
-    pub language: IndexedLanguage,
+    pub language: LanguageId,
     pub source_bytes: usize,
     pub ordinal: usize,
     pub declaration_range: SymbolRange,

@@ -52,10 +52,18 @@ interface FoldingStateMemento {
 
 class FoldingDecorationPresenter extends Disposable {
 	private decorationIds: string[] = [];
+	private visibleWindow = '';
 
 	constructor(private readonly editor: ICodeEditor, private readonly folding: EditorFoldingModel, private readonly decorations: FoldingDecorationProvider) {
 		super();
 		this._register(folding.onDidChange(() => this.refresh()));
+		this._register(folding.model.onDidChangeContent(change => {
+			// An Enter at a header's end moves its tracked decoration into the body.
+			// Reanchor visible controls to physical headers when line structure changes.
+			if (change.changes.some(edit => edit.range.startLineNumber !== edit.range.endLineNumber || /[\r\n]/u.test(edit.text))) this.refresh();
+		}));
+		this._register(editor.onDidScrollChange(() => this.refresh(false)));
+		this._register(editor.onDidLayoutChange(() => this.refresh(false)));
 		this._register(editor.onDidChangeConfiguration(event => {
 			if (event.hasChanged(EditorOption.showFoldingControls) || event.hasChanged(EditorOption.foldingHighlight)) this.refresh();
 		}));
@@ -63,16 +71,23 @@ class FoldingDecorationPresenter extends Disposable {
 		this.refresh();
 	}
 
-	private refresh(): void {
+	private refresh(force = true): void {
+		const visible = this.editor.getVisibleRanges();
+		const window = visible.map(range => `${range.startLineNumber}:${range.endLineNumber}`).join(',');
+		if (!force && window === this.visibleWindow) return;
+		this.visibleWindow = window;
 		this.decorations.showFoldingControls = this.editor.getOption(EditorOption.showFoldingControls);
 		this.decorations.showFoldingHighlights = this.editor.getOption(EditorOption.foldingHighlight);
 		let hiddenThrough = -1;
-		const next = this.folding.regions.map(region => {
+		// The folding model retains every region. Offscreen gutter controls need
+		// no tracked decorations; scrolling installs their presentation on demand.
+		const next = this.folding.regions.flatMap(region => {
 			const startLineNumber = region.startLineIndex + 1;
 			const endLineNumber = region.endLineIndex + 1;
 			const hidden = region.endLineIndex <= hiddenThrough;
 			if (region.collapsed && region.endLineIndex > hiddenThrough) hiddenThrough = region.endLineIndex;
-			return {
+			if (hidden || !visible.some(range => range.startLineNumber <= startLineNumber && startLineNumber <= range.endLineNumber)) return [];
+			return [{
 				range: new Range(
 					startLineNumber,
 					this.folding.model.getLineMaxColumn(startLineNumber),
@@ -84,7 +99,7 @@ class FoldingDecorationPresenter extends Disposable {
 					hidden,
 					region.source === EditorFoldingRangeSource.Manual,
 				),
-			};
+			}];
 		});
 		this.decorations.changeDecorations(accessor => {
 			this.decorationIds = accessor.deltaDecorations(this.decorationIds, next);
@@ -112,7 +127,7 @@ class FoldingRangeSource extends Disposable {
 		const tokenRefresh = this._register(new RunOnceScheduler(() => this.refresh(), 200));
 		this._register(folding.model.onDidChangeContent(() => this.refresh()));
 		this._register(folding.model.onDidChangeLanguage(() => this.refresh()));
-		this._register(folding.model.onDidChangeTokens(() => tokenRefresh.schedule()));
+		this._register(folding.model.onDidChangeTokens(() => { if (!folding.model.tokenization.syntaxTree) tokenRefresh.schedule(); }));
 		this._register(options.configurations.onDidChange(() => this.refresh()));
 		this._register(options.languageFeaturesService.foldingRangeProvider.onDidChange(() => this.refresh()));
 		this._register(providerSelectionChanged.event(() => this.refresh()));
@@ -130,25 +145,26 @@ class FoldingRangeSource extends Disposable {
 			return;
 		}
 		const indentationOnly = this.editor.getOption(EditorOption.foldingStrategy) === 'indentation';
-		const indentation = computeEditorIndentFoldingRanges(this.folding.model, { tabSize: this.options.tabSize });
-		const local = indentationOnly ? indentation : mergeEditorFoldingRanges(
+		const sharedSyntax = !indentationOnly && this.folding.model.tokenization.syntaxTree;
+		const indentation = sharedSyntax ? [] : computeEditorIndentFoldingRanges(this.folding.model, { tabSize: this.options.tabSize });
+		const local = sharedSyntax ? [] : indentationOnly ? indentation : mergeEditorFoldingRanges(
 			computeEditorLanguageFoldingRanges(this.folding.model, this.folding.model.getLanguageId(), this.options.configurations),
 			indentation,
 		);
-		this.applyRanges(local);
+		if (!sharedSyntax) this.applyRanges(local);
 		if (indentationOnly || !this.options.languageFeaturesService.foldingRangeProvider.has(this.folding.model)) return;
 		const request = this.request = new AbortController();
 		const selected = FoldingController.getFoldingRangeProviders(this.options.languageFeaturesService, this.folding.model);
 		void this.service.provideFoldingRanges(this.folding.model.getLanguageId(), request.signal, selected).then(ranges => {
 			if (request.signal.aborted || this.request !== request) return;
-			this.applyRanges(mergeEditorFoldingRanges(local, ranges));
+			this.applyRanges(local, ranges);
 		}, error => {
 			if (!request.signal.aborted) this.options.onError(error);
 		});
 	}
 
-	private applyRanges(ranges: readonly EditorFoldingRange[]): void {
-		const ordered = mergeEditorFoldingRanges(ranges);
+	private applyRanges(...ranges: readonly (readonly EditorFoldingRange[])[]): void {
+		const ordered = mergeEditorFoldingRanges(...ranges);
 		const limit = this.editor.getOption(EditorOption.foldingMaximumRegions);
 		if (ordered.length <= limit) {
 			this.folding.setProviderRanges(ordered);

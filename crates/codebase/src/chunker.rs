@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use ash_syntax::AnalysisLimits;
 use ash_syntax::DocumentRevision;
 use ash_syntax::SyntaxDocument;
@@ -11,10 +9,10 @@ use crate::ChunkContentHash;
 use crate::ChunkKey;
 use crate::ChunkSpan;
 use crate::CodebaseLimits;
-use crate::IndexedLanguage;
+use ash_language::LanguageId;
 
 #[doc(hidden)]
-pub const CHUNKER_VERSION: &str = "ash-codebase-v1";
+pub const CHUNKER_VERSION: &str = "ash-codebase-v2";
 
 #[derive(Clone, Debug)]
 pub struct PreparedChunk {
@@ -29,26 +27,8 @@ pub(crate) struct ChunkingOutcome {
     pub limit_hit: bool,
 }
 
-pub(crate) fn language_for_path(path: &Path) -> IndexedLanguage {
-    let extension = path
-        .extension()
-        .and_then(|extension| extension.to_str())
-        .map(str::to_ascii_lowercase);
-    match extension.as_deref() {
-        Some("js" | "mjs" | "cjs") => IndexedLanguage::Javascript,
-        Some("jsx") => IndexedLanguage::JavascriptReact,
-        Some("json") => IndexedLanguage::Json,
-        Some("jsonc") => IndexedLanguage::Jsonc,
-        Some("rs") => IndexedLanguage::Rust,
-        Some("sh" | "bash" | "zsh") => IndexedLanguage::Shell,
-        Some("ts" | "mts" | "cts") => IndexedLanguage::TypeScript,
-        Some("tsx") => IndexedLanguage::TypeScriptReact,
-        _ => IndexedLanguage::PlainText,
-    }
-}
-
 pub(crate) fn chunk_source(
-    language: IndexedLanguage,
+    language: &LanguageId,
     source: &str,
     limits: &CodebaseLimits,
 ) -> ChunkingOutcome {
@@ -58,7 +38,7 @@ pub(crate) fn chunk_source(
             limit_hit: false,
         };
     }
-    let structural_boundaries = syntax_language(language)
+    let structural_boundaries = SyntaxLanguage::for_language(language)
         .and_then(|syntax_language| symbol_boundaries(syntax_language, source, limits))
         .unwrap_or_default();
     let byte_ranges = build_ranges(source, structural_boundaries, limits);
@@ -216,20 +196,6 @@ pub(crate) fn end_line_exclusive(
         return line_starts.len();
     }
     line_at(line_starts, end_byte.saturating_sub(1)).saturating_add(1)
-}
-
-fn syntax_language(language: IndexedLanguage) -> Option<SyntaxLanguage> {
-    match language {
-        IndexedLanguage::Javascript => Some(SyntaxLanguage::Javascript),
-        IndexedLanguage::JavascriptReact => Some(SyntaxLanguage::Javascriptreact),
-        IndexedLanguage::Json => Some(SyntaxLanguage::Json),
-        IndexedLanguage::Jsonc => Some(SyntaxLanguage::Jsonc),
-        IndexedLanguage::Rust => Some(SyntaxLanguage::Rust),
-        IndexedLanguage::Shell => Some(SyntaxLanguage::Shell),
-        IndexedLanguage::TypeScript => Some(SyntaxLanguage::Typescript),
-        IndexedLanguage::TypeScriptReact => Some(SyntaxLanguage::Typescriptreact),
-        IndexedLanguage::PlainText => None,
-    }
 }
 
 fn sha256(bytes: impl AsRef<[u8]>) -> String {

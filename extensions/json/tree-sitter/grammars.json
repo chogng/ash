@@ -1,0 +1,38 @@
+[
+  {
+    "name": "json",
+    "source": {
+      "crate": "tree-sitter-json",
+      "version": "0.24.8",
+      "root": "."
+    },
+    "wasm": {
+      "path": "tree-sitter/json.wasm",
+      "sha256": "cf909af3e71c1862a81ecdccbe6147669bf89d92058cdc3d0fbdd7221a7e2211"
+    },
+    "highlights": ["queries/json.scm"],
+    "tags": ["queries/json.tags.scm"],
+    "injections": [],
+    "rust": {
+      "language": "tree_sitter_json::LANGUAGE",
+      "snapshotHighlights": ["tree_sitter_json::HIGHLIGHTS_QUERY"]
+    },
+    "languages": [
+      {
+        "id": "json",
+        "variant": "Json",
+        "editorLanguage": "json",
+        "editorIds": ["json"],
+        "aliases": []
+      },
+      {
+        "id": "jsonc",
+        "variant": "Jsonc",
+        "editorLanguage": "jsonc",
+        "editorIds": ["jsonc"],
+        "aliases": []
+      }
+    ],
+    "folds": ["queries/json.folds.scm"]
+  }
+]

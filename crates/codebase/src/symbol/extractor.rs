@@ -1,4 +1,3 @@
-use crate::IndexedLanguage;
 use crate::MaterializedSource;
 use ash_syntax::AnalysisLimits;
 use ash_syntax::DocumentRevision;
@@ -22,7 +21,7 @@ pub(crate) fn extract_source(
     source: &MaterializedSource,
     max_symbols: usize,
 ) -> Result<ExtractedSource, SymbolIndexError> {
-    let Some(language) = syntax_language(source.reference.language) else {
+    let Some(language) = SyntaxLanguage::for_language(&source.reference.language) else {
         return Ok(ExtractedSource {
             symbols: Vec::new(),
             symbol_limit_hit: false,
@@ -58,7 +57,7 @@ pub(crate) fn extract_source(
                 root_id: source.reference.root_id.clone(),
                 relative_path: source.reference.relative_path.clone(),
                 source_revision: source.reference.source_revision.clone(),
-                language: source.reference.language,
+                language: source.reference.language.clone(),
                 source_bytes: source.reference.source_bytes,
                 ordinal,
                 declaration_range: symbol_range(&symbol.range),
@@ -73,20 +72,6 @@ pub(crate) fn extract_source(
         symbols,
         symbol_limit_hit,
     })
-}
-
-fn syntax_language(language: IndexedLanguage) -> Option<SyntaxLanguage> {
-    match language {
-        IndexedLanguage::Javascript => Some(SyntaxLanguage::Javascript),
-        IndexedLanguage::JavascriptReact => Some(SyntaxLanguage::Javascriptreact),
-        IndexedLanguage::Json => Some(SyntaxLanguage::Json),
-        IndexedLanguage::Jsonc => Some(SyntaxLanguage::Jsonc),
-        IndexedLanguage::Rust => Some(SyntaxLanguage::Rust),
-        IndexedLanguage::Shell => Some(SyntaxLanguage::Shell),
-        IndexedLanguage::TypeScript => Some(SyntaxLanguage::Typescript),
-        IndexedLanguage::TypeScriptReact => Some(SyntaxLanguage::Typescriptreact),
-        IndexedLanguage::PlainText => None,
-    }
 }
 
 fn symbol_range(range: &SyntaxRange) -> SymbolRange {

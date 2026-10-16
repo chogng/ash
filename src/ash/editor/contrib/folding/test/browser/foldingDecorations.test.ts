@@ -6,6 +6,7 @@ import { JSDOM } from 'jsdom';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { LanguageFeaturesService } from '../../../../common/services/languageFeaturesService.js';
 import { registerTestTokens } from '../../../../test/common/testTokenization.js';
+import { Range } from '../../../../common/core/range.js';
 
 const { FoldingController } = await import('../../browser/folding.js');
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
@@ -105,5 +106,25 @@ test('Folding contribution projects model ranges through FoldingDecorationProvid
 	assert.ok(model.getAllDecorations().some(decoration => decoration.options.description === 'folding-expanded'));
 	editor.restoreViewState(saved);
 	assert.ok(model.getAllDecorations().some(decoration => decoration.options.description === 'folding-collapsed'));
+	dom.window.close();
+});
+
+
+test('fold headers stay on their physical line after Enter moves a tracked gutter decoration into the body', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel('{\n  value\n}');
+	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, lineHeight: 20 });
+	editor.layout({ width: 320, height: 120 });
+	editor.view.render(true, false);
+	const firstHeader = () => model.getAllDecorations().find(decoration => decoration.options.description === 'folding-expanded')?.range.startLineNumber;
+	assert.equal(firstHeader(), 1);
+	model.applyOperations([{ range: new Range(1, 2, 1, 2), text: '\n' }]);
+	editor.view.render(true, false);
+	assert.equal(firstHeader(), 1);
+	assert.ok(editor.getDomNode().querySelector('.margin-view-overlays [data-line-index="0"] .ash-icon-folding-expanded'));
+	await model.undo();
+	editor.view.render(true, false);
+	assert.equal(firstHeader(), 1);
 	dom.window.close();
 });

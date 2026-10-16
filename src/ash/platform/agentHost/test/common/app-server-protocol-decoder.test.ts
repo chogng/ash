@@ -317,3 +317,65 @@ test('backend credential services are rejected at the renderer extension boundar
 	assert.deepEqual(decodeAppServerServerRequest(envelope), envelope);
 	assert.throws(() => decodeAppServerServerRequest({ ...envelope, params }), AppServerProtocolDecodeError);
 });
+
+test('syntax facts tuples validate fixed fields, coordinates and exact lengths', () => {
+	const response = {
+		jsonrpc: '2.0', id: 1, result: {
+			revision: 2, rows: [], brackets: [], parseMs: 1, queryMs: 1, incremental: true,
+			facts: {
+				baseRevision: 1, edits: [[0, 0, 0, 0, 1, 0]],
+				symbols: { start: 0, deleteCount: 1, items: [['item', 'function', [1, 0, 3, 1], [1, 9, 1, 13]]] },
+				folds: { start: 0, deleteCount: 0, items: [[1, 3, null]] },
+				diagnostics: { start: 0, deleteCount: 0, items: [[[1, 0, 1, 1], 'error']] },
+			},
+		}
+	};
+	assert.deepEqual(decodeAppServerResponse('syntax/query', response), response);
+	for (const malformed of [
+		['item', 'unknown', [1, 0, 3, 1], [1, 9, 1, 13]],
+		['item', 'function', [-1, 0, 3, 1], [1, 9, 1, 13]],
+		['item', 'function', [1, '0', 3, 1], [1, 9, 1, 13]],
+		['item', 'function', [1, 0, 3], [1, 9, 1, 13]],
+		['item', 'function', [1, 0, 3, 1]],
+		['item', 'function', [1, 0, 3, 1], [1, 9, 1, 13], 'extra'],
+	]) {
+		const invalid = {
+			...response, result: {
+				...response.result, facts: {
+					...response.result.facts, symbols: { ...response.result.facts.symbols, items: [malformed] },
+				}
+			}
+		};
+		assert.throws(() => decodeAppServerResponse('syntax/query', invalid), AppServerProtocolDecodeError);
+	}
+	const invalidEdit = structuredClone(response);
+	invalidEdit.result.facts.edits = [[0, 0, 0, 0, -1, 0]];
+	assert.throws(() => decodeAppServerResponse('syntax/query', invalidEdit), AppServerProtocolDecodeError);
+});
+
+test('cached numeric syntax tuples retain all coordinate and edit boundary checks', () => {
+	const response = {
+		jsonrpc: '2.0', id: 1, result: {
+			revision: 2, rows: [], brackets: [], parseMs: 1, queryMs: 1, incremental: true,
+			facts: {
+				baseRevision: 1, edits: [[0, 0, 0, 0, 1, 0]],
+				symbols: { start: 0, deleteCount: 0, items: [['item', 'function', [1, 0, 3, 1], [1, 9, 1, 13]]] },
+				folds: { start: 0, deleteCount: 0, items: [] },
+				diagnostics: { start: 0, deleteCount: 0, items: [] },
+			},
+		},
+	};
+	assert.deepEqual(decodeAppServerResponse('syntax/query', response), response);
+	for (const tuple of ['range', 'selection', 'edit'] as const) {
+		for (let index = 0; index < (tuple === 'edit' ? 6 : 4); index++) {
+			for (const value of [-1, 0.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, '0', null, undefined]) {
+				const invalid = structuredClone(response);
+				const target: unknown[] = tuple === 'edit' ? invalid.result.facts.edits[0] : invalid.result.facts.symbols.items[0][tuple === 'range' ? 2 : 3] as number[];
+				target[index] = value;
+				assert.throws(() => decodeAppServerResponse('syntax/query', invalid), AppServerProtocolDecodeError, `${tuple}[${index}]=${String(value)}`);
+			}
+		}
+		// A previous invalid value must not poison the immutable schema cache.
+		assert.deepEqual(decodeAppServerResponse('syntax/query', response), response);
+	}
+});

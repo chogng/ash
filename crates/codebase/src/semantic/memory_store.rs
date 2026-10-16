@@ -87,7 +87,7 @@ impl CodebaseVectorStore for InMemoryCodebaseVectorStore {
                     root: root_id.as_str().to_owned(),
                     model: embedding_index_key.as_str().to_owned(),
                     path: chunk.reference.relative_path.clone(),
-                    language: chunk.language.id().to_owned(),
+                    language: chunk.language.as_str().to_owned(),
                     chunk_key: chunk.reference.key.as_str().to_owned(),
                     content_hash: chunk.reference.content_hash.as_str().to_owned(),
                 },
@@ -209,7 +209,7 @@ fn cache_identity(
         root: root_id.as_str().to_owned(),
         model: embedding_index_key.as_str().to_owned(),
         path: chunk.reference.relative_path.clone(),
-        language: chunk.language.id().to_owned(),
+        language: chunk.language.as_str().to_owned(),
         chunk_key: chunk.reference.key.as_str().to_owned(),
         content_hash: chunk.reference.content_hash.as_str().to_owned(),
     }

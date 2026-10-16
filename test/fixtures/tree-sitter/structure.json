@@ -1,0 +1,485 @@
+[
+  {
+    "language": "javascript",
+    "text": "function greet() {\nreturn \"😀中文\";\n}\n",
+    "symbols": [
+      "greet"
+    ],
+    "folds": [
+      [
+        0,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "javascriptreact",
+    "text": "function greet() {\nreturn \"😀中文\";\n}\n",
+    "symbols": [
+      "greet"
+    ],
+    "folds": [
+      [
+        0,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "typescript",
+    "text": "function greet() {\nreturn \"😀中文\";\n}\n",
+    "symbols": [
+      "greet"
+    ],
+    "folds": [
+      [
+        0,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "typescriptreact",
+    "text": "function greet() {\nreturn \"😀中文\";\n}\n",
+    "symbols": [
+      "greet"
+    ],
+    "folds": [
+      [
+        0,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "rust",
+    "text": "fn greet() {\nprintln!(\"😀中文\");\n}\n",
+    "symbols": [
+      "greet"
+    ],
+    "folds": [
+      [
+        0,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "go",
+    "text": "package main\nfunc greet() {\nprintln(\"😀中文\")\n}\n",
+    "symbols": [
+      "greet"
+    ],
+    "folds": [
+      [
+        1,
+        3
+      ]
+    ]
+  },
+  {
+    "language": "python",
+    "text": "def greet():\n    return \"😀中文\"\n",
+    "symbols": [
+      "greet"
+    ],
+    "folds": [
+      [
+        0,
+        1
+      ]
+    ]
+  },
+  {
+    "language": "shell",
+    "text": "greet() {\necho \"😀中文\"\n}\n",
+    "symbols": [
+      "greet"
+    ],
+    "folds": [
+      [
+        0,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "css",
+    "text": ".card {\ncolor: red;\n}\n",
+    "symbols": [
+      ".card"
+    ],
+    "folds": [
+      [
+        0,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "scss",
+    "text": "@mixin card($x) {\ncolor: $x;\n}\n",
+    "symbols": [
+      "card"
+    ],
+    "folds": [
+      [
+        0,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "less",
+    "text": ".mixin(@x) {\ncolor: @x;\n}\n",
+    "symbols": [
+      "mixin"
+    ],
+    "folds": [
+      [
+        0,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "html",
+    "text": "<main>\n<section>\n😀中文\n</section>\n</main>\n",
+    "symbols": [
+      "main",
+      "section"
+    ],
+    "folds": [
+      [
+        0,
+        4
+      ],
+      [
+        1,
+        3
+      ]
+    ]
+  },
+  {
+    "language": "json",
+    "text": "{\n\"section\": {\n\"value\": \"😀中文\"\n}\n}\n",
+    "symbols": [
+      "section",
+      "value"
+    ],
+    "folds": [
+      [
+        0,
+        4
+      ],
+      [
+        1,
+        3
+      ]
+    ]
+  },
+  {
+    "language": "jsonc",
+    "text": "{\n\"section\": {\n\"value\": \"😀中文\"\n}\n}\n",
+    "symbols": [
+      "section",
+      "value"
+    ],
+    "folds": [
+      [
+        0,
+        4
+      ],
+      [
+        1,
+        3
+      ]
+    ]
+  },
+  {
+    "language": "ini",
+    "text": "[core]\nname=ash\nvalue=😀中文\n[other]\nname=next\n",
+    "symbols": [
+      "core",
+      "name",
+      "value",
+      "other"
+    ],
+    "folds": [
+      [
+        0,
+        2
+      ],
+      [
+        3,
+        4
+      ]
+    ]
+  },
+  {
+    "language": "properties",
+    "text": "name=ash\nvalue=hello\\\n world\n",
+    "symbols": [
+      "name",
+      "value"
+    ],
+    "folds": [
+      [
+        1,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "markdown",
+    "text": "# Title\n\n## Section\n\n😀中文\n",
+    "symbols": [
+      "Title",
+      "Section"
+    ],
+    "folds": [
+      [
+        0,
+        4
+      ],
+      [
+        2,
+        4
+      ]
+    ]
+  },
+  {
+    "language": "markdown-inline",
+    "text": "**😀中文**",
+    "symbols": [],
+    "folds": [],
+    "noFolds": true
+  },
+  {
+    "language": "sql",
+    "text": "CREATE TABLE users (\n id INTEGER,\n name TEXT\n);\nCREATE VIEW active AS\n SELECT * FROM users;\n",
+    "symbols": [
+      "users",
+      "active"
+    ],
+    "folds": [
+      [
+        0,
+        3
+      ],
+      [
+        4,
+        5
+      ]
+    ]
+  },
+  {
+    "language": "toml",
+    "text": "[core]\nname=\"😀中文\"\nitems=[\n1,2\n]\n[[projects]]\nname=\"ash\"\n",
+    "symbols": [
+      "core",
+      "name",
+      "items",
+      "projects"
+    ],
+    "folds": [
+      [
+        0,
+        4
+      ],
+      [
+        5,
+        6
+      ]
+    ]
+  },
+  {
+    "language": "xml",
+    "text": "<root>\n<section>\n😀中文\n</section>\n</root>\n",
+    "symbols": [
+      "root",
+      "section"
+    ],
+    "folds": [
+      [
+        0,
+        4
+      ],
+      [
+        1,
+        3
+      ]
+    ]
+  },
+  {
+    "language": "dtd",
+    "text": "<!ELEMENT root (\nchild*\n)>\n<!ELEMENT child (#PCDATA)>\n",
+    "symbols": [
+      "root",
+      "child"
+    ],
+    "folds": [
+      [
+        0,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "yaml",
+    "text": "core:\n  name: 😀中文\n  list:\n    - item\ntext: |\n  line one\n  line two\n",
+    "symbols": [
+      "core",
+      "name",
+      "list",
+      "text"
+    ],
+    "folds": [
+      [
+        0,
+        3
+      ],
+      [
+        4,
+        6
+      ]
+    ]
+  },
+  {
+    "language": "diff",
+    "text": "diff --git a/a.js b/a.js\n--- a/a.js\n+++ b/a.js\n@@ -1 +1 @@\n-old\n+new\n",
+    "symbols": [
+      "a/a.js b/a.js",
+      "@@ -1 +1 @@"
+    ],
+    "folds": [
+      [
+        0,
+        5
+      ],
+      [
+        3,
+        5
+      ]
+    ]
+  },
+  {
+    "language": "gitcommit",
+    "text": "feat: add support\n\nDescription\nMore details\n",
+    "symbols": [
+      "feat: add support"
+    ],
+    "folds": [
+      [
+        2,
+        3
+      ]
+    ]
+  },
+  {
+    "language": "git-rebase",
+    "text": "pick 0123456 Initial commit\nexec echo hello\n",
+    "symbols": [
+      "Initial commit",
+      "echo hello"
+    ],
+    "folds": [],
+    "noFolds": true
+  },
+  {
+    "language": "gitignore",
+    "text": "*.log\n!keep.log\n",
+    "symbols": [
+      "*.log",
+      "!keep.log"
+    ],
+    "folds": [],
+    "noFolds": true
+  },
+  {
+    "language": "starlark",
+    "text": "def greet(value):\n    return value\n\ncc_library(\nname = \"core\",\nsrcs = [\"a.cc\"],\n)\n",
+    "symbols": [
+      "greet",
+      "core"
+    ],
+    "folds": [
+      [
+        0,
+        1
+      ],
+      [
+        3,
+        6
+      ]
+    ]
+  },
+  {
+    "language": "bazelrc",
+    "text": "build:debug --jobs=4\nbuild --color=yes\n",
+    "symbols": [
+      "debug",
+      "build"
+    ],
+    "folds": [],
+    "noFolds": true
+  },
+  {
+    "language": "html",
+    "text": "<main>\n<script>\nfunction embedded() {\nreturn \"😀中文\";\n}\n</script>\n<style>\n.card {\ncolor:red;\n}\n</style>\n</main>\n",
+    "symbols": [
+      "main",
+      "script",
+      "embedded",
+      "style",
+      ".card"
+    ],
+    "folds": [
+      [
+        0,
+        11
+      ],
+      [
+        2,
+        4
+      ],
+      [
+        7,
+        9
+      ]
+    ]
+  },
+  {
+    "language": "markdown",
+    "text": "# Host\n\n```python\ndef embedded():\n    return \"😀中文\"\n```\n",
+    "symbols": [
+      "Host",
+      "embedded"
+    ],
+    "folds": [
+      [
+        0,
+        5
+      ],
+      [
+        3,
+        4
+      ]
+    ]
+  },
+  {
+    "language": "sql",
+    "text": "CREATE SCHEMA s AUTHORIZATION owner;\nCREATE DATABASE d WITH OWNER admin;\nCREATE INDEX idx ON users(id);\nCREATE SEQUENCE seq OWNED BY users.id;\nCREATE TRIGGER tr BEFORE INSERT ON users FOR EACH ROW EXECUTE FUNCTION handle();\nCREATE FUNCTION f() RETURNS custom AS $$ SELECT 1 $$ LANGUAGE SQL;\nCREATE TYPE kind AS ENUM ('a','b');",
+    "symbols": [
+      "s",
+      "d",
+      "idx",
+      "seq",
+      "tr",
+      "f",
+      "kind"
+    ],
+    "folds": [],
+    "exactSymbols": true
+  }
+]

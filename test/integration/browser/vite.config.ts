@@ -43,6 +43,7 @@ export default defineConfig({
 				testing: resolve(import.meta.dirname, "testing.html"),
 				table: resolve(import.meta.dirname, 'table.html'),
 				tokenization: resolve(import.meta.dirname, 'tokenization.html'),
+				treeSitter: resolve(import.meta.dirname, 'treeSitter.html'),
 				diff: resolve(import.meta.dirname, 'diff.html'),
 				scrollLocking: resolve(import.meta.dirname, 'scrollLocking.html'),
 				language: resolve(import.meta.dirname, "language.html"),

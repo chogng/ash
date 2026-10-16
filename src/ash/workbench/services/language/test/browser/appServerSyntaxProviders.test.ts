@@ -1,3 +1,4 @@
+import { Event } from '../../../../../base/common/event.js';
 import { strict as assert } from 'node:assert';
 import { test } from 'mocha';
 import { Range } from '../../../../../editor/common/core/range.js';
@@ -6,7 +7,7 @@ import { OutlineModel } from '../../../../../editor/contrib/documentSymbols/brow
 import { FoldingRangeService } from '../../../../../editor/contrib/folding/common/languageFoldingRanges.js';
 import { createLanguageFeatureRequest } from '../../../../../editor/common/languages.js';
 import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../../../../editor/test/common/testLanguageFeaturesService.js';
-import { AppServerSyntaxProviders, projectAppServerSyntaxSymbols, syntaxLanguageForEditorLanguage } from '../../browser/appServerSyntaxProviders.js';
+import { AppServerSyntaxProviders, projectAppServerSyntaxFoldingRanges, projectAppServerSyntaxSymbols, syntaxLanguageForEditorLanguage } from '../../browser/appServerSyntaxProviders.js';
 import { createSyntaxWorker, SyntaxProviderWorker } from '../../../../../editor/common/services/editorWebWorker.js';
 
 test('Frontend tokens remain independent of App Server diagnostics, symbols, folds, and selection ranges', async () => {
@@ -17,6 +18,8 @@ test('Frontend tokens remain independent of App Server diagnostics, symbols, fol
 	let workerCalls = 0;
 	const closed: string[] = [];
 	using providers = new AppServerSyntaxProviders(languages, {
+		isAvailable: true, onDidChangeConnection: Event.None,
+		query: async () => { throw new Error('TextMate providers must not query the shared tree'); },
 		generation: 1,
 		open: async () => { },
 		update: async () => { },
@@ -92,8 +95,8 @@ test('App Server syntax maps only supported editor languages', () => {
 	assert.equal(syntaxLanguageForEditorLanguage('rust'), 'rust');
 	assert.equal(syntaxLanguageForEditorLanguage('typescriptreact'), 'typescriptreact');
 	assert.equal(syntaxLanguageForEditorLanguage('shellscript'), 'shell');
-	assert.equal(syntaxLanguageForEditorLanguage('shell'), undefined);
-	assert.equal(syntaxLanguageForEditorLanguage('markdown'), undefined);
+	assert.equal(syntaxLanguageForEditorLanguage('shell'), 'shell');
+	assert.equal(syntaxLanguageForEditorLanguage('markdown'), 'markdown');
 });
 
 test('App Server parser sessions follow each model revision and release independently', async () => {
@@ -105,6 +108,8 @@ test('App Server parser sessions follow each model revision and release independ
 	const updated: { documentId: string; previousRevision: number; revision: number; text: string; }[] = [];
 	const closed: string[] = [];
 	using providers = new AppServerSyntaxProviders(languages, {
+		isAvailable: true, onDidChangeConnection: Event.None,
+		query: async () => { throw new Error('TextMate providers must not query the shared tree'); },
 		generation: 1,
 		open: async params => { opened.push({ documentId: params.documentId, revision: params.revision, text: params.text }); },
 		update: async params => { updated.push({ documentId: params.documentId, previousRevision: params.previousRevision, revision: params.revision, text: params.edits[0]?.text ?? '' }); },
@@ -153,6 +158,8 @@ test('Selection-only parser sessions close with their editor model', async () =>
 	const selected: { documentId: string; revision: number; text: string; }[] = [];
 	const closed: string[] = [];
 	using providers = new AppServerSyntaxProviders(languages, {
+		isAvailable: true, onDidChangeConnection: Event.None,
+		query: async () => { throw new Error('TextMate providers must not query the shared tree'); },
 		generation: 1,
 		open: async () => { },
 		update: async () => { },
@@ -186,6 +193,8 @@ test('oversized intermediate revisions reopen from the current bounded snapshot'
 	const opened: string[] = [];
 	let updates = 0;
 	using providers = new AppServerSyntaxProviders(languages, {
+		isAvailable: true, onDidChangeConnection: Event.None,
+		query: async () => { throw new Error('TextMate providers must not query the shared tree'); },
 		generation: 1,
 		open: async params => { opened.push(params.text); },
 		update: async () => { updates += 1; },
@@ -212,4 +221,15 @@ test('syntax document symbols reconstruct containing scopes from unsorted flat p
 	const names = (entries: readonly import('../../../../../editor/common/languages.js').LanguageDocumentSymbol[]): unknown => entries.map(entry => ({ name: entry.name, children: names(entry.children ?? []) }));
 	assert.deepEqual(names(symbols), [{ name: 'outer', children: [{ name: 'inner', children: [{ name: 'leaf', children: [] }] }] }, { name: 'other', children: [] }]);
 	assert.ok(Object.isFrozen(symbols[0].children));
+});
+
+test('syntax folds ending at a line start leave the following heading or property visible', () => {
+	using model = new TextModel('# One\ntext\n# Two\n');
+	const result = {
+		revision: model.version, hasErrors: false, tokens: [], symbols: [], diagnostics: [], foldingRanges: [
+			{ range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 2, columnIndex: 0 } } },
+			{ range: { start: { lineIndex: 2, columnIndex: 0 }, end: { lineIndex: 3, columnIndex: 0 } } },
+		]
+	};
+	assert.deepEqual(projectAppServerSyntaxFoldingRanges(result, model.createVersionedSnapshot()), [{ startLineIndex: 0, endLineIndex: 1 }]);
 });

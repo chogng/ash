@@ -3,4 +3,5 @@ load("//:defs.bzl", "ash_rust_crate")
 ash_rust_crate(
     name = "syntax",
     crate_name = "ash_syntax",
+    data = ["//extensions:tree-sitter-queries", "//:test/fixtures/tree-sitter/languages.json", "//:test/fixtures/tree-sitter/structure.json", "//:test/fixtures/languages/folding.json"],
 )

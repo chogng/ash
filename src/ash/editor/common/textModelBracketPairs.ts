@@ -3,7 +3,10 @@ import { Event } from '../../base/common/event.js';
 import { IPosition } from './core/position.js';
 import { IRange, Range } from './core/range.js';
 import { ClosingBracketKind, OpeningBracketKind } from './languages/supports/languageBracketsConfiguration.js';
-import { PairAstNode } from './model/bracketPairsTextModelPart/bracketPairsTree/ast.js';
+interface BracketPairKinds {
+	readonly openingBracket: { readonly bracketInfo: OpeningBracketKind | ClosingBracketKind; };
+	readonly closingBracket: { readonly bracketInfo: OpeningBracketKind | ClosingBracketKind; } | null;
+}
 
 export interface IBracketPairsTextModelPart {
 	/**
@@ -84,7 +87,7 @@ export class BracketPairInfo {
 		/** 0-based */
 		public readonly nestingLevel: number,
 		public readonly nestingLevelOfEqualBracketType: number,
-		private readonly bracketPairNode: PairAstNode,
+		private readonly bracketPairNode: BracketPairKinds,
 
 	) {
 	}
@@ -108,7 +111,7 @@ export class BracketPairWithMinIndentationInfo extends BracketPairInfo {
 		*/
 		nestingLevel: number,
 		nestingLevelOfEqualBracketType: number,
-		bracketPairNode: PairAstNode,
+		bracketPairNode: BracketPairKinds,
 		/**
 		 * -1 if not requested, otherwise the size of the minimum indentation in the bracket pair in terms of visible columns.
 		*/

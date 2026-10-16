@@ -1,6 +1,5 @@
 import { resolveTextMateTokenStyle } from '../../textMate/common/textMateThemeProjection.js';
 import { Color } from '../../../../base/common/color.js';
-import * as textMateNamespace from 'vscode-textmate';
 import { parseJsonDocument } from '../../../../base/common/json.js';
 import { parseJsonc } from '../../../../base/common/jsonc.js';
 import { validateJsonSchema } from '../../../../base/common/jsonSchema.js';
@@ -8,8 +7,8 @@ import { createColorTheme } from '../../../../platform/theme/common/colorTheme.j
 import type { IColorTheme, ISemanticTokenThemeRule } from '../../../../platform/theme/common/themeService.js';
 import { ColorScheme } from '../../../../platform/theme/common/theme.js';
 import { colorThemeSchema, colorThemeSchemaId } from './colorThemeSchema.js';
+import { localize } from '../../../../nls.js';
 
-const textMateRuntime = (textMateNamespace as unknown as { readonly default?: typeof textMateNamespace; }).default ?? textMateNamespace;
 
 export interface ColorThemeDocument {
 	readonly $schema?: string;
@@ -35,7 +34,7 @@ export interface ColorThemeDocument {
 
 export function parseColorThemeDocument(value: unknown): ColorThemeDocument {
 	const source = JSON.stringify(value);
-	if (!source || source.length > 1_048_576) throw new Error('Theme exceeds the 1 MiB document limit');
+	if (!source || source.length > 1_048_576) throw new Error(localize('theme.documentTooLarge', 'Theme exceeds the 1 MiB document limit'));
 	const issues = validateJsonSchema(parseJsonDocument(source), colorThemeSchema);
 	if (issues.length) throw new Error(`Invalid color theme: ${issues.map(issue => issue.message).join('; ')}`);
 	return value as ColorThemeDocument;
@@ -107,10 +106,129 @@ function readThemeDocument(resource: string, value: unknown): ColorThemeDocument
 }
 
 function readSyntaxTokenRules(resource: string, value: unknown): Exclude<ColorThemeDocument['tokenColors'], string | undefined> {
-	const content = typeof value === 'string' ? textMateRuntime.parseRawGrammar(value, resource) : value;
+	const content = typeof value === 'string'
+		? /\.tmTheme$/iu.test(resource) ? parseSyntaxTheme(value) : parseJsonc(value, `Token theme '${resource}'`)
+		: value;
 	if (typeof content !== 'object' || content === null || !('settings' in content)) throw new Error(`Invalid TextMate theme: ${resource}`);
 	const document = parseColorThemeDocument({ tokenColors: content.settings });
 	return asTokenColorRules(document.tokenColors);
+}
+
+/** Reads the property-list data used by .tmTheme without a tokenizer runtime or XML I/O. */
+function parseSyntaxTheme(source: string): unknown {
+	if (source.length > 1_048_576) throw new Error(localize('theme.documentTooLarge', 'Theme exceeds the 1 MiB document limit'));
+	let offset = 0;
+	let elements = 0;
+	const tag = /<(\/?)([A-Za-z][\w-]*)(?:\s+[A-Za-z_:][\w:.-]*\s*=\s*(?:"[^"]*"|'[^']*'))*\s*(\/?)>/y;
+	const whitespace = /\s*/y;
+	const fail = (): never => { throw new Error(localize('theme.invalidPropertyList', 'Invalid property-list theme at offset {0}', offset)); };
+	const skip = (): void => {
+		while (true) {
+			whitespace.lastIndex = offset;
+			offset += whitespace.exec(source)![0].length;
+			let end: number;
+			if (source.startsWith('<!--', offset)) {
+				end = source.indexOf('-->', offset + 4);
+				if (end < 0) fail();
+				offset = end + 3;
+			} else if (source.startsWith('<?', offset)) {
+				end = source.indexOf('?>', offset + 2);
+				if (end < 0) fail();
+				offset = end + 2;
+			} else if (source.startsWith('<!DOCTYPE', offset)) {
+				end = source.indexOf('>', offset + 9);
+				// External declarations are inert; custom entity declarations are unsupported.
+				if (end < 0 || source.slice(offset, end).includes('[')) fail();
+				offset = end + 1;
+			} else return;
+		}
+	};
+	const takeTag = (): { name: string; closing: boolean; empty: boolean; } => {
+		skip();
+		tag.lastIndex = offset;
+		const match = tag.exec(source);
+		if (!match || ++elements > 100_000) return fail();
+		offset = tag.lastIndex;
+		return { name: match[2]!, closing: match[1] === '/', empty: match[3] === '/' };
+	};
+	const close = (name: string): void => {
+		const end = takeTag();
+		if (end.name !== name || !end.closing || end.empty) fail();
+	};
+	const decode = (value: string): string => value.replace(/&(?:#x[\da-f]+|#\d+|amp|lt|gt|quot|apos);|&/giu, entity => {
+		const named: Readonly<Record<string, string>> = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&apos;': "'" };
+		if (entity in named) return named[entity]!;
+		if (!entity.startsWith('&#')) return fail();
+		const point = entity.toLowerCase().startsWith('&#x') ? Number.parseInt(entity.slice(3, -1), 16) : Number.parseInt(entity.slice(2, -1), 10);
+		if (!(point === 9 || point === 10 || point === 13 || point >= 0x20 && point <= 0xd7ff || point >= 0xe000 && point <= 0xfffd || point >= 0x10000 && point <= 0x10ffff)) return fail();
+		return String.fromCodePoint(point);
+	});
+	const read = (depth: number): unknown => {
+		if (depth > 128) return fail();
+		const start = takeTag();
+		if (start.closing) return fail();
+		const { name, empty } = start;
+		if (name === 'dict' || name === 'array') {
+			const value: Record<string, unknown> | unknown[] = name === 'dict' ? Object.create(null) : [];
+			if (empty) return value;
+			while (true) {
+				skip();
+				if (source.startsWith('</', offset)) break;
+				if (Array.isArray(value)) value.push(read(depth + 1));
+				else {
+					const keyOffset = offset;
+					const keyTag = takeTag();
+					if (keyTag.name !== 'key' || keyTag.closing) return fail();
+					offset = keyOffset;
+					const key = read(depth + 1) as string;
+					if (Object.hasOwn(value, key)) return fail();
+					value[key] = read(depth + 1);
+				}
+			}
+			close(name);
+			return value;
+		}
+		if (!['key', 'string', 'integer', 'real', 'date', 'data', 'true', 'false'].includes(name)) return fail();
+		let value = '';
+		if (!empty) {
+			while (!source.startsWith('</', offset)) {
+				if (source.startsWith('<![CDATA[', offset)) {
+					const end = source.indexOf(']]>', offset + 9);
+					if (end < 0) return fail();
+					value += source.slice(offset + 9, end);
+					offset = end + 3;
+				} else if (source.startsWith('<!--', offset)) {
+					const end = source.indexOf('-->', offset + 4);
+					if (end < 0) return fail();
+					offset = end + 3;
+				}
+				else {
+					const end = source.indexOf('<', offset);
+					if (end <= offset) return fail();
+					value += decode(source.slice(offset, end));
+					offset = end;
+				}
+			}
+			close(name);
+		}
+		if (name === 'true' || name === 'false') {
+			if (value.trim()) return fail();
+			return name === 'true';
+		}
+		if (name === 'integer' || name === 'real') {
+			const number = Number(value);
+			if (!value.trim() || !Number.isFinite(number) || name === 'integer' && !Number.isInteger(number)) return fail();
+			return number;
+		}
+		return value;
+	};
+	const root = takeTag();
+	if (root.name !== 'plist' || root.closing || root.empty) return fail();
+	const value = read(0);
+	close('plist');
+	skip();
+	if (offset !== source.length) return fail();
+	return value;
 }
 
 function asTokenColorRules(value: ColorThemeDocument['tokenColors']): Exclude<ColorThemeDocument['tokenColors'], string | undefined> {

@@ -6,6 +6,9 @@ import { type SparseMultilineTokens } from './tokens/sparseMultilineTokens.js';
 
 /** Tokenization state and operations owned by one text model. */
 export interface ITokenizationTextModelPart {
+	/** Shared background syntax capability, present only for the Tree-sitter backend. */
+	readonly syntaxTree?: import('./model/tokens/treeSitter/treeSitterSyntaxTokenBackend.js').TreeSitterSyntaxTokenBackend;
+
 	readonly hasTokens: boolean;
 	setSemanticTokens(tokens: SparseMultilineTokens[] | null, isComplete: boolean): void;
 	setPartialSemanticTokens(range: Range, tokens: SparseMultilineTokens[] | null): void;

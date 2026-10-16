@@ -1,0 +1,58 @@
+[
+  {
+    "name": "xml",
+    "source": {
+      "crate": "tree-sitter-xml",
+      "version": "0.7.0",
+      "root": "xml"
+    },
+    "wasm": {
+      "path": "tree-sitter/xml.wasm",
+      "sha256": "34d01e9bf8b02bcb5def1afcb6c4e112e4be60a1a166ed5bdbc497cbe04648bb"
+    },
+    "highlights": ["queries/xml.scm"],
+    "tags": ["queries/xml.tags.scm"],
+    "injections": [],
+    "rust": {
+      "language": "tree_sitter_xml::LANGUAGE_XML"
+    },
+    "languages": [
+      {
+        "id": "xml",
+        "variant": "Xml",
+        "editorLanguage": "xml",
+        "editorIds": ["xml", "xsl"],
+        "aliases": ["xslt"]
+      }
+    ],
+    "folds": ["queries/xml.folds.scm"]
+  },
+  {
+    "name": "dtd",
+    "source": {
+      "crate": "tree-sitter-xml",
+      "version": "0.7.0",
+      "root": "dtd"
+    },
+    "wasm": {
+      "path": "tree-sitter/dtd.wasm",
+      "sha256": "af346040c1265a4ebc1bd37f11b5177fb2fa626af9bbdd7803bf862392d6755d"
+    },
+    "highlights": ["queries/dtd.scm"],
+    "tags": ["queries/dtd.tags.scm"],
+    "injections": [],
+    "rust": {
+      "language": "tree_sitter_xml::LANGUAGE_DTD"
+    },
+    "languages": [
+      {
+        "id": "dtd",
+        "variant": "Dtd",
+        "editorLanguage": "dtd",
+        "editorIds": ["dtd"],
+        "aliases": []
+      }
+    ],
+    "folds": ["queries/dtd.folds.scm"]
+  }
+]

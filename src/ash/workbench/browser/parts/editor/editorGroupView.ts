@@ -15,7 +15,6 @@ import type { IKeybindingService } from "../../../../platform/keybinding/common/
 import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
 import type { ITextFileService } from "../../../services/textfile/common/textfiles.js";
 import type { IFileService } from "../../../../platform/files/common/files.js";
-import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
 import type { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
 import type { IDiffService } from "../../../services/diff/common/diffService.js";
 import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
@@ -75,7 +74,6 @@ export interface EditorGroupOptions {
 	readonly keyboardLayoutService?: IKeyboardLayoutService;
 	readonly fileService?: IFileService;
 	readonly textFileService?: ITextFileService;
-	readonly textMateService?: ITextMateService;
 	readonly languageResolver?: TextResourceLanguageResolver;
 	readonly diffService?: IDiffService;
 	readonly accessibilityService?: IAccessibilityService;
@@ -142,7 +140,6 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	private readonly keyboardLayoutService: IKeyboardLayoutService | undefined;
 	private readonly fileService: IFileService | undefined;
 	private readonly textFileService: ITextFileService | undefined;
-	private readonly textMateService: ITextMateService | undefined;
 	private readonly languageResolver: TextResourceLanguageResolver | undefined;
 	private readonly diffService: IDiffService | undefined;
 	private readonly instantiationService: IInstantiationService;
@@ -198,7 +195,6 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		this.keyboardLayoutService = options.keyboardLayoutService;
 		this.fileService = options.fileService;
 		this.textFileService = options.textFileService;
-		this.textMateService = options.textMateService;
 		this.languageResolver = options.languageResolver;
 		this.diffService = options.diffService;
 		this.instantiationService = instantiationService;
@@ -575,7 +571,6 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 				keyboardLayoutService: this.keyboardLayoutService,
 				fileService: this.fileService,
 				textFileService: this.textFileService,
-				textMateService: this.textMateService,
 				languageResolver: this.languageResolver,
 				diffService: this.diffService,
 				instantiationService: this.instantiationService,

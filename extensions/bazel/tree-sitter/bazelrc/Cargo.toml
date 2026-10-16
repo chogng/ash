@@ -1,0 +1,18 @@
+[package]
+name = "tree-sitter-bazelrc"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+build = "build.rs"
+
+# Isolated grammar binding; the application workspace forbids unsafe FFI.
+[workspace]
+
+[lib]
+path = "lib.rs"
+
+[dependencies]
+tree-sitter-language = "0.1"
+
+[build-dependencies]
+cc = "1"

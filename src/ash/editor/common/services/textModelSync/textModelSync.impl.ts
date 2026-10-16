@@ -1,4 +1,3 @@
-import { CharCode } from '../../../../base/common/charCode.js';
 import { MutableDisposable, toDisposable, Disposable } from '../../../../base/common/lifecycle.js';
 import { isNonNegativeSafeInteger, isPositiveSafeInteger } from '../../../../base/common/numbers.js';
 import { type TextModelChange, type TextSnapshot } from '../../core/textChange.js';
@@ -421,9 +420,7 @@ function assertRecord(value: unknown, owner: string): asserts value is Record<st
 
 function countLines(text: string): number {
 	let result = 1;
-	for (let index = 0; index < text.length; index += 1) {
-		if (text.charCodeAt(index) === CharCode.LineFeed) result += 1;
-	}
+	for (let index = text.indexOf('\n'); index >= 0; index = text.indexOf('\n', index + 1)) result += 1;
 	return result;
 }
 

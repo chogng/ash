@@ -5,20 +5,39 @@ import { type IColor, type IColorInformation } from '../languages.js';
 export interface IDocumentColorComputerTarget {
 	getValue(): string;
 	positionAt(offset: number): IPosition;
-	findMatches(regex: RegExp): RegExpMatchArray[];
+	findMatches(regex: RegExp): Iterable<RegExpMatchArray>;
 }
 
 /** Scans CSS literals using the caller's text and coordinate source. */
 export function computeDefaultDocumentColors(model: IDocumentColorComputerTarget): IColorInformation[] {
 	const colors: IColorInformation[] = [];
+	for (const color of documentColors(model)) if (color) colors.push(color);
+	return colors;
+}
+
+/** Uses the same matcher while allowing input and cancellation between batches. */
+export async function computeDefaultDocumentColorsAsync(model: IDocumentColorComputerTarget, signal: AbortSignal): Promise<IColorInformation[]> {
+	signal.throwIfAborted();
+	const colors: IColorInformation[] = [];
+	let scanned = 0;
+	for (const color of documentColors(model)) {
+		if (color) colors.push(color);
+		if (++scanned % 512 === 0) {
+			await new Promise<void>(resolve => setTimeout(resolve, 0));
+			signal.throwIfAborted();
+		}
+	}
+	signal.throwIfAborted();
+	return colors;
+}
+
+function* documentColors(model: IDocumentColorComputerTarget): IterableIterator<IColorInformation | undefined> {
 	for (const match of model.findMatches(COLOR_LITERAL_PATTERN)) {
 		const color = parseColorLiteral(match[0]);
-		if (!color || match.index === undefined) {
-			continue;
-		}
-		colors.push(Object.freeze({ range: Range.fromPositions(model.positionAt(match.index), model.positionAt(match.index + match[0].length)), color }));
+		yield color && match.index !== undefined
+			? Object.freeze({ range: Range.fromPositions(model.positionAt(match.index), model.positionAt(match.index + match[0].length)), color })
+			: undefined;
 	}
-	return colors;
 }
 
 const COLOR_LITERAL_PATTERN = /#(?:[0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{4}|[0-9a-f]{3})(?![0-9a-f])|\b(?:rgba?|hsla?)\([^)]*\)|\btransparent\b/giu;

@@ -183,26 +183,6 @@ const properties: Record<string, JsonSchema> = {
 		default: false,
 		tags: ['experimental'],
 	},
-	'editor.experimental.preferTreeSitter.css': {
-		type: 'boolean',
-		default: false,
-		tags: ['experimental'],
-	},
-	'editor.experimental.preferTreeSitter.typescript': {
-		type: 'boolean',
-		default: false,
-		tags: ['experimental'],
-	},
-	'editor.experimental.preferTreeSitter.ini': {
-		type: 'boolean',
-		default: false,
-		tags: ['experimental'],
-	},
-	'editor.experimental.preferTreeSitter.regex': {
-		type: 'boolean',
-		default: false,
-		tags: ['experimental'],
-	},
 	'editor.language.brackets': {
 		type: ['array', 'null'],
 		default: null,
@@ -465,6 +445,12 @@ for (const [key, defaultValue, title, description] of [
 			valueType: 'boolean',
 		},
 	});
+}
+
+// Schema entries alone do not participate in effective configuration values.
+// Keep optional performance measurements disabled until explicitly requested.
+for (const key of ['editor.experimental.treeSitterTelemetry']) {
+	configurationRegistry.registerConfiguration<boolean>({ key, defaultValue: false, parse: value => modelBoolean(value, key) });
 }
 
 // The schema owner also registers the model settings consumed by editor services.

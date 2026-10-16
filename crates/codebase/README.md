@@ -14,6 +14,11 @@
 
 ## 主要接口
 
+源码语言身份和文件关联由 `ash-language` 统一拥有。扫描及源码复核使用语言包生成的
+文件名、glob、后缀和首行规则；存储保留 `LanguageId`，包括没有内置解析器的扩展语言。
+结构切分与符号提取通过 `ash-syntax::SyntaxLanguage::for_language` 独立选择可用解析器。
+身份和结构切分变化已升级 chunker contract，旧的可重建源码索引会在打开时失效。
+
 | 接口                                                      | 保证                                                                                        |
 | --------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | `Codebase::open/rebuild/reconcile/refresh_observed_paths` | 只在规范化 root 内读取事实；自动扫描保留未变化的 generation，显式 rebuild 发布新 generation |

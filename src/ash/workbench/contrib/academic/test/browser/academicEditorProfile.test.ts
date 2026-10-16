@@ -48,13 +48,7 @@ for (const [locale, label] of [['en', 'Academic Document'], ['zh-CN', '学术论
 				resources: new ExtensionResourceLoaderService(async request => Uint8Array.from(Buffer.from(fixture.resources[request.extensionId][request.path], 'base64'))),
 			}, enablement);
 			using service = new AppServerExtensionService({
-				api, textMateService: {
-					grammars: {
-						registerGrammars: () => ({ replace: () => { }, ...toDisposable(() => { }) }),
-						prepareGrammars: async () => ({ commit: () => ({}) }),
-						whenReady: async () => ({}),
-					},
-				} as unknown as import('../../../../services/textMate/common/textMateService.js').ITextMateService
+				api,
 			}, createEmptyTestLanguagePacks());
 			const inputs = [
 				{ resource: URI.file('/paper.ash-academic') },

@@ -30,6 +30,7 @@ export class EditorVisualLineProjection {
 		private readonly visualLineStarts: readonly number[] | undefined,
 		private readonly logicalLineVisibility: readonly boolean[] | undefined,
 		private readonly identityModel: TextModel | undefined,
+		private readonly injectedLines?: ReadonlyMap<number, ModelLineProjectionData>,
 	) {
 		Object.freeze(this);
 	}
@@ -37,6 +38,11 @@ export class EditorVisualLineProjection {
 	/** Builds an unwrapped one-to-one projection without materializing one object per logical line. */
 	static identity(model: TextModel): EditorVisualLineProjection {
 		return new EditorVisualLineProjection(model.version, model.lineCount, undefined, undefined, undefined, model);
+	}
+
+	/** Keeps one row per source line while retaining only lines with injected text. */
+	static withInjectedText(model: TextModel, lines: ReadonlyMap<number, ModelLineProjectionData>): EditorVisualLineProjection {
+		return new EditorVisualLineProjection(model.version, model.lineCount, undefined, undefined, undefined, model, new Map(lines));
 	}
 
 	/** Builds a projection from one final visual segment end-column list per logical line. */
@@ -290,11 +296,13 @@ export class EditorVisualLineProjection {
 	private identityLineAt(lineIndex: number): EditorVisualLine {
 		const model = this.identityModel!;
 		if (model.version !== this.modelVersion) throw new Error("Unwrapped visual line projection is stale");
+		const data = this.injectedLines?.get(lineIndex + 1);
 		return Object.freeze({
 			visualLineIndex: lineIndex,
 			logicalLineIndex: lineIndex,
-			startColumn: 0,
-			endColumn: model.getLineLength((lineIndex) + 1),
+			startColumn: data ? data.translateToInputOffset(0, data.getMinOutputOffset(0)) : 0,
+			endColumn: data ? data.translateToInputOffset(0, data.getMaxOutputOffset(0)) : model.getLineLength(lineIndex + 1),
+			...(data ? { outputLineIndex: 0, projectionData: data } : {}),
 			firstForLogicalLine: true,
 			lastForLogicalLine: true,
 		});

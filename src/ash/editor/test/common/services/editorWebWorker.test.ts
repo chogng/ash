@@ -3,6 +3,7 @@ import { test } from 'mocha';
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { DEFAULT_WORD_REGEXP } from '../../../common/core/wordHelper.js';
+import { computeUnicodeHighlights } from '../../../common/services/unicodeTextModelHighlighter.js';
 import { EditorWorker } from '../../../common/services/editorWebWorker.js';
 import { TextModel } from '../../../common/model/textModel.js';
 import { EndOfLineSequence } from '../../../common/model.js';
@@ -138,4 +139,32 @@ test('a single formatting response with overlapping edits is rejected without ch
 		],
 	}), /must not overlap/);
 	assert.deepEqual([model.getValue(), model.getEOL()], ['alpha', '\n']);
+});
+
+test('Unicode warnings retain UTF-16 positions, line-local confusables, controls and BOMs', async () => {
+	using model = new TextModel('😀a\u0430\u200b\r\n\u0430\rA\u03b1\u2069\n\t\u0000\ufeff');
+	using worker = new EditorWorker();
+	const result = await run(worker, model, 1, EDITOR_WORKER_UNICODE_HIGHLIGHTS_LANE, {});
+	assert.deepEqual(result, [
+		{ range: new Range(1, 4, 1, 5), kind: 'confusable', character: '\u0430' },
+		{ range: new Range(1, 5, 1, 6), kind: 'invisible', character: '\u200b' },
+		{ range: new Range(3, 2, 3, 3), kind: 'confusable', character: '\u03b1' },
+		{ range: new Range(3, 3, 3, 4), kind: 'bidi', character: '\u2069' },
+		{ range: new Range(4, 2, 4, 3), kind: 'invisible', character: '\u0000' },
+		{ range: new Range(4, 3, 4, 4), kind: 'invisible', character: '\ufeff' },
+	]);
+});
+
+
+test('Unicode candidate scan covers every warning category and checks cancellation without matches', () => {
+	const invisible = [0, 1, 8, 11, 12, 14, 31, 0x00ad, 0x061c, 0x200b, 0x200c, 0x200d, 0x2060, 0xfeff];
+	const bidi = [0x202a, 0x202b, 0x202c, 0x202d, 0x202e, 0x2066, 0x2067, 0x2068, 0x2069];
+	using model = new TextModel('ascii' + String.fromCodePoint(...invisible, ...bidi) + '\n\u03b1\u0430\nA\u03b1\u0430');
+	const highlights = computeUnicodeHighlights(model.createVersionedSnapshot());
+	assert.deepEqual(highlights.map(item => item.kind), [...invisible.map(() => 'invisible'), ...bidi.map(() => 'bidi'), 'confusable', 'confusable']);
+	using plain = new TextModel('const x = 1;\n'.repeat(100000));
+	assert.deepEqual(computeUnicodeHighlights(plain.createVersionedSnapshot()), []);
+	const controller = new AbortController();
+	controller.abort();
+	assert.throws(() => computeUnicodeHighlights(plain.createVersionedSnapshot(), controller.signal), /abort/i);
 });

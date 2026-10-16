@@ -14,7 +14,6 @@ import type { ExtensionDescriptor } from '../../../src/ash/platform/extensions/c
 import { AppServerExtensionService, type AppServerExtensionServiceOptions } from '../../../src/ash/workbench/services/extensions/browser/appServerExtensionService.js';
 
 const resourceUrls = import.meta.glob<string>([
-	'../../../extensions/{javascript,typescript-basics,json,rust,shellscript,bazel,git-base,ini,diff,markdown-basics}/syntaxes/*',
 	'../../../extensions/{javascript,typescript-basics,json,rust,shellscript,bazel,ini,diff,markdown-basics}/*language-configuration.json',
 	'../../../extensions/git-base/languages/*language-configuration.json',
 	'../../../extensions/{javascript,typescript-basics,json,rust,shellscript,bazel,markdown-basics}/snippets/*',

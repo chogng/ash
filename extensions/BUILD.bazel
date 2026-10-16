@@ -3,3 +3,10 @@ filegroup(
     srcs = glob(["**"]) + ["//extensions/remote-ssh:artifacts"],
     visibility = ["//visibility:public"],
 )
+
+# Shared compile-time queries for the Rust syntax engine; browser builds import the same files.
+filegroup(
+    name = "tree-sitter-queries",
+    srcs = glob(["*/queries/*.scm"]),
+    visibility = ["//crates/syntax:__pkg__"],
+)

@@ -3,19 +3,7 @@ use crate::TS;
 use serde::Deserialize;
 use serde::Serialize;
 
-/// Grammar supported by the authoritative syntax-analysis service.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub enum SyntaxLanguageDto {
-    Javascript,
-    Javascriptreact,
-    Json,
-    Jsonc,
-    Rust,
-    Shell,
-    Typescript,
-    Typescriptreact,
-}
+include!("syntax_languages.generated.rs");
 
 /// One zero-based UTF-16 position, matching the editor text-model coordinate system.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -203,4 +191,133 @@ pub struct SyntaxSelectionRangesResult {
 #[serde(rename_all = "camelCase")]
 pub struct SyntaxCloseParams {
     pub document_id: String,
+}
+
+/// Work performed against the existing shared tree; never reparses a renderer snapshot.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum SyntaxQueryKindDto {
+    Highlight,
+    Facts,
+    Preview,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SyntaxLineRangeDto {
+    pub start_line_index: usize,
+    pub end_line_index: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SyntaxQueryParams {
+    pub document_id: String,
+    pub operation_id: String,
+    #[ts(type = "number")]
+    pub revision: u64,
+    pub kind: SyntaxQueryKindDto,
+    /// Last facts revision actually accepted by this consumer; None requests a full result.
+    #[ts(type = "number | null")]
+    pub facts_revision: Option<u64>,
+    pub facts_tab_size: Option<usize>,
+    #[schemars(length(max = 1_024))]
+    pub ranges: Vec<SyntaxLineRangeDto>,
+    pub tab_size: usize,
+    pub line_index: Option<usize>,
+    #[schemars(length(max = 10_000))]
+    pub lines: Vec<String>,
+}
+
+/// Cancels only the operation belonging to the sending renderer connection.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SyntaxCancelParams {
+    pub operation_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SyntaxCaptureDto {
+    /// Embedded editor language; omitted for captures belonging to the document language.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub language_id: Option<String>,
+    pub start: usize,
+    pub end: usize,
+    pub name: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SyntaxRowDto {
+    pub row: usize,
+    pub tokens: Vec<SyntaxCaptureDto>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SyntaxBracketDto {
+    pub range: SyntaxRangeDto,
+    pub opening: SyntaxRangeDto,
+    pub closing: Option<SyntaxRangeDto>,
+    pub text: String,
+    pub close_text: Option<String>,
+    pub level: usize,
+    pub equal_level: usize,
+    #[ts(type = "number")]
+    pub min_indent: i64,
+}
+
+/// CPU measurements exclude transport and renderer work; all results use one tree revision.
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SyntaxQueryResult {
+    #[ts(type = "number")]
+    pub revision: u64,
+    pub rows: Vec<SyntaxRowDto>,
+    pub facts: Option<SyntaxFactsDeltaDto>,
+    pub brackets: Vec<SyntaxBracketDto>,
+    pub parse_ms: f64,
+    pub query_ms: f64,
+    pub incremental: bool,
+}
+
+/// One splice into a flat, source-ordered symbol list. Ranges are [start row,
+/// start UTF-16 column, end row, end UTF-16 column]; fixed tuples avoid repeating
+/// field names for every coordinate in large initial snapshots.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SyntaxSymbolsSpliceDto {
+    pub start: usize,
+    pub delete_count: usize,
+    pub items: Vec<(String, SyntaxSymbolKindDto, [usize; 4], [usize; 4])>,
+}
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SyntaxFoldsSpliceDto {
+    pub start: usize,
+    pub delete_count: usize,
+    pub items: Vec<(usize, usize, Option<String>)>,
+}
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SyntaxDiagnosticsSpliceDto {
+    pub start: usize,
+    pub delete_count: usize,
+    pub items: Vec<([usize; 4], SyntaxDiagnosticKindDto)>,
+}
+/// Apply edits in order before the splices. Each edit is [start row, start
+/// column, old end row, old end column, new end row, new end column], in UTF-16.
+/// A base mismatch returns a full result (baseRevision None, empty prior lists).
+/// A cancelled/unobserved response never requires the consumer to advance its base.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SyntaxFactsDeltaDto {
+    #[ts(type = "number | null")]
+    pub base_revision: Option<u64>,
+    pub edits: Vec<[usize; 6]>,
+    pub symbols: SyntaxSymbolsSpliceDto,
+    pub folds: SyntaxFoldsSpliceDto,
+    pub diagnostics: SyntaxDiagnosticsSpliceDto,
 }

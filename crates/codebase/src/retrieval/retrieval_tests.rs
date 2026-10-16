@@ -14,10 +14,10 @@ use crate::CodebaseVectorStore;
 use crate::EmbeddingIndexKey;
 use crate::InMemoryCodebaseVectorStore;
 use crate::IndexRootId;
-use crate::IndexedLanguage;
 use crate::SymbolIndex;
 use crate::SymbolIndexLimits;
 use ash_file_access::Dir;
+use ash_language::LanguageId;
 use ash_model_provider::EmbeddingInvoker;
 use ash_model_provider::EmbeddingRequest;
 use ash_model_provider::EmbeddingResponse;
@@ -263,7 +263,7 @@ fn dirty_overlay_suppresses_old_disk_content_and_materializes_current_text() {
         .synchronize_overlay(CodebaseOverlayDocument {
             relative_path: "lib.rs".into(),
             editor_revision: 2,
-            language: IndexedLanguage::Rust,
+            language: LanguageId::RUST,
             content: "pub fn unsaved_current() {}\n".into(),
         })
         .expect("overlay");

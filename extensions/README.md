@@ -11,6 +11,22 @@ places the same directory under `ash-resources/extensions/`.
 Except for this README and `BUILD.bazel`, each direct child must be a package directory with a
 `package.json`. TextMate packages may put raw JSON or PLIST grammars below the package and reference
 them from `contributes.grammars[].path`.
+Built-in language packages own Tree-sitter queries in `queries/` and parser declarations in `tree-sitter/grammars.json`.
+Additional query sets cover CSS/SCSS/Less, Go, HTML, JSON/JSONC, Python, Shell, INI/Properties,
+Markdown (block and inline), SQL, TOML, XML/DTD/XSL, YAML, Diff, Git commit/rebase/ignore,
+and Starlark/Bazelrc. Each package's `queries/README.md` pins the upstream grammar revision,
+lists source files and licenses, and records query composition or local compatibility changes.
+Existing JavaScript/JSX, TypeScript/TSX and Rust capture names remain adapted to editor theme scopes;
+new query sets retain upstream capture names. Git ignore highlights are authored in Ash because
+its upstream grammar ships no queries.
+
+All built-in languages use the same package declarations. `pnpm tree-sitter:generate`
+produces the Rust language registry, protocol enum and server adapter, plus the Web
+language metadata and WASM/query imports. It includes editor IDs, code-fence aliases,
+embedded-language IDs, and query composition. Rust parsers remain statically linked
+Cargo dependencies; browser parsers remain bundled WASM assets. This registry serves
+the built-in package set and does not introduce per-language processes.
+
 The declarative loader reads resources without executing package code. Packages with a `browser`
 entry, including `markdown-language-features`, are separately bundled and executed by the TS
 browser extension host. This directory holds packages, not the SDK or runtime implementation.
@@ -79,7 +95,7 @@ The current declarative pack contains the following package directories:
 
 - `bazel` (Starlark/bazelrc), `css` (CSS/Less/SCSS), `diff`, `git-base`, `go`, `html`, `ini`, `javascript`, `json`, `markdown-basics`, `python`, `rust`, `shellscript`, `sql`,
   `toml`, `typescript-basics`, `xml`, and `yaml` provide language IDs, file associations, language
-  configuration, TextMate grammars, and—where upstream provides them—snippets.
+  configuration, Tree-sitter queries/parsers, and—where upstream provides them—snippets.
   Bazel associates `BUILD`, `WORKSPACE`, `MODULE.bazel`, `.bazel`, and `.bzl` files with
   Starlark; `.bazelrc` and `bazel.rc` use a separate configuration grammar. Starlark
   editing includes comment toggling, bracket/quote pairs, block indentation, and folding.
@@ -97,7 +113,31 @@ The current declarative pack contains the following package directories:
   Markdown grammar and language settings stay in `markdown-basics`; Markdown colors and font
   styles belong to `theme-defaults`. Users override syntax styles with
   `editor.tokenColorCustomizations.textMateRules`. The `editor.action.inspectTMScopes` command
-  reports the cursor's TextMate scopes and resolved syntax style.
+  reports the active tokenizer's captures/scopes and resolved syntax style.
+
+Built-in languages use Tree-sitter by default. Rust links the grammar dependencies in
+`ash-syntax`; the Web Worker loads portable parser assets from each language package.
+Queries live in `queries/` beside their provenance and licenses. JavaScript, TypeScript
+and Rust use the existing `@vscode/tree-sitter-wasm` assets; the other parser assets and
+hashes are declared in each package's `tree-sitter/grammars.json`. Both runtimes register
+parsers and queries generated from these manifests; package-supplied WASM paths are
+resolved from the locked dependency. The generated files and assets are checked during
+normal build preparation:
+
+```sh
+pnpm tree-sitter:generate
+pnpm tree-sitter:verify
+ASH_TREE_SITTER_CLI=/path/to/tree-sitter pnpm tree-sitter:build <grammar>
+```
+
+Use Tree-sitter CLI 0.26.3 and wasi-sdk 29 for reproducible rebuilds. `gitcommit` also
+requires `ASH_WASI_CC=/path/to/wasi-sdk-29/bin/clang`: its generated lexer is split into
+small equivalent state helpers for LLVM, and only the required `iswcntrl` libc object
+is linked (license in `git-base/tree-sitter/musl.LICENSE.txt`). The shipped parser is
+compared with the original C parser against all 64 upstream corpus examples.
+Gitignore and bazelrc have package-local Rust bindings because their upstreams do not
+publish usable Cargo bindings; they do not introduce another shared syntax engine.
+The generic TextMate loader remains available for external extension contributions.
 
 The manifest is the only source of contribution metadata. `AppServerExtensionService` receives
 Rust-validated package resources and projects languages/configuration/snippets/grammars/theme metadata/

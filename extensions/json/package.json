@@ -52,18 +52,6 @@
         ],
         "configuration": "./language-configuration.json"
       }
-    ],
-    "grammars": [
-      {
-        "language": "json",
-        "scopeName": "source.json",
-        "path": "./syntaxes/JSON.tmLanguage.json"
-      },
-      {
-        "language": "jsonc",
-        "scopeName": "source.json.comments",
-        "path": "./syntaxes/JSONC.tmLanguage.json"
-      }
     ]
   }
 }

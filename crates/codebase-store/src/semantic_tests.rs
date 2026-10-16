@@ -7,9 +7,9 @@ use ash_codebase::ChunkReference;
 use ash_codebase::ChunkSpan;
 use ash_codebase::Codebase;
 use ash_codebase::CodebaseLimits;
-use ash_codebase::IndexedLanguage;
 use ash_codebase::SourceRevision;
 use ash_file_access::Dir;
+use ash_language::LanguageId;
 use ash_model_provider::EmbeddingVector;
 
 use super::ANN_MIN_CHUNKS;
@@ -89,7 +89,7 @@ fn embedded_chunk(root_id: &ash_codebase::IndexRootId, index: usize) -> Embedded
                 end_line_exclusive: 1,
             },
         },
-        language: IndexedLanguage::Rust,
+        language: LanguageId::RUST,
         content: format!("fn item_{index}() {{}}"),
         embedding: vector(index),
     }

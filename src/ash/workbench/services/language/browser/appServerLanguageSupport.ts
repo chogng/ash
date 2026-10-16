@@ -15,7 +15,7 @@ export class AppServerLanguageSupport {
 			const result = await api.servers(folders.length > 1 ? { dirId: folder.id } : {});
 			return [folder.id, result.servers.map(server => ({
 				id: server.id,
-				languageIds: server.languageIds.map(languageId => languageId === 'shell' ? 'shellscript' : languageId),
+				languageIds: server.languageIds,
 			}))] as const;
 		}));
 		return new AppServerLanguageSupport(new Map(entries));

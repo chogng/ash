@@ -232,7 +232,7 @@ class FakeLanguageApi implements ILanguageApi {
 		{ id: "typescript", languageIds: ["typescript", "typescriptreact", "javascript", "javascriptreact"] },
 		{ id: "rust", languageIds: ["rust"] },
 		{ id: "json", languageIds: ["json", "jsonc"] },
-		{ id: "shell", languageIds: ["shell"] },
+		{ id: "shell", languageIds: ["shellscript"] },
 	];
 	async servers(): ReturnType<ILanguageApi["servers"]> { return { servers: this.availableServers }; }
 

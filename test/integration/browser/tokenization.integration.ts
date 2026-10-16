@@ -1,3 +1,8 @@
+import { TextMateScopeThemeModel } from '../../../src/ash/workbench/services/textMate/common/textMateScopeTheme.js';
+import { TreeSitterLibraryService, TreeSitterSyntaxProviders, createTreeSitterSyntaxTokenBackend } from '../../../src/ash/workbench/services/treeSitter/browser/treeSitterLibraryService.js';
+import { rustSyntaxFixture } from './rustSyntaxHostFixture.js';
+import { Range } from '../../../src/ash/editor/common/core/range.js';
+import { LanguageDiagnosticSeverity } from '../../../src/ash/editor/common/languages.js';
 import { SnippetsService } from '../../../src/ash/workbench/contrib/snippets/browser/snippetsService.js';
 import { SnippetCompletionProvider } from '../../../src/ash/workbench/contrib/snippets/browser/snippetCompletionProvider.js';
 import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
@@ -7,17 +12,19 @@ import { IConfigurationService } from '../../../src/ash/platform/configuration/c
 import { StandardTokenType } from '../../../src/ash/editor/common/encodedTokenAttributes.js';
 import { resolveTextResourceLanguageId } from '../../../src/ash/platform/language/common/textResourceLanguage.js';
 import { createLanguageExtensions } from './languageExtensions.js';
-import { AppServerSyntaxProviders } from '../../../src/ash/workbench/services/language/browser/appServerSyntaxProviders.js';
-import { BrowserTextMateService } from '../../../src/ash/workbench/services/textMate/browser/browserTextMateService.js';
 
 const store = new DisposableStore();
-const textMate = store.add(new BrowserTextMateService());
-const services = store.add(StandaloneServices.initialize({ syntaxWorkerFactory: textMate.syntaxWorkerFactory }));
+const syntaxTheme = store.add(new TextMateScopeThemeModel());
+const library = store.add(new TreeSitterLibraryService(await rustSyntaxFixture()));
+const services: ReturnType<typeof StandaloneServices.initialize> = store.add(StandaloneServices.initialize({
+	tokenization: { createSyntaxTokenBackend: model => createTreeSitterSyntaxTokenBackend(model, services.get(IConfigurationService), library, syntaxTheme) },
+}));
+store.add(new TreeSitterSyntaxProviders(services.languageFeaturesService));
 await services.get(IConfigurationService).updateValue('files.eol', '\n');
 const shellResource = stanza.URI.file('/project/main.sh');
 const initialLanguages = services.languageService.getRegisteredLanguageIds();
 const extensions = store.add(await createLanguageExtensions({
-	textMateService: textMate,
+
 	languageService: services.languageService,
 	languageConfigurationService: services.languageConfigurationService,
 }));
@@ -28,24 +35,19 @@ await extensions.start();
 let analyzeCalls = 0;
 let completedCalls = 0;
 const pending: { revision: number; resolve: () => void; }[] = [];
-store.add(new AppServerSyntaxProviders(services.languageFeaturesService, {
-	generation: 1,
-	open: async () => { },
-	update: async () => { },
-	analyze: params => {
+store.add(services.languageFeaturesService.syntaxProvider.register({
+	id: 'test.delayedDiagnostics',
+	languageIds: ['rust', 'javascript', 'javascriptreact', 'typescript', 'typescriptreact', 'json', 'jsonc', 'shellscript'],
+	diagnosticPriority: 200,
+	provideDiagnostics: request => {
 		analyzeCalls++;
 		return new Promise(resolve => pending.push({
-			revision: params.revision, resolve: () => {
+			revision: request.snapshot.version, resolve: () => {
 				completedCalls++;
-				resolve({
-					revision: params.revision, hasErrors: true, tokens: [], symbols: [], foldingRanges: [],
-					diagnostics: [{ kind: 'error', range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 2 } } }]
-				});
-			}
+				resolve({ diagnostics: [{ severity: LanguageDiagnosticSeverity.Error, message: 'Test diagnostic', range: new Range(1, 1, 1, 3) }] });
+			},
 		}));
 	},
-	selectionRanges: async params => ({ revision: params.revision, ranges: [] }),
-	close: async () => { },
 }));
 let model = services.modelService.createModel('fn main() {}\n', services.languageService.createById('rust'), stanza.URI.file('/project/main.rs'));
 const container = document.getElementById('editor')!;
@@ -76,7 +78,7 @@ const integration = {
 	},
 	state() {
 		return {
-			text: model.getValue(), version: model.version, tokenVersion: model.tokenization.modelVersion,
+			text: model.getValue(), version: model.version, tokenVersion: model.tokenization.modelVersion, accurate: model.tokenization.hasAccurateTokensForLine(model.getLineCount()),
 			tokens: model.tokenization.lines.flatMap(line => line.tokens.map(token => ({ type: token.tokenType, text: model.getTextInRange(token.range) }))),
 			analyzeCalls, completedCalls, pendingVersions: pending.map(request => request.revision), errors,
 			diagnosticVersion: model.diagnostics.results.result?.modelVersion ?? null,
@@ -87,12 +89,11 @@ const integration = {
 		shell: services.languageService.guessLanguageIdByFilepathOrFirstLine(shellResource),
 		resource: resolveTextResourceLanguageId({ resource: shellResource }, services.languageService),
 		comment: services.languageConfigurationService.getLanguageConfiguration('shellscript').comments?.lineCommentToken ?? null,
-		grammar: textMate.grammars.currentCatalog.grammars.some(grammar => grammar.languageId === 'shellscript'),
+		grammar: !!model.tokenization.syntaxTree,
 		model: model.getLanguageId(),
 	}),
 	async unloadExtensions(): Promise<void> {
 		extensions.dispose();
-		await textMate.grammars.whenReady();
 	},
 	stopUndo(): void { editor.pushUndoStop(); },
 	async preview(): Promise<{ hasString: boolean; unchanged: boolean; }> {
@@ -108,8 +109,8 @@ const integration = {
 		await action.run();
 		return { version: model.version, accurate: model.tokenization.hasAccurateTokensForLine(model.getLineCount()) };
 	},
-	releaseAnalysis(): void { for (const request of pending.splice(0)) request.resolve(); },
-	dispose(): void { editor.dispose(); model.dispose(); store.dispose(); integration.releaseAnalysis(); },
+	releaseAnalysis(): void { pending.shift()?.resolve(); },
+	dispose(): void { editor.dispose(); model.dispose(); store.dispose(); for (const request of pending.splice(0)) request.resolve(); },
 };
 declare global { interface Window { tokenizationIntegration: typeof integration; } }
 window.tokenizationIntegration = integration;

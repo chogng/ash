@@ -24,7 +24,6 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { EditorPanes, getBuiltinEditorPaneFactory } from '../../../../browser/editor.js';
 import { EditorPaneMatch } from '../../../../browser/parts/editor/editorPane.js';
 import { AppServerExtensionService } from '../../../../services/extensions/browser/appServerExtensionService.js';
-import type { ITextMateService } from '../../../../services/textMate/common/textMateService.js';
 import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { AUDIO_PREVIEW_ID, VIDEO_PREVIEW_ID, MediaPreview } from '../../browser/mediaPreview.js';
 import { createTestFileService, registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
@@ -40,11 +39,7 @@ test('Built-in media declarations activate from the package catalog, localize, r
 	let sourceKind: 'builtIn' | 'user' = 'builtIn';
 	let fail = false;
 	let generation = 1;
-	const grammars = {
-		registerGrammars: () => ({ replace: () => { }, ...toDisposable(() => { }) }),
-		prepareGrammars: async () => ({ commit: () => ({}) }),
-		whenReady: async () => ({}),
-	};
+
 	using service = new AppServerExtensionService({
 		api: {
 			list: async () => ({ generation, extensions: included ? [{ ...descriptor, sourceKind }] : [], diagnostics: [] }),
@@ -55,7 +50,7 @@ test('Built-in media declarations activate from the package catalog, localize, r
 				return readFile('extensions/media-preview/' + request.path);
 			}),
 		},
-		textMateService: { grammars } as unknown as ITextMateService,
+
 	}, createEmptyTestLanguagePacks());
 	try {
 		await service.start();

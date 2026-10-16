@@ -1,0 +1,10 @@
+diff --git a/wasm/tree-sitter.js b/wasm/tree-sitter.js
+index 7faaaca0ca4fa0f22d5a9b037dbb9907b3c2ba91..b7f3c06fdbc663e6ccee243442a8a02772533050 100644
+--- a/wasm/tree-sitter.js
++++ b/wasm/tree-sitter.js
+@@ -19,0 +20,5 @@
++        // Dedicated workers have no document.currentScript.
++        if (typeof self !== 'undefined' && self.location) {
++            return self.location.href;
++        }
++

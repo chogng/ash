@@ -155,7 +155,7 @@ export default defineConfig(({ mode, command }) => {
 		optimizeDeps: {
 			// The dependency scanner parses source before Vite transforms parameter decorators.
 			noDiscovery: true,
-			include: ["vscode-oniguruma", "vscode-textmate", "@xterm/xterm", "@xterm/addon-fit", "pdfjs-dist"],
+			include: ["@xterm/xterm", "@xterm/addon-fit", "pdfjs-dist"],
 		},
 		server: {
 			host: "127.0.0.1",

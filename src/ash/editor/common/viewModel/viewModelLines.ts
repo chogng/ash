@@ -453,6 +453,28 @@ export class ViewModelLinesFromProjectedModel extends Disposable implements ICur
 	}
 
 	private createWrappingProjection(): EditorVisualLineProjection {
+		if (this.wrapping === EditorLineWrapping.Off) {
+			const decorations = this.model.getInjectedTextDecorations(this.editorId);
+			if (decorations.length === 0) return EditorVisualLineProjection.identity(this.model);
+			// Swatches and inline hints affect a few rows, not every line in the file.
+			const affected = new Set<number>();
+			for (const decoration of decorations) {
+				if (decoration.options.before) affected.add(decoration.range.startLineNumber);
+				if (decoration.options.after) affected.add(decoration.range.endLineNumber);
+			}
+			const lineNumbers = [...affected].sort((left, right) => left - right);
+			const computer = this.createLineBreaksComputer();
+			for (const line of lineNumbers) computer.addRequest(line, null);
+			const measured = computer.finalize();
+			if (measured.every(data => !data || data.getOutputLineCount() === 1)) {
+				const lines = new Map<number, ModelLineProjectionData>();
+				for (let index = 0; index < lineNumbers.length; index++) {
+					const data = measured[index];
+					if (data) lines.set(lineNumbers[index], data);
+				}
+				return EditorVisualLineProjection.withInjectedText(this.model, lines);
+			}
+		}
 		const computer = this.createLineBreaksComputer();
 		for (let lineNumber = 1; lineNumber <= this.model.lineCount; lineNumber += 1) computer.addRequest(lineNumber, null);
 		return this.createProjection(computer.finalize());

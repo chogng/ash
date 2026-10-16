@@ -38,26 +38,12 @@
         "configuration": "./language-configuration.json"
       }
     ],
-    "grammars": [
-      {
-        "language": "python",
-        "scopeName": "source.python",
-        "path": "./syntaxes/MagicPython.tmLanguage.json"
-      },
-      {
-        "scopeName": "source.regexp.python",
-        "path": "./syntaxes/MagicRegExp.tmLanguage.json"
-      }
-    ],
     "configurationDefaults": {
       "[python]": {
         "diffEditor.ignoreTrimWhitespace": false,
         "editor.defaultColorDecorators": "never"
       }
     }
-  },
-  "scripts": {
-    "update-grammar": "node ../node_modules/vscode-grammar-updater/bin MagicStack/MagicPython grammars/MagicPython.tmLanguage ./syntaxes/MagicPython.tmLanguage.json grammars/MagicRegExp.tmLanguage ./syntaxes/MagicRegExp.tmLanguage.json"
   },
   "repository": {
     "type": "git",

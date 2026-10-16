@@ -1,3 +1,4 @@
+use ash_language::LanguageId;
 use std::fmt;
 use std::num::NonZeroUsize;
 use std::ops::Range;
@@ -97,51 +98,6 @@ digest_identity!(
     "Stable identity of a chunk's content and the chunker contract version."
 );
 
-/// Source language selected for structural chunking and result projection.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub enum IndexedLanguage {
-    Javascript,
-    JavascriptReact,
-    Json,
-    Jsonc,
-    Rust,
-    Shell,
-    TypeScript,
-    TypeScriptReact,
-    PlainText,
-}
-
-impl IndexedLanguage {
-    pub const fn id(self) -> &'static str {
-        match self {
-            Self::Javascript => "javascript",
-            Self::JavascriptReact => "javascriptreact",
-            Self::Json => "json",
-            Self::Jsonc => "jsonc",
-            Self::Rust => "rust",
-            Self::Shell => "shell",
-            Self::TypeScript => "typescript",
-            Self::TypeScriptReact => "typescriptreact",
-            Self::PlainText => "plaintext",
-        }
-    }
-
-    #[doc(hidden)]
-    pub fn from_id(value: &str) -> Self {
-        match value {
-            "javascript" => Self::Javascript,
-            "javascriptreact" => Self::JavascriptReact,
-            "json" => Self::Json,
-            "jsonc" => Self::Jsonc,
-            "rust" => Self::Rust,
-            "shell" => Self::Shell,
-            "typescript" => Self::TypeScript,
-            "typescriptreact" => Self::TypeScriptReact,
-            _ => Self::PlainText,
-        }
-    }
-}
-
 /// Exact UTF-8 byte and zero-based line coverage of one indexed chunk.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct ChunkSpan {
@@ -198,7 +154,7 @@ impl From<&ChunkReference> for SourceExcerptReference {
 #[derive(Clone, Debug, PartialEq)]
 pub struct SearchHit {
     pub reference: ChunkReference,
-    pub language: IndexedLanguage,
+    pub language: LanguageId,
     pub content: String,
     pub score: f64,
 }
@@ -207,7 +163,7 @@ pub struct SearchHit {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MaterializedChunk {
     pub reference: ChunkReference,
-    pub language: IndexedLanguage,
+    pub language: LanguageId,
     pub content: String,
 }
 
@@ -215,7 +171,7 @@ pub struct MaterializedChunk {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MaterializedExcerpt {
     pub reference: SourceExcerptReference,
-    pub language: IndexedLanguage,
+    pub language: LanguageId,
     pub content: String,
 }
 
@@ -225,7 +181,7 @@ pub struct IndexedSourceReference {
     pub root_id: IndexRootId,
     pub relative_path: PathBuf,
     pub source_revision: SourceRevision,
-    pub language: IndexedLanguage,
+    pub language: LanguageId,
     pub source_bytes: usize,
 }
 
@@ -233,7 +189,7 @@ pub struct IndexedSourceReference {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct IndexedChunkReference {
     pub reference: ChunkReference,
-    pub language: IndexedLanguage,
+    pub language: LanguageId,
 }
 
 /// Source and chunk identities published together in one atomic index generation.
@@ -256,7 +212,7 @@ pub struct MaterializedSource {
 pub struct CodebaseOverlayDocument {
     pub relative_path: PathBuf,
     pub editor_revision: u64,
-    pub language: IndexedLanguage,
+    pub language: LanguageId,
     pub content: String,
 }
 

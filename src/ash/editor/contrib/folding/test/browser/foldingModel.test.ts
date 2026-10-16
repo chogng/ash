@@ -5,6 +5,33 @@ import { EditorFoldingRangeSource } from "../../browser/foldingRanges.js";
 import { Position } from "../../../../common/core/position.js";
 import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
+import { EditorHiddenRangeModel } from '../../browser/hiddenRangeModel.js';
+
+test('column edits and unchanged provider results retain fold state without rereading all tracked coordinates', () => {
+	using model = new TextModel('header\nbody\nend\nother');
+	let updating = false, reads = 0, notifications = 0;
+	using before = model.onDidChangeContent(() => updating = true);
+	using folding = new EditorFoldingModel(model);
+	using hidden = new EditorHiddenRangeModel(model, folding);
+	using after = model.onDidChangeContent(() => updating = false);
+	folding.setProviderRanges([{ startLineIndex: 0, endLineIndex: 2 }]);
+	folding.toggleAtLine(0);
+	using listener = folding.onDidChange(() => notifications++);
+	const original = model.positionAt;
+	model.positionAt = function (offset) { if (updating) reads++; return original.call(this, offset); };
+	try {
+		model.applyEdits([{ range: new Range(1, 2, 1, 2), text: 'name' }]);
+		assert.equal(reads, 0);
+		folding.setProviderRanges([{ startLineIndex: 0, endLineIndex: 2 }]);
+		assert.equal(notifications, 0);
+		assert.equal(folding.regions[0].collapsed, true);
+		assert.deepEqual(hidden.hiddenRanges, [new Range(2, 1, 3, 1)]);
+		model.applyEdits([{ range: new Range(1, 1, 1, 1), text: 'prefix\n' }]);
+		assert.deepEqual(hidden.hiddenRanges, [new Range(3, 1, 4, 1)]);
+		folding.setProviderRanges([{ startLineIndex: 1, endLineIndex: 3 }]);
+		assert.equal(folding.regions[0].collapsed, true);
+	} finally { model.positionAt = original; }
+});
 
 test("Folding model tracks line boundaries across edits and removes deleted ranges", () => {
 	const model = new TextModel("before\nheader\nbody\nend\nafter");

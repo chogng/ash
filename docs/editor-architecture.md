@@ -26,10 +26,10 @@ Stanza 是当前唯一的 Ash editor runtime。不保留旧 editor ID、DOM clas
 | `editor/contrib`                                                         | 行式与结构化 feature 已按能力组织                   | 命令、controller、可移除投影、schema、citation 和 collaboration；不得注册 pane、拥有第二套 model 或读取产品 ID                                                                                                                                                                                                                                           |
 | `editor.*.all.ts`                                                        | 共同编辑能力装配已具备                              | 行式与富文档贡献清单；不得注册 Workbench pane/input                                                                                                                                                                                                                                                                                                      |
 | `workbench/contrib/{codeEditor,multiDiffEditor,documentEditor,academic}` | 编辑器宿主适配已具备                                | pane/input、文件与 working-copy 接线及可停用 Academic 扩展的 profile 组合；文档模型服务按资源共享模型和保存状态；不得实现编辑事务或视图内部行为                                                                                                                                                                                                          |
-| `workbench/services/textMate`                                            | 已具备                                              | grammar revision registry、真实 TextMate/Oniguruma runtime、增量行状态缓存、Stanza provider/module adapter、版本化 catalog/theme wire、独立 browser Worker、声明式扩展资源、活动主题 token color、embedded language 与 bracket metadata 均已接通                                                                                                         |
+| `workbench/services/textMate`                                            | 主题兼容适配                                        | 保留 scope selector、token color 和字体规则适配；TextMate/Oniguruma 分词器、grammar catalog 与专用 Worker 已移除。                                                                                                                                                                                                                                       |
 | Document service                                                         | 已具备                                              | `IFileService` 将 App Server `fs/changed` 映射为工作区失效事件，`ITextFileService` 转发；Stanza 模型服务提供 dirty、快照保存、显式 revert、CRLF/LF 保留、干净模型重载与 expected-revision/CAS。Code 文件后台检查跳过有本地修改的模型，只在保存被磁盘版本检查拒绝时报告冲突；Workbench 提供 workspace-scoped IndexedDB working-copy 恢复                  |
 | Selection/decorations                                                    | 基础具备                                            | selection、实例控制器、tracked range、decoration collection                                                                                                                                                                                                                                                                                              |
-| Language model                                                           | 已具备 Code 主路径                                  | 基础 token 与预览着色由前端 TextMate Worker 计算；诊断、符号、折叠与结构选择通过异步 parser provider 获取，语义 token、补全、跨文件查询和重构由 LSP provider 接入；结果均检查模型版本                                                                                                                                                                    |
+| Language model                                                           | 共用后台语法树                                      | Desktop 使用 Rust/Rope Tree-sitter，Web 连接可用时使用 Rust、断线时回退到本地 Tree-sitter Worker；高亮、结构结果和预览复用会话，语义 token 与语言智能由 LSP provider 接入，结果检查模型版本。                                                                                                                                                            |
 | Browser view                                                             | 部分具备                                            | common viewport、虚拟行 DOM、字体行宽、gutter、selection/caret、基础 decoration、hit-test、active-position reveal、字符/块 canvas minimap（公共布局、semantic-token 颜色、click/drag scroll）、diagnostic severity marker、可见行缩进参考线已完成；富交互与主题细化尚未完成                                                                              |
 | EditorView / ViewController                                              | 部分具备                                            | `EditorView` 选择并拥有 EditContext 生命周期，`ViewController` 将 beforeinput/textupdate/keydown 路由到 common command，覆盖 IME 协作、pointer selection、Alt+Shift 列选择、键盘导航、textarea 编辑、plain/syntax-marked safe HTML 选区与空选区整行 copy/cut/paste、单个显式文本文件 clipboard paste/drop 与 `text/uri-list`；Android/macOS 特化仍未完成 |
 | SuggestController                                                        | 部分具备                                            | 独立 contribution 拥有 completion service/session 的 browser 接线、键盘/鼠标接受、Ctrl+Space invoke、trigger character 与 incomplete refresh、completion/listbox ARIA；完整 screen-reader navigation 与平台辅助输入仍待真实平台验证                                                                                                                      |
@@ -41,7 +41,7 @@ Stanza 是当前唯一的 Ash editor runtime。不保留旧 editor ID、DOM clas
 decoration 等身份只能由 `editor` 领域定义，不得为了复用而下沉到
 `base`。
 
-基础语法高亮不注册 App Server token provider。内置 JavaScript/JSX、TypeScript/TSX、JSON/JSONC、Rust 与 Shell grammar 由扩展资源服务装载，前端 TextMate Worker 持有行状态栈并计算 token。后台分析延迟不阻塞输入、撤销或词法着色；Semantic Tokens 在独立通道异步合成。Shell 在前端统一使用 `shellscript`，后台 `shell` 标识仅在 Workbench 领域适配处转换。
+基础语法高亮、预览、大纲、折叠和结构选择共用后台 Tree-sitter 会话。Desktop 使用 Rust/Rope，Web 连接可用时使用 Rust、断线时回退到本地 Tree-sitter Worker；语言 grammar 与查询随扩展资源打包。TextModel 仍是文本、版本和编辑事务的唯一 owner，后台结果经过版本检查后应用，Semantic Tokens 在独立通道合成。
 
 语言关联、注释、括号和缩进规则与 grammar 一样来自扩展贡献，随扩展装载和撤销。核心只注册纯文本；standalone 宿主显式注册其他语言能力。资源识别查询同一个 LanguageService，产品不维护第二份 MIME 或后缀表。
 
@@ -111,7 +111,7 @@ EOL 和保存基线。授权期间的后续编辑保持 dirty；提交前取消�
 
 `preferredEditorId` 只是 Workbench 在 code、document、diff、PDF 等现有 pane 间做显式选择的通用机制，不再承载旧 editor 兼容入口。
 
-语言能力采用与 VS Code 相同的两条入口、一个内部注册表：`editor.api.ts` 的 `languages` 对象供 standalone 调用者注册语言、编辑规则和 provider；Workbench 不经过公开对象转发，而是直接把 App Server、TextMate 和扩展贡献注册到同一组 Editor service contract。语言身份由 `LanguageService` 管理，编辑规则由 `LanguageConfigurationService` 管理，provider 由 `LanguageFeaturesService` 管理；Hover、补全、折叠等 contribution 自己构造面向当前 `TextModel` 的执行服务。
+语言能力采用与 VS Code 相同的两条入口、一个内部注册表：`editor.api.ts` 的 `languages` 对象供 standalone 调用者注册语言、编辑规则和 provider；Workbench 不经过公开对象转发，而是直接把 App Server、Tree-sitter 和扩展贡献注册到同一组 Editor service contract。语言身份由 `LanguageService` 管理，编辑规则由 `LanguageConfigurationService` 管理，provider 由 `LanguageFeaturesService` 管理；Hover、补全、折叠等 contribution 自己构造面向当前 `TextModel` 的执行服务。
 
 ## 目标数据流
 
@@ -1040,17 +1040,17 @@ token 数组；若要进一步消除 renderer 端整数组分配，需要后续�
 
 本阶段同时固定服务抽取边界：
 
-| 能力                                                               | 所有者                                                                                                        | 当前状态                                                                                                                       |
-| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| event、lifecycle、URI、resource collection                         | `base`                                                                                                        | ✅ 复用现有领域无关基座；禁止 editor 反向依赖                                                                                  |
-| 原始资源 I/O 与粗粒度失效                                          | `platform/files`                                                                                              | ✅ App Server-backed UTF-8 read/write 与 `fs/changed` projection                                                               |
-| load/save 传输、共享文档引用与 Stanza dirty/revert/conflict policy | `workbench/services/textfile/common` / `workbench/services/textmodelResolver/browser/BrowserTextModelService` | ✅ CAS 与 workspace-scoped working-copy 备份恢复均已接通                                                                       |
-| 文本事务、selection、decoration、language result                   | `editor/common`                                                                                               | ✅ editor 领域所有权                                                                                                           |
-| TextMate grammar/runtime 与 token provider                         | 独立 `workbench/services/textMate` adapter                                                                    | ✅ runtime/provider/browser WASM、内置资源、声明式 extension discovery、活动主题、embedded language 与 bracket metadata 已接通 |
+| 能力                                                               | 所有者                                                                                                        | 当前状态                                                                                                    |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| event、lifecycle、URI、resource collection                         | `base`                                                                                                        | ✅ 复用现有领域无关基座；禁止 editor 反向依赖                                                               |
+| 原始资源 I/O 与粗粒度失效                                          | `platform/files`                                                                                              | ✅ App Server-backed UTF-8 read/write 与 `fs/changed` projection                                            |
+| load/save 传输、共享文档引用与 Stanza dirty/revert/conflict policy | `workbench/services/textfile/common` / `workbench/services/textmodelResolver/browser/BrowserTextModelService` | ✅ CAS 与 workspace-scoped working-copy 备份恢复均已接通                                                    |
+| 文本事务、selection、decoration、language result                   | `editor/common`                                                                                               | ✅ editor 领域所有权                                                                                        |
+| Tree-sitter grammar/query 与 token provider                        | `workbench/services/treeSitter` adapter                                                                       | ✅ Rust/Rope 与 Web Worker、内置 grammar/query 资源、活动主题、embedded language 与 bracket metadata 已接通 |
 
 因此 Current 36 不为 token delta 新造 service，也不提前创建没有保存、冲突或 grammar
 consumer 的空壳 service。Current 43 在 Analysis provider 成为真实 consumer 后才抽取
-TextMate adapter。未来若文件 I/O、dirty 状态或 TextMate runtime import 出现在
+Tree-sitter adapter。文件 I/O、dirty 状态或 parser runtime import 不应出现在
 `TextModel`、token index 或 Stanza browser component 中，应视为所有权漂移并
 立即沿上述边界抽取。
 
@@ -1078,8 +1078,7 @@ Analysis Worker entry 不再直接把 lexical provider 无条件注册进 provid
 首请求、批量注册回滚、确认基线转发、失败后的 Worker 重建，并继续回归 Completion
 module 协议。
 
-这条 module seam 是 `workbench/services/textMate` adapter 的接入点。Current 37 落地时
-TextMate grammar、scope 解析和 runtime 依赖后来由 Current 43–46 在 Stanza/`base`
+这条 module seam 是 `workbench/services/treeSitter` adapter 的接入点。Tree-sitter grammar、scope 主题适配和 runtime 依赖在编辑器/`base`
 之外建立，并已接通产品 grammar 资源与 extension discovery。同样，
 `workbench/services/textfile/common` 已由 Text Engine、Document Engine 与 Explorer 的
 共享 loading/save 边界证明需要。它只转发 I/O 与粗粒度 invalidation；Stanza 保持 dirty、
@@ -1113,12 +1112,12 @@ token/diagnostic 两条 lane 共享扫描结果。配置 revision 改变时，�
 registry 独立生命周期、同版本跨语言隔离、JSON/JSONC 差异、配置变更后的 cache
 替换，以及既有 1,000 行增量扫描与随机编辑 oracle。
 
-该 registry 是原生输入的 bracket/comment command、wordPattern 与 `workbench/services/textMate` adapter
+该 registry 是原生输入的 bracket/comment command、wordPattern 与 `workbench/services/treeSitter` adapter
 可共同消费的 Stanza common 基座。Current 38 落地时尚未加入 indentation、on-enter
 或 word-pattern 字段；Current 41 在 Enter command 成为真实消费者后加入前两者。
 word-pattern 继续服务明确需要语言正则的 occurrence 等语言能力；browser pointer、
 键盘导航与按词删除使用 editor 配置的 `wordSeparators` 和标准 `WordOperations`，
-不把语言正则变成第二套 cursor 边界。TextMate grammar runtime 与 scope
+不把语言正则变成第二套 cursor 边界。Tree-sitter grammar 与 scope
 tokenization 由 Current 43 在独立 adapter 中补齐。
 
 ### Current 39：语言配对输入事务
@@ -1164,15 +1163,15 @@ model version 仍是当前已提交版本时，才能把 action 交给
 它复用 `TextModel.trackRange`，分别追踪 enclosing range 与 closer range，并借用同一
 model 的 `EditorSelectionController`：
 
-| 关注点                          | 所有者                          | 结论                                                          |
-| ------------------------------- | ------------------------------- | ------------------------------------------------------------- |
-| tracked-range 映射算法          | `TextModel` / Stanza text core  | ✅ 复用，不建立第二套 decoration                              |
-| “由自动闭合产生”的身份          | `LanguageAutoClosingTracker`    | editor-instance 状态，不进入共享 model                        |
-| DOM `beforeinput` 路由          | `ViewController`                | browser 只适配事件并把 language adapter 的提交回执交回 common |
-| auto-closing tracker 生命周期   | `LanguageEditingAdapter`        | 每个 editor 实例独立拥有 tracker，不进入 shared model         |
-| language pair 配置              | `LanguageConfigurationRegistry` | 继续由 caller-owned registry 提供                             |
-| URI、文件保存、TextMate runtime | 各自 platform/adapter service   | ❌ 不与自动闭合来源耦合                                       |
-| 通用 `base`                     | domain-neutral primitives       | ❌ 不新增 editor identity 或反向依赖                          |
+| 关注点                        | 所有者                          | 结论                                                          |
+| ----------------------------- | ------------------------------- | ------------------------------------------------------------- |
+| tracked-range 映射算法        | `TextModel` / Stanza text core  | ✅ 复用，不建立第二套 decoration                              |
+| “由自动闭合产生”的身份        | `LanguageAutoClosingTracker`    | editor-instance 状态，不进入共享 model                        |
+| DOM `beforeinput` 路由        | `ViewController`                | browser 只适配事件并把 language adapter 的提交回执交回 common |
+| auto-closing tracker 生命周期 | `LanguageEditingAdapter`        | 每个 editor 实例独立拥有 tracker，不进入 shared model         |
+| language pair 配置            | `LanguageConfigurationRegistry` | 继续由 caller-owned registry 提供                             |
+| URI、文件保存、parser runtime | 各自 platform/adapter service   | ❌ 不与自动闭合来源耦合                                       |
+| 通用 `base`                   | domain-neutral primitives       | ❌ 不新增 editor identity 或反向依赖                          |
 
 只有 tracker 对当前位置和 closer 给出正向信任时，pair command 才允许无事务
 overtype；只有 trusted pair 仍为空时，Backspace 才删除两侧。用户源码中原本存在的
@@ -1215,7 +1214,7 @@ history group，但让 Enter 后紧邻输入继续加入新 group：一次 undo 
 | indentation/on-enter language rules                          | `LanguageConfigurationRegistry`                           | ✅ 已有多个 input/Worker composition root                            |
 | 持久化 editor setting                                        | future Workbench settings service                         | 尚未完成；未来只映射为实例 options                                   |
 | TextFile resolve/save 与 invalidation；Stanza dirty/conflict | `workbench/services/textfile` / `BrowserTextModelService` | ✅，不与 Enter command 耦合；CAS 与 workspace-scoped recovery 已接通 |
-| TextMate grammar/runtime                                     | `workbench/services/textMate` adapter                     | ✅；不得进入 Enter 或 `base`                                         |
+| Tree-sitter grammar/query                                    | `workbench/services/treeSitter` adapter                   | ✅；不得进入 Enter 或 `base`                                         |
 
 Current 41 初始 matcher 使用 model 原始行文本，尚未像 VS Code 的
 `IndentationContextProcessor` 一样移除 string/comment token 中的 bracket-looking
@@ -1268,171 +1267,19 @@ unterminated string boundary、line/block comment、多行状态、外部编辑�
 revision、销毁、跨 model/language 拒绝、Enter、auto-closing `notIn` 与 browser
 路由。
 
-### Current 43：独立 TextMate runtime adapter
+### 语法会话与主题兼容
 
-TextMate grammar 已经出现真实消费者：Stanza Analysis provider/module seam 可以接收比
-baseline lexical scanner 更高保真的 token provider。因此 runtime 不进入
-`editor`，而是建立单向依赖 `workbench/services/textMate → editor/common →
-base/common`。`base` 不认识 grammar、scope、language ID 或 token provider；
-Stanza 也不 import `vscode-textmate`、`vscode-oniguruma` 或 WASM。
+语法由 `workbench/services/treeSitter` 组合，Desktop 接入共享 Rust/Rope 会话，Web 使用
+Tree-sitter Worker。语言规则位于各扩展的 `queries/`；文本编辑、版本及撤销仍由 TextModel
+拥有。高亮、大纲、折叠、结构选择与假设编辑共用语法会话。
 
-`TextMateGrammarRegistry` 拥有 grammar contribution identity。一个 definition 由唯一
-`scopeName`、可选 root `languageId`、injection targets 和延迟 loader 组成；注册、
-撤销都会产生新的 immutable snapshot，旧 snapshot 仍能完成已经开始的请求。
-loader 只返回 raw grammar 文本或对象，不接收 URI/`IFileService`。资源定位、extension
-manifest 与信任验证由当前 product composition root 负责，避免 token Worker
-反向拥有 platform I/O。
+`workbench/services/textMate/common` 仅保留 scope-theme 兼容适配。活动主题来自
+`IThemeService`，各 Workbench 拥有自己的 `TextMateScopeThemeModel`；现有主题 scope 规则
+继续映射到 Tree-sitter capture，不需要 TextMate 或 Oniguruma 运行时。
 
-`TextMateTokenizationService` 针对 snapshot 建立 `vscode-textmate.Registry`，通过注入
-的 `IOnigLib` 加载 grammar/injection，并按行保存 input/output `StateStack` 与相对列
-token。文档变化后先复用相同行前缀，再从第一处变化扫描；进入相同文本后缀且新的
-input state 与旧 state `equals` 时复用剩余 suffix。grammar revision 即使 model
-version 未变化，也建立新的 runtime generation；旧 generation 只在最后一个捕获它
-的请求退出后 dispose。
-
-scope mapping 是显式可替换的 `TextMateScopeResolver`。默认 resolver 只投影稳定的
-comment/string/regexp/number/operator/keyword/function/type/parameter/variable/tag/
-property/constant/punctuation/invalid vocabulary。`TextMateScopeThemeModel` 现在提供
-可 structured-clone 的 revisioned selector rule，覆盖 token type 和 modifier；Renderer
-通过独立 theme wire 更新 Worker，Worker 清空仅样式 cache 后由下一请求重算。embedded
-language identity、balanced/unbalanced bracket metadata 与 exact scope styling 已接通。`createTextMateAnalysisProvider` 把结果转为 Stanza
-`LanguageTokenResult`，`createTextMateAnalysisModule` 再接入现有 module activation
-协议。
-
-Stanza token provider 新增 `tokenPriority`，默认值为 `0`，相同优先级保留注册顺序。
-TextMate provider 使用 `100`，因此一个 Worker 可同时激活 lexical fallback 与
-TextMate。Current 43 初始 provider 捕获当时的 root language selectors；该静态限制由
-Current 44 的 wildcard/`undefined` fallback chain 与版本化 catalog transport 移除。
-priority 只影响 token lane；diagnostic provider 继续按原合同合并。
-
-browser 边界由 `createBrowserTextMateOnigLib` 独占：它通过 Vite asset URL fetch
-`onig.wasm`，每个 Worker realm 只初始化一次，并只把 `IOnigLib` 交给 common。
-CommonJS package 在 Node ESM 和 Vite realm 的导出形态不同，适配层统一处理
-namespace/default 两种形式；该差异不泄漏给调用方。
-
-| 能力                                                                       | 所有者                                        | 当前状态                                                                              |
-| -------------------------------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------- |
-| grammar identity、revision、injection graph                                | `workbench/services/textMate/common`          | ✅                                                                                    |
-| TextMate runtime 与 incremental state                                      | `TextMateTokenizationService`                 | ✅                                                                                    |
-| Stanza provider/module integration                                         | `workbench/services/textMate/common`          | ✅                                                                                    |
-| Oniguruma WASM URL/fetch                                                   | `workbench/services/textMate/browser`         | ✅                                                                                    |
-| baseline structural diagnostics                                            | `stanza.lexical`                              | ✅，继续独立                                                                          |
-| grammar resource/extension manifest loading                                | product extension/resource layer              | ✅ App Server extension discovery 与声明式资源投影已接通；不执行 extension JavaScript |
-| scope-theme selector、token type、modifier 与 embedded-language projection | TextMate/theme adapter                        | ✅                                                                                    |
-| URI、文件保存、dirty/conflict                                              | platform/textfile / `BrowserTextModelService` | ✅，不得混入 TextMate；CAS/恢复已接通                                                 |
-
-真实 WASM 测试覆盖跨行 string/comment state、单行编辑只重扫一行、多行状态变化扫描到
-suffix convergence、同 model version grammar revision 替换、scope validation、
-cancellation、独立生命周期，以及经过 `LanguageAnalysisService` application gate 的
-provider priority。独立 Vite entry build 证明 browser WASM adapter 可被 Worker
-打包。`createBrowserEditorPart` consumes the Workbench `ITextMateService`/`BrowserTextMateService` for product Stanza panes and subscribes
-to catalog/theme revisions before scheduling a replacement analysis request.
-This proves extension-packaged JSON/JSONC and caller-resolved session contributions
-are active in the product path; Rust owns extension manifest/resource discovery and
-the Workbench composition root projects those contributions into TextMate.
-
-### Current 44：版本化 grammar catalog 与动态 token fallback
-
-Grammar loader 是函数，不能跨 structured clone；而 Electron Renderer 能通过 platform
-service 读取 extension/resource，dedicated Worker 则不应拥有 IPC 或文件权限。因此
-TextMate 新增显式的完整 catalog 边界：
-
-1. `materializeTextMateGrammarCatalog` 把一个 immutable registry snapshot 的 raw
-   grammar 文本/对象解析为有界 content catalog；
-2. `TextMateGrammarCatalogModel` 在 Renderer 维护严格递增的完整 revision；
-3. `TextMateGrammarCatalogWireClient` 通过 Analysis Worker 已有 port 发送 catalog；
-4. `TextMateGrammarCatalogWireServer` 先完整验证并构造候选 registry，再原子替换
-   `TextMateGrammarCatalogStore`；
-5. `TextMateTokenizationService` 在下一请求捕获新的 registry snapshot，同 model
-   version 也不会复用旧 grammar runtime。
-
-Wire 限制 grammar 数、单 grammar UTF-16 长度和 catalog 总长度，拒绝重复 scope/root
-language、空内容、乱序 revision 与未知 response。远端拒绝、malformed response 或
-transport failure 会 poison catalog client 并 invalidate 整个 Analysis Worker；下一
-请求由 `LanguageRequestCoordinator` 建立新 Worker，并把 catalog source 当前 revision
-发送给从零开始的 store。普通 dispose 只结束 pending catalog wait，不反向拥有 source
-或 port。
-
-静态 root selector 会让动态 catalog 增加语言时必须重注册 provider。为消除这个耦合，
-Stanza token lane 从“选一个 provider”演进为明确的 priority fallback chain：
-
-- `LanguageAnalysisProviderRegistry.getTokenProviders` 按 `tokenPriority` 降序返回，
-  同 priority 保留注册顺序；
-- provider 返回 `undefined` 表示“本次不拥有”，继续下一个 provider；
-- provider failure 被隔离并报告，然后继续 fallback；
-- 第一个返回有效结果的 provider 经过原有 snapshot normalizer 和 application gate；
-- 所有 provider 都缺席时才发布 empty token result。
-
-TextMate provider 因而声明 wildcard、priority `100`；catalog 没有该 language root 时
-返回 `undefined`，priority `0` 的 `stanza.lexical` 自动接管。该 fallback 语义只属于
-token provider；diagnostic lane 仍然并发合并所有匹配 provider。
-
-`TextMateAnalysisModuleWorkerClient` 同时持有 Stanza module client 与 grammar catalog
-client。catalog updates 串行发送，每个 Analysis request 都等待调用时最新的 scheduled
-revision。`textMateAnalysisWorkerMain.ts` 是独立 composition root，拥有：
-
-| Worker 内能力                              | 所有者                                              |
-| ------------------------------------------ | --------------------------------------------------- |
-| Analysis request/result 与 document mirror | Stanza Worker wire                                  |
-| provider module activation                 | Stanza generic module wire                          |
-| grammar catalog replacement                | TextMate catalog wire/store                         |
-| TextMate provider/runtime                  | `textmate.grammars` / `TextMateTokenizationService` |
-| deterministic fallback/diagnostics         | `stanza.lexical`                                    |
-| WASM fetch/init                            | `workbench/services/textMate/browser`               |
-
-这种组合保持依赖为 `textmate/browser → textmate/common → editor/common → base`；
-Stanza 原有 Worker 不 import TextMate，`base` 也不增加任何 editor identity。
-
-真实 structured-clone 测试证明 initial catalog 在首请求前落地、TextMate 优先、
-无 grammar language 回落 lexical、同 Worker revision 热更新改变同版本 token，
-stale revision poison client，以及 registry snapshot 到 wire catalog 的 materialization。
-独立 Vite build 同时产出 TextMate Worker chunk 与 466,610-byte Oniguruma WASM。
-
-Current 44 落地时还缺真实 grammar resource owner 和产品层消费者。Current 45 已补入
-首批内置 grammar 与 catalog service，后续 extension service 也已接通声明式资源 discovery；`createBrowserEditorPart` 选择
-Stanza pane 的 Worker factory 并调度 catalog 变化后的 model token request。catalog change 本身不隐式遍历或重算所有
-文档，这个调度责任不得偷偷进入通用 catalog model。
-
-### Current 45：TextMate grammar service 与首批真实资源
-
-VS Code/Node 兼容 Extension Host 当前仍不存在；Ash-native executable Host RPC v1 的 runtime core
-已经实现，App Server/Workbench provider bridge 和 production enforcing launcher 的状态由
-[`editor-extensions.md`](editor-extensions.md) 维护。Current 45 落地前还没有 grammar contribution
-service；现有
-`IFileService` 的合同是“工作区文件读取”，并不拥有产品内置资源。因而真实 grammar
-不能硬编码进 Worker，也不能通过给 workspace file service 增加 TextMate 特例来读取。
-Current 45 建立了独立的 editor-domain 服务边界：
-
-| 能力                                                                  | 所有者                                 | 结论                                                                     |
-| --------------------------------------------------------------------- | -------------------------------------- | ------------------------------------------------------------------------ |
-| URI、事件、取消与生命周期原语                                         | `base/common`                          | ✅ 复用，保持领域无关                                                    |
-| 工作区用户文件读取                                                    | `platform/files`                       | ✅ 合同不变                                                              |
-| grammar contribution、异步装载和 catalog 发布                         | `TextMateGrammarService`               | ✅ `workbench/services/textMate/common`                                  |
-| 产品内置 grammar 资源解析与贡献                                       | `AppServerExtensionService`            | ✅ 通过 generation-bound extension API 接入                              |
-| catalog 传输和 tokenization                                           | TextMate dedicated Worker              | ✅ 继续无文件权限                                                        |
-| extension manifest 与外部 grammar resource                            | extension service                      | ✅ 不可变 generation-bound 声明式 discovery；不执行 extension JavaScript |
-| TextFile resolve/save/invalidation；Stanza dirty/save/revert/conflict | `textfile` / `BrowserTextModelService` | ✅，未与 grammar service 混合；CAS/working-copy 恢复已完成               |
-
-`TextMateGrammarService` 拥有 registration 和 `TextMateGrammarCatalogModel`。每次贡献变化
-都会捕获 immutable registry snapshot；较新 revision 会取消较旧 materialization，只有最新且
-完整的 catalog 才能发布。loader 失败通过 `onDidFailCatalog` 报告，已经可用的 catalog 保持
-不变；`whenReady()` 明确等待当前最新 revision。服务销毁先关闭调度和 listener，再释放注册，
-不会在 teardown 中启动新的 catalog 工作。
-
-首批产品资源从相邻 VS Code 源码树的 `extensions/json/syntaxes` 移入：
-`JSON.tmLanguage.json` 和 `JSONC.tmLanguage.json`。两者当前位于根目录 `extensions/json/`，保留
-上游 revision/provenance，由 App Server extension resource API 读取，再通过现有 catalog wire 传给 Worker。
-`common` 不 import raw asset，Worker 不访问文件系统，`base` 不识别 grammar、scope 或
-language identity。
-
-`BrowserTextMateService` 把内置 grammar service 和
-`createTextMateAnalysisWorkerFactory` 组合为一个可销毁的产品接入单元。Current 45
-落地时 Workbench 尚无 Stanza `EditorPane`，因此当时未选择该 support，也未在 catalog
-revision 变化时为打开文档请求重分析；Current 46 已补齐这两个真实消费者。
-
-测试覆盖 contribution 装载、latest-revision-wins、失败保持 last-good catalog、撤销后重发布，
-并使用真实 Oniguruma 对移入的 VS Code JSON grammar 执行 tokenization。扩展与打包测试同时
-验证 manifest 引用的真实资源仍存在。
+`AppServerExtensionService` 保留语言、配置、snippets、主题与 Debug 声明的事务化激活。
+旧 TextMate grammar 声明仍经过 manifest 校验，但不读取其语法文件、不创建 grammar
+catalog，也不启动分词 Worker。文件读写和工作副本生命周期仍属于原有资源服务。
 
 ### Current 46：Workbench TextFile 边界与 Stanza 产品 Pane
 
@@ -1445,18 +1292,18 @@ Stanza 已从独立内核演进为由真实 `IEditorPane` 宿主的编辑器能�
 被选实现的生命周期 contract。产品调用方不选择 parser、analysis service 或 transport；descriptor
 只绑定当前受支持的 code、document、diff、PDF 等资源视图，App Server 不知道最终选择了哪个 pane。
 
-| 能力                                                      | 当前所有者                                         | 状态                                                                                                                |
-| --------------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| URI、取消、事件、生命周期原语                             | `base/common`                                      | ✅ 复用，保持领域无关                                                                                               |
-| 工作区原始文件读取                                        | `platform/files`                                   | ✅                                                                                                                  |
-| file/bootstrap 内容决策                                   | `ITextFileService`                                 | ✅ Workbench service                                                                                                |
-| URI 到 Stanza `TextModel` 的共享引用                      | Workbench `BrowserTextModelService`                | ✅ Workbench-owned；Editor 只定义 `ITextModelService` contract                                                      |
-| Stanza viewport、native input、基础键盘/指针与 text drop  | `CodeEditorWidget`                                 | ✅ Code mode 的底层浏览器编辑表面；Academic code region 由 `RichTextEditorWidget` 按同一 TextModel 的连续行范围投影 |
-| Stanza language、folding、diagnostic、save 与文档命令组合 | `EditorBrowser` + editor contribution registry     | ✅ Code browser runtime；可独立能力由模式 bundle 选择                                                               |
-| original/modified 版本 gate、diff result 与前端计算取消   | `DiffModel` / `IDiffComputationService`            | ✅ common model；browser Worker 为当前实现                                                                          |
-| JSON/JSONC TextMate 与 Analysis Worker                    | `workbench/services/textMate` (`ITextMateService`) | ✅ 产品 Stanza pane 已选择                                                                                          |
-| Completion Worker                                         | `createBrowserEditorPart`                          | ✅ 产品 Stanza pane 已选择                                                                                          |
-| dirty、save/revert、CRLF/LF、粗粒度外改重载与冲突状态     | `BrowserTextModelService`                          | ✅；CAS 与 Workbench 备份恢复已完成，TextFile 边界严格接受 UTF-8 并把其他内容路由到只读 Binary Editor               |
+| 能力                                                      | 当前所有者                                     | 状态                                                                                                                |
+| --------------------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| URI、取消、事件、生命周期原语                             | `base/common`                                  | ✅ 复用，保持领域无关                                                                                               |
+| 工作区原始文件读取                                        | `platform/files`                               | ✅                                                                                                                  |
+| file/bootstrap 内容决策                                   | `ITextFileService`                             | ✅ Workbench service                                                                                                |
+| URI 到 Stanza `TextModel` 的共享引用                      | Workbench `BrowserTextModelService`            | ✅ Workbench-owned；Editor 只定义 `ITextModelService` contract                                                      |
+| Stanza viewport、native input、基础键盘/指针与 text drop  | `CodeEditorWidget`                             | ✅ Code mode 的底层浏览器编辑表面；Academic code region 由 `RichTextEditorWidget` 按同一 TextModel 的连续行范围投影 |
+| Stanza language、folding、diagnostic、save 与文档命令组合 | `EditorBrowser` + editor contribution registry | ✅ Code browser runtime；可独立能力由模式 bundle 选择                                                               |
+| original/modified 版本 gate、diff result 与前端计算取消   | `DiffModel` / `IDiffComputationService`        | ✅ common model；browser Worker 为当前实现                                                                          |
+| JSON/JSONC 语法与预览                                     | `workbench/services/treeSitter`                | 已通过同一后台树提供                                                                                                |
+| Completion Worker                                         | `createBrowserEditorPart`                      | ✅ 产品 Stanza pane 已选择                                                                                          |
+| dirty、save/revert、CRLF/LF、粗粒度外改重载与冲突状态     | `BrowserTextModelService`                      | ✅；CAS 与 Workbench 备份恢复已完成，TextFile 边界严格接受 UTF-8 并把其他内容路由到只读 Binary Editor               |
 
 打开资源时，`ExplorerView` 只提交 `{ resource, label }`；它不再预读文件或伪造
 `initialText`。`EditorBrowser` 选定 descriptor 后把 `ITextFileService` 注入 pane。
@@ -1469,7 +1316,7 @@ Stanza pane 先通过 `BrowserTextModelService.acquire` 获取引用：已有资
 所以达到 piece-tree 回收阈值不会把 O(document length) 压缩塞进一次编辑事务；调度
 任务在模型关闭时取消，快照、history 与 `TextModel.version` 不因维护而改变。
 
-产品 Stanza session 组合 `BrowserTextMateService` 与 Completion Worker。
+产品编辑器组合共享 Tree-sitter 语法会话与 Completion Worker。
 它等待初始 grammar catalog，再发 token/diagnostic 请求；catalog revision 变化会触发
 当前文档重新分析。直接构造的 Stanza session 仍使用本地 lexical/word provider，方便
 独立嵌入和确定性测试。详细 TextFile 实现契约见
@@ -1477,7 +1324,7 @@ Stanza pane 先通过 `BrowserTextModelService.acquire` 获取引用：已有资
 Stanza 内部契约见
 [`src/ash/editor/text-engine.md`](../src/ash/editor/text-engine.md)。
 
-Grammar catalog 由共享 Workbench `ITextMateService` 拥有，声明式 extension resource contribution
+Scope theme 由 Workbench 组合层持有，声明式 extension resource contribution
 会更新其 revision；每个文档的 Analysis Worker 仍由其 model coordinator 独立拥有，避免故障域和增量 mirror 互相污染。
 
 本阶段明确没有把 TextFile、TextMate 或 document identity 下沉到 `base`。当前 host 已具备原子写入与粗粒度变更通知，Stanza 因而拥有 dirty/save/revert 和外改 policy；expected-revision write、workspace-scoped working-copy 备份恢复已经接通。TextFile resolve 先以 stat 限制文本大小，再读取 bytes、剥离 UTF-8 BOM、拒绝 NUL/控制字符密集内容和非法 UTF-8；被拒绝的内容可显式切换到只读 Binary Editor。UTF-8 BOM 的标记随资源内容进入模型服务，保存时恢复；LF/CRLF 由文本模型决定，混合换行按模型归一化后的内容建立保存基线。干净文件的外部刷新保留撤销记录，显式 revert 清空被丢弃的历史。非 UTF-8 原编码写回与编码选择器仍是独立的未来能力，当前实现不会静默转码。

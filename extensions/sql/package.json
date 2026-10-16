@@ -8,9 +8,6 @@
   "engines": {
     "vscode": "*"
   },
-  "scripts": {
-    "update-grammar": "node ./build/update-grammar.mjs"
-  },
   "categories": [
     "Programming Languages"
   ],
@@ -27,13 +24,6 @@
           "T-SQL"
         ],
         "configuration": "./language-configuration.json"
-      }
-    ],
-    "grammars": [
-      {
-        "language": "sql",
-        "scopeName": "source.sql",
-        "path": "./syntaxes/sql.tmLanguage.json"
       }
     ]
   },

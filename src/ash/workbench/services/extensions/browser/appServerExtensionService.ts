@@ -34,9 +34,6 @@ import type { IExtensionApi, ExtensionCatalog as TransportExtensionCatalog, Exte
 import type { IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
 import { ColorScheme } from "../../../../platform/theme/common/theme.js";
 import { DebugAdapterFactoriesRegistry, createStaticDebugAdapterFactory, type DebugAdapterFactory, type DebugAdapterFactoryRegistration } from "../../debug/common/debugAdapterFactory.js";
-import type { ITextMateService } from "../../textMate/common/textMateService.js";
-import type { TextMateGrammarDefinition } from "../../textMate/common/textMateGrammarRegistry.js";
-import type { TextMateGrammarRegistration } from "../../textMate/common/textMateGrammarRegistry.js";
 import { normalizeTextMateScopeTheme } from "../../textMate/common/textMateScopeTheme.js";
 import { projectExtensionTokenTheme } from "../../textMate/common/textMateThemeProjection.js";
 import { parseJsonc } from "../common/jsonc.js";
@@ -56,7 +53,6 @@ import { ExtensionDebugAdapterRegistry, validateExtensionDebugAdapterDefinitions
 export interface AppServerExtensionServiceOptions {
 	readonly api: IExtensionApi;
 	readonly eventApi?: IServerEventApi;
-	readonly textMateService: ITextMateService;
 	readonly languageService?: IAshLanguageService;
 	readonly languageConfigurationService?: ILanguageConfigurationService;
 }
@@ -67,7 +63,7 @@ interface LanguageConfigurationContribution {
 	readonly priority?: number;
 }
 
-/** Loads Rust-discovered declarative extensions and projects their grammar contributions into TextMate. */
+/** Activates Rust-discovered declarative extensions without materializing legacy grammar resources. */
 export class AppServerExtensionService extends Disposable implements IExtensionService {
 	private readonly colorContributions = this._register(new ColorExtensionPoint());
 	private readonly iconContributions = this._register(new IconExtensionPoint());
@@ -86,7 +82,6 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 	private activeCatalogSignature: string | undefined;
 	private activationHandler: ((event: string, signal?: AbortSignal) => Promise<void>) | undefined;
 	private reloadQueued = false;
-	private readonly grammarRegistration: TextMateGrammarRegistration;
 	private readonly languageRegistration: LanguageDescriptionRegistration | undefined;
 	private languageConfigurationRegistrations = new DisposableStore();
 	private snippetHandler: ((files: readonly ExtensionSnippetFile[]) => ExtensionSnippetActivation) | undefined;
@@ -97,7 +92,6 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 	private readonly themeRegistry: ExtensionThemeRegistry;
 	private readonly fileTemplateRegistry: ExtensionFileTemplateRegistry;
 	private readonly debugAdapterRegistry: ExtensionDebugAdapterRegistry;
-	private activeGrammars: readonly TextMateGrammarDefinition[] = Object.freeze([]);
 	private activeConfigurations: IConfigurationNode[] = [];
 	private readonly submenuRegistrations = this._register(new DisposableStore());
 	private readonly welcomeRegistrations = this._register(new DisposableStore());
@@ -157,13 +151,6 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			this.dispose();
 			throw new TypeError("App Server extension service requires an extension API");
 		}
-		const grammarService = options.textMateService?.grammars;
-		if (!grammarService || typeof grammarService.registerGrammars !== "function" || typeof grammarService.prepareGrammars !== "function" || typeof grammarService.whenReady !== "function") {
-			this.dispose();
-			throw new TypeError("App Server extension service requires a TextMate service");
-		}
-		this.grammarRegistration = options.textMateService.grammars.registerGrammars([]);
-		this._register(toDisposable(() => this.grammarRegistration.dispose()));
 		const hasLanguageServices = options.languageService !== undefined || options.languageConfigurationService !== undefined;
 		if (hasLanguageServices && (!options.languageService || !options.languageConfigurationService)) {
 			this.dispose();
@@ -273,7 +260,6 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		const languages: LanguageDescriptionContribution[] = [];
 		const languageConfigurations: LanguageConfigurationContribution[] = [];
 		const snippetResources: ExtensionSnippetFile[] = [];
-		const grammars: TextMateGrammarDefinition[] = [];
 		const resources = new Map<string, Promise<Uint8Array>>();
 		const languageConfigurationResources = new Map<string, Promise<ReturnType<typeof parseLanguageConfiguration>>>();
 		const snippetFiles = new Map<string, Promise<string>>();
@@ -421,22 +407,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 				problemMatchers.push(...manifest.contributes.problemMatchers);
 				problemPatterns.push(...manifest.contributes.problemPatterns);
 				for (const debuggerContribution of manifest.contributes.debuggers) debugAdapters.push(Object.freeze({ extensionId: extension.id, ...debuggerContribution }));
-				for (const grammar of manifest.contributes.grammars) {
-					const content = await this.loadGrammar(resources, catalog.generation, extension.id, grammar.path);
-					if (this.isDisposed) return;
-					const definition: TextMateGrammarDefinition = {
-						scopeName: grammar.scopeName,
-						...(grammar.language === undefined ? {} : { languageId: grammar.language }),
-						injectTo: grammar.injectTo,
-						...(grammar.embeddedLanguages === undefined ? {} : { embeddedLanguages: grammar.embeddedLanguages }),
-						...(grammar.tokenTypes === undefined ? {} : { tokenTypes: grammar.tokenTypes }),
-						...(grammar.balancedBracketScopes === undefined ? {} : { balancedBracketScopes: grammar.balancedBracketScopes }),
-						...(grammar.unbalancedBracketScopes === undefined ? {} : { unbalancedBracketScopes: grammar.unbalancedBracketScopes }),
-						filePath: grammar.path,
-						loadGrammar: () => content,
-					};
-					grammars.push(definition);
-				}
+
 			}
 			if (snippetOwnerRevision !== this.snippetOwnerRevision) {
 				this.reloadQueued = true;
@@ -461,8 +432,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 					&& JSON.stringify(previousDefinition) === JSON.stringify(definition)) return [retained];
 				return [createStaticDebugAdapterFactory(definition.type, definition.label, `declarative:${definition.extensionId}`, { program: definition.program, arguments: definition.arguments })];
 			});
-			const previousGrammars = this.activeGrammars;
-			const preparedGrammars = await this.options.textMateService.grammars.prepareGrammars(this.grammarRegistration, grammars);
+			// A synchronous contribution owner can replace itself or dispose this service.
 			if (this.isDisposed) return;
 			if (snippetOwnerRevision !== this.snippetOwnerRevision) {
 				this.reloadQueued = true;
@@ -470,7 +440,6 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			}
 			try {
 				runWithBufferedEvents(() => {
-					preparedGrammars.commit();
 					this.editorPaneRegistration.replace(editorPanes);
 					this.submenuRegistrations.clear();
 					for (const submenu of submenus) this.submenuRegistrations.add(MenusRegistry.appendMenuItem(extensionMenuId(submenu.menu), submenu.item));
@@ -479,7 +448,6 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 					this.replaceContributions(languages, languageConfigurations, themes, fileTemplates, debugAdapters, debugAdapterFactories, fileIconThemes, productIconThemes, themeContributions, { matchers: problemMatchers, patterns: problemPatterns }, configurations);
 					snippetActivation?.commit();
 					this.activeThemeContributions = themeContributions;
-					this.activeGrammars = Object.freeze([...grammars]);
 					this.activeLanguages = Object.freeze([...languages]);
 					this.activeLanguageConfigurations = Object.freeze([...languageConfigurations]);
 					this.activeFileIconThemes = Object.freeze([...fileIconThemes]);
@@ -494,7 +462,6 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			} catch (error) {
 				snippetActivation?.rollback();
 				this.editorPaneRegistration.replace(this.activeEditorPanes);
-				if (!this.isDisposed) await this.restoreActivation(previousGrammars, error);
 				throw error;
 			}
 			this.activeEditorPanes = editorPanes;
@@ -604,23 +571,6 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		for (const theme of themes) normalizeTextMateScopeTheme(projectExtensionTokenTheme(themeCatalog, ColorScheme.Dark, 1, theme.id));
 	}
 
-	private async restoreActivation(previous: readonly TextMateGrammarDefinition[], activationError: unknown): Promise<void> {
-		try {
-			this.grammarRegistration.replace(previous);
-			await this.options.textMateService.grammars.whenReady();
-		} catch (rollbackError) {
-			throw new AggregateError([activationError, rollbackError], "Extension activation and TextMate grammar rollback both failed");
-		}
-	}
-
-	private async loadGrammar(resources: Map<string, Promise<Uint8Array>>, generation: number, extensionId: string, path: string): Promise<string> {
-		const bytes = await this.loadResource(resources, generation, extensionId, path);
-		try {
-			return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-		} catch {
-			throw new TypeError(`Extension '${extensionId}' grammar '${path}' is not valid UTF-8`);
-		}
-	}
 
 	private async loadLanguageConfiguration(resources: Map<string, Promise<Uint8Array>>, generation: number, extensionId: string, path: string): Promise<ReturnType<typeof parseLanguageConfiguration>> {
 		const bytes = await this.loadResource(resources, generation, extensionId, path);

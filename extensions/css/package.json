@@ -8,9 +8,6 @@
   "engines": {
     "vscode": "0.10.x"
   },
-  "scripts": {
-    "update-grammar": "node ../node_modules/vscode-grammar-updater/bin microsoft/vscode-css grammars/css.cson ./syntaxes/css.tmLanguage.json"
-  },
   "categories": [
     "Programming Languages"
   ],
@@ -51,30 +48,6 @@
           ".scss"
         ],
         "configuration": "./scss-language-configuration.json"
-      }
-    ],
-    "grammars": [
-      {
-        "language": "css",
-        "scopeName": "source.css",
-        "path": "./syntaxes/css.tmLanguage.json",
-        "tokenTypes": {
-          "meta.function.url string.quoted": "other"
-        }
-      },
-      {
-        "language": "less",
-        "scopeName": "source.css.less",
-        "path": "./syntaxes/less.tmLanguage.json"
-      },
-      {
-        "language": "scss",
-        "scopeName": "source.css.scss",
-        "path": "./syntaxes/scss.tmLanguage.json"
-      },
-      {
-        "scopeName": "source.sassdoc",
-        "path": "./syntaxes/sassdoc.tmLanguage.json"
       }
     ],
     "snippets": [

@@ -645,3 +645,24 @@ test('individual semantic flags override shorthand fontStyle even when false', (
 		foreground: '#123456', bold: false, italic: false, underline: true, strikethrough: false,
 	});
 });
+
+
+test('property-list token themes preserve entities, CDATA and inert external declarations', () => {
+	const source = '<?xml version="1.0"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://example.invalid/PropertyList.dtd"><plist version="1.0"><dict><key>name</key><string>Comments &amp; strings &#x1F600;</string><key>settings</key><array><dict><key>scope</key><string>comment<!-- note -->, <![CDATA[string]]></string><key>settings</key><dict><key>foreground</key><string>#abcdef</string><key>fontStyle</key><string>italic</string></dict></dict></array></dict></plist>';
+	const resolved = resolveColorThemeDocument('theme.tmTheme', () => source);
+	assert.ok(Array.isArray(resolved.tokenColors));
+	assert.equal(resolved.tokenColors[0]!.scope, 'comment, string');
+	assert.equal(resolved.tokenColors[0]!.settings.foreground, '#abcdef');
+});
+
+test('property-list token themes reject malformed, expanding and oversized inputs', () => {
+	for (const source of [
+		'<plist><dict><key>settings</key><array></dict></plist>',
+		'<!DOCTYPE plist [<!ENTITY example "expanded">]><plist><dict/></plist>',
+		'<plist><dict><key>name</key><string>&unknown;</string></dict></plist>',
+		'<plist><dict><key>name</key><string>&#xD800;</string></dict></plist>',
+		'<plist><dict><key>settings</key><array/><key>settings</key><array/></dict></plist>',
+		'<plist>' + '<array>'.repeat(130) + '</array>'.repeat(130) + '</plist>',
+		'<plist><dict/></plist>' + ' '.repeat(1_048_576),
+	]) assert.throws(() => resolveColorThemeDocument('theme.tmTheme', () => source));
+});

@@ -1,4 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
+import { test } from './rustSyntaxProcessFixture.js';
+import { expect, type Page } from "@playwright/test";
 import { getAxeResults, injectAxe } from "axe-playwright";
 import { ScrollType, type IEditor } from '../../../src/ash/editor/common/editorCommon.js';
 
@@ -1148,9 +1149,9 @@ test("cursor layer retains nodes, animates stable moves, and resolves multi-curs
 
 test("text-model editor supports Rust syntax and symbol navigation without gutter symbol icons", async ({ page }) => {
 	await openEditor(page);
-	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getSyntaxAnalysisCount())).toBeGreaterThan(0);
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getSyntaxAnalysisCount())).toBe(0);
 	await expect(page.locator(".stanza-editor-token.token-keyword")).toHaveText("fn");
-	await expect(page.locator(".cdr.squiggly-error")).toHaveCount(1);
+	await expect(page.locator(".cdr.squiggly-error")).toHaveCount(0);
 	await expect(page.locator(".stanza-editor-symbol-icon")).toHaveCount(0);
 
 	const input = page.locator(".stanza-editor-input");

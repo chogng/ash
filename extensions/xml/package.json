@@ -29,7 +29,6 @@
           ".csproj.user",
           ".dita",
           ".ditamap",
-          ".dtd",
           ".ent",
           ".mod",
           ".dtml",
@@ -98,23 +97,19 @@
           "xsl"
         ],
         "configuration": "./xsl.language-configuration.json"
-      }
-    ],
-    "grammars": [
-      {
-        "language": "xml",
-        "scopeName": "text.xml",
-        "path": "./syntaxes/xml.tmLanguage.json"
       },
       {
-        "language": "xsl",
-        "scopeName": "text.xml.xsl",
-        "path": "./syntaxes/xsl.tmLanguage.json"
+        "id": "dtd",
+        "extensions": [
+          ".dtd"
+        ],
+        "aliases": [
+          "DTD",
+          "dtd"
+        ],
+        "configuration": "./xml.language-configuration.json"
       }
     ]
-  },
-  "scripts": {
-    "update-grammar": "node ../node_modules/vscode-grammar-updater/bin atom/language-xml grammars/xml.cson ./syntaxes/xml.tmLanguage.json grammars/xsl.cson ./syntaxes/xsl.tmLanguage.json"
   },
   "repository": {
     "type": "git",

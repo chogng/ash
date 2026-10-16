@@ -450,7 +450,7 @@ fn indexed_source(reference: &SymbolReference) -> IndexedSourceReference {
         root_id: reference.root_id.clone(),
         relative_path: reference.relative_path.clone(),
         source_revision: reference.source_revision.clone(),
-        language: reference.language,
+        language: reference.language.clone(),
         source_bytes: reference.source_bytes,
     }
 }

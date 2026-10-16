@@ -25,6 +25,17 @@ import { CodeEditorConfiguration } from '../../../workbench/contrib/codeEditor/c
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 
+test('Tree-sitter telemetry participates in effective editor configuration and defaults off', () => {
+	for (const key of ['editor.experimental.treeSitterTelemetry']) {
+		const setting = configurationRegistry.getConfiguration(key);
+		assert.ok(setting, `${key} must be registered, not only present in the JSON schema`);
+		assert.equal(setting.defaultValue, false);
+		assert.equal(setting.parse(true), true);
+		assert.equal(setting.parse(false), false);
+		assert.throws(() => setting.parse('true'), /boolean/);
+	}
+});
+
 test('diff computation time is a registered language-overridable editor setting', () => {
 	const setting = configurationRegistry.getConfiguration('diffEditor.maxComputationTime');
 	assert.equal(setting?.defaultValue, 5_000);

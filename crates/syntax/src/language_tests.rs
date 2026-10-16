@@ -49,3 +49,13 @@ fn concurrent_documents_share_queries_and_keep_independent_parsers() {
         LanguageConfiguration::load(SyntaxLanguage::Typescriptreact, &mut Parser::new()).unwrap();
     assert!(!Arc::ptr_eq(&typescript, &tsx));
 }
+
+#[test]
+fn every_registered_language_compiles_its_queries_and_resolves_its_identity() {
+    for &language in super::TEST_LANGUAGES {
+        let mut parser = Parser::new();
+        LanguageConfiguration::load(language, &mut parser).unwrap();
+        assert!(parser.parse("", None).is_some(), "{language:?}");
+        assert_eq!(SyntaxLanguage::for_injection(language.id()), Some(language));
+    }
+}

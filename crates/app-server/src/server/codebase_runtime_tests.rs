@@ -115,7 +115,7 @@ fn retrieval_rejects_stale_grep_locations_and_uses_unsaved_source() {
         .synchronize_overlay(ash_codebase::CodebaseOverlayDocument {
             relative_path: "lib.rs".into(),
             editor_revision: 1,
-            language: ash_codebase::IndexedLanguage::Rust,
+            language: ash_language::LanguageId::RUST,
             content: "pub fn unsaved_only() {}\n".into(),
         })
         .unwrap();

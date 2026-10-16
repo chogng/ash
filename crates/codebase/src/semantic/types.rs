@@ -2,7 +2,7 @@ use std::num::NonZeroUsize;
 use std::sync::Arc;
 
 use crate::ChunkReference;
-use crate::IndexedLanguage;
+use ash_language::LanguageId;
 use ash_model_provider::EmbeddingVector;
 use ash_model_provider::{EmbeddingInvoker, RerankInvoker};
 use sha2::{Digest, Sha256};
@@ -204,7 +204,7 @@ pub trait CodebaseSemanticMetricsSink: Send + Sync {
 #[derive(Clone, Debug, PartialEq)]
 pub struct EmbeddedCodeChunk {
     pub reference: ChunkReference,
-    pub language: IndexedLanguage,
+    pub language: LanguageId,
     pub content: String,
     pub embedding: EmbeddingVector,
 }

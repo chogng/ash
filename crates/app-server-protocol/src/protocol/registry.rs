@@ -2076,23 +2076,45 @@ use crate::protocol::syntax::SyntaxAnalyzeParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::syntax::SyntaxAnalyzeResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::syntax::SyntaxBracketDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::syntax::SyntaxCancelParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::syntax::SyntaxCaptureDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::syntax::SyntaxCloseParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::syntax::SyntaxDiagnosticDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::syntax::SyntaxDiagnosticKindDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::syntax::SyntaxDiagnosticsSpliceDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::syntax::SyntaxEditDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::syntax::SyntaxFactsDeltaDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::syntax::SyntaxFoldingRangeDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::syntax::SyntaxFoldsSpliceDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::syntax::SyntaxLanguageDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::syntax::SyntaxLineRangeDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::syntax::SyntaxOpenParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::syntax::SyntaxPositionDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::syntax::SyntaxQueryKindDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::syntax::SyntaxQueryParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::syntax::SyntaxQueryResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::syntax::SyntaxRangeDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::syntax::SyntaxRowDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::syntax::SyntaxSelectionRangeDto;
 #[cfg(any(test, feature = "export"))]
@@ -2104,11 +2126,14 @@ use crate::protocol::syntax::SyntaxSymbolDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::syntax::SyntaxSymbolKindDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::syntax::SyntaxSymbolsSpliceDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::syntax::SyntaxTokenDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::syntax::SyntaxTokenKindDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::syntax::SyntaxUpdateParams;
+
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::task_delivery::CodeSnapshot;
 #[cfg(any(test, feature = "export"))]
@@ -4580,6 +4605,22 @@ client_methods! {
         response: (),
         serialization: ResourceExclusive("documentId"),
     },
+    SyntaxOpenShared => "syntax/openShared" {
+        params: SyntaxOpenParams,
+        response: (),
+        serialization: ResourceExclusive("documentId"),
+    },
+    SyntaxQuery => "syntax/query" {
+        params: SyntaxQueryParams,
+        response: SyntaxQueryResult,
+        serialization: ResourceExclusive("documentId"),
+        cancellation: "operationId",
+    },
+    SyntaxCancel => "syntax/cancel" {
+        params: SyntaxCancelParams,
+        response: (),
+        serialization: None,
+    },
     SyntaxUpdate => "syntax/update" {
         params: SyntaxUpdateParams,
         response: (),
@@ -6852,6 +6893,18 @@ typescript_bindings! {
     SyntaxAnalyzeParams,
     SyntaxCloseParams,
     SyntaxAnalyzeResult,
+    SyntaxQueryKindDto,
+    SyntaxLineRangeDto,
+    SyntaxQueryParams,
+    SyntaxCancelParams,
+    SyntaxCaptureDto,
+    SyntaxRowDto,
+    SyntaxFactsDeltaDto,
+    SyntaxSymbolsSpliceDto,
+    SyntaxFoldsSpliceDto,
+    SyntaxDiagnosticsSpliceDto,
+    SyntaxBracketDto,
+    SyntaxQueryResult,
     LanguageLocationKindDto,
     LanguagePositionDto,
     LanguageRangeDto,

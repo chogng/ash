@@ -124,6 +124,18 @@ test("TextModel exposes allocation-free document and line lengths", () => {
 	assert.throws(() => model.getLineLength((2) + 1), /lineNumber/);
 });
 
+test('TextModel reads stored document length without materializing text and retains EOL/BOM semantics', () => {
+	for (const eol of ['\n', '\r\n']) {
+		using model = new TextModel('\uFEFFalpha' + eol + '😀');
+		const expected = model.getValue().length;
+		assert.equal(model.getValueLength(EndOfLinePreference.LF), 8);
+		assert.equal(model.getValueLength(EndOfLinePreference.CRLF), 9);
+		model.getValueInRange = () => { throw new Error('A length-only read must not materialize the document'); };
+		assert.equal(model.getValueLength(), expected);
+		assert.equal(model.getValueLength(EndOfLinePreference.TextDefined, true), expected + 1);
+	}
+});
+
 test('TextModel exposes the editor model reading contract', () => {
 	using model = new TextModel('\uFEFF\talpha\n  \nאב😀');
 
@@ -892,4 +904,20 @@ test('TextModel does not install language rules merely from its language id', ()
 	assert.deepEqual(configured.bracketPairs.matchBracket(new Position(1, 1)), [new Range(1, 1, 1, 2), new Range(1, 7, 1, 8)]);
 	configured.dispose();
 	assert.equal(configurations.getLanguageConfiguration('typescript').comments?.lineCommentToken, '//');
+});
+
+
+test('long-line policy retains character weights across LF, CRLF, edits and undo', () => {
+	for (const eol of ['\n', '\r\n']) {
+		using model = new TextModel(['x'.repeat(10000), 'y'.repeat(9999), ''].join(eol));
+		assert.equal(model.isDominatedByLongLines(), true);
+		model.pushEditOperations(null, [{ range: new Range(3, 1, 3, 1), text: 'zz' }], () => null);
+		assert.equal(model.isDominatedByLongLines(), false);
+		model.undo();
+		assert.equal(model.isDominatedByLongLines(), true);
+		model.setValue('x'.repeat(10000) + eol + 'y'.repeat(10000));
+		assert.equal(model.isDominatedByLongLines(), true);
+		model.setValue('x'.repeat(9999) + eol);
+		assert.equal(model.isDominatedByLongLines(), false);
+	}
 });

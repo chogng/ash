@@ -1,4 +1,5 @@
-import { expect, test } from '@playwright/test';
+import { test } from './rustSyntaxProcessFixture.js';
+import { expect } from '@playwright/test';
 
 const pageErrors = new WeakMap<object, string[]>();
 test.beforeEach(async ({ page }) => {
@@ -13,14 +14,14 @@ test.afterEach(async ({ page }) => {
 	expect(pageErrors.get(page)).toEqual([]);
 });
 
-test('all eight parser languages use bundled TextMate grammars through shared line support', async ({ page }) => {
+test('all eight parser languages use the default Tree-sitter backend', async ({ page }) => {
 	const samples = [
 		['javascript', 'const value = "hello";', 'const', 'keyword'],
 		['javascriptreact', 'const view = <div>hello</div>;', 'div', 'tag'],
 		['typescript', 'const value: number = 42;', 'const', 'keyword'],
 		['typescriptreact', 'const view = <div>hello</div>;', 'div', 'tag'],
 		['json', '{"value": 42}', '42', 'number'],
-		['jsonc', '// hello\n{"value": 42}', ' hello', 'comment'],
+		['jsonc', '// hello\n{"value": 42}', '// hello', 'comment'],
 		['rust', 'fn main() {}', 'fn', 'keyword'],
 		['shellscript', 'if true; then echo "hello"; fi', 'if', 'keyword'],
 	] as const;
@@ -48,7 +49,7 @@ test('Bazel files select Starlark or bazelrc and tokenize through the bundled gr
 		['custom.BUILD', 'starlark', 'cc_library(name = "demo")', 'string', 'demo'],
 		['.bazelrc', 'bazelrc', 'build:release --jobs=8\n# a config', 'keyword', 'build'],
 		['user.bazelrc', 'bazelrc', 'try-import %workspace%/local.bazelrc', 'keyword', 'try-import'],
-		['bazel.rc', 'bazelrc', 'build --jobs=8', 'number', '8'],
+		['bazel.rc', 'bazelrc', 'build --jobs=8', 'variable', '--jobs=8'],
 	] as const;
 	for (const [filename, languageId, text, type, lexeme] of samples) {
 		const actualLanguage = await page.evaluate(({ filename, text }) => window.tokenizationIntegration.openResource(`/project/${filename}`, text), { filename, text });
@@ -67,16 +68,16 @@ test('Git files select their bundled languages and tokenize through shared line 
 		['.git-blame-ignore-revs', 'ignore', '# formatting commit', 'comment', '# formatting commit'],
 		['COMMIT_EDITMSG', 'git-commit', 'Fix the build\n\n# Please enter a commit message', 'comment', '# Please'],
 		['MERGE_MSG', 'git-commit', 'Merge topic\n\n# Conflicts:', 'comment', '# Conflicts:'],
-		['git-rebase-todo', 'git-rebase', 'pick abc1234 Fix the build\nreword def5678 Rename\nexec echo "hello"', 'function', 'pick'],
+		['git-rebase-todo', 'git-rebase', 'pick abc1234 Fix the build\nreword def5678 Rename\nexec echo "hello"', 'keyword', 'pick'],
 		['.git/rebase-merge/done', 'git-rebase', 'squash abc1234 Fix the build', 'constant', 'abc1234'],
-		['.gitconfig', 'properties', '[user]\nname = "Ash"', 'keyword', 'name'],
+		['.gitconfig', 'properties', '[user]\nname = "Ash"', 'variable', 'name'],
 		['gitconfig', 'properties', '[core]\neditor = "ash"', 'string', 'ash'],
-		['.git/config', 'properties', '[core]\neditor = "ash"', 'keyword', 'editor'],
-		['.config/git/config', 'properties', '[core]\neditor = "ash"', 'keyword', 'editor'],
-		['.gitmodules', 'properties', '[submodule "lib"]\npath = "lib"', 'keyword', 'path'],
-		['settings.ini', 'ini', '[core]\neditor = "ash"', 'keyword', 'editor'],
-		['changes.diff', 'diff', '@@ -1 +1 @@\n-old\n+new', 'punctuation', '+'],
-		['changes.patch', 'diff', '@@ -1 +1 @@\n-old\n+new', 'punctuation', '-'],
+		['.git/config', 'properties', '[core]\neditor = "ash"', 'variable', 'editor'],
+		['.config/git/config', 'properties', '[core]\neditor = "ash"', 'variable', 'editor'],
+		['.gitmodules', 'properties', '[submodule "lib"]\npath = "lib"', 'variable', 'path'],
+		['settings.ini', 'ini', '[core]\neditor = "ash"', 'variable', 'editor'],
+		['changes.diff', 'diff', '@@ -1 +1 @@\n-old\n+new', 'string', '+'],
+		['changes.patch', 'diff', '@@ -1 +1 @@\n-old\n+new', 'keyword', '-'],
 	] as const;
 	for (const [filename, languageId, text, type, lexeme] of samples) {
 		const actualLanguage = await page.evaluate(({ filename, text }) => window.tokenizationIntegration.openResource(`/project/${filename}`, text), { filename, text });
@@ -110,15 +111,15 @@ file[0-9]?.txt`;
 test('Markdown Git fences, commit diffs and rebase Shell commands resolve their included grammars', async ({ page }) => {
 	const samples = [
 		['markdown', '```gitignore\n!keep.log\n```', 'operator', '!'],
-		['markdown', '```git-rebase-todo\npick abc1234 Fix\n```', 'function', 'pick'],
-		['markdown', '```git-rebase\npick abc1234 Fix\n```', 'function', 'pick'],
+		['markdown', '```git-rebase-todo\npick abc1234 Fix\n```', 'keyword', 'pick'],
+		['markdown', '```git-rebase\npick abc1234 Fix\n```', 'keyword', 'pick'],
 		['markdown', '```git-commit\nFix\n\n# message\n```', 'comment', '# message'],
 		['markdown', '```COMMIT_EDITMSG\nFix\n\n# message\n```', 'comment', '# message'],
-		['markdown', '```ini\n[core]\neditor = "ash"\n```', 'keyword', 'editor'],
-		['markdown', '```diff\n-old\n+new\n```', 'punctuation', '+'],
-		['git-commit', 'Fix\n\n# message\ndiff --git a/file b/file\n--- a/file\n+++ b/file\n@@ -1 +1 @@\n-old\n+new', 'punctuation', '+'],
+		['markdown', '```ini\n[core]\neditor = "ash"\n```', 'variable', 'editor'],
+		['markdown', '```diff\n-old\n+new\n```', 'string', '+'],
+		['git-commit', 'Fix\n\n# message\ndiff --git a/file b/file\n--- a/file\n+++ b/file\n@@ -1 +1 @@\n-old\n+new', 'string', '+'],
 		['git-rebase', 'exec if true; then echo "hello"; fi', 'keyword', 'if'],
-		['git-rebase', 'exec echo "unfinished\npick abc1234 Fix', 'function', 'pick'],
+		['git-rebase', 'exec echo "unfinished\npick abc1234 Fix', 'keyword', 'pick'],
 	] as const;
 	for (const [languageId, text, type, lexeme] of samples) {
 		await page.evaluate(({ languageId, text }) => window.tokenizationIntegration.open(languageId, text), { languageId, text });
@@ -162,8 +163,8 @@ test('Force Retokenize action invalidates and refreshes visible tokens', async (
 	await expect(page.locator('.stanza-editor-token.token-keyword').filter({ hasText: /^fn$/ })).toBeVisible();
 	const before = await page.evaluate(() => window.tokenizationIntegration.state());
 	const result = await page.evaluate(() => window.tokenizationIntegration.forceRetokenize());
-	expect(result).toEqual({ version: before.version, accurate: true });
-	await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state().tokenVersion)).toBe(before.version);
+	expect(result.version).toBe(before.version);
+	await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state())).toMatchObject({ tokenVersion: before.version, accurate: true });
 	await expect(page.locator('.stanza-editor-token.token-keyword').filter({ hasText: /^fn$/ })).toBeVisible();
 });
 

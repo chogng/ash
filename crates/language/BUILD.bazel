@@ -1,0 +1,7 @@
+load("//:defs.bzl", "ash_rust_crate")
+
+ash_rust_crate(
+    name = "language",
+    crate_name = "ash_language",
+    data = ["//:test/fixtures/languages/associations.json"],
+)

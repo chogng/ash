@@ -38,7 +38,6 @@ pub use types::CodebaseQuery;
 pub use types::CodebaseSnapshot;
 pub use types::IndexRootId;
 pub use types::IndexedChunkReference;
-pub use types::IndexedLanguage;
 pub use types::IndexedSourceReference;
 pub use types::MaterializedChunk;
 pub use types::MaterializedExcerpt;

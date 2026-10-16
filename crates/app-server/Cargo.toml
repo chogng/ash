@@ -15,6 +15,7 @@ name = "ash_app_server"
 path = "src/lib.rs"
 
 [dependencies]
+ash-language = { workspace = true }
 external-ext-protocol.workspace = true
 ash-utils-image = { workspace = true }
 assets = { workspace = true }

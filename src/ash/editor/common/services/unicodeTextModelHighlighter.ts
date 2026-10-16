@@ -12,34 +12,47 @@ export interface UnicodeHighlight {
 
 /** Finds editor-dangerous Unicode characters in one immutable text version. */
 export function computeUnicodeHighlights(snapshot: TextSnapshot, signal?: AbortSignal): readonly UnicodeHighlight[] {
+	signal?.throwIfAborted();
 	const result: UnicodeHighlight[] = [];
-	const lines = snapshot.getText().split(/\r\n|\r|\n/);
-	for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+	const text = snapshot.getText();
+	// Most source text cannot produce a warning. Let the regexp engine skip it
+	// without allocating one string per line or visiting every code point in JS.
+	const candidates = /[\x00-\x08\x0b\x0c\x0e-\x1f\u00ad\u061c\u200b-\u200d\u202a-\u202e\u2060\u2066-\u2069\ufeff\u0370-\u03ff\u0400-\u04ff]/gu;
+	const separators = /\r\n|\r|\n/g;
+	let nextSeparator = separators.exec(text);
+	let lineNumber = 1;
+	let lineStart = 0;
+	let latinLine = 0;
+	let hasLatin = false;
+	for (let match = candidates.exec(text); match; match = candidates.exec(text)) {
 		signal?.throwIfAborted();
-		const line = lines[lineIndex]!;
-		let columnIndex = 0;
-		for (const character of line) {
-			const endColumnIndex = columnIndex + character.length;
-			const kind = classifyCharacter(character, line);
-			if (kind) {
-				result.push(Object.freeze({
-					range: Range.fromPositions(new Position((lineIndex) + 1, (columnIndex) + 1), new Position((lineIndex) + 1, (endColumnIndex) + 1)),
-					kind,
-					character,
-				}));
+		while (nextSeparator && nextSeparator.index < match.index) {
+			lineStart = nextSeparator.index + nextSeparator[0].length;
+			lineNumber += 1;
+			nextSeparator = separators.exec(text);
+		}
+		const character = match[0];
+		const codePoint = character.codePointAt(0)!;
+		let kind: UnicodeHighlightKind | undefined;
+		if (isBidiControl(codePoint)) kind = 'bidi';
+		else if (isInvisible(codePoint)) kind = 'invisible';
+		else {
+			if (latinLine !== lineNumber) {
+				latinLine = lineNumber;
+				hasLatin = /[A-Za-z]/u.test(text.slice(lineStart, nextSeparator?.index ?? text.length));
 			}
-			columnIndex = endColumnIndex;
+			if (hasLatin) kind = 'confusable';
+		}
+		if (kind) {
+			const column = match.index - lineStart + 1;
+			result.push(Object.freeze({
+				range: Range.fromPositions(new Position(lineNumber, column), new Position(lineNumber, column + character.length)),
+				kind,
+				character,
+			}));
 		}
 	}
 	return Object.freeze(result);
-}
-
-function classifyCharacter(character: string, line: string): UnicodeHighlightKind | undefined {
-	const codePoint = character.codePointAt(0)!;
-	if (isBidiControl(codePoint)) return 'bidi';
-	if (isInvisible(codePoint)) return 'invisible';
-	if (isConfusable(character, line)) return 'confusable';
-	return undefined;
 }
 
 function isBidiControl(codePoint: number): boolean {
@@ -55,8 +68,4 @@ function isInvisible(codePoint: number): boolean {
 		|| codePoint === 0x2060
 		|| codePoint === 0xfeff
 		|| (codePoint >= 0 && codePoint < 0x20 && codePoint !== 0x09);
-}
-
-function isConfusable(character: string, line: string): boolean {
-	return /[\u0370-\u03ff\u0400-\u04ff]/u.test(character) && /[A-Za-z]/u.test(line) && /[A-Za-z0-9_$]/u.test(line);
 }

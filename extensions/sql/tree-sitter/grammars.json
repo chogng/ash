@@ -1,0 +1,30 @@
+[
+  {
+    "name": "sql",
+    "source": {
+      "crate": "tree-sitter-sequel",
+      "version": "0.3.11",
+      "root": "."
+    },
+    "wasm": {
+      "path": "tree-sitter/sql.wasm",
+      "sha256": "8dcd3ef2628416b1283a132005c161d1a22da0e397702e48c05505333340a2db"
+    },
+    "highlights": ["queries/sql.scm"],
+    "tags": ["queries/sql.tags.scm"],
+    "injections": [],
+    "rust": {
+      "language": "tree_sitter_sequel::LANGUAGE"
+    },
+    "languages": [
+      {
+        "id": "sql",
+        "variant": "Sql",
+        "editorLanguage": "sql",
+        "editorIds": ["sql"],
+        "aliases": []
+      }
+    ],
+    "folds": ["queries/sql.folds.scm"]
+  }
+]

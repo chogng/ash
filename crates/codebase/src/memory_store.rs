@@ -82,7 +82,7 @@ impl CodebaseIndexStore for InMemoryCodebaseIndexStore {
                 root_id: root_id.clone(),
                 relative_path: file.relative_path.clone(),
                 source_revision: file.source_revision.clone(),
-                language: file.language,
+                language: file.language.clone(),
                 source_bytes: file.source_bytes,
             })
             .collect();
@@ -99,7 +99,7 @@ impl CodebaseIndexStore for InMemoryCodebaseIndexStore {
                         content_hash: chunk.content_hash.clone(),
                         span: chunk.span.clone(),
                     },
-                    language: file.language,
+                    language: file.language.clone(),
                 })
             })
             .collect();
@@ -156,7 +156,7 @@ impl CodebaseIndexStore for InMemoryCodebaseIndexStore {
                     reference.clone(),
                     SearchHit {
                         reference,
-                        language: file.language,
+                        language: file.language.clone(),
                         content: chunk.content.clone(),
                         score: 1.0,
                     },
@@ -196,7 +196,7 @@ impl CodebaseIndexStore for InMemoryCodebaseIndexStore {
                                 content_hash: chunk.content_hash.clone(),
                                 span: chunk.span.clone(),
                             },
-                            language: file.language,
+                            language: file.language.clone(),
                             content: chunk.content.clone(),
                             score: terms
                                 .iter()

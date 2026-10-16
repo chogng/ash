@@ -1,3 +1,8 @@
+import { timeout } from '../../../../../base/common/async.js';
+import { TextDecorationCollection } from '../../../../common/model/decorationCollection.js';
+import { type UnicodeHighlight } from '../../../../common/services/unicodeTextModelHighlighter.js';
+import { type IVersionedEditorWorkerClient } from '../../../../browser/services/editorWorkerService.js';
+import { UnicodeHighlighterController } from '../../browser/unicodeHighlighterController.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { findUnicodeHighlights } from "../../common/unicodeHighlights.js";
@@ -6,4 +11,35 @@ import { TextModel } from "../../../../common/model/textModel.js";
 test("Unicode highlighter finds invisible, bidi, and mixed-script confusable characters", () => {
 	using model = new TextModel("const a = 1;\u200b\nconst а = 2;\u202e");
 	assert.deepEqual(findUnicodeHighlights(model).map(highlight => highlight.kind), ["invisible", "confusable", "bidi"]);
+});
+
+
+test('Unicode controller dispatches the latest synchronous version after attach and cancels on dispose', async () => {
+	using model = new TextModel('first');
+	using decorations = new TextDecorationCollection<UnicodeHighlight>(model);
+	const versions: number[] = [];
+	const worker: IVersionedEditorWorkerClient = {
+		dispose() { },
+		[Symbol.dispose]() { this.dispose(); },
+		textualSuggest: async () => undefined,
+		computeMoreMinimalEdits: async () => undefined,
+		navigateValueSet: async () => undefined,
+		computeUnicodeHighlights: async () => {
+			versions.push(model.version);
+			return findUnicodeHighlights(model);
+		},
+	};
+	const errors: unknown[] = [];
+	using controller = new UnicodeHighlighterController(model, decorations, worker, error => errors.push(error));
+	assert.deepEqual(versions, []);
+	model.setValue('second');
+	model.setValue('const a = 1;\u200b');
+	await timeout(20);
+	assert.deepEqual(versions, [model.version]);
+	assert.deepEqual(decorations.decorations.map(item => item.metadata.kind), ['invisible']);
+	model.setValue('third');
+	controller.dispose();
+	await timeout(20);
+	assert.equal(versions.length, 1);
+	assert.deepEqual(errors, []);
 });

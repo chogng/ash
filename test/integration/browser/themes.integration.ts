@@ -1,3 +1,5 @@
+import { TreeSitterLibraryService, createTreeSitterSyntaxTokenBackend } from '../../../src/ash/workbench/services/treeSitter/browser/treeSitterLibraryService.js';
+import { rustSyntaxFixture } from './rustSyntaxHostFixture.js';
 import { createEmptyTestLanguagePacks } from '../../../src/ash/workbench/services/localization/test/common/localizationTestUtils.js';
 import type { ITextResourceStore } from '../../../src/ash/workbench/services/textmodelResolver/common/textResourceStore.js';
 import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js';
@@ -52,13 +54,7 @@ import { WorkbenchConfiguration } from '../../../src/ash/workbench/common/config
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { AppServerExtensionService } from '../../../src/ash/workbench/services/extensions/browser/appServerExtensionService.js';
 import { WorkbenchThemeService } from '../../../src/ash/workbench/services/themes/browser/workbenchThemeService.js';
-import { TextMateGrammarService } from '../../../src/ash/workbench/services/textMate/common/textMateGrammarService.js';
-import type { ITextMateService } from '../../../src/ash/workbench/services/textMate/common/textMateService.js';
-import { createTextMateSyntaxWorkerFactory } from '../../../src/ash/workbench/services/textMate/browser/textMateSyntaxWorkerClient.js';
-import { TextMateGrammarCatalogModel } from '../../../src/ash/workbench/services/textMate/common/textMateGrammarCatalog.js';
 import { TextMateScopeThemeModel } from '../../../src/ash/workbench/services/textMate/common/textMateScopeTheme.js';
-import { LanguageRequestCoordinator } from '../../../src/ash/editor/common/model/languageRequestCoordinator.js';
-import type { LanguageToken } from '../../../src/ash/editor/common/tokens/languageTokens.js';
 import { TextModel } from '../../../src/ash/editor/common/model/textModel.js';
 import { registerColor } from '../../../src/ash/platform/theme/common/colorUtils.js';
 import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
@@ -79,53 +75,48 @@ declare global {
 		mountNestedHighContrastWidget(): void;
 		disposeNestedHighContrastWidget(): void;
 		disposeIconSelectBox(): void;
-		previewInTextMateWorker(): Promise<{ preview: string[]; unchanged: boolean; text: string; }>;
-		tokenizeInTextMateWorker(): Promise<readonly { type: string; modifiers: readonly string[]; presentation?: { foreground?: string; fontStyle?: readonly string[]; }; }[]>;
+		previewWithRustSyntax(): Promise<{ hasString: boolean; hasKeyword: boolean; unchanged: boolean; text: string; }>;
+		tokenizeWithRustSyntax(): Promise<readonly { type: string; modifiers: readonly string[]; presentation?: { foreground?: string; fontStyle?: readonly string[]; }; }[]>;
 		setLabelDecoration(data: IDecorationData | undefined): void;
 		removeLabelDecorationProvider(): void;
 	}
 }
 
-window.tokenizeInTextMateWorker = async () => {
-	using catalogs = new TextMateGrammarCatalogModel({
-		revision: 1,
-		grammars: [{
-			scopeName: 'source.demo',
-			languageId: 'demo',
-			injectTo: [],
-			content: JSON.stringify({ scopeName: 'source.demo', patterns: [{ match: '\\bif\\b', name: 'keyword.control.demo' }] }),
-		}],
-	});
+window.tokenizeWithRustSyntax = async () => {
 	using scopeTheme = new TextMateScopeThemeModel();
-	using model = new TextModel('if');
-	using syntax = new LanguageRequestCoordinator(model, createTextMateSyntaxWorkerFactory(catalogs, scopeTheme));
+	using library = new TreeSitterLibraryService(await rustSyntaxFixture());
+	const configuration = { getValue: () => false } as unknown as IConfigurationService;
+	const create = (text: string): TextModel => new TextModel(text, {
+		languageId: 'javascript', tokenization: {
+			createSyntaxTokenBackend: model => createTreeSitterSyntaxTokenBackend(model, configuration, library, scopeTheme),
+			onDidChangeSyntaxBackend: listener => scopeTheme.onDidChangeTheme(() => listener()),
+		},
+	});
+	let model = create('if (true) {}');
 	const results: { type: string; modifiers: readonly string[]; presentation?: { foreground?: string; fontStyle?: readonly string[]; }; }[] = [];
 	const capture = async (): Promise<void> => {
-		let token: LanguageToken | undefined;
-		await syntax.runLatest('tokens', { languageId: 'demo' }, result => {
-			if (result.value.lane !== 'tokens') throw new Error('Unexpected syntax result lane');
-			token = result.value.value.tokens[0];
-		});
-		if (!token) {
-			throw new Error('TextMate Worker did not tokenize the registered grammar');
-		}
-		results.push({ type: token.tokenType, modifiers: token.modifiers, ...(token.presentation ? { presentation: token.presentation } : {}) });
+		const tree = model.tokenization.syntaxTree!;
+		await tree.whenReady(new AbortController().signal);
+		const token = tree.getLanguageTokens(1)[0];
+		if (!token) throw new Error('Tree-sitter did not return a token');
+		const { foreground, fontStyle } = token.presentation ?? {};
+		results.push({ type: token.tokenType, modifiers: token.modifiers, ...(foreground || fontStyle ? { presentation: { foreground, fontStyle } } : {}) });
 	};
-	await capture();
-	scopeTheme.replace({ revision: 1, rules: [{ selector: 'keyword.control.demo', tokenType: 'keyword', modifiers: ['declaration'] }] });
-	await capture();
-	scopeTheme.replace({ revision: 2, rules: [{ selector: 'keyword.control.demo', tokenType: 'keyword', modifiers: ['declaration'], foreground: '#ff0000', fontStyle: ['italic'] }] });
-	await capture();
-	scopeTheme.replace({ revision: 3, rules: [{ selector: 'keyword.control.demo', tokenType: 'keyword', modifiers: ['declaration'], foreground: '#0000ff', fontStyle: ['bold'] }] });
-	await capture();
-	catalogs.replace({
-		revision: 2,
-		grammars: [{ ...catalogs.currentCatalog.grammars[0]!, content: JSON.stringify({ scopeName: 'source.demo', patterns: [{ match: '\\bif\\b', name: 'string.quoted.demo' }] }) }],
-	});
-	await capture();
-	syntax.restartWorker();
-	await capture();
-	return results;
+	try {
+		await capture();
+		scopeTheme.replace({ revision: 1, rules: [{ selector: 'keyword', tokenType: 'keyword', modifiers: ['declaration'] }] });
+		await capture();
+		scopeTheme.replace({ revision: 2, rules: [{ selector: 'keyword', tokenType: 'keyword', modifiers: ['declaration'], foreground: '#ff0000', fontStyle: ['italic'] }] });
+		await capture();
+		scopeTheme.replace({ revision: 3, rules: [{ selector: 'keyword', tokenType: 'keyword', modifiers: ['declaration'], foreground: '#0000ff', fontStyle: ['bold'] }] });
+		await capture();
+		model.setValue('"if"');
+		await capture();
+		model.dispose();
+		model = create('"if"');
+		await capture();
+		return results;
+	} finally { model.dispose(); }
 };
 
 const resources = new DisposableStore();
@@ -182,7 +173,6 @@ const manifestJson = JSON.stringify({ ...manifest, contributes: { ...manifest.co
 const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(manifestJson));
 const hash = 'sha256:' + Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
 const urls: Record<string, string> = { 'icons/vs-seti-icon-theme.json': themeUrl, 'icons/seti.woff': fontUrl, 'product-icons/theme.json': productThemeUrl, 'product-icons/add.svg': productIconUrl };
-const grammars = resources.add(new TextMateGrammarService());
 const extensions = resources.add(new AppServerExtensionService({
 	api: {
 		list: async () => ({
@@ -201,7 +191,7 @@ const extensions = resources.add(new AppServerExtensionService({
 			return new Uint8Array(await response.arrayBuffer());
 		}),
 	},
-	textMateService: { grammars } as unknown as ITextMateService,
+
 }, createEmptyTestLanguagePacks()));
 await extensions.start();
 window.disposeThemeExtensions = () => extensions.dispose();
@@ -254,18 +244,15 @@ window.disposeIconLabels = () => labels.dispose();
 document.body.dataset.ready = 'true';
 
 
-window.previewInTextMateWorker = async () => {
-	using catalogs = new TextMateGrammarCatalogModel({
-		revision: 1, grammars: [{
-			scopeName: 'source.preview', languageId: 'preview', injectTo: [],
-			content: JSON.stringify({ scopeName: 'source.preview', patterns: [{ begin: '"', end: '"', name: 'string.quoted.preview' }, { match: '\\bif\\b', name: 'keyword.control.preview' }] }),
-		}]
-	});
+window.previewWithRustSyntax = async () => {
 	using theme = new TextMateScopeThemeModel();
-	using model = new TextModel('"start\nend"\nif', { languageId: 'preview', tokenization: { syntaxService: { workerFactory: createTextMateSyntaxWorkerFactory(catalogs, theme) } } });
-	const signal = new AbortController().signal;
-	const preview = await model.tokenization.tokenizeLinesAtAsync(2, ['[)"', 'if'], signal);
-	const first = await model.tokenization.tokenizeLinesAtAsync(3, ['if'], signal);
-	const second = await model.tokenization.tokenizeLinesAtAsync(3, ['if'], signal);
-	return { preview: preview!.map(line => `${line.getLineContent()}:${line.getStandardTokenType(0)}`), unchanged: first![0]!.equals(second![0]!), text: model.getText() };
+	using library = new TreeSitterLibraryService(await rustSyntaxFixture());
+	const configuration = { getValue: () => false } as unknown as IConfigurationService;
+	using model = new TextModel('const text = `start\nend`;\nif (true) {}', {
+		languageId: 'javascript',
+		tokenization: { createSyntaxTokenBackend: model => createTreeSitterSyntaxTokenBackend(model, configuration, library, theme) },
+	});
+	const before = model.getValue();
+	const preview = await model.tokenization.syntaxTree!.tokenizeLinesAtAsync(2, ['changed`;', 'if (true) {}'], new AbortController().signal);
+	return { hasString: preview[0]!.some(token => token.tokenType === 'string'), hasKeyword: preview[1]!.some(token => token.tokenType === 'keyword'), unchanged: model.getValue() === before, text: model.getValue() };
 };

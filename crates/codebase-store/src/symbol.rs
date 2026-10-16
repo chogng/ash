@@ -4,9 +4,9 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use ash_codebase::{
-    IndexRootId, IndexedLanguage, IndexedSourceReference, IndexedSymbol, SourceRevision,
-    SourceSymbols, StoredSymbolProjection, SymbolIndexError, SymbolIndexSnapshot, SymbolIndexStore,
-    SymbolKind, SymbolRange, SymbolReference,
+    IndexRootId, IndexedSourceReference, IndexedSymbol, SourceRevision, SourceSymbols,
+    StoredSymbolProjection, SymbolIndexError, SymbolIndexSnapshot, SymbolIndexStore, SymbolKind,
+    SymbolRange, SymbolReference,
 };
 use ash_state::{SqliteDurability, open_in_memory_database, open_sqlite_database};
 use ash_syntax::SYNTAX_FACTS_VERSION;
@@ -123,7 +123,7 @@ impl SqliteSymbolIndexStore {
                 root_id: root_id.clone(),
                 relative_path: relative_path.clone(),
                 source_revision: SourceRevision::parse(revision)?,
-                language: language_from_id(&language),
+                language: crate::read_language_id(&language)?,
                 source_bytes: to_usize(source_bytes),
             };
             let symbols = load_symbols(&connection, &source)?;
@@ -296,7 +296,7 @@ fn insert_source(transaction: &Transaction<'_>, source: &SourceSymbols) -> Symbo
         params![
             path,
             source.source.source_revision.as_str(),
-            source.source.language.id(),
+            source.source.language.as_str(),
             to_i64(source.source.source_bytes),
             flag_value(source.symbol_limit_hit),
         ],
@@ -373,7 +373,7 @@ fn load_symbols(
                 root_id: source.root_id.clone(),
                 relative_path: source.relative_path.clone(),
                 source_revision: source.source_revision.clone(),
-                language: source.language,
+                language: source.language.clone(),
                 source_bytes: source.source_bytes,
                 ordinal,
                 declaration_range,
@@ -446,20 +446,6 @@ fn set_metadata(transaction: &Transaction<'_>, key: &str, value: &str) -> rusqli
         params![key, value],
     )?;
     Ok(())
-}
-
-fn language_from_id(value: &str) -> IndexedLanguage {
-    match value {
-        "javascript" => IndexedLanguage::Javascript,
-        "javascriptreact" => IndexedLanguage::JavascriptReact,
-        "json" => IndexedLanguage::Json,
-        "jsonc" => IndexedLanguage::Jsonc,
-        "rust" => IndexedLanguage::Rust,
-        "shell" => IndexedLanguage::Shell,
-        "typescript" => IndexedLanguage::TypeScript,
-        "typescriptreact" => IndexedLanguage::TypeScriptReact,
-        _ => IndexedLanguage::PlainText,
-    }
 }
 
 fn storage_path(path: &Path) -> String {

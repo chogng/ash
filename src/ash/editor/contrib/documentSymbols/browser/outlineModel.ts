@@ -71,7 +71,14 @@ export class OutlineModel extends TreeElement {
 		const results = await Promise.all(providers.map(async (provider, order) => {
 			try {
 				const symbols = await provider.provideDocumentSymbols(request, signal);
-				return { provider, order, symbols: normalizeSymbols(symbols, model) };
+				if (!Array.isArray(symbols)) throw new TypeError('Document symbols must be an array');
+				const normalized: LanguageDocumentSymbol[] = [];
+				for (let start = 0; start < symbols.length; start += 4096) {
+					if (!isLanguageFeatureRequestCurrent(request)) return undefined;
+					normalized.push(...normalizeSymbols(symbols.slice(start, start + 4096), model));
+					if (start + 4096 < symbols.length) await new Promise<void>(resolve => setTimeout(resolve, 0));
+				}
+				return { provider, order, symbols: normalized };
 			} catch (error) {
 				if (isLanguageFeatureRequestCurrent(request)) onError(error);
 				return undefined;
@@ -82,6 +89,7 @@ export class OutlineModel extends TreeElement {
 
 		const outline = new OutlineModel(model.uri, request.snapshot.version);
 		const occurrences = new Map<LanguageDocumentSymbolProvider, number>();
+		const collisionSuffixes = new Map<string, number>();
 		for (const result of results) {
 			if (!result) continue;
 			const occurrence = occurrences.get(result.provider) ?? 0;
@@ -89,7 +97,13 @@ export class OutlineModel extends TreeElement {
 			if (result.symbols.length === 0) continue;
 			const id = `root/provider_${idForProvider(result.provider)}_${occurrence}`;
 			const group = new OutlineGroup(id, outline, result.order);
-			for (const symbol of result.symbols) appendSymbol(group, symbol);
+			for (let index = 0; index < result.symbols.length; index++) {
+				if (index > 0 && index % 4096 === 0) {
+					await new Promise<void>(resolve => setTimeout(resolve, 0));
+					if (!isLanguageFeatureRequestCurrent(request) || !sameProviders(providers, registry.ordered(model))) return null;
+				}
+				appendSymbol(group, result.symbols[index], collisionSuffixes);
+			}
 			outline.children.set(id, group);
 		}
 		return outline;
@@ -111,13 +125,19 @@ export class OutlineModel extends TreeElement {
 	}
 }
 
-function appendSymbol(parent: OutlineGroup | OutlineElement, symbol: LanguageDocumentSymbol): void {
+function appendSymbol(parent: OutlineGroup | OutlineElement, symbol: LanguageDocumentSymbol, collisionSuffixes: Map<string, number>): void {
 	const base = `${parent.id}/${encodeURIComponent(symbol.name)}`;
 	let id = base;
-	for (let suffix = 1; parent.children.has(id); suffix++) id = `${base}_${suffix}`;
+	if (parent.children.has(id)) {
+		// Repeated labels (for example HTML tags) share a request-local suffix cursor.
+		// Starting at one for every sibling makes large outlines quadratic.
+		let suffix = collisionSuffixes.get(base) ?? 1;
+		do { id = `${base}_${suffix++}`; } while (parent.children.has(id));
+		collisionSuffixes.set(base, suffix);
+	}
 	const element = new OutlineElement(id, parent, symbol);
 	parent.children.set(id, element);
-	for (const child of symbol.children ?? []) appendSymbol(element, child);
+	for (const child of symbol.children ?? []) appendSymbol(element, child, collisionSuffixes);
 }
 
 function normalizeSymbols(symbols: readonly LanguageDocumentSymbol[], model: TextModel): readonly LanguageDocumentSymbol[] {

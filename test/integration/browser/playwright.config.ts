@@ -14,6 +14,7 @@ const editorSpecs = [
 	"textModel.integration.spec.ts",
 	"themes.integration.spec.ts",
 	"tokenization.integration.spec.ts",
+	"treeSitter.integration.spec.ts",
 ];
 
 const runDirectory = process.env.ASH_EDITOR_BROWSER_RUN_DIRECTORY;

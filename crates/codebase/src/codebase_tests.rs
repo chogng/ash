@@ -9,9 +9,9 @@ use crate::CodebaseError;
 use crate::CodebaseLimits;
 use crate::CodebaseOverlayDocument;
 use crate::CodebaseQuery;
-use crate::IndexedLanguage;
 use crate::RefreshOutcome;
 use crate::SourceExcerptReference;
+use ash_language::LanguageId;
 
 fn dir() -> TempDir {
     let directory = tempfile::tempdir().expect("dir");
@@ -25,6 +25,76 @@ fn memory_index(directory: &TempDir) -> Codebase {
         CodebaseLimits::default(),
     )
     .expect("index")
+}
+
+#[test]
+fn source_detection_uses_package_filenames_suffixes_and_first_lines() {
+    let directory = dir();
+    for (path, text) in [
+        ("tsconfig.json", "{\"compilerOptions\": {}}\n"),
+        ("main.py", "def python_entry():\n    pass\n"),
+        ("main.go", "package main\nfunc goEntry() {}\n"),
+        ("script", "#!/usr/bin/env bash\necho script_entry\n"),
+    ] {
+        fs::write(directory.path().join(path), text).unwrap();
+    }
+    let index = memory_index(&directory);
+    index.rebuild().unwrap();
+    let manifest = index.manifest().unwrap();
+    for (path, language) in [
+        ("tsconfig.json", "jsonc"),
+        ("main.py", "python"),
+        ("main.go", "go"),
+        ("script", "shellscript"),
+    ] {
+        let source = manifest
+            .sources
+            .iter()
+            .find(|source| source.relative_path == std::path::Path::new(path))
+            .unwrap();
+        assert_eq!(source.language.as_str(), language);
+        let materialized = index
+            .materialize_sources(std::slice::from_ref(source))
+            .unwrap();
+        assert_eq!(materialized[0].reference.language.as_str(), language);
+    }
+    let symbols = crate::SymbolIndex::open_memory(
+        std::sync::Arc::new(index),
+        crate::SymbolIndexLimits::default(),
+    )
+    .unwrap();
+    symbols.reconcile().unwrap();
+    assert!(
+        !symbols
+            .search(&crate::SymbolIndexQuery::new("python_entry"))
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        !symbols
+            .search(&crate::SymbolIndexQuery::new("goEntry"))
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[test]
+fn overlays_preserve_language_identity_without_requiring_a_parser() {
+    let directory = dir();
+    let index = memory_index(&directory);
+    index.rebuild().unwrap();
+    index
+        .synchronize_overlay(CodebaseOverlayDocument {
+            relative_path: "custom.source".into(),
+            editor_revision: 1,
+            language: LanguageId::parse("custom.language").unwrap(),
+            content: "custom_overlay_content".into(),
+        })
+        .unwrap();
+    let hits = index
+        .search(&CodebaseQuery::new("custom_overlay_content"))
+        .unwrap();
+    assert_eq!(hits[0].language.as_str(), "custom.language");
 }
 
 #[test]
@@ -116,7 +186,7 @@ fn rebuild_indexes_structural_chunks_and_searches_literal_text() {
         hits[0].reference.relative_path,
         std::path::Path::new("math.rs")
     );
-    assert_eq!(hits[0].language, IndexedLanguage::Rust);
+    assert_eq!(hits[0].language, LanguageId::RUST);
     assert!(hits[0].content.contains("multiply"));
     assert_eq!(
         index
@@ -149,7 +219,7 @@ fn materializes_revision_bound_excerpt_without_a_local_chunk_key() {
 
     assert_eq!(excerpt.reference, reference);
     assert_eq!(excerpt.content, hit.content);
-    assert_eq!(excerpt.language, IndexedLanguage::Rust);
+    assert_eq!(excerpt.language, LanguageId::RUST);
 
     let mut invalid_lines = reference;
     invalid_lines.span.start_line = invalid_lines.span.start_line.saturating_add(1);
@@ -386,7 +456,7 @@ fn dirty_overlay_replaces_disk_search_and_materialization() {
         .synchronize_overlay(CodebaseOverlayDocument {
             relative_path: "service.rs".into(),
             editor_revision: 2,
-            language: IndexedLanguage::Rust,
+            language: LanguageId::RUST,
             content: "fn unsaved_name() {}\n".into(),
         })
         .expect("overlay");
@@ -420,7 +490,7 @@ fn overlay_hands_back_to_matching_persistent_revision_after_save() {
         .synchronize_overlay(CodebaseOverlayDocument {
             relative_path: "service.rs".into(),
             editor_revision: 2,
-            language: IndexedLanguage::Rust,
+            language: LanguageId::RUST,
             content: "fn saved() {}\n".into(),
         })
         .expect("overlay");
@@ -445,7 +515,7 @@ fn older_editor_revision_cannot_replace_a_newer_overlay() {
         let result = index.synchronize_overlay(CodebaseOverlayDocument {
             relative_path: "new.rs".into(),
             editor_revision: revision,
-            language: IndexedLanguage::Rust,
+            language: LanguageId::RUST,
             content: content.into(),
         });
         if revision == 3 {
@@ -468,7 +538,7 @@ fn equal_editor_revision_cannot_identify_two_different_snapshots() {
         .synchronize_overlay(CodebaseOverlayDocument {
             relative_path: "new.rs".into(),
             editor_revision: 3,
-            language: IndexedLanguage::Rust,
+            language: LanguageId::RUST,
             content: "fn first() {}\n".into(),
         })
         .expect("first snapshot");
@@ -477,7 +547,7 @@ fn equal_editor_revision_cannot_identify_two_different_snapshots() {
         index.synchronize_overlay(CodebaseOverlayDocument {
             relative_path: "new.rs".into(),
             editor_revision: 3,
-            language: IndexedLanguage::Rust,
+            language: LanguageId::RUST,
             content: "fn conflicting() {}\n".into(),
         }),
         Err(CodebaseError::OverlayRevisionConflict)

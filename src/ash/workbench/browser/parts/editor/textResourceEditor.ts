@@ -14,7 +14,6 @@ import { Emitter, type Event } from "../../../../base/common/event.js";
 import { assertDefined } from "../../../../base/common/types.js";
 import * as strings from '../../../../base/common/strings.js';
 import type { URI } from "../../../../base/common/uri.js";
-import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { EditorPaneSelectionChangeReason, type IEditorPaneWithSelection, type IResourceEditorInput, type ISaveOptions, type EditorPaneStatus } from '../../../common/editor.js';
@@ -79,7 +78,6 @@ export interface EditorPanePart extends IDisposable, ITextCodeEditorControl {
 }
 
 export interface EditorPanePartOptions extends CodeEditorWidgetOptions {
-	readonly textMateService?: ITextMateService;
 	readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
 	readonly accessibilityService?: IAccessibilityService;
 }
@@ -87,7 +85,6 @@ export interface EditorPanePartOptions extends CodeEditorWidgetOptions {
 export interface EditorPaneOptions {
 	readonly workingCopyService?: IWorkingCopyService;
 	readonly createPart?: (options: EditorPanePartOptions) => EditorPanePart;
-	readonly textMateService?: ITextMateService;
 	readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
 	readonly accessibilityService?: IAccessibilityService;
 	readonly lineWrapping?: EditorLineWrapping;
@@ -303,7 +300,6 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 				model: resolvedModel,
 				ariaLabel: input.label,
 				readOnly: isProvidedResource || input.readOnly,
-				textMateService: this.options.textMateService,
 				languageDiagnosticsService: this.options.languageDiagnosticsService,
 				accessibilityService: this.options.accessibilityService,
 				lineWrapping: this.options.lineWrapping ?? this.configurationService.getValue(wordWrapConfiguration),

@@ -229,3 +229,23 @@ test('TextModel keeps undo history when reset cannot allocate line identities', 
 	model.undo();
 	assert.equal(model.getText(), 'a\nb');
 });
+
+
+test('plain model identities and metadata remain stable before requesting the first line snapshot', async () => {
+	const metadata = { nested: { tags: ['before'] } };
+	using model = new TextModel('a\r\nb', { lineIds: ['line:1', 'line:3'], metadata });
+	assert.equal(model.getLineId(0), 'line:1');
+	assert.equal(model.getLineIndex('line:3'), 1);
+	metadata.nested.tags[0] = 'mutated';
+	model.applyOperations([{ range: new Range(1, 2, 1, 2), text: '\ninserted' }]);
+	assert.equal(model.getLineId(1), 'line:2');
+	const snapshot = model.lineDocument;
+	assert.equal(snapshot.getText(), 'a\ninserted\nb');
+	assert.deepEqual(snapshot.metadata, { nested: { tags: ['before'] } });
+	assert.ok(Object.isFrozen(snapshot.metadata.nested));
+	await model.undo();
+	assert.deepEqual(model.lineDocument.lines.values.map(line => line.id), ['line:1', 'line:3']);
+	assert.equal(snapshot.getText(), 'a\ninserted\nb');
+	assert.throws(() => new TextModel('text', { metadata: { invalid: Infinity } }), /finite/);
+	assert.throws(() => new TextModel('text', { lineIdGenerator: () => '' }), /non-empty/);
+});

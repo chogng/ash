@@ -8,9 +8,6 @@
   "engines": {
     "vscode": "*"
   },
-  "scripts": {
-    "update-grammar": "node ./build/update-grammar.mjs"
-  },
   "categories": [
     "Programming Languages"
   ],
@@ -26,13 +23,6 @@
           "rust"
         ],
         "configuration": "./language-configuration.json"
-      }
-    ],
-    "grammars": [
-      {
-        "language": "rust",
-        "path": "./syntaxes/rust.tmLanguage.json",
-        "scopeName": "source.rust"
       }
     ]
   },

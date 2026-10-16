@@ -1,0 +1,58 @@
+[
+  {
+    "name": "markdown",
+    "source": {
+      "crate": "tree-sitter-md",
+      "version": "0.5.3",
+      "root": "tree-sitter-markdown"
+    },
+    "wasm": {
+      "path": "tree-sitter/markdown.wasm",
+      "sha256": "db5f95b67e5b38ca22a8c07a094d206d24c87e780ea3a6cab122569579777430"
+    },
+    "highlights": ["queries/markdown.scm"],
+    "tags": ["queries/markdown.tags.scm"],
+    "injections": ["queries/markdown.injections.scm"],
+    "rust": {
+      "language": "tree_sitter_md::LANGUAGE"
+    },
+    "languages": [
+      {
+        "id": "markdown",
+        "variant": "Markdown",
+        "editorLanguage": "markdown",
+        "editorIds": ["markdown"],
+        "aliases": ["md"]
+      }
+    ],
+    "folds": ["queries/markdown.folds.scm"]
+  },
+  {
+    "name": "markdown-inline",
+    "source": {
+      "crate": "tree-sitter-md",
+      "version": "0.5.3",
+      "root": "tree-sitter-markdown-inline"
+    },
+    "wasm": {
+      "path": "tree-sitter/markdown-inline.wasm",
+      "sha256": "ff4c11ea58bb3b8b77549437ca6b1fafc71a2303c51f70b732ce0e0f91823d9c"
+    },
+    "highlights": ["queries/markdown-inline.scm"],
+    "tags": [],
+    "injections": ["queries/markdown-inline.injections.scm"],
+    "rust": {
+      "language": "tree_sitter_md::INLINE_LANGUAGE"
+    },
+    "languages": [
+      {
+        "id": "markdown_inline",
+        "variant": "MarkdownInline",
+        "editorLanguage": "markdown",
+        "editorIds": [],
+        "aliases": ["markdown-inline"]
+      }
+    ],
+    "folds": []
+  }
+]

@@ -20,6 +20,7 @@ type JsonSchema = boolean | {
 	readonly additionalProperties?: boolean | JsonSchema;
 	readonly unevaluatedProperties?: boolean | JsonSchema;
 	readonly items?: JsonSchema;
+	readonly prefixItems?: readonly JsonSchema[];
 	readonly minimum?: number;
 	readonly maximum?: number;
 	readonly minLength?: number;
@@ -31,6 +32,10 @@ type JsonSchema = boolean | {
 };
 
 const protocolSchema: JsonSchema = { $defs: { __SCHEMA_DEFINITIONS__ } };
+// Schema objects are immutable generated data; caches never retain decoded values.
+const referenceSchemas = new Map<string, JsonSchema>();
+type NumericArrayPlan = { readonly items: readonly Exclude<JsonSchema, boolean>[]; readonly repeated: boolean; };
+const numericArrays = new WeakMap<Exclude<JsonSchema, boolean>, NumericArrayPlan | null>();
 const propertyEntries = new WeakMap<Exclude<JsonSchema, boolean>, readonly (readonly [string, JsonSchema])[]>();
 type MethodVariant = Exclude<JsonSchema, boolean> & { readonly properties: { readonly method: { readonly const: string } } };
 // Every generated client result variant has a distinct method, so large results need only validate their own variant.
@@ -191,8 +196,8 @@ function validateComposition(schema: Exclude<JsonSchema, boolean>, value: unknow
 
 function validateNumber(schema: Exclude<JsonSchema, boolean>, value: number, path: string): void {
 	if (!Number.isFinite(value)) throw failure(path, 'expected a finite number');
-	const types = typeof schema.type === 'string' ? [schema.type] : schema.type;
-	if (types?.includes('integer') && !Number.isSafeInteger(value)) throw failure(path, 'expected a safe integer');
+	const integer = schema.type === 'integer' || (typeof schema.type !== 'string' && schema.type?.includes('integer'));
+	if (integer && !Number.isSafeInteger(value)) throw failure(path, 'expected a safe integer');
 	if (schema.minimum !== undefined && value < schema.minimum) throw failure(path, `expected at least ${schema.minimum}`);
 	if (schema.maximum !== undefined && value > schema.maximum) throw failure(path, `expected at most ${schema.maximum}`);
 }
@@ -209,7 +214,17 @@ function validateString(schema: Exclude<JsonSchema, boolean>, value: string, pat
 function validateArray(schema: Exclude<JsonSchema, boolean>, value: readonly unknown[], path: string): void {
 	if (schema.minItems !== undefined && value.length < schema.minItems) throw failure(path, `expected at least ${schema.minItems} items`);
 	if (schema.maxItems !== undefined && value.length > schema.maxItems) throw failure(path, `expected at most ${schema.maxItems} items`);
-	if (schema.items !== undefined) value.forEach((item, index) => validate(schema.items!, item, `${path}[${index}]`));
+	// Draft 2020-12 tuples validate their fixed prefix independently of trailing items.
+	// Ordinary arrays have no prefix, so their items schema still applies everywhere.
+	const prefix = schema.prefixItems ?? [];
+	if (!schema.uniqueItems) {
+		if (prefix.length === 0 && schema.items === undefined) return;
+		if (validateNumericArray(schema, value)) return;
+	}
+	for (let index = 0; index < value.length; index++) {
+		const itemSchema = index < prefix.length ? prefix[index] : schema.items;
+		if (itemSchema !== undefined) validate(itemSchema, value[index], `${path}[${index}]`);
+	}
 	if (schema.uniqueItems) {
 		for (let left = 0; left < value.length; left += 1) {
 			for (let right = left + 1; right < value.length; right += 1) {
@@ -217,6 +232,33 @@ function validateArray(schema: Exclude<JsonSchema, boolean>, value: readonly unk
 			}
 		}
 	}
+}
+
+/** Successful numeric checks avoid allocating error paths for every coordinate.
+ * Unsupported schemas and invalid values use the general validator, retaining
+ * its exact errors. Only immutable schema data is cached, never wire values.
+ */
+function validateNumericArray(schema: Exclude<JsonSchema, boolean>, value: readonly unknown[]): boolean {
+	let plan = numericArrays.get(schema);
+	if (plan === undefined) {
+		const repeated = !schema.prefixItems?.length;
+		const items = repeated ? [schema.items] : schema.prefixItems;
+		const supported = items?.length && items.every(item => item !== undefined && typeof item !== 'boolean'
+			&& (item.type === 'integer' || item.type === 'number')
+			&& Object.keys(item).every(key => key === 'type' || key === 'minimum' || key === 'maximum' || key === 'description' || key === 'title'));
+		plan = supported ? { items: items as readonly Exclude<JsonSchema, boolean>[], repeated } : null;
+		numericArrays.set(schema, plan);
+	}
+	if (!plan || (!plan.repeated && value.length !== plan.items.length)) return false;
+	for (let index = 0; index < value.length; index++) {
+		const item = plan.items[plan.repeated ? 0 : index];
+		const number = value[index];
+		if (typeof number !== 'number' || !Number.isFinite(number)
+			|| (item.type === 'integer' && !Number.isSafeInteger(number))
+			|| (item.minimum !== undefined && number < item.minimum)
+			|| (item.maximum !== undefined && number > item.maximum)) return false;
+	}
+	return true;
 }
 
 function validateObject(schema: Exclude<JsonSchema, boolean>, value: Readonly<Record<string, unknown>>, path: string): void {
@@ -260,11 +302,14 @@ function declaredProperties(schema: JsonSchema, value: unknown, result: Set<stri
 }
 
 function resolveReference(reference: string, path: string): JsonSchema {
+	const cached = referenceSchemas.get(reference);
+	if (cached !== undefined) return cached;
 	const prefix = '#/$defs/';
 	if (!reference.startsWith(prefix)) throw failure(path, `unsupported schema reference: ${reference}`);
 	const definitions = typeof protocolSchema === 'boolean' ? undefined : protocolSchema.$defs;
 	const schema = definitions?.[reference.slice(prefix.length)];
 	if (!schema) throw failure(path, `missing schema reference: ${reference}`);
+	referenceSchemas.set(reference, schema);
 	return schema;
 }
 

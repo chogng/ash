@@ -2,8 +2,8 @@ use std::num::NonZeroUsize;
 
 use crate::ChunkReference;
 use crate::IndexRootId;
-use crate::IndexedLanguage;
 use crate::SourceExcerptReference;
+use ash_language::LanguageId;
 
 use crate::CodebaseRetrievalError;
 
@@ -135,7 +135,7 @@ pub enum CodebaseRetrievalDegradation {
 #[derive(Clone, Debug, PartialEq)]
 pub struct CodebaseRetrievalHit {
     pub reference: SourceExcerptReference,
-    pub language: IndexedLanguage,
+    pub language: LanguageId,
     pub content: String,
     pub rrf_score: f64,
     pub origins: Vec<CodebaseRetrievalOrigin>,

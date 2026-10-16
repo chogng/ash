@@ -5,7 +5,7 @@ use rusqlite::Connection;
 use crate::source::SourceResult;
 use ash_codebase::{
     ChunkContentHash, ChunkKey, ChunkReference, ChunkSpan, CodebaseManifest, CodebaseSnapshot,
-    IndexRootId, IndexedChunkReference, IndexedLanguage, IndexedSourceReference, SourceRevision,
+    IndexRootId, IndexedChunkReference, IndexedSourceReference, SourceRevision,
 };
 
 pub(crate) fn load_manifest(
@@ -26,7 +26,7 @@ pub(crate) fn load_manifest(
                 root_id: root_id.clone(),
                 relative_path: PathBuf::from(row.get::<_, String>(0)?),
                 source_revision: SourceRevision::new(row.get(1)?),
-                language: IndexedLanguage::from_id(&row.get::<_, String>(2)?),
+                language: crate::read_language_id(&row.get::<_, String>(2)?)?,
                 source_bytes: to_usize(row.get::<_, i64>(3)?),
             })
         })?
@@ -52,7 +52,7 @@ pub(crate) fn load_manifest(
                         end_line_exclusive: to_usize(row.get::<_, i64>(8)?),
                     },
                 },
-                language: IndexedLanguage::from_id(&row.get::<_, String>(4)?),
+                language: crate::read_language_id(&row.get::<_, String>(4)?)?,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;

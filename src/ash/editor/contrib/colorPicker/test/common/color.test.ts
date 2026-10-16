@@ -82,12 +82,12 @@ test('explicit providers suppress the default provider in auto mode and retain p
 	assert.deepEqual((await service.provideColorPresentations('typescript', auto[0]!, auto[0]!.information.color, signal)).map(value => value.label), ['provider-color']);
 });
 
-test('default color coordinates belong to the request snapshot after the model changes', () => {
+test('default color coordinates belong to the request snapshot after the model changes', async () => {
 	using model = new TextModel('😀\ncolor: #abcdef;');
 	const signal = new AbortController().signal;
 	const request = createLanguageFeatureRequest(model, 'css', signal);
 	model.setValue('short');
-	const colors = new DefaultDocumentColorProvider().provideDocumentColors(request, signal);
+	const colors = await new DefaultDocumentColorProvider().provideDocumentColors(request, signal);
 	assert.deepEqual(colors.map(color => color.range), [new Range(2, 8, 2, 15)]);
 });
 
@@ -133,4 +133,37 @@ test('a provider without presentations never fabricates a document edit', async 
 	const [data] = await service.provideDocumentColors('plaintext', 'auto', signal);
 	assert.deepEqual(await service.provideColorPresentations('plaintext', data!, data!.information.color, signal), []);
 	assert.deepEqual(errors, []);
+});
+
+
+test('large color scans keep snapshot UTF-16 and multiline coordinates, and yield to cancellation', async () => {
+	const text = '😀 #f00\r\nrgb(\r\n1, 2, 3)\r\n'.repeat(4096);
+	using model = new TextModel(text);
+	const live = new AbortController();
+	const request = createLanguageFeatureRequest(model, 'css', live.signal);
+	const pending = new DefaultDocumentColorProvider().provideDocumentColors(request, live.signal);
+	model.setValue('changed');
+	const colors = await pending;
+	assert.equal(colors.length, 8192);
+	assert.deepEqual(colors[0].range, new Range(1, 4, 1, 8));
+	assert.deepEqual(colors[1].range, new Range(2, 1, 3, 9));
+	assert.deepEqual(colors.at(-1)?.range, new Range(12287, 1, 12288, 9));
+	using large = new TextModel(text);
+	const cancelled = new AbortController();
+	const timer = setTimeout(() => cancelled.abort(), 0);
+	try {
+		await assert.rejects(Promise.resolve(new DefaultDocumentColorProvider().provideDocumentColors(createLanguageFeatureRequest(large, 'css', cancelled.signal), cancelled.signal)), { name: 'AbortError' });
+	} finally { clearTimeout(timer); }
+});
+
+test('a model edit while a large provider color result is normalized discards the entire stale result', async () => {
+	using model = new TextModel('color');
+	const providers = new LanguageFeatureRegistry<LanguageColorProvider>();
+	using registration = providers.register('*', {
+		provideDocumentColors: () => Array.from({ length: 2048 }, () => ({ range: new Range(1, 1, 1, 2), color: { red: 1, green: 0, blue: 0, alpha: 1 } })),
+		provideColorPresentations: () => [],
+	});
+	const timer = setTimeout(() => model.setValue('edited'), 0);
+	try { assert.deepEqual(await new ColorService(model, providers).provideDocumentColors('css', 'never', new AbortController().signal), []); }
+	finally { clearTimeout(timer); }
 });

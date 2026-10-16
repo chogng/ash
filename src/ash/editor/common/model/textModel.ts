@@ -37,7 +37,7 @@ import type { DocumentSchema } from "./documentSchema.js";
 import type { DocumentTransaction } from "./documentTransaction.js";
 import { TextModelBlockState, TextModelRemoteHistoryPolicy, type TextModelBlockChange, type TextModelBlockOptions, type TextModelPluginDecorationSource } from "./textModelBlockState.js";
 import { projectDocumentToLines } from "./lineDocumentProjection.js";
-import { createLineDocumentSnapshot, linePoint, type LineDocumentSnapshot, type LineId, type LinePoint, type LineSemanticAttributes } from "./lineDocument.js";
+import { createLineDocumentSnapshot, freezeLineSemanticAttributes, linePoint, type LineDocumentSnapshot, type LineId, type LinePoint, type LineSemanticAttributes } from "./lineDocument.js";
 import * as model from '../model.js';
 import { DefaultEndOfLine, EndOfLinePreference, EndOfLineSequence, FindMatch, PositionAffinity, TextModelResolvedOptions, TrackedRangeStickiness, ValidAnnotatedEditOperation, isITextSnapshot, type BracketPairColorizationOptions, type IAttachedView, type ICursorStateComputer, type IIdentifiedSingleEditOperation, type IModelDecorationOptions, type IModelDecorationsChangeAccessor, type IModelDeltaDecoration, type ITextBuffer, type ITextModel, type ITextModelUpdateOptions, type ITextSnapshot, type IValidEditOperation } from '../model.js';
 import { type SyntaxRequest, SYNTAX_DIAGNOSTIC_LANE, type SyntaxLane, type SyntaxResult } from '../languages.js';
@@ -193,6 +193,7 @@ export class TextModel implements ITextModel {
 	private readonly modelTrackedRanges = new Map<string, TrackedRange>();
 	private nextTrackedRangeId = 1;
 	private readonly modelDecorations = new Map<string, ModelDecorationEntry>();
+	private lineInjectedTextCache: { readonly version: number; readonly lines: ReadonlyMap<number, readonly LineInjectedText[]>; } | undefined;
 	private nextDecorationId = 1;
 	private readonly history: TextModelHistory;
 	private readonly maintenance: TextModelMaintenanceOptions | undefined;
@@ -205,6 +206,7 @@ export class TextModel implements ITextModel {
 	private readonly lineMetadata: LineSemanticAttributes;
 	private plainLineIds: readonly LineId[] | undefined;
 	private plainLineSnapshot: LineDocumentSnapshot | undefined;
+	private plainLineIndex: { readonly ids: readonly LineId[]; readonly indices: ReadonlyMap<LineId, number>; } | undefined;
 	readonly largeFile: TextModelLargeFilePolicy;
 	private nextTransactionId = 1;
 	private _version = 1;
@@ -273,9 +275,10 @@ export class TextModel implements ITextModel {
 		const initialValue = blockSnapshot?.getText() ?? initialText;
 		this.buffer = createPieceTreeTextBuffer(initialValue, this.modelOptionsValue.defaultEOL);
 		if (!options.blocks) {
-			this.plainLineIds = this.initializeLineIds(options.lineIds);
-			this.plainLineSnapshot = this.createPlainLineSnapshot(options.metadata);
-			this.lineMetadata = this.plainLineSnapshot.metadata;
+			this.plainLineIds = this.initializeLineIds(options.lineIds, options.lineIdGenerator === undefined);
+			// Plain editors need text and stable identities, not another full copy of
+			// every line. Materialize the immutable line document only for its caller.
+			this.lineMetadata = freezeLineSemanticAttributes(options.metadata);
 		} else {
 			this.lineMetadata = Object.freeze({});
 		}
@@ -343,14 +346,21 @@ export class TextModel implements ITextModel {
 	getLineId(lineIndex: number): LineId {
 		this.assertNotDisposed();
 		if (!Number.isSafeInteger(lineIndex) || lineIndex < 0) throw new RangeError("Line index is outside the TextModel");
-		const line = this.lineDocument.lines.at(lineIndex);
-		if (!line) throw new RangeError("Line index is outside the TextModel");
-		return line.id;
+		const id = this.blockState ? this.blockState.snapshot.lines.at(lineIndex)?.id : this.plainLineIds?.[lineIndex];
+		if (id === undefined) throw new RangeError("Line index is outside the TextModel");
+		return id;
 	}
 
 	getLineIndex(lineId: LineId): number {
 		this.assertNotDisposed();
-		const lineIndex = this.lineDocument.lines.indexOf(lineId);
+		let lineIndex: number;
+		if (this.blockState) {
+			lineIndex = this.blockState.snapshot.lines.indexOf(lineId);
+		} else {
+			const ids = this.plainLineIds!;
+			if (this.plainLineIndex?.ids !== ids) this.plainLineIndex = { ids, indices: new Map(ids.map((id, index) => [id, index])) };
+			lineIndex = this.plainLineIndex.indices.get(lineId) ?? -1;
+		}
 		if (lineIndex < 0) throw new RangeError(`Line '${lineId}' does not exist in the TextModel`);
 		return lineIndex;
 	}
@@ -656,10 +666,18 @@ export class TextModel implements ITextModel {
 		if (this.isTooLargeForTokenization()) return false;
 		let smallLineCharacterCount = 0;
 		let longLineCharacterCount = 0;
-		for (let lineNumber = 1; lineNumber <= this.buffer.getLineCount(); lineNumber++) {
-			const lineLength = this.buffer.getLineLength(lineNumber);
+		// This policy is computed at attach time. Sequential offsets avoid two
+		// Piece Tree line-index searches for every row in a large document.
+		const text = this.buffer.createSnapshot().getText();
+		const eolWidth = this.buffer.getEOL().length;
+		let lineStart = 0;
+		for (; ;) {
+			const separator = text.indexOf('\n', lineStart);
+			const lineLength = separator < 0 ? text.length - lineStart : separator - lineStart - (eolWidth - 1);
 			if (lineLength >= LONG_LINE_BOUNDARY) longLineCharacterCount += lineLength;
 			else smallLineCharacterCount += lineLength;
+			if (separator < 0) break;
+			lineStart = separator + 1;
 		}
 		return longLineCharacterCount > smallLineCharacterCount;
 	}
@@ -767,7 +785,14 @@ export class TextModel implements ITextModel {
 	}
 
 	getValueLength(eol = EndOfLinePreference.TextDefined, preserveBOM = false): number {
-		return this.getValueLengthInRange(this.getFullModelRange(), eol) + (preserveBOM ? this.buffer.getBOM().length : 0);
+		this.assertNotDisposed();
+		// Bracket eligibility and other per-line readers ask for this during layout.
+		// The stored representation already has a length; materializing it here makes
+		// a complete layout quadratic in document size.
+		const length = eol === EndOfLinePreference.TextDefined
+			? this.buffer.getLength()
+			: this.getValueLengthInRange(this.getFullModelRange(), eol);
+		return length + (preserveBOM ? this.buffer.getBOM().length : 0);
 	}
 
 	createVersionedSnapshot(): TextSnapshot {
@@ -1257,9 +1282,9 @@ export class TextModel implements ITextModel {
 	}
 
 	getAllMarginDecorations(ownerId = 0): model.IModelDecoration[] {
-		return this.getAllDecorations(ownerId).filter(decoration =>
-			!!decoration.options.glyphMarginClassName || !!decoration.options.glyphMargin,
-		);
+		// Bracket colors cannot contribute margin content. Query stored margin
+		// decorations directly instead of constructing a whole-document bracket index.
+		return this.getDecorationsInRange(this.getFullModelRange(), ownerId, false, false, false, true);
 	}
 
 	getDecorationsInRange(
@@ -1270,6 +1295,16 @@ export class TextModel implements ITextModel {
 		onlyMinimapDecorations = false,
 		onlyMarginDecorations = false,
 	): model.IModelDecoration[] {
+		const validatedRange = this.validateRange(range);
+		const result = this.getStoredDecorationsInRange(validatedRange, ownerId, filterOutValidation, filterFontDecorations, onlyMarginDecorations);
+		if (!onlyMarginDecorations && !onlyMinimapDecorations) {
+			result.push(...this.bracketDecorations.getDecorationsInRange(validatedRange, ownerId, filterOutValidation, filterFontDecorations));
+		}
+		return result;
+	}
+
+	/** Generated bracket colors cannot contribute margin, overview, font, or injected text data. */
+	private getStoredDecorationsInRange(range: IRange, ownerId = 0, filterOutValidation = false, filterFontDecorations = false, onlyMarginDecorations = false): model.IModelDecoration[] {
 		this.assertNotDisposed();
 		const validatedRange = this.validateRange(range);
 		const result: model.IModelDecoration[] = [];
@@ -1277,7 +1312,7 @@ export class TextModel implements ITextModel {
 			if (ownerId !== 0 && entry.ownerId !== 0 && entry.ownerId !== ownerId) continue;
 			if (filterOutValidation && isValidationDecoration(entry.options)) continue;
 			if (filterFontDecorations && entry.options.affectsFont) continue;
-			if (onlyMarginDecorations && !entry.options.glyphMarginClassName) continue;
+			if (onlyMarginDecorations && !entry.options.glyphMarginClassName && !entry.options.glyphMargin) continue;
 			if (entry.cachedRange?.versionId !== this._version) {
 				entry.cachedRange = { versionId: this._version, range: entry.trackedRange.range };
 			}
@@ -1290,18 +1325,24 @@ export class TextModel implements ITextModel {
 				options: entry.options,
 			});
 		}
-		if (!onlyMarginDecorations && !onlyMinimapDecorations) {
-			result.push(...this.bracketDecorations.getDecorationsInRange(validatedRange, ownerId, filterOutValidation, filterFontDecorations));
-		}
 		return result;
 	}
 
 	getLineInjectedText(lineNumber: number, ownerId = 0): LineInjectedText[] {
 		this.assertNotDisposed();
-		if (lineNumber < 1 || lineNumber > this.getLineCount()) return [];
-		const range = new Range(lineNumber, 1, lineNumber, this.getLineMaxColumn(lineNumber));
-		const decorations = this.getInjectedTextDecorations(ownerId).filter(decoration => Range.areIntersectingOrTouching(range, decoration.range));
-		return LineInjectedText.fromDecorations(decorations).filter(text => text.lineNumber === lineNumber);
+		if (lineNumber < 1 || lineNumber > this.getLineCount()) throw new RangeError('Injected text line is outside the model');
+		if (this.lineInjectedTextCache?.version !== this.version) {
+			const lines = new Map<number, LineInjectedText[]>();
+			// Wrapping asks once per source line. Index only actual injections once,
+			// rather than scanning fold decorations or requesting syntax per line.
+			for (const injection of LineInjectedText.fromDecorations(this.getInjectedTextDecorations())) {
+				let line = lines.get(injection.lineNumber);
+				if (!line) lines.set(injection.lineNumber, line = []);
+				line.push(injection);
+			}
+			this.lineInjectedTextCache = { version: this.version, lines };
+		}
+		return (this.lineInjectedTextCache.lines.get(lineNumber) ?? []).filter(text => ownerId === 0 || text.ownerId === 0 || text.ownerId === ownerId);
 	}
 
 	getInjectedTextDecorations(ownerId = 0): model.IModelDecoration[] {
@@ -1322,21 +1363,21 @@ export class TextModel implements ITextModel {
 	}
 
 	getOverviewRulerDecorations(ownerId = 0, filterOutValidation = false, filterFontDecorations = false): model.IModelDecoration[] {
-		return this.getDecorationsInRange(this.getFullModelRange(), ownerId, filterOutValidation, filterFontDecorations)
+		return this.getStoredDecorationsInRange(this.getFullModelRange(), ownerId, filterOutValidation, filterFontDecorations)
 			.filter(decoration => !!decoration.options.overviewRuler?.color);
 	}
 
 	getFontDecorationsInRange(range: IRange, ownerId = 0): model.IModelDecoration[] {
-		return this.getDecorationsInRange(range, ownerId).filter(decoration => !!decoration.options.affectsFont);
+		return this.getStoredDecorationsInRange(range, ownerId).filter(decoration => !!decoration.options.affectsFont);
 	}
 
 	getCustomLineHeightsDecorations(ownerId = 0): model.IModelDecoration[] {
-		return this.getDecorationsInRange(this.getFullModelRange(), ownerId)
+		return this.getStoredDecorationsInRange(this.getFullModelRange(), ownerId)
 			.filter(decoration => decoration.options.lineHeight !== null && decoration.options.lineHeight !== undefined);
 	}
 
 	getCustomLineHeightsDecorationsInRange(range: Range, ownerId = 0): model.IModelDecoration[] {
-		return this.getDecorationsInRange(range, ownerId)
+		return this.getStoredDecorationsInRange(range, ownerId)
 			.filter(decoration => decoration.options.lineHeight !== null && decoration.options.lineHeight !== undefined);
 	}
 
@@ -1364,6 +1405,7 @@ export class TextModel implements ITextModel {
 	}
 
 	private publishDecorationChanges(previous: readonly ModelDecorationEntry[], current: readonly ModelDecorationEntry[]): void {
+		this.lineInjectedTextCache = undefined;
 		const previousById = new Map(previous.map(entry => [entry.id, entry]));
 		const currentById = new Map(current.map(entry => [entry.id, entry]));
 		const ids = new Set([...previousById.keys(), ...currentById.keys()]);
@@ -2160,7 +2202,7 @@ export class TextModel implements ITextModel {
 		return { version: this._version, change };
 	}
 
-	private initializeLineIds(lineIds: readonly LineId[] | undefined): readonly LineId[] {
+	private initializeLineIds(lineIds: readonly LineId[] | undefined, useDefaultGenerator: boolean): readonly LineId[] {
 		if (lineIds !== undefined) {
 			if (!Array.isArray(lineIds) || lineIds.length !== this.buffer.getLineCount()) {
 				throw new RangeError(`TextModel requires exactly ${this.buffer.getLineCount()} line ids`);
@@ -2168,6 +2210,15 @@ export class TextModel implements ITextModel {
 			const validated = this.validateLineIdentities(lineIds);
 			for (const lineId of validated) this.issuedLineIds.add(lineId);
 			return validated;
+		}
+		if (useDefaultGenerator) {
+			// This model owns the monotonic generator and the initially empty ID set.
+			// Custom generators and supplied identities keep their validation.
+			return Object.freeze(Array.from({ length: this.buffer.getLineCount() }, () => {
+				const id = `line:${this.nextGeneratedLineIdentity++}`;
+				this.issuedLineIds.add(id);
+				return id;
+			}));
 		}
 		return Object.freeze(Array.from({ length: this.buffer.getLineCount() }, () => this.allocateLineId()));
 	}
@@ -2282,6 +2333,7 @@ export class TextModel implements ITextModel {
 			this.disposed = true;
 			this.modelTrackedRanges.clear();
 			this.modelDecorations.clear();
+			this.lineInjectedTextCache = undefined;
 			this.attachedViews.clear();
 			this.viewModels.clear();
 			this.disposables.dispose();

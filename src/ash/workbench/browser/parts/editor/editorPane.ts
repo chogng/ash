@@ -5,7 +5,6 @@ import type { IDimension } from "../../../../base/browser/dom.js";
 import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
 import { type ITextFileService } from "../../../services/textfile/common/textfiles.js";
 import type { IFileService } from "../../../../platform/files/common/files.js";
-import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
 import type { IDiffService } from "../../../services/diff/common/diffService.js";
 import type { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import type { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
@@ -52,7 +51,6 @@ export interface EditorPaneCreationOptions {
 	readonly keyboardLayoutService?: IKeyboardLayoutService;
 	readonly fileService?: IFileService;
 	readonly textFileService?: ITextFileService;
-	readonly textMateService?: ITextMateService;
 	readonly languageResolver?: TextResourceLanguageResolver;
 	readonly diffService?: IDiffService;
 	readonly instantiationService?: IInstantiationService;

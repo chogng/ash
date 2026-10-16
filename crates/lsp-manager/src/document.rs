@@ -1,5 +1,7 @@
 use std::path::{Path, PathBuf};
 
+use ash_language::LanguageId;
+
 use crate::LspManagerError;
 
 /// Monotonic product revision of one authoritative editor document.
@@ -22,7 +24,7 @@ impl LanguageDocumentRevision {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LspDocumentSnapshot {
     path: PathBuf,
-    language_id: String,
+    language_id: LanguageId,
     revision: LanguageDocumentRevision,
     text: String,
 }
@@ -39,14 +41,8 @@ impl LspDocumentSnapshot {
             return Err(LspManagerError::InvalidDocumentPath);
         }
         let language_id = language_id.into();
-        if language_id.is_empty()
-            || language_id.len() > 128
-            || !language_id
-                .bytes()
-                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
-        {
-            return Err(LspManagerError::InvalidLanguageId(language_id));
-        }
+        let language_id = LanguageId::parse(&language_id)
+            .map_err(|_| LspManagerError::InvalidLanguageId(language_id))?;
         Ok(Self {
             path,
             language_id,
@@ -60,7 +56,7 @@ impl LspDocumentSnapshot {
     }
 
     pub fn language_id(&self) -> &str {
-        &self.language_id
+        self.language_id.as_str()
     }
 
     pub const fn revision(&self) -> LanguageDocumentRevision {

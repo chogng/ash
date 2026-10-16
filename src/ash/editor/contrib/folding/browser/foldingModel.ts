@@ -48,7 +48,11 @@ export class EditorFoldingModel extends Disposable {
 	constructor(private readonly textModel: TextModel) {
 		super();
 		this._register(toDisposable(() => disposeRecords(this.records)));
-		this._register(textModel.onDidChangeContent(() => this.reconcileTrackedRanges()));
+		this._register(textModel.onDidChangeContent(change => {
+			// Column-only edits cannot reorder, cross or remove physical-line folds.
+			// Their tracked offsets already follow the model's transaction.
+			if (change.changes.some(edit => edit.range.startLineNumber !== edit.range.endLineNumber || /[\r\n]/u.test(edit.text))) this.reconcileTrackedRanges();
+		}));
 	}
 
 	get model(): TextModel {
@@ -133,6 +137,10 @@ export class EditorFoldingModel extends Disposable {
 	setProviderRanges(ranges: readonly EditorFoldingRange[]): void {
 		if (!Array.isArray(ranges)) throw new TypeError("Folding ranges must be an array");
 		const current = this.regions;
+		const providers = current.filter(region => region.source === EditorFoldingRangeSource.Provider);
+		// Most edits change syntax inside existing folds. Preserve their tracked
+		// handles, manual ranges and collapse state without rebuilding decorations.
+		if (providers.length === ranges.length && providers.every((range, index) => range.startLineIndex === ranges[index].startLineIndex && range.endLineIndex === ranges[index].endLineIndex)) return;
 		const collapsedProviders = new Map(current
 			.filter(region => region.source === EditorFoldingRangeSource.Provider)
 			.map(region => [editorFoldingRangeKey(region), region.collapsed]));

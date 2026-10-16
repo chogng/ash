@@ -184,17 +184,7 @@ impl AppServer {
                 .iter()
                 .map(|definition| LanguageServerDescriptorDto {
                     id: definition.name().as_str().to_owned(),
-                    language_ids: definition
-                        .language_ids()
-                        .map(|language| {
-                            if language == "shellscript" {
-                                "shell"
-                            } else {
-                                language
-                            }
-                            .to_owned()
-                        })
-                        .collect(),
+                    language_ids: definition.language_ids().map(str::to_owned).collect(),
                 })
                 .collect(),
         })
@@ -299,7 +289,7 @@ impl AppServer {
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?
             .read_snapshot()
             .map_err(|_| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
-        let language_id = language_service_id(&params.language_id);
+        let language_id = ash_language::canonical_language_id(&params.language_id);
         let mut runtime = self
             .language
             .lock()
@@ -424,7 +414,7 @@ impl AppServer {
         let revision = LanguageDocumentRevision::new(document.revision);
         let service_document = LspDocumentSnapshot::new(
             source_path,
-            language_service_id(&document.language_id),
+            ash_language::canonical_language_id(&document.language_id),
             revision,
             &document.text,
         )
@@ -915,7 +905,7 @@ impl AppServer {
         let revision = LanguageDocumentRevision::new(params.document.revision);
         let document = LspDocumentSnapshot::new(
             &source_path,
-            language_service_id(&params.document.language_id),
+            ash_language::canonical_language_id(&params.document.language_id),
             revision,
             &params.document.text,
         )
@@ -1026,7 +1016,7 @@ impl AppServer {
         let revision = LanguageDocumentRevision::new(params.document.revision);
         let document = LspDocumentSnapshot::new(
             &source_path,
-            language_service_id(&params.document.language_id),
+            ash_language::canonical_language_id(&params.document.language_id),
             revision,
             &params.document.text,
         )
@@ -1115,7 +1105,7 @@ impl AppServer {
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?
             .read_snapshot()
             .map_err(|_| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
-        let language_id = language_service_id(&params.language_id);
+        let language_id = ash_language::canonical_language_id(&params.language_id);
         let mut runtime = self
             .language
             .lock()
@@ -1799,14 +1789,6 @@ fn byte_offset_to_utf16(text: &str, offset: usize) -> Option<LanguagePositionDto
 fn text_for_utf16_range(text: &str, range: LanguageRangeDto) -> Option<String> {
     let bytes = utf8_byte_range(text, range)?;
     Some(text[bytes].to_owned())
-}
-
-fn language_service_id(language_id: &str) -> &str {
-    if language_id == "shell" {
-        "shellscript"
-    } else {
-        language_id
-    }
 }
 
 fn target_location(

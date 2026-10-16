@@ -11,7 +11,7 @@ use rusqlite::params;
 use ash_codebase::{
     CHUNKER_VERSION, ChunkContentHash, ChunkKey, ChunkReference, ChunkSpan, CodebaseError,
     CodebaseIndexStore, CodebaseManifest, CodebaseSnapshot, DirScan, FileUpdate, IndexRootId,
-    IndexedLanguage, PreparedFile, SearchHit, SourceRevision, StoredSource,
+    PreparedFile, SearchHit, SourceRevision, StoredSource,
 };
 
 use crate::CodebaseStoreStorage;
@@ -212,7 +212,7 @@ impl SqliteCodebaseIndexStore {
                         end_line_exclusive: to_usize(row.get::<_, i64>(8)?),
                     },
                 },
-                language: IndexedLanguage::from_id(&row.get::<_, String>(4)?),
+                language: crate::read_language_id(&row.get::<_, String>(4)?)?,
                 content: row.get(9)?,
                 score: -rank,
             })
@@ -317,7 +317,7 @@ impl CodebaseIndexStore for SqliteCodebaseIndexStore {
                                 end_line_exclusive: to_usize(row.get::<_, i64>(8)?),
                             },
                         },
-                        language: IndexedLanguage::from_id(&row.get::<_, String>(4)?),
+                        language: crate::read_language_id(&row.get::<_, String>(4)?)?,
                         content: row.get(9)?,
                         score: 1.0,
                     })
@@ -400,7 +400,7 @@ fn insert_file(transaction: &Transaction<'_>, file: &PreparedFile) -> rusqlite::
         params![
             path,
             file.source_revision.as_str(),
-            file.language.id(),
+            file.language.as_str(),
             to_i64(file.source_bytes),
             to_i64(file.chunks.len()),
             flag_value(file.chunk_limit_hit),
@@ -418,7 +418,7 @@ fn insert_file(transaction: &Transaction<'_>, file: &PreparedFile) -> rusqlite::
                 file.source_revision.as_str(),
                 chunk.key.as_str(),
                 chunk.content_hash.as_str(),
-                file.language.id(),
+                file.language.as_str(),
                 to_i64(chunk.span.start_byte),
                 to_i64(chunk.span.end_byte),
                 to_i64(chunk.span.start_line),

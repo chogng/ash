@@ -1,3 +1,6 @@
+use ropey::Rope;
+use ropey::RopeSlice;
+use std::cell::RefCell;
 use std::cmp::Reverse;
 use std::ops::Range;
 use std::sync::Arc;
@@ -5,10 +8,19 @@ use std::sync::Arc;
 use tree_sitter::{InputEdit, Node, Parser, Point, Query, QueryCursor, StreamingIterator, Tree};
 
 use crate::language::LanguageConfiguration;
+
+#[path = "editor.rs"]
+mod editor;
+#[path = "injections.rs"]
+mod injections;
 use crate::{
     AnalysisLimits, DocumentSymbol, DocumentSymbolKind, FoldingRange, SelectionRange,
     SyntaxDiagnostic, SyntaxDiagnosticKind, SyntaxError, SyntaxLanguage, SyntaxPoint, SyntaxRange,
     SyntaxSnapshot, SyntaxToken, SyntaxTokenKind,
+};
+pub use editor::{
+    EditorBracket, EditorDiagnostic, EditorFacts, EditorFactsDelta, EditorFactsSplice, EditorFold,
+    EditorRow, EditorSymbol, EditorToken,
 };
 
 /// Monotonic host-owned revision attached to source text and derived analysis.
@@ -61,19 +73,20 @@ impl SyntaxEdit {
 pub struct SyntaxDocument {
     language: SyntaxLanguage,
     revision: DocumentRevision,
-    text: String,
-    line_index: LineIndex,
+    text: Rope,
     parser: Parser,
     tree: Tree,
     configuration: Arc<LanguageConfiguration>,
     limits: AnalysisLimits,
+    editor_cache: RefCell<editor::EditorCache>,
+    injection_cache: RefCell<injections::InjectionCache>,
 }
 
 impl SyntaxDocument {
     pub fn open(
         language: SyntaxLanguage,
         revision: DocumentRevision,
-        text: impl Into<String>,
+        text: impl AsRef<str>,
     ) -> Result<Self, SyntaxError> {
         Self::open_with_limits(language, revision, text, AnalysisLimits::default())
     }
@@ -81,26 +94,25 @@ impl SyntaxDocument {
     pub fn open_with_limits(
         language: SyntaxLanguage,
         revision: DocumentRevision,
-        text: impl Into<String>,
+        text: impl AsRef<str>,
         limits: AnalysisLimits,
     ) -> Result<Self, SyntaxError> {
-        let text = text.into();
+        let text = text.as_ref();
         validate_document_size(text.len(), limits)?;
         let mut parser = Parser::new();
         let configuration = LanguageConfiguration::load(language, &mut parser)?;
-        let tree = parser
-            .parse(&text, None)
-            .ok_or(SyntaxError::ParseCancelled)?;
-        let line_index = LineIndex::new(&text);
+        let text = Rope::from_str(text);
+        let tree = parse_rope(&mut parser, &text, None)?;
         Ok(Self {
             language,
             revision,
             text,
-            line_index,
             parser,
             tree,
             configuration,
             limits,
+            editor_cache: RefCell::default(),
+            injection_cache: RefCell::default(),
         })
     }
 
@@ -112,8 +124,9 @@ impl SyntaxDocument {
         self.revision
     }
 
-    pub fn text(&self) -> &str {
-        &self.text
+    /// Borrows a read-only view of the current text without flattening its chunks.
+    pub fn text(&self) -> RopeSlice<'_> {
+        self.text.slice(..)
     }
 
     pub fn snapshot(&self) -> SyntaxSnapshot {
@@ -126,10 +139,16 @@ impl SyntaxDocument {
                 &self.text,
                 self.limits.max_tokens,
             ),
-            collect_folding_ranges(&self.tree, self.limits.max_folding_ranges),
-            collect_symbols(
-                &self.configuration.tags,
+            collect_folding_ranges(
                 &self.tree,
+                &self.configuration.folds,
+                &self.text,
+                self.limits.max_folding_ranges,
+            ),
+            collect_symbols(
+                &mut QueryCursor::new(),
+                &self.configuration.tags,
+                self.tree.root_node(),
                 &self.text,
                 self.limits.max_symbols,
             ),
@@ -171,6 +190,16 @@ impl SyntaxDocument {
         next_revision: DocumentRevision,
         edits: &[SyntaxEdit],
     ) -> Result<SyntaxSnapshot, SyntaxError> {
+        self.update_edits(next_revision, edits)?;
+        Ok(self.snapshot())
+    }
+
+    /// Updates the shared tree without eagerly deriving facts or whole-document tokens.
+    pub fn update_edits(
+        &mut self,
+        next_revision: DocumentRevision,
+        edits: &[SyntaxEdit],
+    ) -> Result<(), SyntaxError> {
         if next_revision <= self.revision {
             return Err(SyntaxError::NonIncreasingRevision {
                 current: self.revision,
@@ -183,88 +212,110 @@ impl SyntaxDocument {
             .iter()
             .map(|edit| edit.replacement.len())
             .sum::<usize>();
-        let next_len = self.text.len() - removed_len + replacement_len;
+        let next_len = self.text.len_bytes() - removed_len + replacement_len;
         validate_document_size(next_len, self.limits)?;
 
-        let mut edited_tree = self.tree.clone();
-        let mut next_text = self.text.clone();
-        let mut next_line_index = self.line_index.clone();
-        for edit in edits {
-            let start_point = self.line_index.point(edit.range.start);
-            let old_end_point = self.line_index.point(edit.range.end);
-            let new_end_point = advance_point(start_point, &edit.replacement);
-            edited_tree.edit(&InputEdit {
-                start_byte: edit.range.start,
-                old_end_byte: edit.range.end,
-                new_end_byte: edit.range.start + edit.replacement.len(),
-                start_position: start_point.into(),
-                old_end_position: old_end_point.into(),
-                new_end_position: new_end_point.into(),
-            });
-            next_text.replace_range(edit.range.clone(), &edit.replacement);
-            next_line_index.apply_edit(edit.range.clone(), &edit.replacement);
-        }
-        let tree = self
-            .parser
-            .parse(&next_text, Some(&edited_tree))
-            .ok_or(SyntaxError::ParseCancelled)?;
+        let parsed = parse_edits(&mut self.parser, &self.text, &self.tree, &edits)?;
 
-        self.text = next_text;
-        self.line_index = next_line_index;
-        self.tree = tree;
-        self.revision = next_revision;
-        Ok(self.snapshot())
-    }
-}
-
-#[derive(Clone, Debug)]
-struct LineIndex {
-    starts: Vec<usize>,
-}
-
-impl LineIndex {
-    fn new(text: &str) -> Self {
-        let mut starts = vec![0];
-        starts.extend(
-            text.bytes()
-                .enumerate()
-                .filter_map(|(index, byte)| (byte == b'\n').then_some(index + 1)),
+        // Commit only after parsing succeeds. The fork shares untouched Rope nodes,
+        // so validation or parse failure keeps both authoritative text and tree intact.
+        self.editor_cache.get_mut().apply_edits(
+            &edits,
+            &self.text,
+            &parsed.edited_tree,
+            &parsed.tree,
         );
-        Self { starts }
+        self.text = parsed.text;
+        self.tree = parsed.tree;
+        self.injection_cache.get_mut().clear();
+        self.revision = next_revision;
+        Ok(())
     }
+}
 
-    fn point(&self, offset: usize) -> SyntaxPoint {
-        let row = self
-            .starts
-            .partition_point(|line_start| *line_start <= offset)
-            .saturating_sub(1);
-        SyntaxPoint {
-            row,
-            column: offset - self.starts[row],
-        }
+/// Tree-sitter may request a byte inside a UTF-8 character, so return the
+/// containing chunk's raw suffix rather than slicing a str at that byte.
+fn parse_rope(
+    parser: &mut Parser,
+    text: &Rope,
+    old_tree: Option<&Tree>,
+) -> Result<Tree, SyntaxError> {
+    parser
+        .parse_with_options(
+            &mut |offset, _| {
+                if offset >= text.len_bytes() {
+                    return &[][..];
+                }
+                let (chunk, start, _, _) = text.chunk_at_byte(offset);
+                &chunk.as_bytes()[offset - start..]
+            },
+            old_tree,
+            None,
+        )
+        .ok_or(SyntaxError::ParseCancelled)
+}
+
+fn point_at(text: &Rope, offset: usize) -> SyntaxPoint {
+    let row = text.byte_to_line(offset);
+    SyntaxPoint {
+        row,
+        column: offset - text.line_to_byte(row),
     }
+}
 
-    fn apply_edit(&mut self, range: Range<usize>, replacement: &str) {
-        let removed_len = range.len();
-        let replacement_len = replacement.len();
-        self.starts
-            .retain(|line_start| *line_start <= range.start || *line_start > range.end);
-        for line_start in &mut self.starts {
-            if *line_start > range.end {
-                *line_start = if replacement_len >= removed_len {
-                    *line_start + (replacement_len - removed_len)
-                } else {
-                    *line_start - (removed_len - replacement_len)
-                };
-            }
-        }
-        let replacement_starts = replacement
-            .bytes()
-            .enumerate()
-            .filter_map(|(index, byte)| (byte == b'\n').then_some(range.start + index + 1));
-        self.starts.extend(replacement_starts);
-        self.starts.sort_unstable();
-        self.starts.dedup();
+// Preserve the exact edited input Tree until dependent caches record its change
+// ranges. Editing another clone independently breaks shared node identity and
+// makes Tree-sitter compare otherwise unchanged subtrees again.
+struct ParsedEdit {
+    text: Rope,
+    tree: Tree,
+    edited_tree: Tree,
+}
+
+fn parse_edits(
+    parser: &mut Parser,
+    text: &Rope,
+    tree: &Tree,
+    edits: &[&SyntaxEdit],
+) -> Result<ParsedEdit, SyntaxError> {
+    let mut next_text = text.clone();
+    let mut edited_tree = tree.clone();
+    // Descending old-document ranges keep all remaining byte offsets unchanged.
+    for edit in edits {
+        let start_point = point_at(text, edit.range.start);
+        let old_end_point = point_at(text, edit.range.end);
+        edited_tree.edit(&InputEdit {
+            start_byte: edit.range.start,
+            old_end_byte: edit.range.end,
+            new_end_byte: edit.range.start + edit.replacement.len(),
+            start_position: start_point.into(),
+            old_end_position: old_end_point.into(),
+            new_end_position: advance_point(start_point, &edit.replacement).into(),
+        });
+        let start = next_text.byte_to_char(edit.range.start);
+        let end = next_text.byte_to_char(edit.range.end);
+        next_text.remove(start..end);
+        next_text.insert(start, &edit.replacement);
+    }
+    let tree = parse_rope(parser, &next_text, Some(&edited_tree))?;
+    Ok(ParsedEdit {
+        text: next_text,
+        tree,
+        edited_tree,
+    })
+}
+
+/// Query predicates also consume chunked source, including captures spanning leaves.
+struct RopeTextProvider<'a>(RopeSlice<'a>);
+
+impl<'a> tree_sitter::TextProvider<&'a [u8]> for RopeTextProvider<'a> {
+    type I = std::iter::Map<ropey::iter::Chunks<'a>, fn(&'a str) -> &'a [u8]>;
+
+    fn text(&mut self, node: Node) -> Self::I {
+        self.0
+            .byte_slice(node.byte_range())
+            .chunks()
+            .map(str::as_bytes)
     }
 }
 
@@ -284,32 +335,32 @@ fn validate_document_size(actual: usize, limits: AnalysisLimits) -> Result<(), S
     Ok(())
 }
 
-fn validate_edit(text: &str, edit: &SyntaxEdit) -> Result<(), SyntaxError> {
-    if edit.range.start > edit.range.end || edit.range.end > text.len() {
+fn validate_edit(text: &Rope, edit: &SyntaxEdit) -> Result<(), SyntaxError> {
+    if edit.range.start > edit.range.end || edit.range.end > text.len_bytes() {
         return Err(SyntaxError::InvalidEditRange {
             start: edit.range.start,
             end: edit.range.end,
-            document_len: text.len(),
+            document_len: text.len_bytes(),
         });
     }
     for offset in [edit.range.start, edit.range.end] {
-        if !text.is_char_boundary(offset) {
+        if text.char_to_byte(text.byte_to_char(offset)) != offset {
             return Err(SyntaxError::InvalidEditBoundary { offset });
         }
     }
     Ok(())
 }
 
-fn validate_selection_range(text: &str, range: &Range<usize>) -> Result<(), SyntaxError> {
-    if range.start > range.end || range.end > text.len() {
+fn validate_selection_range(text: &Rope, range: &Range<usize>) -> Result<(), SyntaxError> {
+    if range.start > range.end || range.end > text.len_bytes() {
         return Err(SyntaxError::InvalidSelectionRange {
             start: range.start,
             end: range.end,
-            document_len: text.len(),
+            document_len: text.len_bytes(),
         });
     }
     for offset in [range.start, range.end] {
-        if !text.is_char_boundary(offset) {
+        if text.char_to_byte(text.byte_to_char(offset)) != offset {
             return Err(SyntaxError::InvalidSelectionBoundary { offset });
         }
     }
@@ -317,7 +368,7 @@ fn validate_selection_range(text: &str, range: &Range<usize>) -> Result<(), Synt
 }
 
 fn validated_edits<'a>(
-    text: &str,
+    text: &Rope,
     edits: &'a [SyntaxEdit],
 ) -> Result<Vec<&'a SyntaxEdit>, SyntaxError> {
     let mut edits = edits.iter().collect::<Vec<_>>();
@@ -350,13 +401,13 @@ fn advance_point(start: SyntaxPoint, text: &str) -> SyntaxPoint {
     }
 }
 
-fn collect_tokens(query: &Query, tree: &Tree, text: &str, limit: usize) -> Vec<SyntaxToken> {
+fn collect_tokens(query: &Query, tree: &Tree, text: &Rope, limit: usize) -> Vec<SyntaxToken> {
     if limit == 0 {
         return Vec::new();
     }
     let capture_names = query.capture_names();
     let mut cursor = QueryCursor::new();
-    let mut captures = cursor.captures(query, tree.root_node(), text.as_bytes());
+    let mut captures = cursor.captures(query, tree.root_node(), RopeTextProvider(text.slice(..)));
     let mut tokens = Vec::new();
     while let Some((query_match, capture_index)) = captures.next() {
         let capture = query_match.captures[*capture_index];
@@ -377,6 +428,9 @@ fn collect_tokens(query: &Query, tree: &Tree, text: &str, limit: usize) -> Vec<S
 }
 
 fn token_kind(capture_name: &str) -> Option<SyntaxTokenKind> {
+    if capture_name.starts_with("keyword.operator.") {
+        return Some(SyntaxTokenKind::Operator);
+    }
     let root = capture_name.split('.').next().unwrap_or(capture_name);
     match root {
         "attribute" => Some(SyntaxTokenKind::Attribute),
@@ -399,18 +453,28 @@ fn token_kind(capture_name: &str) -> Option<SyntaxTokenKind> {
     }
 }
 
-fn collect_folding_ranges(tree: &Tree, limit: usize) -> Vec<FoldingRange> {
+fn collect_folding_ranges(
+    tree: &Tree,
+    query: &Query,
+    text: &Rope,
+    limit: usize,
+) -> Vec<FoldingRange> {
+    let mut cursor = QueryCursor::new();
+    let mut captures = cursor.captures(query, tree.root_node(), RopeTextProvider(text.slice(..)));
     let mut ranges = Vec::new();
-    visit_nodes(tree.root_node(), &mut |node| {
-        if ranges.len() < limit
-            && node.start_position().row < node.end_position().row
-            && is_foldable(node.kind())
-        {
+    while let Some((matched, index)) = captures.next() {
+        if ranges.len() >= limit {
+            break;
+        }
+        let node = matched.captures[*index].node;
+        let end = node.end_position();
+        let last_row = end.row.saturating_sub(usize::from(end.column == 0));
+        if node.start_position().row < last_row {
             ranges.push(FoldingRange {
                 range: syntax_range(node),
             });
         }
-    });
+    }
     ranges.sort_by_key(|range| (range.range.bytes.start, range.range.bytes.end));
     ranges
 }
@@ -456,35 +520,18 @@ fn collect_selection_ranges(
     ranges
 }
 
-fn is_foldable(kind: &str) -> bool {
-    matches!(
-        kind,
-        "block"
-            | "array"
-            | "class_body"
-            | "declaration_list"
-            | "enum_variant_list"
-            | "enum_body"
-            | "field_declaration_list"
-            | "interface_body"
-            | "jsx_element"
-            | "match_block"
-            | "object"
-            | "object_type"
-            | "statement_block"
-            | "switch_body"
-            | "token_tree"
-            | "use_list"
-    )
-}
-
-fn collect_symbols(query: &Query, tree: &Tree, text: &str, limit: usize) -> Vec<DocumentSymbol> {
+fn collect_symbols(
+    cursor: &mut QueryCursor,
+    query: &Query,
+    root: Node<'_>,
+    text: &Rope,
+    limit: usize,
+) -> Vec<DocumentSymbol> {
     if limit == 0 {
         return Vec::new();
     }
     let capture_names = query.capture_names();
-    let mut cursor = QueryCursor::new();
-    let mut matches = cursor.matches(query, tree.root_node(), text.as_bytes());
+    let mut matches = cursor.matches(query, root, RopeTextProvider(text.slice(..)));
     let mut symbols = Vec::new();
     while let Some(query_match) = matches.next() {
         let mut definition = None;
@@ -500,11 +547,11 @@ fn collect_symbols(query: &Query, tree: &Tree, text: &str, limit: usize) -> Vec<
         let (Some((kind, definition_node)), Some(name_node)) = (definition, name_node) else {
             continue;
         };
-        let Ok(name) = name_node.utf8_text(text.as_bytes()) else {
+        let Some(name) = text.get_byte_slice(name_node.byte_range()) else {
             continue;
         };
         symbols.push(DocumentSymbol {
-            name: name.to_owned(),
+            name: name.to_string(),
             kind,
             range: syntax_range(definition_node),
             selection_range: syntax_range(name_node),
@@ -529,7 +576,7 @@ fn symbol_kind(capture_name: &str) -> Option<DocumentSymbolKind> {
     match definition {
         "constant" => Some(DocumentSymbolKind::Constant),
         "enum" => Some(DocumentSymbolKind::Enum),
-        "field" => Some(DocumentSymbolKind::Field),
+        "field" | "property" => Some(DocumentSymbolKind::Field),
         "function" => Some(DocumentSymbolKind::Function),
         "macro" => Some(DocumentSymbolKind::Macro),
         "method" => Some(DocumentSymbolKind::Method),

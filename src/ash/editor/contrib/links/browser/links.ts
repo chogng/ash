@@ -10,7 +10,7 @@ import { Range } from '../../../common/core/range.js';
 import { computeLinks } from '../../../common/languages/linkComputer.js';
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent } from '../../../common/languages.js';
 import type { LanguageLink } from "../../../common/languages.js";
-import { type Position } from "../../../common/core/position.js";
+import { Position } from "../../../common/core/position.js";
 import { type View } from "../../../browser/view.js";
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
@@ -26,6 +26,8 @@ export class LinkDetector extends Disposable {
 		return editor.getContribution<LinkDetector>(LinkDetector.ID);
 	}
 
+	private builtinLinks: readonly LanguageLink[] | undefined;
+	private readonly dirtyBuiltinLines = new Set<number>();
 	private readonly modifierKeys: ModifierKeyEmitter;
 	private readonly recompute: RunOnceScheduler;
 	private readonly debounceInformation: IFeatureDebounceInformation;
@@ -50,7 +52,11 @@ export class LinkDetector extends Disposable {
 		this._register(editor.onDidChangeConfiguration(event => {
 			if (event.hasChanged(EditorOption.links) || event.hasChanged(EditorOption.multiCursorModifier)) this.invalidate();
 		}));
-		this._register(toDisposable(() => this.clear()));
+		this._register(toDisposable(() => {
+			this.clear();
+			this.builtinLinks = undefined;
+			this.dirtyBuiltinLines.clear();
+		}));
 		this._register(addDisposableListener<PointerEvent>(viewport.domNode.domNode, "pointermove", event => this.update(event)));
 		this._register(addDisposableListener(viewport.domNode.domNode, "pointerleave", () => this.clearHover()));
 		this._register(addDisposableListener<PointerEvent>(viewport.domNode.domNode, "pointerdown", event => {
@@ -64,7 +70,15 @@ export class LinkDetector extends Disposable {
 				: (isMacintosh ? event.metaKey : event.ctrlKey);
 			this.openLinkOccurrence(link, openToSide, true);
 		}));
-		this._register(viewport.textModel.onDidChangeContent(() => this.invalidate(this.debounceInformation.get(viewport.textModel))));
+		this._register(viewport.textModel.onDidChangeContent(change => {
+			if (change.changes.some(edit => edit.range.startLineNumber !== edit.range.endLineNumber || /[\r\n]/u.test(edit.text))) {
+				this.builtinLinks = undefined;
+				this.dirtyBuiltinLines.clear();
+			} else {
+				for (const edit of change.changes) this.dirtyBuiltinLines.add(edit.range.startLineNumber);
+			}
+			this.invalidate(this.debounceInformation.get(viewport.textModel));
+		}));
 		this._register(viewport.textModel.onDidChangeLanguage(() => this.invalidate()));
 		this._register(languageFeatures.linkProvider.onDidChange(() => this.invalidate()));
 		// Keyboard opening needs the same provider results without a preceding pointer hover.
@@ -151,13 +165,48 @@ export class LinkDetector extends Disposable {
 			}
 		}
 		if (!isLanguageFeatureRequestCurrent(request) || this.isDisposed) return Object.freeze([]);
-		const providerRanges = links.map(link => link.range);
-		for (const link of computeLinks(model)) {
-			const range = Range.lift(link.range);
-			if (providerRanges.some(existing => Range.areIntersecting(existing, range))) continue;
-			links.push(Object.freeze({ range, target: String(link.url) }));
+		const detected = await this.computeBuiltinLinks(signal);
+		if (!isLanguageFeatureRequestCurrent(request) || this.isDisposed) return Object.freeze([]);
+		// Both lists are ordered by start. A sweep preserves provider precedence
+		// without comparing every detected URL against every provider range.
+		const providerRanges = links.map(link => link.range).sort(Range.compareRangesUsingStarts);
+		let providerIndex = 0;
+		for (const link of detected) {
+			while (providerIndex < providerRanges.length && Position.compare(providerRanges[providerIndex].getEndPosition(), link.range.getStartPosition()) <= 0) providerIndex++;
+			const candidate = providerRanges[providerIndex];
+			if (!candidate || !Range.areIntersecting(candidate, link.range)) links.push(link);
 		}
 		return Object.freeze(links);
+	}
+
+	private async computeBuiltinLinks(signal: AbortSignal): Promise<readonly LanguageLink[]> {
+		const model = this.viewport.textModel, version = model.version;
+		if (this.builtinLinks && this.dirtyBuiltinLines.size === 0) return this.builtinLinks;
+		const previous = this.builtinLinks;
+		const dirty = new Set(this.dirtyBuiltinLines);
+		const result: LanguageLink[] = previous ? previous.filter(link => !dirty.has(link.range.startLineNumber)) : [];
+		const scan = (start: number, end: number): void => {
+			for (const link of computeLinks({ getLineCount: () => end - start + 1, getLineContent: line => model.getLineContent(start + line - 1) })) {
+				const range = Range.lift(link.range).delta(start - 1);
+				result.push(Object.freeze({ range, target: String(link.url) }));
+			}
+		};
+		if (previous) {
+			for (const line of dirty) scan(line, line);
+			result.sort((left, right) => Range.compareRangesUsingStarts(left.range, right.range));
+		} else {
+			for (let start = 1; start <= model.getLineCount(); start += 8192) {
+				if (start > 1) await new Promise<void>(resolve => setTimeout(resolve, 0));
+				signal.throwIfAborted();
+				if (this.isDisposed || model.isDisposed() || model.version !== version) return [];
+				scan(start, Math.min(model.getLineCount(), start + 8191));
+			}
+		}
+		signal.throwIfAborted();
+		if (this.isDisposed || model.isDisposed() || model.version !== version) return [];
+		this.builtinLinks = Object.freeze(result);
+		this.dirtyBuiltinLines.clear();
+		return this.builtinLinks;
 	}
 
 	private invalidate(delay = 0): void {

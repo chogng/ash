@@ -7,20 +7,20 @@ use ignore::WalkBuilder;
 
 use crate::CodebaseError;
 use crate::CodebaseLimits;
-use crate::IndexedLanguage;
 use crate::chunker::PreparedChunk;
 use crate::chunker::chunk_source;
-use crate::chunker::language_for_path;
 use crate::chunker::source_revision;
 use crate::error::io_error;
 use crate::types::SourceRevision;
 use ash_file_access::Dir;
+use ash_language::LanguageId;
+use ash_language::detect_language;
 
 #[derive(Clone, Debug)]
 pub struct PreparedFile {
     pub relative_path: PathBuf,
     pub source_revision: SourceRevision,
-    pub language: IndexedLanguage,
+    pub language: LanguageId,
     pub source_bytes: usize,
     pub chunks: Vec<PreparedChunk>,
     pub chunk_limit_hit: bool,
@@ -163,8 +163,8 @@ fn prepare_file(
     let Ok(source) = String::from_utf8(bytes) else {
         return Ok(None);
     };
-    let language = language_for_path(&relative_path);
-    let chunking = chunk_source(language, &source, limits);
+    let language = detect_language(&relative_path, source.lines().next());
+    let chunking = chunk_source(&language, &source, limits);
     Ok(Some(PreparedFile {
         relative_path,
         source_revision: source_revision(&source),

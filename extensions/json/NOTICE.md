@@ -1,13 +1,11 @@
-# Extension grammar provenance
+# Resource provenance
 
-`JSON.tmLanguage.json` and `JSONC.tmLanguage.json` are copied from the sibling
-VS Code source tree at `extensions/json/syntaxes`.
+Language declarations, editing configuration and any snippets are derived from
+[Microsoft VS Code](https://github.com/microsoft/vscode/tree/main/extensions/json)
+and retain its [MIT license](../../third_party/vscode/LICENSE.txt).
 
-- Upstream: `microsoft/vscode`
-- Grammar revision recorded by the files:
-  `microsoft/vscode-JSON.tmLanguage@9bd83f1c252b375e957203f21793316203f61f70`
-- License: MIT, following the upstream VS Code repository
-
-The files are intentionally shipped as resources of the declarative
-`ash.json` extension package. They are not base contracts and
-must not be imported by `workbench/services/textMate/common`.
+This package uses Tree-sitter for built-in syntax analysis. Query sources, pinned
+grammar revisions, local changes and individual licenses are recorded in
+[`queries/README.md`](queries/README.md). Web parser assets are built from the
+matching Cargo sources; their hashes and query composition are recorded in
+`tree-sitter/grammars.json` where this package supplies its own WASM assets.

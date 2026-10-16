@@ -30,7 +30,6 @@ import { ConfirmResult, DialogSeverity, type IDialogService, type IFileDialogSer
 import { TextFileBinaryError, TextFileTooLargeError } from "../../../services/textfile/common/textFileService.js";
 import { type ITextFileService } from "../../../services/textfile/common/textfiles.js";
 import { FileNotFoundError, type IFileService } from "../../../../platform/files/common/files.js";
-import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
 import type { IDiffService } from "../../../services/diff/common/diffService.js";
 import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
@@ -138,7 +137,6 @@ export interface IEditorPartOptions {
 	readonly keyboardLayoutService?: IKeyboardLayoutService;
 	readonly fileService?: IFileService;
 	readonly textFileService?: ITextFileService;
-	readonly textMateService?: ITextMateService;
 	readonly languageResolver?: TextResourceLanguageResolver;
 	readonly diffService?: IDiffService;
 	readonly accessibilityService?: IAccessibilityService;
@@ -232,7 +230,6 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			keyboardLayoutService: options.keyboardLayoutService,
 			fileService: options.fileService,
 			textFileService: options.textFileService,
-			textMateService: options.textMateService,
 			languageResolver: options.languageResolver,
 			diffService: options.diffService,
 			accessibilityService: options.accessibilityService,
@@ -289,7 +286,6 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 				keyboardLayoutService: options.keyboardLayoutService,
 				fileService: options.fileService,
 				textFileService: options.textFileService,
-				textMateService: options.textMateService,
 				languageResolver: options.languageResolver,
 				diffService: options.diffService,
 				accessibilityService: options.accessibilityService,

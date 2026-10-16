@@ -1,9 +1,11 @@
-# Third-party notices
+# Resource provenance
 
-The package manifest and language configuration come from Microsoft VS Code revision
-bf87d753ddcdf83c55be90e8b0b8cd7a14247685 under the MIT license reproduced at
-third-party/microsoft-vscode.LICENSE.txt.
+Language declarations, editing configuration and any snippets are derived from
+[Microsoft VS Code](https://github.com/microsoft/vscode/tree/main/extensions/go)
+and retain its [MIT license](../../third_party/vscode/LICENSE.txt).
 
-The Go TextMate grammar is redistributed by VS Code from worlpaker/go-syntax revision
-c74e22eb9ef32958e3edd130ea750ce78d8b8241. Its MIT license and copyright notice are reproduced at
-third-party/go-syntax.LICENSE.txt.
+This package uses Tree-sitter for built-in syntax analysis. Query sources, pinned
+grammar revisions, local changes and individual licenses are recorded in
+[`queries/README.md`](queries/README.md). Web parser assets are built from the
+matching Cargo sources; their hashes and query composition are recorded in
+`tree-sitter/grammars.json` where this package supplies its own WASM assets.

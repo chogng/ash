@@ -47,7 +47,6 @@ registerEditorPane({
 		const saveErrorHandler = isFile ? undefined : instantiationService.createInstance(TextFileSaveErrorHandler);
 		return instantiationService.createInstance(isFile ? TextFileEditor : TextResourceEditor, resourceStore, {
 			createPart: partOptions => createBrowserEditorPart(instantiationService, partOptions),
-			textMateService: options.textMateService,
 			languageDiagnosticsService: options.languageDiagnosticsService,
 			accessibilityService: options.accessibilityService,
 			workingCopyService: options.workingCopyService,

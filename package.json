@@ -181,7 +181,11 @@
     "test:unit:prepared": "node test/unit/prepare.ts tsconfig.test.json && tsc -p tsconfig.test.json && node test/unit/run.ts",
     "typecheck:stanza:prepared": "bun check -p build/desktop/vite/stanza/tsconfig.json --all",
     "build:stanza:prepared": "bun check -p build/desktop/vite/stanza/tsconfig.json --all && vite build --config build/desktop/vite/editor.vite.config.ts",
-    "test:browser:integration:prepared": "bun check -p test/integration/browser/tsconfig.json --all && node test/integration/browser/run.ts"
+    "test:browser:integration:prepared": "bun check -p test/integration/browser/tsconfig.json --all && node test/integration/browser/run.ts",
+    "tree-sitter:generate": "node build/treeSitterRegistry.ts",
+    "language:generate": "node build/languageRegistry.ts",
+    "tree-sitter:verify": "node build/treeSitter.ts --verify",
+    "tree-sitter:build": "node build/treeSitter.ts --build"
   },
   "devDependencies": {
     "@ash/typescript-compiler": "npm:typescript@7.0.2",
@@ -193,6 +197,7 @@
     "@types/node": "^24.0.0",
     "@types/trusted-types": "2.0.7",
     "@types/vscode": "1.110.0",
+    "@vscode/tree-sitter-wasm": "0.3.1",
     "@webgpu/types": "0.1.66",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-search": "0.16.0",
@@ -211,8 +216,6 @@
     "svgo": "4.0.1",
     "typescript": "npm:@typescript/typescript6@6.0.2",
     "vite": "8.0.13",
-    "vscode-oniguruma": "1.7.0",
-    "vscode-textmate": "9.3.2",
     "wait-on": "^9.1.0",
     "yaml": "^2.9.1"
   },

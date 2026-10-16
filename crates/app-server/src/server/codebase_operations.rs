@@ -164,7 +164,7 @@ fn project_snapshot(
 fn project_hit(hit: SearchHit) -> CodebaseSearchHitDto {
     CodebaseSearchHitDto {
         path: hit.reference.relative_path,
-        language: hit.language.id().to_owned(),
+        language: hit.language.as_str().to_owned(),
         source_revision: hit.reference.source_revision.as_str().to_owned(),
         chunk_key: hit.reference.key.as_str().to_owned(),
         content_hash: hit.reference.content_hash.as_str().to_owned(),

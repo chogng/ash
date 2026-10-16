@@ -16,7 +16,9 @@ export class EditorHiddenRangeModel extends Disposable {
 		if (folding.model !== textModel) throw new TypeError("Hidden range and folding models must share one text model");
 		this.rebuild();
 		this._register(folding.onDidChange(() => this.rebuild()));
-		this._register(textModel.onDidChangeContent(() => this.rebuild()));
+		this._register(textModel.onDidChangeContent(change => {
+			if (change.changes.some(edit => edit.range.startLineNumber !== edit.range.endLineNumber || /[\r\n]/u.test(edit.text))) this.rebuild();
+		}));
 	}
 
 	get hiddenRanges(): readonly Range[] {

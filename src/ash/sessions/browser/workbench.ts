@@ -98,7 +98,7 @@ import '../../workbench/contrib/accessibility/browser/accessibleViewActions.js';
 import { addDisposableListener, h, type IDimension } from "../../base/browser/dom.js";
 import { errorHandler, getErrorMessage, onUnexpectedError, setUnexpectedErrorHandler } from '../../base/common/errors.js';
 import { mainWindow } from '../../base/browser/window.js';
-import type { Event } from '../../base/common/event.js';
+import { Event } from '../../base/common/event.js';
 import { SessionsViewRegistry } from '../common/views.js';
 import { ExtensionsViewPane, registerExtensionsViewContainer } from '../../workbench/contrib/extensions/browser/extensionsViewlet.js';
 import { SkillsViewPane, McpServersViewPane } from '../../workbench/contrib/extensions/browser/extensionsViews.js';
@@ -177,8 +177,11 @@ import { TextFileEditorTracker } from '../../workbench/contrib/files/browser/edi
 import { ITextModelResourceService, IFileTextModelService } from '../../workbench/services/textmodelResolver/common/textModelResourceService.js';
 import { getBrowserTextModelService } from '../../workbench/services/textmodelResolver/browser/browserTextModelService.js';
 import { getBrowserTextResourceStore } from '../../workbench/contrib/codeEditor/browser/browserTextResourceStore.js';
-import { BrowserTextMateService } from '../../workbench/services/textMate/browser/browserTextMateService.js';
-import { ITextMateService } from '../../workbench/services/textMate/common/textMateService.js';
+import { TextMateScopeThemeModel } from '../../workbench/services/textMate/common/textMateScopeTheme.js';
+import { projectColorThemeTokens } from '../../workbench/services/textMate/common/textMateThemeProjection.js';
+import { TreeSitterLibraryService, TreeSitterSyntaxProviders, createTreeSitterSyntaxTokenBackend } from '../../workbench/services/treeSitter/browser/treeSitterLibraryService.js';
+import { ITreeSitterLibraryService } from '../../editor/common/services/treeSitter/treeSitterLibraryService.js';
+import { ISyntaxApi } from '../../platform/syntax/common/syntaxApi.js';
 import { AppServerExtensionService } from '../../workbench/services/extensions/browser/appServerExtensionService.js';
 import { IExtensionService } from '../../workbench/services/extensions/common/extensionService.js';
 import { DiffService } from '../../workbench/services/diff/browser/diffService.js';
@@ -468,9 +471,16 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(ITextFileService, textFiles);
 		const workingCopies = this._register(services.createInstance(BrowserWorkingCopyService));
 		services.registerInstance(IWorkingCopyService, workingCopies);
-		const textMate = this._register(new BrowserTextMateService());
-		services.registerInstance(ITextMateService, textMate);
-		const extensionService = this._register(services.createInstance(AppServerExtensionService, { api: enabledExtensions, eventApi: options.api.events, textMateService: textMate, languageService, languageConfigurationService: services.get(ILanguageConfigurationService), languageFeaturesService: services.get(ILanguageFeaturesService) }));
+		services.registerInstance(ISyntaxApi, options.api.syntax);
+		const treeSitterLibrary = this._register(services.createInstance(TreeSitterLibraryService));
+		services.registerInstance(ITreeSitterLibraryService, treeSitterLibrary);
+		this._register(new TreeSitterSyntaxProviders(services.get(ILanguageFeaturesService)));
+		let syntaxThemeRevision = 1;
+		const syntaxTheme = this._register(new TextMateScopeThemeModel(projectColorThemeTokens(themeService.getColorTheme(), syntaxThemeRevision)));
+		this._register(themeService.onDidColorThemeChange(() => {
+			syntaxTheme.replace(projectColorThemeTokens(themeService.getColorTheme(), ++syntaxThemeRevision));
+		}));
+		const extensionService = this._register(services.createInstance(AppServerExtensionService, { api: enabledExtensions, eventApi: options.api.events, languageService, languageConfigurationService: services.get(ILanguageConfigurationService) }));
 		services.registerInstance(IExtensionService, extensionService);
 		services.get(ISnippetsService);
 		const extensionReady = extensionService.start();
@@ -479,8 +489,14 @@ export abstract class Workbench extends Disposable {
 			languageService,
 			languageConfigurationService: services.get(ILanguageConfigurationService),
 			languageFeaturesService: services.get(ILanguageFeaturesService),
-			syntaxService: { workerFactory: textMate.syntaxWorkerFactory },
-			onDidChangeLanguageSupport: textMate.onDidChange,
+			createSyntaxTokenBackend: model => createTreeSitterSyntaxTokenBackend(model, configurationService, treeSitterLibrary, syntaxTheme),
+			onDidChangeSyntaxBackend: Event.any(
+				treeSitterLibrary.onDidChange,
+				Event.map(syntaxTheme.onDidChangeTheme, () => undefined),
+				(listener, thisArgs, disposables) => configurationService.onDidChangeConfiguration(event => {
+					if (event.affectsConfiguration('editor.experimental.treeSitterTelemetry')) listener.call(thisArgs, undefined);
+				}, undefined, disposables),
+			),
 		}));
 		services.registerInstance(ITextModelResourceService, textModels);
 		services.registerInstance(IFileTextModelService, textModels);
@@ -748,7 +764,6 @@ export abstract class Workbench extends Disposable {
 			keyboardLayoutService,
 			fileService,
 			textFileService: textFiles,
-			textMateService: textMate,
 			languageResolver: languageService,
 			languageFeaturesService: services.get(ILanguageFeaturesService),
 			diffService,

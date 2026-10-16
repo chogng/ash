@@ -5,7 +5,11 @@ mod error;
 mod language;
 mod snapshot;
 
-pub use document::{DocumentRevision, SyntaxDocument, SyntaxEdit};
+pub use document::{
+    DocumentRevision, EditorBracket, EditorDiagnostic, EditorFacts, EditorFactsDelta,
+    EditorFactsSplice, EditorFold, EditorRow, EditorSymbol, EditorToken, SyntaxDocument,
+    SyntaxEdit,
+};
 pub use error::SyntaxError;
 pub use language::SyntaxLanguage;
 pub use snapshot::{
@@ -18,7 +22,7 @@ pub use snapshot::{
 ///
 /// Grammar or structural-query changes that can alter document symbols, folding ranges, or other
 /// stored facts must change this value so consumers do not reuse incompatible projections.
-pub const SYNTAX_FACTS_VERSION: &str = "ash-syntax-facts-v1";
+pub const SYNTAX_FACTS_VERSION: &str = "ash-syntax-facts-v2";
 
 #[cfg(test)]
 #[path = "syntax_tests.rs"]

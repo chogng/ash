@@ -3214,6 +3214,13 @@ impl AppServer {
             }
             Some(ClientMethod::DiffCompute) => self.diff_compute(&request.params),
             Some(ClientMethod::SyntaxOpen) => self.syntax_open(connection, &request.params),
+            Some(ClientMethod::SyntaxOpenShared) => {
+                self.syntax_open_shared(connection, &request.params)
+            }
+            Some(ClientMethod::SyntaxQuery) => {
+                self.syntax_query(connection, &request.params, cancellation)
+            }
+            Some(ClientMethod::SyntaxCancel) => self.syntax_cancel(connection, &request.params),
             Some(ClientMethod::SyntaxUpdate) => self.syntax_update(connection, &request.params),
             Some(ClientMethod::SyntaxAnalyze) => self.syntax_analyze(connection, &request.params),
             Some(ClientMethod::SyntaxSelectionRanges) => {

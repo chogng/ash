@@ -1,0 +1,326 @@
+{
+  "source": "https://github.com/gbprod/tree-sitter-gitcommit/tree/55a265cf763ec15d6e2d96bb206e3f5e30d82bae/test/corpus",
+  "parserVersion": "0.5.0",
+  "cases": [
+    {
+      "name": "comments.txt:0:Simple comments",
+      "source": "This is a simple subject\n\n# This is a simple body\n",
+      "tree": "(source (subject) (message (comment)))"
+    },
+    {
+      "name": "comments.txt:1:Comment without space",
+      "source": "This is a simple subject\n\n#This is a simple body\n",
+      "tree": "(source (subject) (message (comment)))"
+    },
+    {
+      "name": "comments.txt:2:Empty comment",
+      "source": "This is a simple subject\n\n#\n",
+      "tree": "(source (subject) (message (comment)))"
+    },
+    {
+      "name": "comments.txt:3:Multiline comments",
+      "source": "This is a simple subject\n\n# This is a simple comment.\n#\n#With a second line.\n\n# And a paragraph.\n",
+      "tree": "(source (subject) (message (comment) (comment) (comment) (comment)))"
+    },
+    {
+      "name": "comments.txt:4:Comment title",
+      "source": "\n# This is a simple title:\n# With a content\n",
+      "tree": "(source (message (comment (title)) (comment)))"
+    },
+    {
+      "name": "body.txt:0:Simple body",
+      "source": "This is a simple subject\n\nThis is a simple body",
+      "tree": "(source (subject) (message (message_line)))"
+    },
+    {
+      "name": "body.txt:1:Subject with comment",
+      "source": "this is a simple subject\n\n# comment\n",
+      "tree": "(source (subject) (message (comment)))"
+    },
+    {
+      "name": "body.txt:2:Empty file w/ comments",
+      "source": "\n# comment\n",
+      "tree": "(source (message (comment)))"
+    },
+    {
+      "name": "body.txt:3:Empty file w/ empty comment",
+      "source": "\n#\n",
+      "tree": "(source (message (comment)))"
+    },
+    {
+      "name": "body.txt:4:Multiline body",
+      "source": "This is a simple subject\n\nThis is a simple body.\nWith a second line.\n\nAnd a paragraph.",
+      "tree": "(source (subject) (message (message_line) (message_line) (message_line)))"
+    },
+    {
+      "name": "body.txt:5:BREAKING CHANGE",
+      "source": "\ntest\n\nBREAKING CHANGE: My message\nBREAKING-CHANGE: also valid",
+      "tree": "(source (message (message_line) (breaking_change (token) (value)) (breaking_change (token) (value))))"
+    },
+    {
+      "name": "body.txt:6:BREAKING CHANGE with overflow",
+      "source": "\nBREAKING CHANGE: My message with a long long text\n with more than one line\n that should be parsed as a single value",
+      "tree": "(source (message (breaking_change (token) (value))))"
+    },
+    {
+      "name": "body.txt:7:Overflowed summary",
+      "source": "This is a simple subject\n\nThis is a simple body\nThis is a simple body with so muche characters that it will overflow the summary limit\nThis is a simple body",
+      "tree": "(source (subject) (message (message_line) (message_line) (message_line)))"
+    },
+    {
+      "name": "body.txt:8:Allows 1 char summary",
+      "source": "This is a simple subject\n\nT",
+      "tree": "(source (subject) (message (message_line)))"
+    },
+    {
+      "name": "scissor.txt:0:Simple scissor",
+      "source": "This is a simple subject\n\n# This is a simple body\n# ------------------------ >8 ------------------------\n# Ne touchez pas à la ligne ci-dessus.\n# Tout ce qui suit sera éliminé.\ndiff --git a/lua/usr/git.lua b/lua/usr/git.lua\nindex 457a414..94b9036 100644",
+      "tree": "(source (subject) (message (comment)) (scissor) (diff (generated_comment) (generated_comment)))"
+    },
+    {
+      "name": "scissor.txt:1:Simple empty scissor",
+      "source": "This is a simple subject\n\n# This is a simple body\n# ------------------------ >8 ------------------------\n# Ne touchez pas à la ligne ci-dessus.\n# Tout ce qui suit sera éliminé.",
+      "tree": "(source (subject) (message (comment)) (scissor) (diff (generated_comment) (generated_comment)))"
+    },
+    {
+      "name": "scissor.txt:2:Scissor in commit verbose",
+      "source": "update credits\n\n# ------------------------ >8 ------------------------\n# Do not modify or remove the line above.\n# Everything below it will be ignored.\n#\n# Changes to be committed:\ndiff --git c/README.md i/README.md\nindex 9443e24..d8f88db 100644\n# --------------------------------------------------\n# Modifications qui ne seront pas validées :\ndiff --git c/README.md i/README.md\nindex 9443e24..d8f88db 100644",
+      "tree": "(source (subject) (scissor) (diff (generated_comment) (generated_comment) (generated_comment) (generated_comment (title)) (generated_comment) (generated_comment (title))))"
+    },
+    {
+      "name": "changes.txt:0:New files",
+      "source": "\n# 請輸入描述您變更的提交訊息。會保留開頭是「#」\n# with '#' will be ignored, and an empty message aborts the commit.\n#\n# Changes to be committed:\n#\tnew file:   .gitignore\n#\tnouveau fichier : .gitignore\n#\t新檔案： .gitignore\n#\tnew file: .gitignore\n#\tnouveau fichier : .gitignore\n#\tнов файл: .gitignore\n#\tfitxer nou: .gitignore\n#\tneue Datei: .gitignore\n#\tνέο αρχείο: .gitignore\n#\tnuevos archivos: .gitignore\n#\tberkas baru: .gitignore\n#\tnuovo file: .gitignore\n#\t새 파일: .gitignore\n#\tnowy plik: .gitignore\n#\tnovo ficheiro: .gitignore\n#\tновый файл:  .gitignore\n#\tny fil: .gitignore\n#\tyeni dosya:   .gitignore\n#\ttập tin mới: .gitignore\n#\t新文件： .gitignore\n#\t新檔案：    .gitignore\n",
+      "tree": "(source (generated_comment) (generated_comment) (generated_comment) (generated_comment (title)) (generated_comment (change kind: (new)) (filepath)) (generated_comment (change kind: (new)) (filepath)) (generated_comment (change kind: (new)) (filepath)) (generated_comment (change kind: (new)) (filepath)) (generated_comment (change kind: (new)) (filepath)) (generated_comment (change kind: (new)) (filepath)) (generated_comment (change kind: (new)) (filepath)) (generated_comment (change kind: (new)) (filepath)) (generated_comment (change kind: (new)) (filepath)) (generated_comment (change kind: (new)) (filepath)) (generated_comment (change kind: (new)) (filepath)) (generated_comment (change kind: (new)) (filepath)) (generated_comment (change kind: (new)) (filepath)) (generated_comment (change kind: (new)) (filepath)) (generated_comment (change kind: (new)) (filepath)) (generated_comment (change kind: (new)) (filepath)) (generated_comment (change kind: (new)) (filepath)) (generated_comment (change kind: (new)) (filepath)) (generated_comment (change kind: (new)) (filepath)) (generated_comment (change kind: (new)) (filepath)) (generated_comment (change kind: (new)) (filepath)))"
+    },
+    {
+      "name": "changes.txt:1:Renamed files",
+      "source": "\n# Hãy nhập vào các thông tin để giải thích các thay đổi của bạn. Những\n#\n# Modifications qui seront validées :\n#\trenommé :         test.txt -> test2.txt\n#\trenamed:    test.txt -> test2.txt\n#\trenamed:    test.txt -> test2.txt\n#\trenommé :    test.txt -> test2.txt\n#\tпреименуван:    test.txt -> test2.txt\n#\tcanviat de nom:    test.txt -> test2.txt\n#\tumbenannt:    test.txt -> test2.txt\n#\tμετονομασία:    test.txt -> test2.txt\n#\trenombrados:    test.txt -> test2.txt\n#\tterganti nama:    test.txt -> test2.txt\n#\trinominato:    test.txt -> test2.txt\n#\t이름 바꿈:    test.txt -> test2.txt\n#\tzmieniono nazwę:    test.txt -> test2.txt\n#\trenomeado:    test.txt -> test2.txt\n#\tпереименовано:    test.txt -> test2.txt\n#\tnamnbytt:    test.txt -> test2.txt\n#\tyeniden adlandırıldı:    test.txt -> test2.txt\n#\tđã đổi tên:    test.txt -> test2.txt\n#\t重命名：    test.txt -> test2.txt\n#\t重新命名：    test.txt -> test2.txt\n",
+      "tree": "(source (generated_comment) (generated_comment) (generated_comment (title)) (generated_comment (change kind: (renamed)) (filepath) (arrow) (filepath)) (generated_comment (change kind: (renamed)) (filepath) (arrow) (filepath)) (generated_comment (change kind: (renamed)) (filepath) (arrow) (filepath)) (generated_comment (change kind: (renamed)) (filepath) (arrow) (filepath)) (generated_comment (change kind: (renamed)) (filepath) (arrow) (filepath)) (generated_comment (change kind: (renamed)) (filepath) (arrow) (filepath)) (generated_comment (change kind: (renamed)) (filepath) (arrow) (filepath)) (generated_comment (change kind: (renamed)) (filepath) (arrow) (filepath)) (generated_comment (change kind: (renamed)) (filepath) (arrow) (filepath)) (generated_comment (change kind: (renamed)) (filepath) (arrow) (filepath)) (generated_comment (change kind: (renamed)) (filepath) (arrow) (filepath)) (generated_comment (change kind: (renamed)) (filepath) (arrow) (filepath)) (generated_comment (change kind: (renamed)) (filepath) (arrow) (filepath)) (generated_comment (change kind: (renamed)) (filepath) (arrow) (filepath)) (generated_comment (change kind: (renamed)) (filepath) (arrow) (filepath)) (generated_comment (change kind: (renamed)) (filepath) (arrow) (filepath)) (generated_comment (change kind: (renamed)) (filepath) (arrow) (filepath)) (generated_comment (change kind: (renamed)) (filepath) (arrow) (filepath)) (generated_comment (change kind: (renamed)) (filepath) (arrow) (filepath)) (generated_comment (change kind: (renamed)) (filepath) (arrow) (filepath)))"
+    },
+    {
+      "name": "changes.txt:2:Modified files",
+      "source": "\n# Hãy nhập vào các thông tin để giải thích các thay đổi của bạn. Những\n#\n# Modifications qui seront validées :\n#\tmodified:    test.txt\n#\tmodifié :    test.txt\n#\tпроменен:    test.txt\n#\tmodificat:    test.txt\n#\tgeändert:    test.txt\n#\tτροποποίηση:    test.txt\n#\tmodificados:    test.txt\n#\tterubah:    test.txt\n#\tmodificato:    test.txt\n#\t수정함:    test.txt\n#\tzmieniono:    test.txt\n#\tmodificado:    test.txt\n#\tизменено:    test.txt\n#\tändrad:    test.txt\n#\tdeğiştirildi:    test.txt\n#\tđã sửa:    test.txt\n#\t修改：    test.txt\n#\t修改：    test.txt\n",
+      "tree": "(source (generated_comment) (generated_comment) (generated_comment (title)) (generated_comment (change kind: (modified)) (filepath)) (generated_comment (change kind: (modified)) (filepath)) (generated_comment (change kind: (modified)) (filepath)) (generated_comment (change kind: (modified)) (filepath)) (generated_comment (change kind: (modified)) (filepath)) (generated_comment (change kind: (modified)) (filepath)) (generated_comment (change kind: (modified)) (filepath)) (generated_comment (change kind: (modified)) (filepath)) (generated_comment (change kind: (modified)) (filepath)) (generated_comment (change kind: (modified)) (filepath)) (generated_comment (change kind: (modified)) (filepath)) (generated_comment (change kind: (modified)) (filepath)) (generated_comment (change kind: (modified)) (filepath)) (generated_comment (change kind: (modified)) (filepath)) (generated_comment (change kind: (modified)) (filepath)) (generated_comment (change kind: (modified)) (filepath)) (generated_comment (change kind: (modified)) (filepath)) (generated_comment (change kind: (modified)) (filepath)))"
+    },
+    {
+      "name": "changes.txt:3:Deleted files",
+      "source": "\n# Hãy nhập vào các thông tin để giải thích các thay đổi của bạn. Những\n#\n# Modifications qui seront validées :\n#\tdeleted:        test.txt\n#\tsupprimé :        test.txt\n#\tизтрит:        test.txt\n#\tsuprimit:        test.txt\n#\tgelöscht:        test.txt\n#\tδιαγραφή:        test.txt\n#\tborrados:        test.txt\n#\tterhapus:        test.txt\n#\teliminato:        test.txt\n#\t삭제함:        test.txt\n#\tusunięto:        test.txt\n#\teliminado:        test.txt\n#\tудалено:        test.txt\n#\tborttagen:        test.txt\n#\tsilindi:        test.txt\n#\tđã xóa:        test.txt\n#\t删除：        test.txt\n#\t刪除：        test.txt\n",
+      "tree": "(source (generated_comment) (generated_comment) (generated_comment (title)) (generated_comment (change kind: (deleted)) (filepath)) (generated_comment (change kind: (deleted)) (filepath)) (generated_comment (change kind: (deleted)) (filepath)) (generated_comment (change kind: (deleted)) (filepath)) (generated_comment (change kind: (deleted)) (filepath)) (generated_comment (change kind: (deleted)) (filepath)) (generated_comment (change kind: (deleted)) (filepath)) (generated_comment (change kind: (deleted)) (filepath)) (generated_comment (change kind: (deleted)) (filepath)) (generated_comment (change kind: (deleted)) (filepath)) (generated_comment (change kind: (deleted)) (filepath)) (generated_comment (change kind: (deleted)) (filepath)) (generated_comment (change kind: (deleted)) (filepath)) (generated_comment (change kind: (deleted)) (filepath)) (generated_comment (change kind: (deleted)) (filepath)) (generated_comment (change kind: (deleted)) (filepath)) (generated_comment (change kind: (deleted)) (filepath)) (generated_comment (change kind: (deleted)) (filepath)))"
+    },
+    {
+      "name": "changes.txt:4:Untracked files",
+      "source": "\n# Παρακαλώ εισάγετε το μήνυμα υποβολής για τις αλλαγές σας. Οι γραμμές που αρχίζουν\n#\n# Fichiers non suivis:\n#\ttest\n#\ttest2\n",
+      "tree": "(source (generated_comment) (generated_comment) (generated_comment (title)) (generated_comment (filepath)) (generated_comment (filepath)))"
+    },
+    {
+      "name": "changes.txt:5:Modified content",
+      "source": "\n# Please enter the commit message for your changes. Lines starting\n# with '#' will be ignored, and an empty message aborts the commit.\n#\n# Changes not staged for commit:\n#\tmodified:   ../../../.config/setup-scripts-submodule (modified content)\n#\tmodified:   ../../../.config/setup-scripts-submodule -> ../../../.config/setup-scripts-submodule (modified content)\n\n",
+      "tree": "(source (generated_comment) (generated_comment) (generated_comment) (generated_comment (title)) (generated_comment (change kind: (modified)) (filepath) (annotation)) (generated_comment (change kind: (modified)) (filepath) (arrow) (filepath) (annotation)))"
+    },
+    {
+      "name": "changes.txt:6:Typechange",
+      "source": "\n# Hãy nhập vào các thông tin để giải thích các thay đổi của bạn. Những\n#\n# Modifications qui seront validées :\n#\ttypechange:        test.txt\n#\tсмяна на вида:        test.txt\n#\tcanviat de tipus:        test.txt\n#\tTypänderung:        test.txt\n#\tαλλαγή τύπου:        test.txt\n#\tcambios de tipo:        test.txt\n#\tmodif. type :        test.txt\n#\ttipe perubahan:        test.txt\n#\tmodifica tipo:        test.txt\n#\t종류 바뀜:        test.txt\n#\tzmiana typu:        test.txt\n#\ttipo alterado:        test.txt\n#\tизменен тип:        test.txt\n#\ttypbyte:        test.txt\n#\ttürü değiştirildi:        test.txt\n#\tзмінено тип:        test.txt\n",
+      "tree": "(source (generated_comment) (generated_comment) (generated_comment (title)) (generated_comment (change kind: (typechange)) (filepath)) (generated_comment (change kind: (typechange)) (filepath)) (generated_comment (change kind: (typechange)) (filepath)) (generated_comment (change kind: (typechange)) (filepath)) (generated_comment (change kind: (typechange)) (filepath)) (generated_comment (change kind: (typechange)) (filepath)) (generated_comment (change kind: (typechange)) (filepath)) (generated_comment (change kind: (typechange)) (filepath)) (generated_comment (change kind: (typechange)) (filepath)) (generated_comment (change kind: (typechange)) (filepath)) (generated_comment (change kind: (typechange)) (filepath)) (generated_comment (change kind: (typechange)) (filepath)) (generated_comment (change kind: (typechange)) (filepath)) (generated_comment (change kind: (typechange)) (filepath)) (generated_comment (change kind: (typechange)) (filepath)) (generated_comment (change kind: (typechange)) (filepath)))"
+    },
+    {
+      "name": "subject.txt:0:Empty file",
+      "source": "",
+      "tree": "(source)"
+    },
+    {
+      "name": "subject.txt:1:Simple subject",
+      "source": "This is a simple subject\n",
+      "tree": "(source (subject))"
+    },
+    {
+      "name": "subject.txt:2:Subject with comment",
+      "source": "# comment\nthis is a simple subject\n",
+      "tree": "(source (comment) (subject))"
+    },
+    {
+      "name": "subject.txt:3:Subject with comment",
+      "source": "# comment\nthis is a simple subject\n# comment\n",
+      "tree": "(source (comment) (subject) (comment))"
+    },
+    {
+      "name": "subject.txt:4:Empty file w/ comments",
+      "source": "# comment\n",
+      "tree": "(source (comment))"
+    },
+    {
+      "name": "subject.txt:5:Empty file w/ empty comment",
+      "source": "#\n",
+      "tree": "(source (comment))"
+    },
+    {
+      "name": "subject.txt:6:Subject overflow",
+      "source": "this is a simple subject with an awesome overflow because it's longer than 50 characters\n",
+      "tree": "(source (subject))"
+    },
+    {
+      "name": "subject.txt:7:Not a comment",
+      "source": " # not a comment\n",
+      "tree": "(source (subject))"
+    },
+    {
+      "name": "subject.txt:8:Error if not a new line after subject",
+      "source": "This is a subject\nThis should not exists\n",
+      "tree": "(source (ERROR (subject)) (subject))"
+    },
+    {
+      "name": "subject.txt:9:Subject with type and scope",
+      "source": "feat(git): allow provided config object to extend other configs\n",
+      "tree": "(source (subject (prefix (type) (scope))))"
+    },
+    {
+      "name": "subject.txt:10:Subject complete",
+      "source": "feat(git)!: allow provided config object to extend other configs\n",
+      "tree": "(source (subject (prefix (type) (scope))))"
+    },
+    {
+      "name": "subject.txt:11:Subject type and BC",
+      "source": "feat!: allow provided config object to extend other configs\n",
+      "tree": "(source (subject (prefix (type))))"
+    },
+    {
+      "name": "subject.txt:12:fix #36",
+      "source": "feat(test):",
+      "tree": "(source (ERROR (prefix (type) (scope))))"
+    },
+    {
+      "name": "subject.txt:13:Allows numbers in scope (fix #42)",
+      "source": "feat(issue42): allow numbers in scope\n",
+      "tree": "(source (subject (prefix (type) (scope))))"
+    },
+    {
+      "name": "subject.txt:14:Parse fixup!",
+      "source": "fixup! allow fixup\n",
+      "tree": "(source (subject (subject_prefix)))"
+    },
+    {
+      "name": "subject.txt:15:Parse amend! with conventional commit",
+      "source": "amend! feat(test): allow fixup\n",
+      "tree": "(source (subject (subject_prefix) (prefix (type) (scope))))"
+    },
+    {
+      "name": "subject.txt:16:Parse amend! with conventional commit and overflow",
+      "source": "amend! feat(test): allow fixup with an overflow on the subject\n",
+      "tree": "(source (subject (subject_prefix) (prefix (type) (scope))))"
+    },
+    {
+      "name": "subject.txt:17:Parse fixup! with conventional commit and no scope",
+      "source": "amend! feat: allow fixup\n",
+      "tree": "(source (subject (subject_prefix) (prefix (type))))"
+    },
+    {
+      "name": "subject.txt:18:Allow U+FF1A as colon separator",
+      "source": "feat(hi)：some message\n",
+      "tree": "(source (subject (prefix (type) (scope))))"
+    },
+    {
+      "name": "subject.txt:19:Allows 1 char subject",
+      "source": "o\n",
+      "tree": "(source (subject))"
+    },
+    {
+      "name": "subject.txt:20:Allows numbers and symbols in conventional commit type",
+      "source": "f-e_a12t*$(test): allow numbers and symbols\n",
+      "tree": "(source (subject (prefix (type) (scope))))"
+    },
+    {
+      "name": "subject.txt:21:Not conventional commit if starts with a !",
+      "source": "!test(test): allow numbers and symbols\n",
+      "tree": "(source (subject))"
+    },
+    {
+      "name": "subject.txt:22:Not conventional commit if starts with a :",
+      "source": ":test: allow numbers and symbols\n",
+      "tree": "(source (subject))"
+    },
+    {
+      "name": "subject.txt:23:Not conventional commit if starts with a space",
+      "source": "  test: allow numbers and symbols\n",
+      "tree": "(source (subject))"
+    },
+    {
+      "name": "subject.txt:24:Scope can contain a special chars",
+      "source": "test(10_-#{} test): scope\n",
+      "tree": "(source (subject (prefix (type) (scope))))"
+    },
+    {
+      "name": "generated_comments.txt:0:Comment Date",
+      "source": "\n# Veuillez saisir le message de validation pour vos modifications. Les lignes\n# commençant par '#' seront ignorées, et un message vide abandonne la validation.\n#\n# Date :       Tue Oct 18 15:59:19 2022 +0200\n# Date :       Fri Oct 21 20:26:32 2022 +0200\n# Date:      Fri Oct 21 20:26:32 2022 +0200\n# 日期：  Fri Oct 21 20:26:32 2022 +0200\n# With a content\n",
+      "tree": "(source (generated_comment) (generated_comment) (generated_comment) (generated_comment (title) (value)) (generated_comment (title) (value)) (generated_comment (title) (value)) (generated_comment (title) (value)) (generated_comment))"
+    },
+    {
+      "name": "generated_comments.txt:1:On branch",
+      "source": "\n# Please enter the commit message for your changes. Lines starting\n# with '#' will be ignored, and an empty message aborts the commit.\n#\n# On branch main\n# Sur la branche main\n# Текущая ветка: test.test/test\n# På grenen main\n# Üzerinde bulunulan dal: main\n# Trên nhánh main\n# 位於分支 main\n# Em ramo main\n# Na gałęzi main\n# 현재 브랜치 main\n# Sul branch main\n# Pada cabang main\n# En la rama main\n# Στον κλάδο main\n# Auf Branch main\n# En la branca main\n# На клон main\n",
+      "tree": "(source (generated_comment) (generated_comment) (generated_comment) (generated_comment (text) (branch)) (generated_comment (text) (branch)) (generated_comment (text) (branch)) (generated_comment (text) (branch)) (generated_comment (text) (branch)) (generated_comment (text) (branch)) (generated_comment (text) (branch)) (generated_comment (text) (branch)) (generated_comment (text) (branch)) (generated_comment (text) (branch)) (generated_comment (text) (branch)) (generated_comment (text) (branch)) (generated_comment (text) (branch)) (generated_comment (text) (branch)) (generated_comment (text) (branch)) (generated_comment (text) (branch)) (generated_comment (text) (branch)))"
+    },
+    {
+      "name": "generated_comments.txt:2:Detached HEAD",
+      "source": "\n# Please enter the commit message for your changes. Lines starting\n# with '#' will be ignored, and an empty message aborts the commit.\n#\n# HEAD detached at f5d1c0b8\n# Указателят „HEAD“ не е свързан и е при 0e87307\n# HEAD separat a f3eb78257f38fc09e34efe4b134b72656205ef0f\n# HEAD losgelöst bei 2e873072e87307\n# Αποσυνδεδεμένο HEAD στο 2e87307\n# HEAD desacoplada en 2e87307\n# HEAD détachée sur 2e87307\n# HEAD terlepas pada 2e87307\n# HEAD scollegato su 2e87307\n# HEAD가 다음 위치에서 분리: 2e87307\n# HEAD odłączone na 2e87307\n# HEAD desanexada em 2e87307\n# Отсоединённый указатель HEAD указывает на 2e87307\n# HEAD frånkopplad vid 2e87307\n# HEAD şurada ayrıldı: 2e87307\n# HEAD được tách rời tại 2e87307\n# 头指针分离于 2e87307\n# 開頭指標分離於 2e87307\n",
+      "tree": "(source (generated_comment) (generated_comment) (generated_comment) (generated_comment (text) (branch)) (generated_comment (text) (branch)) (generated_comment (text) (branch)) (generated_comment (text) (branch)) (generated_comment (text) (branch)) (generated_comment (text) (branch)) (generated_comment (text) (branch)) (generated_comment (text) (branch)) (generated_comment (text) (branch)) (generated_comment (text) (branch)) (generated_comment (text) (branch)) (generated_comment (text) (branch)) (generated_comment (text) (branch)) (generated_comment (text) (branch)) (generated_comment (text) (branch)) (generated_comment (text) (branch)) (generated_comment (text) (branch)) (generated_comment (text) (branch)))"
+    },
+    {
+      "name": "generated_comments.txt:3:Up to date",
+      "source": "\n# Por favor, introduz a mensagem de memória das tuas alterações.\n#\n# Your branch is up to date with 'origin/master'.\n# Votre branche est à jour avec 'origin/master'.\n# 您的分支與上游分支 'origin/master' 一致。\n# 您的分支与上游分支 'origin/master' 一致。\n# Nhánh của bạn đã cập nhật với “origin/main”.\n# Dalınız 'origin/master' ile güncel.\n# Din gren är à jour med \"origin/main\".\n# Эта ветка соответствует «origin/main».\n# Teu ramo está atualizado com 'origin/master'.\n# Twoja gałąź jest na bieżąco z „origin/main”.\n# 브랜치가 'origin/master'에 맞게 업데이트된 상태입니다.\n# Il tuo branch è aggiornato rispetto a 'origin/master'.\n# Cabang Anda mutakhir dengan 'origin/master'.\n# Tu rama está actualizada con 'origin/master'.\n# Ο κλάδος σας είναι ενήμερος με το 'origin/master'.\n# Ihr Branch ist auf demselben Stand wie 'origin/master'.\n# La vostra branca està al dia amb «origin/main».\n# Клонът е обновен към „origin/main“.\n",
+      "tree": "(source (generated_comment) (generated_comment) (generated_comment (branch)) (generated_comment (branch)) (generated_comment (branch)) (generated_comment (branch)) (generated_comment (branch)) (generated_comment (branch)) (generated_comment (branch)) (generated_comment (branch)) (generated_comment (branch)) (generated_comment (branch)) (generated_comment (branch)) (generated_comment (branch)) (generated_comment (branch)) (generated_comment (branch)) (generated_comment (branch)) (generated_comment (branch)) (generated_comment (branch)) (generated_comment (branch)))"
+    },
+    {
+      "name": "generated_comments.txt:4:Behind",
+      "source": "\n# Por favor, introduz a mensagem de memória das tuas alterações.\n#\n# Your branch is behind 'origin/main' by 18 commit, and can be fast-forwarded.\n# Your branch is behind 'origin/main' by 18 commits, and can be fast-forwarded.\n# Votre branche est en retard sur 'origin/main' de 18 commit, et peut être mise à jour en avance rapide.\n# Votre branche est en retard sur 'origin/main' de 18 commits, et peut être mise à jour en avance rapide.\n# La vostra branca està 3 comissió per darrere de «origin/master», i pot avançar-se ràpidament.\n# La vostra branca està 3 comissions per darrere de «origin/master», i pot avançar-se ràpidament.\n# Клонът ви е с 3 подаване зад „origin/master“ и може да бъде превъртян.\n# Клонът ви е с 3 подавания зад „origin/master“ и може да бъде превъртян.\n# Ihr Branch ist 56 Commit hinter 'origin/main', und kann vorgespult werden.\n# Ihr Branch ist 56 Commits hinter 'origin/main', und kann vorgespult werden.\n# Ο κλάδος σας είναι πίσω από το 'origin/main' κατά 18 υποβολή, και μπορεί να κάνει ταχεία προώθηση.\n# Ο κλάδος σας είναι πίσω από το 'origin/main' κατά 18 υποβολές, και μπορεί να κάνει ταχεία προώθηση.\n# Tu rama está detrás de 'origin/main' por 18 commit, y puede ser avanzada rápido.\n# Tu rama está detrás de 'origin/main' por 18 commits, y puede ser avanzada rápido.\n# Cabang Anda di belakang 'origin/main' oleh 18 komit, dan bisa di maju-cepatkan.\n# Cabang Anda di belakan 'origin/main' oleh 18 komit, dan bisa di maju-cepatkan.\n# Il tuo branch, rispetto a 'origin/main', è indietro di 18 commit e ne posso eseguire il fast forward.\n# Il tuo branch, rispetto a 'origin/main', è indietro di 18 commit e ne posso eseguire il fast forward.\n# 브랜치가 'origin/main'보다 18개 커밋 뒤에 있고, 앞으로 돌릴 수 있습니다.\n# Nhánh của bạn đứng đằng sau “origin/master” 3 lần chuyển giao, và có thể được chuyển-tiếp-nhanh.\n# Dalınız 'origin/main' dalından 18 işleme geride ve ileri sarılabilir.\n# Din gren ligger efter \"origin/master\" med 3 incheckning, och kan snabbspolas.\n# Din gren ligger efter \"origin/master\" med 3 incheckningar, och kan snabbspolas.\n# Ветка отстает от «origin/master» на 3 коммит и может быть быстро перемотана.\n# Ветка отстает от «origin/master» на 3 коммита и может быть быстро перемотана.\n# Ветка отстает от «origin/master» на 3 коммитов и может быть быстро перемотана.\n# Teu ramo está atrás de 'origin/main' por 18 memória, e pode ser avançado.\n# Teu ramo está atrás de 'origin/main' por 18 memórias, e pode ser avançado.\n# Twoja gałąź jest za „origin/master” o 3 zapis i może zostać przewinięta.\n# Twoja gałąź jest za „origin/master” o 3 zapisy i może zostać przewinięta.\n# Twoja gałąź jest za „origin/master” o 3 zapisów i może zostać przewinięta.\n# 您的分支落后 'origin/main' 共 18 个提交，并且可以快进。\n# 您的分支落後 'origin/main' 共 18 個提交，並且可以快轉。\n",
+      "tree": "(source (generated_comment) (generated_comment) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (number) (branch)) (generated_comment (number) (branch)) (generated_comment (number) (branch)) (generated_comment (number) (branch)) (generated_comment (number) (branch)) (generated_comment (number) (branch)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)))"
+    },
+    {
+      "name": "generated_comments.txt:5:Ahead",
+      "source": "\n# 请为您的变更输入提交说明。以 '#' 开始的行将被保留，如果您愿意\n#\n# Your branch is ahead of 'origin/master' by 456 commit.\n# Your branch is ahead of 'origin/master' by 456 commits.\n# Votre branche est en avance sur 'origin/master' de 456 commit.\n# Votre branche est en avance sur 'origin/master' de 456 commits.\n# 您的分支領先 'origin/master' 共 456 個提交。\n# 您的分支领先 'origin/master' 共 456 个提交。\n# Nhánh của bạn đứng trước “origin/up-to-date” 9 lần chuyển giao.\n# Dalınız 'origin/master' dalından 456 işleme ileride.\n# Din gren ligger före \"origin/up-to-date\" med 9 incheckning.\n# Din gren ligger före \"origin/up-to-date\" med 9 incheckningar.\n# Ваша ветка опережает «origin/up-to-date» на 9 коммит.\n# Ваша ветка опережает «origin/up-to-date» на 9 коммита.\n# Ваша ветка опережает «origin/up-to-date» на 9 коммитов.\n# Ваша ветка опережает «origin/up-to-date» на 9 коммитов.\n# Teu ramo está à frente de 'origin/master' por 456 memória.\n# Teu ramo está à frente de 'origin/master' por 456 memórias.\n# Twoja gałąź jest do przodu względem „origin/up-to-date” o 9 zapis.\n# Twoja gałąź jest do przodu względem „origin/up-to-date” o 9 zapisy.\n# Twoja gałąź jest do przodu względem „origin/up-to-date” o 9 zapisów.\n# 브랜치가 'origin/master'보다 456개 커밋만큼 앞에 있습니다.\n# Il tuo branch è avanti rispetto a 'origin/master' di 456 commit.\n# Il tuo branch è avanti rispetto a 'origin/master' di 456 commit.\n# Cabang Anda mendahului 'origin/master' oleh 456 komit.\n# Cabang Anda mendahului 'origin/master' oleh 456 komit.\n# Tu rama está adelantada a 'origin/master' por 456 commit.\n# Tu rama está adelantada a 'origin/master' por 456 commits.\n# Ο κλάδος σας είναι μπροστά από το 'origin/master' κατά 456 υποβολή.\n# Ο κλάδος σας είναι μπροστά από το 'origin/master' κατά 456 υποβολές.\n# Ihr Branch ist 13 Commit vor 'origin/master'.\n# Ihr Branch ist 13 Commits vor 'origin/master'.\n# La vostra branca està 9 comissió per davant de «origin/up-to-date».\n# La vostra branca està 9 comissions per davant de «origin/up-to-date».\n# Клонът ви е с 9 подаване пред „origin/up-to-date“.\n# Клонът ви е с 9 подавания пред „origin/up-to-date“.\n",
+      "tree": "(source (generated_comment) (generated_comment) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (branch) (number)) (generated_comment (number) (branch)) (generated_comment (number) (branch)) (generated_comment (number) (branch)) (generated_comment (number) (branch)) (generated_comment (number) (branch)) (generated_comment (number) (branch)))"
+    },
+    {
+      "name": "generated_comments.txt:6:Rebasing",
+      "source": "\n# Ange incheckningsmeddelandet för dina ändringar. Rader som inleds\n#\n# You are currently rebasing branch 'feat' on 'main'.\n# Vous êtes en train de rebaser la branche 'feat' sur 'main'.\n# 您在執行將分支 'feat' 重定基底到 'main' 的動作。\n# 您在执行将分支 'feat' 变基到 'main' 的操作。\n# Bạn hiện nay đang thực hiện việc “rebase” nhánh “test” trên “main”.\n# Şu anda 'feat' dalını 'main' üzerine yeniden temellendiriyorsunuz.\n# Du håller på att ombasera grenen \"test\" ovanpå \"main\".\n# Вы сейчас перемещаете ветку «test» над «main».\n# Estás rebaseando ramo 'feat' sobre 'main'.\n# Przestawiasz właśnie gałąź „test” na „main”.\n# 현재 'feat' 브랜치를 'main' 위로 리베이스하는 중입니다.\n# Attualmente stai eseguendo il rebase del branch 'feat' su 'main'.\n# Anda sedang mendasarkan ulang cabang 'feat' pada 'main'.\n# Estás aplicando un rebase de la rama 'feat' sobre 'main.\n# Αυτή τη στιγμή κάνετε rebase τον κλάδο 'feat' στο 'main'.\n# Sie sind gerade beim Rebase von Branch 'feat' auf 'main'.\n# Actualment esteu fent «rebase» de la branca «test» en «main».\n# В момента пребазирате клона „master“ върху „main“.\n",
+      "tree": "(source (generated_comment) (generated_comment) (generated_comment (branch) (branch)) (generated_comment (branch) (branch)) (generated_comment (branch) (branch)) (generated_comment (branch) (branch)) (generated_comment (branch) (branch)) (generated_comment (branch) (branch)) (generated_comment (branch) (branch)) (generated_comment (branch) (branch)) (generated_comment (branch) (branch)) (generated_comment (branch) (branch)) (generated_comment (branch) (branch)) (generated_comment (branch) (branch)) (generated_comment (branch) (branch)) (generated_comment (branch) (branch)) (generated_comment (branch) (branch)) (generated_comment (branch) (branch)) (generated_comment (branch) (branch)) (generated_comment (branch) (branch)))"
+    },
+    {
+      "name": "generated_comments.txt:7:Interactive rebase",
+      "source": "\n# Introduïu el missatge de comissió pels vostres canvis. Es mantindran\n#\n# interactive rebase in progress; onto master\n# rebasage interactif en cours ; sur master\n# извършвате интерактивно пребазиране върху master\n# «rebase» interactiu en curs; sobre master\n# interaktives Rebase im Gange; auf master\n# εκτελείται διαδραστικό rebase, πάνω στο master\n# rebase interactivo en progreso; sobre master\n# sedang mendasarkan ulang interaktif; ke master\n# rebase interattivo in corso su master\n# 대화형 리베이스 진행 중. 갈 위치는 master\n# trwa interaktywne przestawianie na master\n# rebase interativo em curso; sobre master\n# интерактивное перемещение в процессе; над master\n# interaktiv ombasering pågår; ovanpå master\n# şunun üzerine etkileşimli yeniden temellendirme sürmekte: master\n# rebase ở chế độ tương tác đang được thực hiện; lên trên master\n# 交互式变基操作正在进行中；至 master\n# 互動式重定基底動作正在進行中；至 master\n",
+      "tree": "(source (generated_comment) (generated_comment) (generated_comment (branch)) (generated_comment (branch)) (generated_comment (branch)) (generated_comment (branch)) (generated_comment (branch)) (generated_comment (branch)) (generated_comment (branch)) (generated_comment (branch)) (generated_comment (branch)) (generated_comment (branch)) (generated_comment (branch)) (generated_comment (branch)) (generated_comment (branch)) (generated_comment (branch)) (generated_comment (branch)) (generated_comment (branch)) (generated_comment (branch)) (generated_comment (branch)))"
+    },
+    {
+      "name": "generated_comments.txt:8:Rebase command",
+      "source": "\n# Παρακαλώ εισάγετε το μήνυμα υποβολής για τις αλλαγές σας. Οι γραμμές που αρχίζουν\n#\n# Dernières commandes effectuées (2 commandes effectuées) :\n#    pick d7e8984 gregreg\n#    edit 56f5d83 test\n#    update-ref db315c8\n# Aucune commande restante.\n",
+      "tree": "(source (generated_comment) (generated_comment) (generated_comment (title)) (generated_comment (rebase_command)) (generated_comment (rebase_command)) (ERROR))"
+    },
+    {
+      "name": "trailers.txt:0:Not a trailer",
+      "source": "This is a simple subject\n\n:This is a simple body.\n: Fake\nWith a: second line.\n\nAn:d a paragraph.\ntest(trailer): test",
+      "tree": "(source (subject) (message (message_line) (message_line) (message_line) (message_line) (message_line)))"
+    },
+    {
+      "name": "trailers.txt:1:Simple trailer",
+      "source": "This is a simple subject\n\nSigned-by: gbprod <contact@gb-prod.fr>",
+      "tree": "(source (subject) (message (trailer (token) (value))))"
+    },
+    {
+      "name": "trailers.txt:2:Multiple trailers",
+      "source": "This is a simple subject\n\nSigned-by : gbprod <contact@gb-prod.fr>\nSigned-off-by: Bob <bob@example.com>\nAcked-by: Alice <alice@example.com>\nRef: #1234\nSuggested-by: Toto\n",
+      "tree": "(source (subject) (message (trailer (token) (value)) (trailer (token) (value)) (trailer (token) (value)) (trailer (token) (value)) (trailer (token) (value))))"
+    },
+    {
+      "name": "trailers.txt:3:Multiline trailers",
+      "source": "This is a simple subject\n\nkey: This is a very long value, with spaces and\n  newlines in it.\n  it should be parsed as a single value.\n",
+      "tree": "(source (subject) (message (trailer (token) (value))))"
+    },
+    {
+      "name": "trailers.txt:4:Mixed",
+      "source": "This is a simple subject\n\nWith a message\nSigned-by : gbprod <contact@gb-prod.fr>\n\nNot conventional but why not\nRef: #1234\nSuggested-by: Toto\n\nAnd go on\n",
+      "tree": "(source (subject) (message (message_line) (trailer (token) (value)) (message_line) (trailer (token) (value)) (trailer (token) (value)) (message_line)))"
+    },
+    {
+      "name": "trailers.txt:5:Overflowed trailers",
+      "source": "This is a simple subject\n\nkey: This is a very long value, with spaces and that will overflow the line size.\n",
+      "tree": "(source (subject) (message (trailer (token) (value))))"
+    }
+  ]
+}

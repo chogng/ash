@@ -1,0 +1,86 @@
+[
+  {
+    "name": "css",
+    "source": {
+      "crate": "tree-sitter-css",
+      "version": "0.25.0",
+      "root": "."
+    },
+    "wasm": {
+      "path": "tree-sitter/css.wasm",
+      "sha256": "4bf8816c81317b8e74fec17cddcbf797ffd23f33a0c96d9d429c3ce8ad811437"
+    },
+    "highlights": ["queries/css.scm"],
+    "tags": ["queries/css.tags.scm"],
+    "injections": [],
+    "rust": {
+      "language": "tree_sitter_css::LANGUAGE"
+    },
+    "languages": [
+      {
+        "id": "css",
+        "variant": "Css",
+        "editorLanguage": "css",
+        "editorIds": ["css"],
+        "aliases": []
+      }
+    ],
+    "folds": ["queries/css.folds.scm"]
+  },
+  {
+    "name": "scss",
+    "source": {
+      "crate": "tree-sitter-scss",
+      "version": "1.0.0",
+      "root": "."
+    },
+    "wasm": {
+      "path": "tree-sitter/scss.wasm",
+      "sha256": "03711cf049815ac103efc9d2e5a9f635c93abdf2cbccb7d9d63070e9436bfdab"
+    },
+    "highlights": ["queries/css.scm", "queries/scss.scm"],
+    "tags": ["queries/css.tags.scm", "queries/scss.tags.scm"],
+    "injections": [],
+    "rust": {
+      "language": "tree_sitter_scss::language()"
+    },
+    "languages": [
+      {
+        "id": "scss",
+        "variant": "Scss",
+        "editorLanguage": "scss",
+        "editorIds": ["scss"],
+        "aliases": []
+      }
+    ],
+    "folds": ["queries/scss.folds.scm"]
+  },
+  {
+    "name": "less",
+    "source": {
+      "crate": "tree-sitter-less",
+      "version": "1.0.0",
+      "root": "."
+    },
+    "wasm": {
+      "path": "tree-sitter/less.wasm",
+      "sha256": "663ae28b02ca7cdcb0896c2ad0a15c01193487d30d8feb72a9efbbc01894977e"
+    },
+    "highlights": ["queries/css.scm", "queries/less.scm"],
+    "tags": ["queries/css.tags.scm", "queries/less.tags.scm"],
+    "injections": [],
+    "rust": {
+      "language": "tree_sitter_less::language()"
+    },
+    "languages": [
+      {
+        "id": "less",
+        "variant": "Less",
+        "editorLanguage": "less",
+        "editorIds": ["less"],
+        "aliases": []
+      }
+    ],
+    "folds": ["queries/less.folds.scm"]
+  }
+]

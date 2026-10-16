@@ -15,6 +15,7 @@ import { type SparseMultilineTokens } from '../../tokens/sparseMultilineTokens.j
 import { SparseTokensStore } from '../../tokens/sparseTokensStore.js';
 import { type TextModel } from '../textModel.js';
 import { TokenizerSyntaxTokenBackend } from './tokenizerSyntaxTokenBackend.js';
+import { TreeSitterSyntaxTokenBackend } from './treeSitter/treeSitterSyntaxTokenBackend.js';
 import { SemanticTokensTextModelPart } from './semanticTokensTextModelPart.js';
 import { createSyntaxWorker } from '../../services/editorWebWorker.js';
 import { LanguageRequestCoordinator } from '../languageRequestCoordinator.js';
@@ -25,6 +26,9 @@ import { raceCancellationError } from '../../../../base/common/async.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 
 export interface TokenizationTextModelPartOptions {
+	/** Host-selected per-document parser; unsupported languages use the existing tokenizer. */
+	readonly createSyntaxTokenBackend?: (model: TextModel) => TreeSitterSyntaxTokenBackend | undefined;
+	readonly onDidChangeSyntaxBackend?: Event<void>;
 	readonly languageIdCodec?: ILanguageIdCodec;
 	readonly syntaxProviderRegistry?: SyntaxProviderRegistry;
 	readonly syntaxService?: SyntaxServiceOptions;
@@ -42,7 +46,7 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 	private readonly semanticTokensStore: SparseTokensStore;
 	private readonly hasWorkerProvider: boolean;
 	private readonly lineBackendListeners = this._register(new DisposableStore());
-	private readonly lineBackend = this._register(new MutableDisposable<TokenizerSyntaxTokenBackend>());
+	private readonly lineBackend = this._register(new MutableDisposable<TokenizerSyntaxTokenBackend | TreeSitterSyntaxTokenBackend>());
 	private visibleLines: readonly { startLineNumber: number; endLineNumber: number; }[] = [];
 	private requestGeneration = 0;
 	private pendingAnalysis: Promise<void> = Promise.resolve();
@@ -55,12 +59,15 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 	readonly renderedTokens: SemanticTokenSource;
 	readonly languageTokens: LanguageTokenizationSource & SemanticTokenModelSource;
 
+	private readonly createSyntaxTokenBackend: TokenizationTextModelPartOptions['createSyntaxTokenBackend'];
+
 	constructor(readonly textModel: TextModel, options: TokenizationTextModelPartOptions = {}) {
 		super();
 		this.languageIdCodec = options.languageIdCodec ?? new ModelLanguageIdCodec();
 		this.languageIdCodec.encodeLanguageId(textModel.getLanguageId());
 		this.syntaxProviderRegistry = options.syntaxProviderRegistry ?? this._register(new SyntaxProviderRegistry());
 		this.hasWorkerProvider = options.syntaxService?.workerFactory !== undefined;
+		this.createSyntaxTokenBackend = options.createSyntaxTokenBackend;
 		this.tokenStore = this._register(createLanguageTokenStore(textModel));
 		this.coordinator = this._register(new LanguageRequestCoordinator(textModel, () => createSyntaxWorker(this.syntaxProviderRegistry, options.syntaxService ?? {}, this.languageIdCodec)));
 		this.languageTokenLineIndex = this._register(new LanguageTokenLineIndex(this.tokenStore));
@@ -114,7 +121,15 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 			this.clearLexicalTokens();
 			this.scheduleAnalysis();
 		}));
+		if (options.onDidChangeSyntaxBackend) this._register(options.onDidChangeSyntaxBackend(() => {
+			this.clearLexicalTokens();
+			this.scheduleAnalysis();
+		}));
 		if (options.onDidChangeLanguageSupport) this._register(options.onDidChangeLanguageSupport(() => {
+			if (this.lineBackend.value instanceof TreeSitterSyntaxTokenBackend) {
+				this.lineBackend.value.resetStyles();
+				return;
+			}
 			// The worker synchronizes its grammar catalog and theme before each request.
 			// Retaining it keeps the loaded grammars and document mirror available.
 			this.clearLexicalTokens();
@@ -126,8 +141,11 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 		this.scheduleAnalysis();
 	}
 
+	get syntaxTree(): TreeSitterSyntaxTokenBackend | undefined { return this.lineBackend.value instanceof TreeSitterSyntaxTokenBackend ? this.lineBackend.value : undefined; }
+
 	get modelVersion(): number {
-		return this.lineBackend.value ? this.textModel.version : this.languageTokenLineIndex.modelVersion;
+		return this.lineBackend.value instanceof TreeSitterSyntaxTokenBackend ? this.lineBackend.value.modelVersion
+			: this.lineBackend.value ? this.textModel.version : this.languageTokenLineIndex.modelVersion;
 	}
 
 	get tokenCount(): number {
@@ -172,6 +190,7 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 	}
 
 	async whenReady(signal: AbortSignal): Promise<void> {
+		if (this.lineBackend.value instanceof TreeSitterSyntaxTokenBackend) return this.lineBackend.value.whenReady(signal);
 		throwIfCancelled(signal);
 		this.assertNotDisposed();
 		if (this.lineBackend.value) this.forceTokenization(1);
@@ -251,6 +270,10 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 		const payload = { languageId, tokenize: { lineNumber, lines: [...lines] } };
 		assertSyntaxRequest(payload);
 		if (!this.hasTokenProvider() || signal.aborted) return null;
+		if (this.lineBackend.value instanceof TreeSitterSyntaxTokenBackend) {
+			const tokens = await this.lineBackend.value.tokenizeLinesAtAsync(lineNumber, lines, signal);
+			return tokens.map((value, index) => createLineTokens(lines[index]!, value, languageId, this.languageIdCodec));
+		}
 		if (this.lineBackend.value) return this.tokenizeLinesAt(lineNumber, [...lines]);
 		const text = lines.join('\n');
 		const generation = this.requestGeneration;
@@ -288,6 +311,7 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 	}
 
 	get backgroundTokenizationState(): BackgroundTokenizationState {
+		if (this.lineBackend.value instanceof TreeSitterSyntaxTokenBackend) return this.lineBackend.value.backgroundTokenizationState;
 		return this.hasAccurateTokensForLine(this.textModel.getLineCount())
 			? BackgroundTokenizationState.Completed
 			: BackgroundTokenizationState.InProgress;
@@ -295,6 +319,10 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 
 	setVisibleLines(ranges: readonly { startLineNumber: number; endLineNumber: number; }[]): void {
 		this.visibleLines = ranges;
+		if (this.lineBackend.value instanceof TreeSitterSyntaxTokenBackend) {
+			this.lineBackend.value.setVisibleLines(ranges);
+			return;
+		}
 		for (const range of ranges) this.lineBackend.value?.refreshRange(range.startLineNumber, range.endLineNumber);
 	}
 
@@ -313,7 +341,8 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 	private hasTokenProvider(): boolean {
 		const languageId = this.textModel.getLanguageId();
 		return !this.textModel.largeFile.tooLargeForTokenization && (
-			this.hasWorkerProvider
+			this.lineBackend.value !== undefined
+			|| this.hasWorkerProvider
 			|| TokenizationRegistry.get(languageId) !== null
 			|| !TokenizationRegistry.isResolved(languageId)
 			|| this.syntaxProviderRegistry.getTokenProviders(languageId).length > 0
@@ -323,6 +352,19 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 	private scheduleAnalysis(): void {
 		const generation = ++this.requestGeneration;
 		const languageId = this.textModel.getLanguageId();
+		if (!this.lineBackend.value && this.createSyntaxTokenBackend && !this.textModel.largeFile.tooLargeForTokenization) {
+			const backend = this.createSyntaxTokenBackend(this.textModel);
+			if (backend) {
+				this.lineBackend.value = backend;
+				this.lineBackendListeners.add(backend.onDidChangeTokens(ranges => this.changeEmitter.fire(ranges)));
+				this.lineBackendListeners.add(backend.onDidEncounterError(error => this.errorEmitter.fire(error)));
+				this.setVisibleLines(this.visibleLines);
+			}
+		}
+		if (this.lineBackend.value instanceof TreeSitterSyntaxTokenBackend) {
+			this.pendingAnalysis = Promise.resolve();
+			return;
+		}
 		if (!this.hasTokenProvider()) {
 			this.pendingAnalysis = Promise.resolve();
 			return;

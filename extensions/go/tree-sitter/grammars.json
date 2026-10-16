@@ -1,0 +1,30 @@
+[
+  {
+    "name": "go",
+    "source": {
+      "crate": "tree-sitter-go",
+      "version": "0.25.0",
+      "root": "."
+    },
+    "wasm": {
+      "path": "tree-sitter/go.wasm",
+      "sha256": "01b48304013852358fe76e12295a807449a8b3f7531c2f3f96824983dc7ddcd7"
+    },
+    "highlights": ["queries/go.scm"],
+    "tags": ["queries/go.tags.scm"],
+    "injections": [],
+    "rust": {
+      "language": "tree_sitter_go::LANGUAGE"
+    },
+    "languages": [
+      {
+        "id": "go",
+        "variant": "Go",
+        "editorLanguage": "go",
+        "editorIds": ["go"],
+        "aliases": []
+      }
+    ],
+    "folds": ["queries/go.folds.scm"]
+  }
+]

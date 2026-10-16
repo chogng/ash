@@ -2,8 +2,7 @@ import { Color, RGBA } from '../../../../base/common/color.js';
 import { type Event } from '../../../../base/common/event.js';
 import { type URI } from '../../../../base/common/uri.js';
 import { Range } from '../../../common/core/range.js';
-import { PositionOffsetTransformer } from '../../../common/core/text/positionToOffset.js';
-import { computeDefaultDocumentColors } from '../../../common/languages/defaultDocumentColorsComputer.js';
+import { computeDefaultDocumentColors, computeDefaultDocumentColorsAsync } from '../../../common/languages/defaultDocumentColorsComputer.js';
 
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type IColor, type IColorInformation, type IColorPresentation, type LanguageColorRequest, type LanguageColorPresentationRequest, type LanguageColorProvider } from '../../../common/languages.js';
 import { LanguageFeatureRegistry } from '../../../common/languageFeatureRegistry.js';
@@ -39,12 +38,16 @@ export class ColorService {
 			if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);
 			if (!colors) continue;
 			validProviderFound = true;
-			result.push(...this.normalizeColors(colors, provider));
+			const normalized = await this.normalizeColors(colors, provider, request);
+			if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);
+			for (const color of normalized) result.push(color);
 		}
 		if (enablement === 'always' || enablement === 'auto' && !validProviderFound) {
 			const colors = await this.defaultProvider.provideDocumentColors(request, signal);
 			if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);
-			result.push(...this.normalizeColors(colors, this.defaultProvider));
+			const normalized = await this.normalizeColors(colors, this.defaultProvider, request);
+			if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);
+			for (const color of normalized) result.push(color);
 		}
 		return Object.freeze(result);
 	}
@@ -105,34 +108,52 @@ export class ColorService {
 		}
 	}
 
-	private normalizeColors(values: readonly IColorInformation[], provider: LanguageColorProvider): readonly ColorData[] {
-		return values.map(value => {
+	private async normalizeColors(values: readonly IColorInformation[], provider: LanguageColorProvider, request: LanguageColorRequest): Promise<readonly ColorData[]> {
+		const result: ColorData[] = [];
+		for (let index = 0; index < values.length; index++) {
+			if (index > 0 && index % 512 === 0) {
+				await new Promise<void>(resolve => setTimeout(resolve, 0));
+				if (!isLanguageFeatureRequestCurrent(request)) return [];
+			}
+			const value = values[index];
 			const range = Range.lift(value.range);
 			this.model.offsetAt(range.getStartPosition());
 			this.model.offsetAt(range.getEndPosition());
 			assertColor(value.color);
-			return Object.freeze({
+			result.push(Object.freeze({
 				information: Object.freeze({ range, color: normalizedColor(value.color.red, value.color.green, value.color.blue, value.color.alpha) }),
 				provider,
-			});
-		});
+			}));
+		}
+		return result;
 	}
 }
 
 /** Detects common CSS color literals when a language does not provide document colors. */
 export class DefaultDocumentColorProvider implements LanguageColorProvider {
-	provideDocumentColors(request: LanguageColorRequest, signal: AbortSignal): readonly IColorInformation[] {
+	provideDocumentColors(request: LanguageColorRequest, signal: AbortSignal): readonly IColorInformation[] | Promise<readonly IColorInformation[]> {
 		signal.throwIfAborted();
 		const text = request.snapshot.getText();
-		const coordinates = new PositionOffsetTransformer(text);
-		return Object.freeze(computeDefaultDocumentColors({
+		let lineNumber = 1, lineStart = 0, nextLineBreak: number | undefined;
+		// Regex matches arrive in order. Advance snapshot coordinates only as far
+		// as a match instead of allocating a second whole-document line index.
+		const target = {
 			getValue: () => text,
-			findMatches: regex => [...text.matchAll(regex)],
-			positionAt: offset => {
+			findMatches: (regex: RegExp) => text.matchAll(regex),
+			positionAt: (offset: number) => {
 				signal.throwIfAborted();
-				return coordinates.getPosition(offset);
+				nextLineBreak ??= text.indexOf('\n', lineStart);
+				while (nextLineBreak !== -1 && nextLineBreak < offset) {
+					lineNumber++;
+					lineStart = nextLineBreak + 1;
+					nextLineBreak = text.indexOf('\n', lineStart);
+				}
+				return { lineNumber, column: offset - lineStart + 1 };
 			},
-		}));
+		};
+		return text.length < 65_536
+			? Object.freeze(computeDefaultDocumentColors(target))
+			: computeDefaultDocumentColorsAsync(target, signal).then(colors => Object.freeze(colors));
 	}
 
 	provideColorPresentations(request: LanguageColorPresentationRequest): readonly IColorPresentation[] {

@@ -1,15 +1,21 @@
 import { spawn } from 'node:child_process';
 import { resolve } from 'node:path';
+import { generateTreeSitterRegistry } from './treeSitterRegistry.ts';
+import { generateLanguageRegistry } from './languageRegistry.ts';
 import { generateProtocol } from './protocol/generate.ts';
 
 const root = resolve(import.meta.dirname, '..');
 
 /** One preparation owner for direct builds and pnpm lifecycle entrypoints. */
 export async function prepareGenerated(): Promise<void> {
+	await generateLanguageRegistry();
+	await generateTreeSitterRegistry();
 	await generateProtocol();
 	const { generateLocalization } = await import('./resources/localization.ts');
 	await generateLocalization();
 	await runBun(['check', '-p', 'tsconfig.common.json', '--all']);
+	const { verifyTreeSitterGrammars } = await import('./treeSitter.ts');
+	await verifyTreeSitterGrammars();
 	const { prepareBuiltinExtensions } = await import('./builtin/extensions.ts');
 	await prepareBuiltinExtensions();
 	await runBun(['build/resources/icons/generate.ts', '--check']);

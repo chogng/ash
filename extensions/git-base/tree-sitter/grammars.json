@@ -1,0 +1,88 @@
+[
+  {
+    "name": "gitcommit",
+    "source": {
+      "crate": "tree-sitter-gitcommit",
+      "version": "0.5.0",
+      "root": "."
+    },
+    "wasm": {
+      "path": "tree-sitter/gitcommit.wasm",
+      "sha256": "f98d413d29276ccecded2dc2333901910f010a7585f7684677e5e295484d86ff",
+      "libc": ["iswcntrl"],
+      "splitLexer": true
+    },
+    "highlights": ["queries/gitcommit.scm"],
+    "tags": ["queries/gitcommit.tags.scm"],
+    "injections": ["queries/gitcommit.injections.scm"],
+    "rust": {
+      "language": "tree_sitter_gitcommit::LANGUAGE"
+    },
+    "languages": [
+      {
+        "id": "gitcommit",
+        "variant": "Gitcommit",
+        "editorLanguage": "git-commit",
+        "editorIds": ["git-commit"],
+        "aliases": ["commit_editmsg"]
+      }
+    ],
+    "folds": ["queries/gitcommit.folds.scm"]
+  },
+  {
+    "name": "git-rebase",
+    "source": {
+      "crate": "tree-sitter-git-rebase",
+      "version": "0.1.0",
+      "root": "."
+    },
+    "wasm": {
+      "path": "tree-sitter/git-rebase.wasm",
+      "sha256": "3334e4a909ead5d09e9b6032bf088f36a3d835e5b53127ff52ce229f959781a2"
+    },
+    "highlights": ["queries/git-rebase.scm"],
+    "tags": ["queries/git-rebase.tags.scm"],
+    "injections": ["queries/git-rebase.injections.scm"],
+    "rust": {
+      "language": "tree_sitter_git_rebase::LANGUAGE"
+    },
+    "languages": [
+      {
+        "id": "gitrebase",
+        "variant": "Gitrebase",
+        "editorLanguage": "git-rebase",
+        "editorIds": ["git-rebase"],
+        "aliases": ["git_rebase", "git-rebase-todo"]
+      }
+    ],
+    "folds": []
+  },
+  {
+    "name": "gitignore",
+    "source": {
+      "crate": "tree-sitter-gitignore",
+      "version": "0.1.0",
+      "root": "."
+    },
+    "wasm": {
+      "path": "tree-sitter/gitignore.wasm",
+      "sha256": "64c755890ede296c5f4e4f0e3d92cf84203b10412743621603aff303de890bbb"
+    },
+    "highlights": ["queries/gitignore.scm"],
+    "tags": ["queries/gitignore.tags.scm"],
+    "injections": [],
+    "rust": {
+      "language": "tree_sitter_gitignore::LANGUAGE"
+    },
+    "languages": [
+      {
+        "id": "gitignore",
+        "variant": "Gitignore",
+        "editorLanguage": "ignore",
+        "editorIds": ["ignore"],
+        "aliases": []
+      }
+    ],
+    "folds": []
+  }
+]

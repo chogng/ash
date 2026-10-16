@@ -452,6 +452,9 @@ export class ViewLines extends ViewPart implements IViewLines {
 		const viewLineNumber = visualLine.visualLineIndex + 1;
 		const lineData = this.lastViewportData!.getViewLineRenderingData(viewLineNumber);
 		const hasInjectedText = !!visualLine.projectionData?.injectionOffsets;
+		// Resolving the setting merges configuration layers. All tokens on this line
+		// share that decision, regardless of which syntax backend produced them.
+		const semanticHighlightingEnabled = !hasInjectedText && tokens.length > 0 && this.semanticHighlightingEnabled(this._context.theme.value);
 		const inlineDecorations = [...lineData.inlineDecorations];
 		if (this._context.theme.value.getColor(editorSelectionForeground)) {
 			const lineRange = new Range(viewLineNumber, 1, viewLineNumber, lineData.content.length + 1);
@@ -465,7 +468,7 @@ export class ViewLines extends ViewPart implements IViewLines {
 		line.renderLine(
 			lineData.content,
 			hasInjectedText ? [] : clipSemanticTokens(tokens, visualLine.startColumn, visualLine.endColumn).map(token => ({
-				...token, syntaxPresentation: resolveSemanticTokenPresentation(token, this._context.theme.value, this.semanticHighlightingEnabled(this._context.theme.value)),
+				...token, syntaxPresentation: resolveSemanticTokenPresentation(token, this._context.theme.value, semanticHighlightingEnabled),
 			})),
 			0,
 			inlineDecorations,

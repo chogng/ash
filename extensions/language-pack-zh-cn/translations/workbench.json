@@ -1,5 +1,9 @@
 {
   "ash": {
+    "theme.documentTooLarge": "主题超出 1 MiB 文档大小限制",
+    "theme.invalidPropertyList": "主题的属性列表格式无效，位置：{0}",
+    "treeSitter.missingSyntax": "缺少必要的语法",
+    "treeSitter.syntaxError": "语法错误",
     "quickAccess.categoryTitle": "{0}: {1}",
     "workbench.editor.goToFile": "打开文件",
     "workbench.editor.startWorking": "开始工作",

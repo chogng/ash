@@ -1,0 +1,30 @@
+[
+  {
+    "name": "python",
+    "source": {
+      "crate": "tree-sitter-python",
+      "version": "0.25.0",
+      "root": "."
+    },
+    "wasm": {
+      "path": "tree-sitter/python.wasm",
+      "sha256": "d587f57f9c7eb6db6fa72096a8d95da1599aef9c3ba58e258978a279f619b200"
+    },
+    "highlights": ["queries/python.scm"],
+    "tags": ["queries/python.tags.scm"],
+    "injections": [],
+    "rust": {
+      "language": "tree_sitter_python::LANGUAGE"
+    },
+    "languages": [
+      {
+        "id": "python",
+        "variant": "Python",
+        "editorLanguage": "python",
+        "editorIds": ["python"],
+        "aliases": ["py"]
+      }
+    ],
+    "folds": ["queries/python.folds.scm"]
+  }
+]

@@ -1,8 +1,11 @@
-# Extension grammar provenance
+# Resource provenance
 
-This package contains YAML TextMate grammars and language configuration
-copied from the sibling VS Code source tree at `extensions/yaml`.
+Language declarations, editing configuration and any snippets are derived from
+[Microsoft VS Code](https://github.com/microsoft/vscode/tree/main/extensions/yaml)
+and retain its [MIT license](../../third_party/vscode/LICENSE.txt).
 
-- Upstream: `microsoft/vscode`
-- License: MIT, following the upstream VS Code repository
-- Runtime role: declarative resources consumed through Ash's extension catalog
+This package uses Tree-sitter for built-in syntax analysis. Query sources, pinned
+grammar revisions, local changes and individual licenses are recorded in
+[`queries/README.md`](queries/README.md). Web parser assets are built from the
+matching Cargo sources; their hashes and query composition are recorded in
+`tree-sitter/grammars.json` where this package supplies its own WASM assets.

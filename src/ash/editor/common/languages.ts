@@ -534,6 +534,24 @@ export interface LanguageDocumentSymbol {
 	readonly children?: readonly LanguageDocumentSymbol[];
 }
 
+/** Builds containing scopes from flat parser symbols without retaining a text snapshot. */
+export function nestDocumentSymbols(values: readonly LanguageDocumentSymbol[]): readonly LanguageDocumentSymbol[] {
+	interface SymbolNode { readonly symbol: LanguageDocumentSymbol; readonly children: SymbolNode[]; }
+	const symbols = [...values].sort((a, b) =>
+		a.range.startLineNumber - b.range.startLineNumber || a.range.startColumn - b.range.startColumn || b.range.endLineNumber - a.range.endLineNumber || b.range.endColumn - a.range.endColumn);
+	const roots: SymbolNode[] = [];
+	const stack: SymbolNode[] = [];
+	for (const symbol of symbols) {
+		while (stack.length && (!stack.at(-1)!.symbol.range.containsRange(symbol.range) || stack.at(-1)!.symbol.range.equalsRange(symbol.range))) stack.pop();
+		const node: SymbolNode = { symbol, children: [] };
+		(stack.at(-1)?.children ?? roots).push(node);
+		stack.push(node);
+	}
+	const freeze = ({ symbol, children }: SymbolNode): LanguageDocumentSymbol => children.length
+		? Object.freeze({ ...symbol, children: Object.freeze(children.map(freeze)) }) : symbol;
+	return Object.freeze(roots.map(freeze));
+}
+
 export interface LanguageDocumentSymbolRequest extends LanguageFeatureRequest {
 	readonly resource?: URI;
 }

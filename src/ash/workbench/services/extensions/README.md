@@ -46,7 +46,7 @@ Both static contribution loaders refresh on Extensions changes, including remova
 | Supported manifest parsing                                       | `parseExtensionManifest`                        | Identity plus languages, grammars, snippets, color/icon themes, and debuggers                   |
 | Workbench lifecycle                                              | `AppServerExtensionService`                     | Serialized/coalesced refresh with full candidate preparation and one event-barrier commit       |
 | Selectable color themes                                          | `ExtensionColorThemeService`                    | Portable/standard manifests, resource loading, replaceable registrations, and renderer lifetime |
-| Grammar/Worker materialization                                   | `workbench/services/textMate`                   | Latest complete catalog and independent failure event                                           |
+| Syntax parsing and queries                                       | `workbench/services/treeSitter`                 | Shared Rust tree on Desktop; a Tree-sitter Worker on Web                                        |
 | Language/configuration/completion                                | Stanza language services                        | Caller-owned disposable registrations                                                           |
 | Declarative Debug Adapter lookup                                 | `ExtensionDebugAdapterRegistry`                 | Unique debugger type to bounded command descriptor                                              |
 
@@ -57,7 +57,7 @@ Both static contribution loaders refresh on Extensions changes, including remova
 | `languages`                           | Language identity, file/MIME/first-line associations                                                        | No manifest localization                                                                                                     |
 | language `configuration`              | Parsed JSONC to Stanza language configuration                                                               | Only the existing Stanza configuration vocabulary                                                                            |
 | `snippets`                            | Prefix-bearing snippets become completion providers; file templates power `New File from Template`          | Template bodies create language-tagged untitled editors                                                                      |
-| `grammars`                            | Root/injection loader plus advanced embedded/token/bracket metadata                                         | TextMate service owns later materialization                                                                                  |
+| `grammars`                            | Validated legacy manifest metadata                                                                          | Resources are not loaded; syntax requires a supported Tree-sitter grammar                                                    |
 | `themes`                              | Parsed metadata catalog; `ExtensionColorThemeService` independently owns selectable color themes            | Package-relative JSON `include` is resolved before registration; manifest NLS placeholders use deterministic fallback labels |
 | `iconThemes`                          | Package-relative fonts and SVG/PNG file icons; selectable through `workbench.iconTheme`                     | File associations and light variants; folder-specific associations are not consumed by the current file label contract       |
 | `productIconThemes`                   | Package-relative SVG artwork for semantic product icon IDs; selectable through `workbench.productIconTheme` | Unspecified IDs keep Ash's built-in SVG artwork                                                                              |
@@ -136,8 +136,7 @@ IExtensionApi.list("refresh")
   -> adapt transport descriptors to Workbench candidates
   -> parseExtensionManifest
   -> load/parse language configurations, snippets, color themes, and SVG icon themes
-  -> prepare language, grammar, completion, file-template, theme, and debugger registrations
-  -> await the candidate TextMate grammar catalog
+  -> prepare language, completion, file-template, theme, and debugger registrations
   -> commit all domain registrations behind the synchronous event barrier
   -> dispose previous registrations
 ```
@@ -163,7 +162,7 @@ resource loader and owns their Workbench registrations. Code and Sessions await 
 before constructing their theme service. The UI-only transport serves a build-generated copy of
 `extensions/theme-defaults`; connected windows read the packaged extension resources. Both use
 the same manifest parser, `include` resolver, and registry. The metadata catalog above does not
-register color themes a second time. Active-theme changes reach TextMate through `IThemeService`.
+register color themes a second time. Active-theme changes reach the shared Tree-sitter theme adapter through `IThemeService`.
 
 Candidate resources are always read with the candidate catalog generation. A Rust refresh therefore
 cannot make one parsed manifest load resource bytes from another generation. Refreshes with identical
@@ -179,17 +178,17 @@ disposes the candidate store and retains the previous active Workbench catalog. 
 the candidate extension when known. A successful commit publishes `onDidChange` after replacing
 dependent registries.
 
-TextMate owns grammar parsing and catalog normalization. The extension service asks it to materialize
-the candidate before committing; a loader/parser failure is therefore also surfaced through
-`IExtensionService.onDidFail` and leaves the previous complete catalog active. Later Worker runtime
-failures remain TextMate-owned and must not move grammar parsing into this service.
+Legacy TextMate grammar declarations remain validated metadata. They do not trigger resource reads,
+grammar compilation, tokenization Workers, or an additional activation-readiness barrier. Bundled
+Tree-sitter grammars and queries own syntax. Other declaration failures still preserve the previous
+complete catalog through the same prepare/commit boundary.
 
 ## Internal symbols and drift signals
 
 | Symbol                                                                        | Responsibility                                           | Modification impact                                                          |
 | ----------------------------------------------------------------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | `parseExtensionManifest`                                                      | Strict supported manifest subset and safe resource paths | Fixtures for every contribution and bundled manifests                        |
-| `AppServerExtensionService.loadAndRegister`                                   | One candidate generation prepare/commit/rollback         | Reload queue, last-good, dispose, TextMate readiness tests                   |
+| `AppServerExtensionService.loadAndRegister`                                   | One candidate generation prepare/commit/rollback         | Reload queue, last-good, dispose, legacy grammar non-loading tests           |
 | reload runner state                                                           | Coalesce concurrent refreshes and settle all waiters     | Concurrency and disposal tests                                               |
 | `loadLanguageConfiguration` / `loadSnippetFile` / `loadTheme` / `loadGrammar` | Generation-bound UTF-8 resource decoding                 | Invalid UTF-8, path, size, resource adapter tests                            |
 | `ExtensionThemeRegistry`                                                      | Parsed metadata catalog                                  | Catalog prepare/commit tests                                                 |
@@ -215,7 +214,7 @@ pnpm test:build-tools
 
 Tests cover strict manifest/resource normalization, all supported contribution shapes, language
 configuration/snippet/template/theme/debugger projection, repeat and queued reload, failure rollback,
-dispose during load, TextMate candidate readiness, and bounded resource chunk assembly. Packaging
+dispose during load, legacy grammar non-loading, and bounded resource chunk assembly. Packaging
 tests separately enumerate all bundled manifests and their referenced files.
 
 This declarative service has no Editor Extension installer, enablement database, signature

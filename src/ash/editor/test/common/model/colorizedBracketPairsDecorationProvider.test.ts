@@ -63,3 +63,27 @@ test('Model bracket decorations honor color pools, query filters and option chan
 	model.updateOptions({ bracketColorizationOptions: { enabled: false, independentColorPoolPerBracketType: true } });
 	assert.deepEqual(colors(), []);
 });
+
+test('Margin and injected text queries do not generate whole-document bracket colors', () => {
+	using configurations = new TestLanguageConfigurationService();
+	using registration = configurations.register('typescript', { brackets: [['{', '}']] });
+	using model = new TextModel('{\n}', { languageId: 'typescript', languageConfigurationService: configurations });
+	let bracketQueries = 0;
+	const getBrackets = model.bracketPairs.getBracketsInRange.bind(model.bracketPairs);
+	model.bracketPairs.getBracketsInRange = (...args) => { bracketQueries++; return getBrackets(...args); };
+	const [margin, injected] = model.deltaDecorations([], [
+		{ range: new Range(1, 1, 1, 1), options: { description: 'margin', glyphMarginClassName: 'glyph' } },
+		{ range: new Range(1, 1, 1, 1), options: { description: 'injected', before: { content: 'inlay' } } },
+	], 2);
+	assert.deepEqual(model.getAllMarginDecorations(2).map(value => value.id), [margin]);
+	assert.deepEqual(model.getInjectedTextDecorations(2).map(value => value.id), [injected]);
+	assert.equal(model.getLineInjectedText(1, 2)[0]?.options.content, 'inlay');
+	assert.deepEqual(model.getLineInjectedText(2, 2), []);
+	assert.deepEqual(model.getOverviewRulerDecorations(2), []);
+	assert.deepEqual(model.getFontDecorationsInRange(model.getFullModelRange(), 2), []);
+	assert.deepEqual(model.getCustomLineHeightsDecorations(2), []);
+	assert.deepEqual(model.getCustomLineHeightsDecorationsInRange(model.getFullModelRange(), 2), []);
+	assert.equal(bracketQueries, 0);
+	assert.ok(model.getAllDecorations(2).some(value => value.options.description === 'BracketPairColorization'));
+	assert.ok(bracketQueries > 0);
+});

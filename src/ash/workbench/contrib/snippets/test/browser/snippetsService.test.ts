@@ -25,9 +25,6 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../common/contributions.js';
 import { AppServerExtensionService } from '../../../../services/extensions/browser/appServerExtensionService.js';
 import { IExtensionService } from '../../../../services/extensions/common/extensionService.js';
-import type { ITextMateService } from '../../../../services/textMate/common/textMateService.js';
-import type { TextMateGrammarDefinition, TextMateGrammarRegistration } from '../../../../services/textMate/common/textMateGrammarRegistry.js';
-import { TextMateGrammarService } from '../../../../services/textMate/common/textMateGrammarService.js';
 import { createEmptyTestLanguagePacks } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import { SnippetsService } from '../../browser/snippetsService.js';
 import { ISnippetsService } from '../../browser/snippets.js';
@@ -130,7 +127,7 @@ test('the public contribution boundary replays an unchanged snapshot to a replac
 	assert.equal(fixture.features.completionProvider.providerCatalog.providers.length, 1);
 });
 
-for (const stage of ['resource', 'preparation'] as const) {
+for (const stage of ['resource'] as const) {
 	test(`a snippet owner replaced during ${stage} loading receives only the final committed generation`, async () => {
 		using fixture = createFixture({ Log: { prefix: 'log', body: 'old($1)$0' } });
 		await fixture.extensions.start();
@@ -225,7 +222,6 @@ test('production creation rejects missing required services and duplicate snippe
 
 function createFixture(initial: Record<string, unknown>, duplicateResource = false, configurationProperties?: () => Record<string, unknown>) {
 	const resources = new DisposableStore();
-	const grammars = resources.add(new TextMateGrammarService());
 	const languages = resources.add(new LanguageService());
 	const features = resources.add(new TestLanguageFeaturesService());
 	const services = resources.add(new InstantiationService());
@@ -235,7 +231,7 @@ function createFixture(initial: Record<string, unknown>, duplicateResource = fal
 	const reads: number[] = [];
 	const requests: ExtensionResourceRequest[] = [];
 	let nextResource: Uint8Array | Error | undefined;
-	const gates = new Map<'resource' | 'preparation', { entered: DeferredPromise<void>; release: DeferredPromise<void>; }>();
+	const gates = new Map<'resource', { entered: DeferredPromise<void>; release: DeferredPromise<void>; }>();
 	const extensions = resources.add(new AppServerExtensionService({
 		api: {
 			list: async (): Promise<ExtensionCatalog> => ({ generation, extensions: present ? [descriptor()] : [], diagnostics: [] }),
@@ -249,17 +245,7 @@ function createFixture(initial: Record<string, unknown>, duplicateResource = fal
 				return value;
 			}),
 		},
-		textMateService: {
-			grammars: {
-				registerGrammars: grammars.registerGrammars.bind(grammars),
-				whenReady: grammars.whenReady.bind(grammars),
-				prepareGrammars: async (registration: TextMateGrammarRegistration, definitions: readonly TextMateGrammarDefinition[]) => {
-					const prepared = await grammars.prepareGrammars(registration, definitions);
-					await pause('preparation');
-					return prepared;
-				},
-			}
-		} as unknown as ITextMateService,
+
 		languageService: languages,
 		languageConfigurationService: features.languageConfigurationService,
 	}, createEmptyTestLanguagePacks()));
@@ -273,7 +259,7 @@ function createFixture(initial: Record<string, unknown>, duplicateResource = fal
 	return {
 		extensions, features, services, snippets, contributions, reads, requests,
 		nextResource(value: Uint8Array | Error): void { nextResource = value; },
-		pauseNext(stage: 'resource' | 'preparation'): { entered: Promise<void>; release(): void; } {
+		pauseNext(stage: 'resource'): { entered: Promise<void>; release(): void; } {
 			const gate = { entered: new DeferredPromise<void>(), release: new DeferredPromise<void>() };
 			gates.set(stage, gate);
 			return { entered: gate.entered.p, release: () => { void gate.release.complete(); } };
@@ -293,7 +279,7 @@ function createFixture(initial: Record<string, unknown>, duplicateResource = fal
 		[Symbol.dispose](): void { resources.dispose(); },
 	};
 
-	async function pause(stage: 'resource' | 'preparation'): Promise<void> {
+	async function pause(stage: 'resource'): Promise<void> {
 		const gate = gates.get(stage);
 		if (!gate) return;
 		gates.delete(stage);

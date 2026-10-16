@@ -1,6 +1,6 @@
 import { withProcessRun } from '../../../build/processes.ts';
 import { collectTests, playwrightArguments } from '../../../build/playwright.ts';
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
 import { createServer, type Server } from 'node:http';
 import sirv from 'sirv';
@@ -22,6 +22,16 @@ await withProcessRun(desktopDirectory, async (run, environment) => {
 		ASH_EDITOR_BROWSER_EXTERNAL_SERVER: '1',
 	};
 	if (!await collectTests(run, testArgs, playwrightArgs, testEnv)) return;
+	const files = playwrightArgs.filter(argument => /\.spec\.[jt]s$/u.test(argument));
+	let syntaxExecutable: string | undefined;
+	if (files.length === 0 || files.some(file => /(?:treeSitter|tokenization|themes|textModel)\.integration\.spec\.[jt]s$/u.test(file))) {
+		const prepared = await run.command('pnpm', ['run', 'prepare:backend'], testEnv);
+		if (prepared.code !== 0) { process.exitCode = prepared.code; return; }
+		const target = `${process.arch === 'arm64' ? 'aarch64' : 'x86_64'}-${process.platform === 'darwin' ? 'apple-darwin' : process.platform === 'win32' ? 'pc-windows-msvc' : 'unknown-linux-gnu'}`;
+		const metadata = JSON.parse(readFileSync(resolve(desktopDirectory, '.build/runtime/dev/store-v1', target, 'host-provided-node/dev-small/prepare-inputs.json'), 'utf8')) as { packageRoot: string; };
+		// Pin the immutable package, so another build cannot replace the backend during this run.
+		syntaxExecutable = resolve(metadata.packageRoot, 'bin', `ash-app-server${process.platform === 'win32' ? '.exe' : ''}`);
+	}
 	const outputParent = resolve(desktopDirectory, '.build/desktop');
 	mkdirSync(outputParent, { recursive: true });
 	// Another build can clear the shared output while the server is reading it.
@@ -49,6 +59,7 @@ await withProcessRun(desktopDirectory, async (run, environment) => {
 	Browser integration results: ${resultsDirectory}`);
 			exitCode = (await run.command(process.execPath, testArgs, {
 				...testEnv,
+				...(syntaxExecutable ? { ASH_TEST_SYNTAX_APP_SERVER: syntaxExecutable } : {}),
 				ASH_EDITOR_BROWSER_BASE_URL: serverUrl,
 				ASH_EDITOR_BROWSER_RUN_DIRECTORY: resultsDirectory,
 			})).code;

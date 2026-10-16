@@ -16,6 +16,18 @@
     "third_party/tgrep/source.tar.gz": {
       "max_bytes": 2097152,
       "reason": "The locked search program's vendored source archive supports reproducible packaging."
+    },
+    "extensions/git-base/tree-sitter/gitcommit.wasm": {
+      "max_bytes": 4194304,
+      "reason": "The bundled Git commit Tree-sitter parser provides offline Web syntax support. Its Cargo source version and verified SHA-256 are recorded in the owning language package."
+    },
+    "extensions/shellscript/tree-sitter/bash.wasm": {
+      "max_bytes": 2097152,
+      "reason": "The bundled Bash Tree-sitter parser provides offline Web syntax support. Its Cargo source version and verified SHA-256 are recorded in the owning language package."
+    },
+    "extensions/sql/tree-sitter/sql.wasm": {
+      "max_bytes": 3145728,
+      "reason": "The bundled SQL Tree-sitter parser provides offline Web syntax support. Its Cargo source version and verified SHA-256 are recorded in the owning language package."
     }
   }
 }

@@ -1,12 +1,11 @@
-# Extension grammar provenance
+# Resource provenance
 
-This package contains the Markdown TextMate grammar, language configuration,
-and snippets copied from the sibling VS Code source tree at
-`extensions/markdown-basics`.
+Language declarations, editing configuration and any snippets are derived from
+[Microsoft VS Code](https://github.com/microsoft/vscode/tree/main/extensions/markdown-basics)
+and retain its [MIT license](../../third_party/vscode/LICENSE.txt).
 
-- Upstream: `microsoft/vscode`
-- License: MIT, following the upstream VS Code repository
-- Runtime role: declarative resources consumed through Ash's extension catalog
-
-Ash also accepts `git-commit` and `git-rebase` as fenced code-block labels alongside
-the upstream commit-message and rebase filenames.
+This package uses Tree-sitter for built-in syntax analysis. Query sources, pinned
+grammar revisions, local changes and individual licenses are recorded in
+[`queries/README.md`](queries/README.md). Web parser assets are built from the
+matching Cargo sources; their hashes and query composition are recorded in
+`tree-sitter/grammars.json` where this package supplies its own WASM assets.

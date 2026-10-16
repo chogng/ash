@@ -1,5 +1,7 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::OnceLock;
 
 use tree_sitter::Language;
 use tree_sitter::Parser;
@@ -7,48 +9,16 @@ use tree_sitter::Query;
 
 use crate::SyntaxError;
 
-mod javascript;
-mod json;
-mod jsonc;
-mod rust;
-mod shell;
-mod typescript;
-
-/// Source language selected for syntax analysis.
-///
-/// Each variant identifies a grammar and the structural queries that implementations must use.
-/// Adding a language requires registering its grammar and tests in this crate; callers do not
-/// supply arbitrary query source or native grammar pointers.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum SyntaxLanguage {
-    Javascript,
-    Javascriptreact,
-    Json,
-    Jsonc,
-    Rust,
-    Shell,
-    Typescript,
-    Typescriptreact,
-}
-
-impl SyntaxLanguage {
-    pub const fn id(self) -> &'static str {
-        match self {
-            Self::Javascript => "javascript",
-            Self::Javascriptreact => "javascriptreact",
-            Self::Json => "json",
-            Self::Jsonc => "jsonc",
-            Self::Rust => "rust",
-            Self::Shell => "shell",
-            Self::Typescript => "typescript",
-            Self::Typescriptreact => "typescriptreact",
-        }
-    }
-}
+include!("languages.generated.rs");
 
 pub(crate) struct LanguageConfiguration {
+    pub(crate) folding: &'static ash_language::FoldingRules,
     pub(crate) highlights: Query,
     pub(crate) tags: Query,
+    pub(crate) folds: Query,
+    pub(crate) editor_highlights: Query,
+    pub(crate) editor_brackets: Query,
+    pub(crate) injections: Option<Query>,
 }
 
 impl LanguageConfiguration {
@@ -66,21 +36,19 @@ impl LanguageConfiguration {
             })?;
         // Queries are immutable; documents own their parsers and query cursors. Compiling
         // these for every file makes directory refresh and watcher shutdown unbounded in practice.
-        static CONFIGURATIONS: [Mutex<Option<Arc<LanguageConfiguration>>>; 7] =
-            [const { Mutex::new(None) }; 7];
-        let index = match syntax_language {
-            SyntaxLanguage::Javascript | SyntaxLanguage::Javascriptreact => 0,
-            SyntaxLanguage::Json => 1,
-            SyntaxLanguage::Jsonc => 2,
-            SyntaxLanguage::Rust => 3,
-            SyntaxLanguage::Shell => 4,
-            SyntaxLanguage::Typescript => 5,
-            SyntaxLanguage::Typescriptreact => 6,
+        static CONFIGURATIONS: OnceLock<
+            Mutex<HashMap<SyntaxLanguage, Arc<LanguageConfiguration>>>,
+        > = OnceLock::new();
+        let key = if syntax_language == SyntaxLanguage::Javascriptreact {
+            SyntaxLanguage::Javascript
+        } else {
+            syntax_language
         };
-        let mut cached = CONFIGURATIONS[index]
+        let mut cached = CONFIGURATIONS
+            .get_or_init(|| Mutex::new(HashMap::new()))
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(configuration) = &*cached {
+        if let Some(configuration) = cached.get(&key) {
             return Ok(Arc::clone(configuration));
         }
         let highlights = query(
@@ -95,8 +63,54 @@ impl LanguageConfiguration {
             "tags",
             &definition.tags.join("\n"),
         )?;
-        let configuration = Arc::new(Self { highlights, tags });
-        *cached = Some(Arc::clone(&configuration));
+        let editor_highlights = query(
+            syntax_language,
+            &language,
+            "editor highlights",
+            definition.editor_highlights,
+        )?;
+        // Grammars expose different punctuation sets. Include only complete bracket pairs
+        // actually present in this grammar; named string/comment nodes are never brackets.
+        let mut brackets = Vec::new();
+        for (open, close) in [("(", ")"), ("[", "]"), ("{", "}")] {
+            if language.id_for_node_kind(open, false) != 0
+                && language.id_for_node_kind(close, false) != 0
+            {
+                brackets.push(format!("\"{open}\" \"{close}\""));
+            }
+        }
+        let bracket_source = if brackets.is_empty() {
+            String::new()
+        } else {
+            format!("[{}] @bracket", brackets.join(" "))
+        };
+        let editor_brackets = query(
+            syntax_language,
+            &language,
+            "editor brackets",
+            &bracket_source,
+        )?;
+        let injection_source = definition.injections;
+        let injections = if injection_source.is_empty() {
+            None
+        } else {
+            Some(query(
+                syntax_language,
+                &language,
+                "injections",
+                injection_source,
+            )?)
+        };
+        let configuration = Arc::new(Self {
+            folding: ash_language::folding_rules(syntax_language.editor_id()),
+            highlights,
+            tags,
+            editor_highlights,
+            folds: query(syntax_language, &language, "folds", definition.folds)?,
+            editor_brackets,
+            injections,
+        });
+        cached.insert(key, Arc::clone(&configuration));
         Ok(configuration)
     }
 }
@@ -105,18 +119,9 @@ struct LanguageDefinition {
     language: Language,
     highlights: &'static str,
     tags: &'static [&'static str],
-}
-
-fn definition(syntax_language: SyntaxLanguage) -> LanguageDefinition {
-    match syntax_language {
-        SyntaxLanguage::Javascript | SyntaxLanguage::Javascriptreact => javascript::definition(),
-        SyntaxLanguage::Json => json::definition(),
-        SyntaxLanguage::Jsonc => jsonc::definition(),
-        SyntaxLanguage::Rust => rust::definition(),
-        SyntaxLanguage::Shell => shell::definition(),
-        SyntaxLanguage::Typescript => typescript::definition(false),
-        SyntaxLanguage::Typescriptreact => typescript::definition(true),
-    }
+    editor_highlights: &'static str,
+    injections: &'static str,
+    folds: &'static str,
 }
 
 fn query(
