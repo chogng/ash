@@ -232,6 +232,11 @@
       "rendering": "multicolor"
     },
     {
+      "id": "clear-all",
+      "file": "clear-all.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "clockface",
       "file": "clockface.svg",
       "rendering": "symbolic"
@@ -824,6 +829,11 @@
     {
       "id": "list-unordered",
       "file": "list-unordered.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "lock",
+      "file": "lock.svg",
       "rendering": "symbolic"
     },
     {
