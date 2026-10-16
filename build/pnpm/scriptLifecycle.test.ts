@@ -42,6 +42,7 @@ test("aggregate, test and typecheck commands prepare inputs once and stop on pre
 		"build": "desktop-build",
 		"build:prepared": "desktop-build",
 		"prepare:desktop-addons": "electron-dependencies",
+		"prepare:electron": "electron-runtime",
 		"prepare:backend": "backend",
 		"prepare:backend:web": "backend-web",
 		"bundle:web": "bundle-web",
@@ -79,8 +80,9 @@ test("aggregate, test and typecheck commands prepare inputs once and stop on pre
 	const executable = script ? process.execPath : pnpm;
 	const prefix = script ? [pnpm] : [];
 	for (const [command, expected, failure] of [
-		["build", ["electron-dependencies", "protocol", "localization", "common", "extensions", "icons", "desktop-build"], ""],
-		["build", ["electron-dependencies"], "electron-dependencies"],
+		["build", ["electron-runtime", "electron-dependencies", "protocol", "localization", "common", "extensions", "icons", "desktop-build"], ""],
+		["build", ["electron-runtime"], "electron-runtime"],
+		["build", ["electron-runtime", "electron-dependencies"], "electron-dependencies"],
 		["test:main", ["styles", "tools", "output", "protocol", "localization", "common", "extensions", "icons", "unit", "unit-runner"], ""],
 		["test:main", ["styles", "tools", "output", "protocol", "localization", "common", "extensions", "icons", "unit"], "unit"],
 		["test:main", ["styles"], "styles"],
@@ -121,7 +123,7 @@ test("aggregate, test and typecheck commands prepare inputs once and stop on pre
 
 	const workflow = await readFile(resolve(import.meta.dirname, '../../.github/workflows/frontend.yml'), 'utf8');
 	const smokeSteps = workflow.slice(workflow.indexOf('      - name: Check sources and build Desktop and Web on every platform')).split('      - name: ');
-	const checkedBuild = ['protocol', 'localization', 'common', 'extensions', 'icons', 'renderer', 'automation', 'electron-dependencies', 'desktop-build', 'bundle-web'];
+	const checkedBuild = ['protocol', 'localization', 'common', 'extensions', 'icons', 'renderer', 'automation', 'electron-runtime', 'electron-dependencies', 'desktop-build', 'bundle-web'];
 	for (const [surface, failure, expected] of [
 		['browser', '', [...checkedBuild, 'browser', 'browser-ui-tests', 'bundle-web-full', 'backend-web', 'browser-connected-tests']],
 		// CI invokes connected Electron smoke tests separately for the general suite and mock Agent Task coverage.

@@ -1,8 +1,8 @@
 import { dirname, join, resolve } from "node:path";
-import { createRequire } from "node:module";
 import { mkdirSync } from 'node:fs';
 import { createTestEnvironment } from './testEnvironment.js';
 import type { AppServerTestMode } from "./testTarget.js";
+import { resolveDevelopmentElectronExecutable } from '../../build/desktop/electron.ts';
 
 export type ElectronWindowMode = 'hidden' | 'inactive' | 'active';
 
@@ -49,7 +49,7 @@ export function resolveElectronConfiguration(options: ElectronLaunchOptions): El
 	const resourcesPath = bundle ? process.platform === 'darwin' ? join(bundle, 'Contents', 'Resources') : join(bundle, 'resources') : '';
 	const electronExecutablePath = bundle
 		? process.platform === 'darwin' ? join(bundle, 'Contents', 'MacOS', 'Ash') : join(bundle, 'Ash.exe')
-		: createRequire(resolve(desktopDirectory, "package.json"))("electron") as string;
+		: resolveDevelopmentElectronExecutable(desktopDirectory);
 	const environment = createTestEnvironment(options.userDataDirectory, options.environment ?? process.env, options.externalCodexHome);
 	if (process.platform === 'win32') {
 		// Windows cannot begin a Jump List transaction without its destination stores

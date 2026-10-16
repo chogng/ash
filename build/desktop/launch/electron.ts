@@ -1,9 +1,9 @@
 import { spawn } from 'node:child_process';
-import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { watchHost } from '../host.ts';
 import { ProcessRun, withProcessRun } from '../../processes.ts';
 import { prepareAppServer } from '../appServer.ts';
+import { resolveDevelopmentElectronExecutable } from '../electron.ts';
 
 if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 	await withProcessRun(resolve(import.meta.dirname, '../../..'), async (run, environment) => {
@@ -11,8 +11,7 @@ if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 	});
 } else {
 	const sourceRoot = resolve(import.meta.dirname, '../../..');
-	const require = createRequire(resolve(sourceRoot, 'package.json'));
-	const executable: string = require('electron');
+	const executable = resolveDevelopmentElectronExecutable(sourceRoot);
 	const args = process.argv.slice(2);
 	const watch = args[0] === '--watch';
 	if (watch) args.shift();

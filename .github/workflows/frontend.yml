@@ -146,6 +146,7 @@ jobs:
           node build/prepare.ts
           ./node_modules/bun/bin/bun.exe check -p tsconfig.renderer.json --all
           ./node_modules/bun/bin/bun.exe check -p test/automation/tsconfig.json --all
+          pnpm run prepare:electron
           pnpm run prepare:desktop-addons
           pnpm run build:prepared
           pnpm run bundle:web

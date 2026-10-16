@@ -211,6 +211,10 @@ bazel test //cli:tui-real-scenarios --test_output=errors --test_env=PATH
 
 Sherpa ONNX 静态库使用按版本共享的校验缓存，位于 `third_party/.cache/sherpa-onnx/`。仓库 Cargo 入口与产品构建会准备并复用该资源，详见 [资源锁定与离线构建](../third_party/sherpa-onnx/README.md)。
 
+### Electron 开发运行包
+
+`pnpm prepare:electron` 准备并缓存开发运行包，macOS 包含 Ash 名称和图标。Desktop build/dev 与 CI 在准备阶段调用；TS 启动器和测试只读取产物路径，缺失或过期时提示重新准备，不在启动时复制或签名。
+
 ### Electron 平台模块
 
 `pnpm install` 不编译 `native-keymap` 和 `native-is-elevated`。Desktop 的 build/dev 准备入口执行 `pnpm prepare:desktop-addons`：使用当前 Electron 加载实际 `.node` 文件并检查导出；现有产物可用时不启动 rebuild，也不遍历依赖树。Windows 额外准备权限检测模块，其他平台只准备键盘布局模块。仅 Web 构建和类型检查无需这些二进制。
