@@ -37,6 +37,8 @@ const referenceSchemas = new Map<string, JsonSchema>();
 type NumericArrayPlan = { readonly items: readonly Exclude<JsonSchema, boolean>[]; readonly repeated: boolean; };
 const numericArrays = new WeakMap<Exclude<JsonSchema, boolean>, NumericArrayPlan | null>();
 const propertyEntries = new WeakMap<Exclude<JsonSchema, boolean>, readonly (readonly [string, JsonSchema])[]>();
+type TaggedUnion = { readonly property: string; readonly variants: ReadonlyMap<string, JsonSchema>; };
+const taggedUnions = new WeakMap<Exclude<JsonSchema, boolean>, TaggedUnion | null>();
 type MethodVariant = Exclude<JsonSchema, boolean> & { readonly properties: { readonly method: { readonly const: string } } };
 // Every generated client result variant has a distinct method, so large results need only validate their own variant.
 const clientResultVariants = ((protocolSchema as Exclude<JsonSchema, boolean>).$defs!.ClientResultSchema as Exclude<JsonSchema, boolean>).oneOf!;
@@ -186,12 +188,41 @@ function validate(schema: JsonSchema, value: unknown, path: string): void {
 
 function validateComposition(schema: Exclude<JsonSchema, boolean>, value: unknown, path: string): void {
 	if (schema.oneOf) {
-		const matchingSchemas = schema.oneOf.filter(candidate => matches(candidate, value, path));
+		const matchingSchemas = matchingOneOf(schema, value, path);
 		if (matchingSchemas.length !== 1) throw failure(path, `expected exactly one schema variant, matched ${matchingSchemas.length}`);
 	}
 	if (schema.anyOf && !schema.anyOf.some(candidate => matches(candidate, value, path))) {
 		throw failure(path, 'value does not match any allowed schema');
 	}
+}
+
+function matchingOneOf(schema: Exclude<JsonSchema, boolean>, value: unknown, path: string): readonly JsonSchema[] {
+	let plan = taggedUnions.get(schema);
+	if (plan === undefined) {
+		plan = null;
+		const variants = schema.oneOf ?? [];
+		const resolved = variants.map(candidate => typeof candidate !== 'boolean' && candidate.$ref ? resolveReference(candidate.$ref, path) : candidate);
+		const first = resolved[0];
+		if (first && typeof first !== 'boolean') {
+			for (const property of first.required ?? []) {
+				const index = new Map<string, JsonSchema>();
+				for (let i = 0; i < resolved.length; i++) {
+					const candidate = resolved[i];
+					const tag = typeof candidate !== 'boolean' && candidate?.required?.includes(property) ? candidate.properties?.[property] : undefined;
+					if (!tag || typeof tag === 'boolean' || typeof tag.const !== 'string' || index.has(tag.const)) break;
+					index.set(tag.const, variants[i]!);
+				}
+				// Every alternative must require a distinct literal. Otherwise preserve
+				// full oneOf matching, including rejection of overlapping alternatives.
+				if (index.size === variants.length) { plan = { property, variants: index }; break; }
+			}
+		}
+		taggedUnions.set(schema, plan);
+	}
+	if (!plan) return (schema.oneOf ?? []).filter(candidate => matches(candidate, value, path));
+	const tag = isRecord(value) ? value[plan.property] : undefined;
+	const candidate = typeof tag === 'string' ? plan.variants.get(tag) : undefined;
+	return candidate !== undefined && matches(candidate, value, path) ? [candidate] : [];
 }
 
 function validateNumber(schema: Exclude<JsonSchema, boolean>, value: number, path: string): void {
@@ -292,8 +323,8 @@ function declaredProperties(schema: JsonSchema, value: unknown, result: Set<stri
 	if (typeof schema === 'boolean') return result;
 	for (const name of Object.keys(schema.properties ?? {})) result.add(name);
 	if (schema.$ref) declaredProperties(resolveReference(schema.$ref, '$'), value, result);
-	for (const candidate of schema.oneOf ?? []) {
-		if (matches(candidate, value, '$')) declaredProperties(candidate, value, result);
+	for (const candidate of matchingOneOf(schema, value, '$')) {
+		declaredProperties(candidate, value, result);
 	}
 	for (const candidate of schema.anyOf ?? []) {
 		if (matches(candidate, value, '$')) declaredProperties(candidate, value, result);
@@ -314,6 +345,9 @@ function resolveReference(reference: string, path: string): JsonSchema {
 }
 
 function matches(schema: JsonSchema, value: unknown, path: string): boolean {
+	// Nullable and primitive unions routinely reject alternatives. Their expected
+	// type mismatches must not allocate Error objects and capture JS stacks.
+	if (typeof schema !== 'boolean' && schema.type !== undefined && !matchesType(schema.type, value)) return false;
 	try {
 		validate(schema, value, path);
 		return true;

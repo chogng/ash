@@ -289,12 +289,21 @@ function combineValues(base: IStringDictionary<unknown>, update: IStringDictiona
 	return result;
 }
 
+// Only snapshots created here are known to be deeply immutable. An externally
+// frozen container may still contain mutable children and must be copied.
+const copiedValues = new WeakSet<object>();
+
 function copyValue(value: unknown): unknown {
+	if (value !== null && typeof value === 'object' && copiedValues.has(value)) return value;
 	if (Array.isArray(value)) {
-		return Object.freeze(value.map(copyValue));
+		const copy = Object.freeze(value.map(copyValue));
+		copiedValues.add(copy);
+		return copy;
 	}
 	if (isDictionary(value)) {
-		return Object.freeze(Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, copyValue(entry)])));
+		const copy = Object.freeze(Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, copyValue(entry)])));
+		copiedValues.add(copy);
+		return copy;
 	}
 	return value;
 }

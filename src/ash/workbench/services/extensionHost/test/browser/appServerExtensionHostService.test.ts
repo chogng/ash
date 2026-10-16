@@ -103,6 +103,26 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/tes
 
 const DIGEST = `sha256:${"b".repeat(64)}`;
 
+for (const stopBeforeReady of [false, true]) test(`provider activation waits for declarative identity and configuration${stopBeforeReady ? ' and stays stopped after a late catalog' : ''}`, async () => {
+	const api = new FakeExtensionHostApi(snapshot(1, 'acme.run'));
+	using languages = new LanguageFeaturesService();
+	const catalog = deferred<Awaited<ReturnType<IExtensionApi['list']>>>();
+	let requested = false;
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>(), undefined, undefined, undefined, {
+		list: () => { requested = true; return catalog.promise; },
+		resources: new ExtensionResourceLoaderService(async () => assert.fail('Unexpected extension resource')),
+	});
+	using host = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
+	const starting = host.start();
+	await waitFor(() => requested);
+	assert.equal(api.reconciles, 0);
+	if (stopBeforeReady) await host.stop();
+	catalog.resolve({ generation: 1, extensions: [], diagnostics: [] });
+	await starting;
+	assert.equal(api.reconciles, stopBeforeReady ? 0 : 1);
+	assert.equal(host.state, stopBeforeReady ? 'stopped' : 'ready');
+});
+
 test('SCM registrations dispatch updates and Quick Diff, and retire before a restarted provider reuses its identity', async () => {
 	const provider = {
 		id: 'repository', providerId: 'git', label: 'Git', rootUri: 'file:///workspace', selected: true, groups: [],

@@ -17,6 +17,7 @@ const execFileAsync = promisify(execFile);
 interface ConnectionScenario {
 	state: string;
 	acquisitions: number;
+	preparedAcquisitions: number;
 	isClosing: boolean;
 	restartSettled: boolean;
 	restartError?: string;
@@ -31,6 +32,7 @@ interface ConnectionScenario {
 	beginRestart(): void;
 	releaseClose(): void;
 	holdNextValidation(): void;
+	holdNextAcquisitionValidation(): void;
 	releaseValidation(): void;
 	holdNextInitialization(): void;
 	releaseInitialization(): void;
@@ -59,6 +61,7 @@ const { AppServerConnectionRelay } = await import(${JSON.stringify(pathToFileURL
 const { ChildProcessJsonlTransport } = await import(${JSON.stringify(pathToFileURL(join(mainOutput, 'ash/platform/agentHost/node/childProcessJsonlTransport.js')).href)});
 const scenario = globalThis.connectionScenario = {
 	acquisitions: 0,
+	preparedAcquisitions: 0,
 	isClosing: false,
 	restartSettled: false,
 	sameStartPromise: false,
@@ -72,6 +75,7 @@ let closingTransport;
 let closeBarrier;
 let validationBarrier;
 let holdValidation = false;
+let holdAcquisitionValidation = false;
 let initializationBarrier;
 let holdInitialization = false;
 const close = ChildProcessJsonlTransport.prototype.close;
@@ -104,6 +108,7 @@ AppServerConnectionRelay.prototype.routes = function(...args) {
 		await initialized?.();
 	};
 	scenario.holdNextValidation = () => { holdValidation = true; validationBarrier = new Promise(resolve => { scenario.releaseValidation = resolve; }); };
+	scenario.holdNextAcquisitionValidation = () => { holdAcquisitionValidation = true; validationBarrier = new Promise(resolve => { scenario.releaseValidation = resolve; }); };
 	scenario.holdNextInitialization = () => { holdInitialization = true; initializationBarrier = new Promise(resolve => { scenario.releaseInitialization = resolve; }); };
 	scenario.stop = () => relay.stop();
 	scenario.killConnection = () => relay.transport.value.process.kill();
@@ -123,7 +128,9 @@ AppServerConnectionRelay.prototype.routes = function(...args) {
 			...route,
 			async invoke(value) {
 				scenario.acquisitions++;
-				const delayed = holdValidation;
+				if (relay.state === 'starting') scenario.preparedAcquisitions++;
+				const delayed = holdAcquisitionValidation;
+				if (delayed) { holdAcquisitionValidation = false; holdValidation = true; }
 				try { return await route.invoke(value); }
 				catch (error) { if (delayed) scenario.delayedAcquisitionError = error.name; throw error; }
 				finally { if (delayed) scenario.delayedAcquisitionSettled = true; }
@@ -218,9 +225,24 @@ test('Agents reload waits for a connection restart to finish closing its previou
 	expect(await backend()).toEqual(beforeBackend);
 });
 
+test('a committed Agents reload prepares its carrier before Renderer acquisition without a second handshake', async ({ connectionHarness: { application, page, backend } }) => {
+	const beforeBackend = await backend();
+	const before = await application.evaluate(() => {
+		const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario;
+		return { prepared: scenario.preparedAcquisitions, ready: scenario.readyCount };
+	});
+	await page.reload();
+	await expect(page.locator('.ash-sessions-window')).toBeVisible();
+	await expect.poll(() => application.evaluate(() => {
+		const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario;
+		return { prepared: scenario.preparedAcquisitions, ready: scenario.readyCount, state: scenario.state };
+	})).toEqual({ prepared: before.prepared + 1, ready: before.ready + 1, state: 'ready' });
+	expect(await backend()).toEqual(beforeBackend);
+});
+
 test('an acquisition delayed in an old Agents document cannot replace the reloaded connection', async ({ connectionHarness: { application, page, backend } }) => {
 	const beforeBackend = await backend();
-	await application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.holdNextValidation());
+	await application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.holdNextAcquisitionValidation());
 	await page.reload();
 	await expect.poll(() => application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.waitingValidation)).toBe(true);
 	await page.reload();

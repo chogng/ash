@@ -323,6 +323,10 @@ fn product_git_deployment(
     );
     let manifest_value: serde_json::Value =
         serde_json::from_str(manifest).map_err(|_| ExtensionHostRuntimeError::Internal)?;
+    // Preserve the package's eager activation: deferring this to startupFinished
+    // serializes Git discovery behind unrelated Workbench restoration.
+    let events: Vec<String> = serde_json::from_value(manifest_value["activationEvents"].clone())
+        .map_err(|_| ExtensionHostRuntimeError::Internal)?;
     let commands = manifest_value["contributes"]["commands"]
         .as_array()
         .ok_or(ExtensionHostRuntimeError::Internal)?
@@ -362,7 +366,7 @@ fn product_git_deployment(
                 entrypoint: "ash-git-extension".into(),
             },
             runtime_api_version: 1,
-            activation_events: vec!["onStartupFinished".into()],
+            activation_events: events.clone(),
             capabilities: vec![
                 ExtensionCapability::Command,
                 ExtensionCapability::SourceControl,
@@ -370,10 +374,7 @@ fn product_git_deployment(
             ],
         },
         authority: Arc::new(ProductAuthority),
-        activation: Some(ActivationPlan {
-            events: vec!["onStartupFinished".into()],
-            commands,
-        }),
+        activation: Some(ActivationPlan { events, commands }),
         activation_failure: None,
     })
 }

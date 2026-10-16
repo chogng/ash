@@ -12,6 +12,9 @@ selects, validates and freezes built-in and authorized external package director
 The TS adapter binds resource generations to the backend connection without a static catalog fallback.
 Runtime adapters convert transport DTOs; this service
 owns Workbench catalog types and decides which supported declarative contributions become active.
+The executable host waits for this catalog owner to finish its initial commit before accepting a
+provider fleet: terminal package identities and extension configuration defaults must exist before
+provider callbacks run. A registered service instance alone does not establish that readiness.
 It never executes extension JavaScript or gives extensions editor DOM, model, Worker-port, or host
 filesystem access.
 
@@ -148,6 +151,9 @@ Theme startup requests the initial source scan. Declarative startup, enablement 
 package notifications read the authoritative Rust snapshot with `cached`, which still checks managed
 package generations and discovers sources when no snapshot exists. Explicit `reload()` uses `refresh`
 to detect source edits outside package management. No renderer-owned catalog replaces backend checks.
+Browser host reconciliation also reads the current backend snapshot: refreshing runtime instances
+does not imply another package source scan. Package identities and generation-bound resource reads
+still determine which Workers can be retained or must be retired.
 
 Only one runner loads at a time. Concurrent `start()` readiness checks share its current transaction;
 refresh requests and source notifications still queue one follow-up read. A forced source refresh takes

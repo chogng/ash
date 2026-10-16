@@ -4,7 +4,7 @@ import { ConfigurationModel } from '../../common/configurationModels.js';
 import { NullLoggerService } from '../../../log/common/log.js';
 
 test('configuration model combines structured values and replaces arrays without changing its inputs', () => {
-	const contents = { editor: { options: { colors: { foreground: 'gray', background: 'black' }, rulers: [80] } } };
+	const contents = { editor: { options: Object.freeze({ colors: { foreground: 'gray', background: 'black' }, rulers: [80] }) } };
 	const log = new NullLoggerService();
 	const defaults = new ConfigurationModel(contents, ['editor.options'], [], undefined, log);
 	const user = new ConfigurationModel({ editor: { options: { colors: { foreground: 'white' }, rulers: [100] } } }, ['editor.options'], [], undefined, log);

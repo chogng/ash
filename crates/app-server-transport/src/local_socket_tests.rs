@@ -122,6 +122,48 @@ fn polling_listener_returns_blocking_connections() -> io::Result<()> {
     Ok(())
 }
 
+#[cfg(unix)]
+#[test]
+fn listener_activity_wakes_before_the_maintenance_timeout() -> io::Result<()> {
+    let directory = tempfile::tempdir()?;
+    let path = directory.path().join("ready.sock");
+    let listener = PollingLocalListener::new(UnixListener::bind(&path)?)?;
+    let (finished, waiting) = std::sync::mpsc::channel();
+    let worker = thread::spawn(move || {
+        finished
+            .send(listener.wait_for_activity(&[], &[], Duration::from_secs(5)))
+            .unwrap();
+    });
+    let _peer = UnixStream::connect(&path)?;
+    waiting
+        .recv_timeout(Duration::from_secs(1))
+        .expect("listener readiness must wake the wait")?;
+    worker.join().unwrap();
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn pending_peer_activity_wakes_without_a_new_listener_connection() -> io::Result<()> {
+    let directory = tempfile::tempdir()?;
+    let path = directory.path().join("pending.sock");
+    let listener = PollingLocalListener::new(UnixListener::bind(&path)?)?;
+    let mut peer = UnixStream::connect(&path)?;
+    let stream = wait_for_connection(&listener)?;
+    let (finished, waiting) = std::sync::mpsc::channel();
+    let worker = thread::spawn(move || {
+        finished
+            .send(listener.wait_for_activity(&[&stream], &[], Duration::from_secs(5)))
+            .unwrap();
+    });
+    peer.write_all(b"rest of prelude")?;
+    waiting
+        .recv_timeout(Duration::from_secs(1))
+        .expect("pending peer readiness must wake the wait")?;
+    worker.join().unwrap();
+    Ok(())
+}
+
 #[test]
 fn connection_guard_tracks_and_removes_connection() -> io::Result<()> {
     let (stream, _peer) = UnixStream::pair()?;

@@ -8,6 +8,16 @@ use ash_core_plugins::PluginPackageStore;
 use ash_plugin::LocalPluginPackage;
 
 #[test]
+fn product_git_activation_does_not_wait_for_workbench_restoration() {
+    let root = tempfile::tempdir().unwrap();
+    let deployment = super::product_git_deployment(root.path()).unwrap();
+    let activation = deployment.activation.as_ref().unwrap();
+    assert!(activation.events.iter().any(|event| event == "*"));
+    assert_eq!(deployment.params.activation_events, activation.events);
+    assert!(activation.matches(&super::ActivationEvent::Command("git.refresh".into())));
+}
+
+#[test]
 fn local_vscode_package_waits_for_manifest_activation_and_revocation_retires_authority() {
     for valid_activation in [true, false] {
         let root = tempfile::tempdir().unwrap();

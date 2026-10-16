@@ -124,6 +124,34 @@ fn partial_prelude_is_resumed_without_losing_buffered_rpc_bytes() {
     assert_eq!(messages, "first RPC\nsecond RPC\n");
 }
 
+#[cfg(unix)]
+#[test]
+fn pending_handshake_wakes_the_endpoint_and_preserves_its_buffered_prefix() {
+    let profile = tempfile::tempdir().unwrap();
+    let mut endpoint = ManagedEndpoint::bind(profile.path()).unwrap();
+    let mut peer = UnixStream::connect(&endpoint.endpoint.socket).unwrap();
+    let options = ConnectionOptions::new(profile.path(), None, GrantSource::UserConfig, None);
+    let mut prelude = serde_json::to_vec(&ConnectionPrelude::from_options(&options)).unwrap();
+    prelude.extend_from_slice(b"\nfirst RPC\n");
+    peer.write_all(&prelude[..8]).unwrap();
+    assert!(endpoint.poll_connection().unwrap().is_none());
+    let (finished, waiting) = std::sync::mpsc::channel();
+    let worker = std::thread::spawn(move || {
+        endpoint.wait_for_activity(Duration::from_secs(5)).unwrap();
+        let mut connection = endpoint.poll_connection().unwrap().unwrap();
+        let mut message = String::new();
+        connection.reader.read_line(&mut message).unwrap();
+        finished.send((connection.options, message)).unwrap();
+    });
+    peer.write_all(&prelude[8..]).unwrap();
+    let (accepted, message) = waiting
+        .recv_timeout(Duration::from_secs(1))
+        .expect("handshake must not wait for a timer");
+    assert_eq!(accepted, options);
+    assert_eq!(message, "first RPC\n");
+    worker.join().unwrap();
+}
+
 #[test]
 fn pending_preludes_are_bounded_and_expired_without_waiting() {
     let profile = tempfile::tempdir().unwrap();

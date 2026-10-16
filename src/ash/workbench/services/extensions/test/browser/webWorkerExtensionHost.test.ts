@@ -5,6 +5,7 @@ import { ExtensionResourceLoaderService } from '../../../../../platform/extensio
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
@@ -138,9 +139,32 @@ test('readable user and registry browser packages do not gain client execution a
 	assert.equal(reads, 0);
 });
 
+test('declarative packages do not delay executable host startup with translation reads', async () => {
+	using remote = new RemoteHost();
+	let reconciled = false;
+	let resourceReads = 0;
+	remote.reconcile = async () => { reconciled = true; return { generation: 1, extensions: [] }; };
+	const extensions: IExtensionApi = {
+		list: async () => ({
+			generation: 1, diagnostics: [], extensions: [{
+				id: 'static', name: 'static', publisher: 'test', version: '1', displayName: 'Static', sourceKind: 'builtIn',
+				manifestJson: '{"displayName":"%name%","contributes":{"themes":[]}}',
+				manifestSha256: `sha256:${'a'.repeat(64)}`, packageSha256: `sha256:${'a'.repeat(64)}`,
+			}],
+		}),
+		resources: new ExtensionResourceLoaderService(async () => { resourceReads++; return new Uint8Array(); }),
+	};
+	using catalogServices = remote.instantiation.createChild(new ServiceCollection([IExtensionApi, extensions]));
+	using api = new WebWorkerExtensionHost(extensions, remote, catalogServices);
+	assert.deepEqual((await api.reconcile('refresh')).extensions, []);
+	assert.equal(reconciled, true);
+	assert.equal(resourceReads, 0);
+});
+
 test('browser refresh preserves unchanged Workers and pending calls, and cleans up changed packages before replacement', async () => {
 	const originalWorker = Object.getOwnPropertyDescriptor(globalThis, 'Worker');
 	const order: string[] = [];
+	const catalogReads: string[] = [];
 	const urls: string[] = [];
 	let digest = `sha256:${'a'.repeat(64)}`;
 	const invoked = new DeferredPromise<void>();
@@ -177,12 +201,15 @@ test('browser refresh preserves unchanged Workers and pending calls, and cleans 
 		remote.instantiation.registerInstance(IWorkspaceContextService, {} as IWorkspaceContextService);
 		remote.instantiation.registerInstance(IAppServerApi, {} as IAppServerApi);
 		using api = new WebWorkerExtensionHost({
-			list: async () => ({
-				generation: 1, diagnostics: [], extensions: [{
-					id: 'browser', name: 'browser', publisher: 'test', version: '1', displayName: 'Browser', sourceKind: 'builtIn',
-					manifestJson: JSON.stringify({ browser: './browser.js' }), manifestSha256: digest, packageSha256: digest,
-				}]
-			}),
+			list: async reload => {
+				catalogReads.push(reload);
+				return {
+					generation: 1, diagnostics: [], extensions: [{
+						id: 'browser', name: 'browser', publisher: 'test', version: '1', displayName: 'Browser', sourceKind: 'builtIn',
+						manifestJson: JSON.stringify({ browser: './browser.js' }), manifestSha256: digest, packageSha256: digest,
+					}]
+				};
+			},
 			resources: new ExtensionResourceLoaderService(async () => new Uint8Array()),
 		}, remote, remote.instantiation);
 		const registration = api.registerClientHandler(async operation => {
@@ -209,6 +236,7 @@ test('browser refresh preserves unchanged Workers and pending calls, and cleans 
 		const replacement = (await api.reconcile('restartFailed')).extensions.find(runtime => runtime.id === original.id)!;
 		assert.equal(replacement.lifecycle, 'ready');
 		assert.notEqual(replacement.activationGeneration, original.activationGeneration);
+		assert.deepEqual(catalogReads, ['cached', 'cached', 'cached'], 'each reconciliation reads current backend packages without repeating source discovery');
 		assert.deepEqual(order, ['activate', 'deactivate', 'terminate', 'activate']);
 		await assert.rejects(fetch(urls[0]!));
 		await assert.rejects(api.invoke(invocation, new AbortController().signal), /retired activation/);

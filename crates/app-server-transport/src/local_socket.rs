@@ -160,6 +160,50 @@ impl PollingLocalListener {
         Ok(Self { listener })
     }
 
+    /// Waits for the listener or a pending handshake to become ready, up to the
+    /// owner's next maintenance deadline. Unix readiness interrupts the wait;
+    /// Windows retains bounded polling until its socket adapter supports readiness.
+    pub fn wait_for_activity(
+        &self,
+        readers: &[&UnixStream],
+        writers: &[&UnixStream],
+        timeout: std::time::Duration,
+    ) -> io::Result<()> {
+        #[cfg(unix)]
+        {
+            use rustix::event::PollFd;
+            use rustix::event::PollFlags;
+            let mut descriptors = Vec::with_capacity(1 + readers.len() + writers.len());
+            descriptors.push(PollFd::new(&self.listener, PollFlags::IN));
+            descriptors.extend(
+                readers
+                    .iter()
+                    .map(|stream| PollFd::new(*stream, PollFlags::IN)),
+            );
+            descriptors.extend(
+                writers
+                    .iter()
+                    .map(|stream| PollFd::new(*stream, PollFlags::OUT)),
+            );
+            let timeout = rustix::event::Timespec::try_from(timeout).map_err(|_| {
+                io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "socket wait deadline is out of range",
+                )
+            })?;
+            match rustix::event::poll(&mut descriptors, Some(&timeout)) {
+                Ok(_) | Err(rustix::io::Errno::INTR) => Ok(()),
+                Err(error) => Err(io::Error::from(error)),
+            }
+        }
+        #[cfg(windows)]
+        {
+            let _ = (readers, writers);
+            std::thread::sleep(timeout);
+            Ok(())
+        }
+    }
+
     /// Polls for one normalized connection.
     pub fn poll_accept(&self) -> io::Result<LocalSocketAccept> {
         match self.listener.accept() {

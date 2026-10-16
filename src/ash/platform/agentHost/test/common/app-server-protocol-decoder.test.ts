@@ -9,6 +9,24 @@ import {
 	decodeAppServerServerRequest,
 } from '../../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 
+test('backend state watches retain strict callback shapes and legacy one-shot calls', () => {
+	const context = { protocolVersion: 1, requestId: 1, incarnation: 1, activationGeneration: 1 };
+	const envelope = {
+		jsonrpc: '2.0', id: 'state', method: 'extensionClient/request', params: {
+			extensionId: 'ash.git', incarnation: 1, activationGeneration: 1,
+			operation: { operation: 'backendState', capability: 'git.repository', after: 0 },
+		}
+	};
+	assert.deepEqual(decodeAppServerServerRequest(envelope), envelope);
+	const watching = { ...envelope, params: { ...envelope.params, operation: { ...envelope.params.operation, waitForChange: true } } };
+	assert.deepEqual(decodeAppServerServerRequest(watching), watching);
+	for (const operation of [
+		{ ...watching.params.operation, waitForChange: 'yes' },
+		{ ...watching.params.operation, operation: 'unknown' },
+		{ ...watching.params.operation, context },
+	]) assert.throws(() => decodeAppServerServerRequest({ ...envelope, params: { ...envelope.params, operation } }), AppServerProtocolDecodeError);
+});
+
 test('message phases and loop decisions survive the generated notification boundary', () => {
 	const params = { sessionId: 'session', threadId: 'thread', durableSequence: 7, update: { type: 'itemDelta', itemId: 'message', turnId: 'turn', delta: { type: 'agentMessagePhase', phase: 'final_answer' } } };
 	const notification = { jsonrpc: '2.0', method: 'session/thread/update', params };

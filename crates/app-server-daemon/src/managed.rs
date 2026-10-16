@@ -229,6 +229,29 @@ impl ManagedEndpoint {
         !self.pending.is_empty()
     }
 
+    /// Sleeps until endpoint traffic is ready or lifecycle maintenance is due.
+    /// Pending partial preludes and blocked control replies retain their own readiness.
+    pub fn wait_for_activity(&self, maximum: Duration) -> Result<(), String> {
+        if self.is_stopping() {
+            return Ok(());
+        }
+        let mut timeout = maximum;
+        let mut readers = Vec::new();
+        let mut writers = Vec::new();
+        let now = Instant::now();
+        for pending in &self.pending {
+            timeout = timeout.min(pending.deadline.saturating_duration_since(now));
+            if pending.response.is_some() {
+                writers.push(pending.reader.get_ref());
+            } else {
+                readers.push(pending.reader.get_ref());
+            }
+        }
+        self.listener
+            .wait_for_activity(&readers, &writers, timeout)
+            .map_err(|error| error.to_string())
+    }
+
     /// Handles lifecycle traffic and returns the next application connection when available.
     pub fn poll_connection(&mut self) -> Result<Option<ManagedConnection>, String> {
         if self.last_log_maintenance.elapsed() >= Duration::from_secs(1) {

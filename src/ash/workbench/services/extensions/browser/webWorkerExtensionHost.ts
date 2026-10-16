@@ -129,7 +129,10 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 
 	private async activate(mode: ExtensionHostReconcileMode): Promise<ExtensionHostFleetSnapshot> {
 		const generation = ++this.generation;
-		const catalog = await this.extensions.list('refresh');
+		// Reconcile runtime instances against the authoritative package snapshot.
+		// Source discovery belongs to package/theme refresh, not each host startup;
+		// a cached backend read still observes managed updates and connection changes.
+		const catalog = await this.extensions.list('cached');
 		this.assertNotDisposed();
 		const packages = new Map(catalog.extensions.map(extension => [extension.id, browserPackageIdentity(extension)]));
 		const retained = this.snapshot.extensions.filter(runtime => runtime.lifecycle === 'ready' && this.workers.has(runtime.id) && this.workerPackages.get(runtime.id) === packages.get(runtime.id));
@@ -154,6 +157,9 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 			// Package readability does not admit code into the client host. User and registry
 			// packages must pass backend runtime admission before their scripts can execute.
 			if (extension.sourceKind !== 'builtIn') { continue; }
+			// Declarative and Rust packages have no browser activation. Do not put
+			// their optional translation/resource reads on the executable host path.
+			if (typeof JSON.parse(extension.manifestJson).browser !== 'string') { continue; }
 			const previous = this.snapshot.extensions.find(runtime => runtime.id === extension.id);
 			if (previous?.lifecycle === 'ready') { runtimes.push(previous); continue; }
 			const localization = this.instantiation.createInstance(MainThreadLocalization);

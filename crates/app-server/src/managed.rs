@@ -186,7 +186,7 @@ pub(crate) fn run(profile_root: PathBuf, product_services: Option<PathBuf>) -> R
             } else {
                 idle_since = None;
             }
-            thread::sleep(IDLE_POLL_INTERVAL);
+            endpoint.wait_for_activity(IDLE_POLL_INTERVAL)?;
         }
     }
 }

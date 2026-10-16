@@ -51,7 +51,7 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 		@IOutputService output: IOutputService,
 		@IFileTextModelService private readonly models: IFileTextModelService,
 		@ILifecycleService private readonly lifecycle: ILifecycleService,
-		@IExtensionService extensions: IExtensionService,
+		@IExtensionService private readonly extensions: IExtensionService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 	) {
@@ -138,6 +138,10 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 		if (state === "ready") {
 			const revision = this.connectionRevision;
 			const available = await this.api.isAvailable();
+			// Provider callbacks inspect registered configuration and package identities.
+			// A service instance alone does not mean its declarative catalog has committed.
+			// Await that owner explicitly instead of failing and retrying a partial fleet.
+			if (available) await this.extensions.start();
 			if (this.isDisposed || !this.started || revision !== this.connectionRevision) return;
 			this.connectionReady = available;
 			if (!available) {

@@ -28,6 +28,7 @@ export class AppServerConnectionRelay extends Disposable {
 	private readonly connectionOperations = new TaskQueue();
 	private pendingAcquisitions = 0;
 	private navigationGeneration = 0;
+	private acquiredNavigation = -1;
 	private startPromise: CancelablePromise<void> | undefined;
 
 	constructor(options: { readonly enabled: false; } | { readonly enabled: true; readonly processLauncher: IAppServerProcessLauncher; }) {
@@ -89,7 +90,7 @@ export class AppServerConnectionRelay extends Disposable {
 			});
 			// A new document already acquires its own port. Restarting its initial client
 			// would interrupt that initialization; only wake the document we stopped.
-			if (this.nonce === undefined && this.navigationGeneration === navigationGeneration && this.pendingAcquisitions === 0) {
+			if (this.nonce === undefined && this.acquiredNavigation === navigationGeneration && this.navigationGeneration === navigationGeneration && this.pendingAcquisitions === 0) {
 				this.renderer.send('ash:app-server:restart');
 			}
 		});
@@ -123,9 +124,21 @@ export class AppServerConnectionRelay extends Disposable {
 		renderer.on('render-process-gone', reset);
 		// Initial navigation must keep the connection started before the window loaded.
 		// did-navigate commits a main-frame document; blocked attempts retain its connection.
-		const navigating = (): void => {
+		let documentUrl: string | undefined;
+		const navigating = (_event: unknown, url: string): void => {
+			const previousUrl = documentUrl;
+			documentUrl = url;
 			this.navigationGeneration++;
 			if (this.nonce !== undefined) { reset(); }
+			// The old document can close its port before did-navigate is delivered.
+			// Prepare its successor even then, sharing an in-flight restart that may
+			// still be closing the old carrier. Validation overlaps Renderer loading;
+			// a new nonce and initialize exchange still own the new document.
+			if (previousUrl === url && this.options.enabled) {
+				void this.start().catch(error => {
+					if (!this.isDisposed && !(error instanceof CancellationError)) this.diagnostic = String(error);
+				});
+			}
 		};
 		renderer.on('did-navigate', navigating);
 		this._register(toDisposable(() => renderer.removeListener('render-process-gone', reset)));
@@ -192,6 +205,7 @@ export class AppServerConnectionRelay extends Disposable {
 
 	private attach(renderer: WebContents, nonce: string, transport: ChildProcessJsonlTransport): void {
 		this.nonce = nonce;
+		this.acquiredNavigation = this.navigationGeneration;
 		const { port1, port2 } = new MessageChannelMain();
 		this.setState('initializing');
 		const sent: number[] = [];
