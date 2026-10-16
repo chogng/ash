@@ -149,3 +149,53 @@ test('Speech registration accepts only bounded immutable metadata on the origina
 	assert.equal(Object.isFrozen(normalized.extensions[0]!.registrations[0]), true);
 	for (const value of [{ ...registration, identifier: '' }, { ...registration, identifier: 'space inside' }, { ...registration, identifier: 'x'.repeat(257) }, { ...registration, backendToken: 'private' }]) assert.throws(() => normalizeExtensionHostSnapshot(fleet(value)));
 });
+
+test('cancelled decoration invocations consume their terminal sessions before reusing quota', async () => {
+	const sessions = new Map<string, 'pending' | 'cancelled'>();
+	let sequence = 0;
+	for (let index = 0; index < 80; index++) {
+		const controller = new AbortController();
+		await assert.rejects(invokeExtensionHost({
+			start: async () => {
+				assert.ok(sessions.size < 32, 'Abandoned sessions exhausted the real connection quota');
+				const invocationId = `decoration-${sequence++}`;
+				sessions.set(invocationId, 'pending');
+				return { invocationId };
+			},
+			read: async invocationId => {
+				if (sessions.get(invocationId) === 'pending') return { state: 'pending' };
+				sessions.delete(invocationId);
+				return { state: 'cancelled', reason: 'caller' };
+			},
+			cancel: async invocationId => {
+				sessions.set(invocationId, 'cancelled');
+				return { disposition: 'requested' };
+			},
+		}, invocation(), controller.signal, {
+			now: () => 100,
+			wait: async () => { controller.abort(); throw new CancellationError(); },
+		}), CancellationError);
+		assert.equal(sessions.size, 0);
+	}
+	assert.equal(sequence, 80);
+});
+
+test('abandoned invocation consumes a successful result when completion wins cancellation', async () => {
+	const controller = new AbortController();
+	let reads = 0;
+	let consumed = false;
+	await assert.rejects(invokeExtensionHost({
+		start: async () => ({ invocationId: 'completion-race' }),
+		read: async () => {
+			if (++reads === 1) { controller.abort(); return { state: 'pending' }; }
+			consumed = true;
+			return { state: 'succeeded', payload: 'completed before cancellation' };
+		},
+		cancel: async () => ({ disposition: 'alreadyTerminal' }),
+	}, invocation(), controller.signal, {
+		now: () => 100,
+		wait: async () => { throw new CancellationError(); },
+	}), CancellationError);
+	assert.equal(consumed, true);
+	assert.equal(reads, 2);
+});

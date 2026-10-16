@@ -14,6 +14,7 @@ declare global {
 /** Routes the Git test package through its Rust executable while the unrelated generic
  * SCM fixture keeps exercising the Worker host's public contract. */
 export class RustGitHostFixture extends Disposable implements IExtensionHostApi {
+	public initializationFailures = 0;
 	private readonly changed = this._register(new Emitter<number>());
 	private readonly handlers = new Set<ExtensionHostClientHandler>();
 	private current: ExtensionHostRuntime | undefined;
@@ -66,6 +67,10 @@ export class RustGitHostFixture extends Disposable implements IExtensionHostApi 
 	async activateByEvent(_request: ExtensionHostActivationRequest) { return this.reconcile(); }
 	async invoke(request: ExtensionHostInvocationRequest, signal: AbortSignal): Promise<JsonValue> {
 		if (request.extensionId !== 'ash.git') return this.generic.invoke(request, signal);
+		if ((request.payload as { method?: string; }).method === 'initialize' && this.initializationFailures > 0) {
+			this.initializationFailures--;
+			throw new Error('Synthetic extension invocation quota exceeded');
+		}
 		if (!this.current || request.incarnation !== this.current.incarnation || request.activationGeneration !== this.current.activationGeneration) throw new Error('retired activation');
 		signal.throwIfAborted();
 		const value = await window.__rustGitRequest('invoke', { registrationId: request.registrationId, operation: request.operation, payload: request.payload, deadlineUnixMillis: request.deadlineUnixMillis });

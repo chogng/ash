@@ -151,7 +151,7 @@ export class MainThreadExtensionApi extends Disposable {
 	) {
 		super();
 		this.messages = this._register(instantiation.createInstance(MainThreadMessageService));
-		this.scmApi = this._register(instantiation.createInstance(MainThreadSCM, this.invocationTimeoutMillis, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })));
+		this.scmApi = this._register(instantiation.createInstance(MainThreadSCM, this.invocationTimeoutMillis, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' }), commands));
 		this.backendApi = this._register(instantiation.createInstance(MainThreadExtensionBackend));
 		this.terminalApi = this._register(instantiation.createInstance(MainThreadTerminalService));
 		this.speechApi = this._register(instantiation.createInstance(MainThreadSpeech, this.invocationTimeoutMillis));

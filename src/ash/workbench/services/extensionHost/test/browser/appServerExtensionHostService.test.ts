@@ -705,7 +705,7 @@ test('extension API restores all previous registrations when a provider rejects 
 	api.current = snapshot(2, 'acme.new');
 	api.emitChanged(2);
 	await waitFor(() => failures.includes('registrationProjectionFailed'));
-	assert.deepEqual(commands.getCommandIds(), ['acme.old']);
+	assert.deepEqual(commands.getCommandIds(), ['acme.old', 'workbench.scm.action.retryInitialization']);
 	assert.deepEqual(tasks.providers, previousTasks);
 	assert.deepEqual(tests.providers, previousTests);
 	assert.equal(service.currentSnapshot.fleetGeneration, 1);
@@ -786,7 +786,7 @@ test('extension API releases named output and providers when its host stops', as
 	assert.ok(output.getChannel('extension.acme.demo.review'));
 	await service.stop();
 	assert.equal(output.getChannel('extension.acme.demo.review'), undefined);
-	assert.deepEqual(commands.getCommandIds(), []);
+	assert.deepEqual(commands.getCommandIds(), ['workbench.scm.action.retryInitialization']);
 	assert.deepEqual(tasks.providers, []);
 	assert.deepEqual(tests.providers, []);
 	await service.start();

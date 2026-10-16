@@ -538,3 +538,38 @@ test('Git rebase setting command rejects non-boolean input before saving', async
 		expect(error).toContain('布尔值');
 	} finally { await page.evaluate(() => window.gitExtensionIntegration.dispose()); }
 });
+
+test('Git initialization recovers after a transient quota failure without claiming the repository is absent', async ({ page }) => {
+	await page.goto('/gitExtension.html');
+	try {
+		await page.evaluate(() => {
+			window.gitStartupIntegration.failInitialization(1);
+			window.gitStartupIntegration.mountWelcome('en');
+		});
+		await page.evaluate(() => window.gitExtensionIntegration.activate('en'));
+		await expect(page.locator('#scm-pane')).toContainText('Scanning for Git repositories');
+		await expect(page.getByRole('button', { name: 'Initialize Repository', exact: true })).toHaveCount(0);
+		await expect(page.locator('#scm-pane .ash-scm-commit-form')).toBeVisible();
+		await expect(page.locator('#scm-pane')).not.toContainText('does not contain a Git repository');
+		expect(await page.evaluate(() => window.gitExtensionIntegration.state().repositories[0]?.paths)).toEqual(['one.ts']);
+	} finally { await page.evaluate(() => window.gitExtensionIntegration.dispose()); }
+});
+
+test('Git detection failure offers a Chinese keyboard retry and restores the real provider', async ({ page }) => {
+	await page.goto('/gitExtension.html');
+	try {
+		await page.evaluate(() => {
+			window.gitStartupIntegration.failInitialization(3);
+			window.gitStartupIntegration.mountWelcome('zh-cn');
+		});
+		await page.evaluate(() => window.gitExtensionIntegration.activate('zh-cn'));
+		await expect(page.locator('#scm-pane')).toContainText('Git 仓库检测失败');
+		await expect(page.getByRole('button', { name: '初始化仓库', exact: true })).toHaveCount(0);
+		const retry = page.getByRole('button', { name: '重试仓库检测', exact: true });
+		await retry.focus();
+		await page.keyboard.press('Enter');
+		await expect(page.locator('#scm-pane .ash-scm-commit-form')).toBeVisible();
+		await expect(retry).toHaveCount(0);
+		expect(await page.evaluate(() => window.gitExtensionIntegration.state().repositories[0]?.paths)).toEqual(['one.ts']);
+	} finally { await page.evaluate(() => window.gitExtensionIntegration.dispose()); }
+});

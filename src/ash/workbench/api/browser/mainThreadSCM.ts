@@ -1,4 +1,7 @@
-import { ICommandService } from '../../../platform/commands/common/commands.js';
+import { raceCancellationError, TaskQueue, timeout } from '../../../base/common/async.js';
+import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
+import type { IContextKey } from '../../../platform/contextkey/common/contextkey.js';
+import { CommandRegistry, ICommandService } from '../../../platform/commands/common/commands.js';
 import { IMultiDiffSourceResolverService } from '../../contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
 import { isMultiDiffEditorInput, requireActions } from '../../contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
 import { parseExtensionEditorInput } from './mainThreadEditorInput.js';
@@ -17,6 +20,8 @@ import { IQuickDiffService } from '../../contrib/scm/common/quickDiff.js';
 import { IDecorationsService } from '../../services/decorations/common/decorations.js';
 class SCMRegistration extends Disposable {
 	public revision = 0;
+	public initialization: 'initializing' | 'ready' | 'failed' = 'initializing';
+	public initializing: Promise<void> | undefined;
 	public readonly providers = this._register(new DisposableMap<string, ExtensionSCMProvider>());
 	public readonly controller = new AbortController();
 	constructor(public readonly source: ExtensionClientSource, public readonly registrationId: string) {
@@ -26,8 +31,13 @@ class SCMRegistration extends Disposable {
 }
 /** SCM owns view state; all repository policy and commands remain in the extension. */
 export class MainThreadSCM extends Disposable {
+	// Decorations share the window's 32 invocation slots with initialization and commands.
+	// Bound only this high-volume read path; a command must not wait behind file labels.
+	private readonly decorationQueues = Array.from({ length: 4 }, () => new TaskQueue());
+	private nextDecorationQueue = 0;
+	private readonly initializationContexts = new Map<string, IContextKey<string>>();
 	private readonly registrations = this._register(new DisposableMap<string, SCMRegistration>());
-	constructor(private readonly timeout: number, private readonly reportError: (error: unknown) => void,
+	constructor(private readonly timeout: number, private readonly reportError: (error: unknown) => void, commandRegistry: CommandRegistry,
 		@IExtensionHostApi
 		private readonly api: IExtensionHostApi,
 		@ISCMService
@@ -41,7 +51,17 @@ export class MainThreadSCM extends Disposable {
 		@IQuickDiffService
 		private readonly quickDiff: IQuickDiffService,
 		@IDecorationsService
-		private readonly decorations: IDecorationsService) { super(); }
+		private readonly decorations: IDecorationsService,
+		@IContextKeyService private readonly contextKeys: IContextKeyService) {
+		super();
+		this._register(commandRegistry.register('workbench.scm.action.retryInitialization', () => Promise.all(
+			[...this.registrations].map(([, owner]) => owner).filter(owner => owner.initialization === 'failed').map(owner => this.initialize(owner))
+		)));
+		this._register(toDisposable(() => {
+			for (const queue of this.decorationQueues) queue.clearPending();
+			for (const context of this.initializationContexts.values()) context.reset();
+		}));
+	}
 	public update(snapshot: ExtensionHostFleetSnapshot): void {
 		const current = new Set<string>();
 		for (const runtime of snapshot.extensions) {
@@ -73,12 +93,65 @@ export class MainThreadSCM extends Disposable {
 				if (!this.registrations.has(key)) {
 					const owner = this.registrations.set(key, new SCMRegistration(source, registration.registrationId));
 					this.set(source, registration.registrationId, registration.revision, registration.providers);
-					void this.invoke(owner, 'initialize', {}).catch(this.reportError);
+					void this.initialize(owner);
 				} else {
 					this.set(source, registration.registrationId, registration.revision, registration.providers);
 				}
 			}
 		}
+		this.updateInitializationContexts();
+	}
+	private initialize(owner: SCMRegistration): Promise<void> {
+		if (owner.initializing) return owner.initializing;
+		owner.initialization = 'initializing';
+		this.updateInitializationContexts();
+		// Initialization discovers repositories and starts the provider's subscriptions.
+		// It is idempotent, so transient admission/startup failures can be retried safely.
+		owner.initializing = this.initializeWithRetry(owner).finally(() => { owner.initializing = undefined; });
+		return owner.initializing;
+	}
+	private async initializeWithRetry(owner: SCMRegistration): Promise<void> {
+		const signal = owner.controller.signal;
+		for (const delay of [0, 250, 1000]) {
+			try {
+				if (delay) {
+					const waiting = timeout(delay);
+					try { await raceCancellationError(waiting, signal); }
+					finally { waiting.cancel(); }
+				}
+				await this.invoke(owner, 'initialize', {});
+				owner.initialization = 'ready';
+				this.updateInitializationContexts();
+				return;
+			} catch (error) {
+				if (signal.aborted) return;
+				this.reportError(error);
+			}
+		}
+		owner.initialization = 'failed';
+		this.updateInitializationContexts();
+	}
+	private updateInitializationContexts(): void {
+		if (this.isDisposed) return;
+		const states = new Map<string, SCMRegistration['initialization'][]>();
+		for (const [, owner] of this.registrations) {
+			const values = states.get(owner.source.extensionId) ?? [];
+			values.push(owner.initialization);
+			states.set(owner.source.extensionId, values);
+		}
+		this.contextKeys.bufferChangeEvents(() => {
+			for (const [id, context] of this.initializationContexts) {
+				if (!states.has(id)) { context.reset(); this.initializationContexts.delete(id); }
+			}
+			for (const [id, values] of states) {
+				let context = this.initializationContexts.get(id);
+				if (!context) {
+					context = this.contextKeys.createKey<string>(`scm.providerState.${id}`, 'initializing');
+					this.initializationContexts.set(id, context);
+				}
+				context.set(values.includes('failed') ? 'failed' : values.includes('initializing') ? 'initializing' : 'ready');
+			}
+		});
 	}
 	public set(source: ExtensionClientSource, registrationId: string, revision: number, values: readonly JsonValue[]): void {
 		this.assertNotDisposed();
@@ -185,7 +258,14 @@ export class MainThreadSCM extends Disposable {
 	private async invoke(owner: SCMRegistration, method: string, payload: Record<string, unknown>, requestSignal?: AbortSignal): Promise<JsonValue> {
 		owner.controller.signal.throwIfAborted();
 		const signal = requestSignal ? AbortSignal.any([owner.controller.signal, requestSignal]) : owner.controller.signal;
-		const result = await this.api.invoke({ ...owner.source, registrationId: owner.registrationId, operation: 'scm', payload: normalizeExtensionHostPayload(JSON.parse(JSON.stringify({ method, ...payload }))), deadlineUnixMillis: Date.now() + this.timeout }, signal);
+		const run = (): Promise<JsonValue> => {
+			signal.throwIfAborted();
+			// Queueing does not consume the invocation's backend deadline or an admission slot.
+			return this.api.invoke({ ...owner.source, registrationId: owner.registrationId, operation: 'scm', payload: normalizeExtensionHostPayload(JSON.parse(JSON.stringify({ method, ...payload }))), deadlineUnixMillis: Date.now() + this.timeout }, signal);
+		};
+		const result = method === 'decoration'
+			? await this.decorationQueues[this.nextDecorationQueue++ % this.decorationQueues.length]!.schedule(run)
+			: await run();
 		signal.throwIfAborted();
 		return result;
 	}
@@ -256,7 +336,11 @@ export class MainThreadSCM extends Disposable {
 		};
 		return args.map(value => normalizeExtensionHostPayload(encode(value)));
 	}
-	public clear(): void { this.registrations.clearAndDisposeAll(); }
+	public clear(): void {
+		this.registrations.clearAndDisposeAll();
+		for (const queue of this.decorationQueues) queue.clearPending();
+		this.updateInitializationContexts();
+	}
 }
 interface ProviderSnapshot {
 	readonly id: string;

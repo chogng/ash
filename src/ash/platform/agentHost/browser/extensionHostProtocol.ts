@@ -1,3 +1,4 @@
+import { raceCancellationError } from '../../../base/common/async.js';
 import { VSBuffer } from '../../../base/common/buffer.js';
 import { throwIfCancelled } from '../../../base/common/cancellation.js';
 import { CancellationError } from '../../../base/common/errors.js';
@@ -93,8 +94,18 @@ export async function invokeExtensionHost(transport: ExtensionHostInvokeTranspor
 		}
 	} finally {
 		if (invocationId !== undefined && !terminal) {
-			try { normalizeCancelResult(await transport.cancel(invocationId)); }
-			catch { /* Preserve the original cancellation, transport or validation failure. */ }
+			try {
+				// Cancellation acknowledges the request, but does not consume its session.
+				// Read the terminal result even when completion won the cancellation race;
+				// otherwise abandoned label queries occupy the connection's quota for 60s.
+				const cleanup = AbortSignal.timeout(1000);
+				normalizeCancelResult(await raceCancellationError(transport.cancel(invocationId), cleanup));
+				for (let polls = 0; polls < Math.ceil(1000 / pollIntervalMillis); polls++) {
+					const result = normalizeReadResult(await raceCancellationError(transport.read(invocationId), cleanup));
+					if (result.state !== 'pending') break;
+					await wait(pollIntervalMillis, cleanup);
+				}
+			} catch { /* Preserve the original failure if the connection or cancellation grace expires. */ }
 		}
 	}
 }

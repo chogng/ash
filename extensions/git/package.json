@@ -1301,7 +1301,22 @@
       {
         "view": "ash.gitView",
         "contents": "%git.welcome.noRepository%\n[%git.welcome.initialize%](command:git.init)",
-        "when": "workspaceFolderCount != 0 && appServerAvailable"
+        "when": "workspaceFolderCount != 0 && appServerAvailable && scm.providerState.ash.git == ready"
+      },
+      {
+        "view": "ash.gitView",
+        "contents": "%git.welcome.initializing%",
+        "when": "workspaceFolderCount != 0 && appServerAvailable && scm.providerState.ash.git != ready && scm.providerState.ash.git != failed"
+      },
+      {
+        "view": "ash.gitView",
+        "contents": "%git.welcome.failed%\n[%git.welcome.retry%](command:workbench.scm.action.retryInitialization)",
+        "when": "workspaceFolderCount != 0 && appServerAvailable && scm.providerState.ash.git == failed"
+      },
+      {
+        "view": "ash.gitView",
+        "contents": "%git.welcome.unavailable%",
+        "when": "workspaceFolderCount != 0 && !appServerAvailable"
       }
     ],
     "configuration": {

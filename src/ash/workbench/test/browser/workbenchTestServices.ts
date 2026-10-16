@@ -29,7 +29,7 @@ import { IFileTextModelService, ITextModelResourceService } from '../../services
 import { IOutputService } from '../../services/output/common/output.js';
 import { OutputService } from '../../contrib/output/browser/outputServices.js';
 import { IStatusbarService, StatusbarService } from '../../services/statusbar/browser/statusbar.js';
-import { ContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
+import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
 import { TestQuickInputService } from '../../../platform/quickinput/test/browser/testQuickInputService.js';
@@ -50,6 +50,7 @@ export function workbenchInstantiationService(owner?: Pick<DisposableStore, 'add
 	const services = new TestWorkbenchServices();
 	owner?.add(services);
 	const resources = services.resources;
+	services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));
 	services.registerSingleton(IProgressService, () => new BrowserProgressService(document.createElement('div')));
 	const uriIdentityServices = resources.add(new TestUriIdentityServices());
 	services.registerInstance(IUriIdentityService, uriIdentityServices.get(IUriIdentityService));

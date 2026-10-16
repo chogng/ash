@@ -197,7 +197,7 @@ AccessibleViewRegistry.register({
 			}, AccessibilityVerbositySettingId.Scm);
 		}
 		return new AccessibleContentProvider(AccessibleViewProviderId.Scm, { type: AccessibleViewType.Help },
-			() => localize('scm.welcome.help', 'Source control has no repositories yet. Open a folder or use the repository actions supplied by an extension. Use Tab and Shift+Tab to move between the available buttons. Press Enter or Space to run an action. Once a repository is available, this view shows its changes.'),
+			() => localize('scm.welcome.help', 'Source control has no repositories yet. Repository detection may still be running or may have failed. If detection fails, use Retry Repository Detection to scan again. Open a folder or use the repository actions supplied by an extension. Use Tab and Shift+Tab to move between the available buttons. Press Enter or Space to run an action. Once a repository is available, this view shows its changes.'),
 			() => restoreFocus(focused), AccessibilityVerbositySettingId.Scm);
 	},
 });

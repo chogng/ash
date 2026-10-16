@@ -1,8 +1,15 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
+import { mock } from 'node:test';
+import { readFile } from 'node:fs/promises';
+import { CommandRegistry } from '../../../../platform/commands/common/commands.js';
+import { ContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
+import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { DeferredPromise } from '../../../../base/common/async.js';
 import { URI } from '../../../../base/common/uri.js';
+import { CancellationToken } from '../../../../base/common/cancellation.js';
 import type { ICommandService } from '../../../../platform/commands/common/commands.js';
 import type { ExtensionHostFleetSnapshot, IExtensionHostApi, JsonValue } from '../../../../platform/agentHost/common/extensionHostApi.js';
 import { SCMService } from '../../../contrib/scm/common/scmService.js';
@@ -23,9 +30,11 @@ function fixture(invoke: IExtensionHostApi['invoke'], providers?: JsonValue[]) {
 	const quickDiff = lifetime.add(new QuickDiffService()); const resolvers = lifetime.add(new MultiDiffSourceResolverService());
 	const decorationProviders = new Set<IDecorationsProvider>(); const errors: unknown[] = [];
 	const decorations = { registerDecorationsProvider(value: IDecorationsProvider) { decorationProviders.add(value); return { dispose: () => decorationProviders.delete(value) }; } } as unknown as IDecorationsService;
-	const bridge = lifetime.add(new MainThreadSCM(10_000, error => errors.push(error), { invoke } as IExtensionHostApi, scm, view, {} as ICommandService, resolvers, quickDiff, decorations));
+	const contexts = lifetime.add(new ContextKeyService());
+	const commands = new CommandRegistry();
+	const bridge = lifetime.add(new MainThreadSCM(10_000, error => errors.push(error), commands, { invoke } as IExtensionHostApi, scm, view, {} as ICommandService, resolvers, quickDiff, decorations, contexts));
 	bridge.update(fleet(providers));
-	return { lifetime, scm, view, bridge, decorationProviders, errors };
+	return { lifetime, scm, view, bridge, decorationProviders, errors, contexts, commands };
 }
 
 test('SCM resource groups survive input-only snapshots and retire changed resources', () => {
@@ -245,4 +254,156 @@ test('SCM status command availability survives the extension bridge', async () =
 	value.bridge.set(source, 'ash.scm', 2, [{ ...snapshot, statusBarCommands: [{ ...command, enabled: true }] }]);
 	await statusCommands()[0]?.run?.();
 	assert.ok(calls.some(call => typeof call === 'object' && call !== null && 'method' in call && call.method === 'statusBar' && call.commandId === 'git.sync'));
+});
+
+const settleCallbacks = (): Promise<void> => new Promise(resolve => setImmediate(resolve));
+
+test('SCM decoration bursts leave invocation slots available for refresh and return every result', async () => {
+	const pending: DeferredPromise<JsonValue>[] = [];
+	let active = 0;
+	let maximum = 0;
+	let refreshes = 0;
+	const value = fixture(async request => {
+		const method = (request.payload as { method: string; }).method;
+		if (method === 'refresh') refreshes++;
+		if (method !== 'decoration') return null;
+		active++;
+		maximum = Math.max(maximum, active);
+		const completion = new DeferredPromise<JsonValue>();
+		pending.push(completion);
+		try { return await completion.p; }
+		finally { active--; }
+	});
+	using cleanup = value.lifetime;
+	const decorationProvider = [...value.decorationProviders][0]!;
+	const queries = Array.from({ length: 80 }, (_, index) => decorationProvider.provideDecorations(URI.file(`/workspace/file-${index}`), CancellationToken.None));
+	await value.scm.getRepository('repo')!.provider.refresh();
+	assert.equal(refreshes, 1);
+	assert.equal(pending.length, 4);
+	for (let completed = 0; completed < queries.length;) {
+		const batch = pending.splice(0);
+		assert.ok(batch.length > 0);
+		for (const completion of batch) completion.complete(null);
+		await Promise.all(queries.slice(completed, completed + batch.length));
+		completed += batch.length;
+	}
+	assert.equal(maximum, 4);
+	assert.equal(active, 0);
+	assert.deepEqual(await Promise.all(queries), Array(80).fill(undefined));
+	assert.deepEqual(value.errors, []);
+});
+
+test('SCM skips cancelled queued decoration queries and retiring a registration cannot send them', async () => {
+	const pending: DeferredPromise<JsonValue>[] = [];
+	let requests = 0;
+	const value = fixture(async request => {
+		if ((request.payload as { method: string; }).method !== 'decoration') return null;
+		requests++;
+		const completion = new DeferredPromise<JsonValue>();
+		pending.push(completion);
+		return completion.p;
+	});
+	using cleanup = value.lifetime;
+	const decorationProvider = [...value.decorationProviders][0]!;
+	const queries = Array.from({ length: 20 }, (_, index) => decorationProvider.provideDecorations(URI.file(`/workspace/file-${index}`), CancellationToken.None));
+	const results = Promise.allSettled(queries);
+	assert.equal(requests, 4);
+	value.bridge.update({ generation: 2, extensions: [] });
+	for (const completion of pending) completion.complete(null);
+	assert.ok((await results).every(result => result.status === 'rejected'));
+	assert.equal(requests, 4);
+	assert.notEqual(value.contexts.getValue('scm.providerState.ash.git'), 'ready');
+});
+
+test('SCM retries failed initialization and only reports an empty repository after successful discovery', async () => {
+	mock.timers.enable({ apis: ['setTimeout'] });
+	try {
+		let attempts = 0;
+		const value = fixture(async request => {
+			if ((request.payload as { method: string; }).method === 'initialize' && ++attempts < 3) throw new Error('Transient admission failure');
+			return null;
+		}, []);
+		using cleanup = value.lifetime;
+		const state = () => value.contexts.getValue('scm.providerState.ash.git');
+		await settleCallbacks();
+		assert.equal(state(), 'initializing');
+		assert.equal(attempts, 1);
+		mock.timers.tick(250);
+		await settleCallbacks();
+		assert.equal(state(), 'initializing');
+		assert.equal(attempts, 2);
+		mock.timers.tick(1000);
+		await settleCallbacks();
+		assert.equal(state(), 'ready');
+		assert.equal(attempts, 3);
+		assert.equal(value.errors.length, 2);
+		assert.deepEqual([...value.scm.repositories], []);
+	} finally { mock.timers.reset(); }
+});
+
+test('SCM initialization failure stays distinct from no repository and exposes a working retry command', async () => {
+	mock.timers.enable({ apis: ['setTimeout'] });
+	try {
+		let available = false;
+		let attempts = 0;
+		const value = fixture(async request => {
+			if ((request.payload as { method: string; }).method === 'initialize') {
+				attempts++;
+				if (!available) throw new Error('Provider unavailable');
+			}
+			return null;
+		}, []);
+		using cleanup = value.lifetime;
+		await settleCallbacks();
+		mock.timers.tick(250);
+		await settleCallbacks();
+		mock.timers.tick(1000);
+		await settleCallbacks();
+		assert.equal(value.contexts.getValue('scm.providerState.ash.git'), 'failed');
+		assert.equal(attempts, 3);
+		available = true;
+		const retry = value.commands.getCommand('workbench.scm.action.retryInitialization')!;
+		await retry({} as ServicesAccessor);
+		assert.equal(value.contexts.getValue('scm.providerState.ash.git'), 'ready');
+		assert.equal(attempts, 4);
+	} finally { mock.timers.reset(); }
+});
+
+test('SCM retiring an initializer cancels delayed retries and cannot overwrite its replacement state', async () => {
+	mock.timers.enable({ apis: ['setTimeout'] });
+	try {
+		let attempts = 0;
+		const value = fixture(async () => { attempts++; throw new Error('Transient failure'); }, []);
+		using cleanup = value.lifetime;
+		await settleCallbacks();
+		value.bridge.update({ generation: 2, extensions: [] });
+		mock.timers.tick(5000);
+		await settleCallbacks();
+		assert.equal(attempts, 1);
+		assert.notEqual(value.contexts.getValue('scm.providerState.ash.git'), 'failed');
+	} finally { mock.timers.reset(); }
+});
+
+test('Git welcome predicates distinguish scanning, failure, disconnected and confirmed empty states in English and Chinese', async () => {
+	const root = process.cwd();
+	const manifest = JSON.parse(await readFile(`${root}/extensions/git/package.json`, 'utf8'));
+	using contexts = new ContextKeyService();
+	const folders = contexts.createKey<number>('workspaceFolderCount', 1);
+	const connected = contexts.createKey<boolean>('appServerAvailable', true);
+	const state = contexts.createKey<string>('scm.providerState.ash.git', 'initializing');
+	const visible = () => manifest.contributes.viewsWelcome.filter((entry: { when: string; }) => ContextKeyExpr.deserialize(entry.when)!.evaluate(contexts)).map((entry: { contents: string; }) => entry.contents);
+	for (const locale of ['package.nls.json', 'package.nls.zh-CN.json']) {
+		const messages = JSON.parse(await readFile(`${root}/extensions/git/${locale}`, 'utf8'));
+		for (const [status, key] of [['initializing', 'initializing'], ['failed', 'failed'], ['ready', 'noRepository']]) {
+			state.set(status!);
+			const content = visible().join('\n').replace(/%([^%]+)%/g, (_: string, key: string) => messages[key]);
+			assert.ok(content.includes(messages[`git.welcome.${key}`]));
+			assert.equal(content.includes(messages['git.welcome.initialize']), status === 'ready');
+			assert.equal(content.includes(messages['git.welcome.retry']), status === 'failed');
+		}
+	}
+	connected.set(false);
+	assert.deepEqual(visible(), ['%git.welcome.unavailable%']);
+	folders.set(0);
+	assert.ok(!visible().some((content: string) => /noRepository|failed|initializing|unavailable/.test(content)));
 });

@@ -50,7 +50,7 @@
     "view.welcome": "欢迎",
     "view.welcome.actionFailed": "无法完成操作：{0}",
     "scm.welcome.noProviders": "未注册源代码管理提供程序。",
-    "scm.welcome.help": "源代码管理尚无仓库。打开文件夹，或使用扩展提供的仓库操作。按 Tab 和 Shift+Tab 在可用按钮之间移动，按 Enter 或空格执行操作。仓库可用后，此视图将显示其更改。",
+    "scm.welcome.help": "源代码管理尚无仓库。仓库检测可能仍在运行，也可能已失败。如果检测失败，请使用“重试仓库检测”重新扫描。打开文件夹，或使用扩展提供的仓库操作。按 Tab 和 Shift+Tab 在可用按钮之间移动，按 Enter 或空格执行操作。仓库可用后，此视图将显示其更改。",
     "scm.welcome.helpHint": "按 Alt+F1 获取无障碍帮助。",
     "scm.welcome.verbosityInvalid": "源代码管理无障碍详细程度必须为布尔值。",
     "scm.welcome.verbosityTitle": "源代码管理无障碍帮助",

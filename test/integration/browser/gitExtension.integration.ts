@@ -1,8 +1,9 @@
+import { ViewsRegistry } from '../../../src/ash/workbench/common/views.js';
 import { BrowserProgressService } from '../../../src/ash/platform/progress/browser/progressService.js';
 import { RustGitHostFixture } from './rustGitHostFixture.js';
 import '../../../src/ash/workbench/browser/parts/editor/editor.contribution.js';
 import { MenuId, MenusRegistry } from '../../../src/ash/platform/actions/common/actions.js';
-import { ContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
+import { ContextKeyService, IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { setIconResolver } from '../../../src/ash/base/browser/ui/lxicons/lxicon.js';
 import { getIconDefinition } from '../../../src/ash/platform/theme/common/iconRegistry.js';
 import '../../../src/ash/editor/browser/widget/diffEditor/registrations.contribution.js';
@@ -225,7 +226,9 @@ const quickDiff = lifetime.add(new QuickDiffService());
 const resolvers = lifetime.add(new MultiDiffSourceResolverService());
 const commands = { executeCommand: async (id: string, ...args: unknown[]) => invoke(id, args) } as unknown as ICommandService;
 const decorationProviders = new Set<IDecorationsProvider>();
-const bridge = lifetime.add(new MainThreadSCM(10_000, error => errors.push(String(error)), host, scm, view, commands, resolvers, quickDiff, { registerDecorationsProvider: (provider: IDecorationsProvider) => { decorationProviders.add(provider); return toDisposable(() => { decorationProviders.delete(provider); }); } } as unknown as IDecorationsService));
+const scmContexts = lifetime.add(new ContextKeyService());
+services.registerInstance(IContextKeyService, scmContexts);
+const bridge = lifetime.add(new MainThreadSCM(10_000, error => errors.push(String(error)), CommandsRegistry, host, scm, view, commands, resolvers, quickDiff, { registerDecorationsProvider: (provider: IDecorationsProvider) => { decorationProviders.add(provider); return toDisposable(() => { decorationProviders.delete(provider); }); } } as unknown as IDecorationsService, scmContexts));
 const hostChanges = host.onDidChange(() => { void host.list().then(snapshot => bridge.update(snapshot)); });
 lifetime.add(toDisposable(() => hostChanges.dispose()));
 let scmUpdateGate: DeferredPromise<void> | undefined;
@@ -344,6 +347,19 @@ declare global { interface Window { gitPresentationIntegration: typeof presentat
 window.gitPresentationIntegration = presentationIntegration;
 
 const startupIntegration = {
+	failInitialization: (count: number) => { host.initializationFailures = count; },
+	mountWelcome: (locale: 'en' | 'zh-cn') => {
+		scmContexts.setContext('workspaceFolderCount', 1);
+		scmContexts.setContext('appServerAvailable', true);
+		const messages = locale === 'zh-cn' ? gitChineseMessages : gitEnglishMessages;
+		for (const entry of gitManifest.contributes.viewsWelcome) {
+			lifetime.add(ViewsRegistry.registerViewWelcomeContent(entry.view, {
+				content: entry.contents.replace(/%([^%]+)%/g, (_, key) => (messages as Record<string, string>)[key] ?? key),
+				when: ContextKeyExpr.deserialize(entry.when),
+			}));
+		}
+		mountChangesPane('ash.gitView');
+	},
 	hold: () => { startupStateGate = new DeferredPromise<void>(); startupDiscoveryGate = new DeferredPromise<void>(); startupStatusGate = new DeferredPromise<void>(); },
 	releaseState: () => { const gate = startupStateGate; startupStateGate = undefined; void gate?.complete(); },
 	releaseDiscovery: () => { const gate = startupDiscoveryGate; startupDiscoveryGate = undefined; void gate?.complete(); },
@@ -434,13 +450,13 @@ window.gitSettingsIntegration = gitSettingsIntegration;
 
 let scmPaneTheme: TestThemeService | undefined;
 let scmPaneLayout: { readonly host: HTMLElement; readonly panes: PaneView; } | undefined;
-function mountChangesPane(): void {
+function mountChangesPane(viewId = 'fixture.changes'): void {
 	const host = document.createElement('div');
 	host.id = 'scm-pane';
 	host.style.cssText = 'width:320px;height:480px';
 	document.body.append(host);
 	lifetime.add(toDisposable(() => host.remove()));
-	const ui = lifetime.add(createTestEditorServices());
+	const ui = lifetime.add(createTestEditorServices(undefined, viewId === 'ash.gitView' ? services : undefined));
 	registerCodeEditorServices(ui);
 	scmPaneTheme = ui.get(IThemeService) as TestThemeService;
 	lifetime.add(bindColorTheme(ui.get(IThemeService), host));
@@ -448,7 +464,7 @@ function mountChangesPane(): void {
 	ui.registerInstance(ISCMViewService, view);
 	const panes = lifetime.add(new PaneView(host));
 	scmPaneLayout = { host, panes };
-	const changes = lifetime.add(ui.createInstance(ScmViewPane, host, { id: 'fixture.changes', title: 'Changes' }));
+	const changes = lifetime.add(ui.createInstance(ScmViewPane, host, { id: viewId, title: 'Changes' }));
 	panes.addPane(changes, 424);
 	panes.addPane(lifetime.add(new Pane(host, { id: 'fixture.review', title: 'Agent Review', collapsed: true })), 28);
 	panes.addPane(lifetime.add(new Pane(host, { id: 'fixture.graph', title: 'Graph', collapsed: true })), 28);
