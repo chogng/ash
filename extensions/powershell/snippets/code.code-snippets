@@ -1,0 +1,11 @@
+{
+  "function": {
+    "prefix": "function",
+    "body": [
+      "function ${1:Get-Value} {",
+      "\tparam(${2})",
+      "\t$0",
+      "}"
+    ]
+  }
+}

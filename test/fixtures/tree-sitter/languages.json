@@ -194,5 +194,75 @@
     "lexeme": "build",
     "capture": "keyword",
     "tokenType": "keyword"
+  },
+  {
+    "language": "c",
+    "text": "int greet(void) { return 42; }",
+    "lexeme": "return",
+    "capture": "keyword",
+    "tokenType": "keyword"
+  },
+  {
+    "language": "cpp",
+    "text": "class Greeter { public: int greet() { return 42; } };",
+    "lexeme": "class",
+    "capture": "keyword",
+    "tokenType": "keyword"
+  },
+  {
+    "language": "java",
+    "text": "class Greeter { int greet() { return 42; } }",
+    "lexeme": "class",
+    "capture": "keyword",
+    "tokenType": "keyword"
+  },
+  {
+    "language": "csharp",
+    "text": "class Greeter { int Greet() { return 42; } }",
+    "lexeme": "class",
+    "capture": "keyword",
+    "tokenType": "keyword"
+  },
+  {
+    "language": "powershell",
+    "text": "function Get-Greeting {\n    return \"你好🙂\"\n}\n",
+    "lexeme": "function",
+    "capture": "keyword",
+    "tokenType": "keyword"
+  },
+  {
+    "language": "bat",
+    "text": "@echo off\r\nREM 你好🙂\r\nset NAME=world\r\n",
+    "lexeme": "REM",
+    "capture": "comment",
+    "tokenType": "comment"
+  },
+  {
+    "language": "dockerfile",
+    "text": "FROM alpine:3.22\nRUN echo \"你好🙂\"\n",
+    "lexeme": "FROM",
+    "capture": "keyword",
+    "tokenType": "keyword"
+  },
+  {
+    "language": "makefile",
+    "text": "# 你好🙂\nall:\n\t@echo hello\n",
+    "lexeme": "# 你好",
+    "capture": "comment",
+    "tokenType": "comment"
+  },
+  {
+    "language": "dotenv",
+    "text": "# 你好🙂\nNAME=\"hello world\"\nPORT=3000\n",
+    "lexeme": "# 你好",
+    "capture": "comment",
+    "tokenType": "comment"
+  },
+  {
+    "language": "dockercompose",
+    "text": "services:\n  app:\n    image: \"alpine:3.22\"\n",
+    "lexeme": "alpine:3.22",
+    "capture": "string",
+    "tokenType": "string"
   }
 ]

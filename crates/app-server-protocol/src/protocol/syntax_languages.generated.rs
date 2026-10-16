@@ -4,10 +4,18 @@
 /// Grammar supported by the authoritative syntax-analysis service.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 pub enum SyntaxLanguageDto {
+    #[serde(rename = "bat")]
+    Bat,
     #[serde(rename = "starlark")]
     Starlark,
     #[serde(rename = "bazelrc")]
     Bazelrc,
+    #[serde(rename = "c")]
+    C,
+    #[serde(rename = "cpp")]
+    Cpp,
+    #[serde(rename = "csharp")]
+    Csharp,
     #[serde(rename = "css")]
     Css,
     #[serde(rename = "scss")]
@@ -16,6 +24,10 @@ pub enum SyntaxLanguageDto {
     Less,
     #[serde(rename = "diff")]
     Diff,
+    #[serde(rename = "dockerfile")]
+    Dockerfile,
+    #[serde(rename = "dotenv")]
+    Dotenv,
     #[serde(rename = "gitcommit")]
     Gitcommit,
     #[serde(rename = "gitrebase")]
@@ -30,6 +42,8 @@ pub enum SyntaxLanguageDto {
     Ini,
     #[serde(rename = "properties")]
     Properties,
+    #[serde(rename = "java")]
+    Java,
     #[serde(rename = "javascript")]
     Javascript,
     #[serde(rename = "javascriptreact")]
@@ -38,10 +52,14 @@ pub enum SyntaxLanguageDto {
     Json,
     #[serde(rename = "jsonc")]
     Jsonc,
+    #[serde(rename = "makefile")]
+    Makefile,
     #[serde(rename = "markdown")]
     Markdown,
     #[serde(rename = "markdown_inline")]
     MarkdownInline,
+    #[serde(rename = "powershell")]
+    Powershell,
     #[serde(rename = "python")]
     Python,
     #[serde(rename = "rust")]
@@ -60,6 +78,8 @@ pub enum SyntaxLanguageDto {
     Xml,
     #[serde(rename = "dtd")]
     Dtd,
+    #[serde(rename = "dockercompose")]
+    Dockercompose,
     #[serde(rename = "yaml")]
     Yaml,
 }

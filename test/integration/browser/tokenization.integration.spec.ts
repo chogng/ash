@@ -59,6 +59,27 @@ test('Bazel files select Starlark or bazelrc and tokenize through the bundled gr
 	expect((await page.evaluate(() => window.tokenizationIntegration.state())).errors).toEqual([]);
 });
 
+test('common project languages resolve from file names and paint bundled syntax', async ({ page }) => {
+	const samples = [
+		['main.c', 'c', 'int main(void) { return 0; }', 'return', 'keyword'],
+		['header.h', 'cpp', 'class Greeter {};', 'class', 'keyword'],
+		['Main.java', 'java', 'class Main {}', 'class', 'keyword'],
+		['Program.cs', 'csharp', 'class Program {}', 'class', 'keyword'],
+		['build.ps1', 'powershell', 'function Build { return 42 }', 'function', 'keyword'],
+		['build.cmd', 'bat', 'REM Build\r\necho hello\r\n', 'REM', 'comment'],
+		['Dockerfile.dev', 'dockerfile', 'FROM alpine:3.22\n', 'FROM', 'keyword'],
+		['Makefile', 'makefile', '# Build\nall:\n\t@echo hello\n', '# Build', 'comment'],
+		['.env.local', 'dotenv', '# Settings\nNAME=hello\n', '# Settings', 'comment'],
+		['compose.dev.yaml', 'dockercompose', 'services:\n  app:\n    image: "alpine:3.22"\n', 'alpine:3.22', 'string'],
+	] as const;
+	for (const [filename, languageId, text, lexeme, type] of samples) {
+		const actual = await page.evaluate(({ filename, text }) => window.tokenizationIntegration.openResource(`/project/${filename}`, text), { filename, text });
+		expect(actual, filename).toBe(languageId);
+		await expect.poll(() => page.evaluate(({ type, lexeme }) => window.tokenizationIntegration.state().tokens.some(token => token.type === type && token.text.includes(lexeme)), { type, lexeme }), { message: filename }).toBe(true);
+	}
+	expect(await page.evaluate(() => window.tokenizationIntegration.state().errors)).toEqual([]);
+});
+
 test('Git files select their bundled languages and tokenize through shared line support', async ({ page }) => {
 	const samples = [
 		['.gitignore', 'ignore', '# generated\n!keep.log\n**/*.log\nfile[0-9]?.txt', 'operator', '!'],

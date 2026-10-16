@@ -1,0 +1,11 @@
+{
+  "script": {
+    "prefix": "script",
+    "body": [
+      "@echo off",
+      "setlocal",
+      "$0",
+      "endlocal"
+    ]
+  }
+}

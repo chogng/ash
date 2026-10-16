@@ -3,12 +3,18 @@
 
 #[cfg(test)]
 const TEST_LANGUAGES: &[SyntaxLanguage] = &[
+    SyntaxLanguage::Bat,
     SyntaxLanguage::Starlark,
     SyntaxLanguage::Bazelrc,
+    SyntaxLanguage::C,
+    SyntaxLanguage::Cpp,
+    SyntaxLanguage::Csharp,
     SyntaxLanguage::Css,
     SyntaxLanguage::Scss,
     SyntaxLanguage::Less,
     SyntaxLanguage::Diff,
+    SyntaxLanguage::Dockerfile,
+    SyntaxLanguage::Dotenv,
     SyntaxLanguage::Gitcommit,
     SyntaxLanguage::Gitrebase,
     SyntaxLanguage::Gitignore,
@@ -16,12 +22,15 @@ const TEST_LANGUAGES: &[SyntaxLanguage] = &[
     SyntaxLanguage::Html,
     SyntaxLanguage::Ini,
     SyntaxLanguage::Properties,
+    SyntaxLanguage::Java,
     SyntaxLanguage::Javascript,
     SyntaxLanguage::Javascriptreact,
     SyntaxLanguage::Json,
     SyntaxLanguage::Jsonc,
+    SyntaxLanguage::Makefile,
     SyntaxLanguage::Markdown,
     SyntaxLanguage::MarkdownInline,
+    SyntaxLanguage::Powershell,
     SyntaxLanguage::Python,
     SyntaxLanguage::Rust,
     SyntaxLanguage::Shell,
@@ -31,17 +40,24 @@ const TEST_LANGUAGES: &[SyntaxLanguage] = &[
     SyntaxLanguage::Typescriptreact,
     SyntaxLanguage::Xml,
     SyntaxLanguage::Dtd,
+    SyntaxLanguage::Dockercompose,
     SyntaxLanguage::Yaml,
 ];
 /// Source language selected from the built-in language packages.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum SyntaxLanguage {
+    Bat,
     Starlark,
     Bazelrc,
+    C,
+    Cpp,
+    Csharp,
     Css,
     Scss,
     Less,
     Diff,
+    Dockerfile,
+    Dotenv,
     Gitcommit,
     Gitrebase,
     Gitignore,
@@ -49,12 +65,15 @@ pub enum SyntaxLanguage {
     Html,
     Ini,
     Properties,
+    Java,
     Javascript,
     Javascriptreact,
     Json,
     Jsonc,
+    Makefile,
     Markdown,
     MarkdownInline,
+    Powershell,
     Python,
     Rust,
     Shell,
@@ -64,6 +83,7 @@ pub enum SyntaxLanguage {
     Typescriptreact,
     Xml,
     Dtd,
+    Dockercompose,
     Yaml,
 }
 
@@ -71,12 +91,18 @@ impl SyntaxLanguage {
     /// Select parser support independently of the source language's identity.
     pub fn for_language(language: &ash_language::LanguageId) -> Option<Self> {
         match language.as_str() {
+            "bat" => Some(Self::Bat),
             "starlark" => Some(Self::Starlark),
             "bazelrc" => Some(Self::Bazelrc),
+            "c" => Some(Self::C),
+            "cpp" => Some(Self::Cpp),
+            "csharp" => Some(Self::Csharp),
             "css" => Some(Self::Css),
             "scss" => Some(Self::Scss),
             "less" => Some(Self::Less),
             "diff" => Some(Self::Diff),
+            "dockerfile" => Some(Self::Dockerfile),
+            "dotenv" => Some(Self::Dotenv),
             "git-commit" => Some(Self::Gitcommit),
             "git-rebase" => Some(Self::Gitrebase),
             "ignore" => Some(Self::Gitignore),
@@ -84,11 +110,14 @@ impl SyntaxLanguage {
             "html" => Some(Self::Html),
             "ini" => Some(Self::Ini),
             "properties" => Some(Self::Properties),
+            "java" => Some(Self::Java),
             "javascript" => Some(Self::Javascript),
             "javascriptreact" | "jsx-tags" => Some(Self::Javascriptreact),
             "json" => Some(Self::Json),
             "jsonc" => Some(Self::Jsonc),
+            "makefile" => Some(Self::Makefile),
             "markdown" => Some(Self::Markdown),
+            "powershell" => Some(Self::Powershell),
             "python" => Some(Self::Python),
             "rust" => Some(Self::Rust),
             "shellscript" => Some(Self::Shell),
@@ -98,6 +127,7 @@ impl SyntaxLanguage {
             "typescriptreact" => Some(Self::Typescriptreact),
             "xml" | "xsl" => Some(Self::Xml),
             "dtd" => Some(Self::Dtd),
+            "dockercompose" => Some(Self::Dockercompose),
             "yaml" => Some(Self::Yaml),
             _ => None,
         }
@@ -105,12 +135,18 @@ impl SyntaxLanguage {
 
     pub const fn id(self) -> &'static str {
         match self {
+            Self::Bat => "bat",
             Self::Starlark => "starlark",
             Self::Bazelrc => "bazelrc",
+            Self::C => "c",
+            Self::Cpp => "cpp",
+            Self::Csharp => "csharp",
             Self::Css => "css",
             Self::Scss => "scss",
             Self::Less => "less",
             Self::Diff => "diff",
+            Self::Dockerfile => "dockerfile",
+            Self::Dotenv => "dotenv",
             Self::Gitcommit => "gitcommit",
             Self::Gitrebase => "gitrebase",
             Self::Gitignore => "gitignore",
@@ -118,12 +154,15 @@ impl SyntaxLanguage {
             Self::Html => "html",
             Self::Ini => "ini",
             Self::Properties => "properties",
+            Self::Java => "java",
             Self::Javascript => "javascript",
             Self::Javascriptreact => "javascriptreact",
             Self::Json => "json",
             Self::Jsonc => "jsonc",
+            Self::Makefile => "makefile",
             Self::Markdown => "markdown",
             Self::MarkdownInline => "markdown_inline",
+            Self::Powershell => "powershell",
             Self::Python => "python",
             Self::Rust => "rust",
             Self::Shell => "shell",
@@ -133,18 +172,25 @@ impl SyntaxLanguage {
             Self::Typescriptreact => "typescriptreact",
             Self::Xml => "xml",
             Self::Dtd => "dtd",
+            Self::Dockercompose => "dockercompose",
             Self::Yaml => "yaml",
         }
     }
 
     pub(crate) fn editor_id(self) -> &'static str {
         match self {
+            Self::Bat => "bat",
             Self::Starlark => "starlark",
             Self::Bazelrc => "bazelrc",
+            Self::C => "c",
+            Self::Cpp => "cpp",
+            Self::Csharp => "csharp",
             Self::Css => "css",
             Self::Scss => "scss",
             Self::Less => "less",
             Self::Diff => "diff",
+            Self::Dockerfile => "dockerfile",
+            Self::Dotenv => "dotenv",
             Self::Gitcommit => "git-commit",
             Self::Gitrebase => "git-rebase",
             Self::Gitignore => "ignore",
@@ -152,12 +198,15 @@ impl SyntaxLanguage {
             Self::Html => "html",
             Self::Ini => "ini",
             Self::Properties => "properties",
+            Self::Java => "java",
             Self::Javascript => "javascript",
             Self::Javascriptreact => "javascriptreact",
             Self::Json => "json",
             Self::Jsonc => "jsonc",
+            Self::Makefile => "makefile",
             Self::Markdown => "markdown",
             Self::MarkdownInline => "markdown",
+            Self::Powershell => "powershell",
             Self::Python => "python",
             Self::Rust => "rust",
             Self::Shell => "shellscript",
@@ -167,6 +216,7 @@ impl SyntaxLanguage {
             Self::Typescriptreact => "typescriptreact",
             Self::Xml => "xml",
             Self::Dtd => "dtd",
+            Self::Dockercompose => "dockercompose",
             Self::Yaml => "yaml",
         }
     }
@@ -178,12 +228,18 @@ impl SyntaxLanguage {
             .to_ascii_lowercase()
             .as_str()
         {
+            "bat" | "batch" | "cmd" => Some(Self::Bat),
             "starlark" => Some(Self::Starlark),
             "bazelrc" => Some(Self::Bazelrc),
+            "c" => Some(Self::C),
+            "cpp" | "c++" | "cxx" => Some(Self::Cpp),
+            "csharp" | "cs" | "c-sharp" | "c#" => Some(Self::Csharp),
             "css" => Some(Self::Css),
             "scss" => Some(Self::Scss),
             "less" => Some(Self::Less),
             "diff" => Some(Self::Diff),
+            "dockerfile" | "docker" | "containerfile" => Some(Self::Dockerfile),
+            "dotenv" | "env" => Some(Self::Dotenv),
             "gitcommit" | "git-commit" | "commit_editmsg" => Some(Self::Gitcommit),
             "gitrebase" | "git-rebase" | "git_rebase" | "git-rebase-todo" => Some(Self::Gitrebase),
             "gitignore" | "ignore" => Some(Self::Gitignore),
@@ -191,12 +247,15 @@ impl SyntaxLanguage {
             "html" => Some(Self::Html),
             "ini" => Some(Self::Ini),
             "properties" => Some(Self::Properties),
+            "java" => Some(Self::Java),
             "javascript" | "js" => Some(Self::Javascript),
             "javascriptreact" | "jsx-tags" | "jsx" => Some(Self::Javascriptreact),
             "json" => Some(Self::Json),
             "jsonc" => Some(Self::Jsonc),
+            "makefile" | "make" => Some(Self::Makefile),
             "markdown" | "md" => Some(Self::Markdown),
             "markdown_inline" | "markdown-inline" => Some(Self::MarkdownInline),
+            "powershell" | "ps1" | "pwsh" => Some(Self::Powershell),
             "python" | "py" => Some(Self::Python),
             "rust" | "rs" => Some(Self::Rust),
             "shell" | "shellscript" | "bash" | "sh" => Some(Self::Shell),
@@ -206,6 +265,7 @@ impl SyntaxLanguage {
             "typescriptreact" | "tsx" => Some(Self::Typescriptreact),
             "xml" | "xsl" | "xslt" => Some(Self::Xml),
             "dtd" => Some(Self::Dtd),
+            "dockercompose" | "compose" => Some(Self::Dockercompose),
             "yaml" => Some(Self::Yaml),
             _ => None,
         }
@@ -214,6 +274,16 @@ impl SyntaxLanguage {
 
 fn definition(language: SyntaxLanguage) -> LanguageDefinition {
     match language {
+        SyntaxLanguage::Bat => LanguageDefinition {
+            language: tree_sitter_batch::LANGUAGE.into(),
+            highlights: concat!(include_str!("../../../extensions/bat/queries/batch.scm")),
+            tags: &[""],
+            editor_highlights: concat!(include_str!("../../../extensions/bat/queries/batch.scm")),
+            injections: "",
+            folds: concat!(include_str!(
+                "../../../extensions/bat/queries/batch.folds.scm"
+            )),
+        },
         SyntaxLanguage::Starlark => LanguageDefinition {
             language: tree_sitter_starlark::LANGUAGE.into(),
             highlights: concat!(include_str!(
@@ -245,6 +315,52 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
             injections: "",
             folds: "",
+        },
+        SyntaxLanguage::C => LanguageDefinition {
+            language: tree_sitter_c::LANGUAGE.into(),
+            highlights: concat!(include_str!("../../../extensions/cpp/queries/c.scm")),
+            tags: &[concat!(include_str!(
+                "../../../extensions/cpp/queries/c.tags.scm"
+            ))],
+            editor_highlights: concat!(include_str!("../../../extensions/cpp/queries/c.scm")),
+            injections: "",
+            folds: concat!(include_str!("../../../extensions/cpp/queries/c.folds.scm")),
+        },
+        SyntaxLanguage::Cpp => LanguageDefinition {
+            language: tree_sitter_cpp::LANGUAGE.into(),
+            highlights: concat!(
+                include_str!("../../../extensions/cpp/queries/c.scm"),
+                "\n",
+                include_str!("../../../extensions/cpp/queries/cpp.scm")
+            ),
+            tags: &[concat!(include_str!(
+                "../../../extensions/cpp/queries/cpp.tags.scm"
+            ))],
+            editor_highlights: concat!(
+                include_str!("../../../extensions/cpp/queries/c.scm"),
+                "\n",
+                include_str!("../../../extensions/cpp/queries/cpp.scm")
+            ),
+            injections: "",
+            folds: concat!(include_str!(
+                "../../../extensions/cpp/queries/cpp.folds.scm"
+            )),
+        },
+        SyntaxLanguage::Csharp => LanguageDefinition {
+            language: tree_sitter_c_sharp::LANGUAGE.into(),
+            highlights: concat!(include_str!(
+                "../../../extensions/csharp/queries/csharp.scm"
+            )),
+            tags: &[concat!(include_str!(
+                "../../../extensions/csharp/queries/csharp.tags.scm"
+            ))],
+            editor_highlights: concat!(include_str!(
+                "../../../extensions/csharp/queries/csharp.scm"
+            )),
+            injections: "",
+            folds: concat!(include_str!(
+                "../../../extensions/csharp/queries/csharp.folds.scm"
+            )),
         },
         SyntaxLanguage::Css => LanguageDefinition {
             language: tree_sitter_css::LANGUAGE.into(),
@@ -315,6 +431,34 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             folds: concat!(include_str!(
                 "../../../extensions/diff/queries/diff.folds.scm"
             )),
+        },
+        SyntaxLanguage::Dockerfile => LanguageDefinition {
+            language: tree_sitter_containerfile::LANGUAGE.into(),
+            highlights: concat!(include_str!(
+                "../../../extensions/docker/queries/containerfile.scm"
+            )),
+            tags: &[""],
+            editor_highlights: concat!(include_str!(
+                "../../../extensions/docker/queries/containerfile.scm"
+            )),
+            injections: "",
+            folds: concat!(include_str!(
+                "../../../extensions/docker/queries/containerfile.folds.scm"
+            )),
+        },
+        SyntaxLanguage::Dotenv => LanguageDefinition {
+            language: tree_sitter_dotenv::LANGUAGE.into(),
+            highlights: concat!(include_str!(
+                "../../../extensions/dotenv/queries/dotenv.scm"
+            )),
+            tags: &[concat!(include_str!(
+                "../../../extensions/dotenv/queries/dotenv.tags.scm"
+            ))],
+            editor_highlights: concat!(include_str!(
+                "../../../extensions/dotenv/queries/dotenv.scm"
+            )),
+            injections: "",
+            folds: "",
         },
         SyntaxLanguage::Gitcommit => LanguageDefinition {
             language: tree_sitter_gitcommit::LANGUAGE.into(),
@@ -416,6 +560,18 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
                 "../../../extensions/ini/queries/properties.folds.scm"
             )),
         },
+        SyntaxLanguage::Java => LanguageDefinition {
+            language: tree_sitter_java::LANGUAGE.into(),
+            highlights: concat!(include_str!("../../../extensions/java/queries/java.scm")),
+            tags: &[concat!(include_str!(
+                "../../../extensions/java/queries/java.tags.scm"
+            ))],
+            editor_highlights: concat!(include_str!("../../../extensions/java/queries/java.scm")),
+            injections: "",
+            folds: concat!(include_str!(
+                "../../../extensions/java/queries/java.folds.scm"
+            )),
+        },
         SyntaxLanguage::Javascript => LanguageDefinition {
             language: tree_sitter_javascript::LANGUAGE.into(),
             highlights: tree_sitter_javascript::HIGHLIGHT_QUERY,
@@ -468,6 +624,16 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
                 "../../../extensions/json/queries/json.folds.scm"
             )),
         },
+        SyntaxLanguage::Makefile => LanguageDefinition {
+            language: tree_sitter_make::LANGUAGE.into(),
+            highlights: concat!(include_str!("../../../extensions/make/queries/make.scm")),
+            tags: &[""],
+            editor_highlights: concat!(include_str!("../../../extensions/make/queries/make.scm")),
+            injections: "",
+            folds: concat!(include_str!(
+                "../../../extensions/make/queries/make.folds.scm"
+            )),
+        },
         SyntaxLanguage::Markdown => LanguageDefinition {
             language: tree_sitter_md::LANGUAGE.into(),
             highlights: concat!(include_str!(
@@ -499,6 +665,22 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
                 "../../../extensions/markdown-basics/queries/markdown-inline.injections.scm"
             )),
             folds: "",
+        },
+        SyntaxLanguage::Powershell => LanguageDefinition {
+            language: tree_sitter_powershell::LANGUAGE.into(),
+            highlights: concat!(include_str!(
+                "../../../extensions/powershell/queries/powershell.scm"
+            )),
+            tags: &[concat!(include_str!(
+                "../../../extensions/powershell/queries/powershell.tags.scm"
+            ))],
+            editor_highlights: concat!(include_str!(
+                "../../../extensions/powershell/queries/powershell.scm"
+            )),
+            injections: "",
+            folds: concat!(include_str!(
+                "../../../extensions/powershell/queries/powershell.folds.scm"
+            )),
         },
         SyntaxLanguage::Python => LanguageDefinition {
             language: tree_sitter_python::LANGUAGE.into(),
@@ -624,6 +806,18 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             injections: "",
             folds: concat!(include_str!(
                 "../../../extensions/xml/queries/dtd.folds.scm"
+            )),
+        },
+        SyntaxLanguage::Dockercompose => LanguageDefinition {
+            language: tree_sitter_yaml::LANGUAGE.into(),
+            highlights: concat!(include_str!("../../../extensions/yaml/queries/yaml.scm")),
+            tags: &[concat!(include_str!(
+                "../../../extensions/yaml/queries/yaml.tags.scm"
+            ))],
+            editor_highlights: concat!(include_str!("../../../extensions/yaml/queries/yaml.scm")),
+            injections: "",
+            folds: concat!(include_str!(
+                "../../../extensions/yaml/queries/yaml.folds.scm"
             )),
         },
         SyntaxLanguage::Yaml => LanguageDefinition {

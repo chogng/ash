@@ -1,0 +1,30 @@
+[
+  {
+    "name": "containerfile",
+    "source": {
+      "crate": "tree-sitter-containerfile",
+      "version": "0.9.2",
+      "root": "."
+    },
+    "wasm": {
+      "path": "tree-sitter/containerfile.wasm",
+      "sha256": "eee380f5d51e0b14d1e792b125b2a91425f0e832ef5e62bc7713ae8488bb6d5d"
+    },
+    "highlights": ["queries/containerfile.scm"],
+    "tags": [],
+    "folds": ["queries/containerfile.folds.scm"],
+    "injections": [],
+    "rust": {
+      "language": "tree_sitter_containerfile::LANGUAGE"
+    },
+    "languages": [
+      {
+        "id": "dockerfile",
+        "variant": "Dockerfile",
+        "editorLanguage": "dockerfile",
+        "editorIds": ["dockerfile"],
+        "aliases": ["docker", "containerfile"]
+      }
+    ]
+  }
+]

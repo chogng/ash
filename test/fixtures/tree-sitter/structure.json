@@ -481,5 +481,127 @@
     ],
     "folds": [],
     "exactSymbols": true
+  },
+  {
+    "language": "c",
+    "text": "int greet(void) {\n  return 42;\n}\n",
+    "symbols": [
+      "greet"
+    ],
+    "folds": [
+      [
+        0,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "cpp",
+    "text": "class Greeter {\npublic:\n  int greet() { return 42; }\n};\n",
+    "symbols": [
+      "Greeter"
+    ],
+    "folds": [
+      [
+        0,
+        3
+      ]
+    ]
+  },
+  {
+    "language": "java",
+    "text": "class Greeter {\n  int greet() {\n    return 42;\n  }\n}\n",
+    "symbols": [
+      "Greeter",
+      "greet"
+    ],
+    "folds": [
+      [
+        0,
+        4
+      ],
+      [
+        1,
+        3
+      ]
+    ]
+  },
+  {
+    "language": "csharp",
+    "text": "class Greeter {\n  int Greet() {\n    return 42;\n  }\n}\n",
+    "symbols": [
+      "Greeter",
+      "Greet"
+    ],
+    "folds": [
+      [
+        0,
+        4
+      ],
+      [
+        1,
+        3
+      ]
+    ]
+  },
+  {
+    "language": "powershell",
+    "text": "function Get-Greeting {\n  return \"你好🙂\"\n}\n",
+    "symbols": [
+      "Get-Greeting"
+    ],
+    "folds": [
+      [
+        0,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "dockerfile",
+    "text": "FROM alpine:3.22\nRUN echo hello \\\n    && echo world\n",
+    "symbols": [],
+    "folds": [
+      [
+        1,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "makefile",
+    "text": "all:\n\t@echo hello\n\t@echo world\n",
+    "symbols": [],
+    "folds": [
+      [
+        0,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "dotenv",
+    "text": "NAME=\"你好🙂\"\nPORT=3000\n",
+    "symbols": [
+      "NAME",
+      "PORT"
+    ],
+    "folds": [],
+    "exactSymbols": true
+  },
+  {
+    "language": "dockercompose",
+    "text": "services:\n  app:\n    image: \"alpine:3.22\"\n",
+    "symbols": [
+      "services",
+      "app",
+      "image"
+    ],
+    "folds": [
+      [
+        0,
+        2
+      ]
+    ]
   }
 ]

@@ -1,25 +1,224 @@
 [
-  { "path": "src/main.ts", "language": "typescript" },
-  { "path": "src/view.tsx", "language": "typescriptreact" },
-  { "path": "package.json", "language": "json" },
-  { "path": "tsconfig.json", "language": "jsonc" },
-  { "path": "config/tsconfig.build.json", "language": "jsonc" },
-  { "path": "jsconfig-dev.json", "language": "jsonc" },
-  { "path": "src/main.py", "language": "python" },
-  { "path": "src/main.go", "language": "go" },
-  { "path": "Cargo.toml", "language": "toml" },
-  { "path": "README.MD", "language": "markdown" },
-  { "path": "C:\\project\\main.RS", "language": "rust" },
-  { "path": "/repo/.git/info/exclude", "language": "ignore" },
-  { "path": "/repo/.git/rebase-merge/done", "language": "git-rebase" },
-  { "path": ".bashrc", "language": "shellscript" },
-  { "path": "script", "firstLine": "#!/usr/bin/env python3", "language": "python" },
-  { "path": "script", "firstLine": "#!/usr/bin/env pythonΩ", "language": "python" },
-  { "path": "script", "firstLine": "﻿#!/usr/bin/env bash", "language": "shellscript" },
-  { "path": "script", "firstLine": "#!/usr/bin/env ts-node", "language": "typescript" },
-  { "path": "script", "firstLine": "prefix #!/usr/bin/env python3", "language": "plaintext" },
-  { "path": "document", "firstLine": "<?xml version=\"1.0\"?>", "language": "xml" },
-  { "path": "cloud", "firstLine": "#cloud-config", "language": "yaml" },
-  { "path": "script.rs", "firstLine": "#!/usr/bin/env python3", "language": "rust" },
-  { "path": "unknown.file", "language": "plaintext" }
+  {
+    "path": "src/main.ts",
+    "language": "typescript"
+  },
+  {
+    "path": "src/view.tsx",
+    "language": "typescriptreact"
+  },
+  {
+    "path": "package.json",
+    "language": "json"
+  },
+  {
+    "path": "tsconfig.json",
+    "language": "jsonc"
+  },
+  {
+    "path": "config/tsconfig.build.json",
+    "language": "jsonc"
+  },
+  {
+    "path": "jsconfig-dev.json",
+    "language": "jsonc"
+  },
+  {
+    "path": "src/main.py",
+    "language": "python"
+  },
+  {
+    "path": "src/main.go",
+    "language": "go"
+  },
+  {
+    "path": "Cargo.toml",
+    "language": "toml"
+  },
+  {
+    "path": "README.MD",
+    "language": "markdown"
+  },
+  {
+    "path": "C:\\project\\main.RS",
+    "language": "rust"
+  },
+  {
+    "path": "/repo/.git/info/exclude",
+    "language": "ignore"
+  },
+  {
+    "path": "/repo/.git/rebase-merge/done",
+    "language": "git-rebase"
+  },
+  {
+    "path": ".bashrc",
+    "language": "shellscript"
+  },
+  {
+    "path": "script",
+    "firstLine": "#!/usr/bin/env python3",
+    "language": "python"
+  },
+  {
+    "path": "script",
+    "firstLine": "#!/usr/bin/env pythonΩ",
+    "language": "python"
+  },
+  {
+    "path": "script",
+    "firstLine": "﻿#!/usr/bin/env bash",
+    "language": "shellscript"
+  },
+  {
+    "path": "script",
+    "firstLine": "#!/usr/bin/env ts-node",
+    "language": "typescript"
+  },
+  {
+    "path": "script",
+    "firstLine": "prefix #!/usr/bin/env python3",
+    "language": "plaintext"
+  },
+  {
+    "path": "document",
+    "firstLine": "<?xml version=\"1.0\"?>",
+    "language": "xml"
+  },
+  {
+    "path": "cloud",
+    "firstLine": "#cloud-config",
+    "language": "yaml"
+  },
+  {
+    "path": "script.rs",
+    "firstLine": "#!/usr/bin/env python3",
+    "language": "rust"
+  },
+  {
+    "path": "unknown.file",
+    "language": "plaintext"
+  },
+  {
+    "path": "main.c",
+    "language": "c"
+  },
+  {
+    "path": "header.h",
+    "language": "cpp"
+  },
+  {
+    "path": "main.cpp",
+    "language": "cpp"
+  },
+  {
+    "path": "module.cppm",
+    "language": "cpp"
+  },
+  {
+    "path": "config.hpp.in",
+    "language": "cpp"
+  },
+  {
+    "path": "Main.java",
+    "language": "java"
+  },
+  {
+    "path": "Program.cs",
+    "language": "csharp"
+  },
+  {
+    "path": "script.csx",
+    "language": "csharp"
+  },
+  {
+    "path": "profile.ps1",
+    "language": "powershell"
+  },
+  {
+    "path": "module.psm1",
+    "language": "powershell"
+  },
+  {
+    "path": "manifest.psd1",
+    "language": "powershell"
+  },
+  {
+    "path": "SCRIPT.CMD",
+    "language": "bat"
+  },
+  {
+    "path": "build.bat",
+    "language": "bat"
+  },
+  {
+    "path": "Dockerfile",
+    "language": "dockerfile"
+  },
+  {
+    "path": "Dockerfile.dev",
+    "language": "dockerfile"
+  },
+  {
+    "path": "Containerfile",
+    "language": "dockerfile"
+  },
+  {
+    "path": "build.containerfile",
+    "language": "dockerfile"
+  },
+  {
+    "path": "Makefile",
+    "language": "makefile"
+  },
+  {
+    "path": "GNUmakefile",
+    "language": "makefile"
+  },
+  {
+    "path": "rules.mk",
+    "language": "makefile"
+  },
+  {
+    "path": ".env",
+    "language": "dotenv"
+  },
+  {
+    "path": ".env.local",
+    "language": "dotenv"
+  },
+  {
+    "path": ".env.production",
+    "language": "dotenv"
+  },
+  {
+    "path": ".flaskenv",
+    "language": "dotenv"
+  },
+  {
+    "path": "compose.yaml",
+    "language": "dockercompose"
+  },
+  {
+    "path": "compose.dev.yml",
+    "language": "dockercompose"
+  },
+  {
+    "path": "docker-compose.override.yml",
+    "language": "dockercompose"
+  },
+  {
+    "path": "service.yaml",
+    "language": "yaml"
+  },
+  {
+    "path": "script",
+    "firstLine": "#!/usr/bin/env pwsh",
+    "language": "powershell"
+  },
+  {
+    "path": "script",
+    "firstLine": "#!/usr/bin/make -f",
+    "language": "makefile"
+  }
 ]

@@ -2,8 +2,60 @@
 // Edit the owning language package, then run pnpm language:generate.
 
 const declarations: Readonly<Record<string, { offSide: boolean; markers?: { start: { source: string; flags: string; }; end: { source: string; flags: string; }; }; }>> = {
+	"bat": {
+		"offSide": false,
+		"markers": {
+			"start": {
+				"source": "^\\s*(?:[Rr][Ee][Mm]\\s+|::)\\s*#?region\\b",
+				"flags": ""
+			},
+			"end": {
+				"source": "^\\s*(?:[Rr][Ee][Mm]\\s+|::)\\s*#?endregion\\b",
+				"flags": ""
+			}
+		}
+	},
 	"starlark": {
 		"offSide": true
+	},
+	"c": {
+		"offSide": false,
+		"markers": {
+			"start": {
+				"source": "^\\s*//\\s*#?region\\b",
+				"flags": ""
+			},
+			"end": {
+				"source": "^\\s*//\\s*#?endregion\\b",
+				"flags": ""
+			}
+		}
+	},
+	"cpp": {
+		"offSide": false,
+		"markers": {
+			"start": {
+				"source": "^\\s*//\\s*#?region\\b",
+				"flags": ""
+			},
+			"end": {
+				"source": "^\\s*//\\s*#?endregion\\b",
+				"flags": ""
+			}
+		}
+	},
+	"csharp": {
+		"offSide": false,
+		"markers": {
+			"start": {
+				"source": "^\\s*#region\\b",
+				"flags": ""
+			},
+			"end": {
+				"source": "^\\s*#endregion\\b",
+				"flags": ""
+			}
+		}
 	},
 	"css": {
 		"offSide": false,
@@ -44,6 +96,32 @@ const declarations: Readonly<Record<string, { offSide: boolean; markers?: { star
 			}
 		}
 	},
+	"dockerfile": {
+		"offSide": false,
+		"markers": {
+			"start": {
+				"source": "^\\s*#\\s*#?region\\b",
+				"flags": ""
+			},
+			"end": {
+				"source": "^\\s*#\\s*#?endregion\\b",
+				"flags": ""
+			}
+		}
+	},
+	"dotenv": {
+		"offSide": false,
+		"markers": {
+			"start": {
+				"source": "^\\s*#\\s*#?region\\b",
+				"flags": ""
+			},
+			"end": {
+				"source": "^\\s*#\\s*#?endregion\\b",
+				"flags": ""
+			}
+		}
+	},
 	"go": {
 		"offSide": false,
 		"markers": {
@@ -66,6 +144,19 @@ const declarations: Readonly<Record<string, { offSide: boolean; markers?: { star
 			},
 			"end": {
 				"source": "^\\s*<!--\\s*#endregion\\b.*-->",
+				"flags": ""
+			}
+		}
+	},
+	"java": {
+		"offSide": false,
+		"markers": {
+			"start": {
+				"source": "^\\s*//\\s*#?region\\b",
+				"flags": ""
+			},
+			"end": {
+				"source": "^\\s*//\\s*#?endregion\\b",
 				"flags": ""
 			}
 		}
@@ -122,6 +213,19 @@ const declarations: Readonly<Record<string, { offSide: boolean; markers?: { star
 			}
 		}
 	},
+	"makefile": {
+		"offSide": false,
+		"markers": {
+			"start": {
+				"source": "^\\s*#\\s*#?region\\b",
+				"flags": ""
+			},
+			"end": {
+				"source": "^\\s*#\\s*#?endregion\\b",
+				"flags": ""
+			}
+		}
+	},
 	"markdown": {
 		"offSide": true,
 		"markers": {
@@ -131,6 +235,19 @@ const declarations: Readonly<Record<string, { offSide: boolean; markers?: { star
 			},
 			"end": {
 				"source": "^\\s*<!--\\s*#?endregion\\b.*-->",
+				"flags": ""
+			}
+		}
+	},
+	"powershell": {
+		"offSide": false,
+		"markers": {
+			"start": {
+				"source": "^\\s*#region\\b",
+				"flags": ""
+			},
+			"end": {
+				"source": "^\\s*#endregion\\b",
 				"flags": ""
 			}
 		}
@@ -235,6 +352,19 @@ const declarations: Readonly<Record<string, { offSide: boolean; markers?: { star
 			},
 			"end": {
 				"source": "^\\s*<!--\\s*#endregion\\b.*-->",
+				"flags": ""
+			}
+		}
+	},
+	"dockercompose": {
+		"offSide": true,
+		"markers": {
+			"start": {
+				"source": "^\\s*#\\s*region\\b",
+				"flags": ""
+			},
+			"end": {
+				"source": "^\\s*#\\s*endregion\\b",
 				"flags": ""
 			}
 		}

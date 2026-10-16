@@ -3,12 +3,18 @@
 
 fn syntax_language(language: SyntaxLanguageDto) -> SyntaxLanguage {
     match language {
+        SyntaxLanguageDto::Bat => SyntaxLanguage::Bat,
         SyntaxLanguageDto::Starlark => SyntaxLanguage::Starlark,
         SyntaxLanguageDto::Bazelrc => SyntaxLanguage::Bazelrc,
+        SyntaxLanguageDto::C => SyntaxLanguage::C,
+        SyntaxLanguageDto::Cpp => SyntaxLanguage::Cpp,
+        SyntaxLanguageDto::Csharp => SyntaxLanguage::Csharp,
         SyntaxLanguageDto::Css => SyntaxLanguage::Css,
         SyntaxLanguageDto::Scss => SyntaxLanguage::Scss,
         SyntaxLanguageDto::Less => SyntaxLanguage::Less,
         SyntaxLanguageDto::Diff => SyntaxLanguage::Diff,
+        SyntaxLanguageDto::Dockerfile => SyntaxLanguage::Dockerfile,
+        SyntaxLanguageDto::Dotenv => SyntaxLanguage::Dotenv,
         SyntaxLanguageDto::Gitcommit => SyntaxLanguage::Gitcommit,
         SyntaxLanguageDto::Gitrebase => SyntaxLanguage::Gitrebase,
         SyntaxLanguageDto::Gitignore => SyntaxLanguage::Gitignore,
@@ -16,12 +22,15 @@ fn syntax_language(language: SyntaxLanguageDto) -> SyntaxLanguage {
         SyntaxLanguageDto::Html => SyntaxLanguage::Html,
         SyntaxLanguageDto::Ini => SyntaxLanguage::Ini,
         SyntaxLanguageDto::Properties => SyntaxLanguage::Properties,
+        SyntaxLanguageDto::Java => SyntaxLanguage::Java,
         SyntaxLanguageDto::Javascript => SyntaxLanguage::Javascript,
         SyntaxLanguageDto::Javascriptreact => SyntaxLanguage::Javascriptreact,
         SyntaxLanguageDto::Json => SyntaxLanguage::Json,
         SyntaxLanguageDto::Jsonc => SyntaxLanguage::Jsonc,
+        SyntaxLanguageDto::Makefile => SyntaxLanguage::Makefile,
         SyntaxLanguageDto::Markdown => SyntaxLanguage::Markdown,
         SyntaxLanguageDto::MarkdownInline => SyntaxLanguage::MarkdownInline,
+        SyntaxLanguageDto::Powershell => SyntaxLanguage::Powershell,
         SyntaxLanguageDto::Python => SyntaxLanguage::Python,
         SyntaxLanguageDto::Rust => SyntaxLanguage::Rust,
         SyntaxLanguageDto::Shell => SyntaxLanguage::Shell,
@@ -31,6 +40,7 @@ fn syntax_language(language: SyntaxLanguageDto) -> SyntaxLanguage {
         SyntaxLanguageDto::Typescriptreact => SyntaxLanguage::Typescriptreact,
         SyntaxLanguageDto::Xml => SyntaxLanguage::Xml,
         SyntaxLanguageDto::Dtd => SyntaxLanguage::Dtd,
+        SyntaxLanguageDto::Dockercompose => SyntaxLanguage::Dockercompose,
         SyntaxLanguageDto::Yaml => SyntaxLanguage::Yaml,
     }
 }

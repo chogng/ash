@@ -1,16 +1,171 @@
 [
-  { "language": "python", "offSide": true, "text": "# region outer\n# region inner\npass\n# endregion\n# endregion\n", "regions": [[0, 4], [1, 3]] },
-  { "language": "python", "offSide": true, "text": "// #region wrong comment\npass\n// #endregion\n", "regions": [] },
-  { "language": "python", "offSide": true, "text": "# regional is not a marker\npass\n# endregion\n", "regions": [] },
-  { "language": "python", "offSide": true, "text": "# region unclosed\npass\n", "regions": [] },
-  { "language": "yaml", "offSide": true, "text": "# region settings\nvalue: true\n# endregion\n", "regions": [[0, 2]] },
-  { "language": "shellscript", "offSide": false, "text": "#region commands\necho hello\n#endregion\n", "regions": [[0, 2]] },
-  { "language": "html", "offSide": false, "text": "<!-- #region markup -->\n<div />\n<!-- #endregion -->\n", "regions": [[0, 2]] },
-  { "language": "xml", "offSide": false, "text": "<!-- #region markup -->\n<item />\n<!-- #endregion -->\n", "regions": [[0, 2]] },
-  { "language": "css", "offSide": false, "text": "/* #region colors */\n.card { color: red; }\n/* #endregion */\n", "regions": [[0, 2]] },
-  { "language": "sql", "offSide": true, "text": "-- #region queries\nSELECT 1;\n-- #endregion\n", "regions": [[0, 2]] },
-  { "language": "rust", "offSide": false, "text": "// #region functions\nfn main() {}\n// #endregion\n", "regions": [[0, 2]] },
-  { "language": "ini", "offSide": false, "text": "// #region unsupported\nkey=value\n// #endregion\n", "regions": [] },
-  { "language": "python", "offSide": true, "text": "root\n  child\n\nnext\n", "regions": [], "indentFold": [0, 2] },
-  { "language": "ini", "offSide": false, "text": "root\n  child\n\nnext\n", "regions": [], "indentFold": [0, 1] }
+  {
+    "language": "python",
+    "offSide": true,
+    "text": "# region outer\n# region inner\npass\n# endregion\n# endregion\n",
+    "regions": [
+      [
+        0,
+        4
+      ],
+      [
+        1,
+        3
+      ]
+    ]
+  },
+  {
+    "language": "python",
+    "offSide": true,
+    "text": "// #region wrong comment\npass\n// #endregion\n",
+    "regions": []
+  },
+  {
+    "language": "python",
+    "offSide": true,
+    "text": "# regional is not a marker\npass\n# endregion\n",
+    "regions": []
+  },
+  {
+    "language": "python",
+    "offSide": true,
+    "text": "# region unclosed\npass\n",
+    "regions": []
+  },
+  {
+    "language": "yaml",
+    "offSide": true,
+    "text": "# region settings\nvalue: true\n# endregion\n",
+    "regions": [
+      [
+        0,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "shellscript",
+    "offSide": false,
+    "text": "#region commands\necho hello\n#endregion\n",
+    "regions": [
+      [
+        0,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "html",
+    "offSide": false,
+    "text": "<!-- #region markup -->\n<div />\n<!-- #endregion -->\n",
+    "regions": [
+      [
+        0,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "xml",
+    "offSide": false,
+    "text": "<!-- #region markup -->\n<item />\n<!-- #endregion -->\n",
+    "regions": [
+      [
+        0,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "css",
+    "offSide": false,
+    "text": "/* #region colors */\n.card { color: red; }\n/* #endregion */\n",
+    "regions": [
+      [
+        0,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "sql",
+    "offSide": true,
+    "text": "-- #region queries\nSELECT 1;\n-- #endregion\n",
+    "regions": [
+      [
+        0,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "rust",
+    "offSide": false,
+    "text": "// #region functions\nfn main() {}\n// #endregion\n",
+    "regions": [
+      [
+        0,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "ini",
+    "offSide": false,
+    "text": "// #region unsupported\nkey=value\n// #endregion\n",
+    "regions": []
+  },
+  {
+    "language": "python",
+    "offSide": true,
+    "text": "root\n  child\n\nnext\n",
+    "regions": [],
+    "indentFold": [
+      0,
+      2
+    ]
+  },
+  {
+    "language": "ini",
+    "offSide": false,
+    "text": "root\n  child\n\nnext\n",
+    "regions": [],
+    "indentFold": [
+      0,
+      1
+    ]
+  },
+  {
+    "language": "csharp",
+    "offSide": false,
+    "text": "#region Types\nclass Greeter {}\n#endregion\n",
+    "regions": [
+      [
+        0,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "powershell",
+    "offSide": false,
+    "text": "#region Commands\nGet-Date\n#endregion\n",
+    "regions": [
+      [
+        0,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "bat",
+    "offSide": false,
+    "text": "REM #region Build\necho hello\nREM #endregion\n",
+    "regions": [
+      [
+        0,
+        2
+      ]
+    ]
+  }
 ]

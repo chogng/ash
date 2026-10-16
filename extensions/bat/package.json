@@ -1,0 +1,33 @@
+{
+  "name": "bat",
+  "publisher": "ash",
+  "version": "1.0.0",
+  "license": "MIT",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "bat",
+        "aliases": [
+          "Batch",
+          "bat"
+        ],
+        "extensions": [
+          ".bat",
+          ".cmd"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "bat",
+        "path": "./snippets/code.code-snippets"
+      }
+    ]
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "main": {
+    "prefix": "main",
+    "body": [
+      "static void Main(string[] args)",
+      "{",
+      "\t$0",
+      "}"
+    ]
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "variable": {
+    "prefix": "env",
+    "body": "${1:NAME}=${0:value}"
+  }
+}

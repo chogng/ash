@@ -1,0 +1,42 @@
+{
+  "name": "docker",
+  "publisher": "ash",
+  "version": "1.0.0",
+  "license": "MIT",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "dockerfile",
+        "aliases": [
+          "Docker",
+          "Dockerfile",
+          "Containerfile"
+        ],
+        "extensions": [
+          ".dockerfile",
+          ".containerfile"
+        ],
+        "filenames": [
+          "Dockerfile",
+          "Containerfile"
+        ],
+        "filenamePatterns": [
+          "Dockerfile.*",
+          "Containerfile.*"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "dockerfile",
+        "path": "./snippets/code.code-snippets"
+      }
+    ]
+  }
+}

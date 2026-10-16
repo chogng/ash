@@ -1,0 +1,30 @@
+[
+  {
+    "name": "dotenv",
+    "source": {
+      "crate": "tree-sitter-dotenv",
+      "version": "1.1.2",
+      "root": "."
+    },
+    "wasm": {
+      "path": "tree-sitter/dotenv.wasm",
+      "sha256": "92a0b705b8ca51e7e89ea187cb84c44299fb714d94131ae648923c8354992c65"
+    },
+    "highlights": ["queries/dotenv.scm"],
+    "tags": ["queries/dotenv.tags.scm"],
+    "folds": [],
+    "injections": [],
+    "rust": {
+      "language": "tree_sitter_dotenv::LANGUAGE"
+    },
+    "languages": [
+      {
+        "id": "dotenv",
+        "variant": "Dotenv",
+        "editorLanguage": "dotenv",
+        "editorIds": ["dotenv"],
+        "aliases": ["env"]
+      }
+    ]
+  }
+]

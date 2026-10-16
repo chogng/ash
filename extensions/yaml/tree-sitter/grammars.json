@@ -18,6 +18,13 @@
     },
     "languages": [
       {
+        "id": "dockercompose",
+        "variant": "Dockercompose",
+        "editorLanguage": "dockercompose",
+        "editorIds": ["dockercompose"],
+        "aliases": ["compose"]
+      },
+      {
         "id": "yaml",
         "variant": "Yaml",
         "editorLanguage": "yaml",

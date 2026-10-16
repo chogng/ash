@@ -10,6 +10,15 @@ import git from '../../../extensions/git-base/package.json' with { type: 'json' 
 import ini from '../../../extensions/ini/package.json' with { type: 'json' };
 import diff from '../../../extensions/diff/package.json' with { type: 'json' };
 import markdown from '../../../extensions/markdown-basics/package.json' with { type: 'json' };
+import cpp from '../../../extensions/cpp/package.json' with { type: 'json' };
+import java from '../../../extensions/java/package.json' with { type: 'json' };
+import csharp from '../../../extensions/csharp/package.json' with { type: 'json' };
+import powershell from '../../../extensions/powershell/package.json' with { type: 'json' };
+import bat from '../../../extensions/bat/package.json' with { type: 'json' };
+import docker from '../../../extensions/docker/package.json' with { type: 'json' };
+import make from '../../../extensions/make/package.json' with { type: 'json' };
+import dotenv from '../../../extensions/dotenv/package.json' with { type: 'json' };
+import yaml from '../../../extensions/yaml/package.json' with { type: 'json' };
 import type { ExtensionDescriptor } from '../../../src/ash/platform/extensions/common/extensionApi.js';
 import { AppServerExtensionService, type AppServerExtensionServiceOptions } from '../../../src/ash/workbench/services/extensions/browser/appServerExtensionService.js';
 
@@ -17,6 +26,8 @@ const resourceUrls = import.meta.glob<string>([
 	'../../../extensions/{javascript,typescript-basics,json,rust,shellscript,bazel,ini,diff,markdown-basics}/*language-configuration.json',
 	'../../../extensions/git-base/languages/*language-configuration.json',
 	'../../../extensions/{javascript,typescript-basics,json,rust,shellscript,bazel,markdown-basics}/snippets/*',
+	'../../../extensions/{cpp,java,csharp,powershell,bat,docker,make,dotenv,yaml}/*language-configuration.json',
+	'../../../extensions/{cpp,java,csharp,powershell,bat,docker,make,dotenv}/snippets/*',
 ], { eager: true, query: '?url', import: 'default' });
 
 export async function createLanguageExtensions(options: Omit<AppServerExtensionServiceOptions, 'api' | 'eventApi'>): Promise<AppServerExtensionService> {
@@ -33,6 +44,15 @@ export async function createLanguageExtensions(options: Omit<AppServerExtensionS
 		['ini', ini],
 		['diff', diff],
 		['markdown-basics', markdown],
+		['cpp', cpp],
+		['java', java],
+		['csharp', csharp],
+		['powershell', powershell],
+		['bat', bat],
+		['docker', docker],
+		['make', make],
+		['dotenv', dotenv],
+		['yaml', yaml],
 	] as const;
 	for (const [directory, manifest] of manifests) {
 		const manifestJson = JSON.stringify(manifest);

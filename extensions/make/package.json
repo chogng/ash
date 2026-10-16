@@ -1,0 +1,39 @@
+{
+  "name": "make",
+  "publisher": "ash",
+  "version": "1.0.0",
+  "license": "MIT",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "makefile",
+        "aliases": [
+          "Makefile",
+          "makefile"
+        ],
+        "extensions": [
+          ".mak",
+          ".mk"
+        ],
+        "filenames": [
+          "Makefile",
+          "GNUmakefile",
+          "OCamlMakefile"
+        ],
+        "firstLine": "^#!\\s*/usr/bin/make\\b",
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "makefile",
+        "path": "./snippets/code.code-snippets"
+      }
+    ]
+  }
+}

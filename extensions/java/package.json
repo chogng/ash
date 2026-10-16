@@ -1,0 +1,33 @@
+{
+  "name": "java",
+  "publisher": "ash",
+  "version": "1.0.0",
+  "license": "MIT",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "java",
+        "aliases": [
+          "Java",
+          "java"
+        ],
+        "extensions": [
+          ".java",
+          ".jav"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "java",
+        "path": "./snippets/code.code-snippets"
+      }
+    ]
+  }
+}

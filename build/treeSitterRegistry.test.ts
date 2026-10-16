@@ -38,6 +38,21 @@ test('conflicting aliases and uncovered extension languages fail before generati
 	await assert.rejects(readGrammarPackages(root), /Missing Tree-sitter registration for demo:missing/);
 });
 
+test('C variants and punctuation in code-fence aliases generate safe runtime bindings', async t => {
+	const root = await fixture(t);
+	const packages = await readGrammarPackages(root);
+	const grammar = packages[0]!.grammars[0]!;
+	grammar.languages[0]!.variant = 'C';
+	grammar.languages[0]!.aliases = ['c++', 'c#'];
+	await writeFile(packages[0]!.manifest, JSON.stringify([grammar]));
+	await generateTreeSitterRegistry({ root });
+	const rust = await readFile(resolve(root, 'crates/syntax/src/languages.generated.rs'), 'utf8');
+	assert.match(rust, /"c\+\+" \| "c#" => Some\(Self::C\)/);
+	grammar.languages[0]!.aliases.push('c"; unsafe');
+	await writeFile(packages[0]!.manifest, JSON.stringify([grammar]));
+	await assert.rejects(readGrammarPackages(root), /invalid syntax language alias/);
+});
+
 test('invalid bindings and query paths cannot enter generated source', async t => {
 	const root = await fixture(t);
 	const packages = await readGrammarPackages(root);

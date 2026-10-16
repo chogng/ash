@@ -1,0 +1,34 @@
+{
+  "name": "csharp",
+  "publisher": "ash",
+  "version": "1.0.0",
+  "license": "MIT",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "csharp",
+        "aliases": [
+          "C#",
+          "csharp"
+        ],
+        "extensions": [
+          ".cs",
+          ".csx",
+          ".cake"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "csharp",
+        "path": "./snippets/code.code-snippets"
+      }
+    ]
+  }
+}

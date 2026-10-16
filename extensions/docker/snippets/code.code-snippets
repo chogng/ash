@@ -1,0 +1,10 @@
+{
+  "stage": {
+    "prefix": "stage",
+    "body": [
+      "FROM ${1:alpine:latest} AS ${2:build}",
+      "WORKDIR /app",
+      "$0"
+    ]
+  }
+}

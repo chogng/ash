@@ -14,6 +14,13 @@ pub fn canonical_language_id(id: &str) -> &str {
 
 const DECLARATIONS: &[Association] = &[
     Association {
+        id: "bat",
+        extensions: &[".bat", ".cmd"],
+        filenames: &[],
+        patterns: &[],
+        first_line: None,
+    },
+    Association {
         id: "starlark",
         extensions: &[
             ".build",
@@ -43,6 +50,31 @@ const DECLARATIONS: &[Association] = &[
         first_line: None,
     },
     Association {
+        id: "c",
+        extensions: &[".c", ".i"],
+        filenames: &[],
+        patterns: &[],
+        first_line: None,
+    },
+    Association {
+        id: "cpp",
+        extensions: &[
+            ".cpp", ".cppm", ".cc", ".ccm", ".cxx", ".cxxm", ".c++", ".c++m", ".hpp", ".hh",
+            ".hxx", ".h++", ".h", ".ii", ".ino", ".inl", ".ipp", ".ixx", ".mpp", ".mxx", ".tpp",
+            ".txx", ".hpp.in", ".h.in",
+        ],
+        filenames: &[],
+        patterns: &[],
+        first_line: None,
+    },
+    Association {
+        id: "csharp",
+        extensions: &[".cs", ".csx", ".cake"],
+        filenames: &[],
+        patterns: &[],
+        first_line: None,
+    },
+    Association {
         id: "css",
         extensions: &[".css"],
         filenames: &[],
@@ -68,6 +100,20 @@ const DECLARATIONS: &[Association] = &[
         extensions: &[".diff", ".patch", ".rej"],
         filenames: &[],
         patterns: &[],
+        first_line: None,
+    },
+    Association {
+        id: "dockerfile",
+        extensions: &[".dockerfile", ".containerfile"],
+        filenames: &["dockerfile", "containerfile"],
+        patterns: &["dockerfile.*", "containerfile.*"],
+        first_line: None,
+    },
+    Association {
+        id: "dotenv",
+        extensions: &[".env"],
+        filenames: &[".env", ".flaskenv", "user-dirs.dirs"],
+        patterns: &[".env.*"],
         first_line: None,
     },
     Association {
@@ -133,6 +179,13 @@ const DECLARATIONS: &[Association] = &[
         first_line: None,
     },
     Association {
+        id: "java",
+        extensions: &[".java", ".jav"],
+        filenames: &[],
+        patterns: &[],
+        first_line: None,
+    },
+    Association {
         id: "javascriptreact",
         extensions: &[".jsx"],
         filenames: &[],
@@ -183,6 +236,13 @@ const DECLARATIONS: &[Association] = &[
         first_line: None,
     },
     Association {
+        id: "makefile",
+        extensions: &[".mak", ".mk"],
+        filenames: &["makefile", "gnumakefile", "ocamlmakefile"],
+        patterns: &[],
+        first_line: Some("^#!\\s*/usr/bin/make\\b"),
+    },
+    Association {
         id: "markdown",
         extensions: &[
             ".md",
@@ -202,6 +262,13 @@ const DECLARATIONS: &[Association] = &[
         filenames: &[],
         patterns: &["**/.cursor/**/*.mdc"],
         first_line: None,
+    },
+    Association {
+        id: "powershell",
+        extensions: &[".ps1", ".psm1", ".psd1", ".pssc", ".psrc"],
+        filenames: &[],
+        patterns: &[],
+        first_line: Some("^#!\\s*/.*\\bpwsh\\b"),
     },
     Association {
         id: "python",
@@ -400,6 +467,20 @@ const DECLARATIONS: &[Association] = &[
         first_line: None,
     },
     Association {
+        id: "dockercompose",
+        extensions: &[],
+        filenames: &[],
+        patterns: &[
+            "compose.yml",
+            "compose.yaml",
+            "compose.*.yml",
+            "compose.*.yaml",
+            "*docker*compose*.yml",
+            "*docker*compose*.yaml",
+        ],
+        first_line: None,
+    },
+    Association {
         id: "yaml",
         extensions: &[
             ".yaml",
@@ -420,9 +501,44 @@ const DECLARATIONS: &[Association] = &[
 
 const FOLDING_DECLARATIONS: &[FoldingDeclaration] = &[
     FoldingDeclaration {
+        id: "bat",
+        off_side: false,
+        markers: Some((
+            "^\\s*(?:[Rr][Ee][Mm]\\s+|::)\\s*#?region\\b",
+            "",
+            "^\\s*(?:[Rr][Ee][Mm]\\s+|::)\\s*#?endregion\\b",
+            "",
+        )),
+    },
+    FoldingDeclaration {
         id: "starlark",
         off_side: true,
         markers: None,
+    },
+    FoldingDeclaration {
+        id: "c",
+        off_side: false,
+        markers: Some((
+            "^\\s*//\\s*#?region\\b",
+            "",
+            "^\\s*//\\s*#?endregion\\b",
+            "",
+        )),
+    },
+    FoldingDeclaration {
+        id: "cpp",
+        off_side: false,
+        markers: Some((
+            "^\\s*//\\s*#?region\\b",
+            "",
+            "^\\s*//\\s*#?endregion\\b",
+            "",
+        )),
+    },
+    FoldingDeclaration {
+        id: "csharp",
+        off_side: false,
+        markers: Some(("^\\s*#region\\b", "", "^\\s*#endregion\\b", "")),
     },
     FoldingDeclaration {
         id: "css",
@@ -455,6 +571,16 @@ const FOLDING_DECLARATIONS: &[FoldingDeclaration] = &[
         )),
     },
     FoldingDeclaration {
+        id: "dockerfile",
+        off_side: false,
+        markers: Some(("^\\s*#\\s*#?region\\b", "", "^\\s*#\\s*#?endregion\\b", "")),
+    },
+    FoldingDeclaration {
+        id: "dotenv",
+        off_side: false,
+        markers: Some(("^\\s*#\\s*#?region\\b", "", "^\\s*#\\s*#?endregion\\b", "")),
+    },
+    FoldingDeclaration {
         id: "go",
         off_side: false,
         markers: Some((
@@ -471,6 +597,16 @@ const FOLDING_DECLARATIONS: &[FoldingDeclaration] = &[
             "^\\s*<!--\\s*#region\\b.*-->",
             "",
             "^\\s*<!--\\s*#endregion\\b.*-->",
+            "",
+        )),
+    },
+    FoldingDeclaration {
+        id: "java",
+        off_side: false,
+        markers: Some((
+            "^\\s*//\\s*#?region\\b",
+            "",
+            "^\\s*//\\s*#?endregion\\b",
             "",
         )),
     },
@@ -515,6 +651,11 @@ const FOLDING_DECLARATIONS: &[FoldingDeclaration] = &[
         )),
     },
     FoldingDeclaration {
+        id: "makefile",
+        off_side: false,
+        markers: Some(("^\\s*#\\s*#?region\\b", "", "^\\s*#\\s*#?endregion\\b", "")),
+    },
+    FoldingDeclaration {
         id: "markdown",
         off_side: true,
         markers: Some((
@@ -523,6 +664,11 @@ const FOLDING_DECLARATIONS: &[FoldingDeclaration] = &[
             "^\\s*<!--\\s*#?endregion\\b.*-->",
             "",
         )),
+    },
+    FoldingDeclaration {
+        id: "powershell",
+        off_side: false,
+        markers: Some(("^\\s*#region\\b", "", "^\\s*#endregion\\b", "")),
     },
     FoldingDeclaration {
         id: "python",
@@ -593,6 +739,11 @@ const FOLDING_DECLARATIONS: &[FoldingDeclaration] = &[
             "^\\s*<!--\\s*#endregion\\b.*-->",
             "",
         )),
+    },
+    FoldingDeclaration {
+        id: "dockercompose",
+        off_side: true,
+        markers: Some(("^\\s*#\\s*region\\b", "", "^\\s*#\\s*endregion\\b", "")),
     },
     FoldingDeclaration {
         id: "yaml",

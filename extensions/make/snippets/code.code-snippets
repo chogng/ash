@@ -1,0 +1,9 @@
+{
+  "target": {
+    "prefix": "target",
+    "body": [
+      "${1:all}: ${2}",
+      "\t${0:@echo done}"
+    ]
+  }
+}

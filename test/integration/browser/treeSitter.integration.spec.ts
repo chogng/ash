@@ -96,6 +96,28 @@ for (const sample of samples) {
 	});
 }
 
+test('new project languages retain highlights through offline edits and undo', async ({ page }) => {
+	await page.goto('/treeSitter.html?backend=offline');
+	await expect.poll(() => page.evaluate(() => window.treeSitterIntegration?.state().execution)).toBe('worker');
+	const languages = new Set(['c', 'cpp', 'java', 'csharp', 'powershell', 'bat', 'dockerfile', 'makefile', 'dotenv', 'dockercompose']);
+	for (const sample of samples.filter(sample => languages.has(sample.language))) {
+		await page.evaluate(sample => window.treeSitterIntegration.open(sample.language, sample.text), sample);
+		await page.evaluate(() => window.treeSitterIntegration.ready());
+		const original = await page.evaluate(() => window.treeSitterIntegration.state().text);
+		const expected = expect.objectContaining({ type: sample.tokenType, text: expect.stringContaining(sample.lexeme) });
+		expect(await page.evaluate(() => window.treeSitterIntegration.state())).toMatchObject({ execution: 'worker', errors: [], tokens: expect.arrayContaining([expected]) });
+		// An inserted newline changes every row coordinate without changing the language's syntax.
+		await page.locator('.stanza-editor').click();
+		await page.keyboard.press('Control+Home');
+		await page.keyboard.press('Enter');
+		await page.evaluate(() => window.treeSitterIntegration.ready());
+		expect(await page.evaluate(() => window.treeSitterIntegration.state().text.replace(/\r\n/g, '\n'))).toBe('\n' + original.replace(/\r\n/g, '\n'));
+		await page.evaluate(() => window.treeSitterIntegration.undo());
+		await page.evaluate(() => window.treeSitterIntegration.ready());
+		expect(await page.evaluate(() => window.treeSitterIntegration.state())).toMatchObject({ text: original, errors: [], tokens: expect.arrayContaining([expected]) });
+	}
+});
+
 for (const sample of [
 	{ language: 'html', text: '<script>const value = "你好🙂";</script>\n<style>body { color: red; }</style>', lexeme: 'const', tokenType: 'keyword' },
 	{ language: 'html', text: '<script type="application/json">{"value": 42}</script>', lexeme: '42', tokenType: 'number' },

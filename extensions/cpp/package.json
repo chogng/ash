@@ -1,0 +1,72 @@
+{
+  "name": "cpp",
+  "publisher": "ash",
+  "version": "1.0.0",
+  "license": "MIT",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "c",
+        "aliases": [
+          "C",
+          "c"
+        ],
+        "extensions": [
+          ".c",
+          ".i"
+        ],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "cpp",
+        "aliases": [
+          "C++",
+          "Cpp",
+          "cpp"
+        ],
+        "extensions": [
+          ".cpp",
+          ".cppm",
+          ".cc",
+          ".ccm",
+          ".cxx",
+          ".cxxm",
+          ".c++",
+          ".c++m",
+          ".hpp",
+          ".hh",
+          ".hxx",
+          ".h++",
+          ".h",
+          ".ii",
+          ".ino",
+          ".inl",
+          ".ipp",
+          ".ixx",
+          ".mpp",
+          ".mxx",
+          ".tpp",
+          ".txx",
+          ".hpp.in",
+          ".h.in"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "c",
+        "path": "./snippets/code.code-snippets"
+      },
+      {
+        "language": "cpp",
+        "path": "./snippets/code.code-snippets"
+      }
+    ]
+  }
+}

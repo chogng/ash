@@ -1,0 +1,39 @@
+{
+  "name": "dotenv",
+  "publisher": "ash",
+  "version": "1.0.0",
+  "license": "MIT",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "dotenv",
+        "aliases": [
+          "Dotenv"
+        ],
+        "extensions": [
+          ".env"
+        ],
+        "filenames": [
+          ".env",
+          ".flaskenv",
+          "user-dirs.dirs"
+        ],
+        "filenamePatterns": [
+          ".env.*"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "dotenv",
+        "path": "./snippets/code.code-snippets"
+      }
+    ]
+  }
+}

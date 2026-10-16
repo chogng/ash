@@ -1,0 +1,30 @@
+[
+  {
+    "name": "powershell",
+    "source": {
+      "crate": "tree-sitter-powershell",
+      "version": "0.26.4",
+      "root": "."
+    },
+    "wasm": {
+      "path": "tree-sitter/powershell.wasm",
+      "sha256": "bec446f4a112d43f4a947a63940e634545d6f0749f7c0bc298ea944209a61aea"
+    },
+    "highlights": ["queries/powershell.scm"],
+    "tags": ["queries/powershell.tags.scm"],
+    "folds": ["queries/powershell.folds.scm"],
+    "injections": [],
+    "rust": {
+      "language": "tree_sitter_powershell::LANGUAGE"
+    },
+    "languages": [
+      {
+        "id": "powershell",
+        "variant": "Powershell",
+        "editorLanguage": "powershell",
+        "editorIds": ["powershell"],
+        "aliases": ["ps1", "pwsh"]
+      }
+    ]
+  }
+]

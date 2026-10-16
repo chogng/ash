@@ -96,7 +96,7 @@ and codec support belong to the browser/Electron media engine.
 
 The current declarative pack contains the following package directories:
 
-- `bazel` (Starlark/bazelrc), `css` (CSS/Less/SCSS), `diff`, `git-base`, `go`, `html`, `ini`, `javascript`, `json`, `markdown-basics`, `python`, `rust`, `shellscript`, `sql`,
+- `bat`, `bazel` (Starlark/bazelrc), `cpp` (C/C++), `csharp`, `css` (CSS/Less/SCSS), `diff`, `docker`, `dotenv`, `git-base`, `go`, `html`, `ini`, `java`, `javascript`, `json`, `make`, `markdown-basics`, `powershell`, `python`, `rust`, `shellscript`, `sql`,
   `toml`, `typescript-basics`, `xml`, and `yaml` provide language IDs, file associations, language
   configuration, Tree-sitter queries/parsers, and—where upstream provides them—snippets.
   Bazel associates `BUILD`, `WORKSPACE`, `MODULE.bazel`, `.bazel`, and `.bzl` files with
@@ -138,8 +138,11 @@ requires `ASH_WASI_CC=/path/to/wasi-sdk-29/bin/clang`: its generated lexer is sp
 small equivalent state helpers for LLVM, and only the required `iswcntrl` libc object
 is linked (license in `git-base/tree-sitter/musl.LICENSE.txt`). The shipped parser is
 compared with the original C parser against all 64 upstream corpus examples.
-Gitignore and bazelrc have package-local Rust bindings because their upstreams do not
+Gitignore, bazelrc, and dotenv have package-local Rust bindings because their upstreams do not
 publish usable Cargo bindings; they do not introduce another shared syntax engine.
+Docker Compose file names select `dockercompose` and reuse the YAML parser and queries.
+The common project language packages provide offline syntax and editing resources; their
+declarations do not install or start C/C++, Java, C#, PowerShell, or other language servers.
 The generic TextMate loader remains available for external extension contributions.
 
 The manifest is the only source of contribution metadata. `AppServerExtensionService` receives

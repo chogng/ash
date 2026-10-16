@@ -1,0 +1,30 @@
+[
+  {
+    "name": "make",
+    "source": {
+      "crate": "tree-sitter-make",
+      "version": "1.1.1",
+      "root": "."
+    },
+    "wasm": {
+      "path": "tree-sitter/make.wasm",
+      "sha256": "382c70037a3dd49aa06a02bbcb3e8332c6e043562ca0c81d501a7a2352463220"
+    },
+    "highlights": ["queries/make.scm"],
+    "tags": [],
+    "folds": ["queries/make.folds.scm"],
+    "injections": [],
+    "rust": {
+      "language": "tree_sitter_make::LANGUAGE"
+    },
+    "languages": [
+      {
+        "id": "makefile",
+        "variant": "Makefile",
+        "editorLanguage": "makefile",
+        "editorIds": ["makefile"],
+        "aliases": ["make"]
+      }
+    ]
+  }
+]

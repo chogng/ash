@@ -29,6 +29,7 @@ import { AppServerExtensionService } from "../../browser/appServerExtensionServi
 import { parseExtensionManifest, type ExtensionCatalog as WorkbenchExtensionCatalog } from "../../common/extensionService.js";
 import { parseJsonc } from "../../common/jsonc.js";
 import { SnippetsService } from '../../../../contrib/snippets/browser/snippetsService.js';
+import { MainThreadLocalization } from '../../../../api/browser/mainThreadLocalization.js';
 import { ExtensionThemeRegistry, parseExtensionTheme } from "../../common/extensionTheme.js";
 import { ExtensionDebugAdapterRegistry } from "../../common/extensionDebugAdapter.js";
 import { DebugAdapterFactoriesRegistry } from "../../../debug/common/debugAdapterFactory.js";
@@ -902,5 +903,34 @@ test('built-in language associations agree with ash-language on the shared confo
 	for (const entry of cases) {
 		const path = entry.path.startsWith('/') || /^[a-z]:/i.test(entry.path) ? entry.path : `/repo/${entry.path}`;
 		assert.equal(languages.resolveLanguageId({ resource: URI.file(path), firstLine: entry.firstLine }) ?? 'plaintext', entry.language, entry.path);
+	}
+});
+
+test('common project language packages register resources and localize English and Chinese labels', async () => {
+	using localization = toDisposable(resetNlsResolver);
+	const packages = ['bat', 'cpp', 'csharp', 'java', 'powershell', 'docker', 'make', 'dotenv'];
+	const extensions = await Promise.all(packages.map(async directory => {
+		const manifestJson = await readFile(`extensions/${directory}/package.json`, 'utf8');
+		const manifest = JSON.parse(manifestJson);
+		return { ...descriptor, id: `${manifest.publisher}.${manifest.name}`, name: manifest.name, publisher: manifest.publisher, version: manifest.version, manifestJson, manifestSha256: digestText(manifestJson) };
+	}));
+	for (const locale of ['en', 'zh-CN']) {
+		initializeTestLocalization(locale);
+		const api: IExtensionApi = {
+			list: async () => ({ generation: 1, extensions, diagnostics: [] }),
+			resources: new ExtensionResourceLoaderService(request => readFile(`extensions/${request.extensionId.slice('ash.'.length)}/${request.path}`)),
+		};
+		using languageService = new LanguageService();
+		using languages = new LanguageFeaturesService();
+		const languagePacks = createEmptyTestLanguagePacks();
+		using service = new AppServerExtensionService({ api, languageService, languageConfigurationService: languages.languageConfigurationService }, languagePacks);
+		using snippets = new SnippetsService(service);
+		await service.start();
+		assert.equal(service.currentCatalog.extensions.length, packages.length);
+		const labels = new MainThreadLocalization(languagePacks, api);
+		for (const extension of extensions) {
+			const manifest = JSON.parse(await labels.localizeManifest(extension.id, extension.manifestJson, 1));
+			assert.match(manifest.displayName, locale === 'en' ? /Language Support$/ : /语言支持$/);
+		}
 	}
 });

@@ -3,6 +3,17 @@
 
 export const syntaxLanguageDefinitions = [
 	{
+		"id": "bat",
+		"editorLanguage": "bat",
+		"editorIds": [
+			"bat"
+		],
+		"aliases": [
+			"batch",
+			"cmd"
+		]
+	},
+	{
 		"id": "starlark",
 		"editorLanguage": "starlark",
 		"editorIds": [
@@ -17,6 +28,37 @@ export const syntaxLanguageDefinitions = [
 			"bazelrc"
 		],
 		"aliases": []
+	},
+	{
+		"id": "c",
+		"editorLanguage": "c",
+		"editorIds": [
+			"c"
+		],
+		"aliases": []
+	},
+	{
+		"id": "cpp",
+		"editorLanguage": "cpp",
+		"editorIds": [
+			"cpp"
+		],
+		"aliases": [
+			"c++",
+			"cxx"
+		]
+	},
+	{
+		"id": "csharp",
+		"editorLanguage": "csharp",
+		"editorIds": [
+			"csharp"
+		],
+		"aliases": [
+			"cs",
+			"c-sharp",
+			"c#"
+		]
 	},
 	{
 		"id": "css",
@@ -49,6 +91,27 @@ export const syntaxLanguageDefinitions = [
 			"diff"
 		],
 		"aliases": []
+	},
+	{
+		"id": "dockerfile",
+		"editorLanguage": "dockerfile",
+		"editorIds": [
+			"dockerfile"
+		],
+		"aliases": [
+			"docker",
+			"containerfile"
+		]
+	},
+	{
+		"id": "dotenv",
+		"editorLanguage": "dotenv",
+		"editorIds": [
+			"dotenv"
+		],
+		"aliases": [
+			"env"
+		]
 	},
 	{
 		"id": "gitcommit",
@@ -112,6 +175,14 @@ export const syntaxLanguageDefinitions = [
 		"aliases": []
 	},
 	{
+		"id": "java",
+		"editorLanguage": "java",
+		"editorIds": [
+			"java"
+		],
+		"aliases": []
+	},
+	{
 		"id": "javascript",
 		"editorLanguage": "javascript",
 		"editorIds": [
@@ -149,6 +220,16 @@ export const syntaxLanguageDefinitions = [
 		"aliases": []
 	},
 	{
+		"id": "makefile",
+		"editorLanguage": "makefile",
+		"editorIds": [
+			"makefile"
+		],
+		"aliases": [
+			"make"
+		]
+	},
+	{
 		"id": "markdown",
 		"editorLanguage": "markdown",
 		"editorIds": [
@@ -164,6 +245,17 @@ export const syntaxLanguageDefinitions = [
 		"editorIds": [],
 		"aliases": [
 			"markdown-inline"
+		]
+	},
+	{
+		"id": "powershell",
+		"editorLanguage": "powershell",
+		"editorIds": [
+			"powershell"
+		],
+		"aliases": [
+			"ps1",
+			"pwsh"
 		]
 	},
 	{
@@ -251,6 +343,16 @@ export const syntaxLanguageDefinitions = [
 			"dtd"
 		],
 		"aliases": []
+	},
+	{
+		"id": "dockercompose",
+		"editorLanguage": "dockercompose",
+		"editorIds": [
+			"dockercompose"
+		],
+		"aliases": [
+			"compose"
+		]
 	},
 	{
 		"id": "yaml",
