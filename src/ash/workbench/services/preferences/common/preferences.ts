@@ -28,6 +28,7 @@ export interface SettingReference {
 }
 
 export interface ISettingBase {
+	readonly tags?: readonly string[];
 	readonly id: string;
 	readonly title: string;
 	readonly description: string;

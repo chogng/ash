@@ -25,6 +25,16 @@ import { TestConfigurationService as WorkbenchConfigurationService } from '../..
 
 import { ConfigurationTarget, addToValueTree, getConfigValueInTarget, getConfigurationValue, getLanguageTagSettingPlainKey, isConfigurationOverrides, isConfigurationUpdateOverrides, isConfigured, merge, removeFromValueTree, toValuesTree } from "../../../../platform/configuration/common/configuration.js";
 
+test('configuration tags are validated before replacing live registrations', () => {
+	const registry = new ConfigurationRegistry();
+	const active = { properties: { 'test.active': { type: 'boolean' as const, default: true, tags: ['preview'] } } };
+	registry.updateConfigurations({ add: [active], remove: [] });
+	assert.throws(() => registry.updateConfigurations({ add: [{ properties: { 'test.invalid': { type: 'boolean', default: false, tags: [1] as unknown as string[] } } }], remove: [active] }), /Configuration tags/);
+	assert.deepEqual(registry.getConfiguration('test.active')?.tags, ['preview']);
+	assert.equal(registry.getConfiguration('test.invalid'), undefined);
+	assert.throws(() => registry.registerConfiguration({ key: 'test.invalid', defaultValue: false, parse: Boolean, tags: [' '] }), /Configuration tags/);
+});
+
 test('contributed configuration replacement updates live values atomically and preserves stored user settings', async () => {
 	const registry = new ConfigurationRegistry();
 	const source = '// preserved user settings\n{"contributed.value":"saved","[typescript]":{"contributed.value":"typed"}}\n';

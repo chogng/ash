@@ -294,8 +294,7 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 			const isConfigured = !this.descriptor.binding && !state.isDefault;
 			this.indicators.update({ isPending: state.isPending, isConfigured });
 			this.domNode.classList.toggle('is-configured', isConfigured);
-			if (isConfigured) this.domNode.setAttribute('aria-describedby', this.indicators.configuredDescriptionId);
-			else this.domNode.removeAttribute('aria-describedby');
+			this.updateIndicatorDescriptions();
 			const document = this.domNode.ownerDocument;
 			if (state.isPending && !this.pendingFocus) {
 				const active = getActiveElement(document);
@@ -341,6 +340,14 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 		this.titleDomNode.textContent = descriptor.title;
 		this.domNode.setAttribute('aria-label', descriptor.title);
 		this.descriptionDomNode.textContent = descriptor.description;
+		this.indicators.updateMetadata(descriptor.tags);
+		this.updateIndicatorDescriptions();
+	}
+
+	private updateIndicatorDescriptions(): void {
+		const ids = [this.domNode.classList.contains('is-configured') ? this.indicators.configuredDescriptionId : undefined, this.indicators.maturityDescriptionId].filter(Boolean);
+		if (ids.length) this.domNode.setAttribute('aria-describedby', ids.join(' '));
+		else this.domNode.removeAttribute('aria-describedby');
 	}
 }
 
@@ -466,6 +473,14 @@ class SelectSettingWidget extends AbstractSettingWidget<ISelectSetting, string |
 	}
 
 	private renderState(state: SettingState<string | boolean>): void {
+		// A stored theme or extension-provided choice can outlive its catalog entry.
+		// Keep the value visible without changing configuration or inventing a replacement.
+		const options = this.descriptor.options.map(option => ({ value: String(option.value), label: option.label }));
+		const value = String(state.value);
+		if (!options.some(option => option.value === value)) {
+			options.push({ value, label: localize({ bundle: 'ash.settings', key: 'option.unavailable' }, 'Unavailable ({0})', value) });
+		}
+		if (!sameSelectOptions(this.select.options, options)) this.select.setOptions(options);
 		this.select.value = String(state.value);
 		this.select.enabled = !state.isPending;
 	}

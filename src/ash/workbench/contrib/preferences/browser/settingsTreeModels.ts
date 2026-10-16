@@ -5,6 +5,7 @@ import { TreeVisibility } from "../../../../base/browser/ui/tree/tree.js";
 import { SettingsSearchQuery } from "./settingsSearch.js";
 
 export interface SettingsTreeItem<T> {
+	readonly tags?: readonly string[];
 	readonly kind: "item";
 	readonly id: string;
 	readonly title: string;

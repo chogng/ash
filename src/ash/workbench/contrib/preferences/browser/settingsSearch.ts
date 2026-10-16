@@ -13,13 +13,25 @@ export class SettingsSearchQuery {
 	public readonly hasModifiedFilter: boolean;
 	private readonly idFilter: string | undefined;
 	private readonly terms: readonly string[];
+	private readonly tagFilters: readonly string[];
+	private readonly stableOnly: boolean;
 
 	constructor(value: string) {
 		const textTokens: string[] = [];
 		let idFilter: string | undefined;
 		let hasModifiedFilter = false;
+		const tagFilters = new Set<string>();
+		let stableOnly = false;
 		for (const token of value.trim().split(/\s+/u).filter(Boolean)) {
 			const normalized = token.toLocaleLowerCase();
+			if (normalized.startsWith('@tag:') && normalized.length > 5) {
+				tagFilters.add(normalized.slice(5));
+				continue;
+			}
+			if (normalized === '@stable') {
+				stableOnly = true;
+				continue;
+			}
 			if (normalized === '@modified') {
 				hasModifiedFilter = true;
 				continue;
@@ -38,14 +50,19 @@ export class SettingsSearchQuery {
 		this.terms = this.text ? this.text.split(' ') : [];
 		this.idFilter = idFilter;
 		this.hasModifiedFilter = hasModifiedFilter;
-		this.key = `${this.text}\0${idFilter ?? ''}\0${hasModifiedFilter}`;
+		this.tagFilters = [...tagFilters].sort();
+		this.stableOnly = stableOnly;
+		this.key = JSON.stringify([this.text, idFilter, hasModifiedFilter, this.tagFilters, stableOnly]);
 	}
 
 	public get isEmpty(): boolean {
-		return this.terms.length === 0 && !this.idFilter && !this.hasModifiedFilter;
+		return this.terms.length === 0 && !this.idFilter && !this.hasModifiedFilter && !this.tagFilters.length && !this.stableOnly;
 	}
 
 	public matches(target: SettingsSearchTarget): boolean {
+		const tags = new Set(target.tags?.map(tag => tag.toLocaleLowerCase()));
+		if (this.stableOnly && (tags.has('experimental') || tags.has('preview'))) return false;
+		if (this.tagFilters.some(tag => !tags.has(tag))) return false;
 		if (this.idFilter) {
 			const id = target.id?.toLocaleLowerCase();
 			const matchesId = this.idFilter.endsWith('*')

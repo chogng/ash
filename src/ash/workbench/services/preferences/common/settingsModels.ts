@@ -152,9 +152,10 @@ function contributedSettingSchema(configuration: IRegisteredConfiguration): ICon
 	}
 }
 
-function contributedSettingCopy(configuration: IRegisteredConfiguration): { id: string; title: string; description: string; keywords: readonly string[]; } {
+function contributedSettingCopy(configuration: IRegisteredConfiguration): { id: string; title: string; description: string; keywords: readonly string[]; tags?: readonly string[]; } {
 	return {
 		id: configuration.key,
+		tags: configuration.tags,
 		title: configuration.schema?.title ?? configuration.key,
 		description: configuration.schema?.description ?? configuration.schema?.markdownDescription ?? '',
 		keywords: [configuration.source!.id, configuration.source!.displayName ?? ''],
@@ -164,6 +165,7 @@ function contributedSettingCopy(configuration: IRegisteredConfiguration): { id: 
 function registeredSetting(configuration: IRegisteredConfiguration, schema: IConfigurationSettingSchema): ISetting {
 	const base = {
 		id: configuration.key,
+		tags: configuration.tags,
 		title: schema.title,
 		description: schema.description,
 		keywords: configuration.source ? [...new Set([configuration.source.id, configuration.source.displayName ?? '', ...(schema.keywords ?? [])])] : schema.keywords,

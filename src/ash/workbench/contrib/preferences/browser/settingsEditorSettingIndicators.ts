@@ -11,13 +11,14 @@ export interface SettingsTreeIndicatorsState {
 
 let indicatorId = 0;
 
-/** Owns the configured marker, its hover, and the row's accessible status. */
+/** Owns configured and maturity indicators and the row's accessible status. */
 export class SettingsTreeIndicatorsLabel extends Disposable {
 	public readonly domNode: HTMLSpanElement;
 	private readonly markerDomNode: HTMLSpanElement;
 	private readonly labelDomNode: HTMLSpanElement;
 	private readonly configuredDescription: HTMLSpanElement;
 	private readonly hover: Hover;
+	private readonly maturityDomNode: HTMLSpanElement;
 
 	constructor(container: HTMLElement, contextViewProvider: IContextViewProvider, hoverDelay: () => number) {
 		super();
@@ -28,6 +29,12 @@ export class SettingsTreeIndicatorsLabel extends Disposable {
 		this.labelDomNode.className = 'ash-settings-indicator-label';
 		this.domNode.append(this.labelDomNode);
 		container.append(this.domNode);
+		this.maturityDomNode = h(container.ownerDocument, 'span');
+		this.maturityDomNode.id = `ash-settings-maturity-${++indicatorId}`;
+		this.maturityDomNode.className = 'ash-settings-maturity';
+		this.maturityDomNode.hidden = true;
+		container.append(this.maturityDomNode);
+		this._register(toDisposable(() => this.maturityDomNode.remove()));
 		this._register(toDisposable(() => this.domNode.remove()));
 		this.configuredDescription = h(container.ownerDocument, 'span');
 		this.configuredDescription.id = `ash-settings-configured-${++indicatorId}`;
@@ -46,6 +53,22 @@ export class SettingsTreeIndicatorsLabel extends Disposable {
 
 	public get configuredDescriptionId(): string {
 		return this.configuredDescription.id;
+	}
+
+	public get maturityDescriptionId(): string | undefined {
+		return this.maturityDomNode.hidden ? undefined : this.maturityDomNode.id;
+	}
+
+	public updateMetadata(tags: readonly string[] | undefined): void {
+		const experimental = tags?.includes('experimental');
+		const preview = tags?.includes('preview');
+		this.maturityDomNode.hidden = !experimental && !preview;
+		this.maturityDomNode.textContent = experimental
+			? localize({ bundle: 'ash.settings', key: 'status.experimental' }, 'Experimental')
+			: preview ? localize({ bundle: 'ash.settings', key: 'status.preview' }, 'Preview') : '';
+		this.maturityDomNode.title = experimental
+			? localize({ bundle: 'ash.settings', key: 'status.experimentalDescription' }, 'This feature is experimental and may change or be removed.')
+			: preview ? localize({ bundle: 'ash.settings', key: 'status.previewDescription' }, 'This feature is in preview and may change.') : '';
 	}
 
 	public update(state: SettingsTreeIndicatorsState): void {

@@ -94,6 +94,16 @@
 	line-height: 1.45;
 }
 
+.ash-settings-maturity {
+	color: var(--ash-description-foreground);
+	font-size: 12px;
+	line-height: 1.45;
+}
+
+.ash-settings-maturity[hidden] {
+	display: none;
+}
+
 /* Keep status available to assistive technology without shifting the row's controls. */
 .ash-settings-indicators,
 .ash-settings-configured-description {

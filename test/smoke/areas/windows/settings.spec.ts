@@ -1,6 +1,35 @@
 import { readUserSettings, writeUserSettings } from '../../../automation/settings.js';
 import { expect, test } from '../../../automation/test.js';
 
+test('Settings maturity labels and filters work in English and Chinese', async ({ workbench, application, restartWorkbench }, testInfo) => {
+	test.setTimeout(120_000);
+	for (const locale of ['en', 'zh-CN']) {
+		await workbench.settingsEditor.openUserSettingsUI();
+		const settings = workbench.settingsEditor.element;
+		const search = settings.locator('.ash-settings-search input');
+		await workbench.menus.select(application, () => settings.locator('.ash-settings-search-filter').press('Enter'), [locale === 'en' ? 'Experimental' : '实验性']);
+		await expect(search).toHaveValue('@tag:experimental');
+		await expect(search).toBeFocused();
+		const gpu = settings.locator('[data-settings-item-id="editor.experimentalGpuAcceleration"]');
+		await expect(gpu).toBeVisible();
+		await expect(gpu.locator('.ash-settings-maturity')).toHaveText(locale === 'en' ? 'Experimental' : '实验性');
+		await expect(gpu).toHaveAccessibleDescription(locale === 'en' ? 'Experimental' : '实验性');
+		await testInfo.attach(`experimental-settings-${locale}`, { body: await workbench.page.screenshot(), contentType: 'image/png' });
+		await workbench.menus.select(application, () => settings.locator('.ash-settings-search-filter').press('Enter'), [locale === 'en' ? 'Stable' : '稳定']);
+		await expect(search).toHaveValue('@stable');
+		await expect(gpu).not.toBeVisible();
+		await expect(settings.locator('[data-settings-item-id="editor.fontFamily"]')).toBeVisible();
+		await settings.locator('.ash-modal-editor-close').click();
+		if (locale === 'en') {
+			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+			const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
+			await language.fill('简体中文');
+			await language.press('Enter');
+			({ workbench, application } = await restartWorkbench());
+		}
+	}
+});
+
 test('Configure Editors opens workbench editor settings from the title menu in English and Chinese', async ({ workbench, application, restartWorkbench }) => {
 	for (const locale of ['en', 'zh-CN']) {
 		const page = workbench.page;

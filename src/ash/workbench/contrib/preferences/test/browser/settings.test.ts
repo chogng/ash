@@ -312,10 +312,36 @@ test('Chinese indexed search settings explain engine scope in the control and ac
 	assert.match(help.provideContent(), /编辑器的 Current 搜索始终使用 ripgrep/);
 });
 
+test('Settings maturity filters compose with text, identifiers and modified settings without changing values', () => {
+	using tree = new SettingsTreeModel<boolean>(id => id === 'test.preview');
+	tree.setChildren([{
+		element: { kind: 'group', id: 'maturity', title: 'Maturity', description: '' }, children: [
+			{ element: { kind: 'item', id: 'test.experimental', title: 'Browser alpha', description: '', tags: ['experimental', 'browser'], value: true } },
+			{ element: { kind: 'item', id: 'test.preview', title: 'Browser preview', description: '', tags: ['preview'], value: false } },
+			{ element: { kind: 'item', id: 'test.stable', title: 'Browser stable', description: '', value: false } },
+		]
+	}]);
+	for (const [query, ids] of [
+		['@tag:experimental browser', ['test.experimental']],
+		['@TAG:EXPERIMENTAL @tag:browser', ['test.experimental']],
+		['@tag:preview @modified @id:test.*', ['test.preview']],
+		['@stable browser', ['test.stable']],
+		['@stable @tag:experimental', []],
+	] as const) {
+		tree.setQuery(query);
+		assert.deepEqual(tree.visibleItems.map(item => item.id), ids);
+		assert.equal(new SettingsSearchQuery(query).isEmpty, false);
+	}
+	tree.setQuery('');
+	assert.deepEqual(tree.visibleItems.map(item => item.value), [true, false, false]);
+});
+
 test('DefaultSettings projects only Configuration Registry metadata', () => {
 	const registry = new ConfigurationRegistry();
+	const tags = ['experimental'];
 	const visible = registry.registerConfiguration({
 		key: 'editor.test.enabled',
+		tags,
 		defaultValue: true,
 		parse: value => {
 			if (typeof value !== 'boolean') throw new TypeError('Expected a boolean');
@@ -350,6 +376,8 @@ test('DefaultSettings projects only Configuration Registry metadata', () => {
 	});
 
 	const defaults = new DefaultSettings(registry);
+	tags.push('preview');
+	assert.deepEqual(defaults.get(visible).tags, ['experimental']);
 	assert.deepEqual(defaults.all.map(setting => setting.id), ['editor.test.enabled', 'editor.test.patterns']);
 	assert.equal(defaults.get(visible).valueType, 'boolean');
 	assert.equal(defaults.get('editor.test.patterns').valueType, 'stringMap');
@@ -362,7 +390,7 @@ test('Extension settings use catalog identities and standard schemas without a p
 		contributes: {
 			configuration: [{
 				id: 'preferences', title: 'Sample settings', properties: {
-					'editor.sample.enabled': { type: 'boolean', default: true, description: 'Enable sample' },
+					'editor.sample.enabled': { type: 'boolean', default: true, description: 'Enable sample', tags: ['preview'] },
 					'sample.count': { type: 'integer', default: 2, minimum: 1, maximum: 10 },
 					'sample.mode': { type: 'string', enum: ['first', 'second'], default: 'first' },
 					'sample.text': { type: 'string', default: '', markdownDescription: 'Sample text' },
@@ -380,9 +408,14 @@ test('Extension settings use catalog identities and standard schemas without a p
 	]);
 	const layout = createSettingsLayout(defaults.all);
 	const extension = layout.find(category => category.id === 'extension.test.sample')!;
+	using tree = new SettingsTreeModel<ISetting>();
+	tree.setChildren(settingsRootNodes(layout));
+	tree.setQuery('@tag:preview');
+	assert.deepEqual(tree.visibleItems.map(item => item.id), ['editor.sample.enabled']);
 	assert.equal(extension.descriptor.label, '示例扩展');
 	assert.equal(findSettingCategory(layout, 'editor.sample.enabled'), extension.id, 'extension ownership wins over product key patterns');
 	assert.equal(defaults.get('sample.text').description, 'Sample text');
+	assert.deepEqual(defaults.get('editor.sample.enabled').tags, ['preview']);
 	assert.equal(registry.getConfiguration('sample.nested')?.source?.id, 'test.sample');
 	registry.updateConfigurations({ add: [], remove: [...parsed.contributes.configuration] });
 	assert.equal(createSettingsLayout(new DefaultSettings(registry).all).some(category => category.id === extension.id), false);
@@ -507,6 +540,17 @@ test('Configured markers follow explicit local user overrides and expose one acc
 	assert.notEqual(widgets[0]!.domNode.getAttribute('aria-describedby'), widgets[1]!.domNode.getAttribute('aria-describedby'));
 	await configuration.write('{ "[typescript]": { "status.flag": false } }');
 	assertStatus(false);
+	const first = new DefaultSettings(registry).get('status.flag');
+	widgets[0]!.update({ ...first, tags: ['experimental'] });
+	const maturity = widgets[0]!.domNode.querySelector<HTMLElement>('.ash-settings-maturity')!;
+	assert.equal(maturity.textContent, 'Experimental');
+	assert.equal(maturity.hidden, false);
+	assert.equal(widgets[0]!.domNode.getAttribute('aria-describedby'), maturity.id);
+	widgets[0]!.update({ ...first, tags: ['preview'] });
+	assert.equal(maturity.textContent, 'Preview');
+	widgets[0]!.update(first);
+	assert.equal(maturity.hidden, true);
+	assert.equal(widgets[0]!.domNode.hasAttribute('aria-describedby'), false);
 });
 
 test('Copy Setting as JSON reads the latest local user values and preserves falsy and structured values', async () => {
@@ -700,7 +744,7 @@ test('Chinese setting actions, search filters and pending saves expose translate
 	assert.equal(filter.getAttribute('aria-label'), '筛选设置');
 	search.value = '@id:editor.fontSize';
 	filter.click();
-	assert.deepEqual(actions.filter(action => action.id !== Separator.ID).map(action => action.label), ['已修改', '设置 ID…', '清除筛选条件']);
+	assert.deepEqual(actions.filter(action => action.id !== Separator.ID).map(action => action.label), ['已修改', '设置 ID…', '实验性', '预览', '稳定', '清除筛选条件']);
 	search.value = 'font @MODIFIED @id:editor.fontSize';
 	filter.click();
 	await actions.find(action => action.id === 'settings.search.modified')!.run();
@@ -708,6 +752,12 @@ test('Chinese setting actions, search filters and pending saves expose translate
 	assert.equal(browserEnvironment.window.document.activeElement, search.domNode.querySelector('input'));
 	await actions.find(action => action.id === 'settings.search.clearFilters')!.run();
 	assert.equal(search.value, 'font');
+	filter.click();
+	await actions.find(action => action.id === 'settings.search.experimental')!.run();
+	assert.equal(search.value, 'font @tag:experimental');
+	filter.click();
+	await actions.find(action => action.id === 'settings.search.stable')!.run();
+	assert.equal(search.value, 'font @stable');
 });
 
 test('Activity Bar badges expose a translated profile setting with strict boolean validation', () => {
@@ -2036,7 +2086,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	search.value = '';
 	search.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
 	root.querySelector<HTMLButtonElement>('.ash-settings-search-filter')?.click();
-	assert.deepEqual(menuActions.filter(action => action.label).map(action => action.label), ['Modified', 'Setting ID…', 'Clear Filters']);
+	assert.deepEqual(menuActions.filter(action => action.label).map(action => action.label), ['Modified', 'Setting ID…', 'Experimental', 'Preview', 'Stable', 'Clear Filters']);
 	const idFilter = menuActions.find(action => action.id === 'settings.search.id');
 	assert.ok(idFilter);
 	await idFilter.run();
@@ -2053,6 +2103,12 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	await clearFilters.run();
 	hideMenu?.(false);
 	assert.equal(search.value, '');
+	await configuration.updateValue(WorkbenchConfiguration.colorTheme, 'missing-theme');
+	search.value = '@stable @id:workbench.colorTheme';
+	search.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
+	assert.match(root.querySelector('[data-configuration-key="workbench.colorTheme"]')?.textContent ?? '', /Unavailable \(missing-theme\)/);
+	assert.equal(configuration.getValue(WorkbenchConfiguration.colorTheme), 'missing-theme');
+	await configuration.updateValue(WorkbenchConfiguration.colorTheme, undefined);
 
 	search.value = 'font family';
 	search.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));

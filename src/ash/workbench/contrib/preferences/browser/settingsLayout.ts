@@ -615,6 +615,7 @@ export class SettingsLayout {
 							title: setting.title,
 							description: setting.description,
 							keywords: [setting.id, ...(setting.keywords ?? [])],
+							tags: setting.tags,
 							value: setting,
 						},
 					};

@@ -75,6 +75,7 @@ export const CodeEditorConfiguration = Object.freeze({
 	}),
 	experimentalGpuAcceleration: configurationRegistry.registerConfiguration<"on" | "off">({
 		key: "editor.experimentalGpuAcceleration",
+		tags: ['experimental'],
 		defaultValue: "off",
 		parse(value: unknown): "on" | "off" {
 			if (value === "on" || value === "off") return value;

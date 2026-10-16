@@ -18,6 +18,8 @@ export enum ConfigurationScope {
 }
 
 export interface IConfigurationPropertySchema extends JsonSchema {
+	/** Searchable setting metadata; experimental and preview describe maturity, not enablement. */
+	readonly tags?: readonly string[];
 	readonly policy?: ConfigurationPolicy;
 	readonly scope?: ConfigurationScope;
 	readonly included?: boolean;
@@ -79,6 +81,7 @@ export interface IExtensionInfo {
 }
 
 export interface IRegisteredConfiguration<T = unknown> {
+	readonly tags?: readonly string[];
 	readonly policy?: ConfigurationPolicy;
 	readonly key: string;
 	/** Catalog identity supplied by the extension owner, never inferred from a setting key. */
@@ -94,6 +97,7 @@ export interface IRegisteredConfiguration<T = unknown> {
 }
 
 export interface IConfigurationKeyDefinition<T> {
+	readonly tags?: readonly string[];
 	readonly policy?: ConfigurationPolicy;
 	readonly key: string;
 	readonly defaultValue: T;
@@ -167,6 +171,7 @@ export class ConfigurationRegistry implements IConfigurationRegistry {
 					const defaultValue = schema.default === undefined ? (type === 'string' ? '' : type === 'boolean' ? false : type === 'number' || type === 'integer' ? 0 : type === 'array' ? [] : type === 'object' ? {} : null) : schema.default;
 					next.set(key, Object.freeze({
 						key, source, defaultValue: parse(defaultValue), parse, serialize: parse, schema,
+						tags: registeredTags(schema.tags),
 						policy: registeredPolicy(schema.policy, defaultValue, next.values()),
 						setting: schema.ashSetting, extensionBinding: schema.ashBinding,
 						scope: schema.scope ?? node.scope ?? inheritedScope ?? ConfigurationScope.WINDOW,
@@ -199,6 +204,7 @@ export class ConfigurationRegistry implements IConfigurationRegistry {
 			);
 		}
 		const configuration: IRegisteredConfiguration<T> = Object.freeze({
+			tags: registeredTags(definition.tags),
 			policy: registeredPolicy(definition.policy, definition.defaultValue, this.configurations.values()),
 			key: definition.key,
 			scope: definition.scope,
@@ -229,6 +235,15 @@ export class ConfigurationRegistry implements IConfigurationRegistry {
 	owns(key: string): boolean {
 		return this.configurations.has(key);
 	}
+}
+
+/** Own a snapshot so contributors cannot silently change searchable metadata after registration. */
+function registeredTags(tags: readonly string[] | undefined): readonly string[] | undefined {
+	if (tags === undefined) return undefined;
+	if (!Array.isArray(tags) || tags.some(tag => typeof tag !== 'string' || !tag.trim())) {
+		throw new TypeError('Configuration tags must be non-empty strings');
+	}
+	return Object.freeze([...new Set(tags)]);
 }
 
 Registry.add(Extensions.Configuration, new ConfigurationRegistry());
