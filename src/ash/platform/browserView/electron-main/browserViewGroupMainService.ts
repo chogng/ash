@@ -15,6 +15,7 @@ export class BrowserViewGroupMainService extends Disposable implements IBrowserV
 	public async createGroup(filter: IBrowserViewGroupFilter): Promise<string> {
 		this.assertNotDisposed();
 		if (!isRecord(filter) || typeof filter.sandboxSessionId !== 'string' || filter.sandboxSessionId.length === 0
+			|| (filter.agentOnly !== undefined && typeof filter.agentOnly !== 'boolean')
 			|| (filter.browserIds !== undefined && (!Array.isArray(filter.browserIds) || !filter.browserIds.every(id => typeof id === 'string')))) {
 			throw new TypeError('Invalid browser group filter');
 		}
@@ -24,7 +25,7 @@ export class BrowserViewGroupMainService extends Disposable implements IBrowserV
 		try { await group.initialize(); return group.id; }
 		catch (error) { this.groups.deleteAndDispose(group.id); throw error; }
 	}
-	public async destroyGroup(id: string): Promise<void> { this.group(id); this.groups.deleteAndDispose(id); }
+	public async destroyGroup(id: string): Promise<void> { await this.groups.get(id)?.close(); }
 	public onDynamicDidDestroy(id: string): Event<void> { return this.group(id).onDidDestroy; }
 	public onDynamicCDPMessage(id: string): Event<CDPEvent | CDPResponse> { return this.group(id).onCDPMessage; }
 	public sendCDPMessage(id: string, message: CDPRequest): Promise<void> {

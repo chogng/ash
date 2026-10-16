@@ -20,6 +20,7 @@ mod worktree;
 pub use browser::BrowserAction;
 pub use browser::BrowserActionResult;
 pub use browser::BrowserCapability;
+pub use browser::BrowserCdpOperation;
 pub use browser::BrowserElementTarget;
 pub use browser::BrowserError;
 pub use browser::BrowserMediaResource;

@@ -30,6 +30,8 @@ function fixture() {
 			return { windowId: 1, bounds: { left: 0, top: 0, width: 640, height: 480, windowState: 'normal' } };
 		},
 		getBrowserContexts: () => ['context'],
+		createBrowserContext: () => 'new-context',
+		disposeBrowserContext: async () => { },
 		createTarget: async url => add('created-page', url),
 		activateTarget: id => { getTarget(id); },
 		closeTarget: async id => {

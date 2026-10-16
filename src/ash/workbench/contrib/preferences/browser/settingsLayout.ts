@@ -83,7 +83,12 @@ export const SettingsNavigation = [
 				description: localize({ bundle: 'ash.settings', key: 'categories.github.description' }, 'Connect accounts and manage Codex pull request reviews.'),
 				keywords: ['Codex', 'PR', 'review', 'Connector'],
 				presentation: 'general',
-				groups: [],
+				groups: [{
+					id: 'repository',
+					label: localize({ bundle: 'ash.settings', key: 'github.repository.label' }, 'Repositories'),
+					description: localize({ bundle: 'ash.settings', key: 'github.repository.description' }, 'Choose the Git protocol and protected branch behavior.'),
+					settings: ['github.gitProtocol', 'github.branchProtection'],
+				}],
 			},
 			{
 				id: 'network',
@@ -176,6 +181,12 @@ export const SettingsNavigation = [
 						label: localize({ bundle: 'ash.settings', key: 'categories.browser.label' }, 'Browser'),
 						description: localize({ bundle: 'ash.settings', key: 'browser.controls.description' }, 'Control page zoom, address bar search and reload on local file changes.'),
 						settings: ['workbench.browser.searchEngine', 'workbench.browser.pageZoom', 'workbench.browser.autoReloadOnFileChange', 'workbench.browser.dataStorage', 'workbench.browser.openLocalhostLinks'],
+					},
+					{
+						id: 'browser-agent',
+						label: localize({ bundle: 'ash.settings', key: 'browser.agent.label' }, 'Agent control'),
+						description: localize({ bundle: 'ash.settings', key: 'browser.agent.description' }, 'Control browser automation and advanced debugging access.'),
+						settings: ['workbench.browser.enableChatTools', 'workbench.browser.enableCDP'],
 					},
 					{
 						id: 'chatgpt',

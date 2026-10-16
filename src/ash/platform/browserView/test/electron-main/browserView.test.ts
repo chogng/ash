@@ -451,7 +451,8 @@ export function fixture(storageOverride?: IApplicationStorageMainService) {
 		[Symbol.dispose]: () => store.dispose(), events, children, contents, partitions,
 		url: '', title: 'Example', loading: false, attached: false, networkReleases: 0, workbenchFocused: 0,
 		workbenchInput: [] as Electron.KeyboardInputEvent[],
-		commands: [] as Array<{ method: string; params: unknown; }>,
+		commands: [] as Array<{ method: string; params: unknown; sessionId?: string; }>,
+		debugSessions: [] as string[],
 		observations: [] as string[], cancelled: [] as string[], retired: [] as string[],
 		observe: async (pageId: string): Promise<IBrowserViewObservation> => ({ targetId: pageId, url: f.url, title: f.title, loading: f.loading }),
 		command: async (_method: string, _params?: unknown): Promise<unknown> => ({}),
@@ -504,7 +505,7 @@ export function fixture(storageOverride?: IApplicationStorageMainService) {
 		getRemoteNetwork() { return f.remote ? { authority: 'ssh-remote+test', tunnels: { openProxy: () => f.proxy() } as unknown as import('../../../remote/electron-main/sshPortForwardingService.js').SshPortForwardingService } : undefined; }, createSession: (partition: string) => {
 			let session = partitions.get(partition);
 			if (!session) {
-				session = Object.assign(new EventEmitter(), { protocol: { handle: () => { }, unhandle: () => { } }, webRequest: { onBeforeRequest: () => { } }, setPermissionCheckHandler: () => { }, setPermissionRequestHandler: () => { }, setDevicePermissionHandler: () => { }, setProxy: async () => { }, closeAllConnections: async () => { } }) as unknown as Electron.Session;
+				session = Object.assign(new EventEmitter(), { protocol: { handle: () => { }, unhandle: () => { } }, webRequest: { onBeforeRequest: () => { } }, setPermissionCheckHandler: () => { }, setPermissionRequestHandler: () => { }, setDevicePermissionHandler: () => { }, setProxy: async () => { }, closeAllConnections: async () => { }, clearStorageData: async () => { }, clearCache: async () => { } }) as unknown as Electron.Session;
 				partitions.set(partition, session);
 			}
 			return session;
@@ -528,7 +529,7 @@ export function fixture(storageOverride?: IApplicationStorageMainService) {
 				paste: () => f.editing.push('paste'), pasteAndMatchStyle: () => f.editing.push('pastePlain'), selectAll: () => f.editing.push('selectAll'),
 				copyImageAt: (x: number, y: number) => { f.imageCopies.push({ x, y }); }, downloadURL: (url: string) => { f.downloads.push(url); },
 				close: () => { destroyed = true; pageContents.emit('destroyed'); },
-				debugger: Object.assign(new EventEmitter(), { isAttached: () => f.attached, attach: () => { f.attached = true; }, detach: () => { f.attached = false; }, sendCommand: (method: string, params?: unknown) => { f.commands.push({ method, params }); return method === 'Target.getTargetInfo' ? Promise.resolve({ targetInfo: { targetId: chromiumId } }) : f.command(method, params); } }),
+				debugger: Object.assign(new EventEmitter(), { isAttached: () => f.attached, attach: () => { f.attached = true; }, detach: () => { f.attached = false; }, sendCommand: (method: string, params?: unknown, sessionId?: string) => { f.commands.push({ method, params, ...(sessionId ? { sessionId } : {}) }); if (method === 'Target.attachToTarget') { const sessionId = 'session-' + f.debugSessions.length; f.debugSessions.push(sessionId); return Promise.resolve({ sessionId }); } return method === 'Target.getTargetInfo' ? Promise.resolve({ targetInfo: { targetId: chromiumId } }) : f.command(method, params); } }),
 			});
 			return { webContents: pageContents, setVisible: () => { }, setBounds: (value: typeof bounds) => { bounds = value; }, getBounds: () => bounds } as unknown as WebContentsView;
 		},

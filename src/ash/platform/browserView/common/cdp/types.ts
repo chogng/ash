@@ -67,6 +67,8 @@ export interface ICDPBrowserHost {
 	getVersion(): CDPBrowserVersion;
 	getWindowForTarget(targetId: string): { windowId: number; bounds: CDPWindowBounds; };
 	getBrowserContexts(): string[];
+	createBrowserContext(): string;
+	disposeBrowserContext(browserContextId: string): Promise<void>;
 	createTarget(url: string, browserContextId?: string): Promise<CDPTargetInfo>;
 	activateTarget(targetId: string): void;
 	closeTarget(targetId: string): Promise<void>;

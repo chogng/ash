@@ -288,6 +288,7 @@ export interface IWorkbenchOptions {
 	readonly serviceCollection?: ServiceCollection;
 	readonly createAppToolsHost?: (services: IInstantiationService) => IDisposable;
 	readonly createTextDocumentHost?: (services: IInstantiationService) => IDisposable;
+	readonly createBrowserHost?: (services: IInstantiationService) => IDisposable;
 	readonly contributionIds: readonly string[];
 	readonly profile: SessionsProfile;
 	readonly api: IRendererHost;
@@ -587,6 +588,7 @@ export abstract class Workbench extends Disposable {
 			})));
 		// Document hosts resolve Chat editing, whose signals use the window accessibility policy.
 		if (options.createTextDocumentHost) { this._register(options.createTextDocumentHost(services)); }
+		if (options.createBrowserHost) { this._register(options.createBrowserHost(services)); }
 		services.registerInstance(IGitHubConnectionService, this._register(services.createInstance(GitHubConnectionService)));
 		const notificationActionRunner = this._register(services.createInstance(NotificationActionRunner));
 		const keyboardLayoutService = this._register(new BrowserKeyboardLayoutService({

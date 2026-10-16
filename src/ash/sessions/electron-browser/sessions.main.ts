@@ -50,6 +50,8 @@ import { selectionFromWorkspace } from '../browser/workspaceSelection.js';
 import { NativeWorkbenchStorageService } from '../../workbench/services/storage/electron-browser/storageService.js';
 import { LoggerChannelClient } from '../../platform/log/common/logIpc.js';
 import { IPlaywrightService } from '../../platform/browserView/common/playwrightService.js';
+import { registerAppServerBrowserHost } from '../../platform/agentHost/electron-browser/appServerBrowserHost.js';
+import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
 import { getSingletonServiceDescriptors } from '../../platform/instantiation/common/extensions.js';
 
 /** Starts the Code-specific Electron Sessions page. */
@@ -109,7 +111,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 		serviceCollection.set(IPlaywrightService, playwrightService);
 		serviceCollection.set(IBrowserViewService, ProxyChannel.toService<IBrowserViewService>(mainProcessService.getChannel(ipcBrowserViewChannelName)));
 		logger = profileServices.createInstance(LoggerChannelClient);
-		api = await createElectronRendererApi([client => { documentClient = client; return {}; }, client => registerLocalTranscriptionService(transcriptionServices, client)], { browser: true, textDocuments: true, appTools: true }, permissionDialog, mainProcessService, undefined, undefined, playwrightService);
+		api = await createElectronRendererApi([client => { documentClient = client; return {}; }, client => registerLocalTranscriptionService(transcriptionServices, client)], { browser: true, textDocuments: true, appTools: true }, permissionDialog, mainProcessService);
 	}
 	catch (error) { sessions.dispose(); return showStartupError(error, text => invoke<void>('ash:host:writeClipboard', text)); }
 	try {
@@ -145,6 +147,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 		workbench = sessions.add(await createSessionsWorkbench({
 			serviceCollection,
 			createAppToolsHost: documentClient ? services => new AppServerAppToolsHost(documentClient!, services.createInstance(AppToolsHost, container.ownerDocument, services.createInstance(ElectronUpdateService))) : undefined,
+			createBrowserHost: documentClient ? services => registerAppServerBrowserHost(documentClient!, services.get(IPlaywrightService), services.get(IMainProcessService), services.get(IConfigurationService)) : undefined,
 			createTextDocumentHost: documentClient ? services => {
 				const editing = services.get(IChatEditingService);
 				return services.createInstance(AppServerTextDocumentHost, documentClient!, { applyEdits: editing.applyEdits.bind(editing), finishTurn: editing.finishTurn.bind(editing) });

@@ -12,6 +12,7 @@ import { rm } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { Emitter } from '../../../../base/common/event.js';
 import type { CDPEvent, CDPResponse } from '../../common/cdp/types.js';
+import { CancellationError } from '../../../../base/common/errors.js';
 
 suite('Playwright session lifetime', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -58,7 +59,8 @@ suite('Playwright session lifetime', () => {
 				assert.deepEqual(JSON.parse(output!), { value: 'Script input', node: 'undefined', parent: 'isolated' });
 				await assert.rejects(playwright.performAction('bad-script', 'thread', 'observed-page', { type: 'runPlaywright', code: 'return await page.context();' }), /method is unavailable/);
 				const cancellation = playwright.performAction('cancel-script', 'thread', 'observed-page', { type: 'runPlaywright', code: 'return new Promise(() => {});' });
-				const rejected = assert.rejects(cancellation, /BrowserScriptTimedOut/);
+				// Either the worker or its isolated script can observe the explicit cancellation first.
+				const rejected = assert.rejects(cancellation, CancellationError);
 				await new Promise<void>(resolve => {
 					const changed = (): void => {
 						if (page.frames().some(frame => frame.name().startsWith('ashScript'))) { page.off('framenavigated', changed); resolve(); }

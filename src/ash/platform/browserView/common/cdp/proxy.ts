@@ -140,6 +140,10 @@ export class CDPBrowserProxy extends Disposable {
 			switch (method) {
 				case 'Target.getTargets': return { targetInfos: this.host.getTargets().map(target => this.info(target)) };
 				case 'Target.getBrowserContexts': return { browserContextIds: this.host.getBrowserContexts() };
+				case 'Target.createBrowserContext': return { browserContextId: this.host.createBrowserContext() };
+				case 'Target.disposeBrowserContext':
+					await this.host.disposeBrowserContext(stringParam(params.browserContextId, 'browserContextId'));
+					return {};
 				case 'Target.setDiscoverTargets':
 					if (booleanParam(params.discover, 'discover')) {
 						this.discover.add(parent);
@@ -182,7 +186,7 @@ export class CDPBrowserProxy extends Disposable {
 				case 'Target.createTarget': {
 					const contextId = params.browserContextId === undefined ? undefined : stringParam(params.browserContextId, 'browserContextId');
 					const target = await this.host.createTarget(stringParam(params.url, 'url'), contextId);
-					return { targetId: target.targetId };
+					return { targetId: target.targetId, ...(target.browserViewId ? { browserViewId: target.browserViewId } : {}) };
 				}
 				default: throw new CDPMethodNotFoundError(method);
 			}

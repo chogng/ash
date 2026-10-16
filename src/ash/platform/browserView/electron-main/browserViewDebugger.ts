@@ -8,6 +8,8 @@ import { isRecord } from '../../../base/common/types.js';
 export class BrowserViewDebugger extends Disposable {
 	private readonly events = this._register(new Emitter<CDPEvent>());
 	public readonly onEvent = this.events.event;
+	private readonly detached = this._register(new Emitter<void>());
+	public readonly onDidDetach = this.detached.event;
 	private leases = 0;
 	private attachedHere = false;
 	private readonly pending = new Set<Promise<unknown>>();
@@ -18,6 +20,9 @@ export class BrowserViewDebugger extends Disposable {
 		};
 		contents.debugger.on('message', message);
 		this._register(toDisposable(() => contents.debugger.off('message', message)));
+		const detach = (): void => this.detached.fire();
+		contents.debugger.on('detach', detach);
+		this._register(toDisposable(() => contents.debugger.off('detach', detach)));
 	}
 	public acquire(): IDisposable {
 		this.assertNotDisposed();

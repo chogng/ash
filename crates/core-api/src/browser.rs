@@ -46,6 +46,11 @@ pub enum BrowserTextInputTarget {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum BrowserAction {
+    /// Explicitly enabled protocol access, scoped to the task's isolated browser pages.
+    Cdp {
+        target_id: BrowserTargetId,
+        operation: BrowserCdpOperation,
+    },
     Navigate {
         target_id: BrowserTargetId,
         url: String,
@@ -88,6 +93,17 @@ pub enum BrowserAction {
     Reload {
         target_id: BrowserTargetId,
     },
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum BrowserCdpOperation {
+    Command {
+        method: String,
+        params: serde_json::Map<String, serde_json::Value>,
+        session_id: Option<String>,
+    },
+    ReadEvents,
+    Close,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -135,8 +151,8 @@ impl std::error::Error for BrowserError {}
 /// Host-provided browser operations used by the Agent.
 ///
 /// Implementations translate these semantic requests into a local or remote browser backend while
-/// enforcing target ownership, origin policy, deadlines, and cancellation. They must never expose
-/// arbitrary CDP commands to Core or let a closed target silently resolve to a different tab.
+/// enforcing target ownership, origin policy, deadlines, and cancellation. Protocol access requires
+/// a separate explicit host grant; a closed target must never silently resolve to a different tab.
 pub trait BrowserCapability: Send + Sync {
     fn create_target(
         &self,

@@ -12,7 +12,7 @@ fn browser_tools_are_complete_strict_and_require_one_time_approval() {
         ResourceStore::default(),
     )))));
     let definitions = service.definitions();
-    assert_eq!(definitions.len(), 15);
+    assert_eq!(definitions.len(), 18);
     assert!(definitions.iter().all(|definition| definition.strict));
     assert!(
         definitions
@@ -74,6 +74,12 @@ fn additional_browser_tools_validate_input_before_requesting_authority() {
         ResourceStore::default(),
     )))));
     for (name, arguments) in [
+        (
+            "browser_cdp",
+            json!({"target_id":"page", "method":"Runtime.evaluate", "params_json":"{}", "session_id":null}),
+        ),
+        ("browser_cdp_events", json!({"target_id":"page"})),
+        ("browser_cdp_close", json!({"target_id":"page"})),
         ("browser_list_pages", json!({})),
         ("browser_hover", json!({"target_id":"page", "node_id":"1"})),
         (
@@ -96,6 +102,14 @@ fn additional_browser_tools_validate_input_before_requesting_authority() {
         ));
     }
     for (name, arguments) in [
+        (
+            "browser_cdp",
+            json!({"target_id":"page", "method":"Runtime.evaluate", "params_json":"[]", "session_id":null}),
+        ),
+        (
+            "browser_cdp",
+            json!({"target_id":"page", "method":"Runtime.evaluate.extra", "params_json":"{}", "session_id":null}),
+        ),
         ("browser_list_pages", json!({"thread_id":"other"})),
         (
             "browser_drag",

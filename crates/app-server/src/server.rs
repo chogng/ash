@@ -2486,6 +2486,16 @@ impl AppServer {
         }
         match client_method(&request.method) {
             Some(ClientMethod::Initialize) => unreachable!("initialize handled before gate"),
+            Some(ClientMethod::BrowserConfigure) => {
+                let params: ash_app_server_protocol::protocol::browser::BrowserConfigureParams =
+                    decode(&request.params)?;
+                self.browser_host
+                    .configure(connection.connection_id, &params)
+                    .map_err(|_| RpcError::new(-32000, AppServerErrorName::ResourceNotOwner))?;
+                self.synchronize_browser_tool_availability()
+                    .map_err(|_| RpcError::new(-32603, AppServerErrorName::InternalError))?;
+                result(&())
+            }
             Some(ClientMethod::BrowserNetworkAuthorize) => {
                 let params: ash_app_server_protocol::protocol::browser::BrowserNetworkAuthorizeParams = decode(&request.params)?;
                 let policy = self.calls.network_policy();

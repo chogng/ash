@@ -5,6 +5,34 @@ use crate::TS;
 use serde::Deserialize;
 use serde::Serialize;
 
+/// Applies this browser host's current user preference without granting another connection access.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BrowserConfigureParams {
+    pub enabled: bool,
+    pub cdp_enabled: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum BrowserCdpOperationDto {
+    Command {
+        #[schemars(length(min = 1, max = 256))]
+        method: String,
+        params: serde_json::Map<String, serde_json::Value>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        session_id: Option<String>,
+    },
+    ReadEvents {},
+    Close {},
+}
+
 /// Replaces the audience of a user page on this connection; an empty audience revokes access.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -100,6 +128,10 @@ pub enum BrowserTextInputTargetDto {
     rename_all_fields = "camelCase"
 )]
 pub enum BrowserPerformActionDto {
+    Cdp {
+        target_id: String,
+        operation: BrowserCdpOperationDto,
+    },
     Navigate {
         target_id: String,
         url: String,
@@ -148,7 +180,8 @@ pub enum BrowserPerformActionDto {
 impl BrowserPerformActionDto {
     pub fn target_id(&self) -> &str {
         match self {
-            Self::Navigate { target_id, .. }
+            Self::Cdp { target_id, .. }
+            | Self::Navigate { target_id, .. }
             | Self::Click { target_id, .. }
             | Self::Hover { target_id, .. }
             | Self::Drag { target_id, .. }
@@ -176,6 +209,15 @@ pub struct BrowserPerformParams {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct BrowserPerformResult {
+    /// Main-created page identity, published to the backend ownership table before use by tools.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub created_target_id: Option<String>,
+    /// Releases backend ownership for pages closed through the protocol connection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    #[schemars(length(max = 256))]
+    pub closed_target_ids: Option<Vec<String>>,
     #[schemars(length(max = 1048576))]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
@@ -235,3 +277,7 @@ pub struct BrowserListResult {
     #[schemars(length(max = 256))]
     pub pages: Vec<BrowserPageSummary>,
 }
+
+#[cfg(test)]
+#[path = "browser_tests.rs"]
+mod tests;

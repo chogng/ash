@@ -22,6 +22,7 @@ use ash_protocol::ToolName;
 use core_api::ActionPolicyService;
 use core_api::BrowserAction;
 use core_api::BrowserCapability;
+use core_api::BrowserCdpOperation;
 use core_api::BrowserElementTarget;
 use core_api::BrowserObserveRequest;
 use core_api::BrowserTargetId;
@@ -48,6 +49,7 @@ const TARGET_SCHEMA: &str = r#"{"type":"object","properties":{"target_id":{"type
 const DRAG_SCHEMA: &str = r#"{"type":"object","properties":{"target_id":{"type":"string"},"source_node_id":{"type":"string"},"destination_node_id":{"type":"string"}},"required":["target_id","source_node_id","destination_node_id"],"additionalProperties":false}"#;
 const DIALOG_SCHEMA: &str = r#"{"type":"object","properties":{"target_id":{"type":"string"},"accept":{"type":"boolean"},"prompt_text":{"type":["string","null"]}},"required":["target_id","accept","prompt_text"],"additionalProperties":false}"#;
 const SCRIPT_SCHEMA: &str = r#"{"type":"object","properties":{"target_id":{"type":"string"},"code":{"type":"string","minLength":1,"maxLength":32768}},"required":["target_id","code"],"additionalProperties":false}"#;
+const CDP_SCHEMA: &str = r#"{"type":"object","properties":{"target_id":{"type":"string"},"method":{"type":"string","minLength":1,"maxLength":256},"params_json":{"type":"string","description":"JSON object containing CDP command parameters."},"session_id":{"type":["string","null"],"description":"Flattened CDP session ID, or null to select the page automatically (browser and Target commands use the logical browser)."}},"required":["target_id","method","params_json","session_id"],"additionalProperties":false}"#;
 const LIST_SCHEMA: &str =
     r#"{"type":"object","properties":{},"required":[],"additionalProperties":false}"#;
 
@@ -61,6 +63,21 @@ impl BrowserToolService {
         Self {
             browser,
             definitions: vec![
+                definition(
+                    "browser_cdp",
+                    "Send a Chrome DevTools Protocol command. Requires the user's advanced CDP setting. Access is limited to this task's isolated Agent pages and contexts; Ash workbench targets and user pages are excluded. Page domains select target_id automatically; use session_id for child targets. Events are buffered for browser_cdp_events. New targets also return browserViewId for the semantic browser tools. Network requests retain the task's network policy.",
+                    CDP_SCHEMA,
+                ),
+                definition(
+                    "browser_cdp_events",
+                    "Drain buffered CDP events for this task, including a dropped-event count. Enable the relevant CDP domain with browser_cdp first.",
+                    TARGET_SCHEMA,
+                ),
+                definition(
+                    "browser_cdp_close",
+                    "Release this task's CDP subscriptions and contexts without closing its ordinary browser pages.",
+                    TARGET_SCHEMA,
+                ),
                 definition(
                     "browser_list_pages",
                     "List browser pages owned by or explicitly shared with this task.",
@@ -142,6 +159,46 @@ impl BrowserToolService {
 
     fn materialize(&self, call: &ToolCall) -> Result<BrowserToolRequest, CoreError> {
         match call.name.as_str() {
+            "browser_cdp" => {
+                let args: CdpArguments = decode(call)?;
+                let mut parts = args.method.split('.');
+                if !parts.next().is_some_and(|part| {
+                    !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_alphanumeric())
+                }) || !parts.next().is_some_and(|part| {
+                    !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_alphanumeric())
+                }) || parts.next().is_some()
+                    || args.method.len() > 256
+                    || args.params_json.len() > 1024 * 1024
+                    || args
+                        .session_id
+                        .as_ref()
+                        .is_some_and(|id| id.is_empty() || id.len() > 256)
+                {
+                    return Err(CoreError::Policy("invalid CDP command".into()));
+                }
+                let params = serde_json::from_str(&args.params_json).map_err(|_| {
+                    CoreError::Policy("CDP parameters must be a JSON object".into())
+                })?;
+                Ok(BrowserToolRequest::Interaction(BrowserAction::Cdp {
+                    target_id: target_id(args.target_id)?,
+                    operation: BrowserCdpOperation::Command {
+                        method: args.method,
+                        params,
+                        session_id: args.session_id,
+                    },
+                }))
+            }
+            "browser_cdp_events" | "browser_cdp_close" => {
+                let args: TargetArguments = decode(call)?;
+                Ok(BrowserToolRequest::Interaction(BrowserAction::Cdp {
+                    target_id: target_id(args.target_id)?,
+                    operation: if call.name.as_str() == "browser_cdp_events" {
+                        BrowserCdpOperation::ReadEvents
+                    } else {
+                        BrowserCdpOperation::Close
+                    },
+                }))
+            }
             "browser_list_pages" => {
                 let _: EmptyArguments = decode(call)?;
                 Ok(BrowserToolRequest::List)
@@ -609,7 +666,8 @@ impl BrowserToolRequest {
         match self {
             Self::Open { .. } | Self::List => None,
             Self::Interaction(action) => Some(match action {
-                BrowserAction::Navigate { target_id, .. }
+                BrowserAction::Cdp { target_id, .. }
+                | BrowserAction::Navigate { target_id, .. }
                 | BrowserAction::Click { target_id, .. }
                 | BrowserAction::Hover { target_id, .. }
                 | BrowserAction::Drag { target_id, .. }
@@ -643,6 +701,10 @@ impl BrowserToolRequest {
     fn summary(&self) -> String {
         match self {
             Self::List => "list browser pages available to this task".into(),
+            Self::Interaction(BrowserAction::Cdp {
+                target_id,
+                operation: BrowserCdpOperation::Command { method, .. },
+            }) => format!("send CDP {method} for browser target {}", target_id.0),
             Self::Interaction(_) => format!(
                 "operate browser target {}",
                 self.target_id().expect("interaction has a target").0
@@ -735,6 +797,15 @@ struct DialogArguments {
 struct ScriptArguments {
     target_id: String,
     code: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CdpArguments {
+    target_id: String,
+    method: String,
+    params_json: String,
+    session_id: Option<String>,
 }
 
 fn definition(name: &str, description: &str, parameters: &str) -> ToolDefinition {

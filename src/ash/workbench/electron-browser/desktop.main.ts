@@ -54,6 +54,8 @@ import { ElectronWorkbenchEnvironmentService } from '../services/environment/ele
 import { ProxyChannel } from '../../base/parts/ipc/common/ipc.js';
 import { IBrowserViewService, ipcBrowserViewChannelName } from '../../platform/browserView/common/browserView.js';
 import { IPlaywrightService } from '../../platform/browserView/common/playwrightService.js';
+import { registerAppServerBrowserHost } from '../../platform/agentHost/electron-browser/appServerBrowserHost.js';
+import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
 import { getSingletonServiceDescriptors } from '../../platform/instantiation/common/extensions.js';
 
 /** Owns desktop startup and the resources of one renderer window. */
@@ -107,7 +109,7 @@ export class DesktopMain extends Disposable {
 				const address = resolver.getConnectionData(authority);
 				if (!address) { throw new Error('Remote address was retired before connecting'); }
 				return address;
-			}, async (remoteApi, authority) => localResolver!.startRemoteExtensionHost(remoteApi, authority), playwrightService));
+			}, async (remoteApi, authority) => localResolver!.startRemoteExtensionHost(remoteApi, authority)));
 			performance.mark('ash.desktop.api-ready');
 			const profileFiles = this._register(profileServices.createInstance(FileService));
 			const profileProvider = this._register(new FileUserDataProvider(api.localFiles, api.userDataHome));
@@ -149,6 +151,7 @@ export class DesktopMain extends Disposable {
 					}));
 					return hosts;
 				} : undefined,
+				createBrowserHost: documentClient ? services => registerAppServerBrowserHost(documentClient!, playwrightService, mainProcessService, services.get(IConfigurationService)) : undefined,
 				createLogService: () => logger.createLogger('workbench'),
 				createWorkingCopyBackupService: (services, workspaceId) => {
 					if (!api.backup) return new IndexedDbWorkingCopyBackupService(workspaceId);

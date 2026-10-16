@@ -17,7 +17,6 @@ import { createRendererHost, type RendererCapabilityContribution } from '../brow
 import { ElectronRendererClipboardService } from '../../platform/clipboard/electron-browser/electronRendererClipboardService.js';
 import { createDisconnectedRendererApi } from '../browser/rendererApi.js';
 import { AppServerAutomationService } from '../../platform/agentHost/browser/appServerAutomationService.js';
-import { registerAppServerBrowserHost } from '../../platform/agentHost/electron-browser/appServerBrowserHost.js';
 import { registerAppServerWorkspaceHost, initializeWorkspace } from '../../platform/workspaces/electron-browser/appServerWorkspaceHost.js';
 import { DisposableStore, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
 import type { IRendererHost } from '../../platform/renderer/common/rendererHost.js';
@@ -53,13 +52,11 @@ import { createRemoteConnectionApi } from "../../platform/remote/electron-browse
 import type { IWorkspaceTrustRequestService } from '../../platform/workspace/common/workspaceTrust.js';
 import { ILocalTranscriptionService } from '../../platform/localTranscription/common/localTranscription.js';
 import { InstantiationService } from '../../platform/instantiation/common/instantiationService.js';
-import type { IPlaywrightService } from '../../platform/browserView/common/playwrightService.js';
 
 export type ElectronRendererCapabilityContribution = RendererCapabilityContribution;
 
 /** Composes Electron renderer capabilities from domain-owned IPC adapters. */
-export async function createElectronRendererApi(contributions: readonly ElectronRendererCapabilityContribution[], hostCapabilities: { readonly browser: boolean; readonly textDocuments?: boolean; readonly appTools?: boolean; }, workspaceTrust: IWorkspaceTrustRequestService, mainProcessService: IMainProcessService, resolveRemoteAuthority?: (api: IExtensionHostApi, factories: IRemoteSocketFactoryService, authority: string, attempt: number) => Promise<IAddress>, initializeRemoteExtensions?: (api: IExtensionHostApi, authority: string) => Promise<IExtensionHostApi>, playwrightService?: IPlaywrightService): Promise<AshElectronRendererApi & IDisposable> {
-	if (hostCapabilities.browser && !playwrightService) { throw new Error('Browser host requires the Workbench Playwright service'); }
+export async function createElectronRendererApi(contributions: readonly ElectronRendererCapabilityContribution[], hostCapabilities: { readonly browser: boolean; readonly textDocuments?: boolean; readonly appTools?: boolean; }, workspaceTrust: IWorkspaceTrustRequestService, mainProcessService: IMainProcessService, resolveRemoteAuthority?: (api: IExtensionHostApi, factories: IRemoteSocketFactoryService, authority: string, attempt: number) => Promise<IAddress>, initializeRemoteExtensions?: (api: IExtensionHostApi, authority: string) => Promise<IExtensionHostApi>): Promise<AshElectronRendererApi & IDisposable> {
 	performance.mark('ash.rendererApi.start');
 	const resources = new DisposableStore();
 	const workspaceApi = createWorkspaceContextApi();
@@ -134,7 +131,6 @@ export async function createElectronRendererApi(contributions: readonly Electron
 				client = remote.client;
 				await remote.connect();
 			}
-			if (hostCapabilities.browser) { resources.add(registerAppServerBrowserHost(client, playwrightService!, mainProcessService)); }
 			backend = createRendererHost(client, {
 				externalOpener: { openExternal: target => invoke<boolean>('ash:host:openExternal', target) },
 				callbackHost: {

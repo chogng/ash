@@ -1,7 +1,8 @@
 import { Registry } from '../../../../platform/registry/common/platform.js';
-import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { localize } from '../../../../nls.js';
 import { BROWSER_SEARCH_NONE, BrowserSearchEngineId, BrowserSearchEngineSettingId } from '../common/browserSearch.js';
+import { BrowserCDPSettingId, BrowserChatToolsSettingId } from '../../../../platform/browserView/common/browserView.js';
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: BrowserSearchEngineSettingId, defaultValue: BROWSER_SEARCH_NONE,
@@ -20,8 +21,24 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	},
 });
 
-
-import { ConfigurationScope } from '../../../../platform/configuration/common/configurationRegistry.js';
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: BrowserChatToolsSettingId, defaultValue: true, scope: ConfigurationScope.WINDOW,
+	parse: value => { if (typeof value !== 'boolean') { throw new TypeError('Invalid browser tools preference'); } return value; },
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize({ bundle: 'ash.workbench', key: 'browser.chatToolsSetting' }, 'Allow Agent browser tools'); },
+		get description() { return localize({ bundle: 'ash.workbench', key: 'browser.chatToolsDescription' }, 'Allow agents to open, observe and interact with isolated browser pages. Turning this off cancels browser operations, closes Agent pages and revokes shared page access.'); },
+	},
+});
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: BrowserCDPSettingId, defaultValue: false, scope: ConfigurationScope.APPLICATION,
+	parse: value => { if (typeof value !== 'boolean') { throw new TypeError('Invalid CDP preference'); } return value; },
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize({ bundle: 'ash.workbench', key: 'browser.cdpSetting' }, 'Allow advanced browser control (CDP)'); },
+		get description() { return localize({ bundle: 'ash.workbench', key: 'browser.cdpDescription' }, 'Allow agents to send Chrome DevTools Protocol commands and read events from their isolated browser pages, including DOM, JavaScript, network and debugging. Requires Agent browser tools. Turning this off releases CDP connections and their temporary contexts.'); },
+	},
+});
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: 'workbench.browser.openLocalhostLinks', defaultValue: false, scope: ConfigurationScope.WINDOW,
 	parse: value => { if (typeof value !== 'boolean') { throw new TypeError('Invalid localhost link preference'); } return value; },

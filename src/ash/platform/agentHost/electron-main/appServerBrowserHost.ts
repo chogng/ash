@@ -3,7 +3,7 @@ import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { raceCancellationError } from '../../../base/common/async.js';
 import { isRecord } from '../../../base/common/types.js';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
-import type { BrowserCreateParams, BrowserObserveParams, BrowserPerformParams, BrowserCloseParams, BrowserListParams } from '../../../../../.build/protocol/typescript/index.js';
+import type { BrowserCreateParams, BrowserObserveParams, BrowserPerformParams, BrowserPerformResult, BrowserCloseParams, BrowserListParams } from '../../../../../.build/protocol/typescript/index.js';
 import { IBrowserViewMainService } from '../../browserView/electron-main/browserViewMainService.js';
 import type { BrowserView } from '../../browserView/electron-main/browserView.js';
 import { IPlaywrightService } from '../../browserView/common/playwrightService.js';
@@ -11,15 +11,22 @@ import { randomUUID } from 'node:crypto';
 import { addAbortListener } from 'node:events';
 import type { IServerChannel } from '../../../base/parts/ipc/common/ipc.js';
 import type { Event } from '../../../base/common/event.js';
+import { IInstantiationService } from '../../instantiation/common/instantiation.js';
+import { BrowserViewCDPService } from '../../browserView/electron-main/browserViewCDPService.js';
 
 /** Owns cancellable browser operations requested by one renderer. */
 export class AppServerBrowserHost extends Disposable {
 	private readonly operations = new Map<string, AbortController>();
 	private cancellation = new AbortController();
 	private readonly sessions = new Set<string>();
+	private enabled = true;
+	private cdpEnabled = false;
+	private readonly cdp: BrowserViewCDPService;
 	constructor(@IBrowserViewMainService private readonly views: IBrowserViewMainService,
-		@IPlaywrightService private readonly playwright: IPlaywrightService) {
+		@IPlaywrightService private readonly playwright: IPlaywrightService,
+		@IInstantiationService instantiation: IInstantiationService) {
 		super();
+		this.cdp = this._register(instantiation.createInstance(BrowserViewCDPService));
 		this._register(toDisposable(() => { for (const controller of this.operations.values()) { controller.abort(); } this.operations.clear(); }));
 		this._register(views.onDidEvent(event => {
 			if (event.type === 'created' && event.info.owner.type === 'agent') {
@@ -30,13 +37,27 @@ export class AppServerBrowserHost extends Disposable {
 				if (sessionId && this.sessions.has(sessionId) && ![...this.hostedTargets.values()].includes(sessionId)) {
 					this.sessions.delete(sessionId);
 					void this.playwright.disposeSession(sessionId).catch(() => { });
+					void this.cdp.disposeSession(sessionId).catch(() => { });
 				}
 			}
 		}));
 	}
 
 	private readonly hostedTargets = new Map<string, string>();
+	public async configure(preference: { readonly enabled: boolean; readonly cdpEnabled: boolean; }): Promise<void> {
+		this.assertNotDisposed();
+		this.enabled = preference.enabled;
+		this.cdpEnabled = preference.enabled && preference.cdpEnabled;
+		const released = this.cdpEnabled ? Promise.resolve() : this.cdp.reset();
+		if (!this.enabled) { this.reset(); }
+		await released;
+	}
+	private assertEnabled(): void {
+		this.assertNotDisposed();
+		if (!this.enabled) { throw new Error('BrowserCapabilityUnavailable'); }
+	}
 	async list(params: BrowserListParams) {
+		this.assertEnabled();
 		const pages = [];
 		for (const info of await this.views.getBrowserViews()) {
 			try { this.views.validateAgentAccess(info.id, params.threadId); }
@@ -50,7 +71,7 @@ export class AppServerBrowserHost extends Disposable {
 		return { pages };
 	}
 	async create(params: BrowserCreateParams, context: { signal: AbortSignal; }) {
-		this.assertNotDisposed();
+		this.assertEnabled();
 		const signal = AbortSignal.any([context.signal, this.cancellation.signal]);
 		const view = await this.views.createTarget('about:blank', params.threadId, signal);
 		if (signal.aborted) {
@@ -73,7 +94,19 @@ export class AppServerBrowserHost extends Disposable {
 			return { ...observation, url: state.url, title: state.title, loading: state.loading };
 		}, view.getInfo().owner.type === 'agent' ? params.networkToken ?? null : undefined);
 	}
-	async perform(params: BrowserPerformParams, context: { signal: AbortSignal; }) {
+	async perform(params: BrowserPerformParams, context: { signal: AbortSignal; }): Promise<BrowserPerformResult> {
+		if (params.action.type === 'cdp') {
+			this.assertEnabled();
+			if (!this.cdpEnabled) { throw new Error('BrowserCDPDisabled'); }
+			const view = this.views.validateAgentAccess(params.action.targetId, params.threadId);
+			if (view.getInfo().owner.type !== 'agent') { throw new Error('BrowserNetworkIsolationRequired'); }
+			this.sessions.add(params.threadId);
+			const targets = (await this.views.getBrowserViews()).filter(info => info.owner.type === 'agent' && info.owner.sessionId === params.threadId);
+			const result = await this.cdp.perform(params.threadId, view, params.action.operation,
+				AbortSignal.any([context.signal, this.cancellation.signal]), params.networkToken ?? null);
+			const closedTargetIds = targets.filter(info => !this.views.tryGetBrowserView(info.id)).map(info => info.id);
+			return { targetId: view.id, ...result, ...(closedTargetIds.length ? { closedTargetIds } : {}) };
+		}
 		const { view, signal } = this.target(params.action.targetId, params.threadId, context.signal);
 		if (view.getInfo().owner.type !== 'agent') { throw new Error('BrowserNetworkIsolationRequired'); }
 		if (params.action.type === 'handleDialog') {
@@ -113,12 +146,13 @@ export class AppServerBrowserHost extends Disposable {
 		finally { this.hostedTargets.delete(params.targetId); }
 	}
 	private target(id: string, sessionId: string, requestSignal: AbortSignal): { view: BrowserView; signal: AbortSignal; } {
-		this.assertNotDisposed();
+		this.assertEnabled();
 		const view = this.views.validateAgentAccess(id, sessionId);
 		return { view, signal: AbortSignal.any([requestSignal, this.cancellation.signal, this.views.agentAccessSignal(id, sessionId)]) };
 	}
 	/** Retiring a connection closes its pages without disturbing pages opened by the user. */
 	reset(): void {
+		void this.cdp.reset().catch(error => console.error('Could not release CDP connections', error));
 		this.views.cancelPermissionRequests();
 		this.views.revokeSharing();
 		this.cancellation.abort(new Error('BrowserCapabilityUnavailable'));
@@ -164,6 +198,12 @@ export class AppServerBrowserHost extends Disposable {
 			finally { clearTimeout(timer); this.operations.delete(request.id); }
 		};
 		return [
+			{
+				channel: 'configure', validate: value => {
+					if (!isRecord(value) || Object.keys(value).length !== 2 || typeof value.enabled !== 'boolean' || typeof value.cdpEnabled !== 'boolean') { throw new TypeError('Invalid browser configuration'); }
+					return { enabled: value.enabled, cdpEnabled: value.cdpEnabled };
+				}, invoke: value => this.configure(value as { enabled: boolean; cdpEnabled: boolean; })
+			},
 			{ channel: 'list', validate: operation, invoke: value => run(value, params => this.list(decodeAppServerServerRequestParams('browser/list', params))) },
 			{
 				channel: 'disposeSession', validate: value => {
@@ -172,7 +212,7 @@ export class AppServerBrowserHost extends Disposable {
 				}, invoke: async value => {
 					this.assertNotDisposed();
 					const sessionId = value as string;
-					if (this.sessions.delete(sessionId)) { await this.playwright.disposeSession(sessionId); }
+					if (this.sessions.delete(sessionId)) { await Promise.all([this.playwright.disposeSession(sessionId), this.cdp.disposeSession(sessionId)]); }
 				},
 			},
 			{
@@ -188,6 +228,7 @@ export class AppServerBrowserHost extends Disposable {
 			{
 				channel: 'sharing', validate: operation, invoke: value => run(value, async params => {
 					const sharing = decodeAppServerServerRequestParams('browser/sharing/set', params);
+					if (sharing.threadIds.length) { this.assertEnabled(); }
 					// Revoking a closed page still acknowledges release of the backend's grant record.
 					if (sharing.threadIds.length || this.views.tryGetBrowserView(sharing.targetId)) await this.views.setSharing(sharing.targetId, sharing.threadIds);
 					return null;

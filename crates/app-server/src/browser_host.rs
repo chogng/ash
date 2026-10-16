@@ -19,6 +19,7 @@ use base64::Engine;
 use core_api::BrowserAction;
 use core_api::BrowserActionResult;
 use core_api::BrowserCapability;
+use core_api::BrowserCdpOperation;
 use core_api::BrowserError;
 use core_api::BrowserMediaResource;
 use core_api::BrowserObservation;
@@ -80,6 +81,8 @@ struct BrowserTargetOwner {
 
 struct BrowserHostOwner {
     capability: ClientBrowserCapability,
+    enabled: bool,
+    cdp_enabled: bool,
 }
 
 /// Routes semantic Core browser requests to the exact capable client connection and target owner.
@@ -142,7 +145,9 @@ impl BrowserHost {
             .state
             .lock()
             .map_err(|_| BrowserError::CapabilityUnavailable)?;
-        if !state.owners.contains_key(&owner) || state.network_grants.len() >= 128 {
+        if !state.owners.get(&owner).is_some_and(|owner| owner.enabled)
+            || state.network_grants.len() >= 128
+        {
             return Err(BrowserError::CapabilityUnavailable);
         }
         state.network_grants.insert(
@@ -220,9 +225,14 @@ impl BrowserHost {
             .state
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        state
-            .owners
-            .insert(connection_id, BrowserHostOwner { capability });
+        state.owners.insert(
+            connection_id,
+            BrowserHostOwner {
+                capability,
+                enabled: true,
+                cdp_enabled: false,
+            },
+        );
         state.owner_revision = state.owner_revision.wrapping_add(1);
     }
 
@@ -250,6 +260,40 @@ impl BrowserHost {
             .retain(|_, (owner, _)| *owner != connection_id);
     }
 
+    pub(crate) fn configure(
+        &self,
+        connection_id: u64,
+        params: &ash_app_server_protocol::protocol::browser::BrowserConfigureParams,
+    ) -> Result<(), BrowserError> {
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| BrowserError::CapabilityUnavailable)?;
+        let owner = state
+            .owners
+            .get_mut(&connection_id)
+            .ok_or(BrowserError::CapabilityUnavailable)?;
+        owner.enabled = params.enabled;
+        owner.cdp_enabled = params.enabled && params.cdp_enabled;
+        state.owner_revision = state.owner_revision.wrapping_add(1);
+        if !params.enabled {
+            state
+                .target_owners
+                .retain(|_, owner| owner.connection_id != connection_id);
+            state
+                .shared_targets
+                .retain(|_, (owner, _)| *owner != connection_id);
+            state.network_grants.retain(|_, grant| {
+                if grant.owner == connection_id {
+                    grant.cancellation.cancel();
+                    return false;
+                }
+                true
+            });
+        }
+        Ok(())
+    }
+
     pub(crate) fn set_sharing(
         &self,
         connection_id: u64,
@@ -267,7 +311,10 @@ impl BrowserHost {
                 .state
                 .lock()
                 .map_err(|_| BrowserError::Failed("browser host state lock poisoned".into()))?;
-            if !state.owners.contains_key(&connection_id)
+            if !state
+                .owners
+                .get(&connection_id)
+                .is_some_and(|owner| owner.enabled)
                 || state.target_owners.contains_key(&params.target_id)
                 || state
                     .shared_targets
@@ -288,7 +335,11 @@ impl BrowserHost {
             .state
             .lock()
             .map_err(|_| BrowserError::Failed("browser host state lock poisoned".into()))?;
-        if !state.owners.contains_key(&connection_id) {
+        if !state
+            .owners
+            .get(&connection_id)
+            .is_some_and(|owner| owner.enabled)
+        {
             return Err(BrowserError::CapabilityUnavailable);
         }
         if threads.is_empty() {
@@ -311,7 +362,7 @@ impl BrowserHost {
             state
                 .owners
                 .values()
-                .any(|owner| owner.capability.observe && owner.capability.input),
+                .any(|owner| owner.enabled && owner.capability.observe && owner.capability.input),
         )
     }
 
@@ -336,7 +387,10 @@ impl BrowserHost {
             .owners
             .get(&selected)
             .filter(|owner| {
-                owner.capability.version == 3 && owner.capability.observe && owner.capability.input
+                owner.enabled
+                    && owner.capability.version == 3
+                    && owner.capability.observe
+                    && owner.capability.input
             })
             .map(|_| selected)
             .ok_or(BrowserError::CapabilityUnavailable)
@@ -380,7 +434,7 @@ impl BrowserHost {
             BrowserHostOperation::Input => owner.capability.input,
             BrowserHostOperation::Lifecycle => true,
         };
-        if supported {
+        if owner.enabled && supported {
             Ok(owner_id)
         } else {
             Err(BrowserError::CapabilityUnavailable)
@@ -495,7 +549,7 @@ impl BrowserCapability for BrowserHost {
             .state
             .lock()
             .map_err(|_| BrowserError::Failed("browser host state lock poisoned".into()))?;
-        if !state.owners.contains_key(&owner) {
+        if !state.owners.get(&owner).is_some_and(|owner| owner.enabled) {
             return Err(BrowserError::CapabilityUnavailable);
         }
         let Entry::Vacant(target_owner) = state.target_owners.entry(result.target_id.clone())
@@ -538,6 +592,7 @@ impl BrowserCapability for BrowserHost {
                 "browser host changed target identity".into(),
             ));
         }
+        self.target_owner(&expected_target_id, BrowserHostOperation::Observe)?;
         self.register_screenshot(owner, result)
     }
 
@@ -548,6 +603,21 @@ impl BrowserCapability for BrowserHost {
     ) -> Result<BrowserActionResult, BrowserError> {
         let target_id = action_target_id(&action).clone();
         let owner = self.target_owner(&target_id, BrowserHostOperation::Input)?;
+        let cdp = matches!(&action, BrowserAction::Cdp { .. });
+        let creates_target = matches!(&action, BrowserAction::Cdp {
+            operation: BrowserCdpOperation::Command { method, .. }, ..
+        } if method == "Target.createTarget");
+        if cdp
+            && !self
+                .state
+                .lock()
+                .map_err(|_| BrowserError::CapabilityUnavailable)?
+                .owners
+                .get(&owner)
+                .is_some_and(|owner| owner.enabled && owner.cdp_enabled)
+        {
+            return Err(BrowserError::CapabilityUnavailable);
+        }
         let result: BrowserPerformResult = self.request(
             owner,
             HostMethod::BrowserPerform,
@@ -563,6 +633,19 @@ impl BrowserCapability for BrowserHost {
                 "browser host changed target identity".into(),
             ));
         }
+        self.target_owner(&target_id, BrowserHostOperation::Input)?;
+        if cdp
+            && !self
+                .state
+                .lock()
+                .map_err(|_| BrowserError::CapabilityUnavailable)?
+                .owners
+                .get(&owner)
+                .is_some_and(|owner| owner.cdp_enabled)
+        {
+            return Err(BrowserError::CapabilityUnavailable);
+        }
+        // Validate the complete host response before changing target ownership.
         if result
             .output
             .as_ref()
@@ -571,6 +654,58 @@ impl BrowserCapability for BrowserHost {
             return Err(BrowserError::Failed(
                 "browser script result is too large".into(),
             ));
+        }
+        if result
+            .closed_target_ids
+            .as_ref()
+            .is_some_and(|ids| !cdp || ids.len() > 256)
+        {
+            return Err(BrowserError::Failed(
+                "invalid CDP closed-target list".into(),
+            ));
+        }
+        if let Some(created) = result.created_target_id {
+            if !creates_target || created.is_empty() || created.len() > 256 {
+                return Err(BrowserError::Failed(
+                    "invalid CDP-created target identity".into(),
+                ));
+            }
+            let mut state = self
+                .state
+                .lock()
+                .map_err(|_| BrowserError::CapabilityUnavailable)?;
+            if !state
+                .owners
+                .get(&owner)
+                .is_some_and(|owner| owner.enabled && owner.cdp_enabled)
+            {
+                return Err(BrowserError::CapabilityUnavailable);
+            }
+            let identity = BrowserTargetOwner {
+                connection_id: owner,
+                thread_id: self.thread_id()?.clone(),
+            };
+            match state.target_owners.entry(created) {
+                Entry::Vacant(entry) => {
+                    entry.insert(identity);
+                }
+                Entry::Occupied(entry) if entry.get() == &identity => {}
+                Entry::Occupied(_) => return Err(BrowserError::CapabilityUnavailable),
+            }
+        }
+        if let Some(closed_target_ids) = result.closed_target_ids {
+            let thread_id = self.thread_id()?;
+            let mut state = self
+                .state
+                .lock()
+                .map_err(|_| BrowserError::CapabilityUnavailable)?;
+            for id in closed_target_ids {
+                if state.target_owners.get(&id).is_some_and(|target| {
+                    target.connection_id == owner && &target.thread_id == thread_id
+                }) {
+                    state.target_owners.remove(&id);
+                }
+            }
         }
         Ok(BrowserActionResult {
             target_id,
@@ -680,7 +815,8 @@ impl BrowserCapability for BrowserHost {
 
 fn action_target_id(action: &BrowserAction) -> &BrowserTargetId {
     match action {
-        BrowserAction::Navigate { target_id, .. }
+        BrowserAction::Cdp { target_id, .. }
+        | BrowserAction::Navigate { target_id, .. }
         | BrowserAction::Click { target_id, .. }
         | BrowserAction::Hover { target_id, .. }
         | BrowserAction::Drag { target_id, .. }
@@ -695,6 +831,29 @@ fn action_target_id(action: &BrowserAction) -> &BrowserTargetId {
 
 fn browser_action_dto(action: BrowserAction) -> BrowserPerformActionDto {
     match action {
+        BrowserAction::Cdp {
+            target_id,
+            operation,
+        } => BrowserPerformActionDto::Cdp {
+            target_id: target_id.0,
+            operation: match operation {
+                BrowserCdpOperation::Command {
+                    method,
+                    params,
+                    session_id,
+                } => ash_app_server_protocol::protocol::browser::BrowserCdpOperationDto::Command {
+                    method,
+                    params,
+                    session_id,
+                },
+                BrowserCdpOperation::ReadEvents => {
+                    ash_app_server_protocol::protocol::browser::BrowserCdpOperationDto::ReadEvents {}
+                }
+                BrowserCdpOperation::Close => {
+                    ash_app_server_protocol::protocol::browser::BrowserCdpOperationDto::Close {}
+                }
+            },
+        },
         BrowserAction::Navigate { target_id, url } => BrowserPerformActionDto::Navigate {
             target_id: target_id.0,
             url,

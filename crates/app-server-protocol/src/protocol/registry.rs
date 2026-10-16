@@ -329,7 +329,11 @@ use crate::protocol::automation::AutomationWriteParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::browser::BrowserBinaryPayload;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::browser::BrowserCdpOperationDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::browser::BrowserCloseParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::browser::BrowserConfigureParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::browser::BrowserCreateParams;
 #[cfg(any(test, feature = "export"))]
@@ -3464,6 +3468,11 @@ client_methods! {
         // Capability negotiation belongs to one connection; domain mutations must not gate it.
         serialization: ConnectionExclusive("initialize"),
     },
+    BrowserConfigure => "browser/configure" {
+        params: BrowserConfigureParams,
+        response: (),
+        serialization: ConnectionExclusive("browserSharing"),
+    },
     BrowserSharingSet => "browser/sharing/set" {
         params: BrowserSharingSetParams,
         response: (),
@@ -5985,6 +5994,8 @@ typescript_bindings! {
     ClientInfo,
     AgentInteractionCapability,
     BrowserCapability,
+    BrowserConfigureParams,
+    BrowserCdpOperationDto,
     DirectoryGrantsHostCapability,
     BrowserBinaryPayload,
     BrowserCloseParams,

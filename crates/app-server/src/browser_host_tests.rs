@@ -12,6 +12,128 @@ use std::sync::Mutex;
 use std::thread;
 
 #[test]
+fn browser_cdp_requires_a_grant_and_registers_and_releases_created_pages() {
+    let mut host = browser_host(Arc::new(Mutex::new(ResourceStore::default())));
+    host.owner = Some(7);
+    let host = Arc::new(host);
+    let outbound = NotificationQueue::default();
+    host.register(
+        7,
+        ClientBrowserCapability {
+            version: 3,
+            observe: true,
+            input: true,
+        },
+        outbound.clone(),
+    );
+    let anchor = BrowserTargetId("browser_target_anchor".into());
+    host.state.lock().unwrap().target_owners.insert(
+        anchor.0.clone(),
+        BrowserTargetOwner {
+            connection_id: 7,
+            thread_id: host.thread_id().unwrap().clone(),
+        },
+    );
+    let action = BrowserAction::Cdp {
+        target_id: anchor.clone(),
+        operation: BrowserCdpOperation::ReadEvents,
+    };
+    assert!(matches!(
+        host.perform(action.clone(), &CancellationSource::new().token()),
+        Err(BrowserError::CapabilityUnavailable)
+    ));
+    assert!(outbound.listener().drain().is_empty());
+    let settings = ash_app_server_protocol::protocol::browser::BrowserConfigureParams {
+        enabled: true,
+        cdp_enabled: true,
+    };
+    assert!(host.configure(8, &settings).is_err());
+    host.configure(7, &settings).unwrap();
+    let action = BrowserAction::Cdp {
+        target_id: anchor.clone(),
+        operation: BrowserCdpOperation::Command {
+            method: "Target.createTarget".into(),
+            params: serde_json::Map::new(),
+            session_id: None,
+        },
+    };
+    let task_host = Arc::clone(&host);
+    let task = thread::spawn(move || task_host.perform(action, &CancellationSource::new().token()));
+    let request = next_request(&outbound);
+    assert_eq!(
+        request["params"]["action"]["operation"]["method"],
+        "Target.createTarget"
+    );
+    host.clients
+        .handle_response(
+            7,
+            json!({ "jsonrpc":"2.0", "id":request["id"], "result": {
+                "targetId":anchor.0, "createdTargetId":"browser_target_created", "output":"{}"
+            }}),
+        )
+        .unwrap();
+    task.join().unwrap().unwrap();
+    assert_eq!(
+        host.target_owner(
+            &BrowserTargetId("browser_target_created".into()),
+            BrowserHostOperation::Input
+        )
+        .unwrap(),
+        7
+    );
+    let close_host = Arc::clone(&host);
+    let close_target = anchor.clone();
+    let close = thread::spawn(move || {
+        close_host.perform(
+            BrowserAction::Cdp {
+                target_id: close_target,
+                operation: BrowserCdpOperation::Close,
+            },
+            &CancellationSource::new().token(),
+        )
+    });
+    let request = next_request(&outbound);
+    host.clients
+        .handle_response(
+            7,
+            json!({ "jsonrpc":"2.0", "id":request["id"], "result": {
+                "targetId":anchor.0, "closedTargetIds":["browser_target_created"], "output":"{}"
+            }}),
+        )
+        .unwrap();
+    close.join().unwrap().unwrap();
+    assert!(
+        host.target_owner(
+            &BrowserTargetId("browser_target_created".into()),
+            BrowserHostOperation::Input
+        )
+        .is_err()
+    );
+    host.configure(
+        7,
+        &ash_app_server_protocol::protocol::browser::BrowserConfigureParams {
+            enabled: false,
+            cdp_enabled: false,
+        },
+    )
+    .unwrap();
+    assert!(!host.owner_availability().1);
+    assert!(
+        host.target_owner(&anchor, BrowserHostOperation::Input)
+            .is_err()
+    );
+    assert!(matches!(
+        host.create_target(
+            CreateBrowserTargetRequest {
+                url: "about:blank".into()
+            },
+            &CancellationSource::new().token()
+        ),
+        Err(BrowserError::CapabilityUnavailable)
+    ));
+}
+
+#[test]
 fn terminal_errors_release_registration_without_sending_cancellation() {
     for response in [
         json!({"error": {"code": -32603, "message": "browser failed", "data": null}}),

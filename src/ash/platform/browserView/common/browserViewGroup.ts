@@ -13,6 +13,8 @@ export interface IBrowserViewGroup extends IDisposable {
 }
 
 export interface IBrowserViewGroupFilter {
+	/** Raw protocol clients may only mutate isolated Agent pages, even if a user page is shared. */
+	readonly agentOnly?: boolean;
 	/** Storage and ownership must both match; explicit IDs never grant access to another Thread. */
 	readonly sandboxSessionId: string;
 	readonly browserIds?: readonly string[];

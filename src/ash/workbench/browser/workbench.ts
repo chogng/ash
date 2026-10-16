@@ -359,6 +359,7 @@ export interface IStartWorkbenchOptions {
 	readonly createLifecycleService: (services: IInstantiationService) => ILifecycleService & IDisposable;
 	readonly createURLService: (services: InstantiationService) => IURLService & IDisposable;
 	readonly createTextDocumentHost?: (services: IInstantiationService) => IDisposable;
+	readonly createBrowserHost?: (services: IInstantiationService) => IDisposable;
 	readonly createWindow?: (services: IInstantiationService) => IDisposable;
 	readonly createStorageService: (options: BrowserStorageServiceOptions) => Promise<IStorageService & IDisposable & { switchWorkspace(workspaceId: string): void | Promise<void>; }>;
 	readonly createWorkingCopyBackupService: (services: IInstantiationService, workspaceId: string) => IWorkingCopyBackupService;
@@ -395,6 +396,7 @@ export async function startWorkbench({
 	createURLService,
 	createWindow,
 	createTextDocumentHost,
+	createBrowserHost,
 	createStorageService,
 	createWorkingCopyBackupService,
 	createLogService,
@@ -456,6 +458,7 @@ export async function startWorkbench({
 			createWorkingCopyBackupService,
 			createWindow,
 			createTextDocumentHost,
+			createBrowserHost,
 			createURLService,
 			environmentService,
 			serviceCollection,
@@ -525,6 +528,7 @@ export class Workbench extends Disposable {
 		createWorkingCopyBackupService: IStartWorkbenchOptions['createWorkingCopyBackupService'],
 		createWindow: ((services: IInstantiationService) => IDisposable) | undefined,
 		createTextDocumentHost: ((services: IInstantiationService) => IDisposable) | undefined,
+		createBrowserHost: IStartWorkbenchOptions['createBrowserHost'],
 		createURLService: IStartWorkbenchOptions['createURLService'],
 		environmentService: IWorkbenchEnvironmentService,
 		serviceCollection = new ServiceCollection(),
@@ -1130,6 +1134,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IEditorGroupsService, editorService);
 		// Document hosts resolve Chat editing signals and IDE context from the window's accessibility and editor services.
 		if (createTextDocumentHost) { this._register(createTextDocumentHost(services)); }
+		if (createBrowserHost) { this._register(createBrowserHost(services)); }
 		// Markdown rendering resolves the code editor service, which depends on the registered editor parts.
 		services.get(IMarkdownRendererService).setDefaultCodeBlockRenderer(services.createInstance(EditorMarkdownCodeBlockRenderer));
 		// The URL opener requires the completed editor service graph before the window announces readiness.

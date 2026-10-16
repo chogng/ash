@@ -23,7 +23,9 @@ import { browserZoomFactors, browserZoomDefaultIndex } from '../common/browserVi
 export const IBrowserViewMainService = createServiceIdentifier<IBrowserViewMainService>('browserViewMainService');
 export interface IBrowserViewMainService extends IBrowserViewService {
 	tryGetBrowserView(id: string): BrowserView | undefined;
-	createTarget(url: string, sessionId: string, signal: AbortSignal): Promise<BrowserView>;
+	createTarget(url: string, sessionId: string, signal: AbortSignal, browserContextId?: string): Promise<BrowserView>;
+	createBrowserContext(threadId: string): string;
+	disposeBrowserContext(contextId: string, threadId: string): Promise<void>;
 	validateAgentAccess(id: string, sessionId: string): BrowserView;
 	agentAccessSignal(id: string, threadId: string): AbortSignal;
 	revokeSharing(): void;
@@ -69,6 +71,7 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 	private readonly audiences = new Map<string, readonly string[]>();
 	private readonly grants = new Map<string, Map<string, AbortController>>();
 	private readonly histories = new Map<BrowserSession, BrowserSessionHistory>();
+	private readonly contexts = new Map<string, { readonly threadId: string; readonly affinity: string; readonly session: BrowserSession; }>();
 	private contextMenuOwner: BrowserView | undefined;
 	constructor(private readonly options: BrowserViewMainServiceOptions,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
@@ -168,12 +171,53 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 	public async getOrCreateBrowserView(id: string, options: IBrowserViewCreateOptions): Promise<IBrowserViewInfo> {
 		return (await this.getOrCreate(id, options, this.cancellation.signal)).getInfo();
 	}
-	public createTarget(url: string, sessionId: string, signal: AbortSignal): Promise<BrowserView> {
+	public createBrowserContext(threadId: string): string {
+		this.assertNotDisposed();
+		if (this.contexts.size >= 128) { throw new Error('BrowserContextCapacityExceeded'); }
+		const affinity = JSON.stringify([threadId, randomUUID()]);
+		const identity = this.sessionIdentity({ scope: BrowserViewStorageScope.Agent, affinity });
+		const session = BrowserSession.getOrCreate(identity, BrowserViewStorageScope.Agent, this.options.createSession('ash-browser-' + identity));
+		this.contexts.set(identity, { threadId, affinity, session });
+		return identity;
+	}
+	public async disposeBrowserContext(contextId: string, threadId: string): Promise<void> {
+		const context = this.contexts.get(contextId);
+		if (!context || context.threadId !== threadId) { throw new Error('BrowserContextAccessDenied'); }
+		this.contexts.delete(contextId);
+		for (const [, view] of this.targets) {
+			if (view.session.id === contextId) { view.dispose(); }
+		}
+		await context.session.electronSession.closeAllConnections();
+		await context.session.electronSession.clearStorageData();
+		await context.session.electronSession.clearCache();
+	}
+	public createTarget(url: string, sessionId: string, signal: AbortSignal, browserContextId?: string): Promise<BrowserView> {
+		const pages = [...this.targets].map(([, view]) => view);
+		const owned = pages.filter(view => { const owner = view.getInfo().owner; return owner.type === 'agent' && owner.sessionId === sessionId; }).length;
+		if (owned + this.creations.size >= 256) { throw new Error('BrowserTargetCapacityExceeded'); }
+		const context = browserContextId === undefined ? undefined : this.contexts.get(browserContextId);
+		const existing = browserContextId === undefined ? undefined : pages.find(view => {
+			const owner = view.getInfo().owner;
+			return view.session.id === browserContextId && owner.type === 'agent' && owner.sessionId === sessionId;
+		})?.getInfo().session;
+		const affinity = context?.threadId === sessionId ? context.affinity : existing?.scope === BrowserViewStorageScope.Agent ? existing.affinity : undefined;
+		if (browserContextId !== undefined && affinity === undefined) { throw new Error('BrowserContextAccessDenied'); }
 		return this.getOrCreate('browser_target_' + randomUUID(), {
 			initialUrl: url,
 			owner: { type: 'agent', sessionId },
-			session: { scope: BrowserViewStorageScope.Agent, affinity: sessionId },
+			session: { scope: BrowserViewStorageScope.Agent, affinity: affinity ?? sessionId },
 		}, signal);
+	}
+	private sessionIdentity(storage: IBrowserViewCreateOptions['session'], pageId?: string): string {
+		let identity: string;
+		switch (storage.scope) {
+			case BrowserViewStorageScope.Global: identity = 'global'; break;
+			case BrowserViewStorageScope.Workspace: identity = 'workspace:' + this.options.getWorkspaceId(); break;
+			case BrowserViewStorageScope.Ephemeral: identity = 'ephemeral:' + pageId; break;
+			case BrowserViewStorageScope.Agent: identity = JSON.stringify(['agent', this.options.window.id, storage.affinity]); break;
+		}
+		const remote = this.options.getRemoteNetwork();
+		return createHash('sha256').update(remote ? JSON.stringify([identity, remote.authority]) : identity).digest('hex');
 	}
 	public validateAgentAccess(id: string, sessionId: string): BrowserView {
 		const view = this.target(id);
@@ -230,15 +274,7 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 		let view: BrowserView;
 		try {
 			const storage = options.session;
-			let identity: string;
-			switch (storage.scope) {
-				case BrowserViewStorageScope.Global: identity = 'global'; break;
-				case BrowserViewStorageScope.Workspace: identity = 'workspace:' + this.options.getWorkspaceId(); break;
-				case BrowserViewStorageScope.Ephemeral: identity = 'ephemeral:' + id; break;
-				case BrowserViewStorageScope.Agent: identity = JSON.stringify(['agent', this.options.window.id, storage.affinity]); break;
-			}
-			const sessionIdentity = remoteNetwork ? JSON.stringify([identity, remoteNetwork.authority]) : identity;
-			const contextId = createHash('sha256').update(sessionIdentity).digest('hex');
+			const contextId = this.sessionIdentity(storage, id);
 			const persistent = storage.scope === BrowserViewStorageScope.Global || storage.scope === BrowserViewStorageScope.Workspace;
 			const electronSession = this.options.createSession((persistent ? 'persist:' : '') + 'ash-browser-' + contextId);
 			const session = BrowserSession.getOrCreate(contextId, storage.scope, electronSession);

@@ -12,6 +12,15 @@ import { WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_S
 import { createTestInitializeResult } from '../../../../../platform/agentHost/test/common/testAppServerProtocol.js';
 import { IPlaywrightService } from '../../../../../platform/browserView/common/playwrightService.js';
 import type { BrowserViewEvent } from '../../../../../platform/browserView/common/browserView.js';
+import { BrowserCDPSettingId, BrowserChatToolsSettingId } from '../../../../../platform/browserView/common/browserView.js';
+import { ConfigurationService } from '../../../../../platform/configuration/common/configurationService.js';
+import { FileService } from '../../../../../platform/files/common/fileService.js';
+import { InMemoryFileSystemProvider } from '../../../../../platform/files/common/inMemoryFilesystemProvider.js';
+import { IFileService } from '../../../../../platform/files/common/files.js';
+import { URI } from '../../../../../base/common/uri.js';
+import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
+import { IPolicyService, NullPolicyService } from '../../../../../platform/policy/common/policy.js';
+import '../../../../contrib/browserView/browser/browserView.contribution.js';
 import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
@@ -24,6 +33,21 @@ const observation = { targetId, url: 'https://example.test/', title: 'Shared pag
 
 suite('Workbench Playwright service', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('live settings revoke browser requests and advanced CDP preserves newly created page identity', async () => {
+		const calls: string[] = [];
+		using fixture = hostFixture(async command => { calls.push(command); return { targetId, createdTargetId: 'new-page', output: '{"result":{"targetId":"chromium-page"}}' }; });
+		await fixture.client.connect();
+		const params = { threadId: 'thread-one', action: { type: 'cdp', targetId, operation: { type: 'command', method: 'Target.createTarget', params: { url: 'about:blank' } } } };
+		assert.match(JSON.stringify((await fixture.transport.request('browser/perform', params)).error), /BrowserCDPDisabled/);
+		assert.deepEqual(calls, []);
+		await fixture.configuration.updateValue(BrowserCDPSettingId, true);
+		assert.deepEqual((await fixture.transport.request('browser/perform', params)).result, { targetId, createdTargetId: 'new-page', output: '{"result":{"targetId":"chromium-page"}}' });
+		await fixture.configuration.updateValue(BrowserChatToolsSettingId, false);
+		assert.match(JSON.stringify((await fixture.transport.request('browser/perform', params)).error), /BrowserCapabilityUnavailable/);
+		assert.deepEqual(calls, ['perform']);
+		assert.deepEqual(fixture.transport.preferences.at(-1), { enabled: false, cdpEnabled: true });
+	});
 
 	test('the registered service requires its Main connection before first use', () => {
 		using services = new InstantiationService(registrations());
@@ -159,18 +183,24 @@ function registrations(): ServiceCollection {
 	return new ServiceCollection(...descriptors);
 }
 
-function hostFixture(call: (command: string, arg: unknown) => Promise<unknown>): DisposableStore & { readonly playwright: IPlaywrightService; readonly transport: HostTransport; readonly client: AppServerProtocolClient; readonly events: Emitter<BrowserViewEvent>; readonly sharing: IServerChannel<string>; } {
+function hostFixture(call: (command: string, arg: unknown) => Promise<unknown>): DisposableStore & { readonly configuration: ConfigurationService; readonly playwright: IPlaywrightService; readonly transport: HostTransport; readonly client: AppServerProtocolClient; readonly events: Emitter<BrowserViewEvent>; readonly sharing: IServerChannel<string>; } {
 	const resources = new DisposableStore();
 	const events = resources.add(new Emitter<BrowserViewEvent>());
 	const services = resources.add(new InstantiationService(registrations()));
+	const files = resources.add(new FileService());
+	resources.add(files.registerProvider('test', resources.add(new InMemoryFileSystemProvider())));
+	services.registerInstance(IFileService, files);
+	services.registerInstance(ILogService, new NullLoggerService());
+	services.registerInstance(IPolicyService, new NullPolicyService());
+	const configuration = resources.add(services.createInstance(ConfigurationService, URI.parse('test:/settings.json')));
 	services.registerSingleton(IMainProcessService, () => services.createInstance(TestMainProcessService, call, events.event));
 	const mainProcessService = services.get(IMainProcessService);
 	const playwright = services.get(IPlaywrightService);
 	const transport = new HostTransport();
 	const client = new AppServerProtocolClient(transport);
 	resources.add(toDisposable(() => client.dispose()));
-	resources.add(registerAppServerBrowserHost(client, playwright, mainProcessService));
-	return Object.assign(resources, { playwright, transport, client, events, sharing: (mainProcessService as TestMainProcessService).rendererChannels.get('browserSharing')! });
+	resources.add(registerAppServerBrowserHost(client, playwright, mainProcessService, configuration));
+	return Object.assign(resources, { configuration, playwright, transport, client, events, sharing: (mainProcessService as TestMainProcessService).rendererChannels.get('browserSharing')! });
 }
 
 class TestMainProcessService extends AbstractDisposable implements IMainProcessService {
@@ -181,7 +211,7 @@ class TestMainProcessService extends AbstractDisposable implements IMainProcessS
 	constructor(call: (command: string, arg: unknown) => Promise<unknown>, events: Event<BrowserViewEvent>) {
 		super();
 		this.channel = {
-			call: async <T>(command: string, arg: unknown): Promise<T> => { this.assertNotDisposed(); return await call(command, arg) as T; },
+			call: async <T>(command: string, arg: unknown): Promise<T> => { this.assertNotDisposed(); return command === 'configure' ? undefined as T : await call(command, arg) as T; },
 			listen: <T>() => events as Event<T>,
 		};
 	}
@@ -199,6 +229,7 @@ class HostTransport extends EventEmitter implements AppServerTransport {
 	private sequence = 0;
 	private readonly requests = new Map<string, ReturnType<typeof promiseWithResolvers<Record<string, unknown>>>>();
 	public readonly backendRequests: { method: string; params: unknown; }[] = [];
+	public readonly preferences: unknown[] = [];
 
 	public send(event: string, payload?: unknown): void {
 		if (event === WEB_APP_SERVER_CONNECT_EVENT) {
@@ -208,6 +239,10 @@ class HostTransport extends EventEmitter implements AppServerTransport {
 		if (event !== WEB_APP_SERVER_FRAME_EVENT) { return; }
 		const message = JSON.parse((payload as { frame: string; }).frame);
 		if (message.method === 'initialize') { this.emitFrame({ jsonrpc: '2.0', id: message.id, result: createTestInitializeResult() }); }
+		if (message.method === 'browser/configure') {
+			this.preferences.push(message.params);
+			this.emitFrame({ jsonrpc: '2.0', id: message.id, result: null });
+		}
 		if (message.method === 'browser/network/authorize' || message.method === 'browser/sharing/set') {
 			this.backendRequests.push({ method: message.method, params: message.params });
 			this.emitFrame({ jsonrpc: '2.0', id: message.id, result: message.method === 'browser/network/authorize' ? { allowed: false } : null });

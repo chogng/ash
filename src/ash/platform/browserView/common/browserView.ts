@@ -299,6 +299,7 @@ export interface IBrowserViewObservation {
 	readonly screenshot?: { readonly mimeType: 'image/png'; readonly dataBase64: string; readonly decodedLength: number; };
 }
 export type BrowserViewAction =
+	| { readonly type: 'cdp'; readonly operation: BrowserCDPOperation; }
 	| { readonly type: 'hover'; readonly target: { readonly nodeId: string; }; }
 	| { readonly type: 'drag'; readonly source: { readonly nodeId: string; }; readonly destination: { readonly nodeId: string; }; }
 	| { readonly type: 'handleDialog'; readonly accept: boolean; readonly promptText?: string | null; }
@@ -308,6 +309,15 @@ export type BrowserViewAction =
 	| { readonly type: 'typeText'; readonly text: string; readonly target: { readonly type: 'focusedElement'; } | { readonly type: 'element'; readonly target: { readonly nodeId: string; }; }; }
 	| { readonly type: 'scroll'; readonly deltaX: number; readonly deltaY: number; }
 	| { readonly type: 'goBack' | 'reload'; };
+
+/** A connection is scoped to one Thread's Agent pages; event buffers are explicitly drained. */
+export type BrowserCDPOperation =
+	| { readonly type: 'command'; readonly method: string; readonly params: Record<string, unknown>; readonly sessionId?: string; }
+	| { readonly type: 'readEvents'; }
+	| { readonly type: 'close'; };
+
+export const BrowserChatToolsSettingId = 'workbench.browser.enableChatTools';
+export const BrowserCDPSettingId = 'workbench.browser.enableCDP';
 
 const MAX_URL_LENGTH = 8192;
 const MAX_BOUND_MAGNITUDE = 100_000;
