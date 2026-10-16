@@ -305,6 +305,8 @@
 		"--ash-context-view-layer",
 		"--ash-diff-center-width",
 		"--ash-diff-header-height",
+		"--ash-diff-original-line-numbers-left",
+		"--ash-diff-original-line-numbers-width",
 		"--ash-diff-overview-width",
 		"--ash-editor-tab-rows",
 		"--ash-editor-token-foreground",

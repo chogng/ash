@@ -84,8 +84,12 @@ export const diffUnchangedRegionBackground = color("diffEditor.unchangedRegionBa
 export const diffUnchangedRegionForeground = alias("diffEditor.unchangedRegionForeground", mutedForeground, "Foreground for collapsed unchanged diff regions.");
 export const diffRemovedLineMarker = alias("diffEditor.removedLineMarker", errorForeground, "Marker foreground for removed diff lines.");
 export const diffInsertedLineMarker = alias("diffEditor.insertedLineMarker", successForeground, "Marker foreground for inserted diff lines.");
-export const diffInsertedLineGutter = alias('diffEditorGutter.insertedLineBackground', diffInsertedLineBackground, 'Background for the margin beside inserted diff lines.');
-export const diffRemovedLineGutter = alias('diffEditorGutter.removedLineBackground', diffRemovedLineBackground, 'Background for the margin beside removed diff lines.');
+export const diffInsertedLineGutter = registerColor('diffEditorGutter.insertedLineBackground', {
+	dark: null, light: null, hcDark: null, hcLight: null,
+}, { description: 'Background for the margin beside inserted diff lines.', owner });
+export const diffRemovedLineGutter = registerColor('diffEditorGutter.removedLineBackground', {
+	dark: null, light: null, hcDark: null, hcLight: null,
+}, { description: 'Background for the margin beside removed diff lines.', owner });
 export const diffOverviewRulerInserted = registerColor('diffEditorOverview.insertedForeground', {
 	dark: transparent(diffInsertedLineMarker, 0.55), light: transparent(diffInsertedLineMarker, 0.55),
 	hcDark: diffInsertedLineMarker, hcLight: diffInsertedLineMarker,

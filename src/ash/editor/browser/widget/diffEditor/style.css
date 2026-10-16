@@ -48,11 +48,28 @@
 }
 
 .stanza-diff-editor.inline-view .stanza-diff-editor-side.original {
-	display: none;
+	grid-column: 2;
+	left: var(--ash-diff-original-line-numbers-left);
+	width: var(--ash-diff-original-line-numbers-width);
+	z-index: 1;
+	border-right: 0;
+	/* This is a visual number column; input and scrolling belong to the modified editor. */
+	pointer-events: none;
 }
 
 .stanza-diff-editor.inline-view .stanza-diff-editor-side.modified {
 	grid-column: 2;
+}
+
+.stanza-diff-editor.inline-view .modified .margin-view-overlays .line-numbers {
+	left: calc(
+		var(--stanza-editor-line-numbers-left) +
+			var(--ash-diff-original-line-numbers-width)
+	);
+	width: calc(
+		var(--stanza-editor-line-numbers-width) -
+			var(--ash-diff-original-line-numbers-width)
+	);
 }
 
 .ash-diff-alignment-zone {
@@ -77,6 +94,11 @@
 	font: inherit;
 	color: var(--ash-editor-foreground);
 	background: var(--ash-diffEditor-removedLineBackground);
+}
+
+.stanza-diff-editor.word-wrapped .stanza-diff-inline-original-line {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
 }
 
 .ash-diff-inline-original-margin > .stanza-diff-remove-sign {
@@ -136,11 +158,18 @@
 }
 
 .stanza-diff-editor .stanza-diff-gutter-removed {
-	background: var(--ash-diffEditorGutter-removedLineBackground);
+	background: var(--ash-diffEditorGutter-removedLineBackground, transparent);
 }
 
 .stanza-diff-editor .stanza-diff-gutter-added {
-	background: var(--ash-diffEditorGutter-insertedLineBackground);
+	background: var(--ash-diffEditorGutter-insertedLineBackground, transparent);
+}
+
+.stanza-diff-editor .stanza-diff-gutter-removed,
+.stanza-diff-editor .stanza-diff-gutter-added {
+	box-sizing: border-box;
+	padding-left: var(--stanza-editor-line-numbers-left);
+	background-clip: content-box;
 }
 
 .stanza-diff-editor .stanza-diff-remove-sign,

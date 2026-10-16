@@ -284,6 +284,33 @@ test('DiffEditorWidget retains unwrapped alignment zones and accessible inline d
 	assert.equal(editor.modifiedEditor.getModel()!.getLineContent(2), 'replacement');
 });
 
+test('inline diff aligns both number columns through deletions, additions and layout changes', async () => {
+	using services = createServices();
+	using original = new TextModel('first\nremoved\nlast');
+	using modified = new TextModel('first\nlast\nadded');
+	using computation = new WidgetTestDiffComputationService();
+	using model = new DiffModel({ original, modified, diffProvider: computation, diffOptions });
+	await waitForReady(model);
+	using editor = services.createInstance(DiffEditorWidget, {
+		container: browserEnvironment.window.document.createElement('main'), model,
+		renderSideBySide: false, lineHeight: 20, scrollBeyondLastLine: false,
+	});
+	editor.layout({ width: 500, height: 40 });
+	assert.equal(editor.originalEditor.getTopForLineNumber(3), editor.modifiedEditor.getTopForLineNumber(2));
+	assert.equal(editor.originalEditor.getContentHeight(), editor.modifiedEditor.getContentHeight());
+	assert.equal(editor.element.querySelector('.original')?.getAttribute('aria-hidden'), 'true');
+	assert.ok(editor.element.querySelector('.original .stanza-editor-margin-view-zone.stanza-diff-gutter-added'));
+	const inlineNumbersWidth = editor.modifiedEditor.getLayoutInfo().lineNumbersWidth;
+	editor.modifiedEditor.setScrollTop(20);
+	assert.equal(editor.originalEditor.getScrollTop(), editor.modifiedEditor.getScrollTop());
+	editor.setViewMode(true, false, 900);
+	assert.ok(editor.modifiedEditor.getLayoutInfo().lineNumbersWidth < inlineNumbersWidth);
+	assert.equal(editor.element.querySelector('.original')?.getAttribute('aria-hidden'), 'false');
+	editor.setViewMode(false, false, 900);
+	assert.equal(editor.modifiedEditor.getLayoutInfo().lineNumbersWidth, inlineNumbersWidth);
+	assert.equal(editor.originalEditor.getTopForLineNumber(3), editor.modifiedEditor.getTopForLineNumber(2));
+});
+
 test('DiffEditorWidget inserts paired view space for added lines and navigates without wrapping when requested', async () => {
 	using services = createServices();
 	using original = new TextModel('first\nlast\nold end');

@@ -812,7 +812,9 @@ const harness = {
 		editorServices.themeService.setTheme(themeId);
 		const theme = editorServices.themeService.getColorTheme();
 		const cssColor = (id: string) => {
-			const { r, g, b } = theme.getColor(id)!.rgba;
+			const value = theme.getColor(id);
+			if (!value) return 'rgba(0, 0, 0, 0)';
+			const { r, g, b } = value.rgba;
 			return `rgb(${r}, ${g}, ${b})`;
 		};
 		return { marker: cssColor('diffEditor.removedLineMarker'), background: cssColor('diffEditorGutter.removedLineBackground') };

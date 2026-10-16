@@ -74,6 +74,8 @@ export class DiffEditorWidget extends DelegatingEditor implements IDiffEditor {
 	private viewportHeight = 0;
 	private syncingScroll = false;
 	private accessibilityHelpHintEnabled = false;
+	private originalGlyphMargin: boolean;
+	private modifiedLineNumbersMinChars: number;
 
 	constructor(
 		options: DiffEditorWidgetOptions,
@@ -124,6 +126,8 @@ export class DiffEditorWidget extends DelegatingEditor implements IDiffEditor {
 		}));
 		this.originalEditor = this.editors.original;
 		this.modifiedEditor = this.editors.modified;
+		this.originalGlyphMargin = this.originalEditor.getOption(EditorOption.glyphMargin);
+		this.modifiedLineNumbersMinChars = this.modifiedEditor.getOption(EditorOption.lineNumbersMinChars);
 		this.diffDecorations = this._register(new DiffEditorDecorations(this.originalEditor, this.modifiedEditor));
 		this.viewModel = this._register(new DiffEditorViewModel(this.model, this.originalEditor, this.modifiedEditor));
 		this.diffViewZones = this._register(instantiationService.createInstance(DiffEditorViewZones, this.originalEditor, this.modifiedEditor, this.model));
@@ -371,6 +375,8 @@ export class DiffEditorWidget extends DelegatingEditor implements IDiffEditor {
 		if (options.hideUnchangedRegions) { this.hiddenRegions.setOptions(options.hideUnchangedRegions); }
 		this.showInlineChanges = options.showInlineChanges ?? this.showInlineChanges;
 		this.loopChanges = options.loopChanges ?? this.loopChanges;
+		this.originalGlyphMargin = options.glyphMargin ?? this.originalGlyphMargin;
+		this.modifiedLineNumbersMinChars = options.lineNumbersMinChars ?? this.modifiedLineNumbersMinChars;
 		this.editors.updateOptions(options);
 		this.diffDecorations.update(this.displayedDiff?.rows ?? [], this.showInlineChanges, this.diffOptions.renderIndicators);
 		this.updateFeatures();
@@ -408,6 +414,7 @@ export class DiffEditorWidget extends DelegatingEditor implements IDiffEditor {
 			this.element.classList.toggle('inline-view', inlineView);
 			this.originalContainer.setAttribute('aria-hidden', String(inlineView || this.accessibleDiffViewer.isVisible));
 			if (inlineView && this.originalContainer.contains(this.element.ownerDocument.activeElement)) this.modifiedEditor.focus();
+			this.originalContainer.inert = inlineView || this.accessibleDiffViewer.isVisible;
 			if (inlineView && this.movedTextToCompare) {
 				this.clearComparedMove();
 				this.diffDecorations.update(this.model.diff?.rows ?? [], this.showInlineChanges, this.diffOptions.renderIndicators);
@@ -431,8 +438,18 @@ export class DiffEditorWidget extends DelegatingEditor implements IDiffEditor {
 		const wasSyncingScroll = this.syncingScroll;
 		this.syncingScroll = true;
 		try {
-			this.originalEditor.layout({ width: inlineView ? contentWidth : originalWidth, height: editorHeight });
+			const originalDigits = Math.max(this.originalEditor.getOption(EditorOption.lineNumbersMinChars), String(this.model.original.getLineCount()).length);
+			this.originalEditor.updateOptions({ glyphMargin: inlineView ? false : this.originalGlyphMargin });
+			this.modifiedEditor.updateOptions({ lineNumbersMinChars: this.modifiedLineNumbersMinChars + (inlineView ? originalDigits + 1 : 0) });
 			this.modifiedEditor.layout({ width: inlineView ? contentWidth : contentWidth - originalWidth, height: editorHeight });
+			const modifiedLayout = this.modifiedEditor.getLayoutInfo();
+			// The original editor supplies only its number column over the reserved
+			// part of the modified margin. Both text layouts retain the same width.
+			const originalEditorWidth = inlineView ? modifiedLayout.contentWidth + this.originalEditor.getLayoutInfo().contentLeft : originalWidth;
+			this.originalEditor.layout({ width: Math.max(0, originalEditorWidth), height: editorHeight });
+			const originalLayout = this.originalEditor.getLayoutInfo();
+			this.element.style.setProperty('--ash-diff-original-line-numbers-width', `${inlineView ? originalLayout.lineNumbersWidth : 0}px`);
+			this.element.style.setProperty('--ash-diff-original-line-numbers-left', `${modifiedLayout.lineNumbersLeft}px`);
 			this.diffViewZones.update(this.inlineView, this.wordWrap, this.displayedDiff?.rows ?? [], this.diffOptions.renderIndicators, this.viewModel.getComparedRange());
 			this.modifiedEditor.setScrollTop(scrollTop, ScrollType.Immediate);
 		} finally {
@@ -580,7 +597,7 @@ export class DiffEditorWidget extends DelegatingEditor implements IDiffEditor {
 		this.originalContainer.setAttribute('aria-hidden', String(visible || this.inlineView));
 		this.modifiedContainer.setAttribute('aria-hidden', String(visible));
 		this.sash.element.setAttribute('aria-hidden', String(visible));
-		this.originalContainer.inert = visible;
+		this.originalContainer.inert = visible || this.inlineView;
 		this.modifiedContainer.inert = visible;
 		this.sash.element.inert = visible;
 		this.element.classList.toggle('features-inert', visible);
@@ -639,10 +656,11 @@ export class DiffEditorWidget extends DelegatingEditor implements IDiffEditor {
 
 	private synchronizeScroll(source: CodeEditorWidget, target: CodeEditorWidget): void {
 		if (this.syncingScroll) return;
-		// The hidden original has no inline alignment zones and cannot own the visible scroll position.
+		// The inline original is a passive number column. Model updates can clamp
+		// its scroll before alignment is rebuilt; the modified editor owns that position.
 		if (this.inlineView && source === this.originalEditor) return;
 		const top = source.getScrollTop();
-		if (!this.inlineView && target.getScrollTop() !== top) {
+		if (target.getScrollTop() !== top) {
 			this.syncingScroll = true;
 			try {
 				target.setScrollTop(top);

@@ -23,6 +23,7 @@ interface DiffViewZone {
 	readonly afterLineNumber: number;
 	readonly heightInPx: number;
 	readonly ordinal: number;
+	readonly marginClassName?: string;
 }
 
 interface InlineOriginalLine {
@@ -127,16 +128,26 @@ export class DiffEditorViewZones extends Disposable {
 		if (inlineView) {
 			const layout = this.modifiedEditor.getLayoutInfo();
 			const lines: InlineOriginalLine[] = [];
+			const original: DiffViewZone[] = [];
+			const modified: DiffViewZone[] = [];
 			this.inlineOriginalLines = { version: this.model.original.version, lines };
-			this.originalEditor.changeViewZones(accessor => {
-				for (const id of this.originalZones) accessor.removeZone(id);
-				this.originalZones = [];
-			});
 			this.modifiedEditor.changeViewZones(accessor => {
 				for (const id of this.modifiedZones) accessor.removeZone(id);
 				this.modifiedZones = [];
+				let precedingOriginalLine = 0;
 				let precedingModifiedLine = 0;
 				for (const [ordinal, row] of rows.entries()) {
+					const originalHeight = row.originalLineIndex === undefined ? 0 : this.lineHeightFor(this.originalEditor, row.originalLineIndex + 1, wordWrap);
+					const modifiedHeight = row.modifiedLineIndex === undefined ? 0 : this.lineHeightFor(this.modifiedEditor, row.modifiedLineIndex + 1, wordWrap);
+					if (row.originalLineIndex !== undefined) precedingOriginalLine = row.originalLineIndex + 1;
+					if (row.kind === LineDiffKind.Unchanged) {
+						this.appendViewZone(original, precedingOriginalLine, modifiedHeight - originalHeight, ordinal);
+						this.appendViewZone(modified, row.modifiedLineIndex! + 1, originalHeight - modifiedHeight, ordinal);
+					} else if (row.modifiedLineIndex !== undefined) {
+						// Added text occupies no original-model line. Reserve its height in
+						// the old number column, including the blank column's diff color.
+						this.appendViewZone(original, precedingOriginalLine, modifiedHeight, ordinal, 'stanza-diff-gutter-added');
+					}
 					if (row.kind !== LineDiffKind.Unchanged && row.originalLineIndex !== undefined) {
 						const line = h(this.modifiedEditor.getDomNode().ownerDocument, 'div');
 						line.className = 'stanza-diff-inline-original-line';
@@ -147,7 +158,7 @@ export class DiffEditorViewZones extends Disposable {
 						const margin = this.inlineMargins.add(new InlineDiffDeletedCodeMargin(line.ownerDocument, layout.decorationsWidth, renderIndicators));
 						this.modifiedZones.push(accessor.addZone({
 							afterLineNumber: row.modifiedLineIndex ?? precedingModifiedLine,
-							heightInPx: this.modifiedEditor.getOption(EditorOption.lineHeight),
+							heightInPx: originalHeight,
 							ordinal,
 							domNode: line,
 							marginDomNode: margin.domNode,
@@ -156,6 +167,11 @@ export class DiffEditorViewZones extends Disposable {
 					}
 					if (row.modifiedLineIndex !== undefined) precedingModifiedLine = row.modifiedLineIndex + 1;
 				}
+				this.modifiedZones.push(...this.addViewZones(accessor, modified));
+			});
+			this.originalEditor.changeViewZones(accessor => {
+				for (const id of this.originalZones) accessor.removeZone(id);
+				this.originalZones = this.addViewZones(accessor, original);
 			});
 			this.renderInlineOriginalLines();
 			return;
@@ -249,13 +265,13 @@ export class DiffEditorViewZones extends Disposable {
 		return wordWrap ? editor.getBottomForLineNumber(lineNumber) - editor.getTopForLineNumber(lineNumber) : editor.getOption(EditorOption.lineHeight);
 	}
 
-	private appendViewZone(zones: DiffViewZone[], afterLineNumber: number, heightInPx: number, ordinal: number): void {
+	private appendViewZone(zones: DiffViewZone[], afterLineNumber: number, heightInPx: number, ordinal: number, marginClassName?: string): void {
 		if (heightInPx <= 0) return;
 		const previous = zones.at(-1);
-		if (previous?.afterLineNumber === afterLineNumber) {
+		if (previous?.afterLineNumber === afterLineNumber && previous.marginClassName === marginClassName) {
 			zones[zones.length - 1] = { ...previous, heightInPx: previous.heightInPx + heightInPx };
 		} else {
-			zones.push({ afterLineNumber, heightInPx, ordinal });
+			zones.push({ afterLineNumber, heightInPx, ordinal, marginClassName });
 		}
 	}
 
@@ -263,7 +279,8 @@ export class DiffEditorViewZones extends Disposable {
 		return zones.map(zone => {
 			const domNode = h(this.modifiedEditor.getDomNode().ownerDocument, 'div');
 			domNode.className = 'ash-diff-alignment-zone';
-			return accessor.addZone({ ...zone, domNode });
+			const marginDomNode = zone.marginClassName ? h(domNode.ownerDocument, 'div', { className: zone.marginClassName }) : undefined;
+			return accessor.addZone({ ...zone, domNode, marginDomNode });
 		});
 	}
 }

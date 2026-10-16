@@ -1704,6 +1704,97 @@ test('diff navigation keeps line decorations free of focus rings in every theme'
 	}
 });
 
+for (const locale of ['en', 'zh-CN'] as const) {
+	test(`inline diff keeps old and new number columns aligned and gutter colors outside actions (${locale})`, async ({ page }, testInfo) => {
+		await openDiffPage(page, locale);
+		await page.evaluate(() => {
+			window.ashDiffIntegration.setComparisonText('removed first\nfirst\nold\nsame\nlast\nremoved end', 'first\nnew\nadded\nsame\nlast');
+			window.ashDiffIntegration.setEditorFeatures({ renderGutterMenu: false, renderMarginRevertIcon: true });
+			window.ashDiffIntegration.setViewMode(false, false, 900);
+		});
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+		const editor = page.locator('#single .stanza-diff-editor');
+		const number = (side: string, line: number) => editor.locator(`.${side} .line-numbers`).filter({ hasText: new RegExp(`^${line}$`) });
+		const top = async (locator: ReturnType<typeof number>) => (await locator.boundingBox())!.y;
+		for (const [oldLine, newLine] of [[2, 1], [4, 4], [5, 5]]) {
+			await expect.poll(async () => (await top(number('original', oldLine!))) - (await top(number('modified', newLine!)))).toBe(0);
+		}
+		for (const [oldLine, text] of [[1, 'removed first'], [3, 'old'], [6, 'removed end']] as const) {
+			const deletion = editor.locator('.stanza-diff-inline-original-line').filter({ hasText: new RegExp(`^${text}$`) });
+			await expect.poll(async () => (await top(number('original', oldLine))) - (await deletion.boundingBox())!.y).toBe(0);
+			expect(await editor.locator('.modified .line-numbers').evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().y))).not.toContain(await top(number('original', oldLine)));
+		}
+		for (const newLine of [2, 3]) {
+			expect(await editor.locator('.original .line-numbers').evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().y))).not.toContain(await top(number('modified', newLine)));
+		}
+		const oldNumber = (await number('original', 2).boundingBox())!;
+		const newNumber = (await number('modified', 1).boundingBox())!;
+		expect(oldNumber.x + oldNumber.width).toBeLessThanOrEqual(newNumber.x);
+		await expect(editor.locator('.stanza-diff-editor-side.original')).toHaveAttribute('inert', '');
+		for (const theme of ['vs', 'vs-dark', 'hc-black', 'hc-light']) {
+			await page.evaluate(theme => window.ashDiffIntegration.setTheme(theme), theme);
+			for (const gutter of await editor.locator('.stanza-diff-gutter-added, .stanza-diff-gutter-removed').all()) {
+				await expect(gutter).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			}
+			await expect(editor.locator('.modified .stanza-diff-line-added').first()).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			await expect(editor.locator('.stanza-diff-inline-original-line').first()).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			await testInfo.attach(`inline-number-columns-${locale}-${theme}`, { body: await editor.screenshot(), contentType: 'image/png' });
+		}
+		// Explicit gutter colors belong to the number/sign columns; they must
+		// neither enter the action margin nor replace the body's line colors.
+		const bodyBackgrounds = await editor.locator('.modified .stanza-diff-line-added, .stanza-diff-inline-original-line').evaluateAll(nodes => nodes.map(node => getComputedStyle(node).backgroundColor));
+		await page.evaluate(() => {
+			const root = document.querySelector<HTMLElement>('#single .stanza-diff-editor')!;
+			root.style.setProperty('--ash-diffEditorGutter-insertedLineBackground', 'rgb(180, 240, 180)');
+			root.style.setProperty('--ash-diffEditorGutter-removedLineBackground', 'rgb(240, 180, 180)');
+		});
+		await expect(editor.locator('.original .stanza-diff-gutter-added').first()).toHaveCSS('background-color', 'rgb(180, 240, 180)');
+		expect(await editor.locator('.modified .stanza-diff-line-added, .stanza-diff-inline-original-line').evaluateAll(nodes => nodes.map(node => getComputedStyle(node).backgroundColor))).toEqual(bodyBackgrounds);
+		const colors = editor.locator('.modified .stanza-diff-gutter-added, .modified .ash-diff-inline-original-margin');
+		for (const color of await colors.all()) {
+			const geometry = await color.evaluate(node => {
+				const style = getComputedStyle(node);
+				const glyph = node.closest('.stanza-editor')!.querySelector('.glyph-margin')!.getBoundingClientRect();
+				const content = node.closest('.stanza-editor')!.querySelector('.view-lines .view-line')!.getBoundingClientRect();
+				return { clip: style.backgroundClip, colorLeft: node.getBoundingClientRect().left + parseFloat(style.paddingLeft), colorRight: node.getBoundingClientRect().right, glyphRight: glyph.right, textLeft: content.left };
+			});
+			expect(geometry.clip).toBe('content-box');
+			expect(geometry.colorLeft).toBeGreaterThanOrEqual(geometry.glyphRight);
+			expect(geometry.colorRight).toBeLessThanOrEqual(geometry.textLeft);
+		}
+		await page.evaluate(() => window.ashDiffIntegration.setViewMode(true, false, 900));
+		await expect(editor.locator('.stanza-diff-editor-side.original')).not.toHaveAttribute('inert');
+		await editor.locator('.original .stanza-editor-input').focus();
+		await page.evaluate(() => window.ashDiffIntegration.setViewMode(false, false, 900));
+		await expect(editor.locator('.modified .stanza-editor-input')).toBeFocused();
+		await expect.poll(async () => (await top(number('original', 2))) - (await top(number('modified', 1)))).toBe(0);
+		await page.evaluate(() => window.ashDiffIntegration.setEditorFeatures({ lineNumbers: 'off' }));
+		await expect(editor.locator('.line-numbers')).toHaveCount(0);
+	});
+}
+
+test('inline diff number columns follow wrapping, scrolling and recomputed edits', async ({ page }) => {
+	await openDiffPage(page);
+	const shared = Array.from({ length: 80 }, (_, index) => `${index}: ${'shared text '.repeat(20)}`);
+	await page.evaluate(([left, right]) => {
+		window.ashDiffIntegration.setViewMode(false, false, 900);
+		window.ashDiffIntegration.setComparisonText(left, right);
+		window.ashDiffIntegration.toggleWordWrap();
+	}, [`${'removed text '.repeat(30)}\n${shared.join('\n')}`, shared.join('\n')]);
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+	const aligned = async () => page.evaluate(() => window.ashDiffIntegration.linePositions(21, 20));
+	await expect.poll(async () => { const p = await aligned(); return p.originalTop - p.modifiedTop; }).toBe(0);
+	await page.evaluate(() => window.ashDiffIntegration.scrollModified(500));
+	await expect.poll(async () => { const p = await aligned(); return p.originalScrollTop - p.modifiedScrollTop; }).toBe(0);
+	const input = page.locator('#single .modified .stanza-editor-input');
+	await input.focus();
+	await input.press('Control+Home');
+	await input.press('Enter');
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+	await expect.poll(async () => page.evaluate(() => { const p = window.ashDiffIntegration.linePositions(21, 21); return p.originalTop - p.modifiedTop; })).toBe(0);
+	await expect(input).toBeFocused();
+});
+
 test('diff decorations render themed lines, gutter signs, and overview markers', async ({ page }) => {
 	await openDiffPage(page);
 	const editor = page.locator('#single .stanza-diff-editor');
@@ -1959,12 +2050,16 @@ for (const theme of ['vs', 'vs-dark', 'hc-black', 'hc-light']) {
 	});
 }
 
-test('inline diff keeps removed text readable and restores both sides', async ({ page }) => {
+test('inline diff keeps removed text readable and restores side by side text', async ({ page }) => {
 	await openDiffPage(page);
 	const editor = page.locator('#single .stanza-diff-editor');
 	await page.evaluate(() => window.ashDiffIntegration.setViewMode(false, false, 900));
 	await expect(editor).toHaveClass(/inline-view/);
-	await expect(editor.locator('.stanza-diff-editor-side.original')).toBeHidden();
+	const original = editor.locator('.stanza-diff-editor-side.original');
+	await expect(original).toBeVisible();
+	await expect(original).toHaveAttribute('aria-hidden', 'true');
+	const oldColumn = (await original.boundingBox())!;
+	expect((await original.locator('.view-lines .view-line').first().boundingBox())!.x).toBeGreaterThanOrEqual(oldColumn.x + oldColumn.width);
 	await expect(editor.locator('.stanza-diff-editor-side.modified')).toBeVisible();
 	await expect(editor.locator('.stanza-diff-inline-original-line')).toContainText('before 😀 after');
 	await expect(editor.locator('.stanza-diff-inline-original-line').first()).toHaveAttribute('aria-label', /Removed line/);
