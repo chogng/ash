@@ -382,7 +382,7 @@ impl AppServer {
         let session = self.syntax_document(connection, &params.document_id)?;
         let mut session = session.lock().map_err(|_| internal_error())?;
         if session.document.revision().value() != params.previous_revision
-            || params.revision != params.previous_revision.saturating_add(1)
+            || params.revision <= params.previous_revision
         {
             return Err(invalid_params());
         }

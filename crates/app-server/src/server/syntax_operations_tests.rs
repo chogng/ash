@@ -175,7 +175,7 @@ fn parser_sessions_reuse_one_document_per_connection_and_release_on_close() {
             .syntax_update(
                 &first,
                 &json!({
-                    "documentId": "model-1", "previousRevision": 1, "revision": 3,
+                    "documentId": "model-1", "previousRevision": 1, "revision": 1,
                     "edits": [{"startOffset": 3, "endOffset": 7, "text": "cafè_new"}],
                 })
             )
@@ -269,24 +269,32 @@ fn shared_syntax_queries_use_one_rust_tree_and_release_with_the_connection() {
         .unwrap();
     assert_eq!(facts["facts"]["symbols"]["items"][0][0], "café");
     assert!(facts["facts"]["baseRevision"].is_null());
-    server.syntax_update(&first, &json!({"documentId":"shared","previousRevision":1,"revision":2,"edits":[{"startOffset":20,"endOffset":20,"text":"新"}]})).unwrap();
-    let updated = server
-        .syntax_query(&first, &query("facts", 2), &token)
-        .unwrap();
+    server.syntax_update(&first, &json!({"documentId":"shared","previousRevision":1,"revision":5,"edits":[{"startOffset":20,"endOffset":20,"text":"新"}]})).unwrap();
+    let mut updated_query = query("facts", 5);
+    updated_query["factsRevision"] = json!(1);
+    updated_query["factsTabSize"] = json!(4);
+    let updated = server.syntax_query(&first, &updated_query, &token).unwrap();
     assert_eq!(updated["facts"]["symbols"]["items"][0][0], "café新");
     assert_eq!(updated["incremental"], true);
+    assert_eq!(updated["revision"], 5);
+    assert_eq!(updated["facts"]["baseRevision"], 1);
+    assert!(
+        server
+            .syntax_query(&first, &query("facts", 2), &token)
+            .is_err()
+    );
     assert!(
         server
             .syntax_query(&first, &query("highlight", 1), &token)
             .is_err()
     );
-    let mut invalid = query("highlight", 2);
+    let mut invalid = query("highlight", 5);
     invalid["ranges"][0]["endLineIndex"] = json!(999);
     assert!(server.syntax_query(&first, &invalid, &token).is_err());
     source.cancel();
     assert!(
         server
-            .syntax_query(&first, &query("facts", 2), &token)
+            .syntax_query(&first, &query("facts", 5), &token)
             .is_err()
     );
     server.close_connection(first);

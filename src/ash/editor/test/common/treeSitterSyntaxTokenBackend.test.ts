@@ -448,7 +448,11 @@ test('Rust session sends one snapshot followed by ordered UTF-16 deltas, includi
 	assert.equal(calls.length, 1, 'deltas wait for the initial document to exist');
 	release();
 	assert.equal((await highlighted).revision, model.version);
-	assert.deepEqual(calls.map(call => call.kind), ['open', 'update', 'update', 'query']);
+	assert.deepEqual(calls.map(call => call.kind), ['open', 'update', 'query']);
+	assert.deepEqual(calls[1]!.params, {
+		documentId: 'one-tree', previousRevision: 1, revision: model.version,
+		edits: [{ startOffset: 13, endOffset: 13, text: '新' }, { startOffset: 28, endOffset: 28, text: 'x' }],
+	});
 	assert.equal(session.execution, 'rust');
 	const oldLength = model.getValueLength();
 	model.setEOL(1);
@@ -481,7 +485,7 @@ test('Rust session fails a replaced connection without replaying the old documen
 	assert.equal(closed, 0, 'an old session cannot close a new connection document');
 });
 
-test('Rust session pipelines a burst and its query without waiting for update acknowledgements', async () => {
+test('Rust session composes an input burst and pipelines its query without waiting for an acknowledgement', async () => {
 	using model = new TextModel('function item() {}');
 	const calls: string[] = [];
 	const releases: (() => void)[] = [];
@@ -501,9 +505,85 @@ test('Rust session pipelines a burst and its query without waiting for update ac
 	calls.length = 0;
 	for (let index = 0; index < 10; index++) model.applyOperations([{ range: new Range(1, 14, 1, 14), text: 'x' }]);
 	await session.request('facts', {}, signal());
-	assert.deepEqual(calls, [...Array.from({ length: 10 }, (_, index) => `update-${index + 2}`), 'query-11']);
+	assert.deepEqual(calls, ['update-11', 'query-11']);
 	session.dispose();
 	for (const release of releases) release();
+});
+
+test('Rust input batches preserve Unicode, overlapping edits, multiple cursors, EOL and undo', async () => {
+	using model = new TextModel('# 😀é\n\n正文\n');
+	let text = '', revision = 0;
+	const updates: number[] = [];
+	const api: ISyntaxApi = {
+		isAvailable: true, onDidChangeConnection: Event.None, generation: 1,
+		async open(params) { text = params.text; revision = params.revision; },
+		async update(params) {
+			assert.equal(params.previousRevision, revision);
+			assert.ok(params.edits.length <= 1024);
+			for (const edit of [...params.edits].reverse()) text = text.slice(0, edit.startOffset) + edit.text + text.slice(edit.endOffset);
+			revision = params.revision;
+			updates.push(revision);
+		},
+		async query(params) {
+			assert.equal(revision, params.revision);
+			assert.equal(text, model.getValue());
+			return { revision, rows: [], facts: null, brackets: [], parseMs: 0, queryMs: 0, incremental: true };
+		},
+		async analyze() { throw new Error('unused'); }, async selectionRanges() { throw new Error('unused'); }, async close() { },
+	};
+	using session = createAppServerTreeSitterSession(api, model, 'composed');
+	using listener = model.onDidChangeContent(change => session.update(change));
+	await session.request('highlight', {}, signal());
+	for (const piece of [' ', 'PERF', '_', 'MARK']) {
+		const column = model.getLineLength(1) + 1;
+		model.applyOperations([{ range: new Range(1, column, 1, column), text: piece }]);
+	}
+	model.applyOperations([{ range: new Range(1, 8, 1, 12), text: '新🦀\n行' }]);
+	model.applyOperations([{ range: new Range(1, 1, 1, 1), text: '前' }, { range: new Range(4, 1, 4, 1), text: '后' }]);
+	model.setEOL(1);
+	model.applyOperations([{ range: new Range(2, 1, 2, 1), text: '尾' }]);
+	await session.request('facts', {}, signal());
+	assert.deepEqual(updates, [model.version], 'one update covers the entire synchronous burst');
+	model.pushStackElement();
+	model.undo();
+	assert.equal(updates.length, 2, 'history reaches the backend before synchronous editor listeners finish');
+	await session.request('facts', {}, signal());
+	assert.equal(updates.length, 2);
+	model.setValue('x\n'.repeat(1025));
+	await session.request('facts', {}, signal());
+	const cursors = Array.from({ length: 1025 }, (_, index) => ({ range: new Range(index + 1, 1, index + 1, 1), text: '前' }));
+	model.applyOperations(cursors.filter((_, index) => index % 2 === 0));
+	model.applyOperations(cursors.filter((_, index) => index % 2 !== 0));
+	await session.request('facts', {}, signal());
+	assert.deepEqual(updates.slice(-2), [model.version - 1, model.version], 'disjoint edits split at the transport limit without losing their base');
+});
+
+test('Rust session drops cancelled intermediate queries and unsent edits on disposal', async () => {
+	using model = new TextModel('abc');
+	const calls: string[] = [];
+	const api: ISyntaxApi = {
+		isAvailable: true, onDidChangeConnection: Event.None, generation: 1,
+		async open() { }, async update() { calls.push('update'); },
+		async query(params) { calls.push(`query-${params.revision}`); return { revision: params.revision, rows: [], facts: null, brackets: [], parseMs: 0, queryMs: 0, incremental: true }; },
+		async analyze() { throw new Error('unused'); }, async selectionRanges() { throw new Error('unused'); }, async close() { calls.push('close'); },
+	};
+	using session = createAppServerTreeSitterSession(api, model, 'cancelled');
+	using listener = model.onDidChangeContent(change => session.update(change));
+	await session.request('highlight', {}, signal());
+	const controller = new AbortController();
+	model.applyOperations([{ range: new Range(1, 4, 1, 4), text: 'x' }]);
+	const obsolete = session.request('facts', {}, controller.signal);
+	const superseded = session.request('selection', { ranges: [new Range(1, 1, 1, 2)] }, signal());
+	controller.abort();
+	model.applyOperations([{ range: new Range(1, 5, 1, 5), text: 'y' }]);
+	await assert.rejects(obsolete);
+	await assert.rejects(superseded, /Obsolete syntax query/);
+	await session.request('facts', {}, signal());
+	assert.deepEqual(calls, ['query-1', 'update', 'query-3']);
+	model.applyOperations([{ range: new Range(1, 6, 1, 6), text: 'z' }]);
+	session.dispose();
+	await Promise.resolve();
+	assert.deepEqual(calls, ['query-1', 'update', 'query-3', 'close']);
 });
 
 test('Rust facts apply text shifts and splices, and recover from a cancelled unobserved revision', async () => {
@@ -542,7 +622,7 @@ test('Rust facts apply text shifts and splices, and recover from a cancelled uno
 	replies.push(delta(4, { baseRevision: null, edits: [], symbols: { ...empty, items: [sym('fresh', 0)] }, folds: empty, diagnostics: empty }));
 	const recovered = (await session.request('facts', {}, signal())).facts!;
 	assert.deepEqual(recovered.symbols.map(symbol => symbol.name), ['fresh']);
-	assert.deepEqual(requested, [undefined, 1, 2, 3, 3]);
+	assert.deepEqual(requested, [undefined, 1, 2, 3]);
 	session.dispose();
 });
 

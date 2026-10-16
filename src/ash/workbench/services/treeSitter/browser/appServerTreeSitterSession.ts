@@ -6,7 +6,11 @@ import type {
 } from '../../../../editor/common/services/treeSitter/treeSitterLibraryService.js';
 import { syntaxLanguageForEditorLanguage } from '../../../../platform/syntax/common/syntaxApi.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
+import { CancellationError } from '../../../../base/common/errors.js';
 import { Range, type IRange } from '../../../../editor/common/core/range.js';
+import { StringEdit, StringReplacement } from '../../../../editor/common/core/edits/stringEdit.js';
+import { OffsetRange } from '../../../../editor/common/core/ranges/offsetRange.js';
+import { TextModelChangeReason } from '../../../../editor/common/core/textChange.js';
 import type { TextModel } from '../../../../editor/common/model/textModel.js';
 import type { ISyntaxApi, SyntaxQueryResult, SyntaxRange, SyntaxFactsDelta, SyntaxFactsSplice, SyntaxPosition } from '../../../../platform/syntax/common/syntaxApi.js';
 
@@ -18,6 +22,8 @@ export function createAppServerTreeSitterSession(api: ISyntaxApi, model: TextMod
 	let disposed = false;
 	let ready = false;
 	let failure: unknown;
+	let pending: { previousRevision: number; revision: number; edit: StringEdit; } | undefined;
+	let queued = false;
 	let facts: { revision: number; tabSize: number; value: TreeSitterFacts; } | undefined;
 	const opened = api.open({
 		documentId,
@@ -25,7 +31,7 @@ export function createAppServerTreeSitterSession(api: ISyntaxApi, model: TextMod
 		language: syntaxLanguageForEditorLanguage(model.getLanguageId())!,
 		text: model.getValue(),
 	}, 'shared').then(() => { ready = true; });
-	// Once open, post updates and queries immediately in call order. The backend's
+	// Once open, post flushed updates and queries in call order. The backend's
 	// document resource serializes execution; waiting for each acknowledgement here
 	// would put a second scheduling barrier behind synchronous input listeners.
 	void opened.catch(error => { failure = error; });
@@ -43,26 +49,50 @@ export function createAppServerTreeSitterSession(api: ISyntaxApi, model: TextMod
 		try { return ready ? invoke() : opened.then(invoke); }
 		catch (error) { return Promise.reject(error); }
 	}
+	function flush(): void {
+		const batch = pending;
+		pending = undefined;
+		if (!batch || disposed) return;
+		const edits = batch.edit.replacements.map(edit => ({ startOffset: edit.replaceRange.start, endOffset: edit.replaceRange.endExclusive, text: edit.newText }));
+		void send(() => api.update({ documentId, previousRevision: batch.previousRevision, revision: batch.revision, edits }))
+			.catch(error => { failure = error; });
+	}
 	return {
 		execution: 'rust',
 		[Symbol.dispose]() { this.dispose(); },
 		setTabSize: value => { tabSize = value; },
 		update: change => {
 			if (disposed) return;
-			const edits = change.isEolChange
-				? [{ startOffset: 0, endOffset: length, text: model.getValue() }]
-				: change.changes.map(edit => ({
-					startOffset: edit.rangeOffset,
-					endOffset: edit.rangeOffset + edit.rangeLength,
-					text: edit.text,
-				}));
+			const edit = change.isEolChange
+				? StringEdit.replace(new OffsetRange(0, length), model.getValue())
+				: new StringEdit(change.changes.map(edit => new StringReplacement(OffsetRange.ofStartAndLength(edit.rangeOffset, edit.rangeLength), edit.text)));
+			const combined = pending ? pending.edit.compose(edit) : edit;
+			// Composition uses old-document UTF-16 offsets, including edits inside
+			// an earlier insertion. Keep batches within the transport's edit limit.
+			if (pending && combined.replacements.length > 1024) flush();
+			pending = { previousRevision: pending?.previousRevision ?? change.version - 1, revision: change.version, edit: pending ? combined : edit };
 			length = model.getValueLength();
-			void send(() => api.update({ documentId, previousRevision: change.version - 1, revision: change.version, edits }))
-				.catch(error => { failure = error; });
+			// History already reports a complete replay. Send it while synchronous
+			// editor listeners run, so parsing can overlap their work as before.
+			if (change.reason === TextModelChangeReason.Undo || change.reason === TextModelChangeReason.Redo || change.reason === TextModelChangeReason.HistoryCancellation) {
+				flush();
+				return;
+			}
+			// Typing interceptors can commit several model versions in one input.
+			// Parse their combined change once, without delaying the next UI task.
+			if (!queued) {
+				queued = true;
+				queueMicrotask(() => { queued = false; flush(); });
+			}
 		},
 		request: async (operation, data, signal): Promise<TreeSitterSyntaxResult> => {
 			const revision = model.version;
+			// Synchronous content listeners may request intermediate versions. Let
+			// their cancellation win before flushing or querying that input burst.
+			await Promise.resolve();
 			signal.throwIfAborted();
+			if (revision !== model.version) throw new CancellationError('Obsolete syntax query');
+			flush();
 			if (operation === 'selection') {
 				const { ranges } = data as { ranges: readonly IRange[]; };
 				const result = await raceCancellationError(send(() => api.selectionRanges({ documentId, revision, ranges: ranges.map(toSyntaxRange) }), signal), signal, 'Syntax selection cancelled');
@@ -95,6 +125,7 @@ export function createAppServerTreeSitterSession(api: ISyntaxApi, model: TextMod
 		dispose: () => {
 			if (disposed) return;
 			disposed = true;
+			pending = undefined;
 			facts = undefined;
 			void opened.then(() => { if (api.generation === generation) return api.close({ documentId }); }).catch(() => undefined);
 		},

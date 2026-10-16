@@ -78,6 +78,7 @@ export interface SyntaxEdit {
 export interface SyntaxUpdateParams {
 	readonly documentId: string;
 	readonly previousRevision: number;
+	/** Strictly newer host version; edits composed into one batch may skip versions. */
 	readonly revision: number;
 	readonly edits: readonly SyntaxEdit[];
 }

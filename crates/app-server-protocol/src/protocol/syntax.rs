@@ -132,6 +132,8 @@ pub struct SyntaxEditDto {
 }
 
 /// Advances one parser document without resending its full text.
+/// Edits use `previous_revision` coordinates; `revision` is a strictly newer host
+/// version and may skip versions combined into this atomic batch.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SyntaxUpdateParams {
