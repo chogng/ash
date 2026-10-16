@@ -1077,6 +1077,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "snapshot",
+      "file": "snapshot.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "source-control",
       "file": "source-control.svg",
       "rendering": "symbolic"
