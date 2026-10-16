@@ -81,3 +81,49 @@ fn zip_updates_reject_duplicate_entries() {
     fs::create_dir(&output).unwrap();
     assert!(extract_package(&archive, PackageFormat::Zip, &output).is_err());
 }
+
+#[test]
+fn zip_updates_extract_deflated_unicode_files_and_empty_directories() {
+    let root = TempDir::new().unwrap();
+    let archive = root.path().join("update.zip");
+    let mut writer = zip::ZipWriter::new(fs::File::create(&archive).unwrap());
+    let options = zip::write::SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated);
+    writer.add_directory("empty/", options).unwrap();
+    writer.start_file("更新/ash.txt", options).unwrap();
+    writer.write_all(b"verified update").unwrap();
+    writer.finish().unwrap();
+    let output = root.path().join("output");
+    fs::create_dir(&output).unwrap();
+
+    extract_package(&archive, PackageFormat::Zip, &output).unwrap();
+
+    assert!(output.join("empty").is_dir());
+    assert_eq!(
+        fs::read(output.join("更新/ash.txt")).unwrap(),
+        b"verified update"
+    );
+}
+
+#[test]
+fn zip_updates_reject_links_and_paths_outside_the_package() {
+    for symlink in [false, true] {
+        let root = TempDir::new().unwrap();
+        let archive = root.path().join("update.zip");
+        let mut writer = zip::ZipWriter::new(fs::File::create(&archive).unwrap());
+        let options = zip::write::SimpleFileOptions::default();
+        if symlink {
+            writer.add_symlink("link", "../outside", options).unwrap();
+        } else {
+            writer.start_file("../outside", options).unwrap();
+            writer.write_all(b"escaped").unwrap();
+        }
+        writer.finish().unwrap();
+        let output = root.path().join("output");
+        fs::create_dir(&output).unwrap();
+
+        assert!(extract_package(&archive, PackageFormat::Zip, &output).is_err());
+        assert!(!root.path().join("outside").exists());
+        assert!(fs::read_dir(output).unwrap().next().is_none());
+    }
+}

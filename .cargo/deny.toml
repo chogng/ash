@@ -61,6 +61,8 @@ allow-git = [
     "https://github.com/tree-sitter-grammars/tree-sitter-scss",
     # SDK compatibility fixes required by the sandbox; see third_party/mxc/README.md.
     "https://github.com/chogng/mxc",
+    # Optional downloader build dependencies; pinned to the reviewed 1.13.8 adaptation.
+    "https://github.com/chogng/sherpa-onnx",
     "https://github.com/cobalt-org/liquid-rust",
     "https://github.com/dzbarsky/rules_rust",
     "https://github.com/helix-editor/nucleo.git",

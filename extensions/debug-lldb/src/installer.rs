@@ -704,7 +704,11 @@ fn unpack(
         let mut entry = archive
             .by_index(index)
             .map_err(|error| InstallError::Failed(error.to_string()))?;
-        let name = entry.name().trim_end_matches('/').to_string();
+        let name = entry
+            .name()
+            .map_err(|error| InstallError::Failed(error.to_string()))?
+            .trim_end_matches('/')
+            .to_string();
         if !safe_path(&name)
             || !paths.insert(name.to_lowercase())
             || entry.is_symlink()

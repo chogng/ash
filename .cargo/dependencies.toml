@@ -23,11 +23,6 @@ versions = ["0.10.4", "0.12.1"]
 reason = "Current upstream API families: 0.10.4 via digest; 0.12.1 via digest. Review the introducing packages together before changing this set."
 
 [[multiple_versions]]
-name = "bzip2"
-versions = ["0.4.4", "0.5.2"]
-reason = "sherpa-onnx-sys 1.13.8 uses bzip2 0.4 directly and zip 2.4 uses bzip2 0.5 while unpacking its prebuilt ONNX library at build time."
-
-[[multiple_versions]]
 name = "cfg_aliases"
 versions = ["0.1.1", "0.2.2"]
 reason = "Current upstream API families: 0.1.1 via nix; 0.2.2 via naga, nix, quinn and other importers. Review the introducing packages together before changing this set."
@@ -313,9 +308,9 @@ versions = ["3.0.0", "4.3.4"]
 reason = "Current upstream API families: 3.0.0 via zbus; 4.3.4 via atspi-common, zbus, zbus_macros and other importers. Review the introducing packages together before changing this set."
 
 [[multiple_versions]]
-name = "zip"
-versions = ["2.4.2", "4.6.1"]
-reason = "2.4 is a sherpa-onnx-sys build dependency for its prebuilt ONNX library; 4.6 serves Ash CLI/plugins."
+name = "typed-path"
+versions = ["0.9.3", "0.12.3"]
+reason = "0.9.3 belongs to tough's signed package metadata; zip 9.0.4 requires 0.12.3 for platform-independent archive paths. No typed paths cross these APIs."
 
 [[multiple_versions]]
 name = "zvariant"

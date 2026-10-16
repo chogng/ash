@@ -383,7 +383,7 @@ portable-pty = { version = "0.9.0", path = "third_party/wezterm/portable-pty" }
 pkg-config = "0.3"
 p256 = { version = "0.13", default-features = false, features = ["arithmetic", "pkcs8", "std"] }
 pretty_assertions = "1"
-sherpa-onnx = "=1.13.8"
+sherpa-onnx = { version = "=1.13.8", default-features = false, features = ["static"] }
 crossterm = "0.28.1"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 pulldown-cmark = { version = "0.13.4", default-features = false }
@@ -495,7 +495,7 @@ windows = "0.62"
 windows-sys = "0.59"
 x11rb = "0.13.2"
 zeroize = "1"
-zip = { version = "4.6.1", default-features = false, features = ["deflate-flate2"] }
+zip = { version = "9.0.4", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 ash-agent-environment = { path = "crates/agent-environment" }
 agent-graph-store = { package = "ash-agent-graph-store", path = "crates/agent-graph-store" }
 external-agent-migration = { path = "crates/external-agent-migration" }
@@ -709,6 +709,11 @@ inherits = "test"
 debug = "limited"
 
 [patch.crates-io]
+# External libraries are prepared through Ash's checksum-locked build entrypoints.
+# Keep the 1.13.8 ABI while omitting upstream HTTP/archive build dependencies.
+# Remove both pins when an upstream release supports this external-library mode.
+sherpa-onnx = { git = "https://github.com/chogng/sherpa-onnx", rev = "6bf965c7495a4d2a86abdea3bcfa348961079e8b" }
+sherpa-onnx-sys = { git = "https://github.com/chogng/sherpa-onnx", rev = "6bf965c7495a4d2a86abdea3bcfa348961079e8b" }
 # Preserve the sandbox boundaries absent from the published SDK. The compatibility
 # fork keeps upstream layout; remove this override after equivalent upstream support.
 mxc-sdk = { git = "https://github.com/chogng/mxc", rev = "d4bc220668130f941d117aab4326edb4c1812e78" }

@@ -34,7 +34,10 @@ pub(crate) fn extract(bytes: &[u8], destination: &Path) -> Result<(), Extensions
         if entry.is_symlink() || entry.encrypted() {
             return Err(ExtensionsClientError::package_untrusted());
         }
-        let path = safe_path(entry.name())?;
+        let name = entry
+            .name()
+            .map_err(|_| ExtensionsClientError::package_untrusted())?;
+        let path = safe_path(&name)?;
         if !paths.insert(path.clone()) {
             return Err(ExtensionsClientError::package_untrusted());
         }

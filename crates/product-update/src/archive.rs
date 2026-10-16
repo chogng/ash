@@ -116,9 +116,10 @@ fn extract_zip(archive: &Path, destination: &Path) -> Result<(), String> {
     let mut paths = BTreeSet::new();
     for index in 0..archive.len() {
         let entry = archive.by_index(index).map_err(|error| error.to_string())?;
+        let name = entry.name().map_err(|error| error.to_string())?;
         let path = entry
             .enclosed_name()
-            .ok_or_else(|| format!("update archive entry path is invalid: {}", entry.name()))?
+            .ok_or_else(|| format!("update archive entry path is invalid: {name}"))?
             .to_owned();
         if !safe_relative_path(&path) || !paths.insert(path.clone()) {
             return Err(format!(

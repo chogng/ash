@@ -25,7 +25,7 @@ tempfile.workspace = true
 tokio.workspace = true
 tough.workspace = true
 url.workspace = true
-zip = { workspace = true, features = ["deflate-flate2-zlib-rs"] }
+zip = { workspace = true }
 ash-file-identity.workspace = true
 ash-plugin = { workspace = true }
 ash-tools.workspace = true
