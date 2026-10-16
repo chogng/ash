@@ -1,3 +1,4 @@
+import { IAdapterManager, type DebugAdapterFactory, type DebugAdapterFactoryRegistration, IDebugService, type IDebugConfigurationProvider, type DebugConfigurationProviderRegistration, type IDebugAdapterTrackerFactory, type DebugAdapterTrackerFactoryRegistration } from '../../contrib/debug/common/debug.js';
 import { MainThreadSpeech } from './mainThreadSpeech.js';
 import { MainThreadTerminalService, type ExtensionTerminalProfileRegistration, type ExtensionTerminalEnvironmentRegistration } from './mainThreadTerminalService.js';
 import { MainThreadLocalization } from './mainThreadLocalization.js';
@@ -10,7 +11,6 @@ import { MainThreadDebugService } from './mainThreadDebugService.js';
 import { IFileService, FileKind } from '../../../platform/files/common/files.js';
 import { MainThreadConfiguration } from './mainThreadConfiguration.js';
 import { MainThreadWorkspace } from './mainThreadWorkspace.js';
-import { DebugAdapterFactoriesRegistry, type DebugAdapterFactory, type DebugAdapterFactoryRegistration } from '../../services/debug/common/debugAdapterFactory.js';
 import { IHostService } from '../../services/host/browser/host.js';
 import { getRemoteAuthorityPrefix } from '../../../platform/remote/common/remoteAuthorityResolver.js';
 import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
@@ -30,7 +30,6 @@ import { ITestingService, type TestProfileProvider, type TestProfileProviderRegi
 import { IOutputService, type IOutputChannel, type OutputEntrySeverity } from '../../services/output/common/output.js';
 import { createExtensionHostLanguageProviderBatch, extensionHostLanguageProviderId, unsupportedExtensionHostLanguageOperations, type ExtensionHostProviderInvoker } from './extensionHostLanguageBridge.js';
 import { createExtensionHostDebugAdapterFactory, createExtensionHostDebugAdapterTrackerFactory, createExtensionHostDebugConfigurationProvider, createExtensionHostTaskProvider, createExtensionHostTestProfileProvider, extensionHostCanonicalTaskId, extensionHostWorkflowProviderId } from './extensionHostWorkflowBridge.js';
-import { IDebugService, type IDebugConfigurationProvider, type DebugConfigurationProviderRegistration, type IDebugAdapterTrackerFactory, type DebugAdapterTrackerFactoryRegistration } from '../../services/debug/common/debugService.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { MainThreadCustomEditors } from './mainThreadCustomEditors.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
@@ -148,6 +147,7 @@ export class MainThreadExtensionApi extends Disposable {
 		@IRemoteConnectionService private readonly remoteConnections: IRemoteConnectionService,
 		@IDialogService private readonly dialogs: IDialogService,
 		@IHostService private readonly host: IHostService,
+		@IAdapterManager adapters: IAdapterManager,
 	) {
 		super();
 		this.messages = this._register(instantiation.createInstance(MainThreadMessageService));
@@ -169,7 +169,7 @@ export class MainThreadExtensionApi extends Disposable {
 		this.commandRegistration = this._register(commands.registerMany([]));
 		this.languageRegistration = this._register(languageFeatures.registerProviderBatch({}));
 		this.taskRegistration = this._register(tasks.registerTaskProviders([]));
-		this.debugAdapterRegistration = this._register(DebugAdapterFactoriesRegistry.registerFactories([]));
+		this.debugAdapterRegistration = this._register(adapters.registerFactories([]));
 		this.debugConfigurationRegistration = this._register(debug.registerDebugConfigurationProviders([]));
 		this.debugTrackerRegistration = this._register(debug.registerDebugAdapterTrackerFactories([]));
 		this.testRegistration = this._register(testing.registerTestProfileProviders([]));
@@ -595,7 +595,9 @@ export class MainThreadExtensionApi extends Disposable {
 					incarnation,
 					operation,
 					payload,
-					deadlineUnixMillis: Date.now() + this.invocationTimeoutMillis,
+					// Adapter creation can prepare a runtime on first use. Cancellation still
+					// follows this launch and the registration's activation generation.
+					deadlineUnixMillis: Date.now() + (registration.kind === 'debugAdapter' ? Math.max(this.invocationTimeoutMillis, 300_000) : this.invocationTimeoutMillis),
 				}, combined.signal);
 				combined.signal.throwIfAborted();
 				return result;

@@ -1,34 +1,164 @@
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { resetNlsResolver } from '../../../../../nls.js';
-import { initializeTestLocalization } from '../../../localization/test/common/localizationTestUtils.js';
+import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import { SyncDescriptor } from '../../../../../platform/instantiation/common/descriptors.js';
-import { TestConfigurationService as WorkbenchConfigurationService } from '../../../configuration/test/common/testServices.js';
+import { TestConfigurationService as WorkbenchConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IRendererHostService } from '../../../../../platform/renderer/common/rendererHost.js';
 import { createDisconnectedRendererApi } from '../../../../browser/rendererApi.js';
-import { BrowserPathService } from '../../../path/browser/pathService.js';
+import { BrowserPathService } from '../../../../services/path/browser/pathService.js';
 import { IPathService } from '../../../../../platform/path/common/pathService.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
-import { CommandService } from '../../../commands/common/commandService.js';
+import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { ITerminalProcessService } from '../../../../../platform/terminal/common/terminal.js';
-import { ConfigurationResolverService } from '../../../configurationResolver/browser/configurationResolverService.js';
+import { ConfigurationResolverService } from '../../../../services/configurationResolver/browser/configurationResolverService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
-import { WorkspaceContextService } from '../../../workspaces/browser/workspaceContextService.js';
-import type { DebugAdapterSessionStartOptions } from '../../browser/debugAdapterSession.js';
+import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
+import type { DebugSessionStartOptions } from '../../browser/debugSession.js';
 import assert from "node:assert/strict";
-import { test } from "mocha";
+import { suite, test } from "mocha";
 import { Emitter } from "../../../../../base/common/event.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { OperatingSystem } from '../../../../../base/common/platform.js';
 import { type IDebugAdapterProcessReadResult, type IDebugAdapterProcessService } from "../../../../../platform/debug/common/debugAdapterProcessService.js";
 import { type AppServerConnectionState } from "../../../../../platform/agentHost/common/appServerApi.js";
 import { createSshRemoteWorkspaceUri } from "../../../../../platform/remote/common/remote.js";
-import { DebugAdapterSession } from "../../browser/debugAdapterSession.js";
-import { DebugBreakpoint, type IDebugBreakpoint, type IDebugConfiguration } from "../../common/debugService.js";
+import { DebugSession } from "../../browser/debugSession.js";
+import { DebugBreakpoint, type IDebugBreakpoint, type IDebugConfiguration } from "../../common/debug.js";
+import { DeferredPromise, timeout } from '../../../../../base/common/async.js';
+import { mock } from 'node:test';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 
-test("DebugAdapterSession handles zero-sequence DAP messages, clears breakpoints, and resolves an omitted stopped thread", async () => {
+suite('Debug observation isolation', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('DebugSession sends commands while an outgoing tracker callback is held', async () => {
+		using processes = new FakeDebugAdapterProcessService();
+		const entered = new DeferredPromise<void>();
+		const release = new DeferredPromise<void>();
+		const observed: string[] = [];
+		const session = await startSession({
+			configuration: configuration(), processService: processes, breakpoints: () => [], workspace: URI.file('/workspace'), createDebugAdapterTrackers: async () => [{
+				...toDisposable(() => { }),
+				onWillReceiveMessage: async message => {
+					const command = (message as { command: string; }).command;
+					observed.push(command);
+					if (command === 'held-observer') { await entered.complete(); await release.p; }
+				},
+			}]
+		});
+		const request = session.customRequest('held-observer');
+		try {
+			await entered.p;
+			assert.equal(processes.requests('held-observer').length, 1, 'Observation must not hold the adapter request');
+			await request;
+			await session.customRequest('following-request');
+			assert.equal(observed.includes('following-request'), false, 'Observer delivery stays ordered');
+		} finally {
+			await release.complete();
+			await request;
+			await session.disconnect();
+		}
+		assert.equal(observed.includes('following-request'), true);
+	});
+
+	test('DebugSession retires a stalled startup tracker and preserves its peer', async () => {
+		using processes = new FakeDebugAdapterProcessService();
+		const entered = new DeferredPromise<void>();
+		const release = new DeferredPromise<void>();
+		let disposed = 0;
+		let peerStarted = false;
+		initializeTestLocalization('zh-CN');
+		mock.timers.enable({ apis: ['setTimeout'] });
+		const starting = startSession({
+			configuration: configuration(), processService: processes, breakpoints: () => [], workspace: URI.file('/workspace'), createDebugAdapterTrackers: async () => [
+				{ ...toDisposable(() => disposed++), onWillStartSession: async () => { await entered.complete(); await release.p; } },
+				{ ...toDisposable(() => { }), onWillStartSession: () => { peerStarted = true; } },
+			]
+		});
+		try {
+			await entered.p;
+			assert.equal(peerStarted, true);
+			mock.timers.tick(1000);
+			// Restore real timers before startup continues into the DAP reader.
+			mock.timers.reset();
+			const session = await starting;
+			assert.equal(disposed, 1);
+			assert.match(session.output, /调试适配器跟踪器.*超时/);
+		} finally {
+			mock.timers.reset();
+			await release.complete();
+			const session = await starting;
+			try { await session.disconnect(); }
+			finally { resetNlsResolver(); }
+		}
+		assert.equal(disposed, 1, 'A retired tracker is released exactly once');
+	});
+
+	test('DebugSession closes its adapter while a shutdown tracker stays held', async () => {
+		using processes = new FakeDebugAdapterProcessService();
+		const entered = new DeferredPromise<void>();
+		const release = new DeferredPromise<void>();
+		let disposed = 0;
+		let peerStopped = false;
+		const session = await startSession({
+			configuration: configuration(), processService: processes, breakpoints: () => [], workspace: URI.file('/workspace'), createDebugAdapterTrackers: async () => [
+				{ ...toDisposable(() => disposed++), onWillStopSession: async () => { await entered.complete(); await release.p; } },
+				{ ...toDisposable(() => { }), onWillStopSession: () => { peerStopped = true; } },
+			]
+		});
+		mock.timers.enable({ apis: ['setTimeout'] });
+		const stopping = session.disconnect();
+		try {
+			await entered.p;
+			assert.equal(peerStopped, true);
+			mock.timers.tick(1000);
+			mock.timers.reset();
+			await stopping;
+			assert.equal(processes.closed, true);
+			assert.equal(disposed, 1);
+			assert.equal(release.isSettled, false, 'Shutdown does not depend on the stalled callback returning');
+		} finally {
+			mock.timers.reset();
+			await release.complete();
+			await stopping;
+			session.dispose();
+		}
+		assert.equal(disposed, 1);
+	});
+
+	test('DebugSession bounds shutdown when timely observations have a large backlog', async () => {
+		using processes = new FakeDebugAdapterProcessService();
+		const session = await startSession({
+			configuration: configuration(), processService: processes, breakpoints: () => [], workspace: URI.file('/workspace'), createDebugAdapterTrackers: async () => [{
+				...toDisposable(() => { }),
+				onWillReceiveMessage: message => (message as { command: string; }).command.startsWith('slow-') ? timeout(500) : undefined,
+			}]
+		});
+		mock.timers.enable({ apis: ['setTimeout'] });
+		let stopping: Promise<void> | undefined;
+		try {
+			await Promise.all(Array.from({ length: 100 }, (_, index) => session.customRequest(`slow-${index}`)));
+			stopping = session.disconnect();
+			for (let tick = 0; tick < 4; tick++) {
+				mock.timers.tick(500);
+				for (let turn = 0; turn < 30; turn++) await Promise.resolve();
+			}
+			assert.equal(processes.closed, true, 'A backlog must not accumulate per-callback waits during stop');
+			assert.match(session.output, /observations were skipped/);
+			await stopping;
+		} finally {
+			session.dispose();
+			mock.timers.reset();
+			await stopping;
+		}
+	});
+
+});
+
+test("DebugSession handles zero-sequence DAP messages, clears breakpoints, and resolves an omitted stopped thread", async () => {
 	using processes = new FakeDebugAdapterProcessService();
 	let breakpoints: readonly IDebugBreakpoint[] = [breakpoint(4)];
 	const workspace = URI.from({ scheme: 'file', path: '/C:/workspace' });
@@ -82,7 +212,7 @@ test("DebugAdapterSession handles zero-sequence DAP messages, clears breakpoints
 	assert.equal(processes.closed, true);
 });
 
-test("DebugAdapterSession keeps Remote adapter paths on the Remote Workspace authority", async () => {
+test("DebugSession keeps Remote adapter paths on the Remote Workspace authority", async () => {
 	using processes = new FakeDebugAdapterProcessService("/srv/project/src/main file.ts");
 	const workspace = createSshRemoteWorkspaceUri("work-server", "/srv/project");
 	const configurationValue: IDebugConfiguration = { ...configuration(), adapter: { program: "${workspaceFolder}/adapter", arguments: ["--stdio"] }, arguments: { program: "${workspaceFolder}/bin/app", cwd: "${workspaceFolder}" } };
@@ -101,7 +231,7 @@ test("DebugAdapterSession keeps Remote adapter paths on the Remote Workspace aut
 	await session.disconnect();
 });
 
-test("DebugAdapterSession gates mutations on adapter capability and validates adapter replies", async () => {
+test("DebugSession gates mutations on adapter capability and validates adapter replies", async () => {
 	using unsupported = new FakeDebugAdapterProcessService(undefined, false);
 	const unsupportedSession = await startSession({ configuration: configuration(), processService: unsupported, breakpoints: () => [], workspace: URI.file('/workspace') });
 	try {
@@ -126,7 +256,7 @@ test("DebugAdapterSession gates mutations on adapter capability and validates ad
 	}
 });
 
-test("DebugAdapterSession sends expressions unchanged and does not install unsupported breakpoint types", async () => {
+test("DebugSession sends expressions unchanged and does not install unsupported breakpoint types", async () => {
 	let points: readonly IDebugBreakpoint[] = [breakpoint(4), { ...breakpoint(5), condition: 'answer > 0' }, { ...breakpoint(6), hitCondition: '% 3' }, { ...breakpoint(7), logMessage: ' answer = {answer} ' }];
 	using supported = new FakeDebugAdapterProcessService();
 	const session = await startSession({ configuration: configuration(), processService: supported, breakpoints: () => points, workspace: URI.file('/workspace') });
@@ -154,7 +284,7 @@ test("DebugAdapterSession sends expressions unchanged and does not install unsup
 	} finally { await other.disconnect(); }
 });
 
-test("DebugAdapterSession groups interleaved source breakpoints and clears a retired source", async () => {
+test("DebugSession groups interleaved source breakpoints and clears a retired source", async () => {
 	using processes = new FakeDebugAdapterProcessService();
 	const otherResource = URI.file('C:\\workspace\\other.ts');
 	let points: readonly IDebugBreakpoint[] = [breakpoint(4), { ...breakpoint(5), resource: otherResource }, breakpoint(6)];
@@ -170,7 +300,7 @@ test("DebugAdapterSession groups interleaved source breakpoints and clears a ret
 	} finally { await session.disconnect(); }
 });
 
-test("DebugAdapterSession cancels pending breakpoint replacements when disposed", async () => {
+test("DebugSession cancels pending breakpoint replacements when disposed", async () => {
 	using processes = new FakeDebugAdapterProcessService();
 	const session = await startSession({ configuration: configuration(), processService: processes, breakpoints: () => [breakpoint(4)], workspace: URI.file('/workspace') });
 	processes.holdBreakpoints = true;
@@ -182,7 +312,7 @@ test("DebugAdapterSession cancels pending breakpoint replacements when disposed"
 	assert.equal(processes.requests('setBreakpoints').length, 2);
 });
 
-test("DebugAdapterSession orders breakpoint replacements and discards verification for an edited point", async () => {
+test("DebugSession orders breakpoint replacements and discards verification for an edited point", async () => {
 	using processes = new FakeDebugAdapterProcessService();
 	let points: readonly IDebugBreakpoint[] = [breakpoint(4)];
 	const updates: unknown[] = [];
@@ -206,7 +336,7 @@ test("DebugAdapterSession orders breakpoint replacements and discards verificati
 	} finally { await session.disconnect(); }
 });
 
-test("DebugAdapterSession configures all breakpoint families and queries variable access without crossing sessions", async () => {
+test("DebugSession configures all breakpoint families and queries variable access without crossing sessions", async () => {
 	using processes = new FakeDebugAdapterProcessService(undefined, true, true, true);
 	let points: readonly Exclude<DebugBreakpoint, IDebugBreakpoint>[] = [
 		{ kind: 'function', id: 'function', name: 'app::worker', enabled: true, verified: false, condition: 'counter > 0', hitCondition: '>= 2' },
@@ -236,7 +366,7 @@ test("DebugAdapterSession configures all breakpoint families and queries variabl
 	} finally { await session.disconnect(); }
 });
 
-test('DebugAdapterSession excludes unsupported conditions from every additional family', async () => {
+test('DebugSession excludes unsupported conditions from every additional family', async () => {
 	using processes = new FakeDebugAdapterProcessService(undefined, true, false, true);
 	const updates: unknown[] = [];
 	const session = await startSession({
@@ -256,7 +386,7 @@ test('DebugAdapterSession excludes unsupported conditions from every additional 
 	} finally { await session.disconnect(); }
 });
 
-test("DebugAdapterSession reports unsupported breakpoint families without sending their commands", async () => {
+test("DebugSession reports unsupported breakpoint families without sending their commands", async () => {
 	using processes = new FakeDebugAdapterProcessService();
 	const updates: unknown[] = [];
 	const session = await startSession({
@@ -319,7 +449,7 @@ test('unsupported adapters receive neither disassembly nor instruction stepping 
 });
 
 for (const count of [128, 200, 256]) {
-	test(`DebugAdapterSession drains all ${count} buffered messages after process exit`, async () => {
+	test(`DebugSession drains all ${count} buffered messages after process exit`, async () => {
 		using processes = new FakeDebugAdapterProcessService();
 		const session = await startSession({ configuration: configuration(), processService: processes, breakpoints: () => [], workspace: URI.file('/workspace') });
 		try {
@@ -334,7 +464,7 @@ for (const count of [128, 200, 256]) {
 	});
 }
 
-test('DebugAdapterSession drains output after a terminated event before closing its transport', async () => {
+test('DebugSession drains output after a terminated event before closing its transport', async () => {
 	using processes = new FakeDebugAdapterProcessService();
 	const session = await startSession({ configuration: configuration(), processService: processes, breakpoints: () => [], workspace: URI.file('/workspace') });
 	try {
@@ -432,21 +562,21 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 	}
 }
 
-async function startSession(options: Omit<DebugAdapterSessionStartOptions, 'resolvedConfiguration'>): Promise<DebugAdapterSession> {
+async function startSession(options: Omit<DebugSessionStartOptions, 'resolvedConfiguration'>): Promise<DebugSession> {
 	using workspace = new WorkspaceContextService({ id: 'test', uri: options.workspace });
 	const base = createDisconnectedRendererApi();
 	const host = { ...base, hasAppServer: true, appServer: { ...base.appServer, operatingSystem: OperatingSystem.Windows } };
 	using services = new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, host], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], [ITerminalProcessService, { getEnvironment: async () => ({}) }], [IWorkspaceContextService, workspace]));
 	services.registerSingleton(ICommandService, () => new CommandService(services));
-	const resolver = services.createInstance(ConfigurationResolverService);
+	using resolver = services.createInstance(ConfigurationResolverService);
 	const resolvedConfiguration = await resolver.resolveAsync(workspace.getWorkspace().folders[0], { adapter: options.configuration.adapter, arguments: options.configuration.arguments });
 	assert.ok(resolvedConfiguration.adapter);
-	return DebugAdapterSession.start({ id: 'debug-1', ...options, resolvedConfiguration: { ...resolvedConfiguration, adapter: resolvedConfiguration.adapter } });
+	return DebugSession.start({ id: 'debug-1', ...options, resolvedConfiguration: { ...resolvedConfiguration, adapter: resolvedConfiguration.adapter } });
 }
 
 
 for (const id of [0, -1]) {
-	test(`DebugAdapterSession preserves thread and frame identifier ${id} across inspection and execution`, async () => {
+	test(`DebugSession preserves thread and frame identifier ${id} across inspection and execution`, async () => {
 		using processes = new FakeDebugAdapterProcessService('/workspace/main.ts', true, true, true);
 		processes.threadId = id;
 		processes.frameId = id;
@@ -489,7 +619,7 @@ for (const [path, address] of [
 }
 
 
-test('DebugAdapterSession reports invalid identifiers in the current locale without sending a request', async () => {
+test('DebugSession reports invalid identifiers in the current locale without sending a request', async () => {
 	using localization = toDisposable(resetNlsResolver);
 	initializeTestLocalization('zh-CN');
 	using processes = new FakeDebugAdapterProcessService();

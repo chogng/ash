@@ -31,9 +31,12 @@ test("Base and Platform production imports preserve the layer direction", () => 
 	assert.deepEqual(violations, []);
 });
 
-test("Workbench service implementations do not depend on Workbench contributions", () => {
+test("Workbench services do not depend on contribution implementations", () => {
 	const contributionRoot = join(sourceRoot, "workbench/contrib");
-	const violations = productionTypeScriptFiles(join(sourceRoot, "workbench/services")).flatMap(file => localImports(file).filter(target => target.startsWith(contributionRoot)).map(target => `${sourceName(file)} -> ${sourceName(target)}`));
+	// Debug owns its cross-feature service and adapter contracts in contrib/debug,
+	// matching the domain owner. This permits its public API, never its implementation.
+	const debugContract = join(contributionRoot, "debug/common/debug.ts");
+	const violations = productionTypeScriptFiles(join(sourceRoot, "workbench/services")).flatMap(file => localImports(file).filter(target => target.startsWith(contributionRoot) && target !== debugContract).map(target => `${sourceName(file)} -> ${sourceName(target)}`));
 	assert.deepEqual(violations, []);
 });
 
@@ -124,6 +127,7 @@ test("Frontend common service contracts do not import browser implementations", 
 		...productionTypeScriptFiles(join(sessionsRoot, "services")),
 		...productionTypeScriptFiles(join(workbenchRoot, "services")),
 	].filter(file => /services[/\\][^/\\]+[/\\]common[/\\]/u.test(file));
+	candidates.push(join(workbenchRoot, "contrib/debug/common/debug.ts"));
 	const violations = candidates.flatMap(file => localImports(file).filter(target => (target.startsWith(sessionsRoot) || target.startsWith(workbenchRoot) || target.startsWith(platformRoot)) && target.includes(`${sep}browser${sep}`)).map(target => `${sourceName(file)} -> ${sourceName(target)}`));
 	assert.deepEqual(violations, []);
 });
@@ -142,6 +146,7 @@ test("Frontend common service contracts own their domain types", () => {
 		...productionTypeScriptFiles(join(sourceRoot, "sessions/services")).filter(file => /services[/\\][^/\\]+[/\\]common[/\\]/u.test(file)),
 		...productionTypeScriptFiles(join(sourceRoot, "workbench/services")).filter(file => /services[/\\][^/\\]+[/\\]common[/\\]/u.test(file)),
 		...productionTypeScriptFiles(join(sourceRoot, "platform")).filter(file => /common[/\\][^/\\]*Service\.ts$/u.test(file)),
+		join(sourceRoot, "workbench/contrib/debug/common/debug.ts"),
 	];
 	const violations = candidates.filter(file => /generated\/app-server\/types/u.test(readFileSync(file, "utf8"))).map(sourceName);
 	assert.deepEqual(violations, []);

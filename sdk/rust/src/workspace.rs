@@ -59,19 +59,19 @@ impl Workspace {
         + Sync
         + 'static,
     ) -> Result<(), ExtensionError> {
-        let registration = Registration {
-            descriptor: RegistrationDescriptor {
+        let registration = Registration::new(
+            RegistrationDescriptor {
                 registration_id: id.clone(),
                 kind: RegistrationKind::WorkspaceEvents {},
             },
-            operation: "workspaceEvent".into(),
-            handler: Arc::new(move |payload, token| {
+            "workspaceEvent",
+            Arc::new(move |payload, token| {
                 let event = serde_json::from_value(payload)
                     .map_err(|_| ExtensionError::invalid_request("invalid workspace event"))?;
                 callback(event, token)?;
                 Ok(serde_json::Value::Null)
             }),
-        };
+        );
         if self.registrations.contains_key(&id) {
             return Err(ExtensionError::invalid_request(
                 "workspace observer is already registered",
@@ -118,11 +118,7 @@ impl Workspace {
         });
         match self.registrations.entry(id) {
             std::collections::btree_map::Entry::Vacant(entry) => {
-                entry.insert(Registration {
-                    descriptor,
-                    operation: "resolveConnection".into(),
-                    handler,
-                });
+                entry.insert(Registration::new(descriptor, "resolveConnection", handler));
                 Ok(())
             }
             std::collections::btree_map::Entry::Occupied(_) => Err(ExtensionError::new(

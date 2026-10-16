@@ -236,7 +236,7 @@ lifecycle, console sharing and noDebug options are implemented; the remaining
 session options are compatibility gaps.
 
 The executable descriptor callback receives the prepared session's stable ID and
-canonical workspace-folder metadata. DebugAdapterSession is created before the
+canonical workspace-folder metadata. DebugSession is created before the
 factory callback; the same ID is used by later custom/start/end events. Its public
 identity is independent of the backend process handle. A failed factory retires the
 prepared session without spawning a process. The source configuration remains

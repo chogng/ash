@@ -12,6 +12,7 @@ import { IConfigurationService } from '../../../src/ash/platform/configuration/c
 import { StandardTokenType } from '../../../src/ash/editor/common/encodedTokenAttributes.js';
 import { resolveTextResourceLanguageId } from '../../../src/ash/platform/language/common/textResourceLanguage.js';
 import { createLanguageExtensions } from './languageExtensions.js';
+import { AdapterManager } from '../../../src/ash/workbench/contrib/debug/browser/debugAdapterManager.js';
 
 const store = new DisposableStore();
 const library = store.add(new TreeSitterLibraryService(await rustSyntaxFixture()));
@@ -26,7 +27,7 @@ const extensions = store.add(await createLanguageExtensions({
 
 	languageService: services.languageService,
 	languageConfigurationService: services.languageConfigurationService,
-}));
+}, store.add(new AdapterManager())));
 const snippets = store.add(new SnippetsService(extensions));
 store.add(new SnippetCompletionProvider(snippets, services.languageFeaturesService));
 await extensions.start();

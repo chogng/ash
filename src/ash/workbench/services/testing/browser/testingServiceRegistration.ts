@@ -6,7 +6,7 @@ import { TestingService } from "./testingService.js";
 import { ITestExecutionService } from '../../../../platform/testing/common/testExecutionService.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IWorkingCopyService } from '../../workingCopy/common/workingCopyService.js';
-import { IDebugService } from '../../debug/common/debugService.js';
+import { IDebugService } from '../../../contrib/debug/common/debug.js';
 
 registerWorkbenchServiceContribution({
 	service: ITestingService,

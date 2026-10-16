@@ -1,4 +1,5 @@
 import { createEmptyTestLanguagePacks } from '../../../src/ash/workbench/services/localization/test/common/localizationTestUtils.js';
+import type { IAdapterManager } from '../../../src/ash/workbench/contrib/debug/common/debug.js';
 import { ExtensionResourceLoaderService } from '../../../src/ash/platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import javascript from '../../../extensions/javascript/package.json' with { type: 'json' };
 import typescript from '../../../extensions/typescript-basics/package.json' with { type: 'json' };
@@ -48,7 +49,7 @@ const resourceUrls = import.meta.glob<string>([
 	'../../../extensions/{lua,ruby,php,swift,dart,log,json}/package.nls*.json',
 ], { eager: true, query: '?url', import: 'default' });
 
-export async function createLanguageExtensions(options: Omit<AppServerExtensionServiceOptions, 'api' | 'eventApi'>): Promise<AppServerExtensionService> {
+export async function createLanguageExtensions(options: Omit<AppServerExtensionServiceOptions, 'api' | 'eventApi'>, adapters: IAdapterManager): Promise<AppServerExtensionService> {
 	const directories = new Map<string, string>();
 	const descriptors: ExtensionDescriptor[] = [];
 	const manifests = [
@@ -119,5 +120,5 @@ export async function createLanguageExtensions(options: Omit<AppServerExtensionS
 				return new Uint8Array(await response.arrayBuffer());
 			}),
 		},
-	}, createEmptyTestLanguagePacks());
+	}, createEmptyTestLanguagePacks(), adapters);
 }

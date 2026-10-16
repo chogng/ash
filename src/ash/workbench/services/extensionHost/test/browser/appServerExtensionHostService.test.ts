@@ -1,3 +1,5 @@
+import { IAdapterManager, IDebugService, type IDebugConfigurationProvider, type DebugConfigurationProviderRegistration, type IDebugAdapterTrackerFactory, type DebugAdapterTrackerFactoryRegistration } from '../../../../contrib/debug/common/debug.js';
+import { AdapterManager } from '../../../../contrib/debug/browser/debugAdapterManager.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../../contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { ISpeechService } from '../../../../contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../../contrib/speech/browser/speechService.js';
@@ -37,8 +39,7 @@ import { MockDebugSession } from '../../../../contrib/debug/test/common/mockDebu
 import { Event } from '../../../../../base/common/event.js';
 import { IExtensionService } from '../../../extensions/common/extensionService.js';
 import { TestExtensionService } from '../../../../test/common/testExtensionServices.js';
-import { IDebugService, type IDebugConfigurationProvider, type DebugConfigurationProviderRegistration, type IDebugAdapterTrackerFactory, type DebugAdapterTrackerFactoryRegistration } from '../../../debug/common/debugService.js';
-import { DebugAdapterFactoriesRegistry } from '../../../debug/common/debugAdapterFactory.js';
+
 import { IHostService } from '../../../host/browser/host.js';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -561,12 +562,14 @@ test("keeps last-good contributions while refreshing and revokes them synchronou
 	assert.deepEqual(await tests.providers[0]!.provideTestProfiles(new AbortController().signal), [{ id: "unit", label: "Unit", taskId: "extension:extensionHost.61636d652e64656d6f.7461736b73:unit" }]);
 
 	using descriptorSession = new MockDebugSession('debug-registration', 'Host', {});
-	assert.deepEqual(await DebugAdapterFactoriesRegistry.get('acme')!.createDebugAdapterDescriptor!({ id: 'launch', name: 'Host', type: 'acme', request: 'launch', arguments: { program: '/workspace/app' } }, new AbortController().signal, descriptorSession), { program: 'hosted-adapter', arguments: ['', ' literal '] });
+	const preparingAt = Date.now();
+	assert.deepEqual(await services.get(IAdapterManager).get('acme')!.createDebugAdapterDescriptor!({ id: 'launch', name: 'Host', type: 'acme', request: 'launch', arguments: { program: '/workspace/app' } }, new AbortController().signal, descriptorSession), { program: 'hosted-adapter', arguments: ['', ' literal '] });
 	assert.equal(api.invocations.at(-1)?.registrationId, 'debug');
+	assert.ok(api.invocations.at(-1)!.deadlineUnixMillis >= preparingAt + 300_000, 'first-use adapter preparation has a bounded download budget');
 	api.invocationResult = Promise.resolve(null);
-	assert.equal(await DebugAdapterFactoriesRegistry.get('acme')!.createDebugAdapterDescriptor!({ id: 'empty', name: 'Empty', type: 'acme', request: 'launch', arguments: {} }, new AbortController().signal, descriptorSession), undefined);
+	assert.equal(await services.get(IAdapterManager).get('acme')!.createDebugAdapterDescriptor!({ id: 'empty', name: 'Empty', type: 'acme', request: 'launch', arguments: {} }, new AbortController().signal, descriptorSession), undefined);
 	api.invocationResult = Promise.resolve({});
-	await assert.rejects(Promise.resolve(DebugAdapterFactoriesRegistry.get('acme')!.createDebugAdapterDescriptor!({ id: 'invalid', name: 'Invalid', type: 'acme', request: 'launch', arguments: {} }, new AbortController().signal, descriptorSession)), /Extension Debug Adapter descriptor has an invalid shape/);
+	await assert.rejects(Promise.resolve(services.get(IAdapterManager).get('acme')!.createDebugAdapterDescriptor!({ id: 'invalid', name: 'Invalid', type: 'acme', request: 'launch', arguments: {} }, new AbortController().signal, descriptorSession)), /Extension Debug Adapter descriptor has an invalid shape/);
 	api.invocationResult = undefined;
 
 	const pendingList = deferred<ExtensionHostFleetSnapshot>();
@@ -590,7 +593,7 @@ test("keeps last-good contributions while refreshing and revokes them synchronou
 
 	api.emitConnection("crashed");
 	assert.equal(commands.hasCommand("acme.new"), false);
-	assert.equal(DebugAdapterFactoriesRegistry.get("acme"), undefined);
+	assert.equal(services.get(IAdapterManager).get("acme"), undefined);
 	assert.equal(service.state, "failed");
 	api.emitConnection("ready");
 	await waitFor(() => commands.hasCommand("acme.latest"));
@@ -1003,8 +1006,9 @@ function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesServ
 	services.registerSingleton(ISpeechService, () => new SpeechService(undefined));
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 	services.registerInstance(ILanguagePackService, createEmptyTestLanguagePacks());
+	services.registerInstance(IAdapterManager, services.resources.add(new AdapterManager()));
 	services.registerInstance(IFileService, services.resources.add(new FileService()));
-	services.registerSingleton(IExtensionService, () => new TestExtensionService(extensionApi));
+	services.registerSingleton(IExtensionService, () => new TestExtensionService(extensionApi, services.get(IAdapterManager)));
 	services.registerInstance(ITerminalProcessService, { onConnectionState: Event.None } as ITerminalProcessService);
 	services.registerInstance(ITerminalService, { ...Disposable.None, getProfiles: async () => [] } as unknown as ITerminalService);
 	services.registerSingleton(IEnvironmentVariableService, () => services.createInstance(EnvironmentVariableService));
@@ -1023,7 +1027,7 @@ function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesServ
 	services.registerInstance(ICodeEditorService, { listDiffEditors: () => assert.fail('Unexpected diff editor request') } as unknown as ICodeEditorService);
 	services.registerInstance(ITextFileService, { read: async () => assert.fail('Unexpected text file request') } as unknown as ITextFileService);
 
-	services.registerInstance(IExtensionApi, {
+	services.registerInstance(IExtensionApi, extensionApi ?? {
 		list: async () => ({ generation: 1, extensions: [], diagnostics: [] }),
 		resources: new ExtensionResourceLoaderService(async () => assert.fail('Unexpected extension resource request')),
 	});
@@ -1083,6 +1087,56 @@ function dormantSnapshot(events: readonly string[] = ['onCommand:acme.lazy']): E
 		})])
 	});
 }
+
+for (const language of ['en', 'zh-CN']) test(`dormant package commands appear in the palette in ${language} before activation`, async () => {
+	setNlsMessages(language, {});
+	using restoreLocale = toDisposable(resetNlsResolver);
+	const initial = dormantSnapshot();
+	const runtime = initial.extensions[0]!;
+	const api = new FakeExtensionHostApi({ ...initial, extensions: [{ ...runtime, activation: { ...runtime.activation!, commands: [{ command: 'acme.lazy', title: '%command.install%' }] } }] });
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>(), undefined, undefined, undefined, {
+		list: async () => ({ generation: 1, extensions: [], diagnostics: [] }),
+		resources: new ExtensionResourceLoaderService(async request => {
+			assert.equal(request.extensionId, 'acme.demo');
+			assert.equal(request.generation, 1);
+			return readFileSync(`extensions/debug-lldb/${request.path}`);
+		}),
+	});
+	const commands = new CommandRegistry();
+	using host = services.createInstance(AppServerExtensionHostService, commands, 1_000);
+	await host.start();
+	const expected = language === 'en' ? 'LLDB: Install or Retry Debugger' : 'LLDB：安装或重试调试器';
+	assert.equal(commands.getCommands().get('acme.lazy')?.metadata?.description, expected);
+	const items = () => MenusRegistry.getMenuItems(MenuId.CommandPalette).filter(item => 'command' in item && item.command.id === 'acme.lazy');
+	assert.deepEqual(items().map(item => 'command' in item && item.command.title), [expected]);
+	assert.equal(api.activations.length, 0);
+	assert.equal(api.current.extensions[0]!.activation!.commands[0]!.title, '%command.install%');
+	await host.stop();
+	assert.deepEqual(items(), []);
+});
+
+test('stopping while dormant command titles load prevents late palette publication', async () => {
+	const initial = dormantSnapshot();
+	const runtime = initial.extensions[0]!;
+	const api = new FakeExtensionHostApi({ ...initial, extensions: [{ ...runtime, activation: { ...runtime.activation!, commands: [{ command: 'acme.lazy', title: '%command.install%' }] } }] });
+	const messages = deferred<Uint8Array>();
+	let requested = false;
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>(), undefined, undefined, undefined, {
+		list: async () => ({ generation: 1, extensions: [], diagnostics: [] }),
+		resources: new ExtensionResourceLoaderService(() => { requested = true; return messages.promise; }),
+	});
+	const commands = new CommandRegistry();
+	using host = services.createInstance(AppServerExtensionHostService, commands, 1_000);
+	const starting = host.start();
+	await waitFor(() => requested);
+	await host.stop();
+	messages.resolve(new TextEncoder().encode('{"command.install":"Install"}'));
+	await starting;
+	assert.equal(commands.hasCommand('acme.lazy'), false);
+	assert.equal(host.state, 'stopped');
+});
 
 test('declared command starts on first use and invokes the actual registered incarnation', async () => {
 	const api = new FakeExtensionHostApi(dormantSnapshot());
@@ -1315,7 +1369,7 @@ test('activating a task-only owner preserves existing debug providers and pendin
 	using host = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
 	await host.start();
 	const provider = debug.providers[0]!;
-	const adapter = DebugAdapterFactoriesRegistry.get('acme');
+	const adapter = services.get(IAdapterManager).get('acme');
 	const result = deferred<JsonValue>();
 	api.invocationResult = result.promise;
 	const pending = provider.resolveDebugConfiguration!(URI.file('/workspace'), { name: 'Resolve', type: 'acme', request: 'launch' }, new AbortController().signal);
@@ -1324,7 +1378,7 @@ test('activating a task-only owner preserves existing debug providers and pendin
 	api.emitChanged(2);
 	await waitFor(() => host.currentSnapshot.fleetGeneration === 2);
 	assert.equal(debug.providers[0], provider);
-	assert.equal(DebugAdapterFactoriesRegistry.get('acme'), adapter);
+	assert.equal(services.get(IAdapterManager).get('acme'), adapter);
 	assert.equal(api.invocationSignals[0]!.aborted, false);
 	result.resolve({ configuration: { name: 'Resolved', type: 'acme', request: 'launch' } });
 	assert.equal((await pending)?.name, 'Resolved');

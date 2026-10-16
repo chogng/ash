@@ -16,7 +16,7 @@ import { IChatService, type ThreadUpdateEnvelope } from '../../../../services/ch
 import { ISpeechService } from '../../../speech/common/speechService.js';
 import { ITextFileService } from '../../../../services/textfile/common/textfiles.js';
 import { type ITextFileSaveEvent } from '../../../../services/textfile/common/textFileService.js';
-import { IDebugService, type IDebugSession, type DebugSessionState } from '../../../../services/debug/common/debugService.js';
+import { IDebugService, type IDebugSession, type DebugSessionState } from '../../../debug/common/debug.js';
 import { IMarkerService, MarkerSeverity } from '../../../../../platform/markers/common/markers.js';
 import { MarkerService } from '../../../../../platform/markers/common/markerService.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';

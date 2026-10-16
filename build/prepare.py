@@ -347,6 +347,7 @@ def development_binary_inputs(spec: TargetSpec) -> dict[str, None]:
             "ash-github-extension",
             "ash-remote-ssh-extension",
             "ash-dev-container-provider",
+            "ash-debug-lldb",
             "ash-voice-host",
             "ash-collaboration-server",
         ]
@@ -499,6 +500,7 @@ def prepare_development_package(args: argparse.Namespace, *, root: Path = ROOT) 
             github_extension_binary=binaries["ash-github-extension"],
             remote_ssh_extension_binary=binaries["ash-remote-ssh-extension"],
             dev_container_provider_binary=binaries["ash-dev-container-provider"],
+            lldb_extension_binary=binaries["ash-debug-lldb"],
             remote_host_binary=binaries["ash-remote-host"],
             voice_host_binary=binaries["ash-voice-host"],
             collaboration_server_binary=binaries["ash-collaboration-server"],

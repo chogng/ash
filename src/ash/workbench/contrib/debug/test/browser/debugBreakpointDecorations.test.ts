@@ -8,7 +8,7 @@ import { URI } from '../../../../../base/common/uri.js';
 
 import { MouseTargetType, type IEditorMouseEvent } from '../../../../../editor/browser/editorBrowser.js';
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
-import { type IDebugBreakpoint, type IDebugService } from '../../../../services/debug/common/debugService.js';
+import { type IDebugBreakpoint, type IDebugService } from '../../common/debug.js';
 import { BreakpointEditorContribution } from '../../browser/breakpointEditorContribution.js';
 import { GlyphMarginLane } from '../../../../../editor/common/model.js';
 import { Position } from '../../../../../editor/common/core/position.js';

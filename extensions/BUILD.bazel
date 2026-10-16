@@ -1,6 +1,6 @@
 filegroup(
     name = "artifacts",
-    srcs = glob(["**"]) + ["//extensions/remote-ssh:artifacts"],
+    srcs = glob(["**"]) + ["//extensions/remote-ssh:artifacts", "//extensions/debug-lldb:artifacts"],
     visibility = ["//visibility:public"],
 )
 

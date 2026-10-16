@@ -125,7 +125,13 @@ impl RuntimeInner {
             || deployment
                 .params
                 .capabilities
-                .contains(&ash_external_ext::ExtensionCapability::SourceControl);
+                .contains(&ash_external_ext::ExtensionCapability::SourceControl)
+            // Rust debugger callbacks borrow this window's configuration, locale
+            // and session handles just like their standard JS counterparts.
+            || deployment
+                .params
+                .capabilities
+                .contains(&ash_external_ext::ExtensionCapability::DebugAdapter);
         let window_deployment = window_scoped.then(|| deployment.clone());
         let fallback = ExtensionHostExtensionSnapshot {
             id: deployment.id.clone(),
@@ -162,6 +168,17 @@ impl RuntimeInner {
         let prepared = prepare_extension(authorization, deployment, generation);
         let supervisor = prepared.and_then(|prepared| {
             let mut limits = self.limits.clone();
+            if deployment
+                .params
+                .capabilities
+                .contains(&ash_external_ext::ExtensionCapability::DebugAdapter)
+            {
+                // First-use adapter preparation can include a bounded runtime download.
+                // The invoking client still supplies its own deadline and cancellation fence.
+                limits.request_timeout = limits
+                    .request_timeout
+                    .max(std::time::Duration::from_secs(300));
+            }
             if let Some(protocol) = deployment.protocol_limits {
                 if deployment.scope != source::EditorExtensionScope::Product
                     || protocol.maximum_frame_bytes > 32 * 1024 * 1024

@@ -1,8 +1,7 @@
 import type { IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
 import { localize } from '../../../../nls.js';
 import { IConfigurationResolverService } from '../../../services/configurationResolver/common/configurationResolver.js';
-import { normalizeDebugAdapterDescriptor } from '../../../services/debug/common/debugAdapterFactory.js';
-import type { IDebugConfiguration } from '../../../services/debug/common/debugService.js';
+import { normalizeDebugAdapterDescriptor, type IDebugConfiguration } from './debug.js';
 import { IExtensionService } from '../../../services/extensions/common/extensionService.js';
 
 /** Owns the executable debug configuration; the session retains its source for restart. */

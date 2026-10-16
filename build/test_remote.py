@@ -94,6 +94,7 @@ class RemotePackageTests(unittest.TestCase):
                     "ash-github-extension",
                     "ash-remote-ssh-extension",
                     "ash-dev-container-provider",
+                    "ash-debug-lldb",
                     "ash-voice-host",
                     "ash-collaboration-server",
                 )

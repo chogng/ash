@@ -3,7 +3,7 @@ import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { Emitter } from "../../../../../base/common/event.js";
 import { Disposable } from "../../../../../base/common/lifecycle.js";
-import type { IDebugConsoleService, IDebugConsoleSession } from "../../../../services/debug/common/debugConsoleService.js";
+import type { IDebugService, IReplModel, IDebugConsoleSession } from "../../common/debug.js";
 
 test("Debug Console renders retained output, evaluates expressions, and exposes its clear icon action", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
@@ -11,7 +11,7 @@ test("Debug Console renders retained output, evaluates expressions, and exposes 
 	try {
 		const { DebugConsoleViewPane } = await import("../../browser/debugConsoleViewPane.js");
 		using consoleService = new FakeDebugConsoleService();
-		using view = new DebugConsoleViewPane(browser.window.document.body, { id: "ash.debugConsole.test", title: "Debug Console" }, consoleService);
+		using view = new DebugConsoleViewPane(browser.window.document.body, { id: "ash.debugConsole.test", title: "Debug Console" }, { replModel: consoleService } as unknown as IDebugService);
 		browser.window.document.body.append(view.element);
 		assert.equal(view.element.querySelector(".ash-debug-console-output")?.textContent, "ready\n");
 
@@ -31,7 +31,7 @@ test("Debug Console renders retained output, evaluates expressions, and exposes 
 	}
 });
 
-class FakeDebugConsoleService extends Disposable implements IDebugConsoleService {
+class FakeDebugConsoleService extends Disposable implements IReplModel {
 	private readonly changeEmitter = this._register(new Emitter<void>());
 	private output = "ready\n";
 	readonly onDidChange = this.changeEmitter.event;

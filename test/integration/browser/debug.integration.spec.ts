@@ -1,4 +1,46 @@
 import { expect, test } from '@playwright/test';
+import { writeFile } from 'node:fs/promises';
+
+test('debug console coalesces an output flood and preserves keyboard evaluation and clearing', async ({ page }, testInfo) => {
+	await page.goto('/debug.html?console');
+	const output = page.getByRole('log', { name: 'Debug Console output', exact: true });
+	const input = page.getByRole('textbox', { name: 'Debug Console expression', exact: true });
+	await input.fill('answer');
+	await input.focus();
+	const cdp = await page.context().newCDPSession(page);
+	await cdp.send('Performance.enable');
+	try {
+		const before = await cdp.send('Performance.getMetrics');
+		const measurement = await output.evaluate(element => {
+			let updates = 0;
+			const observer = new MutationObserver(records => { updates += records.length; });
+			observer.observe(element, { childList: true, characterData: true, subtree: true });
+			const burst = window.ashDebugIntegration.burstOutput(2000);
+			return new Promise<typeof burst & { updates: number; }>(resolve => {
+				const settled = () => {
+					if (!element.textContent?.endsWith('burst-1999\n')) { requestAnimationFrame(settled); return; }
+					observer.disconnect();
+					resolve({ ...burst, updates });
+				};
+				requestAnimationFrame(settled);
+			});
+		});
+		const after = await cdp.send('Performance.getMetrics');
+		const samplesPath = testInfo.outputPath('debug-console-output-flood.json');
+		await writeFile(samplesPath, JSON.stringify({ measurement, before, after }, null, 2));
+		await testInfo.attach('debug-console-output-flood.json', { path: samplesPath, contentType: 'application/json' });
+		expect(measurement.output).toBe(Array.from({ length: 2000 }, (_, index) => `burst-${index}\n`).join(''));
+		expect(measurement.updates).toBeLessThan(5);
+		await expect(input).toBeFocused();
+		await expect(input).toHaveValue('answer');
+		await input.press('Enter');
+		await expect(output).toContainText('42');
+		const clear = page.locator('[data-view-id="debug.console.integration"] [data-action-id="workbench.debug.panel.action.clearReplAction"] button');
+		await clear.focus();
+		await clear.press('Enter');
+		await expect(output).toHaveText('');
+	} finally { await cdp.detach(); }
+});
 
 test('disassembly navigates instruction pages, follows frame focus, toggles breakpoints and steps by instruction', async ({ page }) => {
 	await page.goto('/debug.html');

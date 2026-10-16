@@ -62,6 +62,7 @@ members = [
     "extensions/markdown-math",
     "extensions/git",
     "extensions/dev-containers",
+    "extensions/debug-lldb",
     "crates/external-agent-migration",
     "crates/agent-roles",
     "crates/ash-home",

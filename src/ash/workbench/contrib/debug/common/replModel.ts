@@ -1,7 +1,7 @@
 import { Emitter } from "../../../../base/common/event.js";
+import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { combinedDisposable, Disposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import type { IDebugConsoleService, IDebugConsoleSession } from "../common/debugConsoleService.js";
-import { DebugConsoleMode, type IDebugService, type IDebugSession } from "../common/debugService.js";
+import { type IReplModel, type IDebugConsoleSession, DebugConsoleMode, type IDebugService, type IDebugSession } from "./debug.js";
 
 interface DebugConsoleRecord {
 	readonly id: string;
@@ -16,8 +16,9 @@ const MAXIMUM_CONSOLE_SESSIONS = 20;
 const MAXIMUM_CONSOLE_CHARACTERS = 128_000;
 
 /** Captures DAP output independently of whether the Debug Console panel is visible. */
-export class DebugConsoleService extends Disposable implements IDebugConsoleService {
+export class ReplModel extends Disposable implements IReplModel {
 	private readonly changeEmitter = this._register(new Emitter<void>());
+	private readonly outputNotification = this._register(new RunOnceScheduler(() => this.changeEmitter.fire(), 16));
 	private readonly records = new Map<string, DebugConsoleRecord>();
 	private activeSessionId: string | undefined;
 	readonly onDidChange = this.changeEmitter.event;
@@ -54,6 +55,7 @@ export class DebugConsoleService extends Disposable implements IDebugConsoleServ
 		const record = sessionId ? this.records.get(sessionId) : undefined;
 		if (!record || !record.output) return;
 		record.output = "";
+		this.outputNotification.cancel();
 		this.changeEmitter.fire();
 	}
 
@@ -91,6 +93,7 @@ export class DebugConsoleService extends Disposable implements IDebugConsoleServ
 		if (this.debug.session) this.activeSessionId = consoleOwner(this.debug.session).id;
 		else if (!this.activeSessionId || !this.records.has(this.activeSessionId)) this.activeSessionId = [...this.records.keys()].at(-1);
 		this.trimRecords();
+		this.outputNotification.cancel();
 		this.changeEmitter.fire();
 	}
 
@@ -119,7 +122,9 @@ export class DebugConsoleService extends Disposable implements IDebugConsoleServ
 	private append(record: DebugConsoleRecord, value: string): void {
 		if (!value) return;
 		record.output = `${record.output}${value}`.slice(-MAXIMUM_CONSOLE_CHARACTERS);
-		this.changeEmitter.fire();
+		// Retain output immediately, but publish a burst once. Do not postpone
+		// an already scheduled notification while the adapter keeps writing.
+		if (!this.outputNotification.isScheduled()) this.outputNotification.schedule();
 	}
 
 	private trimRecords(): void {

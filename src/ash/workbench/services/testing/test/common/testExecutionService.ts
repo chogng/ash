@@ -1,4 +1,4 @@
-import { type DebugSessionState, type IDebugConfiguration, type IDebugService, type IDebugSession } from '../../../../services/debug/common/debugService.js';
+import { type DebugSessionState, type IDebugConfiguration, type IDebugService, type IDebugSession } from '../../../../contrib/debug/common/debug.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { type ITestExecutionService, type TestDebugLaunch, type TestItem, type TestResult, type TestSnapshot, type TestUpdate } from '../../../../../platform/testing/common/testExecutionService.js';

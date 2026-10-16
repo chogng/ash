@@ -80,7 +80,7 @@ const { IConfigurationService } = await import('../../../../../../platform/confi
 const { InMemoryConfigurationService } = await import('../../../../../../platform/configuration/common/inMemoryConfigurationService.js');
 const { IContextKeyService } = await import('../../../../../../platform/contextkey/common/contextkey.js');
 const { DebugTitleContribution } = await import('../../../../../contrib/debug/browser/debugTitle.js');
-const { IDebugService } = await import('../../../../../services/debug/common/debugService.js');
+const { IDebugService } = await import('../../../../../contrib/debug/common/debug.js');
 const { IHostService } = await import('../../../../../services/host/browser/host.js');
 const { URI } = await import('../../../../../../base/common/uri.js');
 const { BrowserMenubarControl } = await import(
@@ -245,8 +245,8 @@ test('title service shares the resolved title with its registered part and relea
 	assert.equal(popupChanged.hasListeners(), false);
 	assert.throws(() => shared.getPart(popup.window.document.body), /no titlebar registered/);
 	popup.window.close();
-	const sessionStateChanged = resources.add(new Emitter<import('../../../../../services/debug/common/debugService.js').DebugSessionState>());
-	let state: import('../../../../../services/debug/common/debugService.js').DebugSessionState = 'running';
+	const sessionStateChanged = resources.add(new Emitter<import('../../../../../contrib/debug/common/debug.js').DebugSessionState>());
+	let state: import('../../../../../contrib/debug/common/debug.js').DebugSessionState = 'running';
 	let focused = false;
 	const focusChanged = resources.add(new Emitter<boolean>());
 	services.registerInstance(IHostService, {
@@ -258,7 +258,7 @@ test('title service shares the resolved title with its registered part and relea
 	services.registerInstance(IDebugService, {
 		session: { get state() { return state; }, onDidChangeState: sessionStateChanged.event },
 		onDidChangeSession: Event.None,
-	} as import('../../../../../services/debug/common/debugService.js').IDebugService);
+	} as import('../../../../../contrib/debug/common/debug.js').IDebugService);
 	const debugTitle = services.createInstance(DebugTitleContribution);
 	state = 'stopped';
 	sessionStateChanged.fire(state);

@@ -7,7 +7,7 @@ import { IModelService } from '../../../../editor/common/services/model.js';
 import { ITextModelService, type ITextModelContentProvider } from '../../../../editor/common/services/resolverService.js';
 import { localize } from '../../../../nls.js';
 import type { IWorkbenchContribution } from '../../../common/contributions.js';
-import { IDebugService } from '../../../services/debug/common/debugService.js';
+import { IDebugService } from './debug.js';
 
 /** Loads adapter source content into the existing reference-counted editor model owner. */
 export class DebugContentProvider extends Disposable implements IWorkbenchContribution, ITextModelContentProvider {

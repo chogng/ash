@@ -34,6 +34,7 @@ import { type IChatService, type TurnChangeDetails } from '../../../src/ash/work
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { type IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { DebugConsoleViewPane } from '../../../src/ash/workbench/contrib/debug/browser/debugConsoleViewPane.js';
+import type { IDebugService } from '../../../src/ash/workbench/contrib/debug/common/debug.js';
 import '../../../src/ash/workbench/contrib/debug/browser/media/debug.css';
 import { ProblemsViewPane } from '../../../src/ash/workbench/contrib/problems/browser/problemsViewPane.js';
 import { TasksViewPane } from '../../../src/ash/workbench/contrib/tasks/browser/tasksViewPane.js';
@@ -154,9 +155,11 @@ const pane = resources.add(view === 'empty'
 								{ openChangesEditor: async () => { throw new Error('Opening review editors is outside this layout fixture'); } } as unknown as ISessionChangesService, storage)
 							: view === 'console'
 								? new DebugConsoleViewPane(root, { id: 'fixture.console', title: 'Console' }, {
-									...Disposable.None, sessions: [], activeSession: { id: 'fixture', label: 'Fixture', state: 'stopped', output: 'Fixture output', canEvaluate: true },
-									onDidChange: Event.None, selectSession: () => { }, clear: () => { }, evaluate: async () => { throw new Error('Evaluation failed. '.repeat(12)); },
-								})
+									replModel: {
+										...Disposable.None, sessions: [], activeSession: { id: 'fixture', label: 'Fixture', state: 'stopped', output: 'Fixture output', canEvaluate: true },
+										onDidChange: Event.None, selectSession: () => { }, clear: () => { }, evaluate: async () => { throw new Error('Evaluation failed. '.repeat(12)); },
+									}
+								} as unknown as IDebugService)
 								: view === 'symphony'
 									? new SymphonyTasksView(root, { id: 'fixture.symphony', title: 'Symphony' }, symphony, configuration, contextKeys,
 										{ showOpenDialog: async () => { throw new Error('File picking is outside this fixture'); } } as unknown as IFileDialogService)

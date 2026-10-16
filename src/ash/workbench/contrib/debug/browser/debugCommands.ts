@@ -4,7 +4,7 @@ import { IWorkspaceContextService } from '../../../../platform/workspace/common/
 import { FileNotFoundError, FileSystemProviderErrorCode, toFileSystemProviderErrorCode, IFileService } from '../../../../platform/files/common/files.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IWorkspaceOpenService } from '../../../services/workspaces/browser/workspaceOpenService.js';
-import { IDebugService } from '../../../services/debug/common/debugService.js';
+import { IDebugService } from '../common/debug.js';
 import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';

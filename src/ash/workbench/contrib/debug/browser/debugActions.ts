@@ -6,24 +6,18 @@ import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { type URI } from '../../../../base/common/uri.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
-import { DebugConfigurationProviderTriggerKind, type DebugConfiguration, type IDebugConfiguration, type IDebugCompound } from '../../../services/debug/common/debugService.js';
-import { SELECT_AND_START_ID } from '../common/debug.js';
-import { CONTEXT_DEBUG_STATE } from '../common/debug.js';
+import { DebugConfigurationProviderTriggerKind, type DebugConfiguration, type IDebugConfiguration, type IDebugCompound, SELECT_AND_START_ID, CONTEXT_DEBUG_STATE, OPEN_DISASSEMBLY_VIEW_COMMAND_ID, IDebugService, CLEAR_DEBUG_CONSOLE_COMMAND_ID, CONTINUE_DEBUG_COMMAND_ID, DEBUG_CONSOLE_VIEW_ID, DEBUG_VIEW_ID, FOCUS_DEBUG_CONSOLE_COMMAND_ID, PAUSE_DEBUG_COMMAND_ID, RESTART_DEBUG_COMMAND_ID, START_DEBUG_COMMAND_ID, STEP_INTO_DEBUG_COMMAND_ID, STEP_OUT_DEBUG_COMMAND_ID, STEP_OVER_DEBUG_COMMAND_ID, STOP_ALL_DEBUG_COMMAND_ID, STOP_DEBUG_COMMAND_ID } from '../common/debug.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { IEditorPartsService } from '../../../browser/parts/editor/editorParts.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { DisassemblyView } from './disassemblyView.js';
 import { DisassemblyViewInput } from '../common/disassemblyViewInput.js';
-import { OPEN_DISASSEMBLY_VIEW_COMMAND_ID } from '../common/debug.js';
 import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
 import { EditorContextKeys } from '../../../../editor/common/editorContextKeys.js';
 import { Action2, MenuId, registerAction2 } from "../../../../platform/actions/common/actions.js";
 import { Keybinding, logicalKey } from "../../../../base/common/keybindings.js";
 import { type ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
-import { IDebugService } from "../../../services/debug/common/debugService.js";
-import { IDebugConsoleService } from "../../../services/debug/common/debugConsoleService.js";
 import { IViewsService } from "../../../services/views/common/viewsService.js";
-import { CLEAR_DEBUG_CONSOLE_COMMAND_ID, CONTINUE_DEBUG_COMMAND_ID, DEBUG_CONSOLE_VIEW_ID, DEBUG_VIEW_ID, FOCUS_DEBUG_CONSOLE_COMMAND_ID, PAUSE_DEBUG_COMMAND_ID, RESTART_DEBUG_COMMAND_ID, START_DEBUG_COMMAND_ID, STEP_INTO_DEBUG_COMMAND_ID, STEP_OUT_DEBUG_COMMAND_ID, STEP_OVER_DEBUG_COMMAND_ID, STOP_ALL_DEBUG_COMMAND_ID, STOP_DEBUG_COMMAND_ID } from "../common/debug.js";
 
 registerAction2(class OpenDisassemblyAction extends Action2 {
 	constructor() { super({ id: OPEN_DISASSEMBLY_VIEW_COMMAND_ID, title: localize2('debug.openDisassembly', 'Open Disassembly View'), f1: true }); }
@@ -140,7 +134,7 @@ registerAction2(class FocusDebugConsoleAction extends Action2 {
 
 registerAction2(class ClearDebugConsoleAction extends Action2 {
 	constructor() { super({ id: CLEAR_DEBUG_CONSOLE_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.ClearDebugConsoleAction' }, "Clear Console"), f1: true }); }
-	override run(accessor: ServicesAccessor): void { accessor.get(IDebugConsoleService).clear(); }
+	override run(accessor: ServicesAccessor): void { accessor.get(IDebugService).replModel.clear(); }
 });
 
 for (const [id, title, keybinding, operation] of [

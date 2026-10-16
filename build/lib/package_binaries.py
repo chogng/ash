@@ -20,6 +20,7 @@ from build.protocol.generate import generate_protocol
 
 
 _BINARIES = {
+    "ash-debug-lldb": ("ash-debug-lldb", "--lldb-extension-bin"),
     "ash-dev-container-provider": (
         "ash-dev-container-provider",
         "--dev-container-provider-bin",

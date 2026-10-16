@@ -8,7 +8,7 @@ import { URI } from '../../../../base/common/uri.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
 import { ITestExecutionService, type TestDebugLaunch, type TestUpdate } from '../../../../platform/testing/common/testExecutionService.js';
-import { IDebugService } from '../../debug/common/debugService.js';
+import { IDebugService } from '../../../contrib/debug/common/debug.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IWorkingCopyService } from '../../workingCopy/common/workingCopyService.js';
 

@@ -32,17 +32,17 @@ impl SourceControl {
         let id = id.into();
         match self.registrations.entry(id.clone()) {
             std::collections::btree_map::Entry::Vacant(entry) => {
-                entry.insert(Registration {
-                    descriptor: RegistrationDescriptor {
+                entry.insert(Registration::new(
+                    RegistrationDescriptor {
                         registration_id: id,
                         kind: RegistrationKind::SourceControl {
                             revision: 1,
                             providers,
                         },
                     },
-                    operation: "scm".into(),
-                    handler: Arc::new(callback),
-                });
+                    "scm",
+                    Arc::new(callback),
+                ));
                 Ok(())
             }
             std::collections::btree_map::Entry::Occupied(_) => Err(ExtensionError::new(

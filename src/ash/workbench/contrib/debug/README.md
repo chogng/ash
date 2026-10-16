@@ -1,10 +1,10 @@
-# Workbench Debug service
+# Workbench Debug
 
 The system-level ownership and current user-visible status are documented in [`docs/debugging.md`](../../../../../docs/debugging.md). This README owns the Renderer implementation contract.
 
 ## Ownership and execution path
 
-`common/debugService.ts` is the canonical frontend contract. `workbench/contrib/debug/browser/debugService.ts` implements `DebugService` and owns launch/compound configuration, source, function, data, and instruction breakpoints and workspace-persisted Watch expressions, exception-breakpoint selection, task orchestration, the active session, and the collection of concurrent sessions. `DebugAdapterSession` owns DAP request pairing, capabilities, initialization, breakpoint synchronization, thread/stack/scope/recursive-variable inspection, `setVariable`, `evaluate`, `source`, execution control, output, termination, and reverse requests. `common/debugConsoleService.ts` is the separate Debug Console contract; `DebugConsoleService` subscribes before any UI is visible, retains bounded per-session DAP/REPL output, and keeps terminated sessions inspectable. The same contribution implementation validates `runInTerminal` and delegates presentation to `ITerminalService`. Its stable dependencies use constructor DI; the window registers its selected DAP process capability, including explicit unavailability. The shared `IDebugAdapterFactorySource` resolves the canonical factory registry.
+`common/debug.ts` is the canonical frontend contract. `browser/debugService.ts` implements `DebugService` and owns launch/compound configuration, source, function, data, and instruction breakpoints and workspace-persisted Watch expressions, exception-breakpoint selection, task orchestration, the active session, and the collection of concurrent sessions. `DebugSession` owns DAP request pairing, capabilities, initialization, breakpoint synchronization, thread/stack/scope/recursive-variable inspection, `setVariable`, `evaluate`, `source`, execution control, output, termination, and reverse requests. `common/debug.ts` also declares the REPL model contract; `DebugService` owns one `common/replModel.ts` model that subscribes before any UI is visible, retains bounded per-session DAP/REPL output, and keeps terminated sessions inspectable. The same contribution implementation validates `runInTerminal` and delegates presentation to `ITerminalService`. Its stable dependencies use constructor DI; the window registers its selected DAP process capability, including explicit unavailability. `IAdapterManager` is the shared registration contract; the injected `browser/debugAdapterManager.ts` implementation owns factories for the window and is shared by declarative packages, the Extension Host and Debug. Generic services import only the common contract.
 
 The call path is:
 
@@ -15,9 +15,9 @@ DebugService.start / startDebugging / startCompound
   -> Debugger.substituteVariables through IConfigurationResolverService.resolveWithInteractionReplace
   -> resolveDebugConfigurationWithSubstitutedVariables providers
   -> preLaunchTask through ITaskService
-  -> prepare DebugAdapterSession and publish its stable identity
+  -> prepare DebugSession and publish its stable identity
   -> dispatch-time Debug Adapter descriptor factory, when contributed
-  -> DebugAdapterSession.start initializes the resolved transport
+  -> DebugSession.start initializes the resolved transport
   -> IDebugAdapterProcessService.start
   -> initialize + launch/attach
   -> breakpoints + exception breakpoints + configurationDone
@@ -26,13 +26,18 @@ DebugService.start / startDebugging / startCompound
   -> postDebugTask through ITaskService
 ```
 
-`DebugBreakpointDecorationProvider` is the only Debug-to-editor adapter. The editor owns a generic composable gutter contract and must not import Debug semantics. `DebugAdapterSession` also converts adapter source paths into URIs on the current local or Remote Workspace authority; `DebugViewPane` consumes that domain resource and never reinterprets a Remote path as local `file://`. Process lifetime, bounded DAP framing, trust retirement, and connection ownership remain backend responsibilities.
+`DebugBreakpointDecorationProvider` is the only Debug-to-editor adapter. The editor owns a generic composable gutter contract and must not import Debug semantics. `DebugSession` also converts adapter source paths into URIs on the current local or Remote Workspace authority; `DebugViewPane` consumes that domain resource and never reinterprets a Remote path as local `file://`. Process lifetime, bounded DAP framing, trust retirement, and connection ownership remain backend responsibilities.
+
+Console output is retained synchronously. Output-only change notifications are coalesced
+over 16 ms so a DAP burst does not rebuild the console for each message. Session changes
+and clearing publish immediately and cancel the pending output notification; disposal
+cancels it as well. Keyboard input, focus and output order remain independent of batching.
 
 ## Configuration and extension integration
 
 `startDebugging` also accepts a caller-supplied configuration, used by TestingService for an exact compiled test. It does not write `launch.json`; restart retains that configuration. F9 invokes `editor.debug.action.toggleBreakpoint` through the current editor and the same breakpoint owner. LLDB-DAP zero-sequence responses and events retain their adapter identity; request pairing uses `request_seq`, independently of the backend output cursor. Stack frames retain DAP zero line/column values for unavailable positions; inspecting them does not invent a source location. A view opened after a session has stopped immediately reads the existing session.
 
-Each `.vscode/launch.json` configuration can declare an explicit `debugAdapter.program` plus `debugAdapter.args`, or a `debugAdapter.connection` server/pipe endpoint. `debugServer` takes precedence over both explicit descriptors and extension factories and connects to the given local TCP port. If it omits `debugAdapter`, `parseLaunchConfigurationDocument` retains dormant types without invoking providers and resolves already registered defaults through the canonical `DebugAdapterFactoriesRegistry`. Declarative extensions register one caller-owned factory set for the program/argument descriptors contributed through `contributes.debuggers`; other runtime producers use independent registrations. Dynamic factories run after the pre-launch task succeeds or its background matcher reports readiness, so they can inspect the build's adapter artifact. A failed build or error diagnostics prevent both descriptor invocation and adapter startup.
+Each `.vscode/launch.json` configuration can declare an explicit `debugAdapter.program` plus `debugAdapter.args`, or a `debugAdapter.connection` server/pipe endpoint. `debugServer` takes precedence over both explicit descriptors and extension factories and connects to the given local TCP port. If it omits `debugAdapter`, `parseLaunchConfigurationDocument` retains dormant types without invoking providers and resolves already registered defaults through the canonical `IAdapterManager`. Declarative extensions register one caller-owned factory set for the program/argument descriptors contributed through `contributes.debuggers`; other runtime producers use independent registrations. Dynamic factories run after the pre-launch task succeeds or its background matcher reports readiness, so they can inspect the build's adapter artifact. A failed build or error diagnostics prevent both descriptor invocation and adapter startup.
 
 All remaining configuration properties are forwarded to the adapter after `Debugger.substituteVariables` resolves `${env:NAME}`, `${workspaceFolder}`, `${workspaceFolderBasename}`, `${command:...}`, and `${input:...}` through the shared `IConfigurationResolverService.resolveWithInteractionReplace`. Named folder selectors such as `${workspaceFolder:server}` use the current Workspace folder names. Resolution fails before task or adapter execution when a referenced folder is unavailable. The source configuration remains unchanged for restart; the executable, adapter arguments, launch arguments, and pre/post task references are resolved into a separate execution snapshot. A command or configured input variable is evaluated once per invocation and reevaluated when a new session starts. Inputs come from the selected folder’s `.vscode/launch.json` through FileService; launch arguments do not include the document’s input definitions. `promptString` and `pickString` reuse Quick Input; command inputs execute their declared command with `args`. Cancellation by Escape, workspace change, or resolver disposal closes the owned prompt and prevents startup. Cancellation prevents both pre-launch tasks and adapter creation; invalid resolved executables fail before either side effect. The value comes from the current Workspace URI: native filesystem syntax for `file:` and decoded POSIX syntax for Remote. Workbench-only `preLaunchTask` and `postDebugTask` fields are removed before the DAP launch/attach request. Compounds resolve configuration IDs, unique names, or `{ name, folder }` references and may request `stopAll` behavior. Every reference is validated before the compound pre-launch task runs.
 
@@ -58,7 +63,7 @@ An integrated `runInTerminal` request requires the created instance to be runnin
 
 ## Tests and modification impact
 
-Run the Debug tests with the desktop unit runner, or target the compiled files under `services/debug/test`. `debugAdapterSession.test.ts` covers DAP capabilities, inspection, and variable assignment requests. `debugService.test.ts` covers persistence, task lifecycle, compounds, multiple sessions, and canonical factory resolution. `debugConsoleService.test.ts` covers hidden-panel capture, evaluation, terminated-session retention, and clear. `debugAdapterFactory.test.ts` covers multi-producer ownership and atomic replacement. `launchConfiguration.test.ts` covers explicit and extension-resolved adapters. `contrib/debug/test/browser/debugViewPane.test.ts` covers inspection lifetime and variable editing. The Playwright `debug.integration.spec.ts` exercises real editor positioning, input focus, validation, localization, narrow layout, and light/dark/high-contrast themes. `test/smoke/areas/debug/debug.spec.ts` exercises the Code product with a deterministic stdio DAP peer.
+Run the Debug tests with the desktop unit runner, or target the compiled files under `contrib/debug/test`. `debugSession.test.ts` covers DAP capabilities, inspection, and variable assignment requests. `debugService.test.ts` covers persistence, task lifecycle, compounds, multiple sessions, and canonical factory resolution. `repl.test.ts` covers hidden-panel capture, evaluation, terminated-session retention, and clear. `debugAdapterManager.test.ts` covers multi-producer ownership and atomic replacement. `debugConfigurationManager.test.ts` covers explicit and extension-resolved adapters. `contrib/debug/test/browser/debugViewPane.test.ts` covers inspection lifetime and variable editing. The Playwright `debug.integration.spec.ts` exercises real editor positioning, input focus, validation, localization, narrow layout, and light/dark/high-contrast themes. `test/smoke/areas/debug/debug.spec.ts` exercises the Code product with a deterministic stdio DAP peer.
 
 Adding DAP client state to the backend, Debug-specific behavior to the editor, direct process execution to the Renderer, deriving Remote authority inside `DebugViewPane`, or live-session data to workspace persistence would signal ownership drift.
 
@@ -114,16 +119,23 @@ Factories receive the same prepared session as descriptor callbacks and subseque
 session events. All factories share a one-second creation deadline; rejected or
 late trackers do not prevent launch, and late handles are disposed. The session
 owns accepted trackers, so unregistering a factory preserves active hooks.
-Sending awaits `onWillReceiveMessage`; ordered delivery starts `onDidSendMessage` without
-blocking the DAP reader, allowing a callback to await another custom request.
+Outgoing `onWillReceiveMessage` and incoming `onDidSendMessage` observations share an
+ordered queue without blocking DAP sends or response pairing. Observation callbacks do
+not transform protocol messages. A callback can await another custom request even when
+that request's observation is queued behind it. Each callback has a one-second deadline;
+expiry retires and releases that tracker, while other trackers and the session continue.
+Startup and shutdown hooks share that deadline, and disposal cancels observation waits.
+Shutdown allows one second to drain message observations. If they remain queued, the
+pending observations are skipped with a diagnostic; the current callback still settles
+before the stop hook, so a slow backlog cannot hold adapter cleanup indefinitely.
 `onWillStopSession` precedes process close, and `onExit` follows close acknowledgement.
-Exit codes are supplied only when reported by the process reader. The receive queue
-permits 2,048 pending callbacks; overflow stops message observation and reports an error. Errors retain
+Exit codes are supplied only when reported by the process reader. The message queue
+permits 2,048 pending observations across both directions; overflow stops message observation and reports an error. Errors retain
 Error identity at the public facade; forced owner retirement revokes callbacks
 and releases handles. Executable, TCP, named-pipe and inline transports share the same session owner. UI suppression and test-run linkage remain gaps.
 
 The executable descriptor callback receives the prepared session's stable ID and
-canonical workspace-folder metadata. DebugAdapterSession is created before the
+canonical workspace-folder metadata. DebugSession is created before the
 factory callback; the same ID is used by later custom/start/end events. Its public
 identity is independent of the backend process handle. A failed factory retires the
 prepared session without spawning a process. The source configuration remains

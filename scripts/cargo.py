@@ -324,6 +324,15 @@ def main(arguments: list[str] | None = None) -> int:
             environment["ASH_MARKDOWN_MATH_BIN"] = prepare_test_executable(
                 args.cargo, cargo_arguments, environment, "ash-markdown-math"
             )
+        if (
+            cargo_arguments[0] == "test"
+            and "--no-run" not in cargo_arguments
+            and "ASH_DEBUG_LLDB_BIN" not in environment
+            and "ash-app-server" in packages
+        ):
+            environment["ASH_DEBUG_LLDB_BIN"] = prepare_test_executable(
+                args.cargo, cargo_arguments, environment, "ash-debug-lldb"
+            )
         if needs_code_mode_host:
             environment["ASH_CODE_MODE_HOST_BIN"] = prepare_test_executable(
                 args.cargo, cargo_arguments, environment, "ash-code-mode-host"

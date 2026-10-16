@@ -118,19 +118,19 @@ impl Languages {
         + Sync
         + 'static,
     ) -> Result<(), ExtensionError> {
-        let registration = Registration {
-            descriptor: RegistrationDescriptor {
+        let registration = Registration::new(
+            RegistrationDescriptor {
                 registration_id: id.clone(),
                 kind: RegistrationKind::TextDocumentEvents {},
             },
-            operation: "documentEvent".into(),
-            handler: Arc::new(move |payload, token| {
+            "documentEvent",
+            Arc::new(move |payload, token| {
                 let event = serde_json::from_value(payload)
                     .map_err(|_| ExtensionError::invalid_request("invalid document event"))?;
                 callback(event, token)?;
                 Ok(serde_json::Value::Null)
             }),
-        };
+        );
         if self.registrations.contains_key(&id) {
             return Err(ExtensionError::invalid_request(
                 "document observer is already registered",
@@ -159,8 +159,8 @@ impl Languages {
     {
         let operation_name = serde_json::to_value(operation)
             .map_err(|_| ExtensionError::invalid_request("invalid language operation"))?;
-        let registration = Registration {
-            descriptor: RegistrationDescriptor {
+        let registration = Registration::new(
+            RegistrationDescriptor {
                 registration_id: registration_id.clone(),
                 kind: RegistrationKind::LanguageProvider {
                     language_ids,
@@ -168,11 +168,10 @@ impl Languages {
                     completion_trigger_characters,
                 },
             },
-            operation: operation_name
+            operation_name
                 .as_str()
-                .ok_or_else(|| ExtensionError::invalid_request("invalid language operation"))?
-                .into(),
-            handler: Arc::new(move |payload, token| {
+                .ok_or_else(|| ExtensionError::invalid_request("invalid language operation"))?,
+            Arc::new(move |payload, token| {
                 let request = serde_json::from_value(payload)
                     .map_err(|_| ExtensionError::invalid_request("invalid language request"))?;
                 serde_json::to_value(callback(request, token)?).map_err(|_| {
@@ -182,7 +181,7 @@ impl Languages {
                     )
                 })
             }),
-        };
+        );
         match self.registrations.entry(registration_id) {
             std::collections::btree_map::Entry::Vacant(entry) => {
                 entry.insert(registration);
@@ -260,11 +259,7 @@ impl Languages {
         };
         match self.registrations.entry(id) {
             std::collections::btree_map::Entry::Vacant(entry) => {
-                entry.insert(Registration {
-                    descriptor,
-                    operation: "hover".into(),
-                    handler,
-                });
+                entry.insert(Registration::new(descriptor, "hover", handler));
                 Ok(())
             }
             std::collections::btree_map::Entry::Occupied(_) => Err(ExtensionError::new(

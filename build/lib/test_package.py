@@ -122,6 +122,7 @@ class PackageTests(unittest.TestCase):
                 "ash-github-extension",
                 "ash-remote-ssh-extension",
                 "ash-dev-container-provider",
+                "ash-debug-lldb",
                 "ash-voice-host",
                 "ash-collaboration-server",
                 "ash-remote",
@@ -297,6 +298,7 @@ class PackageTests(unittest.TestCase):
         "csharp",
         "css",
         "dart",
+        "debug-lldb",
         "dev-containers",
         "diff",
         "docker",
@@ -448,6 +450,9 @@ class PackageTests(unittest.TestCase):
                 ),
                 markdown_extension_binary=executable_file(
                     root / "markdown-language-features", b"markdown-extension"
+                ),
+                lldb_extension_binary=executable_file(
+                    root / "lldb-extension", b"lldb-extension"
                 ),
                 git_extension_binary=executable_file(
                     root / "git-extension", b"git-extension"
@@ -601,6 +606,27 @@ class PackageTests(unittest.TestCase):
             )
             self.assertEqual(
                 b"math-extension", (output / "bin" / "ash-markdown-math").read_bytes()
+            )
+            self.assertEqual(
+                b"lldb-extension", (output / "bin" / "ash-debug-lldb").read_bytes()
+            )
+            self.assertIn("lldbExtension", system_signing_artifacts(output, spec))
+            lldb = output / "ash-resources/extensions/debug-lldb"
+            self.assertEqual(
+                "ash-debug-lldb",
+                json.loads((lldb / "package.json").read_text())["ashRuntime"][
+                    "entrypoint"
+                ],
+            )
+            self.assertFalse((lldb / "src").exists())
+            self.assertEqual(
+                "1.12.3", json.loads((lldb / "runtime.json").read_text())["version"]
+            )
+            self.assertIn(
+                "command.install",
+                json.loads(
+                    (lldb / "package.nls.zh-CN.json").read_text(encoding="utf-8")
+                ),
             )
             math = output / "ash-resources/extensions/markdown-math"
             self.assertEqual(

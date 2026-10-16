@@ -98,6 +98,7 @@ def build_package_directory(
     github_extension_binary: Optional[Path] = None,
     remote_ssh_extension_binary: Optional[Path] = None,
     dev_container_provider_binary: Optional[Path] = None,
+    lldb_extension_binary: Optional[Path] = None,
 ) -> None:
     if git_extension_binary is None:
         raise RuntimeError("Git extension executable is required in product packages")
@@ -172,6 +173,8 @@ def build_package_directory(
             executables["jsExtensionHost"] = str(js_extension_host_binary)
         if dev_container_provider_binary is not None:
             executables["devContainerProvider"] = str(dev_container_provider_binary)
+        if lldb_extension_binary is not None:
+            executables["lldbExtension"] = str(lldb_extension_binary)
         if windows_sandbox_binary is not None:
             executables["windowsSandbox"] = str(windows_sandbox_binary)
             executables["windowsSandboxService"] = str(windows_sandbox_service_binary)
@@ -836,6 +839,7 @@ def record_system_signing(
             "githubExtension",
             "remoteSshExtension",
             "devContainerProvider",
+            "lldbExtension",
             "voiceHost",
             "collaborationServer",
             "livekit",

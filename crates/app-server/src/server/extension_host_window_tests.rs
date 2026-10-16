@@ -61,7 +61,9 @@ impl EditorPeer {
                         ExtensionClientOperation::ReadInitialization {} => {
                             ExtensionClientResult::Initialization {
                                 initialization: ExtensionHostInitialization {
-                                    language: Some("en".into()),
+                                    language: Some(
+                                        if name == "zh-CN" { "zh-CN" } else { "en" }.into(),
+                                    ),
                                     localization: None,
                                     workspace_folders: Vec::new(),
                                     workspace_name: Some(name.clone()),
@@ -81,6 +83,12 @@ impl EditorPeer {
                             ExtensionClientResult::Command {
                                 value: json!(name),
                                 has_value: true,
+                            }
+                        }
+                        ExtensionClientOperation::ReadConfiguration { section, .. } => {
+                            assert_eq!(section, "debug.lldb");
+                            ExtensionClientResult::Configuration {
+                                value: json!({"adapterPath":format!("/tools/{name}/lldb-dap"),"adapterArgs":[]}),
                             }
                         }
                         operation => panic!("unexpected editor operation: {operation:?}"),
@@ -219,15 +227,31 @@ exports.activate = context => {
 }
 
 fn invoke(runtime: &ExtensionHostRuntime, owner: u64) -> Value {
+    invoke_registration(
+        runtime,
+        owner,
+        "test.node",
+        "execute",
+        json!({"arguments": []}),
+    )
+}
+
+fn invoke_registration(
+    runtime: &ExtensionHostRuntime,
+    owner: u64,
+    registration: &str,
+    operation: &str,
+    payload: Value,
+) -> Value {
     let snapshot = runtime.snapshot_for(owner);
     let extension = &snapshot.extensions[0];
     let request = ExtensionHostInvocationRequest {
         extension_id: extension.id.clone(),
-        registration_id: "test.node".into(),
+        registration_id: registration.into(),
         activation_generation: extension.activation_generation,
         incarnation: extension.incarnation.unwrap(),
-        operation: "execute".into(),
-        payload: json!({"arguments": []}),
+        operation: operation.into(),
+        payload,
         deadline_unix_millis: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -477,6 +501,149 @@ exports.deactivate = async () => {{
         "the old owner must lose its registrations before slow cleanup"
     );
     runtime.shutdown();
+}
+
+#[test]
+fn lldb_rust_providers_keep_client_configuration_language_and_shutdown_separate() {
+    let executable = PathBuf::from(
+        std::env::var_os("ASH_DEBUG_LLDB_BIN")
+            .expect("Cargo wrapper builds the Rust LLDB extension"),
+    );
+    let client = Arc::new(crate::client_host::ClientHost::default());
+    let _first = EditorPeer::start(client.clone(), 11, "en");
+    let _second = EditorPeer::start(client.clone(), 22, "zh-CN");
+    let runtime = ExtensionHostRuntime::start(
+        BuiltInEditorExtensions::Omitted,
+        None,
+        None,
+        None,
+        Arc::new(ash_external_ext::ProductExecutableLauncher::new(executable.clone()).unwrap()),
+        ExtensionHostLimits::default(),
+        RestartPolicy::default(),
+        Arc::new(crate::server::update_broker::UpdateBroker::default()),
+        client,
+        None,
+    )
+    .unwrap();
+    let deployment =
+        super::super::source::product_lldb_deployment(executable.parent().unwrap()).unwrap();
+    let entry = runtime
+        .inner
+        .build_entry(None, &deployment, std::num::NonZeroU64::new(7).unwrap());
+    assert!(
+        entry.window_deployment.is_some(),
+        "the production recipe must bind Rust Debug to a window"
+    );
+    runtime
+        .inner
+        .state
+        .lock()
+        .unwrap()
+        .entries
+        .insert(deployment.id.clone(), entry);
+    let activate = |owner| {
+        runtime
+            .activate_by_event(
+                owner,
+                "ash.debug-lldb",
+                7,
+                ActivationEvent::Debug {
+                    phase: super::super::source::DebugActivationPhase::ResolveConfiguration,
+                    debug_type: Some("lldb-dap".into()),
+                },
+                // Renderer supplies activation facts for Rust providers. The
+                // standard JS host separately refreshes them through its facade.
+                Some(ExtensionHostInitialization {
+                    language: Some(if owner == 11 { "en" } else { "zh-CN" }.into()),
+                    localization: None,
+                    workspace_folders: Vec::new(),
+                    workspace_name: None,
+                    workspace_file: None,
+                    configuration_values: json!({}),
+                    configuration_data: json!({}),
+                }),
+                Err(test_files_unavailable()),
+            )
+            .unwrap()
+    };
+    assert_eq!(
+        activate(11).extensions[0].lifecycle,
+        ExtensionHostLifecycle::Ready
+    );
+    assert_eq!(
+        runtime.snapshot_for(22).extensions[0].lifecycle,
+        ExtensionHostLifecycle::Dormant
+    );
+    assert_eq!(
+        activate(22).extensions[0].lifecycle,
+        ExtensionHostLifecycle::Ready
+    );
+    for (owner, name) in [(11, "LLDB: Launch program"), (22, "LLDB：启动程序")] {
+        assert_eq!(
+            invoke_registration(
+                &runtime,
+                owner,
+                "lldb.configuration",
+                "provideDebugConfigurations",
+                json!({"folder":null})
+            )["configurations"][0]["name"],
+            name
+        );
+    }
+    let payload = json!({"configuration":{"type":"lldb-dap","request":"launch","name":"App","program":"app"},"session":{"id":"borrowed-session","workspaceFolder":null}});
+    for (owner, path) in [(11, "/tools/en/lldb-dap"), (22, "/tools/zh-CN/lldb-dap")] {
+        assert_eq!(
+            invoke_registration(
+                &runtime,
+                owner,
+                "lldb.adapter",
+                "createDebugAdapterDescriptor",
+                payload.clone()
+            )["program"],
+            path
+        );
+    }
+    let first = runtime
+        .inner
+        .state
+        .lock()
+        .unwrap()
+        .entry(11, "ash.debug-lldb")
+        .unwrap()
+        .supervisor
+        .clone()
+        .unwrap();
+    let second = runtime
+        .inner
+        .state
+        .lock()
+        .unwrap()
+        .entry(22, "ash.debug-lldb")
+        .unwrap()
+        .supervisor
+        .clone()
+        .unwrap();
+    runtime.inner.client_host.unregister(11);
+    runtime.close_owner(11);
+    assert_eq!(
+        first.snapshot().status,
+        ash_external_ext::ExtensionHostStatus::Stopped
+    );
+    assert_eq!(
+        invoke_registration(
+            &runtime,
+            22,
+            "lldb.adapter",
+            "createDebugAdapterDescriptor",
+            payload
+        )["program"],
+        "/tools/zh-CN/lldb-dap"
+    );
+    runtime.close_owner(22);
+    assert_eq!(
+        second.snapshot().status,
+        ash_external_ext::ExtensionHostStatus::Stopped
+    );
 }
 
 struct DeniedActivation;

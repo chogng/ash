@@ -1,3 +1,4 @@
+import { ReplModel } from '../../common/replModel.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { IUriIdentityService } from '../../../../../platform/uriIdentity/common/uriIdentity.js';
@@ -13,7 +14,7 @@ import { BrowserTextModelService } from '../../../../services/textmodelResolver/
 import { TextModelResolverService } from '../../../../services/textmodelResolver/common/textModelResolverService.js';
 import { DebugContentProvider } from '../../common/debugContentProvider.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import type { IDebugAdapterTrackerFactory, DebugAdapterTrackerFactoryRegistration, DebugConfiguration, DebugConfigurationProviderRegistration, IDebugConfigurationProvider } from '../../../../services/debug/common/debugService.js';
+import { type IDebugAdapterTrackerFactory, type DebugAdapterTrackerFactoryRegistration, type DebugConfiguration, type DebugConfigurationProviderRegistration, type IDebugConfigurationProvider, IDebugService, type DebugBreakpoint, type IBaseBreakpoint, type IDataBreakpoint, type IDataBreakpointInfoResponse, type IDataBreakpointOptions, type IFunctionBreakpoint, type IFunctionBreakpointOptions, type IInstructionBreakpoint, type IInstructionBreakpointOptions, type DebugEvaluateContext, type DebugSessionState, type DebugSteppingGranularity, type IDebugBreakpoint, type IDebugBreakpointUpdate, type IDebugCompound, type IDebugConfiguration, type IDebugEvaluateResult, type IDebugScope, type IDebugSession, type IDisassembledInstruction, type IDebugSource, type IDebugSourceContent, type IDebugStackFrame, type IDebugThread, type IDebugVariable } from '../../common/debug.js';
 import { createTestFileService } from '../../../../test/common/testEditorServices.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
@@ -23,8 +24,6 @@ import { IWorkspaceContextService, type IAnyWorkspaceIdentifier } from '../../..
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
 import { IWorkspaceOpenService } from '../../../../services/workspaces/browser/workspaceOpenService.js';
-import { IDebugService } from '../../../../services/debug/common/debugService.js';
-import type { DebugBreakpoint, IBaseBreakpoint, IDataBreakpoint, IDataBreakpointInfoResponse, IDataBreakpointOptions, IFunctionBreakpoint, IFunctionBreakpointOptions, IInstructionBreakpoint, IInstructionBreakpointOptions, DebugEvaluateContext, DebugSessionState, DebugSteppingGranularity, IDebugBreakpoint, IDebugBreakpointUpdate, IDebugCompound, IDebugConfiguration, IDebugEvaluateResult, IDebugScope, IDebugSession, IDisassembledInstruction, IDebugSource, IDebugSourceContent, IDebugStackFrame, IDebugThread, IDebugVariable } from '../../../../services/debug/common/debugService.js';
 
 export class MockDebugService extends Disposable implements IDebugService {
 	public readonly onWillNewSession = Event.None;
@@ -51,6 +50,7 @@ export class MockDebugService extends Disposable implements IDebugService {
 	public exceptionBreakpoints: readonly string[] = Object.freeze(['uncaught']);
 	public readonly sessions: readonly IDebugSession[];
 	public session: IDebugSession | undefined;
+	public readonly replModel: ReplModel;
 	public getSession(id: string): IDebugSession | undefined { return this.sessions.find(session => session.id === id); }
 	public readonly onDidChangeConfigurations = this.configurationEmitter.event;
 	public readonly onDidChangeBreakpoints = this.breakpointEmitter.event;
@@ -60,6 +60,7 @@ export class MockDebugService extends Disposable implements IDebugService {
 	constructor(source: IDebugSource = { name: 'generated.ts', sourceReference: 33 }) {
 		super();
 		this.sessions = Object.freeze([this._register(new MockDebugSession('session-one', 'One', source)), this._register(new MockDebugSession('session-two', 'Two', source))]);
+		this.replModel = this._register(new ReplModel(this));
 	}
 	public initialConfigurations: readonly DebugConfiguration[] = [];
 	public async provideDebugConfigurations(_folder: URI, _signal?: AbortSignal): Promise<readonly DebugConfiguration[]> { return this.initialConfigurations; }
@@ -166,7 +167,8 @@ export class MockDebugSession extends Disposable implements IDebugSession {
 	public setName(): void { throw new Error("Renaming is unsupported in this fixture"); }
 	public getDebugProtocolBreakpoint(): undefined { return undefined; }
 	public async customRequest(): Promise<never> { throw new Error("Custom requests are unsupported in this fixture"); }
-	public readonly output = '';
+	public output = '';
+	public emitOutput(value: string): void { this.output += value; this.outputEmitter.fire(value); }
 	constructor(public readonly id: string, name: string, private readonly stackSource: IDebugSource) {
 		super();
 		this.configuration = configuration(name);

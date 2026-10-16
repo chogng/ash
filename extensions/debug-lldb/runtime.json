@@ -1,0 +1,20 @@
+{
+  "version": "1.12.3",
+  "artifacts": {
+    "win32-x64": {
+      "sha256": "a916e509308dac817732f63ca604a8b93ed29cd16f38a2fa9f0b64ed58e8f51a"
+    },
+    "linux-x64": {
+      "sha256": "1cd7f386598022b51a5b93b9ffa23e812b23f519cfe1833384ec4bef4bfd1be1"
+    },
+    "linux-arm64": {
+      "sha256": "0887f67d440554617894266f80706b700907c36b95e6e49d23b95a0e05318101"
+    },
+    "darwin-x64": {
+      "sha256": "e25cc716b94c62c07fec268ff2785d2b797245b160502baef8b9c970a0c4d8e8"
+    },
+    "darwin-arm64": {
+      "sha256": "2f114a990e1b368dd1dbd33c80c0e719767af2d228391ec0df0571c957f9ac91"
+    }
+  }
+}

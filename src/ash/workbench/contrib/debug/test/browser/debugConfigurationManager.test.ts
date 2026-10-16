@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import { parseLaunchConfigurationDocument, parseLaunchConfigurations } from "../../common/launchConfiguration.js";
+import { parseLaunchConfigurationDocument, parseLaunchConfigurations } from "../../browser/debugConfigurationManager.js";
 
 test("launch configurations parse an explicit generic DAP command", () => {
 	const configurations = parseLaunchConfigurations(`{

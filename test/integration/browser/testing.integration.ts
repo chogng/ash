@@ -102,7 +102,7 @@ window.ashTestingIntegration = {
 declare global {
 	interface Window {
 		ashTestingIntegration: {
-			debugLaunches(): readonly import('../../../src/ash/workbench/services/debug/common/debugService.js').IDebugConfiguration[];
+			debugLaunches(): readonly import('../../../src/ash/workbench/contrib/debug/common/debug.js').IDebugConfiguration[];
 			readonly opened: readonly { path: string; line: number | undefined; }[];
 			runs(): readonly (readonly string[])[]; scriptRuns(): number;
 			addCases(): Promise<void>; hold(): void; disconnect(): void; edit(): void; refresh(): Promise<void>; accessible(): string; dispose(): void;

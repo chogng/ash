@@ -1,6 +1,6 @@
 # 调试系统
 
-> 状态：Code 产品已具备通用 DAP 调试平台；SSH Remote Workbench 的 stdio adapter、debuggee Terminal、断点路径和调用栈源码都绑定同一个远端 Environment，编辑器 Workspace 只负责路径与配置呈现；Academic 不组装 Tasks、Testing 或 Debug。后端实现细节由 [`ash-debug-adapter` README](../crates/debug-adapter/README.md) 拥有，Renderer 实现细节由 [Workbench Debug README](../src/ash/workbench/services/debug/README.md) 拥有。
+> 状态：Code 产品已具备通用 DAP 调试平台；SSH Remote Workbench 的 stdio adapter、debuggee Terminal、断点路径和调用栈源码都绑定同一个远端 Environment，编辑器 Workspace 只负责路径与配置呈现；Academic 不组装 Tasks、Testing 或 Debug。后端实现细节由 [`ash-debug-adapter` README](../crates/debug-adapter/README.md) 拥有，Renderer 实现细节由 [Workbench Debug README](../src/ash/workbench/contrib/debug/README.md) 拥有。
 
 ## 快速理解
 
@@ -69,6 +69,8 @@ Editor 不得 import Debug service；它只提供无领域语义的 gutter decor
 compound 启动中任一配置失败时，已经启动的会话会回滚。自然退出和主动停止都只执行一次 `postDebugTask`。声明式适配器被卸载后，Workbench 会先清空旧 launch 候选再重新解析，避免继续执行已经失效的命令。
 
 ## 当前实现与后续演进
+
+具体调试器可以由可选 Rust 扩展提供。内置包 [`debug-lldb`](../extensions/debug-lldb/README.md) 为 CodeLLDB 注册 `lldb`，首次调试时下载固定版本及 SHA-256 的完整平台运行包，校验、解压后原子发布到执行环境的缓存；初始配置发现不触发下载。状态栏显示下载和解压进度，可点击取消或在失败时重试，命令面板也提供安装/重试及取消入口。多个窗口用磁盘锁协调同一缓存，各自拥有调用和取消；完整缓存支持离线复用，开发和离线部署可用扩展程序的 `--prepare-runtime` 提前准备。`debug.lldb.codeLldbPath` 可选择已有 CodeLLDB，`debug.lldb.runtimeDirectory` 可选择预填充目录。原有 `lldb-dap` 类型及 `debug.lldb.adapterPath`、`debug.lldb.adapterArgs` 保留为已安装 LLVM 工具链的接入方式。停用会撤销注册并回收准备任务，缺少扩展时不回落到内置 LLDB 实现。会话、断点、调用栈和 REPL 仍由 Workbench Debug 唯一拥有，Adapter 进程仍由共享 Rust DAP runtime 启动和回收。
 
 当前已实现：已授权 stdio adapter、连接级归属、有界 framing/分页、显式和声明式适配器解析、初始化与请求配对、持久行断点和函数断点、变量数据断点、指令断点、异常断点、线程/栈/递归变量、Watch/`evaluate`、调试控制台、虚拟源码、多会话、compound、restart、Tasks 生命周期、`runInTerminal`、Code-only 组装和断点 gutter。Remote Workbench 复用相同协议让 App Server 在远端启动 adapter，并保持 Workspace 变量、断点、调用栈源码和集成终端都映射到同一个远端 Environment。
 

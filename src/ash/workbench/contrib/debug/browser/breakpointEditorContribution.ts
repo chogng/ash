@@ -7,7 +7,7 @@ import { Range } from '../../../../editor/common/core/range.js';
 import { TextDecorationCollection, type TextDecorationId } from '../../../../editor/common/model/decorationCollection.js';
 import { GlyphMarginLane, TrackedRangeStickiness } from '../../../../editor/common/model.js';
 import { isRemoteResource } from '../../../../platform/remote/common/remote.js';
-import { type IDebugBreakpoint, IDebugService } from '../../../services/debug/common/debugService.js';
+import { type IDebugBreakpoint, IDebugService } from '../common/debug.js';
 
 /** Owns breakpoint decorations and gutter interaction for one text editor. */
 export class BreakpointEditorContribution extends Disposable {

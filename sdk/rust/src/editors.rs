@@ -67,8 +67,8 @@ impl Editors {
         struct Request {
             document: TextDocument,
         }
-        let registration = Registration {
-            descriptor: RegistrationDescriptor {
+        let registration = Registration::new(
+            RegistrationDescriptor {
                 registration_id: view_type.clone(),
                 kind: RegistrationKind::CustomTextEditor {
                     view_type: view_type.clone(),
@@ -77,8 +77,8 @@ impl Editors {
                     priority,
                 },
             },
-            operation: "resolveCustomTextEditor".into(),
-            handler: Arc::new(move |payload, token| {
+            "resolveCustomTextEditor",
+            Arc::new(move |payload, token| {
                 let request: Request = serde_json::from_value(payload)
                     .map_err(|_| ExtensionError::invalid_request("invalid editor document"))?;
                 if request.document.version == 0 || request.document.uri.is_empty() {
@@ -93,7 +93,7 @@ impl Editors {
                     )
                 })
             }),
-        };
+        );
         match self.registrations.entry(view_type) {
             std::collections::btree_map::Entry::Vacant(entry) => {
                 entry.insert(registration);

@@ -188,7 +188,7 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 						continue;
 					}
 					this.desiredGeneration = 0;
-					this.acceptSnapshot(snapshot);
+					await this.acceptSnapshot(snapshot);
 				} catch (error) {
 					if (this.isDisposed || !this.started || !this.connectionReady || revision !== this.authorityRevision) continue;
 					this.failRefresh(error);
@@ -200,7 +200,20 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 		}
 	}
 
-	private acceptSnapshot(snapshot: ExtensionHostFleetSnapshot): void {
+	private async acceptSnapshot(snapshot: ExtensionHostFleetSnapshot): Promise<void> {
+		const revision = this.authorityRevision;
+		// Dormant declarations must be discoverable before executing their provider.
+		// Resolve only display titles through this window's existing package NLS owner.
+		const extensions = await Promise.all(snapshot.extensions.map(async runtime => {
+			const activation = runtime.activation;
+			if (runtime.lifecycle !== 'dormant' || !activation?.commands.some(command => command.title.includes('%'))) return runtime;
+			const titles: string[] = JSON.parse(await this.instantiationService.createInstance(MainThreadLocalization).localizeManifest(
+				runtime.id, JSON.stringify(activation.commands.map(command => command.title)), this.extensions.currentCatalog.generation,
+			));
+			return { ...runtime, activation: { ...activation, commands: activation.commands.map((command, index) => ({ ...command, title: titles[index]! })) } };
+		}));
+		if (this.isDisposed || !this.started || !this.connectionReady || revision !== this.authorityRevision || snapshot.generation < this.snapshot.fleetGeneration) return;
+		snapshot = { ...snapshot, extensions };
 		const projected = projectSnapshot(snapshot);
 		try {
 			runWithBufferedEvents(() => {
@@ -244,7 +257,9 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 		if (signal) throwIfCancelled(signal);
 		if (!this.started || !this.connectionReady || this.isDisposed || revision !== this.authorityRevision) throw new CancellationError();
 		if (snapshot.generation < this.snapshot.fleetGeneration) throw new CancellationError();
-		this.acceptSnapshot(snapshot);
+		await this.acceptSnapshot(snapshot);
+		if (signal) throwIfCancelled(signal);
+		if (!this.started || !this.connectionReady || this.isDisposed || revision !== this.authorityRevision) throw new CancellationError();
 		const activations = snapshot.extensions.flatMap(runtime => {
 			if (runtime.lifecycle !== 'dormant') return [];
 			const activation = selectActivationEvent(runtime.activation!.events, event);
@@ -266,8 +281,8 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 			return this.api.activateByEvent({
 				extensionId: runtime.id, activationGeneration: runtime.activationGeneration, event, initialization: { ...createExtensionHostInitialization(this.workspace, this.configuration), localization }
 			});
-		}).then(snapshot => {
-			if (!this.isDisposed && this.started && this.connectionReady && revision === this.authorityRevision && snapshot.generation >= this.snapshot.fleetGeneration) { this.acceptSnapshot(snapshot); }
+		}).then(async snapshot => {
+			if (!this.isDisposed && this.started && this.connectionReady && revision === this.authorityRevision && snapshot.generation >= this.snapshot.fleetGeneration) { await this.acceptSnapshot(snapshot); }
 			const activated = snapshot.extensions.find(extension => extension.id === runtime.id && extension.activationGeneration === runtime.activationGeneration);
 			if (activated?.lifecycle !== 'ready') throw new Error(localize('extensionHost.activationFailed', "Extension '{0}' failed to activate: {1}", runtime.id, activated?.failure?.message ?? activated?.lifecycle ?? 'unavailable'));
 		}).catch(error => {

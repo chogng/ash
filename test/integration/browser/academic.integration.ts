@@ -52,6 +52,7 @@ import { withEnabledBuiltInExtensions } from '../../../src/ash/platform/extensio
 import { GlobalExtensionEnablementService } from '../../../src/ash/platform/extensionManagement/common/extensionEnablementService.js';
 import { AppServerExtensionService } from '../../../src/ash/workbench/services/extensions/browser/appServerExtensionService.js';
 import { createEmptyTestLanguagePacks } from '../../../src/ash/workbench/services/localization/test/common/localizationTestUtils.js';
+import { AdapterManager } from '../../../src/ash/workbench/contrib/debug/browser/debugAdapterManager.js';
 import { EditorPanes } from '../../../src/ash/workbench/browser/editor.js';
 import { DocumentTypes } from '../../../src/ash/workbench/services/documentEditor/common/documentTypes.js';
 import { toDisposable } from '../../../src/ash/base/common/lifecycle.js';
@@ -195,7 +196,7 @@ if (new URLSearchParams(location.search).has('academicExtension')) {
 	}, academicEnablement);
 	academicExtensionService = disposables.add(new AppServerExtensionService({
 		api,
-	}, createEmptyTestLanguagePacks()));
+	}, createEmptyTestLanguagePacks(), disposables.add(new AdapterManager())));
 	await academicExtensionService.start();
 }
 const structuredPane = disposables.add(academicExtensionService

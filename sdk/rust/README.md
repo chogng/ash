@@ -12,6 +12,7 @@ Rust SDK 是[统一后端扩展接口](../../docs/editor-extensions.md#统一后
 ## 当前源码及验证状态
 
 此前实现了命令、Hover、文档快照、Output、合作式取消和激活作用域释放。
+`debug.rs` 通过现有 Host RPC 注册配置 Provider 与 executable adapter factory；一个配置注册处理模板、变量替换前解析和替换后解析，不持有 DAP 会话。产品消费者见 [`debug-lldb`](../../extensions/debug-lldb/README.md)。`window.create_status_bar` 通过同一 Host RPC 发布激活作用域内的状态值，供可取消的运行包准备使用；UI 仍由发起窗口拥有。
 `editors.rs` 注册自定义文本编辑器；`languages.rs` 按类型化 operation 注册语言 Provider，
 并和 `workspace.rs` 观察客户端文档及配置事件。Markdown 功能扩展使用这些通用接口，
 静态视图资源由客户端从所属内置包加载，文档编辑与历史保持客户端所有权。

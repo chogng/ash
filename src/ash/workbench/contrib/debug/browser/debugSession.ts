@@ -1,16 +1,15 @@
-import type { InlineDebugAdapter } from '../common/debugAdapterFactory.js';
+import type { InlineDebugAdapter, DebugBreakpoint, DebugEvaluateContext, DebugSessionState, DebugSteppingGranularity, IDisassembledInstruction, IBaseBreakpoint, IDataBreakpointInfoResponse, DataBreakpointAccessType, IDebugBreakpoint, IDebugConfiguration, IDebugEvaluateResult, IDebugExceptionBreakpointFilter, IDebugScope, IDebugSession, IDebugSessionOptions, IDebugSessionCapabilities, IDebugSource, IDebugSourceContent, IDebugStackFrame, IDebugThread, IDebugVariable, IDebugAdapterTracker } from '../common/debug.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { TaskQueue, timeout } from "../../../../base/common/async.js";
 import { groupByMap } from "../../../../base/common/collections.js";
 import { CancellationError, getErrorMessage } from "../../../../base/common/errors.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { URI } from "../../../../base/common/uri.js";
 import { Schemas } from '../../../../base/common/network.js';
 import { localize } from "../../../../nls.js";
 import { type IDebugAdapterProcessService } from "../../../../platform/debug/common/debugAdapterProcessService.js";
 import { isRemoteResource } from "../../../../platform/remote/common/remote.js";
-import { type DebugBreakpoint, type DebugEvaluateContext, type DebugSessionState, type DebugSteppingGranularity, type IDisassembledInstruction, type IBaseBreakpoint, type IDataBreakpointInfoResponse, type DataBreakpointAccessType, type IDebugBreakpoint, type IDebugConfiguration, type IDebugEvaluateResult, type IDebugExceptionBreakpointFilter, type IDebugScope, type IDebugSession, type IDebugSessionOptions, type IDebugSessionCapabilities, type IDebugSource, type IDebugSourceContent, type IDebugStackFrame, type IDebugThread, type IDebugVariable, type IDebugAdapterTracker } from "../common/debugService.js";
 
 interface DapRequest { readonly seq: number; readonly type: "request"; readonly command: string; readonly arguments?: unknown; }
 interface DapResponse { readonly seq: number; readonly type: "response"; readonly request_seq: number; readonly success: boolean; readonly command: string; readonly message?: string; readonly body?: unknown; }
@@ -18,8 +17,9 @@ interface DapEvent { readonly seq: number; readonly type: "event"; readonly even
 
 const POLL_DELAY_MS = 40;
 const REQUEST_TIMEOUT_MS = 15_000;
+const TRACKER_CALLBACK_TIMEOUT_MS = 1_000;
 
-export interface DebugAdapterSessionStartOptions {
+export interface DebugSessionStartOptions {
 	readonly id?: string;
 	readonly createDebugAdapterTrackers?: (session: IDebugSession) => PromiseLike<readonly IDebugAdapterTracker[]>;
 	readonly createDebugAdapterDescriptor?: (session: IDebugSession) => PromiseLike<IDebugConfiguration['adapter'] | null>;
@@ -42,7 +42,7 @@ export interface DebugAdapterSessionStartOptions {
 }
 
 /** One initialized DAP client session over the platform process boundary. */
-export class DebugAdapterSession extends Disposable implements IDebugSession {
+export class DebugSession extends Disposable implements IDebugSession {
 	private _resolvedConfiguration: IDebugConfiguration;
 	get resolvedConfiguration(): IDebugConfiguration { return this._resolvedConfiguration; }
 	get parentSession(): IDebugSession | undefined { return this.sessionOptions.parentSession; }
@@ -59,7 +59,9 @@ export class DebugAdapterSession extends Disposable implements IDebugSession {
 	private polling = false;
 	private processClose: Promise<void> | undefined;
 	private trackers: readonly IDebugAdapterTracker[] = [];
-	private readonly receivedTrackerMessages = new TaskQueue();
+	private readonly trackerDisposables = new Map<IDebugAdapterTracker, IDisposable>();
+	private readonly trackerLifetime = new AbortController();
+	private readonly trackerMessages = new TaskQueue();
 	private queuedTrackerMessages = 0;
 	private trackerMessagesStopped = false;
 	private adapterExitCode: number | undefined;
@@ -128,14 +130,14 @@ export class DebugAdapterSession extends Disposable implements IDebugSession {
 		readonly id: string,
 		private readonly breakpoints: () => readonly IDebugBreakpoint[],
 		private readonly workspace: URI | undefined,
-		private readonly runInTerminal: DebugAdapterSessionStartOptions["runInTerminal"],
-		private readonly startDebugging: DebugAdapterSessionStartOptions['startDebugging'],
-		private readonly updateBreakpoints: DebugAdapterSessionStartOptions["updateBreakpoints"],
-		private readonly addBreakpoint: DebugAdapterSessionStartOptions['addBreakpoint'],
-		private readonly removeBreakpoint: DebugAdapterSessionStartOptions['removeBreakpoint'],
-		private readonly exceptionBreakpoints: DebugAdapterSessionStartOptions["exceptionBreakpoints"],
-		private readonly additionalBreakpoints: DebugAdapterSessionStartOptions["additionalBreakpoints"],
-		resolvedConfiguration: DebugAdapterSessionStartOptions["resolvedConfiguration"],
+		private readonly runInTerminal: DebugSessionStartOptions["runInTerminal"],
+		private readonly startDebugging: DebugSessionStartOptions['startDebugging'],
+		private readonly updateBreakpoints: DebugSessionStartOptions["updateBreakpoints"],
+		private readonly addBreakpoint: DebugSessionStartOptions['addBreakpoint'],
+		private readonly removeBreakpoint: DebugSessionStartOptions['removeBreakpoint'],
+		private readonly exceptionBreakpoints: DebugSessionStartOptions["exceptionBreakpoints"],
+		private readonly additionalBreakpoints: DebugSessionStartOptions["additionalBreakpoints"],
+		resolvedConfiguration: DebugSessionStartOptions["resolvedConfiguration"],
 		readonly sessionOptions: IDebugSessionOptions,
 	) {
 		super();
@@ -145,18 +147,20 @@ export class DebugAdapterSession extends Disposable implements IDebugSession {
 		// Keep that rejection handled while initialize still observes the original promise.
 		void this.initializedPromise.catch(() => { });
 		this._register(toDisposable(() => {
+			this.trackerLifetime.abort();
 			void this.closeProcess();
 			this.trackers = [];
+			this.trackerDisposables.clear();
 			this.breakpointSync.clearPending();
-			this.receivedTrackerMessages.clearPending();
+			this.trackerMessages.clearPending();
 			for (const pending of this.pending.values()) { clearTimeout(pending.timeout); pending.reject(new Error("Debug session was disposed")); }
 			this.pending.clear();
 			this.protocolBreakpoints.clear();
 		}));
 	}
 
-	static async start(options: DebugAdapterSessionStartOptions): Promise<DebugAdapterSession> {
-		const session = new DebugAdapterSession(
+	static async start(options: DebugSessionStartOptions): Promise<DebugSession> {
+		const session = new DebugSession(
 			options.configuration, options.id ?? generateUuid(), options.breakpoints,
 			options.workspace, options.runInTerminal, options.startDebugging, options.updateBreakpoints, options.addBreakpoint, options.removeBreakpoint,
 			options.exceptionBreakpoints, options.additionalBreakpoints, options.resolvedConfiguration, Object.freeze({ ...options.sessionOptions }),
@@ -177,7 +181,8 @@ export class DebugAdapterSession extends Disposable implements IDebugSession {
 				for (const tracker of trackers) { tracker.dispose(); }
 				throw new CancellationError();
 			}
-			session.trackers = trackers.map(tracker => session._register(tracker));
+			session.trackers = trackers;
+			for (const tracker of trackers) session.trackerDisposables.set(tracker, session._register(toDisposable(() => tracker.dispose())));
 			await session.callTrackers(tracker => tracker.onWillStartSession?.());
 			if (session.isDisposed) { throw new CancellationError(); }
 			if (!adapter.inline) {
@@ -529,30 +534,53 @@ export class DebugAdapterSession extends Disposable implements IDebugSession {
 	}
 
 	private async callTrackers(invoke: (tracker: IDebugAdapterTracker) => void | PromiseLike<void>): Promise<void> {
-		for (const tracker of this.trackers) {
-			if (this.isDisposed) { return; }
-			try { await invoke(tracker); }
-			catch (error) { this.emitOutput(localize('debug.adapterTrackerFailed', 'Debug Adapter tracker failed: {0}', getErrorMessage(error)) + '\n'); }
-		}
+		// A stalled observer must not hold its peers or session cleanup. The
+		// session owns the deadline as callbacks can outlive a Host invocation.
+		await Promise.all(this.trackers.map(async tracker => {
+			const signal = this.trackerLifetime.signal;
+			if (signal.aborted) return;
+			let expired = false;
+			let timer: ReturnType<typeof setTimeout> | undefined;
+			let cancel: (() => void) | undefined;
+			try {
+				await new Promise<void>((resolve, reject) => {
+					cancel = resolve;
+					signal.addEventListener('abort', cancel, { once: true });
+					timer = setTimeout(() => { expired = true; resolve(); }, TRACKER_CALLBACK_TIMEOUT_MS);
+					Promise.resolve().then(() => { if (!signal.aborted) return invoke(tracker); }).then(resolve, reject);
+				});
+				if (expired && !signal.aborted) {
+					this.trackers = this.trackers.filter(value => value !== tracker);
+					const disposable = this.trackerDisposables.get(tracker);
+					this.trackerDisposables.delete(tracker);
+					if (disposable) { this._store.delete(disposable); disposable.dispose(); }
+					this.emitOutput(localize('debug.adapterTrackerTimedOut', 'Debug Adapter tracker timed out and was disabled.') + '\n');
+				}
+			} catch (error) {
+				if (!signal.aborted) this.emitOutput(localize('debug.adapterTrackerFailed', 'Debug Adapter tracker failed: {0}', getErrorMessage(error)) + '\n');
+			} finally {
+				clearTimeout(timer);
+				if (cancel) signal.removeEventListener('abort', cancel);
+			}
+		}));
 	}
 
-	private trackReceivedMessage(message: unknown): void {
+	private trackMessage(invoke: (tracker: IDebugAdapterTracker) => void | PromiseLike<void>): void {
 		if (!this.trackers.length || this.trackerMessagesStopped) { return; }
 		if (this.queuedTrackerMessages >= 2048) {
 			this.trackerMessagesStopped = true;
-			this.receivedTrackerMessages.clearPending();
+			this.trackerMessages.clearPending();
 			this.emitOutput(localize('debug.adapterTrackerQueueExceeded', 'Debug Adapter tracker message queue exceeded its limit; message observation stopped.') + '\n');
 			return;
 		}
 		this.queuedTrackerMessages++;
-		// Serial callback delivery avoids exhausting the Host invocation budget.
-		// The reader still pairs responses immediately, including requests made
-		// by the callback currently waiting at the head of this queue.
-		void this.receivedTrackerMessages.scheduleSkipIfCleared(() => this.callTrackers(tracker => tracker.onDidSendMessage?.(message))).finally(() => { this.queuedTrackerMessages--; });
+		// Both directions share observer order, independently of transport IO.
+		// A callback may await a DAP request whose observation is queued behind it.
+		void this.trackerMessages.scheduleSkipIfCleared(() => this.callTrackers(invoke)).finally(() => { this.queuedTrackerMessages--; });
 	}
 
 	private async sendMessage(message: unknown, pendingSequence?: number): Promise<void> {
-		await this.callTrackers(tracker => tracker.onWillReceiveMessage?.(message));
+		this.trackMessage(tracker => tracker.onWillReceiveMessage?.(message));
 		this.assertNotDisposed();
 		if (this.processClose) { throw new CancellationError(); }
 		if (pendingSequence !== undefined && !this.pending.has(pendingSequence)) { return; }
@@ -568,7 +596,23 @@ export class DebugAdapterSession extends Disposable implements IDebugSession {
 	private async stopTrackers(): Promise<void> {
 		if (this.trackersStopping) { return; }
 		this.trackersStopping = true;
-		if (!this.isDisposed) { await this.receivedTrackerMessages.scheduleSkipIfCleared(() => { }); }
+		this.trackerMessagesStopped = true;
+		if (!this.isDisposed) {
+			const deadline = timeout(TRACKER_CALLBACK_TIMEOUT_MS);
+			try {
+				const drained = await Promise.race([
+					this.trackerMessages.scheduleSkipIfCleared(() => { }).then(() => true),
+					deadline.then(() => false),
+				]);
+				if (!drained) {
+					// A backlog of individually timely callbacks must not accumulate
+					// into an unbounded stop. Keep only the current callback in order.
+					this.trackerMessages.clearPending();
+					await this.trackerMessages.scheduleSkipIfCleared(() => { });
+					this.emitOutput(localize('debug.adapterTrackerShutdownBacklog', 'Pending Debug Adapter tracker observations were skipped to finish stopping the session.') + '\n');
+				}
+			} finally { deadline.cancel(); }
+		}
 		await this.callTrackers(tracker => tracker.onWillStopSession?.());
 	}
 
@@ -590,7 +634,7 @@ export class DebugAdapterSession extends Disposable implements IDebugSession {
 				for (const entry of read.messages) {
 					// A callback can await another DAP request. Keep the reader free to
 					// receive that response while the independent Host invocation runs.
-					this.trackReceivedMessage(entry.message);
+					this.trackMessage(tracker => tracker.onDidSendMessage?.(entry.message));
 					this.acceptMessage(entry.message);
 				}
 				// Exit describes the process, not whether this bounded page drained its output.

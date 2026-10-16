@@ -12,7 +12,7 @@ import { productLanguagePackCatalogs } from "../../../../services/localization/c
 import { URI } from "../../../../../base/common/uri.js";
 import { IEditorService } from "../../../../services/editor/common/editorService.js";
 import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
-import { IDebugService, type IDebugSourceContent, type IDebugVariable } from "../../../../services/debug/common/debugService.js";
+import { IDebugService, type IDebugSourceContent, type IDebugVariable } from "../../common/debug.js";
 import { DebugViewTestServices, MockDebugService, MockDebugSession } from "../common/mockDebug.js";
 
 test("Debug view switches sessions and renders threads, recursive variables, watches, and source references", async () => {
@@ -364,7 +364,7 @@ for (const change of ['document created', 'workspace replaced', 'view disposed']
 			using services = new InstantiationService(support.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, contextMenus])));
 			using view = services.createInstance(DebugViewPane, browser.window.document.body, { id: "debug.welcome", title: "Debug" });
 			let signal: AbortSignal | undefined;
-			const templates = new DeferredPromise<readonly import('../../../../services/debug/common/debugService.js').DebugConfiguration[]>();
+			const templates = new DeferredPromise<readonly import('../../common/debug.js').DebugConfiguration[]>();
 			debug.provideDebugConfigurations = async (_folder, incoming) => { signal = incoming; return templates.p; };
 			view.element.querySelector<HTMLButtonElement>(".ash-debug-welcome-content button")!.click();
 			await waitFor(() => signal !== undefined);

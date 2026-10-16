@@ -1,9 +1,27 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import { createStaticDebugAdapterFactory, DebugAdapterFactoryRegistry } from "../../common/debugAdapterFactory.js";
+import { createStaticDebugAdapterFactory, IAdapterManager } from "../../common/debug.js";
+import { AdapterManager } from "../../browser/debugAdapterManager.js";
+import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 
-test("DebugAdapterFactoryRegistry composes independent producers and removes only its owner", () => {
-	using registry = new DebugAdapterFactoryRegistry();
+test('AdapterManager registration shares factories within a window and isolates other windows', () => {
+	const descriptors = getSingletonServiceDescriptors().filter(([id]) => id === IAdapterManager);
+	assert.equal(descriptors.length, 1, 'one production singleton registration');
+	using firstWindow = new InstantiationService(new ServiceCollection(...descriptors));
+	using secondWindow = new InstantiationService(new ServiceCollection(...descriptors));
+	const first = firstWindow.get(IAdapterManager);
+	const second = secondWindow.get(IAdapterManager);
+	assert.equal(firstWindow.get(IAdapterManager), first);
+	assert.notEqual(first, second);
+	using registration = first.registerFactories([createStaticDebugAdapterFactory('isolated', 'Isolated', 'extension.test', { program: 'adapter', arguments: [] })]);
+	assert.equal(firstWindow.get(IAdapterManager).get('isolated')?.sourceId, 'extension.test');
+	assert.equal(second.get('isolated'), undefined);
+});
+
+test("AdapterManager composes independent producers and removes only its owner", () => {
+	using registry = new AdapterManager();
 	const declarative = registry.registerFactories([createStaticDebugAdapterFactory("node", "Node", "declarative.node", { program: "node-adapter", arguments: [] })]);
 	using hosted = registry.registerFactories([createStaticDebugAdapterFactory("python", "Python", "hosted.python", { program: "python-adapter", arguments: ["--stdio"] })]);
 
@@ -13,8 +31,8 @@ test("DebugAdapterFactoryRegistry composes independent producers and removes onl
 	assert.deepEqual(registry.factories.map(factory => factory.type), ["python"]);
 });
 
-test("DebugAdapterFactoryRegistry rejects conflicting replacement atomically", () => {
-	using registry = new DebugAdapterFactoryRegistry();
+test("AdapterManager rejects conflicting replacement atomically", () => {
+	using registry = new AdapterManager();
 	using first = registry.registerFactories([createStaticDebugAdapterFactory("node", "Node", "first", { program: "first", arguments: [] })]);
 	using second = registry.registerFactories([createStaticDebugAdapterFactory("python", "Python", "second", { program: "second", arguments: [] })]);
 
@@ -23,8 +41,8 @@ test("DebugAdapterFactoryRegistry rejects conflicting replacement atomically", (
 	assert.equal(registry.get("python")?.sourceId, "second");
 });
 
-test('DebugAdapterFactoryRegistry retains unchanged factories when another type activates', () => {
-	using registry = new DebugAdapterFactoryRegistry();
+test('AdapterManager retains unchanged factories when another type activates', () => {
+	using registry = new AdapterManager();
 	const original = createStaticDebugAdapterFactory('original', 'Original', 'owner', { program: 'original', arguments: [] });
 	const next = createStaticDebugAdapterFactory('next', 'Next', 'owner', { program: 'next', arguments: [] });
 	using registration = registry.registerFactories([original]);
@@ -43,8 +61,8 @@ test('DebugAdapterFactoryRegistry retains unchanged factories when another type 
 });
 
 
-test('DebugAdapterFactoryRegistry combines a default with a dynamic owner and reveals it after retirement', async () => {
-	using registry = new DebugAdapterFactoryRegistry();
+test('AdapterManager combines a default with a dynamic owner and reveals it after retirement', async () => {
+	using registry = new AdapterManager();
 	using fallback = registry.registerFactories([createStaticDebugAdapterFactory('example', 'Example', 'declarative:example', { program: 'default', arguments: ['default-arg'] })]);
 	using dynamic = registry.registerFactories([{ type: 'example', label: 'Factory', sourceId: 'runtime:example', createDebugAdapterDescriptor: async () => ({ program: 'dynamic', arguments: [] }) }]);
 	const combined = registry.get('example');

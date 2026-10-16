@@ -1,3 +1,4 @@
+import './contrib/debug/browser/debugAdapterManager.js';
 import '../platform/uriIdentity/common/uriIdentityService.js';
 import './contrib/chat/browser/chat.shared.contribution.js';
 import './contrib/terminal/common/environmentVariable.contribution.js';

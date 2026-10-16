@@ -9,8 +9,7 @@ import { IContextKeyService } from '../../../src/ash/platform/contextkey/browser
 import { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
 import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { DisassemblyView } from '../../../src/ash/workbench/contrib/debug/browser/disassemblyView.js';
-import { DISASSEMBLY_VIEW_ID } from '../../../src/ash/workbench/contrib/debug/common/debug.js';
-import { type IDisassembledInstruction } from '../../../src/ash/workbench/services/debug/common/debugService.js';
+import { DISASSEMBLY_VIEW_ID, type IDisassembledInstruction, IDebugService, type IDebugVariable, type IDataBreakpointInfoResponse } from '../../../src/ash/workbench/contrib/debug/common/debug.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
@@ -21,10 +20,10 @@ import { TestThemeService } from '../../../src/ash/platform/theme/test/common/te
 import { create, createModel } from '../../../src/ash/editor/standalone/browser/standaloneEditor.js';
 import { type TextModel } from '../../../src/ash/editor/common/model/textModel.js';
 import { formatNlsMessage, setNlsResolver } from '../../../src/ash/nls.js';
-import { IDebugService, type IDebugVariable, type IDataBreakpointInfoResponse } from '../../../src/ash/workbench/services/debug/common/debugService.js';
 import { IEditorService, type EditorOpenOptions } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { DebugViewPane } from '../../../src/ash/workbench/contrib/debug/browser/debugViewPane.js';
+import { DebugConsoleViewPane } from '../../../src/ash/workbench/contrib/debug/browser/debugConsoleViewPane.js';
 import { BreakpointEditorContribution } from '../../../src/ash/workbench/contrib/debug/browser/breakpointEditorContribution.js';
 import { DebugViewTestServices, MockDebugService, MockDebugSession } from '../../../src/ash/workbench/contrib/debug/test/common/mockDebug.js';
 import '../../../src/ash/workbench/contrib/debug/browser/media/debug.css';
@@ -98,10 +97,22 @@ if (new URLSearchParams(location.search).has('welcome')) {
 const pane = store.add(services.createInstance(DebugViewPane, document.querySelector<HTMLElement>('#debug')!, { id: 'debug.integration', title: 'Debug' }));
 pane.setVisible(true);
 if (!new URLSearchParams(location.search).has('welcome')) debug.activate(session);
+const debugConsole = debug.replModel;
+if (new URLSearchParams(location.search).has('console')) {
+	const container = document.createElement('div');
+	document.body.append(container);
+	const consolePane = store.add(new DebugConsoleViewPane(container, { id: 'debug.console.integration', title: 'Debug Console' }, debug));
+	consolePane.setVisible(true);
+}
 let pendingAssignment: DeferredPromise<IDebugVariable> | undefined;
 let pendingDataInfo: DeferredPromise<IDataBreakpointInfoResponse> | undefined;
 
 window.ashDebugIntegration = {
+	burstOutput: count => {
+		const started = performance.now();
+		for (let index = 0; index < count; index++) session.emitOutput(`burst-${index}\n`);
+		return { duration: performance.now() - started, output: debugConsole.activeSession?.output };
+	},
 	openedSources: () => openedSources,
 	disassemblyRequests: () => disassemblyRequests,
 	stepRequests: () => session.operations,
@@ -139,6 +150,7 @@ window.addEventListener('pagehide', () => store.dispose(), { once: true });
 declare global {
 	interface Window {
 		ashDebugIntegration: {
+			burstOutput(count: number): { duration: number; output: string | undefined; };
 			openedSources(): readonly unknown[];
 			disassemblyRequests(): readonly unknown[];
 			stepRequests(): readonly string[];

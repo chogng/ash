@@ -14,6 +14,54 @@ use std::time::Duration;
 use std::time::Instant;
 
 #[test]
+fn lldb_product_provider_is_dormant_until_its_exact_debugger_is_requested() {
+    let executable = std::env::current_exe().unwrap();
+    let deployment = super::source::product_lldb_deployment(executable.parent().unwrap()).unwrap();
+    assert_eq!(deployment.id, "ash.debug-lldb");
+    assert_eq!(
+        deployment.params.capabilities,
+        [
+            ash_external_ext::ExtensionCapability::DebugAdapter,
+            ash_external_ext::ExtensionCapability::Command,
+            ash_external_ext::ExtensionCapability::StatusBar
+        ]
+    );
+    assert!(matches!(
+        deployment.workspace_read,
+        super::source::WorkspaceReadAccess::Denied
+    ));
+    assert!(deployment.backend_channels.is_empty());
+    assert!(deployment.credential_providers.is_empty());
+    let activation = deployment.activation.unwrap();
+    for phase in [
+        super::source::DebugActivationPhase::Start,
+        super::source::DebugActivationPhase::ResolveConfiguration,
+    ] {
+        assert!(activation.matches(&super::source::ActivationEvent::Debug {
+            phase,
+            debug_type: Some("lldb-dap".into())
+        }));
+        assert!(activation.matches(&super::source::ActivationEvent::Debug {
+            phase,
+            debug_type: Some("lldb".into())
+        }));
+        assert!(!activation.matches(&super::source::ActivationEvent::Debug {
+            phase,
+            debug_type: Some("other".into())
+        }));
+    }
+    assert!(!activation.matches(&super::source::ActivationEvent::StartupFinished));
+    assert!(!activation.matches(&super::source::ActivationEvent::Language("rust".into())));
+    // Select and Start asks every initial provider for templates before it has
+    // a debugger type. Resolving or launching remains type-specific.
+    assert!(activation.matches(&super::source::ActivationEvent::Debug {
+        phase: super::source::DebugActivationPhase::InitialConfigurations,
+        debug_type: None,
+    }));
+    assert_eq!(activation.events, deployment.params.activation_events);
+}
+
+#[test]
 fn declared_capability_calls_activate_the_exact_real_provider_and_obey_cancellation_and_revocation()
 {
     use ash_external_ext::ActivationAuthority;

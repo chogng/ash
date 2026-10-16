@@ -1,6 +1,6 @@
 import { Disposable, MutableDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import type { IWorkbenchContribution } from '../../../common/contributions.js';
-import { IDebugService } from '../../../services/debug/common/debugService.js';
+import { IDebugService } from '../common/debug.js';
 import { IHostService } from '../../../services/host/browser/host.js';
 import { ITitleService } from '../../../services/title/browser/titleService.js';
 

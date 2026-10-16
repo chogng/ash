@@ -89,6 +89,14 @@ pub(super) fn built_in_deployments(
         product_markdown_math_deployment(directory)?,
         product_markdown_deployment(directory)?,
     ];
+    // This optional package only supplies debugger policy. Missing binaries do
+    // not make the shared host or non-debugging clients depend on LLDB.
+    if directory
+        .join(format!("ash-debug-lldb{}", std::env::consts::EXE_SUFFIX))
+        .is_file()
+    {
+        deployments.push(product_lldb_deployment(directory)?);
+    }
     let git_manifest: serde_json::Value =
         serde_json::from_str(include_str!("../../../../../extensions/git/package.json"))
             .map_err(|_| ExtensionHostRuntimeError::Internal)?;
@@ -102,6 +110,79 @@ pub(super) fn built_in_deployments(
         });
     }
     Ok(deployments)
+}
+
+pub(super) fn product_lldb_deployment(
+    directory: &Path,
+) -> Result<EditorExtensionDeployment, ExtensionHostRuntimeError> {
+    let manifest: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../../extensions/debug-lldb/package.json"
+    ))
+    .map_err(|_| ExtensionHostRuntimeError::Internal)?;
+    let digest = format!(
+        "sha256:{:x}",
+        Sha256::digest(concat!(
+            include_str!("../../../../../extensions/debug-lldb/package.json"),
+            include_str!("../../../../../extensions/debug-lldb/package.nls.json"),
+            include_str!("../../../../../extensions/debug-lldb/package.nls.zh-CN.json"),
+            include_str!("../../../../../extensions/debug-lldb/src/lib.rs"),
+            include_str!("../../../../../extensions/debug-lldb/src/installer.rs"),
+            include_str!("../../../../../extensions/debug-lldb/runtime.json"),
+            include_str!("../../../../../sdk/rust/src/debug.rs"),
+            include_str!("../../../../../sdk/rust/src/window.rs"),
+        ))
+    );
+    let events: Vec<String> = serde_json::from_value(manifest["activationEvents"].clone())
+        .map_err(|_| ExtensionHostRuntimeError::Internal)?;
+    Ok(EditorExtensionDeployment {
+        scope: EditorExtensionScope::Product,
+        id: "ash.debug-lldb".into(),
+        version: "1.0.0".into(),
+        package_digest: digest.clone(),
+        command: ExtensionLaunchCommand::new(
+            directory.join(format!("ash-debug-lldb{}", std::env::consts::EXE_SUFFIX)),
+            std::iter::empty::<String>(),
+            directory,
+            BTreeMap::new(),
+        )
+        .map_err(ExtensionHostRuntimeError::Host)?,
+        workspace_read: WorkspaceReadAccess::Denied,
+        credential_providers: Vec::new(),
+        backend_channels: BTreeMap::new(),
+        protocol_limits: None,
+        params: ActivateParams {
+            initialization: None,
+            extension_id: "ash.debug-lldb".into(),
+            package: PackageBinding {
+                package_id: "ash.debug-lldb@1.0.0".into(),
+                package_digest: digest,
+                entrypoint: "ash-debug-lldb".into(),
+            },
+            runtime_api_version: 1,
+            activation_events: events.clone(),
+            capabilities: vec![
+                ExtensionCapability::DebugAdapter,
+                ExtensionCapability::Command,
+                ExtensionCapability::StatusBar,
+            ],
+        },
+        authority: Arc::new(ProductAuthority),
+        activation: Some(ActivationPlan {
+            events,
+            commands: manifest["contributes"]["commands"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|command| {
+                    command["command"]
+                        .as_str()
+                        .zip(command["title"].as_str())
+                        .map(|(id, title)| (id.to_owned(), title.to_owned()))
+                })
+                .collect(),
+        }),
+        activation_failure: None,
+    })
 }
 
 fn product_ssh_deployment(

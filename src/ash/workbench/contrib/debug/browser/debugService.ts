@@ -5,8 +5,7 @@ import { IUriIdentityService } from '../../../../platform/uriIdentity/common/uri
 import { getUriFromSource } from '../common/debugSource.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
-import { DebugConsoleService } from '../../../services/debug/browser/debugConsoleService.js';
-import { IDebugConsoleService } from '../../../services/debug/common/debugConsoleService.js';
+import { ReplModel } from '../common/replModel.js';
 import { registerWorkbenchServiceContribution } from '../../../browser/workbenchServiceContributions.js';
 import { IConfigurationResolverService } from '../../../services/configurationResolver/common/configurationResolver.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -14,7 +13,7 @@ import { CancellationError } from '../../../../base/common/errors.js';
 import { Debugger } from '../common/debugger.js';
 import { localize } from '../../../../nls.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
-import { CONTEXT_DEBUG_STATE } from '../common/debug.js';
+import { CONTEXT_DEBUG_STATE, IAdapterManager, type IResolvedDebugConfiguration, type IDebugStackFrame, type DebugBreakpoint, type IBaseBreakpoint, type IDebugBreakpoint, type IDebugBreakpointUpdate, type IDebugCompound, type IDebugConfiguration, type IDataBreakpoint, type IDataBreakpointOptions, type IFunctionBreakpoint, type IFunctionBreakpointOptions, type IInstructionBreakpoint, type IInstructionBreakpointOptions, IDebugService, DebugConsoleMode, type IDebugSessionOptions, type IDebugSession, DebugConfigurationProviderTriggerKind, type DebugConfiguration, type IDebugConfigurationProvider, type DebugConfigurationProviderRegistration, type IDebugAdapterTracker, type IDebugAdapterTrackerFactory, type DebugAdapterTrackerFactoryRegistration } from '../common/debug.js';
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { type JsonValue } from "../../../../base/common/jsonValue.js";
 import { Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
@@ -35,15 +34,12 @@ import { GeneralShellType } from '../../../../platform/terminal/common/terminal.
 import { mergeEnvironments } from '../../terminal/common/terminalEnvironment.js';
 import { OperatingSystem } from '../../../../base/common/platform.js';
 import { getRemoteAuthority } from '../../../../platform/remote/common/remoteHosts.js';
-import { DebugAdapterSession } from "../../../services/debug/browser/debugAdapterSession.js";
-import { DebugAdapterFactoriesRegistry, IDebugAdapterFactorySource, type DebugAdapterFactorySource } from "../../../services/debug/common/debugAdapterFactory.js";
-import { type IResolvedDebugConfiguration, type IDebugStackFrame, type DebugBreakpoint, type IBaseBreakpoint, type IDebugBreakpoint, type IDebugBreakpointUpdate, type IDebugCompound, type IDebugConfiguration, type IDataBreakpoint, type IDataBreakpointOptions, type IFunctionBreakpoint, type IFunctionBreakpointOptions, type IInstructionBreakpoint, type IInstructionBreakpointOptions, IDebugService, DebugConsoleMode, type IDebugSessionOptions, type IDebugSession } from "../../../services/debug/common/debugService.js";
-import { parseLaunchConfigurationDocument } from "../../../services/debug/common/launchConfiguration.js";
+import { DebugSession } from "./debugSession.js";
+import { parseLaunchConfigurationDocument } from "./debugConfigurationManager.js";
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IEditorGroupsService } from '../../../services/editor/common/editorGroupsService.js';
 import { Schemas } from '../../../../base/common/network.js';
-import { DebugConfigurationProviderTriggerKind, type DebugConfiguration, type IDebugConfigurationProvider, type DebugConfigurationProviderRegistration, type IDebugAdapterTracker, type IDebugAdapterTrackerFactory, type DebugAdapterTrackerFactoryRegistration } from '../../../services/debug/common/debugService.js';
 
 interface PersistedDebugState {
 	readonly version: 2;
@@ -66,7 +62,7 @@ interface PersistedBreakpoint {
 }
 
 interface DebugSessionRecord {
-	readonly session: DebugAdapterSession;
+	readonly session: DebugSession;
 	readonly listener: DisposableStore;
 	readonly postDebugTask: string | undefined;
 	completion?: Promise<void>;
@@ -76,6 +72,7 @@ const EMPTY_STATE: PersistedDebugState = Object.freeze({ version: 2, breakpoints
 
 /** Workspace Debug composition over generic DAP processes. */
 export class DebugService extends Disposable implements IDebugService {
+	readonly replModel: ReplModel;
 	private readonly debugger: Debugger;
 	private readonly configurationsEmitter = this._register(new Emitter<readonly IDebugConfiguration[]>());
 	private readonly breakpointsEmitter = this._register(new Emitter<readonly DebugBreakpoint[]>());
@@ -129,7 +126,7 @@ export class DebugService extends Disposable implements IDebugService {
 		@ITerminalProcessService private readonly terminalProcesses: ITerminalProcessService,
 		@IStorageService storage: IStorageService,
 		@ITaskService private readonly tasks: ITaskService,
-		@IDebugAdapterFactorySource private readonly adapters: DebugAdapterFactorySource,
+		@IAdapterManager private readonly adapters: IAdapterManager,
 		@ILogService private readonly logService: ILogService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IInstantiationService instantiationService: IInstantiationService,
@@ -179,6 +176,7 @@ export class DebugService extends Disposable implements IDebugService {
 		}));
 		this._register(workspace.onDidChangeWorkspace(() => { this.workspaceGeneration++; this.cancelPendingDescriptors(); this.refreshGeneration += 1; this.setLaunchDocument(Object.freeze([]), Object.freeze([])); void this.stopAll(); }));
 		this._register(toDisposable(() => { this.cancelPendingDescriptors(); this.configurationProviders.clear(); this.trackerFactories.clear(); for (const session of this.preparingSessions.values()) { session.dispose(); } this.preparingSessions.clear(); for (const record of this.sessionRecords.values()) { record.listener.dispose(); record.session.dispose(); } this.sessionRecords.clear(); }));
+		this.replModel = this._register(new ReplModel(this));
 	}
 
 	get configurations() { return this.currentConfigurations; }
@@ -514,7 +512,7 @@ export class DebugService extends Disposable implements IDebugService {
 		if (generation !== this.workspaceGeneration || this.isDisposed) throw new Error(localize('configurationResolver.workspaceChanged', 'The workspace changed while resolving the configuration. Run it again.'));
 		let initializingSession: IDebugSession | undefined;
 		const acceptsBreakpointEvents = (): boolean => !this.isDisposed && workspaceGeneration === this.workspaceGeneration && initializingSession !== undefined && !['terminated', 'error'].includes(initializingSession.state);
-		const session = await DebugAdapterSession.start({
+		const session = await DebugSession.start({
 			configuration: current, sessionOptions,
 			resolvedConfiguration: factory?.createDebugAdapterDescriptor ? { ...resolvedConfiguration, adapter: undefined } : resolvedConfiguration,
 			processService: this.processes,
@@ -825,7 +823,7 @@ export class DebugService extends Disposable implements IDebugService {
 	private breakpointStateChanged(): void {
 		this.breakpointsEmitter.fire(this.allBreakpoints());
 		this.persistState();
-		for (const session of this.sessions) void (session as DebugAdapterSession).syncBreakpoints().catch(error => this.reportError(error));
+		for (const session of this.sessions) void (session as DebugSession).syncBreakpoints().catch(error => this.reportError(error));
 	}
 
 	addFunctionBreakpoint(options: IFunctionBreakpointOptions): void {
@@ -915,7 +913,7 @@ export class DebugService extends Disposable implements IDebugService {
 		this.breakpointsEmitter.fire(this.allBreakpoints());
 	}
 
-	private finishSession(session: DebugAdapterSession): Promise<void> {
+	private finishSession(session: DebugSession): Promise<void> {
 		const record = this.sessionRecords.get(session.id);
 		if (!record) return Promise.resolve();
 		// Stop and adapter exit share the same release and post-task completion.
@@ -1331,22 +1329,15 @@ function toExtensionDebugConfiguration(configuration: IDebugConfiguration): Debu
 }
 
 registerWorkbenchServiceContribution({
-	service: IDebugAdapterFactorySource,
-	dependencies: [],
-	install: () => DebugAdapterFactoriesRegistry,
-});
-
-registerWorkbenchServiceContribution({
 	service: IDebugService,
 	dependencies: [
 		IExtensionService, IFileService, IWorkspaceContextService, IDebugAdapterProcessService,
 		ITerminalService, ITerminalProfileResolverService, ITerminalProcessService,
-		IStorageService, ITaskService, IDebugAdapterFactorySource, ILogService, IConfigurationResolverService,
+		IStorageService, ITaskService, IAdapterManager, ILogService, IConfigurationResolverService,
 		IConfigurationService, IEditorService, IEditorGroupsService,
 	],
 	install: context => {
 		const service = context.register(context.container.createInstance(DebugService));
-		context.container.registerInstance(IDebugConsoleService, context.register(new DebugConsoleService(service)));
 		return service;
 	},
 });

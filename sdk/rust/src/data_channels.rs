@@ -42,10 +42,10 @@ impl DataChannels {
         };
         self.registrations.insert(
             id,
-            Registration {
+            Registration::new(
                 descriptor,
-                operation: "receiveData".into(),
-                handler: Arc::new(move |payload, token| {
+                "receiveData",
+                Arc::new(move |payload, token| {
                     let request = serde_json::from_value(payload).map_err(|_| {
                         ExtensionError::invalid_request("invalid capability request")
                     })?;
@@ -53,7 +53,7 @@ impl DataChannels {
                         ExtensionError::new(HostErrorCode::Internal, "invalid capability response")
                     })
                 }),
-            },
+            ),
         );
         Ok(())
     }

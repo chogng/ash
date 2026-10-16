@@ -3,7 +3,7 @@ import { Schemas } from '../../../../base/common/network.js';
 import { localize } from '../../../../nls.js';
 import type { ILogService } from '../../../../platform/log/common/log.js';
 import type { IUriIdentityService } from '../../../../platform/uriIdentity/common/uriIdentity.js';
-import type { IDebugSource } from '../../../services/debug/common/debugService.js';
+import type { IDebugSource } from './debug.js';
 
 /** Reference-backed sources belong to their live session, even when the adapter supplies a path. */
 export function getUriFromSource(raw: IDebugSource, path: string | undefined, sessionId: string, uriIdentityService: IUriIdentityService, logService: ILogService): URI {

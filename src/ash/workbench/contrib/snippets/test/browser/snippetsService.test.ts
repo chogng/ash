@@ -1,3 +1,4 @@
+import { AdapterManager } from '../../../debug/browser/debugAdapterManager.js';
 import '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -261,7 +262,7 @@ function createFixture(initial: Record<string, unknown>, duplicateResource = fal
 
 		languageService: languages,
 		languageConfigurationService: features.languageConfigurationService,
-	}, createEmptyTestLanguagePacks()));
+	}, createEmptyTestLanguagePacks(), resources.add(new AdapterManager())));
 	services.registerInstance(IExtensionService, extensions);
 	services.registerInstance(ILanguageFeaturesService, features);
 	const registration = getSingletonServiceDescriptors().find(([id]) => id === ISnippetsService)![1];

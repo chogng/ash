@@ -1,6 +1,5 @@
-import { normalizeDebugAdapterDescriptor } from './debugAdapterFactory.js';
+import { normalizeDebugAdapterDescriptor, type IDebugCompound, type IDebugConfiguration, type IResolvedDebugConfiguration } from '../common/debug.js';
 import { parseJsonc } from "../../../../base/common/jsonc.js";
-import { type IDebugCompound, type IDebugConfiguration, type IResolvedDebugConfiguration } from "./debugService.js";
 
 const MAX_CONFIGURATIONS = 64;
 

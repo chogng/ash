@@ -11,6 +11,7 @@ import { cornerRadiusSmall } from '../../../src/ash/platform/theme/common/sizes/
 import { ITextModelService } from '../../../src/ash/editor/common/services/resolverService.js';
 import { TextModelResolverService } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResolverService.js';
 import { createLanguageExtensions } from './languageExtensions.js';
+import { AdapterManager } from '../../../src/ash/workbench/contrib/debug/browser/debugAdapterManager.js';
 import { ContextKeyService, IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { IMarkerService } from '../../../src/ash/platform/markers/common/markers.js';
 import { MarkerService } from '../../../src/ash/platform/markers/common/markerService.js';
@@ -137,7 +138,7 @@ const languageConfigurationService = disposables.add(new LanguageConfigurationSe
 const languageFeaturesService = disposables.add(new LanguageFeaturesService());
 const syntaxTheme = disposables.add(new TestThemeService(darkColorTheme));
 const library = disposables.add(new TreeSitterLibraryService(await rustSyntaxFixture()));
-const extensions = disposables.add(await createLanguageExtensions({ languageService, languageConfigurationService }));
+const extensions = disposables.add(await createLanguageExtensions({ languageService, languageConfigurationService }, disposables.add(new AdapterManager())));
 const snippets = disposables.add(new SnippetsService(extensions));
 disposables.add(new SnippetCompletionProvider(snippets, languageFeaturesService));
 await extensions.start();

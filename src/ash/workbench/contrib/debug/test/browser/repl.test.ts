@@ -1,13 +1,62 @@
 import assert from "node:assert/strict";
-import { test } from "mocha";
+import { suite, test } from "mocha";
 import { Emitter, Event } from "../../../../../base/common/event.js";
 import { Disposable } from "../../../../../base/common/lifecycle.js";
-import type { DebugEvaluateContext, DebugSessionState, IDebugConfiguration, IDebugEvaluateResult, IDebugService, IDebugSession } from "../../common/debugService.js";
-import { DebugConsoleService } from "../../browser/debugConsoleService.js";
+import type { DebugEvaluateContext, DebugSessionState, IDebugConfiguration, IDebugEvaluateResult, IDebugService, IDebugSession } from "../../common/debug.js";
+import { ReplModel } from "../../common/replModel.js";
+import { mock } from 'node:test';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 
-test("DebugConsoleService captures output while hidden, evaluates, and retains terminated sessions", async () => {
+suite('Debug Console output batching', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('ReplModel batches a burst without delaying retained output or session changes', () => {
+		using debug = new FakeDebugService();
+		using consoleService = new ReplModel(debug as unknown as IDebugService);
+		const session = debug.addSession();
+		let notifications = 0;
+		using listener = consoleService.onDidChange(() => notifications++);
+		mock.timers.enable({ apis: ['setTimeout'] });
+		try {
+			for (let index = 0; index < 200; index++) session.emitOutput(`line-${index}\n`);
+			assert.equal(consoleService.activeSession?.output, Array.from({ length: 200 }, (_, index) => `line-${index}\n`).join(''));
+			assert.equal(notifications, 0, 'A DAP batch must not trigger a render per message');
+			mock.timers.tick(16);
+			assert.equal(notifications, 1);
+			session.emitOutput('tail\n');
+			debug.finishSession();
+			assert.equal(consoleService.activeSession?.state, 'terminated');
+			assert.ok(consoleService.activeSession?.output.endsWith('tail\n'));
+			assert.equal(notifications, 2);
+			mock.timers.tick(16);
+			assert.equal(notifications, 2, 'Publishing the state already includes the pending output');
+		} finally { mock.timers.reset(); }
+	});
+
+	test('ReplModel cancels pending output notifications on clear and disposal', () => {
+		using debug = new FakeDebugService();
+		const consoleService = new ReplModel(debug as unknown as IDebugService);
+		const session = debug.addSession();
+		let notifications = 0;
+		using listener = consoleService.onDidChange(() => notifications++);
+		mock.timers.enable({ apis: ['setTimeout'] });
+		try {
+			session.emitOutput('before clear');
+			consoleService.clear();
+			assert.equal(consoleService.activeSession?.output, '');
+			assert.equal(notifications, 1);
+			session.emitOutput('before disposal');
+			consoleService.dispose();
+			mock.timers.tick(16);
+			assert.equal(notifications, 1);
+		} finally { consoleService.dispose(); mock.timers.reset(); }
+	});
+
+});
+
+test("ReplModel captures output while hidden, evaluates, and retains terminated sessions", async () => {
 	using debug = new FakeDebugService();
-	using consoleService = new DebugConsoleService(debug as unknown as IDebugService);
+	using consoleService = new ReplModel(debug as unknown as IDebugService);
 	const session = debug.addSession();
 
 	session.emitOutput("adapter ready\n");

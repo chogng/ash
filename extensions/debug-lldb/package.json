@@ -1,0 +1,96 @@
+{
+  "name": "debug-lldb",
+  "publisher": "ash",
+  "version": "1.0.0",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "engines": {
+    "vscode": "*"
+  },
+  "ashRuntime": {
+    "kind": "rust",
+    "entrypoint": "ash-debug-lldb"
+  },
+  "activationEvents": [
+    "onDebug:lldb",
+    "onDebugResolve:lldb",
+    "onDebug:lldb-dap",
+    "onDebugInitialConfigurations",
+    "onDebugResolve:lldb-dap",
+    "onCommand:ash.debug-lldb.install",
+    "onCommand:ash.debug-lldb.cancelInstall"
+  ],
+  "contributes": {
+    "debuggers": [
+      {
+        "type": "lldb",
+        "label": "CodeLLDB",
+        "languages": [
+          "rust",
+          "c",
+          "cpp"
+        ]
+      },
+      {
+        "type": "lldb-dap",
+        "label": "LLDB",
+        "languages": [
+          "rust",
+          "c",
+          "cpp"
+        ]
+      }
+    ],
+    "commands": [
+      {
+        "command": "ash.debug-lldb.install",
+        "title": "%command.install%"
+      },
+      {
+        "command": "ash.debug-lldb.cancelInstall",
+        "title": "%command.cancel%"
+      }
+    ],
+    "configuration": {
+      "title": "LLDB",
+      "properties": {
+        "debug.lldb.codeLldbPath": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "description": "%setting.codeLldbPath%"
+        },
+        "debug.lldb.codeLldbArgs": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "scope": "resource",
+          "description": "%setting.codeLldbArgs%"
+        },
+        "debug.lldb.runtimeDirectory": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "%setting.runtimeDirectory%"
+        },
+        "debug.lldb.adapterPath": {
+          "type": "string",
+          "default": "lldb-dap",
+          "description": "%setting.adapterPath%",
+          "scope": "resource"
+        },
+        "debug.lldb.adapterArgs": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "description": "%setting.adapterArgs%",
+          "scope": "resource"
+        }
+      }
+    }
+  }
+}

@@ -264,12 +264,18 @@ impl<E: Extension> Runtime<E> {
                         }),
                         data_channels: crate::data_channels::DataChannels::default(),
                         commands: Commands::default(),
+                        debug: crate::debug::Debug::default(),
                         scm: crate::scm::SourceControl::default(),
                         terminal: crate::terminal::Terminal::default(),
                         languages: Languages::default(),
                         editors: crate::editors::Editors::default(),
                         workspace: crate::workspace::Workspace::default(),
-                        window: Window::new(self.writer.clone(), fence, self.options.protocol),
+                        window: Window::new(
+                            self.writer.clone(),
+                            fence,
+                            self.options.protocol,
+                            self.services.bound(fence),
+                        ),
                         activation: params.clone(),
                         environment: self.environment.clone().unwrap_or_default(),
                     };
@@ -399,7 +405,7 @@ impl<E: Extension> Runtime<E> {
                     HostErrorCode::RegistrationNotFound,
                     "registration not found",
                 )),
-                Some(registration) if registration.operation != params.operation => {
+                Some(registration) if !registration.handlers.contains_key(&params.operation) => {
                     Some(ExtensionError::new(
                         HostErrorCode::OperationNotSupported,
                         "operation is not supported by this registration",
@@ -411,7 +417,12 @@ impl<E: Extension> Runtime<E> {
         if let Some(error) = failure {
             return self.respond(&request, Err(error));
         }
-        let registration = registration.expect("registration was checked before dispatch");
+        let handler = registration
+            .expect("registration was checked before dispatch")
+            .handlers
+            .get(&params.operation)
+            .cloned()
+            .expect("operation was checked before dispatch");
         let token = CancellationToken::new(params.deadline_unix_millis, context);
         let callback_token = token.clone();
         let writer = self.writer.clone();
@@ -421,7 +432,7 @@ impl<E: Extension> Runtime<E> {
             .spawn(move || {
                 let result = callback_token
                     .check_cancelled()
-                    .and_then(|()| (registration.handler)(params.payload, callback_token.clone()))
+                    .and_then(|()| handler(params.payload, callback_token.clone()))
                     .map(|payload| HostSuccess::Invoked(InvokeResult { payload }));
                 callback_token.cancel(CancelReason::Shutdown);
                 let mut response = ExtensionHostResponse {
@@ -470,6 +481,9 @@ impl<E: Extension> Runtime<E> {
     }
 
     fn deactivate(&mut self) -> Result<(), RuntimeError> {
+        // The input loop is about to join extension work. Unblock reverse calls
+        // first: their replies cannot be consumed while this loop is joining.
+        self.services.close();
         let mut outcome = Ok(());
         for invocation in self.invocations.values() {
             invocation.token.cancel(CancelReason::Shutdown);

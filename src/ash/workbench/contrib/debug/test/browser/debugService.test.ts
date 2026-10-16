@@ -1,11 +1,11 @@
 import { MergedEnvironmentVariableCollection } from '../../../../../platform/terminal/common/environmentVariableCollection.js';
-import { IEnvironmentVariableService } from '../../../../contrib/terminal/common/environmentVariable.js';
-import { ITerminalContributionService, ITerminalProfileResolverService, ITerminalProfileService } from '../../../terminal/common/terminal.js';
+import { IEnvironmentVariableService } from '../../../terminal/common/environmentVariable.js';
+import { ITerminalContributionService, ITerminalProfileResolverService, ITerminalProfileService } from '../../../../services/terminal/common/terminal.js';
 import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
-import { TerminalProfileService } from '../../../../contrib/terminal/browser/terminalProfileService.js';
-import { BrowserTerminalProfileResolverService } from '../../../../contrib/terminal/browser/terminalProfileResolverService.js';
-import { IEditorService } from '../../../editor/common/editorService.js';
-import { IEditorGroupsService } from '../../../editor/common/editorGroupsService.js';
+import { TerminalProfileService } from '../../../terminal/browser/terminalProfileService.js';
+import { BrowserTerminalProfileResolverService } from '../../../terminal/browser/terminalProfileResolverService.js';
+import { IEditorService } from '../../../../services/editor/common/editorService.js';
+import { IEditorGroupsService } from '../../../../services/editor/common/editorGroupsService.js';
 import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
 import { ConfigurationRegistry, ConfigurationScope, Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../../platform/registry/common/platform.js';
@@ -14,43 +14,41 @@ import { ITextModelService } from '../../../../../editor/common/services/resolve
 import { IUriIdentityService } from '../../../../../platform/uriIdentity/common/uriIdentity.js';
 import { UriIdentityService } from '../../../../../platform/uriIdentity/common/uriIdentityService.js';
 import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
-import { DebugContentProvider } from '../../../../contrib/debug/common/debugContentProvider.js';
-import { getUriFromSource } from '../../../../contrib/debug/common/debugSource.js';
-import { DebugConsoleService } from '../../browser/debugConsoleService.js';
+import { DebugContentProvider } from '../../common/debugContentProvider.js';
+import { getUriFromSource } from '../../common/debugSource.js';
 import { MainThreadDebugService } from '../../../../api/browser/mainThreadDebugService.js';
 import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../../../platform/agentHost/common/extensionHostApi.js';
 import { registerTestWorkbenchInteractionServices, workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
-import { TaskService } from '../../../../contrib/tasks/browser/taskService.js';
-import { TerminalService } from '../../../../contrib/terminal/browser/terminalService.js';
+import { TaskService } from '../../../tasks/browser/taskService.js';
+import { TerminalService } from '../../../terminal/browser/terminalService.js';
 import { IMarkerService } from '../../../../../platform/markers/common/markers.js';
 import { MarkerService } from '../../../../../platform/markers/common/markerService.js';
-import { IExtensionService } from '../../../extensions/common/extensionService.js';
+import { IExtensionService } from '../../../../services/extensions/common/extensionService.js';
 import { normalizeExtensionCatalog } from '../../../../../platform/extensions/common/extensionApi.js';
 import { ExtensionResourceLoaderService } from '../../../../../platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import { createHash } from 'node:crypto';
 import { registerTestExtensionService, TestExtensionService } from '../../../../test/common/testExtensionServices.js';
-import { TestConfigurationService as WorkbenchConfigurationService } from '../../../configuration/test/common/testServices.js';
+import { TestConfigurationService as WorkbenchConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IRendererHostService } from '../../../../../platform/renderer/common/rendererHost.js';
 import { createDisconnectedRendererApi } from '../../../../browser/rendererApi.js';
-import { BrowserPathService } from '../../../path/browser/pathService.js';
+import { BrowserPathService } from '../../../../services/path/browser/pathService.js';
 import { IPathService } from '../../../../../platform/path/common/pathService.js';
 import { OperatingSystem } from '../../../../../base/common/platform.js';
-import { DebugConfigurationProviderTriggerKind, DebugConsoleMode, IDebugService, type DebugConfiguration, type IDebugConfiguration } from '../../common/debugService.js';
-import '../../../../contrib/debug/browser/debugActions.js';
-import { SELECT_AND_START_ID } from '../../../../contrib/debug/common/debug.js';
+import { DebugConfigurationProviderTriggerKind, DebugConsoleMode, IDebugService, type DebugConfiguration, type IDebugConfiguration, SELECT_AND_START_ID, IAdapterManager, createStaticDebugAdapterFactory } from '../../common/debug.js';
+import '../../browser/debugActions.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { createExtensionHostDebugAdapterFactory, createExtensionHostDebugAdapterTrackerFactory } from '../../../../api/browser/extensionHostWorkflowBridge.js';
 import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
-import { CommandService } from '../../../commands/common/commandService.js';
+import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { resetNlsResolver } from '../../../../../nls.js';
-import { initializeTestLocalization } from '../../../localization/test/common/localizationTestUtils.js';
+import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
-import { WorkspaceContextService } from '../../../workspaces/browser/workspaceContextService.js';
+import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
 import { ITerminalProcessService } from '../../../../../platform/terminal/common/terminal.js';
-import { ConfigurationResolverService } from '../../../configurationResolver/browser/configurationResolverService.js';
-import { IConfigurationResolverService } from '../../../configurationResolver/common/configurationResolver.js';
+import { ConfigurationResolverService } from '../../../../services/configurationResolver/browser/configurationResolverService.js';
+import { IConfigurationResolverService } from '../../../../services/configurationResolver/common/configurationResolver.js';
 import { SyncDescriptor } from '../../../../../platform/instantiation/common/descriptors.js';
 import { type IFileSystemProvider, type IFileWriteOptions, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
 import { createTestFileService } from '../../../../test/common/testEditorServices.js';
@@ -60,7 +58,6 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { ITaskService } from '../../../../services/tasks/common/taskService.js';
-import { IDebugAdapterFactorySource } from '../../common/debugAdapterFactory.js';
 import assert from "node:assert/strict";
 import { suite, test } from "mocha";
 import { Emitter, Event } from "../../../../../base/common/event.js";
@@ -72,10 +69,10 @@ import { FileKind, FileNotFoundError, type IFileBytes, IFileService, type IFileS
 import { IStorageService, type IStorageValueChangeEvent, type IWillSaveStateEvent, StorageScope, StorageTarget, type StorageValue, WillSaveStateReason } from "../../../../../platform/storage/common/storage.js";
 import { IWorkspaceContextService } from "../../../../../platform/workspace/common/workspace.js";
 import { type ITaskRun, type IWorkspaceTask, type TaskProvider, type TaskProviderRegistration, type TaskRunStatus } from "../../../../services/tasks/common/taskService.js";
-import { ITerminalService } from "../../../terminal/browser/terminal.js";
-import { DebugAdapterFactoryRegistry, createStaticDebugAdapterFactory } from "../../common/debugAdapterFactory.js";
-import { DebugService } from "../../../../contrib/debug/browser/debugService.js";
-import { DebugAdapterSession } from "../../browser/debugAdapterSession.js";
+import { ITerminalService } from "../../../../services/terminal/browser/terminal.js";
+import { AdapterManager } from "../../browser/debugAdapterManager.js";
+import { DebugService } from "../../browser/debugService.js";
+import { DebugSession } from "../../browser/debugSession.js";
 import { JSDOM } from 'jsdom';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 
@@ -94,7 +91,7 @@ test('DebugService exposes the active session state for the pause shortcut and c
 	const contextKeys = resources.add(new ContextKeyService());
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
-	using adapters = new DebugAdapterFactoryRegistry();
+	using adapters = new AdapterManager();
 	using service = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters, contextKeys);
 	assert.equal(contextKeys.getContext().getValue('debugState'), 'inactive');
 	await service.refresh();
@@ -120,7 +117,7 @@ test("DebugService persists workspace breakpoints and watch expressions", async 
 	using resources = new DisposableStore();
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
-	using adapters = new DebugAdapterFactoryRegistry();
+	using adapters = new AdapterManager();
 	using first = createDebugService(resources, new FakeFileService(root), workspace, processes, {} as ITerminalService, storage, tasks, adapters);
 	first.toggleBreakpoint(resource, 7);
 	first.updateBreakpoint(first.breakpoints[0]!.id, { enabled: false, condition: 'value > 0', hitCondition: '>= 3', logMessage: ' value = {value} ' });
@@ -145,7 +142,7 @@ test('DebugService reloads external state, preserves pending edits and releases 
 	using resources = new DisposableStore();
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
-	using adapters = new DebugAdapterFactoryRegistry();
+	using adapters = new AdapterManager();
 	const root = URI.file('/workspace');
 	using service = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, storage, tasks, adapters);
 	const externalState = (expression: string) => JSON.stringify({ version: 2, breakpoints: [], functionBreakpoints: [], dataBreakpoints: [], watchExpressions: [expression], exceptionBreakpoints: {} });
@@ -168,7 +165,7 @@ test('DebugService rejects persisted state with an invalid Debug schema', () => 
 	using resources = new DisposableStore();
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
-	using adapters = new DebugAdapterFactoryRegistry();
+	using adapters = new AdapterManager();
 	const root = URI.file('/workspace');
 	storage.store('memento/debug.workspace', '{"version":99}', StorageScope.WORKSPACE, StorageTarget.USER);
 	assert.throws(() => createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, storage, tasks, adapters), /Debug workspace state version is unsupported/);
@@ -180,7 +177,7 @@ test('DebugService persists durable breakpoint families and retires session addr
 	using resources = new DisposableStore();
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
-	using adapters = new DebugAdapterFactoryRegistry();
+	using adapters = new AdapterManager();
 	using service = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, storage, tasks, adapters);
 	await service.refresh();
 	service.addFunctionBreakpoint({ name: 'app::worker', condition: ' counter > 0 ', hitCondition: '>= 2' });
@@ -205,7 +202,7 @@ test('DebugService persists durable breakpoint families and retires session addr
 	assert.throws(() => service.addDataBreakpoint({ ...options, accessTypes: ['write'] }), /Unsupported data/);
 	assert.throws(() => service.addInstructionBreakpoint({ instructionReference: '0x1000', offset: 1.5 }), /integer/);
 	assert.throws(() => service.updateBreakpoint(service.functionBreakpoints[0]!.id, { offset: 4 }), /Only instruction/);
-	await (session as DebugAdapterSession).syncBreakpoints();
+	await (session as DebugSession).syncBreakpoints();
 	const last = (command: string) => processes.requests.filter(request => request.command === command).at(-1)?.arguments;
 	assert.deepEqual(last('setFunctionBreakpoints'), { breakpoints: [{ name: 'app::worker', condition: ' counter > 0 ', hitCondition: '>= 2' }] });
 	assert.deepEqual(last('setDataBreakpoints'), {
@@ -247,7 +244,7 @@ test('DebugService migrates source breakpoint storage without losing expressions
 	using resources = new DisposableStore();
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
-	using adapters = new DebugAdapterFactoryRegistry();
+	using adapters = new AdapterManager();
 	using service = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, storage, tasks, adapters);
 	assert.equal(service.breakpoints[0]?.condition, 'x > 0');
 	assert.equal(service.breakpoints[0]?.enabled, false);
@@ -262,7 +259,7 @@ test("DebugService starts compounds, runs launch lifecycle tasks, and owns multi
 	using resources = new DisposableStore();
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
-	using adapters = new DebugAdapterFactoryRegistry();
+	using adapters = new AdapterManager();
 	using service = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters);
 	await service.refresh();
 	const sessions = await service.startCompound(service.compounds[0]!);
@@ -284,7 +281,7 @@ test("DebugService resolves adapter executables from the canonical factory sourc
 	using resources = new DisposableStore();
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
-	using adapters = new DebugAdapterFactoryRegistry();
+	using adapters = new AdapterManager();
 	using registration = adapters.registerFactories([createStaticDebugAdapterFactory("contributed", "Contributed", "extension:demo", { program: "demo-adapter", arguments: ["--stdio"] })]);
 	using service = createDebugService(resources, new FakeFileService(root, document), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters);
 
@@ -298,7 +295,7 @@ test('DebugService launches and restarts supplied test configurations without la
 	using resources = new DisposableStore();
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
-	using adapters = new DebugAdapterFactoryRegistry();
+	using adapters = new AdapterManager();
 	using service = createDebugService(resources, new FakeFileService(root, '{"version":"0.2.0","configurations":[]}'), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters);
 	await service.refresh();
 	const configuration = { id: 'test-launch', dirId: 'workspace', name: 'Debug test', type: 'lldb-dap', request: 'launch' as const, adapter: { program: 'lldb-dap', arguments: [] }, arguments: { program: 'test-binary', args: ['--exact', 'generated_case'], cwd: root.fsPath } };
@@ -479,7 +476,7 @@ async function resolveTerminalProfile(selection: import('../../../../../platform
 	};
 }
 
-function createDebugService(owner: DisposableStore, files: IFileSystemProvider, workspace: IWorkspaceContextService, processes: IDebugAdapterProcessService | undefined, terminals: ITerminalService, storage: IStorageService, tasks: ITaskService, adapters: DebugAdapterFactoryRegistry, contextKeys = owner.add(new ContextKeyService()), quickInput?: IQuickInputService, extensions?: TestExtensionService, options?: { editor?: IEditorService; groups?: IEditorGroupsService; configuration?: IConfigurationService; executionOS?: OperatingSystem; }): DebugService {
+function createDebugService(owner: DisposableStore, files: IFileSystemProvider, workspace: IWorkspaceContextService, processes: IDebugAdapterProcessService | undefined, terminals: ITerminalService, storage: IStorageService, tasks: ITaskService, adapters: AdapterManager, contextKeys = owner.add(new ContextKeyService()), quickInput?: IQuickInputService, extensions?: TestExtensionService, options?: { editor?: IEditorService; groups?: IEditorGroupsService; configuration?: IConfigurationService; executionOS?: OperatingSystem; }): DebugService {
 	const services = owner.add(new InstantiationService(new ServiceCollection([IPathService, testPathService(workspace, options?.executionOS)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, options?.configuration ?? new SyncDescriptor(WorkbenchConfigurationService)],
 		[IFileService, owner.add(createTestFileService(files))],
 		[IUriIdentityService, new SyncDescriptor(UriIdentityService)],
@@ -491,7 +488,7 @@ function createDebugService(owner: DisposableStore, files: IFileSystemProvider, 
 		}], [ITerminalService, terminals],
 		[IStorageService, storage],
 		[ITaskService, tasks],
-		[IDebugAdapterFactorySource, adapters],
+		[IAdapterManager, adapters],
 		[ILogService, new NullLoggerService()],
 		[IContextKeyService, contextKeys],
 	)));
@@ -511,7 +508,7 @@ test('DebugService rejects missing process registration and reports an explicitl
 	const files = new FakeFileService(root);
 	const workspace = workspaceService(root);
 	using tasks = new FakeTaskService();
-	using adapters = new DebugAdapterFactoryRegistry();
+	using adapters = new AdapterManager();
 	using missing = new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], [IFileService, resources.add(createTestFileService(files))], [IWorkspaceContextService, workspace]));
 	assert.throws(() => missing.createInstance(DebugService), /Unknown service: debugAdapterProcessService/);
 	using service = createDebugService(resources, files, workspace, undefined, {} as ITerminalService, new TestStorageService(), tasks, adapters);
@@ -524,7 +521,7 @@ test('DebugService waits for editor save participants before providers, tasks an
 	const root = URI.file('/workspace');
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
-	using adapters = new DebugAdapterFactoryRegistry();
+	using adapters = new AdapterManager();
 	const entered = new DeferredPromise<void>();
 	const saved = new DeferredPromise<void>();
 	const phases: string[] = [];
@@ -553,7 +550,7 @@ test('DebugService prevents launch after failed, cancelled or retired editor sav
 		using workspace = new WorkspaceContextService({ id: 'workspace', uri: root });
 		using tasks = new FakeTaskService();
 		using processes = new FakeDebugAdapterProcessService();
-		using adapters = new DebugAdapterFactoryRegistry();
+		using adapters = new AdapterManager();
 		const editors: IEditorService = {
 			...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { }, saveAll: async () => {
 				if (outcome === 'failed') { throw new Error('Save failed'); }
@@ -573,7 +570,7 @@ test('DebugService saveBeforeStart policies select files and active untitled Sav
 		const root = URI.file('/workspace');
 		using tasks = new FakeTaskService();
 		using processes = new FakeDebugAdapterProcessService();
-		using adapters = new DebugAdapterFactoryRegistry();
+		using adapters = new AdapterManager();
 		const registry = new ConfigurationRegistry();
 		for (const definition of Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getRegisteredConfigurations().filter(definition => definition.key.startsWith('terminal.integrated.'))) {
 			registry.registerConfiguration({ key: definition.key, defaultValue: definition.defaultValue, parse: definition.parse, serialize: definition.serialize, scope: definition.scope, schema: definition.schema });
@@ -600,7 +597,7 @@ test('DebugService suppressSaveBeforeStart bypasses saves and parent sessions do
 	const root = URI.file('/workspace');
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
-	using adapters = new DebugAdapterFactoryRegistry();
+	using adapters = new AdapterManager();
 	let saves = 0;
 	const editors: IEditorService = { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { }, saveAll: async () => { saves++; return { success: true, editors: [] }; } };
 	using service = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters, undefined, undefined, undefined, { editor: editors });
@@ -623,7 +620,7 @@ for (const { root, os, folderPath, separator } of [
 		using resources = new DisposableStore();
 		using tasks = new FakeTaskService();
 		using processes = new FakeDebugAdapterProcessService();
-		using adapters = new DebugAdapterFactoryRegistry();
+		using adapters = new AdapterManager();
 		using service = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters, undefined, undefined, undefined, { executionOS: os });
 		const configuration = { id: 'resolved', name: 'Resolved', type: 'example', request: 'launch' as const, adapter: { program: '${workspaceFolder}${pathSeparator}adapter', arguments: ['${env:HOME}'], cwd: '${workspaceFolder}${/}src', env: { MODE: '${env:HOME}', LITERAL: '$HOME', TERM_PROGRAM: null } }, arguments: { cwd: '${workspaceFolder}', args: ['${workspaceFolderBasename}', '${workspaceFolder:project}${pathSeparator}app', '${env:HOME}', '${env:MISSING}'] } };
 		const session = await service.startDebugging(configuration);
@@ -646,7 +643,7 @@ test('DebugService rejects a missing folder before executing preLaunchTask or st
 	const root = URI.file('/workspace');
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
-	using adapters = new DebugAdapterFactoryRegistry();
+	using adapters = new AdapterManager();
 	using service = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters);
 	await assert.rejects(service.startDebugging({ id: 'invalid', name: 'Invalid', type: 'example', request: 'launch', adapter: { program: '${workspaceFolder:Missing}/adapter', arguments: [] }, arguments: {}, preLaunchTask: 'build' }));
 	assert.deepEqual({ tasks: tasks.ran, adapters: processes.started }, { tasks: [], adapters: [] });
@@ -658,7 +655,7 @@ test('DebugService cancels dispatch when the workspace changes during preLaunchT
 	using workspace = new WorkspaceContextService({ id: 'workspace', uri: root });
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
-	using adapters = new DebugAdapterFactoryRegistry();
+	using adapters = new AdapterManager();
 	const entered = new DeferredPromise<void>();
 	const finish = new DeferredPromise<void>();
 	const run = tasks.run.bind(tasks);
@@ -681,7 +678,7 @@ test('DebugService resolves command variables in the executable and task referen
 	const root = URI.file('/workspace');
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
-	using adapters = new DebugAdapterFactoryRegistry();
+	using adapters = new AdapterManager();
 	let calls = 0;
 	using commands = CommandsRegistry.registerMany([
 		{ id: 'debug.test.adapter', handler: (_accessor, value) => { assert.equal((value as Record<string, unknown>).type, 'example'); return `/adapter-${++calls}`; } },
@@ -706,7 +703,7 @@ test('DebugService uses the selected debugger command aliases once per start and
 	const root = URI.file('/workspace');
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
-	using adapters = new DebugAdapterFactoryRegistry();
+	using adapters = new AdapterManager();
 	let command = 'debug.test.alias.first';
 	let generation = 1;
 	let present = true;
@@ -754,7 +751,7 @@ test('DebugService cancels before preLaunchTask and adapter launch when command 
 	const root = URI.file('/workspace');
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
-	using adapters = new DebugAdapterFactoryRegistry();
+	using adapters = new AdapterManager();
 	using command = CommandsRegistry.register('debug.test.cancel', () => undefined);
 	using service = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters);
 	await assert.rejects(service.startDebugging({ id: 'cancel', name: 'Cancel', type: 'example', request: 'launch', adapter: { program: '${command:debug.test.cancel}', arguments: [] }, arguments: {}, preLaunchTask: 'build' }), isCancellationError);
@@ -767,7 +764,7 @@ test('DebugService cannot launch into a replacement workspace after a pending co
 	using workspace = new WorkspaceContextService({ id: 'workspace', uri: root });
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
-	using adapters = new DebugAdapterFactoryRegistry();
+	using adapters = new AdapterManager();
 	const entered = new DeferredPromise<void>();
 	const finish = new DeferredPromise<string>();
 	using command = CommandsRegistry.register('debug.test.pending', () => { void entered.complete(undefined); return finish.p; });
@@ -787,7 +784,7 @@ test('DebugService rejects an invalid resolved executable before task or process
 	const root = URI.file('/workspace');
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
-	using adapters = new DebugAdapterFactoryRegistry();
+	using adapters = new AdapterManager();
 	using command = CommandsRegistry.register('debug.test.empty', () => '');
 	using service = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters);
 	await assert.rejects(service.startDebugging({ id: 'invalid', name: 'Invalid', type: 'example', request: 'launch', adapter: { program: '${command:debug.test.empty}', arguments: [] }, arguments: {}, preLaunchTask: 'build' }), { message: '解析后的调试适配器可执行文件为空，或包含无效的进程参数。' });
@@ -799,7 +796,7 @@ test('DebugService resolves configured command inputs in adapter and launch data
 	const root = URI.file('/workspace');
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
-	using adapters = new DebugAdapterFactoryRegistry();
+	using adapters = new AdapterManager();
 	const dom = new JSDOM('<!doctype html><body></body>');
 	resources.add(toDisposable(() => dom.window.close()));
 	const context = resources.add(new ContextKeyService());
@@ -835,7 +832,7 @@ test('DebugService validates all compound references before running its pre-laun
 	const document = JSON.stringify({ version: '0.2.0', configurations: [], compounds: [{ name: 'Missing', configurations: [{ name: 'Launch', folder: 'Missing' }], preLaunchTask: 'prepare' }] });
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
-	using adapters = new DebugAdapterFactoryRegistry();
+	using adapters = new AdapterManager();
 	using service = createDebugService(resources, new FakeFileService(root, document), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters);
 	await service.refresh();
 	await assert.rejects(service.startCompound(service.compounds[0]!), /was not found/);
@@ -848,7 +845,7 @@ test('DebugService resolves Host-broker adapter descriptors only at dispatch and
 	using resources = new DisposableStore();
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
-	using adapters = new DebugAdapterFactoryRegistry();
+	using adapters = new AdapterManager();
 	using workspace = new WorkspaceContextService({ id: 'workspace', uri: root });
 	const calls: unknown[] = [];
 	using registration = adapters.registerFactories([createExtensionHostDebugAdapterFactory('hosted', 'extension:hosted', async (operation, payload, signal) => {
@@ -874,7 +871,7 @@ for (const result of ['succeeded', 'failed'] as const) {
 		using resources = new DisposableStore();
 		using tasks = new FakeTaskService();
 		using processes = new FakeDebugAdapterProcessService();
-		using adapters = new DebugAdapterFactoryRegistry();
+		using adapters = new AdapterManager();
 		using buildStatus = new Emitter<TaskRunStatus>();
 		const entered = new DeferredPromise<void>();
 		let buildResult: TaskRunStatus = 'running';
@@ -910,7 +907,7 @@ for (const change of ['workspace', 'factory', 'dispose'] as const) {
 		using resources = new DisposableStore();
 		using tasks = new FakeTaskService();
 		using processes = new FakeDebugAdapterProcessService();
-		using adapters = new DebugAdapterFactoryRegistry();
+		using adapters = new AdapterManager();
 		const entered = new DeferredPromise<AbortSignal>();
 		const result = new DeferredPromise<{ program: string; arguments: string[]; }>();
 		using registration = adapters.registerFactories([{ type: 'hosted', label: 'Hosted', sourceId: 'extension:hosted', createDebugAdapterDescriptor: async (_configuration, signal) => { void entered.complete(signal); return result.p; } }]);
@@ -933,7 +930,7 @@ test('unrelated provider retirement preserves a pending Debug configuration reso
 	using resources = new DisposableStore();
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
-	using adapters = new DebugAdapterFactoryRegistry();
+	using adapters = new AdapterManager();
 	const root = URI.file('/workspace');
 	using service = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters);
 	const entered = new DeferredPromise<AbortSignal>();
@@ -955,7 +952,7 @@ test('unrelated provider retirement preserves pending Debug configuration discov
 	using resources = new DisposableStore();
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
-	using adapters = new DebugAdapterFactoryRegistry();
+	using adapters = new AdapterManager();
 	const root = URI.file('/workspace');
 	using service = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters);
 	const entered = new DeferredPromise<AbortSignal>();
@@ -975,7 +972,7 @@ test('unrelated factory retirement preserves a pending Debug adapter descriptor'
 	using resources = new DisposableStore();
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
-	using adapters = new DebugAdapterFactoryRegistry();
+	using adapters = new AdapterManager();
 	const entered = new DeferredPromise<AbortSignal>();
 	const finish = new DeferredPromise<{ program: string; arguments: string[]; }>();
 	using factory = adapters.registerFactories([{ type: 'selected', label: 'Selected', sourceId: 'selected', createDebugAdapterDescriptor: async (_config, signal) => { void entered.complete(signal); return finish.p; } }]);
@@ -997,7 +994,7 @@ test('factory retirement during Debug session preparation prevents descriptor in
 	using resources = new DisposableStore();
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
-	using adapters = new DebugAdapterFactoryRegistry();
+	using adapters = new AdapterManager();
 	let calls = 0;
 	using factory = adapters.registerFactories([{ type: 'selected', label: 'Selected', sourceId: 'selected', createDebugAdapterDescriptor: async () => { calls++; return { program: 'selected-adapter', arguments: [] }; } }]);
 	const root = URI.file('/workspace');
@@ -1013,7 +1010,7 @@ test('DebugService keeps a pending launch alive across an unchanged discovery re
 	using resources = new DisposableStore();
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
-	using adapters = new DebugAdapterFactoryRegistry();
+	using adapters = new AdapterManager();
 	const entered = new DeferredPromise<AbortSignal>();
 	const result = new DeferredPromise<{ program: string; arguments: string[]; }>();
 	using registration = adapters.registerFactories([{ type: 'hosted', label: 'Hosted', sourceId: 'extension:hosted', createDebugAdapterDescriptor: async (_configuration, signal) => { void entered.complete(signal); return result.p; } }]);
@@ -1034,7 +1031,7 @@ test('DebugService closes a late initialized adapter instead of publishing it in
 	using resources = new DisposableStore();
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
-	using adapters = new DebugAdapterFactoryRegistry();
+	using adapters = new AdapterManager();
 	using workspace = new WorkspaceContextService({ id: 'workspace', uri: root });
 	const entered = new DeferredPromise<void>();
 	const release = new DeferredPromise<void>();
@@ -1062,7 +1059,7 @@ suite('Debug service release', () => {
 		using resources = new DisposableStore();
 		using tasks = new FakeTaskService();
 		using processes = new FakeDebugAdapterProcessService();
-		using adapters = new DebugAdapterFactoryRegistry();
+		using adapters = new AdapterManager();
 		using storage = new TestStorageService();
 		const closed: string[] = [];
 		const close = processes.close.bind(processes);
@@ -1082,7 +1079,7 @@ test('Debug configuration providers run around variable substitution and preserv
 	using resources = new DisposableStore();
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
-	using adapters = new DebugAdapterFactoryRegistry();
+	using adapters = new AdapterManager();
 	const root = URI.file('/workspace');
 	using service = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters);
 	const order: string[] = [];
@@ -1123,7 +1120,7 @@ test('Debug configuration templates exclude Dynamic providers and validate resul
 	using resources = new DisposableStore();
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
-	using adapters = new DebugAdapterFactoryRegistry();
+	using adapters = new AdapterManager();
 	const root = URI.file('/workspace');
 	using service = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters);
 	const template = { name: 'Generated', type: 'example', request: 'launch' as const, debugAdapter: { program: 'adapter' }, program: '${workspaceFolder}/app' };
@@ -1146,7 +1143,7 @@ for (const cancellation of ['undefined result', 'provider retirement', 'workspac
 		using resources = new DisposableStore();
 		using tasks = new FakeTaskService();
 		using processes = new FakeDebugAdapterProcessService();
-		using adapters = new DebugAdapterFactoryRegistry();
+		using adapters = new AdapterManager();
 		const root = URI.file('/workspace');
 		using workspace = new WorkspaceContextService({ id: 'workspace', uri: root });
 		using service = createDebugService(resources, new FakeFileService(root), workspace, processes, {} as ITerminalService, new TestStorageService(), tasks, adapters);
@@ -1170,7 +1167,7 @@ test('Debug configuration type redirection visits the new provider and bounds cy
 	using resources = new DisposableStore();
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
-	using adapters = new DebugAdapterFactoryRegistry();
+	using adapters = new AdapterManager();
 	const root = URI.file('/workspace');
 	using service = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters);
 	const calls: string[] = [];
@@ -1189,7 +1186,7 @@ test('Debug configuration template cancellation never enters an already canceled
 	using resources = new DisposableStore();
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
-	using adapters = new DebugAdapterFactoryRegistry();
+	using adapters = new AdapterManager();
 	const root = URI.file('/workspace');
 	using service = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters);
 	using providers = service.registerDebugConfigurationProviders([{ id: 'initial', type: 'example', triggerKind: DebugConfigurationProviderTriggerKind.Initial, provideDebugConfigurations: () => assert.fail('Canceled discovery must not enter extension code') }]);
@@ -1203,7 +1200,7 @@ test('Debug configuration redirection selects the contributed adapter without ex
 	using resources = new DisposableStore();
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
-	using adapters = new DebugAdapterFactoryRegistry();
+	using adapters = new AdapterManager();
 	using factories = adapters.registerFactories([
 		createStaticDebugAdapterFactory('example', 'Old', 'old', { program: 'old-adapter', arguments: [] }),
 		createStaticDebugAdapterFactory('redirected', 'New', 'new', { program: '${env:HOME}/adapter', arguments: ['${workspaceFolder}'] }),
@@ -1225,7 +1222,7 @@ test('Debug templates can obtain their adapter from a configuration resolver at 
 	using resources = new DisposableStore();
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
-	using adapters = new DebugAdapterFactoryRegistry();
+	using adapters = new AdapterManager();
 	const root = URI.file('/workspace');
 	const document = JSON.stringify({ version: '0.2.0', configurations: [{ name: 'Provided', type: 'provided', request: 'launch' }] });
 	using service = createDebugService(resources, new FakeFileService(root, document), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters);
@@ -1253,7 +1250,7 @@ for (const selection of ['accept', 'escape', 'workspace replacement'] as const) 
 		using workspace = new WorkspaceContextService({ id: 'workspace', uri: root });
 		using tasks = new FakeTaskService();
 		using processes = new FakeDebugAdapterProcessService();
-		using adapters = new DebugAdapterFactoryRegistry();
+		using adapters = new AdapterManager();
 		const dom = new JSDOM('<!doctype html><body></body>');
 		resources.add(toDisposable(() => dom.window.close()));
 		const context = resources.add(new ContextKeyService());
@@ -1307,7 +1304,7 @@ test('debug discovery and launch wait for the requested dormant provider before 
 	using resources = new DisposableStore();
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
-	using adapters = new DebugAdapterFactoryRegistry();
+	using adapters = new AdapterManager();
 	using extensions = new TestExtensionService();
 	const root = URI.file('/workspace');
 	using service = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters, undefined, undefined, extensions);
@@ -1344,7 +1341,7 @@ test('Debug configuration redirection activates its dormant provider and retains
 	using resources = new DisposableStore();
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
-	using adapters = new DebugAdapterFactoryRegistry();
+	using adapters = new AdapterManager();
 	using extensions = new TestExtensionService();
 	const root = URI.file('/workspace');
 	using service = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters, undefined, undefined, extensions);
@@ -1379,7 +1376,7 @@ test('workspace retirement during debug extension activation prevents provider i
 	using resources = new DisposableStore();
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
-	using adapters = new DebugAdapterFactoryRegistry();
+	using adapters = new AdapterManager();
 	using extensions = new TestExtensionService();
 	const root = URI.file('/workspace');
 	using workspace = new WorkspaceContextService({ id: 'workspace', uri: root });
@@ -1410,7 +1407,6 @@ suite('Extension debug session lifecycle', () => {
 			services.registerInstance(IPathService, testPathService(workspace));
 			services.registerSingleton(ICommandService, () => new CommandService(services));
 			services.registerInstance(ILogService, new NullLoggerService());
-			services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));
 			services.registerInstance(IMarkerService, resources.add(new MarkerService()));
 			registerTestExtensionService(resources, services);
 			services.registerInstance(ITerminalProcessService, createDisconnectedRendererApi().terminal);
@@ -1421,7 +1417,7 @@ suite('Extension debug session lifecycle', () => {
 			services.registerInstance(ITaskService, resources.add(services.createInstance(TaskService)));
 			const processes = resources.add(new FakeDebugAdapterProcessService());
 			services.registerInstance(IDebugAdapterProcessService, processes);
-			services.registerInstance(IDebugAdapterFactorySource, resources.add(new DebugAdapterFactoryRegistry()));
+			services.registerInstance(IAdapterManager, resources.add(new AdapterManager()));
 			if (!services.has(IEditorService)) services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } });
 			if (!services.has(IEditorGroupsService)) services.registerInstance(IEditorGroupsService, {} as IEditorGroupsService);
 			const debug = resources.add(services.createInstance(DebugService));
@@ -1488,7 +1484,6 @@ suite('Extension debug session lifecycle', () => {
 				services.registerInstance(IPathService, testPathService(workspace));
 				services.registerSingleton(ICommandService, () => new CommandService(services));
 				services.registerInstance(ILogService, new NullLoggerService());
-				services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));
 				services.registerInstance(IMarkerService, resources.add(new MarkerService()));
 				registerTestExtensionService(resources, services);
 				services.registerInstance(ITerminalProcessService, createDisconnectedRendererApi().terminal);
@@ -1503,13 +1498,13 @@ suite('Extension debug session lifecycle', () => {
 					? { success: false, message: 'Adapter rejected request' }
 					: request.command === 'custom:empty' ? {} : { body: request.arguments };
 				services.registerInstance(IDebugAdapterProcessService, processes);
-				const adapters = resources.add(new DebugAdapterFactoryRegistry());
-				services.registerInstance(IDebugAdapterFactorySource, adapters);
+				const adapters = resources.add(new AdapterManager());
+				services.registerInstance(IAdapterManager, adapters);
 				if (!services.has(IEditorService)) services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } });
 				if (!services.has(IEditorGroupsService)) services.registerInstance(IEditorGroupsService, {} as IEditorGroupsService);
 				const debug = resources.add(services.createInstance(DebugService));
 				services.registerInstance(IDebugService, debug);
-				const consoleService = resources.add(new DebugConsoleService(debug));
+				const consoleService = debug.replModel;
 				const events: { incarnation: number; value: Record<string, JsonValue>; }[] = [];
 				const trackerEvents: { trackerId: string; event: string; message?: { type: string; seq: number; command?: string; event?: string; }; code?: unknown; signal?: unknown; }[] = [];
 				let trackerCreations = 0;
@@ -1689,7 +1684,7 @@ suite('Extension debug session lifecycle', () => {
 					await breakpointsRemoved.p;
 					const removed = events.filter(entry => entry.value.type === 'breakpoints').at(-1)!;
 					assert.deepEqual((removed.value.removed as { id: string; }[]).map(value => value.id), [sourcePoint.id, 'extension-function']);
-					await (session as DebugAdapterSession).syncBreakpoints();
+					await (session as DebugSession).syncBreakpoints();
 					const sent = processes.requests.filter(value => value.command === 'setBreakpoints').length;
 					const addedPoint = new DeferredPromise<string>();
 					using additions = debug.onDidChangeBreakpoints(points => {
@@ -1721,7 +1716,7 @@ suite('Extension debug session lifecycle', () => {
 					const unidentifiedId = await unidentifiedPoint.p;
 					assert.deepEqual(session.getDebugProtocolBreakpoint(unidentifiedId), { source: { sourceReference: 18 }, line: 7, verified: true });
 					await bridge.handle({ operation: 'removeDebugBreakpoints', breakpointIds: [unidentifiedId] }, signal);
-					await (session as DebugAdapterSession).syncBreakpoints();
+					await (session as DebugSession).syncBreakpoints();
 					assert.deepEqual(processes.requests.filter(value => value.command === 'setBreakpoints').slice(sent).map(value => value.arguments), [{ source: { sourceReference: 18 }, breakpoints: [] }]);
 				}
 				const request = (command: string, args: JsonValue, hasArguments = true) => bridge.handle({
@@ -1775,7 +1770,6 @@ test('installed inline descriptors use the real DAP session and await implementa
 	services.registerInstance(IPathService, testPathService(workspace));
 	services.registerSingleton(ICommandService, () => new CommandService(services));
 	services.registerInstance(ILogService, new NullLoggerService());
-	services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));
 	services.registerInstance(IMarkerService, resources.add(new MarkerService()));
 	registerTestExtensionService(resources, services);
 	services.registerInstance(ITerminalProcessService, createDisconnectedRendererApi().terminal);
@@ -1792,8 +1786,8 @@ test('installed inline descriptors use the real DAP session and await implementa
 	const io = await peer.start({});
 	peer.closeBarrier = new DeferredPromise<void>();
 	peer.closeRequested = new DeferredPromise<void>();
-	const factories = resources.add(new DebugAdapterFactoryRegistry());
-	services.registerInstance(IDebugAdapterFactorySource, factories);
+	const factories = resources.add(new AdapterManager());
+	services.registerInstance(IAdapterManager, factories);
 	let closed = 0;
 	resources.add(factories.registerFactories([createExtensionHostDebugAdapterFactory('inline', 'inline-owner', async (operation, payload) => {
 		const value = payload as { message?: unknown; afterSequence: number; maxMessages: number; };
@@ -1907,7 +1901,7 @@ test('extension debug session options retain parent identity, inherit noDebug, m
 	processes.requestHandler = request => request.command === 'initialize'
 		? { supportsConfigurationDoneRequest: true, supportsRestartRequest: true, supportsFunctionBreakpoints: true }
 		: request.command === 'evaluate' ? { result: 'child answer', variablesReference: 0 } : {};
-	using adapters = new DebugAdapterFactoryRegistry();
+	using adapters = new AdapterManager();
 	const descriptorParents: Array<string | undefined> = [];
 	const trackerParents: Array<string | undefined> = [];
 	resources.add(adapters.registerFactories([createExtensionHostDebugAdapterFactory('example', 'host', async (_operation, payload) => {
@@ -1919,7 +1913,7 @@ test('extension debug session options retain parent identity, inherit noDebug, m
 		trackerParents.push((payload as { session: { parentSessionId?: string; }; }).session.parentSessionId);
 		return null;
 	}, workspace)]));
-	using consoleService = new DebugConsoleService(debug);
+	const consoleService = debug.replModel;
 	using services = new InstantiationService(new ServiceCollection([IDebugService, debug], [IWorkspaceContextService, workspace], [IExtensionHostApi, createDisconnectedRendererApi().extensionHost]));
 	using bridge = services.createInstance(MainThreadDebugService, 5000, (error: unknown) => { throw error; });
 	debug.toggleBreakpoint(URI.file('/workspace/main.ts'), 3);
@@ -1981,7 +1975,7 @@ test('a parent ending during child descriptor preparation cancels the child and 
 	const root = URI.file('/workspace');
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
-	using adapters = new DebugAdapterFactoryRegistry();
+	using adapters = new AdapterManager();
 	using debug = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters);
 	const parent = await debug.startDebugging({ id: 'parent', name: 'Parent', type: 'example', request: 'launch', adapter: { program: '/adapter', arguments: [] }, arguments: {} });
 	const entered = new DeferredPromise<AbortSignal>();
@@ -2016,7 +2010,7 @@ for (const hasOpenFolder of [true, false]) {
 		using processes = new FakeDebugAdapterProcessService();
 		processes.requestHandler = request => request.command === 'initialize' ? { supportsConfigurationDoneRequest: true }
 			: request.command === 'stackTrace' ? { stackFrames: [{ id: 0, name: 'main', line: 1, column: 1, source: { path: 'C:\\outside\\app.ts' } }] } : {};
-		using adapters = new DebugAdapterFactoryRegistry();
+		using adapters = new AdapterManager();
 		const factoryFolders: unknown[] = [];
 		resources.add(adapters.registerFactories([createExtensionHostDebugAdapterFactory('example', 'host', async (_operation, payload) => {
 			const value = payload as { configuration: { program: string; }; session: { workspaceFolder: unknown; }; };
@@ -2071,7 +2065,6 @@ suite('DAP reverse startDebugging through the real session owner', () => {
 			services.registerInstance(IPathService, testPathService(workspace));
 			services.registerSingleton(ICommandService, () => new CommandService(services));
 			services.registerInstance(ILogService, new NullLoggerService());
-			services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));
 			services.registerInstance(IMarkerService, resources.add(new MarkerService()));
 			registerTestExtensionService(resources, services);
 			registerTestWorkbenchInteractionServices(resources, services);
@@ -2082,7 +2075,7 @@ suite('DAP reverse startDebugging through the real session owner', () => {
 			services.registerInstance(ITaskService, resources.add(services.createInstance(TaskService)));
 			const peer = resources.add(new FakeDebugAdapterProcessService());
 			services.registerInstance(IDebugAdapterProcessService, peer);
-			services.registerInstance(IDebugAdapterFactorySource, resources.add(new DebugAdapterFactoryRegistry()));
+			services.registerInstance(IAdapterManager, resources.add(new AdapterManager()));
 			if (!services.has(IEditorService)) services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } });
 			if (!services.has(IEditorGroupsService)) services.registerInstance(IEditorGroupsService, {} as IEditorGroupsService);
 			const debug = resources.add(services.createInstance(DebugService));

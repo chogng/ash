@@ -1,3 +1,4 @@
+import { IAdapterManager, createStaticDebugAdapterFactory, type DebugAdapterFactory, type DebugAdapterFactoryRegistration } from '../../../contrib/debug/common/debug.js';
 import type { IExtensionPointUser } from '../common/extensionsRegistry.js';
 import type { ExtensionManifest } from '../common/extensionManifest.js';
 import { localizeManifest } from '../../../../platform/extensionManagement/common/extensionNls.js';
@@ -32,7 +33,6 @@ import type { LanguageDescriptionContribution, LanguageDescriptionRegistration }
 import type { IAshLanguageService } from '../../../../editor/common/languages/language.js';
 import type { IExtensionApi, ExtensionCatalogReload, ExtensionCatalog as TransportExtensionCatalog, ExtensionDescriptor as TransportExtensionDescriptor } from "../../../../platform/extensions/common/extensionApi.js";
 import type { IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
-import { DebugAdapterFactoriesRegistry, createStaticDebugAdapterFactory, type DebugAdapterFactory, type DebugAdapterFactoryRegistration } from "../../debug/common/debugAdapterFactory.js";
 import { parseJsonc } from "../common/jsonc.js";
 import { parseExtensionManifest, verifyExtensionManifestDigest } from '../common/extensionManifest.js';
 import { getNLSLanguage } from '../../../../nls.js';
@@ -114,7 +114,11 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 	readonly onDidChange: Event<ExtensionCatalog> = this.changeEmitter.event;
 	readonly onDidFail: Event<ExtensionServiceFailure> = this.failureEmitter.event;
 
-	constructor(private readonly options: AppServerExtensionServiceOptions, @ILanguagePackService private readonly languagePacks: ILanguagePackService) {
+	constructor(
+		private readonly options: AppServerExtensionServiceOptions,
+		@ILanguagePackService private readonly languagePacks: ILanguagePackService,
+		@IAdapterManager adapters: IAdapterManager,
+	) {
 		super();
 		if (options.api.onDidChange) {
 			this._register(options.api.onDidChange(() => { void this.requestReload('cached').catch(error => console.error('Extension enablement refresh failed', error)); }));
@@ -154,7 +158,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			throw new TypeError('App Server extension language contributions require language and configuration services');
 		}
 		this.languageRegistration = options.languageService ? this._register(options.languageService.registerLanguages([])) : undefined;
-		this.debugAdapterFactoryRegistration = this._register(DebugAdapterFactoriesRegistry.registerFactories([]));
+		this.debugAdapterFactoryRegistration = this._register(adapters.registerFactories([]));
 		if (options.eventApi) {
 			let activationGeneration: number | undefined;
 			let extensionManagementRevision: { readonly instanceId: string; readonly generation: number; } | undefined;

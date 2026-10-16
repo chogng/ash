@@ -22,6 +22,7 @@
     "remoteHost": "bin/ash-remote-host{exe}"
   },
   "optionalBinaries": {
+    "lldbExtension": "bin/ash-debug-lldb{exe}",
     "devContainerProvider": "bin/ash-dev-container-provider{exe}",
     "jsExtensionHost": "bin/ash-external-js-ext{exe}"
   },

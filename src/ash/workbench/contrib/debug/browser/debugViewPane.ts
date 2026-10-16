@@ -26,9 +26,8 @@ import { Position } from "../../../../editor/common/core/position.js";
 import { Range } from "../../../../editor/common/core/range.js";
 import { IEditorService } from "../../../services/editor/common/editorService.js";
 import { DisassemblyViewInput } from '../common/disassemblyViewInput.js';
-import { DISASSEMBLY_VIEW_ID } from '../common/debug.js';
+import { DISASSEMBLY_VIEW_ID, type DebugBreakpoint, type IDebugBreakpointUpdate, type IDataBreakpointOptions, type IDataBreakpoint, type IFunctionBreakpoint, type IInstructionBreakpoint, type IDebugBreakpoint, type IDebugConfiguration, type IDebugEvaluateResult, type IDebugScope, IDebugService, type IDebugSession, type IDebugStackFrame, type IDebugThread, type IDebugVariable } from '../common/debug.js';
 import { ViewPane, type IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
-import { type DebugBreakpoint, type IDebugBreakpointUpdate, type IDataBreakpointOptions, type IDataBreakpoint, type IFunctionBreakpoint, type IInstructionBreakpoint, type IDebugBreakpoint, type IDebugConfiguration, type IDebugEvaluateResult, type IDebugScope, IDebugService, type IDebugSession, type IDebugStackFrame, type IDebugThread, type IDebugVariable } from "../../../services/debug/common/debugService.js";
 
 interface DebugVariableRow {
 	readonly key: number;

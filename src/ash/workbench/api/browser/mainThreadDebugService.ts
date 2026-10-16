@@ -6,7 +6,7 @@ import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } fr
 import { normalizeExtensionHostPayload } from '../../../platform/agentHost/browser/extensionHostProtocol.js';
 import { type ExtensionClientOperation, type ExtensionClientResult } from '../common/extHost.protocol.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
-import { IDebugService, type DebugConfiguration, type IDebugSessionOptions, type IDebugSession, type IDebugBreakpoint, type IFunctionBreakpoint } from '../../services/debug/common/debugService.js';
+import { IDebugService, type DebugConfiguration, type IDebugSessionOptions, type IDebugSession, type IDebugBreakpoint, type IFunctionBreakpoint } from '../../contrib/debug/common/debug.js';
 
 /** Exposes the existing Workbench sessions to connection-owned extension callbacks. */
 export class MainThreadDebugService extends Disposable {

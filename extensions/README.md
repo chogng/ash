@@ -68,6 +68,11 @@ User-installed extensions are a separate profile-level root. Extensions packages
 
 ## Bundled packages
 
+[`debug-lldb`](debug-lldb/README.md) is an optional Rust debugger provider for CodeLLDB
+(`lldb`, with a verified runtime prepared on demand) or an installed `lldb-dap`.
+It supplies configuration and adapter descriptors; Workbench Debug and the generic
+DAP process runtime remain built in.
+
 [`git`](git/README.md) is a browser TypeScript extension owning Git commands and SCM presentation.
 App Server and `ash-git` retain the shared repository, history, watcher and execution capabilities
 used independently by Desktop, Agent and TUI. `build/builtin` bundles the frontend and stages its

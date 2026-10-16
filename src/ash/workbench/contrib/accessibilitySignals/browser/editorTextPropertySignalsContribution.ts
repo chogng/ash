@@ -4,7 +4,7 @@ import type { ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
 import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
 import { AccessibilitySignal, IAccessibilitySignalService } from '../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 import { IMarkerService, MarkerSeverity } from '../../../../platform/markers/common/markers.js';
-import { IDebugService } from '../../../services/debug/common/debugService.js';
+import { IDebugService } from '../../debug/common/debug.js';
 
 /** Observes the editor and marker owners without retaining document or diagnostic state. */
 export class EditorTextPropertySignalsContribution extends Disposable {

@@ -18,6 +18,7 @@ use serde_json::Value;
 mod cancellation;
 pub mod client;
 pub mod data_channels;
+pub mod debug;
 pub mod editors;
 pub mod languages;
 mod runtime;
@@ -117,8 +118,16 @@ type Handler = Arc<dyn Fn(Value, CancellationToken) -> Result<Value, ExtensionEr
 #[derive(Clone)]
 pub(crate) struct Registration {
     pub descriptor: RegistrationDescriptor,
-    pub operation: String,
-    pub handler: Handler,
+    pub handlers: BTreeMap<String, Handler>,
+}
+
+impl Registration {
+    fn new(descriptor: RegistrationDescriptor, operation: &str, handler: Handler) -> Self {
+        Self {
+            descriptor,
+            handlers: BTreeMap::from([(operation.into(), handler)]),
+        }
+    }
 }
 
 /// Commands registered for the current activation. Registration IDs equal command IDs.
@@ -155,11 +164,7 @@ impl Commands {
         });
         match self.registrations.entry(id) {
             std::collections::btree_map::Entry::Vacant(entry) => {
-                entry.insert(Registration {
-                    descriptor,
-                    operation: "execute".into(),
-                    handler,
-                });
+                entry.insert(Registration::new(descriptor, "execute", handler));
                 Ok(())
             }
             std::collections::btree_map::Entry::Occupied(_) => Err(ExtensionError::new(
@@ -179,6 +184,7 @@ pub struct ExtensionContext {
     pub services: services::Services,
     pub data_channels: data_channels::DataChannels,
     pub commands: Commands,
+    pub debug: debug::Debug,
     pub scm: scm::SourceControl,
     pub terminal: terminal::Terminal,
     pub languages: languages::Languages,
@@ -216,10 +222,12 @@ impl ExtensionContext {
             .registrations
             .iter()
             .chain(self.data_channels.registrations.iter())
+            .chain(self.debug.registrations.iter())
             .chain(self.workspace.registrations.iter())
             .chain(self.scm.registrations.iter())
             .chain(self.terminal.registrations.iter())
             .chain(self.editors.registrations.iter())
+            .chain(self.window.registrations.iter())
         {
             if registrations
                 .insert(id.clone(), registration.clone())

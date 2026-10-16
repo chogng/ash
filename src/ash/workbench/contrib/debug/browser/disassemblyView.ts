@@ -27,9 +27,8 @@ import { IContextMenuService } from '../../../../platform/contextview/browser/co
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
-import { IDebugService, type IDebugSession, type IDisassembledInstruction, type IInstructionBreakpoint } from '../../../services/debug/common/debugService.js';
+import { IDebugService, type IDebugSession, type IDisassembledInstruction, type IInstructionBreakpoint, CONTEXT_DISASSEMBLY_VIEW_FOCUS, DISASSEMBLY_VIEW_ID } from '../common/debug.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
-import { CONTEXT_DISASSEMBLY_VIEW_FOCUS, DISASSEMBLY_VIEW_ID } from '../common/debug.js';
 
 const PAGE_SIZE = 50;
 interface InstructionCell { readonly instruction: IDisassembledInstruction; readonly column: 'address' | 'bytes' | 'instruction'; }

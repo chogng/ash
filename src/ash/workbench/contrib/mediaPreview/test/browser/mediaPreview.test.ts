@@ -24,6 +24,7 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { EditorPanes, getBuiltinEditorPaneFactory } from '../../../../browser/editor.js';
 import { EditorPaneMatch } from '../../../../browser/parts/editor/editorPane.js';
 import { AppServerExtensionService } from '../../../../services/extensions/browser/appServerExtensionService.js';
+import { AdapterManager } from '../../../debug/browser/debugAdapterManager.js';
 import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { AUDIO_PREVIEW_ID, VIDEO_PREVIEW_ID, MediaPreview } from '../../browser/mediaPreview.js';
 import { createTestFileService, registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
@@ -40,6 +41,7 @@ test('Built-in media declarations activate from the package catalog, localize, r
 	let fail = false;
 	let generation = 1;
 
+	using adapters = new AdapterManager();
 	using service = new AppServerExtensionService({
 		api: {
 			list: async () => ({ generation, extensions: included ? [{ ...descriptor, sourceKind }] : [], diagnostics: [] }),
@@ -51,7 +53,7 @@ test('Built-in media declarations activate from the package catalog, localize, r
 			}),
 		},
 
-	}, createEmptyTestLanguagePacks());
+	}, createEmptyTestLanguagePacks(), adapters);
 	try {
 		await service.start();
 		const choices = ['PRODUCT.PNG', 'song.mp3', 'song.wav', 'song.ogg', 'movie.mp4', 'movie.webm'].map(name => EditorPanes.getEditorPane({ resource: URI.file('/media/' + name) })?.id);

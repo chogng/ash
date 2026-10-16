@@ -1228,6 +1228,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "ash-debug-lldb"
+version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+ "ash-external-ext",
+ "ash-external-ext-protocol",
+ "ash-external-ext-sdk",
+ "ash-http-client",
+ "dirs",
+ "dunce",
+ "fs2",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "url",
+ "zip 4.6.1",
+]
+
+[[package]]
 name = "ash-dev-container-provider"
 version = "0.1.0"
 dependencies = [

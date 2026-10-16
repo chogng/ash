@@ -1,6 +1,6 @@
 import { Disposable, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { AccessibilitySignal, IAccessibilitySignalService } from '../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
-import { IDebugService, type IDebugSession } from '../../../services/debug/common/debugService.js';
+import { IDebugService, type IDebugSession } from '../../debug/common/debug.js';
 
 export class AccessibilitySignalDebuggerContribution extends Disposable {
 	private readonly sessionListener = this._register(new MutableDisposable());

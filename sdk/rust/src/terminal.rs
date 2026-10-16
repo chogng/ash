@@ -28,14 +28,14 @@ impl Terminal {
         }
         self.registrations.insert(
             id.clone(),
-            Registration {
-                descriptor: RegistrationDescriptor {
+            Registration::new(
+                RegistrationDescriptor {
                     registration_id: id,
                     kind: RegistrationKind::TerminalEnvironment {},
                 },
-                operation: "getTerminalEnvironment".into(),
-                handler: Arc::new(move |_, token| callback(token)),
-            },
+                "getTerminalEnvironment",
+                Arc::new(move |_, token| callback(token)),
+            ),
         );
         Ok(())
     }

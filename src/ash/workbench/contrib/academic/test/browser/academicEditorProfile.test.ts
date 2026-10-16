@@ -1,3 +1,4 @@
+import { AdapterManager } from '../../../debug/browser/debugAdapterManager.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { academicProfile } from "../../browser/academicEditorProfile.js";
@@ -47,9 +48,10 @@ for (const [locale, label] of [['en', 'Academic Document'], ['zh-CN', '学术论
 				list: async () => ({ generation: 1, extensions: [entry], diagnostics: [] }),
 				resources: new ExtensionResourceLoaderService(async request => Uint8Array.from(Buffer.from(fixture.resources[request.extensionId][request.path], 'base64'))),
 			}, enablement);
+			using adapters = new AdapterManager();
 			using service = new AppServerExtensionService({
 				api,
-			}, createEmptyTestLanguagePacks());
+			}, createEmptyTestLanguagePacks(), adapters);
 			const inputs = [
 				{ resource: URI.file('/paper.ash-academic') },
 				{ resource: URI.file('/paper.ASH-PAPER') },
