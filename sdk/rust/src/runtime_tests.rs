@@ -48,13 +48,100 @@ impl Extension for CommandsOnly {
         context
             .commands
             .register_command(Command::new("example.echo", "Echo"), |invocation, _| {
-                Ok(serde_json::json!(invocation.arguments))
+                Ok(
+                    if invocation.arguments.first() == Some(&serde_json::json!("expand")) {
+                        serde_json::json!("x".repeat(4096))
+                    } else {
+                        serde_json::json!(invocation.arguments)
+                    },
+                )
             })
     }
     fn deactivate(&mut self) -> Result<(), ExtensionError> {
         self.deactivations.fetch_add(1, Ordering::SeqCst);
         Ok(())
     }
+}
+
+#[test]
+fn oversized_callback_returns_a_quota_error_and_keeps_the_runtime_usable() {
+    let buffer = Buffer::default();
+    let options = RuntimeOptions {
+        protocol: external_ext_protocol::ProtocolLimits {
+            maximum_payload_bytes: 1024,
+            maximum_frame_bytes: 8192,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let writer = super::Writer {
+        stream: Arc::new(Mutex::new(Box::new(buffer.clone()))),
+        maximum_bytes: options.protocol.maximum_frame_bytes,
+    };
+    let mut runtime = super::Runtime {
+        client: crate::client::Client::new(writer.clone(), options.maximum_in_flight_requests),
+        services: crate::services::Services::new(
+            writer.clone(),
+            options.maximum_in_flight_requests,
+        ),
+        extension: CommandsOnly {
+            deactivations: Arc::new(AtomicUsize::new(0)),
+        },
+        writer,
+        options,
+        phase: super::Phase::New,
+        environment: None,
+        fence: None,
+        context: None,
+        registrations: Default::default(),
+        invocations: Default::default(),
+    };
+    runtime.dispatch(initialize(1, 1)).unwrap();
+    runtime
+        .dispatch(activate(2, vec![ExtensionCapability::Command]))
+        .unwrap();
+    for (id, argument) in [(3, "expand"), (5, "small")] {
+        runtime
+            .invoke(
+                RequestContext::new(id, 2, 3),
+                external_ext_protocol::InvokeParams {
+                    extension_id: "example.commands".into(),
+                    registration_id: "example.echo".into(),
+                    operation: "execute".into(),
+                    payload: serde_json::json!({"arguments":[argument]}),
+                    deadline_unix_millis: 1_900_000_000_000,
+                },
+            )
+            .unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while runtime
+            .invocations
+            .values()
+            .any(|invocation| !invocation.thread.is_finished())
+        {
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::yield_now();
+        }
+        runtime.reap_finished().unwrap();
+        runtime
+            .dispatch(ExtensionHostRequest {
+                context: RequestContext::new(id + 1, 2, 3),
+                request: HostRequestKind::Ping,
+            })
+            .unwrap();
+    }
+    let replies = responses(&buffer);
+    assert!(
+        matches!(&replies[2].response, HostResponseKind::Failure(failure) if failure.code == HostErrorCode::QuotaExceeded)
+    );
+    assert!(matches!(
+        &replies[3].response,
+        HostResponseKind::Success(external_ext_protocol::HostSuccess::Pong)
+    ));
+    assert!(
+        matches!(&replies[4].response, HostResponseKind::Success(external_ext_protocol::HostSuccess::Invoked(result)) if result.payload == serde_json::json!(["small"]))
+    );
+    runtime.deactivate().unwrap();
 }
 
 fn initialize(id: u64, runtime_api_version: u16) -> ExtensionHostRequest {

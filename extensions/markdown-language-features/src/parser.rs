@@ -1,9 +1,4 @@
-//! Stateless Markdown parsing for the client-owned editor. Source ranges use UTF-16,
-//! matching Ash's text model; parsing never serializes or normalizes the document.
-
-use external_ext_sdk::Command;
-use external_ext_sdk::Extension;
-use external_ext_sdk::ExtensionContext;
+//! Stateless rendering parse of immutable editor snapshots. Offsets are UTF-16.
 use external_ext_sdk::ExtensionError;
 use external_ext_sdk::HostErrorCode;
 use pulldown_cmark::Event;
@@ -11,74 +6,22 @@ use pulldown_cmark::HeadingLevel;
 use pulldown_cmark::Options;
 use pulldown_cmark::Parser;
 use pulldown_cmark::Tag;
-use serde::Deserialize;
 use serde::Serialize;
 use std::ops::Range;
 
-#[derive(Default)]
-/// Stateless parsing capability registered with the shared extension host.
-pub struct MarkdownExtension;
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct ParseRequest {
-    protocol_version: u32,
-    uri: String,
-    version: u64,
-    text: String,
-}
-
-impl Extension for MarkdownExtension {
-    fn id(&self) -> &str {
-        "ash.markdown-parser"
-    }
-
-    fn activate(&mut self, context: &mut ExtensionContext) -> Result<(), ExtensionError> {
-        let messages = if context
-            .initialization()
-            .and_then(|facts| facts.language.as_deref())
-            == Some("zh-CN")
-        {
-            include_str!("../package.nls.zh-CN.json")
-        } else {
-            include_str!("../package.nls.json")
-        };
-        let messages: serde_json::Value = serde_json::from_str(messages).map_err(|_| {
-            ExtensionError::new(HostErrorCode::Internal, "Invalid extension localization")
-        })?;
-        let title = messages["parse"]
-            .as_str()
-            .ok_or_else(|| ExtensionError::new(HostErrorCode::Internal, "Missing command title"))?;
-        context.commands.register_command(Command::new("_markdown.parse", title), |invocation, token| {
-            token.check_cancelled()?;
-            let [argument] = invocation.arguments.as_slice() else {
-                return Err(ExtensionError::new(HostErrorCode::InvalidRequest, "Expected one document snapshot"));
-            };
-            let request: ParseRequest = serde_json::from_value(argument.clone()).map_err(|_| ExtensionError::new(HostErrorCode::InvalidRequest, "Invalid Markdown snapshot"))?;
-            if request.protocol_version != 1 || request.version == 0 || request.version > 9_007_199_254_740_991 || request.uri.is_empty() || request.uri.len() > 32768 || request.uri.contains('\0') {
-                return Err(ExtensionError::new(HostErrorCode::InvalidRequest, "Unsupported Markdown snapshot contract"));
-            }
-            let document = parse_checked(&request.text, || token.check_cancelled())?;
-            token.check_cancelled()?;
-            Ok(serde_json::json!({ "protocol_version": 1, "uri": request.uri, "version": request.version, "blocks": document.blocks }))
-        })
-    }
-}
-
 #[derive(Debug, Serialize)]
-struct Document {
-    blocks: Vec<Block>,
+pub(crate) struct Document {
+    pub(crate) blocks: Vec<Block>,
 }
 
-#[derive(Debug, Serialize)]
-struct Block {
+#[derive(Debug)]
+pub(crate) struct Block {
     start: u32,
     end: u32,
     content: Node,
 }
 
-#[derive(Debug, Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+#[derive(Debug)]
 enum Node {
     Text {
         value: String,
@@ -117,6 +60,39 @@ enum Node {
     },
 }
 
+// This private render wire format avoids repeating field names for every inline
+// node. A prose-heavy snapshot can otherwise exceed the host response quota well
+// before reaching the source limit. The renderer consumes these tuples directly.
+impl Serialize for Block {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        (&self.start, &self.end, &self.content).serialize(serializer)
+    }
+}
+
+impl Serialize for Node {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            Self::Text { value } => ("t", value).serialize(serializer),
+            Self::Element { tag, children } => ("el", tag, children).serialize(serializer),
+            Self::OrderedList { first, children } => ("ol", first, children).serialize(serializer),
+            Self::Link {
+                destination,
+                children,
+            } => ("a", destination, children).serialize(serializer),
+            Self::Image {
+                destination,
+                children,
+            } => ("img", destination, children).serialize(serializer),
+            Self::Code { value } => ("code", value).serialize(serializer),
+            Self::Math { value, display } => ("math", value, display).serialize(serializer),
+            Self::Task { checked, offset } => ("task", checked, offset).serialize(serializer),
+            Self::Break => ["br"].serialize(serializer),
+            Self::Rule => ["hr"].serialize(serializer),
+            Self::Raw { value } => ("raw", value).serialize(serializer),
+        }
+    }
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "lowercase")]
 enum Element {
@@ -142,7 +118,7 @@ enum Element {
 
 /// Parses a bounded snapshot. Gaps are retained as raw blocks, including reference
 /// definitions, front matter and whitespace which do not produce parser events.
-fn parse_checked(
+pub(crate) fn parse_checked(
     source: &str,
     check: impl Fn() -> Result<(), ExtensionError>,
 ) -> Result<Document, ExtensionError> {
@@ -216,9 +192,10 @@ fn node<'a>(
 ) -> Node {
     match event {
         Event::Start(tag) => {
-            // Malicious nesting must not exhaust the process stack. Consume the full
-            // subtree and expose its exact source through the ordinary text input.
-            if depth >= 64 {
+            // Each element adds two JSON levels. Leave room for block and response
+            // envelopes under the transport decoder's recursion limit as well as
+            // bounding the Rust stack. Keep the full subtree as editable source.
+            if depth >= 48 {
                 let mut nesting = 1;
                 for (event, _) in events.by_ref() {
                     match event {
@@ -317,4 +294,5 @@ fn node<'a>(
 }
 
 #[cfg(test)]
+#[path = "parser_tests.rs"]
 mod tests;

@@ -1,17 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { inputEdit, sourceOffset } from '../../extensions/markdown-language-features/src/sourceEdits.js';
-import { readParseResponse } from '../../extensions/markdown-language-features/src/parseResponse.js';
-
-test('a parse provider cannot inject executable elements or ranges for another document version', () => {
-	const snapshot = { uri: 'file:///synthetic.md', version: 4, text: '中文😀' };
-	const result = { protocol_version: 1, uri: snapshot.uri, version: 4, blocks: [{ start: 0, end: 4, content: { kind: 'text', value: snapshot.text } }] };
-	assert.deepEqual(readParseResponse(result, snapshot), result.blocks);
-	assert.throws(() => readParseResponse({ ...result, version: 3 }, snapshot));
-	assert.throws(() => readParseResponse({ ...result, uri: 'file:///other.md' }, snapshot));
-	assert.throws(() => readParseResponse({ ...result, blocks: [{ start: 0, end: 4, content: { kind: 'element', tag: 'script', children: [] } }] }, snapshot));
-	assert.throws(() => readParseResponse({ ...result, blocks: [{ start: 0, end: 2, content: result.blocks[0]!.content }] }, snapshot));
-});
+import { inputEdit, sourceOffset, textEdit } from '../../extensions/markdown-language-features/src/sourceEdits.js';
 
 function apply(source: string, input: string): string {
 	const edit = inputEdit(source, input);
@@ -34,4 +23,12 @@ test('emoji replacement does not split surrogate pairs or alter surrounding Mark
 	assert.equal(apply(source, '**😁**\n[id]: https://example.com\n'), '**😁**\r\n[id]: https://example.com\r\n');
 	const edit = inputEdit('😀', '😁');
 	assert.deepEqual(edit, { start: 0, end: 2, text: '😁' });
+});
+
+test('range messages preserve exact mixed line endings and whole surrogate pairs', () => {
+	const source = '# 😀\r\n\n[id]: x\r';
+	const next = source.replace('😀', '😁');
+	const edit = textEdit(source, next);
+	assert.deepEqual(edit, { start: 2, end: 4, text: '😁' });
+	assert.equal(source.slice(0, edit.start) + edit.text + source.slice(edit.end), next);
 });

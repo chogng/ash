@@ -1,40 +1,36 @@
-# Ash Markdown editing
+# Ash Markdown language features
 
-The built-in extension registers preview and rich editors with the existing custom
-text editor API. It calls the independent `ash.markdown-parser` Rust extension
-through the existing command/extension host protocol. Desktop and connected Web
-use the same capability. Without the backend/provider the editor shows a localized
-error and retains source editing; formatted rich content requires the provider.
+One preinstalled Rust extension owns Markdown preview, rich editing, link completion,
+definitions, references, rename, workspace heading search and link diagnostics.
+Its internal `parser` module uses `pulldown-cmark`; there is no separate parser
+extension, command or process. Syntax highlighting, outline, folding and structural
+selection use the editor's shared Rust Tree-sitter (and the Web Worker fallback).
+Grammar/query resources remain in `markdown-basics`.
 
-The parser returns render nodes and UTF-16 source ranges. Inactive blocks show
-formatted Markdown; click a block or press Enter/F2 to edit its original source
-using Ash's existing multiline InputBox. Escape returns to formatted content.
-“Edit document source” supports selections across blocks. The host's canonical
-TextModel owns versions, undo/redo and persistence. Input composition is committed
-only after completion, and conflicting external changes retain the local draft.
-Unedited source, reference definitions, escapes, whitespace and line endings are
-preserved. Raw HTML is displayed as text. Remote images are not loaded.
+The public Rust SDK registers commands, custom text editors, language providers and
+client document/workspace observations. Versioned snapshots are analysis input;
+the existing client TextModel owns edits, dirty state, save, conflicts and undo/redo.
+Dirty documents precede authorized resource reads. Workspace rename results include
+expected source text and file operations for the client's single transaction.
 
-Large documents use the same versioned snapshots and canonical model. The view's
-HTML contains only a small bootstrap; source and parsed blocks arrive in one queued
-update. Client JSON envelopes are bounded at 64 MiB with separate structure limits;
-the Rust parser retains its 16 MiB UTF-8 source and 24 MiB encoded payload ceilings.
-Escaped JSON and render-tree size also count, so these remain bounded limits rather
-than an unlimited-file guarantee.
+The rich view's JavaScript and CSS are static package resources compiled by
+`build/builtin`, not a JavaScript extension entry point. The host resolves resources
+within the owning product package and executes them inside its existing sandboxed
+Webview. HTML is inert in the rich view; remote images are not fetched automatically.
+The readonly and input composition behavior stays in the client view.
 
-## Build
+Both views update their existing sandbox and retain unchanged DOM. Rich edits use
+versioned UTF-16 ranges; preview heading IDs, metadata and math use the same Markdown
+semantics as language features. A request shares parsed target documents and a sparse
+line index. Document events update diagnostics for the changed document and its open
+dependents. Compact render tuples keep prose-heavy documents within transport quotas;
+an oversized provider result returns a recoverable error instead of ending the process.
 
-Install the repository Rust toolchain, then:
+Disable the functional extension to retire its process and providers; source
+editing and Tree-sitter remain available. Browser hosts need an authorized backend
+for this executable provider; the grammar WASM fallback does not run Rust extensions.
 
-```sh
-pnpm prepare:backend
-pnpm build
-```
-
-The existing backend package includes `ash-markdown-parser`; the client contains
-only the editor view and math renderer. No WASM build or GUI framework is used.
-
-```sh
-just verify ash-markdown-parser
-pnpm test:browser:integration markdownEditor.integration.spec.ts --project=chromium
-```
+Validate with `just verify ash-markdown-language-features`, the custom-editor unit
+suite, `pnpm test:browser:integration markdownEditor.integration.spec.ts --project=chromium`,
+and the Python packaging tests. `pnpm prepare:backend` packages the executable as
+`bin/ash-markdown-language-features{.exe}` with the functional extension's resources.

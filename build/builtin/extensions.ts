@@ -7,6 +7,7 @@ import { build } from 'vite';
 import { gzipSync } from 'node:zlib';
 import { fingerprintPaths, PreparedInputs, readJsonCache, writeJsonCache } from '../lib/preparedInputs.ts';
 import { readPreinstalledLanguagePackIds } from '../resources/languagePacks.ts';
+import { compileExtensionWebviews } from './extensionWebviews.ts';
 
 const root = resolve(import.meta.dirname, '../..');
 export const browserExtensionRoots = [resolve(root, 'extensions'), ...String(process.env.ASH_WEB_EXTENSION_PATHS ?? '').split(delimiter).filter(Boolean).map(path => resolve(path))];
@@ -15,7 +16,7 @@ const prepared = new PreparedInputs(resolve(root, '.build/browser-extension-inpu
 // Vite sets NODE_ENV during its first build; cache hits must use that same default.
 const buildEnvironment = process.env.NODE_ENV ?? 'production';
 const toolchainFiles = [
-	'build/builtin/extensions.ts', 'build/lib/preparedInputs.ts', 'pnpm-lock.yaml', 'package.json', 'build/package.json',
+	'build/builtin/extensions.ts', 'build/builtin/extensionWebviews.ts', 'build/lib/preparedInputs.ts', 'pnpm-lock.yaml', 'package.json', 'build/package.json',
 	'build/resources/languagePacks.ts', 'localization/preinstalled.json',
 	'tsconfig.json', 'tsconfig.base.json', 'extensions/tsconfig.json', 'extensions/tsconfig.base.json',
 	'.env', '.env.local', '.env.production', '.env.production.local',
@@ -55,6 +56,7 @@ async function extensionFingerprint(): Promise<string> {
 	return await fingerprintPaths([
 		...browserExtensionRoots, resolve(root, '.build/desktop/localization/extensions'),
 		...toolchainFiles,
+		...await browserExtensionWatchFiles(),
 	], (path, directory) => !directory || !['node_modules', 'test', 'target', '.git'].includes(path.split(/[\\/]/).at(-1)!))
 		+ JSON.stringify(browserExtensionRoots) + environment;
 }
@@ -113,6 +115,18 @@ async function preparePackages(): Promise<boolean> {
 			}
 		}
 		await collect(packageRoot);
+		if (manifest.ashRuntime?.kind === 'rust') {
+			const views = await compileExtensionWebviews(packageRoot, manifest.ashRuntime.webviews);
+			if (views.files.length) await writeJsonCache(resolve(root, '.build/browser-extensions', digest(packageRoot).slice(7) + '-views.json'), { bundle: { files: views.files } });
+			for (const [path, content] of Object.entries(views.resources)) {
+				const bytes = Buffer.from(content);
+				const difference = bytes.length - Buffer.from(packageResources[path] ?? '', 'base64').length;
+				if (bytes.length > 16 * 1024 * 1024 || packageBytes + difference > 64 * 1024 * 1024 || snapshotBytes + difference > 256 * 1024 * 1024) throw new RangeError('Extension webview exceeds its resource budget');
+				packageBytes += difference;
+				snapshotBytes += difference;
+				packageResources[path] = bytes.toString('base64');
+			}
+		}
 		if (index < builtInCount && manifest.engines?.ash && manifest.contributes?.localizations) {
 			packageResources['localization/package.json'] = (await readPackageFile(resolve(root, '.build/desktop/localization/extensions', id, 'localization/package.json'))).toString('base64');
 		}

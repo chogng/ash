@@ -1,0 +1,16 @@
+load("//:defs.bzl", "ash_rust_binary", "ash_rust_crate")
+
+exports_files(glob(["src/*.rs"]) + ["package.json", "package.nls.json", "package.nls.zh-CN.json", "media/markdown.css"], visibility = ["//crates/app-server:__pkg__"])
+
+ash_rust_crate(
+    name = "markdown-language-features",
+    crate_name = "ash_markdown_language_features",
+    data = ["package.json", "package.nls.json", "package.nls.zh-CN.json", "media/markdown.css"],
+)
+
+ash_rust_binary(
+    name = "ash-markdown-language-features",
+    crate_name = "ash_markdown_language_features",
+    crate_root = "src/main.rs",
+    deps = [":markdown-language-features"],
+)

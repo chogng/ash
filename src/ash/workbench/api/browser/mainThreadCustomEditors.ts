@@ -8,6 +8,7 @@ import { EditorPaneMatch } from '../../browser/parts/editor/editorPane.js';
 import { WebviewEditor, type CustomTextEditorProvider } from '../../contrib/webviewPanel/browser/webviewEditor.js';
 import '../../contrib/customEditor/browser/customEditorInputFactory.js';
 import { CustomEditorInput } from '../../contrib/customEditor/browser/customEditorInput.js';
+import { IExtensionApi } from '../../../platform/extensions/common/extensionApi.js';
 
 /** Connects one activated extension provider to the existing editor pane registry. */
 export class MainThreadCustomEditors extends Disposable {
@@ -17,6 +18,7 @@ export class MainThreadCustomEditors extends Disposable {
 		private readonly timeout: number,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@IExtensionHostApi private readonly api: IExtensionHostApi,
+		@IExtensionApi private readonly packages: IExtensionApi,
 	) {
 		super();
 	}
@@ -66,7 +68,7 @@ export class MainThreadCustomEditors extends Disposable {
 						payload,
 						deadlineUnixMillis: Date.now() + this.timeout,
 					}, AbortSignal.any([controller.signal, signal]));
-				}));
+				}, runtime));
 				this.identities.set(registration.viewType, key);
 			}
 		}
@@ -85,8 +87,31 @@ export class MainThreadCustomEditors extends Disposable {
 
 	public registerCustomTextEditorProvider(
 		registration: ExtensionHostCustomEditorRegistration,
-		invoke: (operation: string, payload: JsonValue, signal: AbortSignal) => Promise<JsonValue>): IDisposable {
+		invoke: (operation: string, payload: JsonValue, signal: AbortSignal) => Promise<JsonValue>,
+		owner?: { readonly id: string; readonly version: string; }): IDisposable {
 		const resourceCache = new Map<string, string>();
+		let resourceGeneration: number | undefined;
+		const readResource = async (value: JsonValue | undefined, signal: AbortSignal): Promise<string> => {
+			if (typeof value !== 'string' || value.startsWith('blob:')) return readWebviewResource(value, resourceCache, signal);
+			if (!owner || !value || /[\\:\0]/u.test(value) || value.split('/').some(part => !part || part === '.' || part === '..')) {
+				throw new TypeError('Custom editor resource must be a path in its own package');
+			}
+			const catalog = await this.packages.list('cached');
+			const entry = catalog.extensions.find(entry => entry.id === owner.id && entry.version === owner.version);
+			// Product Rust executables are bound by the launcher. Installed executable packages
+			// will need their exact admitted package binding before using this resource path.
+			if (entry?.sourceKind !== 'builtIn') throw new TypeError('Custom editor package is unavailable');
+			if (resourceGeneration !== catalog.generation) { resourceCache.clear(); resourceGeneration = catalog.generation; }
+			const key = `${catalog.generation}:${value}`;
+			let text = resourceCache.get(key);
+			if (text === undefined) {
+				const bytes = await this.packages.resources.readExtensionResourceBytes({ generation: catalog.generation, extensionId: owner.id, path: value });
+				text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+				if (resourceGeneration === catalog.generation) resourceCache.set(key, text);
+			}
+			signal.throwIfAborted();
+			return text;
+		};
 		return EditorPanes.registerEditorPane({
 			id: registration.viewType,
 			name: registration.displayName,
@@ -115,13 +140,15 @@ export class MainThreadCustomEditors extends Disposable {
 							throw new TypeError('Custom editor resources require a script and stylesheet');
 						}
 						const assets = resources as Readonly<Record<string, JsonValue>>;
-						const [script, style] = await Promise.all([readWebviewResource(assets.script, resourceCache, signal), readWebviewResource(assets.style, resourceCache, signal)]);
+						const [script, style] = await Promise.all([readResource(assets.script, signal), readResource(assets.style, signal)]);
 						// Resource bytes execute only inside the opaque sandbox, outside the JSON edit channel.
 						html = `<style>${style.replaceAll(/<\/style/gi, '<\\/style')}</style>${html}<script>${script.replaceAll(/<\/script/gi, '<\\/script')}</script>`;
 					}
 					const update = result.update;
+					if ('editable' in result && typeof result.editable !== 'boolean') throw new TypeError('Custom editor editable policy must be boolean');
+					const editable = 'editable' in result ? result.editable as boolean : undefined;
 					// Readonly policy belongs to the editor model owner, including after configuration changes.
-					return 'update' in result ? { html, update: update && typeof update === 'object' && !Array.isArray(update) ? { ...update, readOnly: document.readOnly } : update } : { html };
+					return 'update' in result ? { html, editable, update: update && typeof update === 'object' && !Array.isArray(update) ? { ...update, readOnly: document.readOnly } : update } : { html, editable };
 				},
 			} satisfies CustomTextEditorProvider, options.onSave),
 		});

@@ -17,7 +17,7 @@ use std::time::Instant;
 mod windows;
 
 #[test]
-fn markdown_product_registration_is_lazy_snapshot_only_and_obeys_profile_policy() {
+fn markdown_product_registration_owns_views_and_obeys_profile_policy() {
     struct Disabled;
     impl crate::ExtensionsEditorExtensionAdmission for Disabled {
         fn generation(&self) -> u64 {
@@ -43,25 +43,26 @@ fn markdown_product_registration_is_lazy_snapshot_only_and_obeys_profile_policy(
     .unwrap();
     let markdown = deployments
         .iter()
-        .find(|entry| entry.id == "ash.markdown-parser")
+        .find(|entry| entry.id == "vscode.markdown-language-features")
         .unwrap();
     assert_eq!(
         markdown.params.capabilities,
-        vec![ash_external_ext::ExtensionCapability::Command]
+        vec![
+            ash_external_ext::ExtensionCapability::Command,
+            ash_external_ext::ExtensionCapability::CustomTextEditor,
+            ash_external_ext::ExtensionCapability::LanguageProvider
+        ]
     );
     assert!(matches!(
         markdown.workspace_read,
-        super::source::WorkspaceReadAccess::Denied
+        super::source::WorkspaceReadAccess::Read
     ));
     assert!(markdown.credential_providers.is_empty());
     assert_eq!(
         markdown.activation.as_ref().unwrap().events,
-        ["onCommand:_markdown.parse"]
+        ["onStartupFinished"]
     );
-    assert_eq!(
-        markdown.activation.as_ref().unwrap().commands,
-        [("_markdown.parse".into(), "_markdown.parse".into())]
-    );
+    assert_eq!(markdown.activation.as_ref().unwrap().commands.len(), 7);
     assert!(!markdown.authority.authorizes());
     assert!(markdown.authority.acquire().is_none());
 }

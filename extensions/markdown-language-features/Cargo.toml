@@ -1,5 +1,5 @@
 [package]
-name = "ash-markdown-parser"
+name = "ash-markdown-language-features"
 version.workspace = true
 edition.workspace = true
 license-file.workspace = true
@@ -7,9 +7,12 @@ publish.workspace = true
 
 [dependencies]
 external-ext-sdk = { package = "ash-external-ext-sdk", path = "../../sdk/rust" }
-pulldown-cmark.workspace = true
+pulldown-cmark = { workspace = true, features = ["html"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
+url.workspace = true
+globset.workspace = true
+regex.workspace = true
 
 [dev-dependencies]
 ash-external-ext.workspace = true

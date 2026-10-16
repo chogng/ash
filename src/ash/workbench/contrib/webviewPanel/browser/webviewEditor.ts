@@ -34,8 +34,10 @@ export interface CustomTextEditorDocument {
 
 export interface CustomTextEditorContent {
 	readonly html: string;
-	/** Editable views accept version-bound changes and update their existing DOM. */
+	/** Live views update their existing document through the webview message channel. */
 	readonly update?: unknown;
+	/** A live preview can explicitly decline edit, history and save messages. */
+	readonly editable?: boolean;
 }
 
 export interface CustomTextEditorProvider {
@@ -128,7 +130,7 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 						return;
 					}
 					const variables = Object.entries(this.themes.getColorTheme().colors).map(([id, value]) => `${colorCssVariable(id)}:${value}`).join(';');
-					this.editable = content.update !== undefined;
+					this.editable = content.editable ?? (content.update !== undefined);
 					this.renderedUpdate = content.update;
 					this.renderedVersion = document.version;
 					const base = asWebviewUri(input.resource).toString().replaceAll('&', '&amp;').replaceAll('"', '&quot;');
@@ -204,6 +206,11 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 			}
 		}));
 		resources.add(webview.onMessage(({ message }) => {
+			if (typeof message === 'object' && message !== null && 'type' in message && message.type === 'ready') {
+				if (this.renderedUpdate !== undefined) webview.postMessage(this.renderedUpdate);
+				if (this.renderedVersion !== this.model?.reference.model.getVersionId()) this.refreshView?.();
+				return;
+			}
 			if (this.editable && typeof message === 'object' && message !== null && 'type' in message) {
 				this.handleEditMessage(message, webview);
 				return;
@@ -227,10 +234,6 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 	private handleEditMessage(message: object & { type: unknown; }, webview: IWebviewElement): void {
 		const model = this.model?.reference.model;
 		if (!model) return;
-		if (message.type === 'ready') {
-			if (this.renderedVersion !== model.getVersionId()) this.refreshView?.();
-			return;
-		}
 		if (message.type === 'save') {
 			void this.save().catch(error => this.notifications.error(error));
 			return;
@@ -247,21 +250,35 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 				return;
 			}
 			const previous = model.getText();
-			const next = message.text;
 			let start = 0;
-			while (start < previous.length && start < next.length && previous[start] === next[start]) start++;
 			let end = previous.length;
-			let nextEnd = next.length;
-			while (end > start && nextEnd > start && previous[end - 1] === next[nextEnd - 1]) { end--; nextEnd--; }
+			let replacement = message.text;
+			const delta = 'start' in message || 'end' in message;
+			if (delta) {
+				if (!('start' in message) || !('end' in message)
+					|| typeof message.start !== 'number' || typeof message.end !== 'number'
+					|| !Number.isSafeInteger(message.start) || !Number.isSafeInteger(message.end)
+					|| message.start < 0 || message.end < message.start || message.end > previous.length
+					|| previous.length - (message.end - message.start) + replacement.length > 16 * 1024 * 1024) {
+					webview.postMessage({ type: 'editRejected', reason: 'invalid' });
+					return;
+				}
+				start = message.start; end = message.end;
+			} else {
+				while (start < previous.length && start < replacement.length && previous[start] === replacement[start]) start++;
+				let nextEnd = replacement.length;
+				while (end > start && nextEnd > start && previous[end - 1] === replacement[nextEnd - 1]) { end--; nextEnd--; }
+				replacement = replacement.slice(start, nextEnd);
+			}
 			this.applyingEdit = true;
 			try {
-				if (start !== end || start !== nextEnd) {
+				if (start !== end || replacement.length > 0) {
 					model.pushStackElement();
-					model.pushEditOperations(null, [{ range: Range.fromPositions(model.getPositionAt(start), model.getPositionAt(end)), text: next.slice(start, nextEnd) }], null);
+					model.pushEditOperations(null, [{ range: Range.fromPositions(model.getPositionAt(start), model.getPositionAt(end)), text: replacement }], null);
 					model.pushStackElement();
 				}
 			} finally { this.applyingEdit = false; }
-			webview.postMessage({ type: 'accepted', version: model.getVersionId(), text: model.getText() });
+			webview.postMessage({ type: 'accepted', version: model.getVersionId(), ...(delta ? {} : { text: model.getText() }) });
 			this.refreshView?.();
 		} else {
 			if (message.type === 'undo') model.undo(); else model.redo();

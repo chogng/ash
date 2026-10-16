@@ -20,7 +20,7 @@ TS/JS 扩展沿用 Open VSX 包与 VS Code API，运行时职责按第 0.1 节�
 下面第 0 节是目标架构，其余实现记录不表示迁移已经完成。Open VSX 来源已接入；包能否运行仍取决于实际入口、API、平台与授权。Rust SDK 与产品 launcher 已用于独立 GitHub 认证试点；通用第三方 Rust 包安装、隔离与其余服务商能力迁移尚未完成。
 
 当前代码同时存在声明式目录、可信浏览器 Worker 和 Rust 可执行扩展 Host。声明式目录只读取
-`package.json` 与资源；内置 Markdown 预览已经走浏览器 Worker。现有 `ash-external-ext-sdk` 的注册、typed DataChannels、scoped Services 与 stdio runtime 已被 Rust 认证试点复用，继续作为 Rust 作者接口建设；旧命令/Hover 示例本身不证明其他业务契约已完成。标准 API 适配器与 Rust V8 宿主已实现命令、悬停 Provider、文档快照、
+`package.json` 与资源；内置 Markdown 功能由独立 Rust 扩展运行。现有 `ash-external-ext-sdk` 的注册、typed DataChannels、scoped Services 与 stdio runtime 已被 Rust 认证试点复用，继续作为 Rust 作者接口建设；旧命令/Hover 示例本身不证明其他业务契约已完成。标准 API 适配器与 Rust V8 宿主已实现命令、悬停 Provider、文档快照、
 授权磁盘读取、通知、Quick Pick 和停用释放；本地包安装、启用、授权和 macOS、64 位 Windows JS 系统隔离已接入。目标是建设统一的 VS Code/Node API 兼容层，由 Electron、Rust 和 V8 按执行位置承担职责；当前 Node、受限 V8 与可信 Worker 共用标准 API 适配器；完整 VS Code/Node 兼容仍未完成。
 Open VSX 已接入现有 Rust 包管理。VSIX 安装先加载受支持的声明式贡献；扩展启用且用户授权脚本后，标准包由产品 Node Host 执行，兼容范围取决于所用 VS Code API。Node 路径支持 macOS、Linux 和 64 位 Windows；本轮验证平台是 macOS。
 现有 Host RPC v1 的细节在下文作为当前实现记录保留；可以复用其监管与取消机制，但窄编辑器契约不能代替 Rust 能力扩展的完整业务契约。
@@ -68,24 +68,25 @@ Worker 持有调用的取消信号；到达截止时间后终止 Worker 并撤�
 该路径仅执行内置或开发者显式指定的可信资源，不属于 Extensions 执行许可或生产第三方隔离路径。
 Worker 无法访问 Workbench DOM，但仍是同源代码，不宣称具备生产 launcher 的 hard limits。
 
-未连接后端的浏览器窗口仍加载 TS 打包的语言声明和主题，因此 Markdown 动作不依赖后端连接。
+未连接后端的浏览器窗口仍加载 TS 打包的语言声明、语法资源和主题；Rust 扩展功能需要授权后端。
 工作台组合入口同时持有浏览器 Worker 与 App Server 可执行扩展的注册快照；同一扩展 ID 只能由一个
 运行宿主持有。`MainThreadExtensionApi` 把扩展命令和编辑器菜单接入工作台，
 `MainThreadCustomEditors` 注册文本自定义编辑器。内置 `extensions/markdown-language-features`
-使用 `vscode-markdown-languageservice` 提供路径和标题补全、定义、引用、标题与链接重命名、
-文档及工作区符号、折叠、链接、悬停、快速修复、链接诊断、扩大选择和引用高亮。
+通过 Rust Provider 提供路径和标题补全、定义、引用、标题与链接重命名、
+工作区符号、链接、悬停、快速修复、链接诊断和引用高亮。
 每次请求固定文档快照，打开的未保存文档先于磁盘内容；跨文件编辑附带原文，由编辑器批量编辑服务检查冲突。
 Workspace edit 的 `entries` 按顺序执行：`kind: textDocument` 带 `resource`、`expectedText` 和 `edits`；
 `kind: rename` 带 `source`、`target` 和 `existing`。链接路径重命名将文件改名和引用修改交给同一批量编辑事务，
 预览确认后才执行，目标冲突与撤销由该服务处理。
-文档扫描只使用文件服务可访问的工作区目录；后端未连接时，仅扫描本地浏览器已授权的目录。
+文档扫描只使用发起客户端的文件服务可访问的工作区目录。
 补全触发字符属于语言 Provider 注册契约。取消和扩展退出会终止对应请求。
 
-该扩展还提供 Markdown 预览及富文本编辑器。富编辑通过标准命令调用独立的 `ash.markdown-parser`
-Rust 扩展，由已有 SDK、Host RPC 和产品进程监管承载，按 `_markdown.parse` 请求激活；扩展只接收带版本的
-源码快照，返回渲染节点与 UTF-16 源码范围，不读取磁盘或维护文档副本。客户端丢弃已取消渲染的响应，
-并检查返回的协议、URI、版本及源码范围；标准命令 API 不传调用方取消，后台解析由 deadline、撤权与退出终止。
-桌面端和已连接后端的 Web 共用此能力；不可用时显示本地化错误并保留源码编辑。
+`markdown-language-features` 由一个独立 Rust 扩展程序提供 Markdown 预览、富文本编辑和链接语义功能。
+内部 `parser` 模块使用 `pulldown-cmark` 解析带版本的源码快照，返回渲染节点和 UTF-16 源码范围；
+不再注册独立的解析扩展或跨扩展解析命令。通用 Rust SDK 提供命令、自定义文本编辑器、语言 Provider 和文档观察。
+高亮、大纲、折叠与结构选择由编辑器已有的共享 Tree-sitter 提供，grammar/query 继续归 `markdown-basics`。
+静态浏览器视图资源随功能扩展打包，通过通用 CustomTextEditor 宿主加载；没有 JS 扩展入口。
+桌面端和已连接后端的 Web 使用同一 Rust Provider；纯 Web 的语法 WASM 降级不提供可执行扩展能力。
 客户端 JSON envelope 上限为 64 MiB、100 万节点、每集合 262144 项及深度 160，允许快照和渲染树一同传输；
 各扩展进程仍按各自已授权额度校验。富编辑 HTML 只保留启动数据，完整文档通过宿主初始消息队列投递，
 避免重复嵌入 HTML；文档、源码视图与富编辑视图继续共用同一个撤销历史。客户端使用现有多行 InputBox
@@ -96,8 +97,8 @@ Rust 扩展，由已有 SDK、Host RPC 和产品进程监管承载，按 `_markd
 允许读取的目录是当前工作区与源文档目录，实际读取还必须满足已有文件服务的授权。
 切换文档和关闭视图后，旧请求不会向新页面发送结果。
 富文本视图只保留当前显示内容，编辑必须带上共享模型的版本；撤销、重做、保存和关闭确认均由同一文档状态决定。
-版本冲突保留视图中的草稿，并提供重新载入操作。库资源由 Worker 创建、工作台在沙箱内加载，
-不占用文档编辑消息的 JSON 限额；扩展持有的对象 URL 可显式释放，Worker 退出时宿主释放剩余 URL。
+版本冲突保留视图中的草稿，并提供重新载入操作。静态视图资源由扩展包提供，工作台按当前目录代次
+读取并在沙箱内加载，不占用文档编辑消息的 JSON 限额；Provider 退出时撤销注册并取消在途调用。
 “打开富文本编辑器”（`markdown.showRichEditor`）保留源码标签；“重新打开为富文本”替换当前视图。
 源码、预览与富文本标签可以同时打开。此入口没有扩大第三方扩展的生产执行许可。
 
@@ -385,7 +386,7 @@ Host RPC 与 App Server 客户端协议是两个真实传输边界，允许机�
 
 第一切片使用已存在的命令注册、Workbench 调用和未保存文档读取，验证 TS/JS 与 Rust 共用注册、双向调用、错误和取消；先核对 wire 源与生成类型，再收敛现有 adapter。第二切片使用已有 SecretStore/HTTP 契约，完善按 scope 授权的公共服务绑定和 JS 对等适配，补齐后台调用的 deadline、取消及释放。两者均通过真实入口后，才迁移 Remote 的接入业务策略和它实际需要的标准运行时能力，不以新增 SSH 专用 API 跳过公共机制。
 
-本次已迁移的 TS SDK 消费范围包括原来依赖 `@ash/extension` 的 VS Code facade、Node bootstrap 与 V8 模块加载，以及 Markdown Worker、产品 Remote resolver、示例/fixtures、打包与构建输入。先将 Host RPC 注册与生命周期实现归入执行宿主的内部 adapter，再让内置扩展使用标准 API，并验证其原有行为；内部 adapter 不向扩展发布第二个模块或另一套注册 API。Backend 与 Browser 两条路径共用私有 runtime adapter，构建、打包和测试使用标准包与独立 Rust Provider。只删除目录，或把整个 SDK 换名继续发布，都不满足该退出要求。
+本次已迁移的 TS SDK 消费范围包括原来依赖 `@ash/extension` 的 VS Code facade、Node bootstrap 与 V8 模块加载，以及产品 Remote resolver、示例/fixtures、打包与构建输入。先将 Host RPC 注册与生命周期实现归入执行宿主的内部 adapter，再让内置扩展使用标准 API，并验证其原有行为；内部 adapter 不向扩展发布第二个模块或另一套注册 API。Backend 与 Browser 两条路径共用私有 runtime adapter，构建、打包和测试使用标准包与独立 Rust Provider。只删除目录，或把整个 SDK 换名继续发布，都不满足该退出要求。
 
 每个切片核对领域 owner、权限和全部消费者，语言适配及 Workbench/TUI 支持范围同批处理，退出旧入口和重复状态；全部消费者迁移及验证前保留原有行为，不先删除后端实现。具体服务实现继续由现有领域 owner 持有，不新增复制注册、授权、包状态和业务状态的总管理对象。
 
@@ -489,16 +490,16 @@ App 可预装并按认证请求激活 GitHub 扩展；TUI 默认不加载、不�
 
 ### 0.4 当前状态与验收要求
 
-| 项目                                                | 当前状态                                                                                                        |
-| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| 内置或显式可信包的浏览器 Worker 执行、Markdown 预览 | 已有实现；当前同源 Worker 不代表第三方权限隔离已完成                                                            |
-| Rust GitHub 领域能力与 TS 产品服务调用              | 已有实现；尚未开放为逐扩展授权的统一作者 API                                                                    |
-| 产品窗口禁用 Node、开启上下文隔离和沙箱             | 已有基础设置；preload 仍有按 `ash:` 前缀过滤的通用 IPC                                                          |
-| 标准 API adapter 与独立 Rust V8 宿主                | 已实现并通过独立进程测试；支持命令、悬停 Provider、文档快照、授权文件读取、通知、Quick Pick 和释放              |
-| 受限 V8 执行与系统隔离                              | macOS 与 64 位 Windows JS 扩展已接通；系统沙箱、V8 堆和 ArrayBuffer 预算在独立进程实施；其余平台尚未开放        |
-| 完整 TS API                                         | 尚未完成；现有可信 Worker 仍接入通用命令，不属于第三方扩展权限边界                                              |
-| Open VSX 搜索、下载、安装、更新和卸载               | 已接入 Rust Manager 与 Extensions 界面；支持 universal 正式版本、已有静态贡献及分别授权的基础 CommonJS API 子集 |
-| Rust 能力扩展与作者接口                             | GitHub 认证已用公共 Rust SDK／Host RPC v1 和产品 launcher 实现独立程序；通用第三方安装／授权仍待完成            |
+| 项目                                    | 当前状态                                                                                                        |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| 内置或显式可信包的浏览器 Worker 执行    | 已有实现；当前同源 Worker 不代表第三方权限隔离已完成                                                            |
+| Rust GitHub 领域能力与 TS 产品服务调用  | 已有实现；尚未开放为逐扩展授权的统一作者 API                                                                    |
+| 产品窗口禁用 Node、开启上下文隔离和沙箱 | 已有基础设置；preload 仍有按 `ash:` 前缀过滤的通用 IPC                                                          |
+| 标准 API adapter 与独立 Rust V8 宿主    | 已实现并通过独立进程测试；支持命令、悬停 Provider、文档快照、授权文件读取、通知、Quick Pick 和释放              |
+| 受限 V8 执行与系统隔离                  | macOS 与 64 位 Windows JS 扩展已接通；系统沙箱、V8 堆和 ArrayBuffer 预算在独立进程实施；其余平台尚未开放        |
+| 完整 TS API                             | 尚未完成；现有可信 Worker 仍接入通用命令，不属于第三方扩展权限边界                                              |
+| Open VSX 搜索、下载、安装、更新和卸载   | 已接入 Rust Manager 与 Extensions 界面；支持 universal 正式版本、已有静态贡献及分别授权的基础 CommonJS API 子集 |
+| Rust 能力扩展与作者接口                 | GitHub 认证已用公共 Rust SDK／Host RPC v1 和产品 launcher 实现独立程序；通用第三方安装／授权仍待完成            |
 
 后续实现必须通过真实扩展入口验证：正常授权操作成功；伪造扩展身份、越界文件或仓库、未授权命令、
 受限 V8 的直接 Node 访问及所有扩展的产品 IPC/后端越权访问失败；授权 Node 包的真实文件、网络和子进程调用成功；撤销授权后在途和后续调用停止；关闭窗口释放注册与任务；文档编辑

@@ -2,7 +2,7 @@
   "markdown.rich.source": "编辑全文源码",
   "markdown.rich.editBlock": "编辑 Markdown 段落",
   "markdown.rich.task": "已完成任务",
-  "markdown.rich.parseError": "Rust Markdown 解析扩展不可用或解析失败。你仍可继续编辑源码。",
+  "markdown.rich.parseError": "无法解析 Markdown 内容。你可以继续编辑源码。",
   "markdown.preview.title": "打开预览",
   "markdown.previewSide.title": "打开侧边预览",
   "markdown.reopenAsPreview.title": "重新打开为预览",
@@ -89,5 +89,13 @@
   "markdown.preferredMdPathExtensionStyle.option.auto": "自动",
   "markdown.preferredMdPathExtensionStyle.option.includeExtension": "包含扩展名",
   "markdown.preferredMdPathExtensionStyle.option.removeExtension": "移除扩展名",
-  "displayName": "Markdown 语言功能"
+  "displayName": "Markdown 语言功能",
+  "markdown.diagnostic.missingHeading": "找不到标题：“{0}”。",
+  "markdown.diagnostic.unusedDefinition": "未使用的链接定义：“{0}”。",
+  "markdown.action.removeUnusedDefinition": "删除未使用的链接定义",
+  "markdown.diagnostic.missingReference": "找不到链接定义：{0}",
+  "markdown.diagnostic.missingFile": "找不到文件：{0}",
+  "markdown.diagnostic.duplicateDefinition": "重复的链接定义：{0}",
+  "markdown.action.organizeDefinitions": "整理链接定义",
+  "markdown.action.extractDefinition": "将链接提取到定义"
 }

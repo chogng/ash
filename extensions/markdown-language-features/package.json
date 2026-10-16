@@ -1,13 +1,12 @@
 {
-  "type": "module",
   "name": "markdown-language-features",
   "publisher": "vscode",
   "version": "1.0.0",
+  "type": "module",
   "displayName": "%displayName%",
   "engines": {
     "vscode": "*"
   },
-  "browser": "./src/extension.js",
   "contributes": {
     "commands": [
       {
@@ -459,13 +458,25 @@
   },
   "private": true,
   "dependencies": {
-    "@vscode/l10n": "^0.0.18",
-    "katex": "0.18.2",
-    "markdown-it": "^15.0.2",
-    "marked": "18.0.14",
-    "picomatch": "^4.0.5",
-    "vscode-languageserver-textdocument": "^1.0.15",
-    "vscode-markdown-languageservice": "^0.5.0",
-    "vscode-uri": "^3.2.0"
-  }
+    "katex": "0.18.2"
+  },
+  "ashRuntime": {
+    "kind": "rust",
+    "entrypoint": "ash-markdown-language-features",
+    "webviews": [
+      {
+        "entry": "src/richEditor.js",
+        "script": "media/richEditor.js",
+        "style": "media/richEditor.css"
+      },
+      {
+        "entry": "src/preview.js",
+        "script": "media/preview.js",
+        "style": "media/preview.css"
+      }
+    ]
+  },
+  "activationEvents": [
+    "onStartupFinished"
+  ]
 }

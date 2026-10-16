@@ -1,8 +1,6 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
-import { test, afterEach } from 'mocha';
-import { AsyncLocalStorage } from 'node:async_hooks';
+import { test, before, afterEach } from 'mocha';
+import { prepareMarkdownExtension, startMarkdownExtension } from '../../../../../../test/fixtures/markdownExtension.js';
 import { normalizeExtensionHostPayload, normalizeExtensionHostSnapshot } from '../../../../platform/agentHost/browser/extensionHostProtocol.js';
 import { type ExtensionHostRegistration, type JsonValue } from '../../../../platform/agentHost/common/extensionHostApi.js';
 import { EditorGroupModel } from '../../../common/editor/editorGroupModel.js';
@@ -10,59 +8,137 @@ import { CustomEditorInput } from '../../../contrib/customEditor/browser/customE
 import { CustomEditorInputSerializer } from '../../../contrib/customEditor/browser/customEditorInputFactory.js';
 import { EditorInputSerializerRegistry } from '../../../services/editor/common/editorInputSerializer.js';
 import { URI } from '../../../../base/common/uri.js';
+import { MainThreadCustomEditors } from '../../browser/mainThreadCustomEditors.js';
+import { EditorPanes } from '../../../browser/editor.js';
+import type { CustomTextEditorProvider } from '../../../contrib/webviewPanel/browser/webviewEditor.js';
+import type { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import type { IExtensionApi, ExtensionDescriptor } from '../../../../platform/extensions/common/extensionApi.js';
+import type { IExtensionHostApi } from '../../../../platform/agentHost/common/extensionHostApi.js';
 
-type Handler = (operation: string, payload: JsonValue, signal: AbortSignal) => Promise<JsonValue>;
-
-let activeRuntime: { deactivate(): Promise<void>; } | undefined;
-let fixtureSequence = 0;
-const invocationScope = new AsyncLocalStorage<number>();
-const globals = globalThis as unknown as Record<string, unknown>;
-let previousGlobals: Map<string, PropertyDescriptor | undefined> | undefined;
-afterEach(async () => {
-	try { await activeRuntime?.deactivate(); }
-	finally {
-		activeRuntime = undefined;
-		for (const [name, descriptor] of previousGlobals ?? []) {
-			if (descriptor) Object.defineProperty(globals, name, descriptor);
-			else delete globals[name];
-		}
-		previousGlobals = undefined;
-	}
+test('Rust custom editor resources stay within their enabled package and follow catalog generations', async () => {
+	let generation = 1, enabled = true;
+	let provider: CustomTextEditorProvider | undefined;
+	let path = 'media/view.js';
+	const reads: unknown[] = [];
+	const packages = {
+		list: async () => ({ generation, diagnostics: [], extensions: enabled ? [{ id: 'test.rust', version: '1', sourceKind: 'builtIn' } as ExtensionDescriptor] : [] }),
+		resources: { readExtensionResourceBytes: async (request: unknown) => { reads.push(request); return new TextEncoder().encode('/* view */'); } },
+	} as unknown as IExtensionApi;
+	using adapter = new MainThreadCustomEditors(30000, { createInstance: (_ctor: unknown, value: CustomTextEditorProvider) => { provider = value; return {}; } } as unknown as IInstantiationService, {} as IExtensionHostApi, packages);
+	using registration = adapter.registerCustomTextEditorProvider({ kind: 'customTextEditor', registrationId: 'test.rust.editor', viewType: 'test.rust.editor', displayName: 'Test', selectors: ['*.md'], priority: 'option' }, async () => ({ html: '<main></main>', resources: { script: path, style: 'media/view.css' } }), { id: 'test.rust', version: '1' });
+	await EditorPanes.getEditorPanes().find(pane => pane.id === 'test.rust.editor')!.create({});
+	const document = { uri: 'untitled:/view.md', version: 1, languageId: 'markdown', text: '', readOnly: false };
+	const signal = new AbortController().signal;
+	await provider!.render(document, signal);
+	await provider!.render(document, signal);
+	assert.equal(reads.length, 2);
+	generation = 2;
+	await provider!.render(document, signal);
+	assert.equal(reads.length, 4);
+	assert.deepEqual(reads[2], { generation: 2, extensionId: 'test.rust', path: 'media/view.js' });
+	for (path of ['../other/view.js', '/view.js', 'file:///view.js', 'media\\view.js']) await assert.rejects(provider!.render(document, signal), /own package/);
+	path = 'media/view.js'; enabled = false;
+	await assert.rejects(provider!.render(document, signal), /unavailable/);
 });
 
-async function loadMarkdown(language: string, documents: readonly unknown[] = [], configuration: unknown = {}, folders: readonly string[] = [], clientRequest: (request: { operation: string; uri?: string; command?: string; arguments?: unknown[]; }) => Promise<unknown> = async () => ({ result: 'done' })) {
-	const bundle = JSON.parse(await readFile(resolve(process.cwd(), '.build/builtin/fixture.json'), 'utf8'));
-	const entry = bundle.resources['vscode.markdown-language-features']['src/extension.js'];
-	const manifest = JSON.parse(await readFile(resolve(process.cwd(), 'extensions/markdown-language-features/package.json'), 'utf8'));
-	const packageNls = JSON.parse(await readFile(resolve(process.cwd(), 'extensions/markdown-language-features/package.nls.json'), 'utf8'));
-	if (language === 'zh-CN') Object.assign(packageNls, JSON.parse(await readFile(resolve(process.cwd(), 'extensions/markdown-language-features/package.nls.zh-CN.json'), 'utf8')));
-	const empty = { contents: {}, keys: [], overrides: [] };
-	previousGlobals = new Map(['__ashConfiguration', '__ashInitialization', '__ashInvocation', '__ashRequest', '__ashBackgroundRequest'].map(name => [name, Object.getOwnPropertyDescriptor(globals, name)]));
-	globals.__ashConfiguration = { extensionId: 'vscode.markdown-language-features', extensionPath: '/', pathSeparator: '/', manifest, commands: manifest.contributes.commands, localization: { package: packageNls } };
-	globals.__ashInitialization = { language, workspaceFolders: folders.map((uri, index) => ({ uri, name: 'Workspace', index })), workspaceName: null, workspaceFile: null, configurationValues: configuration, configurationData: { defaults: empty, application: empty, userLocal: empty, userRemote: empty, workspace: empty, policy: empty, folders: [] } };
-	globals.__ashInvocation = (required = true) => { const id = invocationScope.getStore(); if (required && id === undefined) throw new Error('No invocation'); return id; };
-	globals.__ashRequest = async (_id: number, encoded: string) => JSON.stringify(await clientRequest(JSON.parse(encoded)));
-	globals.__ashBackgroundRequest = async (encoded: string) => JSON.stringify(await clientRequest(JSON.parse(encoded)));
-	const runtime = await import(`data:text/javascript;base64,${entry}#${++fixtureSequence}`);
-	activeRuntime = runtime;
-	const registrations = await runtime.activate() as ExtensionHostRegistration[];
+type Handler = (operation: string, payload: JsonValue, signal: AbortSignal) => Promise<JsonValue>;
+let activeRuntime: Awaited<ReturnType<typeof startMarkdownExtension>> | undefined;
+before(function () { this.timeout(600000); prepareMarkdownExtension(); });
+afterEach(async () => { await activeRuntime?.dispose(); activeRuntime = undefined; });
+async function loadMarkdown(language: string, documents: readonly unknown[] = [], configuration: unknown = {}, folders: readonly string[] = [], clientRequest: (request: any) => Promise<any> = async () => ({ result: 'done' })) {
+	const runtime = activeRuntime = await startMarkdownExtension(language, documents, configuration, folders, clientRequest);
+	const registrations = runtime.registrations as ExtensionHostRegistration[];
 	const handlers = new Map<string, Handler>();
-	for (const registration of registrations) handlers.set(registration.registrationId, async (operation, payload, signal) => {
-		signal.throwIfAborted();
-		const id = ++fixtureSequence;
-		const cancel = () => runtime.cancel(id);
-		signal.addEventListener('abort', cancel, { once: true });
-		try { return await invocationScope.run(id, () => runtime.invoke(registration.registrationId, payload, id, operation)); }
-		finally { signal.removeEventListener('abort', cancel); }
-	});
+	for (const registration of registrations) handlers.set(registration.registrationId, (operation, payload, signal) => runtime.invoke(registration.registrationId, operation, payload, signal));
 	const invoke = async (operation: string, payload: JsonValue, signal: AbortSignal): Promise<JsonValue> => {
 		const registration = registrations.find(value => value.kind === 'languageProvider' && value.operations.includes(operation as never));
 		if (!registration) throw new Error(`Missing provider ${operation}`);
-		return handlers.get(registration.registrationId)!(operation, { ...(payload as Record<string, JsonValue>), languageId: 'markdown', context: { kind: 'invoke' } }, signal);
+		return runtime.invoke(registration.registrationId, operation, payload, signal);
 	};
 	for (const document of documents) await handlers.get('vscode.documents')!('documentEvent', { type: 'open', document } as JsonValue, new AbortController().signal);
-	return { registrations, handlers, invoke };
+	return { registrations, handlers, invoke, clientCalls: runtime.clientCalls };
 }
+
+function diagnosticEntries<T>(previous: T[], request: any): T[] {
+	if (!request.merge) return request.entries;
+	const entries = new Map(previous.map(entry => [(entry as { uri: string; }).uri, entry]));
+	for (const entry of request.entries) entries.set(entry.uri, entry);
+	return [...entries.values()];
+}
+
+test('reference destination rename edits the path, rebases moved content and leaves labels intact', async () => {
+	const current = { uri: 'file:///workspace/current.md', text: '[go][id]\n\n[id]: ./target.md\n', version: 1, languageId: 'markdown' };
+	const target = { ...current, uri: 'file:///workspace/target.md', text: '# Target\n\n[asset](./asset.png)\n' };
+	const { invoke } = await loadMarkdown('en', [current, target], {}, [], async request => {
+		if (request.operation === 'statResource') return { result: 'resourceStat', fileType: 1, size: 0, mtime: 0 };
+		return { result: 'done' };
+	});
+	const edit = await invoke('rename', { resource: current.uri, text: current.text, version: 1, position: { lineIndex: 2, columnIndex: 12 }, kind: 'edit', newName: './sub/moved.md' }, new AbortController().signal);
+	assert.deepEqual(edit, {
+		entries: [
+			{ kind: 'textDocument', resource: current.uri, expectedText: current.text, edits: [{ range: { start: { lineIndex: 2, columnIndex: 6 }, end: { lineIndex: 2, columnIndex: 17 } }, text: './sub/moved.md' }] },
+			{ kind: 'textDocument', resource: target.uri, expectedText: target.text, edits: [{ range: { start: { lineIndex: 2, columnIndex: 8 }, end: { lineIndex: 2, columnIndex: 19 } }, text: '../asset.png' }] },
+			{ kind: 'rename', source: target.uri, target: 'file:///workspace/sub/moved.md', existing: 'error' },
+		]
+	});
+});
+
+test('heading links share preview slugs and destination ranges even when titles contain delimiters', async () => {
+	const text = '# Cafe\u0301\n\n[go](<#CAFE%CC%81> "title ](bad")\n';
+	const uri = 'untitled:/unicode.md';
+	const { invoke, handlers } = await loadMarkdown('en', [{ uri, text, version: 1, languageId: 'markdown' }]);
+	const signal = new AbortController().signal;
+	const request = { resource: uri, text, version: 1 };
+	assert.deepEqual(await invoke('diagnostics', request, signal), { diagnostics: [] });
+	const links = await invoke('documentLinks', request, signal) as { range: unknown; target: string; }[];
+	assert.deepEqual(links[0]!.range, { start: { lineIndex: 2, columnIndex: 6 }, end: { lineIndex: 2, columnIndex: 17 } });
+	assert.equal(URI.parse(links[0]!.target).fragment, '1,1');
+	const preview = await handlers.get('vscode.markdown.preview.editor')!('resolveCustomTextEditor', { document: { uri, text: '---\ntitle: hidden\n---\n\n' + text + '\n$E=mc^2$', version: 1, languageId: 'markdown' } }, signal) as { editable: boolean; update: { html: string; }; };
+	assert.equal(preview.editable, false);
+	assert.match(preview.update.html, /id="cafe\u0301"/u);
+	assert.doesNotMatch(preview.update.html, /title: hidden/u);
+	assert.match(preview.update.html, /data-math="E=mc\^2"/u);
+});
+
+test('link diagnostics reuse target snapshots without listing unrelated open documents', async () => {
+	const target = { uri: 'file:///workspace/target.md', text: '# Target\n', version: 1, languageId: 'markdown' };
+	const current = { ...target, uri: 'file:///workspace/current.md', text: '[go](./target.md#TARGET)\n\n'.repeat(1000) };
+	const { invoke, clientCalls } = await loadMarkdown('en', [current, target], {}, [], async request => {
+		if (request.operation === 'statResource') return { result: 'resourceStat', fileType: 1, size: 0, mtime: 0 };
+		return { result: 'done' };
+	});
+	clientCalls.length = 0;
+	assert.deepEqual(await invoke('diagnostics', { resource: current.uri, text: current.text, version: 1 }, new AbortController().signal), { diagnostics: [] });
+	assert.equal(clientCalls.filter(operation => operation === 'listDocuments').length, 0);
+	assert.equal(clientCalls.filter(operation => operation === 'readDocument').length, 1);
+});
+
+test('document diagnostics update dependents, retain unrelated markers and clear a closed document', async () => {
+	const documents = [
+		{ uri: 'file:///workspace/target.md', text: '# Before\n', version: 1, languageId: 'markdown' },
+		{ uri: 'file:///workspace/link.md', text: '[go](./target.md#before)', version: 1, languageId: 'markdown' },
+		{ uri: 'file:///workspace/unrelated.md', text: '[broken](#missing)', version: 1, languageId: 'markdown' },
+	];
+	const publications: any[] = [];
+	const { handlers, clientCalls } = await loadMarkdown('en', documents, {}, [], async request => {
+		if (request.operation === 'setDiagnostics') publications.push(request);
+		return { result: 'done' };
+	});
+	publications.length = 0;
+	documents[0] = { ...documents[0]!, text: '# After\n', version: 2 };
+	const signal = new AbortController().signal;
+	await handlers.get('vscode.documents')!('documentEvent', { type: 'change', document: documents[0]! }, signal);
+	assert.equal(publications[0].merge, true);
+	assert.deepEqual(publications[0].entries.map((entry: any) => entry.uri).sort(), documents.slice(0, 2).map(document => document.uri).sort());
+	assert.equal(publications[0].entries.find((entry: any) => entry.uri === documents[1]!.uri).diagnostics[0].code, 'link.no-such-header-in-file');
+	const closed = documents.pop()!;
+	await handlers.get('vscode.documents')!('documentEvent', { type: 'close', document: closed }, signal);
+	assert.deepEqual(publications[1].entries, [{ uri: closed.uri, version: null, diagnostics: [] }]);
+	const calls = clientCalls.length;
+	await handlers.get('vscode.documents')!('documentEvent', { type: 'change', document: { ...closed, languageId: 'plaintext' } }, signal);
+	assert.equal(publications.length, 2);
+	assert.equal(clientCalls.length, calls, 'unrelated language changes do not fetch Markdown snapshots');
+});
 
 test('custom editor tabs retain source identity and survive working-set serialization independently', () => {
 	const source = { resource: URI.file('/notes/draft.md'), languageId: 'markdown', initialText: '# Unsaved' };
@@ -91,28 +167,28 @@ test('packaged Markdown extension activates Chinese labels and renders the suppl
 			stderr: '', failure: null, registrations, outputEvents: [],
 		}]
 	});
-	const provider = normalized.extensions[0]!.registrations.find(registration => registration.kind === 'customTextEditor');
+	const provider = normalized.extensions[0]!.registrations.find(registration => registration.kind === 'customTextEditor' && registration.viewType === 'vscode.markdown.preview.editor');
 	assert.equal(provider?.kind === 'customTextEditor' && provider.displayName, 'Markdown 预览');
 	const previewCommand = registrations.find(registration => registration.kind === 'command' && registration.command === 'markdown.showPreview');
 	assert.equal(previewCommand?.kind === 'command' && previewCommand.title, '打开预览');
 	const signal = new AbortController().signal;
 	const result = await handlers.get('vscode.markdown.preview.editor')!('resolveCustomTextEditor', {
-		document: { uri: 'untitled:/draft.md', text: '# Unsaved\n\n**bold**\n\n<script>alert(1)</script>', languageId: 'markdown' },
-	}, signal) as { html: string; };
-	assert.match(result.html, /<h1>Unsaved<\/h1>/u);
-	assert.match(result.html, /<strong>bold<\/strong>/u);
-	assert.doesNotMatch(result.html, /alert\(1\)/u);
+		document: { uri: 'untitled:/draft.md', text: '# Unsaved\n\n**bold**\n\n<script>alert(1)</script>', languageId: 'markdown', version: 1 },
+	}, signal) as { html: string; update: { html: string; }; };
+	assert.match(result.update.html, /<h1 id="unsaved" tabindex="-1">Unsaved<\/h1>/u);
+	assert.match(result.update.html, /<strong>bold<\/strong>/u);
+	assert.doesNotMatch(result.update.html, /alert\(1\)/u);
 	const activeEditor = { resource: URI.file('/notes/draft.md').toJSON(), groupId: 'source-group', editorIndex: 2 };
 	for (const command of ['markdown.showPreview', 'markdown.showPreviewToSide', 'markdown.showSource', 'markdown.reopenAsPreview', 'markdown.reopenAsSource', 'markdown.showRichEditor', 'markdown.reopenAsRichEditor']) {
 		await handlers.get(command)!('execute', normalizeExtensionHostPayload({ activeEditor, arguments: [] }), signal);
 	}
 	assert.deepEqual(JSON.parse(JSON.stringify(commands)), [
-		['_workbench.openWith', { scheme: 'file', authority: '', path: '/notes/draft.md', query: '', fragment: '' }, 'vscode.markdown.preview.editor', [-1], 'source-group'],
-		['_workbench.openWith', { scheme: 'file', authority: '', path: '/notes/draft.md', query: '', fragment: '' }, 'vscode.markdown.preview.editor', [-2], 'source-group'],
-		['_workbench.openWith', { scheme: 'file', authority: '', path: '/notes/draft.md', query: '', fragment: '' }, 'default', [-1], 'source-group'],
+		['_workbench.openWith', activeEditor.resource, 'vscode.markdown.preview.editor', [-1], 'source-group'],
+		['_workbench.openWith', activeEditor.resource, 'vscode.markdown.preview.editor', [-2], 'source-group'],
+		['_workbench.openWith', activeEditor.resource, 'default', [-1], 'source-group'],
 		['reopenActiveEditorWith', 'vscode.markdown.preview.editor', { groupId: 'source-group', editorIndex: 2 }],
 		['reopenActiveEditorWith', 'default', { groupId: 'source-group', editorIndex: 2 }],
-		['_workbench.openWith', { scheme: 'file', authority: '', path: '/notes/draft.md', query: '', fragment: '' }, 'vscode.markdown.editor', [-1], 'source-group'],
+		['_workbench.openWith', activeEditor.resource, 'vscode.markdown.editor', [-1], 'source-group'],
 		['reopenActiveEditorWith', 'vscode.markdown.editor', { groupId: 'source-group', editorIndex: 2 }],
 	]);
 });
@@ -121,8 +197,8 @@ test('packaged Markdown language service resolves unsaved headings and diagnoses
 	const text = '# Shared draft\n\n[go](#shared-draft)\n\n[missing](#not-here)';
 	const uri = 'untitled:/draft.md';
 	let published: { diagnostics: { code: string; message: string; }[]; }[] = [];
-	const { invoke } = await loadMarkdown('en', [{ uri, text, version: 7, languageId: 'markdown' }], {}, [], async request => {
-		if (request.operation === 'setDiagnostics') published = (request as unknown as { entries: typeof published; }).entries;
+	const { invoke, handlers } = await loadMarkdown('en', [{ uri, text, version: 7, languageId: 'markdown' }], {}, [], async request => {
+		if (request.operation === 'setDiagnostics') published = diagnosticEntries(published, request);
 		return { result: 'done' };
 	});
 	const signal = new AbortController().signal;
@@ -131,8 +207,7 @@ test('packaged Markdown language service resolves unsaved headings and diagnoses
 	assert.deepEqual(definitions, [{ resource: uri, range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 14 } } }]);
 	const diagnostics = published[0]!;
 	assert.deepEqual(diagnostics.diagnostics.map(value => value.code), ['link.no-such-header-in-own-file']);
-	const symbols = await invoke('documentSymbols', request, signal) as { name: string; }[];
-	assert.equal(symbols[0]!.name, '# Shared draft');
+	assert.ok(![...handlers.keys()].some(id => /documentSymbols|foldingRanges|selectionRanges/u.test(id)));
 	const completions = await invoke('completion', { ...request, position: { lineIndex: 2, columnIndex: 7 } }, signal) as { items: { label: string; }[]; };
 	assert.ok(completions.items.some(item => item.label === '#shared-draft'));
 	const edit = await invoke('rename', { ...request, position: { lineIndex: 0, columnIndex: 5 }, kind: 'edit', newName: 'Changed heading' }, signal) as { entries: { expectedText: string; edits: unknown[]; }[]; };
@@ -152,7 +227,7 @@ test('packaged Markdown preferences control completion, highlighting, preview br
 	const { handlers, invoke } = await loadMarkdown('en', [{ uri, text, version: 1, languageId: 'markdown' }], {
 		markdown: { suggest: { paths: { enabled: false } }, occurrencesHighlight: { enabled: false }, preview: { breaks: true }, validate: { fragmentLinks: { enabled: 'error' }, fileLinks: { markdownFragmentLinks: 'inherit' } } },
 	}, [], async request => {
-		if (request.operation === 'setDiagnostics') published = (request as unknown as { entries: typeof published; }).entries;
+		if (request.operation === 'setDiagnostics') published = diagnosticEntries(published, request);
 		return { result: 'done' };
 	});
 	const signal = new AbortController().signal;
@@ -160,8 +235,8 @@ test('packaged Markdown preferences control completion, highlighting, preview br
 	assert.equal(published[0]!.diagnostics[0]!.severity, 'error');
 	assert.deepEqual(await invoke('completion', request, signal), { items: [], isIncomplete: false });
 	assert.deepEqual(await invoke('documentHighlights', request, signal), []);
-	const preview = await handlers.get('vscode.markdown.preview.editor')!('resolveCustomTextEditor', { document: { uri, text, version: 1, languageId: 'markdown' } }, signal) as { html: string; };
-	assert.match(preview.html, /first<br>\s*second/);
+	const preview = await handlers.get('vscode.markdown.preview.editor')!('resolveCustomTextEditor', { document: { uri, text, version: 1, languageId: 'markdown' } }, signal) as { html: string; update: { html: string; }; };
+	assert.match(preview.update.html, /first<br\s*\/?>\s*second/);
 	const empty = { contents: {}, keys: [], overrides: [] };
 	await handlers.get('vscode.workspace.events')!('workspaceEvent', {
 		type: 'configuration', revision: 1, emit: true,
@@ -173,8 +248,8 @@ test('packaged Markdown preferences control completion, highlighting, preview br
 	const completion = await invoke('completion', request, signal) as { items: { label: string; }[]; };
 	assert.ok(completion.items.some(item => item.label === '#heading'));
 	assert.ok((await invoke('documentHighlights', request, signal) as unknown[]).length > 0);
-	const reset = await handlers.get('vscode.markdown.preview.editor')!('resolveCustomTextEditor', { document: { uri, text, version: 1, languageId: 'markdown' } }, signal) as { html: string; };
-	assert.match(reset.html, /first\nsecond/);
+	const reset = await handlers.get('vscode.markdown.preview.editor')!('resolveCustomTextEditor', { document: { uri, text, version: 1, languageId: 'markdown' } }, signal) as { html: string; update: { html: string; }; };
+	assert.match(reset.update.html, /first\nsecond/);
 });
 
 test('Markdown workspace edits use dirty documents and localized validation respects configuration', async () => {
@@ -182,7 +257,7 @@ test('Markdown workspace edits use dirty documents and localized validation resp
 	const referring = { uri: 'file:///workspace/referring.md', text: '[go](./heading.md#current-heading)', languageId: 'markdown', version: 9 };
 	let published: { diagnostics: { message: string; }[]; }[] = [];
 	const { handlers, invoke } = await loadMarkdown('zh-CN', [heading, referring], { markdown: { validate: { enabled: true } } }, ['file:///workspace'], async request => {
-		if (request.operation === 'setDiagnostics') { published = (request as unknown as { entries: typeof published; }).entries; return { result: 'done' }; }
+		if (request.operation === 'setDiagnostics') { published = diagnosticEntries(published, request); return { result: 'done' }; }
 		if (request.operation === 'statResource') return { result: 'resourceStat', fileType: request.uri === 'file:///workspace' ? 2 : 1, size: 0, mtime: 0 };
 		if (request.operation === 'readResourceDirectory') return { result: 'resourceDirectory', entries: [['heading.md', 1], ['referring.md', 1]] };
 		throw new Error(`Dirty documents must precede disk reads: ${request.uri}`);
@@ -213,16 +288,12 @@ test('Markdown workspace edits use dirty documents and localized validation resp
 test('large rich documents are delivered once as updates instead of embedded HTML', async () => {
 	const text = '\uFEFF# Unembedded source\r\n' + '中文😀 **保真**  \r\n'.repeat(50000);
 	const uri = 'file:///synthetic/large.md';
-	const { handlers } = await loadMarkdown('zh-CN', [], {}, [], async request => {
-		if (request.operation !== 'executeCommand' || request.command !== '_markdown.parse') return { result: 'done' };
-		assert.deepEqual(request.arguments, [{ protocol_version: 1, uri, version: 5, text }]);
-		return { result: 'command', hasValue: true, value: { protocol_version: 1, uri, version: 5, blocks: [{ start: 0, end: text.length, content: { kind: 'raw', value: text } }] } };
-	});
+	const { handlers } = await loadMarkdown('zh-CN');
 	const result = await handlers.get('vscode.markdown.editor')!('resolveCustomTextEditor', { document: { uri, version: 5, text, languageId: 'markdown' } }, new AbortController().signal) as { html: string; update: { text: string; blocks: unknown[]; }; };
 	assert.ok(result.html.length < 10000);
 	assert.doesNotMatch(result.html, /Unembedded source/u);
 	assert.equal(result.update.text, text);
-	assert.equal(result.update.blocks.length, 1);
+	assert.ok(result.update.blocks.length > 0);
 });
 
 
@@ -248,4 +319,71 @@ test('Markdown reads unopened files for definitions, workspace references and re
 	assert.deepEqual(new Map(renamed.entries.map(value => [value.resource, value.expectedText])), new Map([[heading.uri, heading.text], [referring.uri, referring.text]]));
 	assert.ok(reads.length > 0);
 	assert.ok(reads.every(uri => uri === heading.uri));
+});
+
+test('Rust Markdown preserves reference spelling and validates unresolved and duplicate definitions', async () => {
+	const uri = 'untitled:/references.md';
+	const text = '[shown][ID]\n\n[id][] and [id]\n\n[missing][absent]\n\n[ID]: https://example.com\n[id]: https://duplicate.example\n';
+	const { invoke } = await loadMarkdown('zh-CN', [{ uri, text, version: 1, languageId: 'markdown' }]);
+	const request = { resource: uri, text, version: 1, position: { lineIndex: 0, columnIndex: 9 } };
+	const signal = new AbortController().signal;
+	const diagnostics = await invoke('diagnostics', request, signal) as { diagnostics: { code: string; message: string; }[]; };
+	assert.ok(diagnostics.diagnostics.some(value => value.code === 'link.no-such-reference' && value.message.includes('找不到链接定义')));
+	assert.ok(diagnostics.diagnostics.some(value => value.code === 'link.duplicate-definition'));
+	const renamed = await invoke('rename', { ...request, kind: 'edit', newName: 'renamed' }, signal) as { entries: { edits: { range: { start: { lineIndex: number; columnIndex: number; }; end: { lineIndex: number; columnIndex: number; }; }; text: string; }[]; }[]; };
+	const lines = text.split('\n');
+	const offset = (position: { lineIndex: number; columnIndex: number; }) => lines.slice(0, position.lineIndex).reduce((sum, line) => sum + line.length + 1, 0) + position.columnIndex;
+	let result = text;
+	for (const edit of renamed.entries[0]!.edits.sort((a, b) => offset(b.range.start) - offset(a.range.start))) result = result.slice(0, offset(edit.range.start)) + edit.text + result.slice(offset(edit.range.end));
+	assert.equal(result, '[shown][renamed]\n\n[id][renamed] and [id][renamed]\n\n[missing][absent]\n\n[renamed]: https://example.com\n[renamed]: https://duplicate.example\n');
+});
+
+test('Rust Markdown completes directory paths and workspace headings through client services', async () => {
+	const other = { uri: 'file:///workspace/other.md', version: 2, languageId: 'markdown', text: '# Other heading' };
+	const { invoke } = await loadMarkdown('en', [other], { markdown: { preferredMdPathExtensionStyle: 'removeExtension' }, files: { exclude: { '**/excluded': true } } }, ['file:///workspace'], async request => {
+		if (request.operation === 'setDiagnostics') return { result: 'done' };
+		if (request.operation === 'readResourceDirectory') { assert.equal(request.uri.replace(/\/$/u, ''), 'file:///workspace'); return { result: 'resourceDirectory', entries: [['other.md', 1], ['excluded', 2]] }; }
+		throw new Error(`Unexpected client request: ${JSON.stringify(request)}`);
+	});
+	const signal = new AbortController().signal;
+	const request = { resource: 'file:///workspace/current.md', text: '[link](', version: 1, position: { lineIndex: 0, columnIndex: 7 } };
+	const paths = await invoke('completion', request, signal) as { items: { insertText: string; }[]; };
+	assert.ok(paths.items.some(item => item.insertText === 'other'));
+	const headings = await invoke('completion', { ...request, text: '[link](##', position: { lineIndex: 0, columnIndex: 9 } }, signal) as { items: { insertText: string; }[]; };
+	assert.ok(headings.items.some(item => item.insertText === 'other.md#other-heading'));
+});
+
+test('Rust Markdown cancels an in-flight workspace read and remains usable', async () => {
+	let entered!: () => void, release!: () => void;
+	const reading = new Promise<void>(resolve => { entered = resolve; });
+	const waiting = new Promise<void>(resolve => { release = resolve; });
+	const uri = 'file:///workspace/current.md', text = '# Heading';
+	const { invoke } = await loadMarkdown('en', [{ uri, text, version: 1, languageId: 'markdown' }], {}, ['file:///workspace'], async request => {
+		if (request.operation === 'readResourceDirectory') { entered(); await waiting; return { result: 'resourceDirectory', entries: [] }; }
+		return { result: 'done' };
+	});
+	const controller = new AbortController();
+	const pending = invoke('references', { resource: uri, text, version: 1, position: { lineIndex: 0, columnIndex: 4 } }, controller.signal);
+	await reading;
+	controller.abort();
+	await assert.rejects(pending, error => error instanceof Error && error.name === 'AbortError');
+	release();
+	assert.deepEqual(await invoke('diagnostics', { resource: uri, text, version: 1 }, new AbortController().signal), { diagnostics: [] });
+});
+
+test('Rust Markdown extracts link definitions and resolves extensionless targets', async () => {
+	const uri = 'file:///workspace/current.md', text = '[link](./other#heading)';
+	const other = { uri: 'file:///workspace/other.md', text: '# Heading', version: 1, languageId: 'markdown' };
+	const { invoke } = await loadMarkdown('en', [other], {}, [], async request => {
+		if (request.operation === 'statResource') throw new Error('Missing extensionless file');
+		return { result: 'done' };
+	});
+	const signal = new AbortController().signal;
+	const request = { resource: uri, text, version: 1, position: { lineIndex: 0, columnIndex: 17 } };
+	const definitions = await invoke('definition', request, signal) as { resource: string; }[];
+	assert.equal(definitions[0]!.resource, other.uri);
+	const actions = await invoke('codeAction', { ...request, range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: text.length } }, only: ['refactor.extract'] }, signal) as { kind: string; edit: { entries: { expectedText: string; edits: { text: string; }[]; }[]; }; }[];
+	assert.equal(actions[0]!.kind, 'refactor.extract.link');
+	assert.equal(actions[0]!.edit.entries[0]!.expectedText, text);
+	assert.deepEqual(actions[0]!.edit.entries[0]!.edits.map(edit => edit.text), ['[link][1]', '\n\n[1]: ./other#heading\n']);
 });

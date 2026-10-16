@@ -17,6 +17,7 @@ use crate::HostErrorCode;
 use crate::runtime::Writer;
 
 pub use external_ext_protocol::ExtensionConfigurationTarget as ConfigurationTarget;
+pub use external_ext_protocol::ExtensionDiagnosticEntry as DiagnosticEntry;
 pub use external_ext_protocol::ExtensionDocumentEdit as DocumentEdit;
 pub use external_ext_protocol::ExtensionDocumentSnapshot as DocumentSnapshot;
 pub use external_ext_protocol::ExtensionMessageSeverity as MessageSeverity;
@@ -46,6 +47,40 @@ pub struct Client {
 }
 
 impl Client {
+    /// Replaces this activation's diagnostic collection, bound to observed document versions.
+    pub fn set_diagnostics(
+        &self,
+        collection: String,
+        entries: Vec<DiagnosticEntry>,
+        token: &CancellationToken,
+    ) -> Result<(), ExtensionError> {
+        self.done(
+            ExtensionClientOperation::SetDiagnostics {
+                collection,
+                entries,
+                merge: None,
+            },
+            token,
+        )
+    }
+
+    /// Updates listed resources without clearing unrelated diagnostics in the collection.
+    pub fn update_diagnostics(
+        &self,
+        collection: String,
+        entries: Vec<DiagnosticEntry>,
+        token: &CancellationToken,
+    ) -> Result<(), ExtensionError> {
+        self.done(
+            ExtensionClientOperation::SetDiagnostics {
+                collection,
+                entries,
+                merge: Some(true),
+            },
+            token,
+        )
+    }
+
     pub(crate) fn new(writer: Writer, maximum_pending: usize) -> Self {
         Self {
             writer,

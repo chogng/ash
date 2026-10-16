@@ -44,7 +44,7 @@ impl DataChannels {
             id,
             Registration {
                 descriptor,
-                operation: "receiveData",
+                operation: "receiveData".into(),
                 handler: Arc::new(move |payload, token| {
                     let request = serde_json::from_value(payload).map_err(|_| {
                         ExtensionError::invalid_request("invalid capability request")

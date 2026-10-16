@@ -92,7 +92,7 @@ def build_package_directory(
     remote_runtime_release: Optional[Dict[str, str]] = None,
     symbols_dir: Optional[Path] = None,
     git_extension_binary: Optional[Path] = None,
-    markdown_parser_binary: Optional[Path] = None,
+    markdown_extension_binary: Optional[Path] = None,
     github_authentication_binary: Optional[Path] = None,
     github_extension_binary: Optional[Path] = None,
     remote_ssh_extension_binary: Optional[Path] = None,
@@ -100,8 +100,10 @@ def build_package_directory(
 ) -> None:
     if git_extension_binary is None:
         raise RuntimeError("Git extension executable is required in product packages")
-    if markdown_parser_binary is None:
-        raise RuntimeError("Markdown parser executable is required in product packages")
+    if markdown_extension_binary is None:
+        raise RuntimeError(
+            "Markdown extension executable is required in product packages"
+        )
     if remote_ssh_extension_binary is None:
         raise RuntimeError(
             "Remote SSH extension executable is required in product packages"
@@ -154,7 +156,7 @@ def build_package_directory(
             "appServerDaemon": str(app_server_daemon_binary),
             "codeModeHost": str(code_mode_host_binary),
             "gitExtension": str(git_extension_binary),
-            "markdownParser": str(markdown_parser_binary),
+            "markdownExtension": str(markdown_extension_binary),
             "githubAuthentication": str(github_authentication_binary),
             "githubExtension": str(github_extension_binary),
             "remoteSshExtension": str(remote_ssh_extension_binary),
@@ -736,9 +738,9 @@ def system_signing_artifacts(package: Path, spec: TargetSpec) -> Dict[str, Path]
         "gitExtension": package
         / "bin"
         / ("ash-git-extension" + spec.executable_suffix),
-        "markdownParser": package
+        "markdownExtension": package
         / "bin"
-        / ("ash-markdown-parser" + spec.executable_suffix),
+        / ("ash-markdown-language-features" + spec.executable_suffix),
         "githubAuthentication": package
         / "bin"
         / ("ash-github-authentication" + spec.executable_suffix),
@@ -821,7 +823,7 @@ def record_system_signing(
             "codeModeHost",
             "jsExtensionHost",
             "gitExtension",
-            "markdownParser",
+            "markdownExtension",
             "githubAuthentication",
             "githubExtension",
             "remoteSshExtension",

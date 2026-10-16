@@ -1,6 +1,6 @@
 load("//:defs.bzl", "ash_rust_crate")
 
-exports_files(["src/workspace.rs", "src/scm.rs", "src/terminal.rs"], visibility = ["//crates/app-server:__pkg__"])
+exports_files(["src/editors.rs", "src/languages.rs", "src/workspace.rs", "src/scm.rs", "src/terminal.rs"], visibility = ["//crates/app-server:__pkg__"])
 
 ash_rust_crate(
     name = "external-ext-sdk",

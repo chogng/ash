@@ -13,10 +13,8 @@ allowBuilds:
   unrs-resolver: true
   workerd: true
 
-# The Markdown language service runs in a browser Worker; picomatch 4 has no Node-only imports.
 overrides:
   # Keep the Markdown formula renderer on the GHSA-238p-pmpm-9mq7 fixed release.
   katex: 0.18.2
-  vscode-markdown-languageservice>picomatch: ^4.0.5
 patchedDependencies:
   "@vscode/tree-sitter-wasm@0.3.1": patches/@vscode__tree-sitter-wasm@0.3.1.patch

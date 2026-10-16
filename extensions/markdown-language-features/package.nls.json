@@ -11,7 +11,7 @@
   "markdown.rich.source": "Edit document source",
   "markdown.rich.editBlock": "Edit Markdown block",
   "markdown.rich.task": "Completed task",
-  "markdown.rich.parseError": "The Rust Markdown parsing extension is unavailable or parsing failed. You can continue editing the source.",
+  "markdown.rich.parseError": "Markdown content could not be parsed. You can continue editing the source.",
   "markdown.rich.bold": "Bold",
   "markdown.rich.italic": "Italic",
   "markdown.rich.strike": "Strikethrough",
@@ -89,5 +89,13 @@
   "markdown.preferredMdPathExtensionStyle.option.auto": "Automatic",
   "markdown.preferredMdPathExtensionStyle.option.includeExtension": "Include extension",
   "markdown.preferredMdPathExtensionStyle.option.removeExtension": "Remove extension",
-  "displayName": "Markdown Language Features"
+  "displayName": "Markdown Language Features",
+  "markdown.diagnostic.missingHeading": "No header found: '{0}'.",
+  "markdown.diagnostic.unusedDefinition": "Unused link definition: '{0}'.",
+  "markdown.action.removeUnusedDefinition": "Remove unused link definition",
+  "markdown.diagnostic.missingReference": "No link definition found for: {0}",
+  "markdown.diagnostic.missingFile": "File not found: {0}",
+  "markdown.diagnostic.duplicateDefinition": "Duplicate link definition: {0}",
+  "markdown.action.organizeDefinitions": "Organize Link Definitions",
+  "markdown.action.extractDefinition": "Extract link to definition"
 }

@@ -187,6 +187,7 @@ fn validate_operation(
     if let ExtensionClientOperation::SetDiagnostics {
         collection,
         entries,
+        ..
     } = operation
     {
         if collection.is_empty() || collection.len() > 256 || entries.len() > 1024 {
@@ -488,10 +489,13 @@ pub enum ExtensionClientOperation {
         uri: String,
     },
     ListDocuments,
-    /// Replaces only this extension incarnation's named diagnostic collection.
+    /// Replaces this incarnation's collection, or updates only the listed resources.
     SetDiagnostics {
         collection: String,
         entries: Vec<ExtensionDiagnosticEntry>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(feature = "export", ts(optional))]
+        merge: Option<bool>,
     },
     ApplyEdit {
         documents: Vec<ExtensionDocumentEdit>,

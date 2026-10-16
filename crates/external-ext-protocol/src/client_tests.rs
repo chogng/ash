@@ -238,6 +238,11 @@ fn diagnostic_replacements_preserve_versions_and_reject_forged_ownership_and_inv
     let request: ExtensionClientRequest = serde_json::from_value(value.clone()).unwrap();
     request.validate(&ProtocolLimits::default()).unwrap();
     assert_eq!(serde_json::to_value(&request).unwrap(), value);
+    let mut merge = value.clone();
+    merge["operation"]["merge"] = json!(true);
+    let update: ExtensionClientRequest = serde_json::from_value(merge.clone()).unwrap();
+    update.validate(&ProtocolLimits::default()).unwrap();
+    assert_eq!(serde_json::to_value(update).unwrap(), merge);
     let mut invalid = value.clone();
     invalid["operation"]["entries"][0]["diagnostics"][0]["end"]["character"] = json!(1);
     assert!(

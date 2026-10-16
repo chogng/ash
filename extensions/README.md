@@ -28,7 +28,7 @@ Cargo dependencies; browser parsers remain bundled WASM assets. This registry se
 the built-in package set and does not introduce per-language processes.
 
 The declarative loader reads resources without executing package code. Packages with a `browser`
-entry, including `markdown-language-features`, are separately bundled and executed by the TS
+entry are separately bundled and executed by the TS
 browser extension host. This directory holds packages, not the SDK or runtime implementation.
 
 TS/JS packages use the selected extension runtime and public compatibility API. Independent Rust
@@ -84,7 +84,10 @@ profile, model, undo, save and collaboration services. Its file associations and
 editor registration follow extension enablement; see [Academic](academic/README.md).
 Pagination and PDF export remain future work.
 
-`markdown-language-features` ships the Markdown preview browser extension. `media-preview`
+`markdown-language-features` is one Rust extension owning Markdown preview, rich editing and
+link semantics. Its private `pulldown-cmark` parser has no separate package or process.
+Static JavaScript and CSS implement the sandboxed view; `markdown-basics` owns the grammar
+and queries used by the shared Tree-sitter service. `media-preview`
 declares the image (PNG/JPEG/WebP), audio (MP3/WAV/OGG/OGA), and video (MP4/WebM) editors.
 TS packages and loads its metadata and resources in both Web and Electron. Its `customEditors` declarations select product-owned TS
 renderers, so it has no executable extension entry. File selectors and optional MIME types

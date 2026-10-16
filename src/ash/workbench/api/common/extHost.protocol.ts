@@ -29,7 +29,7 @@ export type ExtensionClientOperation =
 	| { operation: 'readInitialization'; }
 	| { operation: 'openRemoteConnection'; authority: string; }
 	| { operation: 'setStatusBarEntries'; registrationId: string; revision: number; entries: readonly ExtensionStatusBarEntry[]; }
-	| { operation: 'setDiagnostics'; collection: string; entries: ExtensionDiagnosticEntry[]; }
+	| { operation: 'setDiagnostics'; collection: string; entries: ExtensionDiagnosticEntry[]; merge?: boolean; }
 	| { operation: 'executeCommand'; command: string; arguments: JsonValue[]; }
 	| { operation: 'addDebugBreakpoints'; breakpoints: readonly JsonValue[]; }
 	| { operation: 'removeDebugBreakpoints'; breakpointIds: readonly string[]; }

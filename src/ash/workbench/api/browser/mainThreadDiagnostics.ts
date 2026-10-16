@@ -20,7 +20,7 @@ export class MainThreadDiagnostics extends Disposable {
 		}
 	}
 
-	public set(source: ExtensionClientSource, collection: string, entries: readonly ExtensionDiagnosticEntry[]): void {
+	public set(source: ExtensionClientSource, collection: string, entries: readonly ExtensionDiagnosticEntry[], merge = false): void {
 		const identity = JSON.stringify([source.extensionId, source.activationGeneration, source.incarnation]);
 		if (!this.sources.has(identity)) throw new Error('Diagnostic request belongs to a retired extension');
 		if (!collection || collection.length > 256 || entries.length > 1024) throw new TypeError('Invalid diagnostic collection');
@@ -60,12 +60,29 @@ export class MainThreadDiagnostics extends Disposable {
 		if (stale) return;
 		const key = JSON.stringify([identity, collection]);
 		const owner = `extensionHost.diagnostics.${key}`;
-		if (entries.length === 0) { this.collections.deleteAndDispose(key); return; }
+		if (entries.length === 0) {
+			if (!merge) this.collections.deleteAndDispose(key);
+			return;
+		}
 		const isNew = !this.collections.has(key);
 		if (isNew) {
 			if ([...this.collections.keys()].filter(value => (JSON.parse(value) as [string, string])[0] === identity).length >= 128) throw new RangeError('Extension diagnostic collection quota exceeded');
 		}
-		this.markers.changeAll(owner, values);
+		if (merge) {
+			const retained = this.markers.read({ owner }).filter(marker => !resources.has(marker.resource.toString())).length;
+			if (retained + values.length > 10000) throw new RangeError('Diagnostic collection exceeds 10000 markers');
+			const byResource = new Map<string, IResourceMarker['marker'][]>();
+			for (const value of values) {
+				const key = value.resource.toString();
+				const markers = byResource.get(key) ?? [];
+				markers.push(value.marker);
+				byResource.set(key, markers);
+			}
+			for (const entry of entries) {
+				const resource = URI.parse(entry.uri);
+				this.markers.changeOne(owner, resource, byResource.get(resource.toString()) ?? []);
+			}
+		} else { this.markers.changeAll(owner, values); }
 		if (isNew) this.collections.set(key, toDisposable(() => this.markers.changeAll(owner, [])));
 	}
 

@@ -40,7 +40,7 @@ impl SourceControl {
                             providers,
                         },
                     },
-                    operation: "scm",
+                    operation: "scm".into(),
                     handler: Arc::new(callback),
                 });
                 Ok(())

@@ -26,3 +26,15 @@ export function inputEdit(source, value) {
 export function normalizedOffset(source, offset) {
 	return source.slice(0, offset).replace(/\r\n?/gu, '\n').length;
 }
+
+/** Minimal UTF-16 edit between exact source snapshots, preserving line endings. */
+export function textEdit(previous, next) {
+	let start = 0;
+	while (start < previous.length && start < next.length && previous[start] === next[start]) start++;
+	let end = previous.length;
+	let nextEnd = next.length;
+	while (end > start && nextEnd > start && previous[end - 1] === next[nextEnd - 1]) { end--; nextEnd--; }
+	if (start > 0 && /[\uDC00-\uDFFF]/u.test(previous[start] ?? next[start] ?? '')) start--;
+	if (end < previous.length && /[\uDC00-\uDFFF]/u.test(previous[end])) { end++; nextEnd++; }
+	return { start, end, text: next.slice(start, nextEnd) };
+}

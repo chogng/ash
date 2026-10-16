@@ -231,7 +231,7 @@ export class MainThreadExtensionApi extends Disposable {
 				this.statusbar.set(source, operation.registrationId, operation.revision, operation.entries);
 				return { result: 'done' };
 			case 'setDiagnostics':
-				this.diagnostics.set(source, operation.collection, operation.entries);
+				this.diagnostics.set(source, operation.collection, operation.entries, operation.merge);
 				return { result: 'done' };
 			case 'executeCommand': {
 				const value = await this.commandService.executeCommand(operation.command, ...this.scmApi.reviveCommandArguments(source, operation.arguments));

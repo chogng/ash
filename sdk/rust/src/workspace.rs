@@ -26,12 +26,61 @@ pub struct SavedConnection {
     pub connection_name: String,
 }
 
+/// Workspace identities confer no filesystem access by themselves.
+#[derive(Deserialize)]
+pub struct WorkspaceFolder {
+    pub uri: String,
+}
+
+#[derive(Deserialize)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum WorkspaceEvent {
+    Workspace {
+        workspace_folders: Vec<WorkspaceFolder>,
+    },
+    Configuration {},
+}
+
 #[derive(Default)]
 pub struct Workspace {
     pub(crate) registrations: BTreeMap<String, Registration>,
 }
 
 impl Workspace {
+    pub fn observe(
+        &mut self,
+        id: String,
+        callback: impl Fn(WorkspaceEvent, CancellationToken) -> Result<(), ExtensionError>
+        + Send
+        + Sync
+        + 'static,
+    ) -> Result<(), ExtensionError> {
+        let registration = Registration {
+            descriptor: RegistrationDescriptor {
+                registration_id: id.clone(),
+                kind: RegistrationKind::WorkspaceEvents {},
+            },
+            operation: "workspaceEvent".into(),
+            handler: Arc::new(move |payload, token| {
+                let event = serde_json::from_value(payload)
+                    .map_err(|_| ExtensionError::invalid_request("invalid workspace event"))?;
+                callback(event, token)?;
+                Ok(serde_json::Value::Null)
+            }),
+        };
+        if self.registrations.contains_key(&id) {
+            return Err(ExtensionError::invalid_request(
+                "workspace observer is already registered",
+            ));
+        }
+        self.registrations.insert(id, registration);
+        Ok(())
+    }
+
     /// Registers the existing saved-connection capability, distinct from transport resolvers.
     pub fn register_connection_resolver(
         &mut self,
@@ -71,7 +120,7 @@ impl Workspace {
             std::collections::btree_map::Entry::Vacant(entry) => {
                 entry.insert(Registration {
                     descriptor,
-                    operation: "resolveConnection",
+                    operation: "resolveConnection".into(),
                     handler,
                 });
                 Ok(())

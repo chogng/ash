@@ -1,10 +1,37 @@
-import { Disposable, DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
+import { Disposable, DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { addDisposableListener } from '../../../src/ash/base/browser/dom.js';
 import { InputBox } from '../../../src/ash/base/browser/ui/inputbox/inputBox.js';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
-import { inputEdit, sourceOffset, normalizedOffset } from './sourceEdits.js';
+import { inputEdit, sourceOffset, normalizedOffset, textEdit } from './sourceEdits.js';
 import '../media/richEditor.css';
+
+function shiftNode(node, shift) {
+	if (!shift) return node;
+	const [kind, value, detail] = node;
+	if (kind === 'task') return [kind, value, detail + shift];
+	if (['el', 'ol', 'a', 'img'].includes(kind)) return [kind, value, detail.map(child => shiftNode(child, shift))];
+	return node;
+}
+
+function draftBlocks(parsed, text) {
+	if (!parsed?.blocks) return [{ start: 0, end: text.length, content: ['raw', text] }];
+	const blocks = parsed.blocks.map(([start, end, content]) => ({ start, end, content }));
+	if (parsed.text === text) return blocks;
+	// Until Rust returns the new tree, retain exact, unaffected source spans. Only
+	// the edited region becomes raw source; its offsets never borrow an older tree.
+	const edit = textEdit(parsed.text, text);
+	const shift = edit.text.length - (edit.end - edit.start);
+	const before = blocks.filter(block => block.end <= edit.start && block.end > block.start);
+	const after = blocks.filter(block => block.start >= edit.end && block.end > block.start);
+	const start = before.at(-1)?.end ?? 0;
+	const end = after.length ? after[0].start + shift : text.length;
+	return [
+		...before,
+		...(end > start || text.length === 0 ? [{ start, end, content: ['raw', text.slice(start, end)] }] : []),
+		...after.map(block => ({ start: block.start + shift, end: block.end + shift, content: shiftNode(block.content, shift) })),
+	];
+}
 
 /** A transient view and draft. The existing host owns versions, undo and saving. */
 class MarkdownEditor extends Disposable {
@@ -22,7 +49,7 @@ class MarkdownEditor extends Disposable {
 		this.saving = this.conflict = this.composing = false;
 		this.pending = undefined;
 		this.inputLifetime = this._register(new DisposableStore());
-		this.renderLifetime = this._register(new DisposableStore());
+		this._register(toDisposable(() => { for (const entry of this.renderedBlocks ?? []) entry.lifetime.dispose(); }));
 		this.toolbar = document.createElement('div');
 		this.toolbar.className = 'ash-markdown-toolbar';
 		this.toolbar.setAttribute('role', 'toolbar');
@@ -125,67 +152,92 @@ class MarkdownEditor extends Disposable {
 	}
 
 	render() {
-		this.inputLifetime.clear(); this.renderLifetime.clear(); this.active = undefined;
-		// Parsing is asynchronous and belongs to the Rust extension. Only results for
+		const activeContainer = this.active?.whole ? this.view : this.active?.input.element.closest('.ash-markdown-block');
+		this.inputLifetime.clear(); this.active = undefined;
+		// Parsing belongs to this extension's Rust provider. Only results for
 		// these exact bytes may supply ranges; the draft stays editable while waiting.
 		const current = this.parsed?.text === this.text;
-		const blocks = current && this.parsed.blocks ? this.parsed.blocks : [{ start: 0, end: this.text.length, content: { kind: 'raw', value: this.text } }];
+		const blocks = draftBlocks(this.parsed, this.text);
 		if (current && this.parsed.parseError && !this.conflict) this.status.textContent = this.messages.parseError;
 		this.blocks = blocks;
-		this.view.replaceChildren(...blocks.map(block => {
+		const reusable = new Map();
+		for (const entry of this.renderedBlocks ?? []) {
+			if (entry.element === activeContainer || activeContainer === this.view) continue;
+			const bucket = reusable.get(entry.key) ?? { entries: [], next: 0 };
+			bucket.entries.push(entry); reusable.set(entry.key, bucket);
+		}
+		const previous = new Set(this.renderedBlocks);
+		this.renderedBlocks = blocks.map(block => {
+			const source = this.text.slice(block.start, block.end);
+			const key = JSON.stringify([source, block.content]);
+			const bucket = reusable.get(key);
+			const reused = bucket?.entries[bucket.next++];
+			if (reused) {
+				previous.delete(reused);
+				reused.element.dataset.start = block.start; reused.element.dataset.end = block.end;
+				return reused;
+			}
+			const lifetime = new DisposableStore();
 			const element = document.createElement('div');
 			element.className = 'ash-markdown-block';
 			element.dataset.start = block.start; element.dataset.end = block.end;
-			const source = this.text.slice(block.start, block.end);
 			if (!source.trim() && this.text.length) {
 				element.classList.add('ash-markdown-gap'); element.setAttribute('aria-hidden', 'true');
-			} else { element.tabIndex = 0; element.append(this.node(block.content)); }
-			return element;
-		}));
+			} else { element.tabIndex = 0; element.append(this.node(block.content, false, lifetime)); }
+			return { key, element, lifetime };
+		});
+		for (const entry of previous) { entry.lifetime.dispose(); entry.element.remove(); }
+		// Keep surviving nodes attached so selection and keyboard focus survive updates.
+		let cursor = this.view.firstChild;
+		for (const { element } of this.renderedBlocks) {
+			if (element !== cursor) this.view.insertBefore(element, cursor);
+			cursor = element.nextSibling;
+		}
+		while (cursor) { const next = cursor.nextSibling; cursor.remove(); cursor = next; }
 		this.updateButtons();
 	}
 
-	node(node, header = false) {
-		const children = (parent, nodes) => { for (const child of nodes) parent.append(this.node(child, header)); return parent; };
-		switch (node.kind) {
-			case 'text': return document.createTextNode(node.value);
-			case 'raw': { const span = document.createElement('span'); span.className = 'ash-markdown-raw'; span.textContent = node.value; return span; }
-			case 'code': { const code = document.createElement('code'); code.textContent = node.value; return code; }
-			case 'break': return document.createElement('br');
-			case 'rule': return document.createElement('hr');
+	node([kind, value, detail], header = false, lifetime) {
+		const children = (parent, nodes) => { for (const child of nodes) parent.append(this.node(child, header, lifetime)); return parent; };
+		switch (kind) {
+			case 't': return document.createTextNode(value);
+			case 'raw': { const span = document.createElement('span'); span.className = 'ash-markdown-raw'; span.textContent = value; return span; }
+			case 'code': { const code = document.createElement('code'); code.textContent = value; return code; }
+			case 'br': return document.createElement('br');
+			case 'hr': return document.createElement('hr');
 			case 'math': {
 				const element = document.createElement('span');
-				katex.render(node.value, element, { displayMode: node.display, throwOnError: false, trust: false }); return element;
+				katex.render(value, element, { displayMode: detail, throwOnError: false, trust: false }); return element;
 			}
-			case 'element': {
-				const element = document.createElement(header && node.tag === 'td' ? 'th' : node.tag);
-				if (node.tag === 'thead') {
+			case 'el': {
+				const element = document.createElement(header && value === 'td' ? 'th' : value);
+				if (value === 'thead') {
 					const row = document.createElement('tr');
-					for (const child of node.children) row.append(this.node(child, true));
+					for (const child of detail) row.append(this.node(child, true, lifetime));
 					element.append(row); return element;
 				}
-				return children(element, node.children);
+				return children(element, detail);
 			}
-			case 'ordered_list': { const list = document.createElement('ol'); list.start = node.first; return children(list, node.children); }
-			case 'link': {
-				const link = document.createElement(this.safeLink(node.destination) ? 'a' : 'span');
-				if (link.tagName === 'A') { link.setAttribute('href', node.destination); link.setAttribute('rel', 'noopener noreferrer'); }
-				return children(link, node.children);
+			case 'ol': { const list = document.createElement('ol'); list.start = value; return children(list, detail); }
+			case 'a': {
+				const link = document.createElement(this.safeLink(value) ? 'a' : 'span');
+				if (link.tagName === 'A') { link.setAttribute('href', value); link.setAttribute('rel', 'noopener noreferrer'); }
+				return children(link, detail);
 			}
-			case 'image': {
-				const label = children(document.createElement('span'), node.children).textContent;
+			case 'img': {
+				const label = children(document.createElement('span'), detail).textContent;
 				// Opening a document must not load tracking images over the network.
-				if (/[\u0000-\u0020\u007f]/u.test(node.destination)) return document.createTextNode(label);
-				if (/^(?:[a-z][\w+.-]*:|\/\/)/iu.test(node.destination) && !/^data:image\/(?:png|jpeg|gif|webp|avif);base64,/iu.test(node.destination)) return document.createTextNode(label);
-				const image = document.createElement('img'); image.alt = label; image.src = node.destination; return image;
+				if (/[\u0000-\u0020\u007f]/u.test(value)) return document.createTextNode(label);
+				if (/^(?:[a-z][\w+.-]*:|\/\/)/iu.test(value) && !/^data:image\/(?:png|jpeg|gif|webp|avif);base64,/iu.test(value)) return document.createTextNode(label);
+				const image = document.createElement('img'); image.alt = label; image.src = value; return image;
 			}
 			case 'task': {
-				const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.checked = node.checked;
+				const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.checked = value;
 				checkbox.disabled = this.readOnly || this.conflict; checkbox.setAttribute('aria-label', this.messages.task);
 				this.listen(checkbox, 'change', () => {
-					if (this.readOnly || this.conflict || this.composing || !/^\[[ xX]\]$/u.test(this.text.slice(node.offset, node.offset + 3))) return;
-					this.commitInput(); this.patch(node.offset + 1, node.offset + 2, checkbox.checked ? 'x' : ' '); this.render();
-				}, false, this.renderLifetime);
+					if (this.readOnly || this.conflict || this.composing || !/^\[[ xX]\]$/u.test(this.text.slice(detail, detail + 3))) return;
+					this.commitInput(); this.patch(detail + 1, detail + 2, checkbox.checked ? 'x' : ' '); this.render();
+				}, false, lifetime);
 				return checkbox;
 			}
 		}
@@ -319,7 +371,8 @@ class MarkdownEditor extends Disposable {
 	flush() {
 		if (this.composing || this.pending !== undefined || this.historyPending || this.conflict) return;
 		if (this.text !== this.confirmed) {
-			this.pending = this.text; this.api.postMessage({ type: 'edit', version: this.version, text: this.text });
+			this.pending = this.text;
+			this.api.postMessage({ type: 'edit', version: this.version, ...textEdit(this.confirmed, this.text) });
 		} else if (this.historyQueue.length) {
 			this.historyPending = true; this.api.postMessage({ type: this.historyQueue.shift(), version: this.version });
 		} else if (this.saving) { this.saving = false; this.api.postMessage({ type: 'save' }); }
@@ -357,12 +410,12 @@ class MarkdownEditor extends Disposable {
 		if (!message || typeof message !== 'object') return;
 		if (message.type === 'theme' && typeof message.variables === 'string') { document.documentElement.style.cssText = message.variables; return; }
 		if (message.type === 'editRejected') { this.reject(message); return; }
-		if (!Number.isSafeInteger(message.version) || message.version < this.version || typeof message.text !== 'string') return;
+		if (!Number.isSafeInteger(message.version) || message.version < this.version) return;
 		if (message.type === 'accepted' && !this.conflict) {
-			const pending = this.pending; this.pending = undefined; this.version = message.version; this.confirmed = message.text;
-			if (this.text === pending && pending !== message.text) this.adopt({ ...this.latest, ...message });
+			if (this.pending === undefined) return;
+			this.confirmed = this.pending; this.pending = undefined; this.version = message.version;
 			this.flush();
-		} else if (message.type === 'document') {
+		} else if (message.type === 'document' && typeof message.text === 'string') {
 			this.latest = message; this.historyPending = false;
 			this.parsed = message;
 			if (message.version === this.version && message.text === this.confirmed) {

@@ -155,20 +155,31 @@ fn product_ssh_deployment(
 fn product_markdown_deployment(
     directory: &Path,
 ) -> Result<EditorExtensionDeployment, ExtensionHostRuntimeError> {
-    let manifest = include_str!("../../../../../extensions/markdown-parser/package.json");
-    let source = include_str!("../../../../../extensions/markdown-parser/src/lib.rs");
+    let manifest =
+        include_str!("../../../../../extensions/markdown-language-features/package.json");
+    let source = [
+        include_str!("../../../../../extensions/markdown-language-features/src/parser.rs"),
+        include_str!("../../../../../extensions/markdown-language-features/src/lib.rs"),
+        include_str!("../../../../../extensions/markdown-language-features/src/language.rs"),
+        include_str!("../../../../../extensions/markdown-language-features/package.nls.json"),
+        include_str!("../../../../../extensions/markdown-language-features/package.nls.zh-CN.json"),
+        include_str!("../../../../../extensions/markdown-language-features/media/markdown.css"),
+        include_str!("../../../../../sdk/rust/src/editors.rs"),
+        include_str!("../../../../../sdk/rust/src/languages.rs"),
+    ]
+    .join("\0");
     let digest = format!(
         "sha256:{:x}",
         Sha256::digest(format!("{manifest}\0{source}"))
     );
     Ok(EditorExtensionDeployment {
         scope: EditorExtensionScope::Product,
-        id: "ash.markdown-parser".into(),
-        version: "0.1.0".into(),
+        id: "vscode.markdown-language-features".into(),
+        version: "1.0.0".into(),
         package_digest: digest.clone(),
         command: ExtensionLaunchCommand::new(
             directory.join(format!(
-                "ash-markdown-parser{}",
+                "ash-markdown-language-features{}",
                 std::env::consts::EXE_SUFFIX
             )),
             std::iter::empty::<String>(),
@@ -176,7 +187,7 @@ fn product_markdown_deployment(
             BTreeMap::new(),
         )
         .map_err(ExtensionHostRuntimeError::Host)?,
-        workspace_read: WorkspaceReadAccess::Denied,
+        workspace_read: WorkspaceReadAccess::Read,
         credential_providers: Vec::new(),
         protocol_limits: Some(external_ext_protocol::ProtocolLimits {
             maximum_frame_bytes: 32 * 1024 * 1024,
@@ -185,20 +196,34 @@ fn product_markdown_deployment(
         }),
         params: ActivateParams {
             initialization: None,
-            extension_id: "ash.markdown-parser".into(),
+            extension_id: "vscode.markdown-language-features".into(),
             package: PackageBinding {
-                package_id: "ash.markdown-parser@0.1.0".into(),
+                package_id: "vscode.markdown-language-features@1.0.0".into(),
                 package_digest: digest,
-                entrypoint: "ash-markdown-parser".into(),
+                entrypoint: "ash-markdown-language-features".into(),
             },
             runtime_api_version: 1,
-            activation_events: vec!["onCommand:_markdown.parse".into()],
-            capabilities: vec![ExtensionCapability::Command],
+            activation_events: vec!["onStartupFinished".into()],
+            capabilities: vec![
+                ExtensionCapability::Command,
+                ExtensionCapability::CustomTextEditor,
+                ExtensionCapability::LanguageProvider,
+            ],
         },
         authority: Arc::new(ProductAuthority),
         activation: Some(ActivationPlan {
-            events: vec!["onCommand:_markdown.parse".into()],
-            commands: vec![("_markdown.parse".into(), "_markdown.parse".into())],
+            events: vec!["onStartupFinished".into()],
+            commands: serde_json::from_str::<serde_json::Value>(manifest)
+                .map_err(|_| ExtensionHostRuntimeError::Internal)?["contributes"]["commands"]
+                .as_array()
+                .ok_or(ExtensionHostRuntimeError::Internal)?
+                .iter()
+                .filter_map(|entry| {
+                    entry["command"]
+                        .as_str()
+                        .map(|id| (id.to_owned(), id.to_owned()))
+                })
+                .collect(),
         }),
         activation_failure: None,
     })

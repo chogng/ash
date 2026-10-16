@@ -54,7 +54,7 @@ members = [
     "extensions/github-authentication",
     "extensions/github",
     "extensions/remote-ssh",
-    "extensions/markdown-parser",
+    "extensions/markdown-language-features",
     "extensions/git",
     "extensions/dev-containers",
     "crates/external-agent-migration",

@@ -18,6 +18,7 @@ use serde_json::Value;
 mod cancellation;
 pub mod client;
 pub mod data_channels;
+pub mod editors;
 pub mod languages;
 mod runtime;
 pub mod scm;
@@ -116,7 +117,7 @@ type Handler = Arc<dyn Fn(Value, CancellationToken) -> Result<Value, ExtensionEr
 #[derive(Clone)]
 pub(crate) struct Registration {
     pub descriptor: RegistrationDescriptor,
-    pub operation: &'static str,
+    pub operation: String,
     pub handler: Handler,
 }
 
@@ -156,7 +157,7 @@ impl Commands {
             std::collections::btree_map::Entry::Vacant(entry) => {
                 entry.insert(Registration {
                     descriptor,
-                    operation: "execute",
+                    operation: "execute".into(),
                     handler,
                 });
                 Ok(())
@@ -181,6 +182,7 @@ pub struct ExtensionContext {
     pub scm: scm::SourceControl,
     pub terminal: terminal::Terminal,
     pub languages: languages::Languages,
+    pub editors: editors::Editors,
     pub window: window::Window,
     pub workspace: workspace::Workspace,
     activation: ActivateParams,
@@ -217,6 +219,7 @@ impl ExtensionContext {
             .chain(self.workspace.registrations.iter())
             .chain(self.scm.registrations.iter())
             .chain(self.terminal.registrations.iter())
+            .chain(self.editors.registrations.iter())
         {
             if registrations
                 .insert(id.clone(), registration.clone())

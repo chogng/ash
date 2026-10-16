@@ -7,8 +7,11 @@ fn main() {
         },
         ..Default::default()
     };
-    if external_ext_sdk::run_stdio_with_options(ash_markdown_parser::MarkdownExtension, options)
-        .is_err()
+    if external_ext_sdk::run_stdio_with_options(
+        ash_markdown_language_features::MarkdownExtension,
+        options,
+    )
+    .is_err()
     {
         std::process::exit(1);
     }

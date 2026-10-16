@@ -6,12 +6,30 @@ use external_ext_protocol::RegistrationDescriptor;
 use external_ext_protocol::RegistrationKind;
 use serde::Deserialize;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 
 use crate::CancellationToken;
 use crate::ExtensionError;
 use crate::Handler;
 use crate::HostErrorCode;
 use crate::Registration;
+
+pub use external_ext_protocol::LanguageProviderOperation as Operation;
+
+/// Client-owned document observations used as immutable analysis input.
+#[derive(Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum DocumentEvent {
+    Open {
+        document: crate::client::DocumentSnapshot,
+    },
+    Change {
+        document: crate::client::DocumentSnapshot,
+    },
+    Close {
+        document: crate::client::DocumentSnapshot,
+    },
+}
 
 /// Zero-based UTF-16 position, matching VS Code's public `Position` semantics.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -92,6 +110,91 @@ pub struct Languages {
 }
 
 impl Languages {
+    pub fn observe_documents(
+        &mut self,
+        id: String,
+        callback: impl Fn(DocumentEvent, CancellationToken) -> Result<(), ExtensionError>
+        + Send
+        + Sync
+        + 'static,
+    ) -> Result<(), ExtensionError> {
+        let registration = Registration {
+            descriptor: RegistrationDescriptor {
+                registration_id: id.clone(),
+                kind: RegistrationKind::TextDocumentEvents {},
+            },
+            operation: "documentEvent".into(),
+            handler: Arc::new(move |payload, token| {
+                let event = serde_json::from_value(payload)
+                    .map_err(|_| ExtensionError::invalid_request("invalid document event"))?;
+                callback(event, token)?;
+                Ok(serde_json::Value::Null)
+            }),
+        };
+        if self.registrations.contains_key(&id) {
+            return Err(ExtensionError::invalid_request(
+                "document observer is already registered",
+            ));
+        }
+        self.registrations.insert(id, registration);
+        Ok(())
+    }
+
+    /// Registers one typed language operation. Payload decoding stays at the SDK boundary;
+    /// document identity and operation-specific constraints belong to the provider.
+    pub fn register_provider<Request, Response>(
+        &mut self,
+        registration_id: String,
+        language_ids: Vec<String>,
+        operation: Operation,
+        completion_trigger_characters: Vec<String>,
+        callback: impl Fn(Request, CancellationToken) -> Result<Response, ExtensionError>
+        + Send
+        + Sync
+        + 'static,
+    ) -> Result<(), ExtensionError>
+    where
+        Request: DeserializeOwned,
+        Response: Serialize,
+    {
+        let operation_name = serde_json::to_value(operation)
+            .map_err(|_| ExtensionError::invalid_request("invalid language operation"))?;
+        let registration = Registration {
+            descriptor: RegistrationDescriptor {
+                registration_id: registration_id.clone(),
+                kind: RegistrationKind::LanguageProvider {
+                    language_ids,
+                    operations: vec![operation],
+                    completion_trigger_characters,
+                },
+            },
+            operation: operation_name
+                .as_str()
+                .ok_or_else(|| ExtensionError::invalid_request("invalid language operation"))?
+                .into(),
+            handler: Arc::new(move |payload, token| {
+                let request = serde_json::from_value(payload)
+                    .map_err(|_| ExtensionError::invalid_request("invalid language request"))?;
+                serde_json::to_value(callback(request, token)?).map_err(|_| {
+                    ExtensionError::new(
+                        HostErrorCode::Internal,
+                        "language result could not be encoded",
+                    )
+                })
+            }),
+        };
+        match self.registrations.entry(registration_id) {
+            std::collections::btree_map::Entry::Vacant(entry) => {
+                entry.insert(registration);
+                Ok(())
+            }
+            std::collections::btree_map::Entry::Occupied(_) => Err(ExtensionError::new(
+                HostErrorCode::ActivationFailed,
+                "language provider is already registered",
+            )),
+        }
+    }
+
     pub fn register_hover_provider(
         &mut self,
         registration_id: impl Into<String>,
@@ -159,7 +262,7 @@ impl Languages {
             std::collections::btree_map::Entry::Vacant(entry) => {
                 entry.insert(Registration {
                     descriptor,
-                    operation: "hover",
+                    operation: "hover".into(),
                     handler,
                 });
                 Ok(())

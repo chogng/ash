@@ -9,8 +9,6 @@ import { IFileService } from '../../../src/ash/platform/files/common/files.js';
 import { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
 import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { ILanguagePackService } from '../../../src/ash/platform/languagePacks/common/languagePacks.js';
-import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
-import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
 import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
 import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
@@ -19,8 +17,6 @@ import { createTestEditorServices, createTestFileService } from '../../../src/as
 import { MemoryResourceStore, MemoryFileService } from '../../../src/ash/workbench/contrib/bulkEdit/test/browser/bulkEditTestServices.js';
 import { BrowserTextModelService } from '../../../src/ash/workbench/services/textmodelResolver/browser/browserTextModelService.js';
 import { IFileTextModelService, ITextModelResourceService } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResourceService.js';
-import { WebWorkerExtensionHost } from '../../../src/ash/workbench/services/extensions/browser/webWorkerExtensionHost.js';
-import { createExtensionHostInitialization } from '../../../src/ash/workbench/services/extensions/common/extensionHostProtocol.js';
 import { MainThreadCustomEditors } from '../../../src/ash/workbench/api/browser/mainThreadCustomEditors.js';
 import { EditorPanes } from '../../../src/ash/workbench/browser/editor.js';
 import { WebviewEditor } from '../../../src/ash/workbench/contrib/webviewPanel/browser/webviewEditor.js';
@@ -52,23 +48,25 @@ const packages: IExtensionApi = {
 	list: async mode => { const catalog = await fixture.list(mode); return { ...catalog, extensions: catalog.extensions.filter(extension => extension.id === 'vscode.markdown-language-features') }; },
 };
 services.registerInstance(IExtensionApi, packages);
-const host = lifetime.add(services.createInstance(WebWorkerExtensionHost, packages, createDisconnectedExtensionHostApi(operation => { throw new Error(`Unexpected backend call ${operation}`); })));
+const host = {
+	...createDisconnectedExtensionHostApi(operation => { throw new Error(`Unexpected backend call ${operation}`); }),
+	async reconcile() {
+		const response = await fetch(`/__markdown_extension?locale=${locale}`);
+		if (!response.ok) throw new Error('Markdown extension unavailable');
+		return response.json();
+	},
+	async invoke(request: import('../../../src/ash/platform/agentHost/common/extensionHostApi.js').ExtensionHostInvocationRequest, signal: AbortSignal) {
+		const response = await fetch(`/__markdown_render?locale=${locale}&view=${encodeURIComponent(request.registrationId)}`, { signal, method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify((request.payload as { document: unknown; }).document) });
+		if (!response.ok) throw new Error('Markdown extension failed');
+		return response.json();
+	},
+};
 services.registerInstance(IExtensionHostApi, host);
-const client = host.registerClientHandler(async raw => {
-	const operation = raw as { operation: string; command?: string; arguments?: unknown[]; };
-	if (operation.operation === 'readInitialization') return { result: 'initialization', initialization: createExtensionHostInitialization(services.get(IWorkspaceContextService), services.get(IConfigurationService)) };
-	if (operation.operation === 'executeCommand' && operation.command === '_markdown.parse') {
-		const response = await fetch('/__markdown_parse', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(operation.arguments?.[0]) });
-		if (!response.ok) throw new Error('Rust parser unavailable');
-		return { result: 'command', value: await response.json(), hasValue: true };
-	}
-	throw new Error(`Unexpected extension client operation ${operation.operation}`);
-});
-lifetime.add(toDisposable(() => client.dispose()));
 const registration = lifetime.add(services.createInstance(MainThreadCustomEditors, 30000));
-const snapshot = await host.reconcile('restartFailed');
+const snapshot = await host.reconcile();
 registration.update(snapshot);
-const descriptor = EditorPanes.getEditorPanes().find(pane => pane.id === 'vscode.markdown.editor');
+const viewType = new URL(location.href).searchParams.get('view') ?? 'vscode.markdown.editor';
+const descriptor = EditorPanes.getEditorPanes().find(pane => pane.id === viewType);
 if (!descriptor) throw new Error(`Markdown editor failed to register: ${JSON.stringify(snapshot)}`);
 const pane = lifetime.add(await descriptor.create({}));
 if (!(pane instanceof WebviewEditor)) throw new TypeError('Markdown must use the shared webview editor host');
@@ -77,9 +75,13 @@ pane.setVisible(true);
 pane.layout({ width: innerWidth, height: 850 });
 await pane.setInput({ resource, languageId: 'markdown' }, new AbortController().signal);
 const source = lifetime.add(await models.acquire({ resource, languageId: 'markdown' }, new AbortController().signal));
+const messages: unknown[] = [];
+lifetime.add(pane.getControl()!.onMessage(({ message }) => messages.push(message)));
 
 window.ashMarkdownHost = {
 	initial,
+	messages,
+	get editable() { return pane.isEditable; },
 	get text() { return source.model.getText(); },
 	get saved() { return store.text(resource); },
 	get saves() { return store.saved.length; },
@@ -92,6 +94,8 @@ window.ashMarkdownHost = {
 	},
 	undo: () => source.model.undo(),
 	redo: () => source.model.redo(),
+	disable: () => registration.clear(),
+	get registered() { return EditorPanes.getEditorPanes().some(pane => pane.id === 'vscode.markdown.editor'); },
 };
 
 declare global {
@@ -99,8 +103,10 @@ declare global {
 		ashMarkdownHost: {
 			readonly initial: string; readonly text: string; readonly saved: string; readonly saves: number;
 			readonly dirty: boolean; readonly sharedModel: boolean;
+			readonly editable: boolean; readonly messages: unknown[];
 			edit(start: number, end: number, text: string): void;
 			undo(): void; redo(): void;
+			disable(): void; readonly registered: boolean;
 		};
 	}
 }

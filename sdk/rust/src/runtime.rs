@@ -266,6 +266,7 @@ impl<E: Extension> Runtime<E> {
                         scm: crate::scm::SourceControl::default(),
                         terminal: crate::terminal::Terminal::default(),
                         languages: Languages::default(),
+                        editors: crate::editors::Editors::default(),
                         workspace: crate::workspace::Workspace::default(),
                         window: Window::new(self.writer.clone(), fence, self.options.protocol),
                         activation: params.clone(),
@@ -418,11 +419,24 @@ impl<E: Extension> Runtime<E> {
                     .and_then(|()| (registration.handler)(params.payload, callback_token.clone()))
                     .map(|payload| HostSuccess::Invoked(InvokeResult { payload }));
                 callback_token.cancel(CancelReason::Shutdown);
-                let response = ExtensionHostResponse {
+                let mut response = ExtensionHostResponse {
                     context,
                     response: response_kind(result),
                 };
-                response.validate_for(&request, &limits)?;
+                // Provider output is an invocation failure, not a broken transport.
+                // Keep the process and its other registrations alive after a large result.
+                if let Err(error) = response.validate_for(&request, &limits) {
+                    response.response = response_kind(Err(ExtensionError::new(
+                        match error {
+                            ProtocolError::QuotaExceeded(_) => HostErrorCode::QuotaExceeded,
+                            ProtocolError::InvalidProtocol(_) | ProtocolError::Transport(_) => {
+                                HostErrorCode::Internal
+                            }
+                        },
+                        "extension result exceeds its response contract",
+                    )));
+                    response.validate_for(&request, &limits)?;
+                }
                 writer.write(&response)?;
                 Ok(())
             })

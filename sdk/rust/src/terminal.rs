@@ -33,7 +33,7 @@ impl Terminal {
                     registration_id: id,
                     kind: RegistrationKind::TerminalEnvironment {},
                 },
-                operation: "getTerminalEnvironment",
+                operation: "getTerminalEnvironment".into(),
                 handler: Arc::new(move |_, token| callback(token)),
             },
         );

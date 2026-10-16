@@ -23,9 +23,9 @@
 			  messages: Object.fromEntries(Object.entries(messages).filter(([key]) => key.startsWith('markdown.rich.')).map(([key, value]) => [key.slice('markdown.rich.'.length), value])),
 			});
 			async function parse(snapshot) {
-				const response = await fetch('/__markdown_parse', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ protocol_version: 1, uri: 'file:///fixture.md', version: snapshot.version, text: snapshot.text }) });
+				const response = await fetch('/__markdown_render', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ protocol_version: 1, uri: 'file:///fixture.md', version: snapshot.version, text: snapshot.text }) });
 				if (!response.ok) return { ...snapshot, parseError: true };
-				return { ...snapshot, blocks: (await response.json()).blocks };
+				return { ...snapshot, blocks: (await response.json()).update.blocks };
 			}
 			initial.textContent = JSON.stringify(await parse(JSON.parse(initial.textContent)));
 			document.body.append(initial);

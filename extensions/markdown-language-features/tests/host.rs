@@ -71,7 +71,7 @@ impl Drop for Running {
     }
 }
 fn start() -> Running {
-    let executable = PathBuf::from(env!("CARGO_BIN_EXE_ash-markdown-parser"));
+    let executable = PathBuf::from(env!("CARGO_BIN_EXE_ash-markdown-language-features"));
     let directory = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let launcher = Arc::new(Launcher {
         inner: ProductExecutableLauncher::new(executable.clone()).unwrap(),
@@ -84,15 +84,19 @@ fn start() -> Running {
     let activation = ExtensionActivationSpec::new(
         ActivateParams {
             initialization: None,
-            extension_id: "ash.markdown-parser".into(),
+            extension_id: "vscode.markdown-language-features".into(),
             package: PackageBinding {
-                package_id: "ash.markdown-parser@0.1.0".into(),
+                package_id: "vscode.markdown-language-features@1.0.0".into(),
                 package_digest: format!("sha256:{}", "a".repeat(64)),
-                entrypoint: "ash-markdown-parser".into(),
+                entrypoint: "ash-markdown-language-features".into(),
             },
             runtime_api_version: 1,
-            activation_events: vec!["onCommand:_markdown.parse".into()],
-            capabilities: vec![ExtensionCapability::Command],
+            activation_events: vec!["onStartupFinished".into()],
+            capabilities: vec![
+                ExtensionCapability::Command,
+                ExtensionCapability::LanguageProvider,
+                ExtensionCapability::CustomTextEditor,
+            ],
         },
         NonZeroU64::new(1).unwrap(),
         authority.clone(),
@@ -112,7 +116,7 @@ fn start() -> Running {
     .unwrap();
     let snapshot = host.start().unwrap();
     assert_eq!(snapshot.status, ExtensionHostStatus::Ready);
-    assert_eq!(snapshot.registrations.len(), 1);
+    assert_eq!(snapshot.registrations.len(), 21);
     Running {
         host,
         authority,
@@ -121,9 +125,9 @@ fn start() -> Running {
 }
 fn invocation(snapshot: Value) -> ExtensionInvocation {
     ExtensionInvocation {
-        registration_id: "_markdown.parse".into(),
-        operation: "execute".into(),
-        payload: json!({"arguments": [snapshot]}),
+        registration_id: "vscode.markdown.editor".into(),
+        operation: "resolveCustomTextEditor".into(),
+        payload: json!({"document": snapshot}),
         deadline_unix_millis: NonZeroU64::new(
             (SystemTime::now().duration_since(UNIX_EPOCH).unwrap() + Duration::from_secs(20))
                 .as_millis() as u64,
@@ -132,7 +136,7 @@ fn invocation(snapshot: Value) -> ExtensionInvocation {
     }
 }
 fn snapshot(text: &str) -> Value {
-    json!({"protocol_version": 1, "uri": "file:///synthetic.md", "version": 7, "text": text})
+    json!({"uri": "file:///synthetic.md", "version": 7, "text": text,"languageId":"markdown","readOnly":false})
 }
 
 #[test]
@@ -144,18 +148,29 @@ fn real_product_process_preserves_utf16_source_and_rejects_invalid_contracts() {
         .host
         .invoke(invocation(snapshot(text)))
         .unwrap()
-        .payload;
+        .payload["update"]
+        .clone();
     assert_eq!(result["version"], 7);
     assert_eq!(result["uri"], "file:///synthetic.md");
     let blocks = result["blocks"].as_array().unwrap();
     let mut offset = 0;
     for block in blocks {
-        assert_eq!(block["start"], offset);
-        offset = block["end"].as_u64().unwrap();
+        assert_eq!(block[0], offset);
+        offset = block[1].as_u64().unwrap();
     }
     assert_eq!(offset, text.encode_utf16().count() as u64);
+    let deep = format!("{}deep\n", "> ".repeat(256));
+    let nested = running
+        .host
+        .invoke(invocation(snapshot(&deep)))
+        .unwrap()
+        .payload;
+    assert_eq!(
+        nested["update"]["blocks"][0][1].as_u64().unwrap(),
+        deep.len() as u64
+    );
     let mut invalid = snapshot(text);
-    invalid["protocol_version"] = json!(2);
+    invalid["version"] = json!(0);
     assert!(matches!(
         running.host.invoke(invocation(invalid)),
         Err(ExtensionHostError::HostRejected {
@@ -201,16 +216,53 @@ fn product_process_transports_large_wide_and_nested_render_trees() {
         .host
         .invoke(invocation(snapshot(&source)))
         .unwrap()
-        .payload;
+        .payload["update"]
+        .clone();
     assert!(serde_json::to_vec(&result).unwrap().len() > 512 * 1024);
     let blocks = result["blocks"].as_array().unwrap();
     assert!(blocks.len() > 8192);
     let mut offset = 0;
     for block in blocks {
-        assert_eq!(block["start"], offset);
-        offset = block["end"].as_u64().unwrap();
+        assert_eq!(block[0], offset);
+        offset = block[1].as_u64().unwrap();
     }
     assert_eq!(offset, source.encode_utf16().count() as u64);
+}
+
+#[test]
+fn four_megabytes_of_prose_fit_the_response_contract_and_leave_the_process_usable() {
+    let source = "A paragraph with **bold** text, [link](https://example.com) and 中文😀.\n\n"
+        .repeat(55_000);
+    assert!(source.len() >= 4 * 1024 * 1024);
+    let running = start();
+    let result = running
+        .host
+        .invoke(invocation(snapshot(&source)))
+        .unwrap()
+        .payload;
+    let blocks = result["update"]["blocks"].as_array().unwrap();
+    assert_eq!(
+        blocks.last().unwrap()[1].as_u64().unwrap(),
+        source.encode_utf16().count() as u64
+    );
+    assert!(serde_json::to_vec(&result).unwrap().len() < 24 * 1024 * 1024);
+    let incarnation = running.host.snapshot().incarnation;
+    // The larger source still fits the input contract, but its render tree does
+    // not fit the output quota. That must not retire this extension incarnation.
+    assert!(matches!(
+        running.host.invoke(invocation(snapshot(&source.repeat(2)))),
+        Err(ExtensionHostError::HostRejected {
+            code: HostErrorCode::QuotaExceeded,
+            ..
+        })
+    ));
+    assert!(
+        running
+            .host
+            .invoke(invocation(snapshot("# Still alive")))
+            .is_ok()
+    );
+    assert_eq!(running.host.snapshot().incarnation, incarnation);
 }
 
 #[test]

@@ -31,11 +31,10 @@ fn reference_links_resolve_without_rewriting_the_definition() {
 #[test]
 fn math_tables_and_tasks_are_structured_and_html_is_inert() {
     let serialized = serde_json::to_string(&parse("- [x] 中文😀\n\n$x^2$\n\n| A | B |\n|---|---|\n| 1 | 2 |\n\n<script>alert(1)</script>\n").unwrap()).unwrap();
-    assert!(serialized.contains("\"kind\":\"task\""));
-    assert!(serialized.contains("\"offset\":2"));
-    assert!(serialized.contains("\"kind\":\"math\""));
-    assert!(serialized.contains("\"tag\":\"table\""));
-    assert!(serialized.contains("\"kind\":\"raw\",\"value\":\"<script>"));
+    assert!(serialized.contains("[\"task\",true,2]"));
+    assert!(serialized.contains("[\"math\""));
+    assert!(serialized.contains("[\"el\",\"table\""));
+    assert!(serialized.contains("[\"raw\",\"<script>"));
 }
 
 #[test]

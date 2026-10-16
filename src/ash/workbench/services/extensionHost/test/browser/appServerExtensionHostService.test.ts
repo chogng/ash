@@ -326,17 +326,25 @@ test('diagnostic collections reject stale versions and keep extension ownership 
 	assert.deepEqual(markers.read({ resource: model.uri }).map(marker => [marker.startLineNumber, marker.startColumn, marker.endLineNumber, marker.endColumn, marker.modelVersionId, marker.code]), [[1, 1, 1, 4, 1, 'W1'], [1, 1, 1, 4, 1, 'W1']]);
 	await assert.rejects(api.clientHandler!({ operation: 'setDiagnostics', collection: 'lint', entries: [{ ...entries[0]!, diagnostics: [{ ...diagnostic, message: '' }] }] }, signal, source), /Diagnostic message must not be empty/);
 	assert.equal(markers.read({ resource: model.uri }).length, 2, 'invalid replacement leaves current collections intact');
+	const second = services.get(IModelService).createModel('bad', null, URI.file('/second.ts'));
+	await api.clientHandler!({ operation: 'setDiagnostics', collection: 'lint', merge: true, entries: [{ ...entries[0]!, uri: second.uri.toString() }] }, signal, source);
+	await api.clientHandler!({ operation: 'setDiagnostics', collection: 'lint', merge: true, entries: [{ ...entries[0]!, diagnostics: [] }] }, signal, source);
+	assert.equal(markers.read({ resource: model.uri }).length, 1, 'merge clears only the listed resource for this extension');
+	assert.equal(markers.read({ resource: second.uri }).length, 1, 'merge retains unlisted resources');
+	await api.clientHandler!({ operation: 'setDiagnostics', collection: 'lint', merge: true, entries }, signal, source);
 	model.setValue('good');
 	await api.clientHandler!({ operation: 'setDiagnostics', collection: 'lint', entries: [{ ...entries[0]!, diagnostics: [] }] }, signal, source);
 	assert.equal(markers.read({ resource: model.uri }).length, 2, 'old replacement cannot clear current diagnostics');
 	await api.clientHandler!({ operation: 'setDiagnostics', collection: 'lint', entries: [] }, signal, source);
 	assert.equal(markers.read({ resource: model.uri }).length, 1, 'other extension owns its collection');
+	assert.equal(markers.read({ resource: second.uri }).length, 0, 'whole replacement still clears unlisted resources');
 	api.current = { generation: 2, extensions: [{ ...api.current.extensions[0]!, incarnation: 4 }] };
 	api.emitChanged(2);
 	await waitFor(() => service.currentSnapshot.fleetGeneration === 2);
 	assert.equal(markers.read({ resource: model.uri }).length, 0);
 	await assert.rejects(api.clientHandler!({ operation: 'setDiagnostics', collection: 'lint', entries: [] }, signal, source), /retired extension/);
 	model.dispose();
+	second.dispose();
 });
 
 test('document callback errors do not suppress later commits and language changes close then reopen', async () => {
