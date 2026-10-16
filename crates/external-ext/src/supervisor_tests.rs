@@ -108,6 +108,8 @@ impl ExtensionHostLauncher for TestLauncher {
 struct TestProcess {
     exited: AtomicBool,
     hang_invocations: AtomicBool,
+    client_on_invoke: AtomicBool,
+    client_replies: AtomicUsize,
     cancels: AtomicUsize,
     output_events: Mutex<Vec<ExtensionHostOutputEvent>>,
     initializations: Mutex<Vec<Option<external_ext_protocol::ExtensionHostInitialization>>>,
@@ -118,7 +120,8 @@ impl ExtensionHostProcess for TestProcess {
         &self,
         _: external_ext_protocol::ExtensionClientResponse,
     ) -> Result<(), ExtensionHostError> {
-        panic!("fixture does not issue client calls")
+        self.client_replies.fetch_add(1, Ordering::AcqRel);
+        Ok(())
     }
     fn dispatch(
         &self,
@@ -153,6 +156,22 @@ impl ExtensionHostProcess for TestProcess {
                         },
                     }],
                 }))
+            }
+            HostRequestKind::Invoke(_) if self.client_on_invoke.load(Ordering::Acquire) => {
+                sender
+                    .send(Ok(crate::process::PendingMessage::ClientRequest(
+                        external_ext_protocol::ExtensionClientRequest {
+                            context: request.context,
+                            call_id: 1,
+                            operation:
+                                external_ext_protocol::ExtensionClientOperation::ReadConfiguration {
+                                    section: "test".into(),
+                                    resource: None,
+                                },
+                        },
+                    )))
+                    .unwrap();
+                None
             }
             HostRequestKind::Invoke(_) if self.hang_invocations.load(Ordering::Acquire) => None,
             HostRequestKind::Invoke(_) => Some(HostSuccess::Invoked(InvokeResult {
@@ -294,6 +313,13 @@ fn handshake_activation_and_invoke_hold_exact_authority_leases() {
     assert_eq!(authority.active_leases.load(Ordering::Acquire), 2);
     assert_eq!(handle.wait().unwrap().payload, json!({"ok": true}));
     assert_eq!(authority.active_leases.load(Ordering::Acquire), 1);
+    handle.cancel(CancelReason::Caller).unwrap();
+    assert_eq!(
+        launcher.processes.lock().unwrap()[0]
+            .cancels
+            .load(Ordering::Acquire),
+        0
+    );
 }
 
 #[test]
@@ -362,6 +388,31 @@ fn caller_cancel_is_dispatched_while_invoke_is_pending() {
 
     assert!(waiter.join().unwrap().is_err());
     assert!(process.cancels.load(Ordering::Acquire) >= 1);
+}
+
+#[test]
+fn delayed_wait_does_not_run_client_calls_after_the_original_deadline() {
+    let launcher = Arc::new(TestLauncher::default());
+    let authority = Arc::new(TestAuthority::authorized());
+    let supervisor = supervisor(Arc::clone(&launcher), Arc::clone(&authority));
+    supervisor.start().unwrap();
+    let process = Arc::clone(&launcher.processes.lock().unwrap()[0]);
+    process.client_on_invoke.store(true, Ordering::Release);
+    let handle = supervisor.begin_invoke(invocation()).unwrap();
+    // The public begin/wait API permits a caller to schedule its waiter later.
+    thread::sleep(Duration::from_millis(60));
+    let calls = AtomicUsize::new(0);
+    let result = handle.wait_with_client(|_, _, _| {
+        calls.fetch_add(1, Ordering::AcqRel);
+        Ok(external_ext_protocol::ExtensionClientResult::Configuration { value: json!({}) })
+    });
+    assert!(matches!(
+        result,
+        Err(ExtensionHostError::OutcomeIndeterminate)
+    ));
+    assert_eq!(calls.load(Ordering::Acquire), 0);
+    assert_eq!(process.client_replies.load(Ordering::Acquire), 1);
+    assert_eq!(authority.active_leases.load(Ordering::Acquire), 1);
 }
 
 #[test]

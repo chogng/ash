@@ -194,7 +194,7 @@ export class MainThreadExtensionApi extends Disposable {
 		switch (operation.operation) {
 			case 'scmUpdate': this.scmApi.set(source, operation.registrationId, operation.revision, operation.providers); return { result: 'done' };
 			case 'backendRequest': return { result: 'value', value: await this.backendApi.handle(source, operation.capability, operation.method, operation.params, 0, signal, operation.progress) };
-			case 'backendState': return { result: 'value', value: await this.backendApi.handle(source, operation.capability, undefined, {}, operation.after, signal) };
+			case 'backendState': return { result: 'value', value: await this.backendApi.handle(source, operation.capability, undefined, {}, operation.after, signal, undefined, operation.waitForChange === true) };
 			case 'editorOperation': return { result: 'value', value: this.handleOutput(source, operation.payload) ? null : await (this.editorsApi ??= this._register(this.instantiation.createInstance(MainThreadEditors))).handle(operation.payload, signal, source) };
 			case 'addDebugBreakpoints':
 			case 'removeDebugBreakpoints':

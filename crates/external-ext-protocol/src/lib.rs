@@ -211,7 +211,9 @@ impl ExtensionHostInitialization {
     pub fn validate(&self) -> Result<(), ProtocolError> {
         if let Some(localization) = &self.localization {
             if localization.uri.is_empty()
-                || localization.uri.len() > 32768
+                // Inline catalogs grow with their translations, especially percent-encoded
+                // UTF-8. The complete initialization's 512 KiB quota bounds those data URIs.
+                || (localization.uri.len() > 32768 && !localization.uri.starts_with("data:"))
                 || localization.uri.chars().any(char::is_control)
                 || localization.bundle.len() > 10000
                 || localization.package.len() > 10000

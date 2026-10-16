@@ -10,6 +10,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
+use std::sync::mpsc;
 use std::thread;
 use std::thread::JoinHandle;
 
@@ -44,12 +45,13 @@ struct BackgroundClientQueue {
 
 pub(super) struct StdioExtensionHostProcess {
     child: Mutex<Option<ash_sandboxing::ProcessHandle>>,
-    writer: Mutex<Option<BufWriter<Box<dyn Write + Send>>>>,
+    writer: Mutex<Option<mpsc::SyncSender<Vec<u8>>>>,
     pending: Arc<Mutex<BTreeMap<u64, PendingEntry>>>,
     exited: Arc<AtomicBool>,
     stderr: Arc<Mutex<Vec<u8>>>,
     output_events: Arc<Mutex<OutputEventQueue>>,
     background: Arc<Mutex<BackgroundClientQueue>>,
+    writer_thread: Mutex<Option<JoinHandle<()>>>,
     stdout_thread: Mutex<Option<JoinHandle<()>>>,
     stderr_thread: Mutex<Option<JoinHandle<()>>>,
     diagnostic_stdout_thread: Mutex<Option<JoinHandle<()>>>,
@@ -149,6 +151,8 @@ impl StdioExtensionHostProcess {
         } else {
             (stdin, stdout, None)
         };
+        let (writer, writer_thread) =
+            spawn_writer(stdin, Arc::clone(&pending), Arc::clone(&exited), limits);
         let stdout_thread = spawn_stdout_reader(
             stdout,
             Arc::clone(&pending),
@@ -165,12 +169,13 @@ impl StdioExtensionHostProcess {
         );
         Ok(Self {
             child: Mutex::new(Some(child)),
-            writer: Mutex::new(Some(BufWriter::new(stdin))),
+            writer: Mutex::new(Some(writer)),
             pending,
             exited,
             stderr,
             output_events,
             background,
+            writer_thread: Mutex::new(Some(writer_thread)),
             stdout_thread: Mutex::new(Some(stdout_thread)),
             stderr_thread: Mutex::new(Some(stderr_thread)),
             diagnostic_stdout_thread: Mutex::new(diagnostic_stdout_thread),
@@ -182,6 +187,24 @@ impl StdioExtensionHostProcess {
     fn fail_pending(&self, failure: PendingFailure) {
         fail_all_pending(&self.pending, failure);
     }
+
+    fn queue_frame(&self, bytes: Vec<u8>) -> Result<(), ExtensionHostError> {
+        if self.exited.load(Ordering::Acquire) {
+            return Err(ExtensionHostError::HostExited);
+        }
+        self.writer
+            .lock()
+            .map_err(|_| ExtensionHostError::HostExited)?
+            .as_ref()
+            .ok_or(ExtensionHostError::HostExited)?
+            .try_send(bytes)
+            .map_err(|_| ExtensionHostError::HostExited)
+    }
+
+    fn fail_transport(&self) {
+        self.exited.store(true, Ordering::Release);
+        self.fail_pending(PendingFailure::Transport);
+    }
 }
 
 impl ExtensionHostProcess for StdioExtensionHostProcess {
@@ -189,6 +212,8 @@ impl ExtensionHostProcess for StdioExtensionHostProcess {
         &self,
         response: external_ext_protocol::ExtensionClientResponse,
     ) -> Result<(), ExtensionHostError> {
+        let mut bytes = Vec::new();
+        external_ext_protocol::write_frame(&mut bytes, &response, self.limits.maximum_frame_bytes)?;
         let mut pending = self
             .pending
             .lock()
@@ -203,13 +228,15 @@ impl ExtensionHostProcess for StdioExtensionHostProcess {
                 "unknown invocation client reply".into(),
             ));
         }
-        let mut writer = self
-            .writer
-            .lock()
-            .map_err(|_| ExtensionHostError::HostExited)?;
-        let writer = writer.as_mut().ok_or(ExtensionHostError::HostExited)?;
-        external_ext_protocol::write_frame(writer, &response, self.limits.maximum_frame_bytes)?;
+        if let Err(error) = self.queue_frame(bytes) {
+            drop(pending);
+            self.fail_transport();
+            return Err(error);
+        }
         entry.client_ids.remove(&response.call_id);
+        if entry.response_received && entry.client_ids.is_empty() {
+            pending.remove(&response.context.request_id);
+        }
         Ok(())
     }
     fn drain_background_client_requests(
@@ -225,6 +252,8 @@ impl ExtensionHostProcess for StdioExtensionHostProcess {
         &self,
         response: external_ext_protocol::ExtensionBackgroundClientResponse,
     ) -> Result<(), ExtensionHostError> {
+        let mut bytes = Vec::new();
+        external_ext_protocol::write_frame(&mut bytes, &response, self.limits.maximum_frame_bytes)?;
         let mut queue = self
             .background
             .lock()
@@ -234,12 +263,11 @@ impl ExtensionHostProcess for StdioExtensionHostProcess {
                 "unknown background client reply".into(),
             ));
         }
-        let mut writer = self
-            .writer
-            .lock()
-            .map_err(|_| ExtensionHostError::HostExited)?;
-        let writer = writer.as_mut().ok_or(ExtensionHostError::HostExited)?;
-        external_ext_protocol::write_frame(writer, &response, self.limits.maximum_frame_bytes)?;
+        if let Err(error) = self.queue_frame(bytes) {
+            drop(queue);
+            self.fail_transport();
+            return Err(error);
+        }
         queue.outstanding.remove(&response.call_id);
         Ok(())
     }
@@ -267,8 +295,8 @@ impl ExtensionHostProcess for StdioExtensionHostProcess {
         if self.has_exited() {
             return Err(ExtensionHostError::HostExited);
         }
-        let bytes = serde_json::to_vec(&request)
-            .map_err(|error| ExtensionHostError::InvalidProtocol(error.to_string()))?;
+        let mut bytes = Vec::new();
+        external_ext_protocol::write_frame(&mut bytes, &request, self.limits.maximum_frame_bytes)?;
         let (waiter, sender) = PendingHostRequest::channel(request.context.request_id);
         {
             let mut pending = self
@@ -286,6 +314,7 @@ impl ExtensionHostProcess for StdioExtensionHostProcess {
                 PendingEntry {
                     client_ids: std::collections::BTreeSet::new(),
                     last_client_id: 0,
+                    response_received: false,
                     request,
                     sender,
                     control,
@@ -294,20 +323,8 @@ impl ExtensionHostProcess for StdioExtensionHostProcess {
                 self.limits.maximum_in_flight_control_requests,
             )?;
         }
-        let write_result = self
-            .writer
-            .lock()
-            .map_err(|_| ExtensionHostError::HostExited)
-            .and_then(|mut writer| {
-                let writer = writer.as_mut().ok_or(ExtensionHostError::HostExited)?;
-                writer.write_all(&bytes)?;
-                writer.write_all(b"\n")?;
-                writer.flush()?;
-                Ok(())
-            });
-        if write_result.is_err() {
-            self.exited.store(true, Ordering::Release);
-            self.fail_pending(PendingFailure::Transport);
+        if self.queue_frame(bytes).is_err() {
+            self.fail_transport();
             return Err(ExtensionHostError::HostExited);
         }
         Ok(waiter)
@@ -336,18 +353,23 @@ impl ExtensionHostProcess for StdioExtensionHostProcess {
         if let Some(control) = &self.control {
             let _ = control.shutdown(Shutdown::Both);
         }
+        {
+            let mut child = self
+                .child
+                .lock()
+                .map_err(|_| ExtensionHostError::HostExited)?;
+            if let Some(mut child) = child.take() {
+                // Interrupt a full pipe before joining its writer; extension code may have
+                // stopped reading while the caller is cancelling or enforcing a deadline.
+                child.close().map_err(|_| ExtensionHostError::HostExited)?;
+            }
+        }
         self.writer
             .lock()
             .map_err(|_| ExtensionHostError::HostExited)?
             .take();
-        let mut child = self
-            .child
-            .lock()
-            .map_err(|_| ExtensionHostError::HostExited)?;
-        if let Some(mut child) = child.take() {
-            child.close().map_err(|_| ExtensionHostError::HostExited)?;
-        }
         self.fail_pending(PendingFailure::Exited);
+        join_thread(&self.writer_thread);
         join_thread(&self.stdout_thread);
         join_thread(&self.stderr_thread);
         join_thread(&self.diagnostic_stdout_thread);
@@ -378,6 +400,42 @@ impl Drop for StdioExtensionHostProcess {
     }
 }
 
+fn spawn_writer(
+    stdin: Box<dyn Write + Send>,
+    pending: Arc<Mutex<BTreeMap<u64, PendingEntry>>>,
+    exited: Arc<AtomicBool>,
+    limits: &ExtensionHostLimits,
+) -> (mpsc::SyncSender<Vec<u8>>, JoinHandle<()>) {
+    // Dispatch and callback replies must return even when the child stops reading. One
+    // bounded FIFO preserves frame order without holding a caller hostage to pipe IO.
+    // Exhaustion retires this incarnation rather than dropping or replaying a frame.
+    let capacity = limits
+        .maximum_in_flight_requests
+        .saturating_add(limits.maximum_in_flight_control_requests);
+    let (sender, receiver) = mpsc::sync_channel::<Vec<u8>>(capacity);
+    let thread = thread::Builder::new()
+        .name("ash-external-ext-stdin".into())
+        .spawn(move || {
+            let mut writer = BufWriter::new(stdin);
+            while let Ok(bytes) = receiver.recv() {
+                if exited.load(Ordering::Acquire) {
+                    break;
+                }
+                if writer
+                    .write_all(&bytes)
+                    .and_then(|()| writer.flush())
+                    .is_err()
+                {
+                    exited.store(true, Ordering::Release);
+                    fail_all_pending(&pending, PendingFailure::Transport);
+                    break;
+                }
+            }
+        })
+        .expect("extension host stdin writer thread must start");
+    (sender, thread)
+}
+
 fn spawn_stdout_reader(
     stdout: Box<dyn Read + Send>,
     pending: Arc<Mutex<BTreeMap<u64, PendingEntry>>>,
@@ -391,22 +449,28 @@ fn spawn_stdout_reader(
         .name("ash-external-ext-stdout".into())
         .spawn(move || {
             let mut reader = BufReader::new(stdout);
+            let fail = |failure| {
+                // Fence new dispatches before draining pending entries, including callers
+                // racing EOF or a malformed frame on this same incarnation.
+                exited.store(true, Ordering::Release);
+                fail_all_pending(&pending, failure);
+            };
             loop {
                 let bytes = match read_bounded_line(&mut reader, limits.maximum_frame_bytes) {
                     Ok(Some(bytes)) => bytes,
                     Ok(None) => {
-                        fail_all_pending(&pending, PendingFailure::Exited);
+                        fail(PendingFailure::Exited);
                         break;
                     }
                     Err(error) => {
-                        fail_all_pending(&pending, PendingFailure::Protocol(error));
+                        fail(PendingFailure::Protocol(error));
                         break;
                     }
                 };
                 let frame = match serde_json::from_slice::<ExtensionHostStdoutFrame>(&bytes) {
                     Ok(frame) => frame,
                     Err(error) => {
-                        fail_all_pending(&pending, PendingFailure::Protocol(error.to_string()));
+                        fail(PendingFailure::Protocol(error.to_string()));
                         break;
                     }
                 };
@@ -434,7 +498,7 @@ fn spawn_stdout_reader(
                         Ok(())
                     })();
                     if let Err(error) = forwarded {
-                        fail_all_pending(&pending, PendingFailure::Protocol(error));
+                        fail(PendingFailure::Protocol(error));
                         break;
                     }
                     continue;
@@ -451,6 +515,7 @@ fn spawn_stdout_reader(
                             .get_mut(&request.context.request_id)
                             .ok_or_else(|| "client call has no pending invocation".to_owned())?;
                         if entry.request.context != request.context
+                            || entry.response_received
                             || !matches!(entry.request.request, crate::HostRequestKind::Invoke(_))
                         {
                             return Err("client call belongs to a different invocation".to_owned());
@@ -468,7 +533,7 @@ fn spawn_stdout_reader(
                             .map_err(|_| "client call queue exceeded".to_owned())
                     })();
                     if let Err(error) = forwarded {
-                        fail_all_pending(&pending, PendingFailure::Protocol(error));
+                        fail(PendingFailure::Protocol(error));
                         break;
                     }
                     continue;
@@ -478,48 +543,62 @@ fn spawn_stdout_reader(
                         unreachable!();
                     };
                     if let Err(error) = event.validate(&limits.protocol_limits()) {
-                        fail_all_pending(&pending, PendingFailure::Protocol(error.to_string()));
+                        fail(PendingFailure::Protocol(error.to_string()));
                         break;
                     }
                     let Ok(mut queue) = output_events.lock() else {
-                        fail_all_pending(&pending, PendingFailure::Transport);
+                        fail(PendingFailure::Transport);
                         break;
                     };
                     if queue.events.len() >= limits.maximum_output_event_count
                         || queue.bytes.saturating_add(bytes.len()) > limits.maximum_output_bytes
                     {
-                        fail_all_pending(
-                            &pending,
-                            PendingFailure::Protocol("Output event quota exceeded".into()),
-                        );
+                        fail(PendingFailure::Protocol(
+                            "Output event quota exceeded".into(),
+                        ));
                         break;
                     }
                     queue.bytes += bytes.len();
                     queue.events.push_back(event);
                     continue;
                 };
-                let entry = pending
-                    .lock()
-                    .ok()
-                    .and_then(|mut pending| pending.remove(&response.context.request_id));
-                let Some(entry) = entry else {
-                    fail_all_pending(
-                        &pending,
-                        PendingFailure::Protocol("response used an unknown request ID".into()),
-                    );
+                let delivery = pending.lock().ok().and_then(|mut pending| {
+                    let entry = pending.get_mut(&response.context.request_id)?;
+                    if entry.response_received {
+                        return None;
+                    }
+                    let request_id = response.context.request_id;
+                    let response = response
+                        .validate_for(&entry.request, &limits.protocol_limits())
+                        .map(|()| PendingMessage::Response(response))
+                        .map_err(|error| PendingFailure::Protocol(error.to_string()));
+                    let sender = entry.sender.clone();
+                    entry.response_received = true;
+                    // Retain correlation and quota until the transport owns late client replies.
+                    // Otherwise a cancelled label query looks like a dead process to its host
+                    // callback and incorrectly restarts every provider in this incarnation.
+                    if entry.client_ids.is_empty() || response.is_err() {
+                        pending.remove(&request_id);
+                    }
+                    Some((sender, response))
+                });
+                let Some((sender, response)) = delivery else {
+                    fail(PendingFailure::Protocol(
+                        "response used an unknown request ID".into(),
+                    ));
                     break;
                 };
-                let response = response
-                    .validate_for(&entry.request, &limits.protocol_limits())
-                    .map(|()| PendingMessage::Response(response))
-                    .map_err(|error| PendingFailure::Protocol(error.to_string()));
                 let invalid = response.is_err();
-                let _ = entry.sender.send(response);
+                if matches!(sender.try_send(response), Err(mpsc::TrySendError::Full(_))) {
+                    fail(PendingFailure::Protocol(
+                        "response queue exceeded or abandoned".into(),
+                    ));
+                    break;
+                }
                 if invalid {
-                    fail_all_pending(
-                        &pending,
-                        PendingFailure::Protocol("invalid response correlation".into()),
-                    );
+                    fail(PendingFailure::Protocol(
+                        "invalid response correlation".into(),
+                    ));
                     break;
                 }
             }
@@ -556,9 +635,15 @@ fn fail_all_pending(pending: &Mutex<BTreeMap<u64, PendingEntry>>, failure: Pendi
         return;
     };
     for (_, entry) in std::mem::take(&mut *pending) {
-        let _ = entry.sender.send(Err(failure.clone()));
+        // A caller may have stopped draining a full callback queue. Dropping its sender
+        // still closes the waiter; retirement must never wait for that caller to read.
+        let _ = entry.sender.try_send(Err(failure.clone()));
     }
 }
+
+#[cfg(test)]
+#[path = "stdio_tests.rs"]
+mod tests;
 
 fn join_thread(thread: &Mutex<Option<JoinHandle<()>>>) {
     if let Ok(mut thread) = thread.lock()

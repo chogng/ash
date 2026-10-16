@@ -99,6 +99,15 @@ flowchart TD
 
 ## 4. Host RPC v1
 
+调用的绝对截止时间在 dispatch 前固定，延迟启动 waiter 不会重新获得超时预算。
+取消后仍等待合作式终态；宽限期内没有终态则保留结果不确定语义，终止旧实例后恢复注册。
+请求和回包进入同一个有界写入队列，不在调用线程等待子进程读取；队列超限会终止该实例，
+不会静默丢帧或重放。强制退出先关闭子进程，再回收写入端，因此不读 stdin 的进程不能阻塞退出。
+
+调用终态到达后，不再接收该调用的新客户端请求；已经发出的客户端请求仍保留身份关联和配额，
+直到回包交给传输队列，由该队列负责送达或随实例退出清理。迟到回包只清理原请求，
+不能恢复已取消的调用或进入另一个实例。
+
 传输是一行一个 UTF-8 JSON frame 的双向 stdio 协议。请求与响应携带 `protocolVersion`、`requestId`、
 `incarnation` 和 `activationGeneration`；扩展主动发出的 Output event 不带 `requestId`，但必须携带其余
 三个 stale-process fence。任一 fence 为零、版本不匹配、response correlation 不完全一致、未知 request

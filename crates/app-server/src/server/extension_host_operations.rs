@@ -293,7 +293,15 @@ impl AppServer {
         let params: ExtensionHostInvokeCancelParams = decode(params)?;
         let disposition = self
             .extension_host_runtime(connection)?
-            .cancel_invocation(connection.connection_id, &params.invocation_id)
+            .cancel_invocation(
+                connection.connection_id,
+                &params.invocation_id,
+                if params.discard_result == Some(true) {
+                    super::extension_host_runtime::ResultRetention::Discard
+                } else {
+                    super::extension_host_runtime::ResultRetention::Retain
+                },
+            )
             .map_err(runtime_rpc_error)?;
         result(&ExtensionHostInvokeCancelResult {
             disposition: match disposition {

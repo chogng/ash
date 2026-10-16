@@ -18,6 +18,13 @@ Rust SDK 是[统一后端扩展接口](../../docs/editor-extensions.md#统一后
 [`src/bin/review.rs`](src/bin/review.rs) 与 [`tests/host.rs`](tests/host.rs) 保留独立扩展进程的示例和测试，
 基础能力曾通过真实 Supervisor 和 stdio 调用验证。
 
+显式停用和输入 EOF 都先取消调用，并释放 `Client` / `Services` 的等待者，再等待扩展任务退出。
+已经发送的客户端请求保留有界关联以接收迟到回包；共享 token 的并发请求按 call ID 顺序发送。
+
+`BackgroundClient::wait_for_backend_state` 按已有 sequence 等待获授权的通知，通知到达即返回，
+空闲时仍有有界 tick；关闭 activation 会中断等待。原 `backend_state` 保留立即读取的行为，
+没有订阅要求的调用无需携带可选的 `waitForChange` 字段。
+
 `data_channels.rs` 复用现有 DataChannel 注册和 `receiveData` 调用，要求闭合的请求／响应类型。`services.rs` 复用有界反向请求，绑定 profile activation 的 incarnation／generation；Host 逐 Provider 授予秘密命名空间与 HTTP 端点，不开放完整后端连接。现有 `client.rs` 的窗口编辑器调用仍需按各自能力独立验证。
 
 | 现有部分                                  | 当前职责                               | 目标处理                                                                    |

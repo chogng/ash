@@ -95,6 +95,7 @@ fn duplicate_request_id_never_replaces_the_original_waiter() {
         PendingEntry {
             client_ids: std::collections::BTreeSet::new(),
             last_client_id: 0,
+            response_received: false,
             request: request.clone(),
             sender: original_sender,
             control: false,
@@ -110,6 +111,7 @@ fn duplicate_request_id_never_replaces_the_original_waiter() {
             PendingEntry {
                 client_ids: std::collections::BTreeSet::new(),
                 last_client_id: 0,
+                response_received: false,
                 request: request.clone(),
                 sender: duplicate_sender,
                 control: false,
@@ -149,6 +151,7 @@ fn control_request_capacity_is_reserved_when_normal_requests_are_full() {
         PendingEntry {
             client_ids: std::collections::BTreeSet::new(),
             last_client_id: 0,
+            response_received: false,
             request: normal,
             sender: normal_sender,
             control: false,
@@ -171,6 +174,7 @@ fn control_request_capacity_is_reserved_when_normal_requests_are_full() {
             PendingEntry {
                 client_ids: std::collections::BTreeSet::new(),
                 last_client_id: 0,
+                response_received: false,
                 request: cancel,
                 sender: cancel_sender,
                 control: true,

@@ -212,3 +212,20 @@ fn debug_activation_rejects_unknown_phases_and_forged_runtime_authority() {
         );
     }
 }
+#[test]
+fn invocation_cancel_keeps_legacy_result_retention_and_validates_explicit_discard() {
+    use super::ExtensionHostInvokeCancelParams;
+    let legacy: ExtensionHostInvokeCancelParams =
+        serde_json::from_value(serde_json::json!({"invocationId":"one"})).unwrap();
+    assert_eq!(legacy.discard_result, None);
+    let discard: ExtensionHostInvokeCancelParams =
+        serde_json::from_value(serde_json::json!({"invocationId":"one","discardResult":true}))
+            .unwrap();
+    assert_eq!(discard.discard_result, Some(true));
+    assert!(
+        serde_json::from_value::<ExtensionHostInvokeCancelParams>(
+            serde_json::json!({"invocationId":"one","discardResult":"true"})
+        )
+        .is_err()
+    );
+}

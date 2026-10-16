@@ -8,6 +8,19 @@ use serde_json::Value;
 use serde_json::json;
 
 #[test]
+fn backend_state_watch_is_opt_in_and_keeps_legacy_calls_unchanged() {
+    for wire in [
+        json!({"operation":"backendState","capability":"git.repository","after":3}),
+        json!({"operation":"backendState","capability":"git.repository","after":3,"waitForChange":true}),
+        json!({"operation":"backendState","capability":"git.repository","after":3,"waitForChange":false}),
+    ] {
+        let operation: ExtensionClientOperation = serde_json::from_value(wire.clone()).unwrap();
+        assert_eq!(serde_json::to_value(operation).unwrap(), wire);
+    }
+    assert!(serde_json::from_value::<ExtensionClientOperation>(json!({"operation":"backendState","capability":"git.repository","after":3,"waitForChange":"yes"})).is_err());
+}
+
+#[test]
 fn notification_buttons_round_trip_and_legacy_messages_keep_their_wire_shape() {
     for wire in [
         json!({"operation":"showMessage","message":"Git failed","severity":"error"}),

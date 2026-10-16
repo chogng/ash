@@ -40,6 +40,7 @@ pub(super) use projection::ExtensionHostFleetSnapshot;
 pub(super) use projection::ExtensionHostLifecycle;
 pub(super) use projection::ExtensionHostRuntimeFailure;
 use sessions::InvocationSessionStore;
+pub(super) use sessions::ResultRetention;
 
 const MAXIMUM_FLEET_EXTENSIONS: usize = 128;
 const MAXIMUM_GLOBAL_INVOCATIONS: usize = 256;
@@ -634,12 +635,13 @@ impl ExtensionHostRuntime {
         &self,
         owner: u64,
         id: &str,
+        retention: ResultRetention,
     ) -> Result<ExtensionHostInvocationCancelDisposition, ExtensionHostRuntimeError> {
         self.inner
             .sessions
             .lock()
             .map_err(|_| ExtensionHostRuntimeError::Internal)?
-            .cancel(owner, id, CancelReason::Caller)
+            .cancel(owner, id, CancelReason::Caller, retention)
     }
 
     pub(super) fn close_owner(&self, owner: u64) {

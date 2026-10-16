@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { CancellationError } from "../../../../base/common/errors.js";
+import { DeferredPromise } from '../../../../base/common/async.js';
+import { ExtensionHostInvocationError } from '../../common/extensionHostApi.js';
 import { invokeExtensionHost, normalizeExtensionHostPayload, normalizeExtensionHostSnapshot } from '../../browser/extensionHostProtocol.js';
 import { type ExtensionHostInvocationRequest, type JsonValue } from '../../common/extensionHostApi.js';
 
@@ -109,53 +111,93 @@ test("cancels a pending connection-owned invocation when the caller aborts", asy
 	assert.deepEqual(cancelled, ["invoke-2"]);
 });
 
-test('discarded editor invocations consume cancellation results before exhausting the connection quota', async () => {
-	const sessions = new Map<string, { cancelled: boolean; reads: number; }>();
-	let sequence = 0, terminalReads = 0;
+test('discarded editor invocations delegate delayed result cleanup to the backend owner', async () => {
+	const sessions = new Map<string, { discard: boolean; }>();
+	let sequence = 0;
 	for (let index = 0; index < 64; index++) {
 		const controller = new AbortController();
+		let id = '';
+		let reads = 0;
 		await assert.rejects(invokeExtensionHost({
-			start: async () => {
-				if (sessions.size >= 32) throw new Error('Connection invocation quota exceeded');
-				const invocationId = `edit-${++sequence}`;
-				sessions.set(invocationId, { cancelled: false, reads: 0 });
-				return { invocationId };
-			},
-			read: async invocationId => {
-				const session = sessions.get(invocationId)!;
-				if (!session.cancelled || session.reads++ === 0) return { state: 'pending' };
-				sessions.delete(invocationId);
-				terminalReads++;
-				return { state: 'cancelled', reason: 'caller' };
-			},
-			cancel: async invocationId => { sessions.get(invocationId)!.cancelled = true; return { disposition: 'requested' }; },
+			start: async () => { assert.ok(sessions.size < 32); id = `edit-${++sequence}`; sessions.set(id, { discard: false }); return { invocationId: id }; },
+			read: async () => { reads++; return { state: 'pending' }; },
+			cancel: async (invocationId, retention) => { assert.equal(retention, 'discard'); sessions.get(invocationId)!.discard = true; return { disposition: 'requested' }; },
 		}, invocation(), controller.signal, {
 			now: () => 100,
-			wait: async (_milliseconds, signal) => {
-				if (signal === controller.signal) { controller.abort('superseded'); throw new CancellationError('superseded'); }
-			},
+			wait: async () => { controller.abort('superseded'); throw new CancellationError('superseded'); },
 		}), CancellationError);
+		assert.equal(reads, 1, 'The abandoned caller must not wait for a delayed terminal result');
+		assert.equal(sessions.get(id)?.discard, true);
+		// Completion happens after the caller has left. The session owner can release quota
+		// without another poll, even when cancellation grace outlives frontend cleanup.
+		sessions.delete(id);
 	}
-	assert.equal(terminalReads, 64);
 	assert.equal(sessions.size, 0);
 });
 
-test('cancellation also consumes an already completed result and preserves the original failure', async () => {
+test('discarding an already completed result preserves the original failure', async () => {
 	const controller = new AbortController();
-	let completed = false, consumed = false;
+	let completed = false, discarded = false;
 	await assert.rejects(invokeExtensionHost({
 		start: async () => ({ invocationId: 'completed' }),
-		read: async () => {
-			if (!completed) return { state: 'pending' };
-			consumed = true;
-			return { state: 'succeeded', payload: { late: true } };
-		},
-		cancel: async () => ({ disposition: 'alreadyTerminal' }),
+		read: async () => ({ state: 'pending' }),
+		cancel: async (_id, retention) => { assert.equal(completed, true); assert.equal(retention, 'discard'); discarded = true; return { disposition: 'alreadyTerminal' }; },
 	}, invocation(), controller.signal, {
 		now: () => 100,
 		wait: async () => { completed = true; controller.abort(); throw new CancellationError('original'); },
 	}), error => error instanceof CancellationError && error.message === 'original');
-	assert.equal(consumed, true);
+	assert.equal(discarded, true);
+});
+
+test('abort returns before a delayed start and discards its late session exactly once', async () => {
+	const started = new DeferredPromise<unknown>();
+	const discarded = new DeferredPromise<void>();
+	const controller = new AbortController();
+	let cancellations = 0;
+	const pending = invokeExtensionHost({
+		start: () => started.p,
+		read: async () => { assert.fail('Abandoned start must not begin polling'); },
+		cancel: async (id, retention) => {
+			assert.equal(id, 'late-session'); assert.equal(retention, 'discard');
+			cancellations++; void discarded.complete(); return { disposition: 'requested' };
+		},
+	}, invocation(), controller.signal, { now: () => 100 });
+	controller.abort();
+	try {
+		await assert.rejects(Promise.race([pending, new Promise((_, reject) => setTimeout(() => reject(new Error('abort waited for start')), 500))]), CancellationError);
+	} finally {
+		await started.complete({ invocationId: 'late-session' });
+		await pending.catch(() => undefined);
+	}
+	await discarded.p;
+	assert.equal(cancellations, 1);
+});
+
+test('abort and deadline interrupt a stalled read and discard its backend session', async () => {
+	for (const mode of ['abort', 'deadline'] as const) {
+		const reading = new DeferredPromise<void>();
+		const response = new DeferredPromise<unknown>();
+		const controller = new AbortController();
+		let cancellations = 0;
+		const pending = invokeExtensionHost({
+			start: async () => ({ invocationId: mode }),
+			read: () => { void reading.complete(); return response.p; },
+			cancel: async (id, retention) => {
+				assert.equal(id, mode); assert.equal(retention, 'discard'); cancellations++;
+				return { disposition: 'requested' };
+			},
+		}, { ...invocation(), deadlineUnixMillis: Date.now() + (mode === 'deadline' ? 50 : 5000) }, controller.signal);
+		await reading.p;
+		if (mode === 'abort') controller.abort();
+		try {
+			await assert.rejects(Promise.race([pending, new Promise((_, reject) => setTimeout(() => reject(new Error('caller waited for stalled read')), 500))]), error => mode === 'abort' ? error instanceof CancellationError : error instanceof ExtensionHostInvocationError && error.code === 'deadlineExceeded');
+		} finally {
+			await response.complete({ state: 'pending' });
+			controller.abort();
+			await pending.catch(() => undefined);
+		}
+		assert.equal(cancellations, 1);
+	}
 });
 
 function invocation(): ExtensionHostInvocationRequest {
@@ -199,54 +241,19 @@ test('Speech registration accepts only bounded immutable metadata on the origina
 	for (const value of [{ ...registration, identifier: '' }, { ...registration, identifier: 'space inside' }, { ...registration, identifier: 'x'.repeat(257) }, { ...registration, backendToken: 'private' }]) assert.throws(() => normalizeExtensionHostSnapshot(fleet(value)));
 });
 
-test('cancelled decoration invocations consume their terminal sessions before reusing quota', async () => {
-	const sessions = new Map<string, 'pending' | 'cancelled'>();
-	let sequence = 0;
-	for (let index = 0; index < 80; index++) {
-		const controller = new AbortController();
-		await assert.rejects(invokeExtensionHost({
-			start: async () => {
-				assert.ok(sessions.size < 32, 'Abandoned sessions exhausted the real connection quota');
-				const invocationId = `decoration-${sequence++}`;
-				sessions.set(invocationId, 'pending');
-				return { invocationId };
-			},
-			read: async invocationId => {
-				if (sessions.get(invocationId) === 'pending') return { state: 'pending' };
-				sessions.delete(invocationId);
-				return { state: 'cancelled', reason: 'caller' };
-			},
-			cancel: async invocationId => {
-				sessions.set(invocationId, 'cancelled');
-				return { disposition: 'requested' };
-			},
-		}, invocation(), controller.signal, {
-			now: () => 100,
-			wait: async () => { controller.abort(); throw new CancellationError(); },
-		}), CancellationError);
-		assert.equal(sessions.size, 0);
-	}
-	assert.equal(sequence, 80);
-});
-
-test('abandoned invocation consumes a successful result when completion wins cancellation', async () => {
+test('abandoned invocation discards a successful result when completion wins cancellation', async () => {
 	const controller = new AbortController();
-	let reads = 0;
-	let consumed = false;
+	let reads = 0, discarded = false;
 	await assert.rejects(invokeExtensionHost({
 		start: async () => ({ invocationId: 'completion-race' }),
-		read: async () => {
-			if (++reads === 1) { controller.abort(); return { state: 'pending' }; }
-			consumed = true;
-			return { state: 'succeeded', payload: 'completed before cancellation' };
-		},
-		cancel: async () => ({ disposition: 'alreadyTerminal' }),
+		read: async () => { reads++; controller.abort(); return { state: 'pending' }; },
+		cancel: async (_id, retention) => { assert.equal(retention, 'discard'); discarded = true; return { disposition: 'alreadyTerminal' }; },
 	}, invocation(), controller.signal, {
 		now: () => 100,
 		wait: async () => { throw new CancellationError(); },
 	}), CancellationError);
-	assert.equal(consumed, true);
-	assert.equal(reads, 2);
+	assert.equal(discarded, true);
+	assert.equal(reads, 1);
 });
 
 test('payload byte limits count JSON escaping, Unicode and numeric wire representation exactly', () => {

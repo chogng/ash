@@ -250,6 +250,7 @@ impl<E: Extension> Runtime<E> {
                         "activation identity or API version does not match",
                     ))
                 } else {
+                    self.client.reopen();
                     self.services = crate::services::Services::new(
                         self.writer.clone(),
                         self.options.maximum_in_flight_requests,
@@ -288,6 +289,8 @@ impl<E: Extension> Runtime<E> {
                                 .validate_for(&request, &self.options.protocol)
                                 .is_err()
                             {
+                                self.client.close();
+                                self.services.close();
                                 let deactivated = self.extension.deactivate();
                                 let disposed = context.window.dispose();
                                 deactivated?;
@@ -304,6 +307,8 @@ impl<E: Extension> Runtime<E> {
                             }
                         }
                         Err(error) => {
+                            self.client.close();
+                            self.services.close();
                             let deactivated = self.extension.deactivate();
                             let disposed = context.window.dispose();
                             deactivated?;
@@ -469,6 +474,10 @@ impl<E: Extension> Runtime<E> {
         for invocation in self.invocations.values() {
             invocation.token.cancel(CancelReason::Shutdown);
         }
+        // The input loop cannot service replies while this synchronous control request
+        // joins tasks. Release foreground and activation-owned service waiters first.
+        self.client.close();
+        self.services.close();
         for (_, invocation) in std::mem::take(&mut self.invocations) {
             let joined = invocation
                 .thread

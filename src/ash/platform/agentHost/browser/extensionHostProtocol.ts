@@ -11,7 +11,7 @@ import type { ExtensionStatusBarEntry, JsonValue } from '../common/extensionHost
 export interface ExtensionHostInvokeTransport {
 	start(request: ExtensionHostInvocationRequest): Promise<unknown>;
 	read(invocationId: string): Promise<unknown>;
-	cancel(invocationId: string): Promise<unknown>;
+	cancel(invocationId: string, resultRetention: 'retain' | 'discard'): Promise<unknown>;
 }
 
 export interface ExtensionHostInvokeOptions {
@@ -81,15 +81,41 @@ export async function invokeExtensionHost(transport: ExtensionHostInvokeTranspor
 	const wait = options.wait ?? waitForPoll;
 	let invocationId: string | undefined;
 	let terminal = false;
+	let abandoned = false;
+	const deadline = new AbortController();
+	const pendingSignal = AbortSignal.any([signal, deadline.signal]);
+	let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+	const scheduleDeadline = () => {
+		const remaining = normalized.deadlineUnixMillis - now();
+		if (remaining <= 0) deadline.abort();
+		else deadlineTimer = setTimeout(scheduleDeadline, Math.min(remaining, 0x7fffffff));
+	};
+	const discard = async (id: string) => {
+		try {
+			// Backend completion can outlive this caller's cleanup budget. Tell the
+			// session owner to discard its result, so it releases quota on completion.
+			normalizeCancelResult(await raceCancellationError(transport.cancel(id, 'discard'), AbortSignal.timeout(1000)));
+		} catch { /* Preserve the original failure if the connection or cancellation grace expires. */ }
+	};
+	scheduleDeadline();
 	try {
-		const started = exactRecord(await transport.start(normalized), "Extension Host invocation start result", ["invocationId"]);
-		invocationId = boundedText(started.invocationId, "Extension Host invocation ID", 256);
+		throwIfCancelled(pendingSignal, "Extension Host invocation cancelled");
+		const started = transport.start(normalized).then(value => {
+			const result = exactRecord(value, "Extension Host invocation start result", ["invocationId"]);
+			const id = boundedText(result.invocationId, "Extension Host invocation ID", 256);
+			invocationId = id;
+			// Start can allocate a session after its caller has already left. The late
+			// continuation still owns that identity and must retire it exactly once.
+			if (abandoned) void discard(id);
+			return id;
+		});
+		invocationId = await raceCancellationError(started, pendingSignal);
 		while (true) {
-			throwIfCancelled(signal, "Extension Host invocation cancelled");
+			throwIfCancelled(pendingSignal, "Extension Host invocation cancelled");
 			if (now() >= normalized.deadlineUnixMillis) throw new ExtensionHostInvocationError("deadlineExceeded", "Extension Host invocation deadline elapsed");
-			const result = normalizeReadResult(await transport.read(invocationId));
+			const result = normalizeReadResult(await raceCancellationError(transport.read(invocationId), pendingSignal));
 			if (result.state === "pending") {
-				await wait(pollIntervalMillis, signal);
+				await wait(pollIntervalMillis, pendingSignal);
 				continue;
 			}
 			terminal = true;
@@ -97,20 +123,14 @@ export async function invokeExtensionHost(transport: ExtensionHostInvokeTranspor
 			if (result.state === "failed") throw new ExtensionHostInvocationError(result.code, result.message);
 			throw new CancellationError(`Extension Host invocation cancelled: ${result.reason}`, result.reason);
 		}
+	} catch (error) {
+		if (deadline.signal.aborted && !signal.aborted) throw new ExtensionHostInvocationError("deadlineExceeded", "Extension Host invocation deadline elapsed");
+		throw error;
 	} finally {
+		abandoned = true;
+		clearTimeout(deadlineTimer);
 		if (invocationId !== undefined && !terminal) {
-			try {
-				// Cancellation acknowledges the request, but does not consume its session.
-				// Read the terminal result even when completion won the cancellation race;
-				// otherwise abandoned label queries occupy the connection's quota for 60s.
-				const cleanup = AbortSignal.timeout(1000);
-				normalizeCancelResult(await raceCancellationError(transport.cancel(invocationId), cleanup));
-				for (let polls = 0; polls < Math.ceil(1000 / pollIntervalMillis); polls++) {
-					const result = normalizeReadResult(await raceCancellationError(transport.read(invocationId), cleanup));
-					if (result.state !== 'pending') break;
-					await wait(pollIntervalMillis, cleanup);
-				}
-			} catch { /* Preserve the original failure if the connection or cancellation grace expires. */ }
+			await discard(invocationId);
 		}
 	}
 }

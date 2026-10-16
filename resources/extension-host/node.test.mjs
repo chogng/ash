@@ -333,6 +333,24 @@ test('activation can await editor services before publishing its registrations',
 	assert.equal((await h.invoke('test.node', []).result).body.body.payload, 'activated with editor IO');
 });
 
+for (const [reason, expected] of [['caller', 'cancelled'], ['deadline', 'deadlineExceeded']]) {
+	test(`uncaught service cancellation preserves ${reason} without retiring the host`, { timeout: 10000 }, async t => {
+		const h = await host(t, `const v = require('vscode'); exports.activate = context => {
+context.subscriptions.push(v.commands.registerCommand('test.node', () => v.commands.executeCommand('waiting')));
+context.subscriptions.push(v.commands.registerCommand('test.second', () => 'other'));
+};`);
+		const pending = h.invoke('test.node', []);
+		while (!h.clientCalls.length) { if (t.signal.aborted) throw new Error('Test aborted'); await new Promise(resolve => setTimeout(resolve, 2)); }
+		const call = h.clientCalls[0];
+		await h.request('cancel', { targetRequestId: pending.requestId, reason }).result;
+		const result = await pending.result;
+		assert.equal(result.status, 'failure');
+		assert.equal(result.body.code, expected);
+		h.send({ context: call.context, callId: call.callId, outcome: { Ok: { result: 'command', value: 'late', hasValue: true } } });
+		assert.equal((await h.invoke('test.second', []).result).body.body.payload, 'other');
+	});
+}
+
 test('Quick Pick preserves item metadata and returns the original item', { timeout: 10000 }, async t => {
 	const item = { label: 'occupied', description: 'origin/occupied', detail: 'Checked out elsewhere' };
 	const h = await host(t, `const v = require('vscode'); exports.activate = context => {

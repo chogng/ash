@@ -24,7 +24,7 @@ export type ExtensionClientOperation =
 	| { operation: 'scmUpdate'; registrationId: string; revision: number; providers: readonly JsonValue[]; }
 	| { operation: 'backendRequest'; capability: string; method: string; params: JsonValue; progress?: { title: string; cancellable: boolean; }; }
 	| { operation: 'editorOperation'; payload: JsonValue; }
-	| { operation: 'backendState'; capability: string; after: number; }
+	| { operation: 'backendState'; capability: string; after: number; waitForChange?: boolean; }
 	| { operation: 'readResourceFile' | 'statResource' | 'readResourceDirectory'; uri: string; }
 	| { operation: 'readInitialization'; }
 	| { operation: 'openRemoteConnection'; authority: string; }

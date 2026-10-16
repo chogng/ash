@@ -28,12 +28,13 @@ pub use external_ext_protocol::ExtensionTextPosition as TextPosition;
 
 struct PendingCall {
     context: RequestContext,
-    sender: mpsc::SyncSender<Result<ExtensionClientResult, ExtensionError>>,
+    sender: Option<mpsc::SyncSender<Result<ExtensionClientResult, ExtensionError>>>,
 }
 
 #[derive(Default)]
 struct State {
     next_id: u64,
+    closed: bool,
     pending: BTreeMap<u64, PendingCall>,
 }
 
@@ -151,6 +152,7 @@ impl Client {
             ExtensionClientOperation::BackendState {
                 capability: capability.into(),
                 after,
+                wait_for_change: None,
             },
             token,
         )
@@ -441,11 +443,17 @@ impl Client {
         token.check_cancelled()?;
         let context = token.context;
         let (sender, receiver) = mpsc::sync_channel(1);
-        let call_id = {
+        let (call_id, written) = {
             let mut state = self
                 .state
                 .lock()
                 .expect("client call state is not poisoned");
+            if state.closed {
+                return Err(ExtensionError::new(
+                    HostErrorCode::Cancelled,
+                    "client connection ended",
+                ));
+            }
             if state.pending.len() >= self.maximum_pending {
                 return Err(ExtensionError::new(
                     HostErrorCode::QuotaExceeded,
@@ -456,17 +464,23 @@ impl Client {
                 ExtensionError::new(HostErrorCode::QuotaExceeded, "client call IDs exhausted")
             })?;
             let call_id = state.next_id;
-            state
-                .pending
-                .insert(call_id, PendingCall { context, sender });
-            call_id
+            state.pending.insert(
+                call_id,
+                PendingCall {
+                    context,
+                    sender: Some(sender),
+                },
+            );
+            // Cloned tokens can issue concurrent calls for the same invocation. Allocation
+            // and emission must preserve the host's strictly increasing call-ID fence.
+            let written = self.writer.write(&ExtensionClientRequest {
+                context,
+                call_id,
+                operation,
+            });
+            (call_id, written)
         };
-        let request = ExtensionClientRequest {
-            context,
-            call_id,
-            operation,
-        };
-        if self.writer.write(&request).is_err() {
+        if written.is_err() {
             self.state
                 .lock()
                 .expect("client call state is not poisoned")
@@ -511,20 +525,36 @@ impl Client {
             .pending
             .remove(&response.call_id)
             .expect("pending call was checked while locked");
-        let _ = pending.sender.send(
-            response
-                .outcome
-                .map_err(|failure| ExtensionError::new(failure.code, failure.message)),
-        );
+        if let Some(sender) = pending.sender {
+            let _ = sender.send(
+                response
+                    .outcome
+                    .map_err(|failure| ExtensionError::new(failure.code, failure.message)),
+            );
+        }
         Ok(())
     }
 
-    pub(crate) fn close(&self) {
+    pub(crate) fn reopen(&self) {
+        // A later activation shares the transport's monotonically increasing IDs and
+        // late-reply correlations; only its ability to admit fresh calls is reopened.
         self.state
             .lock()
             .expect("client call state is not poisoned")
-            .pending
-            .clear();
+            .closed = false;
+    }
+
+    pub(crate) fn close(&self) {
+        let mut state = self
+            .state
+            .lock()
+            .expect("client call state is not poisoned");
+        state.closed = true;
+        // Drop waiters before joining callbacks, but retain each bounded correlation until
+        // its host reply arrives. A normal shutdown must not turn that late reply fatal.
+        for call in state.pending.values_mut() {
+            call.sender.take();
+        }
     }
 }
 
@@ -588,6 +618,20 @@ impl BackgroundClient {
         self.value(ExtensionClientOperation::BackendState {
             capability: capability.into(),
             after,
+            wait_for_change: None,
+        })
+    }
+    /// Waits for the window's next admitted backend notification or a bounded idle tick.
+    /// Closing the activation interrupts the wait before background tasks are joined.
+    pub fn wait_for_backend_state(
+        &self,
+        capability: impl Into<String>,
+        after: u64,
+    ) -> Result<Value, ExtensionError> {
+        self.value(ExtensionClientOperation::BackendState {
+            capability: capability.into(),
+            after,
+            wait_for_change: Some(true),
         })
     }
     pub fn editor_operation(&self, payload: Value) -> Result<Value, ExtensionError> {

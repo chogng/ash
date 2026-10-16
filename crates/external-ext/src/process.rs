@@ -206,8 +206,9 @@ pub trait ExtensionHostLauncher: Send + Sync {
 
 /// Concurrent bounded peer for one process incarnation.
 ///
-/// `dispatch` must register the response waiter before writing. Implementations must authorization a
-/// cancellation request to be dispatched while an earlier invocation is still pending.
+/// `dispatch` registers its response waiter before queueing a frame and must not wait for child IO.
+/// Control requests can be dispatched while an earlier invocation is pending. An accepted callback
+/// reply transfers ownership to the bounded transport until delivery or incarnation retirement.
 pub trait ExtensionHostProcess: Send + Sync {
     /// Completes a client request previously received through an invocation waiter.
     fn respond_client(
@@ -315,6 +316,8 @@ struct PendingEntry {
     sender: mpsc::SyncSender<Result<PendingMessage, PendingFailure>>,
     client_ids: std::collections::BTreeSet<u64>,
     last_client_id: u64,
+    // Cancellation may finish the invocation before an outstanding host callback replies.
+    response_received: bool,
     control: bool,
 }
 

@@ -7,11 +7,13 @@ import type { IProgressService } from '../../../../platform/progress/common/prog
 import { AppServerRemoteError } from '../../../../platform/agentHost/common/appServerError.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../nls.js';
 import type { JsonValue } from '../../../../platform/agentHost/common/extensionHostApi.js';
-import { Event } from '../../../../base/common/event.js';
+import { Emitter, Event } from '../../../../base/common/event.js';
+import type { ServerNotification } from '../../../../../../.build/protocol/typescript/index.js';
 import type { IExtensionApi } from '../../../../platform/extensions/common/extensionApi.js';
 import type { IExtensionBackendApi } from '../../../../platform/agentHost/common/extensionBackendApi.js';
 import type { IAppServerApi, IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
 import type { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { ConfigurationTarget, type IConfigurationChangeEvent, type IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { MainThreadExtensionBackend } from '../../browser/mainThreadExtensionBackend.js';
 
 const source = { extensionId: 'ash.git', activationGeneration: 1, incarnation: 1 };
@@ -20,11 +22,59 @@ function fixture(sourceKind = 'builtIn', request?: IExtensionBackendApi['request
 	const calls: { method: string; params: unknown; }[] = [];
 	const extensions = { list: async () => ({ extensions: [{ id: 'ash.git', sourceKind, manifestJson: JSON.stringify(manifest) }] }) } as unknown as IExtensionApi;
 	const backend = { request: async (method, params, signal) => { calls.push({ method, params }); if (request) return request(method, params, signal); return { revision: 1, git: { autofetch: 'off', autofetchPeriod: 180 }, gitConfigured: true, providers: { token: 'private' } }; } } satisfies IExtensionBackendApi;
-	const connection = { getConnectionState: async () => 'ready', connectionGeneration: 1 } as IAppServerApi;
-	const events: IServerEventApi = { subscribe: Event.None };
-	const workspace = { getWorkspace: () => ({ folders: [] }) } as unknown as IWorkspaceContextService;
-	return { bridge: new MainThreadExtensionBackend(extensions, backend, connection, events, workspace, progress), calls };
+	const connection = { getConnectionState: async () => 'ready', getSlashCommands: async () => [], connectionGeneration: 1, onConnectionState: Event.None } satisfies IAppServerApi;
+	const notifications = new Emitter<ServerNotification>();
+	const events: IServerEventApi = { subscribe: listener => notifications.event(listener) };
+	const workspace = { getWorkspace: () => ({ folders: [] }), onDidChangeWorkspace: Event.None } as unknown as IWorkspaceContextService;
+	const configurationChanges = new Emitter<IConfigurationChangeEvent>();
+	const configuration = { onDidChangeConfiguration: configurationChanges.event } as unknown as IConfigurationService;
+	return { bridge: new MainThreadExtensionBackend(extensions, backend, connection, events, workspace, configuration, progress), calls, notifications, configurationChanges };
 }
+
+test('client settings invalidate backend state without fabricating a server configuration notification', async () => {
+	const value = fixture(); using bridge = value.bridge; using changes = value.configurationChanges; using notifications = value.notifications;
+	const signal = new AbortController().signal;
+	const waiting = bridge.handle(source, 'git.repository', undefined, {}, 0, signal, undefined, true);
+	await Promise.resolve(); await Promise.resolve();
+	changes.fire({ source: ConfigurationTarget.USER_LOCAL, affectedKeys: new Set(['git.autorefresh']), change: { keys: ['git.autorefresh'], overrides: [] }, affectsConfiguration: () => true });
+	const result = await waiting as { reset: boolean; sequence: number; events: JsonValue[]; };
+	assert.equal(result.reset, true);
+	assert.equal(result.sequence, 1);
+	assert.deepEqual(result.events, []);
+	const current = await bridge.handle(source, 'git.repository', undefined, {}, result.sequence, signal) as { reset: boolean; };
+	assert.equal(current.reset, false);
+});
+
+test('backend state subscriptions wake on admitted changes and replay notifications that precede the wait', async () => {
+	const value = fixture(); using bridge = value.bridge; using notifications = value.notifications;
+	const signal = new AbortController().signal;
+	let settled = false;
+	const waiting = bridge.handle(source, 'git.repository', undefined, {}, 0, signal, undefined, true);
+	void waiting.then(() => { settled = true; });
+	await Promise.resolve(); await Promise.resolve();
+	notifications.fire({ method: 'git/repositoriesChanged', params: {} } as ServerNotification);
+	await Promise.resolve();
+	assert.equal(settled, false, 'Other capabilities cannot wake this subscription');
+	const change = { method: 'config/changed', params: { revision: 1 } } as ServerNotification;
+	notifications.fire(change);
+	const result = await waiting as { sequence: number; events: JsonValue[]; };
+	assert.equal(result.events.length, 1);
+	assert.equal(JSON.stringify(result.events[0]), JSON.stringify(change));
+	notifications.fire(change);
+	const replay = await bridge.handle(source, 'git.repository', undefined, {}, result.sequence, signal, undefined, true) as { events: JsonValue[]; };
+	assert.deepEqual(replay.events, result.events);
+});
+
+test('backend state waits release on caller cancellation and bridge disposal', async () => {
+	for (const reason of ['caller', 'dispose'] as const) {
+		const value = fixture(); using bridge = value.bridge; using notifications = value.notifications;
+		const controller = new AbortController();
+		const waiting = bridge.handle(source, 'git.repository', undefined, {}, 0, controller.signal, undefined, true);
+		await Promise.resolve(); await Promise.resolve();
+		if (reason === 'caller') controller.abort(); else bridge.dispose();
+		await assert.rejects(waiting, /cancelled/i);
+	}
+});
 
 test('product backend grants restrict methods, input fields and returned configuration', async () => {
 	const value = fixture(); using cleanup = value.bridge; const signal = new AbortController().signal;

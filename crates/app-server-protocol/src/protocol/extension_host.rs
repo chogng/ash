@@ -550,6 +550,11 @@ pub enum ExtensionHostInvokeReadResult {
 pub struct ExtensionHostInvokeCancelParams {
     #[schemars(length(min = 1, max = 256))]
     pub invocation_id: String,
+    /// Abandons polling: release this session when its work ends, including a result
+    /// that won the cancellation race. Omission preserves cancellation-and-read clients.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub discard_result: Option<bool>,
 }
 
 /// Whether cancellation was newly requested or the session was already terminal.

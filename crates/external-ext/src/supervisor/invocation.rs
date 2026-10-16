@@ -69,6 +69,9 @@ impl ExtensionHostSupervisor {
             invocation.deadline_unix_millis,
             self.inner.limits.request_timeout,
         )?;
+        let deadline = Instant::now()
+            .checked_add(wait_timeout)
+            .ok_or(ExtensionHostError::RequestTimedOut)?;
         let (process, incarnation, request_id, request) = {
             let mut state = self
                 .inner
@@ -121,7 +124,7 @@ impl ExtensionHostSupervisor {
             process,
             incarnation,
             request_id: pending.request_id(),
-            wait_timeout,
+            deadline,
             pending: Mutex::new(Some(pending)),
             cancelled: AtomicBool::new(false),
             completed: AtomicBool::new(false),
@@ -150,7 +153,7 @@ pub struct ExtensionInvocationHandle {
     process: Arc<dyn ExtensionHostProcess>,
     incarnation: u64,
     request_id: u64,
-    wait_timeout: Duration,
+    deadline: Instant,
     pending: Mutex<Option<PendingHostRequest>>,
     cancelled: AtomicBool,
     completed: AtomicBool,
@@ -162,6 +165,9 @@ impl ExtensionInvocationHandle {
     }
 
     pub fn cancel(&self, reason: CancelReason) -> Result<(), ExtensionHostError> {
+        if self.completed.load(Ordering::Acquire) {
+            return Ok(());
+        }
         self.client_cancellation.cancel();
         if self.cancelled.swap(true, Ordering::AcqRel) {
             return Ok(());
@@ -204,10 +210,9 @@ impl ExtensionInvocationHandle {
             .map_err(|_| ExtensionHostError::HostExited)?
             .take()
             .ok_or(ExtensionHostError::HostExited)?;
-        let started = Instant::now();
         let response = loop {
-            let elapsed = started.elapsed();
-            if elapsed >= self.wait_timeout || self.cancelled.load(Ordering::Acquire) {
+            let remaining = self.deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() || self.cancelled.load(Ordering::Acquire) {
                 let reason = if self.cancelled.load(Ordering::Acquire) {
                     CancelReason::Caller
                 } else {
@@ -250,23 +255,26 @@ impl ExtensionInvocationHandle {
                     }
                 };
             }
-            let poll = WAIT_POLL_INTERVAL.min(self.wait_timeout.saturating_sub(elapsed));
+            let poll = WAIT_POLL_INTERVAL.min(remaining);
             match pending.recv_next_timeout(poll) {
                 Ok(Some(crate::process::PendingMessage::Response(response))) => {
                     break Ok(Some(response));
                 }
                 Ok(Some(crate::process::PendingMessage::ClientRequest(request))) => {
-                    let outcome = self.supervisor.inner.service_client_operation(
+                    let outcome = match self.supervisor.inner.service_client_operation(
                         self.incarnation,
                         request.operation,
                         |operation| {
                             handler(
                                 operation,
                                 &self.client_cancellation.token(),
-                                self.wait_timeout.saturating_sub(started.elapsed()),
+                                self.deadline.saturating_duration_since(Instant::now()),
                             )
                         },
-                    )?;
+                    ) {
+                        Ok(outcome) => outcome,
+                        Err(error) => break Err(error),
+                    };
                     if let Err(error) = self.process.respond_client(
                         external_ext_protocol::ExtensionClientResponse {
                             context: request.context,

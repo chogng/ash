@@ -289,6 +289,186 @@ fn abandoned_terminal_sessions_are_reaped_before_reusing_quota() {
 }
 
 #[test]
+fn discarding_a_completed_invocation_is_owner_fenced_and_releases_quota_without_a_read() {
+    let mut sessions = InvocationSessionStore::new(1, 1);
+    sessions.reserve("one".into(), 7, 1).unwrap();
+    sessions.complete(
+        "one",
+        Ok(InvokeResult {
+            payload: json!("completed before cancellation"),
+        }),
+    );
+    assert!(matches!(
+        sessions.cancel(
+            8,
+            "one",
+            ash_external_ext::CancelReason::Caller,
+            super::ResultRetention::Discard
+        ),
+        Err(ExtensionHostRuntimeError::InvocationNotFound)
+    ));
+    assert!(matches!(
+        sessions.reserve("blocked".into(), 8, 1),
+        Err(ExtensionHostRuntimeError::QuotaExceeded)
+    ));
+    sessions
+        .cancel(
+            7,
+            "one",
+            ash_external_ext::CancelReason::Caller,
+            super::ResultRetention::Discard,
+        )
+        .unwrap();
+    assert!(matches!(
+        sessions.read(7, "one"),
+        Err(ExtensionHostRuntimeError::InvocationNotFound)
+    ));
+    sessions.reserve("replacement".into(), 7, 1).unwrap();
+}
+
+#[test]
+fn cancellation_with_retained_results_keeps_the_existing_polling_contract() {
+    let mut sessions = InvocationSessionStore::new(1, 1);
+    sessions.reserve("one".into(), 7, 1).unwrap();
+    sessions.complete(
+        "one",
+        Ok(InvokeResult {
+            payload: json!("result"),
+        }),
+    );
+    sessions
+        .cancel(
+            7,
+            "one",
+            ash_external_ext::CancelReason::Caller,
+            super::ResultRetention::Retain,
+        )
+        .unwrap();
+    assert!(
+        matches!(sessions.read(7, "one"), Ok(ExtensionHostInvocationRead::Succeeded(value)) if value == json!("result"))
+    );
+    sessions.reserve("replacement".into(), 7, 1).unwrap();
+}
+
+#[test]
+fn discarded_pending_invocations_release_quota_when_the_real_host_completes() {
+    use ash_external_ext::ExtensionActivationSpec;
+    use ash_external_ext::ExtensionHostSupervisor;
+    use ash_external_ext::ExtensionInvocation;
+    use ash_external_ext::ExtensionLaunchCommand;
+    use std::sync::Arc;
+    let node = std::process::Command::new("node")
+        .args(["--print", "process.execPath"])
+        .output()
+        .unwrap();
+    assert!(node.status.success());
+    let executable = std::path::PathBuf::from(String::from_utf8(node.stdout).unwrap().trim());
+    let source = r#"
+require('node:readline').createInterface({ input: process.stdin }).on('line', line => {
+ const r = JSON.parse(line);
+ const body = r.method === 'initialize' ? { result: 'initialized', body: { protocolVersion: 1, runtimeApiVersion: 1 } }
+  : r.method === 'activate' ? { result: 'activated', body: { registrations: [{ registrationId: 'fixture', kind: 'command', command: 'fixture', title: 'Fixture' }] } }
+  : r.method === 'invoke' ? { result: 'invoked', body: { payload: 'completed' } }
+  : { result: ({ cancel: 'cancelled', deactivate: 'deactivated', shutdown: 'shutdown', ping: 'pong' })[r.method] };
+ process.stdout.write(JSON.stringify({ protocolVersion: r.protocolVersion, requestId: r.requestId, incarnation: r.incarnation, activationGeneration: r.activationGeneration, status: 'success', body }) + '\n');
+});
+"#;
+    let supervisor = ExtensionHostSupervisor::new(
+        Arc::new(ash_external_ext::TrustedDevelopmentLauncher),
+        ExtensionLaunchCommand::new(
+            executable,
+            ["-e", source],
+            std::env::temp_dir(),
+            Default::default(),
+        )
+        .unwrap(),
+        ExtensionActivationSpec::new(
+            ash_external_ext::ActivateParams {
+                initialization: None,
+                extension_id: "fixture".into(),
+                package: ash_external_ext::PackageBinding {
+                    package_id: "fixture@1".into(),
+                    package_digest: format!("sha256:{}", "a".repeat(64)),
+                    entrypoint: "fixture.js".into(),
+                },
+                runtime_api_version: 1,
+                activation_events: vec!["onCommand:fixture".into()],
+                capabilities: vec![ash_external_ext::ExtensionCapability::Command],
+            },
+            std::num::NonZeroU64::new(1).unwrap(),
+            Arc::new(AllowedActivation),
+        ),
+        ash_external_ext::ExtensionHostLimits {
+            isolation: ash_external_ext::ProcessIsolationPolicy::TrustedDevelopment,
+            ..Default::default()
+        },
+        ash_external_ext::RestartPolicy::default(),
+    )
+    .unwrap();
+    supervisor.start().unwrap();
+    let handle = Arc::new(
+        supervisor
+            .begin_invoke(ExtensionInvocation {
+                registration_id: "fixture".into(),
+                operation: "execute".into(),
+                payload: json!({}),
+                deadline_unix_millis: std::num::NonZeroU64::new(1_900_000_000_000).unwrap(),
+            })
+            .unwrap(),
+    );
+    let mut sessions = InvocationSessionStore::new(1, 1);
+    sessions.reserve("one".into(), 7, 1).unwrap();
+    sessions.install("one", handle.clone()).unwrap();
+    sessions
+        .cancel(
+            7,
+            "one",
+            ash_external_ext::CancelReason::Caller,
+            super::ResultRetention::Discard,
+        )
+        .unwrap();
+    assert!(matches!(
+        sessions.read(7, "one"),
+        Err(ExtensionHostRuntimeError::InvocationNotFound)
+    ));
+    assert!(matches!(
+        sessions.reserve("blocked".into(), 7, 1),
+        Err(ExtensionHostRuntimeError::QuotaExceeded)
+    ));
+    sessions.complete("one", handle.wait());
+    sessions.reserve("replacement".into(), 7, 1).unwrap();
+    assert_eq!(supervisor.snapshot().incarnation, 1);
+    let handle = Arc::new(
+        supervisor
+            .begin_invoke(ExtensionInvocation {
+                registration_id: "fixture".into(),
+                operation: "execute".into(),
+                payload: json!({}),
+                deadline_unix_millis: std::num::NonZeroU64::new(1_900_000_000_000).unwrap(),
+            })
+            .unwrap(),
+    );
+    sessions.install("replacement", handle.clone()).unwrap();
+    supervisor.shutdown().unwrap();
+    assert!(
+        sessions
+            .cancel(
+                7,
+                "replacement",
+                ash_external_ext::CancelReason::Caller,
+                super::ResultRetention::Discard
+            )
+            .is_err()
+    );
+    assert!(matches!(
+        sessions.read(7, "replacement"),
+        Err(ExtensionHostRuntimeError::InvocationNotFound)
+    ));
+    sessions.complete("replacement", handle.wait());
+    sessions.reserve("after-exit".into(), 7, 1).unwrap();
+}
+
+#[test]
 fn invocation_operations_are_brokered_by_registration_kind() {
     let remote = RegistrationKind::RemoteConnectionResolver {
         authority_prefix: "team".into(),

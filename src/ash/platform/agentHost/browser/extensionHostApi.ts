@@ -27,7 +27,7 @@ export function createAppServerExtensionHostApi(connection: AppServerProtocolCli
 	const transport = {
 		start: (request: Parameters<IExtensionHostApi["invoke"]>[0]) => appServerRequest(connection, "extensionHost/invoke/start", request),
 		read: (invocationId: string) => appServerRequest(connection, "extensionHost/invoke/read", { invocationId }),
-		cancel: (invocationId: string) => appServerRequest(connection, "extensionHost/invoke/cancel", { invocationId }),
+		cancel: (invocationId: string, resultRetention: 'retain' | 'discard') => appServerRequest(connection, "extensionHost/invoke/cancel", { invocationId, discardResult: resultRetention === 'discard' }),
 	};
 	return {
 		registerClientHandler: handler => connection.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['extensionClient/request'], async ({ operation, ...source }, context) => {

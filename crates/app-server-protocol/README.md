@@ -1,5 +1,10 @@
 # `ash-app-server-protocol`
 
+`extensionHost/invoke/cancel` 的可选 `discardResult: true` 表示调用方放弃读取结果。
+已完成的结果立即释放；在途调用仍执行取消收尾，并在真正结束时释放会话及配额。
+省略或设置为 `false` 保留原有取消后通过 `extensionHost/invoke/read` 读取唯一终态的语义。
+连接关闭只退役该连接拥有的调用。丢弃结果不表示后台工作已经结束，也不会重放写入。
+
 - 定义 App Server 的 JSON-RPC 请求、结果、通知、错误、方法注册、启动记录、序列化作用域，以及带稳定操作 ID 的领域取消契约；不拥有运行时、连接或存储。
 - Session API 提供按 `session_id` 聚合的 Agent tree 与轻量会话列表；Project 使用独立 revision 和命令回执，不复制 Thread 状态。
 - `session/list` 与 Session mutation result 的 `Session.model` 返回主线程当前选择的模型；主线程未选模型时省略此字段。子线程、fork 或全局默认模型不替代主线程的选择。列表从持久目录读取，不为显示模型逐个重放历史；旧目录版本通过历史重建后写入当前格式。

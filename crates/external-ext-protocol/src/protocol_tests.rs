@@ -907,6 +907,22 @@ fn activation_initialization_requires_bounded_window_facts_and_preserves_absence
         "uri":"data:application/json,%7B%7D", "bundle":{"Hello":"你好"}, "package":{"title":"标题"}
     })).unwrap());
     assert!(translated.validate().is_ok());
+    let mut inline_catalog = translated.clone();
+    inline_catalog.localization.as_mut().unwrap().uri =
+        format!("data:application/json,%22{}%22", "%E4%BD%A0".repeat(6000));
+    assert!(inline_catalog.validate().is_ok());
+    let mut oversized = inline_catalog.clone();
+    oversized.localization.as_mut().unwrap().uri =
+        format!("data:application/json,{}", "x".repeat(512 * 1024));
+    assert!(oversized.validate().is_err());
+    for uri in [
+        format!("file:///{}", "x".repeat(32768)),
+        "data:application/json,invalid\nuri".to_owned(),
+    ] {
+        let mut invalid = inline_catalog.clone();
+        invalid.localization.as_mut().unwrap().uri = uri;
+        assert!(invalid.validate().is_err());
+    }
     assert_eq!(
         serde_json::from_value::<super::ExtensionHostInitialization>(
             serde_json::to_value(&translated).unwrap()

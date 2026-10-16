@@ -17,6 +17,11 @@ use super::projection::runtime_failure;
 
 const TERMINAL_SESSION_TTL: Duration = Duration::from_secs(60);
 
+pub(in crate::server) enum ResultRetention {
+    Retain,
+    Discard,
+}
+
 pub(super) struct InvocationSessionStore {
     sessions: BTreeMap<String, InvocationSession>,
     owner_counts: BTreeMap<u64, usize>,
@@ -161,6 +166,7 @@ impl InvocationSessionStore {
         owner: u64,
         id: &str,
         reason: CancelReason,
+        retention: ResultRetention,
     ) -> Result<ExtensionHostInvocationCancelDisposition, ExtensionHostRuntimeError> {
         let session = self
             .sessions
@@ -168,16 +174,22 @@ impl InvocationSessionStore {
             .filter(|session| session.owner == owner && !session.detached)
             .ok_or(ExtensionHostRuntimeError::InvocationNotFound)?;
         if session.terminal.is_some() {
+            if matches!(retention, ResultRetention::Discard) {
+                self.release(id);
+            }
             return Ok(ExtensionHostInvocationCancelDisposition::AlreadyTerminal);
         }
         let handle = session
             .handle
             .clone()
             .ok_or(ExtensionHostRuntimeError::Internal)?;
+        // Abandonment survives a failed cancellation write or an already-dead host.
+        // The completion task still owns the in-flight quota until it actually ends.
+        session.cancellation = Some(reason);
+        session.detached = matches!(retention, ResultRetention::Discard);
         handle
             .cancel(reason)
             .map_err(ExtensionHostRuntimeError::Host)?;
-        session.cancellation = Some(reason);
         Ok(ExtensionHostInvocationCancelDisposition::Requested)
     }
 

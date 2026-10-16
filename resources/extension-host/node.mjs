@@ -105,14 +105,14 @@ function context(frame) {
 function same(left, right) {
 	return left && right && Object.keys(left).every(key => left[key] === right[key]);
 }
-function failCalls(requestId, message) {
+function failCalls(requestId, message, code = 'cancelled') {
 	for (const [id, call] of calls) {
 		if (call.context.requestId !== requestId) continue;
 		calls.delete(id);
 		if (call.sent) sentCalls--;
 		if (call.sent) retiredCalls.set(id, call.context);
 		if (retiredCalls.size > 4096) retiredCalls.delete(retiredCalls.keys().next().value);
-		call.reject(Object.assign(new Error(message), { code: 'cancelled' }));
+		call.reject(Object.assign(new Error(message), { code }));
 	}
 	pumpClientCalls();
 }
@@ -246,7 +246,7 @@ async function dispatch(frame) {
 					|| Object.keys(frame.params).some(key => !['targetRequestId', 'reason'].includes(key))) throw new Error('Invalid cancellation target');
 				const owned = active.get(id);
 				if (owned) owned.cancelled = true;
-				failCalls(id, 'Invocation was cancelled');
+				failCalls(id, 'Invocation was cancelled', frame.params.reason === 'deadline' ? 'deadlineExceeded' : 'cancelled');
 				runtime.cancel(id);
 				success = { result: 'cancelled' };
 				break;
@@ -273,8 +273,9 @@ async function dispatch(frame) {
 		if (frame.method === 'shutdown') process.exit(0);
 	} catch (error) {
 		// Details stay on captured stderr; only a bounded failure crosses the public protocol.
-		process.stderr.write(String(error?.stack ?? error) + '\n');
-		await send({ ...ctx, status: 'failure', body: { code: error?.code === 'deadlineExceeded' ? 'deadlineExceeded' : frame.method === 'activate' ? 'activationFailed' : 'internal', message: 'Extension host operation failed' } });
+		const cancellation = error?.code === 'cancelled' || error?.code === 'deadlineExceeded';
+		if (!cancellation) process.stderr.write(String(error?.stack ?? error) + '\n');
+		await send({ ...ctx, status: 'failure', body: { code: frame.method === 'activate' ? 'activationFailed' : cancellation ? error.code : 'internal', message: 'Extension host operation failed' } });
 	}
 }
 function receive(frame) {

@@ -398,6 +398,10 @@ pub enum ExtensionClientOperation {
         capability: String,
         #[cfg_attr(feature = "export", ts(type = "number"))]
         after: u64,
+        /// Wait briefly for an admitted notification rather than polling on a fixed delay.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(feature = "export", ts(optional))]
+        wait_for_change: Option<bool>,
     },
     /// Editor-owned interactions, including dirty buffers, are resolved by the initiating window.
     EditorOperation {
