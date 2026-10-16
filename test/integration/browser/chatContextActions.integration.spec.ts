@@ -362,6 +362,9 @@ for (const locale of ['en', 'zh-CN']) {
 		for (const name of chinese ? ['剪贴板中的图片', '截图…', '会话…'] : ['Image from Clipboard', 'Screenshot…', 'Sessions…']) {
 			await add.press('Enter');
 			await page.getByRole('dialog').getByRole('option', { name, exact: true }).click();
+			if (name === 'Screenshot…' || name === '截图…') {
+				await page.getByRole('dialog', { name: chinese ? '截图预览' : 'Screenshot Preview' }).getByRole('button', { name: chinese ? '加入聊天' : 'Add to Chat', exact: true }).click();
+			}
 			if (name === 'Sessions…' || name === '会话…') {
 				await expect(page.getByRole('dialog').getByRole('option', { name: 'Current session', exact: true })).toHaveCount(0);
 				await page.getByRole('dialog').getByRole('option', { name: 'Earlier design', exact: true }).click();
@@ -414,7 +417,7 @@ for (const locale of ['en', 'zh-CN']) {
 	});
 }
 
-test('empty clipboard reports an error and cancelling screenshot returns to attachment search', async ({ page }) => {
+test('empty clipboard reports an error and cancelling screenshot restores the message', async ({ page }) => {
 	await page.goto('/chatInput.html?emptyClipboard=1&cancelScreenshot=1');
 	await page.evaluate(() => window.ashChatInputIntegration.showModels());
 	const add = page.getByRole('button', { name: 'Add context', exact: true });
@@ -425,9 +428,8 @@ test('empty clipboard reports an error and cancelling screenshot returns to atta
 	await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toBeFocused();
 	await add.press('Enter');
 	await page.getByRole('dialog').getByRole('option', { name: 'Screenshot…', exact: true }).click();
-	await expect(page.getByRole('dialog').getByRole('combobox')).toHaveAttribute('placeholder', 'Search attachments');
-	await expect(page.getByRole('dialog').getByRole('combobox')).toBeFocused();
-	await page.keyboard.press('Escape');
+	await expect(page.getByRole('dialog')).toHaveCount(0);
+	await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toBeFocused();
 	await expect(page.getByRole('list', { name: 'Attached context' })).toBeHidden();
 });
 

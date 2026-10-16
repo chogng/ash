@@ -73,6 +73,7 @@ test('Electron titlebars apply the active theme and release their subscriptions 
 		services.registerInstance(IThemeService, themes);
 		registerTestComponentServices(services, environment.window.document);
 		services.registerInstance(INativeHostService, {
+			getScreenshot: async () => { throw new Error('Unused screenshot capability'); },
 			getAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },
 			updateAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },
 			claimAgentsWindowInvitation: () => { throw new Error('Unused invitation capability'); },

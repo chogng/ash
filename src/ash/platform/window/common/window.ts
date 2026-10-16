@@ -5,6 +5,13 @@ import { isRecord } from '../../../base/common/types.js';
 import { URI } from '../../../base/common/uri.js';
 import { parseWorkspaceIdentifier, type IAnyWorkspaceIdentifier } from '../../workspace/common/workspace.js';
 
+export interface IRectangle {
+	readonly x: number;
+	readonly y: number;
+	readonly width: number;
+	readonly height: number;
+}
+
 export const WORKSPACE_RECOVERY_CHANNEL = 'ash:window:restoreWorkspaces';
 export const WINDOW_OPEN_EXTERNAL_URI_CHANNEL = 'ash:window:openExternalUri';
 export const AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL = 'ash:sessions:handoff-available';

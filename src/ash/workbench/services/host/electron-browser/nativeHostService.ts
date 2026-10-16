@@ -5,6 +5,8 @@ import { BrowserHostService } from '../browser/browserHostService.js';
 import { ILifecycleService } from '../../lifecycle/common/lifecycle.js';
 import { HOST_RESTART_CHANNEL } from '../../../../platform/window/common/window.js';
 import { invoke } from '../../../../platform/ipc/electron-browser/rendererIpc.js';
+import type { IRectangle } from '../../../../platform/window/common/window.js';
+import type { VSBuffer } from '../../../../base/common/buffer.js';
 
 export class NativeHostService extends BrowserHostService {
 	constructor(
@@ -14,7 +16,7 @@ export class NativeHostService extends BrowserHostService {
 
 	public override restart(): Promise<void> { return invoke<void>(HOST_RESTART_CHANNEL); }
 
-	public override getScreenshot(): Promise<Uint8Array> { return invoke<Uint8Array>('ash:host:screenshot'); }
+	public override getScreenshot(rect?: IRectangle): Promise<VSBuffer | undefined> { return this.host.getScreenshot(rect); }
 
 	public override openWindow(options: IOpenEmptyWindowOptions = {}): Promise<void> {
 		return this.host.openWindow(options);

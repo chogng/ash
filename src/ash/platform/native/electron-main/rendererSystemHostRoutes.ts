@@ -6,6 +6,8 @@ import { ElectronMainClipboardService } from '../../clipboard/electron-main/elec
 import { ElectronOpenerService } from '../../opener/electron-main/electronOpenerService.js';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
 import type { DialogRequest } from '../../dialogs/common/dialogs.js';
+import { validateScreenshotRectangle } from '../common/nativeHost.js';
+import { getScreenshot } from './nativeHostMainService.js';
 
 export function rendererSystemHostRoutes(
 	window: BrowserWindow,
@@ -61,10 +63,9 @@ export function rendererSystemHostRoutes(
 		{ channel: 'ash:host:readClipboardData', validate: value => { if (value !== undefined) throw new Error('Unexpected clipboard arguments'); }, invoke: () => clipboard.read() },
 		{ channel: 'ash:host:readClipboardImage', validate: value => { if (value !== undefined) throw new Error('Unexpected clipboard arguments'); }, invoke: () => clipboard.readImage() },
 		{
-			channel: 'ash:host:screenshot', validate: value => { if (value !== undefined) throw new Error('Unexpected screenshot arguments'); }, invoke: async () => {
+			channel: 'ash:host:screenshot', validate: validateScreenshotRectangle, invoke: async value => {
 				// The trusted router binds this route to its sender; another window can never be chosen by renderer input.
-				if (window.isDestroyed() || window.webContents.isDestroyed()) throw new Error('The screenshot window has closed');
-				return new Uint8Array((await window.webContents.capturePage()).toPNG());
+				return (await getScreenshot(window, value as ReturnType<typeof validateScreenshotRectangle>))?.buffer;
 			}
 		},
 		{ channel: 'ash:host:readFindClipboard', validate: value => { if (value !== undefined) throw new Error('Unexpected find clipboard arguments'); }, invoke: () => clipboard.readFindText() },

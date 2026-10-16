@@ -23,7 +23,8 @@ import { createToolSelectionAttachment, showToolsPicker, toolSetLabel } from './
 import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
 import { IChatService } from '../../../../services/chat/common/chatService.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
-import { IHostService } from '../../../../services/host/browser/host.js';
+import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
+import { ChatScreenshotContext, convertBufferToScreenshotVariable } from '../attachments/chatScreenshotContext.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { readLocalRepositories } from '../../../github/common/localRepository.js';
 
@@ -144,11 +145,12 @@ export class ClipboardImageContextValuePick implements ChatContextSource {
 export class ScreenshotContextValuePick implements ChatContextSource {
 	public readonly icon = Lxicon.openPreview;
 	public get label(): string { return isWeb ? localize('chat.context.screenshotWeb', 'Screenshot…') : localize('chat.context.screenshot', 'Screenshot Window'); }
-	constructor(@IHostService private readonly host: IHostService) { }
+	constructor(private readonly container: HTMLElement, @IInstantiationService private readonly instantiation: IInstantiationService) { }
 	public async asAttachment(signal: AbortSignal): Promise<ChatContextSelection | undefined> {
-		const image = await this.host.getScreenshot();
+		using screenshot = this.instantiation.createInstance(ChatScreenshotContext, this.container);
+		const image = await screenshot.run(signal);
 		if (!image || signal.aborted) return undefined;
-		const attachment = await createImageAttachment(localize('chat.context.screenshotName', 'Screenshot'), image, 'image/png');
+		const attachment = await convertBufferToScreenshotVariable(image);
 		return signal.aborted ? undefined : { attachment, acceptInBackground: false };
 	}
 }

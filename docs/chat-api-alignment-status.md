@@ -10,6 +10,36 @@
 
 文件集合差异和公开声明差异是待调查项，不等于对应行为全部缺失。完整路径、imports、exports、公开成员、CSS selector/token、生产与测试调用方已保存在 `.build/chat-alignment/inventory.json`；可读版为 `.build/chat-alignment/report.html`。不将未验证的上游公开成员计为已实现。
 
+## 截图附件
+
+截图入口沿 `browser/actions/chatContext.ts` → `IHostService.getScreenshot(rect?)` →
+平台 Host → Electron Main 捕获的职责链工作。新增上游同路径
+`browser/attachments/chatScreenshotContext.ts` 承接截图附件转换，以及用户确认的 Ash
+框选、预览和确认交互；其同名 CSS 是已确认的 Ash 界面职责。已有图片准备、消息引用和
+`ChatAttachmentModel` 继续拥有附件与草稿，窗口内同时只保留一个截图流程。
+
+Host 返回 `VSBuffer` 中的 PNG。平台截图契约落在上游同路径
+`platform/native/common/native.ts`，原 `nativeHost.ts` 继续承接现有 IPC 契约和输入校验，
+`nativeHostApi.ts` 负责 IPC 字节适配；捕获实现归
+`platform/native/electron-main/nativeHostMainService.ts`。原发送窗口绑定的路由只校验和
+转交请求。桌面区域参数使用 renderer CSS 像素，Main 按窗口缩放换算到 DIP；Web 仍由
+浏览器选择共享画面。此切片只对齐截图端口，不表示完整平台 Host API 已对齐。
+
+菜单与旧预览退出合成后才捕获。框选在冻结的原图上以图片像素裁切，可鼠标拖动、输入
+坐标或用方向键移动、Shift+方向键调整大小。确认前可预览、恢复整图或重新截图；
+取消和 Escape 返回消息。切换草稿或关闭输入取消未完成操作，迟到图像不会进入新草稿。
+辅助视图报告尺寸和区域坐标，并由原无障碍服务解析帮助快捷键与 verbosity 设置。
+
+验证：浏览器上下文回归 69 项通过，截图修改后定向重跑 9 项通过（英文、中文、浅色、
+深色及两种高对比度主题）；平台捕获、附件和焦点单测 12 项通过。真实 Electron UI
+冒烟验证 PNG、125% 窗口缩放下的区域尺寸、框选预览、确认附件与焦点恢复。
+
+完整桌面验证最初因初始化只接受浏览器能力版本 3、而桌面声明版本 4，被
+`InvalidParams` 阻塞。App Server 初始化现在接受实现已支持的版本 3 和 4；未知版本和
+空能力仍拒绝，CDP 仍受既有版本与授权规则约束。后端定向验证 24 项通过，编译和
+warning 检查通过；连接真实 App Server 的截图冒烟测试，以及截图、区域预览、确认附件
+三步录制场景全部通过。该截图冒烟测试同时覆盖 Electron UI 和 Electron App Server 两个测试组。
+
 ## 输入框附件栏移除（2026-10-14）
 
 用户确认去掉输入框上方的当前编辑器文件推荐栏。Code 和 Sessions 共用的

@@ -132,7 +132,7 @@ export class AttachContextAction extends Disposable {
 			const sources: ContextSourceItem[] = [{ label: localize('chat.attach.files', 'Attach files'), iconClass: ThemeIcon.asClassName(Lxicon.paperclip), source: 'upload' }];
 			if (this.workspace.getWorkspace().folders.length) sources.unshift({ label: localize('chat.context.filesAndFolders', 'Files & Folders…'), iconClass: ThemeIcon.asClassName(Lxicon.folders), source: 'workspace' });
 			const contexts: readonly ChatContextSource[] = [
-				...(this.host.supportsImages() ? [instantiation.createInstance(ClipboardImageContextValuePick), instantiation.createInstance(ScreenshotContextValuePick)] : []),
+				...(this.host.supportsImages() ? [instantiation.createInstance(ClipboardImageContextValuePick), instantiation.createInstance(ScreenshotContextValuePick, this.host.container)] : []),
 				instantiation.createInstance(SessionReferenceContextPickerPick, this.navigation.getActiveConversation()),
 				instantiation.createInstance(GitHubContextValuePick, 'issue'),
 				instantiation.createInstance(GitHubContextValuePick, 'pullRequest'),
@@ -222,7 +222,8 @@ export class AttachContextAction extends Disposable {
 							if (attachment) {
 								status(localize('chat.context.added', 'Added {0}', attachment.name));
 							}
-							if (!attachment || background || selection?.acceptInBackground) show(); else finish();
+							if (context instanceof ScreenshotContextValuePick && !attachment) finish();
+							else if (!attachment || background || selection?.acceptInBackground) show(); else finish();
 							return;
 						}
 						if (item.source === 'upload') { await this.showFilePicker(signal); finish(); return; }

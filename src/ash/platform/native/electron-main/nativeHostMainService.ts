@@ -5,6 +5,30 @@ import { homedir } from 'node:os';
 import { basename, delimiter, dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 import type { ShellCommandOperation } from '../common/nativeHost.js';
+import type { BrowserWindow } from 'electron/main';
+import type { IRectangle } from '../../window/common/window.js';
+import { VSBuffer } from '../../../base/common/buffer.js';
+
+/** Main owns the sender's capture target and converts CSS coordinates to window DIPs. */
+export async function getScreenshot(window: BrowserWindow, rect?: IRectangle): Promise<VSBuffer | undefined> {
+	if (window.isDestroyed() || window.webContents.isDestroyed()) return undefined;
+	const zoom = window.webContents.getZoomFactor();
+	const bounds = window.getContentBounds();
+	if (rect && ((rect.x + rect.width) * zoom > bounds.width + 1 || (rect.y + rect.height) * zoom > bounds.height + 1)) {
+		throw new RangeError('Screenshot rectangle is outside the window');
+	}
+	// Round both edges onto the same DIP grid; outward rounding adds pixels at fractional zoom.
+	const clip = rect ? {
+		x: Math.round(rect.x * zoom), y: Math.round(rect.y * zoom),
+		width: Math.max(1, Math.round((rect.x + rect.width) * zoom) - Math.round(rect.x * zoom)),
+		height: Math.max(1, Math.round((rect.y + rect.height) * zoom) - Math.round(rect.y * zoom)),
+	} : undefined;
+	const image = await window.webContents.capturePage(clip);
+	if (window.isDestroyed() || window.webContents.isDestroyed()) return undefined;
+	const bytes = image.toPNG();
+	if (image.isEmpty() || bytes.byteLength === 0 || bytes.byteLength > 20 * 1024 * 1024) throw new Error('Screenshot image is empty or too large');
+	return VSBuffer.wrap(new Uint8Array(bytes));
+}
 
 /** Reads the desktop process's effective privilege, independently of its App Server. */
 export async function isAdmin(): Promise<boolean> {

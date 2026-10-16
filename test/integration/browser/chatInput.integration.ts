@@ -1,3 +1,4 @@
+import { VSBuffer } from '../../../src/ash/base/common/buffer.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { createTestLanguageModelToolsService } from '../../../src/ash/workbench/contrib/chat/test/common/tools/testLanguageModelToolsService.js';
 import { createDiffEditorInput } from '../../../src/ash/workbench/common/editor/diffEditorInput.js';
@@ -193,7 +194,27 @@ services.registerInstance(IClipboardService, {
 	readImage: async () => new URLSearchParams(location.search).has('emptyClipboard') ? new Uint8Array() : png,
 	readText: async () => '', writeText: async () => { }, readResources: async () => ({ resources: [], operation: 'copy' }), writeResources: async () => { }, hasResources: async () => false,
 });
-services.registerInstance(IHostService, { hasFocus: true, onDidChangeFocus: Event.None, restart: async () => { }, openWindow: async () => { }, getScreenshot: async () => new URLSearchParams(location.search).has('cancelScreenshot') ? undefined : Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNg+M/QAAADggGA8sg/+gAAAABJRU5ErkJggg=='), character => character.charCodeAt(0)) });
+let screenshotCalls = 0;
+let screenshotVisibleOverlays: number[] = [];
+let releaseScreenshot: (() => void) | undefined;
+services.registerInstance(IHostService, {
+	hasFocus: true, onDidChangeFocus: Event.None, restart: async () => { }, openWindow: async () => { },
+	async getScreenshot() {
+		screenshotCalls++;
+		screenshotVisibleOverlays.push([...document.querySelectorAll('dialog[open], [role="dialog"]')].filter(element => element.checkVisibility()).length);
+		if (new URLSearchParams(location.search).has('holdScreenshot')) await new Promise<void>(resolve => { releaseScreenshot = resolve; });
+		if (new URLSearchParams(location.search).has('cancelScreenshot')) return undefined;
+		if (new URLSearchParams(location.search).has('screenshotFixture')) {
+			const canvas = document.createElement('canvas'); canvas.width = 800; canvas.height = 480;
+			const context = canvas.getContext('2d')!;
+			context.fillStyle = screenshotCalls === 1 ? '#ff0000' : '#0000ff'; context.fillRect(0, 0, 800, 480);
+			context.fillStyle = '#ffff00'; context.fillRect(400, 240, 400, 240);
+			const blob = await new Promise<Blob>(resolve => canvas.toBlob(blob => resolve(blob!), 'image/png'));
+			return VSBuffer.wrap(new Uint8Array(await blob.arrayBuffer()));
+		}
+		return VSBuffer.wrap(Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNg+M/QAAADggGA8sg/+gAAAABJRU5ErkJggg=='), character => character.charCodeAt(0)));
+	}
+});
 let toolsChanged = false;
 const toolCatalogChanges = resources.add(new Emitter<void>());
 services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService({
@@ -712,3 +733,26 @@ window.ashChatInputIntegration = {
 };
 part.setVisible(true);
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
+
+
+declare global {
+	interface Window {
+		ashScreenshotIntegration: {
+			state(): { calls: number; overlays: number[]; pending: boolean; providers: number; };
+			release(): void;
+			switchDraft(): void;
+			accessibility(type: 'help' | 'view'): string | undefined;
+		};
+	}
+}
+window.ashScreenshotIntegration = {
+	state: () => ({ calls: screenshotCalls, overlays: screenshotVisibleOverlays, pending: part.attachmentModel.hasPendingContext, providers: AccessibleViewRegistry.getImplementations().filter(entry => entry.name.startsWith('chatScreenshot-')).length }),
+	release: () => { releaseScreenshot?.(); releaseScreenshot = undefined; },
+	switchDraft: () => { part.invalidatePendingInput(); part.restoreDraft({ mode: state.mode, text: 'Next conversation', contexts: [] }); },
+	accessibility: type => {
+		const entry = AccessibleViewRegistry.getImplementations().find(entry => entry.name.startsWith('chatScreenshot-') && entry.type === type);
+		const provider = entry?.getProvider(services);
+		if (!provider) return undefined;
+		try { return provider.provideContent(); } finally { provider.dispose(); }
+	}
+};

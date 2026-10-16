@@ -9,6 +9,20 @@ import type { AgentHostEditorUpdate, IAgentHostEditorState, IAgentsWindowInvitat
 import { URI, type UriComponents } from '../../../base/common/uri.js';
 import { buildOpenSessionLinkUri, parseOpenSessionLinkUri } from '../../agentHost/common/openSessionLink.js';
 import { isRecord } from '../../../base/common/types.js';
+import type { ICommonNativeHostService } from './native.js';
+import type { IRectangle } from '../../window/common/window.js';
+
+/** The IPC boundary accepts only a rectangle in the sender's own window. */
+export function validateScreenshotRectangle(value: unknown): IRectangle | undefined {
+	if (value === undefined) return undefined;
+	if (!isRecord(value) || Object.keys(value).sort().join(',') !== 'height,width,x,y'
+		|| !['x', 'y', 'width', 'height'].every(key => typeof value[key] === 'number' && Number.isFinite(value[key]))
+		|| (value.x as number) < 0 || (value.y as number) < 0
+		|| (value.width as number) <= 0 || (value.height as number) <= 0) {
+		throw new TypeError('Invalid screenshot rectangle');
+	}
+	return value as unknown as IRectangle;
+}
 
 export const AGENT_HOST_EDITOR_STATE_CHANNEL = 'ash:native-host:editor-state';
 /** Main selects the backend profile's TOML resource; this is not the UI settings transport. */
@@ -141,7 +155,7 @@ export interface IOpenAgentsWindowOptions {
 }
 
 /** Window-scoped native capabilities exposed to an Electron renderer. */
-export interface INativeHostApi {
+export interface INativeHostApi extends ICommonNativeHostService {
 	/** The frame style used to create this window, independently of saved settings. */
 	getTitleBarStyle(): Promise<TitleBarStyleConfiguration>;
 	isAdmin(): Promise<boolean>;

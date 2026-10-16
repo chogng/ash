@@ -36,6 +36,7 @@ import {
 } from '../../window/common/window.js';
 import { showMessageBox } from '../../dialogs/electron-browser/dialog.js';
 import { normalizeExternalUrl } from '../../opener/common/opener.js';
+import { VSBuffer } from '../../../base/common/buffer.js';
 import {
 	AGENT_HOST_EDITOR_STATE_CHANNEL, AGENT_HOST_EDITOR_UPDATE_CHANNEL, AGENT_HOST_EDITOR_STATE_CHANGED_CHANNEL,
 	AGENTS_WINDOW_INVITATION_CLAIM_CHANNEL, AGENTS_WINDOW_INVITATION_SHOWN_CHANNEL, AGENTS_WINDOW_INVITATION_RELEASE_CHANNEL,
@@ -45,6 +46,12 @@ import {
 export function createNativeHostApi(mainProcessService: IMainProcessService): INativeHostApi {
 	const colors = mainProcessService.getChannel('colorScheme');
 	return {
+		async getScreenshot(rect) {
+			const value = await invoke<unknown>('ash:host:screenshot', rect);
+			if (value === undefined) return undefined;
+			if (!(value instanceof Uint8Array) || value.byteLength === 0 || value.byteLength > 20 * 1024 * 1024) throw new TypeError('Invalid screenshot image');
+			return VSBuffer.wrap(new Uint8Array(value));
+		},
 		getTitleBarStyle: async () => parseTitleBarStyle(await invoke<unknown>(NATIVE_HOST_GET_TITLE_BAR_STYLE_CHANNEL)),
 		async isAdmin(): Promise<boolean> {
 			const value = await invoke<unknown>(NATIVE_HOST_IS_ADMIN_CHANNEL);

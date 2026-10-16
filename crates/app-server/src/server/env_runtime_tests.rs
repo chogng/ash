@@ -1379,6 +1379,70 @@ fn sandbox_managed_ceilings_reach_installed_executor_for_defaults_and_profiles()
 }
 
 #[test]
+fn initialize_browser_capability_versions_accept_supported_hosts_and_reject_invalid_declarations() {
+    let server = server();
+    for version in [3, 4] {
+        for (observe, input) in [(true, false), (false, true), (true, true)] {
+            let mut connection = server.connection();
+            let response: serde_json::Value = serde_json::from_str(&server.handle_json(
+                &mut connection,
+                &serde_json::json!({
+                    "jsonrpc": "2.0", "id": 1,
+                    "method": "initialize",
+                    "params": {
+                        "clientInfo": { "name": "desktop-browser-test", "version": "1" },
+                        "capabilities": { "browser": { "version": version, "observe": observe, "input": input } }
+                    }
+                }).to_string(),
+            )).unwrap();
+            assert_eq!(
+                response["result"]["capabilities"]["sessions"], true,
+                "{response}"
+            );
+            assert!(connection.is_initialized());
+            let configured: serde_json::Value = serde_json::from_str(
+                &server.handle_json(
+                    &mut connection,
+                    &serde_json::json!({
+                    "jsonrpc": "2.0", "id": 2, "method": "browser/configure",
+                        "params": { "enabled": true, "cdpEnabled": true }
+                    })
+                    .to_string(),
+                ),
+            )
+            .unwrap();
+            assert!(configured.get("result").is_some(), "{configured}");
+            server.close_connection(connection);
+        }
+    }
+    for (version, observe, input) in [
+        (0, true, true),
+        (1, true, true),
+        (2, true, true),
+        (5, true, true),
+        (u32::MAX, true, true),
+        (3, false, false),
+        (4, false, false),
+    ] {
+        let mut connection = server.connection();
+        let response: serde_json::Value = serde_json::from_str(&server.handle_json(
+            &mut connection,
+            &serde_json::json!({
+                "jsonrpc": "2.0", "id": 1,
+                "method": "initialize",
+                "params": {
+                    "clientInfo": { "name": "invalid-browser-test", "version": "1" },
+                    "capabilities": { "browser": { "version": version, "observe": observe, "input": input } }
+                }
+            }).to_string(),
+        )).unwrap();
+        assert_eq!(response["error"]["code"], -32602, "{response}");
+        assert!(!connection.is_initialized());
+        server.close_connection(connection);
+    }
+}
+
+#[test]
 fn browser_tools_follow_capable_connection_lifecycle_with_explicit_permissions() {
     let dir = TestDir::new("browser-capability", "readable.txt");
     let server = server().with_local_env_host(None, host_policy()).unwrap();

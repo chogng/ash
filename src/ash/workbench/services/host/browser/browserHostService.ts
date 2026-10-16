@@ -6,6 +6,7 @@ import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../
 import type { IOpenEmptyWindowOptions } from '../../../../platform/window/common/window.js';
 import { ILifecycleService, ShutdownVetoError } from '../../lifecycle/common/lifecycle.js';
 import { IHostService } from './host.js';
+import { VSBuffer } from '../../../../base/common/buffer.js';
 
 export const EMPTY_WORKSPACE_ID_KEY = 'ash.workbench.emptyWorkspaceId';
 
@@ -50,7 +51,7 @@ export class BrowserHostService extends Disposable implements IHostService {
 		this.ownerWindow.location.reload();
 	}
 
-	public async getScreenshot(): Promise<Uint8Array | undefined> {
+	public async getScreenshot(): Promise<VSBuffer | undefined> {
 		this.assertNotDisposed();
 		const resources = this._register(new DisposableStore());
 		let stream: MediaStream | undefined;
@@ -76,7 +77,7 @@ export class BrowserHostService extends Disposable implements IHostService {
 			context.drawImage(video, 0, 0);
 			const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
 			if (!blob) throw new Error('The screenshot could not be encoded');
-			return new Uint8Array(await blob.arrayBuffer());
+			return VSBuffer.wrap(new Uint8Array(await blob.arrayBuffer()));
 		} catch (error) {
 			if (error instanceof DOMException && error.name === 'NotAllowedError') return undefined;
 			throw error;
