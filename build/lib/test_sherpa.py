@@ -7,7 +7,13 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from build.lib.sherpa import ROOT, SpeechArchive, load_sherpa_lock, materialize
+from build.lib.sherpa import (
+    ROOT,
+    SUPPORTED_TARGETS,
+    SpeechArchive,
+    load_sherpa_lock,
+    materialize,
+)
 from build.lib.sherpa import resolve_sherpa_cargo_env
 from build.lib.targets import TARGETS
 
@@ -15,7 +21,7 @@ from build.lib.targets import TARGETS
 class SherpaResourceTests(unittest.TestCase):
     def test_lock_matches_rust_dependency_and_supported_targets(self) -> None:
         version, archives = load_sherpa_lock()
-        self.assertEqual(set(TARGETS), set(archives))
+        self.assertEqual(SUPPORTED_TARGETS, set(archives))
         lock = (ROOT / "Cargo.lock").read_text()
         for package in ("sherpa-onnx", "sherpa-onnx-sys"):
             versions = re.findall(

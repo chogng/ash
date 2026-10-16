@@ -78,6 +78,14 @@
     {
       "source": "third_party/ash-grammars/THIRD_PARTY_NOTICES.txt",
       "destination": "ash-resources/licenses/ash-grammars/THIRD_PARTY_NOTICES.txt"
+    },
+    {
+      "source": "third_party/sherpa-onnx/LICENSE",
+      "destination": "ash-resources/licenses/sherpa-onnx/LICENSE"
+    },
+    {
+      "source": "third_party/sherpa-onnx/NOTICE",
+      "destination": "ash-resources/licenses/sherpa-onnx/NOTICE"
     }
   ]
 }

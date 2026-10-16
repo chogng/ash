@@ -1,0 +1,6 @@
+package(default_visibility = ["//visibility:public"])
+
+alias(
+    name = "library",
+    actual = "@//third_party/sherpa-onnx:library",
+)

@@ -231,18 +231,26 @@ crate.annotation(
 
 inject_repo(crate, "ash_grammar_targets")
 
-# Both speech crates share a nested Cargo workspace in the pinned source tree.
-[
-    crate.annotation(
-        crate = name,
-        repositories = ["crates"],
-        workspace_cargo_toml = "sherpa-onnx/rust/Cargo.toml",
-    )
-    for name in [
-        "sherpa-onnx",
-        "sherpa-onnx-sys",
-    ]
-]
+# The speech sys crate has no acquisition responsibilities under either build host.
+sherpa_archives = use_extension("//third_party/sherpa-onnx:repositories.bzl", "sherpa")
+use_repo(
+    sherpa_archives,
+    "ash_sherpa_aarch64_apple_darwin",
+    "ash_sherpa_aarch64_pc_windows_msvc",
+    "ash_sherpa_aarch64_unknown_linux_gnu",
+    "ash_sherpa_x86_64_apple_darwin",
+    "ash_sherpa_x86_64_pc_windows_msvc",
+    "ash_sherpa_x86_64_unknown_linux_gnu",
+)
+
+crate.annotation(
+    crate = "sherpa-onnx-sys",
+    gen_build_script = "off",
+    repositories = ["crates"],
+    deps = ["@ash_sherpa_targets//:library"],
+)
+
+inject_repo(crate, "ash_sherpa_targets")
 
 # Keep liblzma inside the build action instead of discovering a host installation.
 crate.annotation(
@@ -368,6 +376,11 @@ new_local_repository(
     path = "third_party/ash-grammars",
 )
 
+new_local_repository(
+    name = "ash_sherpa_targets",
+    build_file = "//third_party/sherpa-onnx:targets.BUILD.bazel",
+    path = "third_party/sherpa-onnx",
+)
 
 new_local_repository(
     name = "ash_v8_targets",

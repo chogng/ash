@@ -1,0 +1,22 @@
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "runtime-lock.json",
+    "repositories.bzl",
+    "targets.BUILD.bazel",
+])
+
+alias(
+    name = "library",
+    actual = select(
+        {
+            "@rules_rs//rs/platforms/config:aarch64-apple-darwin": "@ash_sherpa_aarch64_apple_darwin//:library",
+            "@rules_rs//rs/platforms/config:aarch64-pc-windows-msvc": "@ash_sherpa_aarch64_pc_windows_msvc//:library",
+            "@rules_rs//rs/platforms/config:aarch64-unknown-linux-gnu": "@ash_sherpa_aarch64_unknown_linux_gnu//:library",
+            "@rules_rs//rs/platforms/config:x86_64-apple-darwin": "@ash_sherpa_x86_64_apple_darwin//:library",
+            "@rules_rs//rs/platforms/config:x86_64-pc-windows-msvc": "@ash_sherpa_x86_64_pc_windows_msvc//:library",
+            "@rules_rs//rs/platforms/config:x86_64-unknown-linux-gnu": "@ash_sherpa_x86_64_unknown_linux_gnu//:library",
+        },
+        no_match_error = "No compatible Sherpa ONNX static bundle; Linux GNU libraries cannot be used for musl.",
+    ),
+)

@@ -4,7 +4,8 @@
   "version": "1.13.8",
   "source": {
     "repository": "https://github.com/k2-fsa/sherpa-onnx",
-    "release": "v1.13.8"
+    "release": "v1.13.8",
+    "commit": "11afbd009a7f8c08f4bcf2fc1b265d0df4670fbf"
   },
   "artifacts": {
     "aarch64-apple-darwin": {
@@ -22,17 +23,7 @@
       "sha256": "77983e3cf29aa60f2e531d249dbd01d15596530550c8db2e9e02fc6a655da6bb",
       "size": 21325380
     },
-    "aarch64-unknown-linux-musl": {
-      "name": "sherpa-onnx-v1.13.8-linux-aarch64-static-lib.tar.bz2",
-      "sha256": "77983e3cf29aa60f2e531d249dbd01d15596530550c8db2e9e02fc6a655da6bb",
-      "size": 21325380
-    },
     "x86_64-unknown-linux-gnu": {
-      "name": "sherpa-onnx-v1.13.8-linux-x64-static-lib.tar.bz2",
-      "sha256": "e1fdc5b67530e15741ef897fa5ffff297056f3bf0c6d829a27af9225a4c4b5a6",
-      "size": 22952328
-    },
-    "x86_64-unknown-linux-musl": {
       "name": "sherpa-onnx-v1.13.8-linux-x64-static-lib.tar.bz2",
       "sha256": "e1fdc5b67530e15741ef897fa5ffff297056f3bf0c6d829a27af9225a4c4b5a6",
       "size": 22952328
@@ -47,5 +38,10 @@
       "sha256": "56ffcf3c454c1f14f7bc9887286cc8143e7e542dc632804e1c447d5f8d534eaf",
       "size": 123206268
     }
+  },
+  "bundleVersion": "1.13.8-ash.1",
+  "distribution": {
+    "repository": "https://github.com/chogng/ash-sherpa-onnx",
+    "release": "v1.13.8-ash.1"
   }
 }

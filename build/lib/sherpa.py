@@ -17,13 +17,17 @@ from build.download.artifacts import (
     sha256,
     temporary_file,
 )
+from build.lib.file_lock import exclusive_lock
 from build.lib.targets import TARGETS, TargetSpec
 
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_LOCK = ROOT / "third_party/sherpa-onnx/runtime-lock.json"
 DEFAULT_CACHE = ROOT / "third_party/.cache/sherpa-onnx"
-REPOSITORY = "https://github.com/k2-fsa/sherpa-onnx"
+REPOSITORY = "https://github.com/chogng/ash-sherpa-onnx"
+UPSTREAM = "https://github.com/k2-fsa/sherpa-onnx"
+# Upstream CPU archives use glibc. They cannot serve the product's musl targets.
+SUPPORTED_TARGETS = {target for target in TARGETS if not target.endswith("-musl")}
 # These are the static link inputs declared by the locked sherpa-onnx-sys build script.
 LIBRARIES = (
     "sherpa-onnx-c-api",
@@ -51,14 +55,20 @@ class SpeechArchive:
 
 
 def load_sherpa_lock(path: Path = DEFAULT_LOCK) -> tuple[str, dict[str, SpeechArchive]]:
-    document = json.loads(path.read_text())
+    document = json.loads(path.read_text(encoding="utf-8"))
     version = document["version"]
+    bundle_version = document["bundleVersion"]
     if (
         document["schemaVersion"] != 1
         or document["runtime"] != "sherpa-onnx"
         or not re.fullmatch(r"\d+\.\d+\.\d+", version)
-        or document["source"] != {"repository": REPOSITORY, "release": f"v{version}"}
-        or document["artifacts"].keys() != TARGETS.keys()
+        or document["source"]["repository"] != UPSTREAM
+        or document["source"]["release"] != f"v{version}"
+        or not re.fullmatch(r"[0-9a-f]{40}", document["source"]["commit"])
+        or not re.fullmatch(re.escape(version) + r"-ash\.[1-9]\d*", bundle_version)
+        or document["distribution"]
+        != {"repository": REPOSITORY, "release": f"v{bundle_version}"}
+        or document["artifacts"].keys() != SUPPORTED_TARGETS
     ):
         raise RuntimeError(f"Invalid Sherpa resource lock: {path}")
     archives = {}
@@ -77,7 +87,7 @@ def load_sherpa_lock(path: Path = DEFAULT_LOCK) -> tuple[str, dict[str, SpeechAr
             name,
             entry["sha256"],
             entry["size"],
-            f"{REPOSITORY}/releases/download/v{version}/{name}",
+            f"{REPOSITORY}/releases/download/v{bundle_version}/{name}",
         )
     return version, archives
 
@@ -93,12 +103,19 @@ def resolve_sherpa_cargo_env(
     if environment.get("SHERPA_ONNX_LIB_DIR"):
         return {}
     version, archives = load_sherpa_lock(lock_path)
+    if spec.target not in archives:
+        raise RuntimeError(
+            f"Sherpa ONNX has no static bundle for {spec.target}; "
+            "Linux GNU archives require glibc and cannot be used for musl"
+        )
     archive = archives[spec.target]
     if local := environment.get("SHERPA_ONNX_ARCHIVE_DIR"):
         archive = replace(archive, url=(Path(local) / archive.name).resolve().as_uri())
     names = {f"{name}.lib" if spec.is_windows else f"lib{name}.a" for name in LIBRARIES}
     directory = cache_root / f"v{version}"
-    libraries = materialize(archive, names, directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    with exclusive_lock(directory / f".{spec.target}.lock", create=True):
+        libraries = materialize(archive, names, directory)
     return {"SHERPA_ONNX_LIB_DIR": str(libraries.resolve())}
 
 
