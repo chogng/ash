@@ -30,7 +30,12 @@ class Connection extends Disposable {
 		const transport: ConnectOverCDPTransport = {
 			send: message => {
 				if (!isRecord(message) || typeof message.id !== 'number' || typeof message.method !== 'string') { throw new TypeError('Invalid Playwright CDP request'); }
-				void this.groups.sendCDPMessage(groupId, message as unknown as CDPRequest).catch(error => {
+				// Playwright's utility world needs isolation, without the universal
+				// access flag that Main forbids for every browser protocol client.
+				const request = message.method === 'Page.createIsolatedWorld' && isRecord(message.params)
+					? { ...message, params: { ...message.params, grantUniveralAccess: false } }
+					: message;
+				void this.groups.sendCDPMessage(groupId, request as unknown as CDPRequest).catch(error => {
 					transport.onmessage?.({ id: message.id, sessionId: message.sessionId, error: { code: -32000, message: error instanceof Error ? error.message : String(error) } });
 				});
 			},

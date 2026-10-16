@@ -34,6 +34,7 @@ import { pathToFileURL, fileURLToPath } from "node:url";
 import { throwIfCancelled, type CancellationToken } from "../../base/common/cancellation.js";
 import { isCancellationError } from "../../base/common/errors.js";
 import { Disposable, DisposableMap, DisposableStore, DisposableTracker, MutableDisposable, installDisposableTracker, type IDisposable, toDisposable } from "../../base/common/lifecycle.js";
+import { Lazy } from '../../base/common/lazy.js';
 import { assertDefined } from "../../base/common/types.js";
 import { AshApplicationId, AshApplicationName } from '../common/application.js';
 import { ElectronContextMenu } from "../../base/parts/contextmenu/electron-main/contextmenu.js";
@@ -1648,15 +1649,28 @@ export class AshApplication extends Disposable {
 		const sharing = this.mainProcessIpcServer.getChannel('browserSharing', client => client.ctx === context);
 		browserServices.registerInstance(IBrowserViewMainService, browserViewMainService);
 		const browserGroups = windowDisposables.add(browserServices.createInstance(BrowserViewGroupMainService));
-		const browserPort = this.sharedProcess.connect(context);
-		const browserClient = windowDisposables.add(new MessagePortClient({
-			postMessage: data => browserPort.postMessage(data), start: () => browserPort.start(), close: () => browserPort.close(),
-			addEventListener: (type, listener) => type === 'message' ? browserPort.on('message', listener) : browserPort.on('close', listener as () => void), removeEventListener: (type, listener) => type === 'message' ? browserPort.off('message', listener) : browserPort.off('close', listener as () => void),
-		}, context));
-		browserClient.registerChannel('browserViewGroup', ProxyChannel.fromService(browserGroups, windowDisposables));
-		browserServices.registerInstance(IPlaywrightService, ProxyChannel.toService<IPlaywrightService>(browserClient.getChannel('playwright')));
-		// A worker crash retires its debugger leases, while the user's live pages remain in Main.
-		browserPort.once('close', () => browserGroups.dispose());
+		const browserConnection = windowDisposables.add(new DisposableStore());
+		// Window creation and manual browsing need no Playwright worker. Connect only
+		// when automation first reads or acts on a page, preserving window ownership.
+		const playwright = new Lazy<IPlaywrightService>(() => {
+			if (windowDisposables.isDisposed) { throw new Error('BrowserCapabilityUnavailable'); }
+			const browserPort = this.sharedProcess.connect(context);
+			const browserClient = browserConnection.add(new MessagePortClient({
+				postMessage: data => browserPort.postMessage(data), start: () => browserPort.start(), close: () => browserPort.close(),
+				addEventListener: (type, listener) => type === 'message' ? browserPort.on('message', listener) : browserPort.on('close', listener as () => void), removeEventListener: (type, listener) => type === 'message' ? browserPort.off('message', listener) : browserPort.off('close', listener as () => void),
+			}, context));
+			browserClient.registerChannel('browserViewGroup', ProxyChannel.fromService(browserGroups, browserConnection));
+			// A worker crash retires its debugger leases, while the user's live pages remain in Main.
+			browserPort.once('close', () => browserGroups.dispose());
+			return ProxyChannel.toService<IPlaywrightService>(browserClient.getChannel('playwright'));
+		});
+		browserServices.registerInstance(IPlaywrightService, {
+			getObservation: async (...args) => playwright.value.getObservation(...args),
+			performAction: async (...args) => playwright.value.performAction(...args),
+			// Cancellation and direct-CDP cleanup must not start an unused worker.
+			cancelOperation: async id => { await playwright.rawValue?.cancelOperation(id); },
+			disposeSession: async sessionId => { await playwright.rawValue?.disposeSession(sessionId); },
+		});
 		const appServerBrowserHost = windowDisposables.add(browserServices.createInstance(AppServerBrowserHost));
 		this.browserChannels.set(context, { view: browserViewChannel(browserViewMainService, sharing), host: appServerBrowserHost.getChannel() });
 		windowDisposables.add(toDisposable(() => this.browserChannels.delete(context)));

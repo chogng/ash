@@ -355,14 +355,23 @@ test('sharing a user page exposes only that page to the chosen thread and revoca
 	await page.getByRole('button', { name: 'Close Browser', exact: true }).click();
 });
 
-test('browser automation runs in one separate process and its crash retains manually usable pages', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, application, workbench }) => {
+test('browser automation starts lazily in one separate process and its crash retains manually usable pages', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, application, workbench }) => {
 	const electron = application as ElectronApplication;
 	const page = workbench.page;
+	const workers = () => electron.evaluate(({ app }) => app.getAppMetrics().filter(metric => metric.name === 'Ash Browser Automation').map(metric => metric.pid));
 	const invoke = (method: string, params: Record<string, unknown>) => page.evaluate(({ method, params }) => {
 		return globalThis.ashTestMainProcess.call('browserHost', method, { id: crypto.randomUUID(), params: { threadId: 'crash-test-thread', ...params } });
 	}, { method, params: ['create', 'observe', 'perform'].includes(method) ? { networkToken: browserNetworkToken, ...params } : params });
+	expect(await workers()).toEqual([]);
 	const created = decodeAppServerServerRequestResult('browser/create', await invoke('create', { url: 'about:blank' }));
+	await invoke('list', {});
+	await page.evaluate(() => globalThis.ashTestMainProcess.call('browserHost', 'disposeSession', { threadId: 'unused-thread' }));
+	await page.evaluate(() => globalThis.ashTestMainProcess.call('browserHost', 'configure', { enabled: true, cdpEnabled: true }));
+	await invoke('perform', { action: { type: 'cdp', targetId: created.targetId, operation: { type: 'readEvents' } } });
+	await page.evaluate(() => globalThis.ashTestMainProcess.call('browserHost', 'disposeSession', { threadId: 'crash-test-thread' }));
+	expect(await workers()).toEqual([]);
 	const options = { targetId: created.targetId, includeAccessibilityTree: true, includeDomSnapshot: false, includeScreenshot: false };
+	await invoke('observe', options);
 	await invoke('observe', options);
 	const processes = await electron.evaluate(({ app }) => ({ main: process.pid, workers: app.getAppMetrics().filter(metric => metric.name === 'Ash Browser Automation').map(metric => metric.pid) }));
 	expect(processes.workers).toHaveLength(1);

@@ -9,6 +9,18 @@ Define a warmup action, a repeatable iteration, and an observable settled state.
 
 For typing, undo, large-file editing, folding or outline latency, use [editor-perf-optimize](../editor-perf-optimize/SKILL.md) for the editor's input-to-readiness measurements and renderer/backend/extension investigation.
 
+For streaming responses, transcript rendering, or Chat session retention, use [chat-perf](../chat-perf/SKILL.md) for controlled workloads and completion criteria.
+
+## Low memory footprint
+
+When the goal is low absolute memory use, measure that separately from leak growth. Establish cold startup, project-ready idle, warmed representative use, and a settled state after closing or releasing the workload. Add a sustained run when investigating long-term growth. Use the user's memory budget when specified; otherwise establish the baseline before proposing a numeric target.
+
+Identify each owned Main, Renderer, GPU/utility, App Server, extension, worker, and tool process, including background work left after the feature closes. Distinguish RSS or platform footprint, V8 heap and backing storage, Rust allocations, and GPU resources. RSS sums can count shared pages repeatedly. A small post-GC JS heap does not explain a large process footprint.
+
+Match build mode, workspace, open views, enabled features, profile state, and instrumentation. Development builds and video/trace capture can change the baseline; do not present those absolute values as packaged-product idle usage. Capture functional evidence separately when recording would distort the footprint being measured.
+
+Follow the measured allocation owner. Check eager process startup, unused background work, duplicate data, caches and resource pools for avoidable retention. A bounded cache can still be too large for the workload; evaluate its memory cost and reuse latency. Verify first use, reuse, background activity, unsaved state and release after making resources lazy or evictable. Do not lower the result by skipping required work or hiding failed providers.
+
 ## Run an Ash scenario
 
 Use the existing `test/scenario/src/runScenario.ts` entrypoint and [scenario guide](../validate-ui-scenario/SKILL.md) for the scenario contract, preparation, and evidence output. Inspect that guide when launching a real application. Reuse preparation that still covers the current source.
@@ -43,6 +55,6 @@ Attaching to an existing application does not transfer ownership. Preserve that 
 
 ## Investigation and verification
 
-Trace allocation and disposal ownership before changing product code. Use existing CPU-profile tooling or heap analysis tools available in the session; do not assume a separate heap-analysis skill is installed. Preserve raw evidence and record what was measured, what changed, and what remains uncertain.
+Trace allocation and disposal ownership before changing product code. Use [heap-snapshot-analysis](../heap-snapshot-analysis/SKILL.md) for snapshot comparisons and retainer paths, or [cpu-profile-analysis](../cpu-profile-analysis/SKILL.md) for CPU evidence. Preserve raw evidence and record what was measured, what changed, and what remains uncertain.
 
 Run the smallest checks covering a fix, following [testing guidelines](../../../.github/instructions/testing.instructions.md). Reuse successful results when their inputs still cover the current changes. Performance comparisons may need intentional repeated sampling; committing or pushing does not require another test run. Do not expand to full unit or integration suites merely because a performance investigation finished.

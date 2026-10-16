@@ -31,6 +31,7 @@ suite('Playwright session lifetime', () => {
 			await new Promise<void>((done, fail) => { socket.addEventListener('open', () => done(), { once: true }); socket.addEventListener('error', fail, { once: true }); });
 			using messages = new Emitter<CDPResponse | CDPEvent>();
 			using destroyed = new Emitter<void>();
+			const isolatedWorlds: unknown[] = [];
 			const receive = (event: MessageEvent): void => {
 				const message = JSON.parse(String(event.data));
 				// The Main group normally adds the view's domain identity to Chromium target metadata.
@@ -44,11 +45,19 @@ suite('Playwright session lifetime', () => {
 			services.registerInstance(IBrowserViewGroupService, {
 				createGroup: async () => 'live-group', destroyGroup: async () => { socket.close(); },
 				onDynamicCDPMessage: () => messages.event, onDynamicDidDestroy: () => destroyed.event,
-				sendCDPMessage: async (_id, message) => { socket.send(JSON.stringify(message)); },
+				sendCDPMessage: async (_id, message) => {
+					if (message.method === 'Page.createIsolatedWorld') {
+						// Exercise Main's rejection of universal access through the real Playwright connection.
+						assert.notEqual((message.params as { grantUniveralAccess?: boolean; }).grantUniveralAccess, true);
+						isolatedWorlds.push(message.params);
+					}
+					socket.send(JSON.stringify(message));
+				},
 			});
 			using playwright = services.createInstance(PlaywrightService);
 			try {
 				const observation = await playwright.getObservation('inspect', 'thread', 'observed-page', { includeAccessibilityTree: false, includeDomSnapshot: true, includeScreenshot: false });
+				assert.ok(isolatedWorlds.length > 0);
 				const snapshot = JSON.parse(observation.domSnapshot!);
 				assert.ok(snapshot.documents[0].layout.styles.some((styles: unknown[]) => styles.length > 0));
 				assert.ok(snapshot.focusedElementStyles.rulesText.includes('color:var(--accent)'));
