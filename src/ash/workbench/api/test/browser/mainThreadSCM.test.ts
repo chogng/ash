@@ -52,6 +52,45 @@ test('SCM resource groups survive input-only snapshots and retire changed resour
 	assert.ok(!repository.provider.groups.includes(groups[0]!));
 });
 
+test('SCM decorates collapsed ancestors from current changes and respects provider bubbling', async () => {
+	const resource = URI.file('/workspace/src/sample.txt');
+	const snapshot = { ...(provider() as Record<string, JsonValue>), groups: [{ id: 'changes', label: 'Changes', actions: [], resources: [{ id: 'sample', sourceUri: resource.toString(), path: 'src/sample.txt', decorations: { badge: 'D', tooltip: 'Deleted', kind: 'deleted' }, openLabel: 'Open change', actions: [] }] }] };
+	let enabled = true;
+	let bubble = true;
+	let directFolder = false;
+	const queries: string[] = [];
+	const value = fixture(async (request): Promise<JsonValue> => {
+		const payload = request.payload as Record<string, JsonValue>;
+		if (payload.method !== 'decoration') return null;
+		queries.push(payload.resource as string);
+		if (directFolder && payload.resource === 'file:///workspace/src') return { color: 'description.foreground', letter: '!', tooltip: 'Folder status' };
+		return enabled && payload.resource === resource.toString() ? { color: 'gitDecoration.deletedResourceForeground', letter: 'D', tooltip: 'Deleted', weight: 10, bubble, strikethrough: true } : null;
+	}, [snapshot]);
+	using cleanup = value.lifetime;
+	const decorations = [...value.decorationProviders][0]!;
+	const folder = URI.file('/workspace/src');
+	const fileDecoration = await decorations.provideDecorations(resource, CancellationToken.None);
+	assert.equal(fileDecoration?.letter, 'D');
+	assert.equal(fileDecoration?.strikethrough, true);
+	const folderDecoration = await decorations.provideDecorations(folder, CancellationToken.None);
+	assert.equal(folderDecoration?.color, fileDecoration?.color);
+	assert.equal(folderDecoration?.letter, '●');
+	assert.equal(folderDecoration?.strikethrough, false);
+	assert.equal(queries.at(-1), resource.toString());
+	assert.equal(await decorations.provideDecorations(URI.file('/workspace/sr'), CancellationToken.None), undefined);
+	bubble = false;
+	assert.equal(await decorations.provideDecorations(folder, CancellationToken.None), undefined);
+	directFolder = true;
+	assert.equal((await decorations.provideDecorations(folder, CancellationToken.None))?.letter, '!');
+	directFolder = false;
+	bubble = true; enabled = false;
+	assert.equal(await decorations.provideDecorations(folder, CancellationToken.None), undefined);
+	enabled = true;
+	value.bridge.set(source, 'ash.scm', 2, [{ ...snapshot, groups: [] }]);
+	assert.equal(await decorations.provideDecorations(folder, CancellationToken.None), undefined);
+	assert.equal(queries.at(-1), folder.toString());
+});
+
 test('SCM history command contexts revive only the owning live repository', async () => {
 	const value = fixture(async () => null);
 	using cleanup = value.lifetime;

@@ -10,6 +10,7 @@ import { Emitter, Event } from '../../../base/common/event.js';
 import { structuralEquals } from '../../../base/common/equals.js';
 import { observableValue } from '../../../base/common/observable.js';
 import { URI } from '../../../base/common/uri.js';
+import { extUriBiasedIgnorePathCase } from '../../../base/common/resources.js';
 import { Icon } from '../../../base/common/icon.js';
 import type { IAction } from '../../../base/common/actions.js';
 import { IExtensionHostApi, type ExtensionClientSource, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
@@ -238,12 +239,27 @@ export class MainThreadSCM extends Disposable {
 						if (token.isCancellationRequested) {
 							controller.abort();
 						}
-						const result = await provider!.call('decoration', { resource: resource.toString() }, controller.signal);
+						let result = await provider!.call('decoration', { resource: resource.toString() }, controller.signal);
+						let inherited = false;
+						if (result === null) {
+							// Collapsed folders have no rendered children to populate the decoration cache.
+							// Ask the owner about a current changed descendant; it still controls whether
+							// decorations are enabled and may bubble, while direct folder data wins.
+							const descendant = provider!.groups.flatMap(group => group.resources).find(change =>
+								!extUriBiasedIgnorePathCase.isEqual(change.sourceUri, resource) && extUriBiasedIgnorePathCase.isEqualOrParent(change.sourceUri, resource));
+							if (descendant) {
+								result = await provider!.call('decoration', { resource: descendant.sourceUri.toString() }, controller.signal);
+								inherited = true;
+							}
+						}
 						if (result === null) {
 							return undefined;
 						}
 						const data = object(result);
-						return { tooltip: optionalString(data.tooltip), color: optionalString(data.color), letter: optionalString(data.letter), weight: typeof data.weight === 'number' ? data.weight : undefined, bubble: data.bubble === true, strikethrough: data.strikethrough === true };
+						if (inherited && data.bubble !== true) {
+							return undefined;
+						}
+						return { tooltip: optionalString(data.tooltip), color: optionalString(data.color), letter: inherited ? '●' : optionalString(data.letter), weight: typeof data.weight === 'number' ? data.weight : undefined, bubble: data.bubble === true, strikethrough: !inherited && data.strikethrough === true };
 					}
 				}));
 			} else {
