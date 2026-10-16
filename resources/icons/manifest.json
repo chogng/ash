@@ -547,6 +547,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "frame",
+      "file": "frame.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "gear",
       "file": "gear.svg",
       "rendering": "symbolic"
