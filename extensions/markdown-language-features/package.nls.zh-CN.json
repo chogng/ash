@@ -1,4 +1,6 @@
 {
+  "markdown.math.invalidFormula": "无法渲染此公式。",
+  "markdown.math.outputLimit": "此公式超出渲染输出限制。",
   "markdown.rich.source": "编辑全文源码",
   "markdown.rich.editBlock": "编辑 Markdown 段落",
   "markdown.rich.task": "已完成任务",

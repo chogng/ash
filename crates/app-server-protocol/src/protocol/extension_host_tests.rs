@@ -176,6 +176,7 @@ fn invoke_read_uses_disjoint_tagged_terminal_states() {
 #[test]
 fn activation_intent_is_fenced_and_closed_without_granting_process_identity() {
     for event in [
+        json!({"type":"capability","capability":"math.render.v2"}),
         json!({"type":"command","command":"lazy.run"}),
         json!({"type":"language","languageId":"rust"}),
         json!({"type":"startupFinished"}),

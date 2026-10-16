@@ -1,5 +1,7 @@
 //! Formula rendering lives in this optional process, never in the shared host.
+use ash_utils_markdown_math::Diagnostic;
 use ash_utils_markdown_math::Display;
+use ash_utils_markdown_math::FormulaResult;
 use ash_utils_markdown_math::RenderRequest;
 use ash_utils_markdown_math::RenderResponse;
 use external_ext_sdk::CancellationToken;
@@ -53,7 +55,7 @@ fn render(
     let context = KatexContext::default();
     let mut settings = Settings::default();
     settings.global_group = true;
-    settings.throw_on_error = false;
+    settings.throw_on_error = true;
     settings.trust = TrustSetting::Bool(false);
     settings.max_expand = 1000;
     settings.max_size = 100.0;
@@ -69,28 +71,49 @@ fn render(
             .borrow_mut()
             .insert(name, MacroDefinition::String(value));
     }
-    let mut html = Vec::with_capacity(request.formulas.len());
-    let mut output_bytes = 0;
-    for formula in request.formulas {
+    // Reserve a small source result for every formula before admitting rendered HTML.
+    // JSON escaping and diagnostics count toward the same complete-response budget.
+    let fallback = FormulaResult::Source {
+        diagnostic: Diagnostic::OutputLimit {},
+    };
+    let mut response = RenderResponse {
+        results: vec![fallback.clone(); request.formulas.len()],
+    };
+    let encoding_error =
+        |_| ExtensionError::new(HostErrorCode::InvalidRequest, "Invalid math render result");
+    let fallback_bytes = serde_json::to_vec(&fallback).map_err(encoding_error)?.len();
+    let mut output_bytes = serde_json::to_vec(&response).map_err(encoding_error)?.len();
+    const MAX_OUTPUT_BYTES: usize = 512 * 1024;
+    if output_bytes > MAX_OUTPUT_BYTES {
+        return Err(ExtensionError::new(
+            HostErrorCode::QuotaExceeded,
+            "Math render exceeds its output limit",
+        ));
+    }
+    for (index, formula) in request.formulas.into_iter().enumerate() {
         token.check_cancelled()?;
         settings.display_mode = match formula.display {
             Display::Inline => false,
             Display::Block => true,
         };
-        let rendered =
-            katex::render_to_string(&context, &formula.source, &settings).map_err(|_| {
-                ExtensionError::new(HostErrorCode::InvalidRequest, "Invalid math formula")
-            })?;
-        output_bytes += rendered.len();
-        // Leave room for JSON escaping and the host envelope within the SDK quota.
-        if output_bytes > 512 * 1024 {
-            return Err(ExtensionError::new(
-                HostErrorCode::QuotaExceeded,
-                "Math render exceeds its output limit",
-            ));
+        // Evaluate every formula even when its HTML will not fit: macro definitions
+        // must still affect later formulas in this immutable document batch.
+        let result = match katex::render_to_string(&context, &formula.source, &settings) {
+            Ok(html) => FormulaResult::Rendered { html },
+            Err(error) => FormulaResult::Source {
+                diagnostic: Diagnostic::InvalidFormula {
+                    message: error.to_string().chars().take(512).collect(),
+                },
+            },
+        };
+        token.check_cancelled()?;
+        let result_bytes = serde_json::to_vec(&result).map_err(encoding_error)?.len();
+        let next_bytes = output_bytes - fallback_bytes + result_bytes;
+        if next_bytes <= MAX_OUTPUT_BYTES {
+            response.results[index] = result;
+            output_bytes = next_bytes;
         }
-        html.push(rendered);
     }
     token.check_cancelled()?;
-    Ok(RenderResponse { html })
+    Ok(response)
 }

@@ -128,7 +128,7 @@ impl Extension for MarkdownExtension {
                 let configuration = client.get_configuration("markdown", Some(document.uri.clone()), &token)?;
                 if rich {
                     let mut parsed = parser::parse_checked(&document.text, math::enabled(&configuration), || token.check_cancelled())?;
-                    parsed.render_math(&client, &configuration, &token)?;
+                    parsed.render_math(&client, &configuration, &messages, &token)?;
                     let labels: serde_json::Map<String,Value> = messages.as_object().into_iter().flatten().filter_map(|(key,value)| key.strip_prefix("markdown.rich.").map(|key| (key.into(),value.clone()))).collect();
                     let bootstrap = json!({"uri":document.uri,"text":"","version":0,"readOnly":true,"messages":labels}).to_string().replace('<', "\\u003c");
                     Ok(Content {
@@ -141,7 +141,7 @@ impl Extension for MarkdownExtension {
                     Ok(Content {
                         html: "<main id=\"markdown-preview\"></main>".into(),
                         editable: false,
-                        update: Some(json!({"type":"preview","html":preview(&document.text, &configuration, &client, &token)?})),
+                        update: Some(json!({"type":"preview","html":preview(&document.text, &configuration, &messages, &client, &token)?})),
                         resources: Some(Resources { script: "media/preview.js".into(), style: "media/preview.css".into() }),
                     })
                 }
@@ -154,12 +154,11 @@ impl Extension for MarkdownExtension {
 fn preview(
     text: &str,
     configuration: &Value,
+    messages: &Value,
     client: &external_ext_sdk::client::Client,
     token: &external_ext_sdk::CancellationToken,
 ) -> Result<String, ExtensionError> {
     use pulldown_cmark::Event;
-    use pulldown_cmark::Options;
-    use pulldown_cmark::Parser;
     use pulldown_cmark::Tag;
     use pulldown_cmark::TagEnd;
     if text.len() > 16 * 1024 * 1024 {
@@ -175,31 +174,22 @@ fn preview(
         .and_then(Value::as_bool)
         .unwrap_or(false);
     let mut fence: Option<String> = None;
-    for event in Parser::new_ext(
-        text,
-        Options::ENABLE_TABLES
-            | Options::ENABLE_STRIKETHROUGH
-            | Options::ENABLE_TASKLISTS
-            | if math_enabled {
-                Options::ENABLE_MATH
-            } else {
-                Options::empty()
-            }
-            | Options::ENABLE_YAML_STYLE_METADATA_BLOCKS
-            | Options::ENABLE_PLUSES_DELIMITED_METADATA_BLOCKS,
-    ) {
+    let source = parser::MathSource::new(text, math_enabled, &|| token.check_cancelled())?;
+    for (event, range) in source.events(parser::markdown_options()) {
         token.check_cancelled()?;
         if let Some(source) = &mut fence {
             match event {
                 Event::End(TagEnd::CodeBlock) => {
-                    events.push(Event::DisplayMath(fence.take().unwrap().into()));
+                    events.push(Event::DisplayMath(
+                        fence.take().unwrap().trim().to_owned().into(),
+                    ));
                 }
                 Event::Text(value) => source.push_str(&value),
                 _ => {}
             }
             continue;
         }
-        if matches!(&event, Event::Start(Tag::CodeBlock(pulldown_cmark::CodeBlockKind::Fenced(info))) if math_enabled && info.split_whitespace().next() == Some("math"))
+        if matches!(&event, Event::Start(Tag::CodeBlock(pulldown_cmark::CodeBlockKind::Fenced(info))) if math_enabled && info.split_whitespace().next() == Some("math") && parser::complete_math_fence(text, &range))
         {
             fence = Some(String::new());
             continue;
@@ -254,7 +244,7 @@ fn preview(
             _ => None,
         })
         .collect();
-    let mut rendered = math::render(client, formulas, configuration, token)?
+    let mut rendered = math::render(client, formulas, configuration, messages, token)?
         .unwrap_or_default()
         .into_iter();
     pulldown_cmark::html::push_html(
@@ -262,17 +252,25 @@ fn preview(
         events.into_iter().map(|event| match event {
             Event::InlineMath(value) => rendered
                 .next()
-                .map(|html| Event::Html(html.into()))
+                .map(|html| rendered_math_html(&html, false))
                 .unwrap_or_else(|| math_html(&value, false)),
             Event::DisplayMath(value) => rendered
                 .next()
-                .map(|html| Event::Html(html.into()))
+                .map(|html| rendered_math_html(&html, true))
                 .unwrap_or_else(|| math_html(&value, true)),
             other => other,
         }),
     );
     token.check_cancelled()?;
     Ok(html)
+}
+
+fn rendered_math_html(html: &str, display: bool) -> pulldown_cmark::Event<'static> {
+    let display = if display { "block" } else { "inline" };
+    pulldown_cmark::Event::Html(
+        format!("<span class=\"ash-markdown-math\" data-math-display=\"{display}\">{html}</span>")
+            .into(),
+    )
 }
 
 fn math_html(value: &str, display: bool) -> pulldown_cmark::Event<'static> {
@@ -282,6 +280,6 @@ fn math_html(value: &str, display: bool) -> pulldown_cmark::Event<'static> {
         .replace('>', "&gt;")
         .replace('"', "&quot;");
     pulldown_cmark::Event::Html(
-        format!("<span data-math=\"{escaped}\" data-display=\"{display}\">{escaped}</span>").into(),
+        format!("<span class=\"ash-markdown-math\" data-math=\"{escaped}\" data-display=\"{display}\" data-math-display=\"{}\">{escaped}</span>", if display { "block" } else { "inline" }).into(),
     )
 }

@@ -1,5 +1,7 @@
 {
   "ash": {
+    "markdown.math.invalidFormula": "无法渲染此公式。",
+    "markdown.math.outputLimit": "此公式超出渲染输出限制。",
     "theme.documentTooLarge": "主题超出 1 MiB 文档大小限制",
     "theme.invalidPropertyList": "主题的属性列表格式无效，位置：{0}",
     "toggleCompactAuxiliaryWindow": "切换窗口紧凑模式",

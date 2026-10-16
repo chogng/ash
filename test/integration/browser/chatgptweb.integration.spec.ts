@@ -1,3 +1,5 @@
+import { startMarkdownMathExtension, startMarkdownExtension } from '../../fixtures/markdownExtension.js';
+import { join } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript';
@@ -74,6 +76,18 @@ test('ChatGPT rendering rules reset on print and SPA replacement', async ({ page
 	await expect(page.locator('.turn')).toHaveCSS('content-visibility', 'visible');
 });
 
+async function fillMessage(page: Page, text: string): Promise<void> {
+	const input = page.getByRole('textbox', { name: /^(Ask ChatGPT|询问 ChatGPT)$/u });
+	await input.focus();
+	await input.press('ControlOrMeta+a');
+	await page.keyboard.insertText(text);
+	await expectDraft(page, text);
+}
+
+async function expectDraft(page: Page, text: string): Promise<void> {
+	await expect.poll(() => page.evaluate(() => window.ashChatGPTIntegration.draft())).toBe(text);
+}
+
 /** Exercise the actual page and client with synthetic HTTP boundaries, without a real account. */
 async function mockChatGPTRequests(page: Page, answer = 'Synthetic answer'): Promise<void> {
 	await page.route('**/service/**', async route => {
@@ -103,6 +117,32 @@ async function mockChatGPTRequests(page: Page, answer = 'Synthetic answer'): Pro
 			await route.fulfill({ status: 500, json: {} });
 		}
 	});
+}
+
+let math: Awaited<ReturnType<typeof startMarkdownMathExtension>> | undefined;
+test.afterAll(async () => { await math?.dispose(); });
+async function installMathProvider(page: Page): Promise<{ lists: number; renders: number; }> {
+	const counters = { lists: 0, renders: 0 };
+	math ??= await startMarkdownMathExtension();
+	await page.route('**/__chat_math', async route => {
+		try {
+			if (route.request().method() === 'POST') {
+				counters.renders++;
+				await route.fulfill({ json: await math!.invoke('math.render.v2', 'receiveData', route.request().postDataJSON()) });
+			} else {
+				counters.lists++;
+				await route.fulfill({
+					json: {
+						generation: 1, extensions: [{
+							id: 'vscode.markdown-math', version: '1', packageDigest: `sha256:${'a'.repeat(64)}`, runtimeApiVersion: 1,
+							activationGeneration: 1, incarnation: 1, lifecycle: 'ready', stderr: '', failure: null, outputEvents: [], registrations: math!.registrations,
+						}]
+					}
+				});
+			}
+		} catch (error) { await route.fulfill({ status: 503, json: { error: String(error) } }); }
+	});
+	return counters;
 }
 
 async function chatPage(page: Page, answer = 'Synthetic answer'): Promise<void> {
@@ -203,6 +243,8 @@ test('ChatGPT replies omit internal citation tags while preserving literal code 
 });
 
 test('ChatGPT retains semantic content and gives custom cards and charts local interaction', async ({ page }, testInfo) => {
+	test.setTimeout(600000);
+	await installMathProvider(page);
 	await chatPage(page, `<FuturePanel title="Overview"><FutureCard>**Card body**</FutureCard></FuturePanel>
 
 <details><summary>More details</summary><table><tr><th>Name</th><td>Retained cell</td></tr></table>H<sub>2</sub>O and x<sup>2</sup></details>
@@ -412,4 +454,150 @@ test('ChatGPT Stop cancels an active stream immediately and fences a delayed rem
 	await stop();
 	await expect(page.getByRole('textbox', { name: '询问 ChatGPT' })).toBeEnabled();
 	await expect(page.locator('.ash-chatgpt-status')).toHaveText('已停止回复');
+});
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`ChatGPT uses the Rust math provider and follows math settings (${locale})`, async ({ page }) => {
+		test.setTimeout(600000);
+		await installMathProvider(page);
+		await mockChatGPTRequests(page, '$\\newcommand{\\chatfoo}{x^2}\\chatfoo$\n\n\\[\\chatfoo+\\RR\\]\n\n$$\\sqrt{x}+\\overbrace{a+b}+\\widehat{ABC}$$\n\n$\\frac{1}{$');
+		await page.goto(`/chatgptNavigation.html?locale=${locale}`);
+		await page.evaluate(() => window.ashChatGPTIntegration.setMathMacros({ '\\RR': '\\mathbb{R}' }));
+		await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
+		const body = page.locator('.ash-chatgpt-turn.assistant .ash-chatgpt-message-body');
+		await expect(body.locator('.katex')).toHaveCount(3);
+		await expect(body.locator('.katex-display')).toHaveCount(2);
+		await expect(body.locator('.katex-error')).toHaveCount(0);
+		const bounds = await body.locator('.katex-display').first().boundingBox();
+		expect(bounds!.height).toBeGreaterThan(10);
+		await page.evaluate(() => document.fonts.ready);
+		const geometry = await body.locator('.katex-html svg').evaluateAll(elements => elements.map(element => ({
+			width: element.getAttribute('width'), height: element.getAttribute('height'),
+			actual: element.getBoundingClientRect().height, fontSize: parseFloat(getComputedStyle(element).fontSize),
+		})));
+		expect(geometry.length).toBeGreaterThanOrEqual(5);
+		for (const svg of geometry) {
+			expect(svg.width).toMatch(/^(400em|100%)$/);
+			expect(svg.height).toMatch(/^[\d.]+em$/);
+			expect(Math.abs(svg.actual - parseFloat(svg.height!) * svg.fontSize)).toBeLessThan(1);
+		}
+		await expect(body.locator('[data-math-diagnostic=invalidFormula]')).toContainText('\\frac{1}{');
+		await expect(body.locator('[data-math-diagnostic=invalidFormula]')).toHaveAttribute('title', new RegExp(locale === 'en' ? 'This formula could not be rendered' : '无法渲染此公式'));
+		await page.evaluate(() => window.ashChatGPTIntegration.setMathEnabled(false));
+		await expect(body.locator('.katex')).toHaveCount(0);
+		await expect(body).toContainText('\\chatfoo+\\RR');
+		await page.evaluate(() => window.ashChatGPTIntegration.setMathEnabled(true));
+		await expect(body.locator('.katex')).toHaveCount(3);
+	});
+}
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`chat and Markdown share formula syntax, MathML and styles (${locale})`, async ({ page, context }) => {
+		test.setTimeout(600000);
+		const corpus = JSON.parse(readFileSync(join(process.cwd(), 'test/fixtures/markdownMath.json'), 'utf8')) as { name: string; markdown: string; formulas: { source: string; display: string; }[]; }[];
+		const cases = corpus.filter(entry => entry.formulas.length || ['code and escapes', 'currency and jQuery'].includes(entry.name));
+		const text = cases.map(entry => entry.markdown).join('\n\n');
+		const expected = cases.flatMap(entry => entry.formulas);
+		const extension = await startMarkdownExtension(locale);
+		const editor = await context.newPage();
+		try {
+			await editor.route('**/__markdown_render**', async route => {
+				await route.fulfill({ json: await extension.render('vscode.markdown.editor', { document: { languageId: 'markdown', ...route.request().postDataJSON() } }) });
+			});
+			await installMathProvider(page);
+			await mockChatGPTRequests(page, text);
+			await page.goto(`/chatgptNavigation.html?locale=${locale}`);
+			await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
+			await editor.goto(`/markdownEditor.html?locale=${locale}`);
+			await expect(editor.locator('.ash-markdown-content .katex')).toHaveCount(2);
+			await editor.evaluate(text => window.postMessage({ type: 'document', version: 2, text, readOnly: true }, location.origin), text);
+			const chat = page.locator('.ash-chatgpt-turn.assistant .ash-chatgpt-message-body');
+			const markdown = editor.locator('.ash-markdown-content');
+			for (const content of [chat, markdown]) {
+				await expect(content.locator('.ash-markdown-math')).toHaveCount(expected.length);
+				await expect(content.locator('[data-math-diagnostic]')).toHaveCount(2);
+				await expect(content.locator('math')).toHaveCount(expected.length - 2);
+				await expect(content.locator('code').first()).toHaveText('$x$');
+				await content.evaluate(element => { Object.assign((element as HTMLElement).style, { fontSize: '16px', lineHeight: '1.5', width: '360px' }); });
+			}
+			await Promise.all([page.evaluate(() => document.fonts.ready), editor.evaluate(() => document.fonts.ready)]);
+			for (const content of [chat, markdown]) {
+				const overflow = await content.evaluate(element => {
+					const formula = [...element.querySelectorAll<HTMLElement>('.ash-markdown-math')].find(node => node.querySelector('annotation')?.textContent?.startsWith('\\underbrace{'))!;
+					return { behavior: getComputedStyle(formula).overflowX, width: formula.clientWidth, contentWidth: formula.scrollWidth };
+				});
+				expect(overflow.behavior).toBe('auto');
+				expect(overflow.width).toBeLessThanOrEqual(360);
+				expect(overflow.contentWidth).toBeGreaterThan(overflow.width);
+			}
+
+			for (const color of ['rgb(30, 30, 30)', 'rgb(240, 240, 240)', 'rgb(255, 255, 0)']) {
+				for (const content of [chat, markdown]) {
+					await content.evaluate((element, color) => {
+						(element as HTMLElement).style.color = color;
+						// Give both hosts the same inherited link context for formula comparison.
+						for (const link of element.querySelectorAll('a')) { link.style.color = color; }
+					}, color);
+				}
+				const values = await Promise.all([chat, markdown].map(content => content.locator('.ash-markdown-math').evaluateAll(elements => elements.map(element => {
+					const semantic = (node: Node): unknown => node instanceof Element
+						? { tag: node.localName, attributes: [...node.attributes].map(attribute => [attribute.name, attribute.value]).sort(([a], [b]) => a.localeCompare(b)), children: [...node.childNodes].map(semantic) }
+						: node.textContent;
+					const math = element.querySelector('math');
+					const katex = element.querySelector('.katex');
+					const style = getComputedStyle(katex ?? element);
+					return {
+						source: math?.querySelector('annotation')?.textContent,
+						display: (element as HTMLElement).dataset.mathDisplay,
+						math: math ? semantic(math) : undefined, color: style.color, fontSize: style.fontSize, fontFamily: style.fontFamily,
+						diagnostic: element.querySelector('[data-math-diagnostic]')?.getAttribute('data-math-diagnostic') ?? element.getAttribute('data-math-diagnostic'),
+						height: katex?.getBoundingClientRect().height,
+					};
+				}))));
+				for (let index = 0; index < expected.length; index++) {
+					const { height: chatHeight, ...chatValue } = values[0][index];
+					const { height: markdownHeight, ...markdownValue } = values[1][index];
+					expect(chatValue, expected[index].source).toEqual(markdownValue);
+					expect(chatValue.color).toBe(color);
+					if (chatHeight !== undefined) { expect(Math.abs(chatHeight - markdownHeight!)).toBeLessThan(1); }
+				}
+			}
+		} finally { await editor.close(); await extension.dispose(); }
+	});
+}
+
+
+test('ChatGPT streaming reuses math while prose grows and renders one new ordered batch when formulas change', async ({ page }) => {
+	await page.addInitScript(() => {
+		const fetcher = globalThis.fetch.bind(globalThis);
+		globalThis.fetch = async (input, init) => {
+			if (String(input) !== '/service/backend-api/f/conversation') { return fetcher(input, init); }
+			return new Response(new ReadableStream({
+				start(controller) {
+					const push = (text: string) => controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ conversation_id: 'fixture-chat', message: { id: 'math-stream', author: { role: 'assistant' }, content: { parts: [text] } } })}\n\n`));
+					Reflect.set(globalThis, 'pushMathStream', push);
+					Reflect.set(globalThis, 'endMathStream', () => { controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n')); controller.close(); });
+					push('$x$ prose 0');
+				},
+			}), { headers: { 'Content-Type': 'text/event-stream' } });
+		};
+	});
+	const counters = await installMathProvider(page);
+	await chatPage(page);
+	await fillMessage(page, 'Synthetic math streaming');
+	await page.getByRole('button', { name: '发送', exact: true }).click();
+	const body = page.locator('.ash-chatgpt-turn.assistant:not(.complete) .ash-chatgpt-message-body');
+	await expect(body.locator('math')).toHaveCount(1);
+	for (let index = 1; index <= 8; index++) {
+		await page.evaluate(index => Reflect.get(globalThis, 'pushMathStream')(`$x$ prose ${index}`), index);
+		await expect(body).toContainText(`prose ${index}`);
+		await expect(body.locator('math')).toHaveCount(1);
+	}
+	expect(counters).toEqual({ lists: 1, renders: 1 });
+	await page.evaluate(() => Reflect.get(globalThis, 'pushMathStream')('$x$\n\n$y$ final prose'));
+	await expect(body.locator('math')).toHaveCount(2);
+	expect(counters).toEqual({ lists: 1, renders: 2 });
+	await page.evaluate(() => Reflect.get(globalThis, 'endMathStream')());
+	await expect(page.getByRole('button', { name: '停止', exact: true })).toHaveCount(0);
+	expect(counters).toEqual({ lists: 1, renders: 2 });
 });

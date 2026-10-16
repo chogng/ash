@@ -1,4 +1,6 @@
 {
+  "markdown.math.invalidFormula": "This formula could not be rendered.",
+  "markdown.math.outputLimit": "This formula exceeds the rendering output limit.",
   "markdown.preview.title": "Open Preview",
   "markdown.previewSide.title": "Open Preview to the Side",
   "markdown.reopenAsPreview.title": "Reopen as Preview",

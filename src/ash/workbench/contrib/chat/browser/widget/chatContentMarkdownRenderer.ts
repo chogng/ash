@@ -1,8 +1,9 @@
-import { getDocument, getWindow } from '../../../../../base/browser/dom.js';
 import { allowedMarkdownHtmlAttributes, allowedMarkdownHtmlTags, type IRenderedMarkdown, type MarkdownRenderOptions } from '../../../../../base/browser/markdownRenderer.js';
 import type { URI } from '../../../../../base/common/uri.js';
 import type { IMarkdownString } from '../../../../../base/common/htmlContent.js';
 import { localize } from '../../../../../nls.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IMarkdownRendererService, type IMarkdownRenderer } from '../../../../../platform/markdown/browser/markdownRenderer.js';
 import { MarkedKatexSupport } from '../../../markdown/browser/markedKatexSupport.js';
 
@@ -16,7 +17,7 @@ function getChatMarkdownRenderOptions(options: MarkdownRenderOptions = {}): Mark
 	return {
 		...options,
 		markedOptions: { gfm: true, breaks: true, ...options.markedOptions },
-		markedExtensions: [MarkedKatexSupport.getExtension(getWindow(options.ownerDocument ?? getDocument())), ...(options.markedExtensions ?? [])],
+		markedExtensions: [MarkedKatexSupport.getExtension(), ...(options.markedExtensions ?? [])],
 		sanitizerConfig: {
 			...sanitizer,
 			...MarkedKatexSupport.getSanitizerOptions({
@@ -28,10 +29,17 @@ function getChatMarkdownRenderOptions(options: MarkdownRenderOptions = {}): Mark
 }
 
 /** Uses the standard service for code rendering, links and the disposable render lifetime. */
-export class ChatContentMarkdownRenderer implements IMarkdownRenderer {
-	constructor(@IMarkdownRendererService private readonly markdownRenderer: IMarkdownRendererService) { }
+export class ChatContentMarkdownRenderer extends Disposable implements IMarkdownRenderer {
+	private readonly math = this._register(new MutableDisposable<MarkedKatexSupport>());
+	constructor(
+		@IMarkdownRendererService private readonly markdownRenderer: IMarkdownRendererService,
+		@IInstantiationService private readonly instantiation: IInstantiationService,
+	) {
+		super();
+	}
 
 	public render(markdown: IMarkdownString, options: MarkdownRenderOptions = {}, outElement?: HTMLElement): IRenderedMarkdown {
+		this.assertNotDisposed();
 		const result = this.markdownRenderer.render(markdown, getChatMarkdownRenderOptions({ ...options, ownerDocument: outElement?.ownerDocument ?? options.ownerDocument }), outElement);
 		// When a caller chooses semantic fallback rather than literal HTML, retain
 		// media descriptions after the base sanitizer has removed a blocked source.
@@ -45,6 +53,12 @@ export class ChatContentMarkdownRenderer implements IMarkdownRenderer {
 			placeholder.append(...media.childNodes);
 			media.replaceWith(placeholder);
 		}
-		return result;
+		const store = new DisposableStore();
+		store.add(result);
+		if (result.element.querySelector('.ash-katex-container[data-latex]')) {
+			this.math.value ??= this.instantiation.createInstance(MarkedKatexSupport);
+			store.add(this.math.value.renderMath(result.element, options.asyncRenderCallback));
+		}
+		return Object.assign(toDisposable(() => store.dispose()), { element: result.element });
 	}
 }

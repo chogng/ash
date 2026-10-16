@@ -27,10 +27,11 @@ export class ChatGPTWidget extends Disposable {
 	private readonly status = this.element('span', 'ash-chatgpt-status');
 	private readonly sendButton: HTMLButtonElement;
 	private readonly jumpButton: HTMLButtonElement;
+	private followOutput = true;
 
 	constructor(private readonly root: HTMLElement, @IChatGPTService private readonly chat: IChatGPTService, @IInstantiationService private readonly instantiation: IInstantiationService) {
 		super();
-		this.markdownRenderer = instantiation.createInstance(ChatContentMarkdownRenderer);
+		this.markdownRenderer = this._register(instantiation.createInstance(ChatContentMarkdownRenderer));
 		root.className = 'ash-chatgpt-widget';
 		root.tabIndex = -1;
 		const main = this.element('main', 'ash-chatgpt-main');
@@ -38,7 +39,10 @@ export class ChatGPTWidget extends Disposable {
 		this.messages.setAttribute('role', 'log');
 		this.messages.setAttribute('aria-label', localize('sessions.chatgpt.conversation', 'Conversation'));
 		this.messages.setAttribute('aria-live', 'off');
-		this.listen(this.scroll, 'scroll', () => { if (this.atBottom()) { this.jumpButton.hidden = true; } });
+		this.listen(this.scroll, 'scroll', () => {
+			this.followOutput = this.atBottom();
+			if (this.followOutput) { this.jumpButton.hidden = true; }
+		});
 		this.jumpButton = this.button(localize('sessions.chatgpt.latest', 'Latest message'), () => { this.scroll.scrollTop = this.scroll.scrollHeight; this.jumpButton.hidden = true; });
 		this.jumpButton.classList.add('ash-chatgpt-jump');
 		this.jumpButton.hidden = true;
@@ -97,6 +101,7 @@ export class ChatGPTWidget extends Disposable {
 	private render(state: ChatGPTState): void {
 		const conversationChanged = state.conversationId !== this.renderedConversationId;
 		const follow = this.atBottom() || conversationChanged;
+		this.followOutput = follow;
 		this.renderedConversationId = state.conversationId;
 		this.root.classList.toggle('empty', !state.messages.length);
 		this.welcome.textContent = localize('sessions.chatgpt.welcome', 'What can I help with?');
@@ -141,6 +146,9 @@ export class ChatGPTWidget extends Disposable {
 					...getChatGPTMarkdownRenderOptions(message.role, message.references),
 					ownerDocument: row.body.ownerDocument,
 					fillInIncompleteTokens: state.sending,
+					asyncRenderCallback: () => {
+						if (this.followOutput) { this.scroll.scrollTop = this.scroll.scrollHeight; }
+					},
 				});
 				completeChatGPTRichContent(row.markdown.element, state.conversationId);
 				row.resources = [];

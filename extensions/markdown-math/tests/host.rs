@@ -122,7 +122,7 @@ fn start() -> Running {
 
 fn invocation(payload: Value) -> ExtensionInvocation {
     ExtensionInvocation {
-        registration_id: "math.render.v1".into(),
+        registration_id: "math.render.v2".into(),
         operation: "receiveData".into(),
         payload,
         deadline_unix_millis: NonZeroU64::new(
@@ -151,15 +151,11 @@ fn real_process_shares_document_macros_and_resets_them_between_requests() {
         })))
         .unwrap()
         .payload;
-    let html = result["html"].as_array().unwrap();
+    let html = result["results"].as_array().unwrap();
     assert_eq!(html.len(), 3);
-    assert!(html[0].as_str().unwrap().contains("<math"));
-    assert!(html[1].as_str().unwrap().contains("katex-display"));
-    assert!(
-        !html
-            .iter()
-            .any(|html| html.as_str().unwrap().contains("katex-error"))
-    );
+    assert!(html[0]["html"].as_str().unwrap().contains("<math"));
+    assert!(html[1]["html"].as_str().unwrap().contains("katex-display"));
+    assert!(!html.iter().any(|html| html["status"] != "rendered"));
     for _ in 0..2 {
         let isolated = running
             .host
@@ -167,11 +163,12 @@ fn real_process_shares_document_macros_and_resets_them_between_requests() {
             .unwrap()
             .payload;
         assert!(
-            isolated["html"]
+            isolated["results"]
                 .as_array()
                 .unwrap()
                 .iter()
-                .all(|html| html.as_str().unwrap().contains("#cc0000"))
+                .all(|html| html["status"] == "source"
+                    && html["diagnostic"]["code"] == "invalidFormula")
         );
     }
 }
@@ -190,16 +187,19 @@ fn invalid_untrusted_and_expanding_input_stays_inert_and_leaves_process_usable()
         ])))
         .unwrap()
         .payload;
-    let html = output["html"].as_array().unwrap();
+    let html = output["results"].as_array().unwrap();
     assert_eq!(html.len(), 5);
     for rendered in html {
-        let text = rendered.as_str().unwrap();
+        let Some(text) = rendered["html"].as_str() else {
+            assert_eq!(rendered["status"], "source");
+            continue;
+        };
         assert!(!text.contains("<script"));
         assert!(!text.contains("<img"));
         assert!(!text.contains("<a "));
     }
-    assert!(html[3].as_str().unwrap().contains("katex-error"));
-    assert!(html[4].as_str().unwrap().contains("katex-error"));
+    assert_eq!(html[3]["diagnostic"]["code"], "invalidFormula");
+    assert_eq!(html[4]["diagnostic"]["code"], "invalidFormula");
     let malformed = json!({"formulas":[],"trust":true});
     assert!(matches!(
         running.host.invoke(invocation(malformed)),
@@ -221,7 +221,7 @@ fn invalid_untrusted_and_expanding_input_stays_inert_and_leaves_process_usable()
             .host
             .invoke(invocation(formulas(&["E=mc^2"])))
             .unwrap()
-            .payload["html"][0]
+            .payload["results"][0]["html"]
             .as_str()
             .unwrap()
             .contains("<math")
@@ -262,4 +262,60 @@ fn process_cancellation_crash_recovery_and_revocation_preserve_authority() {
         running.host.invoke(invocation(formulas(&["x+1"]))),
         Err(ExtensionHostError::AuthorityDenied)
     ));
+}
+
+#[test]
+fn formula_errors_return_structured_diagnostics_without_erasing_siblings() {
+    let running = start();
+    let output = running
+        .host
+        .invoke(invocation(formulas(&["x+1", r"\frac{1}{", "y+2"])))
+        .unwrap()
+        .payload;
+    let results = output["results"].as_array().unwrap();
+    assert_eq!(results.len(), 3);
+    assert_eq!(results[0]["status"], "rendered");
+    assert_eq!(results[1]["status"], "source");
+    assert_eq!(results[1]["diagnostic"]["code"], "invalidFormula");
+    let message = results[1]["diagnostic"]["message"].as_str().unwrap();
+    assert!(!message.is_empty());
+    assert!(message.len() <= 2048);
+    assert_eq!(results[2]["status"], "rendered");
+    assert!(results[1].get("html").is_none());
+}
+
+#[test]
+fn output_budget_preserves_successes_and_macro_effects_of_source_fallbacks() {
+    let running = start();
+    let huge = format!(r"\gdef\kept{{q}}{}", "x+".repeat(4000));
+    let output = running
+        .host
+        .invoke(invocation(formulas(&[&huge, r"\kept"])))
+        .unwrap()
+        .payload;
+    assert_eq!(
+        output["results"][0],
+        json!({"status":"source","diagnostic":{"code":"outputLimit"}})
+    );
+    assert_eq!(output["results"][1]["status"], "rendered");
+    assert!(output["results"][1]["html"].as_str().unwrap().contains('q'));
+
+    let output = running
+        .host
+        .invoke(invocation(formulas(&vec![r"\frac{x+1}{y+2}"; 1024])))
+        .unwrap()
+        .payload;
+    assert!(serde_json::to_vec(&output).unwrap().len() <= 512 * 1024);
+    let results = output["results"].as_array().unwrap();
+    assert_eq!(results.len(), 1024);
+    assert_eq!(results[0]["status"], "rendered");
+    assert!(
+        results
+            .iter()
+            .any(|result| result["diagnostic"]["code"] == "outputLimit")
+    );
+    assert!(
+        results.iter().all(|result| result["status"] == "rendered"
+            || result["diagnostic"]["code"] == "outputLimit")
+    );
 }

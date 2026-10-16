@@ -10,8 +10,10 @@ Opening a Markdown document or invoking a contributed command can activate the
 extension immediately, without waiting for the rest of workbench startup.
 
 Formula rendering belongs to the independently enabled [`markdown-math`](../markdown-math/README.md)
-Rust extension. Markdown sends inline/display formulas and `math` fences in document
-order through its declared `math.render.v1` capability. Macro definitions are scoped
+Rust extension. Chat, rich editing and preview share the `$...$`, `$$...$$`, `\(...\)`,
+`\[...\]` and complete `math` fence syntax, tested against one compatibility corpus.
+Escaped delimiters, currency, code examples and incomplete input stay literal.
+Markdown sends recognized formulas in document order through its declared `math.render.v2` capability. Macro definitions are scoped
 to one render. Both views consume the returned HTML + MathML; their static bundles
 include formula styles and fonts, with no JavaScript formula renderer. Missing or
 disabled math retains formula source and does not prevent Markdown editing.

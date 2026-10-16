@@ -9,10 +9,10 @@ publish.workspace = true
 ash-utils-markdown-math.workspace = true
 external-ext-sdk = { package = "ash-external-ext-sdk", path = "../../sdk/rust" }
 katex-rs.workspace = true
+serde_json.workspace = true
 
 [dev-dependencies]
 ash-external-ext.workspace = true
-serde_json.workspace = true
 
 [lints]
 workspace = true

@@ -1,0 +1,250 @@
+[
+  {
+    "name": "inline and display delimiters",
+    "markdown": "$x^2$\n\n$$y^2$$\n\n\\(z+1\\)\n\n\\[\\sqrt{x}\\]",
+    "formulas": [
+      {
+        "source": "x^2",
+        "display": "inline"
+      },
+      {
+        "source": "y^2",
+        "display": "block"
+      },
+      {
+        "source": "z+1",
+        "display": "inline"
+      },
+      {
+        "source": "\\sqrt{x}",
+        "display": "block"
+      }
+    ]
+  },
+  {
+    "name": "multiline displays and CRLF",
+    "markdown": "中文😀\r\n\r\n\\[\r\n\\begin{pmatrix}a&b\\\\c&d\\end{pmatrix}\r\n\\]\r\n\r\n$$\r\nx+y\r\n$$",
+    "formulas": [
+      {
+        "source": "\\begin{pmatrix}a&b\\\\c&d\\end{pmatrix}",
+        "display": "block"
+      },
+      {
+        "source": "x+y",
+        "display": "block"
+      }
+    ]
+  },
+  {
+    "name": "math fences",
+    "markdown": "```math\n\\frac{1}{2}\n```\n\n~~~~math\r\nx+y\r\n~~~~\r\n",
+    "formulas": [
+      {
+        "source": "\\frac{1}{2}",
+        "display": "block"
+      },
+      {
+        "source": "x+y",
+        "display": "block"
+      }
+    ]
+  },
+  {
+    "name": "nested Markdown",
+    "markdown": "> $x$\n\n- \\(y\\)\n- **$z$**\n\n| A | B |\n|---|---|\n| $a$ | $b$ |",
+    "formulas": [
+      {
+        "source": "x",
+        "display": "inline"
+      },
+      {
+        "source": "y",
+        "display": "inline"
+      },
+      {
+        "source": "z",
+        "display": "inline"
+      },
+      {
+        "source": "a",
+        "display": "inline"
+      },
+      {
+        "source": "b",
+        "display": "inline"
+      }
+    ]
+  },
+  {
+    "name": "code and escapes",
+    "markdown": "`$x$` and `\\(x\\)`\n\n```latex\n$$x$$\n\\[x\\]\n```\n\n\\$escaped\\$ and \\\\(escaped\\\\) and \\\\[escaped\\\\]",
+    "formulas": []
+  },
+  {
+    "name": "currency and jQuery",
+    "markdown": "cost$x$word 中文$x$中文 价格 $5 and $10. $(\"#id\") $.ajax()",
+    "formulas": []
+  },
+  {
+    "name": "incomplete formulas",
+    "markdown": "$x\n\n$$y\n\n\\(z\n\n\\[a",
+    "formulas": []
+  },
+  {
+    "name": "invalid TeX remains a formula",
+    "markdown": "$\\frac{1}{$\n\n\\(\\unknownFormula\\)",
+    "formulas": [
+      {
+        "source": "\\frac{1}{",
+        "display": "inline"
+      },
+      {
+        "source": "\\unknownFormula",
+        "display": "inline"
+      }
+    ]
+  },
+  {
+    "name": "escaped dollar inside formula",
+    "markdown": "$x+\\$+y$\n\n\\(x+\\text{中文😀}\\)",
+    "formulas": [
+      {
+        "source": "x+\\$+y",
+        "display": "inline"
+      },
+      {
+        "source": "x+\\text{中文😀}",
+        "display": "inline"
+      }
+    ]
+  },
+  {
+    "name": "batch macro order",
+    "markdown": "$\\gdef\\shared{x}\\shared$\n\n\\[\\shared+1\\]",
+    "formulas": [
+      {
+        "source": "\\gdef\\shared{x}\\shared",
+        "display": "inline"
+      },
+      {
+        "source": "\\shared+1",
+        "display": "block"
+      }
+    ]
+  },
+  {
+    "name": "inline code adjacency",
+    "markdown": "`code`$x$ and $y$`code`",
+    "formulas": [
+      {
+        "source": "x",
+        "display": "inline"
+      },
+      {
+        "source": "y",
+        "display": "inline"
+      }
+    ]
+  },
+  {
+    "name": "incomplete math fence",
+    "markdown": "```math\nx+1",
+    "formulas": []
+  },
+  {
+    "name": "fence info boundary",
+    "markdown": "```mathematics\n$x$\n```\n\n```math extra\nx\n```",
+    "formulas": [
+      {
+        "source": "x",
+        "display": "block"
+      }
+    ]
+  },
+  {
+    "name": "links and image descriptions",
+    "markdown": "[link](https://example.com/$x$) ![image $x$](./image.png) [$y$](https://example.com)",
+    "formulas": [
+      {
+        "source": "y",
+        "display": "inline"
+      }
+    ]
+  },
+  {
+    "name": "whitespace and empty delimiters",
+    "markdown": "$ x$ $x $ $$ $$ \\( \\)",
+    "formulas": []
+  },
+  {
+    "name": "stretchy SVG and long display",
+    "markdown": "$$\\sqrt{x}+\\overbrace{a+b}+\\widehat{ABC}+\\frac{a}{b}$$\n\n$$\\underbrace{x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x}_{n}$$",
+    "formulas": [
+      {
+        "source": "\\sqrt{x}+\\overbrace{a+b}+\\widehat{ABC}+\\frac{a}{b}",
+        "display": "block"
+      },
+      {
+        "source": "\\underbrace{x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x}_{n}",
+        "display": "block"
+      }
+    ]
+  },
+  {
+    "name": "Unicode delimiter boundaries",
+    "markdown": "𝒙$x$ $x$𝟛 中文$x$中文 😀$x$😀",
+    "formulas": [
+      {
+        "source": "x",
+        "display": "inline"
+      }
+    ]
+  },
+  {
+    "name": "empty complete math fences",
+    "markdown": "```math\n```\n\n~~~~math\n\n~~~~",
+    "formulas": [
+      {
+        "source": "",
+        "display": "block"
+      },
+      {
+        "source": "",
+        "display": "block"
+      }
+    ]
+  },
+  {
+    "name": "nested math fences",
+    "markdown": "> ```math\n> x+1\n> ```\n\n- ```math\n  y+1\n  ```",
+    "formulas": [
+      {
+        "source": "x+1",
+        "display": "block"
+      },
+      {
+        "source": "y+1",
+        "display": "block"
+      }
+    ]
+  },
+  {
+    "name": "unclosed fence with quoted marker",
+    "markdown": "```math\nx+1\n> ```",
+    "formulas": []
+  },
+  {
+    "name": "math fence whitespace",
+    "markdown": "``` math\nx+1\n```\n\n~~~\tmath\ny+1\n~~~",
+    "formulas": [
+      {
+        "source": "x+1",
+        "display": "block"
+      },
+      {
+        "source": "y+1",
+        "display": "block"
+      }
+    ]
+  }
+]

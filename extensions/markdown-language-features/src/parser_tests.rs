@@ -51,10 +51,60 @@ fn math_fences_share_formula_nodes_and_disabled_math_remains_source() {
     let source = "$x^2$\n\n$$y^2$$\n\n```math\n\\frac{1}{2}\n```\n";
     let rendered = serde_json::to_string(&parse(source).unwrap()).unwrap();
     assert_eq!(rendered.matches("[\"math\"").count(), 3);
-    assert!(rendered.contains("\\\\frac{1}{2}\\n\",true"));
+    assert!(rendered.contains("\\\\frac{1}{2}\",true"));
     let disabled = super::parse_checked(source, false, || Ok(())).unwrap();
     let disabled = serde_json::to_string(&disabled).unwrap();
     assert!(!disabled.contains("[\"math\""));
     assert!(disabled.contains("$x^2$"));
     assert!(disabled.contains("\"pre\""));
+}
+
+#[test]
+fn shared_math_syntax_and_original_source_ranges() {
+    let cases: serde_json::Value =
+        serde_json::from_str(include_str!("../../../test/fixtures/markdownMath.json")).unwrap();
+    let mut cases = cases.as_array().unwrap().clone();
+    let combined: Vec<_> = cases
+        .iter()
+        .filter(|case| {
+            !case["formulas"].as_array().unwrap().is_empty()
+                || ["code and escapes", "currency and jQuery"]
+                    .contains(&case["name"].as_str().unwrap())
+        })
+        .collect();
+    let source = combined
+        .iter()
+        .map(|case| case["markdown"].as_str().unwrap())
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    let formulas: Vec<_> = combined
+        .iter()
+        .flat_map(|case| case["formulas"].as_array().unwrap().clone())
+        .collect();
+    cases.push(serde_json::json!({"name":"combined compatibility document","markdown":source,"formulas":formulas}));
+    for case in cases {
+        let source = case["markdown"].as_str().unwrap();
+        let mut document = parse(source).unwrap();
+        let mut formulas = Vec::new();
+        let mut end = 0;
+        for block in &mut document.blocks {
+            assert_eq!(block.start, end, "{}", case["name"]);
+            end = block.end;
+            block.content.visit_math(&mut |value, display, _| {
+                formulas.push(serde_json::json!({"source":value,"display":if display {"block"} else {"inline"}}));
+            });
+        }
+        assert_eq!(
+            end as usize,
+            source.encode_utf16().count(),
+            "{}",
+            case["name"]
+        );
+        assert_eq!(
+            serde_json::json!(formulas),
+            case["formulas"],
+            "{}",
+            case["name"]
+        );
+    }
 }

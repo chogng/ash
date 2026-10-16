@@ -1,0 +1,9 @@
+@import "katex/dist/katex.min.css";
+
+/* Shared by chat, rich Markdown and preview; formulas inherit the host theme. */
+.ash-markdown-math[data-math-display="block"] {
+	display: block;
+	max-width: 100%;
+	overflow-x: auto;
+	overflow-y: hidden;
+}

@@ -98,9 +98,9 @@ export async function startMarkdownExtension(language = 'en', documents: readonl
 	let runtime: Awaited<ReturnType<typeof startExtensionProcess>>;
 	try {
 		runtime = await startExtensionProcess('ash-markdown-language-features', 'vscode.markdown-language-features', ['command', 'customTextEditor', 'languageProvider'], language, documents, configuration, folders, async operation => {
-			if (operation.operation === 'backendRequest' && operation.capability === 'math.render.v1' && operation.method === 'receiveData') {
+			if (operation.operation === 'backendRequest' && operation.capability === 'math.render.v2' && operation.method === 'receiveData') {
 				if (!math) throw new Error('Math capability unavailable');
-				return { result: 'value', value: await math.invoke('math.render.v1', 'receiveData', operation.params) };
+				return { result: 'value', value: await math.invoke('math.render.v2', 'receiveData', operation.params) };
 			}
 			return clientRequest(operation);
 		});
@@ -123,4 +123,9 @@ export async function startMarkdownExtension(language = 'en', documents: readonl
 		async disableMath() { const current = math; math = undefined; await current?.dispose(); },
 		async dispose() { try { await runtime.dispose(); } finally { await math?.dispose(); math = undefined; } },
 	};
+}
+
+/** Exposes the same optional math process to chat-renderer consumers. */
+export function startMarkdownMathExtension() {
+	return startExtensionProcess('ash-markdown-math', 'vscode.markdown-math', ['dataChannel'], 'en', [], {}, [], async () => ({ result: 'done' }));
 }

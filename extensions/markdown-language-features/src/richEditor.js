@@ -206,6 +206,8 @@ class MarkdownEditor extends Disposable {
 			case 'hr': return document.createElement('hr');
 			case 'math': {
 				const element = document.createElement('span');
+				element.className = 'ash-markdown-math';
+				element.dataset.mathDisplay = detail ? 'block' : 'inline';
 				// HTML comes from the authorized math provider, with trust disabled.
 				// Missing capabilities retain visible, editable formula source.
 				if (typeof html === 'string') element.innerHTML = html;

@@ -461,7 +461,7 @@
     "kind": "rust",
     "entrypoint": "ash-markdown-language-features",
     "requires": {
-      "math.render.v1": "vscode.markdown-math"
+      "math.render.v2": "vscode.markdown-math"
     },
     "webviews": [
       {

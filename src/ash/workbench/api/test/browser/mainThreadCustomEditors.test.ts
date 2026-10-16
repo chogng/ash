@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test, before, afterEach } from 'mocha';
 import { prepareMarkdownExtension, startMarkdownExtension } from '../../../../../../test/fixtures/markdownExtension.js';
 import { normalizeExtensionHostPayload, normalizeExtensionHostSnapshot } from '../../../../platform/agentHost/browser/extensionHostProtocol.js';
@@ -43,6 +44,27 @@ test('Rust custom editor resources stay within their enabled package and follow 
 
 type Handler = (operation: string, payload: JsonValue, signal: AbortSignal) => Promise<JsonValue>;
 
+test('rich Markdown and preview consume the shared formula compatibility corpus', async () => {
+	const { handlers } = await loadMarkdown('en');
+	const corpus = JSON.parse(readFileSync('test/fixtures/markdownMath.json', 'utf8')) as { name: string; markdown: string; formulas: { source: string; display: string; }[]; }[];
+	const combined = corpus.filter(entry => entry.formulas.length || ['code and escapes', 'currency and jQuery'].includes(entry.name));
+	corpus.push({ name: 'combined compatibility document', markdown: combined.map(entry => entry.markdown).join('\n\n'), formulas: combined.flatMap(entry => entry.formulas) });
+	const collect = (value: unknown): { source: string; display: string; }[] => {
+		if (!Array.isArray(value)) { return []; }
+		if (value[0] === 'math') { return [{ source: value[1], display: value[2] ? 'block' : 'inline' }]; }
+		return value.flatMap(collect);
+	};
+	for (const entry of corpus) {
+		const document = { uri: 'untitled:/compatibility.md', version: 1, languageId: 'markdown', text: entry.markdown };
+		const signal = new AbortController().signal;
+		const rich = await handlers.get('vscode.markdown.editor')!('resolveCustomTextEditor', { document }, signal) as { update: { blocks: unknown[]; }; };
+		assert.deepEqual(collect(rich.update.blocks), entry.formulas, entry.name);
+		const preview = await handlers.get('vscode.markdown.preview.editor')!('resolveCustomTextEditor', { document }, signal) as { update: { html: string; }; };
+		assert.equal((preview.update.html.match(/class="ash-markdown-math"/gu) ?? []).length, entry.formulas.length, entry.name);
+		assert.equal((preview.update.html.match(/data-math-display="block"/gu) ?? []).length, entry.formulas.filter(formula => formula.display === 'block').length, entry.name);
+	}
+});
+
 test('independent Markdown math shares macros across formulas and follows settings and disablement', async () => {
 	const { handlers } = await loadMarkdown('en', [], { markdown: { math: { macros: { '\\RR': '\\mathbb{R}' } } } });
 	const signal = new AbortController().signal;
@@ -75,6 +97,25 @@ test('independent Markdown math shares macros across formulas and follows settin
 	assert.match(unavailable.update.html, /data-math=/);
 	assert.match(unavailable.update.html, /\\frac\{1\}\{2\}/);
 });
+for (const [language, explanation, limitExplanation] of [['en', 'This formula could not be rendered.', 'This formula exceeds the rendering output limit.'], ['zh-CN', '无法渲染此公式。', '此公式超出渲染输出限制。']]) {
+	test(`Markdown math preserves valid siblings and localizes structured diagnostics (${language})`, async () => {
+		const { handlers } = await loadMarkdown(language);
+		const document = { uri: 'untitled:/diagnostics.md', version: 1, languageId: 'markdown', text: '$x$\n\n$\\ashInvalidCommand$\n\n```math\n' + 'q+'.repeat(4000) + '\n```\n\n$y$' };
+		const signal = new AbortController().signal;
+		for (const view of ['vscode.markdown.preview.editor', 'vscode.markdown.editor']) {
+			const result = await handlers.get(view)!('resolveCustomTextEditor', { document }, signal);
+			const encoded = JSON.stringify(result);
+			assert.match(encoded, /data-math-diagnostic/);
+			assert.match(encoded, /invalidFormula/);
+			assert.ok(encoded.includes(explanation));
+			assert.ok(encoded.includes(limitExplanation));
+			assert.match(encoded, /outputLimit/);
+			assert.ok(encoded.includes('<mi>x</mi>') && encoded.includes('<mi>y</mi>'));
+			assert.match(encoded, /katex/);
+			assert.doesNotMatch(encoded, /katex-error/);
+		}
+	});
+}
 let activeRuntime: Awaited<ReturnType<typeof startMarkdownExtension>> | undefined;
 before(function () { this.timeout(600000); prepareMarkdownExtension(); });
 afterEach(async () => { await activeRuntime?.dispose(); activeRuntime = undefined; });

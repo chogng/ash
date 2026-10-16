@@ -1,3 +1,8 @@
+import { Registry } from '../../../src/ash/platform/registry/common/platform.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../src/ash/platform/configuration/common/configurationRegistry.js';
+import { IExtensionHostApi } from '../../../src/ash/platform/agentHost/common/extensionHostApi.js';
+import { createDisconnectedExtensionHostApi } from '../../../src/ash/platform/agentHost/browser/extensionHostApi.js';
+import { normalizeExtensionHostSnapshot } from '../../../src/ash/platform/agentHost/browser/extensionHostProtocol.js';
 import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { VSBuffer } from '../../../src/ash/base/common/buffer.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
@@ -21,11 +26,19 @@ import { ChatResponseResourceFileSystemProvider, IChatResponseResourceFileSystem
 import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 
-setNlsMessages('zh-CN', productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
+declare global {
+	interface Window { ashChatGPTIntegration: { draft(): string; setMathEnabled(enabled: boolean): Promise<void>; setMathMacros(macros: Record<string, string>): Promise<void>; }; }
+}
+
+const locale = new URLSearchParams(location.search).get('locale') ?? 'zh-CN';
+if (locale !== 'en') { setNlsMessages(locale, productLanguagePackCatalogs.find(catalog => catalog.locale === locale)!.bundles); }
 const resources = new DisposableStore();
 const requests = new Map<string, { controller: AbortController; reader?: ReadableStreamDefaultReader<Uint8Array>; }>();
 const values = new Map<string, string>();
 let widget: ChatGPTWidget;
+const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+configurationRegistry.registerConfiguration({ key: 'markdown.math.enabled', defaultValue: true, parse: value => Boolean(value) });
+configurationRegistry.registerConfiguration({ key: 'markdown.math.macros', defaultValue: {}, parse: value => value });
 const services = resources.add(new InstantiationService(new ServiceCollection(
 	[IChatGPTTransport, {
 		async request(id, request) {
@@ -40,6 +53,19 @@ const services = resources.add(new InstantiationService(new ServiceCollection(
 		async cancel(id) { const pending = requests.get(id); requests.delete(id); pending?.controller.abort(); await pending?.reader?.cancel().catch(() => { }); },
 	} satisfies IChatGPTTransport],
 	[IStorageService, { get: (key: string) => values.get(key), store: (key: string, value: string) => { values.set(key, value); }, remove: (key: string) => { values.delete(key); } } as unknown as IStorageService],
+	[IExtensionHostApi, {
+		...createDisconnectedExtensionHostApi(async () => { throw new Error('No host'); }),
+		list: async () => {
+			const response = await fetch('/__chat_math');
+			if (!response.ok) { throw new Error('Math provider unavailable'); }
+			return normalizeExtensionHostSnapshot(await response.json());
+		},
+		invoke: async (request, signal) => {
+			const response = await fetch('/__chat_math', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request.payload), signal });
+			if (!response.ok) { throw new Error('Math rendering failed'); }
+			return response.json();
+		},
+	} satisfies IExtensionHostApi],
 	[IConfigurationService, resources.add(new InMemoryConfigurationService())],
 	[IContextKeyService, resources.add(new ContextKeyService())],
 	[IOpenerService, { open: async () => true } as unknown as IOpenerService],
@@ -52,6 +78,11 @@ services.registerInstance(IChatResponseResourceFileSystemProvider, resources.add
 services.registerInstance(IMarkdownRendererService, services.createInstance(MarkdownRendererService));
 const chat = resources.add(services.createInstance(ChatGPTService));
 services.registerInstance(IChatGPTService, chat);
+window.ashChatGPTIntegration = {
+	draft: () => chat.state.get().draft,
+	setMathEnabled: enabled => services.get(IConfigurationService).updateValue('markdown.math.enabled', enabled),
+	setMathMacros: macros => services.get(IConfigurationService).updateValue('markdown.math.macros', macros),
+};
 widget = resources.add(services.createInstance(ChatGPTWidget, document.getElementById('editor')!));
 const host = document.getElementById('navigation')!;
 const view = resources.add(services.createInstance(ChatGPTNavigationView, host, { id: 'chatgpt-navigation-fixture', title: 'ChatGPT' }));

@@ -28,6 +28,10 @@ pub struct ExtensionClientRequestParams {
     deny_unknown_fields
 )]
 pub enum ExtensionHostActivationEventDto {
+    Capability {
+        #[schemars(length(min = 1, max = 256))]
+        capability: String,
+    },
     Command {
         #[schemars(length(min = 1, max = 256))]
         command: String,

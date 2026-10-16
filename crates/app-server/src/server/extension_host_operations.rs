@@ -123,6 +123,9 @@ impl AppServer {
             !value.is_empty() && value.len() <= maximum && !value.chars().any(char::is_control)
         };
         let valid_event = match &params.event {
+            ExtensionHostActivationEventDto::Capability { capability } => {
+                valid_text(capability, 256)
+            }
             ExtensionHostActivationEventDto::Command { command } => valid_text(command, 256),
             ExtensionHostActivationEventDto::Language { language_id } => {
                 valid_text(language_id, 128)
@@ -149,6 +152,9 @@ impl AppServer {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
         }
         let event = match params.event {
+            ExtensionHostActivationEventDto::Capability { capability } => {
+                ActivationEvent::Capability(capability)
+            }
             ExtensionHostActivationEventDto::Command { command } => {
                 ActivationEvent::Command(command)
             }

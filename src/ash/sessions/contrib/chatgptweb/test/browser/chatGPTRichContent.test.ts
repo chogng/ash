@@ -1,5 +1,10 @@
 import '../../../../../editor/test/browser/testEditorDom.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
+import { IExtensionHostApi } from '../../../../../platform/agentHost/common/extensionHostApi.js';
+import { createDisconnectedExtensionHostApi } from '../../../../../platform/agentHost/browser/extensionHostApi.js';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { suite, test } from 'mocha';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
@@ -7,17 +12,33 @@ import { IOpenerService } from '../../../../../platform/opener/common/opener.js'
 import { IMarkdownRendererService, MarkdownRendererService } from '../../../../../platform/markdown/browser/markdownRenderer.js';
 import { ChatContentMarkdownRenderer } from '../../../../../workbench/contrib/chat/browser/widget/chatContentMarkdownRenderer.js';
 import { completeChatGPTRichContent, getChatGPTMarkdownRenderOptions, getChatGPTRichContentText } from '../../browser/chatGPTRichContent.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import type { ChatGPTReference } from '../../browser/chatGPTClient.js';
 
 function render(value: string, references?: readonly ChatGPTReference[]): string {
 	using services = new InstantiationService(new ServiceCollection([IOpenerService, { open: async () => true } as unknown as IOpenerService]));
+	services.registerInstance(IExtensionHostApi, createDisconnectedExtensionHostApi(async () => { throw new Error('No extension host'); }));
+	using configuration = new InMemoryConfigurationService();
+	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(IMarkdownRendererService, services.createInstance(MarkdownRendererService));
-	using result = services.createInstance(ChatContentMarkdownRenderer).render({ value, supportHtml: true, isTrusted: false }, getChatGPTMarkdownRenderOptions('assistant', references));
+	using resultRenderer = services.createInstance(ChatContentMarkdownRenderer);
+	using result = resultRenderer.render({ value, supportHtml: true, isTrusted: false }, getChatGPTMarkdownRenderOptions('assistant', references));
 	completeChatGPTRichContent(result.element, 'fixture');
 	return result.element.innerHTML;
 }
 
 suite('ChatGPT rich content', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+	test('keeps the shared formula grammar when rich content extensions are installed', () => {
+		const cases = JSON.parse(readFileSync('test/fixtures/markdownMath.json', 'utf8')) as { name: string; markdown: string; formulas: { source: string; display: string; }[]; }[];
+		const combined = cases.filter(entry => entry.formulas.length || ['code and escapes', 'currency and jQuery'].includes(entry.name));
+		cases.push({ name: 'combined compatibility document', markdown: combined.map(entry => entry.markdown).join('\n\n'), formulas: combined.flatMap(entry => entry.formulas) });
+		for (const entry of cases) {
+			const root = document.createElement('div'); root.innerHTML = render(entry.markdown);
+			assert.deepEqual([...root.querySelectorAll<HTMLElement>('.ash-katex-container')].map(element => ({ source: element.dataset.latex, display: element.dataset.mathDisplay })), entry.formulas, entry.name);
+		}
+	});
+
 	test('resolves web reference encodings into source cards and links while keeping code literal', () => {
 		const references = [{ id: 'turn2search1', title: 'CSV documentation', url: 'https://docs.python.org/3/library/csv.html', snippet: 'Read and write tabular data.' }];
 		const source = 'A <Cite refs={[["turn2search1"]]}/> B urlPython docsturn2search1 C citeturn2search1\n\n`citeturn2search1`';

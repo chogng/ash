@@ -35,11 +35,11 @@
     "kind": "rust",
     "entrypoint": "ash-markdown-math",
     "capabilities": [
-      "math.render.v1"
+      "math.render.v2"
     ]
   },
   "activationEvents": [
-    "onCapability:math.render.v1"
+    "onCapability:math.render.v2"
   ],
   "dependencies": {
     "katex": "0.18.2"

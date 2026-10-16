@@ -84,7 +84,7 @@ fn declared_capability_calls_activate_the_exact_real_provider_and_obey_cancellat
         files: Err(test_files_unavailable()),
     };
     let operation = || ExtensionClientOperation::BackendRequest {
-        capability: "math.render.v1".into(),
+        capability: "math.render.v2".into(),
         method: "receiveData".into(),
         params: json!({"formulas":[{"source":"\\frac{a}{b}","display":"block"}]}),
         progress: None,
@@ -109,10 +109,10 @@ fn declared_capability_calls_activate_the_exact_real_provider_and_obey_cancellat
     );
     binding
         .backend_channels
-        .insert("math.render.v1".into(), deployment.id.clone());
+        .insert("math.render.v2".into(), deployment.id.clone());
     let result = invoke(&binding).unwrap();
     assert!(
-        matches!(result, ExtensionClientResult::Value { value } if value["html"][0].as_str().unwrap().contains("katex-display"))
+        matches!(result, ExtensionClientResult::Value { value } if value["results"][0]["html"].as_str().unwrap().contains("katex-display"))
     );
     assert!(
         runtime.inner.state.lock().unwrap().entries[&deployment.id]
@@ -188,7 +188,7 @@ fn markdown_product_registration_owns_views_and_obeys_profile_policy() {
     assert_eq!(
         markdown
             .backend_channels
-            .get("math.render.v1")
+            .get("math.render.v2")
             .map(String::as_str),
         Some("vscode.markdown-math")
     );
@@ -201,7 +201,7 @@ fn markdown_product_registration_owns_views_and_obeys_profile_policy() {
         [ash_external_ext::ExtensionCapability::DataChannel]
     );
     assert!(math.activation.as_ref().unwrap().matches(
-        &super::source::ActivationEvent::Capability("math.render.v1".into())
+        &super::source::ActivationEvent::Capability("math.render.v2".into())
     ));
     assert!(math.backend_channels.is_empty());
     assert!(!math.authority.authorizes());
@@ -538,6 +538,7 @@ fn lazy_activation_checks_generation_and_event_and_health_never_launches_dormant
     use super::source::ActivationEvent;
     use super::source::DebugActivationPhase;
     for event in [
+        ActivationEvent::Capability("math.render.v2".into()),
         ActivationEvent::Command("lazy.run".into()),
         ActivationEvent::TaskType(Some("build".into())),
         ActivationEvent::Debug {
@@ -601,6 +602,7 @@ fn assert_lazy_activation_fence(event: super::source::ActivationEvent) {
         },
         runtime_api_version: 1,
         activation_events: vec![
+            "onCapability:math.render.v2".into(),
             "onCommand:lazy.run".into(),
             "onTaskType:build".into(),
             "onDebugResolve:node".into(),
@@ -636,6 +638,7 @@ fn assert_lazy_activation_fence(event: super::source::ActivationEvent) {
                 failure: None,
                 pending_activation: Some(super::source::ActivationPlan {
                     events: vec![
+                        "onCapability:math.render.v2".into(),
                         "onCommand:lazy.run".into(),
                         "onTaskType:build".into(),
                         "onDebugResolve:node".into(),

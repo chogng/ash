@@ -33,7 +33,7 @@ export class ChatMarkdownContentPart extends Disposable {
 
 	constructor(private readonly options: ChatMarkdownContentPartOptions, @IInstantiationService private readonly instantiation: IInstantiationService) {
 		super();
-		this.markdownRenderer = instantiation.createInstance(ChatContentMarkdownRenderer);
+		this.markdownRenderer = this._register(instantiation.createInstance(ChatContentMarkdownRenderer));
 		this.domNode = h(options.ownerDocument, 'div');
 		this.domNode.className = 'ash-chat-markdown-part';
 		this._register(addDisposableListener(this.domNode, 'load', event => { if ((event.target as Element).tagName === 'IMG') this.changedHeight.fire(); }, true));
@@ -79,9 +79,10 @@ export class ChatMarkdownContentPart extends Disposable {
 			}));
 			// Fingerprints belong to sanitized source before editor widgets or provider labels decorate it.
 			const nodes = [...rendered.element.childNodes];
+			// Async formula nodes belong to their render lifetime and cannot be transplanted after disposal.
 			const fingerprints = nodes.map(node => ({
 				source: node.nodeType === 1 ? (node as Element).outerHTML : node.textContent ?? '',
-				reusable: node.nodeType !== 1 || !(node as Element).matches('img,input,button,pre') && !(node as Element).querySelector('img,input,button,.ash-chat-code-placeholder'),
+				reusable: node.nodeType !== 1 || !(node as Element).matches('img,input,button,pre,.ash-katex-container') && !(node as Element).querySelector('img,input,button,.ash-chat-code-placeholder,.ash-katex-container'),
 			}));
 			this.current.clear();
 			// Corrections can insert a block before the reader's selection. Match sanitized content
