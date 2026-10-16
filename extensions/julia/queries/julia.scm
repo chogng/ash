@@ -269,11 +269,11 @@
 ] @punctuation.bracket
 
 ; Keyword operators
-((operator) @keyword.operator
-  (#any-of? @keyword.operator "in" "isa"))
+((operator) @operator
+  (#any-of? @operator "in" "isa"))
 
 (where_expression
-  "where" @keyword.operator)
+  "where" @operator)
 
 ; Built-in constants
 ((identifier) @constant.builtin

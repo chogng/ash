@@ -8,8 +8,8 @@ await runUnitTests([
 	'src/ash/platform/extensionResourceLoader/test/**/*.test.js',
 	'src/ash/platform/agentHost/test/browser/extensionHostProtocol.test.js',
 	'src/ash/workbench/services/extensions/test/**/*.test.js',
-	'src/ash/workbench/services/textMate/test/common/textMateGrammarService.test.js',
-	'src/ash/workbench/services/textMate/test/common/textMateThemeProjection.test.js',
+
+
 	'src/ash/workbench/contrib/codeEditor/test/browser/codeEditorPane.test.js',
 	'src/ash/workbench/contrib/codeEditor/test/common/editorInput.test.js',
 	'src/ash/workbench/contrib/preferences/test/browser/settings.test.js',

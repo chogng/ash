@@ -141,11 +141,11 @@ for (const sample of [
 	});
 }
 
-for (const locale of ['en', 'zh-CN']) {
-	test(`Token inspection reports live embedded captures and restores focus in ${locale}`, async ({ page }) => {
+for (const backend of ['rust', 'offline']) for (const locale of ['en', 'zh-CN']) {
+	test(`Token inspection reports live embedded captures and restores focus in ${locale} (${backend})`, async ({ page }) => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));
-		await page.goto(`/treeSitter.html?locale=${locale}`);
+		await page.goto(`/treeSitter.html?locale=${locale}&backend=${backend}`);
 		await expect.poll(() => page.evaluate(() => !!window.treeSitterIntegration)).toBe(true);
 		await page.evaluate(() => {
 			const source = '<script>const label = "你好🙂";</script>';
@@ -158,10 +158,9 @@ for (const locale of ['en', 'zh-CN']) {
 		const value = await report.inputValue();
 		expect(value).toContain(locale === 'en' ? 'Embedded language: javascript' : '内嵌语言：javascript');
 		expect(value).toContain(locale === 'en' ? 'Tree-sitter captures:' : 'Tree-sitter 捕获：');
-		expect(value).toContain(locale === 'en' ? 'Theme scopes:' : '主题作用域：');
 		expect(value).toContain('string');
 		expect(value).toContain('你好🙂');
-		expect(value).toContain('Tree-sitter / Rust');
+		expect(value).toContain(backend === 'rust' ? 'Tree-sitter / Rust' : 'Tree-sitter / WASM');
 		expect(value).not.toContain('No TextMate grammar');
 		await expect(report).toBeFocused();
 		await page.keyboard.press('Tab');

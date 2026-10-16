@@ -215,16 +215,15 @@ test('keyboard focus remains visible across themed controls', async ({ page }) =
 	}
 });
 
-test('Tree-sitter applies current theme rules after edits and in a new document', async ({ page }) => {
+for (const backend of ['rust', 'offline']) test(`Tree-sitter applies current theme rules after edits and in a new document (${backend})`, async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
-	await page.goto('/themes.html');
+	await page.goto(`/themes.html?backend=${backend}`);
 	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
-	expect(await page.evaluate(() => window.tokenizeWithRustSyntax())).toEqual([
+	expect(await page.evaluate(() => window.tokenizeWithSyntax())).toEqual([
 		{ type: 'keyword', modifiers: [] },
-		{ type: 'keyword', modifiers: ['declaration'] },
-		{ type: 'keyword', modifiers: ['declaration'], presentation: { foreground: '#ff0000', fontStyle: ['italic'] } },
-		{ type: 'keyword', modifiers: ['declaration'], presentation: { foreground: '#0000ff', fontStyle: ['bold'] } },
+		{ type: 'keyword', modifiers: [], presentation: { foreground: '#ff0000', fontStyle: ['italic'] } },
+		{ type: 'keyword', modifiers: [], presentation: { foreground: '#0000ff', fontStyle: ['bold'] } },
 		{ type: 'string', modifiers: [] },
 		{ type: 'string', modifiers: [] },
 	]);

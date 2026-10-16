@@ -6,7 +6,7 @@ registries are separate Editor services; Workbench registers App Server and
 product providers into those contracts without subclassing or wrapping them.
 
 `WorkbenchLanguageFeatures` installs JSON providers. App Server, extension-host,
-TextMate, codebase-symbols, and LSP
+Tree-sitter, codebase-symbols, and LSP
 adapters register directly through `ILanguageFeaturesService` registries. Every
 registration is disposable and independent of per-document service lifetimes.
 
@@ -74,7 +74,7 @@ channel selection and clearing. User-visible messages use the shared dialog
 service. Active work-done progress is summarized through a transient statusbar
 entry, which is removed when no operation remains.
 
-TextMate is a separate provider under `workbench/services/textMate`. Without a registered grammar, models expose plain text; diagnostics come from registered language providers.
+Tree-sitter is composed under `workbench/services/treeSitter`. Captures resolve styles through the current color theme; unsupported languages expose plain text. Diagnostics come from registered language providers.
 
 The frontend reads `language/servers` for each workspace folder and registers the returned language
 IDs. `config/changed`, `extensions/changed`, and workspace changes invalidate that snapshot.

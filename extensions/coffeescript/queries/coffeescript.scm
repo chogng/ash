@@ -10,7 +10,7 @@
 (undefined_literal) @constant.builtin
 
 ;; Variables
-(instance_variable (identifier) @variable.other.member)
+(instance_variable (identifier) @variable.member)
 
 ;; Functions and methods
 (function_definition
@@ -26,20 +26,20 @@
 (parameters
   (parameter
     (pattern
-      (identifier) @variable.parameter)))
+      (identifier) @parameter)))
 
 (parameters
   (parameter
     (pattern
-      (instance_variable (identifier) @variable.parameter))))
+      (instance_variable (identifier) @parameter))))
 
 (function_expression
   (pattern
-    (identifier) @variable.parameter))
+    (identifier) @parameter))
 
 (function_expression
   (pattern
-    (instance_variable (identifier) @variable.parameter)))
+    (instance_variable (identifier) @parameter)))
 
 (function_call
   (expression
@@ -48,7 +48,7 @@
 (function_call
   (expression
     (member_expression
-      (expression) @variable.other
+      (expression) @variable
       (identifier) @function.method)))
 
 ;; Classes and properties
@@ -69,50 +69,50 @@
   (identifier) @property)
 
 ;; Control flow keywords
-"class" @keyword.control
-"extends" @keyword.control
-"if" @keyword.control
-"else" @keyword.control
-"unless" @keyword.control
-"when" @keyword.control
-"switch" @keyword.control
-"for" @keyword.control
-"while" @keyword.control
-"until" @keyword.control
-"then" @keyword.control
-"do" @keyword.control
-"by" @keyword.control
-"try" @keyword.control
-"catch" @keyword.control
-"finally" @keyword.control
-"loop" @keyword.control
-(break_statement) @keyword.control
-(continue_statement) @keyword.control
-(return_statement) @keyword.control
-(throw_statement) @keyword.control
+"class" @keyword
+"extends" @keyword
+"if" @keyword
+"else" @keyword
+"unless" @keyword
+"when" @keyword
+"switch" @keyword
+"for" @keyword
+"while" @keyword
+"until" @keyword
+"then" @keyword
+"do" @keyword
+"by" @keyword
+"try" @keyword
+"catch" @keyword
+"finally" @keyword
+"loop" @keyword
+(break_statement) @keyword
+(continue_statement) @keyword
+(return_statement) @keyword
+(throw_statement) @keyword
 
 ;; Imports / exports
-"import" @keyword.control.import
-"export" @keyword.control.import
-"from" @keyword.control.import
-"as" @keyword.control.import
-"default" @keyword.control.import
+"import" @keyword.import
+"export" @keyword.import
+"from" @keyword.import
+"as" @keyword.import
+"default" @keyword.import
 
 ;; Operators and miscellaneous keywords
-"and" @keyword.operator
-"or" @keyword.operator
-"not" @keyword.operator
-"is" @keyword.operator
-"isnt" @keyword.operator
-"in" @keyword.operator
-"of" @keyword.operator
-"instanceof" @keyword.operator
-"new" @keyword.operator
-"typeof" @keyword.operator
-"delete" @keyword.operator
-"await" @keyword.operator
-"async" @keyword.operator
-"yield" @keyword.operator
+"and" @operator
+"or" @operator
+"not" @operator
+"is" @operator
+"isnt" @operator
+"in" @operator
+"of" @operator
+"instanceof" @operator
+"new" @operator
+"typeof" @operator
+"delete" @operator
+"await" @operator
+"async" @operator
+"yield" @operator
 
 ;; Fallback variable highlight
 (identifier) @variable

@@ -2,7 +2,7 @@ import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Color } from "../../../../base/common/color.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { IColorTheme } from "../../../../platform/theme/common/themeService.js";
-import { createDocumentColorTheme, parseColorThemeDocument } from "../../themes/common/colorThemeData.js";
+import { createDocumentColorTheme, parseColorThemeDocument, parseSemanticTokenRules } from "../../themes/common/colorThemeData.js";
 import type { ColorThemeDocument } from "../../themes/common/colorThemeData.js";
 import { ColorScheme } from "../../../../platform/theme/common/theme.js";
 import { loadColorThemeDocument } from '../../themes/common/colorThemeData.js';
@@ -11,24 +11,12 @@ import type { ExtensionThemeContribution } from './extensionManifest.js';
 import { colorThemeSchema } from '../../themes/common/colorThemeSchema.js';
 import { isRecord } from '../../../../base/common/types.js';
 
-export interface ExtensionThemeTokenColorSettings {
-	readonly foreground?: string;
-	readonly background?: string;
-	readonly fontStyle?: string;
-}
-
-export interface ExtensionThemeTokenColorRule {
-	readonly scopes: readonly string[];
-	readonly settings: ExtensionThemeTokenColorSettings;
-}
-
 export interface ExtensionThemeDefinition {
 	readonly id: string;
 	readonly extensionId: string;
 	readonly label: string;
 	readonly uiTheme?: string;
 	readonly colors: Readonly<Record<string, string>>;
-	readonly tokenColors: readonly ExtensionThemeTokenColorRule[];
 	readonly semanticHighlighting?: boolean;
 	readonly semanticTokenColors?: ColorThemeDocument['semanticTokenColors'];
 }
@@ -81,7 +69,6 @@ export class ExtensionThemeRegistry extends Disposable implements ExtensionTheme
 /** Parses the declarative subset of a VS Code color-theme document. */
 export function parseExtensionTheme(value: unknown, id: string, extensionId: string, label: string, uiTheme: string | undefined, owner: string): ExtensionThemeDefinition {
 	const document = extensionThemeDocument(value);
-	const tokenColors = document.tokenColors === undefined ? Object.freeze([]) : parseTokenColors(document.tokenColors, `${owner}.tokenColors`);
 	const colors = document.colors === undefined ? Object.freeze({}) : parseColors(document.colors, `${owner}.colors`);
 	const documentName = document.name === undefined ? undefined : boundedText(document.name, `${owner}.name`, 256);
 	const resolvedLabel = /^%[^%]+%$/u.test(label) && documentName !== undefined ? documentName : label;
@@ -91,7 +78,6 @@ export function parseExtensionTheme(value: unknown, id: string, extensionId: str
 		label: resolvedLabel,
 		...(uiTheme === undefined ? {} : { uiTheme }),
 		colors,
-		tokenColors,
 		...(document.semanticHighlighting === undefined ? {} : { semanticHighlighting: document.semanticHighlighting }),
 		...(document.semanticTokenColors === undefined ? {} : { semanticTokenColors: document.semanticTokenColors }),
 	});
@@ -107,7 +93,7 @@ export async function loadExtensionTheme(
 	const document = await loadColorThemeDocument(contribution.path, async resource => {
 		const bytes = await read(resource);
 		const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-		return /\.tmTheme$/iu.test(resource) ? text : extensionThemeDocument(parseJsonc(text, `Extension '${extensionId}' theme '${resource}'`));
+		return extensionThemeDocument(parseJsonc(text, `Extension '${extensionId}' theme '${resource}'`));
 	});
 	return parseExtensionTheme(document, extensionWorkbenchThemeId(extensionId, contribution.id, index), extensionId, contribution.label, contribution.uiTheme, `Extension '${extensionId}' theme '${contribution.path}'`);
 }
@@ -116,16 +102,8 @@ export async function loadExtensionTheme(
  * format before applying Ash's complete-value validator; user theme documents remain strict. */
 function extensionThemeDocument(value: unknown): ColorThemeDocument {
 	if (!isRecord(value)) { throw new TypeError('Invalid color theme: expected an object'); }
+	if (Object.hasOwn(value, 'tokenColors')) return parseColorThemeDocument(value);
 	const document = Object.fromEntries(Object.entries(value).filter(([key]) => Object.hasOwn(colorThemeSchema.properties!, key)));
-	if (Array.isArray(document.tokenColors)) {
-		document.tokenColors = document.tokenColors.map(rule => {
-			if (!isRecord(rule) || !isRecord(rule.settings)) { return rule; }
-			// TextMate treats these explicit regular-weight styles as clearing inherited emphasis.
-			const fontStyle = rule.settings.fontStyle;
-			return fontStyle === 'normal' || fontStyle === 'regular'
-				? { ...rule, settings: { ...rule.settings, fontStyle: '' } } : rule;
-		});
-	}
 	return parseColorThemeDocument(document);
 }
 
@@ -142,7 +120,6 @@ export function extensionWorkbenchThemeId(extensionId: string, contributionId: s
 export function createExtensionWorkbenchColorTheme(theme: ExtensionThemeDefinition): IColorTheme {
 	return createDocumentColorTheme({
 		colors: theme.colors,
-		tokenColors: theme.tokenColors.map(rule => ({ scope: rule.scopes, settings: rule.settings })),
 		semanticHighlighting: theme.semanticHighlighting,
 		semanticTokenColors: theme.semanticTokenColors,
 	}, theme.id, theme.label, extensionColorScheme(theme.uiTheme));
@@ -158,7 +135,6 @@ function normalizeTheme(theme: ExtensionThemeDefinition): ExtensionThemeDefiniti
 		label: boundedText(theme.label, "Extension theme label", 256),
 		...(uiTheme === undefined ? {} : { uiTheme }),
 		colors: normalizeColors(theme.colors),
-		tokenColors: normalizeTokenColors(theme.tokenColors),
 		...(theme.semanticHighlighting === undefined ? {} : { semanticHighlighting: theme.semanticHighlighting }),
 		...(theme.semanticTokenColors === undefined ? {} : { semanticTokenColors: normalizeSemanticTokenColors(theme.semanticTokenColors) }),
 	});
@@ -166,35 +142,10 @@ function normalizeTheme(theme: ExtensionThemeDefinition): ExtensionThemeDefiniti
 
 function normalizeSemanticTokenColors(value: NonNullable<ExtensionThemeDefinition['semanticTokenColors']>): NonNullable<ExtensionThemeDefinition['semanticTokenColors']> {
 	parseColorThemeDocument({ semanticTokenColors: value });
+	parseSemanticTokenRules(value);
 	return Object.freeze(Object.fromEntries(Object.entries(value).map(([selector, style]) => [
 		selector, typeof style === 'string' ? style : Object.freeze({ ...style }),
 	])));
-}
-
-function parseTokenColors(value: unknown, owner: string): readonly ExtensionThemeTokenColorRule[] {
-	if (!Array.isArray(value)) throw new TypeError(`${owner} must be an array`);
-	return Object.freeze(value.map((candidate, index) => {
-		const rule = record(candidate, `${owner}[${index}]`);
-		const scopes = rule.scope === undefined ? Object.freeze([]) : parseScopes(rule.scope, `${owner}[${index}].scope`);
-		return Object.freeze({ scopes, settings: parseTokenColorSettings(rule.settings, `${owner}[${index}].settings`) });
-	}));
-}
-
-function parseTokenColorSettings(value: unknown, owner: string): ExtensionThemeTokenColorSettings {
-	const settings = record(value, owner);
-	const keys = new Set(["foreground", "background", "fontStyle"]);
-	if (Object.keys(settings).some(key => !keys.has(key))) throw new TypeError(`${owner} contains unsupported fields`);
-	return Object.freeze({
-		...(settings.foreground === undefined ? {} : { foreground: colorValue(settings.foreground, `${owner}.foreground`) }),
-		...(settings.background === undefined ? {} : { background: colorValue(settings.background, `${owner}.background`) }),
-		...(settings.fontStyle === undefined ? {} : { fontStyle: fontStyleValue(settings.fontStyle, `${owner}.fontStyle`) }),
-	});
-}
-
-function parseScopes(value: unknown, owner: string): readonly string[] {
-	const scopes = typeof value === "string" ? [value] : value;
-	if (!Array.isArray(scopes)) throw new TypeError(`${owner} must be a string or string array`);
-	return Object.freeze(scopes.map(scope => boundedText(scope, owner, 512)));
 }
 
 function parseColors(value: unknown, owner: string): Readonly<Record<string, string>> {
@@ -210,35 +161,11 @@ function normalizeColors(value: Readonly<Record<string, string>>): Readonly<Reco
 	])));
 }
 
-function normalizeTokenColors(value: readonly ExtensionThemeTokenColorRule[]): readonly ExtensionThemeTokenColorRule[] {
-	if (!Array.isArray(value)) throw new TypeError("Extension theme token colors must be an array");
-	let projectedRuleCount = 0;
-	const normalized = value.map((candidate, index) => {
-		const rule = record(candidate, `Extension theme token color ${index}`);
-		const scopes = parseScopes(rule.scopes, `Extension theme token color ${index} scopes`);
-		projectedRuleCount += scopes.length;
-		if (projectedRuleCount > 1_024) throw new RangeError("Extension theme cannot project more than 1024 TextMate rules");
-		return Object.freeze({
-			scopes,
-			settings: parseTokenColorSettings(rule.settings, `Extension theme token color ${index} settings`),
-		});
-	});
-	return Object.freeze(normalized);
-}
-
 function colorValue(value: unknown, owner: string): string {
 	const color = boundedText(value, owner, 128);
 	if (!color.startsWith("#")) throw new TypeError(`${owner} must be a hexadecimal color`);
 	Color.fromHex(color);
 	return color;
-}
-
-function fontStyleValue(value: unknown, owner: string): string {
-	if (typeof value !== "string" || value.length > 128 || /[\r\n]/u.test(value)) throw new TypeError(`${owner} is invalid`);
-	for (const style of value.trim().split(/\s+/u)) {
-		if (style.length > 0 && style !== "italic" && style !== "bold" && style !== "underline" && style !== "strikethrough") throw new TypeError(`${owner} contains unsupported style '${style}'`);
-	}
-	return value;
 }
 
 function boundedText(value: unknown, owner: string, maximum: number): string {

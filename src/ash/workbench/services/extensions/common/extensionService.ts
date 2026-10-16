@@ -8,7 +8,7 @@ import type { ExtensionFileTemplateSource, ExtensionFileTemplateDefinition } fro
 import type { IExtensionPointUser } from './extensionsRegistry.js';
 export type { ExtensionDebugAdapterContribution, ExtensionGrammarContribution, ExtensionLanguageContribution, ExtensionManifest, ExtensionSnippetContribution, ExtensionThemeContribution } from "./extensionManifest.js";
 export type { ExtensionDebugAdapterDefinition, ExtensionDebugAdapterSource } from "./extensionDebugAdapter.js";
-export type { ExtensionThemeCatalog, ExtensionThemeDefinition, ExtensionThemeSource, ExtensionThemeTokenColorRule, ExtensionThemeTokenColorSettings } from "./extensionTheme.js";
+export type { ExtensionThemeCatalog, ExtensionThemeDefinition, ExtensionThemeSource } from "./extensionTheme.js";
 export { parseExtensionTheme } from "./extensionTheme.js";
 export type { ExtensionFileTemplateCatalog, ExtensionFileTemplateDefinition, ExtensionFileTemplateSource } from "./extensionFileTemplate.js";
 export { parseExtensionManifest } from "./extensionManifest.js";

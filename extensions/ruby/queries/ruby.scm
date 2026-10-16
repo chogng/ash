@@ -78,16 +78,16 @@
   (super)
 ] @variable.builtin
 
-(block_parameter (identifier) @variable.parameter)
-(block_parameters (identifier) @variable.parameter)
-(destructured_parameter (identifier) @variable.parameter)
-(hash_splat_parameter (identifier) @variable.parameter)
-(lambda_parameters (identifier) @variable.parameter)
-(method_parameters (identifier) @variable.parameter)
-(splat_parameter (identifier) @variable.parameter)
+(block_parameter (identifier) @parameter)
+(block_parameters (identifier) @parameter)
+(destructured_parameter (identifier) @parameter)
+(hash_splat_parameter (identifier) @parameter)
+(lambda_parameters (identifier) @parameter)
+(method_parameters (identifier) @parameter)
+(splat_parameter (identifier) @parameter)
 
-(keyword_parameter name: (identifier) @variable.parameter)
-(optional_parameter name: (identifier) @variable.parameter)
+(keyword_parameter name: (identifier) @parameter)
+(optional_parameter name: (identifier) @parameter)
 
 ; Literals
 

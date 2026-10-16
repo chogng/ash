@@ -42,7 +42,7 @@
 (for_set_literal) @string
 
 ; FOR loop variables
-(for_variable) @variable.parameter
+(for_variable) @parameter
 
 ; FOR options
 (for_options) @constant

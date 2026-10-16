@@ -177,8 +177,6 @@ import { TextFileEditorTracker } from '../../workbench/contrib/files/browser/edi
 import { ITextModelResourceService, IFileTextModelService } from '../../workbench/services/textmodelResolver/common/textModelResourceService.js';
 import { getBrowserTextModelService } from '../../workbench/services/textmodelResolver/browser/browserTextModelService.js';
 import { getBrowserTextResourceStore } from '../../workbench/contrib/codeEditor/browser/browserTextResourceStore.js';
-import { TextMateScopeThemeModel } from '../../workbench/services/textMate/common/textMateScopeTheme.js';
-import { projectColorThemeTokens } from '../../workbench/services/textMate/common/textMateThemeProjection.js';
 import { TreeSitterLibraryService, TreeSitterSyntaxProviders, createTreeSitterSyntaxTokenBackend } from '../../workbench/services/treeSitter/browser/treeSitterLibraryService.js';
 import { ITreeSitterLibraryService } from '../../editor/common/services/treeSitter/treeSitterLibraryService.js';
 import { ISyntaxApi } from '../../platform/syntax/common/syntaxApi.js';
@@ -476,11 +474,6 @@ export abstract class Workbench extends Disposable {
 		const treeSitterLibrary = this._register(services.createInstance(TreeSitterLibraryService));
 		services.registerInstance(ITreeSitterLibraryService, treeSitterLibrary);
 		this._register(new TreeSitterSyntaxProviders(services.get(ILanguageFeaturesService)));
-		let syntaxThemeRevision = 1;
-		const syntaxTheme = this._register(new TextMateScopeThemeModel(projectColorThemeTokens(themeService.getColorTheme(), syntaxThemeRevision)));
-		this._register(themeService.onDidColorThemeChange(() => {
-			syntaxTheme.replace(projectColorThemeTokens(themeService.getColorTheme(), ++syntaxThemeRevision));
-		}));
 		const extensionService = this._register(services.createInstance(AppServerExtensionService, { api: enabledExtensions, eventApi: options.api.events, languageService, languageConfigurationService: services.get(ILanguageConfigurationService) }));
 		services.registerInstance(IExtensionService, extensionService);
 		services.get(ISnippetsService);
@@ -490,10 +483,10 @@ export abstract class Workbench extends Disposable {
 			languageService,
 			languageConfigurationService: services.get(ILanguageConfigurationService),
 			languageFeaturesService: services.get(ILanguageFeaturesService),
-			createSyntaxTokenBackend: model => createTreeSitterSyntaxTokenBackend(model, configurationService, treeSitterLibrary, syntaxTheme),
+			createSyntaxTokenBackend: model => createTreeSitterSyntaxTokenBackend(model, configurationService, treeSitterLibrary, themeService),
 			onDidChangeSyntaxBackend: Event.any(
 				treeSitterLibrary.onDidChange,
-				Event.map(syntaxTheme.onDidChangeTheme, () => undefined),
+				Event.map(themeService.onDidColorThemeChange, () => undefined),
 				(listener, thisArgs, disposables) => configurationService.onDidChangeConfiguration(event => {
 					if (event.affectsConfiguration('editor.experimental.treeSitterTelemetry')) listener.call(thisArgs, undefined);
 				}, undefined, disposables),

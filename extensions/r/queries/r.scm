@@ -73,8 +73,8 @@
 
 ; Parameters
 
-(parameters (parameter name: (identifier) @variable.parameter))
-(arguments (argument name: (identifier) @variable.parameter))
+(parameters (parameter name: (identifier) @parameter))
+(arguments (argument name: (identifier) @parameter))
 
 ; Namespace
 

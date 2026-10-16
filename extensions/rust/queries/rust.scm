@@ -3,72 +3,72 @@
 ; Capture names adapted to the editor syntax-theme vocabulary; patterns retain upstream semantics.
 ; Identifiers
 
-(type_identifier) @entity.name.type
-(primitive_type) @entity.name.type.builtin
-(field_identifier) @variable.other.property
+(type_identifier) @type
+(primitive_type) @type.builtin
+(field_identifier) @property
 
 ; Identifier conventions
 
 ; Assume all-caps names are constants
-((identifier) @constant.language
- (#match? @constant.language "^[A-Z][A-Z\\d_]+$'"))
+((identifier) @constant
+ (#match? @constant "^[A-Z][A-Z\\d_]+$'"))
 
 ; Assume uppercase names are enum constructors
-((identifier) @entity.name.type
- (#match? @entity.name.type "^[A-Z]"))
+((identifier) @type
+ (#match? @type "^[A-Z]"))
 
 ; Assume that uppercase names in paths are types
 ((scoped_identifier
-  path: (identifier) @entity.name.type)
- (#match? @entity.name.type "^[A-Z]"))
+  path: (identifier) @type)
+ (#match? @type "^[A-Z]"))
 ((scoped_identifier
   path: (scoped_identifier
-    name: (identifier) @entity.name.type))
- (#match? @entity.name.type "^[A-Z]"))
+    name: (identifier) @type))
+ (#match? @type "^[A-Z]"))
 ((scoped_type_identifier
-  path: (identifier) @entity.name.type)
- (#match? @entity.name.type "^[A-Z]"))
+  path: (identifier) @type)
+ (#match? @type "^[A-Z]"))
 ((scoped_type_identifier
   path: (scoped_identifier
-    name: (identifier) @entity.name.type))
- (#match? @entity.name.type "^[A-Z]"))
+    name: (identifier) @type))
+ (#match? @type "^[A-Z]"))
 
 ; Assume all qualified names in struct patterns are enum constructors. (They're
 ; either that, or struct names; highlighting both as constructors seems to be
 ; the less glaring choice of error, visually.)
 (struct_pattern
   type: (scoped_type_identifier
-    name: (type_identifier) @entity.name.type))
+    name: (type_identifier) @type))
 
 ; Function calls
 
 (call_expression
-  function: (identifier) @entity.name.function)
+  function: (identifier) @function)
 (call_expression
   function: (field_expression
-    field: (field_identifier) @entity.name.function.method))
+    field: (field_identifier) @function.method))
 (call_expression
   function: (scoped_identifier
     "::"
-    name: (identifier) @entity.name.function))
+    name: (identifier) @function))
 
 (generic_function
-  function: (identifier) @entity.name.function)
+  function: (identifier) @function)
 (generic_function
   function: (scoped_identifier
-    name: (identifier) @entity.name.function))
+    name: (identifier) @function))
 (generic_function
   function: (field_expression
-    field: (field_identifier) @entity.name.function.method))
+    field: (field_identifier) @function.method))
 
 (macro_invocation
-  macro: (identifier) @entity.name.function.macro
-  "!" @entity.name.function.macro)
+  macro: (identifier) @function.macro
+  "!" @function.macro)
 
 ; Function definitions
 
-(function_item (identifier) @entity.name.function)
-(function_signature_item (identifier) @entity.name.function)
+(function_item (identifier) @function)
+(function_signature_item (identifier) @function)
 
 (line_comment) @comment
 (block_comment) @comment
@@ -96,7 +96,7 @@
 "," @punctuation.delimiter
 ";" @punctuation.delimiter
 
-(parameter (identifier) @variable.parameter)
+(parameter (identifier) @parameter)
 
 (lifetime (identifier) @label)
 
@@ -150,15 +150,15 @@
 (string_literal) @string
 (raw_string_literal) @string
 
-(boolean_literal) @constant.language.builtin
-(integer_literal) @constant.language.builtin
-(float_literal) @constant.language.builtin
+(boolean_literal) @constant.builtin
+(integer_literal) @constant.builtin
+(float_literal) @constant.builtin
 
 (escape_sequence) @escape
 
-(attribute_item) @entity.other.attribute-name
-(inner_attribute_item) @entity.other.attribute-name
+(attribute_item) @attribute
+(inner_attribute_item) @attribute
 
-"*" @keyword.operator
-"&" @keyword.operator
-"'" @keyword.operator
+"*" @operator
+"&" @operator
+"'" @operator

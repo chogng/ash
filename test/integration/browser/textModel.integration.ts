@@ -1,6 +1,6 @@
 import { TreeSitterLibraryService, TreeSitterSyntaxProviders, createTreeSitterSyntaxTokenBackend } from '../../../src/ash/workbench/services/treeSitter/browser/treeSitterLibraryService.js';
 import { rustSyntaxFixture } from './rustSyntaxHostFixture.js';
-import { TextMateScopeThemeModel } from '../../../src/ash/workbench/services/textMate/common/textMateScopeTheme.js';
+import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { SnippetsService } from '../../../src/ash/workbench/contrib/snippets/browser/snippetsService.js';
 import { SnippetCompletionProvider } from '../../../src/ash/workbench/contrib/snippets/browser/snippetCompletionProvider.js';
 import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js';
@@ -29,7 +29,6 @@ import '../../../src/ash/workbench/contrib/codeEditor/browser/toggleRenderContro
 import '../../../src/ash/workbench/contrib/codeEditor/browser/toggleWordWrap.js';
 import { h } from '../../../src/ash/base/browser/dom.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
-import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { createColorTheme, darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { URI } from "../../../src/ash/base/common/uri.js";
 import { DisposableStore, toDisposable } from "../../../src/ash/base/common/lifecycle.js";
@@ -136,7 +135,7 @@ const languageService = disposables.add(new LanguageService());
 const configurationService = disposables.add(new WorkbenchConfigurationService());
 const languageConfigurationService = disposables.add(new LanguageConfigurationService(configurationService, languageService));
 const languageFeaturesService = disposables.add(new LanguageFeaturesService());
-const syntaxTheme = disposables.add(new TextMateScopeThemeModel());
+const syntaxTheme = disposables.add(new TestThemeService(darkColorTheme));
 const library = disposables.add(new TreeSitterLibraryService(await rustSyntaxFixture()));
 const extensions = disposables.add(await createLanguageExtensions({ languageService, languageConfigurationService }));
 const snippets = disposables.add(new SnippetsService(extensions));
@@ -145,7 +144,7 @@ await extensions.start();
 const models = disposables.add(uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {
 	languageService, languageConfigurationService, languageFeaturesService,
 	createSyntaxTokenBackend: (model: TextModel) => createTreeSitterSyntaxTokenBackend(model, configurationService, library, syntaxTheme),
-	onDidChangeSyntaxBackend: (listener: () => void) => syntaxTheme.onDidChangeTheme(() => listener()),
+	onDidChangeSyntaxBackend: (listener: () => void) => syntaxTheme.onDidColorThemeChange(() => listener()),
 }));
 disposables.add(new TreeSitterSyntaxProviders(languageFeaturesService));
 let syntaxAnalysisCount = 0;
@@ -293,7 +292,7 @@ window.ashTextModelIntegration = {
 	setTheme: theme => themeService.setColorTheme({ dark: darkColorTheme, light: lightColorTheme, contrast: highContrastDarkColorTheme, contrastLight: highContrastLightColorTheme }[theme]),
 	setSyntaxColor: color => {
 		const scopeTheme = syntaxTheme;
-		scopeTheme.replace({ revision: scopeTheme.currentTheme.revision + 1, rules: [{ selector: '*', foreground: color }] });
+		scopeTheme.setColorTheme(createColorTheme({ ...scopeTheme.getColorTheme(), semanticTokenRules: [{ selector: '*', type: '*', modifiers: [], foreground: color }] }));
 	},
 	setSelectionColors: colors => themeService.setColorTheme(createColorTheme({
 		...themeService.getColorTheme(), id: 'text-model-selection', baseTheme: themeService.getColorTheme(), colorOverrides: colors,

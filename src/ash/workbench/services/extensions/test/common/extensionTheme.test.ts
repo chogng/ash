@@ -15,7 +15,7 @@ test("compiles a stable selectable Workbench theme from supported extension colo
 	const definition = parseExtensionTheme({
 		name: "Dark (Visual Studio)",
 		colors: { "editor.background": "#1E1E1E", "unsupported.color": "#ffffff" },
-		tokenColors: [],
+		semanticTokenColors: {},
 	}, id, "vscode.theme-defaults", "%darkColorThemeLabel%", "vs-dark", "theme test");
 
 	const theme = createExtensionWorkbenchColorTheme(definition);
@@ -27,30 +27,27 @@ test("compiles a stable selectable Workbench theme from supported extension colo
 });
 
 test("rejects selectable extension themes without a supported UI scheme", () => {
-	const definition = parseExtensionTheme({ colors: {}, tokenColors: [] }, "extension-ash-demo-one", "ash.demo", "Demo", undefined, "theme test");
+	const definition = parseExtensionTheme({ colors: {}, semanticTokenColors: {} }, "extension-ash-demo-one", "ash.demo", "Demo", undefined, "theme test");
 	assert.throws(() => createExtensionWorkbenchColorTheme(definition), /uiTheme/);
 });
 
-test('loads extension publisher metadata and regular-weight syntax rules through package-relative includes', async () => {
+test('loads extension publisher metadata and direct token styles through package-relative includes', async () => {
 	const { loadExtensionTheme } = await import('../../common/extensionTheme.js');
 	const files: Record<string, unknown> = {
 		'themes/theme.json': { include: './base.json', author: 'Publisher', maintainers: ['Publisher'], semanticClass: 'dark', dracula: {}, colors: { 'editor.background': '#282a36' } },
 		'themes/base.json': {
-			tokenColors: [
-				{ scope: 'comment', settings: { foreground: '#6272a4', fontStyle: 'normal' } },
-				{ scope: 'variable', settings: { fontStyle: 'regular' } },
-			]
+			semanticTokenColors: { "comment": { "foreground": "#6272a4", "fontStyle": "" }, "variable": { "fontStyle": "" } }
 		},
 	};
 	const definition = await loadExtensionTheme(async path => new TextEncoder().encode(JSON.stringify(files[path])),
 		'open-vsx.dracula-theme.theme-dracula', { id: 'Dracula', label: 'Dracula Theme', uiTheme: 'vs-dark', path: 'themes/theme.json' }, 0);
 	assert.equal(createExtensionWorkbenchColorTheme(definition).getColorCss(editorBackground), '#282a36');
-	assert.deepEqual(definition.tokenColors.map(rule => rule.settings.fontStyle), ['', '']);
+	assert.deepEqual(definition.semanticTokenColors, { comment: { foreground: '#6272a4', fontStyle: '' }, variable: { fontStyle: '' } });
 });
 
 test("rejects invalid token colors and font styles before a theme becomes active", () => {
-	assert.throws(() => parseExtensionTheme({ tokenColors: [{ scope: "comment", settings: { foreground: "green" } }] }, "extension-ash-demo-one", "ash.demo", "Demo", "vs-dark", "theme test"), /Invalid color theme/);
-	assert.throws(() => parseExtensionTheme({ tokenColors: [{ scope: "comment", settings: { fontStyle: "italic blink" } }] }, "extension-ash-demo-one", "ash.demo", "Demo", "vs-dark", "theme test"), /Invalid color theme/);
+	assert.throws(() => parseExtensionTheme({ semanticTokenColors: { "comment": { "foreground": "green" } } }, "extension-ash-demo-one", "ash.demo", "Demo", "vs-dark", "theme test"), /Invalid color theme/);
+	assert.throws(() => parseExtensionTheme({ semanticTokenColors: { "comment": { "fontStyle": "italic blink" } } }, "extension-ash-demo-one", "ash.demo", "Demo", "vs-dark", "theme test"), /Invalid color theme/);
 });
 
 test('dedicated renderer loads extension themes and retains the last valid registration after a failed reload', async () => {

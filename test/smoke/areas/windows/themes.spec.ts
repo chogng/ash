@@ -488,7 +488,7 @@ test('structured theme settings persist scoped colors and token rules after relo
 	const page = workbench.page;
 	const entries = [
 		{ setting: 'workbench.colorCustomizations', key: '[Ash Dark][Ash Light]', value: { 'editor.selectionBackground': '#123456' } },
-		{ setting: 'editor.tokenColorCustomizations', key: 'textMateRules', value: [{ scope: 'variable.other.readwrite', settings: { foreground: '#654321', fontStyle: 'bold' } }] },
+		{ setting: 'editor.tokenColorCustomizations', key: 'variables', value: { foreground: '#654321', fontStyle: 'bold' } },
 		{ setting: 'editor.semanticTokenColorCustomizations', key: 'rules', value: { 'variable.readonly': { foreground: '#fedcba', italic: false } } },
 	];
 	const openAppearance = async (): Promise<void> => {

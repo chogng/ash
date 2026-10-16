@@ -202,7 +202,7 @@
 ;; Parameters
 
 (parameter
-  name: (identifier) @variable.parameter)
+  name: (identifier) @parameter)
 
 ;; Type constraints
 

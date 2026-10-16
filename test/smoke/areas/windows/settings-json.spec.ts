@@ -201,7 +201,7 @@ for (const locale of ['en', 'zh-CN']) {
 		}
 		const page = workbench.page;
 		const title = 'Copy test "quoted" \\ path\n中文';
-		const tokenColors = { textMateRules: [{ scope: ['keyword', 'string'], settings: { foreground: '#ff1122' } }] };
+		const tokenColors = { keywords: '#ff1122', strings: '#ff1122' };
 		await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
 		const group = workbench.editors.groupAt(0);
 		await group.editor.input.press('ControlOrMeta+A');
@@ -594,10 +594,10 @@ test('Saving JSON token customization refreshes Markdown and the canonical profi
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
 	await workbench.settingsEditor.selectGroup('workbench');
 	await workbench.settingsEditor.selectCategory('appearance');
-	await settings.getByRole('searchbox').fill('@id:editor.tokenColorCustomizations');
-	await settings.locator('[data-settings-item-id="editor.tokenColorCustomizations"]').getByRole('button', { name: 'Edit in settings.json', exact: true }).click();
+	await settings.getByRole('searchbox').fill('@id:editor.semanticTokenColorCustomizations');
+	await settings.locator('[data-settings-item-id="editor.semanticTokenColorCustomizations"]').getByRole('button', { name: 'Edit in settings.json', exact: true }).click();
 	await expect(group.editor.input).toBeFocused();
-	await pasteJson(group.editor.input, JSON.stringify({ textMateRules: [{ scope: 'markup.heading.markdown', settings: { foreground: '#654321', fontStyle: 'italic' } }] }));
+	await pasteJson(group.editor.input, JSON.stringify({ rules: { 'text.title': { foreground: '#654321', fontStyle: 'italic' } } }));
 	await group.editor.input.press('ControlOrMeta+S');
 	const tab = group.tabs.filter({ hasText: 'User Settings (JSON)' });
 	await expect(tab.locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
@@ -608,7 +608,7 @@ test('Saving JSON token customization refreshes Markdown and the canonical profi
 	if (target.kind === 'electron' && 'windows' in application) {
 		const profile = await application.evaluate(() => process.env.ASH_HOME);
 		if (!profile) throw new Error('Test profile is unavailable');
-		await expect.poll(async () => JSON.parse(await readFile(join(profile, 'settings.json'), 'utf8'))['editor.tokenColorCustomizations'].textMateRules[0].settings.foreground).toBe('#654321');
+		await expect.poll(async () => JSON.parse(await readFile(join(profile, 'settings.json'), 'utf8'))['editor.semanticTokenColorCustomizations'].rules['text.title'].foreground).toBe('#654321');
 	}
 	await page.reload();
 	await workbench.waitForReady();

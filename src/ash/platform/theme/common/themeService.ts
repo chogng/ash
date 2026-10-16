@@ -122,10 +122,6 @@ export interface ISemanticTokenThemeRule {
 
 /** Resolved color and size values exposed to editor and Workbench consumers. */
 export interface IColorTheme {
-	readonly tokenColors?: readonly {
-		readonly scopes: readonly string[];
-		readonly settings: { readonly foreground?: string; readonly background?: string; readonly fontStyle?: string; };
-	}[];
 	readonly semanticHighlighting?: boolean;
 	readonly semanticTokenRules?: readonly ISemanticTokenThemeRule[];
 	readonly id: string;

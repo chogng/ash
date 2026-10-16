@@ -82,10 +82,9 @@ test('built-in syntax rules use the theme-defaults extension resources', async (
 		['ash-high-contrast-light', 'hc_light'],
 	] as const) {
 		const document = await loadColorThemeDocument(`themes/${file}.json`, async resource => JSON.parse(await readFile(resolve('extensions/theme-defaults', resource), 'utf8')));
-		assert.ok(Array.isArray(document.tokenColors));
-		const actual = getWorkbenchColorTheme(id).tokenColors!.map(rule => ({ scopes: rule.scopes, settings: rule.settings }));
-		const expected = document.tokenColors.map((rule: { scope?: string | string[]; settings: object; }) => ({ scopes: typeof rule.scope === 'string' ? [rule.scope] : rule.scope ?? [], settings: rule.settings }));
-		assert.deepEqual(actual, expected, id);
+		assert.ok(document.semanticTokenColors);
+		const { parseSemanticTokenRules } = await import('../../services/themes/common/colorThemeData.js');
+		assert.deepEqual(getWorkbenchColorTheme(id).semanticTokenRules, parseSemanticTokenRules(document.semanticTokenColors), id);
 	}
 });
 

@@ -22,7 +22,6 @@ import { URI } from '../../../../../base/common/uri.js';
 import { WorkbenchThemesRegistry } from '../../../../common/theme.js';
 import { loadUserThemes, WorkbenchThemeService } from '../../browser/workbenchThemeService.js';
 import { createExtensionWorkbenchColorTheme, parseExtensionTheme } from '../../../extensions/common/extensionTheme.js';
-import { projectColorThemeTokens } from '../../../textMate/common/textMateThemeProjection.js';
 import { loadColorThemeDocument, loadUserColorTheme, parseUserColorTheme, resolveColorThemeDocument, serializeUserColorThemeDraft } from '../../common/colorThemeData.js';
 import { colorThemeSchemaId, registerColorThemeSchemas } from '../../common/colorThemeSchema.js';
 import { Extensions as JSONExtensions, type IJSONContributionRegistry } from '../../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
@@ -106,7 +105,9 @@ const document = {
 	name: 'Test User Aurora',
 	type: 'dark',
 	colors: { 'editor.background': '#101525', 'unsupported.extension.color': '#abcdef' },
-	tokenColors: [{ scope: 'comment, string.quoted', settings: { foreground: '#123456', fontStyle: 'italic bold' } }],
+	semanticTokenColors: {
+		"comment": { "foreground": "#123456", "fontStyle": "italic bold" }, "string.quoted": { "foreground": "#123456", "fontStyle": "italic bold" }
+	},
 };
 
 test('temporary previews update bound windows, keep settings unchanged, and restore the latest configured theme', async () => {
@@ -165,8 +166,8 @@ test('persisted color customizations override themes, update live, and restore t
 			active.getColorTheme().getColorCss('editor.selectionBackground'),
 			active.getColorTheme().getColorCss('editor.selectionForeground'),
 			active.getColorTheme().getColor('editor.inactiveSelectionBackground')?.rgba.a,
-			active.getColorTheme().tokenColors,
-		], ['#456789', '#112233', 0.65, theme.tokenColors]);
+			active.getColorTheme().semanticTokenRules,
+		], ['#456789', '#112233', 0.65, theme.semanticTokenRules]);
 		assert.equal(active.getColorTheme().getColor('editor.inactiveSelectionBackground')?.rgba.r, 69);
 		await configuration.updateValue(WorkbenchConfiguration.colorCustomizations, { 'editor.inactiveSelectionBackground': '#765432' });
 		assert.equal(browser.window.document.body.style.getPropertyValue('--ash-editor-inactiveSelectionBackground'), '#765432');
@@ -184,15 +185,14 @@ test('persisted color customizations override themes, update live, and restore t
 	}
 });
 
-test('user and extension themes share colors and TextMate rules', () => {
-	const source = `// authored theme\n${JSON.stringify(document).replace(/}$/, ',}')}`;
-	const user = parseUserColorTheme(source, 'test-user-aurora');
+test('user and extension themes share direct token styles', () => {
+	const user = parseUserColorTheme(JSON.stringify(document), 'test-user-aurora');
 	const extension = createExtensionWorkbenchColorTheme(parseExtensionTheme(document, 'test-extension', 'test.theme', document.name, 'vs-dark', 'test'));
 	assert.deepEqual(user.colors, extension.colors);
-	assert.deepEqual(projectColorThemeTokens(user, 1), projectColorThemeTokens(extension, 1));
-	assert.deepEqual(projectColorThemeTokens(user, 1).rules, [
-		{ selector: 'comment, string.quoted', foreground: '#123456', fontStyle: ['italic', 'bold'] },
-	]);
+	assert.deepEqual(user.semanticTokenRules, extension.semanticTokenRules);
+	const style = user.getTokenStyleMetadata('comment', [], 'typescript')!;
+	assert.equal(user.tokenColorMap[style.foreground!], '#123456');
+	assert.equal(style.italic, true);
 });
 
 test('user and extension themes preserve semantic token selectors and styles', () => {
@@ -276,7 +276,7 @@ test('user themes resolve colors across component domains and their dependent de
 test('theme exports contain standard fields and resolved colors', () => {
 	const source = serializeUserColorThemeDraft(lightColorTheme, 'Test Light Copy');
 	const exported = JSON.parse(source);
-	assert.deepEqual(Object.keys(exported), ['$schema', 'name', 'type', 'colors', 'tokenColors']);
+	assert.deepEqual(Object.keys(exported), ['$schema', 'name', 'type', 'colors']);
 	assert.equal(exported.type, 'light');
 	assert.deepEqual(parseUserColorTheme(source).colors, lightColorTheme.colors);
 	using registration = registerColorThemeSchemas();
@@ -338,10 +338,10 @@ test('active user themes apply overrides for colors registered after theme loadi
 			resolved: theme.colors['test.workbenchLate'],
 			css: browser.window.document.body.style.getPropertyValue('--ash-test-workbenchLate'),
 			changes,
-			tokenRules: theme.tokenColors,
+			tokenRules: theme.semanticTokenRules,
 		}, {
 			before: undefined, resolved: '#fedcba', css: '#fedcba', changes: ['#fedcba'],
-			tokenRules: [{ scopes: ['comment, string.quoted'], settings: { foreground: '#123456', fontStyle: 'italic bold' } }],
+			tokenRules: theme.semanticTokenRules,
 		});
 		assert.equal(JSON.parse(serializeUserColorThemeDraft(theme, theme.label)).colors['test.workbenchLate'], '#fedcba');
 		assert.ok(jsonRegistry.getSchemaContributions().schemas[colorThemeSchemaId]?.properties?.colors?.properties?.['test.workbenchLate']);
@@ -365,37 +365,23 @@ test('current theme documents reject retired fields, transforms, and invalid tok
 		{ ...document, id: 'custom' },
 		{ ...document, colors: { 'editor.background': 'red' } },
 		{ ...document, colors: { 'editor.background': { op: 'lighten', value: '#000000', factor: 0.2 } } },
-		{ ...document, tokenColors: [{ scope: 'comment', settings: { fontStyle: 'blink' } }] },
+		{ ...document, semanticTokenColors: { "comment": { "fontStyle": "blink" } } },
 	]) assert.throws(() => parseUserColorTheme(JSON.stringify(value)), /Invalid color theme/);
 	assert.throws(() => parseUserColorTheme(JSON.stringify({ include: './base.json', colors: {} })), /resource loader/);
 });
 
 test('theme documents inherit colors and syntax rules in package order', async () => {
 	const resources = new Map<string, unknown>([
-		['themes/base.json', { colors: { 'editor.background': '#112233', 'statusBar.background': '#223344' }, tokenColors: [{ scope: 'comment', settings: { foreground: '#334455' } }] }],
-		['themes/child.json', { include: './base.json', colors: { 'editor.background': '#445566' }, tokenColors: [{ scope: 'string', settings: { foreground: '#556677' } }] }],
+		['themes/base.json', { colors: { 'editor.background': '#112233', 'statusBar.background': '#223344' }, semanticTokenColors: { "comment": { "foreground": "#334455" } } }],
+		['themes/child.json', { include: './base.json', colors: { 'editor.background': '#445566' }, semanticTokenColors: { "string": { "foreground": "#556677" } } }],
 	]);
 	const read = (path: string): unknown => resources.get(path);
 	const resolved = resolveColorThemeDocument('themes/child.json', read);
 	assert.deepEqual(resolved.colors, { 'editor.background': '#445566', 'statusBar.background': '#223344' });
-	assert(Array.isArray(resolved.tokenColors));
-	assert.deepEqual(resolved.tokenColors.map(rule => rule.scope), ['comment', 'string']);
+	assert.deepEqual(resolved.semanticTokenColors, { comment: { foreground: '#334455' }, string: { foreground: '#556677' } });
 	assert.deepEqual(await loadColorThemeDocument('themes/child.json', async path => read(path)), resolved);
 	assert.throws(() => resolveColorThemeDocument('themes/child.json', path => path === 'themes/base.json' ? { include: './child.json' } : read(path)), /include cycle/);
 	assert.throws(() => resolveColorThemeDocument('themes/child.json', path => path === 'themes/child.json' ? { include: '../../outside.json' } : read(path)), /escapes its package/);
-});
-
-test('theme documents load tokenColors from a TextMate theme resource', async () => {
-	const syntax = '<?xml version="1.0"?><plist version="1.0"><dict><key>settings</key><array><dict><key>scope</key><string>comment</string><key>settings</key><dict><key>foreground</key><string>#123456</string></dict></dict></array></dict></plist>';
-	const resources = new Map<string, unknown>([
-		['themes/main.json', { colors: { 'editor.background': '#101010' }, tokenColors: './syntax.tmTheme' }],
-		['themes/syntax.tmTheme', syntax],
-	]);
-	const resolved = resolveColorThemeDocument('themes/main.json', path => resources.get(path));
-	assert(Array.isArray(resolved.tokenColors));
-	assert.deepEqual(resolved.tokenColors.map(rule => rule.scope), ['comment']);
-	assert.deepEqual(await loadColorThemeDocument('themes/main.json', async path => resources.get(path)), resolved);
-	assert.throws(() => resolveColorThemeDocument('themes/main.json', path => path === 'themes/main.json' ? { tokenColors: '../../outside.tmTheme' } : resources.get(path)), /escapes its package/);
 });
 
 test('user theme reload applies included files from its theme directory', async () => {
@@ -416,22 +402,6 @@ test('user theme reload applies included files from its theme directory', async 
 		await writeFile(join(directory, 'shared', 'base.json'), JSON.stringify({ colors: { 'statusBar.background': '#667788' } }));
 		await service.reload();
 		assert.equal(WorkbenchThemesRegistry.getColorTheme('custom')?.getColorCss('statusBar.background'), '#667788');
-		assert.deepEqual(service.issues, []);
-	} finally { await rm(directory, { recursive: true, force: true }); }
-});
-
-test('user theme loads a package-relative TextMate syntax file', async () => {
-	const directory = await mkdtemp(join(tmpdir(), 'ash-theme-textmate-'));
-	try {
-		await mkdir(join(directory, 'syntax'));
-		await writeFile(join(directory, 'syntax', 'tokens.tmTheme'), '<?xml version="1.0"?><plist version="1.0"><dict><key>settings</key><array><dict><key>scope</key><string>string</string><key>settings</key><dict><key>foreground</key><string>#abcdef</string></dict></dict></array></dict></plist>');
-		await writeFile(join(directory, 'custom.json'), JSON.stringify({ name: 'Custom', type: 'dark', tokenColors: './syntax/tokens.tmTheme' }));
-		using files = new DiskFileSystemProvider([URI.file(directory)]);
-		using fileService = createTestFileService(files);
-		using service = await loadThemes(fileService, directory);
-		assert.deepEqual(projectColorThemeTokens(WorkbenchThemesRegistry.getColorTheme('custom')!, 1).rules, [
-			{ selector: 'string', foreground: '#abcdef' },
-		]);
 		assert.deepEqual(service.issues, []);
 	} finally { await rm(directory, { recursive: true, force: true }); }
 });
@@ -566,13 +536,13 @@ async function loadThemes(files: IFileService, directory: string): Promise<IUser
 test('theme scoped customizations inherit global syntax and semantic styles and reset authored UI colors', async () => {
 	const theme = parseUserColorTheme(JSON.stringify({
 		name: 'Scoped Aurora', type: 'dark', colors: { 'editor.selectionBackground': '#123456' },
-		tokenColors: [{ settings: { foreground: '#112233', fontStyle: 'italic bold' } }, { scope: 'entity.name.function', settings: { foreground: '#223344' } }],
+		semanticTokenColors: { "*": { "foreground": "#112233", "fontStyle": "italic bold" }, "function": { "foreground": "#223344" } },
 	}), 'scoped-aurora');
 	using configuration = new WorkbenchConfigurationService();
 	await configuration.updateValue('workbench.colorCustomizations', { 'editor.selectionForeground': '#445566', '[Scoped *]': { 'editor.selectionBackground': 'default' } });
 	await configuration.updateValue('editor.tokenColorCustomizations', {
-		textMateRules: [{ scope: 'entity.name.function', settings: { fontStyle: 'italic' } }],
-		'[Scoped Aurora]': { textMateRules: [{ scope: 'entity.name.function', settings: { foreground: '#556677' } }] },
+		functions: { fontStyle: 'italic' },
+		'[Scoped Aurora]': { functions: { foreground: '#556677' } },
 	});
 	await configuration.updateValue('editor.semanticTokenColorCustomizations', {
 		enabled: true, rules: { function: { foreground: '#778899', italic: false } },
@@ -584,11 +554,6 @@ test('theme scoped customizations inherit global syntax and semantic styles and 
 		active.defines('editor.selectionBackground'), active.getColor('editor.selectionBackground', false),
 		active.getColorCss('editor.selectionForeground'), active.semanticHighlighting,
 	], [false, undefined, '#445566', true]);
-	const syntax = projectColorThemeTokens(active, 1);
-	const { createTextMateScopeThemeResolver } = await import('../../../textMate/common/textMateScopeTheme.js');
-	assert.deepEqual(createTextMateScopeThemeResolver(syntax)(['source.ts', 'entity.name.function.ts']), {
-		tokenType: 'function', modifiers: [], foreground: '#556677', fontStyle: ['italic'],
-	});
 	const metadata = active.getTokenStyleMetadata('function', [], 'typescript')!;
 	assert.deepEqual({ ...metadata, foreground: active.tokenColorMap[metadata.foreground!] }, { foreground: '#778899', bold: false, italic: false, underline: false, strikethrough: false });
 	await configuration.updateValue('editor.semanticTokenColorCustomizations', {});
@@ -618,22 +583,6 @@ test('theme settings expose structured schemas and localized labels', async () =
 	} finally { resetNlsResolver(); }
 });
 
-test('TextMate configuration retains grouped alternatives and global styles throughout theme compilation', async () => {
-	const { applyThemeCustomizations } = await import('../../common/themeConfiguration.js');
-	const { createTextMateScopeThemeResolver } = await import('../../../textMate/common/textMateScopeTheme.js');
-	const theme = parseUserColorTheme(JSON.stringify({
-		name: 'Grouped', tokenColors: [{ scope: 'source.ts (entity.name.function, variable.other)', settings: { foreground: '#112233' } }],
-	}));
-	using configuration = new WorkbenchConfigurationService();
-	await configuration.updateValue('editor.tokenColorCustomizations', {
-		textMateRules: [{ settings: { fontStyle: 'italic' } }, { scope: 'source.ts (entity.name.function, variable.other)', settings: { foreground: '#445566' } }],
-	});
-	const active = applyThemeCustomizations(theme, configuration);
-	const resolve = createTextMateScopeThemeResolver(projectColorThemeTokens(active, 1));
-	assert.deepEqual(resolve(['source.ts', 'entity.name.function.ts']), { tokenType: 'function', modifiers: [], foreground: '#445566', fontStyle: ['italic'] });
-	assert.deepEqual(resolve(['source.ts', 'variable.other.ts']), { tokenType: 'variable', modifiers: [], foreground: '#445566', fontStyle: ['italic'] });
-});
-
 test('individual semantic flags override shorthand fontStyle even when false', () => {
 	const theme = parseUserColorTheme(JSON.stringify({
 		name: 'Semantic flags', semanticTokenColors: {
@@ -647,22 +596,11 @@ test('individual semantic flags override shorthand fontStyle even when false', (
 });
 
 
-test('property-list token themes preserve entities, CDATA and inert external declarations', () => {
-	const source = '<?xml version="1.0"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://example.invalid/PropertyList.dtd"><plist version="1.0"><dict><key>name</key><string>Comments &amp; strings &#x1F600;</string><key>settings</key><array><dict><key>scope</key><string>comment<!-- note -->, <![CDATA[string]]></string><key>settings</key><dict><key>foreground</key><string>#abcdef</string><key>fontStyle</key><string>italic</string></dict></dict></array></dict></plist>';
-	const resolved = resolveColorThemeDocument('theme.tmTheme', () => source);
-	assert.ok(Array.isArray(resolved.tokenColors));
-	assert.equal(resolved.tokenColors[0]!.scope, 'comment, string');
-	assert.equal(resolved.tokenColors[0]!.settings.foreground, '#abcdef');
-});
-
-test('property-list token themes reject malformed, expanding and oversized inputs', () => {
-	for (const source of [
-		'<plist><dict><key>settings</key><array></dict></plist>',
-		'<!DOCTYPE plist [<!ENTITY example "expanded">]><plist><dict/></plist>',
-		'<plist><dict><key>name</key><string>&unknown;</string></dict></plist>',
-		'<plist><dict><key>name</key><string>&#xD800;</string></dict></plist>',
-		'<plist><dict><key>settings</key><array/><key>settings</key><array/></dict></plist>',
-		'<plist>' + '<array>'.repeat(130) + '</array>'.repeat(130) + '</plist>',
-		'<plist><dict/></plist>' + ' '.repeat(1_048_576),
-	]) assert.throws(() => resolveColorThemeDocument('theme.tmTheme', () => source));
+test('retired scope themes and configuration rules are rejected', async () => {
+	for (const tokenColors of [[], './syntax.tmTheme']) {
+		assert.throws(() => parseUserColorTheme(JSON.stringify({ tokenColors })), /Invalid color theme/);
+	}
+	assert.throws(() => resolveColorThemeDocument('syntax.tmTheme', () => ({})), /Invalid color theme include/);
+	using configuration = new WorkbenchConfigurationService();
+	await assert.rejects(configuration.updateValue('editor.tokenColorCustomizations', { textMateRules: [] }), /textMateRules/);
 });

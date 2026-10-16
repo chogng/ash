@@ -20,15 +20,11 @@ export interface TokenStyleData {
 	readonly strikethrough?: boolean;
 }
 
-export interface TokenStyleDefaults { readonly scopesToProbe: readonly (readonly string[])[]; }
-export interface SemanticTokenDefaultRule { readonly selector: TokenSelector; readonly defaults: TokenStyleDefaults; }
-
-/** Owns semantic classifications and their syntax scope mappings, including extension lifetimes. */
+/** Owns semantic classifications and type inheritance, including extension lifetimes. */
 export class TokenClassificationRegistry extends Disposable {
-	private readonly groups = new Map<symbol, { types: readonly string[]; modifiers: readonly string[]; selectors: readonly TokenSelector[]; }>();
+	private readonly groups = new Map<symbol, { types: readonly string[]; modifiers: readonly string[]; }>();
 	private readonly types = new Map<string, TokenTypeOrModifierContribution>();
 	private readonly modifiers = new Map<string, TokenTypeOrModifierContribution>();
-	private readonly defaults = new Map<TokenSelector, TokenStyleDefaults>();
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
 	public revision = 0;
@@ -80,16 +76,10 @@ export class TokenClassificationRegistry extends Disposable {
 			},
 		};
 	}
-	public registerTokenStyleDefault(selector: TokenSelector, defaults: TokenStyleDefaults): void {
-		this.defaults.set(selector, defaults);
-		this.publish();
-	}
-	public deregisterTokenStyleDefault(selector: TokenSelector): void { if (this.defaults.delete(selector)) { this.publish(); } }
-	public getTokenStylingDefaultRules(): readonly SemanticTokenDefaultRule[] { return [...this.defaults].map(([selector, defaults]) => ({ selector, defaults })); }
 	/** Validate the complete catalog first; replacement and removal publish one revision. */
-	public replaceContributions(owner: symbol, types: readonly TokenTypeOrModifierContribution[], modifiers: readonly TokenTypeOrModifierContribution[], scopes: readonly { readonly language?: string; readonly scopes: Readonly<Record<string, readonly string[]>>; }[]): void {
+	public replaceContributions(owner: symbol, types: readonly TokenTypeOrModifierContribution[], modifiers: readonly TokenTypeOrModifierContribution[]): void {
 		const previous = this.groups.get(owner);
-		if (!previous && !types.length && !modifiers.length && !scopes.length) { return; }
+		if (!previous && !types.length && !modifiers.length) { return; }
 		using validation = new TokenClassificationRegistry();
 		for (const type of this.types.values()) { if (!previous?.types.includes(type.id)) { validation.registerTokenType(type.id, type.description, type.superType); } }
 		for (const modifier of this.modifiers.values()) { if (!previous?.modifiers.includes(modifier.id)) { validation.registerTokenModifier(modifier.id, modifier.description); } }
@@ -98,16 +88,11 @@ export class TokenClassificationRegistry extends Disposable {
 		for (const type of types) {
 			if (type.superType && !validation.types.has(type.superType)) { throw new TypeError(`Unknown semantic super type: ${type.superType}`); }
 		}
-		const defaults = scopes.flatMap(group => Object.entries(group.scopes).map(([selector, mappings]) => ({
-			selector: this.parseTokenSelector(selector, group.language), defaults: { scopesToProbe: mappings.map(scope => scope.split(/\s+/u)) },
-		})));
 		this.types.clear();
 		this.modifiers.clear();
 		for (const [id, type] of validation.types) { this.types.set(id, type); }
 		for (const [id, modifier] of validation.modifiers) { this.modifiers.set(id, modifier); }
-		for (const selector of previous?.selectors ?? []) { this.defaults.delete(selector); }
-		for (const rule of defaults) { this.defaults.set(rule.selector, rule.defaults); }
-		if (types.length || modifiers.length || defaults.length) { this.groups.set(owner, { types: types.map(type => type.id), modifiers: modifiers.map(modifier => modifier.id), selectors: defaults.map(rule => rule.selector) }); } else { this.groups.delete(owner); }
+		if (types.length || modifiers.length) { this.groups.set(owner, { types: types.map(type => type.id), modifiers: modifiers.map(modifier => modifier.id) }); } else { this.groups.delete(owner); }
 		this.publish();
 	}
 
@@ -119,19 +104,14 @@ function validateId(id: string): void {
 }
 
 const registry = new TokenClassificationRegistry();
-const scopes: Record<string, string> = {
-	namespace: 'entity.name.namespace', type: 'entity.name.type', class: 'entity.name.type.class', enum: 'entity.name.type.enum',
-	interface: 'entity.name.type.interface', struct: 'entity.name.type.struct', typeParameter: 'entity.name.type.parameter',
-	parameter: 'variable.parameter', variable: 'variable.other.readwrite', property: 'variable.other.property', enumMember: 'variable.other.enummember',
-	function: 'entity.name.function', method: 'entity.name.function.member', macro: 'entity.name.function.preprocessor', label: 'entity.name.label',
-	comment: 'comment', string: 'string', keyword: 'keyword', number: 'constant.numeric', regexp: 'string.regexp', operator: 'keyword.operator', modifier: 'storage.modifier', decorator: 'entity.name.function.decorator', event: 'variable.other.event',
-};
-for (const [id, scope] of Object.entries(scopes)) {
+const types = [
+	'namespace', 'type', 'class', 'enum', 'interface', 'struct', 'typeParameter',
+	'parameter', 'variable', 'property', 'enumMember', 'function', 'method', 'macro', 'label',
+	'comment', 'string', 'keyword', 'number', 'regexp', 'operator', 'modifier', 'decorator', 'event',
+];
+for (const id of types) {
 	registry.registerTokenType(id, id, ['class', 'enum', 'interface', 'struct', 'typeParameter'].includes(id) ? 'type' : undefined);
-	registry.registerTokenStyleDefault(registry.parseTokenSelector(id), { scopesToProbe: [[scope]] });
 }
 for (const id of ['declaration', 'definition', 'readonly', 'static', 'deprecated', 'abstract', 'async', 'modification', 'documentation', 'defaultLibrary']) { registry.registerTokenModifier(id, id); }
 
 export function getTokenClassificationRegistry(): TokenClassificationRegistry { return registry; }
-
-for (const type of ['variable', 'property']) { registry.registerTokenStyleDefault(registry.parseTokenSelector(type + '.readonly'), { scopesToProbe: [['variable.other.constant']] }); }

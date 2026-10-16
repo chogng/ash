@@ -21,8 +21,10 @@ const colorMapSchema: JsonSchema = {
 	additionalProperties: colorSchema,
 };
 const groups: Readonly<Record<string, readonly string[]>> = {
-	comments: ['comment'], strings: ['string'], numbers: ['constant.numeric'], keywords: ['keyword'],
-	types: ['entity.name.type', 'support.type'], functions: ['entity.name.function', 'support.function'], variables: ['variable'],
+	comments: ['comment'], strings: ['string', 'character'], numbers: ['number', 'float'],
+	keywords: ['keyword', 'conditional', 'repeat', 'include', 'storageclass'],
+	types: ['type', 'class', 'interface', 'struct', 'enum', 'typeParameter'],
+	functions: ['function', 'method', 'constructor'], variables: ['variable', 'parameter', 'property'],
 };
 
 export const ThemeConfigurationSettings = Object.freeze({
@@ -95,7 +97,12 @@ export const ThemeConfigurationSettings = Object.freeze({
 			},
 		},
 	}),
-	tokenColorCustomizations: registerRuleSetting('editor.tokenColorCustomizations', localize2('theme.editor.tokenColorCustomizations.title', 'Token Colors').original, localize2('theme.editor.tokenColorCustomizations.description', 'Override syntax colors and TextMate rules.').original, parseTokenColors, tokenCustomizationSchema()),
+	tokenColorCustomizations: registerRuleSetting(
+		'editor.tokenColorCustomizations',
+		localize2('theme.editor.tokenColorCustomizations.title', 'Token Colors').original,
+		localize2('theme.editor.tokenColorCustomizations.description', 'Override syntax colors and styles by token category.').original,
+		parseTokenColors, tokenCustomizationSchema(),
+	),
 	semanticTokenColorCustomizations: registerRuleSetting('editor.semanticTokenColorCustomizations', localize2('theme.editor.semanticTokenColorCustomizations.title', 'Semantic Token Colors').original, localize2('theme.editor.semanticTokenColorCustomizations.description', 'Override semantic token colors and styles.').original, parseSemanticColors, semanticCustomizationSchema()),
 	autoDetectColorScheme: registerBoolean('window.autoDetectColorScheme', false, localize2('theme.window.autoDetectColorScheme.title', 'Follow System Appearance').original, localize2('theme.window.autoDetectColorScheme.description', 'Select your preferred light or dark theme when the system appearance changes.').original),
 	autoDetectHighContrast: registerBoolean('window.autoDetectHighContrast', true, localize2('theme.window.autoDetectHighContrast.title', 'Follow System High Contrast').original, localize2('theme.window.autoDetectHighContrast.description', 'Select your preferred high contrast theme when the system enables high contrast.').original),
@@ -175,10 +182,9 @@ function parseColors(value: unknown): Record<string, string> {
 function parseTokenColors(value: unknown): Record<string, unknown> {
 	const result = record(value);
 	for (const [key, entry] of Object.entries(result)) {
-		if (key === 'textMateRules') { parseColorThemeDocument({ tokenColors: entry }); }
-		else if (key === 'semanticHighlighting') {
+		if (key === 'semanticHighlighting') {
 			if (typeof entry !== 'boolean') { throw new TypeError(localize('theme.invalidSetting', 'Invalid theme setting: {0}', key)); }
-		} else if (groups[key]) { parseColorThemeDocument({ tokenColors: [{ scope: groups[key], settings: typeof entry === 'string' ? { foreground: entry } : entry }] }); }
+		} else if (groups[key]) { parseColorThemeDocument({ semanticTokenColors: Object.fromEntries(groups[key]!.map(type => [type, entry])) }); }
 		else { throw new TypeError(localize('theme.invalidSetting', 'Invalid theme setting: {0}', key)); }
 	}
 	return { ...result };
@@ -239,21 +245,18 @@ export function applyThemeCustomizations(theme: IColorTheme, configuration: ICon
 	for (const [id, value] of Object.entries(colors)) {
 		if (value === 'default') { reset.push(id); } else { overrides[id] = value as string; }
 	}
-	const tokenColors = [...theme.tokenColors ?? []];
+	const tokenRules = [...theme.semanticTokenRules ?? []];
 	for (const [key, value] of Object.entries(tokens)) {
-		if (groups[key]) { tokenColors.push({ scopes: groups[key]!, settings: typeof value === 'string' ? { foreground: value } : value as NonNullable<IColorTheme['tokenColors']>[number]['settings'] }); }
-	}
-	if (tokens.textMateRules) {
-		const document = parseColorThemeDocument({ tokenColors: tokens.textMateRules });
-		for (const rule of document.tokenColors as Exclude<typeof document.tokenColors, string | undefined>) {
-			tokenColors.push({ scopes: (typeof rule.scope === 'string' ? [rule.scope] : rule.scope ?? []).map(scope => scope.trim()), settings: rule.settings });
+		if (groups[key]) {
+			const styles = Object.fromEntries(groups[key]!.map(type => [type, value])) as Parameters<typeof parseSemanticTokenRules>[0];
+			tokenRules.push(...parseSemanticTokenRules(styles));
 		}
 	}
 	return createColorTheme({
-		...theme, baseTheme: theme, colorOverrides: overrides, resetColorOverrides: reset, tokenColors,
+		...theme, baseTheme: theme, colorOverrides: overrides, resetColorOverrides: reset,
 		allowUnregisteredColorOverrides: true,
 		semanticHighlighting: (semantic.enabled as boolean | undefined) ?? (tokens.semanticHighlighting as boolean | undefined) ?? theme.semanticHighlighting,
-		semanticTokenRules: [...theme.semanticTokenRules ?? [], ...parseSemanticTokenRules(semantic.rules as Parameters<typeof parseSemanticTokenRules>[0])],
+		semanticTokenRules: [...tokenRules, ...parseSemanticTokenRules(semantic.rules as Parameters<typeof parseSemanticTokenRules>[0])],
 	});
 }
 
@@ -262,12 +265,10 @@ function isColorThemePreference(value: string): boolean {
 }
 
 function tokenCustomizationSchema(): JsonSchema {
-	const tokenArray = colorThemeSchema.properties!.tokenColors!.anyOf![1]!;
-	const style = (tokenArray.items as JsonSchema).properties!.settings!;
+	const style = colorThemeSchema.properties!.semanticTokenColors!.additionalProperties as JsonSchema;
 	return {
 		type: 'object', additionalProperties: false, properties: {
-			...Object.fromEntries(Object.keys(groups).map(group => [group, { anyOf: [colorThemeSchema.properties!.colors!.additionalProperties as JsonSchema, style] }])),
-			textMateRules: tokenArray,
+			...Object.fromEntries(Object.keys(groups).map(group => [group, style])),
 			semanticHighlighting: { type: 'boolean' },
 		}
 	};

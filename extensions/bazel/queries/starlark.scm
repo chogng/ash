@@ -209,7 +209,7 @@
   "or"
 
   "del"
-] @keyword.operator
+] @operator
 
 [
   "def"

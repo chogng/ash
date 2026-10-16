@@ -15,7 +15,7 @@ import { raceCancellationError } from '../../../../base/common/async.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import { ColorExtensionPoint } from '../../themes/common/colorExtensionPoint.js';
 import { IconExtensionPoint } from '../../themes/common/iconExtensionPoint.js';
-import { TokenClassificationExtensionPoint, type SemanticTokenScopeContribution } from '../../themes/common/tokenClassificationExtensionPoint.js';
+import { TokenClassificationExtensionPoint } from '../../themes/common/tokenClassificationExtensionPoint.js';
 import type { ColorContribution } from '../../../../platform/theme/common/colorRegistry.js';
 import type { IconContribution, IconFontDefinition } from '../../../../platform/theme/common/iconRegistry.js';
 import type { TokenTypeOrModifierContribution } from '../../../../platform/theme/common/tokenClassificationRegistry.js';
@@ -32,10 +32,7 @@ import type { LanguageDescriptionContribution, LanguageDescriptionRegistration }
 import type { IAshLanguageService } from '../../../../editor/common/languages/language.js';
 import type { IExtensionApi, ExtensionCatalog as TransportExtensionCatalog, ExtensionDescriptor as TransportExtensionDescriptor } from "../../../../platform/extensions/common/extensionApi.js";
 import type { IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
-import { ColorScheme } from "../../../../platform/theme/common/theme.js";
 import { DebugAdapterFactoriesRegistry, createStaticDebugAdapterFactory, type DebugAdapterFactory, type DebugAdapterFactoryRegistration } from "../../debug/common/debugAdapterFactory.js";
-import { normalizeTextMateScopeTheme } from "../../textMate/common/textMateScopeTheme.js";
-import { projectExtensionTokenTheme } from "../../textMate/common/textMateThemeProjection.js";
 import { parseJsonc } from "../common/jsonc.js";
 import { parseExtensionManifest, verifyExtensionManifestDigest } from '../common/extensionManifest.js';
 import { getNLSLanguage } from '../../../../nls.js';
@@ -68,7 +65,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 	private readonly colorContributions = this._register(new ColorExtensionPoint());
 	private readonly iconContributions = this._register(new IconExtensionPoint());
 	private readonly tokenContributions = this._register(new TokenClassificationExtensionPoint());
-	private activeThemeContributions: ThemeContributions = { colors: [], icons: [], fonts: [], types: [], modifiers: [], scopes: [] };
+	private activeThemeContributions: ThemeContributions = { colors: [], icons: [], fonts: [], types: [], modifiers: [] };
 	private readonly changeEmitter = this._register(new Emitter<ExtensionCatalog>());
 	private readonly failureEmitter = this._register(new Emitter<ExtensionServiceFailure>());
 	private readonly editorPaneRegistration = this._register(EditorPanes.registerEditorPanes([]));
@@ -256,7 +253,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 	}
 
 	private async loadAndRegister(): Promise<ExtensionServiceFailure | undefined> {
-		const themeContributions: ThemeContributions = { colors: [], icons: [], fonts: [], types: [], modifiers: [], scopes: [] };
+		const themeContributions: ThemeContributions = { colors: [], icons: [], fonts: [], types: [], modifiers: [] };
 		const languages: LanguageDescriptionContribution[] = [];
 		const languageConfigurations: LanguageConfigurationContribution[] = [];
 		const snippetResources: ExtensionSnippetFile[] = [];
@@ -336,7 +333,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 				themeContributions.colors.push(...manifest.contributes.colors);
 				themeContributions.types.push(...manifest.contributes.semanticTokenTypes);
 				themeContributions.modifiers.push(...manifest.contributes.semanticTokenModifiers);
-				themeContributions.scopes.push(...manifest.contributes.semanticTokenScopes);
+
 				for (const icon of manifest.contributes.icons) {
 					if (typeof icon.defaults === 'string') { themeContributions.icons.push({ id: icon.id, description: icon.description, defaults: { id: icon.defaults } }); }
 					else {
@@ -535,7 +532,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 
 	private replaceThemeContributions(contributions: ThemeContributions): void {
 		this.colorContributions.replace(contributions.colors);
-		this.tokenContributions.replace(contributions.types, contributions.modifiers, contributions.scopes);
+		this.tokenContributions.replace(contributions.types, contributions.modifiers);
 		this.iconContributions.replace(contributions.icons, contributions.fonts);
 	}
 
@@ -567,8 +564,6 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		try { validationTemplates.replace(fileTemplates); }
 		finally { validationTemplates.dispose(); }
 		validateExtensionDebugAdapterDefinitions(debugAdapters);
-		const themeCatalog = Object.freeze({ revision: 1, themes: Object.freeze([...themes]) });
-		for (const theme of themes) normalizeTextMateScopeTheme(projectExtensionTokenTheme(themeCatalog, ColorScheme.Dark, 1, theme.id));
 	}
 
 
@@ -628,5 +623,4 @@ interface ThemeContributions {
 	readonly fonts: IconFontDefinition[];
 	readonly types: TokenTypeOrModifierContribution[];
 	readonly modifiers: TokenTypeOrModifierContribution[];
-	readonly scopes: SemanticTokenScopeContribution[];
 }

@@ -147,18 +147,18 @@
 ; ============================================================================
 
 (formal_parameter
-  (identifier) @variable.parameter)
+  (identifier) @parameter)
 
 (constructor_param
-  (identifier) @variable.parameter)
+  (identifier) @parameter)
 
 (super_formal_parameter
-  (identifier) @variable.parameter)
+  (identifier) @parameter)
 
 ; Named arguments
 (named_argument
   (label
-    (identifier) @variable.parameter))
+    (identifier) @parameter))
 
 ; ============================================================================
 ; Variables
@@ -188,7 +188,7 @@
 (relational_operator) @operator
 (prefix_operator) @operator
 (negate_operator) @operator
-(is_operator) @keyword.operator
+(is_operator) @operator
 (binary_operator) @operator
 
 [

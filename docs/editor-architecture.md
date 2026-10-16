@@ -26,7 +26,6 @@ Stanza 是当前唯一的 Ash editor runtime。不保留旧 editor ID、DOM clas
 | `editor/contrib`                                                         | 行式与结构化 feature 已按能力组织                   | 命令、controller、可移除投影、schema、citation 和 collaboration；不得注册 pane、拥有第二套 model 或读取产品 ID                                                                                                                                                                                                                                           |
 | `editor.*.all.ts`                                                        | 共同编辑能力装配已具备                              | 行式与富文档贡献清单；不得注册 Workbench pane/input                                                                                                                                                                                                                                                                                                      |
 | `workbench/contrib/{codeEditor,multiDiffEditor,documentEditor,academic}` | 编辑器宿主适配已具备                                | pane/input、文件与 working-copy 接线及可停用 Academic 扩展的 profile 组合；文档模型服务按资源共享模型和保存状态；不得实现编辑事务或视图内部行为                                                                                                                                                                                                          |
-| `workbench/services/textMate`                                            | 主题兼容适配                                        | 保留 scope selector、token color 和字体规则适配；TextMate/Oniguruma 分词器、grammar catalog 与专用 Worker 已移除。                                                                                                                                                                                                                                       |
 | Document service                                                         | 已具备                                              | `IFileService` 将 App Server `fs/changed` 映射为工作区失效事件，`ITextFileService` 转发；Stanza 模型服务提供 dirty、快照保存、显式 revert、CRLF/LF 保留、干净模型重载与 expected-revision/CAS。Code 文件后台检查跳过有本地修改的模型，只在保存被磁盘版本检查拒绝时报告冲突；Workbench 提供 workspace-scoped IndexedDB working-copy 恢复                  |
 | Selection/decorations                                                    | 基础具备                                            | selection、实例控制器、tracked range、decoration collection                                                                                                                                                                                                                                                                                              |
 | Language model                                                           | 共用后台语法树                                      | Desktop 使用 Rust/Rope Tree-sitter，Web 连接可用时使用 Rust、断线时回退到本地 Tree-sitter Worker；高亮、结构结果和预览复用会话，语义 token 与语言智能由 LSP provider 接入，结果检查模型版本。                                                                                                                                                            |
@@ -1267,15 +1266,16 @@ unterminated string boundary、line/block comment、多行状态、外部编辑�
 revision、销毁、跨 model/language 拒绝、Enter、auto-closing `notIn` 与 browser
 路由。
 
-### 语法会话与主题兼容
+### 语法会话与主题样式
 
 语法由 `workbench/services/treeSitter` 组合，Desktop 接入共享 Rust/Rope 会话，Web 使用
 Tree-sitter Worker。语言规则位于各扩展的 `queries/`；文本编辑、版本及撤销仍由 TextModel
 拥有。高亮、大纲、折叠、结构选择与假设编辑共用语法会话。
 
-`workbench/services/textMate/common` 仅保留 scope-theme 兼容适配。活动主题来自
-`IThemeService`，各 Workbench 拥有自己的 `TextMateScopeThemeModel`；现有主题 scope 规则
-继续映射到 Tree-sitter capture，不需要 TextMate 或 Oniguruma 运行时。
+活动主题由 `IThemeService` 唯一持有。Tree-sitter capture 的首段是 token 类型，其余段是
+修饰信息；高亮通过活动 `IColorTheme.getTokenStyleMetadata` 直接取得颜色和字体样式，嵌入语言
+使用自己的 language ID。内置、用户和扩展主题共用 `semanticTokenColors` 规则。
+不再支持 TextMate scope selector、`tokenColors`、`.tmTheme` 或 `textMateRules`，也不维护第二份高亮主题模型。
 
 `AppServerExtensionService` 保留语言、配置、snippets、主题与 Debug 声明的事务化激活。
 旧 TextMate grammar 声明仍经过 manifest 校验，但不读取其语法文件、不创建 grammar
@@ -1324,8 +1324,8 @@ Stanza pane 先通过 `BrowserTextModelService.acquire` 获取引用：已有资
 Stanza 内部契约见
 [`src/ash/editor/text-engine.md`](../src/ash/editor/text-engine.md)。
 
-Scope theme 由 Workbench 组合层持有，声明式 extension resource contribution
-会更新其 revision；每个文档的 Analysis Worker 仍由其 model coordinator 独立拥有，避免故障域和增量 mirror 互相污染。
+活动主题由窗口的主题服务持有。声明式扩展主题更新同一份主题注册，语法后端直接消费其样式；
+每个文档的语法会话仍由模型独立拥有。
 
 本阶段明确没有把 TextFile、TextMate 或 document identity 下沉到 `base`。当前 host 已具备原子写入与粗粒度变更通知，Stanza 因而拥有 dirty/save/revert 和外改 policy；expected-revision write、workspace-scoped working-copy 备份恢复已经接通。TextFile resolve 先以 stat 限制文本大小，再读取 bytes、剥离 UTF-8 BOM、拒绝 NUL/控制字符密集内容和非法 UTF-8；被拒绝的内容可显式切换到只读 Binary Editor。UTF-8 BOM 的标记随资源内容进入模型服务，保存时恢复；LF/CRLF 由文本模型决定，混合换行按模型归一化后的内容建立保存基线。干净文件的外部刷新保留撤销记录，显式 revert 清空被丢弃的历史。非 UTF-8 原编码写回与编码选择器仍是独立的未来能力，当前实现不会静默转码。
 

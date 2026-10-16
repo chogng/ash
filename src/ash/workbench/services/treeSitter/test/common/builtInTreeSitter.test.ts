@@ -1,3 +1,4 @@
+import { TestThemeService } from '../../../../../platform/theme/test/common/testThemeService.js';
 import { StandardTokenType } from '../../../../../editor/common/encodedTokenAttributes.js';
 import { Event } from '../../../../../base/common/event.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
@@ -14,8 +15,7 @@ import type { ITreeSitterLibraryService } from '../../../../../editor/common/ser
 import type { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { editorLanguageForSyntaxLanguage, syntaxLanguageForEditorLanguage, syntaxLanguages } from '../../../../../platform/syntax/common/syntaxApi.js';
 import { getWorkbenchColorTheme } from '../../../../common/theme.js';
-import { projectColorThemeTokens } from '../../../textMate/common/textMateThemeProjection.js';
-import { captureScopes, createTreeSitterSyntaxTokenBackend } from '../../browser/treeSitterLibraryService.js';
+import { createTreeSitterSyntaxTokenBackend } from '../../browser/treeSitterLibraryService.js';
 import { getLanguageFoldingRules } from '../../../../../platform/language/common/languageFolding.generated.js';
 
 const runtime = (treeSitterNamespace as unknown as { default?: typeof treeSitterNamespace; }).default ?? treeSitterNamespace;
@@ -75,8 +75,8 @@ const configuration = { getValue: () => false } as unknown as IConfigurationServ
 
 async function highlighted(language: string, text: string, themeId = 'ash-dark') {
 	using model = new TextModel(text, { languageId: language });
-	const scopeTheme = { onDidChangeTheme: Event.None, currentTheme: projectColorThemeTokens(getWorkbenchColorTheme(themeId), 1) };
-	using backend = createTreeSitterSyntaxTokenBackend(model, configuration, library, scopeTheme)!;
+	using themeService = new TestThemeService(getWorkbenchColorTheme(themeId));
+	using backend = createTreeSitterSyntaxTokenBackend(model, configuration, library, themeService)!;
 	backend.setVisibleLines([{ startLineNumber: 1, endLineNumber: model.getLineCount() }]);
 	await backend.whenReady(new AbortController().signal);
 	return backend.lines.flatMap(row => row.tokens.map(token => ({ ...token, text: model.getTextInRange(token.range) })));
@@ -210,10 +210,8 @@ test('An unterminated rebase exec string cannot consume the following operation'
 
 test('Embedded script preserves language identity through unstyled text and supplies bracket pairs', async () => {
 	using model = new TextModel('<script>const value = { unknown };</script>', { languageId: 'html' });
-	using backend = createTreeSitterSyntaxTokenBackend(model, configuration, library, {
-		currentTheme: projectColorThemeTokens(getWorkbenchColorTheme('ash-dark'), 1),
-		onDidChangeTheme: Event.None,
-	})!;
+	using themeService = new TestThemeService(getWorkbenchColorTheme('ash-dark'));
+	using backend = createTreeSitterSyntaxTokenBackend(model, configuration, library, themeService)!;
 	await backend.whenReady(new AbortController().signal);
 	const unknown = model.getValue().indexOf('unknown') + 1;
 	assert.ok(backend.getLanguageTokens(1).some(token => token.languageId === 'javascript' && token.range.startColumn <= unknown && token.range.endColumn > unknown));
@@ -231,10 +229,8 @@ test('Multiline embedded strings cannot consume Diff change markers', async () =
 
 test('Markdown hypothetical edits preserve embedded language and relative Unicode coordinates', async () => {
 	using model = new TextModel('# Title\r\n\r\n```python\r\nprint("你好🙂")\r\n```\r\n', { languageId: 'markdown' });
-	using backend = createTreeSitterSyntaxTokenBackend(model, configuration, library, {
-		currentTheme: projectColorThemeTokens(getWorkbenchColorTheme('ash-dark'), 1),
-		onDidChangeTheme: Event.None,
-	})!;
+	using themeService = new TestThemeService(getWorkbenchColorTheme('ash-dark'));
+	using backend = createTreeSitterSyntaxTokenBackend(model, configuration, library, themeService)!;
 	await backend.whenReady(new AbortController().signal);
 	const preview = await backend.tokenizeLinesAtAsync(4, ['print("更新🙂")'], new AbortController().signal);
 	assert.ok(preview[0]!.some(token => token.languageId === 'python' && token.tokenType === 'string' && token.range.startLineNumber === 1 && token.range.endColumn <= 14));
@@ -244,24 +240,27 @@ test('Markdown hypothetical edits preserve embedded language and relative Unicod
 
 test('token inspection reads current UTF-16 captures from the shared backend and excludes stale revisions', async () => {
 	using model = new TextModel('/* 😀 */ function demo() {}', { languageId: 'javascript' });
-	const scopeTheme = { onDidChangeTheme: Event.None, currentTheme: projectColorThemeTokens(getWorkbenchColorTheme('ash-dark'), 1) };
-	using backend = createTreeSitterSyntaxTokenBackend(model, configuration, library, scopeTheme)!;
+	using themeService = new TestThemeService(getWorkbenchColorTheme('ash-dark'));
+	using backend = createTreeSitterSyntaxTokenBackend(model, configuration, library, themeService)!;
 	assert.deepEqual(backend.getTokenCaptures(1), []);
 	await backend.whenReady(new AbortController().signal);
 	const before = backend.getTokenCaptures(1);
-	assert.ok(before.some(token => token.name === 'entity.name.function' && model.getValue().slice(token.start, token.end) === 'demo'));
+	assert.ok(before.some(token => token.name === 'function' && model.getValue().slice(token.start, token.end) === 'demo'));
 	const start = model.getValue().indexOf('demo') + 1;
 	model.applyEdits([{ range: new Range(1, start, 1, start + 4), text: 'renamed' }]);
 	assert.deepEqual(backend.getTokenCaptures(1), []);
 	await backend.whenReady(new AbortController().signal);
-	assert.ok(backend.getTokenCaptures(1).some(token => token.name === 'entity.name.function' && model.getValue().slice(token.start, token.end) === 'renamed'));
+	assert.ok(backend.getTokenCaptures(1).some(token => token.name === 'function' && model.getValue().slice(token.start, token.end) === 'renamed'));
 	assert.notEqual(before, backend.getTokenCaptures(1));
 });
 
 
-test('Every declared syntax language loads its real WASM grammar and all composed queries', async () => {
+test('Every declared syntax language loads its real WASM grammar and themeable captures', async () => {
 	for (const id of syntaxLanguages) {
 		const grammar = (await load(id))!;
+		for (const capture of grammar.query.captureNames) {
+			if (!capture.startsWith('_')) assert.match(capture, /^[A-Za-z][\w]*(?:\.[\w]+)*$/u, `${id}: ${capture} must be usable as a theme selector`);
+		}
 		const parser = new grammar.Parser();
 		parser.setLanguage(grammar.language);
 		try {
@@ -274,10 +273,10 @@ test('Every declared syntax language loads its real WASM grammar and all compose
 
 
 test('Hypothetical tokenization uses the shared parser without a legacy token provider', async () => {
-	const scopeTheme = { onDidChangeTheme: Event.None, currentTheme: projectColorThemeTokens(getWorkbenchColorTheme('ash-dark'), 1) };
+	using themeService = new TestThemeService(getWorkbenchColorTheme('ash-dark'));
 	using model = new TextModel('fn main() {}', {
 		languageId: 'rs',
-		tokenization: { createSyntaxTokenBackend: value => createTreeSitterSyntaxTokenBackend(value, configuration, library, scopeTheme) },
+		tokenization: { createSyntaxTokenBackend: value => createTreeSitterSyntaxTokenBackend(value, configuration, library, themeService) },
 	});
 	await model.tokenization.whenReady(new AbortController().signal);
 	const tokens = await model.tokenization.tokenizeLinesAtAsync(1, ['fn preview() { "preview"; }'], new AbortController().signal);

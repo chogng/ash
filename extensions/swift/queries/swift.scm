@@ -50,21 +50,21 @@
   "init" @constructor)
 
 (parameter
-  external_name: (simple_identifier) @variable.parameter)
+  external_name: (simple_identifier) @parameter)
 
 (parameter
-  name: (simple_identifier) @variable.parameter)
+  name: (simple_identifier) @parameter)
 
 (type_parameter
-  (type_identifier) @variable.parameter)
+  (type_identifier) @parameter)
 
 (inheritance_constraint
   (identifier
-    (simple_identifier) @variable.parameter))
+    (simple_identifier) @parameter))
 
 (equality_constraint
   (identifier
-    (simple_identifier) @variable.parameter))
+    (simple_identifier) @parameter))
 
 [
   "protocol"
@@ -267,7 +267,7 @@
 
 ; Lambda literals
 (lambda_literal
-  "in" @keyword.operator)
+  "in" @operator)
 
 ; Basic literals
 [

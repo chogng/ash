@@ -9,64 +9,64 @@
 ; Properties
 ;-----------
 
-(property_identifier) @variable.other.property
+(property_identifier) @property
 
 ; Function and method definitions
 ;--------------------------------
 
 (function_expression
-  name: (identifier) @entity.name.function)
+  name: (identifier) @function)
 (function_declaration
-  name: (identifier) @entity.name.function)
+  name: (identifier) @function)
 (method_definition
-  name: (property_identifier) @entity.name.function.method)
+  name: (property_identifier) @function.method)
 
 (pair
-  key: (property_identifier) @entity.name.function.method
+  key: (property_identifier) @function.method
   value: [(function_expression) (arrow_function)])
 
 (assignment_expression
   left: (member_expression
-    property: (property_identifier) @entity.name.function.method)
+    property: (property_identifier) @function.method)
   right: [(function_expression) (arrow_function)])
 
 (variable_declarator
-  name: (identifier) @entity.name.function
+  name: (identifier) @function
   value: [(function_expression) (arrow_function)])
 
 (assignment_expression
-  left: (identifier) @entity.name.function
+  left: (identifier) @function
   right: [(function_expression) (arrow_function)])
 
 ; Function and method calls
 ;--------------------------
 
 (call_expression
-  function: (identifier) @entity.name.function)
+  function: (identifier) @function)
 
 (call_expression
   function: (member_expression
-    property: (property_identifier) @entity.name.function.method))
+    property: (property_identifier) @function.method))
 
 ; Special identifiers
 ;--------------------
 
-((identifier) @entity.name.type
- (#match? @entity.name.type "^[A-Z]"))
+((identifier) @type
+ (#match? @type "^[A-Z]"))
 
 ([
     (identifier)
     (shorthand_property_identifier)
     (shorthand_property_identifier_pattern)
- ] @constant.language
- (#match? @constant.language "^[A-Z_][A-Z\\d_]+$"))
+ ] @constant
+ (#match? @constant "^[A-Z_][A-Z\\d_]+$"))
 
 ((identifier) @variable.builtin
  (#match? @variable.builtin "^(arguments|module|console|window|document)$")
  (#is-not? local))
 
-((identifier) @entity.name.function.builtin
- (#eq? @entity.name.function.builtin "require")
+((identifier) @function.builtin
+ (#eq? @function.builtin "require")
  (#is-not? local))
 
 ; Literals
@@ -80,7 +80,7 @@
   (false)
   (null)
   (undefined)
-] @constant.language.builtin
+] @constant.builtin
 
 (comment) @comment
 
@@ -90,7 +90,7 @@
 ] @string
 
 (regex) @string.special
-(number) @constant.numeric
+(number) @number
 
 ; Tokens
 ;-------
@@ -147,7 +147,7 @@
   "&&="
   "||="
   "??="
-] @keyword.operator
+] @operator
 
 [
   "("

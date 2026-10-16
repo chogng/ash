@@ -22,7 +22,7 @@
 (variable) @variable
 
 (arguments
-  (variable) @variable.parameter)
+  (variable) @parameter)
 
 [
   "["

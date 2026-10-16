@@ -13,10 +13,9 @@ import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { ITreeSitterLibraryService, treeSitterChannel, type TreeSitterSyntaxSession } from '../../../../editor/common/services/treeSitter/treeSitterLibraryService.js';
 import type { TreeSitterFacts, TreeSitterSyntaxResult } from '../../../../editor/common/services/treeSitter/treeSitterLibraryService.js';
 import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { TextModel } from '../../../../editor/common/model/textModel.js';
 import { TreeSitterSyntaxTokenBackend } from '../../../../editor/common/model/tokens/treeSitter/treeSitterSyntaxTokenBackend.js';
-import type { TextMateScopeThemeSource } from '../../textMate/common/textMateScopeTheme.js';
-import { createTextMateScopeThemeResolver } from '../../textMate/common/textMateScopeTheme.js';
 
 /** Rust owns connected syntax sessions; Web uses a local Worker while the connection is unavailable. */
 export class TreeSitterLibraryService extends Disposable implements ITreeSitterLibraryService {
@@ -79,15 +78,19 @@ function decodeResult(value: unknown, model: TextModel): TreeSitterSyntaxResult 
 	return result;
 }
 
-export function createTreeSitterSyntaxTokenBackend(model: TextModel, configuration: IConfigurationService, library: ITreeSitterLibraryService, themes: TextMateScopeThemeSource): TreeSitterSyntaxTokenBackend | undefined {
-	const languageId = model.getLanguageId();
-	if (!library.supportsLanguage(languageId)) return undefined;
-	let revision = -1;
-	let resolve = createTextMateScopeThemeResolver(themes.currentTheme);
+export function createTreeSitterSyntaxTokenBackend(model: TextModel, configuration: IConfigurationService, library: ITreeSitterLibraryService, themes: IThemeService): TreeSitterSyntaxTokenBackend | undefined {
+	if (!library.supportsLanguage(model.getLanguageId())) return undefined;
 	const session = library.createSession(model);
-	return new TreeSitterSyntaxTokenBackend(model, session, capture => {
-		if (revision !== themes.currentTheme.revision) { revision = themes.currentTheme.revision; resolve = createTextMateScopeThemeResolver(themes.currentTheme); }
-		return resolve(captureScopes(capture));
+	return new TreeSitterSyntaxTokenBackend(model, session, (capture, language) => {
+		const [tokenType, ...modifiers] = capture.split('.');
+		const theme = themes.getColorTheme();
+		const metadata = theme.getTokenStyleMetadata(tokenType!, modifiers, language);
+		const fontStyle = metadata ? (['italic', 'bold', 'underline', 'strikethrough'] as const).filter(style => metadata[style]) : undefined;
+		return {
+			tokenType: tokenType!, modifiers,
+			...(metadata?.foreground === undefined ? {} : { foreground: theme.tokenColorMap[metadata.foreground] }),
+			...(fontStyle?.length ? { fontStyle } : {}),
+		};
 	}, configuration.getValue('editor.experimental.treeSitterTelemetry') === true ? sample => {
 		performance.measure(`ash.treeSitter.${sample.operation}`, { start: performance.now() - sample.duration, duration: sample.duration, detail: { ...sample, version: model.version, model: model.uri.path, execution: session.execution } });
 	} : undefined);
@@ -144,29 +147,3 @@ export class TreeSitterSyntaxProviders extends Disposable {
 	}
 }
 function symbolKind(kind: string): string { return kind === 'property' ? 'field' : kind === 'class' ? 'struct' : kind === 'interface' ? 'trait' : kind; }
-
-/** Convert upstream Tree-sitter categories to the editor theme's scope vocabulary. */
-export function captureScopes(capture: string): readonly string[] {
-	if (capture === 'constant.builtin') return ['constant.language'];
-	if (capture === 'property' || capture === 'field') return ['support.type.property-name', 'variable.other.property'];
-	const [kind, ...suffix] = capture.split('.');
-	const scopes: Record<string, string> = {
-		function: 'entity.name.function', method: 'entity.name.function', constructor: 'entity.name.type',
-		type: 'entity.name.type', tag: 'entity.name.tag', property: 'variable.other.property',
-		attribute: 'entity.other.attribute-name', number: 'constant.numeric', float: 'constant.numeric',
-		boolean: 'constant.language.boolean', operator: 'keyword.operator', module: 'entity.name.namespace',
-		namespace: 'entity.name.namespace', label: 'entity.name.label', character: 'string',
-		field: 'variable.other.property', parameter: 'variable.parameter', conditional: 'keyword.control',
-		repeat: 'keyword.control', include: 'keyword.control.import', storageclass: 'storage.type',
-		error: 'invalid', escape: 'constant.character.escape', none: 'source',
-	};
-	if (kind === 'text') {
-		const markup: Record<string, string> = { title: 'heading', literal: 'raw', emphasis: 'italic', strong: 'bold' };
-		if (suffix[0] === 'uri') return ['string.other.link.markdown', 'markup.underline.link.markdown'];
-		if (suffix[0] === 'reference') return ['constant.other.reference.link.markdown', 'markup.underline.link.markdown'];
-		return [`markup.${markup[suffix[0]!] ?? suffix.join('.')}.markdown`];
-	}
-	const scope = scopes[kind!];
-	if (capture === 'markup.link') return ['string.other.link', 'markup.underline.link'];
-	return [scope ? [scope, ...suffix].join('.') : capture];
-}

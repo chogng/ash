@@ -25,14 +25,11 @@ export interface IColorThemeOptions {
 	readonly baseTheme?: IColorTheme;
 	readonly resetColorOverrides?: readonly string[];
 	readonly allowUnregisteredColorOverrides?: boolean;
-	readonly tokenColors?: IColorTheme['tokenColors'];
 	readonly semanticHighlighting?: boolean;
 	readonly semanticTokenRules?: IColorTheme['semanticTokenRules'];
-	readonly resolveTokenScopes?: (rules: NonNullable<IColorTheme['tokenColors']>, scopes: readonly string[]) => TokenStyleData | undefined;
 }
 
 // Retain authored values so layered overrides re-resolve aliases instead of freezing resolved defaults.
-const themeScopeResolvers = new WeakMap<IColorTheme, NonNullable<IColorThemeOptions['resolveTokenScopes']>>();
 const themeColorOverrides = new WeakMap<IColorTheme, Readonly<Record<string, ColorValue>>>();
 
 /** Keeps color resolution current without giving each theme its own registry listener. */
@@ -57,7 +54,6 @@ export function createColorTheme(options: IColorThemeOptions): IColorTheme {
 	const sizeEntries = Object.freeze(Sizes.getSizes().map((entry) => Object.freeze({ ...entry, value: Object.freeze({ ...entry.value }) })));
 	const sizeMap = new Map(sizeEntries.map(({ id, value }) => [id, value] as const));
 	const classifications = getTokenClassificationRegistry();
-	const scopeResolver = options.resolveTokenScopes ?? (options.baseTheme ? themeScopeResolvers.get(options.baseTheme) : undefined);
 	const colorMap = [''];
 	const styleCache = new Map<string, ITokenStyle | undefined>();
 	let classificationRevision = classifications.revision;
@@ -73,14 +69,6 @@ export function createColorTheme(options: IColorThemeOptions): IColorTheme {
 				if (candidate[property] !== undefined && score >= (scores.get(property) ?? -1)) { Object.assign(style, { [property]: candidate[property] }); scores.set(property, score); }
 			}
 		};
-		for (const { selector, defaults } of classifications.getTokenStylingDefaultRules()) {
-			const score = selector.match(type, modifiers, language);
-			if (score < 0 || !scopeResolver) { continue; }
-			for (const scope of defaults.scopesToProbe) {
-				const candidate = scopeResolver(options.tokenColors ?? [], scope);
-				if (candidate) { apply(candidate, score); break; }
-			}
-		}
 		for (const { rule, selector } of rules) {
 			const score = selector.match(type, modifiers, language);
 			if (score < 0) { continue; }
@@ -122,13 +110,9 @@ export function createColorTheme(options: IColorThemeOptions): IColorTheme {
 		},
 		getSize: (id: string) => sizeMap.get(id),
 	};
-	if (options.tokenColors) {
-		Object.assign(theme, { tokenColors: options.tokenColors });
-	}
 	if (options.semanticHighlighting !== undefined) Object.assign(theme, { semanticHighlighting: options.semanticHighlighting });
 	if (options.semanticTokenRules) Object.assign(theme, { semanticTokenRules: options.semanticTokenRules });
 	themeColorOverrides.set(theme, overrides);
-	if (scopeResolver) { themeScopeResolvers.set(theme, scopeResolver); }
 	return Object.freeze(theme);
 }
 

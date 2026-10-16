@@ -38,14 +38,14 @@
 
 (mixin_statement
   (parameters
-    (parameter) @variable.parameter))
+    (parameter) @parameter))
 
 (function_statement
   name: (identifier) @function)
 
 (function_statement
   (parameters
-    (parameter) @variable.parameter))
+    (parameter) @parameter))
 
 (plain_value) @string
 
@@ -55,10 +55,10 @@
 
 (variable) @variable
 
-(argument) @variable.parameter
+(argument) @parameter
 
 (arguments
-  (variable) @variable.parameter)
+  (variable) @parameter)
 
 [
   "["

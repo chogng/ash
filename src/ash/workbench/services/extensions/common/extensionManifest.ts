@@ -6,7 +6,6 @@ import { URI } from '../../../../base/common/uri.js';
 import { posix, win32 } from '../../../../base/common/path.js';
 import { validateTokenId, type ColorContribution } from '../../../../platform/theme/common/colorRegistry.js';
 import { getTokenClassificationRegistry, type TokenTypeOrModifierContribution } from '../../../../platform/theme/common/tokenClassificationRegistry.js';
-import type { SemanticTokenScopeContribution } from '../../themes/common/tokenClassificationExtensionPoint.js';
 import type { ILocalizationContribution } from '../../../../platform/extensions/common/extensions.js';
 
 export interface ExtensionIconContribution { readonly id: string; readonly description: string; readonly defaults: string | { readonly fontPath: string; readonly fontCharacter: string; }; }
@@ -81,7 +80,6 @@ export interface ExtensionManifest {
 		readonly colors: readonly ColorContribution[];
 		readonly semanticTokenTypes: readonly TokenTypeOrModifierContribution[];
 		readonly semanticTokenModifiers: readonly TokenTypeOrModifierContribution[];
-		readonly semanticTokenScopes: readonly SemanticTokenScopeContribution[];
 		readonly icons: readonly ExtensionIconContribution[];
 		readonly customEditors: readonly ExtensionCustomEditorContribution[];
 		readonly problemMatchers: readonly Readonly<Record<string, unknown>>[];
@@ -148,7 +146,6 @@ export function parseExtensionManifest(manifestJson: string, descriptor: Extensi
 			colors: parseColors(contributes.colors, descriptor.id),
 			semanticTokenTypes: parseClassifications(contributes.semanticTokenTypes, true),
 			semanticTokenModifiers: parseClassifications(contributes.semanticTokenModifiers, false),
-			semanticTokenScopes: parseSemanticScopes(contributes.semanticTokenScopes),
 			icons: parseIcons(contributes.icons),
 			customEditors: parseCustomEditors(contributes.customEditors, descriptor.id),
 			problemMatchers: parseProblemContributions(contributes.problemMatchers, 'problemMatchers'),
@@ -558,22 +555,6 @@ function parseClassifications(value: unknown, allowSuperType: boolean): readonly
 		const superType = allowSuperType && source.superType !== undefined ? requiredString(source.superType, 'Semantic super type', 128) : undefined;
 		if (superType && !/^[A-Za-z][\w]*$/u.test(superType)) { throw new TypeError('Invalid semantic super type'); }
 		return { id, description: requiredString(source.description, 'Semantic classification description', 1024), ...(superType ? { superType } : {}) };
-	});
-}
-
-function parseSemanticScopes(value: unknown): readonly SemanticTokenScopeContribution[] {
-	if (value === undefined) { return []; }
-	if (!Array.isArray(value) || value.length > 512) { throw new TypeError('Semantic token scopes must be an array of up to 512 contributions'); }
-	return value.map(candidate => {
-		const source = record(candidate, 'Semantic token scopes');
-		const language = source.language === undefined ? undefined : languageId(source.language, 'Semantic token language');
-		const scopes = Object.fromEntries(Object.entries(record(source.scopes, 'Semantic token scopes')).map(([selector, mapping]) => {
-			getTokenClassificationRegistry().parseTokenSelector(selector, language);
-			const values = parseTextList(mapping, 'Semantic token scope mappings');
-			if (values.some(value => !/^[A-Za-z0-9_.+*-]+(?: [A-Za-z0-9_.+*-]+)*$/u.test(value))) { throw new TypeError('Invalid semantic token scope mapping'); }
-			return [selector, values];
-		}));
-		return { ...(language ? { language } : {}), scopes };
 	});
 }
 

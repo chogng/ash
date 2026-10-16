@@ -191,13 +191,13 @@ test("preserves language, snippet, theme, and advanced TextMate metadata", () =>
 test("validates extension theme catalogs", () => {
 
 	const theme = parseExtensionTheme({
-		tokenColors: [{ scope: ["comment", "punctuation.definition.comment"], settings: { foreground: "#6A9955", fontStyle: "italic" } }],
+		semanticTokenColors: { "comment": { "foreground": "#6A9955", "fontStyle": "italic" } },
 		colors: { "editor.foreground": "#D4D4D4" },
 	}, "ash.demo:0", "ash.demo", "Demo Dark", "vs-dark", "theme test");
 	using themes = new ExtensionThemeRegistry();
 	themes.replace([theme]);
 	assert.equal(themes.currentCatalog.themes[0]!.label, "Demo Dark");
-	assert.equal(themes.currentCatalog.themes[0]!.tokenColors.length, 1);
+	assert.deepEqual(themes.currentCatalog.themes[0]!.semanticTokenColors?.comment, { foreground: '#6A9955', fontStyle: 'italic' });
 });
 
 test("activates declarations without fetching legacy TextMate grammar resources", async () => {
@@ -267,7 +267,7 @@ test("reads each generation-scoped resource once while preparing one catalog", a
 	let reads = 0;
 	const api: IExtensionApi = {
 		list: async () => Object.freeze({ generation: 7, extensions: Object.freeze([themedDescriptor]), diagnostics: Object.freeze([]) }),
-		resources: new ExtensionResourceLoaderService(async () => { reads += 1; return new TextEncoder().encode('{"colors":{},"tokenColors":[]}'); }),
+		resources: new ExtensionResourceLoaderService(async () => { reads += 1; return new TextEncoder().encode('{"colors":{},"semanticTokenColors":{}}'); }),
 	};
 	using service = new AppServerExtensionService({ api, }, createEmptyTestLanguagePacks());
 
@@ -283,8 +283,8 @@ test('loads an extension theme include through its package resources', async () 
 		contributes: { themes: [{ id: 'inherited', label: 'Inherited', path: 'themes/child.json', uiTheme: 'vs-dark' }] },
 	});
 	const resources = new Map([
-		['themes/child.json', JSON.stringify({ include: './base.json', colors: { 'editor.background': '#445566' }, tokenColors: [{ scope: 'string', settings: { foreground: '#556677' } }] })],
-		['themes/base.json', JSON.stringify({ colors: { 'editor.background': '#112233', 'statusBar.background': '#223344' }, tokenColors: [{ scope: 'comment', settings: { foreground: '#334455' } }] })],
+		['themes/child.json', JSON.stringify({ include: './base.json', colors: { 'editor.background': '#445566' }, semanticTokenColors: { "string": { "foreground": "#556677" } } })],
+		['themes/base.json', JSON.stringify({ colors: { 'editor.background': '#112233', 'statusBar.background': '#223344' }, semanticTokenColors: { "comment": { "foreground": "#334455" } } })],
 	]);
 	const reads: string[] = [];
 	const api: IExtensionApi = {
@@ -299,26 +299,18 @@ test('loads an extension theme include through its package resources', async () 
 	const theme = service.themes.currentCatalog.themes[0]!;
 	assert.deepEqual(reads, ['themes/child.json', 'themes/base.json']);
 	assert.deepEqual(theme.colors, { 'editor.background': '#445566', 'statusBar.background': '#223344' });
-	assert.deepEqual(theme.tokenColors.map(rule => rule.scopes), [['comment'], ['string']]);
+	assert.deepEqual(theme.semanticTokenColors, { comment: { foreground: '#334455' }, string: { foreground: '#556677' } });
 	assert.equal(theme.colors['statusBar.background'], '#223344');
 });
 
-test('loads an extension theme with a TextMate tokenColors resource', async () => {
-	const themedDescriptor = descriptorWithManifest({
-		name: 'demo', publisher: 'ash', version: '1.0.0',
-		contributes: { themes: [{ id: 'textmate', label: 'TextMate', path: 'themes/main.json', uiTheme: 'vs-dark' }] },
-	});
-	const resources = new Map([
-		['themes/main.json', JSON.stringify({ colors: { 'editor.background': '#112233' }, tokenColors: './syntax.tmTheme' })],
-		['themes/syntax.tmTheme', '<?xml version="1.0"?><plist version="1.0"><dict><key>settings</key><array><dict><key>scope</key><string>comment</string><key>settings</key><dict><key>foreground</key><string>#123456</string></dict></dict></array></dict></plist>'],
-	]);
-	const api: IExtensionApi = {
-		list: async () => ({ generation: 1, extensions: [themedDescriptor], diagnostics: [] }),
-		resources: new ExtensionResourceLoaderService(async request => new TextEncoder().encode(resources.get(request.path)!)),
-	};
-	using service = new AppServerExtensionService({ api, }, createEmptyTestLanguagePacks());
-	await service.start();
-	assert.deepEqual(service.themes.currentCatalog.themes[0]?.tokenColors.map(rule => rule.scopes), [['comment']]);
+test('rejects retired extension token themes without reading syntax resources', async () => {
+	const { loadExtensionTheme } = await import('../../common/extensionTheme.js');
+	const reads: string[] = [];
+	await assert.rejects(loadExtensionTheme(async path => {
+		reads.push(path);
+		return new TextEncoder().encode(JSON.stringify({ tokenColors: './syntax.tmTheme' }));
+	}, 'ash.demo', { id: 'old', label: 'Old', path: 'themes/main.json', uiTheme: 'vs-dark' }, 0), /Invalid color theme/);
+	assert.deepEqual(reads, ['themes/main.json']);
 });
 
 test("rejects a catalog whose canonical manifest digest does not match", async () => {
@@ -461,7 +453,7 @@ test("preserves the last active catalog when refreshed theme materialization fai
 	let generation = 1;
 	const api: IExtensionApi = {
 		list: async () => ({ generation, extensions: [extension], diagnostics: [] }),
-		resources: new ExtensionResourceLoaderService(async () => new TextEncoder().encode(generation === 1 ? '{"colors":{},"tokenColors":[]}' : 'invalid theme')),
+		resources: new ExtensionResourceLoaderService(async () => new TextEncoder().encode(generation === 1 ? '{"colors":{},"semanticTokenColors":{}}' : 'invalid theme')),
 	};
 	using service = new AppServerExtensionService({ api }, createEmptyTestLanguagePacks());
 	await service.start();
@@ -490,7 +482,7 @@ test("publishes one coherent contribution generation to registry listeners", asy
 	});
 	const api: IExtensionApi = {
 		list: async () => catalog,
-		resources: new ExtensionResourceLoaderService(async () => new TextEncoder().encode('{"colors":{},"tokenColors":[]}')),
+		resources: new ExtensionResourceLoaderService(async () => new TextEncoder().encode('{"colors":{},"semanticTokenColors":{}}')),
 	};
 	using languageService = new LanguageService();
 	using languages = new LanguageFeaturesService();
@@ -664,7 +656,7 @@ test('extension theme contributions activate together, retain the last valid cat
 			colors: [{ id: 'test.extensionAccent', description: 'Extension accent', defaults: { light: '#123456', dark: '#654321', highContrast: '#fedcba', highContrastLight: '#aabbcc' } }],
 			semanticTokenTypes: [{ id: 'testCustomFunction', description: 'Custom function', superType: invalid ? 'missingType' : 'function' }],
 			semanticTokenModifiers: [{ id: 'testCustomModifier', description: 'Custom modifier' }],
-			semanticTokenScopes: [{ language: 'typescript', scopes: { testCustomFunction: ['entity.name.function.custom'] } }],
+
 			icons: { 'test-extension-alias': { description: 'Extension icon', default: 'add' } },
 		}
 	});
@@ -676,8 +668,7 @@ test('extension theme contributions activate together, retain the last valid cat
 	}
 	const themed = parseUserColorTheme(JSON.stringify({
 		name: 'Extension mappings', colors: { 'test.extensionAccent': '#abcdef' },
-		tokenColors: [{ scope: 'entity.name.function.custom', settings: { foreground: '#112233', fontStyle: 'italic' } }],
-		semanticTokenColors: { function: { bold: true } },
+		semanticTokenColors: { function: { foreground: '#112233', fontStyle: 'italic', bold: true } },
 	}));
 	const style = themed.getTokenStyleMetadata('testCustomFunction', ['testCustomModifier'], 'typescript')!;
 	assert.equal(themed.tokenColorMap[style.foreground!], '#112233');

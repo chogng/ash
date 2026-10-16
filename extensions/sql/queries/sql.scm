@@ -412,7 +412,7 @@
   (keyword_union)
   (keyword_except)
   (keyword_intersect)
-] @keyword.operator
+] @operator
 
 [
   "+"

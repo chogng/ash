@@ -22,7 +22,7 @@
   (type) @keyword @nospell)
 
 (prefix
-  (scope) @variable.parameter @nospell)
+  (scope) @parameter @nospell)
 
 (prefix
   [

@@ -38,11 +38,11 @@
   (list_marker_dot)
   (list_marker_parenthesis)
   (thematic_break)
-] @punctuation.definition.list.begin.markdown
+] @punctuation.list
 
 [
   (block_continuation)
   (block_quote_marker)
-] @punctuation.definition.quote.begin.markdown
+] @punctuation.quote
 
 (backslash_escape) @string.escape

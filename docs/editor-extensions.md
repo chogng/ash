@@ -753,7 +753,7 @@ Git 的显示设置与 Markdown 的语言功能在配置事件后更新；Markdo
 | language `configuration`                       | ✅           | 读取 JSONC 并注册 comments、brackets、indentation、on-enter 等语言配置                                   |
 | `grammars`                                     | ✅           | root/injection grammar、embedded languages、token types、balanced/unbalanced bracket scopes              |
 | `snippets`                                     | ✅           | 有 prefix 的 snippet 投影为 completion provider；file template 进入可查询 template catalog               |
-| `themes`                                       | ✅           | 严格解析并注册可选择 Workbench color theme，同时投影活动主题的 TextMate token scope rules                |
+| `themes`                                       | ✅           | 严格解析并注册可选择 Workbench color theme，语法与语义高亮直接读取主题的类型及修饰样式                   |
 | `debuggers`                                    | ✅（窄契约） | debugger type 映射到默认程序或动态工厂；标准 runtime/平台声明已接入，完整 VS Code Debug 扩展兼容仍在补齐 |
 | `configurationDefaults`、`semanticTokenScopes` | 尚未完成     | 内置 manifest 可包含，但当前 loader 不投影                                                               |
 | JavaScript、LSP server declaration、动态 UI    | ❌           | 不执行、不隐式信任                                                                                       |

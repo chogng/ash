@@ -36,7 +36,12 @@ export class TreeSitterSyntaxTokenBackend extends Disposable {
 	private queued = false;
 	private requestedVersion = -1;
 	private requestedRanges: readonly { startLineNumber: number; endLineNumber: number; }[] = [];
-	constructor(private readonly model: TextModel, private readonly session: TreeSitterSyntaxSession, private readonly resolveStyle: (capture: string) => TreeSitterTokenStyle | undefined, private readonly measure?: (sample: TreeSitterTokenizationMeasure) => void) {
+	constructor(
+		private readonly model: TextModel,
+		private readonly session: TreeSitterSyntaxSession,
+		private readonly resolveStyle: (capture: string, language: string) => TreeSitterTokenStyle | undefined,
+		private readonly measure?: (sample: TreeSitterTokenizationMeasure) => void,
+	) {
 		super();
 		this._register(session);
 		this.session.setTabSize(model.getOptions().tabSize);
@@ -94,8 +99,10 @@ export class TreeSitterSyntaxTokenBackend extends Disposable {
 	getLanguageTokens(line: number): readonly LanguageToken[] {
 		const length = this.model.getLineLength(line);
 		return (this.rows.get(line - 1) ?? []).flatMap(token => {
-			if (!this.styles.has(token.name)) this.styles.set(token.name, this.resolveStyle(token.name));
-			const style = this.styles.get(token.name); if ((!style && !token.languageId) || token.start >= length) return [];
+			const language = token.languageId ?? this.model.getLanguageId();
+			const key = JSON.stringify([token.name, language]);
+			if (!this.styles.has(key)) this.styles.set(key, this.resolveStyle(token.name, language));
+			const style = this.styles.get(key); if ((!style && !token.languageId) || token.start >= length) return [];
 			const { tokenType, modifiers, ...presentation } = style ?? { tokenType: 'source' };
 			return [{ range: new Range(line, token.start + 1, line, Math.min(length, token.end) + 1), tokenType, languageId: token.languageId, modifiers: modifiers ?? [], presentation }];
 		});
@@ -105,7 +112,10 @@ export class TreeSitterSyntaxTokenBackend extends Disposable {
 	async tokenizeLinesAtAsync(line: number, lines: readonly string[], signal: AbortSignal): Promise<readonly (readonly LanguageToken[])[]> {
 		const result = await this.session.request('preview', { line, lines }, signal);
 		if (result.revision !== this.model.version) throw new Error('Obsolete hypothetical syntax');
-		return (result.preview ?? []).map(tokens => tokens.flatMap(token => { const style = this.resolveStyle(token.tokenType); return style ? [{ ...token, range: Range.lift(token.range), tokenType: style.tokenType, presentation: style }] : []; }));
+		return (result.preview ?? []).map(tokens => tokens.flatMap(token => {
+			const style = this.resolveStyle(token.tokenType, token.languageId ?? this.model.getLanguageId());
+			return style ? [{ ...token, range: Range.lift(token.range), tokenType: style.tokenType, presentation: style }] : [];
+		}));
 	}
 	getBracketPairs(range: Range): readonly TreeSitterBracket[] {
 		this.refreshRange(range.startLineNumber, range.endLineNumber);

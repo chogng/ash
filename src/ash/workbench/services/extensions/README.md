@@ -109,13 +109,13 @@ its latest acknowledged SCM/status-bar registrations through other packages' act
 Packaged browser entries currently activate during reconciliation; this path does not implement
 backend JS manifest event scheduling. See [host lifecycle mechanisms](../../../../../docs/editor-extensions.md#浏览器-worker-与后端宿主的生命周期).
 
-Theme documents accept the four supported `uiTheme` values, hexadecimal colors, package-relative
-JSON `include` files, `tokenColors` arrays or package-relative TextMate theme files, and semantic token styles. Token
-settings use `foreground`, `background`, and supported `fontStyle` values. Unknown
-Workbench color token IDs remain catalog data but are ignored when compiling product color themes.
-At the extension resource boundary, publisher metadata is ignored and TextMate's `normal` and
-`regular` font styles clear emphasis. Color and style validation still applies, and user-authored
-theme documents retain their complete-value schema.
+Theme documents accept the four supported `uiTheme` values, hexadecimal colors,
+package-relative JSON `include` files, and direct type/modifier styles in
+`semanticTokenColors`. Tree-sitter syntax and language-server semantic tokens use the
+same active color theme. TextMate `tokenColors`, `.tmTheme` resources and scope mappings
+are unsupported. Unknown Workbench color IDs remain catalog data but are ignored
+when compiling product color themes. Publisher metadata is ignored at the extension
+resource boundary; user theme documents retain their complete-value schema.
 
 Product icon themes use the manifest entry `{ "id": "my-icons", "label": "My icons", "path": "./icons/theme.json" }`.
 The referenced JSONC file maps icon IDs to package-relative SVG resources:

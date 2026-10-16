@@ -228,7 +228,6 @@ import { BrowserAuxiliaryWindowService, IAuxiliaryWindowService } from "../servi
 import { ITerminalProcessService } from "../../platform/terminal/common/terminal.js";
 import { ITextFileService } from "../services/textfile/common/textfiles.js";
 import { TextFileService } from "../services/textfile/browser/textFileService.js";
-import { TextMateScopeThemeModel } from "../services/textMate/common/textMateScopeTheme.js";
 import { Event } from "../../base/common/event.js";
 import { AppServerExtensionService } from "../services/extensions/browser/appServerExtensionService.js";
 import { IExtensionService } from "../services/extensions/common/extensionService.js";
@@ -285,7 +284,6 @@ import { IActivityService } from '../services/activity/common/activity.js';
 import { ActivityService } from '../services/activity/browser/activityService.js';
 import { WorkingCopyBackupTracker } from "../services/workingCopy/browser/workingCopyBackupTracker.js";
 import { IWorkingCopyBackupService, type WorkingCopyBackup } from "../services/workingCopy/common/workingCopyBackupService.js";
-import { projectColorThemeTokens } from "../services/textMate/common/textMateThemeProjection.js";
 import { IFileTextModelService, ITextModelResourceService } from "../services/textmodelResolver/common/textModelResourceService.js";
 import { IDocumentEditorTextModelService } from '../services/documentEditor/common/documentTypes.js';
 import { DocumentEditorTextModelService } from '../services/documentEditor/browser/documentEditorTextModelService.js';
@@ -726,16 +724,16 @@ export class Workbench extends Disposable {
 		const treeSitterLibrary = this._register(services.createInstance(TreeSitterLibraryService));
 		services.registerInstance(ITreeSitterLibraryService, treeSitterLibrary);
 		this._register(new TreeSitterSyntaxProviders(languageFeaturesService));
-		const syntaxTheme = this._register(new TextMateScopeThemeModel());
 		const textResourceStore = getBrowserTextResourceStore(textFileService);
 		const textModelService = this._register(getBrowserTextModelService(textResourceStore, services, {
 			languageService,
 			languageConfigurationService,
 			languageFeaturesService,
-			createSyntaxTokenBackend: model => createTreeSitterSyntaxTokenBackend(model, configuration, treeSitterLibrary, syntaxTheme),
+			createSyntaxTokenBackend: model => createTreeSitterSyntaxTokenBackend(model, configuration, treeSitterLibrary, themeService),
 			onDidChangeSyntaxBackend: Event.any(
 				treeSitterLibrary.onDidChange,
-				Event.map(syntaxTheme.onDidChangeTheme, () => undefined),
+				// Models subscribe after the window's theme service has been initialized.
+				(listener, thisArgs, disposables) => themeService.onDidColorThemeChange(() => listener.call(thisArgs, undefined), undefined, disposables),
 				(listener, thisArgs, disposables) => configuration.onDidChangeConfiguration(event => {
 					if (event.affectsConfiguration('editor.experimental.treeSitterTelemetry')) listener.call(thisArgs, undefined);
 				}, undefined, disposables),
@@ -911,15 +909,6 @@ export class Workbench extends Disposable {
 		this._register(logService.registerSink(systemOutputService));
 		const serviceContributionReady: Promise<void>[] = [];
 		services.registerInstance(IAccessibleViewInformationService, this._register(new AccessibleViewInformationService(storage)));
-		let textMateThemeRevision = 0;
-		const updateTextMateTheme = (): void => {
-			const model = syntaxTheme;
-			const activeTheme = themeService.getColorTheme();
-			try { model.replace(projectColorThemeTokens(activeTheme, ++textMateThemeRevision)); }
-			catch (error) { logService.error("theme", "Failed to apply extension token theme", error); }
-		};
-		this._register(themeService.onDidColorThemeChange(() => updateTextMateTheme()));
-		updateTextMateTheme();
 		services.registerInstance(IUserThemeService, userThemeService ?? UnavailableUserThemeService);
 		services.registerInstance(IResourceIconRenderer, themeService);
 		services.registerInstance(IResourceLabelService, services.createInstance(ResourceLabelService));

@@ -9,16 +9,16 @@ This directory contains extension package sources and declarative resources ship
 places the same directory under `ash-resources/extensions/`.
 
 Except for this README and `BUILD.bazel`, each direct child must be a package directory with a
-`package.json`. TextMate packages may put raw JSON or PLIST grammars below the package and reference
-them from `contributes.grammars[].path`.
+`package.json`. Legacy `contributes.grammars` declarations remain inert metadata; their grammar
+resources are not loaded.
 Built-in language packages own Tree-sitter queries in `queries/` and parser declarations in `tree-sitter/grammars.json`.
 Additional query sets cover CSS/SCSS/Less, Go, HTML, JSON/JSONC/JSONL/Snippets, Lua, Ruby, PHP,
 Swift, Dart, Log, R, Julia, Clojure, Groovy, CoffeeScript, Perl, Python, Shell, INI/Properties,
 Markdown (block and inline), SQL, TOML, XML/DTD/XSL, YAML, Diff, Git commit/rebase/ignore,
 and Starlark/Bazelrc. Each package's `queries/README.md` pins the upstream grammar revision,
 lists source files and licenses, and records query composition or local compatibility changes.
-Existing JavaScript/JSX, TypeScript/TSX and Rust capture names remain adapted to editor theme scopes;
-new query sets retain upstream capture names. Git ignore highlights are authored in Ash because
+Tree-sitter captures resolve directly through the active theme token-style interface;
+Capture names use direct token categories rather than TextMate scope selectors. Git ignore highlights are authored in Ash because
 its upstream grammar ships no queries; Log highlights use Ash-authored theme-compatible captures.
 
 All built-in languages use the same package declarations. `pnpm tree-sitter:generate`
@@ -127,8 +127,8 @@ The current declarative pack contains the following package directories:
   UI-only hosts read a generated bundle of these same package resources through the extension API.
   Markdown grammar and language settings stay in `markdown-basics`; Markdown colors and font
   styles belong to `theme-defaults`. Users override syntax styles with
-  `editor.tokenColorCustomizations.textMateRules`. The `editor.action.inspectTMScopes` command
-  reports the active tokenizer's captures/scopes and resolved syntax style.
+  `editor.semanticTokenColorCustomizations.rules`. The `editor.action.inspectTMScopes` command
+  reports the active parser's captures and resolved syntax style.
 
 Built-in languages use Tree-sitter by default. Rust links the grammar dependencies in
 `ash-syntax`; the Web Worker loads portable parser assets from each language package.
@@ -155,14 +155,13 @@ publish usable Cargo bindings; they do not introduce another shared syntax engin
 Docker Compose file names select `dockercompose` and reuse the YAML parser and queries.
 The common project language packages provide offline syntax and editing resources; their
 declarations do not install or start C/C++, Java, C#, PowerShell, or other language servers.
-The generic TextMate loader remains available for external extension contributions.
+TextMate tokenization, scope-theme rules, and property-list themes are not supported.
 
 The manifest is the only source of contribution metadata. `AppServerExtensionService` receives
 Rust-validated package resources and projects languages/configuration/snippets/grammars/theme metadata/
 debuggers into their Workbench-owned registries. `ExtensionColorThemeService` owns selectable color
-theme registrations; the browser TextMate runtime never imports package files directly.
-Theme documents provide the active
-TextMate token scope rules.
+theme registrations. Theme documents provide direct type/modifier styles in
+`semanticTokenColors`; syntax and semantic highlights consume the same active theme.
 
 Supported declarative fields are deliberately narrower than a VS Code extension host:
 
@@ -170,10 +169,10 @@ Supported declarative fields are deliberately narrower than a VS Code extension 
 | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------- |
 | `languages`, file/first-line associations, `language-configuration.json` | ✅ loaded and registered                                                                                                 | Editor language registry/configuration                   |
 | `snippets`                                                               | ✅ 有 prefix 的 snippet 注册为 completion；file template 可通过 `New File from Template` 创建 untitled editor            | Editor language completion / extension template registry |
-| `grammars`                                                               | ✅ loaded through client built-in assets or validated external resources and TextMate snapshots                          | Workbench TextMate service                               |
-| `embeddedLanguages`, `tokenTypes`, bracket scope metadata                | ✅ validated, transported, and projected to Stanza token language/type/bracket metadata                                  | TextMate adapter                                         |
+| `grammars`                                                               | 仅校验旧声明元数据；不读取 grammar 资源                                                                                  | Extension manifest validator                             |
+| `embeddedLanguages`, `tokenTypes`, bracket scope metadata                | 仅作为旧 grammar 声明元数据校验；无运行时转换                                                                            | Extension manifest validator                             |
 | `iconThemes`                                                             | Loaded from package resources; supports font and SVG/PNG file icons, light variants, and `workbench.iconTheme` selection | Workbench theme service                                  |
-| `themes`                                                                 | ✅ 严格解析、版本化 catalog、Workbench theme registration 和 active TextMate token projection                            | Extension/theme/TextMate services                        |
+| `themes`                                                                 | ✅ 严格解析、版本化 catalog、Workbench theme registration 与直接类型配色                                                 | Extension/theme services                                 |
 | `debuggers`                                                              | ✅ 窄声明式 adapter command discovery；不提供 VS Code Debug Extension API                                                | Extension registry / Debug service                       |
 | `configurationDefaults`, `semanticTokenScopes`                           | 尚未接入；bundled manifest 中的字段不会被投影                                                                            | 后续领域 adapter                                         |
 | extension JavaScript                                                     | 声明式扫描不执行；可信 `browser` 包由独立 Worker 路径执行                                                                | TS 扩展宿主                                              |

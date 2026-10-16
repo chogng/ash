@@ -12,12 +12,11 @@ import { IContextKeyService } from '../../../../../platform/contextkey/browser/c
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
-import { captureScopes } from '../../../../services/treeSitter/browser/treeSitterLibraryService.js';
 import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
 
 class InspectEditorTokens extends Action2 {
 	constructor() {
-		super({ id: 'editor.action.inspectTMScopes', title: localize2({ bundle: 'ash', key: 'inspectEditorTokens.command' }, 'Developer: Inspect Editor Tokens and Scopes'), f1: true });
+		super({ id: 'editor.action.inspectTMScopes', title: localize2({ bundle: 'ash', key: 'inspectEditorTokens.command' }, 'Developer: Inspect Editor Tokens'), f1: true });
 	}
 
 	public override async run(accessor: ServicesAccessor): Promise<void> {
@@ -51,7 +50,6 @@ class InspectEditorTokens extends Action2 {
 		const offset = Math.min(position.column - 1, Math.max(0, model.getLineLength(position.lineNumber) - 1));
 		const captures = tree?.getTokenCaptures(position.lineNumber).filter(token => token.start <= offset && offset < token.end) ?? [];
 		const token = captures.at(-1);
-		const scopes = [...new Set(captures.flatMap(capture => captureScopes(capture.name)))];
 		const text = token ? model.getLineContent(position.lineNumber).slice(token.start, token.end) : '';
 		const style = tree?.getLanguageTokens(position.lineNumber).filter(token => token.range.startColumn <= offset + 1 && offset + 1 < token.range.endColumn).at(-1)?.presentation;
 		const theme = themes.getColorTheme();
@@ -66,8 +64,6 @@ class InspectEditorTokens extends Action2 {
 			localize('inspectEditorTokens.font', 'Syntax font style: {0}', style?.fontStyle?.join(' ') || localize('inspectEditorTokens.regular', 'regular')),
 			'', localize('inspectEditorTokens.captures', 'Tree-sitter captures:'),
 			...(captures.length ? captures.map(capture => capture.name) : [localize('inspectEditorTokens.noCaptures', 'No Tree-sitter capture at this position.')]),
-			'', localize('inspectEditorTokens.scopes', 'Theme scopes:'),
-			...(scopes.length ? scopes : [localize('inspectEditorTokens.noScopes', 'No theme scopes at this position.')]),
 		].join('\n');
 		const root = layout.mainContainer;
 		const content = h(root.ownerDocument, 'textarea');
@@ -78,7 +74,7 @@ class InspectEditorTokens extends Action2 {
 		const hint = accessibleViews.getOpenAriaHint(AccessibilityVerbositySettingId.InspectEditorTokens);
 		if (hint) content.setAttribute('aria-description', hint);
 		const dialog = lifetime.add(new Dialog(root, {
-			title: localize('inspectEditorTokens.title', 'Editor Tokens and Scopes'), content,
+			title: localize('inspectEditorTokens.title', 'Editor Tokens'), content,
 			buttons: [{ label: localize('inspectEditorTokens.close', 'Close'), value: 'close' }], cancelValue: 'close',
 		}));
 		const context = lifetime.add(contextKeys.createScoped(dialog.element));
@@ -87,7 +83,7 @@ class InspectEditorTokens extends Action2 {
 			lifetime.add(AccessibleViewRegistry.register({
 				name: 'inspectEditorTokens', type, priority: 150, when: ContextKeyExpr.has('inspectEditorTokensVisible'),
 				getProvider: () => new AccessibleContentProvider(AccessibleViewProviderId.InspectEditorTokens, { type },
-					() => type === AccessibleViewType.View ? report : localize('inspectEditorTokens.help', 'This report shows the token at the editor cursor, its syntax color and font style, and its Tree-sitter captures and theme scopes. Copy a theme scope into editor.tokenColorCustomizations.textMateRules to change its style. Use Tab and Shift+Tab to move between the report and Close. Press Escape to return to the editor.'),
+					() => type === AccessibleViewType.View ? report : localize('inspectEditorTokens.help', 'This report shows the token at the editor cursor, its syntax color and font style, and its Tree-sitter captures. Use a capture name in editor.semanticTokenColorCustomizations.rules to change its style. Use Tab and Shift+Tab to move between the report and Close. Press Escape to return to the editor.'),
 					() => content.focus(), AccessibilityVerbositySettingId.InspectEditorTokens),
 			}));
 		}

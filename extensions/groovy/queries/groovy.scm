@@ -16,7 +16,7 @@
   "as"
   "in"
   "new"
-] @keyword.operator
+] @operator
 
 [
   "case"
@@ -178,13 +178,13 @@
 
 (map
   (map_item
-    key: (identifier) @variable.parameter))
+    key: (identifier) @parameter))
 
 (parameter
   type: (identifier) @type)
 
 (parameter
-  name: (identifier) @variable.parameter)
+  name: (identifier) @parameter)
 
 (generic_param
   name: (identifier) @type)
@@ -271,7 +271,7 @@
 (function_call
   (argument_list
     (map_item
-      key: (identifier) @variable.parameter)))
+      key: (identifier) @parameter)))
 
 (juxt_function_call
   function: (identifier) @function)
@@ -283,7 +283,7 @@
 (juxt_function_call
   (argument_list
     (map_item
-      key: (identifier) @variable.parameter)))
+      key: (identifier) @parameter)))
 
 (function_definition
   function: (identifier) @function)
@@ -311,7 +311,7 @@
 
 (groovy_doc
   (groovy_doc_param
-    (identifier) @variable.parameter) @nospell)
+    (identifier) @parameter) @nospell)
 
 (groovy_doc
   (groovy_doc_throws

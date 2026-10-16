@@ -1,3 +1,5 @@
+import { createDisconnectedSyntaxApi } from '../../../src/ash/platform/syntax/browser/syntaxApi.js';
+import { parseUserColorTheme } from '../../../src/ash/workbench/services/themes/common/colorThemeData.js';
 import { TreeSitterLibraryService, createTreeSitterSyntaxTokenBackend } from '../../../src/ash/workbench/services/treeSitter/browser/treeSitterLibraryService.js';
 import { rustSyntaxFixture } from './rustSyntaxHostFixture.js';
 import { createEmptyTestLanguagePacks } from '../../../src/ash/workbench/services/localization/test/common/localizationTestUtils.js';
@@ -54,12 +56,11 @@ import { WorkbenchConfiguration } from '../../../src/ash/workbench/common/config
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { AppServerExtensionService } from '../../../src/ash/workbench/services/extensions/browser/appServerExtensionService.js';
 import { WorkbenchThemeService } from '../../../src/ash/workbench/services/themes/browser/workbenchThemeService.js';
-import { TextMateScopeThemeModel } from '../../../src/ash/workbench/services/textMate/common/textMateScopeTheme.js';
+import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { TextModel } from '../../../src/ash/editor/common/model/textModel.js';
 import { registerColor } from '../../../src/ash/platform/theme/common/colorUtils.js';
 import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
 import { highContrastDarkColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
-import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { registerIcon } from '../../../src/ash/platform/theme/common/iconRegistry.js';
 
 declare global {
@@ -76,20 +77,22 @@ declare global {
 		disposeNestedHighContrastWidget(): void;
 		disposeIconSelectBox(): void;
 		previewWithRustSyntax(): Promise<{ hasString: boolean; hasKeyword: boolean; unchanged: boolean; text: string; }>;
-		tokenizeWithRustSyntax(): Promise<readonly { type: string; modifiers: readonly string[]; presentation?: { foreground?: string; fontStyle?: readonly string[]; }; }[]>;
+		tokenizeWithSyntax(): Promise<readonly { type: string; modifiers: readonly string[]; presentation?: { foreground?: string; fontStyle?: readonly string[]; }; }[]>;
 		setLabelDecoration(data: IDecorationData | undefined): void;
 		removeLabelDecorationProvider(): void;
 	}
 }
 
-window.tokenizeWithRustSyntax = async () => {
-	using scopeTheme = new TextMateScopeThemeModel();
-	using library = new TreeSitterLibraryService(await rustSyntaxFixture());
+window.tokenizeWithSyntax = async () => {
+	using scopeTheme = new TestThemeService(parseUserColorTheme('{}', 'empty-theme'));
+	using library = new TreeSitterLibraryService(new URL(location.href).searchParams.get('backend') === 'offline'
+		? createDisconnectedSyntaxApi(operation => { throw new Error(`Unexpected offline syntax request: ${operation}`); })
+		: await rustSyntaxFixture());
 	const configuration = { getValue: () => false } as unknown as IConfigurationService;
 	const create = (text: string): TextModel => new TextModel(text, {
 		languageId: 'javascript', tokenization: {
 			createSyntaxTokenBackend: model => createTreeSitterSyntaxTokenBackend(model, configuration, library, scopeTheme),
-			onDidChangeSyntaxBackend: listener => scopeTheme.onDidChangeTheme(() => listener()),
+			onDidChangeSyntaxBackend: listener => scopeTheme.onDidColorThemeChange(() => listener()),
 		},
 	});
 	let model = create('if (true) {}');
@@ -104,11 +107,9 @@ window.tokenizeWithRustSyntax = async () => {
 	};
 	try {
 		await capture();
-		scopeTheme.replace({ revision: 1, rules: [{ selector: 'keyword', tokenType: 'keyword', modifiers: ['declaration'] }] });
+		scopeTheme.setColorTheme(parseUserColorTheme('{"semanticTokenColors":{"keyword":{"foreground":"#ff0000","fontStyle":"italic"}}}', 'red-theme'));
 		await capture();
-		scopeTheme.replace({ revision: 2, rules: [{ selector: 'keyword', tokenType: 'keyword', modifiers: ['declaration'], foreground: '#ff0000', fontStyle: ['italic'] }] });
-		await capture();
-		scopeTheme.replace({ revision: 3, rules: [{ selector: 'keyword', tokenType: 'keyword', modifiers: ['declaration'], foreground: '#0000ff', fontStyle: ['bold'] }] });
+		scopeTheme.setColorTheme(parseUserColorTheme('{"semanticTokenColors":{"keyword":{"foreground":"#0000ff","fontStyle":"bold"}}}', 'blue-theme'));
 		await capture();
 		model.setValue('"if"');
 		await capture();
@@ -245,7 +246,7 @@ document.body.dataset.ready = 'true';
 
 
 window.previewWithRustSyntax = async () => {
-	using theme = new TextMateScopeThemeModel();
+	using theme = new TestThemeService(parseUserColorTheme('{}', 'empty-theme'));
 	using library = new TreeSitterLibraryService(await rustSyntaxFixture());
 	const configuration = { getValue: () => false } as unknown as IConfigurationService;
 	using model = new TextModel('const text = `start\nend`;\nif (true) {}', {

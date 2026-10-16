@@ -1,4 +1,4 @@
-import { TextMateScopeThemeModel } from '../../../src/ash/workbench/services/textMate/common/textMateScopeTheme.js';
+import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { TreeSitterLibraryService, TreeSitterSyntaxProviders, createTreeSitterSyntaxTokenBackend } from '../../../src/ash/workbench/services/treeSitter/browser/treeSitterLibraryService.js';
 import { rustSyntaxFixture } from './rustSyntaxHostFixture.js';
 import { Range } from '../../../src/ash/editor/common/core/range.js';
@@ -14,10 +14,9 @@ import { resolveTextResourceLanguageId } from '../../../src/ash/platform/languag
 import { createLanguageExtensions } from './languageExtensions.js';
 
 const store = new DisposableStore();
-const syntaxTheme = store.add(new TextMateScopeThemeModel());
 const library = store.add(new TreeSitterLibraryService(await rustSyntaxFixture()));
 const services: ReturnType<typeof StandaloneServices.initialize> = store.add(StandaloneServices.initialize({
-	tokenization: { createSyntaxTokenBackend: model => createTreeSitterSyntaxTokenBackend(model, services.get(IConfigurationService), library, syntaxTheme) },
+	tokenization: { createSyntaxTokenBackend: model => createTreeSitterSyntaxTokenBackend(model, services.get(IConfigurationService), library, services.get(IThemeService)) },
 }));
 store.add(new TreeSitterSyntaxProviders(services.languageFeaturesService));
 await services.get(IConfigurationService).updateValue('files.eol', '\n');

@@ -81,7 +81,7 @@
     "list.treeGuidesNone": "不显示",
     "list.treeGuidesOnHover": "悬停时显示",
     "list.treeGuidesAlways": "始终显示",
-    "inspectEditorTokens.command": "开发者：检查编辑器词法单元和作用域",
+    "inspectEditorTokens.command": "开发者：检查编辑器词法单元",
     "inspectEditorTokens.position": "位置：{0}:{1}",
     "inspectEditorTokens.language": "语言：{0}",
     "inspectEditorTokens.theme": "主题：{0}",
@@ -89,11 +89,10 @@
     "inspectEditorTokens.color": "语法颜色：{0}",
     "inspectEditorTokens.font": "语法字体样式：{0}",
     "inspectEditorTokens.regular": "常规",
-    "inspectEditorTokens.scopes": "主题作用域：",
     "inspectEditorTokens.report": "编辑器词法单元检查",
-    "inspectEditorTokens.title": "编辑器词法单元和作用域",
+    "inspectEditorTokens.title": "编辑器词法单元",
     "inspectEditorTokens.close": "关闭",
-    "inspectEditorTokens.help": "此报告显示编辑器光标处的词法单元、语法颜色、字体样式，以及 Tree-sitter 捕获和主题作用域。将主题作用域复制到 editor.tokenColorCustomizations.textMateRules 即可调整样式。使用 Tab 和 Shift+Tab 在报告与关闭按钮之间移动，按 Escape 返回编辑器。",
+    "inspectEditorTokens.help": "此报告显示编辑器光标处的词法单元、语法颜色、字体样式，以及 Tree-sitter 捕获。在 editor.semanticTokenColorCustomizations.rules 中使用捕获名称即可调整样式。使用 Tab 和 Shift+Tab 在报告与关闭按钮之间移动，按 Escape 返回编辑器。",
     "inspectEditorTokens.invalidVerbosity": "词法单元检查的无障碍提示设置必须为布尔值",
     "inspectEditorTokens.verbosityTitle": "词法单元检查无障碍帮助",
     "inspectEditorTokens.verbosityDescription": "在词法单元检查中提示如何打开无障碍帮助。",
@@ -807,8 +806,7 @@
     "inspectEditorTokens.embeddedLanguage": "内嵌语言：{0}",
     "inspectEditorTokens.engine": "语法引擎：{0}",
     "inspectEditorTokens.captures": "Tree-sitter 捕获：",
-    "inspectEditorTokens.noCaptures": "此位置没有 Tree-sitter 捕获。",
-    "inspectEditorTokens.noScopes": "此位置没有主题作用域。"
+    "inspectEditorTokens.noCaptures": "此位置没有 Tree-sitter 捕获。"
   },
   "ash.editor.clipboard": {
     "selection.title": "选区剪贴板",

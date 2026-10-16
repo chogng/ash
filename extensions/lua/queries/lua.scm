@@ -85,7 +85,7 @@
   "and"
   "not"
   "or"
-] @keyword.operator
+] @operator
 
 ; Punctuations
 [

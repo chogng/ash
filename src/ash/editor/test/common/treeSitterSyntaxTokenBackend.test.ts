@@ -84,8 +84,8 @@ test('Tree-sitter composes TypeScript and JavaScript queries and preserves Unico
 	await value.whenReady(signal());
 	const all = tokens(value, model).flatMap(row => row.tokens);
 	assert.ok(all.some(token => token.type === 'keyword' && token.text === 'return'));
-	assert.ok(all.some(token => token.type.startsWith('entity.name.function') && token.text === 'answer'));
-	assert.ok(all.some(token => token.type === 'constant.numeric' && token.text === '42'));
+	assert.ok(all.some(token => token.type.startsWith('function') && token.text === 'answer'));
+	assert.ok(all.some(token => token.type === 'number' && token.text === '42'));
 	assert.ok(all.some(token => token.type === 'string' && token.text === '"😀中文"'));
 	model.applyEdits([{ range: new Range(1, 26, 1, 26), text: 'x' }]);
 	await assertFresh(value, model, 'typescript');
@@ -158,9 +158,9 @@ test('Tree-sitter composes JSX/TSX queries and retains code inside JSX expressio
 		using value = backend(model, language);
 		await value.whenReady(signal());
 		const all = tokens(value, model).flatMap(row => row.tokens);
-		assert.ok(all.some(token => token.text === 'panel' && token.type.startsWith('entity.name.tag')));
-		assert.ok(all.some(token => token.text === 'answer' && token.type.startsWith('entity.name.function')));
-		assert.ok(all.some(token => token.text === '42' && token.type === 'constant.numeric'));
+		assert.ok(all.some(token => token.text === 'panel' && token.type.startsWith('tag')));
+		assert.ok(all.some(token => token.text === 'answer' && token.type.startsWith('function')));
+		assert.ok(all.some(token => token.text === '42' && token.type === 'number'));
 		model.applyEdits([{ range: new Range(1, 27, 1, 32), text: 'changed' }]);
 		await assertFresh(value, model, language);
 	}

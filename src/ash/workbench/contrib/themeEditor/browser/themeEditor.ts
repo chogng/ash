@@ -523,7 +523,7 @@ export class ThemeEditor extends EditorPane {
 	private authoredColors(): Readonly<Record<string, string>> {
 		const source = parseJsonc(this.textEditor.getValue(), 'Color theme');
 		const extension = this.input && getThemeEditorSource(this.extensions, this.input.resource);
-		// Use the format owner for publisher metadata and TextMate style normalization.
+		// Use the format owner to validate theme fields and normalize publisher metadata.
 		return extension
 			? parseExtensionTheme(source, extension.id, extension.request.extensionId, extension.contribution.label, extension.contribution.uiTheme, extension.contribution.path).colors
 			: parseColorThemeDocument(source).colors ?? {};
