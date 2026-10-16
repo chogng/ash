@@ -9,6 +9,7 @@ import { MenuWorkbenchToolBar } from "../../../../platform/actions/browser/toolb
 import { type IMenu, type IMenuService, MenuId } from "../../../../platform/actions/common/actions.js";
 import type { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
 import { localize, type ILocalizationService } from "../../../services/localization/common/localizationService.js";
+import type { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 
 /** Host-selected menubar presentation owned by the titlebar. */
 export interface IMenubarControl extends IDisposable {
@@ -69,6 +70,7 @@ export class BrowserMenubarControl extends Disposable
 		contextMenuService: IContextMenuService,
 		localizationService?: ILocalizationService,
 		options: MenubarOptions = {},
+		contextKeyService?: IContextKeyService,
 	) {
 		super();
 		this.contextMenuService = contextMenuService;
@@ -88,6 +90,7 @@ export class BrowserMenubarControl extends Disposable
 			? localize(localizationService, { bundle: 'ash.regions', key: 'titleBarLeftActions' }, 'Title bar left actions')
 			: resolveNls({ bundle: 'ash.regions', key: 'titleBarLeftActions' }, 'Title bar left actions');
 		this.toolbar = this._register(new MenuWorkbenchToolBar(container, menuService, contextMenuService, options.titlebarMenuId ?? MenuId.TitleBarLeft, {
+			contextKeyService,
 			ariaLabel: leftActionsLabel(),
 			presentation: "inherit-foreground",
 			// Layout actions expose their pressed state without a persistent titlebar fill.

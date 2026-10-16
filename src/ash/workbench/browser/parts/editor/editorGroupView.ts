@@ -852,8 +852,11 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	}
 
 	public setTitleVisible(visible: boolean): void {
+		if (this.titleVisible === visible) return;
 		this.titleVisible = visible;
-		this.titleControl.domNode.hidden = !visible;
+		// Restore the editor's own title policy when leaving a window presentation mode.
+		if (visible) this.renderChrome();
+		else this.titleControl.domNode.hidden = true;
 		this.layout(this.groupDimension);
 	}
 

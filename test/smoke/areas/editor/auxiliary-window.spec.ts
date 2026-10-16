@@ -49,6 +49,13 @@ for (const scenario of [
 			const input = popup.locator('.stanza-editor-input').first();
 			await expect(popup.locator('.view-lines')).toContainText('selected tab content');
 			await expect(input).toBeFocused();
+			if (scenario.locale === 'zh-CN') {
+				const titlebar = popup.locator('.ash-auxiliary-titlebar');
+				await titlebar.getByRole('button', { name: '开启紧凑模式', exact: true }).click();
+				await expect(popup.locator('.ash-workbench-statusbar')).toBeHidden();
+				await titlebar.getByRole('button', { name: '关闭紧凑模式', exact: true }).click();
+				await expect(popup.locator('.ash-workbench-statusbar')).toBeVisible();
+			}
 			await expect(tab).toHaveCount(scenario.mode === 'move' ? 0 : 1);
 			await expect(remainingTab).toHaveCount(1);
 			const popupId = await popup.getByRole('tab').first().evaluate(element => element.closest<HTMLElement>('.ash-tab')!.dataset.actionId!);
@@ -188,6 +195,8 @@ focusTest('detached editor windows participate in desktop window switching and c
 test('detached window titlebar follows its own editor and reserves layout space', async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
+	await workbench.editors.groupAt(0).editor.waitForEditorFocus();
+	await workbench.editors.groupAt(0).editor.waitForTypeInEditor('auxiliary compact fixture');
 	await page.keyboard.press('F1');
 	const command = page.locator('.ash-quick-pick').getByRole('combobox');
 	await command.fill('>Move to New Window');
@@ -203,6 +212,9 @@ test('detached window titlebar follows its own editor and reserves layout space'
 		await expect(titlebar).toBeVisible();
 		await expect(popup).toHaveTitle(/Untitled/);
 		await expect(titlebar.locator('.ash-titlebar-command-center-button')).toHaveAttribute('aria-description', await popup.title());
+		await expect(titlebar.locator('[data-action-id="workbench.action.toggleSideBar"]')).toHaveCount(0);
+		await expect(titlebar.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"]')).toHaveCount(0);
+		await expect(page.locator('[data-action-id="workbench.action.toggleSideBar"]')).toBeVisible();
 		const mainTitle = await page.title();
 		await popup.locator('.stanza-editor-input').first().focus();
 		await expect(page).toHaveTitle(mainTitle);
@@ -216,6 +228,51 @@ test('detached window titlebar follows its own editor and reserves layout space'
 		expect(Math.abs(bounds.titleBottom - bounds.editorTop)).toBeLessThanOrEqual(1);
 		expect(Math.abs(bounds.editorBottom - bounds.statusTop)).toBeLessThanOrEqual(1);
 		expect(Math.abs(bounds.statusBottom - bounds.windowHeight)).toBeLessThanOrEqual(1);
+
+		const enableCompact = titlebar.getByRole('button', { name: 'Turn On Compact Mode', exact: true });
+		const regularModeButtonBounds = (await enableCompact.boundingBox())!;
+		await enableCompact.focus();
+		await enableCompact.press('Enter');
+		const disableCompact = titlebar.getByRole('button', { name: 'Turn Off Compact Mode', exact: true });
+		await expect(disableCompact).toBeVisible();
+		const compactModeButtonBounds = (await disableCompact.boundingBox())!;
+		expect(Math.abs(compactModeButtonBounds.x - regularModeButtonBounds.x)).toBeLessThanOrEqual(1);
+		expect(Math.abs(compactModeButtonBounds.y - regularModeButtonBounds.y)).toBeLessThanOrEqual(1);
+		await expect(popup.locator('.stanza-editor-input').first()).toBeFocused();
+		await expect(root.locator('.ash-workbench-statusbar')).toBeHidden();
+		await expect(popup.getByRole('tab')).toHaveCount(0);
+		await expect(titlebar.locator('.ash-titlebar-command-center-button')).toBeHidden();
+		const compactTitle = titlebar.locator('.ash-titlebar-window-title');
+		await expect(compactTitle).toBeVisible();
+		await expect(compactTitle).toHaveText(await popup.title());
+		const titleBounds = (await compactTitle.boundingBox())!;
+		const windowWidth = await popup.evaluate(() => window.innerWidth);
+		expect(Math.abs(titleBounds.x + titleBounds.width / 2 - windowWidth / 2)).toBeLessThanOrEqual(1);
+		expect(titleBounds.x + titleBounds.width).toBeLessThan(compactModeButtonBounds.x);
+		await expect(page.locator('.ash-workbench-statusbar')).toBeVisible();
+		const compactBottom = await root.locator('.ash-workbench-editor').evaluate(element => element.getBoundingClientRect().bottom);
+		expect(Math.abs(compactBottom - bounds.windowHeight)).toBeLessThanOrEqual(1);
+		await popup.screenshot({ path: test.info().outputPath('compact-window.png') });
+		const originalSize = await popup.evaluate(() => ({ width: window.outerWidth, height: window.outerHeight }));
+		try {
+			await popup.evaluate(() => window.resizeTo(500, 530));
+			await expect.poll(() => popup.evaluate(() => window.innerWidth)).toBeLessThanOrEqual(500);
+			await expect(compactTitle).toHaveAttribute('title', await popup.title());
+			await expect(compactTitle).toHaveCSS('text-overflow', 'ellipsis');
+			expect(await compactTitle.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
+		} finally {
+			await popup.evaluate(size => window.resizeTo(size.width, size.height), originalSize);
+		}
+		await expect.poll(() => popup.evaluate(() => window.outerWidth)).toBe(originalSize.width);
+		await disableCompact.focus();
+		await disableCompact.press('Enter');
+		await expect(enableCompact).toBeVisible();
+		await expect(popup.locator('.stanza-editor-input').first()).toBeFocused();
+		await expect(root.locator('.ash-workbench-statusbar')).toBeVisible();
+		await expect(popup.getByRole('tab')).toHaveCount(1);
+		await expect(titlebar.locator('.ash-titlebar-command-center-button')).toBeVisible();
+		await expect(compactTitle).toBeHidden();
+		await popup.screenshot({ path: test.info().outputPath('regular-window.png') });
 
 		await popup.close();
 		await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'Untitled' })).toHaveCount(1);

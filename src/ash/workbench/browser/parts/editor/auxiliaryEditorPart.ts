@@ -1,6 +1,7 @@
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import "./media/auxiliaryEditorPart.css";
-import { Dimension } from "../../../../base/browser/dom.js";
+import { Dimension, getActiveWindow, getWindow } from "../../../../base/browser/dom.js";
+import { mainWindow } from '../../../../base/browser/window.js';
 import { Disposable, DisposableStore, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
 import type { IAuxiliaryWindow } from "../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js";
@@ -10,10 +11,46 @@ import { StatusbarPart } from "../statusbar/statusbarPart.js";
 import type { IAuxiliaryTitlebarPart } from "../titlebar/titlebarPart.js";
 import type { IEditorPart } from "./editorPart.js";
 import { EditorStatusContribution } from "./editorStatus.js";
-import { localize } from '../../../../nls.js';
+import { localize, localize2 } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { WorkbenchConfiguration } from '../../../common/configuration.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
+import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
+import { IsAuxiliaryWindowContext, IsCompactTitleBarContext } from '../../../common/contextkeys.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
+import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
+import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+
+// Commands resolve the window at invocation; the live part owns its mode and chrome.
+const compactWindowCommands = new WeakMap<Window, (compact?: boolean) => void>();
+
+for (const compact of [undefined, true, false]) {
+	registerAction2(class extends Action2 {
+		constructor() {
+			super({
+				id: `workbench.action.${compact === undefined ? 'toggle' : compact ? 'enable' : 'disable'}CompactAuxiliaryWindow`,
+				title: compact === undefined
+					? localize2('toggleCompactAuxiliaryWindow', 'Toggle Window Compact Mode')
+					: compact ? localize2('enableCompactAuxiliaryWindow', 'Turn On Compact Mode') : localize2('disableCompactAuxiliaryWindow', 'Turn Off Compact Mode'),
+				f1: compact === undefined,
+				icon: compact === false ? Lxicon.screenNormal : Lxicon.screenFull,
+				menu: compact === undefined ? undefined : {
+					id: MenuId.LayoutControlMenu,
+					when: ContextKeyExpr.and(IsAuxiliaryWindowContext.isEqualTo(true), IsCompactTitleBarContext.isEqualTo(!compact)),
+					group: 'navigation',
+					order: 0,
+				},
+			});
+		}
+
+		override run(accessor: ServicesAccessor): void {
+			const focused = getActiveWindow();
+			const target = focused === mainWindow ? getWindow(accessor.get(ILayoutService).activeContainer) : focused;
+			compactWindowCommands.get(target)?.(compact);
+		}
+	});
+}
 
 export interface AuxiliaryEditorPartCreation {
 	readonly part: IEditorPart;
@@ -49,15 +86,31 @@ export class AuxiliaryEditorPart extends Disposable {
 			const statusServices = this._register(instantiationService.createChild());
 			statusServices.registerInstance(IAccessibilityService, accessibility);
 			this._register(statusServices.createInstance(EditorStatusContribution, creation.part, statusbarService));
+			let compact: boolean | undefined;
 			const updateWindowChrome = (): void => {
-				creation.titlebar.updateOptions({ compact: creation.part.activePane?.prefersCompactTitlebar === true });
-				const hidden = creation.part.activePane?.prefersStatusbarHidden === true || configuration.getValue<boolean>(WorkbenchConfiguration.statusBarVisible) === false;
+				const isCompact = compact ?? creation.part.activePane?.prefersCompactTitlebar === true;
+				creation.titlebar.updateOptions({ compact: isCompact });
+				for (const group of creation.part.groups) group.setTitleVisible(!isCompact);
+				const hidden = isCompact || creation.part.activePane?.prefersStatusbarHidden === true || configuration.getValue<boolean>(WorkbenchConfiguration.statusBarVisible) === false;
 				if (statusbarPart.domNode.hidden !== hidden) {
 					statusbarPart.setVisible(!hidden);
 					window.layout();
 				}
 			};
-			this._register(creation.part.onDidChangeEditors(updateWindowChrome));
+			compactWindowCommands.set(window.window, value => {
+				const focusedElement = window.window.document.activeElement;
+				compact = value ?? !(compact ?? creation.part.activePane?.prefersCompactTitlebar === true);
+				updateWindowChrome();
+				window.layout();
+				// The mode button is replaced by its inverse; keep keyboard focus in this window.
+				if (focusedElement && !focusedElement.isConnected) creation.part.focus();
+			});
+			this._register(toDisposable(() => compactWindowCommands.delete(window.window)));
+			this._register(creation.part.onDidChangeEditors(() => {
+				// Compact windows expose one editor. Reveal navigation when another is added.
+				if (creation.part.groups.length > 1 || creation.part.activeGroup.inputs.length > 1) compact = false;
+				updateWindowChrome();
+			}));
 			this._register(configuration.onDidChangeConfiguration(event => { if (event.affectsConfiguration(WorkbenchConfiguration.statusBarVisible)) updateWindowChrome(); }));
 			let isConfirmingClose = false;
 			const confirmClose = async (): Promise<void> => {

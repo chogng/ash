@@ -74,21 +74,39 @@
 	border-radius: 0;
 }
 
-.ash-auxiliary-titlebar-compact > .ash-workbench-part-title,
-.ash-auxiliary-titlebar-compact .ash-titlebar-center {
+.ash-titlebar-window-title {
 	display: none;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	text-align: center;
+	font-size: var(--ash-fontSize-body1);
+}
+
+.ash-auxiliary-titlebar-compact > .ash-workbench-part-title,
+.ash-auxiliary-titlebar-compact .ash-titlebar-command-center,
+.ash-auxiliary-titlebar-compact .ash-titlebar-center-adjacent-actions {
+	display: none;
+}
+
+.ash-auxiliary-titlebar-compact .ash-titlebar-center {
+	width: 40%;
+	max-width: 400px;
+}
+
+.ash-auxiliary-titlebar-compact .ash-titlebar-window-title {
+	display: block;
 }
 
 .ash-auxiliary-titlebar-compact > .ash-workbench-part-content {
 	margin-left: auto;
-	flex: 1;
 	min-width: 0;
 }
 
 .ash-auxiliary-titlebar-compact .ash-titlebar-actions,
 .ash-auxiliary-titlebar-compact .ash-titlebar-actions > .ash-toolbar {
-	flex: 1;
 	min-width: 0;
+	justify-content: flex-end;
 }
 
 .ash-titlebar-actions .ash-dropdown-with-primary-action-view-item {

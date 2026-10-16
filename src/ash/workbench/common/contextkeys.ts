@@ -9,6 +9,9 @@ export const IsSessionsWindowContext = new RawContextKey<boolean>('isSessionsWin
 /** Whether this title bar belongs to an auxiliary editor window. */
 export const IsAuxiliaryWindowContext = new RawContextKey<boolean>('isAuxiliaryWindow', false);
 
+/** Whether this window's editor actions occupy its compact title bar. */
+export const IsCompactTitleBarContext = new RawContextKey<boolean>('isCompactTitleBar', false);
+
 /** Operating-system always-on-top state for this title bar's window. */
 export const IsWindowAlwaysOnTopContext = new RawContextKey<boolean>('isWindowAlwaysOnTop', false);
 

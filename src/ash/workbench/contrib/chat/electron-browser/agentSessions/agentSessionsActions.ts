@@ -7,6 +7,7 @@ import { INativeHostService } from '../../../../common/services.js';
 import { validateOpenAgentsWindow } from '../../../../../platform/native/common/nativeHost.js';
 import { OPEN_AGENTS_WINDOW_COMMAND_ID } from '../../common/constants.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
+import { IsAuxiliaryWindowContext } from '../../../../common/contextkeys.js';
 
 const openAgentsWindowTitle = localize2({ bundle: 'ash.actions', key: 'openAgentsWindow' }, 'Open Agents Window');
 const openInAgentsTitle = localize2({ bundle: 'ash.actions', key: 'openInAgents' }, 'Open in Agents');
@@ -34,7 +35,7 @@ export class OpenAgentsWindowTitleBarAction extends Action2 {
 			title: openInAgentsTitle,
 			tooltip: openInAgentsTooltip,
 			icon: ashTitlebarMark,
-			menu: { id: MenuId.TitleBarAdjacentCenter, group: 'navigation', order: 1 },
+			menu: { id: MenuId.TitleBarAdjacentCenter, when: IsAuxiliaryWindowContext.isEqualTo(false), group: 'navigation', order: 1 },
 		});
 	}
 

@@ -2,6 +2,10 @@
   "ash": {
     "theme.documentTooLarge": "主题超出 1 MiB 文档大小限制",
     "theme.invalidPropertyList": "主题的属性列表格式无效，位置：{0}",
+    "toggleCompactAuxiliaryWindow": "切换窗口紧凑模式",
+    "enableCompactAuxiliaryWindow": "开启紧凑模式",
+    "disableCompactAuxiliaryWindow": "关闭紧凑模式",
+    "accessibility.editorCompactWindow": "在独立编辑器窗口中，切换窗口紧凑模式会隐藏编辑器标签栏和状态栏，在中间显示当前窗口标题，并将编辑器操作移到标题栏。使用标题栏中的关闭紧凑模式可恢复显示。打开另一个编辑器或拆分编辑器组也会恢复导航。",
     "treeSitter.missingSyntax": "缺少必要的语法",
     "treeSitter.syntaxError": "语法错误",
     "quickAccess.categoryTitle": "{0}: {1}",

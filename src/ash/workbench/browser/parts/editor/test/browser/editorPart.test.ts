@@ -3471,6 +3471,51 @@ test('auxiliary tools hide the status bar and return its space to the editor', a
 	} finally { dom.window.close(); }
 });
 
+test('compact window commands hide chrome only in their target and restore navigation for another editor', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost' });
+	try {
+		using registry = new EditorPaneRegistry();
+		registry.registerEditorPane(descriptor('test.text', '.ts', () => new TestEditorPane('test.text')));
+		using main = createEditorPart(dom.window.document.body, { registry });
+		using windows = new TestAuxiliaryWindowService();
+		using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'workspace', flushInterval: 0 });
+		using parts = createEditorParts(main, windows, container => createAuxiliaryPart(container, registry), {
+			onDidChangeScreenReaderOptimized: Event.None,
+			isScreenReaderOptimized: () => false,
+		} as unknown as IAccessibilityService, storage);
+		const first = await parts.createAuxiliaryEditorPart();
+		const firstWindow = windows.lastWindow!;
+		const second = await parts.createAuxiliaryEditorPart();
+		const secondWindow = windows.lastWindow!;
+		await first.openEditor(input('/first.ts'), { pinned: true });
+		await second.openEditor(input('/second.ts'), { pinned: true });
+		using services = new InstantiationService();
+		const { ILayoutService } = await import('../../../../../../platform/layout/browser/layoutService.js');
+		services.registerInstance(ILayoutService, { activeContainer: firstWindow.container } as import('../../../../../../platform/layout/browser/layoutService.js').ILayoutService);
+		using commands = new CommandService(services);
+		const status = firstWindow.container.querySelector<HTMLElement>('.ash-workbench-statusbar')!;
+		const expandedHeight = (first.activePane as TestEditorPane).dimension!.height;
+		await commands.executeCommand('workbench.action.enableCompactAuxiliaryWindow');
+		assert.equal(first.activeGroup.domNode.querySelector<HTMLElement>('.ash-editor-title-control')!.hidden, true);
+		assert.equal(status.hidden, true);
+		assert.ok((first.activePane as TestEditorPane).dimension!.height > expandedHeight);
+		assert.equal(secondWindow.container.querySelector<HTMLElement>('.ash-workbench-statusbar')!.hidden, false);
+		assert.equal(second.activeGroup.domNode.querySelector<HTMLElement>('.ash-editor-title-control')!.hidden, false);
+		await commands.executeCommand('workbench.action.disableCompactAuxiliaryWindow');
+		assert.equal(status.hidden, false);
+		assert.equal((first.activePane as TestEditorPane).dimension!.height, expandedHeight);
+		await commands.executeCommand('workbench.action.toggleCompactAuxiliaryWindow');
+		assert.equal(status.hidden, true);
+		await first.openEditor(input('/another.ts'), { pinned: true });
+		assert.equal(status.hidden, false);
+		assert.equal(first.activeGroup.domNode.querySelector<HTMLElement>('.ash-editor-title-control')!.hidden, false);
+		await commands.executeCommand('workbench.action.enableCompactAuxiliaryWindow');
+		first.addGroup(first.activeGroup.id, Direction.Right);
+		assert.equal(status.hidden, false);
+		assert.equal(first.groups[0]!.domNode.querySelector<HTMLElement>('.ash-editor-title-control')!.hidden, false);
+	} finally { dom.window.close(); }
+});
+
 test('HistoryService reopens across editor windows in close order into the active part', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost' });
 	try {

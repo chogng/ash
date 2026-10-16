@@ -176,6 +176,19 @@ test('title service shares the resolved title with its registered part and relea
 	services.registerInstance(ITitleService, titleService);
 	const shared = services.get(ITitleService);
 	const part = titleService.getPart(ownerDocument.body);
+	const { IsAuxiliaryWindowContext } = await import('../../../../../common/contextkeys.js');
+	resources.add(MenusRegistry.appendMenuItem(MenuId.TitleBarAdjacentCenter, {
+		command: { id: 'test.titlebar.mainAdjacent', title: 'Main adjacent action' },
+		when: IsAuxiliaryWindowContext.isEqualTo(false),
+		group: 'navigation',
+	}));
+	resources.add(MenusRegistry.appendMenuItem(MenuId.TitleBarLeft, {
+		command: { id: 'test.titlebar.mainSidebar', title: 'Main sidebar' },
+		when: IsAuxiliaryWindowContext.isEqualTo(false),
+		group: 'navigation',
+	}));
+	assert.ok(part.domNode.querySelector('[data-action-id="test.titlebar.mainSidebar"]'));
+	assert.ok(part.domNode.querySelector('[data-action-id="test.titlebar.mainAdjacent"]'));
 	assert.equal(shared, titleService);
 	assert.equal(shared.getPart(part.domNode), part);
 	assert.equal(ownerDocument.querySelectorAll('[data-part="titlebar"]').length, 1);
@@ -200,6 +213,9 @@ test('title service shares the resolved title with its registered part and relea
 		onDidChangeActiveGroup: Event.None,
 	};
 	const auxiliary = shared.createAuxiliaryTitlebarPart(popup.window.document.body, popupGroups, services);
+	assert.equal(auxiliary.container.querySelector('[data-action-id="test.titlebar.mainSidebar"]'), null);
+	assert.equal(auxiliary.container.querySelector('[data-action-id="test.titlebar.mainAdjacent"]'), null);
+	assert.ok(part.domNode.querySelector('[data-action-id="test.titlebar.mainSidebar"]'), 'Auxiliary context must not hide the main window action');
 	assert.equal(shared.getPart(auxiliary.container), auxiliary);
 	assert.equal(popup.window.document.title, 'main — detached.ts — Ash Code');
 	assert.throws(() => shared.createAuxiliaryTitlebarPart(popup.window.document.body, popupGroups, services), /already has a titlebar/);
@@ -215,6 +231,13 @@ test('title service shares the resolved title with its registered part and relea
 	resources.add(auxiliary.onMenubarVisibilityChange(value => visibility.push(value)));
 	auxiliary.updateOptions({ compact: true });
 	assert.equal(auxiliary.container.classList.contains('ash-auxiliary-titlebar-compact'), true);
+	const compactTitle = auxiliary.container.querySelector<HTMLElement>('.ash-titlebar-window-title')!;
+	assert.equal(compactTitle.textContent, popup.window.document.title);
+	popupInput = { resource: URI.file('/renamed.ts') };
+	popupChanged.fire();
+	assert.equal(compactTitle.textContent, '🔴 feature — renamed.ts — Ash Code');
+	assert.equal(compactTitle.title, popup.window.document.title);
+	assert.equal(shared.windowTitle.value, '🔴 feature — draft.ts — Ash Code');
 	auxiliary.updateOptions({ compact: false });
 	assert.deepEqual(visibility, [false, true]);
 	auxiliary.dispose();

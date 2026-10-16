@@ -12,7 +12,7 @@ import { IContextMenuService } from "../../../../platform/contextview/browser/co
 import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { getActionBarActions } from '../../../../platform/actions/browser/menuEntryActionViewItem.js';
-import { IsAuxiliaryWindowContext } from '../../../common/contextkeys.js';
+import { IsAuxiliaryWindowContext, IsCompactTitleBarContext } from '../../../common/contextkeys.js';
 import { Part } from "../../part.js";
 import type { GlobalCompositeBar } from "../globalCompositeBar.js";
 import { WorkbenchWindowBarHeight } from "../workbenchPartDimensions.js";
@@ -154,7 +154,7 @@ export class BrowserTitlebarPart extends Part implements ITitlebarPart {
 	constructor(
 		container: HTMLElement,
 		private readonly options: ITitlebarPartFactoryOptions,
-		createMenubar: (menuService: IMenuService, contextMenuService: IContextMenuService, localizationService: ILocalizationService) => IMenubarControl,
+		createMenubar: (menuService: IMenuService, contextMenuService: IContextMenuService, localizationService: ILocalizationService, contextKeyService: IContextKeyService) => IMenubarControl,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IMenuService menuService: IMenuService,
 		@IContextMenuService contextMenuService: IContextMenuService,
@@ -166,8 +166,9 @@ export class BrowserTitlebarPart extends Part implements ITitlebarPart {
 		super(container, "titlebar", themeService, storageService);
 		this.contextKeyService = this._register(contextKeyService.createScoped(this.domNode));
 		IsAuxiliaryWindowContext.bindTo(this.contextKeyService);
+		IsCompactTitleBarContext.bindTo(this.contextKeyService);
 		const ownerDocument = container.ownerDocument;
-		this.menubar = this._register(createMenubar(menuService, contextMenuService, localizationService));
+		this.menubar = this._register(createMenubar(menuService, contextMenuService, localizationService, this.contextKeyService));
 		const appIconDomNode = h(ownerDocument, "span");
 		appIconDomNode.className = "ash-titlebar-app-icon";
 		appIconDomNode.setAttribute("aria-hidden", "true");
@@ -180,6 +181,15 @@ export class BrowserTitlebarPart extends Part implements ITitlebarPart {
 		centerDomNode.className = "ash-titlebar-center";
 		this.contentDomNode.before(centerDomNode);
 		this._register(instantiationService.createInstance(CommandCenterControl, centerDomNode, options.windowTitle, localizationService));
+		const windowTitleDomNode = h(ownerDocument, 'span');
+		windowTitleDomNode.className = 'ash-titlebar-window-title';
+		centerDomNode.append(windowTitleDomNode);
+		const updateWindowTitle = (): void => {
+			windowTitleDomNode.textContent = options.windowTitle.value;
+			windowTitleDomNode.title = options.windowTitle.value;
+		};
+		this._register(options.windowTitle.onDidChange(updateWindowTitle));
+		updateWindowTitle();
 		const centerAdjacentActionsDomNode = h(ownerDocument, "div");
 		centerAdjacentActionsDomNode.className = "ash-titlebar-center-adjacent-actions ash-titlebar-interactive-region";
 		centerDomNode.append(centerAdjacentActionsDomNode);
@@ -243,6 +253,7 @@ export class BrowserTitlebarPart extends Part implements ITitlebarPart {
 
 	public updateOptions(options: { compact: boolean; }): void {
 		this.isCompact = options.compact;
+		IsCompactTitleBarContext.bindTo(this.contextKeyService).set(this.isCompact);
 		this.updateEditorActions();
 	}
 
@@ -269,7 +280,7 @@ export class BrowserTitlebarPart extends Part implements ITitlebarPart {
 /** Creates the titlebar used by a regular web workbench. */
 export const createBrowserTitlebarPart: TitlebarPartFactory = (container, options, instantiationService) =>
 	instantiationService.createInstance(BrowserTitlebarPart, container, options,
-		(menuService: IMenuService, contextMenuService: IContextMenuService, localizationService: ILocalizationService) => new BrowserMenubarControl(container, menuService, contextMenuService, localizationService));
+		(menuService: IMenuService, contextMenuService: IContextMenuService, localizationService: ILocalizationService, contextKeyService: IContextKeyService) => new BrowserMenubarControl(container, menuService, contextMenuService, localizationService, {}, contextKeyService));
 
 export interface IAuxiliaryTitlebarPart extends ITitlebarPart, IView {
 	readonly container: HTMLElement;
@@ -300,7 +311,7 @@ export class AuxiliaryBrowserTitlebarPart extends BrowserTitlebarPart implements
 	) {
 		const windowTitle = instantiationService.createInstance(WindowTitle, container.ownerDocument.defaultView!, productName, editorGroupsContainer);
 		super(container, { windowTitle, editorGroupsContainer },
-			(menus, contextMenus, localization) => new BrowserMenubarControl(container, menus, contextMenus, localization, { presentation: menubarPresentation }),
+			(menus, contextMenus, localization, contextKeys) => new BrowserMenubarControl(container, menus, contextMenus, localization, { presentation: menubarPresentation }, contextKeys),
 			instantiationService, menuService, contextMenuService, localizationService, themeService, storageService, contextKeyService);
 		this._register(windowTitle);
 		this._register(toDisposable(onDispose));
