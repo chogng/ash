@@ -35,8 +35,8 @@
 }
 
 .ash-output-title-actions > .ash-output-filter-widget {
-	width: 280px;
-	flex: 1 1 280px;
+	width: 180px;
+	flex: 0 1 180px;
 }
 
 .ash-output-filter-widget > .ash-toolbar,
