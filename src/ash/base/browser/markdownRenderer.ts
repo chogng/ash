@@ -1,6 +1,7 @@
 import { Marked, type MarkedExtension, type MarkedOptions, type Token, type Tokens } from "../common/marked/marked.js";
 import { addDisposableListener, getDocument, reset, h } from "./dom.js";
 import {
+	basicMarkupHtmlTags,
 	type DomSanitizerConfig,
 	type SanitizeAttributeRule,
 	sanitizeHtmlToFragment,
@@ -16,6 +17,7 @@ import { Schemas } from '../common/network.js';
 import { URI } from '../common/uri.js';
 import { localize } from '../../nls.js';
 import { createObjectUrl } from './fileAccess.js';
+import { htmlAttributeEncodeValue } from '../common/strings.js';
 
 export type MarkdownActionHandler = (linkContent: string, markdown: IMarkdownString) => void;
 
@@ -63,53 +65,8 @@ interface MarkdownParserInstance {
 }
 
 const MAX_MARKDOWN_LENGTH = 4 * 1024 * 1024;
-const ALLOWED_TAGS = [
-	"a",
-	"abbr",
-	"b",
-	"blockquote",
-	"br",
-	"caption",
-	"code",
-	"dd",
-	"del",
-	"details",
-	"div",
-	"dl",
-	"dt",
-	"em",
-	"footer",
-	"h1",
-	"h2",
-	"h3",
-	"h4",
-	"h5",
-	"h6",
-	"hr",
-	"img",
-	"input",
-	"kbd",
-	"li",
-	"mark",
-	"ol",
-	"p",
-	"pre",
-	"section",
-	"s",
-	"strong",
-	"sub",
-	"summary",
-	"span",
-	"sup",
-	"table",
-	"tbody",
-	"td",
-	"th",
-	"thead",
-	"tr",
-	"ul",
-] as const;
-const ALLOWED_ATTRIBUTES = [
+export const allowedMarkdownHtmlTags = Object.freeze([...basicMarkupHtmlTags, 'input', 'footer', 'section', 'audio']);
+export const allowedMarkdownHtmlAttributes = Object.freeze([
 	"alt",
 	"checked",
 	"class",
@@ -123,7 +80,7 @@ const ALLOWED_ATTRIBUTES = [
 	"title",
 	"type",
 	{ attributeName: 'width', shouldKeep: isImageDimension },
-] as const;
+] as const);
 
 function isImageDimension(element: Element, data: { readonly attrValue: string; }): boolean {
 	return element.tagName === 'IMG' && /^\d+$/u.test(data.attrValue);
@@ -148,8 +105,8 @@ const RESOURCE_IMAGE_SCHEMES = [
 	Schemas.file, Schemas.ashRemote, Schemas.vscodeFileResource, Schemas.vscodeRemote, Schemas.vscodeRemoteResource,
 ] as const;
 const SANITIZER_CONFIG: DomSanitizerConfig = {
-	allowedTags: { override: ALLOWED_TAGS },
-	allowedAttributes: { override: ALLOWED_ATTRIBUTES },
+	allowedTags: { override: allowedMarkdownHtmlTags },
+	allowedAttributes: { override: allowedMarkdownHtmlAttributes },
 	allowedLinkProtocols: { override: DEFAULT_LINK_SCHEMES },
 	allowRelativeLinkPaths: true,
 	allowedMediaProtocols: { override: DEFAULT_MEDIA_SCHEMES },
@@ -320,6 +277,7 @@ class RenderedMarkdown extends Disposable implements IRenderedMarkdown {
 				markdown.supportAlertSyntax === true,
 				this.markedExtensions,
 				this.transformUri,
+				this.sanitizerConfig?.replaceWithPlaintext,
 			);
 			this.parsers.set(key, parser);
 		}
@@ -351,6 +309,7 @@ export function renderWorkbenchMarkdown(
 			markdownString.supportAlertSyntax === true,
 			options.markedExtensions ?? [],
 			options.transformUri,
+			options.sanitizerConfig?.replaceWithPlaintext,
 		),
 		markdownString,
 		{
@@ -398,7 +357,9 @@ function plaintextBlocks(tokens: readonly Token[], options: PlaintextMarkdownOpt
 			}
 			case 'hr':
 			case 'space':
+				break;
 			case 'html':
+				lines.push(plaintextHtml((token as Tokens.HTML).text));
 				break;
 			default:
 				if ('tokens' in token && token.tokens) lines.push(plaintextInline(token.tokens, options));
@@ -418,7 +379,10 @@ function plaintextInline(tokens: readonly Token[], options: PlaintextMarkdownOpt
 				break;
 			}
 			case 'image':
+				result += (token as Tokens.Image).text;
+				break;
 			case 'html':
+				result += plaintextHtml((token as Tokens.HTML).text);
 				break;
 			case 'br':
 				result += '\n';
@@ -429,6 +393,20 @@ function plaintextInline(tokens: readonly Token[], options: PlaintextMarkdownOpt
 		}
 	}
 	return result;
+}
+
+/** HTML blocks carry their children in one token, so ignoring that token loses visible text. */
+function plaintextHtml(source: string): string {
+	const fragment = sanitizeHtmlToFragment(source, { ownerDocument: getDocument() });
+	const read = (node: Node): string => {
+		if (node.nodeType === 3) { return node.textContent ?? ''; }
+		const element = node.nodeType === 1 ? node as Element : undefined;
+		if (element?.localName === 'img') { return element.getAttribute('alt') ?? ''; }
+		const text = Array.from(node.childNodes, read).join('');
+		if (element?.matches('br,hr,p,div,section,li,tr,summary,h1,h2,h3,h4,h5,h6')) { return text + '\n'; }
+		return element?.matches('td,th') ? text + '\t' : text;
+	};
+	return read(fragment);
 }
 
 function renderMarkdownWithParser(
@@ -462,6 +440,7 @@ function createMarkdownParser(
 	supportAlerts: boolean,
 	markedExtensions: readonly MarkedExtension[],
 	transformUri?: (href: string, kind: 'link' | 'image') => string,
+	replaceWithPlaintext = false,
 ): MarkdownParserInstance {
 	const codeBlocks: Tokens.Code[] = [];
 	const parser = new Marked();
@@ -497,7 +476,9 @@ function createMarkdownParser(
 		});
 	}
 	parser.use(...markedExtensions);
-	parser.use({ renderer: { html: ({ text }) => supportHtml ? text : '' } });
+	if (!supportHtml) {
+		parser.use({ renderer: { html: ({ text }) => replaceWithPlaintext ? htmlAttributeEncodeValue(text) : '' } });
+	}
 	return { parser, codeBlocks };
 }
 
@@ -506,7 +487,7 @@ function codeBlockLanguageId(language: string | undefined): string {
 }
 
 function escapeHtmlAttribute(value: string): string {
-	return value.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+	return htmlAttributeEncodeValue(value);
 }
 
 /** Sanitizes parser-produced Markdown HTML into a detached DOM fragment. */
@@ -525,8 +506,8 @@ export function sanitizeMarkdownHtmlToFragment(
 function createMarkdownSanitizerConfig(markdown: IMarkdownString | undefined, config: MarkdownSanitizerConfig | undefined): DomSanitizerConfig {
 	return {
 		...SANITIZER_CONFIG,
-		allowedTags: { override: config?.allowedTags?.override ?? ALLOWED_TAGS },
-		allowedAttributes: { override: config?.allowedAttributes?.override ?? ALLOWED_ATTRIBUTES },
+		allowedTags: { override: config?.allowedTags?.override ?? allowedMarkdownHtmlTags },
+		allowedAttributes: { override: config?.allowedAttributes?.override ?? allowedMarkdownHtmlAttributes },
 		allowedLinkProtocols: {
 			override: [...DEFAULT_LINK_SCHEMES, ...(config?.allowedLinkSchemes?.augment ?? [])],
 		},

@@ -17,12 +17,6 @@
 	box-sizing: border-box;
 }
 
-.ash-chatgpt-navigation-heading {
-	margin: 0 12px;
-	font-size: var(--ash-fontSize-heading2, 18px);
-	font-weight: var(--ash-fontWeight-semiBold, 600);
-}
-
 .ash-chatgpt-navigation button,
 .ash-chatgpt-navigation input {
 	font: inherit;
@@ -40,7 +34,6 @@
 }
 
 .ash-chatgpt-navigation button:hover,
-.ash-chatgpt-navigation summary:hover,
 .ash-chatgpt-navigation button[aria-current] {
 	background: var(--ash-list-hoverBackground, ButtonFace);
 }
@@ -60,7 +53,7 @@
 	background: transparent;
 }
 
-.ash-chatgpt-navigation :is(button, input, summary):focus-visible {
+.ash-chatgpt-navigation :is(button, input):focus-visible {
 	outline: var(--ash-strokeThickness, 1px) solid
 		var(--ash-focusBorder, Highlight);
 	outline-offset: -1px;
@@ -88,28 +81,12 @@
 	text-overflow: ellipsis;
 }
 
-.ash-chatgpt-navigation-actions {
-	flex-shrink: 0;
-}
-
-.ash-chatgpt-navigation-actions summary {
-	min-height: 36px;
-	padding: 6px 12px;
-	border-radius: var(--ash-cornerRadius-small, 4px);
-	cursor: pointer;
-}
-
-.ash-chatgpt-navigation-action-buttons {
-	display: flex;
-	flex-direction: column;
-}
-
 .ash-chatgpt-navigation [hidden] {
 	display: none;
 }
 
 @media (forced-colors: active) {
-	.ash-chatgpt-navigation :is(button, summary) {
+	.ash-chatgpt-navigation button {
 		border: var(--ash-strokeThickness, 1px) solid CanvasText;
 	}
 	.ash-chatgpt-navigation-list button[aria-current] {

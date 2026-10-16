@@ -118,7 +118,7 @@ export class ChatMcpAppSubPart extends Disposable {
 			if (!/^text\/html\s*;\s*profile\s*=\s*mcp-app(?:\s*;|\s*$)/iu.test(resource.mimeType)) throw new Error(localize('chat.mcpApp.invalidMime', 'The server did not return an MCP App document.'));
 			const html = new TextDecoder('utf-8', { fatal: true }).decode(resource.bytes);
 			this.appCsp = resource.appCsp;
-			const view = this.webviews.createWebviewElement({ title: localize('chat.mcpApp.label', 'Interactive MCP App'), options: {}, contentOptions: { allowScripts: true, localResourceRoots: [], messageProtocol: 'mcp', mcpCsp: this.appCsp } });
+			const view = this.webviews.createWebviewElement({ title: localize('chat.mcpApp.label', 'Interactive MCP App'), options: {}, contentOptions: { allowScripts: true, localResourceRoots: [], messageProtocol: 'mcp', contentSecurityPolicy: this.appCsp } });
 			this.view.value = view;
 			this.listener.value = view.onMessage(event => this.receive(event.message));
 			view.setHtml(html);

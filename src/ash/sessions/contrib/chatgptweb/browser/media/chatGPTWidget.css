@@ -11,6 +11,10 @@
 	position: relative;
 }
 
+.ash-chatgpt-widget:focus {
+	outline: none;
+}
+
 .ash-chatgpt-widget *,
 .ash-chatgpt-widget *::before,
 .ash-chatgpt-widget *::after {
@@ -43,7 +47,7 @@
 	background: var(--ash-list-hoverBackground, ButtonFace);
 }
 
-.ash-chatgpt-widget :is(button, input, textarea, select):focus-visible {
+.ash-chatgpt-widget :is(button, input, textarea, select, a):focus-visible {
 	outline: var(--ash-strokeThickness, 1px) solid
 		var(--ash-focusBorder, Highlight);
 	outline-offset: -1px;
@@ -104,11 +108,6 @@
 	margin-bottom: 24px;
 	border-radius: var(--ash-cornerRadius-xLarge, 12px);
 	background: var(--ash-list-hoverBackground, ButtonFace);
-}
-.ash-chatgpt-role {
-	margin: 0 0 8px;
-	font-size: var(--ash-fontSize-label1, 12px);
-	font-weight: var(--ash-fontWeight-semiBold, 600);
 }
 .ash-chatgpt-message-body p {
 	margin: 0 0 12px;
@@ -212,4 +211,137 @@
 		:is(button, .ash-chatgpt-composer, .ash-chatgpt-turn.user) {
 		border: var(--ash-strokeThickness, 1px) solid CanvasText;
 	}
+}
+
+.ash-chatgpt-rich-box,
+.ash-chatgpt-rich-row {
+	display: flex;
+	min-width: 0;
+	max-width: 100%;
+}
+.ash-chatgpt-rich-box {
+	flex-direction: column;
+}
+.ash-chatgpt-rich-row {
+	flex-direction: row;
+	flex-wrap: wrap;
+}
+.ash-chatgpt-rich p {
+	margin: 0;
+}
+.ash-chatgpt-message-body > .ash-markdown > .ash-chatgpt-rich-box {
+	margin: 12px 0 24px;
+}
+.ash-chatgpt-rich.border {
+	border: var(--ash-strokeThickness, 1px) solid
+		var(--ash-widget-border, GrayText);
+}
+.ash-chatgpt-rich.radius-sm {
+	border-radius: var(--ash-cornerRadius-small, 4px);
+}
+.ash-chatgpt-rich.radius-md {
+	border-radius: var(--ash-cornerRadius-medium, 6px);
+}
+.ash-chatgpt-rich.radius-lg {
+	border-radius: var(--ash-cornerRadius-large, 8px);
+}
+.ash-chatgpt-rich.padding-0 {
+	padding: 0;
+}
+.ash-chatgpt-rich.padding-1 {
+	padding: 4px;
+}
+.ash-chatgpt-rich.padding-2 {
+	padding: 8px;
+}
+.ash-chatgpt-rich.padding-3 {
+	padding: 12px;
+}
+.ash-chatgpt-rich.padding-4 {
+	padding: 16px;
+}
+.ash-chatgpt-rich.gap-0 {
+	gap: 0;
+}
+.ash-chatgpt-rich.gap-1 {
+	gap: 4px;
+}
+.ash-chatgpt-rich.gap-2 {
+	gap: 8px;
+}
+.ash-chatgpt-rich.gap-3 {
+	gap: 12px;
+}
+.ash-chatgpt-rich.gap-4 {
+	gap: 16px;
+}
+.ash-chatgpt-rich.align-start {
+	text-align: start;
+}
+.ash-chatgpt-rich.align-center {
+	text-align: center;
+}
+.ash-chatgpt-rich.align-end {
+	text-align: end;
+}
+.ash-chatgpt-rich.align-stretch {
+	align-items: stretch;
+}
+.ash-chatgpt-rich.justify-start {
+	justify-content: flex-start;
+}
+.ash-chatgpt-rich.justify-center {
+	justify-content: center;
+}
+.ash-chatgpt-rich.justify-end {
+	justify-content: flex-end;
+}
+.ash-chatgpt-rich.background-surface {
+	background: var(--ash-editor-background, Canvas);
+}
+.ash-chatgpt-rich.background-surface-secondary {
+	background: var(--ash-list-hoverBackground, ButtonFace);
+}
+.ash-chatgpt-rich.color-secondary {
+	color: var(--ash-editor-descriptionForeground, GrayText);
+}
+.ash-chatgpt-rich-text.size-xs {
+	font-size: var(--ash-fontSize-body2, 11px);
+}
+.ash-chatgpt-rich-text.size-sm {
+	font-size: var(--ash-fontSize-label1, 12px);
+}
+.ash-chatgpt-rich-text.size-lg {
+	font-size: var(--ash-fontSize-heading2, 18px);
+}
+.ash-chatgpt-rich-icon {
+	font-size: var(--ash-lxiconFontSize, 16px);
+}
+.ash-chatgpt-rich-fallback {
+	display: inline-block;
+	margin: 4px;
+}
+.ash-chatgpt-citation {
+	display: inline-block;
+	vertical-align: baseline;
+	margin-inline: var(--ash-spacing-size20);
+}
+.ash-chatgpt-citation > summary {
+	color: var(--ash-link-foreground);
+	cursor: pointer;
+	font-size: var(--ash-fontSize-body2);
+}
+.ash-chatgpt-citation[open] {
+	display: block;
+	padding: var(--ash-spacing-size80);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-border));
+	border-radius: var(--ash-cornerRadius-medium);
+}
+.ash-chatgpt-citation > summary:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: var(--ash-spacing-size20);
+}
+.ash-chatgpt-resource {
+	color: var(--ash-description-foreground);
 }

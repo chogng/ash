@@ -37,6 +37,10 @@ import { BrowserHostService } from '../../workbench/services/host/browser/browse
 import { ILanguagePackStore } from '../../platform/languagePacks/common/languagePackStore.js';
 import { BrowserLanguagePackStore } from '../../platform/languagePacks/browser/languagePackStore.js';
 import { InstantiationType, registerSingleton } from '../../platform/instantiation/common/extensions.js';
+import { ServiceCollection } from '../../platform/instantiation/common/serviceCollection.js';
+import { SyncDescriptor } from '../../platform/instantiation/common/descriptors.js';
+import { IWorkbenchEnvironmentService } from '../../workbench/services/environment/common/environmentService.js';
+import { BrowserWorkbenchEnvironmentService } from '../../workbench/services/environment/browser/environmentService.js';
 
 registerSingleton(IHostService, BrowserHostService, InstantiationType.Delayed);
 registerSingleton(ILanguagePackStore, BrowserLanguagePackStore, InstantiationType.Delayed);
@@ -62,12 +66,14 @@ export class SessionsBrowserMain extends Disposable {
 			if (!ownerWindow) throw new Error('Sessions renderer requires an owner window');
 			const browserFiles = host?.webWorkspaceClient ? undefined : this._register(new HTMLFileSystemProvider(ownerWindow.indexedDB, ownerWindow));
 			const workbench = await createSessionsWorkbench({
+				serviceCollection: new ServiceCollection([IWorkbenchEnvironmentService, new SyncDescriptor(BrowserWorkbenchEnvironmentService, [ownerWindow.location])]),
 				createAppToolsHost: documentClient ? services => new AppServerAppToolsHost(documentClient!, services.createInstance(AppToolsHost, container.ownerDocument, undefined)) : undefined,
 				createTextDocumentHost: documentClient ? services => {
 					const editing = services.get(IChatEditingService);
 					return services.createInstance(AppServerTextDocumentHost, documentClient!, { applyEdits: editing.applyEdits.bind(editing), finishTurn: editing.finishTurn.bind(editing) });
 				} : undefined,
 				contributionIds: [
+					'chatResponseResourceWorkbenchContribution',
 					'workbench.contrib.partsSplash',
 					'workbench.contrib.preferences',
 					'workbench.contrib.snippets',

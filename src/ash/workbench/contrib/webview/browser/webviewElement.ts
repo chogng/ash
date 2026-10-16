@@ -54,7 +54,7 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 	private readonly localResourceRoots: readonly URI[];
 	private readonly allowScripts: boolean;
 	private readonly messageProtocol: 'mcp' | undefined;
-	private readonly mcpCsp: WebviewContentOptions['mcpCsp'];
+	private readonly contentSecurityPolicy: WebviewContentOptions['contentSecurityPolicy'];
 	private readonly resourceRequests = this._register(new MutableDisposable());
 	private documentCancellation: CancellationTokenSource | undefined;
 	private isBootstrapReady = false;
@@ -96,7 +96,7 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 		this.localResourceRoots = [...(initInfo.contentOptions?.localResourceRoots ?? [])];
 		this.allowScripts = initInfo.contentOptions?.allowScripts === true;
 		this.messageProtocol = initInfo.contentOptions?.messageProtocol;
-		this.mcpCsp = this.messageProtocol === 'mcp' ? initInfo.contentOptions?.mcpCsp : undefined;
+		this.contentSecurityPolicy = initInfo.contentOptions?.contentSecurityPolicy;
 		this.forwardKeyboardEvents = initInfo.options.forwardKeyboardEvents === true;
 		const element = h(mainWindow.document, "iframe");
 		this.element = element;
@@ -264,7 +264,7 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 				type: 'document',
 				documentChannel: this.channel,
 				title: this.element.title,
-				html: createWebviewDocument(this.channel, this.html, this.forwardKeyboardEvents, this.allowScripts, this.mcpCsp),
+				html: createWebviewDocument(this.channel, this.html, this.forwardKeyboardEvents, this.allowScripts, this.contentSecurityPolicy),
 				messageProtocol: this.messageProtocol,
 			});
 		}
@@ -330,7 +330,7 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 	}
 }
 
-function createWebviewDocument(channel: string, html: string, forwardKeyboardEvents: boolean, allowScripts: boolean, appCsp?: WebviewContentOptions['mcpCsp']): string {
+function createWebviewDocument(channel: string, html: string, forwardKeyboardEvents: boolean, allowScripts: boolean, appCsp?: WebviewContentOptions['contentSecurityPolicy']): string {
 	const nonce = crypto.randomUUID();
 	const policy = appCsp ? [
 		"default-src 'none'", "object-src 'none'", "form-action 'none'",

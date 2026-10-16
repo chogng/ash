@@ -178,6 +178,9 @@ importers:
       harfbuzzjs:
         specifier: 1.6.3
         version: 1.6.3
+      katex:
+        specifier: 0.18.2
+        version: 0.18.2
       native-keymap:
         specifier: 3.3.9
         version: 3.3.9

@@ -6,12 +6,12 @@ import { IStorageService, StorageScope, StorageTarget } from '../../../../platfo
 import { IChatGPTTransport } from '../common/chatGPTTransport.js';
 import { ChatGPTClient, ChatGPTRequestError, type ChatGPTConversation, type ChatGPTMessage, type ChatGPTModel } from './chatGPTClient.js';
 import { createChatGPTFetch } from './chatGPTFetch.js';
+import { getChatGPTRichContentText } from './chatGPTRichContent.js';
 
 export const chatGPTNavigationContainerId = 'sessions.chatgpt.navigation';
 
 export interface ChatGPTState {
 	readonly draft: string;
-	readonly name: string;
 	readonly connected: boolean;
 	readonly busy: boolean;
 	readonly sending: boolean;
@@ -32,7 +32,6 @@ export interface ChatGPTState {
 export interface IChatGPTService {
 	readonly state: IObservable<ChatGPTState>;
 	initialize(): void;
-	connect(): Promise<void>;
 	reload(): Promise<void>;
 	newChat(): void;
 	select(id: string): Promise<void>;
@@ -41,13 +40,14 @@ export interface IChatGPTService {
 	setModel(value: string): void;
 	send(): Promise<void>;
 	stop(): Promise<void>;
+	readResource(resource: string, conversationId: string | undefined, messageId: string, signal: AbortSignal): Promise<Blob>;
 	getAccessibleContent(): string;
 }
 export const IChatGPTService = createServiceIdentifier<IChatGPTService>('chatGPTService');
 
 export class ChatGPTService extends Disposable implements IChatGPTService {
 	private readonly model = observableValue<ChatGPTState>('chatgpt', {
-		draft: '', name: '', connected: false, busy: false, sending: false, conversations: [], hasMore: false,
+		draft: '', connected: false, busy: false, sending: false, conversations: [], hasMore: false,
 		models: [], model: '', title: 'ChatGPT', parentId: crypto.randomUUID(), messages: [], error: '', uncertain: false, stopped: false,
 	});
 	private readonly drafts = new Map<string, string>();
@@ -55,7 +55,6 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	private stream: AbortController | undefined;
 	private stopping: Promise<void> | undefined;
 	private generation = 0;
-	private accountId: string | undefined;
 
 	public readonly state: IObservable<ChatGPTState> = this.model;
 	private readonly client: ChatGPTClient;
@@ -64,20 +63,23 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		super();
 		this.client = new ChatGPTClient(createChatGPTFetch(transport));
 		this._register(toDisposable(() => {
-			this.generation++; this.operation?.abort(); this.stream?.abort(); this.client.clear(); this.drafts.clear();
+			this.generation++; this.operation?.abort(); this.stream?.abort(); this.drafts.clear();
 		}));
 	}
-	public initialize(): void { if (!this.initialized) { this.initialized = true; void this.connect(); } }
+	public initialize(): void { if (!this.initialized) { this.initialized = true; void this.loadCatalog(); } }
 	public async reload(): Promise<void> {
 		if (this.model.get().busy || this.model.get().sending) { return; }
 		const id = this.model.get().conversationId;
-		if (this.model.get().connected && id) { await this.select(id); } else { await this.connect(); }
+		if (this.model.get().connected && id) { await this.select(id); } else { await this.loadCatalog(); }
 	}
 	public setDraft(draft: string): void { this.drafts.set(this.draftKey(), draft); this.update({ draft }); }
 	public setModel(model: string): void { this.update({ model }); }
+	public readResource(resource: string, conversationId: string | undefined, messageId: string, signal: AbortSignal): Promise<Blob> {
+		return this.client.readResource(resource, conversationId, messageId, signal);
+	}
 	public getAccessibleContent(): string {
 		const state = this.model.get();
-		return [state.title, ...state.messages.map(message => `${message.role === 'user' ? localize('sessions.chatgpt.you', 'You') : 'ChatGPT'}\n${message.text}`), state.error].filter(Boolean).join('\n\n');
+		return [state.title, ...state.messages.map(message => `${message.role === 'user' ? localize('sessions.chatgpt.you', 'You') : 'ChatGPT'}\n${message.role === 'assistant' ? getChatGPTRichContentText(message.text, message.references) : message.text}\n${message.resources?.map(resource => resource.name).join('\n') ?? ''}`), state.error].filter(Boolean).join('\n\n');
 	}
 	private rememberConversation(id: string | undefined): void {
 		if (id) { this.storage.store('sessions.chatgpt.conversation', id, StorageScope.PROFILE, StorageTarget.MACHINE); }
@@ -91,32 +93,23 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		return { signal: AbortSignal.any([this.operation.signal, AbortSignal.timeout(30_000)]), generation: ++this.generation };
 	}
 
-	public async connect(): Promise<void> {
+	private async loadCatalog(): Promise<void> {
 		if (this.isDisposed || this.model.get().sending) { return; }
 		const { signal, generation } = this.beginOperation();
-		this.update({ draft: '', busy: true, connected: false, name: '', conversations: [], models: [], messages: [], error: '' });
+		this.update({ busy: true, error: '' });
 		try {
-			const account = await this.client.connect(signal);
-			if (generation !== this.generation) { return; }
-			if (!account.id || account.id !== this.accountId) {
-				this.drafts.clear();
-				if (this.accountId !== undefined) { this.rememberConversation(undefined); }
-			}
-			this.accountId = account.id;
 			const [catalog, conversations] = await Promise.all([this.client.models(signal), this.client.conversations(0, signal)]);
 			if (generation !== this.generation) { return; }
-
+			const state = this.model.get();
 			this.update({
-				name: account.name, connected: true, busy: false, models: catalog.models, model: catalog.defaultModel, uncertain: false, stopped: false,
-				draft: this.drafts.get('new') ?? '', conversations: conversations.items, hasMore: conversations.hasMore, messages: [], conversationId: undefined, parentId: crypto.randomUUID(), title: 'ChatGPT'
+				connected: true, busy: false, models: catalog.models,
+				model: catalog.models.some(model => model.id === state.model) ? state.model : catalog.defaultModel,
+				uncertain: false, stopped: false, conversations: conversations.items, hasMore: conversations.hasMore,
 			});
-			const retained = this.storage.get('sessions.chatgpt.conversation', StorageScope.PROFILE);
+			const retained = state.conversationId ?? this.storage.get('sessions.chatgpt.conversation', StorageScope.PROFILE);
 			if (retained && retained.length < 1024) { await this.select(retained); }
 		} catch (error) {
-			if (generation === this.generation) {
-				this.client.clear();
-				this.update({ connected: false, busy: false, name: '', conversations: [], models: [], messages: [], error: this.errorText(error) });
-			}
+			if (generation === this.generation) { this.update({ busy: false, error: this.errorText(error) }); }
 		}
 	}
 
@@ -191,7 +184,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 				try {
 					const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]);
 					const [history, catalog] = await Promise.all([this.client.history(currentId, signal), this.client.conversations(0, signal)]);
-					this.update({ title: history.title, parentId: history.parentId, conversations: catalog.items, hasMore: catalog.hasMore });
+					this.update({ title: history.title, parentId: history.parentId, messages: history.messages, conversations: catalog.items, hasMore: catalog.hasMore });
 				} catch (error) { if (!controller.signal.aborted) { this.update({ error: this.errorText(error) }); } }
 			}
 		} catch (error) {
@@ -200,7 +193,6 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 				this.update({
 					error: this.errorText(error), uncertain: !rejected,
 					...(rejected ? { messages: state.messages, parentId: state.parentId } : {}),
-					...(error instanceof ChatGPTRequestError && (error.status === 401 || error.status === 409) ? { connected: false } : {}),
 				});
 			}
 		} finally {

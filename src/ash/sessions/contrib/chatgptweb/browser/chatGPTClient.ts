@@ -1,10 +1,25 @@
 import { localize } from '../../../../nls.js';
 import { isRecord } from '../../../../base/common/types.js';
-import { chatGPTAccountHeader, chatGPTAccountScopeHeader } from '../common/chatGPTTransport.js';
+import { escapeMarkdownSyntaxTokens } from '../../../../base/common/htmlContent.js';
+import { getMediaOrTextMime } from '../../../../base/common/mime.js';
 export interface ChatGPTConversation { readonly id: string; readonly title: string; }
 
 export interface ChatGPTModel { readonly id: string; readonly title: string; }
-export interface ChatGPTMessage { readonly id: string; readonly role: 'user' | 'assistant'; readonly text: string; }
+export interface ChatGPTResource {
+	readonly uri: string;
+	readonly name: string;
+	readonly kind: 'image' | 'audio' | 'video' | 'document' | 'html';
+	readonly mimeType?: string;
+	readonly frameOrigin?: string;
+}
+export interface ChatGPTReference { readonly id: string; readonly url: string; readonly title: string; readonly snippet: string; }
+export interface ChatGPTMessage {
+	readonly id: string;
+	readonly role: 'user' | 'assistant';
+	readonly text: string;
+	readonly resources?: readonly ChatGPTResource[];
+	readonly references?: readonly ChatGPTReference[];
+}
 export interface ChatGPTHistory {
 	readonly id: string;
 	readonly title: string;
@@ -19,33 +34,9 @@ export class ChatGPTRequestError extends Error {
 	constructor(readonly status: number, message: string) { super(message); }
 }
 
-/** Credentials stay in the host. The client holds only an opaque connection binding. */
+/** ChatGPT web conversation client. Authentication is supplied by the host per request. */
 export class ChatGPTClient {
-	private accountBinding: string | undefined;
-	private generation = 0;
 	constructor(private readonly fetcher: typeof fetch = globalThis.fetch.bind(globalThis)) { }
-
-	async connect(signal: AbortSignal): Promise<{ readonly id?: string; readonly name: string; }> {
-		this.clear();
-		const generation = this.generation;
-		const response = await this.fetcher('/service/backend-api/me', { signal, cache: 'no-store' });
-		const value: unknown = response.ok ? await response.json() : undefined;
-		signal.throwIfAborted();
-		if (generation !== this.generation) { throw new DOMException('Connection superseded', 'AbortError'); }
-		const binding = response.headers.get(chatGPTAccountHeader);
-		const scope = response.headers.get(chatGPTAccountScopeHeader);
-		if (!isRecord(value) || typeof value.id !== 'string' || !binding || !scope) {
-			if (!response.ok && response.status !== 401) { throw this.requestError(response.status); }
-			throw this.signInRequired();
-		}
-		this.accountBinding = binding;
-		return {
-			id: `${scope}\0${value.id}`,
-			name: typeof value.name === 'string' ? value.name : 'ChatGPT',
-		};
-	}
-
-	clear(): void { this.generation++; this.accountBinding = undefined; }
 
 	async models(signal: AbortSignal): Promise<{ models: readonly ChatGPTModel[]; defaultModel: string; }> {
 		const value = await this.json('/models?iim=false&include_icons=false&is_gizmo=false', signal);
@@ -73,8 +64,8 @@ export class ChatGPTClient {
 			visited.add(nodeId);
 			const node: unknown = value.mapping[nodeId];
 			if (!isRecord(node)) { break; }
-			const message = readMessage(node.message);
-			if (message) { messages.push(message); }
+			const message = readMessage(node.message, id);
+			if (message && (message.text.trim() || message.resources?.length)) { messages.push(message); }
 			nodeId = typeof node.parent === 'string' ? node.parent : undefined;
 		}
 		return {
@@ -116,34 +107,42 @@ export class ChatGPTClient {
 		});
 	}
 
+	async readResource(resource: string, conversationId: string | undefined, messageId: string, signal: AbortSignal): Promise<Blob> {
+		if (resource.startsWith('data:')) { return (await globalThis.fetch(resource, { signal })).blob(); }
+		let url: string;
+		if (/^(?:file-service|sediment):\/\//u.test(resource)) {
+			const id = resource.slice(resource.indexOf('://') + 3);
+			url = `https://chatgpt.com/backend-api/files/${encodeURIComponent(id)}/download`;
+		} else if (resource.startsWith('sandbox:') && conversationId) {
+			url = `https://chatgpt.com/backend-api/conversation/${encodeURIComponent(conversationId)}/interpreter/download?` + new URLSearchParams({ message_id: messageId, sandbox_path: resource.slice('sandbox:'.length) });
+		} else { url = new URL(resource, 'https://chatgpt.com').href; }
+		for (let redirects = 0; redirects < 4; redirects++) {
+			const response = await this.fetcher('/service/.resource?' + new URLSearchParams({ url }), { signal });
+			if (!response.ok) throw this.requestError(response.status);
+			if (response.headers.get('content-type')?.startsWith('application/json')) {
+				const data: unknown = await response.clone().json();
+				if (isRecord(data) && typeof data.download_url === 'string') { await response.body?.cancel(); url = data.download_url; continue; }
+			}
+			return response.blob();
+		}
+		throw this.invalidResponse();
+	}
+
 	private async json(path: string, signal: AbortSignal): Promise<unknown> {
 		return (await this.request(path, signal)).json();
 	}
 
 	private async request(path: string, signal: AbortSignal, init: RequestInit = {}, headersOnly = false): Promise<Response> {
 		signal.throwIfAborted();
-		if (!this.accountBinding) { throw this.signInRequired(); }
-		const generation = this.generation;
-		const headers = new Headers(init.headers);
-		headers.set(chatGPTAccountHeader, this.accountBinding);
-		const response = await this.fetcher(`/service${headersOnly ? '/.headers' : ''}/backend-api` + path, { ...init, headers, signal, cache: 'no-store' });
-		signal.throwIfAborted();
-		if (generation !== this.generation) { await response.body?.cancel(); throw new DOMException('Connection superseded', 'AbortError'); }
+		const response = await this.fetcher(`/service${headersOnly ? '/.headers' : ''}/backend-api` + path, { ...init, signal, cache: 'no-store' });
+		if (signal.aborted) { await response.body?.cancel(); signal.throwIfAborted(); }
 		if (response.ok) { return response; }
-		if (response.status === 401 || response.status === 409) { this.clear(); }
 		throw this.requestError(response.status);
-	}
-
-	private signInRequired(): Error {
-		return new Error(localize('sessions.chatgpt.signInRequired', 'No usable local Codex login was found. Sign in through Codex, then select Connect.'));
 	}
 
 	private requestError(status: number): ChatGPTRequestError {
 		if (status === 428) {
 			return new ChatGPTRequestError(status, localize('sessions.chatgpt.sendVerificationUnavailable', 'ChatGPT send verification could not finish. Your message was not sent. Try again later.'));
-		}
-		if (status === 409) {
-			return new ChatGPTRequestError(status, localize('sessions.chatgpt.accountChanged', 'The local login changed. Select Connect before continuing. Your message was not sent.'));
 		}
 		if (status === 403) {
 			return new ChatGPTRequestError(status, localize('sessions.chatgpt.verificationRequired', 'ChatGPT rejected this request with a verification or access restriction (403). An existing login does not remove this restriction.'));
@@ -155,13 +154,85 @@ export class ChatGPTClient {
 	private invalidResponse(): Error { return new Error(localize('sessions.chatgpt.invalidResponse', 'ChatGPT returned an unsupported response.')); }
 }
 
-function readMessage(value: unknown): ChatGPTMessage | undefined {
+function readMessage(value: unknown, conversationId: string | undefined): ChatGPTMessage | undefined {
 	if (!isRecord(value) || typeof value.id !== 'string' || !isRecord(value.author) || !['user', 'assistant'].includes(value.author.role as string)
-		|| !isRecord(value.content) || !Array.isArray(value.content.parts)) { return undefined; }
+		|| !isRecord(value.content)) { return undefined; }
 	if (isRecord(value.metadata) && value.metadata.is_visually_hidden_from_conversation === true) { return undefined; }
-	const text = value.content.parts.filter((part): part is string => typeof part === 'string').join('\n') ||
-		(value.content.parts.some(part => isRecord(part)) ? localize('sessions.chatgpt.unsupportedContent', 'This message contains content that cannot be displayed here. Open ChatGPT to view it.') : '');
-	return { id: value.id, role: value.author.role as 'user' | 'assistant', text };
+	// The web sends this turn-status node separately from the answer. Treating
+	// it as opaque media creates a content-free message with a web-view link.
+	if (value.content.content_type === 'reasoning_recap') { return undefined; }
+	const url = conversationId ? `https://chatgpt.com/c/${encodeURIComponent(conversationId)}` : 'https://chatgpt.com/';
+	const fallback = `[${localize('sessions.chatgpt.viewContent', 'View this content in ChatGPT')}](${url})`;
+	const resources: ChatGPTResource[] = [];
+	const resourcePart = (part: Record<string, unknown>): ChatGPTResource | undefined => {
+		const uri = ['asset_pointer', 'audio_asset_pointer', 'video_asset_pointer', 'url'].map(key => part[key]).find(value => typeof value === 'string') ?? (typeof part.file_id === 'string' ? `file-service://${part.file_id}` : undefined);
+		if (typeof uri !== 'string' || uri.length > 8192) return undefined;
+		const name = ['name', 'file_name', 'title', 'alt'].map(key => part[key]).find(value => typeof value === 'string');
+		const mimeType = typeof part.mime_type === 'string' ? part.mime_type : typeof part.mimeType === 'string' ? part.mimeType : typeof name === 'string' ? getMediaOrTextMime(name) : undefined;
+		const type = typeof part.content_type === 'string' ? part.content_type : mimeType ?? '';
+		const kind = /image/u.test(type) ? 'image' : /audio/u.test(type) ? 'audio' : /video/u.test(type) ? 'video' : mimeType === 'text/html' ? 'html' : 'document';
+		return { uri, kind, name: typeof name === 'string' ? name : kind === 'document' ? localize('sessions.chatgpt.file', 'File') : localize('sessions.chatgpt.media', 'Media'), mimeType };
+	};
+	const literal = (text: string): string => escapeMarkdownSyntaxTokens(text).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+	const partText = (part: unknown): string => {
+		if (typeof part === 'string') { return part; }
+		if (!isRecord(part)) { return part == null ? '' : fallback; }
+		// Keep mixed text/media parts in source order. Selecting only string parts
+		// used to silently discard an image whenever that same message had a caption.
+		if (part.content_type === 'text' && typeof part.text === 'string') { return part.text; }
+		const resource = resourcePart(part);
+		if (resource) { resources.push(resource); return literal(resource.name); }
+		for (const key of ['audio', 'video', 'image']) {
+			if (isRecord(part[key])) { const nested = resourcePart({ content_type: key, ...part[key] }); if (nested) { resources.push(nested); return literal(nested.name); } }
+		}
+		const description = ['text', 'title', 'alt', 'name'].flatMap(key => typeof part[key] === 'string' ? [literal(part[key])] : []).join('\n');
+		return [description, fallback].filter(Boolean).join('\n\n');
+	};
+	let text: string;
+	if (Array.isArray(value.content.parts)) { text = value.content.parts.map(partText).join('\n'); }
+	else if (typeof value.content.text === 'string') {
+		const body = value.content.text;
+		// Code content uses a different web payload shape. Quote it instead of
+		// interpreting embedded HTML/components as the surrounding message.
+		let fenceLength = 3;
+		for (const match of body.matchAll(/`+/gu)) { fenceLength = Math.max(fenceLength, match[0].length + 1); }
+		const fence = '`'.repeat(fenceLength);
+		text = value.content.content_type === 'code' ? `${fence}\n${body}\n${fence}` : body;
+		if (value.content.content_type && !['text', 'code'].includes(value.content.content_type as string)) { text += `\n\n${fallback}`; }
+	} else { text = value.content.content_type === 'text' || !value.content.content_type ? '' : fallback; }
+	if (isRecord(value.metadata) && Array.isArray(value.metadata.attachments)) {
+		for (const attachment of value.metadata.attachments) {
+			if (!isRecord(attachment)) { continue; }
+			const name = typeof attachment.name === 'string' ? attachment.name : typeof attachment.file_name === 'string' ? attachment.file_name : '';
+			const resource = resourcePart({ ...attachment, file_id: attachment.file_id ?? attachment.id });
+			if (resource) { resources.push(resource); }
+			else { text += `\n\n${name ? localize('sessions.chatgpt.attachment', 'Attachment: {0}', literal(name)) + '\n\n' : ''}${fallback}`; }
+		}
+	}
+	const references: ChatGPTReference[] = [];
+	const addReference = (entry: unknown): void => {
+		if (!isRecord(entry) || typeof entry.url !== 'string') return;
+		let url: URL; try { url = new URL(entry.url); } catch { return; }
+		if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return;
+		const ids = [entry.ref_id, ...(Array.isArray(entry.refs) ? entry.refs : [])].flatMap(ref =>
+			typeof ref === 'string' ? [ref] : isRecord(ref) && typeof ref.turn_index === 'number' && typeof ref.ref_type === 'string' && typeof ref.ref_index === 'number'
+				? [`turn${ref.turn_index}${ref.ref_type}${ref.ref_index}`] : []);
+		for (const id of ids.length ? ids : [url.href]) {
+			if (!references.some(item => item.id === id)) references.push({ id, url: url.href, title: typeof entry.title === 'string' ? entry.title : url.hostname, snippet: typeof entry.snippet === 'string' ? entry.snippet : '' });
+		}
+	};
+	if (isRecord(value.metadata)) {
+		for (const group of Array.isArray(value.metadata.search_result_groups) ? value.metadata.search_result_groups : []) {
+			if (isRecord(group) && Array.isArray(group.entries)) group.entries.forEach(addReference);
+		}
+		for (const reference of Array.isArray(value.metadata.content_references) ? value.metadata.content_references : []) {
+			if (!isRecord(reference)) continue;
+			addReference(reference);
+			addReference(reference.item);
+			for (const key of ['sources', 'items']) if (Array.isArray(reference[key])) reference[key].forEach(addReference);
+		}
+	}
+	return { id: value.id, role: value.author.role as 'user' | 'assistant', text, ...(resources.length ? { resources } : {}), ...(references.length ? { references } : {}) };
 }
 
 /** SSE framing is independent of HTTP chunks; delta paths are restricted to ordinary JSON properties. */
@@ -200,8 +271,8 @@ export async function* decodeChatGPTStream(stream: ReadableStream<Uint8Array>, s
 						else { applyDelta(snapshot, path, patch.o, patch.v); }
 					}
 				} else { snapshot = value; }
-				const message = readMessage(snapshot.message);
 				const conversationId = typeof snapshot.conversation_id === 'string' ? snapshot.conversation_id : undefined;
+				const message = readMessage(snapshot.message, conversationId);
 				if (message || conversationId) { yield { conversationId, message }; }
 			}
 			if (chunk.done) {

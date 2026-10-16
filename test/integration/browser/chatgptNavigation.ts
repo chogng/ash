@@ -7,14 +7,19 @@ import { IContextKeyService, ContextKeyService } from '../../../src/ash/platform
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../src/ash/platform/instantiation/common/serviceCollection.js';
 import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
+import { IMarkdownRendererService, MarkdownRendererService } from '../../../src/ash/platform/markdown/browser/markdownRenderer.js';
 import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
-import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { ChatGPTService, IChatGPTService } from '../../../src/ash/sessions/contrib/chatgptweb/browser/chatGPTService.js';
 import { ChatGPTNavigationView } from '../../../src/ash/sessions/contrib/chatgptweb/browser/chatGPTNavigationView.js';
 import { ChatGPTWidget } from '../../../src/ash/sessions/contrib/chatgptweb/browser/chatGPTWidget.js';
 import { IChatGPTTransport } from '../../../src/ash/sessions/contrib/chatgptweb/common/chatGPTTransport.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
+import { registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
+import { IAgentThreadService } from '../../../src/ash/platform/agentHost/common/agentService.js';
+import { ChatResponseResourceFileSystemProvider, IChatResponseResourceFileSystemProvider } from '../../../src/ash/workbench/contrib/chat/common/widget/chatResponseResourceFileSystemProvider.js';
+import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 
 setNlsMessages('zh-CN', productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
 const resources = new DisposableStore();
@@ -39,8 +44,12 @@ const services = resources.add(new InstantiationService(new ServiceCollection(
 	[IContextKeyService, resources.add(new ContextKeyService())],
 	[IOpenerService, { open: async () => true } as unknown as IOpenerService],
 	[IEditorService, { focusActiveEditor: () => widget.focus() } as unknown as IEditorService],
-	[IAccessibleViewService, { show: () => true } as unknown as IAccessibleViewService],
+	[IAgentThreadService, {} as IAgentThreadService],
 )));
+registerTestComponentServices(services);
+resources.add(bindColorTheme(services.get(IThemeService), document.body));
+services.registerInstance(IChatResponseResourceFileSystemProvider, resources.add(new ChatResponseResourceFileSystemProvider()));
+services.registerInstance(IMarkdownRendererService, services.createInstance(MarkdownRendererService));
 const chat = resources.add(services.createInstance(ChatGPTService));
 services.registerInstance(IChatGPTService, chat);
 widget = resources.add(services.createInstance(ChatGPTWidget, document.getElementById('editor')!));

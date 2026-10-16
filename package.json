@@ -225,6 +225,7 @@
   "dependencies": {
     "fontkit": "2.0.4",
     "harfbuzzjs": "1.6.3",
+    "katex": "0.18.2",
     "native-keymap": "3.3.9",
     "paper": "0.12.18",
     "paperjs-offset": "2.2.1",

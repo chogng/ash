@@ -4,7 +4,6 @@ import { ChatGPTClient, decodeChatGPTStream } from '../../browser/chatGPTClient.
 
 const signal = (): AbortSignal => new AbortController().signal;
 const json = (value: unknown): Response => Response.json(value);
-const account = (): Response => Response.json({ id: 'fixture-user', name: 'Fixture' }, { headers: { 'X-Ash-ChatGPT-Account': 'synthetic-binding', 'X-Ash-ChatGPT-Account-Scope': 'fixture-scope' } });
 const message = (id: string, role: string, text: string): object => ({ id, author: { role }, content: { content_type: 'text', parts: [text] } });
 async function collect<T>(values: AsyncIterable<T>): Promise<T[]> {
 	const result: T[] = [];
@@ -13,12 +12,68 @@ async function collect<T>(values: AsyncIterable<T>): Promise<T[]> {
 }
 
 suite('Bundled ChatGPT client', () => {
+	test('retains authenticated resources and source metadata instead of reducing them to web links', async () => {
+		const client = new ChatGPTClient((async () => json({
+			current_node: 'reply', mapping: {
+				reply: {
+					parent: null, message: {
+						id: 'reply', author: { role: 'assistant' },
+						content: { content_type: 'multimodal_text', parts: ['Before', { content_type: 'image_asset_pointer', asset_pointer: 'file-service://file-image', alt: 'Diagram' }, 'After'] },
+						metadata: { attachments: [{ id: 'file-pdf', name: 'report.pdf', mime_type: 'application/pdf' }], search_result_groups: [{ entries: [{ ref_id: { turn_index: 2, ref_type: 'search', ref_index: 1 }, url: 'https://docs.python.org/3/library/csv.html', title: 'CSV documentation', snippet: 'Read and write tabular data.' }] }] },
+					}
+				},
+			}
+		})) as typeof fetch);
+		const reply = (await client.history('conversation', signal())).messages[0]!;
+		assert.match(reply.text, /Before\nDiagram\nAfter/u);
+		assert.equal(reply.resources?.[0]?.uri, 'file-service://file-image');
+		assert.equal(reply.resources?.[1]?.name, 'report.pdf');
+		assert.equal(reply.references?.[0]?.id, 'turn2search1');
+		assert.equal(reply.references?.[0]?.snippet, 'Read and write tabular data.');
+		assert.doesNotMatch(reply.text, /View this content/u);
+	});
+
+	test('resolves grouped and single web sources whose reference IDs live in refs arrays', async () => {
+		const client = new ChatGPTClient((async () => json({
+			current_node: 'reply', mapping: {
+				reply: {
+					parent: null, message: {
+						...message('reply', 'assistant', 'Reference'), metadata: {
+							content_references: [
+								{ type: 'url', item: { title: 'CSV', url: 'https://docs.python.org/3/library/csv.html', refs: [{ turn_index: 0, ref_type: 'search', ref_index: 0 }] } },
+								{ type: 'grouped_webpages', items: [{ title: 'Writer', url: 'https://docs.python.org/3/library/csv.html?highlight=writerow', snippet: 'Writer documentation', refs: [{ turn_index: 0, ref_type: 'search', ref_index: 1 }] }] },
+								{ items: [{ url: 'javascript:alert(1)', refs: ['turn0search2'] }] },
+							]
+						}
+					}
+				}
+			}
+		})) as typeof fetch);
+		const reply = (await client.history('conversation', signal())).messages[0]!;
+		assert.deepEqual(reply.references?.map(reference => [reference.id, reference.title, reference.snippet]), [['turn0search0', 'CSV', ''], ['turn0search1', 'Writer', 'Writer documentation']]);
+	});
+
+	test('resolves a sandbox file through the web download endpoint and signed resource bytes', async () => {
+		const requests: string[] = [];
+		const client = new ChatGPTClient((async input => {
+			const url = new URL(String(input), 'https://fixture.test');
+			requests.push(url.searchParams.get('url')!);
+			return requests.length === 1 ? json({ download_url: 'https://files.oaiusercontent.com/file-test?signature=fixture' }) : new Response(new Uint8Array([1, 2, 3]), { headers: { 'Content-Type': 'image/png' } });
+		}) as typeof fetch);
+		const blob = await client.readResource('sandbox:/mnt/data/test.png', 'conversation', 'reply', signal());
+		assert.equal(blob.type, 'image/png');
+		assert.deepEqual([...new Uint8Array(await blob.arrayBuffer())], [1, 2, 3]);
+		const web = new URL(requests[0]!);
+		assert.equal(web.origin, 'https://chatgpt.com');
+		assert.equal(web.searchParams.get('message_id'), 'reply');
+		assert.equal(web.searchParams.get('sandbox_path'), '/mnt/data/test.png');
+		assert.equal(requests[1], 'https://files.oaiusercontent.com/file-test?signature=fixture');
+	});
 	test('reads only the selected branch and sends its actual parent and model', async () => {
 		const calls: { path: string; init: RequestInit; }[] = [];
 		const client = new ChatGPTClient((async (url, init = {}) => {
 			const path = String(url);
 			calls.push({ path, init });
-			if (path.endsWith('/backend-api/me')) { return account(); }
 			if (path.includes('/.headers/')) { return json({ 'OpenAI-Sentinel-Chat-Requirements-Token': 'fixture-requirements', 'OpenAI-Sentinel-Proof-Token': 'fixture-proof', 'OpenAI-Sentinel-Turnstile-Token': 'fixture-vm' }); }
 			if (path.endsWith('/f/conversation/prepare')) { return json({ status: 'ready', conduit_token: 'synthetic-conduit' }); }
 			if (path.endsWith('/conversation/chat-one')) {
@@ -32,7 +87,6 @@ suite('Bundled ChatGPT client', () => {
 			}
 			return new Response('data: {"conversation_id":"chat-one","message":{"id":"reply-three","author":{"role":"assistant"},"content":{"parts":["Next answer"]}}}\n\ndata: [DONE]\n\n', { headers: { 'Content-Type': 'text/event-stream' } });
 		}) as typeof fetch);
-		assert.deepEqual(await client.connect(signal()), { id: 'fixture-scope\0fixture-user', name: 'Fixture' });
 		const history = await client.history('chat-one', signal());
 		assert.deepEqual(history.messages.map(item => item.text), ['Question', 'Selected answer']);
 		const output = await collect(client.send({ text: 'Follow up', model: 'fixture-model', parentId: history.parentId, conversationId: history.id, messageId: 'new-user' }, signal()));
@@ -40,7 +94,8 @@ suite('Bundled ChatGPT client', () => {
 		const sent = calls.at(-1)!;
 		assert.equal(sent.path, '/service/backend-api/f/conversation');
 		assert.equal(new Headers(sent.init.headers).get('Authorization'), null);
-		assert.equal(new Headers(sent.init.headers).get('X-Ash-ChatGPT-Account'), 'synthetic-binding');
+		assert.equal(new Headers(sent.init.headers).get('X-Ash-ChatGPT-Account'), null);
+		assert.ok(calls.every(call => !call.path.endsWith('/me')));
 		assert.equal(new Headers(sent.init.headers).get('OpenAI-Sentinel-Chat-Requirements-Token'), 'fixture-requirements');
 		assert.equal(new Headers(sent.init.headers).get('OpenAI-Sentinel-Proof-Token'), 'fixture-proof');
 		assert.equal(new Headers(sent.init.headers).get('OpenAI-Sentinel-Turnstile-Token'), 'fixture-vm');
@@ -51,13 +106,75 @@ suite('Bundled ChatGPT client', () => {
 		assert.deepEqual(body.messages[0].content, { content_type: 'text', parts: ['Follow up'] });
 	});
 
+	test('omits empty history messages while retaining content and the actual continuation node', async () => {
+		const client = new ChatGPTClient((async () => {
+			return json({
+				current_node: 'empty-leaf', mapping: {
+					user: { parent: null, message: message('user', 'user', 'Question') },
+					empty: { parent: 'user', message: message('empty', 'assistant', '') },
+					recap: { parent: 'empty', message: { id: 'recap', author: { role: 'assistant' }, content: { content_type: 'reasoning_recap', content: 'Thought for a few seconds' } } },
+					whitespace: { parent: 'recap', message: message('whitespace', 'assistant', ' \t\n ') },
+					'no-parts': { parent: 'whitespace', message: { id: 'no-parts', author: { role: 'assistant' }, content: { parts: [] } } },
+					reply: { parent: 'no-parts', message: message('reply', 'assistant', '  Answer\n') },
+					attachment: { parent: 'reply', message: { id: 'attachment', author: { role: 'user' }, content: { parts: [{ content_type: 'image_asset_pointer' }] } } },
+					'empty-leaf': { parent: 'attachment', message: message('empty-leaf', 'assistant', '') },
+				}
+			});
+		}) as typeof fetch);
+		const history = await client.history('fixture', signal());
+		assert.deepEqual(history.messages, [
+			{ id: 'user', role: 'user', text: 'Question' },
+			{ id: 'reply', role: 'assistant', text: '  Answer\n' },
+			{ id: 'attachment', role: 'user', text: '[View this content in ChatGPT](https://chatgpt.com/c/fixture)' },
+		]);
+		assert.equal(history.parentId, 'empty-leaf');
+	});
+
+	test('retains mixed media, structured text, code payloads and named attachments', async () => {
+		const payload = (id: string, content: object, metadata = {}): object => ({ id, author: { role: 'assistant' }, content, metadata });
+		const client = new ChatGPTClient((async () => json({
+			current_node: 'file', mapping: {
+				mixed: { parent: null, message: payload('mixed', { content_type: 'multimodal_text', parts: ['Before', { content_type: 'image_asset_pointer', alt: 'Diagram' }, 'After', { content_type: 'text', text: '**Structured text**' }] }) },
+				code: { parent: 'mixed', message: payload('code', { content_type: 'code', text: '<chart/>\n```\nend' }) },
+				audio: { parent: 'code', message: payload('audio', { content_type: 'audio', text: 'Transcript' }) },
+				unknown: { parent: 'audio', message: payload('unknown', { content_type: 'future-rich-content' }) },
+				file: { parent: 'unknown', message: payload('file', { content_type: 'text', parts: ['File caption'] }, { attachments: [{ name: '<report>[1].pdf' }] }) },
+			}
+		})) as typeof fetch);
+		const { messages } = await client.history('fixture', signal());
+		assert.match(messages[0]!.text, /Before\nDiagram\n\n\[View this content in ChatGPT\]\(https:\/\/chatgpt\.com\/c\/fixture\)\nAfter\n\*\*Structured text\*\*/u);
+		assert.equal(messages[1]!.text, '````\n<chart/>\n```\nend\n````');
+		assert.equal(messages[2]!.text, 'Transcript\n\n[View this content in ChatGPT](https://chatgpt.com/c/fixture)');
+		assert.match(messages[3]!.text, /View this content in ChatGPT/u);
+		assert.match(messages[4]!.text, /File caption\n\nAttachment: &lt;report&gt;\\\[1\\\]\.pdf\n\n\[View this content/u);
+	});
+
+	test('retains a structured part arriving in a streaming reply', async () => {
+		const initial = { conversation_id: 'stream-chat', message: { id: 'reply', author: { role: 'assistant' }, content: { content_type: 'multimodal_text', parts: ['Caption', { content_type: 'image_asset_pointer' }] } } };
+		const body = `data: ${JSON.stringify(initial)}\n\ndata: [DONE]\n\n`;
+		const stream = new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new TextEncoder().encode(body)); controller.close(); } });
+		const updates = await collect(decodeChatGPTStream(stream, signal()));
+		assert.equal(updates[0]!.message!.text, 'Caption\n[View this content in ChatGPT](https://chatgpt.com/c/stream-chat)');
+	});
+
+	test('does not turn a web reasoning status into an empty streamed answer', async () => {
+		const events = [
+			{ conversation_id: 'fixture', message: { id: 'recap', author: { role: 'assistant' }, content: { content_type: 'reasoning_recap', content: 'Thought for a few seconds' } } },
+			{ conversation_id: 'fixture', message: message('answer', 'assistant', 'Visible answer') },
+		].map(value => `data: ${JSON.stringify(value)}\n\n`).join('') + 'data: [DONE]\n\n';
+		const stream = new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new TextEncoder().encode(events)); controller.close(); } });
+		const updates = await collect(decodeChatGPTStream(stream, signal()));
+		assert.equal(updates[0]!.conversationId, 'fixture');
+		assert.equal(updates[0]!.message, undefined);
+		assert.deepEqual(updates.flatMap(update => update.message ? [update.message.text] : []), ['Visible answer']);
+	});
+
 	test('never sends after verification is rejected or cancelled', async () => {
 		let resolveVerification!: (response: Response) => void;
 		let rejectVerification = true;
 		let sent = 0;
 		const client = new ChatGPTClient((async url => {
 			const path = String(url);
-			if (path.endsWith('/me')) { return account(); }
 			if (path.endsWith('/prepare')) { return json({ conduit_token: 'fixture-conduit' }); }
 			if (path.includes('/.headers/')) {
 				return rejectVerification ? new Response(null, { status: 428 }) : new Promise<Response>(resolve => { resolveVerification = resolve; });
@@ -65,7 +182,6 @@ suite('Bundled ChatGPT client', () => {
 			sent++;
 			return new Response(null, { status: 500 });
 		}) as typeof fetch);
-		await client.connect(signal());
 		const input = { text: 'Fixture', model: 'fixture', parentId: 'parent', messageId: 'user' };
 		await assert.rejects(collect(client.send(input, signal())), /verification could not finish/u);
 		rejectVerification = false;
@@ -121,38 +237,29 @@ suite('Bundled ChatGPT client', () => {
 		assert.deepEqual((await collect(decodeChatGPTStream(stream, signal()))).map(update => update.message?.text), ['Safe', 'Safe', 'Safe', 'Safe', 'Safe\nNext part']);
 	});
 
-	test('clears expired credentials and does not replay a rejected send', async () => {
-		let authenticated = false;
+	test('reports web request failures without replaying or requiring an account handshake', async () => {
 		let sends = 0;
 		const client = new ChatGPTClient((async url => {
-			if (String(url).endsWith('/backend-api/me')) { authenticated = true; return account(); }
-			assert.equal(authenticated, true);
+			assert.equal(String(url), '/service/backend-api/f/conversation/prepare');
 			sends++;
 			return new Response(null, { status: 401 });
 		}) as typeof fetch);
-		await client.connect(signal());
 		const input = { text: 'Synthetic prompt', model: 'fixture', parentId: 'parent', messageId: 'user' };
 		await assert.rejects(collect(client.send(input, signal())), /401/u);
-		await assert.rejects(collect(client.send(input, signal())), /local Codex login/u);
 		assert.equal(sends, 1);
+		await assert.rejects(collect(client.send(input, signal())), /401/u);
+		assert.equal(sends, 2);
 	});
 
-	test('ignores late account results and authentication rejections after reconnecting', async () => {
-		let pending!: (response: Response) => void;
-		let delay = true;
-		const client = new ChatGPTClient((async () => delay ? new Promise<Response>(resolve => { pending = resolve; }) : account()) as typeof fetch);
-		const staleConnect = client.connect(signal());
-		delay = false;
-		await client.connect(signal());
-		pending(account());
-		await assert.rejects(staleConnect, { name: 'AbortError' });
-		delay = true;
-		const staleRequest = client.conversations(0, signal());
-		delay = false;
-		await client.connect(signal());
-		pending(new Response(null, { status: 401 }));
-		await assert.rejects(staleRequest, { name: 'AbortError' });
-		// A stale 401 must not clear the newer connection.
-		await assert.rejects(client.conversations(0, signal()), /unsupported response/u);
+	test('cancels a response arriving after its request was aborted', async () => {
+		let finish!: (response: Response) => void;
+		let cancelled = false;
+		const client = new ChatGPTClient((async () => new Promise<Response>(resolve => { finish = resolve; })) as typeof fetch);
+		const controller = new AbortController();
+		const pending = client.conversations(0, controller.signal);
+		controller.abort();
+		finish(new Response(new ReadableStream({ cancel() { cancelled = true; } })));
+		await assert.rejects(pending, { name: 'AbortError' });
+		assert.equal(cancelled, true);
 	});
 });

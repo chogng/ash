@@ -5,7 +5,7 @@ import type { MarkdownRenderOptions } from '../../../../../../base/browser/markd
 import type { IMarkdownString } from '../../../../../../base/common/htmlContent.js';
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
-import { IMarkdownRendererService } from '../../../../../../platform/markdown/browser/markdownRenderer.js';
+import { ChatContentMarkdownRenderer } from '../chatContentMarkdownRenderer.js';
 import { ChatMarkdownDecorationsRenderer } from './chatMarkdownDecorationsRenderer.js';
 import { CodeBlockPart } from './codeBlockPart.js';
 
@@ -25,13 +25,15 @@ export class ChatMarkdownContentPart extends Disposable {
 	public readonly domNode: HTMLElement;
 	private readonly changedHeight = this._register(new Emitter<void>());
 	public readonly onDidChangeHeight = this.changedHeight.event;
+	private readonly markdownRenderer: ChatContentMarkdownRenderer;
 	private readonly current = this._register(new MutableDisposable<DisposableStore>());
 	private readonly codeBlocks = this._register(new DisposableMap<number, CodeBlockPart>());
 	private readonly images = new Map<string, Promise<Blob>>();
 	private blocks: readonly RenderedBlock[] = [];
 
-	constructor(private readonly options: ChatMarkdownContentPartOptions, @IInstantiationService private readonly instantiation: IInstantiationService, @IMarkdownRendererService private readonly markdownRenderer: IMarkdownRendererService) {
+	constructor(private readonly options: ChatMarkdownContentPartOptions, @IInstantiationService private readonly instantiation: IInstantiationService) {
 		super();
+		this.markdownRenderer = instantiation.createInstance(ChatContentMarkdownRenderer);
 		this.domNode = h(options.ownerDocument, 'div');
 		this.domNode.className = 'ash-chat-markdown-part';
 		this._register(addDisposableListener(this.domNode, 'load', event => { if ((event.target as Element).tagName === 'IMG') this.changedHeight.fire(); }, true));

@@ -95,7 +95,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 	const profileServices = sessions.add(new InstantiationService(new ServiceCollection(
 		...getSingletonServiceDescriptors().filter(([id]) => id === IPlaywrightService),
 	)));
-	const serviceCollection = new ServiceCollection();
+	const serviceCollection = new ServiceCollection([IWorkbenchEnvironmentService, new ElectronWorkbenchEnvironmentService()]);
 	let logger: LoggerChannelClient;
 	let api: Awaited<ReturnType<typeof createElectronRendererApi>>;
 	let documentClient: AppServerProtocolClient | undefined;
@@ -153,6 +153,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 				return services.createInstance(AppServerTextDocumentHost, documentClient!, { applyEdits: editing.applyEdits.bind(editing), finishTurn: editing.finishTurn.bind(editing) });
 			} : undefined,
 			contributionIds: [
+				'chatResponseResourceWorkbenchContribution',
 				'workbench.contrib.settingsChangeRelauncher',
 				'workbench.contrib.partsSplash',
 				'workbench.contrib.preferences',
@@ -231,3 +232,5 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 		throw error;
 	}
 }
+import { IWorkbenchEnvironmentService } from '../../workbench/services/environment/common/environmentService.js';
+import { ElectronWorkbenchEnvironmentService } from '../../workbench/services/environment/electron-browser/environmentService.js';

@@ -52,6 +52,29 @@
 .ash-chat-media > audio {
 	max-width: 100%;
 }
+.ash-chat-media > video {
+	max-width: 100%;
+	max-height: calc(var(--ash-spacing-size40) * 120);
+}
+.ash-chat-html-preview {
+	height: calc(var(--ash-spacing-size40) * 120);
+	min-width: 0;
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-border));
+	border-radius: var(--ash-cornerRadius-medium);
+	overflow: hidden;
+}
+.ash-chat-media > div:not(.ash-chat-html-preview) {
+	max-height: calc(var(--ash-spacing-size40) * 160);
+	overflow: auto;
+}
+.ash-chat-media > div .ash-pdf-page {
+	max-width: 100%;
+}
+.ash-chat-media > div .ash-pdf-page-canvas {
+	max-width: 100%;
+	height: auto;
+}
 .ash-chat-media > button {
 	padding: 4px 8px;
 	border: var(--ash-strokeThickness) solid var(--ash-border);

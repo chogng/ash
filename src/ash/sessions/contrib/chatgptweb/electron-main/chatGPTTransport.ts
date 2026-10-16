@@ -1,24 +1,24 @@
 import { open } from 'node:fs/promises';
-import { createHmac, randomBytes } from 'node:crypto';
 import { VSBuffer } from '../../../../base/common/buffer.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { isRecord } from '../../../../base/common/types.js';
 import type { IServerChannel } from '../../../../base/parts/ipc/common/ipc.js';
-import { chatGPTAccountHeader, chatGPTAccountScopeHeader, type ChatGPTRequest, type ChatGPTResponse, type IChatGPTTransport } from '../common/chatGPTTransport.js';
+import type { ChatGPTRequest, ChatGPTResponse, IChatGPTTransport } from '../common/chatGPTTransport.js';
 import type { IChatGPTVerificationRuntime } from './chatGPTVerificationRuntime.js';
 
-const readPaths = new Set(['/backend-api/me', '/backend-api/models', '/backend-api/conversations']);
+const readPaths = new Set(['/backend-api/models', '/backend-api/conversations']);
 const writePaths = new Set(['/backend-api/f/conversation/prepare', '/backend-api/f/conversation', '/backend-api/stop_conversation']);
 const conversationPath = (path: string): boolean => /^\/backend-api\/conversation\/[^/]+$/u.test(path);
+const filePath = (path: string): boolean => /^\/backend-api\/(?:files\/[^/]+(?:\/download)?|conversation\/[^/]+\/(?:interpreter\/download|files\/[^/]+(?:\/download)?)|estuary\/content)$/u.test(path);
 const proofHeaders = ['OpenAI-Sentinel-Chat-Requirements-Token', 'OpenAI-Sentinel-Proof-Token', 'OpenAI-Sentinel-Turnstile-Token'];
-const requestHeaders = new Set(['accept', 'content-type', chatGPTAccountHeader.toLowerCase(), 'x-conduit-token', ...proofHeaders.map(name => name.toLowerCase())]);
+const requestHeaders = new Set(['accept', 'content-type', 'x-conduit-token', ...proofHeaders.map(name => name.toLowerCase())]);
 interface PendingRequest {
 	readonly controller: AbortController;
+	bytesRead?: number;
 	reader?: ReadableStreamDefaultReader<Uint8Array>;
 	reading?: boolean;
 }
-interface Account { readonly headers: Headers; readonly binding: string; readonly scope: string; }
 
 export interface ChatGPTTransportOptions {
 	readonly credentialFile: string;
@@ -29,14 +29,13 @@ export interface ChatGPTTransportOptions {
 /** A window-owned HTTP/credential adapter. It has no conversation model, drafts or UI messages. */
 export class ChatGPTTransport extends Disposable implements IChatGPTTransport {
 	private readonly requests = new Map<string, PendingRequest>();
-	private readonly bindingKey = randomBytes(32);
-	private runtime: { readonly binding: string; readonly value: IChatGPTVerificationRuntime; } | undefined;
+	private runtime: IChatGPTVerificationRuntime | undefined;
 
 	constructor(private readonly options: ChatGPTTransportOptions) {
 		super();
 		this._register(toDisposable(() => {
 			for (const id of this.requests.keys()) { void this.cancel(id); }
-			this.runtime?.value.dispose();
+			this.runtime?.dispose();
 			this.runtime = undefined;
 		}));
 	}
@@ -77,6 +76,8 @@ export class ChatGPTTransport extends Disposable implements IChatGPTTransport {
 			pending.controller.signal.throwIfAborted();
 			if (chunk.done) { this.requests.delete(id); pending.reader.releaseLock(); return null; }
 			if (chunk.value.byteLength > 1024 * 1024) { throw new Error('ChatGPT response chunk exceeds the limit'); }
+			pending.bytesRead = (pending.bytesRead ?? 0) + chunk.value.byteLength;
+			if (pending.bytesRead > 64 * 1024 * 1024) { throw new Error('ChatGPT response exceeds the limit'); }
 			return VSBuffer.wrap(new Uint8Array(chunk.value));
 		} catch (error) { await this.cancel(id); throw error; }
 		finally { pending.reading = false; }
@@ -91,15 +92,16 @@ export class ChatGPTTransport extends Disposable implements IChatGPTTransport {
 	}
 
 	private async fetch(request: ChatGPTRequest, signal: AbortSignal): Promise<Response> {
-		let account: Account;
-		try { account = await this.readAccount(); }
+		if (request.path.startsWith('/service/.resource?')) {
+			return this.fetchResource(new URL(request.path, 'https://chatgpt.com').searchParams.get('url')!, signal);
+		}
+		let authorization: Headers;
+		try { authorization = await this.readCredentialHeaders(); }
 		catch { return new Response(null, { status: 401 }); }
 		signal.throwIfAborted();
 		const headersOnly = request.path.startsWith('/service/.headers/');
 		const url = new URL(request.path.replace(headersOnly ? '/service/.headers' : '/service', ''), 'https://chatgpt.com');
-		if (!(request.method === 'GET' && url.pathname === '/backend-api/me' && !url.search)
-			&& new Headers(request.headers).get(chatGPTAccountHeader) !== account.binding) { return new Response(null, { status: 409 }); }
-		const runtime = this.getRuntime(account);
+		const runtime = this.getRuntime();
 		if (headersOnly) {
 			try {
 				const script = await this.options.readVerificationScript(signal);
@@ -118,16 +120,12 @@ export class ChatGPTTransport extends Disposable implements IChatGPTTransport {
 				return Response.json(headers);
 			} catch {
 				signal.throwIfAborted();
-				if (this.runtime?.value === runtime) { runtime.dispose(); this.runtime = undefined; }
+				if (this.runtime === runtime) { runtime.dispose(); this.runtime = undefined; }
 				return new Response(null, { status: 428 });
 			}
 		}
 		const headers = new Headers(request.headers);
-		headers.delete(chatGPTAccountHeader);
-		for (const [name, value] of account.headers) { headers.set(name, value); }
-		// Verification and other file/network awaits must not let an old draft borrow a new login.
-		try { if ((await this.readAccount()).binding !== account.binding) { return new Response(null, { status: 409 }); } }
-		catch { return new Response(null, { status: 401 }); }
+		for (const [name, value] of authorization) { headers.set(name, value); }
 		signal.throwIfAborted();
 		try {
 			const response = await runtime.session.fetch(url.href, { method: request.method, headers, body: request.body, credentials: 'include', redirect: 'error', signal });
@@ -138,27 +136,43 @@ export class ChatGPTTransport extends Disposable implements IChatGPTTransport {
 			}
 			return new Response(response.body, {
 				status: response.status, headers: {
-					'Content-Type': contentType, ...(response.ok ? { [chatGPTAccountHeader]: account.binding, [chatGPTAccountScopeHeader]: account.scope } : {}),
+					'Content-Type': contentType,
 				}
 			});
 		} catch { signal.throwIfAborted(); return new Response(null, { status: 502 }); }
 	}
 
-	private getRuntime(account: Account): IChatGPTVerificationRuntime {
-		if (this.runtime?.binding === account.binding) { return this.runtime.value; }
-		this.runtime?.value.dispose();
-		const value = this.options.createRuntime(async url => {
-			const headers = new Headers({ Authorization: '', 'ChatGPT-Account-Id': '' });
-			if (url.origin !== 'https://chatgpt.com' || /%(?:2f|5c|00|25)/iu.test(url.pathname) || !(readPaths.has(url.pathname) || writePaths.has(url.pathname) || conversationPath(url.pathname) || url.pathname.startsWith('/backend-api/sentinel/'))) { return headers; }
-			const current = await this.readAccount();
-			if (current.binding !== account.binding) { throw new Error('ChatGPT account changed'); }
-			return current.headers;
-		});
-		this.runtime = { binding: account.binding, value };
-		return value;
+	/** Only the ChatGPT web asset origin receives login headers. Signed CDN requests carry no credentials. */
+	private async fetchResource(source: string, signal: AbortSignal): Promise<Response> {
+		let url = readResourceUrl(source);
+		const runtime = this.getRuntime();
+		for (let redirects = 0; redirects < 5; redirects++) {
+			const headers = url.origin === 'https://chatgpt.com' ? await this.readCredentialHeaders() : new Headers();
+			signal.throwIfAborted();
+			const response = await runtime.session.fetch(url.href, { headers, credentials: 'omit', redirect: 'manual', signal });
+			if ([301, 302, 303, 307, 308].includes(response.status)) {
+				await response.body?.cancel();
+				url = readResourceUrl(new URL(response.headers.get('location') ?? '', url).href);
+				continue;
+			}
+			if (Number(response.headers.get('content-length')) > 64 * 1024 * 1024) { await response.body?.cancel(); throw new Error('ChatGPT resource exceeds the limit'); }
+			return new Response(response.body, { status: response.status, headers: { 'Content-Type': response.headers.get('content-type') ?? 'application/octet-stream' } });
+		}
+		throw new Error('ChatGPT resource redirected too many times');
 	}
 
-	private async readAccount(): Promise<Account> {
+	private getRuntime(): IChatGPTVerificationRuntime {
+		// Reuse the web verification session; the login owner supplies credentials for
+		// each request. No account identity or credential-change state is retained here.
+		return this.runtime ??= this.options.createRuntime(async url => {
+			const headers = new Headers({ Authorization: '', 'ChatGPT-Account-Id': '' });
+			if (url.origin !== 'https://chatgpt.com' || /%(?:2f|5c|00|25)/iu.test(url.pathname) || !(readPaths.has(url.pathname) || writePaths.has(url.pathname) || conversationPath(url.pathname) || filePath(url.pathname) || url.pathname.startsWith('/backend-api/sentinel/'))) { return headers; }
+			for (const [name, value] of await this.readCredentialHeaders()) { headers.set(name, value); }
+			return headers;
+		});
+	}
+
+	private async readCredentialHeaders(): Promise<Headers> {
 		const file = await open(this.options.credentialFile, 'r');
 		const bytes = Buffer.alloc(1024 * 1024 + 1);
 		try {
@@ -177,9 +191,7 @@ export class ChatGPTTransport extends Disposable implements IChatGPTTransport {
 				|| (accountId != null && (typeof accountId !== 'string' || !accountId.trim() || accountId.length > 16384 || /[\r\n\0]/u.test(accountId)))) { throw new Error('ChatGPT credential field is unavailable'); }
 			const headers = new Headers({ Authorization: `Bearer ${token}` });
 			if (typeof accountId === 'string') { headers.set('ChatGPT-Account-Id', accountId); }
-			const sign = (text: string) => createHmac('sha256', this.bindingKey).update(text).digest('hex');
-			const binding = sign(JSON.stringify([token, accountId]));
-			return { headers, binding, scope: typeof accountId === 'string' ? sign(accountId) : binding };
+			return headers;
 		} finally { bytes.fill(0); await file.close(); }
 	}
 }
@@ -191,6 +203,12 @@ function readRequest(value: unknown): ChatGPTRequest {
 		|| Object.entries(value.headers).some(([name, header]) => !requestHeaders.has(name.toLowerCase()) || typeof header !== 'string' || header.length > 65536 || /[\r\n\0]/u.test(header))
 		|| (value.body !== undefined && (typeof value.body !== 'string' || Buffer.byteLength(value.body) > 2 * 1024 * 1024))) { throw new TypeError('Invalid ChatGPT request'); }
 	const headersOnly = value.path.startsWith('/service/.headers/');
+	if (value.path.startsWith('/service/.resource?') && value.method === 'GET' && value.body === undefined && Object.keys(value.headers).length === 0) {
+		const url = new URL(value.path, 'https://chatgpt.com');
+		if (url.searchParams.size !== 1 || !url.searchParams.has('url')) { throw new TypeError('Invalid ChatGPT resource request'); }
+		readResourceUrl(url.searchParams.get('url')!);
+		return value as unknown as ChatGPTRequest;
+	}
 	const url = new URL(value.path.replace(headersOnly ? '/service/.headers' : '/service', ''), 'https://chatgpt.com');
 	const allowed = url.origin === 'https://chatgpt.com' && !/%(?:2f|5c|00|25)/iu.test(url.pathname) && (headersOnly
 		? value.method === 'POST' && url.pathname === '/backend-api/f/conversation' && !url.search && value.body === undefined
@@ -199,4 +217,13 @@ function readRequest(value: unknown): ChatGPTRequest {
 			: !url.search && writePaths.has(url.pathname));
 	if (!allowed || (value.method === 'GET' && value.body !== undefined)) { throw new TypeError('Invalid ChatGPT endpoint'); }
 	return value as unknown as ChatGPTRequest;
+}
+
+function readResourceUrl(value: string): URL {
+	const url = new URL(value, 'https://chatgpt.com');
+	if (value.length > 8192 || url.protocol !== 'https:' || url.port || url.username || url.password || url.hash || /[\r\n\0\\]|%(?:2f|5c|00|25)/iu.test(url.pathname)) { throw new TypeError('Invalid ChatGPT resource URL'); }
+	const webAsset = url.origin === 'https://chatgpt.com' && filePath(url.pathname);
+	const signedAsset = ['oaiusercontent.com', 'blob.core.windows.net'].some(domain => url.hostname.endsWith('.' + domain));
+	if (!webAsset && !signedAsset) { throw new TypeError('Invalid ChatGPT resource origin'); }
+	return url;
 }

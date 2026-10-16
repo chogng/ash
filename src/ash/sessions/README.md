@@ -7,6 +7,13 @@ is canonical for the renderer implementation and extension points.
 
 UI design and style boundaries are defined in [Sessions style](STYLE.md).
 
+The ChatGPT contribution uses `chatgpt.com/backend-api` conversation requests,
+streaming replies and the web verification runtime. It does not use the OpenAI
+API. The host attaches the current externally managed login credentials per
+request; the contribution does not query account identity, retain account
+bindings, detect account changes or reset chats and drafts when login changes.
+Credentials and cookies remain in the host, outside renderer state.
+
 Shared Agent execution, Thread records, model catalogs, approval metadata and
 profile execution defaults belong to `platform/agentHost/common/`. Its browser
 adapters own App Server DTO conversion; Workbench and Sessions consume the shared

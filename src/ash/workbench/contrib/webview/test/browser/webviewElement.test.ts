@@ -67,9 +67,9 @@ suite('Webview element', () => {
 		assert.deepEqual(received, [{ type: 'edit' }, 'new edit']);
 	});
 
-	test('MCP source origins apply only to its owned document policy and keep frame and permissions denied by default', () => {
+	test('declared source origins apply to each owned document while frames and permissions remain denied by default', () => {
 		for (const messageProtocol of ['mcp', undefined] as const) {
-			using webview = createWebview({ title: 'CSP', options: {}, contentOptions: { messageProtocol, allowScripts: true, mcpCsp: { connectDomains: ['https://api.example.com'], resourceDomains: ['https://cdn.example.com'], frameDomains: [], baseUriDomains: [] } } });
+			using webview = createWebview({ title: 'CSP', options: {}, contentOptions: { messageProtocol, allowScripts: true, contentSecurityPolicy: { connectDomains: ['https://api.example.com'], resourceDomains: ['https://cdn.example.com'], frameDomains: [], baseUriDomains: [] } } });
 			webview.setHtml('<p>Document</p>');
 			mount(webview);
 			let documentHtml = '';
@@ -79,8 +79,8 @@ suite('Webview element', () => {
 			try {
 				message(webview, { channel: new URLSearchParams(new URL(webview.element.src).hash.slice(1)).get('channel'), type: 'bootstrap-ready' });
 				assert.ok(documentHtml);
-				assert.equal(documentHtml.includes('https://api.example.com'), messageProtocol === 'mcp');
-				assert.equal(documentHtml.includes('https://cdn.example.com'), messageProtocol === 'mcp');
+				assert.equal(documentHtml.includes('https://api.example.com'), true);
+				assert.equal(documentHtml.includes('https://cdn.example.com'), true);
 				assert.ok(documentHtml.includes("frame-src 'none'"));
 				assert.equal(documentHtml.includes("'wasm-unsafe-eval'"), false);
 				assert.ok(!documentHtml.includes("'unsafe-eval'"));

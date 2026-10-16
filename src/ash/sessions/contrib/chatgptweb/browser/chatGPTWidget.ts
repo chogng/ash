@@ -1,15 +1,21 @@
 import { addDisposableListener } from '../../../../base/browser/dom.js';
-import { renderMarkdown, type IRenderedMarkdown } from '../../../../base/browser/markdownRenderer.js';
+import { type IRenderedMarkdown } from '../../../../base/browser/markdownRenderer.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { URI } from '../../../../base/common/uri.js';
+import { isRecord } from '../../../../base/common/types.js';
 import { autorun } from '../../../../base/common/observable.js';
 import { localize } from '../../../../nls.js';
-import { IOpenerService } from '../../../../platform/opener/common/opener.js';
-import type { ChatGPTMessage, ChatGPTModel } from './chatGPTClient.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { ChatContentMarkdownRenderer } from '../../../../workbench/contrib/chat/browser/widget/chatContentMarkdownRenderer.js';
+import type { ChatGPTMessage, ChatGPTModel, ChatGPTResource } from './chatGPTClient.js';
+import { ChatAttachmentsContentPart, type IChatAttachmentResource } from '../../../../workbench/contrib/chat/browser/widget/chatContentParts/chatAttachmentsContentPart.js';
 import { IChatGPTService, type ChatGPTState } from './chatGPTService.js';
+import { completeChatGPTRichContent, getChatGPTMarkdownRenderOptions } from './chatGPTRichContent.js';
 import './media/chatGPTWidget.css';
 
 export class ChatGPTWidget extends Disposable {
-	private readonly rendered = new Map<string, { element: HTMLElement; body: HTMLElement; markdown?: IRenderedMarkdown; text: string; }>();
+	private readonly markdownRenderer: ChatContentMarkdownRenderer;
+	private readonly rendered = new Map<string, { element: HTMLElement; body: HTMLElement; markdown?: IRenderedMarkdown; attachments?: ChatAttachmentsContentPart; resources: readonly ChatGPTResource[]; text: string; }>();
 	private renderedConversationId: string | undefined;
 	private modelReference: readonly ChatGPTModel[] | undefined;
 	private readonly scroll = this.element('div', 'ash-chatgpt-scroll');
@@ -22,8 +28,9 @@ export class ChatGPTWidget extends Disposable {
 	private readonly sendButton: HTMLButtonElement;
 	private readonly jumpButton: HTMLButtonElement;
 
-	constructor(private readonly root: HTMLElement, @IChatGPTService private readonly chat: IChatGPTService, @IOpenerService private readonly opener: IOpenerService) {
+	constructor(private readonly root: HTMLElement, @IChatGPTService private readonly chat: IChatGPTService, @IInstantiationService private readonly instantiation: IInstantiationService) {
 		super();
+		this.markdownRenderer = instantiation.createInstance(ChatContentMarkdownRenderer);
 		root.className = 'ash-chatgpt-widget';
 		root.tabIndex = -1;
 		const main = this.element('main', 'ash-chatgpt-main');
@@ -60,7 +67,7 @@ export class ChatGPTWidget extends Disposable {
 		main.append(this.scroll, this.jumpButton, footer);
 		root.append(main);
 		this._register(autorun(reader => this.render(this.chat.state.read(reader))));
-		this._register(toDisposable(() => { for (const item of this.rendered.values()) { item.markdown?.dispose(); } }));
+		this._register(toDisposable(() => { for (const item of this.rendered.values()) { item.markdown?.dispose(); item.attachments?.dispose(); } }));
 	}
 
 	private element<K extends keyof HTMLElementTagNameMap>(tag: K, className: string): HTMLElementTagNameMap[K] {
@@ -82,20 +89,23 @@ export class ChatGPTWidget extends Disposable {
 	}
 
 	public focus(): void { if (this.input.disabled) { this.root.focus(); } else { this.input.focus(); } }
+	public setVisible(visible: boolean): void { for (const row of this.rendered.values()) row.attachments?.setVisible(visible); }
 	public setScrollingOptimization(enabled: boolean): void { this.root.classList.toggle('optimize-scrolling', enabled); }
 	private atBottom(): boolean { return this.scroll.scrollHeight - this.scroll.scrollTop - this.scroll.clientHeight < 80; }
 	private resizeInput(): void { this.input.style.height = 'auto'; this.input.style.height = `${Math.min(this.input.scrollHeight, 240)}px`; }
 	private roleLabel(role: ChatGPTMessage['role']): string { return role === 'user' ? localize('sessions.chatgpt.you', 'You') : 'ChatGPT'; }
 	private render(state: ChatGPTState): void {
-		const follow = this.atBottom() || state.conversationId !== this.renderedConversationId;
+		const conversationChanged = state.conversationId !== this.renderedConversationId;
+		const follow = this.atBottom() || conversationChanged;
 		this.renderedConversationId = state.conversationId;
 		this.root.classList.toggle('empty', !state.messages.length);
-		this.welcome.textContent = state.name ? localize('sessions.chatgpt.greeting', 'Hi, {0}. Ready to start?', state.name) : localize('sessions.chatgpt.welcome', 'What can I help with?');
+		this.welcome.textContent = localize('sessions.chatgpt.welcome', 'What can I help with?');
 		this.welcome.hidden = state.messages.length > 0;
 		this.error.textContent = state.error;
 		this.error.hidden = !state.error;
 		this.status.textContent = state.busy ? localize('sessions.chatgpt.loading', 'Loading…') : state.sending ? localize('sessions.chatgpt.replying', 'ChatGPT is replying…') :
-			state.stopped ? localize('sessions.chatgpt.replyStopped', 'Reply stopped') : !state.error && state.messages.at(-1)?.role === 'assistant' ? localize('sessions.chatgpt.replyComplete', 'Reply complete') : '';
+			state.stopped ? localize('sessions.chatgpt.replyStopped', 'Reply stopped') : '';
+		this.status.hidden = !this.status.textContent;
 		this.messages.setAttribute('aria-busy', String(state.sending || state.busy));
 		this.input.disabled = !state.connected || state.busy || state.sending;
 		this.model.disabled = !state.connected || state.busy || state.sending;
@@ -109,31 +119,63 @@ export class ChatGPTWidget extends Disposable {
 		if (this.input.value !== state.draft) { this.input.value = state.draft; this.resizeInput(); }
 		const ids = new Set(state.messages.map(message => message.id));
 		for (const [id, row] of this.rendered) {
-			if (!ids.has(id)) { row.markdown?.dispose(); row.element.remove(); this.rendered.delete(id); }
+			if (!ids.has(id)) { row.markdown?.dispose(); row.attachments?.dispose(); row.element.remove(); this.rendered.delete(id); }
 		}
 		for (const message of state.messages) {
 			let row = this.rendered.get(message.id);
 			if (!row) {
 				const element = this.element('article', `ash-chatgpt-turn ${message.role}`);
-				const label = this.element('h3', 'ash-chatgpt-role');
-				label.textContent = this.roleLabel(message.role);
+				element.setAttribute('aria-label', this.roleLabel(message.role));
 				const body = this.element('div', 'ash-chatgpt-message-body');
-				element.append(label, body);
-				row = { element, body, text: '' };
+				element.append(body);
+				row = { element, body, resources: [], text: '' };
 				this.rendered.set(message.id, row);
 				this.messages.append(element);
 			}
 			row.element.classList.toggle('complete', !state.sending || message !== state.messages.at(-1));
-			if (row.text !== message.text) {
-				row.text = message.text;
+			const contentIdentity = JSON.stringify([message.text, message.references]);
+			if (row.text !== contentIdentity) {
+				row.text = contentIdentity;
 				row.markdown?.dispose();
-				row.markdown = renderMarkdown({ value: message.text, isTrusted: false, supportHtml: false }, {
-					// Reply text must not trigger network or local-file reads through embedded images.
-					transformUri: (href, kind) => kind === 'image' && !/^data:image\//iu.test(href) ? '' : href,
-					actionHandler: href => { if (/^https?:\/\//iu.test(href)) { void this.opener.open(href); } },
+				row.markdown = this.markdownRenderer.render({ value: message.text, isTrusted: false, supportHtml: message.role === 'assistant' }, {
+					...getChatGPTMarkdownRenderOptions(message.role, message.references),
+					ownerDocument: row.body.ownerDocument,
+					fillInIncompleteTokens: state.sending,
 				});
+				completeChatGPTRichContent(row.markdown.element, state.conversationId);
+				row.resources = [];
+				for (const placeholder of row.markdown.element.querySelectorAll<HTMLElement>('[data-chatgpt-resource]')) {
+					try {
+						const value: unknown = JSON.parse(placeholder.dataset.chatgptResource!);
+						if (isRecord(value) && typeof value.uri === 'string' && typeof value.name === 'string' && ['image', 'audio', 'video', 'document', 'html'].includes(value.kind as string)) {
+							let frameOrigin: string | undefined;
+							if (typeof value.frameOrigin === 'string') {
+								const url = new URL(value.frameOrigin);
+								if (url.protocol === 'https:' && url.origin === value.frameOrigin) frameOrigin = url.origin;
+							}
+							row.resources = [...row.resources, { uri: value.uri, name: value.name, kind: value.kind as ChatGPTResource['kind'], mimeType: typeof value.mimeType === 'string' ? value.mimeType : undefined, frameOrigin }];
+						}
+					} catch { /* A malformed resource keeps its readable label. */ }
+					placeholder.removeAttribute('data-chatgpt-resource');
+				}
 				row.body.replaceChildren(row.markdown.element);
+			} else if (conversationChanged && row.markdown) {
+				// The web stream may assign its conversation ID after its first content.
+				completeChatGPTRichContent(row.markdown.element, state.conversationId);
 			}
+			const resources = [...row.resources, ...(message.resources ?? [])];
+			const unique = resources.filter((resource, index) => resources.findIndex(other => other.uri === resource.uri) === index && (!resource.uri.startsWith('sandbox:') || !!state.conversationId));
+			if (unique.length) {
+				const variables: IChatAttachmentResource[] = unique.map(resource => ({ type: 'resource', resource: URI.parse(resource.uri), name: resource.name, presentation: resource.kind, mimeType: resource.mimeType, frameOrigin: resource.frameOrigin }));
+				if (row.attachments) { row.attachments.updateVariables(variables); }
+				else {
+					row.attachments = this.instantiation.createInstance(ChatAttachmentsContentPart, {
+						ownerDocument: row.body.ownerDocument, variables,
+						readResource: (resource: URI, signal: AbortSignal) => this.chat.readResource(resource.toString(), this.renderedConversationId, message.id, signal),
+					});
+					row.element.append(row.attachments.domNode);
+				}
+			} else { row.attachments?.dispose(); row.attachments = undefined; }
 		}
 		if (follow) { this.scroll.scrollTop = this.scroll.scrollHeight; }
 		else if (state.sending) { this.jumpButton.hidden = false; }

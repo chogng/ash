@@ -43,4 +43,5 @@ export class ChatGPTEditorPane extends EditorPane {
 	public override clearInput(): void { }
 	public override layout(_dimension: IDimension): void { }
 	public override focus(): void { this.widget.focus(); }
+	public override setVisible(visible: boolean): void { super.setVisible(visible); this.widget?.setVisible(visible); }
 }

@@ -7,18 +7,14 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ViewPane, type IViewPaneOptions } from '../../../../workbench/browser/parts/views/viewPane.js';
 import type { ChatGPTConversation } from './chatGPTClient.js';
-import { IAccessibleViewService, AccessibleViewType } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
-import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IChatGPTService } from './chatGPTService.js';
 import './media/chatGPTNavigationView.css';
 
 export class ChatGPTNavigationView extends ViewPane {
 	constructor(parent: HTMLElement, options: IViewPaneOptions,
 		@IChatGPTService chat: IChatGPTService,
-		@IAccessibleViewService accessible: IAccessibleViewService,
 		@IEditorService editors: IEditorService,
-		@IOpenerService opener: IOpenerService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IConfigurationService configuration: IConfigurationService,
 	) {
@@ -26,9 +22,6 @@ export class ChatGPTNavigationView extends ViewPane {
 		const document = parent.ownerDocument;
 		const root = this.contentElement;
 		root.classList.add('ash-chatgpt-navigation');
-		const heading = document.createElement('h2');
-		heading.className = 'ash-chatgpt-navigation-heading';
-		heading.textContent = 'ChatGPT';
 		this._register(contextKeys.createScoped(root)).createKey('chatGPTFocused', true);
 		this._register(addDisposableListener(root, 'focusin', event => {
 			if (!root.contains(event.relatedTarget as Node) && configuration.getValue<boolean>(AccessibilityVerbositySettingId.ChatGPT)) {
@@ -69,25 +62,7 @@ export class ChatGPTNavigationView extends ViewPane {
 			items[next].focus();
 		}));
 		const more = button(localize('sessions.chatgpt.loadMore', 'Load more'), () => { void chat.loadMore(); });
-		const actions = document.createElement('details');
-		actions.className = 'ash-chatgpt-navigation-actions';
-		const summary = document.createElement('summary');
-		summary.textContent = localize('sessions.chatgpt.moreActions', 'More actions');
-		const reload = button(localize('sessions.chatgpt.reloadShort', 'Reload'), () => { void chat.reload(); });
-		const read = button(localize('sessions.chatgpt.readConversation', 'Read conversation'), () => { accessible.show(AccessibleViewType.View, read); });
-		const help = button(localize('sessions.chatgpt.help', 'Help'), () => { accessible.show(AccessibleViewType.Help, help); });
-		const open = button(localize('sessions.chatgpt.openLogin', 'Open ChatGPT'), () => { const id = chat.state.get().conversationId; void opener.open(id ? `https://chatgpt.com/c/${encodeURIComponent(id)}` : 'https://chatgpt.com/'); });
-		const connect = button(localize('sessions.chatgpt.connect', 'Connect'), () => { void chat.connect(); });
-		const actionButtons = document.createElement('div');
-		actionButtons.className = 'ash-chatgpt-navigation-action-buttons';
-		actionButtons.append(reload, read, help, open, connect);
-		actions.append(summary, actionButtons);
-		this._register(addDisposableListener(actions, 'keydown', event => {
-			if (event.key === 'Escape' && actions.open) {
-				event.preventDefault(); event.stopPropagation(); actions.open = false; summary.focus();
-			}
-		}));
-		root.append(heading, newChat, search, list, more, actions);
+		root.append(newChat, search, list, more);
 		let conversations: readonly ChatGPTConversation[] | undefined;
 		this._register(autorun(reader => {
 			const state = chat.state.read(reader);
@@ -95,8 +70,6 @@ export class ChatGPTNavigationView extends ViewPane {
 			newChat.disabled = !state.connected || state.sending;
 			more.hidden = !state.hasMore;
 			more.disabled = state.busy || state.sending;
-			connect.disabled = reload.disabled = state.busy || state.sending;
-			open.disabled = state.sending;
 			if (conversations !== state.conversations) {
 				const focused = getActiveElement(document) as HTMLElement;
 				const focusedId = list.contains(focused) ? focused.dataset.conversation : undefined;
@@ -119,6 +92,6 @@ export class ChatGPTNavigationView extends ViewPane {
 	}
 
 	public override focus(): void {
-		this.contentElement.querySelector<HTMLElement>('button:not(:disabled), input:not(:disabled), summary')?.focus();
+		this.contentElement.querySelector<HTMLElement>('button:not(:disabled), input:not(:disabled)')?.focus();
 	}
 }

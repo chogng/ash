@@ -1,5 +1,6 @@
 {
   "ash": {
+    "chat.markdown.mediaUnavailable": "此处暂无法显示该媒体内容。",
     "agentsVoice.start": "开始语音",
     "agentsVoice.mute": "静音麦克风",
     "agentsVoice.unmute": "取消麦克风静音",
@@ -967,7 +968,10 @@
     "chat.permissions.approveSelected": "批准所选权限",
     "chat.permissions.help": "权限请求会显示准确的环境、目录能力和网络主机。按 Tab 移动到复选框，按空格选择部分权限，并在可用时选择本轮或本会话有效期。“批准所选权限”仅授予选中的项目；“拒绝”不授予任何权限。本轮权限会在该轮结束时失效，策略上限始终生效。",
     "chat.approval.approveForSession": "本会话内批准同一操作",
-    "chat.approval.saveRule": "保存此精确操作的批准"
+    "chat.approval.saveRule": "保存此精确操作的批准",
+    "chat.resource.preview": "预览",
+    "chat.resource.download": "下载",
+    "chat.resource.loadStatus": "{0}：{1}"
   },
   "ash.workbench": {
     "command.OpenCalls": "打开通话",
