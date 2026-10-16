@@ -480,20 +480,22 @@ suite('Terminal configuration and interactive profiles', () => {
 	test('built-in runtime fingerprints bind terminal contributions by their admitted product identity', async () => {
 		using owner = new DisposableStore();
 		const { services, profiles, launches } = createServices(owner, true);
-		const packageDigest = `sha256:${'a'.repeat(64)}`;
-		Object.assign(services.get(IExtensionService), { currentCatalog: { generation: 1, diagnostics: [], extensions: [{ id: 'ash.git', sourceKind: 'builtIn', packageSha256: `sha256:${'b'.repeat(64)}` }] } });
+		const runtimeDigest = `sha256:${'b'.repeat(64)}`;
+		Object.assign(services.get(IExtensionService), { currentCatalog: { generation: 1, diagnostics: [], extensions: [{ id: 'ash.git', sourceKind: 'builtIn', packageSha256: `sha256:${'c'.repeat(64)}` }] } });
 		const bridge = owner.add(services.createInstance(MainThreadTerminalService));
 		bridge.replaceEnvironmentProviders([{
-			runtimeId: 'ash.git', packageDigest, invoke: async () => ({ persistent: false, map: [['GIT_EDITOR', { type: 1, value: 'ash-editor' }]] }),
+			runtimeId: 'ash.git', packageDigest: runtimeDigest, invoke: async () => ({ persistent: false, map: [['GIT_EDITOR', { type: 1, value: 'ash-editor' }]] }),
 		}]);
 		bridge.replaceProfiles([{
-			runtimeId: 'ash.git', packageDigest, profileId: 'shell', title: 'Product shell', invoke: async () => ({ options: { shellPath: 'C:\\Windows\\cmd.exe' } }),
+			runtimeId: 'ash.git', packageDigest: runtimeDigest, profileId: 'shell', title: 'Product shell', invoke: async () => ({ options: { shellPath: 'C:\\Windows\\cmd.exe' } }),
 		}]);
 		await profiles.getContributedProfileProvider('ash.git', 'shell')!.createContributedTerminalProfile({});
 		assert.equal(launches[0]!.env?.GIT_EDITOR, 'ash-editor');
 		bridge.replaceEnvironmentProviders([]);
+		await services.get(IEnvironmentVariableService).refreshCollections();
+		assert.equal(services.get(IEnvironmentVariableService).collections.has('ash.git'), false);
 		bridge.replaceProfiles([]);
-		assert.throws(() => bridge.replaceEnvironmentProviders([{ runtimeId: 'other.product', packageDigest, invoke: async () => null }]), /Invalid terminal profile/);
+		assert.throws(() => bridge.replaceEnvironmentProviders([{ runtimeId: 'other.product', packageDigest: runtimeDigest, invoke: async () => null }]), /Invalid terminal profile/);
 	});
 
 	for (const sourceKind of ['user', 'plugin', 'registry']) test(`external ${sourceKind} terminal contributions reject a mismatched package digest even for the same ID`, () => {
