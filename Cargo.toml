@@ -461,7 +461,9 @@ tree-sitter-typescript = "0.23.2"
 tree-sitter-gitignore = { path = "extensions/git-base/tree-sitter/gitignore" }
 tree-sitter-bazelrc = { path = "extensions/bazel/tree-sitter/bazelrc" }
 tree-sitter-css = "0.25.0"
-tree-sitter-scss = "1.0.0"
+# Published 1.0.0 passes a GCC warning flag to MSVC. Pin the upstream build-only
+# fix until a release includes it; keep the existing generated parser unchanged.
+tree-sitter-scss = { git = "https://github.com/tree-sitter-grammars/tree-sitter-scss", rev = "9ab738d22bb248771d42e8678d1a307d14990df1" }
 tree-sitter-less = "1.0.0"
 tree-sitter-go = "0.25.0"
 tree-sitter-html = "0.23.2"
