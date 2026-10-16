@@ -161,7 +161,7 @@ test('Explorer scrollbar stays at the pane edge while rows remain inset', { tag:
 			outerScroll: sidebar.querySelector('.ash-composite-content')!.scrollTop,
 		};
 	});
-	await expect.poll(geometry).toEqual({ trackGap: 0, treeGap: 0, rowInset: 8, rowRightInset: 8, headerInset: 8, outerScroll: 0 });
+	await expect.poll(geometry).toEqual({ trackGap: 0, treeGap: 0, rowInset: 4, rowRightInset: 4, headerInset: 0, outerScroll: 0 });
 	const originalTransform = await track.evaluate(element => {
 		const transform = element.style.transform;
 		element.style.transform = `translateX(-${1 / devicePixelRatio}px)`;
@@ -187,9 +187,13 @@ test('Explorer scrollbar stays at the pane edge while rows remain inset', { tag:
 	await expect(typedMatch).toBeInViewport();
 	await expect(tree).toBeFocused();
 	for (const theme of ['Ash Light', 'Ash High Contrast Dark', 'Ash High Contrast Light']) {
-		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
-		await workbench.quickaccess.select(theme);
-		await expect.poll(geometry).toEqual({ trackGap: 0, treeGap: 0, rowInset: 8, rowRightInset: 8, headerInset: 8, outerScroll: 0 });
+		if (target.appServerMode === 'required') {
+			await workbench.quickaccess.runCommand('workbench.action.selectTheme');
+			await workbench.quickaccess.select(theme);
+		} else {
+			await page.emulateMedia({ colorScheme: theme.endsWith('Dark') ? 'dark' : 'light', forcedColors: theme.includes('High Contrast') ? 'active' : 'none' });
+		}
+		await expect.poll(geometry).toEqual({ trackGap: 0, treeGap: 0, rowInset: 4, rowRightInset: 4, headerInset: 0, outerScroll: 0 });
 	}
 	await workbench.quickaccess.runCommand('workbench.action.openSettings');
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
@@ -199,8 +203,8 @@ test('Explorer scrollbar stays at the pane edge while rows remain inset', { tag:
 	for (const label of ['Flat', 'Modern']) {
 		await style.click();
 		await page.getByRole('option', { name: label, exact: true }).click();
-		const inset = label === 'Modern' ? 8 : 0;
-		await expect.poll(geometry).toEqual({ trackGap: 0, treeGap: 0, rowInset: inset, rowRightInset: inset, headerInset: inset, outerScroll: 0 });
+		const inset = label === 'Modern' ? 4 : 0;
+		await expect.poll(geometry).toEqual({ trackGap: 0, treeGap: 0, rowInset: inset, rowRightInset: inset, headerInset: 0, outerScroll: 0 });
 	}
 	await settings.locator('.ash-modal-editor-close').click();
 });

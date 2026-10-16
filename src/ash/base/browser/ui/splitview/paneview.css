@@ -83,6 +83,20 @@
 .ash-pane-view-header-actions[hidden] {
 	display: none;
 }
+
+/* Keep title geometry stable while actions wait for pointer or keyboard intent. */
+.ash-pane-view:not(.collapsed)
+	> .ash-pane-view-header
+	> .ash-pane-view-header-actions {
+	visibility: hidden;
+}
+
+.ash-pane-view:is(:hover, :focus-within)
+	> .ash-pane-view-header
+	> .ash-pane-view-header-actions {
+	visibility: visible;
+}
+
 .ash-pane-view-content {
 	min-width: 0;
 	min-height: 0;

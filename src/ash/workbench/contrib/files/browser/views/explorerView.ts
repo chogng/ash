@@ -88,7 +88,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		@IStorageService private readonly storageService: IStorageService,
 		@IMenuService menuService: IMenuService,
 	) {
-		super(container, options);
+		super(container, { ...options, headerActionsVisibility: 'whenExpanded' });
 		this._register(toDisposable(() => this.selectionCancellation.value?.cancel()));
 		this._register(storageService.onWillSaveState(() => this.saveTreeState()));
 		this._register(explorerService.registerView(this));

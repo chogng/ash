@@ -84,14 +84,15 @@
 	flex-direction: column;
 	min-height: 0;
 	overflow: hidden;
-	padding: 0 var(--ash-spacing-size60) var(--ash-spacing-size60);
+	padding: 0 0 var(--ash-spacing-size60);
 }
 
 .ash-quick-pick-list .ash-quick-pick-list-items {
 	min-height: 0;
 	box-sizing: border-box;
-	/* Keep the selection background out of the translucent scrollbar. */
-	padding-right: var(--ash-scrollbar-size);
+	/* Inset content without moving the scrollbar away from the picker's edge. */
+	padding-left: var(--ash-spacing-size60);
+	padding-right: calc(var(--ash-scrollbar-size) + var(--ash-spacing-size60));
 }
 
 .ash-quick-pick-list-scrollable {
