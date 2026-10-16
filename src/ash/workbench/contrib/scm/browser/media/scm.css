@@ -271,15 +271,23 @@
 .ash-scm-graph-overlay {
 	/* References and actions cover the row without reducing the title's available width. */
 	position: absolute;
+	z-index: 1;
 	top: 0;
 	right: var(--ash-spacing-size80);
 	bottom: 0;
 	display: flex;
 	align-items: center;
-	background: var(--scm-graph-row-background);
+	background:
+		linear-gradient(
+			var(--scm-graph-row-background),
+			var(--scm-graph-row-background)
+		),
+		var(--ash-sideBar-background);
 }
 
-.ash-scm-graph-row:hover > .ash-scm-graph-overlay {
+.ash-scm-graph-commit:not(.selected)
+	> .ash-scm-graph-row:hover
+	> .ash-scm-graph-overlay {
 	background:
 		linear-gradient(
 			var(--ash-list-hoverBackground),
@@ -295,6 +303,7 @@
 }
 
 .ash-scm-graph-row:hover > .ash-scm-graph-overlay > .ash-scm-graph-actions,
+.ash-scm-graph-actions:has(button[aria-expanded="true"]),
 .ash-scm-graph-commit:focus-within
 	> .ash-scm-graph-row
 	> .ash-scm-graph-overlay
@@ -343,9 +352,20 @@
 
 .ash-scm-graph-change-row > .ash-scm-graph-actions {
 	position: absolute;
+	z-index: 1;
 	top: 0;
-	right: 0;
+	right: var(--ash-toolbar-actionSize);
 	padding: 0;
+	background: var(--ash-sideBar-background);
+}
+
+.ash-scm-graph-change-row:is(:hover, :focus-within) > .ash-scm-graph-actions {
+	background:
+		linear-gradient(
+			var(--ash-list-hoverBackground),
+			var(--ash-list-hoverBackground)
+		),
+		var(--ash-sideBar-background);
 }
 
 .ash-scm-graph-change-row:hover > .ash-scm-graph-actions,
@@ -362,7 +382,7 @@
 	border: 0;
 	border-radius: 0;
 	margin-left: var(--scm-graph-content-x, 22px);
-	padding: 0 var(--ash-spacing-size320) 0
+	padding: 0 0 0
 		calc(var(--scm-graph-change-depth, 0) * var(--ash-spacing-size120));
 	color: inherit;
 	background: transparent;
@@ -375,8 +395,7 @@
 	flex: 1 1 auto;
 }
 
-.ash-scm-graph-change:hover,
-.ash-scm-graph-change:focus-visible {
+.ash-scm-graph-change-row:is(:hover, :focus-within) > .ash-scm-graph-change {
 	background: var(--ash-list-hoverBackground);
 }
 
@@ -386,8 +405,10 @@
 }
 
 .ash-scm-graph-change-status {
-	flex: 0 0 auto;
-	margin-left: 8px;
+	flex: 0 0 var(--ash-spacing-size200);
+	width: var(--ash-spacing-size200);
+	margin-left: var(--ash-spacing-size40);
+	text-align: center;
 	color: var(--ash-muted-foreground);
 	font-size: var(--ash-fontSize-label2);
 	font-weight: var(--ash-fontWeight-semiBold);
@@ -630,7 +651,8 @@
 }
 
 .ash-scm-section-heading {
-	display: flex;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
 	min-width: 0;
 	height: var(--ash-list-rowHeight);
 	flex: 1 1 auto;
@@ -644,6 +666,7 @@
 }
 
 .ash-scm-section-label {
+	grid-area: 1 / 1;
 	min-width: 0;
 	flex: 1 1 auto;
 	overflow: hidden;
@@ -658,11 +681,26 @@
 .ash-scm-section-actions,
 .ash-scm-change-actions {
 	visibility: hidden;
+	pointer-events: none;
+}
+
+.ash-scm-section-actions {
+	/* Share the label's grid cell so only the count occupies permanent space. */
+	position: relative;
+	z-index: 1;
+	grid-area: 1 / 1;
+	justify-self: end;
+	background: var(--ash-sideBar-background);
+}
+
+.ash-scm-section-count {
+	grid-area: 1 / 2;
 }
 
 .ash-scm-change-actions {
 	/* Actions cover the label on intent; only the status marker reserves row width. */
 	position: absolute;
+	z-index: 1;
 	top: 0;
 	right: var(--ash-toolbar-actionSize);
 	bottom: 0;
@@ -673,7 +711,9 @@
 	pointer-events: none;
 }
 
-.ash-scm-changes .ash-tree-row:hover:not(.focused) .ash-scm-change-actions {
+.ash-scm-changes
+	.ash-tree-row:hover:not(.focused, .selected)
+	:is(.ash-scm-section-actions, .ash-scm-change-actions) {
 	background:
 		linear-gradient(
 			var(--ash-list-hoverBackground),
@@ -682,7 +722,9 @@
 		var(--ash-sideBar-background);
 }
 
-.ash-scm-changes .ash-tree-row.selected .ash-scm-change-actions {
+.ash-scm-changes
+	.ash-tree-row.selected
+	:is(.ash-scm-section-actions, .ash-scm-change-actions) {
 	background:
 		linear-gradient(
 			var(--ash-list-inactiveSelectionBackground),
@@ -694,7 +736,7 @@
 .ash-scm-changes
 	.ash-tree:focus
 	.ash-tree-row.selected
-	.ash-scm-change-actions {
+	:is(.ash-scm-section-actions, .ash-scm-change-actions) {
 	background:
 		linear-gradient(
 			var(--ash-list-activeSelectionBackground),
@@ -704,6 +746,8 @@
 }
 
 .ash-scm-changes .ash-tree-row:hover .ash-scm-section-actions,
+.ash-scm-section-actions:has(button[aria-expanded="true"]),
+.ash-scm-change-actions:has(button[aria-expanded="true"]),
 .ash-scm-changes .ash-tree-row:hover .ash-scm-change-actions,
 .ash-scm-changes
 	.ash-tree:focus-visible
@@ -715,6 +759,39 @@
 .ash-scm-change:focus-within > .ash-scm-change-actions {
 	visibility: visible;
 	pointer-events: auto;
+}
+
+.ash-scm-section-actions::before,
+.ash-scm-change-actions::before,
+.ash-scm-graph-overlay::before,
+.ash-scm-graph-change-row > .ash-scm-graph-actions::before {
+	content: "";
+	position: absolute;
+	inset-block: 0;
+	inset-inline-end: 100%;
+	width: var(--ash-spacing-size160);
+	background: inherit;
+	mask-image: linear-gradient(to right, transparent, currentColor);
+	pointer-events: none;
+}
+
+.ash-scm-graph-overlay::before {
+	opacity: 0;
+}
+
+.ash-scm-graph-row:hover > .ash-scm-graph-overlay::before,
+.ash-scm-graph-commit:focus-within
+	> .ash-scm-graph-row
+	> .ash-scm-graph-overlay::before,
+.ash-scm-graph-overlay:has(button[aria-expanded="true"])::before {
+	opacity: 1;
+}
+
+.ash-scm-section-actions:dir(rtl)::before,
+.ash-scm-change-actions:dir(rtl)::before,
+.ash-scm-graph-overlay:dir(rtl)::before,
+.ash-scm-graph-change-row > .ash-scm-graph-actions:dir(rtl)::before {
+	mask-image: linear-gradient(to left, transparent, currentColor);
 }
 
 .ash-scm-change {

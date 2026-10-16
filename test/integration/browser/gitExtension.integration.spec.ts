@@ -231,6 +231,34 @@ test('SCM commit form stays borderless with and without resource groups across t
 			await page.evaluate(() => window.gitScmPaneIntegration.setClean(false));
 			await expect(tree.locator('.ash-scm-change')).toHaveCount(1);
 			await expect(form).toHaveCSS('border-bottom-width', '0px');
+			const resource = tree.locator('.ash-scm-change');
+			await resource.hover();
+			const actions = resource.locator('.ash-scm-change-actions');
+			await expect(actions).toBeVisible();
+			const fileGeometry = await resource.evaluate(element => {
+				const toolbar = element.querySelector('.ash-scm-change-actions')!;
+				const fade = getComputedStyle(toolbar, '::before');
+				return {
+					actionsRight: toolbar.getBoundingClientRect().right,
+					statusLeft: element.querySelector('.ash-scm-change-status')!.getBoundingClientRect().left,
+					mask: fade.maskImage, pointerEvents: fade.pointerEvents,
+				};
+			});
+			expect(fileGeometry.actionsRight).toBeLessThanOrEqual(fileGeometry.statusLeft);
+			expect(fileGeometry.mask).toContain('linear-gradient');
+			expect(fileGeometry.pointerEvents).toBe('none');
+			await actions.getByRole('button').first().focus();
+			await expect(actions).toBeVisible();
+			const heading = tree.locator('.ash-scm-section-heading');
+			await heading.hover();
+			const groupGeometry = await heading.evaluate(element => {
+				const label = element.querySelector('.ash-scm-section-label')!.getBoundingClientRect();
+				const toolbar = element.querySelector('.ash-scm-section-actions')!.getBoundingClientRect();
+				const count = element.querySelector('.ash-scm-section-count')!.getBoundingClientRect();
+				return { labelRight: label.right, actionsLeft: toolbar.left, actionsRight: toolbar.right, countLeft: count.left };
+			});
+			expect(groupGeometry.labelRight).toBeGreaterThan(groupGeometry.actionsLeft);
+			expect(groupGeometry.actionsRight).toBeLessThanOrEqual(groupGeometry.countLeft);
 			await testInfo.attach(`source-control-${theme}`, { body: await page.locator('#scm-pane').screenshot(), contentType: 'image/png' });
 		}
 	} finally { await page.evaluate(() => window.gitExtensionIntegration.dispose()); }

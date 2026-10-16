@@ -25,6 +25,16 @@ test('history rows retain identity and reserve title width when the pane resizes
 		expect(geometry.left).toBeCloseTo(0, 1);
 		expect(geometry.right).toBeCloseTo(8, 1);
 	}
+	await commit.locator('.ash-scm-graph-row').hover({ position: { x: 80, y: 10 } });
+	const overlay = commit.locator('.ash-scm-graph-overlay');
+	await expect(overlay.locator('.ash-scm-graph-actions')).toBeVisible();
+	const fade = await overlay.evaluate(element => {
+		const style = getComputedStyle(element, '::before');
+		return { mask: style.maskImage, opacity: style.opacity, pointerEvents: style.pointerEvents };
+	});
+	expect(fade).toMatchObject({ opacity: '1', pointerEvents: 'none' });
+	expect(fade.mask).toContain('linear-gradient');
+	await test.info().attach('scm-history-row-overlay', { body: await commit.screenshot(), contentType: 'image/png' });
 	await retainedCommit?.dispose();
 	await retainedActions?.dispose();
 });
