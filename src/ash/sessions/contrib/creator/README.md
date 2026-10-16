@@ -6,7 +6,7 @@ Creator 是 Sessions 的创作功能聚合入口，首页提供 Design、Whitebo
 
 | 模式       | 当前操作                                                           |
 | ---------- | ------------------------------------------------------------------ |
-| Design     | 画板、图片和图形编辑；按需展开共享 Agent 对话，附上文档与选区快照  |
+| Design     | 画板、图片和图形编辑；自动保存与恢复未命名草稿                     |
 | Whiteboard | 便签、自由绘图和固定连接线                                         |
 | Slides     | 16:9 页面、排序和演示                                              |
 | Brand      | 常用素材尺寸、整批尺寸变体                                         |
@@ -16,15 +16,11 @@ Creator 是 Sessions 的创作功能聚合入口，首页提供 Design、Whitebo
 
 Sites 尚未提供网站布局重排、路由文档和发布，完整领域约定见 [Creator Sites](../../CREATOR_SITES.md)。Make 的 Agent 操作准备未发送的 Code 草稿，由用户在对话里检查并发送。
 
-这份文档说明目录归属、状态与生命周期约定。后续开发先阅读 [七项入口的官方定位](DESIGN.md#七项入口的官方定位)、[Agent 的作用](DESIGN.md#agent-在各项工作中的作用)、[Part 分工](DESIGN.md#七项工作区的-part-分工)和 [工作区与验收要求](DESIGN.md#ash-的工作区与验收要求)，按各项任务设计能力；这些是目标要求，不能将上表的当前操作视为完整产品能力。完整 Agent 对话由 `SessionsPart` 承载，创作内容由 `EditorPart` 承载；Design 已接入两者同时显示的 [Sessions 布局契约](../../LAYOUT.md#creator-conversation-and-editor-composition)，其他工作区的组合仍待实现。Sessions 的窗口装配见 [Sessions README](../../README.md)，窗口分层见 [LAYERS.md](../../LAYERS.md)。
+这份文档说明目录归属、状态与生命周期约定。后续开发先阅读 [七项入口的官方定位](DESIGN.md#七项入口的官方定位)、[Agent 的作用](DESIGN.md#agent-在各项工作中的作用)、[Part 分工](DESIGN.md#七项工作区的-part-分工)和 [工作区与验收要求](DESIGN.md#ash-的工作区与验收要求)，按各项任务设计能力；这些是目标要求，不能将上表的当前操作视为完整产品能力。完整 Agent 对话由 `SessionsPart` 承载，创作内容由 `EditorPart` 承载；布局组合遵循 [Sessions 布局契约](../../LAYOUT.md#creator-conversation-and-editor-composition)。Sessions 的窗口装配见 [Sessions README](../../README.md)，窗口分层见 [LAYERS.md](../../LAYERS.md)。
 
-### Design 的 Agent 对话
+### Design 画布布局
 
-每次进入 Design 或重开窗口时，默认只显示图层、画布和属性；工具栏的“显示 Agent”展开已有 `SessionsPart`，继续使用当前选中的对话、草稿及附件。Creator 入口、画布及属性仍保留；“隐藏 Agent”将焦点返回画布。画布优先吸收窗口尺寸变化，对话宽度由桌面布局保存，显示状态只在本次进入期间有效。
-
-“添加设计到 Agent”打开对话并添加 `design-context.json`。附件在点击时固定文档内容、模型版本令牌和所选对象身份，后续编辑不会改变已经添加的快照；再次添加同一文档会更新该文档的附件。操作保留用户已有文字，由用户检查并发送。附件包含素材版本元数据，不包含图片字节。当前没有自动采用 Agent 的设计修改，也没有每份文档独立绑定对话；组件和布局系统仍按 [DESIGN](DESIGN.md) 继续实施。
-
-调用链由 Design contribution 的工具栏进入 `ISessionsLayoutService` 或窗口的 `sessions.addContextToAgent` 命令。Creator contribution 提供 `creator.design` 入口与可选对话声明；布局服务只管理入口显示，`DesktopWorkbenchLayout` 管理主区域及尺寸，Sessions 保持唯一对话状态，Design 工作副本保持唯一文档与撤销历史。新增能力沿既有 Ash 文件原位实现，没有新增 Part 或聊天模型。
+Design 隐藏编辑器标签栏和 Creator 标题行，不创建工作空间顶部操作栏，画布直接占用中央内容区。底部绘图工具、图层和属性面板保留。添加画板、导入图片、打开设计、保存副本与导出 SVG 使用画布快捷键或右键菜单；自动保存失败时，右键菜单提供重试保存。点击左侧 Creator 活动图标返回工作空间列表。其他工作空间保留各自的标题和操作栏。
 
 ## 目录与命名
 
@@ -94,7 +90,7 @@ Typography 面板面向整层或当前字符选区，显示混合值，支持字
 | 当前工具与模式                           | 每个 Widget                         | 否                             |
 | 文件 URI、读取版本、已保存内容和操作状态 | `DesignDocumentController`          | 否                             |
 
-多个 Widget 可以使用同一个文档控制器，共享已提交内容与历史，同时保留各自的选区和视口。Widget 借用控制器的模型；单独释放 Widget 会取消手势，释放 View、输入控制器、共享工具栏及该实例的全部贡献，并清理订阅和命令查找记录。View 释放画布的主题与配置订阅，Motion 释放播放时钟；文档仍由控制器持有。活动页切换隐藏对应编辑组或 EditorPane，`CreatorPage` 保留页面组件与 Widget；隐藏画布会取消手势并停止动画播放，回到设计页时恢复原选区和视口。Creator 页面使用 EditorPart 中保留的产品编辑组，不进入会话 Code 工作集，页面切换不会触发关闭确认。窗口编辑器服务通过关闭生命周期逐一确认保存、放弃或取消，即使当前正在查看其他模式，也会检查全部未保存文档；窗口关闭后释放文档。
+多个 Widget 可以使用同一个文档控制器，共享已提交内容与历史，同时保留各自的选区和视口。Widget 借用控制器的模型；单独释放 Widget 会取消手势，释放 View、输入控制器、共享工具栏及该实例的全部贡献，并清理订阅和命令查找记录。View 释放画布的主题与配置订阅，Motion 释放播放时钟；文档仍由控制器持有。活动页切换隐藏对应编辑组或 EditorPane，`CreatorPage` 保留页面组件与 Widget；隐藏画布会取消手势并停止动画播放，回到设计页时恢复原选区和视口。Creator 页面使用 EditorPart 中保留的产品编辑组，不进入会话 Code 工作集，页面切换不会触发关闭确认。Design 文档由控制器自动保存：未命名草稿以现有设计文件包格式保存在当前 UI profile 的 `creator/<workspace-id>/<document-id>.ash-design`；工作空间机器状态只记录上次文档 URI，重新进入 Design 时加载该文件包。已打开的文件保留版本检查并自动写回。正常关闭等待全部修改保存，不询问保存；失败时保留画布内容并阻止关闭，可重试。保存副本、导出与发布仍需显式操作。其他 Creator 模式继续通过关闭生命周期确认保存、放弃或取消；窗口关闭后释放文档。
 
 文档文件保存所属模式；打开和恢复备份必须匹配当前工作空间。原有未记录模式的 Design 文件保持 Design 语义。每种模式的工作副本资源为 `ash-creator:/<mode>`，窗口导航迁移旧的 Design 命令顺序与页面选择。
 

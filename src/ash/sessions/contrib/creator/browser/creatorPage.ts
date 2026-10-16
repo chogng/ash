@@ -67,6 +67,7 @@ export class CreatorPage extends Disposable {
 	private readonly homeDomNode: HTMLElement;
 	private readonly workspacesDomNode: HTMLElement;
 	private readonly titleDomNode: HTMLElement;
+	private readonly headerDomNode: HTMLElement;
 	private readonly back: Button;
 	private readonly modeButtons = new Map<CreatorMode, Button>();
 	private readonly workspaces = this._register(new DisposableMap<CreatorMode, ICreatorWorkspace>());
@@ -81,7 +82,7 @@ export class CreatorPage extends Disposable {
 		this.domNode = h(ownerDocument, 'section', { className: 'ash-creator', attributes: { role: 'region', 'aria-label': localize('sessions.creator.title', 'Creator') } });
 		pages.set(this.domNode, this);
 		this._register(contextKeys.createScoped(this.domNode)).createKey('sessionsCreatorFocused', true);
-		const header = h(ownerDocument, 'header', { className: 'ash-creator-header' });
+		const header = this.headerDomNode = h(ownerDocument, 'header', { className: 'ash-creator-header' });
 		this.back = this._register(new Button(header, { label: localize('sessions.creator.home', 'Creator home'), onClick: () => { void commands.executeCommand('sessions.show.creator'); } }));
 		this.back.hidden = true;
 		this.titleDomNode = h(ownerDocument, 'h1', { className: 'ash-creator-title' }, localize('sessions.creator.title', 'Creator'));
@@ -144,6 +145,7 @@ export class CreatorPage extends Disposable {
 		this.homeDomNode.hidden = this.mode !== undefined;
 		this.workspacesDomNode.hidden = this.mode === undefined;
 		this.back.hidden = this.mode === undefined;
+		this.headerDomNode.hidden = this.mode === CreatorMode.Design;
 		for (const [mode, workspace] of this.workspaces) {
 			workspace.domNode.hidden = mode !== this.mode;
 			workspace.setVisible(this.visible && mode === this.mode);
@@ -153,7 +155,7 @@ export class CreatorPage extends Disposable {
 	public layout(dimension: IDimension): void {
 		this.dimension = dimension;
 		this.domNode.classList.toggle('narrow', dimension.width < 600);
-		if (this.mode !== undefined) { this.workspaces.get(this.mode)!.layout({ width: dimension.width, height: Math.max(0, dimension.height - 52) }); }
+		if (this.mode !== undefined) { this.workspaces.get(this.mode)!.layout({ width: dimension.width, height: Math.max(0, dimension.height - (this.headerDomNode.hidden ? 0 : 52)) }); }
 	}
 	public focus(): void {
 		if (this.mode !== undefined) { this.workspaces.get(this.mode)!.focus(); }

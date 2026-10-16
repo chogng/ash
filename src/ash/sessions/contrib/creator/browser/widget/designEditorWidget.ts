@@ -22,6 +22,7 @@ import { DesignSelection } from '../../common/selection.js';
 import type { DesignDocumentController } from '../designDocumentController.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { DesignMediaPreview } from '../designMedia.js';
 import { DesignView } from '../view.js';
 import { CanvasViewport } from '../../../canvas/common/canvasViewport.js';
@@ -45,7 +46,6 @@ export class DesignEditorWidget extends Disposable {
 	private readonly properties: IDesignPropertiesContribution;
 	private readonly contentDomNode: HTMLElement;
 	private readonly messageDomNode: HTMLElement;
-	private readonly zoomDomNode: HTMLElement;
 	private contextMenuVisible = false;
 	private vectorSelectionStatus: string | undefined;
 	private readonly toolsWidget: DesignToolsWidget;
@@ -67,6 +67,7 @@ export class DesignEditorWidget extends Disposable {
 		@IContextMenuService private readonly contextMenus: IContextMenuService,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@ICommandService commandService: ICommandService,
+		@INotificationService private readonly notifications: INotificationService,
 	) {
 		super();
 		this.commands = new DocumentCommands(documentController.model);
@@ -77,7 +78,6 @@ export class DesignEditorWidget extends Disposable {
 			focusedViews.delete(this.domNode);
 			if (this.contextMenuVisible) { this.contextMenus.hideContextMenu(); }
 		}));
-		this.zoomDomNode = h(ownerDocument, 'span', { className: 'ash-sessions-design-zoom' });
 		this.canvas = this._register(instantiationService.createInstance(DesignView, ownerDocument));
 		this.canvas.setTool(this.tool);
 		const stage = h(ownerDocument, 'div', { className: 'ash-sessions-design-stage' });
@@ -107,9 +107,7 @@ export class DesignEditorWidget extends Disposable {
 
 		this.contentDomNode = h(ownerDocument, 'div', { className: 'ash-sessions-design-content', attributes: { 'aria-hidden': 'true' } });
 		this.messageDomNode = h(ownerDocument, 'div', { className: 'ash-sessions-design-message', attributes: { role: 'status', 'aria-live': 'polite' } });
-		const statusDomNode = h(ownerDocument, 'div', { className: 'ash-sessions-design-status' });
-		statusDomNode.append(this.messageDomNode, this.zoomDomNode);
-		this.domNode.append(stage, statusDomNode, this.contentDomNode);
+		this.domNode.append(stage, this.messageDomNode, this.contentDomNode);
 		const scopedContext = this._register(contextKeys.createScoped(this.domNode));
 		scopedContext.createKey('sessionsDesignCanvasFocused', true);
 		const active = scopedContext.createKey<boolean>('sessionsDesignCanvasActive', false);
@@ -126,7 +124,10 @@ export class DesignEditorWidget extends Disposable {
 		}));
 		this._register(documentController.onDidChange(event => {
 			if (documentController.isBusy) { this.cancelGesture(); }
-			if (event.message !== undefined) { this.messageDomNode.textContent = event.message; }
+			if (event.message !== undefined) {
+				if (documentController.needsSaveRetry) { this.notifications.error(event.message); }
+				else { this.messageDomNode.textContent = event.message; }
+			}
 			this.render();
 		}));
 		this._register(this.drawing.onDidChange(() => this.renderShapes()));
@@ -193,7 +194,7 @@ export class DesignEditorWidget extends Disposable {
 		return root ? focusedViews.get(root) : undefined;
 	}
 
-	public getAccessibleContent(): string { return this.mode === DesignMode.Code ? this.code.getAccessibleContent() : this.contentDomNode.textContent! + '\n' + this.text.getAccessibleContent() + '\n' + this.prototype.getAccessibleContent(); }
+	public getAccessibleContent(): string { return (this.documentController.automaticallySaves ? this.documentController.saveStatus + '\n' : '') + (this.mode === DesignMode.Code ? this.code.getAccessibleContent() : this.contentDomNode.textContent! + '\n' + this.text.getAccessibleContent() + '\n' + this.prototype.getAccessibleContent()); }
 	public undo(): void { if (this.documentController.isBusy) { return; } this.cancelGesture(); this.documentController.model.undo(); }
 	public redo(): void { if (this.documentController.isBusy) { return; } this.cancelGesture(); this.documentController.model.redo(); }
 	public formatText(format: 'bold' | 'italic' | 'underline'): void { this.text.toggleFormat(format); }
@@ -420,6 +421,8 @@ export class DesignEditorWidget extends Disposable {
 			this.action('importImage', localize('sessions.design.importImage', 'Import image'), () => this.importImage(), !this.documentController.isBusy && this.mode !== DesignMode.Code && this.mode !== DesignMode.Motion),
 			this.action('export', localize('sessions.design.export', 'Export SVG'), () => this.runFileOperation(() => this.documentController.exportDocument()), !this.documentController.isBusy && shapes.length > 0),
 			this.action('open', localize('sessions.design.open', 'Open design'), () => this.runFileOperation(() => this.documentController.openDocument()), !this.documentController.isBusy),
+			...(this.documentController.needsSaveRetry ? [this.action('retrySave', localize('sessions.design.retrySave', 'Retry saving'), () => this.documentController.flushAutoSave(), !this.documentController.isRestoring)] : []),
+			...(this.documentController.automaticallySaves ? [this.action('saveCopy', localize('sessions.design.saveCopy', 'Save a copy'), () => this.runFileOperation(() => this.documentController.saveCopy()), !this.documentController.isBusy)] : []),
 		];
 	}
 
@@ -475,7 +478,6 @@ export class DesignEditorWidget extends Disposable {
 		const resources = this.commands.resources.value;
 		if (resources.collections.length || resources.styles.length || resources.libraries.length) { this.contentDomNode.textContent += '\n' + localize('sessions.design.resourceDescription', 'Variables: {0}. Styles: {1}. Libraries: {2}.', resources.variables.map(variable => variable.name).join(', '), resources.styles.map(style => style.name).join(', '), resources.libraries.map(library => library.name).join(', ')); }
 		this.domNode.classList.toggle('dirty', this.documentController.isDirty);
-		this.updateZoomLabel();
 	}
 
 	private cancelGesture(): void { this.input.cancelGesture(); }
@@ -645,11 +647,6 @@ export class DesignEditorWidget extends Disposable {
 	private applyTransform(): void {
 		this.canvas.applyTransform(this.camera);
 		this.renderShapes();
-		this.updateZoomLabel();
-	}
-
-	private updateZoomLabel(): void {
-		this.zoomDomNode.textContent = localize('sessions.design.zoom', '{0}% · 1 unit = 1 px · grid 12 px', Math.round(this.camera.scale * 100)) + (this.documentController.isDirty ? ' · ' + localize('sessions.design.unsaved', 'Unsaved changes') : '');
 	}
 
 	private async runFileOperation(operation: () => Promise<unknown>): Promise<void> {

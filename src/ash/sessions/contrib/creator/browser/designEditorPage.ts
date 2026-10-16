@@ -32,10 +32,19 @@ export class DesignEditorPage extends Disposable {
 		this.domNode = this.editor.domNode;
 		parent.append(this.domNode);
 		this.editor.initialize();
+		const updateRestoring = () => {
+			this.domNode.inert = this.workingCopy.isRestoring;
+			this.domNode.setAttribute('aria-busy', String(this.workingCopy.isRestoring));
+		};
+		this._register(this.workingCopy.onDidChange(updateRestoring));
+		updateRestoring();
 		this._register(addDisposableListener(this.domNode, 'focusin', () => this.designEditors.setActiveEditor(this.editor)));
-		// Browser unload cannot await the lifecycle's asynchronous save confirmation.
+		// Desktop drains saves through the lifecycle. Browser unload only prompts for manual-save modes.
 		this._register(addDisposableListener(getWindow(this.domNode), 'beforeunload', (event: BeforeUnloadEvent) => {
-			if (this.workingCopy.isDirty && !this.lifecycle.willShutdown) { event.preventDefault(); event.returnValue = ''; }
+			if (!this.workingCopy.automaticallySaves && this.workingCopy.isDirty && !this.lifecycle.willShutdown) { event.preventDefault(); event.returnValue = ''; }
+		}));
+		this._register(addDisposableListener(getWindow(this.domNode), 'pagehide', () => {
+			if (this.workingCopy.automaticallySaves) { void this.workingCopy.flushAutoSave(); }
 		}));
 	}
 
@@ -53,6 +62,6 @@ export class DesignEditorPage extends Disposable {
 	}
 	public focus(): void { this.editor.focus(); }
 	public layout(dimension: IDimension): void { this.editor.layout(dimension); }
-	public async save(): Promise<void> { await this.editor.saveDocument(); }
+	public async save(): Promise<void> { await this.workingCopy.save(new AbortController().signal); }
 	public async saveAs(resource: URI): Promise<void> { await this.workingCopy.saveAs(resource, new AbortController().signal); }
 }

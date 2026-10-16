@@ -1,3 +1,6 @@
+import { readFile, readdir } from 'node:fs/promises';
+import { join } from 'node:path';
+import { Menus } from '../../../automation/menus.js';
 import type { Page } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
@@ -271,7 +274,7 @@ test('Sessions Creator opens seven workspaces and retains each canvas independen
 	await canvas.press('+');
 	const world = canvas.locator('.ash-canvas-world');
 	const transform = await world.evaluate(element => (element as HTMLElement).style.transform);
-	await creator.getByRole('button', { name: 'Creator home', exact: true }).click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Creator', exact: true }).click();
 	await expect(design).toBeFocused();
 	for (const [mode, action] of [['Whiteboard', 'Add note'], ['Slides', 'Add slide'], ['Brand', 'Square asset'], ['Sites', 'Add web page'], ['Prototype', 'Add screen']]) {
 		await creator.getByRole('button', { name: mode, exact: true }).click();
@@ -281,98 +284,23 @@ test('Sessions Creator opens seven workspaces and retains each canvas independen
 		await workspace.getByRole('button', { name: action, exact: true }).click();
 		await expect(canvas.locator('[data-shape-id]').first()).toBeVisible();
 		await expect(page.locator('[data-part="sidebar"]')).toBeVisible();
-		await creator.getByRole('button', { name: 'Creator home', exact: true }).click();
+		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Creator', exact: true }).click();
 	}
 	await creator.getByRole('button', { name: 'Make', exact: true }).click();
 	await expect(creator.getByRole('textbox', { name: 'Describe what to build' })).toBeVisible();
 	await expect(page.locator('[data-part="auxiliarybar"]')).toBeHidden();
-	await creator.getByRole('button', { name: 'Creator home', exact: true }).click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Creator', exact: true }).click();
 	await design.click();
 	canvas = creator.locator('.ash-creator-workspace:visible').getByRole('region', { name: 'Design canvas' });
 	await expect(canvas.locator('[data-shape-id]')).toHaveCount(1);
 	await expect.poll(() => world.evaluate(element => (element as HTMLElement).style.transform)).toBe(transform);
 	await canvas.press('ControlOrMeta+z');
 	await expect(canvas.locator('[data-shape-id]')).toHaveCount(0);
-	await creator.getByRole('button', { name: 'Creator home', exact: true }).click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Creator', exact: true }).click();
 	await page.setViewportSize({ width: 620, height: 860 });
 	await expect(creator).toHaveClass(/narrow/);
 	await expect.poll(() => creator.locator('.ash-creator-modes').evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(2);
 	await expect(design).toHaveCSS('min-height', '36px');
-});
-
-test('Sessions Design starts with Agent hidden on every entry and reopening while retaining context, drafts and width', async ({ application, target, workbench }) => {
-	let page = await workbench.openAgentsWindow(target.kind);
-	let navigation = page.locator('.ash-sessions-activity-content');
-	const initialChat = new Editor(page.locator('.ash-sessions-chat-slot.active:visible'));
-	await initialChat.waitForEditorFocus();
-	await initialChat.waitForTypeInEditor('Review this design');
-	const retainedInput = await initialChat.input.elementHandle();
-	await navigation.getByRole('button', { name: 'Creator', exact: true }).click();
-	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
-	const canvas = page.getByRole('region', { name: 'Design canvas' });
-	await canvas.press('r');
-	await expect(canvas.locator('[data-shape-id]')).toHaveCount(1);
-	const design = page.locator('[data-creator-mode="design"]');
-	const show = design.getByRole('button', { name: 'Show Agent', exact: true });
-	await expect(page.locator('[data-part="sessions"]')).toBeHidden();
-	await show.focus();
-	await page.keyboard.press('Alt+F1');
-	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Show Agent opens the shared conversation beside the canvas/);
-	await page.keyboard.press('Escape');
-	await expect(show).toBeFocused();
-	await show.press('Enter');
-	await initialChat.waitForEditorContents(text => text === 'Review this design');
-	expect(await initialChat.input.evaluate((element, retained) => element === retained, retainedInput)).toBe(true);
-	await expect(navigation.getByRole('button', { name: 'Creator', exact: true })).toHaveAttribute('aria-current', 'page');
-	await expect(canvas).toBeVisible();
-	await expect.poll(() => design.locator('.ash-creator-workspace-actions').evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
-	const conversationWidth = () => page.locator('[data-part="sessions"]').evaluate(element => Math.round(element.parentElement!.getBoundingClientRect().width));
-	const initialWidth = await conversationWidth();
-	const conversationSash = page.locator('[data-part="sessions"]').locator('xpath=../../..').locator(':scope > .ash-sash:not(.ash-sash-disabled):visible').first();
-	await conversationSash.press('ArrowRight');
-	await expect.poll(conversationWidth).toBeGreaterThan(initialWidth);
-	const resizedWidth = await conversationWidth();
-	await expect(page.locator('[data-part="sidebar"]')).toContainText('Layers');
-	await expect(page.locator('[data-part="auxiliarybar"]').getByRole('spinbutton', { name: 'X', exact: true })).toBeVisible();
-	await design.getByRole('button', { name: 'Add design to Agent', exact: true }).click();
-	await expect(page.locator('[data-part="sessions"]').getByRole('button', { name: 'Remove design-context.json', exact: true })).toBeVisible();
-	await design.getByRole('button', { name: 'Hide Agent', exact: true }).press('Enter');
-	await expect(canvas).toBeFocused();
-	await expect(page.locator('[data-part="sessions"]')).toBeHidden();
-	await show.press('Enter');
-	await page.locator('.ash-creator').getByRole('button', { name: 'Creator home', exact: true }).click();
-	await page.locator('.ash-creator').getByRole('button', { name: 'Whiteboard', exact: true }).click();
-	await expect(page.locator('[data-part="sessions"]')).toBeHidden();
-	await page.locator('.ash-creator').getByRole('button', { name: 'Creator home', exact: true }).click();
-	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
-	await expect(page.locator('[data-part="sessions"]')).toBeHidden();
-	await show.press('Enter');
-	await expect(design.getByRole('button', { name: 'Hide Agent', exact: true })).toBeVisible();
-	await expect.poll(conversationWidth).toBe(resizedWidth);
-	await expect(canvas.locator('[data-shape-id]')).toHaveCount(1);
-	await initialChat.waitForEditorContents(text => text === 'Review this design');
-	await retainedInput!.dispose();
-	// Workspace switching retained the edit; finish the edit before exercising the normal close handshake.
-	await canvas.press('ControlOrMeta+z');
-	await expect(canvas.locator('[data-shape-id]')).toHaveCount(0);
-	page = await workbench.reopenAgentsWindow(application, page);
-	navigation = page.locator('.ash-sessions-activity-content');
-	await expect(navigation.getByRole('button', { name: 'Creator', exact: true })).toHaveAttribute('aria-current', 'page');
-	await expect(page.getByRole('region', { name: 'Design canvas' })).toBeVisible();
-	await expect(page.locator('[data-part="sessions"]')).toBeHidden();
-	await page.locator('[data-creator-mode="design"]').getByRole('button', { name: 'Show Agent', exact: true }).press('Enter');
-	await expect.poll(conversationWidth).toBe(resizedWidth);
-	await expect(page.locator('[data-part="sessions"]').getByRole('button', { name: 'Remove design-context.json', exact: true })).toBeVisible();
-	await new Editor(page.locator('.ash-sessions-chat-slot.active:visible')).waitForEditorContents(text => text === 'Review this design');
-	await navigation.getByRole('button', { name: 'Chat', exact: true }).click();
-	await expect(page.locator('[data-part="editor"]')).toBeHidden();
-	await page.locator('[data-part="sessions"]').getByRole('button', { name: 'Remove design-context.json', exact: true }).click();
-	await navigation.getByRole('button', { name: 'Creator', exact: true }).click();
-	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
-	await expect(page.locator('[data-part="sessions"]')).toBeHidden();
-	await page.locator('[data-creator-mode="design"]').getByRole('button', { name: 'Show Agent', exact: true }).press('Enter');
-	await expect(page.locator('[data-part="sessions"]')).toBeVisible();
-	await expect(page.locator('[data-part="sessions"]').getByRole('button', { name: 'Remove design-context.json', exact: true })).toHaveCount(0);
 });
 
 test('Sessions Creator resets side panel widths and retains them across page changes and reopening', async ({ application, target, workbench }) => {
@@ -421,14 +349,14 @@ test('Sessions Creator resets side panel widths and retains them across page cha
 	await expect(canvas.locator('[data-shape-id]')).toHaveCount(0);
 	await leftSash.dblclick();
 	await expect.poll(panelWidths).toEqual([240, 240]);
-	await page.locator('.ash-creator').getByRole('button', { name: 'Creator home', exact: true }).click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Creator', exact: true }).click();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	await expect.poll(panelWidths).toEqual([240, 240]);
 	await leftSash.focus();
 	await leftSash.press('ArrowRight');
 	const resized = await panelWidths();
 	page = await workbench.reopenAgentsWindow(application, page);
-	await expect(page.locator('.ash-creator').getByRole('heading', { name: 'Design', exact: true })).toBeVisible();
+	await expect(page.getByRole('region', { name: 'Design canvas', exact: true })).toBeVisible();
 	await expect.poll(panelWidths).toEqual(resized);
 });
 
@@ -452,7 +380,7 @@ test('Sessions Creator Slides presents reordered pages and Brand undoes an entir
 	await preview.press('Escape');
 	await expect(preview).toBeHidden();
 	await expect(slides.getByRole('combobox', { name: 'Pages', exact: true })).toBeFocused();
-	await creator.getByRole('button', { name: 'Creator home', exact: true }).click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Creator', exact: true }).click();
 	await creator.getByRole('button', { name: 'Brand', exact: true }).click();
 	const brand = creator.locator('.ash-creator-workspace:visible');
 	await brand.getByRole('button', { name: 'Square asset', exact: true }).click();
@@ -485,32 +413,18 @@ test('Sessions Creator Make runs preview and prepares a Code draft with source a
 });
 
 test('Sessions Creator uses Chinese mode names, actions and keyboard help', async ({ application, target, workbench, restartWorkbench }) => {
-	let page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+,');
-	const settings = page.locator('.ash-settings-editor');
-	await settings.locator('[data-settings-category-id="general"]').click();
-	const language = settings.locator('[data-settings-item-id="workbench.locale"]').getByRole('combobox');
-	await language.click();
-	await page.keyboard.press('End');
-	await page.keyboard.press('Enter');
-	await expect(language).toHaveText('简体中文');
+	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+	const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
+	await language.fill('简体中文');
+	await language.press('Enter');
 	({ workbench, application } = await restartWorkbench());
-	page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+,');
-	await page.locator('.ash-modal-editor-close').click();
-	if (target.kind === 'browser') { await page.locator('[data-action-id="ash.code.open-sessions"] button').click(); }
-	else {
-		if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
-		const opened = application.waitForEvent('window');
-		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
-		page = await opened;
-	}
+	const page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Creator', exact: true }).click();
 	const creator = page.locator('.ash-creator');
 	for (const title of ['设计', '白板', '幻灯片', '品牌', '网站', 'Make', '原型']) { await expect(creator.getByRole('button', { name: title, exact: true })).toBeVisible(); }
 	await creator.getByRole('button', { name: '幻灯片', exact: true }).focus();
 	await page.keyboard.press('Alt+F1');
-	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/选择工作空间/);
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Creator 活动图标.*Design 画布右键菜单/);
 	await page.keyboard.press('Escape');
 	await creator.getByRole('button', { name: '幻灯片', exact: true }).press('Enter');
 	await expect(creator.getByRole('button', { name: '添加幻灯片', exact: true })).toBeVisible();
@@ -518,10 +432,14 @@ test('Sessions Creator uses Chinese mode names, actions and keyboard help', asyn
 	await expect(creator.getByRole('combobox', { name: '页面', exact: true })).toHaveText('第 1 页');
 	await creator.getByRole('button', { name: 'Creator 首页', exact: true }).click();
 	await creator.getByRole('button', { name: '设计', exact: true }).click();
-	await creator.getByRole('button', { name: '显示 Agent', exact: true }).press('Enter');
-	await expect(creator.getByRole('button', { name: '隐藏 Agent', exact: true })).toBeVisible();
-	await creator.getByRole('button', { name: '添加设计到 Agent', exact: true }).click();
-	await expect(page.locator('[data-part="sessions"]')).toContainText('design-context.json');
+	await expect(creator.locator('.ash-creator-header')).toBeHidden();
+	await expect(creator.locator('[data-creator-mode="design"] .ash-creator-workspace-actions')).toHaveCount(0);
+	const canvas = page.getByRole('region', { name: '设计画布', exact: true });
+	await canvas.press('r');
+	const menu = await new Menus(page).inspect(application, () => canvas.press('Shift+F10'));
+	expect(menu).toEqual(expect.arrayContaining(['添加画板 (F)', '导入图片', '保存副本', '导出 SVG'].map(label => expect.objectContaining({ label, enabled: true }))));
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Creator', exact: true }).click();
+	await expect(creator.getByRole('button', { name: '设计', exact: true })).toBeVisible();
 });
 
 test('Sessions Design layout edits reflow the canvas and preserve layer identity through undo', async ({ target, workbench }, testInfo) => {
@@ -858,8 +776,8 @@ test('Sessions Design vector booleans keep editable operands, holes, history and
 	await page.screenshot({ path: testInfo.outputPath('design-vector-booleans.png') });
 	if (target.kind === 'browser') {
 		await page.evaluate(async () => { const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(`ash-vector-${crypto.randomUUID()}`, { create: true }); Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder }); });
-		await canvas.press('ControlOrMeta+s');
-		const dialog = page.getByRole('dialog', { name: 'Save design', exact: true });
+		await canvas.press('Shift+F10'); await page.getByRole('menuitem', { name: 'Save a copy', exact: true }).click();
+		const dialog = page.getByRole('dialog', { name: 'Save a copy', exact: true });
 		await dialog.getByRole('textbox', { name: 'File name, field 1' }).fill('vectors.ash-design'); await dialog.getByRole('button', { name: 'OK', exact: true }).click();
 		await expect(canvas.locator('.ash-sessions-design-message')).toHaveText('Saved vectors.ash-design');
 		await canvas.press('Escape'); await canvas.press('Shift+F10'); await page.getByRole('menuitem', { name: 'Open design', exact: true }).click();
@@ -1317,8 +1235,8 @@ test('Sessions Design converts shaped variable-font text to editable outlines an
 async function reopenOutlinedDesign(page: Page, name: string): Promise<void> {
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true });
 	await page.evaluate(async () => { const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(`ash-outline-${crypto.randomUUID()}`, { create: true }); Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder }); });
-	await canvas.press('ControlOrMeta+s');
-	const dialog = page.getByRole('dialog', { name: 'Save design', exact: true });
+	await canvas.press('Shift+F10'); await page.getByRole('menuitem', { name: 'Save a copy', exact: true }).click();
+	const dialog = page.getByRole('dialog', { name: 'Save a copy', exact: true });
 	await dialog.getByRole('textbox', { name: 'File name, field 1' }).fill(name); await dialog.getByRole('button', { name: 'OK', exact: true }).click();
 	await expect(canvas.locator('.ash-sessions-design-message')).toHaveText(`Saved ${name}`);
 	await canvas.press('Escape'); await canvas.press('Shift+F10'); await page.getByRole('menuitem', { name: 'Open design', exact: true }).click();
@@ -1545,3 +1463,55 @@ for (const type of ['layer-blur', 'background-blur'] as const) {
 		} finally { await preview.close(); }
 	});
 }
+
+
+test('Sessions Design automatically retains an untitled draft across window reopen without save confirmation', async ({ target, workbench, application }, testInfo) => {
+	let page = await workbench.openAgentsWindow(target.kind);
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Creator', exact: true }).click();
+	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
+	let canvas = page.getByRole('region', { name: 'Design canvas', exact: true });
+	await expect(page.locator('.ash-creator-header')).toBeHidden();
+	await expect(page.locator('[data-creator-mode="design"] .ash-creator-workspace-actions')).toHaveCount(0);
+	// Removed tabs, controls and the footer reserve no space around the canvas.
+	await expect.poll(async () => {
+		const editor = await page.locator('[data-part="editor"]').boundingBox();
+		const canvasBounds = await canvas.locator('.ash-canvas-viewport').boundingBox();
+		return Math.max(Math.abs(canvasBounds!.y - editor!.y), Math.abs(canvasBounds!.y + canvasBounds!.height - editor!.y - editor!.height));
+	}).toBeLessThanOrEqual(2);
+	await canvas.press('r');
+	const shape = canvas.locator('.ash-sessions-design-shapes > rect[data-shape-id]');
+	await expect(shape).toHaveCount(1);
+	const id = await shape.getAttribute('data-shape-id');
+	await expect(canvas).not.toHaveClass(/\bdirty\b/u);
+	await canvas.press('ControlOrMeta+s');
+	await expect(page.getByRole('dialog')).toHaveCount(0);
+	const menu = await new Menus(page).inspect(application, () => canvas.press('Shift+F10'));
+	expect(menu).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'Save a copy', enabled: true }), expect.objectContaining({ label: 'Export SVG', enabled: true })]));
+	await page.screenshot({ path: testInfo.outputPath('design-autosaved-draft.png') });
+	page = await workbench.reopenAgentsWindow(application, page);
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Creator', exact: true }).click();
+	const design = page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true });
+	if (await design.isVisible()) { await design.click(); }
+	canvas = page.getByRole('region', { name: 'Design canvas', exact: true });
+	await expect(canvas.locator('.ash-sessions-design-shapes > rect[data-shape-id]')).toHaveAttribute('data-shape-id', id!);
+	await expect(canvas).not.toHaveClass(/\bdirty\b/u);
+	await canvas.press('Tab'); await canvas.press('ArrowRight');
+	const movedX = await canvas.locator('.ash-sessions-design-shapes > rect[data-shape-id]').getAttribute('x');
+	if (target.kind === 'browser') { await expect(canvas).not.toHaveClass(/\bdirty\b/u); }
+	page = await workbench.reopenAgentsWindow(application, page);
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Creator', exact: true }).click();
+	const reopenDesign = page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true });
+	if (await reopenDesign.isVisible()) { await reopenDesign.click(); }
+	canvas = page.getByRole('region', { name: 'Design canvas', exact: true });
+	await expect(canvas.locator('.ash-sessions-design-shapes > rect[data-shape-id]')).toHaveAttribute('x', movedX!);
+	await expect(page.getByRole('dialog')).toHaveCount(0);
+	if ('windows' in application) {
+		const profile = await application.evaluate(() => process.env.ASH_HOME!);
+		const drafts = join(profile, 'creator');
+		const manifests = (await readdir(drafts, { recursive: true })).filter(path => path.endsWith('manifest.json'));
+		expect(manifests).toHaveLength(1);
+		const saved = JSON.parse(await readFile(join(drafts, manifests[0]), 'utf8')) as { artifacts: Record<string, { objects: Record<string, { x: number; }>; }>; };
+		expect(Object.values(saved.artifacts).map(artifact => artifact.objects[id!])).toContainEqual(expect.objectContaining({ x: Number(movedX) }));
+	}
+	await page.screenshot({ path: testInfo.outputPath('design-restored-after-close.png') });
+});

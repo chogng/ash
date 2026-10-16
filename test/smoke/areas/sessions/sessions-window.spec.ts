@@ -775,7 +775,7 @@ test('Sessions Design edits vector geometry and preserves a complete undo gestur
 	await clickCanvasMenu(canvas, 'Undo', application);
 	await expect(rectangle).toHaveCount(1);
 	await expect(viewport).toHaveCSS('background-size', /17\.28px/u);
-	await expect(canvas.locator('.ash-sessions-design-zoom')).toContainText('Unsaved changes');
+	await expect(canvas).toHaveClass(/\bdirty\b/u);
 });
 
 test('Sessions Design color picker preserves formats, previews gestures and exports transparent fills', async ({ application, target, workbench }) => {
@@ -1092,7 +1092,7 @@ test('Sessions Design imports backend asset versions, crops independently and re
 		await dialog.getByRole('button', { name: 'OK', exact: true }).click();
 	}
 	await expect(canvas.locator('.ash-sessions-design-message')).toHaveText('Saved design.ash-design');
-	await expect(canvas.locator('.ash-sessions-design-zoom')).not.toContainText('Unsaved changes');
+	await expect(canvas).not.toHaveClass(/\bdirty\b/u);
 	const saved = await readFile(join(directory, 'design.ash-design/manifest.json'), 'utf8');
 	const designDocument = parseDesignDocument(saved);
 	expect(designDocument.assets).toHaveLength(1);
@@ -1121,7 +1121,7 @@ test('Sessions Design imports backend asset versions, crops independently and re
 	await expect(canvas.locator('.ash-sessions-design-message')).toHaveText('Opened moved.ash-design');
 	await expect(images).toHaveCount(2);
 	await expect(images.last()).toHaveAttribute('viewBox', '0 0 50 80');
-	await expect(canvas.locator('.ash-sessions-design-zoom')).not.toContainText('Unsaved changes');
+	await expect(canvas).not.toHaveClass(/\bdirty\b/u);
 });
 
 test('Sessions Design saves and reopens an editable file through App Server', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
@@ -1153,7 +1153,7 @@ test('Sessions Design saves and reopens an editable file through App Server', { 
 	const saved = JSON.parse(await readFile(filePath, 'utf8'));
 	expect(saved.schemaVersion).toBe(2);
 	expect(parseDesignDocument(JSON.stringify(saved)).shapes).toMatchObject([{ kind: 'rectangle', width: 120.5, fill: '#2670ee80' }]);
-	await expect(canvas.locator('.ash-sessions-design-zoom')).not.toContainText('Unsaved changes');
+	await expect(canvas).not.toHaveClass(/\bdirty\b/u);
 	await canvas.focus();
 	await page.keyboard.press('e');
 	await page.keyboard.press('ControlOrMeta+z');
@@ -1168,7 +1168,7 @@ test('Sessions Design saves and reopens an editable file through App Server', { 
 	await width.press('Tab');
 	await canvas.focus();
 	await page.keyboard.press('ControlOrMeta+s');
-	await expect(canvas.locator('.ash-sessions-design-zoom')).not.toContainText('Unsaved changes');
+	await expect(canvas).not.toHaveClass(/\bdirty\b/u);
 	expect(parseDesignDocument(await readFile(filePath, 'utf8')).shapes[0].width).toBe(240.5);
 	await writeFile(filePath, JSON.stringify(saved));
 	await width.fill('360.5');
@@ -1179,7 +1179,7 @@ test('Sessions Design saves and reopens an editable file through App Server', { 
 	await expect(error).toContainText('Could not save the design. Your changes are still in the canvas.');
 	await error.getByRole('button', { name: 'OK', exact: true }).click();
 	await expect(canvas.locator('rect[data-shape-id]')).toHaveAttribute('width', '360.5');
-	await expect(canvas.locator('.ash-sessions-design-zoom')).toContainText('Unsaved changes');
+	await expect(canvas).toHaveClass(/\bdirty\b/u);
 	expect(JSON.parse(await readFile(filePath, 'utf8'))).toEqual(saved);
 	const closeSessions = () => application.evaluate(({ BrowserWindow }) => {
 		BrowserWindow.getAllWindows().find(window => window.getTitle().includes('Sessions'))!.close();
@@ -1226,7 +1226,7 @@ test('Sessions Design saves and opens a browser folder without replacing the wor
 	await canvas.focus();
 	await page.keyboard.press('r');
 	await page.keyboard.press('ControlOrMeta+z');
-	await expect(canvas.locator('.ash-sessions-design-zoom')).not.toContainText('Unsaved changes');
+	await expect(canvas).not.toHaveClass(/\bdirty\b/u);
 	await clickCanvasMenu(canvas, 'Open design', application);
 	const file = page.locator('.ash-quick-pick-row-label').filter({ hasText: /^design\.ash-design$/u });
 	await expect(file).toBeVisible();
@@ -1234,7 +1234,7 @@ test('Sessions Design saves and opens a browser folder without replacing the wor
 	await expect(canvas.locator('.ash-sessions-design-message')).toHaveText('Opened design.ash-design');
 	await expect(canvas.locator('ellipse[data-shape-id]')).toHaveCount(1);
 	await expect(canvas.locator('rect[data-shape-id]')).toHaveCount(0);
-	await expect(canvas.locator('.ash-sessions-design-zoom')).not.toContainText('Unsaved changes');
+	await expect(canvas).not.toHaveClass(/\bdirty\b/u);
 	const legacy = await page.evaluate(async name => {
 		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
 		const content = JSON.stringify({ version: 1, shapes: [{ id: crypto.randomUUID(), kind: 'rectangle', x: 10, y: 20, width: 239.5, height: 80, rotation: 0, fill: '#808080' }] });
@@ -1393,7 +1393,7 @@ test('Sessions Design exports SVG and HTML and reopens grouped text and paths th
 		await dialog.getByRole('button', { name: 'OK', exact: true }).click();
 	}
 	await expect(canvas.locator('.ash-sessions-design-message')).toHaveText('Exported design.svg');
-	await expect(canvas.locator('.ash-sessions-design-zoom')).toContainText('Unsaved changes');
+	await expect(canvas).toHaveClass(/\bdirty\b/u);
 	const read = async (filename: string): Promise<string> => target.kind === 'electron' ? readFile(join(directory, filename), 'utf8') : page.evaluate(async ({ folderName, filename }) => {
 		let folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(folderName);
 		const parts = filename.split('/');
@@ -1422,7 +1422,7 @@ test('Sessions Design exports SVG and HTML and reopens grouped text and paths th
 	}
 	await expect(canvas.locator('.ash-sessions-design-message')).toHaveText('Exported design.html');
 	expect(await read('design.html')).toBe(source);
-	await expect(canvas.locator('.ash-sessions-design-zoom')).toContainText('Unsaved changes');
+	await expect(canvas).toHaveClass(/\bdirty\b/u);
 	await canvas.locator('.ash-design-tools-widget').getByRole('button', { name: 'Design', exact: true }).click();
 	await canvas.focus();
 	await page.keyboard.press('ControlOrMeta+z');

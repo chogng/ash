@@ -28,6 +28,11 @@ export class DesignEditorService extends Disposable implements IDesignEditorServ
 	constructor(@IInstantiationService private readonly instantiation: IInstantiationService, @IWorkingCopyService private readonly workingCopies: IWorkingCopyService, @ILifecycleService lifecycle: ILifecycleService) {
 		super();
 		this._register(lifecycle.onBeforeShutdown(event => event.veto(this.confirmDiscard(), 'unsavedCreator')));
+		this._register(lifecycle.onWillShutdown(event => event.join(async () => {
+			for (const document of this.documents.values()) {
+				if (document.automaticallySaves && !(await document.flushAutoSave())) { throw new Error(document.saveStatus); }
+			}
+		}, 'Creator automatic save', () => [...this.documents.values()].every(document => !document.automaticallySaves || (!document.isDirty && !document.needsSaveRetry && !document.isRestoring)))));
 	}
 	public getDocument(mode: CreatorMode): DesignDocumentController {
 		let document = this.documents.get(mode);

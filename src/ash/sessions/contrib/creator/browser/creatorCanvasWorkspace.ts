@@ -25,6 +25,7 @@ export abstract class CreatorCanvasWorkspace extends Disposable implements ICrea
 	protected contentDomNode!: HTMLElement;
 	protected actionsDomNode!: HTMLElement;
 	protected toolbar!: WorkbenchToolBar;
+	protected readonly hasWorkspaceActions: boolean = true;
 	protected get editor(): DesignEditorWidget { return this.page.editor; }
 	protected get document(): DesignDocumentController { return this.page.workingCopy; }
 	protected get commands(): DocumentCommands { return new DocumentCommands(this.document.model); }
@@ -38,21 +39,29 @@ export abstract class CreatorCanvasWorkspace extends Disposable implements ICrea
 
 	public create(container: HTMLElement): void {
 		this.domNode = h(this.ownerDocument, 'section', { className: 'ash-creator-workspace', attributes: { 'data-creator-mode': this.mode } });
-		this.actionsDomNode = h(this.ownerDocument, 'div', { className: 'ash-creator-workspace-actions' });
+		if (this.hasWorkspaceActions) {
+			this.actionsDomNode = h(this.ownerDocument, 'div', { className: 'ash-creator-workspace-actions' });
+			this.domNode.append(this.actionsDomNode);
+		}
 		this.contentDomNode = h(this.ownerDocument, 'div', { className: 'ash-creator-workspace-content' });
-		this.domNode.append(this.actionsDomNode, this.contentDomNode);
+		this.domNode.append(this.contentDomNode);
 		container.append(this.domNode);
 		this.page = this._register(this.instantiation.createInstance(DesignEditorPage, this.mode));
 		this.page.create(this.contentDomNode);
-		this.toolbar = this._register(new WorkbenchToolBar(this.actionsDomNode, this.contextMenus, { ariaLabel: localize('sessions.creator.workspaceActions', 'Workspace actions') }));
+		if (this.hasWorkspaceActions) {
+			this.toolbar = this._register(new WorkbenchToolBar(this.actionsDomNode, this.contextMenus, { ariaLabel: localize('sessions.creator.workspaceActions', 'Workspace actions') }));
+		}
 		this.createModeContent();
-		this._register(this.document.model.onDidChange(() => this.updateActions()));
-		this._register(this.document.onDidChange(() => this.updateActions()));
-		this._register(this.editor.onDidChangeView(() => this.updateActions()));
-		this.updateActions();
+		if (this.hasWorkspaceActions) {
+			this._register(this.document.model.onDidChange(() => this.updateActions()));
+			this._register(this.document.onDidChange(() => this.updateActions()));
+			this._register(this.editor.onDidChangeView(() => this.updateActions()));
+			this.updateActions();
+		}
 	}
 
 	protected updateActions(): void {
+		if (!this.hasWorkspaceActions) { return; }
 		this.toolbar.setActions(this.getModeActions(), [
 			this.action('open', localize('sessions.creator.open', 'Open document'), () => this.document.openDocument()),
 			this.action('save', localize('sessions.creator.save', 'Save document'), () => this.editor.saveDocument()),
@@ -61,7 +70,7 @@ export abstract class CreatorCanvasWorkspace extends Disposable implements ICrea
 	}
 
 	protected createModeContent(): void { }
-	protected abstract getModeActions(): readonly IAction[];
+	protected getModeActions(): readonly IAction[] { return []; }
 	protected action(id: string, label: string, run: () => unknown, enabled = true): IAction {
 		return { id: `sessions.creator.${this.mode}.${id}`, label, tooltip: label, run, enabled: enabled && !this.document.isBusy };
 	}
@@ -77,7 +86,7 @@ export abstract class CreatorCanvasWorkspace extends Disposable implements ICrea
 	public setVisible(visible: boolean): void { this.page.setVisible(visible ? true : false); }
 	public layout(dimension: IDimension): void {
 		this.domNode.classList.toggle('narrow', dimension.width < 600);
-		this.page.layout({ width: dimension.width, height: Math.max(0, dimension.height - this.actionsDomNode.offsetHeight) });
+		this.page.layout({ width: dimension.width, height: Math.max(0, dimension.height - (this.actionsDomNode?.offsetHeight ?? 0)) });
 	}
 	public focus(): void { this.page.focus(); }
 	public getAccessibleContent(): string { return this.editor.getAccessibleContent(); }

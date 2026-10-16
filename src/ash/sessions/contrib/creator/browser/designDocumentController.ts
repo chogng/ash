@@ -7,7 +7,9 @@ import { Emitter } from '../../../../base/common/event.js';
 import { decodeBase64 } from '../../../../base/common/buffer.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
-import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { DeferredPromise } from '../../../../base/common/async.js';
+import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { disposableWindowTimeout } from '../../../../base/browser/scheduler.js';
 import { basename, dirname, extUri } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
@@ -23,6 +25,8 @@ import { DesignModel } from '../common/model/designModel.js';
 import { emptyDesignResources, getDesignResourceCatalog, getDesignLibraryShapes, type DesignLibrary } from '../common/model/designResources.js';
 import { exportDesignSvg } from './svgRenderer.js';
 import type { IWorkingCopy } from '../../../../workbench/services/workingCopy/common/workingCopyService.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
+import { IUserDataProfileService } from '../../../../workbench/services/userDataProfile/common/userDataProfile.js';
 
 /** Each workspace owns its file identity and saved revision independently of the active canvas. */
 export class DesignDocumentController extends Disposable implements IWorkingCopy {
@@ -45,7 +49,34 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 	public readonly onDidChangeDirty = this.dirtyChange.event;
 	private file: { resource: URI; revision: string; } | undefined;
 	private savedContent: string;
-	private isFileOperationRunning = false;
+	private fileOperation: DeferredPromise<void> | undefined;
+	private get isFileOperationRunning(): boolean { return this.fileOperation !== undefined; }
+	private set isFileOperationRunning(running: boolean) {
+		if (running) { this.fileOperation ??= new DeferredPromise<void>(); }
+		else {
+			const operation = this.fileOperation;
+			this.fileOperation = undefined;
+			void operation?.complete(undefined);
+		}
+	}
+	private readonly autoSaveTimer = this._register(new MutableDisposable<IDisposable>());
+	private autoSavePromise: Promise<boolean> | undefined;
+	private autoSaveRunning = false;
+	private restoring = false;
+	private restoreFailed = false;
+	private autoSaveError = false;
+	private readonly draftHome: URI;
+	public readonly ready: Promise<void>;
+	public get automaticallySaves(): boolean { return this.mode === CreatorMode.Design; }
+	public get needsSaveRetry(): boolean { return this.autoSaveError || this.restoreFailed; }
+	public get isRestoring(): boolean { return this.restoring; }
+	private get activeDocumentKey(): string { return `creator.${this.mode}.activeDocument`; }
+	public get saveStatus(): string {
+		if (this.restoreFailed) { return localize('sessions.design.restoreFailed', 'Could not restore the design. Retry to reopen your saved work.'); }
+		if (this.restoring) { return localize('sessions.design.restoring', 'Restoring design…'); }
+		if (this.autoSaveError) { return localize('sessions.design.autoSaveFailed', 'Could not save changes. Your changes are still in the canvas.'); }
+		return this.isDirty || this.autoSaveRunning ? localize('sessions.design.saving', 'Saving…') : localize('sessions.design.allSaved', 'All changes saved');
+	}
 	private publication: { readonly documentId: string; readonly resource: URI; } | undefined;
 	private readonly libraryUpdates = new Map<string, { readonly library: DesignLibrary; readonly baseVersion: string; readonly media: ReadonlyMap<string, Uint8Array>; }>();
 	public getLibraryUpdate(id: string): DesignLibrary | undefined {
@@ -60,23 +91,29 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 		@IFileDialogService private readonly fileDialogs: IFileDialogService,
 		@IDialogService private readonly dialogs: IDialogService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
+		@IStorageService private readonly storage: IStorageService,
+		@IUserDataProfileService profiles: IUserDataProfileService,
 	) {
 		super();
 		this.resource = URI.from({ scheme: 'ash-creator', path: `/${mode}` });
 		this.model = this._register(new DesignModel(mode, measureDesignText));
 		if (mainWindow.document.fonts) { this._register(addDisposableListener(mainWindow.document.fonts, 'loadingdone', () => { clearDesignTextMeasurements(); this.model.refreshTextLayout(); })); }
 		this.savedContent = serializeDesignDocument(this.model.value);
+		this.draftHome = URI.joinPath(profiles.currentProfile.location, 'creator', encodeURIComponent(workspace.getWorkspace().id));
 		this._register(this.model.onDidChange(kind => { if (kind === 'replace') { this.libraryUpdates.clear(); } if (!isDesignVectorGeometryReady() && flattenDesignShapes(this.model.value.shapes).some(shape => shape.kind === 'group' && shape.booleanOperation)) { void loadDesignVectorGeometry().then(() => { if (!this.isDisposed) { this.changeEmitter.fire({}); } }, error => { if (!this.isDisposed) { this.changeEmitter.fire({ message: String(error) }); } }); } this.contentChange.fire(); this.dirtyChange.fire(); }));
 		this._register(this.onDidChange(() => this.dirtyChange.fire()));
 		this._register(files.onDidChangeFiles(() => { void this.checkExternalChange(); }));
-		this._register(toDisposable(() => this.media.clear()));
+		this._register(toDisposable(() => { this.media.clear(); this.isFileOperationRunning = false; }));
+		this._register(this.model.onDidChange(() => this.scheduleAutoSave()));
+		const active = this.automaticallySaves ? storage.get(this.activeDocumentKey, StorageScope.WORKSPACE) : undefined;
+		this.ready = active ? this.restoreAutoSavedDocument(active) : Promise.resolve();
 	}
 
 	public get name(): string {
-		if (this.file) { return basename(this.file.resource); }
+		if (this.file && !extUri.isEqualOrParent(this.file.resource, this.draftHome)) { return basename(this.file.resource); }
 		return this.mode === CreatorMode.Design ? localize('sessions.design.untitled', 'Untitled design') : localize('sessions.creator.untitled', 'Untitled {0}', getCreatorModeTitle(this.mode));
 	}
-	public get isBusy(): boolean { return this.isFileOperationRunning; }
+	public get isBusy(): boolean { return this.restoring || this.restoreFailed || (this.isFileOperationRunning && !this.autoSaveRunning); }
 	public get isDirty(): boolean { return serializeDesignDocument(this.model.value) !== this.savedContent; }
 	public backup(): string {
 		const document = this.model.value;
@@ -122,6 +159,8 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 	}
 
 	public async importImage(center: DesignPoint): Promise<string | undefined> {
+		await this.ready;
+		await this.autoSavePromise;
 		if (this.isBusy) { return undefined; }
 		this.isFileOperationRunning = true;
 		this.changeEmitter.fire({});
@@ -141,6 +180,8 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 		}
 	}
 	public async adoptAssetVersion(metadata: AssetVersion, center: DesignPoint): Promise<string | undefined> {
+		await this.ready;
+		await this.autoSavePromise;
 		if (this.isBusy) { return undefined; }
 		this.isFileOperationRunning = true;
 		this.changeEmitter.fire({});
@@ -169,11 +210,13 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 		return id;
 	}
 
-	public async save(signal: AbortSignal): Promise<void> { signal.throwIfAborted(); await this.saveDocument(); }
+	public async save(signal: AbortSignal): Promise<void> { signal.throwIfAborted(); if (this.automaticallySaves) { await this.flushAutoSave(); } else { await this.saveDocument(); } }
 	public async saveAs(resource: URI, signal: AbortSignal): Promise<void> { signal.throwIfAborted(); await this.saveDocument(resource); }
 	public async revert(signal: AbortSignal): Promise<void> { signal.throwIfAborted(); this.model.replace(parseDesignDocument(this.savedContent)); }
 
 	public async exportDocument(output?: { title: string; filename: string; extension: string; content: string; }): Promise<void> {
+		await this.ready;
+		await this.autoSavePromise;
 		if (this.isFileOperationRunning) { return; }
 		this.isFileOperationRunning = true;
 		this.changeEmitter.fire({});
@@ -193,6 +236,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 
 	/** Returns a shutdown/open veto, including a cancelled or failed save. */
 	public async confirmDiscard(): Promise<boolean> {
+		if (this.automaticallySaves) { return !(await this.flushAutoSave()); }
 		if (this.isFileOperationRunning) { return true; }
 		if (!this.isDirty) { return false; }
 		this.isFileOperationRunning = true;
@@ -214,46 +258,75 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 		this.isFileOperationRunning = true;
 		this.changeEmitter.fire({});
 		try {
-			const resources = await this.fileDialogs.showOpenDialog({ title: this.mode === CreatorMode.Design ? localize('sessions.design.open', 'Open design') : localize('sessions.creator.open', 'Open document'), defaultUri: this.file ? dirname(this.file.resource) : undefined, canSelectFiles: true, canSelectFolders: true, filters: [{ name: localize('sessions.design.fileType', 'Ash design'), extensions: ['ash-design', 'json'] }] });
+			const resources = await this.fileDialogs.showOpenDialog({ title: this.mode === CreatorMode.Design ? localize('sessions.design.open', 'Open design') : localize('sessions.creator.open', 'Open document'), defaultUri: this.file && !extUri.isEqualOrParent(this.file.resource, this.draftHome) ? dirname(this.file.resource) : undefined, canSelectFiles: true, canSelectFolders: true, filters: [{ name: localize('sessions.design.fileType', 'Ash design'), extensions: ['ash-design', 'json'] }] });
 			if (!resources || this.isDisposed) { return; }
-			const selected = resources[0];
-			const isPackage = (await this.files.stat(selected)).kind === FileKind.Directory;
-			const read = await this.files.readFile(isPackage ? selected.joinPathSegment('manifest.json') : selected);
-			const document = parseDesignDocument(read.content);
-			if (document.mode !== this.mode) { throw new TypeError(localize('sessions.creator.wrongMode', 'This document belongs to {0}. Open it in that Creator mode.', getCreatorModeTitle(document.mode))); }
-			const root = isPackage ? selected : dirname(selected);
-			const media = new Map<string, Uint8Array>();
-			for (const asset of document.assets) {
-				for (const version of asset.versions) {
-					const data = await this.files.readFileBytes(URI.joinPath(root, version.path));
-					if (await hashDesignMedia(data.bytes) !== version.sha256) { throw new Error(localize('sessions.design.mediaCorrupt', 'Image content does not match its saved version: {0}', asset.name)); }
-					media.set(version.sha256, data.bytes);
-				}
-			}
-			if (this.isDisposed) { return; }
-			this.file = isPackage || basename(selected) === 'manifest.json' ? { resource: root, revision: read.revision } : undefined;
-			this.media = media;
-			this.setExternalChange(false);
-			this.labelChange.fire();
-			this.model.replace(document);
-			this.savedContent = serializeDesignDocument(this.model.value);
-			this.changeEmitter.fire({ message: localize('sessions.design.opened', 'Opened {0}', basename(isPackage ? selected : read.resource)) });
+			await this.readDocument(resources[0]);
+			await this.rememberDocument();
 		} catch (error) {
 			await this.dialogs.error(localize('sessions.design.openFailed', 'Could not open the design.'), String(error));
 		} finally {
 			this.isFileOperationRunning = false;
-			if (!this.isDisposed) { this.changeEmitter.fire({}); }
+			if (!this.isDisposed) { this.changeEmitter.fire({}); this.scheduleAutoSave(); }
 		}
 	}
 
+	private async readDocument(selected: URI): Promise<void> {
+		const isPackage = (await this.files.stat(selected)).kind === FileKind.Directory;
+		const read = await this.files.readFile(isPackage ? selected.joinPathSegment('manifest.json') : selected);
+		const document = parseDesignDocument(read.content);
+		if (document.mode !== this.mode) { throw new TypeError(localize('sessions.creator.wrongMode', 'This document belongs to {0}. Open it in that Creator mode.', getCreatorModeTitle(document.mode))); }
+		const root = isPackage ? selected : dirname(selected);
+		const media = new Map<string, Uint8Array>();
+		for (const asset of document.assets) {
+			for (const version of asset.versions) {
+				const data = await this.files.readFileBytes(URI.joinPath(root, version.path));
+				if (await hashDesignMedia(data.bytes) !== version.sha256) { throw new Error(localize('sessions.design.mediaCorrupt', 'Image content does not match its saved version: {0}', asset.name)); }
+				media.set(version.sha256, data.bytes);
+			}
+		}
+		if (this.isDisposed) { return; }
+		this.file = isPackage || basename(selected) === 'manifest.json' ? { resource: root, revision: read.revision } : undefined;
+		this.media = media;
+		this.setExternalChange(false);
+		this.labelChange.fire();
+		this.model.replace(document);
+		this.savedContent = this.automaticallySaves && !this.file ? '' : serializeDesignDocument(this.model.value);
+		this.changeEmitter.fire({ message: localize('sessions.design.opened', 'Opened {0}', basename(isPackage ? selected : read.resource)) });
+	}
+
 	public async saveDocument(target?: URI): Promise<boolean> {
+		await this.ready;
+		await this.autoSavePromise;
+		if (this.restoreFailed) { return false; }
+		return this.persistDocument(target);
+	}
+
+	public async saveCopy(): Promise<void> {
+		await this.ready;
+		await this.autoSavePromise;
+		if (this.isBusy) { return; }
+		const resource = await this.fileDialogs.showSaveDialog({
+			title: localize('sessions.design.saveCopy', 'Save a copy'),
+			defaultUri: this.workspace.getWorkspace().folders[0]?.uri.joinPathSegment('design.ash-design'),
+			filters: [{ name: localize('sessions.design.fileType', 'Ash design'), extensions: ['ash-design'] }],
+		});
+		if (resource && !this.isDisposed) {
+			await this.autoSavePromise;
+			await this.persistDocument(resource, false, true);
+		}
+	}
+
+	private async persistDocument(target?: URI, automatic = false, copyOnly = false): Promise<boolean> {
 		if (this.isFileOperationRunning) { return false; }
 		this.isFileOperationRunning = true;
 		this.changeEmitter.fire({});
 		try {
 			const resource = target ?? this.file?.resource ?? await this.fileDialogs.showSaveDialog({ title: this.mode === CreatorMode.Design ? localize('sessions.design.save', 'Save design') : localize('sessions.creator.save', 'Save document'), defaultUri: this.workspace.getWorkspace().folders[0]?.uri.joinPathSegment(`${this.mode}.ash-design`), filters: [{ name: localize('sessions.design.fileType', 'Ash design'), extensions: ['ash-design'] }] });
 			if (!resource || this.isDisposed) { return false; }
-			const isCopy = !!this.file && !extUri.isEqual(this.file.resource, resource);
+			if (copyOnly && this.file && extUri.isEqual(this.file.resource, resource)) {
+				throw new Error(localize('sessions.design.copySameLocation', 'Choose a different location for the copy.'));
+			}
+			const isCopy = copyOnly || !!this.file && !extUri.isEqual(this.file.resource, resource);
 			const snapshot = isCopy ? documentFromShapes(this.model.value.shapes, { ...this.model.value, documentId: generateUuid() }, this.model.value.assets) : this.model.value;
 			const content = serializeDesignDocument(snapshot);
 			await this.files.createDirectory(resource);
@@ -279,19 +352,89 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 			}
 			const result = await this.files.writeFile({ resource: manifest, content, expectedRevision });
 			if (this.isDisposed) { return false; }
+			if (copyOnly) {
+				this.changeEmitter.fire({ message: localize('sessions.design.saved', 'Saved {0}', basename(resource)) });
+				return true;
+			}
 			this.file = { resource, revision: result.revision };
 			this.labelChange.fire();
-			this.savedContent = content;
 			this.setExternalChange(false);
 			if (isCopy) { this.model.changeIdentity(snapshot.documentId); }
-			this.changeEmitter.fire({ message: localize('sessions.design.saved', 'Saved {0}', basename(resource)) });
+			await this.rememberDocument();
+			this.savedContent = content;
+			this.autoSaveError = false;
+			this.changeEmitter.fire(automatic ? {} : { message: localize('sessions.design.saved', 'Saved {0}', basename(resource)) });
 			return !this.isDirty;
 		} catch (error) {
-			await this.dialogs.error(localize('sessions.design.saveFailed', 'Could not save the design. Your changes are still in the canvas.'), String(error));
+			if (automatic) {
+				this.autoSaveError = true;
+				this.changeEmitter.fire({ message: this.saveStatus });
+			} else { await this.dialogs.error(localize('sessions.design.saveFailed', 'Could not save the design. Your changes are still in the canvas.'), String(error)); }
 			return false;
 		} finally {
 			this.isFileOperationRunning = false;
 			if (!this.isDisposed) { this.changeEmitter.fire({}); }
+		}
+	}
+
+	private scheduleAutoSave(): void {
+		if (!this.automaticallySaves || this.restoring || this.restoreFailed || this.isDisposed) { return; }
+		this.autoSaveTimer.value = disposableWindowTimeout(mainWindow, () => {
+			this.autoSaveTimer.clear();
+			void this.flushAutoSave();
+		}, 250);
+	}
+
+	/** Drain edits made during an asynchronous write before allowing shutdown or document replacement. */
+	public async flushAutoSave(): Promise<boolean> {
+		this.autoSaveTimer.clear();
+		await this.ready;
+		if (this.isDisposed) { return false; }
+		if (this.restoreFailed) {
+			const active = this.storage.get(this.activeDocumentKey, StorageScope.WORKSPACE);
+			if (active) { await this.restoreAutoSavedDocument(active); }
+			if (this.restoreFailed) { return false; }
+		}
+		if (this.autoSavePromise) { return this.autoSavePromise; }
+		if (!this.automaticallySaves || this.isDisposed) { return !this.isDirty; }
+		const operation = async (): Promise<boolean> => {
+			while (this.fileOperation) { await this.fileOperation.p; }
+			while (!this.isDisposed && (this.isDirty || this.autoSaveError)) {
+				this.autoSaveRunning = true;
+				const resource = this.file?.resource ?? URI.joinPath(this.draftHome, `${this.model.value.documentId}.ash-design`);
+				await this.persistDocument(resource, true);
+				this.autoSaveRunning = false;
+				if (this.autoSaveError) { return false; }
+			}
+			return !this.isDisposed;
+		};
+		this.autoSavePromise = operation().finally(() => {
+			this.autoSaveRunning = false;
+			this.autoSavePromise = undefined;
+			if (!this.isDisposed) { this.changeEmitter.fire({}); }
+		});
+		return this.autoSavePromise;
+	}
+
+	private async rememberDocument(): Promise<void> {
+		if (!this.automaticallySaves || !this.file) { return; }
+		this.storage.store(this.activeDocumentKey, this.file.resource.toString(), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		await this.storage.flush();
+	}
+
+	private async restoreAutoSavedDocument(active: string): Promise<void> {
+		this.restoring = true;
+		this.changeEmitter.fire({});
+		try {
+			const resource = URI.parse(active, true);
+			await this.readDocument(resource);
+			this.restoreFailed = false;
+		} catch {
+			// Keep the pointer and original package intact; a failed read must never create a replacement draft.
+			this.restoreFailed = true;
+		} finally {
+			this.restoring = false;
+			if (!this.isDisposed) { this.changeEmitter.fire({ message: this.saveStatus }); }
 		}
 	}
 
@@ -374,6 +517,8 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 	}
 
 	private async libraryOperation(run: () => Promise<void>): Promise<void> {
+		await this.ready;
+		await this.autoSavePromise;
 		if (this.isBusy) { return; }
 		this.isFileOperationRunning = true; this.changeEmitter.fire({});
 		try { await run(); }
@@ -405,7 +550,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 
 	private async checkExternalChange(): Promise<void> {
 		const file = this.file;
-		if (!file || this.isBusy || this.isDisposed) { return; }
+		if (!file || this.isFileOperationRunning || this.restoring || this.isDisposed) { return; }
 		try {
 			const read = await this.files.readFile(file.resource.joinPathSegment('manifest.json'));
 			if (this.file === file && !this.isDisposed) { this.setExternalChange(read.revision !== file.revision); }

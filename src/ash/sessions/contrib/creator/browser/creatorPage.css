@@ -11,6 +11,7 @@
 }
 .ash-creator[hidden],
 .ash-creator-home[hidden],
+.ash-creator-header[hidden],
 .ash-creator-workspaces[hidden] {
 	display: none;
 }

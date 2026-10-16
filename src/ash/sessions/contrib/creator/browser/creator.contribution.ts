@@ -44,7 +44,7 @@ function openCreator(accessor: ServicesAccessor, workspace?: CreatorMode | 'home
 		else if (workspace) { page.openMode(workspace); }
 		return page.usesCanvasPanels ? {
 			...entry, id: page.activeMode === CreatorMode.Design ? 'creator.design' : 'creator.canvas',
-			conversation: page.activeMode === CreatorMode.Design ? 'optional' : undefined, sidebarContainerId: DESIGN_LAYERS_CONTAINER_ID,
+			conversation: page.activeMode === CreatorMode.Design ? 'optional' : undefined, showEditorTabs: page.activeMode !== CreatorMode.Design, sidebarContainerId: DESIGN_LAYERS_CONTAINER_ID,
 			detailsContainerId: DESIGN_PROPERTIES_CONTAINER_ID,
 		} : entry;
 	}, source ? { source } : undefined);
@@ -87,7 +87,7 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 			const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement;
 			const page = CreatorPage.getFocused(focused) ?? CreatorNavigationView.getFocused(focused) ?? CreatorWorkspaceView.getFocused(focused);
 			if (!page) { return undefined; }
-			return new AccessibleContentProvider(AccessibleViewProviderId.Creator, { type }, () => type === AccessibleViewType.Help ? `${localize('sessions.creator.help', 'Creator\nUse Tab and Shift+Tab to choose a workspace, then press Enter. Creator home returns to the mode list and keeps each workspace document, selection and viewport. Save document and Open document are available from Workspace actions. Pages selects a slide, website page or prototype screen. Preview controls support Left and Right on the preview and Escape to return.')}\n\n${page.getAccessibleContent()}` : page.getAccessibleContent(), () => focused.focus(), AccessibilityVerbositySettingId.Creator);
+			return new AccessibleContentProvider(AccessibleViewProviderId.Creator, { type }, () => type === AccessibleViewType.Help ? `${localize('sessions.creator.help', 'Creator\nUse Tab and Shift+Tab to choose a workspace, then press Enter. The Creator activity icon returns to the mode list and keeps each workspace document, selection and viewport. Design automatically saves changes, including untitled drafts, and restores the last document when reopened. The Design canvas context menu offers Save a copy, Open design and Export SVG; publishing a library remains manual. Other canvas workspaces use Save document. Pages selects a slide, website page or prototype screen. Preview controls support Left and Right on the preview and Escape to return.')}\n\n${page.getAccessibleContent()}` : page.getAccessibleContent(), () => focused.focus(), AccessibilityVerbositySettingId.Creator);
 		},
 	});
 }

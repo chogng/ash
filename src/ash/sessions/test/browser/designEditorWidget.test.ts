@@ -1,12 +1,13 @@
 import { DocumentCommands } from '../../contrib/creator/common/commands/documentCommands.js';
 import { flattenDesignShapes, type DesignShape } from '../../contrib/creator/common/model/document.js';
+import { InMemoryFileSystemProvider } from '../../../platform/files/common/inMemoryFilesystemProvider.js';
 import { createTestFileService } from '../../../workbench/test/common/testEditorServices.js';
 import { IAssetService } from '../../../platform/assets/common/assetService.js';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { Separator } from '../../../base/common/actions.js';
-import { test, suiteTeardown } from 'mocha';
+import { test, setup, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
@@ -30,14 +31,20 @@ import { Disposable, toDisposable, type IDisposable } from '../../../base/common
 import { BrowserWorkingCopyService } from '../../../workbench/services/workingCopy/browser/browserWorkingCopyService.js';
 import { IWorkingCopyService } from '../../../workbench/services/workingCopy/common/workingCopyService.js';
 
+import { AbstractLifecycleService } from '../../../workbench/services/lifecycle/common/lifecycleService.js';
+import { NullLoggerService } from '../../../platform/log/common/log.js';
 import { ILifecycleService, LifecyclePhase, StartupKind, type IBeforeShutdownEvent } from '../../../workbench/services/lifecycle/common/lifecycle.js';
 import { ICommandService } from '../../../platform/commands/common/commands.js';
 import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
 import { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
 import { IOpenerService } from '../../../platform/opener/common/opener.js';
-import { IStorageService } from '../../../platform/storage/common/storage.js';
+import { IStorageService, StorageScope } from '../../../platform/storage/common/storage.js';
+import { IUserDataProfileService } from '../../../workbench/services/userDataProfile/common/userDataProfile.js';
+import { UserDataProfileService } from '../../../workbench/services/userDataProfile/browser/userDataProfileService.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
 import { setARIAContainer } from '../../../base/browser/ui/aria/aria.js';
+import { INotificationService } from '../../../platform/notification/common/notification.js';
+import { NotificationService } from '../../../workbench/services/notification/common/notificationService.js';
 import { ISessionsLayoutService } from '../../services/layout/common/sessionsLayoutService.js';
 
 const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
@@ -76,6 +83,10 @@ const DESIGN_EDITOR_RESOURCE = URI.parse('ash-creator:/design');
 await import('../../contrib/creator/browser/creatorEditor.contribution.js');
 const { createDesignEditorContributions } = await import('../../contrib/creator/design.main.js');
 const services = new InstantiationService();
+const notifications = new NotificationService();
+services.registerInstance(INotificationService, notifications);
+setup(() => notifications.clear());
+suiteTeardown(() => notifications.dispose());
 services.registerSingleton(IUriIdentityService, () => services.createInstance(UriIdentityService));
 const colorContextView = new ContextView(browser.window.document.body);
 services.registerInstance(IContextViewService, Object.assign(colorContextView, { container: browser.window.document.body }));
@@ -89,6 +100,10 @@ services.registerSingleton(IWorkingCopyService, () => services.createInstance(Br
 services.registerInstance(IConfigurationService, configuration);
 services.registerInstance(IThemeService, theme);
 services.registerInstance(IWorkspaceContextService, new WorkspaceContextService({ id: 'design-test', folders: [] }));
+const designStorage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: generateUuid(), flushInterval: 0 });
+services.registerInstance(IStorageService, designStorage);
+services.registerInstance(IUserDataProfileService, new UserDataProfileService());
+setup(() => designStorage.remove('creator.design.activeDocument', StorageScope.WORKSPACE));
 const resource = URI.file('/design.ash-design');
 const binaryFiles = new Map<string, Uint8Array>();
 const directories = new Set<string>();
@@ -153,6 +168,7 @@ services.registerInstance(ILifecycleService, { startupKind: StartupKind.NewWindo
 
 suiteTeardown(() => {
 	colorContextView.dispose();
+	designStorage.dispose();
 	services.dispose();
 	contextKeys.dispose();
 	configuration.dispose();
@@ -173,6 +189,7 @@ class DesignEditorFixture extends Disposable {
 	constructor() {
 		super();
 		const child = services.createChild();
+		child.registerInstance(IStorageService, this._register(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: generateUuid(), flushInterval: 0 })));
 		this.designEditors = this._register(child.createInstance(DesignEditorService));
 		child.registerInstance(IDesignEditorService, this.designEditors);
 		const ownerDocument = browser.window.document;
@@ -475,7 +492,7 @@ test('Design canvas menu keeps selection, applies edits and disappears with its 
 		pressCanvas(view, 'ContextMenu');
 		assert.deepEqual(contextMenu!.getActions().filter(action => !(action instanceof Separator)).map(action => [action.label, action.enabled]), [
 			['Undo', false], ['Redo', false], ['Delete', false], ['Select all', false],
-			['Duplicate', false], ['Bring to front', false], ['Send to back', false], ['Add auto layout', false], ['Group', false], ['Create component', false], ['Detach instance', false], ['Ungroup', false], ['Add frame (F)', true], ['Import image', true], ['Export SVG', false], ['Open design', true],
+			['Duplicate', false], ['Bring to front', false], ['Send to back', false], ['Add auto layout', false], ['Group', false], ['Create component', false], ['Detach instance', false], ['Ungroup', false], ['Add frame (F)', true], ['Import image', true], ['Export SVG', false], ['Open design', true], ['Save a copy', true],
 		]);
 		pressCanvas(view, 'r');
 		pressCanvas(view, 'e');
@@ -532,38 +549,33 @@ test('Design edits render fractional geometry, keep input editing separate and u
 	assert.equal(Number(rect.getAttribute('x')), before + 40);
 });
 
-test('Design saves and reopens the complete document, rejecting stale writes and invalid files', async () => {
+test('Design saves before opening another file and rejects stale writes and invalid files', async () => {
 	using view = createView();
 	view.layout({ width: 200, height: 100 });
-	errors = [];
-	writes.length = 0;
-	revision = '0';
-	saveDecision = ConfirmResult.DONT_SAVE;
+	errors = []; writes.length = 0; revision = '0';
 	pressCanvas(view, 'r');
-	await DesignEditorWidget.getFocused(view.domNode)!.saveDocument();
-	const saved = fileContent;
+	await view.pane.editor.saveDocument();
 	assert.equal(view.domNode.classList.contains('dirty'), false);
 	pressCanvas(view, 'e');
 	await clickCanvasMenu(view, 'Open design');
-	assert.equal(view.domNode.querySelectorAll('[data-shape-id]').length, 1);
-	assert.equal(parseDesignDocument(saved).shapes[0].kind, 'rectangle');
-	pressCanvas(view, 'Tab');
-	pressCanvas(view, 'ArrowRight');
+	assert.equal(view.domNode.querySelectorAll('[data-shape-id]').length, 2);
+	const saved = fileContent;
+	pressCanvas(view, 'Tab'); pressCanvas(view, 'ArrowRight');
 	revision = '99';
-	await DesignEditorWidget.getFocused(view.domNode)!.saveDocument();
-	assert.equal(writes.at(-1)!.expectedRevision, '1');
+	await view.pane.editor.saveDocument();
+	assert.equal(writes.at(-1)!.expectedRevision, '2');
 	assert.equal(view.domNode.classList.contains('dirty'), true);
 	assert.equal(fileContent, saved);
 	assert.equal(errors.length, 1);
+	await clickCanvasMenu(view, 'Open design');
+	assert.equal(view.pane.workingCopy.needsSaveRetry, true);
+	assert.equal(fileContent, saved);
+	revision = '2';
+	assert.equal(await view.pane.workingCopy.flushAutoSave(), true);
 	fileContent = '{"version":1,"shapes":[{"kind":"rectangle"}]}';
 	await clickCanvasMenu(view, 'Open design');
-	assert.equal(view.domNode.querySelectorAll('[data-shape-id]').length, 1);
-	assert.equal(view.domNode.classList.contains('dirty'), true);
+	assert.equal(view.domNode.querySelectorAll('[data-shape-id]').length, 2);
 	assert.equal(errors.length, 2);
-	saveDecision = ConfirmResult.CANCEL;
-	await clickCanvasMenu(view, 'Open design');
-	assert.equal(errors.length, 2);
-	saveDecision = ConfirmResult.DONT_SAVE;
 });
 
 test('Design keyboard selection and Chinese properties expose the document content', async () => {
@@ -626,6 +638,7 @@ test('Design edits text and path nodes, groups a selection, and exports safe SVG
 	assert.equal(svg.querySelector('[data-design-text]')!.textContent, '中文 <script>alert(1)</script>\nSecond line');
 	assert.equal(svg.querySelector('[contenteditable]'), null);
 	assert.match(svg.querySelector('path')!.getAttribute('d')!, / Z$/u);
+	DesignEditorWidget.getFocused(view.domNode)!.undo();
 	fileContent = saved;
 	await clickCanvasMenu(view, 'Open design');
 	pressCanvas(view, 'Tab');
@@ -754,13 +767,13 @@ test('Design editors share document edits and history while keeping selection, c
 	assert.equal(first.domNode.querySelector('.ash-canvas-viewport'), null);
 });
 
-test('Design editor owns the unsaved browser-close check and releases it with the editor', () => {
+test('Design browser close does not show a manual save confirmation', () => {
 	const page = createView();
 	try {
 		pressCanvas(page, 'r');
 		const before = new browser.window.Event('beforeunload', { cancelable: true });
 		browser.window.dispatchEvent(before);
-		assert.equal(before.defaultPrevented, true);
+		assert.equal(before.defaultPrevented, false);
 		page.dispose();
 		const after = new browser.window.Event('beforeunload', { cancelable: true });
 		browser.window.dispatchEvent(after);
@@ -927,7 +940,7 @@ test('Design panels share the editor selection and detach when the pane hides', 
 	assert.equal(view.propertiesDomNode.querySelector('.ash-sessions-design-properties')!.classList.contains('visible'), true);
 });
 
-test('Design shutdown checks cancel, save and discard even while its page is hidden', async () => {
+test('Design shutdown automatically saves hidden documents without asking to save', async () => {
 	using child = services.createChild();
 	using shutdown = new Emitter<IBeforeShutdownEvent>();
 	child.registerInstance(ILifecycleService, { ...services.get(ILifecycleService), onBeforeShutdown: shutdown.event });
@@ -949,8 +962,8 @@ test('Design shutdown checks cancel, save and discard even while its page is hid
 		pressCanvas(editor, 'r');
 		page.setVisible(false);
 		saveDecision = ConfirmResult.CANCEL;
-		assert.equal(await isVetoed(), true);
-		assert.equal(designEditors.document.isDirty, true);
+		assert.equal(await isVetoed(), false);
+		assert.equal(designEditors.document.isDirty, false);
 		saveDecision = ConfirmResult.SAVE;
 		assert.equal(await isVetoed(), false);
 		assert.equal(parseDesignDocument(fileContent).shapes.length, 1);
@@ -1675,6 +1688,7 @@ test('Prototype cancels delayed transitions when hidden and renders animation fr
 	browser.window.clearTimeout = id => { timers.delete(id!); };
 	try {
 		editor.documentController.model.replace(documentFromShapes([{ ...home, interactions: [{ id: generateUuid(), trigger: 'delay', delay: 800, actions: [{ action: 'navigate', destination: detail.id, transition: defaultPrototypeTransition }] }] }, detail]));
+		await editor.documentController.flushAutoSave();
 		editor.selectShape(home.id); editor.previewPrototype(); assert.equal(timers.size, 1);
 		const fire = [...timers.values()][0]; fire(); assert.equal(view.domNode.querySelector<SVGSVGElement>('.ash-prototype-preview-scene')!.dataset.screenId, detail.id);
 		editor.setVisible(false); assert.equal(timers.size, 0);
@@ -2236,4 +2250,229 @@ test('Chinese progressive blur fields, descriptions and keyboard help are locali
 		assert.match(describeDesignEffect(effect), /渐进式模糊：0 至 20/u);
 		assert.match(chinese.bundles.ash['sessions.design.effectsHelp'], /渐进式.*Enter.*Escape/u);
 	} finally { resetNlsResolver(); }
+});
+
+
+class AutoSaveFixture extends Disposable {
+	readonly storage = this._register(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: generateUuid(), flushInterval: 0 }));
+	beforeWrite: ((resource: URI) => Promise<void>) | undefined;
+	readonly files: IFileService;
+	readonly child = this._register(services.createChild());
+	readonly copyResource = URI.file('/design-copy.ash-design');
+	confirmations = 0;
+	saveDialogs = 0;
+	constructor() {
+		super();
+		const fixture = this;
+		const provider = this._register(new class extends InMemoryFileSystemProvider {
+			override async writeFile(resource: URI, bytes: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult> {
+				await fixture.beforeWrite?.(resource);
+				return super.writeFile(resource, bytes, options);
+			}
+		}());
+		this.files = this._register(createTestFileService(provider));
+		this.child.registerInstance(IFileService, this.files);
+		this.child.registerInstance(IStorageService, this.storage);
+		this.child.registerInstance(IFileDialogService, {
+			pickFileToSave: unexpected,
+			showSaveConfirm: async () => { this.confirmations++; throw new Error('Automatic saving must not ask to save'); },
+			showSaveDialog: async () => { this.saveDialogs++; return this.copyResource; },
+			showOpenDialog: async () => [this.copyResource],
+		});
+	}
+	createDocument(): InstanceType<typeof DesignDocumentController> { return this._register(this.child.createInstance(DesignDocumentController, CreatorMode.Design)); }
+	get activeResource(): URI { return URI.parse(this.storage.get('creator.design.activeDocument', StorageScope.WORKSPACE)!); }
+	async readActive(): Promise<ReturnType<typeof parseDesignDocument>> { return parseDesignDocument((await this.files.readFile(URI.joinPath(this.activeResource, 'manifest.json'))).content); }
+}
+
+test('Design automatically saves an untitled draft and restores its document and image bytes after reopening', async () => {
+	using fixture = new AutoSaveFixture();
+	const document = fixture.createDocument();
+	const bytes = new Uint8Array([1, 2, 3]);
+	const sha256 = createHash('sha256').update(bytes).digest('hex');
+	const asset = { id: generateUuid(), name: 'draft.png', versions: [{ id: generateUuid(), sha256, path: `assets/${sha256}`, mediaType: 'image/png' as const, width: 1, height: 1 }] };
+	const image = { id: generateUuid(), kind: 'image' as const, assetId: asset.id, assetVersionId: asset.versions[0].id, crop: { x: 0, y: 0, width: 1, height: 1 }, x: 0, y: 0, width: 1, height: 1, rotation: 0, fill: '#ffffff' };
+	document.restoreBackup(JSON.stringify({ manifest: serializeDesignDocument(documentFromShapes([image], document.model.value, [asset])), media: { [sha256]: Buffer.from(bytes).toString('base64') } }));
+	const saved = new Promise<void>(resolve => {
+		const listener = document.onDidChange(() => { if (!document.isDirty) { listener.dispose(); resolve(); } });
+	});
+	await saved;
+	assert.equal(document.name, 'Untitled design');
+	assert.match(fixture.activeResource.path, /creator\/design-test\/[^/]+\.ash-design$/u);
+	assert.deepEqual(await fixture.readActive(), document.model.value);
+	assert.equal(document.saveStatus, 'All changes saved');
+	assert.deepEqual([fixture.confirmations, fixture.saveDialogs], [0, 0]);
+	const original = document.model.value;
+	document.dispose();
+	const restored = fixture.createDocument();
+	await restored.ready;
+	assert.deepEqual(restored.model.value, original);
+	assert.deepEqual(restored.readMedia(asset.versions[0]), bytes);
+	assert.equal(restored.isDirty, false);
+	assert.equal(restored.name, 'Untitled design');
+	new DocumentCommands(restored.model).addShape('rectangle', { x: 10, y: 20 });
+	assert.equal(await restored.flushAutoSave(), true);
+	assert.equal((await fixture.readActive()).shapes.length, 2);
+});
+
+test('Design drains edits made during saving without interrupting editing or asking for a path', async () => {
+	using fixture = new AutoSaveFixture();
+	const document = fixture.createDocument();
+	new DocumentCommands(document.model).addShape('rectangle', { x: 0, y: 0 });
+	let enter!: () => void;
+	let release!: () => void;
+	const entered = new Promise<void>(resolve => { enter = resolve; });
+	const gate = new Promise<void>(resolve => { release = resolve; });
+	let writes = 0;
+	fixture.beforeWrite = async () => { if (++writes === 1) { enter(); await gate; } };
+	const saving = document.flushAutoSave();
+	await entered;
+	assert.equal(document.isBusy, false);
+	new DocumentCommands(document.model).addShape('ellipse', { x: 30, y: 40 });
+	const closing = document.confirmDiscard();
+	release();
+	assert.deepEqual(await Promise.all([saving, closing]), [true, false]);
+	assert.deepEqual(await fixture.readActive(), document.model.value);
+	assert.equal(writes, 2);
+	assert.equal(document.isDirty, false);
+	assert.deepEqual([fixture.confirmations, fixture.saveDialogs], [0, 0]);
+});
+
+test('Design retains failed edits, refuses to close on failure and retries without a save dialog', async () => {
+	using fixture = new AutoSaveFixture();
+	const document = fixture.createDocument();
+	using editor = fixture.child.createInstance(DesignEditorWidget, browser.window.document, document, (context: DesignEditorContributionContext) => createDesignEditorContributions(context, fixture.child));
+	new DocumentCommands(document.model).addShape('rectangle', { x: 0, y: 0 });
+	fixture.beforeWrite = async () => { throw new Error('Disk full'); };
+	assert.equal(await document.flushAutoSave(), false);
+	assert.equal(await document.confirmDiscard(), true);
+	assert.equal(document.needsSaveRetry, true);
+	assert.ok(notifications.getNotifications().some(notification => notification.message === document.saveStatus));
+	assert.equal(document.isDirty, true);
+	assert.equal(document.model.value.shapes.length, 1);
+	fixture.beforeWrite = undefined;
+	assert.equal(await document.flushAutoSave(), true);
+	assert.equal(document.needsSaveRetry, false);
+	assert.equal(document.isDirty, false);
+	assert.deepEqual([fixture.confirmations, fixture.saveDialogs], [0, 0]);
+});
+
+test('Design autosave preserves an externally changed package instead of overwriting it', async () => {
+	using fixture = new AutoSaveFixture();
+	const document = fixture.createDocument();
+	new DocumentCommands(document.model).addShape('rectangle', { x: 0, y: 0 });
+	await document.flushAutoSave();
+	const manifest = URI.joinPath(fixture.activeResource, 'manifest.json');
+	const external = serializeDesignDocument(documentFromShapes([], document.model.value));
+	await fixture.files.writeFile({ resource: manifest, content: external });
+	new DocumentCommands(document.model).addShape('ellipse', { x: 0, y: 0 });
+	assert.equal(await document.flushAutoSave(), false);
+	assert.equal((await fixture.files.readFile(manifest)).content, external);
+	assert.equal(document.model.value.shapes.length, 2);
+	assert.equal(document.isDirty, true);
+	assert.equal(await document.confirmDiscard(), true);
+	assert.equal(fixture.confirmations, 0);
+});
+
+test('Design save a copy and export stay manual and keep the automatically saved document active', async () => {
+	using fixture = new AutoSaveFixture();
+	const document = fixture.createDocument();
+	new DocumentCommands(document.model).addShape('rectangle', { x: 0, y: 0 });
+	await document.flushAutoSave();
+	const active = fixture.activeResource;
+	const original = document.model.value;
+	assert.equal(fixture.saveDialogs, 0);
+	await document.saveCopy();
+	const copy = parseDesignDocument((await fixture.files.readFile(URI.joinPath(fixture.copyResource, 'manifest.json'))).content);
+	assert.notEqual(copy.documentId, original.documentId);
+	assert.deepEqual(copy.shapes, original.shapes);
+	assert.deepEqual(document.model.value, original);
+	assert.equal(fixture.activeResource.toString(), active.toString());
+	await document.exportDocument({ title: 'Export SVG', filename: 'design.svg', extension: 'svg', content: '<svg />' });
+	assert.equal(fixture.saveDialogs, 2);
+	assert.equal(document.isDirty, false);
+	assert.deepEqual(await fixture.readActive(), original);
+});
+
+test('Design failed restoration keeps the original pointer and blocks replacement until retry succeeds', async () => {
+	using fixture = new AutoSaveFixture();
+	const document = fixture.createDocument();
+	new DocumentCommands(document.model).addShape('rectangle', { x: 0, y: 0 });
+	await document.flushAutoSave();
+	const resource = fixture.activeResource;
+	const manifest = URI.joinPath(resource, 'manifest.json');
+	const original = await fixture.files.readFile(manifest);
+	document.dispose();
+	await fixture.files.writeFile({ resource: manifest, content: '{broken' });
+	const restored = fixture.createDocument();
+	await restored.ready;
+	assert.equal(restored.needsSaveRetry, true);
+	assert.equal(await restored.confirmDiscard(), true);
+	assert.equal(fixture.activeResource.toString(), resource.toString());
+	assert.equal((await fixture.files.readFile(manifest)).content, '{broken');
+	await fixture.files.writeFile({ resource: manifest, content: original.content });
+	assert.equal(await restored.flushAutoSave(), true);
+	assert.equal(restored.needsSaveRetry, false);
+	assert.deepEqual(restored.model.value, parseDesignDocument(original.content));
+});
+
+test('Design autosave status and copy actions use Chinese localization', async () => {
+	const { productLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
+	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	try {
+		using fixture = new AutoSaveFixture();
+		const document = fixture.createDocument();
+		new DocumentCommands(document.model).addShape('rectangle', { x: 0, y: 0 });
+		assert.equal(document.saveStatus, '正在保存…');
+		await document.flushAutoSave();
+		assert.equal(document.saveStatus, '所有更改已保存');
+		using view = createView();
+		assert.match(view.pane.editor.getAccessibleContent(), /所有更改已保存/u);
+	} finally { resetNlsResolver(); }
+});
+
+
+test('Design close drains edits from final lifecycle joins without confirming save', async () => {
+	using fixture = new AutoSaveFixture();
+	using lifecycle = new class extends AbstractLifecycleService { }(StartupKind.NewWindow, new NullLoggerService(), fixture.storage);
+	fixture.child.registerInstance(ILifecycleService, lifecycle);
+	using editors = fixture.child.createInstance(DesignEditorService);
+	const document = editors.document;
+	const commands = new DocumentCommands(document.model);
+	commands.addShape('rectangle', { x: 0, y: 0 });
+	// A later shutdown participant can still commit an edit after the initial flush.
+	using lateEdit = lifecycle.onWillShutdown(event => event.join(Promise.resolve().then(() => { commands.addShape('ellipse', { x: 10, y: 20 }); }), 'Finish pending edit'));
+	await lifecycle.shutdown('windowClose');
+	assert.equal(document.isDirty, false);
+	assert.deepEqual(await fixture.readActive(), document.model.value);
+	assert.equal(document.model.value.shapes.length, 2);
+	assert.equal(fixture.confirmations, 0);
+});
+
+test('Design publishes a library only when explicitly requested', async () => {
+	using fixture = new AutoSaveFixture();
+	const document = fixture.createDocument();
+	new DocumentCommands(document.model).addShape('rectangle', { x: 0, y: 0 });
+	await document.flushAutoSave();
+	assert.equal(fixture.saveDialogs, 0);
+	await fixture.files.createDirectory(URI.file('/'));
+	await document.publishLibrary();
+	assert.equal(fixture.saveDialogs, 1);
+	const published = JSON.parse((await fixture.files.readFile(fixture.copyResource)).content);
+	assert.equal(published.kind, 'ash-design-library');
+	assert.equal(published.document.documentId, document.model.value.documentId);
+	assert.deepEqual(await fixture.readActive(), document.model.value);
+});
+
+test('Design save a copy rejects the active package as its destination', async () => {
+	using fixture = new AutoSaveFixture();
+	const document = fixture.createDocument();
+	new DocumentCommands(document.model).addShape('rectangle', { x: 0, y: 0 });
+	await document.saveDocument(fixture.copyResource);
+	const original = await fixture.readActive();
+	await document.saveCopy();
+	assert.deepEqual(await fixture.readActive(), original);
+	assert.deepEqual(document.model.value, original);
 });
