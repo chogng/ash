@@ -64,12 +64,14 @@
 	cursor: default;
 }
 
+.ash-chatgpt-navigation-scrollable {
+	flex: 1;
+	min-height: 0;
+}
+
 .ash-chatgpt-navigation-list {
 	display: flex;
 	flex-direction: column;
-	flex: 1;
-	min-height: 0;
-	overflow: auto;
 	gap: 4px;
 }
 

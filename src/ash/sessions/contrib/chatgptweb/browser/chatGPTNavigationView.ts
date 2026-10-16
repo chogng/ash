@@ -1,5 +1,8 @@
-import { addDisposableListener, getActiveElement } from '../../../../base/browser/dom.js';
+import { addDisposableListener, getActiveElement, getWindow, scheduleAtNextAnimationFrame } from '../../../../base/browser/dom.js';
+import { observeResize } from '../../../../base/browser/observer.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
+import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
+import { MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { autorun } from '../../../../base/common/observable.js';
 import { localize } from '../../../../nls.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
@@ -40,12 +43,17 @@ export class ChatGPTNavigationView extends ViewPane {
 		search.type = 'search';
 		search.placeholder = localize('sessions.chatgpt.search', 'Search conversations');
 		search.setAttribute('aria-label', search.placeholder);
+		root.append(newChat, search);
+		const scrollable = this._register(new ScrollableElement(root, { direction: 'vertical', vertical: 'auto', tabIndex: -1 }));
+		scrollable.element.classList.add('ash-chatgpt-navigation-scrollable');
 		const list = document.createElement('nav');
 		list.className = 'ash-chatgpt-navigation-list';
 		list.setAttribute('aria-label', localize('sessions.chatgpt.recent', 'Recent conversations'));
+		scrollable.append(list);
 		const filter = () => {
 			const query = search.value.trim().toLocaleLowerCase();
 			for (const item of list.querySelectorAll('button')) { item.hidden = !item.textContent?.toLocaleLowerCase().includes(query); }
+			scrollable.layout();
 		};
 		this._register(addDisposableListener(search, 'input', filter));
 		this._register(addDisposableListener(list, 'click', event => {
@@ -61,16 +69,34 @@ export class ChatGPTNavigationView extends ViewPane {
 			const next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
 			items[next].focus();
 		}));
-		const more = button(localize('sessions.chatgpt.loadMore', 'Load more'), () => { void chat.loadMore(); });
-		root.append(newChat, search, list, more);
+		const loadMoreIfNeeded = (retry = false): void => {
+			const state = chat.state.get();
+			const viewport = scrollable.state;
+			if (!this.isBodyVisible() || !viewport.height || search.value.trim() || !state.connected || state.busy || state.sending || !state.hasMore || (!retry && state.error)) { return; }
+			if (viewport.maximumTop - viewport.top <= 96) { void chat.loadMore(); }
+		};
+		const pendingLoad = this._register(new MutableDisposable());
+		let retryLoad = false;
+		const scheduleLoad = (retry = false): void => {
+			retryLoad ||= retry;
+			pendingLoad.value = scheduleAtNextAnimationFrame(getWindow(list), () => {
+				pendingLoad.clear();
+				const retry = retryLoad;
+				retryLoad = false;
+				loadMoreIfNeeded(retry);
+			});
+		};
+		this._register(scrollable.onDidScroll(event => scheduleLoad(event.current.top !== event.previous.top)));
+		this._register(observeResize(scrollable.element, () => scheduleLoad()));
+		this._register(addDisposableListener(search, 'input', () => scheduleLoad()));
+		this._register(this.onDidChangeBodyVisibility(() => { scrollable.layout(); scheduleLoad(); }));
 		let conversations: readonly ChatGPTConversation[] | undefined;
 		this._register(autorun(reader => {
 			const state = chat.state.read(reader);
 			list.setAttribute('aria-busy', String(state.busy));
 			newChat.disabled = !state.connected || state.sending;
-			more.hidden = !state.hasMore;
-			more.disabled = state.busy || state.sending;
 			if (conversations !== state.conversations) {
+				const scrollTop = scrollable.state.top;
 				const focused = getActiveElement(document) as HTMLElement;
 				const focusedId = list.contains(focused) ? focused.dataset.conversation : undefined;
 				conversations = state.conversations;
@@ -80,7 +106,9 @@ export class ChatGPTNavigationView extends ViewPane {
 					item.dataset.conversation = conversation.id;
 					return item;
 				}));
-				if (focusedId) { [...list.querySelectorAll('button')].find(item => item.dataset.conversation === focusedId)?.focus(); }
+				if (focusedId) { [...list.querySelectorAll('button')].find(item => item.dataset.conversation === focusedId)?.focus({ preventScroll: true }); }
+				scrollable.layout();
+				scrollable.scrollTo(0, scrollTop);
 			}
 			for (const item of list.querySelectorAll('button')) {
 				item.disabled = state.sending;
@@ -88,6 +116,8 @@ export class ChatGPTNavigationView extends ViewPane {
 				else { item.removeAttribute('aria-current'); }
 			}
 			filter();
+			// Recheck after layout so short pages fill the viewport without another scroll.
+			scheduleLoad();
 		}));
 	}
 

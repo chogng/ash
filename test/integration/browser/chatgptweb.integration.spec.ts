@@ -130,6 +130,137 @@ async function mockChatGPTRequests(page: Page, answer = 'Synthetic answer'): Pro
 	});
 }
 
+for (const locale of ['en', 'zh-CN']) {
+	test(`ChatGPT conversations load more on scroll and keyboard navigation (${locale})`, async ({ page }) => {
+		await page.setViewportSize({ width: 1000, height: 600 });
+		await mockChatGPTRequests(page);
+		const offsets: number[] = [];
+		let releasePage: (() => Promise<void>) | undefined;
+		await page.route('**/service/backend-api/conversations?*', async route => {
+			const offset = Number(new URL(route.request().url()).searchParams.get('offset'));
+			offsets.push(offset);
+			const fulfill = () => route.fulfill({ json: { items: Array.from({ length: 20 }, (_, index) => ({ id: `chat-${offset + index}`, title: `Conversation ${offset + index}` })), total: 60 } });
+			if (offset === 20) { releasePage = fulfill; }
+			else { await fulfill(); }
+		});
+		await page.goto(`/chatgptNavigation.html?locale=${locale}`);
+		const list = page.locator('.ash-chatgpt-navigation-list');
+		const items = list.getByRole('button');
+		const viewport = page.locator('.ash-chatgpt-navigation-scrollable > .ash-scrollbar-viewport');
+		await expect(items).toHaveCount(20);
+		await expect(page.getByRole('button', { name: /^(Load more|加载更多)$/ })).toHaveCount(0);
+		expect(offsets).toEqual([0]);
+		await items.last().focus();
+		await expect(list).toHaveAttribute('aria-busy', 'true');
+		await list.hover();
+		await page.mouse.wheel(0, 1000);
+		await expect.poll(() => viewport.evaluate(element => element.scrollHeight - element.clientHeight - element.scrollTop)).toBe(0);
+		const scrollTop = await viewport.evaluate(element => element.scrollTop);
+		expect(offsets).toEqual([0, 20]);
+		await releasePage!();
+		await expect(items).toHaveCount(40);
+		await expect(items.nth(19)).toBeFocused();
+		expect(await viewport.evaluate(element => element.scrollTop)).toBe(scrollTop);
+		await items.nth(19).press('End');
+		await expect(items).toHaveCount(60);
+		await expect(items.nth(39)).toBeFocused();
+		await items.nth(39).press('End');
+		await list.hover();
+		await page.mouse.wheel(0, 1000);
+		await expect(list).toHaveAttribute('aria-busy', 'false');
+		expect(offsets).toEqual([0, 20, 40]);
+	});
+}
+
+for (const theme of ['light', 'dark', 'hcDark', 'hcLight']) {
+	test(`ChatGPT conversations use the shared scrollbar with fixed controls (${theme})`, async ({ page }, testInfo) => {
+		await page.setViewportSize({ width: 1000, height: 600 });
+		await mockChatGPTRequests(page);
+		await page.route('**/service/backend-api/conversations?*', route => route.fulfill({
+			json: {
+				items: Array.from({ length: 20 }, (_, index) => ({ id: `chat-${index}`, title: `Conversation ${index} ${'long title '.repeat(8)}` })), total: 20,
+			}
+		}));
+		await page.goto(`/chatgptNavigation.html?locale=zh-CN&theme=${theme}`);
+		const list = page.locator('.ash-chatgpt-navigation-list');
+		await expect(list.getByRole('button')).toHaveCount(20);
+		const scrollable = page.locator('.ash-chatgpt-navigation-scrollable');
+		const viewport = scrollable.locator('.ash-scrollbar-viewport');
+		const scrollbar = scrollable.getByRole('scrollbar', { name: 'Vertical scrollbar' });
+		await expect(scrollbar).toHaveAttribute('aria-disabled', 'false');
+		expect(await viewport.evaluate(element => getComputedStyle(element).scrollbarWidth)).toBe('none');
+		expect(await list.evaluate(element => getComputedStyle(element).overflowY)).toBe('visible');
+		const search = page.getByRole('searchbox', { name: '搜索会话' });
+		const newChat = page.getByRole('button', { name: '新聊天', exact: true });
+		const controls = await Promise.all([newChat.boundingBox(), search.boundingBox()]);
+		await list.hover();
+		await page.mouse.wheel(0, 300);
+		await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+		expect(await Promise.all([newChat.boundingBox(), search.boundingBox()])).toEqual(controls);
+		await expect(scrollbar).toHaveCSS('opacity', '1');
+		const thumb = scrollbar.locator('.ash-scrollbar-thumb');
+		expect(await thumb.evaluate(element => getComputedStyle(element).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
+		const geometry = await viewport.evaluate(element => ({ width: element.clientWidth, contentWidth: element.scrollWidth }));
+		expect(geometry.contentWidth).toBe(geometry.width);
+		await scrollbar.focus();
+		await scrollbar.press('End');
+		await expect.poll(() => viewport.evaluate(element => element.scrollHeight - element.clientHeight - element.scrollTop)).toBe(0);
+		await testInfo.attach(`chatgpt-sidebar-scrollbar-${theme}`, { body: await page.locator('#navigation').screenshot(), contentType: 'image/png' });
+	});
+}
+
+test('ChatGPT conversation pagination fills the viewport after resize and pauses while searching', async ({ page }) => {
+	await page.setViewportSize({ width: 1000, height: 600 });
+	await mockChatGPTRequests(page);
+	const offsets: number[] = [];
+	await page.route('**/service/backend-api/conversations?*', async route => {
+		const offset = Number(new URL(route.request().url()).searchParams.get('offset'));
+		offsets.push(offset);
+		const count = offset === 0 ? 2 : 20;
+		await route.fulfill({ json: { items: Array.from({ length: count }, (_, index) => ({ id: `chat-${offset + index}`, title: `Conversation ${offset + index}` })), total: 42 } });
+	});
+	await page.goto('/chatgptNavigation.html?locale=zh-CN');
+	const list = page.locator('.ash-chatgpt-navigation-list');
+	await expect(list.getByRole('button')).toHaveCount(22);
+	expect(offsets).toEqual([0, 2]);
+	const search = page.getByRole('searchbox', { name: '搜索会话' });
+	await search.fill('Conversation 21');
+	await page.setViewportSize({ width: 1000, height: 1600 });
+	await expect(list.getByRole('button')).toHaveCount(1);
+	await expect(list).toHaveAttribute('aria-busy', 'false');
+	expect(offsets).toEqual([0, 2]);
+	await search.fill('');
+	await expect(list.getByRole('button')).toHaveCount(42);
+	expect(offsets).toEqual([0, 2, 22]);
+});
+
+test('ChatGPT conversation pagination retries a failure only after another scroll', async ({ page }) => {
+	await page.setViewportSize({ width: 1000, height: 600 });
+	await mockChatGPTRequests(page);
+	const offsets: number[] = [];
+	await page.route('**/service/backend-api/conversations?*', async route => {
+		const offset = Number(new URL(route.request().url()).searchParams.get('offset'));
+		offsets.push(offset);
+		if (offset > 0 && offsets.length === 2) {
+			await route.fulfill({ status: 500, json: {} });
+			return;
+		}
+		await route.fulfill({ json: { items: Array.from({ length: 20 }, (_, index) => ({ id: `chat-${offset + index}`, title: `Conversation ${offset + index}` })), total: 40 } });
+	});
+	await page.goto('/chatgptNavigation.html?locale=en');
+	const list = page.locator('.ash-chatgpt-navigation-list');
+	await expect(list.getByRole('button')).toHaveCount(20);
+	await list.hover();
+	await page.mouse.wheel(0, 2000);
+	await expect(page.locator('.ash-chatgpt-error')).toBeVisible();
+	await expect(list).toHaveAttribute('aria-busy', 'false');
+	expect(offsets).toEqual([0, 20]);
+	await page.mouse.wheel(0, -100);
+	await page.mouse.wheel(0, 200);
+	await expect(list.getByRole('button')).toHaveCount(40);
+	expect(offsets).toEqual([0, 20, 20]);
+});
+
 let math: Awaited<ReturnType<typeof startMarkdownMathExtension>> | undefined;
 test.afterAll(async () => { await math?.dispose(); });
 async function installMathProvider(page: Page): Promise<{ lists: number; renders: number; }> {
