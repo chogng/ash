@@ -7,62 +7,53 @@
 
 .ash-problems-controls {
 	display: flex;
-	flex-wrap: wrap;
 	gap: 6px;
 	align-items: center;
+	min-width: 0;
 }
 
 .ash-problems-filter {
-	flex: 1 1 220px;
-	min-width: 120px;
-	border: var(--ash-strokeThickness) solid
-		color-mix(in srgb, currentColor 25%, transparent);
-	border-radius: var(--ash-cornerRadius-small);
-	padding: 6px 8px;
-	color: inherit;
-	background: color-mix(in srgb, currentColor 6%, transparent);
-	font: inherit;
-}
-
-.ash-problems-filter:focus {
-	border-color: var(--ash-focusBorder);
-	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
-}
-
-.ash-problems-severities {
 	display: flex;
+	align-items: center;
+	flex: 0 1 200px;
+	width: 200px;
+	min-width: 72px;
+}
+
+.ash-problems-filter > input {
+	flex: 1;
+	min-width: 0;
+}
+
+.ash-problems-controls > .ash-action-bar,
+.ash-problems-filter > .ash-action-bar {
+	flex-shrink: 0;
+}
+
+.ash-problems-status-row {
+	display: flex;
+	flex-wrap: wrap;
 	gap: 4px;
-}
-
-.ash-problems-severity {
-	border: var(--ash-strokeThickness) solid transparent;
-	border-radius: var(--ash-cornerRadius-small);
-	padding: 4px 8px;
-	color: inherit;
-	background: transparent;
-	font: inherit;
-	font-size: 11px;
-	cursor: pointer;
-	opacity: 0.48;
-}
-
-.ash-problems-severity.checked {
-	border-color: color-mix(in srgb, currentColor 24%, transparent);
-	background: color-mix(in srgb, currentColor 9%, transparent);
-	opacity: 1;
-}
-
-.ash-problems-severity:focus-visible,
-.ash-problems-item-button:focus-visible {
-	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
-	outline-offset: -1px;
+	align-items: center;
+	padding: 6px 0;
+	flex-shrink: 0;
 }
 
 .ash-problems-status {
-	min-height: 18px;
-	padding: 6px 2px 2px;
-	color: color-mix(in srgb, currentColor 72%, transparent);
-	font-size: 12px;
+	min-width: 0;
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label1);
+	overflow-wrap: anywhere;
+}
+
+.ash-problems-status-row > [hidden] {
+	display: none;
+}
+
+.ash-problems-file-heading:focus-visible,
+.ash-problems-item-button:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
 }
 
 .ash-problems-results,
@@ -84,7 +75,14 @@
 .ash-problems-file-heading {
 	display: flex;
 	gap: 8px;
-	align-items: baseline;
+	align-items: center;
+	width: 100%;
+	border: 0;
+	color: inherit;
+	background: transparent;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
 	padding: 4px 6px;
 }
 
@@ -159,4 +157,12 @@
 	color: color-mix(in srgb, currentColor 58%, transparent);
 	font-size: 11px;
 	white-space: nowrap;
+}
+
+.ash-problems-file.collapsed .ash-problems-file-twisty {
+	transform: rotate(-90deg);
+}
+
+.ash-problems-file-items[hidden] {
+	display: none;
 }

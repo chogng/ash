@@ -1,3 +1,4 @@
+import { localize } from "../../../../nls.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
 import { type IMarkerService } from "../../../../platform/markers/common/markers.js";
@@ -34,9 +35,11 @@ export class ProblemsStatusContribution extends Disposable implements IWorkbench
 	private entry(): IStatusbarEntry {
 		const { errors, warnings } = this.options.markerService.getStatistics();
 		const summaries: string[] = [];
-		if (errors > 0) summaries.push(`Errors: ${errors}`);
-		if (warnings > 0) summaries.push(`Warnings: ${warnings}`);
-		const tooltip = summaries.length === 0 ? "No Problems" : summaries.join(", ");
+		if (errors > 0) summaries.push(localize('problems.errorCount', 'Errors: {0}', errors));
+		if (warnings > 0) summaries.push(localize('problems.warningCount', 'Warnings: {0}', warnings));
+		const tooltip = summaries.length === 0
+			? localize('problems.noProblems', 'No Problems')
+			: summaries.length === 1 ? summaries[0]! : localize('problems.summary', '{0}, {1}', summaries[0]!, summaries[1]!);
 		return {
 			text: "",
 			segments: [

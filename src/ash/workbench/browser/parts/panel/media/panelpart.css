@@ -13,3 +13,19 @@
 .ash-workbench-panel > .ash-composite-content {
 	overflow: hidden;
 }
+
+.ash-panel-title-control .ash-pane-composite-title-part-actions {
+	display: flex;
+	align-items: center;
+}
+
+.ash-panel-title-control .ash-pane-composite-title-separator {
+	flex-shrink: 0;
+	margin: 0 6px;
+	background: var(--ash-muted-foreground);
+	opacity: 1;
+}
+
+.ash-panel-title-control .ash-pane-composite-title-separator[hidden] {
+	display: none;
+}

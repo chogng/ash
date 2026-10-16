@@ -1,3 +1,5 @@
+import { Separator } from "../../../base/common/actions.js";
+import { SeparatorActionViewItem } from "../../../base/browser/ui/actionbar/actionViewItems.js";
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import type { PaneCompositeOptions } from './views/paneComposite.js';
 import type { PaneComposite } from './views/paneComposite.js';
@@ -141,6 +143,16 @@ export class PaneCompositePart extends CompositePart<PaneComposite> {
 				{ highlightToggledItems: true, toolbarOptions: { primaryGroup: options.titleActions.primaryGroup } },
 			));
 			actions.element.classList.add("ash-pane-composite-title-menu-actions");
+			if (options.location === ViewContainerLocation.Panel) {
+				const separator = h(ownerDocument, "div");
+				this._register(new SeparatorActionViewItem(new Separator())).render(separator);
+				separator.classList.add("ash-pane-composite-title-separator");
+				separator.setAttribute("aria-orientation", "vertical");
+				this.partTitleActionsDomNode.prepend(separator);
+				const updateSeparator = () => { separator.hidden = actions.element.hidden; };
+				this._register(actions.onDidChangeMenuItems(updateSeparator));
+				updateSeparator();
+			}
 		}
 
 		this.setCompositeBarVisible(options.compositeBarVisible ?? true);

@@ -1,3 +1,9 @@
+import { IMarkerService, MarkerSeverity } from '../../../src/ash/platform/markers/common/markers.js';
+import { MarkerService } from '../../../src/ash/platform/markers/common/markerService.js';
+import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
+import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
+import { emptyEditorServiceState } from '../../../src/ash/workbench/test/common/testEditorService.js';
+import { registerProblemsView } from '../../../src/ash/workbench/contrib/problems/browser/problems.contribution.js';
 import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { addDisposableListener, h } from '../../../src/ash/base/browser/dom.js';
 import { Lxicon } from '../../../src/ash/base/common/lxicons.js';
@@ -131,6 +137,7 @@ declare global {
 			setBadgeCompact(compact: boolean): void;
 			toggleBadge(): void;
 			readonly events: readonly string[];
+			readonly copiedProblems: readonly string[];
 			state(): readonly CompositeState[];
 			open(id: string, focus?: boolean): Promise<void>;
 			resize(width: number, height: number): void;
@@ -195,6 +202,10 @@ for (const id of ['first', 'second']) {
 	resources.add(registry.registerViewContainer({ id, title: `${id} container`, icon: new URLSearchParams(location.search).has('badges') ? Lxicon.gitBranch : undefined, location: ViewContainerLocation.Panel }));
 	resources.add(registry.registerViews(id, [{ id: `${id}.view`, title: `${id} view`, ctorDescriptor: new SyncDescriptor(FocusView) }]));
 }
+if (new URLSearchParams(location.search).has('problems')) {
+	registerProblemsView(registry);
+	await import('../../../src/ash/workbench/browser/parts/panel/panelActions.js');
+}
 const services = resources.add(new InstantiationService());
 const contexts = resources.add(new ContextKeyService());
 services.registerInstance(IContextKeyService, contexts);
@@ -204,12 +215,29 @@ services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), 
 services.registerInstance(IViewDescriptorService, resources.add(services.createInstance(ViewDescriptorService, { registry })));
 const commands = resources.add(new CommandService(services));
 services.registerInstance(IMenuService, new MenuService(commands, contexts));
-// Context menus and global layout are outside this content-focus scenario.
-services.registerInstance(IContextMenuService, {
+// The content-focus fixtures reject menus; Problems exercises the real menu host below.
+if (!new URLSearchParams(location.search).has('problems')) services.registerInstance(IContextMenuService, {
 	contextMenuStyle: 'custom',
 	onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None,
 	showContextMenu: () => { throw new Error('Unexpected context menu'); }, hideContextMenu() { },
 });
+const copiedProblems: string[] = [];
+if (new URLSearchParams(location.search).has('problems')) {
+	await import('../../../src/ash/base/browser/ui/styles.css');
+	const markers = resources.add(new MarkerService());
+	markers.changeAll('typescript', [
+		{ resource: URI.file('/project/src/main.ts'), marker: { severity: MarkerSeverity.Error, message: "Type 'string' is not assignable to type 'number'.", source: 'ts', startLineNumber: 12, startColumn: 7, endLineNumber: 12, endColumn: 12 } },
+		{ resource: URI.file('/project/src/utils.ts'), marker: { severity: MarkerSeverity.Warning, message: "'result' is declared but its value is never read.", source: 'ts', startLineNumber: 4, startColumn: 1, endLineNumber: 4, endColumn: 7 } },
+	]);
+	services.registerInstance(IMarkerService, markers);
+	services.registerInstance(IWorkspaceContextService, resources.add(new WorkspaceContextService({ id: 'problems', uri: URI.file('/project') })));
+	services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { throw new Error('Editor opening is outside this title scenario'); }, focusActiveEditor() { } });
+	services.registerInstance(IClipboardService, { writeText: async (text: string) => { copiedProblems.push(text); } } as IClipboardService);
+	services.registerInstance(IContextMenuService, resources.add(new BrowserContextMenuService(
+		services.get(IMenuService), contexts,
+		{ lookupKeybinding: () => undefined } as unknown as IKeybindingService,
+		resources.add(new BrowserContextViewService(document.body)), resources.add(new NotificationService()))));
+}
 const panel = resources.add(registerTestComponentServices(services).createInstance(PanelPart, document.body));
 if (new URLSearchParams(location.search).has('partWidth')) {
 	const host = h(document, 'section');
@@ -497,6 +525,7 @@ window.ashCompositeIntegration = {
 	},
 	toggleBadge: () => { badgeBars[0]!.toggleBadgeEnablement('first'); },
 	events,
+	copiedProblems,
 	editorEvents,
 	partEvents,
 	resize: (width, height) => {

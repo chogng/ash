@@ -1,3 +1,9 @@
+import type { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
+import { BrowserContextMenuService } from '../../../src/ash/platform/contextview/browser/contextMenuService.js';
+import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
+import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
+import type { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
+import { WorkspaceContextService } from '../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js';
 import { IChangesViewService } from '../../../src/ash/sessions/contrib/changes/common/changesViewService.js';
 import { ChangesViewService } from '../../../src/ash/sessions/contrib/changes/browser/changesViewService.js';
 import type { ISessionChangesService } from '../../../src/ash/sessions/contrib/changes/common/sessionChangesService.js';
@@ -12,7 +18,7 @@ import { InMemoryConfigurationService } from '../../../src/ash/platform/configur
 import { ContextKeyService, IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { type IFileDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
-import { lightColorTheme, highContrastDarkColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
+import { lightColorTheme, darkColorTheme, highContrastLightColorTheme, highContrastDarkColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { SymphonyTasksView } from '../../../src/ash/sessions/contrib/symphony/browser/symphonyViews.js';
 import { type ISymphonyService, type SymphonyViewState } from '../../../src/ash/sessions/contrib/symphony/browser/symphonyService.js';
@@ -62,7 +68,7 @@ if (params.get('locale') === 'zh-CN') {
 }
 const resources = new DisposableStore();
 const root = document.querySelector<HTMLElement>('#root')!;
-resources.add(bindColorTheme(resources.add(new TestThemeService(params.has('hc') ? highContrastDarkColorTheme : lightColorTheme)), root));
+resources.add(bindColorTheme(resources.add(new TestThemeService(params.has('hc') ? highContrastDarkColorTheme : params.has('hcLight') ? highContrastLightColorTheme : params.has('dark') ? darkColorTheme : lightColorTheme)), root));
 const contextKeys = resources.add(new ContextKeyService());
 const configuration = resources.add(new InMemoryConfigurationService());
 const notifications = resources.add(new NotificationService());
@@ -105,8 +111,16 @@ const changes: TurnChangeDetails = {
 	summary: { changeSetId: 'fixture', sessionId: 'fixture', threadId: 'fixture-thread', turnId: 'turn', repositoryId: 'repo', statistics: { files: 30, additions: 30, deletions: 30 }, captureState: 'sealed', messageState: 'unconfigured', commitState: 'idle', committedPaths: [], dependencies: [], externalDependencyPaths: [], warnings: [], conflictPaths: [], revision: 1 },
 	files: Array.from({ length: 30 }, (_, index) => ({ path: `file-${index}.ts`, kind: 'modified', binary: false, additions: 1, deletions: 1 })),
 };
+const workspace = resources.add(new WorkspaceContextService(params.has('emptyWorkspace') ? { id: 'empty' } : { id: 'fixture', uri: URI.file('/fixture') }));
+const contextMenus = resources.add(new BrowserContextMenuService(
+	new MenuService(changesServices.get(ICommandService), contextKeys), contextKeys,
+	{ lookupKeybinding: () => undefined } as unknown as IKeybindingService,
+	resources.add(new BrowserContextViewService(root)), notifications));
+const copiedProblems: string[] = [];
+const clipboard = { writeText: async (text: string) => { copiedProblems.push(text); } } as IClipboardService;
 const markers = resources.add(new MarkerService());
 markers.changeAll('fixture', [{ resource: URI.file('/fixture/file.ts'), marker: { severity: MarkerSeverity.Error, message: 'Fixture problem', startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 2 } }]);
+if (params.has('noProblems')) markers.changeAll('fixture', []);
 const pane = resources.add(view === 'empty'
 	? new EmptyView(root, { id: 'fixture.empty', title: 'Files' }, {
 		canOpenFolder: true, canOpenWorkspace: false, openFolder: async () => { throw new Error('Folder opening failed. '.repeat(12)); },
@@ -115,7 +129,7 @@ const pane = resources.add(view === 'empty'
 	: view === 'review'
 		? new ScmAgentReviewViewPane(root, { id: 'fixture.review', title: 'Agent Review' })
 		: view === 'problems'
-			? new ProblemsViewPane(root, { id: 'fixture.problems', title: 'Problems' }, markers, editors)
+			? new ProblemsViewPane(root, { id: 'fixture.problems', title: 'Problems' }, markers, editors, workspace, contextMenus, clipboard)
 			: view === 'bulk'
 				? new BulkEditPane(root, { id: 'fixture.bulk', title: 'Refactor Preview' }, configuration, editors, contextKeys, resources.add(new InstantiationService()))
 				: view === 'tasks'
@@ -155,7 +169,7 @@ if (view !== 'symphony' && view !== null) {
 }
 panes.layout(180, 280);
 pane.setVisible(true);
-window.viewpaneLayoutIntegration = { commands, submissions, watchers: () => watchers, dispose: () => resources.dispose() };
+window.viewpaneLayoutIntegration = { commands, submissions, copiedProblems, watchers: () => watchers, dispose: () => resources.dispose() };
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
 document.body.dataset.ready = 'true';
 
@@ -163,6 +177,7 @@ declare global {
 	interface Window {
 		viewpaneLayoutIntegration: {
 			readonly commands: readonly string[];
+			readonly copiedProblems: readonly string[];
 			readonly submissions: readonly { title: string; prompt: string; }[];
 			watchers(): number;
 			dispose(): void;

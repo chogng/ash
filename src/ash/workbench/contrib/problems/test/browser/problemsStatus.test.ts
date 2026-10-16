@@ -1,3 +1,5 @@
+import { resetNlsResolver } from '../../../../../nls.js';
+import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { URI } from "../../../../../base/common/uri.js";
@@ -34,6 +36,17 @@ test("Problems status projects and updates workspace error and warning counts", 
 	]);
 	assert.deepEqual(statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.segments?.map(segment => segment.text), ["0", "2"]);
 	assert.equal(statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.tooltip, "Warnings: 2");
+
+	try {
+		initializeTestLocalization('zh-CN');
+		markerService.changeAll('fixture', [marker(resource, MarkerSeverity.Error, 'error'), marker(resource, MarkerSeverity.Warning, 'warning')]);
+		assert.equal(statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.tooltip, '错误：1，警告：1');
+		assert.equal(statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.ariaLabel, '错误：1，警告：1');
+		markerService.changeAll('fixture', []);
+		assert.equal(statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.tooltip, '没有问题');
+	} finally {
+		resetNlsResolver();
+	}
 
 	contribution.dispose();
 	assert.deepEqual(statusbar.getEntries(StatusbarAlignment.Left), []);

@@ -787,3 +787,87 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect.poll(() => page.evaluate(() => window.ashEditorTitleIntegration.state().groups.map(group => group.tabs))).toEqual([['first.ts', 'second.ts']]);
 	});
 }
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`Problems hosts its filter and actions in the Panel title (${locale})`, async ({ page }, testInfo) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await expect(page.locator('.ash-panel-title-control').getByRole('separator')).toBeHidden();
+		await page.goto(`/composite.html?problems&locale=${locale}`);
+		await page.waitForFunction(() => !!window.ashCompositeIntegration);
+		await page.evaluate(() => window.ashCompositeIntegration.open('ash.panel.problems'));
+		const panel = page.locator('.ash-workbench-panel');
+		const title = panel.locator('.ash-panel-title-control');
+		const input = title.getByRole('textbox');
+		const controls = title.locator('.ash-problems-controls');
+		const sharedActions = title.locator('.ash-pane-composite-title-part-actions');
+		const sharedActionIds = ['workbench.action.toggleMaximizedPanel', 'workbench.action.closePanel'];
+		expect(await sharedActions.locator('[data-action-id]').evaluateAll(elements => elements.map(element => element.getAttribute('data-action-id')))).toEqual(sharedActionIds);
+		for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-light', 'ash-high-contrast-dark']) {
+			await page.evaluate(theme => window.ashCompositeIntegration.setEditorTheme(theme), theme);
+			const separator = sharedActions.getByRole('separator');
+			await expect(separator).toBeVisible();
+			await expect(separator).toHaveAttribute('aria-orientation', 'vertical');
+			const geometry = await separator.boundingBox();
+			expect(geometry!.width).toBe(1);
+			expect(geometry!.height).toBe(16);
+			// Sample painted pixels so a present but imperceptible line cannot pass.
+			const image = await title.screenshot();
+			const titleBounds = (await title.boundingBox())!;
+			const pixels = await page.evaluate(async ({ base64, x, y }) => {
+				const image = new Image();
+				image.src = `data:image/png;base64,${base64}`;
+				await image.decode();
+				const canvas = document.createElement('canvas');
+				canvas.width = image.width;
+				canvas.height = image.height;
+				const context = canvas.getContext('2d')!;
+				context.drawImage(image, 0, 0);
+				const line = [...context.getImageData(x, y, 1, 1).data];
+				const background = [...context.getImageData(x - 3, y, 1, 1).data];
+				const luminance = (rgb: number[]) => rgb.slice(0, 3).map(value => value / 255).map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4).reduce((sum, value, index) => sum + value * [0.2126, 0.7152, 0.0722][index]!, 0);
+				const values = [luminance(line), luminance(background)].sort((a, b) => b - a);
+				return { line, background, contrast: (values[0]! + 0.05) / (values[1]! + 0.05) };
+			}, { base64: image.toString('base64'), x: Math.round(geometry!.x - titleBounds.x), y: Math.round(geometry!.y + geometry!.height / 2 - titleBounds.y) });
+			expect(pixels.line).not.toEqual(pixels.background);
+			expect(pixels.contrast, theme).toBeGreaterThanOrEqual(3);
+
+		}
+
+		await expect(input).toBeVisible();
+		await expect(panel.locator('.ash-problems .ash-problems-controls')).toHaveCount(0);
+		const filter = title.getByRole('button', { name: locale === 'en' ? 'Filter' : '筛选', exact: true });
+		const collapse = title.getByRole('button', { name: locale === 'en' ? 'Collapse All' : '全部折叠', exact: true });
+		const copy = title.getByRole('button', { name: locale === 'en' ? 'Copy Problems' : '复制问题', exact: true });
+		for (const width of [1200, 600, 300]) {
+			await page.evaluate(width => window.ashCompositeIntegration.resize(width, 240), width);
+			await expect.poll(() => title.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+			const [inputBounds, filterBounds, controlsBounds, titleBounds] = await Promise.all([input.boundingBox(), filter.boundingBox(), controls.boundingBox(), title.boundingBox()]);
+			expect(filterBounds!.x).toBeGreaterThan(inputBounds!.x);
+			expect(controlsBounds!.x + controlsBounds!.width).toBeLessThanOrEqual(titleBounds!.x + titleBounds!.width);
+			await expect(copy).toBeInViewport();
+		}
+		await collapse.press('Enter');
+		await expect(panel.locator('.ash-problems-file-heading').first()).toHaveAttribute('aria-expanded', 'false');
+		await copy.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.copiedProblems[0]?.split('\n').length)).toBe(2);
+		await input.fill('utils.ts');
+		await copy.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.copiedProblems.length)).toBe(2);
+		expect(await page.evaluate(() => window.ashCompositeIntegration.copiedProblems[1])).toContain('/project/src/utils.ts');
+		await page.evaluate(() => window.ashCompositeIntegration.resize(1000, 240));
+		await page.evaluate(() => window.ashCompositeIntegration.setEditorTheme('ash-light'));
+		await input.fill('');
+		for (const heading of await panel.locator('.ash-problems-file-heading').all()) await heading.press('Enter');
+		await testInfo.attach('problems-title', { body: await panel.screenshot(), contentType: 'image/png' });
+		await input.fill('utils.ts');
+		await page.evaluate(() => window.ashCompositeIntegration.open('first'));
+		await expect(title.locator('.ash-problems-controls')).toHaveCount(0);
+		expect(await sharedActions.locator('[data-action-id]').evaluateAll(elements => elements.map(element => element.getAttribute('data-action-id')))).toEqual(sharedActionIds);
+		await expect(sharedActions.getByRole('separator')).toBeVisible();
+
+		await page.evaluate(() => window.ashCompositeIntegration.open('ash.panel.problems'));
+		await expect(input).toHaveValue('utils.ts');
+		expect(errors).toEqual([]);
+	});
+}

@@ -30,7 +30,8 @@
 .ash-pane-composite-title-actions {
 	display: flex;
 	height: 100%;
-	flex: 0 0 auto;
+	flex: 0 1 auto;
+	min-width: 0;
 	align-items: center;
 	margin-left: auto;
 	padding: 0 4px;
@@ -38,4 +39,13 @@
 
 .ash-pane-composite-title-menu-actions.ash-toolbar {
 	height: 100%;
+}
+
+.ash-pane-composite-title-view-actions {
+	display: flex;
+	min-width: 0;
+}
+
+.ash-pane-composite-title-part-actions {
+	flex-shrink: 0;
 }
