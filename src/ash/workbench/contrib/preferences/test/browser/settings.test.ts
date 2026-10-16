@@ -1,3 +1,8 @@
+import { IScreenshotService } from '../../../screenshot/common/screenshot.js';
+import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
+import { resolveKeybinding } from '../../../../../base/common/keybindings.js';
+import { IHostService } from '../../../../services/host/browser/host.js';
+import '../../../screenshot/browser/screenshot.contribution.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../chat/browser/speechToText/chatSpeechToTextService.js';
 import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from '../../../chat/browser/speechToText/voiceCodeTranscriptionClient.js';
 import { ITelemetryService } from '../../../../../platform/telemetry/common/telemetry.js';
@@ -872,6 +877,7 @@ test('settingsLayout is the single projection from registered settings to catego
 		'general',
 		'github',
 		'network',
+		'screenshot',
 		'appearance',
 		'layout',
 		'startup',
@@ -1645,6 +1651,20 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	services.registerInstance(IGitHubReviewModel, disposables.add(services.createInstance(GitHubReviewModel)));
 	services.registerInstance(IWorkbenchHostService, { downloadText: () => assert.fail('Unexpected download'), editUserConfiguration: async () => { openUserToml++; } });
 
+	services.registerInstance(IScreenshotService, {
+		onDidChangeShortcut: Event.None, shortcutStatus: { availability: 'unchecked', global: false, activeLabel: '' }, checkShortcut: async () => { },
+		captureScreenshot: async () => assert.fail('Settings must not capture a screen'),
+		getPermission: async () => ({ status: 'browser', canOpenSystemSettings: false, applicationPath: '' }),
+		openPermissionSettings: async () => assert.fail('Browser settings have no system permission action'),
+		revealApplication: async () => assert.fail('Browser settings have no desktop application'),
+	});
+	services.registerInstance(IKeybindingService, {
+		inChordMode: false, onDidUpdateKeybindings: Event.None, getKeybindings: () => [],
+		enableKeybindingHoldMode: () => undefined, registerSchemaContribution: () => toDisposable(() => { }),
+		resolveKeybinding, resolveUserBinding: () => undefined, lookupKeybindings: () => [], lookupKeybinding: () => undefined,
+	});
+	services.registerInstance(IHostService, { hasFocus: true, onDidChangeFocus: Event.None, openWindow: async () => { }, restart: async () => { }, getScreenshot: async () => undefined });
+
 	await preferences.openSettings();
 	const host = root.querySelector<HTMLElement>('.ash-modal-editor-host');
 	assert.ok(host);
@@ -1660,7 +1680,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	workbenchGroup.closest<HTMLElement>('.ash-tree-row')?.click();
 	assert.deepEqual(
 		[...root.querySelectorAll<HTMLElement>('[data-settings-category-id]')].map(element => element.dataset.settingsCategoryId),
-		['general', 'github', 'network', 'appearance', 'layout', 'startup', 'browser'],
+		['general', 'github', 'network', 'screenshot', 'appearance', 'layout', 'startup', 'browser'],
 	);
 	assert.equal(root.querySelector('[data-settings-category-id="general"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
 	assert.equal(root.querySelector('[data-settings-category-id="appearance"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);

@@ -1,3 +1,4 @@
+import { ScreenshotSettingsModel } from './screenshotSettingsModel.js';
 import { ExtensionSettingBinding } from './extensionSettingBinding.js';
 import { GitHubSettingsModel } from '../../github/browser/githubSettingsModel.js';
 import { TraceSettingsModel } from '../../trace/browser/traceSettingsModel.js';
@@ -209,7 +210,9 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		const githubSettings = this._register(this.instantiationService.createInstance(GitHubSettingsModel, async () => { await this.instantiationService.invokeFunction(accessor => accessor.get(ICommandService).executeCommand(CLOSE_EDITOR_COMMAND_ID)); }));
 		const traceSettings = this._register(this.instantiationService.createInstance(TraceSettingsModel));
 		const sandboxSettings = this._register(this.instantiationService.createInstance(SandboxSettingsModel));
+		const screenshotSettings = this._register(this.instantiationService.createInstance(ScreenshotSettingsModel));
 		this.contents.push(
+			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, screenshotSettings, AccessibleViewProviderId.ChatScreenshot, AccessibilityVerbositySettingId.ChatScreenshot)),
 			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, sandboxSettings, AccessibleViewProviderId.SandboxSettings, AccessibilityVerbositySettingId.SandboxSettings)),
 			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, traceSettings, AccessibleViewProviderId.TraceSettings, AccessibilityVerbositySettingId.TraceSettings)),
 			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, githubSettings, AccessibleViewProviderId.GitHubSettings, AccessibilityVerbositySettingId.GitHubSettings)),

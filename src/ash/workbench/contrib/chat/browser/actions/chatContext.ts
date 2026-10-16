@@ -1,3 +1,4 @@
+import { IScreenshotService } from '../../../screenshot/common/screenshot.js';
 import { captureTerminalAttachment } from '../../../terminal/browser/chatTerminalCommandMirror.js';
 import { ILanguageModelToolsService, isToolSet } from '../../common/tools/languageModelToolsService.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
@@ -11,7 +12,6 @@ import { URI } from '../../../../../base/common/uri.js';
 import { Schemas } from '../../../../../base/common/network.js';
 import { ThemeIcon } from '../../../../../base/common/themables.js';
 import { createImageAttachment } from '../chatImageUtils.js';
-import { isWeb } from '../../../../../base/common/platform.js';
 import type { Icon } from '../../../../../base/common/icon.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { localize } from '../../../../../nls.js';
@@ -23,8 +23,7 @@ import { createToolSelectionAttachment, showToolsPicker, toolSetLabel } from './
 import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
 import { IChatService } from '../../../../services/chat/common/chatService.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
-import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
-import { ChatScreenshotContext, convertBufferToScreenshotVariable } from '../attachments/chatScreenshotContext.js';
+import { convertBufferToScreenshotVariable } from '../attachments/chatScreenshotContext.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { readLocalRepositories } from '../../../github/common/localRepository.js';
 
@@ -144,11 +143,10 @@ export class ClipboardImageContextValuePick implements ChatContextSource {
 
 export class ScreenshotContextValuePick implements ChatContextSource {
 	public readonly icon = Lxicon.openPreview;
-	public get label(): string { return isWeb ? localize('chat.context.screenshotWeb', 'Screenshot…') : localize('chat.context.screenshot', 'Screenshot Window'); }
-	constructor(private readonly container: HTMLElement, @IInstantiationService private readonly instantiation: IInstantiationService) { }
+	public get label(): string { return localize('chat.context.screenshotWeb', 'Screenshot…'); }
+	constructor(@IScreenshotService private readonly screenshots: IScreenshotService) { }
 	public async asAttachment(signal: AbortSignal): Promise<ChatContextSelection | undefined> {
-		using screenshot = this.instantiation.createInstance(ChatScreenshotContext, this.container);
-		const image = await screenshot.run(signal);
+		const image = await this.screenshots.captureScreenshot(signal);
 		if (!image || signal.aborted) return undefined;
 		const attachment = await convertBufferToScreenshotVariable(image);
 		return signal.aborted ? undefined : { attachment, acceptInBackground: false };

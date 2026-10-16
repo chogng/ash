@@ -10,7 +10,7 @@ export interface IHostService {
 	readonly onDidChangeFocus: Event<boolean>;
 	openWindow(options?: IOpenEmptyWindowOptions): Promise<void>;
 	restart(): Promise<void>;
-	/** Captures PNG bytes; browser hosts ask the user to choose a display surface. */
+	/** Raw PNG capture without workbench editing; browser hosts ask the user to choose a display surface. */
 	getScreenshot(rect?: IRectangle): Promise<VSBuffer | undefined>;
 }
 

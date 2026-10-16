@@ -9,7 +9,7 @@ import { withSelection } from '../../../../../platform/opener/common/opener.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import type { IView } from '../../../../common/views.js';
 import { CHAT_VIEW_ID } from '../../common/chat.js';
-import { MenuId, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { Action2, MenuId, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { ChatInstructionsPickerPick } from '../promptSyntax/attachInstructionsAction.js';
 import { pickFiles } from '../../../../../base/browser/fileAccess.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
@@ -33,6 +33,7 @@ import { IChatSessionNavigationService } from '../../../../services/chat/common/
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { addDisposableListener } from '../../../../../base/browser/dom.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
+import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
 import type { ChatContextAttachment, IChatContextTarget } from '../../../../services/chat/common/chatContextService.js';
 
 /** Registers editor context commands for the lifetime of their Workbench host. */
@@ -65,6 +66,27 @@ export function registerChatContextActions(): DisposableStore {
 			const content = `Source: ${resource.toString()}\n\n${code}`;
 			const target = await accessor.get(IViewsService).openView<IView & IChatContextTarget>(CHAT_VIEW_ID);
 			target?.addContext({ id: `code-selection:${createUuid()}`, kind: 'codeSelection', name, resource, resolve: async () => ({ name, content }) });
+		}
+	}));
+
+	store.add(registerAction2(class AttachScreenshotToChatAction extends Action2 {
+		constructor() {
+			super({
+				id: 'workbench.action.chat.attachScreenshot',
+				title: localize2('chat.context.attachScreenshot', 'Chat: Add Screenshot'),
+				f1: true,
+				precondition: ChatContextKeys.enabled.isEqualTo(true),
+				keybinding: {
+					primary: KeyMod.CtrlCmd | KeyMod.Alt | KeyCode.KeyS,
+					mac: { primary: KeyMod.WinCtrl | KeyMod.CtrlCmd | KeyCode.KeyA },
+					weight: KeybindingWeight.WorkbenchContrib,
+				},
+			});
+		}
+
+		override async run(accessor: ServicesAccessor): Promise<void> {
+			const target = await accessor.get(IViewsService).openView<IView & IChatContextTarget>(CHAT_VIEW_ID);
+			await target?.captureScreenshot();
 		}
 	}));
 
@@ -132,7 +154,7 @@ export class AttachContextAction extends Disposable {
 			const sources: ContextSourceItem[] = [{ label: localize('chat.attach.files', 'Attach files'), iconClass: ThemeIcon.asClassName(Lxicon.paperclip), source: 'upload' }];
 			if (this.workspace.getWorkspace().folders.length) sources.unshift({ label: localize('chat.context.filesAndFolders', 'Files & Folders…'), iconClass: ThemeIcon.asClassName(Lxicon.folders), source: 'workspace' });
 			const contexts: readonly ChatContextSource[] = [
-				...(this.host.supportsImages() ? [instantiation.createInstance(ClipboardImageContextValuePick), instantiation.createInstance(ScreenshotContextValuePick, this.host.container)] : []),
+				...(this.host.supportsImages() ? [instantiation.createInstance(ClipboardImageContextValuePick), instantiation.createInstance(ScreenshotContextValuePick)] : []),
 				instantiation.createInstance(SessionReferenceContextPickerPick, this.navigation.getActiveConversation()),
 				instantiation.createInstance(GitHubContextValuePick, 'issue'),
 				instantiation.createInstance(GitHubContextValuePick, 'pullRequest'),

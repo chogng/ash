@@ -1,3 +1,4 @@
+import '../workbench/contrib/screenshot/electron-browser/screenshot.contribution.js';
 import '../workbench/contrib/relauncher/browser/relauncher.contribution.js';
 import '../workbench/contrib/splash/electron-browser/splash.contribution.js';
 import { ElectronElevatedFileService } from '../workbench/services/files/electron-browser/elevatedFileService.js';

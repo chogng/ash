@@ -28,6 +28,8 @@ export interface ChatContextAttachment {
 /** A Chat view that accepts context from another Workbench contribution. */
 export interface IChatContextTarget {
 	addContext(attachment: ChatContextAttachment): void;
+	/** Captures and previews an image through the active composer’s attachment lifecycle. */
+	captureScreenshot(): Promise<void>;
 	acceptInput(value?: string): Promise<void>;
 }
 

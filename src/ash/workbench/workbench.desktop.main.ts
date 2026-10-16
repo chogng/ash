@@ -1,3 +1,4 @@
+import './contrib/screenshot/electron-browser/screenshot.contribution.js';
 import './contrib/relauncher/browser/relauncher.contribution.js';
 import './contrib/splash/electron-browser/splash.contribution.js';
 import './contrib/terminal/electron-browser/terminal.contribution.js';

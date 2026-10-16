@@ -235,6 +235,11 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		this.activePane?.addContext(attachment);
 	}
 
+	captureScreenshot(): Promise<void> {
+		this.ensureConversationForVisibleChat();
+		return this.activePane?.captureScreenshot() ?? Promise.resolve();
+	}
+
 	captureActiveDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void; } | undefined> {
 		return this.activePane?.captureDraft() ?? Promise.resolve(undefined);
 	}

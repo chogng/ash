@@ -100,6 +100,14 @@ export const SettingsNavigation = [
 		description: localize({ bundle: 'ash.settings', key: 'groups.workbench.description' }, 'Configure the Workbench appearance, layout, and startup.'),
 		categories: [
 			{
+				id: 'screenshot',
+				label: localize({ bundle: 'ash.settings', key: 'categories.screenshot.label' }, 'Screenshot'),
+				description: localize({ bundle: 'ash.settings', key: 'categories.screenshot.description' }, 'Manage screen capture permission, keyboard shortcuts, and accessibility help.'),
+				keywords: ['screenshot', 'screen capture', 'permission', 'shortcut'],
+				presentation: 'general',
+				groups: [{ id: 'screenshot-preferences', label: localize('screenshot.settings.title', 'Screen capture'), description: localize('screenshot.settings.description', 'Check permission for the application that is running and configure the screenshot shortcut.'), settings: ['screenshot.*'] }],
+			},
+			{
 				id: 'appearance',
 				label: localize({ bundle: 'ash.settings', key: 'categories.appearance.label' }, 'Appearance'),
 				description: localize({ bundle: 'ash.settings', key: 'categories.appearance.description' }, 'Customize the visual appearance of Ash.'),

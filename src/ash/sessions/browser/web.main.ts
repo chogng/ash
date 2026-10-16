@@ -1,3 +1,4 @@
+import '../../workbench/contrib/screenshot/browser/screenshot.web.contribution.js';
 import { migrateLegacyBrowserSettings } from '../../workbench/services/userData/browser/userDataInit.js';
 import { URI as SettingsURI } from '../../base/common/uri.js';
 import '../../workbench/contrib/url/browser/url.contribution.js';

@@ -1,3 +1,6 @@
+import '../../../src/ash/workbench/contrib/screenshot/browser/screenshot.contribution.js';
+import { BrowserScreenshotService } from '../../../src/ash/workbench/contrib/screenshot/browser/browserScreenshotService.js';
+import { IScreenshotService } from '../../../src/ash/workbench/contrib/screenshot/common/screenshot.js';
 import { VSBuffer } from '../../../src/ash/base/common/buffer.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { createTestLanguageModelToolsService } from '../../../src/ash/workbench/contrib/chat/test/common/tools/testLanguageModelToolsService.js';
@@ -361,6 +364,7 @@ services.registerInstance(ILanguageModelsService, {
 } satisfies ILanguageModelsService);
 services.registerInstance(IConfigurationService, resources.add(new InMemoryConfigurationService()));
 services.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
+services.registerSingleton(IScreenshotService, () => services.createInstance(BrowserScreenshotService));
 services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 if (!services.has(IChatSpeechToTextService)) services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 registerTestDictationOnboarding(services);
@@ -738,21 +742,14 @@ window.addEventListener('pagehide', () => resources.dispose(), { once: true });
 declare global {
 	interface Window {
 		ashScreenshotIntegration: {
-			state(): { calls: number; overlays: number[]; pending: boolean; providers: number; };
+			state(): { calls: number; overlays: number[]; pending: boolean; };
 			release(): void;
 			switchDraft(): void;
-			accessibility(type: 'help' | 'view'): string | undefined;
 		};
 	}
 }
 window.ashScreenshotIntegration = {
-	state: () => ({ calls: screenshotCalls, overlays: screenshotVisibleOverlays, pending: part.attachmentModel.hasPendingContext, providers: AccessibleViewRegistry.getImplementations().filter(entry => entry.name.startsWith('chatScreenshot-')).length }),
+	state: () => ({ calls: screenshotCalls, overlays: screenshotVisibleOverlays, pending: part.attachmentModel.hasPendingContext }),
 	release: () => { releaseScreenshot?.(); releaseScreenshot = undefined; },
 	switchDraft: () => { part.invalidatePendingInput(); part.restoreDraft({ mode: state.mode, text: 'Next conversation', contexts: [] }); },
-	accessibility: type => {
-		const entry = AccessibleViewRegistry.getImplementations().find(entry => entry.name.startsWith('chatScreenshot-') && entry.type === type);
-		const provider = entry?.getProvider(services);
-		if (!provider) return undefined;
-		try { return provider.provideContent(); } finally { provider.dispose(); }
-	}
 };

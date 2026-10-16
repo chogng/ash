@@ -17,6 +17,8 @@ class TestShortcuts implements IGlobalShortcutRegistry {
 		return true;
 	}
 
+	isRegistered(accelerator: string): boolean { return this.callbacks.has(accelerator); }
+
 	unregister(accelerator: string): void {
 		this.releases.push(accelerator);
 		this.callbacks.delete(accelerator);
@@ -94,4 +96,67 @@ test('system-wide shortcut retains and dispatches arguments after the editor own
 	});
 	service.removeWindow(2);
 	assert.deepEqual(shortcuts.releases, ['Control+Shift+A']);
+});
+
+test('contribution shortcuts acquire replacements before releasing the previous working shortcut', () => {
+	const shortcuts = new TestShortcuts();
+	const fired: string[] = [];
+	using service = new GlobalKeybindingsMainService({ shortcuts, activeWindowId: () => undefined, runCommand: () => assert.fail('Wrong owner'), onError: error => { throw error; } });
+	using owner = service.createOwner(1, binding => fired.push(binding.accelerator));
+	assert.equal(owner.update(binding('Control+A')), true);
+	shortcuts.unavailable.add('Control+B');
+	assert.equal(owner.update(binding('Control+B')), false);
+	assert.equal(owner.getBinding()?.accelerator, 'Control+A');
+	assert.deepEqual(shortcuts.releases, []);
+	shortcuts.callbacks.get('Control+A')!();
+	assert.deepEqual(fired, ['Control+A']);
+	assert.equal(owner.update(binding('Control+C')), true);
+	assert.equal(shortcuts.callbacks.has('Control+C'), true);
+	assert.deepEqual(shortcuts.releases, ['Control+A']);
+	owner.dispose();
+	assert.deepEqual(shortcuts.releases, ['Control+A', 'Control+C']);
+});
+
+test('temporary availability checks release only their own registration and preserve existing owners', () => {
+	const shortcuts = new TestShortcuts();
+	using service = new GlobalKeybindingsMainService({ shortcuts, activeWindowId: () => undefined, runCommand: () => { }, onError: error => { throw error; } });
+	using owner = service.createOwner(1, () => { });
+	shortcuts.unavailable.add('Control+A');
+	assert.equal(owner.check('Control+A', 'screenshot'), false);
+	assert.deepEqual(shortcuts.releases, []);
+	assert.equal(owner.check('Control+B', 'screenshot'), true);
+	assert.deepEqual(shortcuts.releases, ['Control+B']);
+	const foreignCallback = () => { };
+	shortcuts.register('Control+C', foreignCallback);
+	assert.equal(owner.check('Control+C', 'screenshot'), false);
+	assert.equal(shortcuts.callbacks.get('Control+C'), foreignCallback);
+	owner.update(binding('Control+D'));
+	assert.equal(owner.check('Control+D', 'workbench.action.openAgentsWindow'), true);
+	assert.equal(owner.check('Control+D', 'screenshot'), false);
+	assert.equal(shortcuts.callbacks.has('Control+D'), true);
+});
+
+test('contribution ownership survives user shortcut synchronization and releases when its window closes', () => {
+	const shortcuts = new TestShortcuts();
+	const fired: string[] = [];
+	using service = new GlobalKeybindingsMainService({ shortcuts, activeWindowId: () => 1, runCommand: () => { fired.push('user'); }, onError: error => { throw error; } });
+	using owner = service.createOwner(1, () => fired.push('screenshot'));
+	owner.update({ ...binding('Control+A'), commandId: 'screenshot' });
+	service.updateKeybindings(1, [binding('Control+B')]);
+	assert.equal(shortcuts.callbacks.has('Control+A'), true);
+	assert.deepEqual(service.updateKeybindings(1, [binding('Control+A')]), { failed: ['Control+A'] });
+	shortcuts.callbacks.get('Control+A')!();
+	assert.deepEqual(fired, ['screenshot']);
+	service.removeWindow(1);
+	assert.equal(shortcuts.callbacks.has('Control+A'), false);
+});
+
+test('contribution global shortcut falls back while a non-owner window has focus', () => {
+	const shortcuts = new TestShortcuts();
+	let fired = 0;
+	using service = new GlobalKeybindingsMainService({ shortcuts, activeWindowId: () => 99, runCommand: () => assert.fail('Wrong routing'), onError: error => { throw error; } });
+	using owner = service.createOwner(1, () => { fired++; });
+	owner.update(binding('Control+A'));
+	shortcuts.callbacks.get('Control+A')!();
+	assert.equal(fired, 1);
 });

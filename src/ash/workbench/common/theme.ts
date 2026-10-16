@@ -1,8 +1,11 @@
+import { localize } from '../../nls.js';
 import { Emitter, type Event } from "../../base/common/event.js";
 import { type IDisposable, toDisposable } from "../../base/common/lifecycle.js";
 import { registerColor } from "../../platform/theme/common/colorUtils.js";
 import { accentBackground, border, contrastBorder, descriptionForeground, foreground, selectionBackground } from "../../platform/theme/common/colors/baseColors.js";
 import type { IColorTheme } from "../../platform/theme/common/themeService.js";
+
+registerColor('screenshot.maskBackground', { dark: '#00000088', light: '#00000088', hcDark: '#000000', hcLight: '#ffffff' }, { description: localize('screenshot.maskDescription', 'Mask outside the screenshot selection.'), owner: 'workbench.screenshot' });
 
 const colorOwner = "workbench.shell";
 const color = (id: string, dark: string, light: string, hcDark: string, hcLight: string, description: string): string =>

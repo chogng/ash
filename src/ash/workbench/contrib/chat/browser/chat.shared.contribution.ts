@@ -17,7 +17,6 @@ import { LanguageModelToolsService } from './tools/languageModelToolsService.js'
 
 import { ChatSessionArchiveActionWording, ChatSessionArchiveActionWordingSettingId } from '../../../../platform/chat/common/sessionArchiveActions.js';
 import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
-import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 
 registerSingleton(IChatSpeechToTextService, ChatSpeechToTextService, InstantiationType.Delayed);
 registerSingleton(IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient, InstantiationType.Delayed);
@@ -38,22 +37,6 @@ registerWorkbenchContribution('workbench.contrib.chatEnablement', WorkbenchPhase
 });
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(Extensions.Configuration);
-
-configurationRegistry.registerConfiguration<boolean>({
-	key: AccessibilityVerbositySettingId.ChatScreenshot,
-	defaultValue: true,
-	scope: ConfigurationScope.WINDOW,
-	schema: { type: 'boolean' },
-	parse(value: unknown): boolean {
-		if (typeof value !== 'boolean') throw new TypeError(localize('chat.screenshot.verbosityInvalid', 'Screenshot accessibility hints must be boolean.'));
-		return value;
-	},
-	setting: {
-		valueType: 'boolean',
-		get title() { return localize('chat.screenshot.verbosityTitle', 'Screenshot accessibility help'); },
-		get description() { return localize('chat.screenshot.verbosityDescription', 'Announce how to open accessibility help in screenshot previews.'); },
-	},
-});
 
 configurationRegistry.registerConfiguration<boolean>({
 	key: ChatAIDisabledSettingId,

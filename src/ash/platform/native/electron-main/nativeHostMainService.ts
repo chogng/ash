@@ -1,3 +1,4 @@
+import { SCREENSHOT_MAX_BYTES, SCREENSHOT_MAX_PIXELS, type DesktopScreenshot } from '../common/native.js';
 import { execFile } from 'node:child_process';
 import { constants } from 'node:fs';
 import { access, chmod, lstat, readFile, unlink, writeFile } from 'node:fs/promises';
@@ -28,6 +29,28 @@ export async function getScreenshot(window: BrowserWindow, rect?: IRectangle): P
 	const bytes = image.toPNG();
 	if (image.isEmpty() || bytes.byteLength === 0 || bytes.byteLength > 20 * 1024 * 1024) throw new Error('Screenshot image is empty or too large');
 	return VSBuffer.wrap(new Uint8Array(bytes));
+}
+
+/** Acquires display pixels only; the workbench owns selection, overlays and output actions. */
+export async function getDesktopScreenshots(): Promise<readonly DesktopScreenshot[]> {
+	const { desktopCapturer, screen } = await import('electron/main');
+	const displays = screen.getAllDisplays();
+	const width = Math.max(...displays.map(display => Math.ceil(display.size.width * display.scaleFactor)));
+	const height = Math.max(...displays.map(display => Math.ceil(display.size.height * display.scaleFactor)));
+	if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0 || width * height > SCREENSHOT_MAX_PIXELS) throw new Error('ScreenshotTooLarge');
+	// Freeze every display before the caller can show overlays, including mixed-DPI desktops.
+	const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width, height }, fetchWindowIcons: false }).catch(error => {
+		throw new Error('ScreenshotUnavailable', { cause: error });
+	});
+	return displays.map(display => {
+		const source = sources.find(candidate => candidate.display_id === String(display.id));
+		// Enumeration order is not a reliable display identity.
+		if (!source || source.thumbnail.isEmpty()) throw new Error('ScreenshotUnavailable');
+		const bytes = source.thumbnail.toPNG();
+		const size = source.thumbnail.getSize();
+		if (!bytes.byteLength || bytes.byteLength > SCREENSHOT_MAX_BYTES || size.width * size.height > SCREENSHOT_MAX_PIXELS) throw new Error('ScreenshotTooLarge');
+		return { displayId: display.id, bounds: { ...display.bounds }, image: VSBuffer.wrap(new Uint8Array(bytes)) };
+	});
 }
 
 /** Reads the desktop process's effective privilege, independently of its App Server. */

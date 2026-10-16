@@ -20,6 +20,7 @@ import type { SettingsContent, SettingsContentItem, SettingsSectionField, Settin
 /** Renders service-backed sections from data while preserving controls and focus across updates. */
 export class SettingsSectionRenderer extends Disposable implements SettingsContent {
 	public get categoryId(): string { return this.model.categoryId; }
+	public get settingIds(): readonly string[] | undefined { return this.model.settingIds; }
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
 	private readonly domNode: HTMLElement;

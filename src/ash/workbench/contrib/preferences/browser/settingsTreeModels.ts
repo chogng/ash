@@ -43,6 +43,7 @@ export interface SettingsContent {
 
 /** Non-configuration service state and actions; Preferences owns their DOM and widgets. */
 export interface SettingsSectionModel {
+	readonly settingIds?: readonly string[];
 	readonly categoryId: string;
 	readonly title: string;
 	readonly description: string;

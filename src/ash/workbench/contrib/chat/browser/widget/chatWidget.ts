@@ -305,6 +305,10 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		this.inputPart.addContext(attachment);
 	}
 
+	captureScreenshot(): Promise<void> {
+		return this.inputPart.captureScreenshot();
+	}
+
 	captureDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void; } | undefined> {
 		return this.inputPart.captureDraft();
 	}

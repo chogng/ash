@@ -1,3 +1,4 @@
+import { ScreenshotMainService } from '../../workbench/contrib/screenshot/electron-main/screenshotMainService.js';
 import { AshWorkbenchName } from '../common/application.js';
 import '../../platform/update/common/update.config.contribution.js';
 import { SystemPolicyService } from '../../platform/policy/node/systemPolicyService.js';
@@ -350,7 +351,7 @@ export class AshApplication extends Disposable {
 					return this.openSessionsWindow(session.workspaceContext.getWorkspace(), session.workspaceContext.getResolvedWorkspace(), options);
 				}
 			},
-			onError: error => console.error('Failed to open Agents Window from a system-wide shortcut', error),
+			onError: error => console.error('Failed to handle a system-wide shortcut', error),
 		}));
 		this.nativeMenubar = process.platform === "darwin"
 			? this._register(new NativeMenubarMainService(createElectronMenubarHost()))
@@ -1414,6 +1415,10 @@ export class AshApplication extends Disposable {
 			...supervisor.routes(window.webContents, () => ({ workspaceId: workspaceContext.getWorkspace().id, workspaceRoot: workspaceContext.getResolvedWorkspace().folders[0]?.uri.fsPath ?? this.profileRoot })),
 			...windowDisposables.add(new OAuthCallbackHost()).routes(),
 			...rendererSystemHostRoutes(window, path => this.directoryPermissionPrompt(path), this.auxiliaryWindowsMainService),
+			...windowDisposables.add(new ScreenshotMainService(window, {
+				entry: this.resolveRendererEntry('screenshot'), webPreferences: this.createSandboxWebPreferences(),
+				router: this.trustedIpcRouter, localization: () => this.activeLanguagePack,
+			}, this.globalKeybindings)).routes(),
 			userConfigurationIpcRoute(this.profileRoot, () => !getWorkspaceRemoteAuthority(workspaceContext.getWorkspace()), openUserConfigurationTextFile),
 			...remoteWindowContext.ipcRoutes,
 			windowOperationIpcRoute(this.windowsMainService, window),
@@ -1744,6 +1749,10 @@ export class AshApplication extends Disposable {
 						...this.mainProcessIpcRoutes(window),
 						...sessionsRelay.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })),
 						...rendererSystemHostRoutes(window, path => this.directoryPermissionPrompt(path), this.auxiliaryWindowsMainService),
+						...windowDisposables.add(new ScreenshotMainService(window, {
+							entry: this.resolveRendererEntry('screenshot'), webPreferences: this.createSandboxWebPreferences(),
+							router: this.trustedIpcRouter, localization: () => this.activeLanguagePack,
+						}, this.globalKeybindings)).routes(),
 						userConfigurationIpcRoute(this.profileRoot, () => !getWorkspaceRemoteAuthority(session.workspaceContext.getWorkspace()), openUserConfigurationTextFile),
 						...remoteWindowContext.ipcRoutes,
 						windowOperationIpcRoute(this.windowsMainService, window),
@@ -1830,8 +1839,8 @@ export class AshApplication extends Disposable {
 		}
 	}
 
-	private resolveRendererEntry(kind: "workbench" | "sessions" | "remoteRuntimeInstall"): RendererEntry {
-		const entry = kind === "workbench"
+	private resolveRendererEntry(kind: "workbench" | "sessions" | "remoteRuntimeInstall" | "screenshot"): RendererEntry {
+		const entry = kind === "screenshot" ? "screenshot" : kind === "workbench"
 			? "workbench"
 			: kind === "sessions"
 				? 'sessions'
