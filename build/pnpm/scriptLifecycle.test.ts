@@ -41,7 +41,7 @@ test("aggregate, test and typecheck commands prepare inputs once and stop on pre
 		"typecheck:renderer": "renderer",
 		"build": "desktop-build",
 		"build:prepared": "desktop-build",
-		"rebuild:native": "electron-dependencies",
+		"prepare:desktop-addons": "electron-dependencies",
 		"prepare:backend": "backend",
 		"prepare:backend:web": "backend-web",
 		"bundle:web": "bundle-web",
@@ -51,7 +51,7 @@ test("aggregate, test and typecheck commands prepare inputs once and stop on pre
 		"test:smoke:ui:no-compile": "electron-ui-tests",
 		"test:smoke:desktop:no-compile": "electron-connected-tests",
 	})) scripts[name] = `node record.ts ${operation}`;
-	// The direct build owns preparation after its dependency rebuild lifecycle hook.
+	// The direct build owns generated inputs after its addon preparation hook.
 	scripts.build = 'node build/prepare.ts && node record.ts desktop-build';
 	await writeFile(join(directory, "package.json"), JSON.stringify({ private: true, type: "module", scripts }));
 	await writeFile(join(directory, "record.ts"), `
@@ -79,6 +79,8 @@ test("aggregate, test and typecheck commands prepare inputs once and stop on pre
 	const executable = script ? process.execPath : pnpm;
 	const prefix = script ? [pnpm] : [];
 	for (const [command, expected, failure] of [
+		["build", ["electron-dependencies", "protocol", "localization", "common", "extensions", "icons", "desktop-build"], ""],
+		["build", ["electron-dependencies"], "electron-dependencies"],
 		["test:main", ["styles", "tools", "output", "protocol", "localization", "common", "extensions", "icons", "unit", "unit-runner"], ""],
 		["test:main", ["styles", "tools", "output", "protocol", "localization", "common", "extensions", "icons", "unit"], "unit"],
 		["test:main", ["styles"], "styles"],
@@ -132,12 +134,17 @@ test("aggregate, test and typecheck commands prepare inputs once and stop on pre
 		const commands = smokeSteps.filter(step => step.startsWith('Check sources and build Desktop and Web on every platform') || step.includes(`if: matrix.surface == '${surface}'`)).flatMap(step => {
 			const run = step.match(/^        run: (.+)$/m)?.[1];
 			assert.ok(run, step);
-			return run === '|' ? [...step.matchAll(/^          (pnpm .+)$/gm)].map(match => match[1]) : [run];
+			return run === '|' ? [...step.matchAll(/^          ((?:pnpm |node |\.\/node_modules\/bun\/bin\/bun\.exe ).+)$/gm)].map(match => match[1]) : [run];
 		});
 		let status: number | null = 0;
 		for (const command of commands) {
-			assert.match(command, /^pnpm (run|exec) /);
-			const result = spawnSync(executable, [...prefix, ...command.split(' ').slice(1)], {
+			// CI's direct generator/checker invocations participate in the same
+			// ordering and failure checks as its pnpm lifecycle commands.
+			const pnpmCommand = command.startsWith('pnpm ');
+			const args = pnpmCommand ? [...prefix, ...command.split(' ').slice(1)]
+				: command.startsWith('node ') ? command.split(' ').slice(1)
+					: ['record.ts', command.includes('tsconfig.renderer.json') ? 'renderer' : 'automation'];
+			const result = spawnSync(pnpmCommand ? executable : process.execPath, args, {
 				cwd: directory, env: { ...process.env, FAIL_OPERATION: failure }, encoding: 'utf8', windowsHide: true, timeout: 30_000,
 			});
 			assert.equal(result.error, undefined);

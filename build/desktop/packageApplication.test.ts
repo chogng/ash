@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { cp, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
@@ -48,3 +48,32 @@ test('application copying retains hoisted and nested dependency resolution witho
 	}
 	await assert.rejects(readFile(join(destination, 'build/source.ts')), { code: 'ENOENT' });
 });
+
+for (const platform of ['darwin', 'win32', 'linux'] as const) {
+	test(`${platform} application copying retains addon loaders and attribution without build inputs or duplicate binaries`, async t => {
+		const root = await mkdtemp(join(tmpdir(), 'ash-packaged-addons-'));
+		t.after(() => rm(root, { recursive: true, force: true }));
+		const source = join(root, 'source');
+		const destination = join(root, 'application');
+		const files: Record<string, string> = { 'package.json': '{}' };
+		for (const [name, binary] of [['native-keymap', 'keymapping.node'], ['native-is-elevated', 'iselevated.node']]) {
+			for (const path of ['package.json', 'index.js', 'License.txt', 'ThirdPartyNotices.txt', 'src/keyboard.cc', 'deps/table.inc', 'binding.gyp', 'build/Makefile', 'build/Release/obj.target/source.o', `build/Release/${binary}`, `bin/platform/${binary}`, 'README.md']) {
+				files[`node_modules/${name}/${path}`] = path;
+			}
+		}
+		for (const [path, content] of Object.entries(files)) {
+			await mkdir(join(source, path, '..'), { recursive: true });
+			await writeFile(join(source, path), content);
+		}
+		await cp(source, destination, {
+			recursive: true,
+			filter: path => !ignoreApplicationFile(`/${relative(source, path).split(sep).join('/')}`, platform),
+		});
+		for (const [path, content] of Object.entries(files)) {
+			const expected = path === 'package.json' || (!path.includes('native-is-elevated') || platform === 'win32')
+				&& /\/(?:package\.json|index\.js|License\.txt|ThirdPartyNotices\.txt|build\/Release\/(?:keymapping|iselevated)\.node)$/u.test(path);
+			if (expected) assert.equal(await readFile(join(destination, path), 'utf8'), content);
+			else await assert.rejects(stat(join(destination, path)), { code: 'ENOENT' });
+		}
+	});
+}

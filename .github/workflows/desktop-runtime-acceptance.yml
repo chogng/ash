@@ -55,6 +55,12 @@ jobs:
         run: |
           python -B scripts/install_python_tools.py
           pnpm install --frozen-lockfile
+      - name: Restore desktop addon artifacts
+        id: desktop-addons
+        uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4
+        with:
+          path: .build/desktop-addons
+          key: desktop-addons-v1-${{ matrix.runner }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml', 'build/desktop/addons.ts') }}
       - name: Install browser used to render Windows application icons
         if: runner.os == 'Windows'
         run: pnpm exec playwright install chromium
@@ -81,6 +87,12 @@ jobs:
             pnpm run package:darwin:bundle --unsigned --backend-package "$ASH_ACCEPTANCE_RUNTIME_PACKAGE" --output .build/desktop-runtime-ci
           fi
           node --input-type=module -e "import {appendFileSync,readFileSync} from 'node:fs'; import {resolve,join} from 'node:path'; const mac=process.platform==='darwin'; const bundle=resolve('.build/desktop-runtime-ci', mac ? 'Ash-darwin-'+process.arch+'/Ash.app' : 'Ash-win32-x64'); const electron=mac ? join(bundle,'Contents/MacOS/Ash') : join(bundle,'Ash.exe'); const version=JSON.parse(readFileSync('node_modules/electron/package.json','utf8')).version; appendFileSync(process.env.GITHUB_ENV, 'ASH_PACKAGED_BUNDLE='+bundle+'\nASH_TEST_ELECTRON_PATH='+electron+'\nASH_TEST_ELECTRON_VERSION='+version+'\n');"
+      - name: Save verified desktop addon artifacts
+        if: github.ref == 'refs/heads/main' && steps.desktop-addons.outputs.cache-hit != 'true'
+        uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684 # v4
+        with:
+          path: .build/desktop-addons
+          key: ${{ steps.desktop-addons.outputs.cache-primary-key }}
       - name: Check packaged automation types
         run: ./node_modules/bun/bin/bun.exe check -p test/automation/tsconfig.json --all
       - name: Verify real Desktop startup, quit, file and terminal operations

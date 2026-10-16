@@ -211,6 +211,14 @@ bazel test //cli:tui-real-scenarios --test_output=errors --test_env=PATH
 
 Sherpa ONNX 静态库使用按版本共享的校验缓存，位于 `third_party/.cache/sherpa-onnx/`。仓库 Cargo 入口与产品构建会准备并复用该资源，详见 [资源锁定与离线构建](../third_party/sherpa-onnx/README.md)。
 
+### Electron 平台模块
+
+`pnpm install` 不编译 `native-keymap` 和 `native-is-elevated`。Desktop 的 build/dev 准备入口执行 `pnpm prepare:desktop-addons`：使用当前 Electron 加载实际 `.node` 文件并检查导出；现有产物可用时不启动 rebuild，也不遍历依赖树。Windows 额外准备权限检测模块，其他平台只准备键盘布局模块。仅 Web 构建和类型检查无需这些二进制。
+
+缺失或加载失败时，先从 `.build/desktop-addons/` 恢复与模块源码、平台、架构和 Electron 精确版本匹配的产物，校验 SHA-256 并重新验证加载；没有可用缓存才调用编译器，编译后仍须通过 Electron 加载检查。CI 复用精确 lockfile 和准备脚本对应的缓存。`pnpm prepare:desktop-addons --force` 可显式重新编译；缓存不替代各平台的行为测试。
+
+macOS 和 Windows 发布组包使用同一个准备入口，不再无条件重新编译。交付时保留模块加载器、许可证和唯一的 Release 二进制，排除源码、构建中间文件和重复的 `bin/` 副本；非 Windows 包排除整个权限检测模块。
+
 ### 清理与缓存
 
 `pnpm clean` 删除 `.build/`、旧 `target/`、`dist/`、旧 `test/integration/browser/dist/`，以及根目录和 `build/`、`scripts/` 内的 Python、pytest、Ruff 缓存；同时删除本地 `node_modules/` 内的 `.vite/`、`.vite-temp/` 缓存。清理前停止构建和开发进程；下次启动会重新构建。

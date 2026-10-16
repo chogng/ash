@@ -2,7 +2,7 @@ import { packager } from '@electron/packager';
 import { writeApplicationChecksums } from './host.ts';
 import { ignoreApplicationFile, productionDependencyDeployOptions } from './packageApplication.ts';
 import { pruneElectronLocales } from './packageLocales.ts';
-import { rebuild } from '@electron/rebuild';
+import { prepareElectronAddons } from './addons.ts';
 import { spawn } from 'node:child_process';
 import { cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
@@ -72,14 +72,7 @@ async function assembleBundle(stage: string, bundlePath: string, options: Map<st
 	const electronMetadata = JSON.parse(await readFile(join(appRoot, 'node_modules', 'electron', 'package.json'), 'utf8'));
 	await lstat(python);
 	process.env.NODE_GYP_FORCE_PYTHON = python;
-	await rebuild({
-		buildPath: appStage,
-		electronVersion: electronMetadata.version,
-		platform: 'win32',
-		arch: 'x64',
-		onlyModules: ['native-keymap', 'native-is-elevated'],
-		force: true,
-	});
+	await prepareElectronAddons(appStage);
 
 	await writeApplicationChecksums(appStage);
 
@@ -101,7 +94,7 @@ async function assembleBundle(stage: string, bundlePath: string, options: Map<st
 		asar: false,
 		prune: false,
 		derefSymlinks: true,
-		ignore: ignoreApplicationFile,
+		ignore: path => ignoreApplicationFile(path),
 		afterExtract: [pruneElectronLocales],
 	});
 	if (packagePaths.length !== 1 || resolve(packagePaths[0]) !== bundlePath) throw new Error('Electron packager returned an unexpected bundle path');

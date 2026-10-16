@@ -130,6 +130,12 @@ jobs:
         run: python -B scripts/install_python_tools.py
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
+      - name: Restore desktop addon artifacts
+        id: desktop-addons
+        uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4
+        with:
+          path: .build/desktop-addons
+          key: desktop-addons-v1-${{ matrix.runner }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml', 'build/desktop/addons.ts') }}
       - name: Install Chromium
         if: matrix.surface == 'browser'
         run: pnpm exec playwright install --with-deps chromium chrome
@@ -140,9 +146,15 @@ jobs:
           node build/prepare.ts
           ./node_modules/bun/bin/bun.exe check -p tsconfig.renderer.json --all
           ./node_modules/bun/bin/bun.exe check -p test/automation/tsconfig.json --all
-          pnpm run rebuild:native
+          pnpm run prepare:desktop-addons
           pnpm run build:prepared
           pnpm run bundle:web
+      - name: Save verified desktop addon artifacts
+        if: github.ref == 'refs/heads/main' && steps.desktop-addons.outputs.cache-hit != 'true'
+        uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684 # v4
+        with:
+          path: .build/desktop-addons
+          key: ${{ steps.desktop-addons.outputs.cache-primary-key }}
       - name: Test browser integration
         if: matrix.surface == 'browser'
         run: pnpm run test:browser:integration:prepared --project=chromium --project=chrome-gpu
