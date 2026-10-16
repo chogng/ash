@@ -54,6 +54,7 @@ SyntaxDocument::open / open_with_limits
 
 SyntaxDocument::apply_edit / apply_edits
   → revision / range / UTF-8 boundary / size validation
+  → 缩去替换两端相同的文本；全文未变时只推进 revision
   → Rope 行/字节/字符度量
   → Tree::edit on a cheap tree clone
   → 在共享节点的 Rope fork 上 remove/insert
@@ -76,6 +77,10 @@ SyntaxDocument::selection_ranges(exact byte range)
 编辑校验发生在文本修改之前。解析使用已应用 edit 的旧 tree clone；如果 tree-sitter 取消解析，
 丢弃未提交的 Rope/tree fork，权威文本、revision/tree 保持不变。解析成功仍可包含可恢复的语法错误，这些
 错误作为 diagnostics 返回，不会导致整次操作失败。
+
+宿主可能为仅结构变化的 revision 提交相同全文。此时保留已有 tree、注入解析器与事实缓存；
+包含局部修改的宽范围替换只把实际变化送入解析器。缩减保留 UTF-8 字符边界，并在原始 batch
+通过重叠校验后执行，不改变宿主 revision 或替换结果。
 
 grammar query 可能为父节点提供通用分类，并为子节点提供更具体分类，因此 highlight capture
 可以重叠。range 顺序是确定的；consumer 应让较晚、较窄的 capture 覆盖较早 capture。各结果
@@ -118,7 +123,9 @@ host adapter；修改 symbol category 时必须同步检查未来 workspace inde
 
 ## 共用后台树的按需查询
 
-Desktop 共享模式调用 `update_edits` 更新树而不计算整份 snapshot。`editor_highlight` 只查询
+Desktop 共享模式调用 `update_edits` 更新树而不计算整份 snapshot，并取得实际应用的 UTF-8 编辑范围。
+App Server 从旧 Rope 快照生成这些范围的 UTF-16 facts edits，避免把未变全文快照当作所有结构的删除和重建。
+同一查询前多次更新的解析计时累计返回，覆盖一次输入引起的多个模型 revision。`editor_highlight` 只查询
 视口并返回 UTF-16 行捕获，`editor_brackets` 返回视口及祖先括号，`editor_facts` 从同一树
 用解析器实际使用的 edited Tree 记录 changed ranges，与显式编辑范围一起定位顶层子树区间，
 仅对这些区间重做查询；不再独立编辑另一份旧树后重复做整树比较。

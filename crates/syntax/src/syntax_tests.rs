@@ -737,12 +737,16 @@ fn package_folding_rules_match_the_worker_corpus_after_edits_and_undo() {
                 );
             }
             match revision {
-                1 => document
-                    .update_edits(DocumentRevision::new(2), &[SyntaxEdit::insert(0, "\n")])
-                    .unwrap(),
-                2 => document
-                    .update_edits(DocumentRevision::new(3), &[SyntaxEdit::replace(0..1, "")])
-                    .unwrap(),
+                1 => {
+                    document
+                        .update_edits(DocumentRevision::new(2), &[SyntaxEdit::insert(0, "\n")])
+                        .unwrap();
+                }
+                2 => {
+                    document
+                        .update_edits(DocumentRevision::new(3), &[SyntaxEdit::replace(0..1, "")])
+                        .unwrap();
+                }
                 _ => (),
             }
         }

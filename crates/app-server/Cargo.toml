@@ -38,6 +38,7 @@ exec-server-protocol = { workspace = true }
 external-agent-migration = { workspace = true }
 serde-saphyr = { workspace = true, features = ["serialize"] }
 pulldown-cmark = { workspace = true }
+ropey = { workspace = true }
 iana-time-zone = { workspace = true }
 sleep = { workspace = true }
 git-attribution = { workspace = true }

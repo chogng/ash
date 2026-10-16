@@ -622,7 +622,12 @@ test('Rust facts apply text shifts and splices, and recover from a cancelled uno
 	replies.push(delta(4, { baseRevision: null, edits: [], symbols: { ...empty, items: [sym('fresh', 0)] }, folds: empty, diagnostics: empty }));
 	const recovered = (await session.request('facts', {}, signal())).facts!;
 	assert.deepEqual(recovered.symbols.map(symbol => symbol.name), ['fresh']);
-	assert.deepEqual(requested, [undefined, 1, 2, 3]);
+	replies.push(delta(5, { baseRevision: 4, edits: [], symbols: empty, folds: empty, diagnostics: empty }));
+	const unchanged = (await session.request('facts', {}, signal())).facts!;
+	assert.equal(unchanged.symbols, recovered.symbols, 'unchanged revisions preserve symbol identities');
+	assert.equal(unchanged.folds, recovered.folds);
+	assert.equal(unchanged.diagnostics, recovered.diagnostics);
+	assert.deepEqual(requested, [undefined, 1, 2, 3, 4]);
 	session.dispose();
 });
 

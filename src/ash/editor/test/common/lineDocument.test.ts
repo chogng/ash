@@ -249,3 +249,34 @@ test('plain model identities and metadata remain stable before requesting the fi
 	assert.throws(() => new TextModel('text', { metadata: { invalid: Infinity } }), /finite/);
 	assert.throws(() => new TextModel('text', { lineIdGenerator: () => '' }), /non-empty/);
 });
+
+
+test('in-line edit batches and history preserve line points while equal-height replacements allocate new lines', () => {
+	let generated = 0;
+	using model = new TextModel('first\n😀second\nlast', {
+		lineIds: ['a', 'b', 'c'], lineIdGenerator: () => `new:${++generated}`,
+	});
+	const original = model.lineDocument;
+	model.applyOperations([
+		{ range: new Range(1, 6, 1, 6), text: '!' },
+		{ range: new Range(2, 3, 2, 9), text: '中文' },
+	]);
+	assert.equal(model.getText(), 'first!\n😀中文\nlast');
+	assert.deepEqual([0, 1, 2].map(index => model.getLineId(index)), ['a', 'b', 'c']);
+	assert.deepEqual(model.textPositionAt({ lineId: 'b', offset: 4 }), new Position(2, 5));
+	assert.equal(original.getText(), 'first\n😀second\nlast');
+	model.undo();
+	assert.equal(model.getText(), original.getText());
+	model.redo();
+	assert.deepEqual([0, 1, 2].map(index => model.getLineId(index)), ['a', 'b', 'c']);
+	assert.equal(generated, 0);
+
+	model.pushStackElement();
+	model.applyOperations([{ range: new Range(1, 1, 2, 5), text: 'replacement\nline' }]);
+	assert.deepEqual([0, 1, 2].map(index => model.getLineId(index)), ['a', 'new:1', 'c']);
+	model.undo();
+	assert.deepEqual([0, 1, 2].map(index => model.getLineId(index)), ['a', 'b', 'c']);
+	model.redo();
+	assert.deepEqual([0, 1, 2].map(index => model.getLineId(index)), ['a', 'new:1', 'c']);
+	assert.equal(generated, 1);
+});

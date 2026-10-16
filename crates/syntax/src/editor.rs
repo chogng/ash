@@ -298,8 +298,12 @@ impl EditorFacts {
         let old_folds = previous
             .map(|facts| facts.folds.as_slice())
             .unwrap_or_default();
+        // Consumers move ranges inside a multiline replacement even when its
+        // line count is unchanged. Such edits still need a correcting patch.
         let folds = if previous.is_some_and(|facts| Arc::ptr_eq(&facts.folds, &self.folds))
-            && edits.iter().all(|edit| edit[2] == edit[4])
+            && edits
+                .iter()
+                .all(|edit| edit[0] == edit[2] && edit[2] == edit[4])
         {
             EditorFactsSplice {
                 start: old_folds.len(),

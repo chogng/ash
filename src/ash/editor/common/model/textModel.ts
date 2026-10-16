@@ -1966,10 +1966,20 @@ export class TextModel implements ITextModel {
 		const reservedLineIds = new Set<LineId>();
 		let nextLineIds: readonly LineId[] | undefined;
 		if (previousLineIds) {
-			const projectedLineIds = this.projectLineIds(prepared);
-			nextLineIds = context.lineIds === undefined
-				? this.mapLineIds(projectedLineIds, reservedLineIds)
-				: this.validateCommittedLineIds(context.lineIds, projectedLineIds.length);
+			if (context.lineIds !== undefined) {
+				// History retains immutable identity sequences created by this model.
+				// Only the resulting line count changes; the identities need no revalidation.
+				const expected = this.buffer.getLineCount() + prepared.reduce((delta, edit) =>
+					delta + countEOL(edit.text)[0] - (edit.range.endLineNumber - edit.range.startLineNumber), 0);
+				if (context.lineIds.length !== expected) throw new Error("History line identities do not match the edited buffer");
+				nextLineIds = context.lineIds;
+			} else if (prepared.every(edit => edit.range.startLineNumber === edit.range.endLineNumber && countEOL(edit.text)[0] === 0)) {
+				// In-line edits preserve every logical line. Reuse the identity sequence
+				// and its lookup index instead of copying all lines on each keystroke.
+				nextLineIds = previousLineIds;
+			} else {
+				nextLineIds = this.mapLineIds(this.projectLineIds(prepared), reservedLineIds);
+			}
 		}
 
 		const bufferResult = this.buffer.applyEdits(
@@ -2008,7 +2018,7 @@ export class TextModel implements ITextModel {
 		if (nextLineIds) {
 			if (nextLineIds.length !== this.buffer.getLineCount()) throw new Error("TextModel line identity mapping diverged from the ITextBuffer");
 			this.plainLineIds = nextLineIds;
-			for (const lineId of context.lineIds === undefined ? reservedLineIds : nextLineIds) this.issuedLineIds.add(lineId);
+			for (const lineId of reservedLineIds) this.issuedLineIds.add(lineId);
 			this.plainLineSnapshot = undefined;
 		}
 		this.trackedRanges.acceptChanges(appliedChanges);
@@ -2237,13 +2247,6 @@ export class TextModel implements ITextModel {
 
 	private mapLineIds(projected: readonly (LineId | undefined)[], reserved: Set<LineId>): readonly LineId[] {
 		return Object.freeze(projected.map(lineId => lineId ?? this.allocateLineId(reserved)));
-	}
-
-	private validateCommittedLineIds(lineIds: readonly LineId[], expected: number): readonly LineId[] {
-		if (lineIds.length !== expected) {
-			throw new RangeError(`Committed TextModel state requires exactly ${expected} line ids`);
-		}
-		return this.validateLineIdentities(lineIds);
 	}
 
 	private validateLineIdentities(lineIds: readonly LineId[]): readonly LineId[] {

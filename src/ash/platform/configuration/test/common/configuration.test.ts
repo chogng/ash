@@ -35,6 +35,26 @@ test('configuration tags are validated before replacing live registrations', () 
 	assert.throws(() => registry.registerConfiguration({ key: 'test.invalid', defaultValue: false, parse: Boolean, tags: [' '] }), /Configuration tags/);
 });
 
+test('reused configuration reads observe new layers inside change listeners and preserve language overrides', async () => {
+	const registry = new ConfigurationRegistry();
+	registry.updateConfigurations({ add: [{ properties: { 'cache.palette': { type: 'object', default: { enabled: true }, scope: 5 } } }], remove: [] });
+	using service = new WorkbenchConfigurationService({ registry, source: '{"[javascript]":{"cache.palette":{"enabled":false}}}' });
+	const initial = service.getValue('cache.palette');
+	assert.deepEqual(initial, { enabled: true });
+	assert.ok(Object.isFrozen(initial));
+	const observed: unknown[] = [];
+	using listener = service.onDidChangeConfiguration(event => {
+		if (event.affectsConfiguration('cache.palette')) observed.push(service.getValue('cache.palette'));
+	});
+	await service.updateValue('cache.palette', { enabled: true, label: 'updated' });
+	assert.deepEqual(service.getValue('cache.palette'), { enabled: true, label: 'updated' });
+	assert.deepEqual(service.getValue('cache.palette', { overrideIdentifier: 'javascript' }), { enabled: false, label: 'updated' });
+	await service.updateValue('cache.palette', undefined);
+	assert.deepEqual(service.getValue('cache.palette'), { enabled: true });
+	assert.deepEqual(observed, [{ enabled: true, label: 'updated' }, { enabled: true }]);
+	assert.deepEqual(initial, { enabled: true }, 'previous configuration snapshots remain immutable');
+});
+
 test('contributed configuration replacement updates live values atomically and preserves stored user settings', async () => {
 	const registry = new ConfigurationRegistry();
 	const source = '// preserved user settings\n{"contributed.value":"saved","[typescript]":{"contributed.value":"typed"}}\n';

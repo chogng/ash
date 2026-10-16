@@ -214,6 +214,7 @@ function spliceFacts<T>(previous: readonly T[], change: SyntaxFactsSplice<T>): r
 	if (change.start < 0 || change.deleteCount < 0 || change.start + change.deleteCount > previous.length) {
 		throw new Error('Invalid syntax facts splice');
 	}
+	if (change.deleteCount === 0 && change.items.length === 0) return previous;
 	return [...previous.slice(0, change.start), ...change.items, ...previous.slice(change.start + change.deleteCount)];
 }
 function shiftPosition(point: SyntaxPosition, edit: SyntaxFactsDelta['edits'][number]): { lineNumber: number; column: number; } {

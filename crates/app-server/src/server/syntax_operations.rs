@@ -394,44 +394,6 @@ impl AppServer {
                 .ok_or_else(invalid_params)?;
             edits.push(SyntaxEdit::replace(start..end, edit.text));
         }
-        let mut facts_edits = Vec::new();
-        if session.facts.is_some() {
-            let offsets = edits
-                .iter()
-                .flat_map(|edit| [edit.range().start, edit.range().end])
-                .collect();
-            let positions = Utf16PositionIndex::for_offsets(&session.document, offsets);
-            let mut ordered = edits.iter().collect::<Vec<_>>();
-            ordered.sort_by_key(|edit| std::cmp::Reverse(edit.range().start));
-            for edit in ordered {
-                let start = positions.position(edit.range().start);
-                let end = positions.position(edit.range().end);
-                let rows = edit
-                    .replacement()
-                    .bytes()
-                    .filter(|byte| *byte == b'\n')
-                    .count();
-                let column = edit
-                    .replacement()
-                    .rsplit('\n')
-                    .next()
-                    .unwrap()
-                    .encode_utf16()
-                    .count();
-                facts_edits.push([
-                    start.line_index,
-                    start.column_index,
-                    end.line_index,
-                    end.column_index,
-                    start.line_index + rows,
-                    if rows == 0 {
-                        start.column_index + column
-                    } else {
-                        column
-                    },
-                ]);
-            }
-        }
         match session.analysis {
             SessionAnalysis::Complete(_) => {
                 let snapshot = session
@@ -441,13 +403,57 @@ impl AppServer {
                 session.analysis = SessionAnalysis::Complete(snapshot);
             }
             SessionAnalysis::Shared(_) => {
+                // A Rope snapshot shares untouched nodes. Preserve old coordinates
+                // until the document has atomically validated and reduced the batch.
+                let previous_text: Option<ropey::Rope> = session
+                    .facts
+                    .as_ref()
+                    .map(|_| session.document.text().into());
                 let started = Instant::now();
-                session
+                let edits = session
                     .document
                     .update_edits(DocumentRevision::new(params.revision), &edits)
                     .map_err(syntax_error)?;
-                session.parse_ms = Some(started.elapsed().as_secs_f64() * 1000.0);
+                session.parse_ms = Some(
+                    session.parse_ms.unwrap_or(0.0) + started.elapsed().as_secs_f64() * 1000.0,
+                );
                 session.analysis = SessionAnalysis::Shared(None);
+                let mut facts_edits = Vec::new();
+                if let Some(previous_text) = previous_text {
+                    let offsets = edits
+                        .iter()
+                        .flat_map(|edit| [edit.range().start, edit.range().end])
+                        .collect();
+                    let positions = Utf16PositionIndex::for_text(previous_text.slice(..), offsets);
+                    for edit in &edits {
+                        let start = positions.position(edit.range().start);
+                        let end = positions.position(edit.range().end);
+                        let rows = edit
+                            .replacement()
+                            .bytes()
+                            .filter(|byte| *byte == b'\n')
+                            .count();
+                        let column = edit
+                            .replacement()
+                            .rsplit('\n')
+                            .next()
+                            .unwrap()
+                            .encode_utf16()
+                            .count();
+                        facts_edits.push([
+                            start.line_index,
+                            start.column_index,
+                            end.line_index,
+                            end.column_index,
+                            start.line_index + rows,
+                            if rows == 0 {
+                                start.column_index + column
+                            } else {
+                                column
+                            },
+                        ]);
+                    }
+                }
                 if let Some((_, pending)) = &mut session.acknowledged_facts {
                     pending.extend_from_slice(&facts_edits);
                     if pending.len() > 1024 {
@@ -743,11 +749,14 @@ impl Utf16PositionIndex {
         Self::for_offsets(document, byte_offsets)
     }
 
-    fn for_offsets(document: &SyntaxDocument, mut byte_offsets: Vec<usize>) -> Self {
+    fn for_offsets(document: &SyntaxDocument, byte_offsets: Vec<usize>) -> Self {
+        Self::for_text(document.text(), byte_offsets)
+    }
+
+    fn for_text(text: ropey::RopeSlice<'_>, mut byte_offsets: Vec<usize>) -> Self {
         byte_offsets.sort_unstable();
         byte_offsets.dedup();
 
-        let text = document.text();
         // Small patches use Rope metrics instead of walking from the document's start.
         // Full snapshots keep the sorted linear walk, avoiding a tree lookup per field.
         if byte_offsets.len() <= 128 {

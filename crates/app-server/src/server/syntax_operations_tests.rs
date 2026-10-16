@@ -826,3 +826,115 @@ fn shared_fact_patches_match_full_results_with_skipped_versions_and_unicode_boun
     }
     server.close_connection(connection);
 }
+
+#[test]
+fn shared_markdown_snapshot_updates_send_only_effective_utf16_fact_edits() {
+    let server = AppServer::new(
+        Arc::new(ThreadController::with_store(Arc::new(
+            InMemoryThreadStore::default(),
+        ))),
+        Arc::new(crate::local::ProviderModelService::new(Arc::new(EchoModel))),
+    );
+    let connection = server.connection();
+    let cancellation = ash_async_utils::CancellationSource::new();
+    let original = (0..20_000)
+        .map(|i| format!("# Section{i} é😀\n\ncontent\n\ntext\n"))
+        .collect::<String>();
+    let changed = original.replacen("é😀", "ê🦀", 1);
+    let query = |revision, base| json!({"documentId":"snapshots","operationId":"facts","revision":revision,"kind":"facts","tabSize":4,"factsRevision":base,"factsTabSize":4,"ranges":[],"lineIndex":null,"lines":[]});
+    server
+        .syntax_open_shared(
+            &connection,
+            &json!({"documentId":"snapshots","language":"markdown","revision":1,"text":original}),
+        )
+        .unwrap();
+    let first: ash_app_server_protocol::protocol::syntax::SyntaxQueryResult =
+        serde_json::from_value(
+            server
+                .syntax_query(&connection, &query(1, None), &cancellation.token())
+                .unwrap(),
+        )
+        .unwrap();
+    let first = first.facts.unwrap();
+    let mut current = AppliedFacts {
+        revision: 1,
+        symbols: first.symbols.items,
+        folds: first.folds.items,
+        diagnostics: first.diagnostics.items,
+    };
+    assert_eq!(current.symbols.len(), 20_000);
+    assert_eq!(
+        current.folds.last().map(|f| (f.0, f.1)),
+        Some((99_995, 99_999))
+    );
+    let mut previous_text = &original;
+    for (revision, text) in [(2, &original), (3, &changed), (4, &changed), (5, &original)] {
+        server.syntax_update(&connection, &json!({"documentId":"snapshots","previousRevision":revision-1,"revision":revision,"edits":[{"startOffset":0,"endOffset":previous_text.encode_utf16().count(),"text":text}]})).unwrap();
+        previous_text = text;
+        // Skip a response to cover accumulation across an unchanged revision and
+        // an actual edit, including the base retained after a discarded response.
+        if revision == 4 {
+            continue;
+        }
+        let response = server
+            .syntax_query(
+                &connection,
+                &query(revision, Some(current.revision)),
+                &cancellation.token(),
+            )
+            .unwrap();
+        assert!(
+            serde_json::to_vec(&response).unwrap().len() < 2000,
+            "snapshot edits must not resend 20,000 symbols and folds"
+        );
+        let patch: ash_app_server_protocol::protocol::syntax::SyntaxQueryResult =
+            serde_json::from_value(response).unwrap();
+        let patch = patch.facts.unwrap();
+        assert_eq!(patch.base_revision, Some(current.revision));
+        if revision == 2 {
+            assert!(patch.edits.is_empty());
+            assert!(patch.symbols.items.is_empty());
+            assert!(patch.folds.items.is_empty());
+        } else {
+            assert_eq!(patch.edits, vec![[0, 11, 0, 14, 0, 14]]);
+        }
+        for edit in patch.edits {
+            current.apply_edit(edit);
+        }
+        current.symbols.splice(
+            patch.symbols.start..patch.symbols.start + patch.symbols.delete_count,
+            patch.symbols.items,
+        );
+        current.folds.splice(
+            patch.folds.start..patch.folds.start + patch.folds.delete_count,
+            patch.folds.items,
+        );
+        current.diagnostics.splice(
+            patch.diagnostics.start..patch.diagnostics.start + patch.diagnostics.delete_count,
+            patch.diagnostics.items,
+        );
+        current.revision = revision;
+        // Query a separate session so checking against a cold parse cannot alter
+        // the incremental session's acknowledged base or pending changes.
+        server
+            .syntax_open_shared(
+                &connection,
+                &json!({"documentId":"cold","language":"markdown","revision":revision,"text":text}),
+            )
+            .unwrap();
+        let mut cold_query = query(revision, None);
+        cold_query["documentId"] = json!("cold");
+        let cold: ash_app_server_protocol::protocol::syntax::SyntaxQueryResult =
+            serde_json::from_value(
+                server
+                    .syntax_query(&connection, &cold_query, &cancellation.token())
+                    .unwrap(),
+            )
+            .unwrap();
+        let cold = cold.facts.unwrap();
+        assert_eq!(current.symbols, cold.symbols.items);
+        assert_eq!(current.folds, cold.folds.items);
+        assert_eq!(current.diagnostics, cold.diagnostics.items);
+    }
+    server.close_connection(connection);
+}

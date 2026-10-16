@@ -48,6 +48,7 @@ export class WorkbenchConfigurationService extends Disposable implements IConfig
 	private defaultConfiguration = ConfigurationModel.createEmptyModel(configurationModelLog);
 	private userConfiguration = this.defaultConfiguration;
 	private effectiveConfiguration = this.defaultConfiguration;
+	private consolidated: { base: ConfigurationModel; workspace: ConfigurationModel; policy: ConfigurationModel; model: ConfigurationModel; } | undefined;
 	private workspaceConfiguration = this.defaultConfiguration;
 	private policyConfiguration = this.defaultConfiguration;
 	private readonly folderConfigurations = new Map<string, { root: URI; resource: FolderConfiguration; model: ConfigurationModel; }>();
@@ -297,6 +298,15 @@ export class WorkbenchConfigurationService extends Disposable implements IConfig
 	}
 
 	private resolveSection(section: string, overrides?: IConfigurationOverrides): unknown {
+		if (overrides === undefined) {
+			const base = this.effectiveConfiguration, workspace = this.workspaceConfiguration, policy = this.policyConfiguration;
+			// Layers are immutable snapshots. Reuse their combined read model until
+			// an owner replaces a layer, including reads made inside change events.
+			if (!this.consolidated || this.consolidated.base !== base || this.consolidated.workspace !== workspace || this.consolidated.policy !== policy) {
+				this.consolidated = { base, workspace, policy, model: base.merge(workspace, policy) };
+			}
+			return this.consolidated.model.getValue(section);
+		}
 		return resolveConfiguration(this.state(), section, overrides);
 	}
 

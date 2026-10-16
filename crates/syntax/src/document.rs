@@ -195,11 +195,15 @@ impl SyntaxDocument {
     }
 
     /// Updates the shared tree without eagerly deriving facts or whole-document tokens.
+    ///
+    /// Returns the effective edits in descending pre-edit byte order. Hosts must use
+    /// these same changes to shift retained facts: a broad or unchanged snapshot is
+    /// not a replacement of every symbol and fold in the document.
     pub fn update_edits(
         &mut self,
         next_revision: DocumentRevision,
         edits: &[SyntaxEdit],
-    ) -> Result<(), SyntaxError> {
+    ) -> Result<Vec<SyntaxEdit>, SyntaxError> {
         if next_revision <= self.revision {
             return Err(SyntaxError::NonIncreasingRevision {
                 current: self.revision,
@@ -215,6 +219,19 @@ impl SyntaxDocument {
         let next_len = self.text.len_bytes() - removed_len + replacement_len;
         validate_document_size(next_len, self.limits)?;
 
+        // Hosts can replace a whole snapshot for a structural-only revision, or
+        // send a broad replacement containing a small text change. Preserve the
+        // unchanged input so Tree-sitter and the fact caches can reuse it. Validate
+        // the original batch first: shrinking edits must not conceal overlaps.
+        let reduced = edits
+            .into_iter()
+            .filter_map(|edit| reduce_edit(&self.text, edit))
+            .collect::<Vec<_>>();
+        if reduced.is_empty() {
+            self.revision = next_revision;
+            return Ok(reduced);
+        }
+        let edits = reduced.iter().collect::<Vec<_>>();
         let parsed = parse_edits(&mut self.parser, &self.text, &self.tree, &edits)?;
 
         // Commit only after parsing succeeds. The fork shares untouched Rope nodes,
@@ -229,8 +246,40 @@ impl SyntaxDocument {
         self.tree = parsed.tree;
         self.injection_cache.get_mut().clear();
         self.revision = next_revision;
-        Ok(())
+        Ok(reduced)
     }
+}
+
+fn reduce_edit(text: &Rope, edit: &SyntaxEdit) -> Option<SyntaxEdit> {
+    let source = text.byte_slice(edit.range.clone());
+    let replacement = edit.replacement();
+    let mut prefix = source
+        .bytes()
+        .zip(replacement.bytes())
+        .take_while(|(old, new)| old == new)
+        .count();
+    if prefix == source.len_bytes() && prefix == replacement.len() {
+        return None;
+    }
+    // Distinct UTF-8 characters can share leading or trailing bytes. Both
+    // replacement endpoints must remain character boundaries for Rope edits.
+    while !replacement.is_char_boundary(prefix) {
+        prefix -= 1;
+    }
+    let mut suffix = source
+        .bytes_at(source.len_bytes())
+        .reversed()
+        .zip(replacement.bytes().rev())
+        .take((source.len_bytes() - prefix).min(replacement.len() - prefix))
+        .take_while(|(old, new)| old == new)
+        .count();
+    while !replacement.is_char_boundary(replacement.len() - suffix) {
+        suffix -= 1;
+    }
+    Some(SyntaxEdit::replace(
+        edit.range.start + prefix..edit.range.end - suffix,
+        &replacement[prefix..replacement.len() - suffix],
+    ))
 }
 
 /// Tree-sitter may request a byte inside a UTF-8 character, so return the

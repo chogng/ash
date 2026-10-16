@@ -364,7 +364,9 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	}
 
 	get editors(): readonly EditorInstanceState[] {
-		return this.entries.map(entry => this.editorState(entry));
+		// Entries already follow model order; resolving each position again turns a
+		// state read on every cursor change into quadratic URI identity work.
+		return this.entries.map((entry, index) => this.editorState(entry, index));
 	}
 
 	get activeInput(): IResourceEditorInput | undefined {
@@ -955,7 +957,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			paneId: entry.paneInstance.pane.id,
 			input: entry.input,
 			index,
-			isActive: this.activeEntry === entry,
+			isActive: this.model.activeEditor === entry.input,
 			isPreview: entry.preview,
 			isSticky: entry.sticky,
 			isDirty: workingCopies.some(copy => copy.isDirty),

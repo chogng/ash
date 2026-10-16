@@ -100,13 +100,62 @@ test("cancels a pending connection-owned invocation when the caller aborts", asy
 	const cancelled: string[] = [];
 	await assert.rejects(invokeExtensionHost({
 		start: async () => ({ invocationId: "invoke-2" }),
-		read: async () => ({ state: "pending" }),
+		read: async () => cancelled.length ? { state: 'cancelled', reason: 'caller' } : { state: "pending" },
 		cancel: async invocationId => { cancelled.push(invocationId); return { disposition: "requested" }; },
 	}, invocation(), controller.signal, {
 		now: () => 100,
 		wait: async () => { controller.abort("test"); throw new CancellationError("cancelled", "test"); },
 	}), CancellationError);
 	assert.deepEqual(cancelled, ["invoke-2"]);
+});
+
+test('discarded editor invocations consume cancellation results before exhausting the connection quota', async () => {
+	const sessions = new Map<string, { cancelled: boolean; reads: number; }>();
+	let sequence = 0, terminalReads = 0;
+	for (let index = 0; index < 64; index++) {
+		const controller = new AbortController();
+		await assert.rejects(invokeExtensionHost({
+			start: async () => {
+				if (sessions.size >= 32) throw new Error('Connection invocation quota exceeded');
+				const invocationId = `edit-${++sequence}`;
+				sessions.set(invocationId, { cancelled: false, reads: 0 });
+				return { invocationId };
+			},
+			read: async invocationId => {
+				const session = sessions.get(invocationId)!;
+				if (!session.cancelled || session.reads++ === 0) return { state: 'pending' };
+				sessions.delete(invocationId);
+				terminalReads++;
+				return { state: 'cancelled', reason: 'caller' };
+			},
+			cancel: async invocationId => { sessions.get(invocationId)!.cancelled = true; return { disposition: 'requested' }; },
+		}, invocation(), controller.signal, {
+			now: () => 100,
+			wait: async (_milliseconds, signal) => {
+				if (signal === controller.signal) { controller.abort('superseded'); throw new CancellationError('superseded'); }
+			},
+		}), CancellationError);
+	}
+	assert.equal(terminalReads, 64);
+	assert.equal(sessions.size, 0);
+});
+
+test('cancellation also consumes an already completed result and preserves the original failure', async () => {
+	const controller = new AbortController();
+	let completed = false, consumed = false;
+	await assert.rejects(invokeExtensionHost({
+		start: async () => ({ invocationId: 'completed' }),
+		read: async () => {
+			if (!completed) return { state: 'pending' };
+			consumed = true;
+			return { state: 'succeeded', payload: { late: true } };
+		},
+		cancel: async () => ({ disposition: 'alreadyTerminal' }),
+	}, invocation(), controller.signal, {
+		now: () => 100,
+		wait: async () => { completed = true; controller.abort(); throw new CancellationError('original'); },
+	}), error => error instanceof CancellationError && error.message === 'original');
+	assert.equal(consumed, true);
 });
 
 function invocation(): ExtensionHostInvocationRequest {
@@ -198,4 +247,28 @@ test('abandoned invocation consumes a successful result when completion wins can
 	}), CancellationError);
 	assert.equal(consumed, true);
 	assert.equal(reads, 2);
+});
+
+test('payload byte limits count JSON escaping, Unicode and numeric wire representation exactly', () => {
+	const limit = 64 * 1024 * 1024;
+	const values = [null, true, false, 0, -0, 1.2e30, 1e-9, '中文😀\ud800x\udfff\u0000\b\t\n\f\r"\\'];
+	const envelope = { values, ['quoted"\\\n中文😀\ud800']: { sparse: new Array(3) }, padding: '' };
+	const overhead = Buffer.byteLength(JSON.stringify(envelope));
+	const padding = 'x'.repeat(limit - overhead);
+	const normalized = normalizeExtensionHostPayload({ ...envelope, padding });
+	assert.equal(Buffer.byteLength(JSON.stringify(normalized)), limit);
+	assert.throws(() => normalizeExtensionHostPayload({ ...envelope, padding: padding + 'x' }), /too large/);
+});
+
+test('only boundary-normalized immutable payloads are reused; caller data and Worker clones remain untrusted', () => {
+	const source = { tree: [{ text: '中文😀' }] };
+	const normalized = normalizeExtensionHostPayload(source);
+	assert.equal(normalizeExtensionHostPayload(normalized), normalized);
+	source.tree[0]!.text = 'changed';
+	assert.deepEqual(normalized, Object.assign(Object.create(null), { tree: [Object.assign(Object.create(null), { text: '中文😀' })] }));
+	assert.notEqual(normalizeExtensionHostPayload(source), normalized);
+	const clone = structuredClone(normalized) as { tree: unknown[]; };
+	clone.tree.push(NaN);
+	assert.throws(() => normalizeExtensionHostPayload(clone), /Extension Host payload\.tree\[1\] contains a non-finite number/);
+	assert.throws(() => normalizeExtensionHostPayload(Object.freeze({ invalid: undefined })), /JSON values/);
 });

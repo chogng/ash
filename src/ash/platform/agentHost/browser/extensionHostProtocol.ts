@@ -1,5 +1,4 @@
 import { raceCancellationError } from '../../../base/common/async.js';
-import { VSBuffer } from '../../../base/common/buffer.js';
 import { throwIfCancelled } from '../../../base/common/cancellation.js';
 import { CancellationError } from '../../../base/common/errors.js';
 import { validateRemoteConnectionResolverPrefix } from '../../remote/common/remoteConnectionService.js';
@@ -47,10 +46,16 @@ export function normalizeExtensionHostChanged(value: unknown): number {
 	return positiveSafeInteger(changed.generation, "Extension Host changed generation");
 }
 
+// Only this boundary's own deeply frozen output can bypass another same-realm
+// normalization. A structured clone from a Worker is a new, untrusted object.
+const normalizedPayloads = new WeakSet<object>();
+
 export function normalizeExtensionHostPayload(value: unknown): JsonValue {
-	const budget = { bytes: 0, nodes: 0, seen: new Set<object>() };
-	const normalized = normalizeJsonValue(value, "Extension Host payload", 0, budget);
-	if (utf8Length(JSON.stringify(normalized)) > MAX_PAYLOAD_BYTES) throw new RangeError("Extension Host payload is too large");
+	if (value !== null && typeof value === 'object' && normalizedPayloads.has(value)) return value as JsonValue;
+	const budget = { bytes: 0, jsonBytes: 0, nodes: 0, seen: new Set<object>(), path: [] as (string | number)[] };
+	const normalized = normalizeJsonValue(value, 0, budget);
+	if (budget.jsonBytes > MAX_PAYLOAD_BYTES) throw new RangeError("Extension Host payload is too large");
+	if (normalized !== null && typeof normalized === 'object') normalizedPayloads.add(normalized);
 	return normalized;
 }
 
@@ -381,43 +386,67 @@ function normalizeCancelResult(value: unknown): void {
 	stringEnum(result.disposition, "Extension Host cancellation disposition", ["requested", "alreadyTerminal"] as const);
 }
 
-function normalizeJsonValue(value: unknown, owner: string, depth: number, budget: { bytes: number; nodes: number; readonly seen: Set<object>; }): JsonValue {
+function normalizeJsonValue(value: unknown, depth: number, budget: { bytes: number; jsonBytes: number; nodes: number; readonly seen: Set<object>; readonly path: (string | number)[]; }): JsonValue {
 	budget.nodes += 1;
-	if (budget.nodes > MAX_PAYLOAD_NODES || depth > MAX_PAYLOAD_DEPTH) throw new RangeError(`${owner} is too complex`);
-	if (value === null || typeof value === "boolean") return value;
+	if (budget.nodes > MAX_PAYLOAD_NODES || depth > MAX_PAYLOAD_DEPTH) throw new RangeError(`${jsonValuePath(budget.path)} is too complex`);
+	if (value === null || typeof value === "boolean") {
+		budget.jsonBytes += value === null || value === true ? 4 : 5;
+		return value;
+	}
 	if (typeof value === "number") {
-		if (!Number.isFinite(value)) throw new TypeError(`${owner} contains a non-finite number`);
+		if (!Number.isFinite(value)) throw new TypeError(`${jsonValuePath(budget.path)} contains a non-finite number`);
 		budget.bytes += 16;
+		budget.jsonBytes += String(value).length;
 		return value;
 	}
 	if (typeof value === "string") {
 		budget.bytes += utf8Length(value);
-		if (budget.bytes > MAX_PAYLOAD_BYTES) throw new RangeError(`${owner} is too large`);
+		budget.jsonBytes += jsonStringLength(value);
+		if (budget.bytes > MAX_PAYLOAD_BYTES) throw new RangeError(`${jsonValuePath(budget.path)} is too large`);
 		return value;
 	}
-	if (typeof value !== "object" || value === undefined) throw new TypeError(`${owner} must contain only JSON values`);
-	if (budget.seen.has(value)) throw new TypeError(`${owner} must not contain cycles or shared object references`);
+	if (typeof value !== "object" || value === undefined) throw new TypeError(`${jsonValuePath(budget.path)} must contain only JSON values`);
+	if (budget.seen.has(value)) throw new TypeError(`${jsonValuePath(budget.path)} must not contain cycles or shared object references`);
 	budget.seen.add(value);
 	try {
 		if (Array.isArray(value)) {
-			if (value.length > MAX_COLLECTION_ENTRIES) throw new RangeError(`${owner} array is too large`);
-			return Object.freeze(value.map((entry, index) => normalizeJsonValue(entry, `${owner}[${index}]`, depth + 1, budget)));
+			if (value.length > MAX_COLLECTION_ENTRIES) throw new RangeError(`${jsonValuePath(budget.path)} array is too large`);
+			budget.jsonBytes += 2 + Math.max(0, value.length - 1);
+			for (let index = 0; index < value.length; index++) if (!(index in value)) budget.jsonBytes += 4;
+			const normalized = Object.freeze(value.map((entry, index) => {
+				budget.path.push(index);
+				const normalized = normalizeJsonValue(entry, depth + 1, budget);
+				budget.path.pop();
+				return normalized;
+			}));
+			return normalized;
 		}
 		const prototype = Object.getPrototypeOf(value);
-		if (prototype !== Object.prototype && prototype !== null) throw new TypeError(`${owner} must contain only plain objects`);
+		if (prototype !== Object.prototype && prototype !== null) throw new TypeError(`${jsonValuePath(budget.path)} must contain only plain objects`);
 		const entries = Object.entries(value as Record<string, unknown>);
-		if (entries.length > MAX_COLLECTION_ENTRIES) throw new RangeError(`${owner} object is too large`);
+		if (entries.length > MAX_COLLECTION_ENTRIES) throw new RangeError(`${jsonValuePath(budget.path)} object is too large`);
+		budget.jsonBytes += 2 + Math.max(0, entries.length - 1);
 		const normalized: Record<string, JsonValue> = Object.create(null) as Record<string, JsonValue>;
 		for (const [key, entry] of entries) {
-			if (key.length === 0 || key.length > 256 || key.includes("\0")) throw new TypeError(`${owner} contains an invalid key`);
+			if (key.length === 0 || key.length > 256 || key.includes("\0")) throw new TypeError(`${jsonValuePath(budget.path)} contains an invalid key`);
 			budget.bytes += utf8Length(key);
-			normalized[key] = normalizeJsonValue(entry, `${owner}.${key}`, depth + 1, budget);
+			budget.jsonBytes += jsonStringLength(key) + 1;
+			budget.path.push(key);
+			normalized[key] = normalizeJsonValue(entry, depth + 1, budget);
+			budget.path.pop();
 		}
-		if (budget.bytes > MAX_PAYLOAD_BYTES) throw new RangeError(`${owner} is too large`);
-		return Object.freeze(normalized);
+		if (budget.bytes > MAX_PAYLOAD_BYTES) throw new RangeError(`${jsonValuePath(budget.path)} is too large`);
+		Object.freeze(normalized);
+		return normalized;
 	} finally {
 		budget.seen.delete(value);
 	}
+}
+
+// Build diagnostic paths only for rejected input, rather than allocating one
+// string per property in a large, valid document/render-tree envelope.
+function jsonValuePath(path: readonly (string | number)[]): string {
+	return 'Extension Host payload' + path.map(part => typeof part === 'number' ? `[${part}]` : `.${part}`).join('');
 }
 
 function waitForPoll(milliseconds: number, signal: AbortSignal): Promise<void> {
@@ -510,5 +539,30 @@ function outputChannelId(value: unknown): string {
 }
 
 function utf8Length(value: string): number {
-	return VSBuffer.fromString(value).byteLength;
+	let length = value.length;
+	for (let index = 0; index < value.length; index++) {
+		const code = value.charCodeAt(index);
+		if (code < 0x80) continue;
+		if (code < 0x800) length++;
+		else if (code >= 0xd800 && code <= 0xdbff && index + 1 < value.length && value.charCodeAt(index + 1) >= 0xdc00 && value.charCodeAt(index + 1) <= 0xdfff) { length += 2; index++; }
+		else length += 2;
+	}
+	return length;
+}
+
+/** UTF-8 bytes on the JSON wire, including escapes and lone-surrogate escaping.
+ * Counting during normalization avoids a second full tree serialization and buffer.
+ */
+function jsonStringLength(value: string): number {
+	let length = 2;
+	for (let index = 0; index < value.length; index++) {
+		const code = value.charCodeAt(index);
+		if (code === 0x22 || code === 0x5c) length += 2;
+		else if (code < 0x20) length += code === 8 || code === 9 || code === 10 || code === 12 || code === 13 ? 2 : 6;
+		else if (code < 0x80) length++;
+		else if (code < 0x800) length += 2;
+		else if (code >= 0xd800 && code <= 0xdbff && index + 1 < value.length && value.charCodeAt(index + 1) >= 0xdc00 && value.charCodeAt(index + 1) <= 0xdfff) { length += 4; index++; }
+		else length += code >= 0xd800 && code <= 0xdfff ? 6 : 3;
+	}
+	return length;
 }

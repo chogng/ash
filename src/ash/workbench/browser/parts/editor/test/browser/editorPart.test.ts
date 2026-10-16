@@ -4533,3 +4533,31 @@ test('disabling preview pins existing previews and keeps subsequent preview open
 	await editor.openEditor(third, { pinned: false });
 	assert.equal(editor.activeGroup.isPreview(third), true);
 });
+
+
+test('ordered editor state reads do not resolve every tab identity again', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using browserOwner = toDisposable(() => dom.window.close());
+	using registry = new EditorPaneRegistry();
+	using registration = registry.registerEditorPane(descriptor('ash.test.orderedState', '.ts', () => new TestEditorPane('ash.test.orderedState')));
+	using editor = createEditorPart(dom.window.document.body, { registry });
+	let resourceReads = 0;
+	const inputs = Array.from({ length: 32 }, (_, index): IResourceEditorInput => {
+		const value = input(`C:/project/item${index}.ts`);
+		return { ...value, get resource() { resourceReads++; return value.resource; } };
+	});
+	for (const value of inputs) await editor.openEditor(value, { pinned: true });
+	resourceReads = 0;
+	const states = editor.activeGroup.editors;
+	assert.equal(resourceReads, 0, 'already identified entries need no repeated URI lookup to read their order and active state');
+	assert.deepEqual(states.map(state => ({ input: state.input, index: state.index, active: state.isActive })),
+		inputs.map((input, index) => ({ input, index, active: index === inputs.length - 1 })));
+	await editor.openEditor(inputs[3]!);
+	await editor.activeGroup.moveEditorTo(inputs[3]!, editor.activeGroup, 0);
+	const reordered = [inputs[3]!, ...inputs.filter((_, index) => index !== 3)];
+	resourceReads = 0;
+	const moved = editor.activeGroup.editors;
+	assert.equal(resourceReads, 0);
+	assert.deepEqual(moved.map(state => ({ input: state.input, index: state.index, active: state.isActive })),
+		reordered.map((input, index) => ({ input, index, active: index === 0 })));
+});

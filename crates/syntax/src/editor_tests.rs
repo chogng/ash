@@ -392,96 +392,199 @@ fn initial_parse_input_latency_probe() {
 }
 
 #[test]
-#[ignore = "Manual Markdown edit-stage latency probe"]
-fn markdown_incremental_latency_probe() {
-    use std::time::Instant;
+fn unchanged_replacements_advance_revision_without_invalidating_markdown() {
     let text = (0..20_000)
         .map(|i| format!("# Section{i}\n\ncontent 😀中文\n\ntext\n"))
         .collect::<String>();
     let mut document =
         SyntaxDocument::open(SyntaxLanguage::Markdown, DocumentRevision::new(1), &text).unwrap();
+    let original = document.editor_facts(4, &|| false).unwrap();
+    assert_eq!(original.folds.len(), 20_000);
+    assert_eq!(original.folds.last().unwrap().start_line_index, 99_995);
+    assert_eq!(original.folds.last().unwrap().end_line_index, 99_999);
+    let highlight = document.editor_highlight(0..5, &|| false).unwrap();
+    let tree_id = document.tree.root_node().id();
+    let injections = document.injection_cache.borrow().len();
+    for (revision, edits) in [
+        (2, vec![SyntaxEdit::replace(0..text.len(), &text)]),
+        (3, vec![]),
+        (
+            4,
+            vec![
+                SyntaxEdit::replace(0..10, "# Section0"),
+                SyntaxEdit::insert(text.len(), ""),
+            ],
+        ),
+    ] {
+        let effective = document
+            .update_edits(DocumentRevision::new(revision), &edits)
+            .unwrap();
+        assert!(effective.is_empty());
+        assert_eq!(document.revision(), DocumentRevision::new(revision));
+        assert_eq!(
+            document.tree.root_node().id(),
+            tree_id,
+            "unchanged text must retain its parsed tree"
+        );
+        assert_eq!(document.injection_cache.borrow().len(), injections);
+        let facts = document.editor_facts(4, &|| false).unwrap();
+        assert_eq!(facts.revision(), DocumentRevision::new(revision));
+        assert!(Arc::ptr_eq(&original.nodes[0], &facts.nodes[0]));
+        assert!(Arc::ptr_eq(&original.nodes[19_999], &facts.nodes[19_999]));
+        assert_eq!(
+            document.editor_highlight(0..5, &|| false).unwrap(),
+            highlight
+        );
+        assert_eq!(facts.delta(None, &[]).symbols.items.len(), 20_000);
+        if revision == 2 {
+            // Consumers move old coordinates through the reported snapshot edit
+            // before applying the patch, even when its replacement text is equal.
+            let edit = [
+                0,
+                0,
+                document.line_count() - 1,
+                0,
+                document.line_count() - 1,
+                0,
+            ];
+            let patch = facts.delta(Some(&original), &[edit]);
+            let mut folds = original
+                .folds
+                .iter()
+                .cloned()
+                .map(|mut fold| {
+                    fold.start_line_index = shift_row(fold.start_line_index, edit);
+                    fold.end_line_index = shift_row(fold.end_line_index, edit);
+                    fold
+                })
+                .collect::<Vec<_>>();
+            folds.splice(
+                patch.folds.start..patch.folds.start + patch.folds.delete_count,
+                patch.folds.items,
+            );
+            assert_eq!(folds, *facts.folds);
+        }
+    }
+    // Normalization must not turn invalid, overlapping original ranges into valid edits.
+    assert!(matches!(
+        document.update_edits(
+            DocumentRevision::new(5),
+            &[
+                SyntaxEdit::replace(0..10, "# Section0"),
+                SyntaxEdit::insert(5, ""),
+            ]
+        ),
+        Err(SyntaxError::OverlappingEdits)
+    ));
+    assert_eq!(document.revision(), DocumentRevision::new(4));
+}
+
+#[test]
+fn broad_replacements_preserve_utf8_boundaries_and_untouched_fact_windows() {
+    let text = format!(
+        "# café\n\né😀\n\n{}",
+        (0..1000)
+            .map(|i| format!("# Tail{i}\n\ntext\n"))
+            .collect::<String>()
+    );
+    let mut document =
+        SyntaxDocument::open(SyntaxLanguage::Markdown, DocumentRevision::new(1), &text).unwrap();
     document.editor_facts(4, &|| false).unwrap();
-    let log_counts = std::sync::Arc::new(std::sync::Mutex::new(std::collections::BTreeMap::<
-        String,
-        usize,
-    >::new()));
-    let counts = std::sync::Arc::clone(&log_counts);
-    document
-        .parser
-        .set_logger(Some(Box::new(move |kind, message| {
-            if kind == tree_sitter::LogType::Parse {
-                let key = message.split_whitespace().next().unwrap_or("").to_owned();
-                *counts.lock().unwrap().entry(key).or_default() += 1;
-            }
-        })));
-    for sample in 0..2 {
-        let edit = if sample % 2 == 0 {
-            SyntaxEdit::insert(10, " PERF_MARK")
-        } else {
-            SyntaxEdit::delete(10..20)
-        };
-        let edits = vec![&edit];
-        let started = Instant::now();
-        let mut next_text = document.text.clone();
-        let mut edited_tree = document.tree.clone();
-        let start = point_at(&document.text, edit.range.start);
-        let end = point_at(&document.text, edit.range.end);
-        edited_tree.edit(&tree_sitter::InputEdit {
-            start_byte: edit.range.start,
-            old_end_byte: edit.range.end,
-            new_end_byte: edit.range.start + edit.replacement.len(),
-            start_position: start.into(),
-            old_end_position: end.into(),
-            new_end_position: super::super::advance_point(start, &edit.replacement).into(),
-        });
-        let tree_edit_ms = started.elapsed().as_secs_f64() * 1000.;
-        let started = Instant::now();
-        let start = next_text.byte_to_char(edit.range.start);
-        let end = next_text.byte_to_char(edit.range.end);
-        next_text.remove(start..end);
-        next_text.insert(start, &edit.replacement);
-        let rope_ms = started.elapsed().as_secs_f64() * 1000.;
-        let mut reads = 0;
-        let mut read_bytes = 0;
-        let started = Instant::now();
-        let tree = document
-            .parser
-            .parse_with_options(
-                &mut |offset, _| {
-                    reads += 1;
-                    if offset >= next_text.len_bytes() {
-                        return &[][..];
-                    }
-                    let (chunk, start, _, _) = next_text.chunk_at_byte(offset);
-                    let bytes = &chunk.as_bytes()[offset - start..];
-                    read_bytes += bytes.len();
-                    bytes
-                },
-                Some(&edited_tree),
-                None,
+    for (revision, replacement) in [(2, text.replace("é😀", "ê🦀")), (4, text.clone())] {
+        document
+            .update_edits(
+                DocumentRevision::new(revision),
+                &[SyntaxEdit::replace(
+                    0..document.text.len_bytes(),
+                    &replacement,
+                )],
             )
             .unwrap();
-        let parse_ms = started.elapsed().as_secs_f64() * 1000.;
-        println!("PARSE_LOG {:?}", log_counts.lock().unwrap());
-        log_counts.lock().unwrap().clear();
-        let started = Instant::now();
-        document
-            .editor_cache
-            .get_mut()
-            .apply_edits(&edits, &document.text, &edited_tree, &tree);
-        let cache_ms = started.elapsed().as_secs_f64() * 1000.;
-        let started = Instant::now();
-        document.text = next_text;
-        document.tree = tree;
-        document.injection_cache.get_mut().clear();
-        document.revision = DocumentRevision::new(sample + 2);
-        drop(edited_tree);
-        let commit_ms = started.elapsed().as_secs_f64() * 1000.;
-        let started = Instant::now();
-        document.editor_facts(4, &|| false).unwrap();
-        let facts_ms = started.elapsed().as_secs_f64() * 1000.;
-        println!(
-            "MARKDOWN_STAGE sample={sample} tree_edit={tree_edit_ms:.3} rope={rope_ms:.3} parse={parse_ms:.3} cache={cache_ms:.3} commit={commit_ms:.3} facts={facts_ms:.3} reads={reads} read_bytes={read_bytes}"
+        assert!(
+            document
+                .editor_cache
+                .borrow()
+                .dirty
+                .iter()
+                .all(|range| range.end < 100),
+            "an unchanged suffix must remain outside the fact invalidation window"
         );
+        let dirty = document.editor_cache.borrow().dirty.clone();
+        document
+            .update_edits(
+                DocumentRevision::new(revision + 1),
+                &[SyntaxEdit::replace(0..replacement.len(), &replacement)],
+            )
+            .unwrap();
+        assert_eq!(document.editor_cache.borrow().dirty, dirty);
+        let fresh = SyntaxDocument::open(
+            SyntaxLanguage::Markdown,
+            DocumentRevision::new(revision + 1),
+            &replacement,
+        )
+        .unwrap();
+        assert_eq!(document.text().to_string(), replacement);
+        assert_eq!(
+            document.tree.root_node().to_sexp(),
+            fresh.tree.root_node().to_sexp()
+        );
+        let cached = document
+            .editor_facts(4, &|| false)
+            .unwrap()
+            .delta(None, &[]);
+        let cold = fresh.editor_facts(4, &|| false).unwrap().delta(None, &[]);
+        assert_eq!(cached.symbols.items, cold.symbols.items);
+        assert_eq!(cached.folds.items, cold.folds.items);
+        assert_eq!(cached.diagnostics.items, cold.diagnostics.items);
+        assert_eq!(
+            document.editor_highlight(0..5, &|| false).unwrap(),
+            fresh.editor_highlight(0..5, &|| false).unwrap()
+        );
+    }
+}
+
+#[test]
+#[ignore = "Manual comparison of Markdown range edits and host snapshot replacements"]
+fn markdown_snapshot_edit_latency_probe() {
+    enum EditMode {
+        Unchanged,
+        Snapshot,
+        Range,
+    }
+    let text = (0..20_000)
+        .map(|i| format!("# Section{i}\n\ncontent 😀中文\n\ntext\n"))
+        .collect::<String>();
+    for (mode, label) in [
+        (EditMode::Unchanged, "unchanged"),
+        (EditMode::Snapshot, "snapshot"),
+        (EditMode::Range, "range"),
+    ] {
+        let mut document =
+            SyntaxDocument::open(SyntaxLanguage::Markdown, DocumentRevision::new(1), &text)
+                .unwrap();
+        document.editor_facts(4, &|| false).unwrap();
+        for sample in 0..36 {
+            let inserted = sample % 2 == 0;
+            let replacement = if inserted {
+                format!("{} PERF_MARK{}", &text[..10], &text[10..])
+            } else {
+                text.clone()
+            };
+            let edit = match mode {
+                EditMode::Unchanged => SyntaxEdit::replace(0..text.len(), &text),
+                EditMode::Snapshot => {
+                    SyntaxEdit::replace(0..document.text.len_bytes(), replacement)
+                }
+                EditMode::Range if inserted => SyntaxEdit::insert(10, " PERF_MARK"),
+                EditMode::Range => SyntaxEdit::delete(10..20),
+            };
+            let started = std::time::Instant::now();
+            document
+                .update_edits(DocumentRevision::new(sample + 2), &[edit])
+                .unwrap();
+            let ms = started.elapsed().as_secs_f64() * 1000.;
+            document.editor_facts(4, &|| false).unwrap();
+            println!("MARKDOWN_SNAPSHOT mode={label} sample={sample} ms={ms:.3}");
+        }
     }
 }

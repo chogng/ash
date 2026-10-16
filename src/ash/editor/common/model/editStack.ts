@@ -309,7 +309,9 @@ function createEntry(
 		editsEOL,
 		eol,
 		historyGroup,
-		lineIds: lineIds === undefined ? undefined : Object.freeze([...lineIds]),
+		// Model-owned identity sequences are immutable and can be shared by history
+		// entries. Copy only inputs whose caller still owns a mutable array.
+		lineIds: lineIds === undefined || Object.isFrozen(lineIds) ? lineIds : Object.freeze([...lineIds]),
 		beforeCursorState: cloneSelections(beforeCursorState),
 		afterCursorState: cloneSelections(afterCursorState),
 	});
