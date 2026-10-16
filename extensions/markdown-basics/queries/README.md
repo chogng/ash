@@ -9,8 +9,7 @@ The Web host loads the packaged WASM assets. Rust links the grammar dependencies
 - Upstream: [tree-sitter-grammars/tree-sitter-markdown](https://github.com/tree-sitter-grammars/tree-sitter-markdown)
 - Revision: `f969cd3ae3f9fbd4e43205431d0ae286014c05b5`
 - Grammar version: `0.5.3`
-- Rust dependency: `tree-sitter-md`
-- WASM: [`../tree-sitter/markdown.wasm`](../tree-sitter/markdown.wasm)
+- Parser artifacts: [pinned Ash grammar release](../../../third_party/ash-grammars/README.md)
 - License: [markdown.LICENSE.txt](markdown.LICENSE.txt)
 
 | Local file                                         | Upstream source                                                                                                                                                                                       |
@@ -23,8 +22,7 @@ The Web host loads the packaged WASM assets. Rust links the grammar dependencies
 - Upstream: [tree-sitter-grammars/tree-sitter-markdown](https://github.com/tree-sitter-grammars/tree-sitter-markdown)
 - Revision: `f969cd3ae3f9fbd4e43205431d0ae286014c05b5`
 - Grammar version: `0.5.3`
-- Rust dependency: `tree-sitter-md`
-- WASM: [`../tree-sitter/markdown-inline.wasm`](../tree-sitter/markdown-inline.wasm)
+- Parser artifacts: [pinned Ash grammar release](../../../third_party/ash-grammars/README.md)
 - License: [markdown-inline.LICENSE.txt](markdown-inline.LICENSE.txt)
 
 | Local file                                                       | Upstream source                                                                                                                                                                                                     |

@@ -1,22 +1,10 @@
 [
   {
     "name": "swift",
-    "source": {
-      "crate": "tree-sitter-swift",
-      "version": "0.7.3",
-      "root": "."
-    },
-    "wasm": {
-      "path": "tree-sitter/swift.wasm",
-      "sha256": "0ccd8da8f3acb27fd37301312f335d04bb7dcddade9f7d3846e5efab8f1d09c6"
-    },
     "highlights": ["queries/swift.scm"],
     "tags": ["queries/swift.tags.scm"],
     "folds": ["queries/swift.folds.scm"],
     "injections": [],
-    "rust": {
-      "language": "tree_sitter_swift::LANGUAGE"
-    },
     "languages": [
       {
         "id": "swift",

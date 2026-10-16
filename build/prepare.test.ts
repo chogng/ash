@@ -15,7 +15,7 @@ test('the preparation owner runs each stage once and stops before consumers on f
 	await symlink(resolve(import.meta.dirname, '../node_modules/bun'), join(root, 'node_modules/bun'), process.platform === 'win32' ? 'junction' : 'dir');
 	await writeFile(join(root, 'package.json'), '{"type":"module"}');
 	await writeFile(join(root, 'record.ts'), `import { appendFileSync } from 'node:fs'; export function record(stage) { appendFileSync(new URL('./operations.log', import.meta.url), stage + '\\n'); if (process.env.FAIL_PREP_STAGE === stage) throw new Error(stage + ' failed'); }`);
-	await writeFile(join(root, 'build/treeSitter.ts'), `import { record } from '../record.ts'; export async function verifyTreeSitterGrammars() { record('grammars'); }`);
+	await writeFile(join(root, 'build/treeSitter.ts'), `import { record } from '../record.ts'; export async function prepareTreeSitterGrammars() { record('grammars'); }`);
 	for (const [file, symbol, stage] of [
 		['protocol/generate.ts', 'generateProtocol', 'protocol'],
 		['resources/localization.ts', 'generateLocalization', 'localization'],

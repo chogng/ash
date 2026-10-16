@@ -14,7 +14,7 @@ test('one package declaration generates both runtimes and detects stale registra
 	assert.deepEqual(metadata.syntaxLanguageDefinitions.map((language: { id: string; }) => language.id), ['demo', 'demoreact']);
 	const rust = await readFile(resolve(root, 'crates/syntax/src/languages.generated.rs'), 'utf8');
 	const web = await readFile(resolve(root, 'src/ash/workbench/services/treeSitter/browser/treeSitterGrammars.generated.ts'), 'utf8');
-	assert.match(rust, /tree_sitter_demo::LANGUAGE/);
+	assert.match(rust, /ash_grammars::language\("demo"\)/);
 	assert.match(rust, /shared\/queries\/base.scm/);
 	assert.match(web, /shared\/queries\/base.scm\?raw/);
 	const packages = await readGrammarPackages(root);
@@ -57,10 +57,10 @@ test('invalid bindings and query paths cannot enter generated source', async t =
 	const root = await fixture(t);
 	const packages = await readGrammarPackages(root);
 	const grammar = packages[0]!.grammars[0]!;
-	grammar.rust.language = 'untrusted();';
+	grammar.snapshots = { highlights: ['untrusted();'] };
 	await writeFile(packages[0]!.manifest, JSON.stringify([grammar]));
-	await assert.rejects(readGrammarPackages(root), /Invalid Rust grammar binding/);
-	grammar.rust.language = 'tree_sitter_demo::LANGUAGE';
+	await assert.rejects(readGrammarPackages(root), /Invalid snapshot binding/);
+	delete grammar.snapshots;
 	grammar.highlights = ['@shared/../../outside.scm'];
 	await writeFile(packages[0]!.manifest, JSON.stringify([grammar]));
 	await assert.rejects(readGrammarPackages(root), /escapes its language package/);
@@ -70,14 +70,14 @@ async function fixture(t: { after(callback: () => Promise<void>): void; }): Prom
 	const root = await mkdtemp(resolve(tmpdir(), 'ash-tree-sitter-registry-'));
 	t.after(() => rm(root, { recursive: true, force: true }));
 	await writeFile(resolve(root, 'package.json'), '{"type":"module"}');
+	await mkdir(resolve(root, 'third_party/ash-grammars'), { recursive: true });
+	await writeFile(resolve(root, 'third_party/ash-grammars/runtime-lock.json'), JSON.stringify({ version: '0.1.0', wasm: { sha256: 'a'.repeat(64) } }));
 	await mkdir(resolve(root, 'extensions/demo/tree-sitter'), { recursive: true });
 	await mkdir(resolve(root, 'extensions/shared/queries'), { recursive: true });
 	await writeFile(resolve(root, 'extensions/shared/queries/base.scm'), '(identifier) @variable');
 	await writeFile(resolve(root, 'extensions/demo/package.json'), JSON.stringify({ contributes: { languages: [{ id: 'demo' }, { id: 'demoreact' }] } }));
 	await writeFile(resolve(root, 'extensions/demo/tree-sitter/grammars.json'), JSON.stringify([{
-		name: 'demo', source: { crate: 'tree-sitter-demo', version: '1.0.0', root: '.' },
-		wasm: { path: 'tree-sitter/demo.wasm', sha256: 'a'.repeat(64) },
-		rust: { language: 'tree_sitter_demo::LANGUAGE' },
+		name: 'demo',
 		highlights: ['@shared/queries/base.scm'], tags: [], folds: [], injections: [],
 		languages: [
 			{ id: 'demo', variant: 'Demo', editorLanguage: 'demo', editorIds: ['demo'], aliases: ['dm'] },

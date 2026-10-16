@@ -39,13 +39,6 @@ allow = [
 ]
 confidence-threshold = 0.8
 
-# The published grammar declares WTFPL; keep this approval confined to the
-# reviewed package version rather than permitting the license for new dependencies.
-[[licenses.exceptions]]
-name = "tree-sitter-gitcommit"
-version = "=0.5.0"
-allow = ["WTFPL"]
-
 # Ash's unpublished proprietary packages are not third-party SPDX dependencies.
 [licenses.private]
 ignore = true
@@ -56,9 +49,7 @@ unknown-git = "deny"
 required-git-spec = "rev"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 allow-git = [
-    "https://github.com/murtaza64/tree-sitter-groovy",
-    "https://github.com/the-mikedavis/tree-sitter-git-rebase",
-    "https://github.com/tree-sitter-grammars/tree-sitter-scss",
+    "https://github.com/chogng/ash-grammars",
     # SDK compatibility fixes required by the sandbox; see third_party/mxc/README.md.
     "https://github.com/chogng/mxc",
     # Optional downloader build dependencies; pinned to the reviewed 1.13.8 adaptation.

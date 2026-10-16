@@ -359,9 +359,11 @@ impl SyntaxLanguage {
 fn definition(language: SyntaxLanguage) -> LanguageDefinition {
     match language {
         SyntaxLanguage::Bat => LanguageDefinition {
-            language: tree_sitter_batch::LANGUAGE.into(),
+            language: ash_grammars::language("batch")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(include_str!("../../../extensions/bat/queries/batch.scm")),
-            tags: &[""],
+            tags: || [""].join("\n"),
             editor_highlights: concat!(include_str!("../../../extensions/bat/queries/batch.scm")),
             injections: "",
             folds: concat!(include_str!(
@@ -369,13 +371,18 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::Starlark => LanguageDefinition {
-            language: tree_sitter_starlark::LANGUAGE.into(),
+            language: ash_grammars::language("starlark")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(include_str!(
                 "../../../extensions/bazel/queries/starlark.scm"
             )),
-            tags: &[concat!(include_str!(
-                "../../../extensions/bazel/queries/starlark.tags.scm"
-            ))],
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/bazel/queries/starlark.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!(
                 "../../../extensions/bazel/queries/starlark.scm"
             )),
@@ -387,13 +394,18 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::Bazelrc => LanguageDefinition {
-            language: tree_sitter_bazelrc::LANGUAGE.into(),
+            language: ash_grammars::language("bazelrc")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(include_str!(
                 "../../../extensions/bazel/queries/bazelrc.scm"
             )),
-            tags: &[concat!(include_str!(
-                "../../../extensions/bazel/queries/bazelrc.tags.scm"
-            ))],
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/bazel/queries/bazelrc.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!(
                 "../../../extensions/bazel/queries/bazelrc.scm"
             )),
@@ -401,13 +413,18 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             folds: "",
         },
         SyntaxLanguage::Clojure => LanguageDefinition {
-            language: tree_sitter_clojure::LANGUAGE.into(),
+            language: ash_grammars::language("clojure")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(include_str!(
                 "../../../extensions/clojure/queries/clojure.scm"
             )),
-            tags: &[concat!(include_str!(
-                "../../../extensions/clojure/queries/clojure.tags.scm"
-            ))],
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/clojure/queries/clojure.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!(
                 "../../../extensions/clojure/queries/clojure.scm"
             )),
@@ -417,13 +434,18 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::Coffeescript => LanguageDefinition {
-            language: tree_sitter_coffeescript::LANGUAGE.into(),
+            language: ash_grammars::language("coffeescript")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(include_str!(
                 "../../../extensions/coffeescript/queries/coffeescript.scm"
             )),
-            tags: &[concat!(include_str!(
-                "../../../extensions/coffeescript/queries/coffeescript.tags.scm"
-            ))],
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/coffeescript/queries/coffeescript.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!(
                 "../../../extensions/coffeescript/queries/coffeescript.scm"
             )),
@@ -433,25 +455,33 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::C => LanguageDefinition {
-            language: tree_sitter_c::LANGUAGE.into(),
+            language: ash_grammars::language("c").expect("bundled grammar").into(),
             highlights: concat!(include_str!("../../../extensions/cpp/queries/c.scm")),
-            tags: &[concat!(include_str!(
-                "../../../extensions/cpp/queries/c.tags.scm"
-            ))],
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/cpp/queries/c.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!("../../../extensions/cpp/queries/c.scm")),
             injections: "",
             folds: concat!(include_str!("../../../extensions/cpp/queries/c.folds.scm")),
         },
         SyntaxLanguage::Cpp => LanguageDefinition {
-            language: tree_sitter_cpp::LANGUAGE.into(),
+            language: ash_grammars::language("cpp")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(
                 include_str!("../../../extensions/cpp/queries/c.scm"),
                 "\n",
                 include_str!("../../../extensions/cpp/queries/cpp.scm")
             ),
-            tags: &[concat!(include_str!(
-                "../../../extensions/cpp/queries/cpp.tags.scm"
-            ))],
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/cpp/queries/cpp.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(
                 include_str!("../../../extensions/cpp/queries/c.scm"),
                 "\n",
@@ -463,13 +493,18 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::Csharp => LanguageDefinition {
-            language: tree_sitter_c_sharp::LANGUAGE.into(),
+            language: ash_grammars::language("csharp")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(include_str!(
                 "../../../extensions/csharp/queries/csharp.scm"
             )),
-            tags: &[concat!(include_str!(
-                "../../../extensions/csharp/queries/csharp.tags.scm"
-            ))],
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/csharp/queries/csharp.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!(
                 "../../../extensions/csharp/queries/csharp.scm"
             )),
@@ -479,11 +514,16 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::Css => LanguageDefinition {
-            language: tree_sitter_css::LANGUAGE.into(),
+            language: ash_grammars::language("css")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(include_str!("../../../extensions/css/queries/css.scm")),
-            tags: &[concat!(include_str!(
-                "../../../extensions/css/queries/css.tags.scm"
-            ))],
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/css/queries/css.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!("../../../extensions/css/queries/css.scm")),
             injections: "",
             folds: concat!(include_str!(
@@ -491,17 +531,22 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::Scss => LanguageDefinition {
-            language: tree_sitter_scss::language().into(),
+            language: ash_grammars::language("scss")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(
                 include_str!("../../../extensions/css/queries/css.scm"),
                 "\n",
                 include_str!("../../../extensions/css/queries/scss.scm")
             ),
-            tags: &[concat!(
-                include_str!("../../../extensions/css/queries/css.tags.scm"),
-                "\n",
-                include_str!("../../../extensions/css/queries/scss.tags.scm")
-            )],
+            tags: || {
+                [concat!(
+                    include_str!("../../../extensions/css/queries/css.tags.scm"),
+                    "\n",
+                    include_str!("../../../extensions/css/queries/scss.tags.scm")
+                )]
+                .join("\n")
+            },
             editor_highlights: concat!(
                 include_str!("../../../extensions/css/queries/css.scm"),
                 "\n",
@@ -513,17 +558,22 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::Less => LanguageDefinition {
-            language: tree_sitter_less::language().into(),
+            language: ash_grammars::language("less")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(
                 include_str!("../../../extensions/css/queries/css.scm"),
                 "\n",
                 include_str!("../../../extensions/css/queries/less.scm")
             ),
-            tags: &[concat!(
-                include_str!("../../../extensions/css/queries/css.tags.scm"),
-                "\n",
-                include_str!("../../../extensions/css/queries/less.tags.scm")
-            )],
+            tags: || {
+                [concat!(
+                    include_str!("../../../extensions/css/queries/css.tags.scm"),
+                    "\n",
+                    include_str!("../../../extensions/css/queries/less.tags.scm")
+                )]
+                .join("\n")
+            },
             editor_highlights: concat!(
                 include_str!("../../../extensions/css/queries/css.scm"),
                 "\n",
@@ -535,11 +585,16 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::Dart => LanguageDefinition {
-            language: tree_sitter_dart::LANGUAGE.into(),
+            language: ash_grammars::language("dart")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(include_str!("../../../extensions/dart/queries/dart.scm")),
-            tags: &[concat!(include_str!(
-                "../../../extensions/dart/queries/dart.tags.scm"
-            ))],
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/dart/queries/dart.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!("../../../extensions/dart/queries/dart.scm")),
             injections: "",
             folds: concat!(include_str!(
@@ -547,11 +602,16 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::Diff => LanguageDefinition {
-            language: tree_sitter_diff::LANGUAGE.into(),
+            language: ash_grammars::language("diff")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(include_str!("../../../extensions/diff/queries/diff.scm")),
-            tags: &[concat!(include_str!(
-                "../../../extensions/diff/queries/diff.tags.scm"
-            ))],
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/diff/queries/diff.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!("../../../extensions/diff/queries/diff.scm")),
             injections: concat!(include_str!(
                 "../../../extensions/diff/queries/diff.injections.scm"
@@ -561,11 +621,13 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::Dockerfile => LanguageDefinition {
-            language: tree_sitter_containerfile::LANGUAGE.into(),
+            language: ash_grammars::language("containerfile")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(include_str!(
                 "../../../extensions/docker/queries/containerfile.scm"
             )),
-            tags: &[""],
+            tags: || [""].join("\n"),
             editor_highlights: concat!(include_str!(
                 "../../../extensions/docker/queries/containerfile.scm"
             )),
@@ -575,13 +637,18 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::Dotenv => LanguageDefinition {
-            language: tree_sitter_dotenv::LANGUAGE.into(),
+            language: ash_grammars::language("dotenv")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(include_str!(
                 "../../../extensions/dotenv/queries/dotenv.scm"
             )),
-            tags: &[concat!(include_str!(
-                "../../../extensions/dotenv/queries/dotenv.tags.scm"
-            ))],
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/dotenv/queries/dotenv.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!(
                 "../../../extensions/dotenv/queries/dotenv.scm"
             )),
@@ -589,13 +656,18 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             folds: "",
         },
         SyntaxLanguage::Gitcommit => LanguageDefinition {
-            language: tree_sitter_gitcommit::LANGUAGE.into(),
+            language: ash_grammars::language("gitcommit")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(include_str!(
                 "../../../extensions/git-base/queries/gitcommit.scm"
             )),
-            tags: &[concat!(include_str!(
-                "../../../extensions/git-base/queries/gitcommit.tags.scm"
-            ))],
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/git-base/queries/gitcommit.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!(
                 "../../../extensions/git-base/queries/gitcommit.scm"
             )),
@@ -607,13 +679,18 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::Gitrebase => LanguageDefinition {
-            language: tree_sitter_git_rebase::LANGUAGE.into(),
+            language: ash_grammars::language("git-rebase")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(include_str!(
                 "../../../extensions/git-base/queries/git-rebase.scm"
             )),
-            tags: &[concat!(include_str!(
-                "../../../extensions/git-base/queries/git-rebase.tags.scm"
-            ))],
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/git-base/queries/git-rebase.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!(
                 "../../../extensions/git-base/queries/git-rebase.scm"
             )),
@@ -623,13 +700,18 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             folds: "",
         },
         SyntaxLanguage::Gitignore => LanguageDefinition {
-            language: tree_sitter_gitignore::LANGUAGE.into(),
+            language: ash_grammars::language("gitignore")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(include_str!(
                 "../../../extensions/git-base/queries/gitignore.scm"
             )),
-            tags: &[concat!(include_str!(
-                "../../../extensions/git-base/queries/gitignore.tags.scm"
-            ))],
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/git-base/queries/gitignore.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!(
                 "../../../extensions/git-base/queries/gitignore.scm"
             )),
@@ -637,23 +719,33 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             folds: "",
         },
         SyntaxLanguage::Go => LanguageDefinition {
-            language: tree_sitter_go::LANGUAGE.into(),
+            language: ash_grammars::language("go")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(include_str!("../../../extensions/go/queries/go.scm")),
-            tags: &[concat!(include_str!(
-                "../../../extensions/go/queries/go.tags.scm"
-            ))],
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/go/queries/go.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!("../../../extensions/go/queries/go.scm")),
             injections: "",
             folds: concat!(include_str!("../../../extensions/go/queries/go.folds.scm")),
         },
         SyntaxLanguage::Groovy => LanguageDefinition {
-            language: tree_sitter_groovy::language().into(),
+            language: ash_grammars::language("groovy")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(include_str!(
                 "../../../extensions/groovy/queries/groovy.scm"
             )),
-            tags: &[concat!(include_str!(
-                "../../../extensions/groovy/queries/groovy.tags.scm"
-            ))],
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/groovy/queries/groovy.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!(
                 "../../../extensions/groovy/queries/groovy.scm"
             )),
@@ -663,11 +755,16 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::Html => LanguageDefinition {
-            language: tree_sitter_html::LANGUAGE.into(),
+            language: ash_grammars::language("html")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(include_str!("../../../extensions/html/queries/html.scm")),
-            tags: &[concat!(include_str!(
-                "../../../extensions/html/queries/html.tags.scm"
-            ))],
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/html/queries/html.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!("../../../extensions/html/queries/html.scm")),
             injections: concat!(include_str!(
                 "../../../extensions/html/queries/html.injections.scm"
@@ -677,11 +774,16 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::Ini => LanguageDefinition {
-            language: tree_sitter_ini::LANGUAGE.into(),
+            language: ash_grammars::language("ini")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(include_str!("../../../extensions/ini/queries/ini.scm")),
-            tags: &[concat!(include_str!(
-                "../../../extensions/ini/queries/ini.tags.scm"
-            ))],
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/ini/queries/ini.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!("../../../extensions/ini/queries/ini.scm")),
             injections: "",
             folds: concat!(include_str!(
@@ -689,13 +791,18 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::Properties => LanguageDefinition {
-            language: tree_sitter_properties::LANGUAGE.into(),
+            language: ash_grammars::language("properties")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(include_str!(
                 "../../../extensions/ini/queries/properties.scm"
             )),
-            tags: &[concat!(include_str!(
-                "../../../extensions/ini/queries/properties.tags.scm"
-            ))],
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/ini/queries/properties.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!(
                 "../../../extensions/ini/queries/properties.scm"
             )),
@@ -705,11 +812,16 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::Java => LanguageDefinition {
-            language: tree_sitter_java::LANGUAGE.into(),
+            language: ash_grammars::language("java")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(include_str!("../../../extensions/java/queries/java.scm")),
-            tags: &[concat!(include_str!(
-                "../../../extensions/java/queries/java.tags.scm"
-            ))],
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/java/queries/java.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!("../../../extensions/java/queries/java.scm")),
             injections: "",
             folds: concat!(include_str!(
@@ -717,9 +829,16 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::Javascript => LanguageDefinition {
-            language: tree_sitter_javascript::LANGUAGE.into(),
-            highlights: tree_sitter_javascript::HIGHLIGHT_QUERY,
-            tags: &[tree_sitter_javascript::TAGS_QUERY],
+            language: ash_grammars::language("javascript")
+                .expect("bundled grammar")
+                .into(),
+            highlights: ash_grammars::query("tree_sitter_javascript::HIGHLIGHT_QUERY")
+                .expect("bundled snapshot query"),
+            tags: || {
+                [ash_grammars::query("tree_sitter_javascript::TAGS_QUERY")
+                    .expect("bundled snapshot query")]
+                .join("\n")
+            },
             editor_highlights: concat!(
                 include_str!("../../../extensions/javascript/queries/javascript.scm"),
                 "\n",
@@ -731,9 +850,16 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::Javascriptreact => LanguageDefinition {
-            language: tree_sitter_javascript::LANGUAGE.into(),
-            highlights: tree_sitter_javascript::HIGHLIGHT_QUERY,
-            tags: &[tree_sitter_javascript::TAGS_QUERY],
+            language: ash_grammars::language("javascript")
+                .expect("bundled grammar")
+                .into(),
+            highlights: ash_grammars::query("tree_sitter_javascript::HIGHLIGHT_QUERY")
+                .expect("bundled snapshot query"),
+            tags: || {
+                [ash_grammars::query("tree_sitter_javascript::TAGS_QUERY")
+                    .expect("bundled snapshot query")]
+                .join("\n")
+            },
             editor_highlights: concat!(
                 include_str!("../../../extensions/javascript/queries/javascript.scm"),
                 "\n",
@@ -745,11 +871,17 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::Json => LanguageDefinition {
-            language: tree_sitter_json::LANGUAGE.into(),
-            highlights: tree_sitter_json::HIGHLIGHTS_QUERY,
-            tags: &[concat!(include_str!(
-                "../../../extensions/json/queries/json.tags.scm"
-            ))],
+            language: ash_grammars::language("json")
+                .expect("bundled grammar")
+                .into(),
+            highlights: ash_grammars::query("tree_sitter_json::HIGHLIGHTS_QUERY")
+                .expect("bundled snapshot query"),
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/json/queries/json.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!("../../../extensions/json/queries/json.scm")),
             injections: "",
             folds: concat!(include_str!(
@@ -757,11 +889,17 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::Jsonc => LanguageDefinition {
-            language: tree_sitter_json::LANGUAGE.into(),
-            highlights: tree_sitter_json::HIGHLIGHTS_QUERY,
-            tags: &[concat!(include_str!(
-                "../../../extensions/json/queries/json.tags.scm"
-            ))],
+            language: ash_grammars::language("json")
+                .expect("bundled grammar")
+                .into(),
+            highlights: ash_grammars::query("tree_sitter_json::HIGHLIGHTS_QUERY")
+                .expect("bundled snapshot query"),
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/json/queries/json.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!("../../../extensions/json/queries/json.scm")),
             injections: "",
             folds: concat!(include_str!(
@@ -769,11 +907,17 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::Jsonl => LanguageDefinition {
-            language: tree_sitter_json::LANGUAGE.into(),
-            highlights: tree_sitter_json::HIGHLIGHTS_QUERY,
-            tags: &[concat!(include_str!(
-                "../../../extensions/json/queries/json.tags.scm"
-            ))],
+            language: ash_grammars::language("json")
+                .expect("bundled grammar")
+                .into(),
+            highlights: ash_grammars::query("tree_sitter_json::HIGHLIGHTS_QUERY")
+                .expect("bundled snapshot query"),
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/json/queries/json.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!("../../../extensions/json/queries/json.scm")),
             injections: "",
             folds: concat!(include_str!(
@@ -781,11 +925,17 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::Snippets => LanguageDefinition {
-            language: tree_sitter_json::LANGUAGE.into(),
-            highlights: tree_sitter_json::HIGHLIGHTS_QUERY,
-            tags: &[concat!(include_str!(
-                "../../../extensions/json/queries/json.tags.scm"
-            ))],
+            language: ash_grammars::language("json")
+                .expect("bundled grammar")
+                .into(),
+            highlights: ash_grammars::query("tree_sitter_json::HIGHLIGHTS_QUERY")
+                .expect("bundled snapshot query"),
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/json/queries/json.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!("../../../extensions/json/queries/json.scm")),
             injections: "",
             folds: concat!(include_str!(
@@ -793,11 +943,16 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::Julia => LanguageDefinition {
-            language: tree_sitter_julia::LANGUAGE.into(),
+            language: ash_grammars::language("julia")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(include_str!("../../../extensions/julia/queries/julia.scm")),
-            tags: &[concat!(include_str!(
-                "../../../extensions/julia/queries/julia.tags.scm"
-            ))],
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/julia/queries/julia.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!("../../../extensions/julia/queries/julia.scm")),
             injections: "",
             folds: concat!(include_str!(
@@ -805,19 +960,26 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::Log => LanguageDefinition {
-            language: tree_sitter_log::LANGUAGE.into(),
+            language: ash_grammars::language("log")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(include_str!("../../../extensions/log/queries/log.scm")),
-            tags: &[""],
+            tags: || [""].join("\n"),
             editor_highlights: concat!(include_str!("../../../extensions/log/queries/log.scm")),
             injections: "",
             folds: "",
         },
         SyntaxLanguage::Lua => LanguageDefinition {
-            language: tree_sitter_lua::LANGUAGE.into(),
+            language: ash_grammars::language("lua")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(include_str!("../../../extensions/lua/queries/lua.scm")),
-            tags: &[concat!(include_str!(
-                "../../../extensions/lua/queries/lua.tags.scm"
-            ))],
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/lua/queries/lua.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!("../../../extensions/lua/queries/lua.scm")),
             injections: "",
             folds: concat!(include_str!(
@@ -825,9 +987,11 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::Makefile => LanguageDefinition {
-            language: tree_sitter_make::LANGUAGE.into(),
+            language: ash_grammars::language("make")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(include_str!("../../../extensions/make/queries/make.scm")),
-            tags: &[""],
+            tags: || [""].join("\n"),
             editor_highlights: concat!(include_str!("../../../extensions/make/queries/make.scm")),
             injections: "",
             folds: concat!(include_str!(
@@ -835,13 +999,18 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::Markdown => LanguageDefinition {
-            language: tree_sitter_md::LANGUAGE.into(),
+            language: ash_grammars::language("markdown")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(include_str!(
                 "../../../extensions/markdown-basics/queries/markdown.scm"
             )),
-            tags: &[concat!(include_str!(
-                "../../../extensions/markdown-basics/queries/markdown.tags.scm"
-            ))],
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/markdown-basics/queries/markdown.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!(
                 "../../../extensions/markdown-basics/queries/markdown.scm"
             )),
@@ -853,11 +1022,13 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::MarkdownInline => LanguageDefinition {
-            language: tree_sitter_md::INLINE_LANGUAGE.into(),
+            language: ash_grammars::language("markdown-inline")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(include_str!(
                 "../../../extensions/markdown-basics/queries/markdown-inline.scm"
             )),
-            tags: &[""],
+            tags: || [""].join("\n"),
             editor_highlights: concat!(include_str!(
                 "../../../extensions/markdown-basics/queries/markdown-inline.scm"
             )),
@@ -867,11 +1038,16 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             folds: "",
         },
         SyntaxLanguage::Perl => LanguageDefinition {
-            language: tree_sitter_perl::LANGUAGE.into(),
+            language: ash_grammars::language("perl")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(include_str!("../../../extensions/perl/queries/perl.scm")),
-            tags: &[concat!(include_str!(
-                "../../../extensions/perl/queries/perl.tags.scm"
-            ))],
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/perl/queries/perl.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!("../../../extensions/perl/queries/perl.scm")),
             injections: "",
             folds: concat!(include_str!(
@@ -879,11 +1055,16 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::Php => LanguageDefinition {
-            language: tree_sitter_php::LANGUAGE_PHP.into(),
+            language: ash_grammars::language("php")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(include_str!("../../../extensions/php/queries/php.scm")),
-            tags: &[concat!(include_str!(
-                "../../../extensions/php/queries/php.tags.scm"
-            ))],
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/php/queries/php.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!("../../../extensions/php/queries/php.scm")),
             injections: concat!(include_str!(
                 "../../../extensions/php/queries/php.injections.scm"
@@ -893,13 +1074,18 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::Powershell => LanguageDefinition {
-            language: tree_sitter_powershell::LANGUAGE.into(),
+            language: ash_grammars::language("powershell")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(include_str!(
                 "../../../extensions/powershell/queries/powershell.scm"
             )),
-            tags: &[concat!(include_str!(
-                "../../../extensions/powershell/queries/powershell.tags.scm"
-            ))],
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/powershell/queries/powershell.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!(
                 "../../../extensions/powershell/queries/powershell.scm"
             )),
@@ -909,13 +1095,18 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::Python => LanguageDefinition {
-            language: tree_sitter_python::LANGUAGE.into(),
+            language: ash_grammars::language("python")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(include_str!(
                 "../../../extensions/python/queries/python.scm"
             )),
-            tags: &[concat!(include_str!(
-                "../../../extensions/python/queries/python.tags.scm"
-            ))],
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/python/queries/python.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!(
                 "../../../extensions/python/queries/python.scm"
             )),
@@ -925,21 +1116,29 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::R => LanguageDefinition {
-            language: tree_sitter_r::LANGUAGE.into(),
+            language: ash_grammars::language("r").expect("bundled grammar").into(),
             highlights: concat!(include_str!("../../../extensions/r/queries/r.scm")),
-            tags: &[concat!(include_str!(
-                "../../../extensions/r/queries/r.tags.scm"
-            ))],
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/r/queries/r.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!("../../../extensions/r/queries/r.scm")),
             injections: "",
             folds: concat!(include_str!("../../../extensions/r/queries/r.folds.scm")),
         },
         SyntaxLanguage::Ruby => LanguageDefinition {
-            language: tree_sitter_ruby::LANGUAGE.into(),
+            language: ash_grammars::language("ruby")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(include_str!("../../../extensions/ruby/queries/ruby.scm")),
-            tags: &[concat!(include_str!(
-                "../../../extensions/ruby/queries/ruby.tags.scm"
-            ))],
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/ruby/queries/ruby.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!("../../../extensions/ruby/queries/ruby.scm")),
             injections: "",
             folds: concat!(include_str!(
@@ -947,9 +1146,16 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::Rust => LanguageDefinition {
-            language: tree_sitter_rust::LANGUAGE.into(),
-            highlights: tree_sitter_rust::HIGHLIGHTS_QUERY,
-            tags: &[tree_sitter_rust::TAGS_QUERY],
+            language: ash_grammars::language("rust")
+                .expect("bundled grammar")
+                .into(),
+            highlights: ash_grammars::query("tree_sitter_rust::HIGHLIGHTS_QUERY")
+                .expect("bundled snapshot query"),
+            tags: || {
+                [ash_grammars::query("tree_sitter_rust::TAGS_QUERY")
+                    .expect("bundled snapshot query")]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!("../../../extensions/rust/queries/rust.scm")),
             injections: "",
             folds: concat!(include_str!(
@@ -957,13 +1163,18 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::Shell => LanguageDefinition {
-            language: tree_sitter_bash::LANGUAGE.into(),
+            language: ash_grammars::language("bash")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(include_str!(
                 "../../../extensions/shellscript/queries/bash.scm"
             )),
-            tags: &[concat!(include_str!(
-                "../../../extensions/shellscript/queries/bash.tags.scm"
-            ))],
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/shellscript/queries/bash.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!(
                 "../../../extensions/shellscript/queries/bash.scm"
             )),
@@ -973,11 +1184,16 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::Sql => LanguageDefinition {
-            language: tree_sitter_sequel::LANGUAGE.into(),
+            language: ash_grammars::language("sql")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(include_str!("../../../extensions/sql/queries/sql.scm")),
-            tags: &[concat!(include_str!(
-                "../../../extensions/sql/queries/sql.tags.scm"
-            ))],
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/sql/queries/sql.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!("../../../extensions/sql/queries/sql.scm")),
             injections: "",
             folds: concat!(include_str!(
@@ -985,11 +1201,16 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::Swift => LanguageDefinition {
-            language: tree_sitter_swift::LANGUAGE.into(),
+            language: ash_grammars::language("swift")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(include_str!("../../../extensions/swift/queries/swift.scm")),
-            tags: &[concat!(include_str!(
-                "../../../extensions/swift/queries/swift.tags.scm"
-            ))],
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/swift/queries/swift.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!("../../../extensions/swift/queries/swift.scm")),
             injections: "",
             folds: concat!(include_str!(
@@ -997,11 +1218,16 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::Toml => LanguageDefinition {
-            language: tree_sitter_toml_ng::LANGUAGE.into(),
+            language: ash_grammars::language("toml")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(include_str!("../../../extensions/toml/queries/toml.scm")),
-            tags: &[concat!(include_str!(
-                "../../../extensions/toml/queries/toml.tags.scm"
-            ))],
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/toml/queries/toml.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!("../../../extensions/toml/queries/toml.scm")),
             injections: "",
             folds: concat!(include_str!(
@@ -1009,12 +1235,20 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::Typescript => LanguageDefinition {
-            language: tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
-            highlights: tree_sitter_typescript::HIGHLIGHTS_QUERY,
-            tags: &[
-                tree_sitter_javascript::TAGS_QUERY,
-                tree_sitter_typescript::TAGS_QUERY,
-            ],
+            language: ash_grammars::language("typescript")
+                .expect("bundled grammar")
+                .into(),
+            highlights: ash_grammars::query("tree_sitter_typescript::HIGHLIGHTS_QUERY")
+                .expect("bundled snapshot query"),
+            tags: || {
+                [
+                    ash_grammars::query("tree_sitter_javascript::TAGS_QUERY")
+                        .expect("bundled snapshot query"),
+                    ash_grammars::query("tree_sitter_typescript::TAGS_QUERY")
+                        .expect("bundled snapshot query"),
+                ]
+                .join("\n")
+            },
             editor_highlights: concat!(
                 include_str!("../../../extensions/javascript/queries/javascript.scm"),
                 "\n",
@@ -1026,12 +1260,20 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::Typescriptreact => LanguageDefinition {
-            language: tree_sitter_typescript::LANGUAGE_TSX.into(),
-            highlights: tree_sitter_typescript::HIGHLIGHTS_QUERY,
-            tags: &[
-                tree_sitter_javascript::TAGS_QUERY,
-                tree_sitter_typescript::TAGS_QUERY,
-            ],
+            language: ash_grammars::language("tsx")
+                .expect("bundled grammar")
+                .into(),
+            highlights: ash_grammars::query("tree_sitter_typescript::HIGHLIGHTS_QUERY")
+                .expect("bundled snapshot query"),
+            tags: || {
+                [
+                    ash_grammars::query("tree_sitter_javascript::TAGS_QUERY")
+                        .expect("bundled snapshot query"),
+                    ash_grammars::query("tree_sitter_typescript::TAGS_QUERY")
+                        .expect("bundled snapshot query"),
+                ]
+                .join("\n")
+            },
             editor_highlights: concat!(
                 include_str!("../../../extensions/javascript/queries/javascript.scm"),
                 "\n",
@@ -1045,11 +1287,16 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::Xml => LanguageDefinition {
-            language: tree_sitter_xml::LANGUAGE_XML.into(),
+            language: ash_grammars::language("xml")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(include_str!("../../../extensions/xml/queries/xml.scm")),
-            tags: &[concat!(include_str!(
-                "../../../extensions/xml/queries/xml.tags.scm"
-            ))],
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/xml/queries/xml.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!("../../../extensions/xml/queries/xml.scm")),
             injections: "",
             folds: concat!(include_str!(
@@ -1057,11 +1304,16 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::Dtd => LanguageDefinition {
-            language: tree_sitter_xml::LANGUAGE_DTD.into(),
+            language: ash_grammars::language("dtd")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(include_str!("../../../extensions/xml/queries/dtd.scm")),
-            tags: &[concat!(include_str!(
-                "../../../extensions/xml/queries/dtd.tags.scm"
-            ))],
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/xml/queries/dtd.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!("../../../extensions/xml/queries/dtd.scm")),
             injections: "",
             folds: concat!(include_str!(
@@ -1069,11 +1321,16 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::Dockercompose => LanguageDefinition {
-            language: tree_sitter_yaml::LANGUAGE.into(),
+            language: ash_grammars::language("yaml")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(include_str!("../../../extensions/yaml/queries/yaml.scm")),
-            tags: &[concat!(include_str!(
-                "../../../extensions/yaml/queries/yaml.tags.scm"
-            ))],
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/yaml/queries/yaml.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!("../../../extensions/yaml/queries/yaml.scm")),
             injections: "",
             folds: concat!(include_str!(
@@ -1081,11 +1338,16 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
         },
         SyntaxLanguage::Yaml => LanguageDefinition {
-            language: tree_sitter_yaml::LANGUAGE.into(),
+            language: ash_grammars::language("yaml")
+                .expect("bundled grammar")
+                .into(),
             highlights: concat!(include_str!("../../../extensions/yaml/queries/yaml.scm")),
-            tags: &[concat!(include_str!(
-                "../../../extensions/yaml/queries/yaml.tags.scm"
-            ))],
+            tags: || {
+                [concat!(include_str!(
+                    "../../../extensions/yaml/queries/yaml.tags.scm"
+                ))]
+                .join("\n")
+            },
             editor_highlights: concat!(include_str!("../../../extensions/yaml/queries/yaml.scm")),
             injections: "",
             folds: concat!(include_str!(

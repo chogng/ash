@@ -9,8 +9,7 @@ The Web host loads the packaged WASM assets. Rust links the grammar dependencies
 - Upstream: [tree-sitter-grammars/tree-sitter-yaml](https://github.com/tree-sitter-grammars/tree-sitter-yaml)
 - Revision: `7708026449bed86239b1cd5bce6e3c34dbca6415`
 - Grammar version: `0.7.2`
-- Rust dependency: `tree-sitter-yaml`
-- WASM: [`../tree-sitter/yaml.wasm`](../tree-sitter/yaml.wasm)
+- Parser artifacts: [pinned Ash grammar release](../../../third_party/ash-grammars/README.md)
 - License: [yaml.LICENSE.txt](yaml.LICENSE.txt)
 
 | Local file           | Upstream source                                                                                                                                         |

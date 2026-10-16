@@ -133,7 +133,7 @@ for (const preserveSymlinks of [false, true]) {
 	});
 }
 
-test('CSS discovery caches relative sorted paths and skips filesystem access in builds', async () => {
+test('CSS discovery shares concurrent scans, refreshes paths and skips filesystem access in builds', async () => {
 	const directory = await mkdtemp(join(tmpdir(), 'ash-css-modules-'));
 	try {
 		await mkdir(join(directory, 'nested'));
@@ -145,7 +145,7 @@ test('CSS discovery caches relative sorted paths and skips filesystem access in 
 		assert.equal(first, service.getCssModules());
 		assert.deepEqual(await first, ['nested/a.css', 'z.css']);
 		await writeFile(join(directory, 'new.css'), '');
-		assert.deepEqual(await service.getCssModules(), ['nested/a.css', 'z.css']);
+		assert.deepEqual(await service.getCssModules(), ['nested/a.css', 'new.css', 'z.css']);
 		const built = new CSSDevelopmentService({ sourceRoot: join(directory, 'missing'), isBuilt: true });
 		assert.equal(built.isEnabled, false);
 		assert.deepEqual(await built.getCssModules(), []);

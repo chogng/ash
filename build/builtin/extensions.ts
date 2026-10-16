@@ -111,8 +111,6 @@ async function preparePackages(): Promise<boolean> {
 				if (manifest.ashRuntime?.kind === 'rust' && ['src', 'tests', 'browser', 'Cargo.toml', 'Cargo.lock', 'BUILD.bazel'].includes(entry.name)) { continue; }
 				const path = resolve(resourceDirectory, entry.name);
 				if (entry.isDirectory()) {
-					// Cargo grammar sources serve the build; hosts load the adjacent WASM and queries.
-					if (resourceDirectory === resolve(packageRoot, 'tree-sitter') && (await readdir(path)).includes('Cargo.toml')) { continue; }
 					await collect(path);
 				}
 				else if (entry.isFile()) { packageResources[relative(packageRoot, path).replaceAll('\\', '/')] = (await readPackageFile(path)).toString('base64'); }

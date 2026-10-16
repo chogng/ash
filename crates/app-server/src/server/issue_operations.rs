@@ -1,4 +1,3 @@
-use super::AppServer;
 use super::RpcError;
 use super::decode;
 use super::github_processor::github_authentication_error;
@@ -12,21 +11,61 @@ use ash_app_server_protocol::protocol::issues::IssueReadParams;
 use ash_app_server_protocol::protocol::issues::IssueReadResult;
 use ash_app_server_protocol::protocol::issues::IssueRepository;
 use ash_app_server_protocol::protocol::issues::IssueSummary;
-use ash_async_utils::CancellationToken;
+use ash_app_server_protocol::protocol::registry::ClientMethod;
+use ash_config::ConfigStore;
 use serde_json::Value;
+use std::path::Path;
+use std::path::PathBuf;
+use std::sync::Mutex;
 
-impl AppServer {
-    pub(super) fn issue_list(
+/// Directory-specific Issue adapter. Persistent cache and configuration stay with
+/// their domain stores; remote work runs on the shared request executor.
+pub(super) struct IssueRequestProcessor {
+    root: PathBuf,
+    cache: Mutex<ash_state::SqliteIssueCache>,
+}
+
+impl IssueRequestProcessor {
+    pub(super) fn open(root: &Path, database: &Path) -> Result<Self, String> {
+        let root = dunce::canonicalize(root)
+            .map_err(|error| format!("cannot resolve Issue repository root: {error}"))?;
+        Ok(Self {
+            root,
+            cache: Mutex::new(ash_state::SqliteIssueCache::open(database)?),
+        })
+    }
+
+    pub(super) fn handles(method: ClientMethod) -> bool {
+        matches!(method, ClientMethod::IssueList | ClientMethod::IssueRead)
+    }
+
+    /// The host prepares current credentials. Apply that result after validating the
+    /// request and local repository, preserving the existing error precedence.
+    pub(super) async fn request(
+        &self,
+        method: ClientMethod,
+        params: &Value,
+        client: Result<github::GitHub, RpcError>,
+        config: Option<&ConfigStore>,
+    ) -> Result<Value, RpcError> {
+        match method {
+            ClientMethod::IssueList => self.list(params, client, config).await,
+            ClientMethod::IssueRead => self.read(params, client).await,
+            _ => unreachable!("only Issue query methods are dispatched here"),
+        }
+    }
+
+    async fn list(
         &self,
         params: &Value,
-        cancellation: &CancellationToken,
+        client: Result<github::GitHub, RpcError>,
+        config: Option<&ConfigStore>,
     ) -> Result<Value, RpcError> {
         let params: IssueListParams = decode(params)?;
-        let runtime = self.issue_runtime()?;
-        let repository = runtime.block_on(github_repository(runtime.root()))?;
+        let repository = github_repository(&self.root).await?;
         let query = params.query.trim();
         github::validate_issue_query(query, params.page).map_err(github_error)?;
-        let github = self.github_client(cancellation)?;
+        let github = client?;
         if !repository
             .host
             .eq_ignore_ascii_case(&github.authorization().host)
@@ -40,15 +79,7 @@ impl AppServer {
             ash_app_server_protocol::protocol::issues::IssueState::Open => "open",
             ash_app_server_protocol::protocol::issues::IssueState::Closed => "closed",
         };
-        let cache = self
-            .issue_cache
-            .as_ref()
-            .ok_or_else(|| issue_error("Issue cache is unavailable".into()))?
-            .lock()
-            .map_err(|_| issue_error("Issue cache operation lock poisoned".into()))?;
-        let settings = self
-            .config
-            .as_ref()
+        let settings = config
             .ok_or_else(|| issue_error("Issue configuration is unavailable".into()))?
             .read_snapshot()
             .map_err(|error| issue_error(error.to_string()))?
@@ -67,28 +98,33 @@ impl AppServer {
             query,
             page: params.page,
         };
-        if params.mode == IssueListMode::ClearCache {
-            if params.page != 1 {
-                return Err(issue_error("Clear cache must start at page 1".into()));
+        let fresh = {
+            let cache = self
+                .cache
+                .lock()
+                .map_err(|_| issue_error("Issue cache operation lock poisoned".into()))?;
+            if params.mode == IssueListMode::ClearCache {
+                if params.page != 1 {
+                    return Err(issue_error("Clear cache must start at page 1".into()));
+                }
+                cache.clear(&key).map_err(issue_error)?;
             }
-            cache.clear(&key).map_err(issue_error)?;
-        }
-        let stored = if matches!(params.mode, IssueListMode::Cached | IssueListMode::Auto) {
-            cache.read(&key, now).map_err(issue_error)?
-        } else {
-            None
+            let stored = if matches!(params.mode, IssueListMode::Cached | IssueListMode::Auto) {
+                cache.read(&key, now).map_err(issue_error)?
+            } else {
+                None
+            };
+            stored.filter(|entry| {
+                params.mode == IssueListMode::Cached
+                    || interval == 0
+                    || now.saturating_sub(entry.fetched_at) < u64::from(interval)
+            })
         };
-        let fresh = stored.filter(|entry| {
-            params.mode == IssueListMode::Cached
-                || interval == 0
-                || now.saturating_sub(entry.fetched_at) < u64::from(interval)
-        });
-        drop(cache);
         let (page, fetched_at, cached) = if let Some(entry) = fresh {
             (entry.page, entry.fetched_at, true)
         } else {
-            let page = runtime
-                .block_on(github.search_issues(
+            let page = github
+                .search_issues(
                     &repository,
                     if state == "open" {
                         github::IssueState::Open
@@ -97,7 +133,8 @@ impl AppServer {
                     },
                     query,
                     params.page,
-                ))
+                )
+                .await
                 .map_err(github_error)?;
             let fetched_at = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -106,9 +143,7 @@ impl AppServer {
             github
                 .validate_authorization()
                 .map_err(github_authentication_error)?;
-            self.issue_cache
-                .as_ref()
-                .expect("cache checked above")
+            self.cache
                 .lock()
                 .map_err(|_| issue_error("Issue cache operation lock poisoned".into()))?
                 .write(&key, &page, fetched_at)
@@ -134,14 +169,13 @@ impl AppServer {
         })
     }
 
-    pub(super) fn issue_read(
+    async fn read(
         &self,
         params: &Value,
-        cancellation: &CancellationToken,
+        client: Result<github::GitHub, RpcError>,
     ) -> Result<Value, RpcError> {
         let params: IssueReadParams = decode(params)?;
-        let runtime = self.issue_runtime()?;
-        let repository = runtime.block_on(github_repository(runtime.root()))?;
+        let repository = github_repository(&self.root).await?;
         if (
             repository.host.as_str(),
             repository.owner.as_str(),
@@ -155,9 +189,10 @@ impl AppServer {
                 "Repository changed; refresh the issue list".into(),
             ));
         }
-        let github = self.github_client(cancellation)?;
-        let snapshot = runtime
-            .block_on(github.issue(&repository, params.number))
+        let github = client?;
+        let snapshot = github
+            .issue(&repository, params.number)
+            .await
             .map_err(github_error)?;
         result(&IssueReadResult {
             body: snapshot.issue.body.clone().unwrap_or_default(),

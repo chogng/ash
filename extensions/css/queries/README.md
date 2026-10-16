@@ -9,8 +9,7 @@ The Web host loads the packaged WASM assets. Rust links the grammar dependencies
 - Upstream: [tree-sitter/tree-sitter-css](https://github.com/tree-sitter/tree-sitter-css)
 - Revision: `dda5cfc5722c429eaba1c910ca32c2c0c5bb1a3f`
 - Grammar version: `0.25.0`
-- Rust dependency: `tree-sitter-css`
-- WASM: [`../tree-sitter/css.wasm`](../tree-sitter/css.wasm)
+- Parser artifacts: [pinned Ash grammar release](../../../third_party/ash-grammars/README.md)
 - License: [css.LICENSE.txt](css.LICENSE.txt)
 
 | Local file         | Upstream source                                                                                                                               |
@@ -22,8 +21,7 @@ The Web host loads the packaged WASM assets. Rust links the grammar dependencies
 - Upstream: [tree-sitter-grammars/tree-sitter-scss](https://github.com/tree-sitter-grammars/tree-sitter-scss)
 - Revision: `eb69c8f55ecc17235f43358c65ec644578554f92`
 - Grammar version: `1.0.0`
-- Rust dependency: `tree-sitter-scss`
-- WASM: [`../tree-sitter/scss.wasm`](../tree-sitter/scss.wasm)
+- Parser artifacts: [pinned Ash grammar release](../../../third_party/ash-grammars/README.md)
 - License: [scss.LICENSE.txt](scss.LICENSE.txt)
 
 | Local file           | Upstream source                                                                                                                                         |
@@ -35,8 +33,7 @@ The Web host loads the packaged WASM assets. Rust links the grammar dependencies
 - Upstream: [jimliang/tree-sitter-less](https://github.com/jimliang/tree-sitter-less)
 - Revision: `b95f7e9780be5c9c191bb478054106253f04acb9`
 - Grammar version: `1.0.0`
-- Rust dependency: `tree-sitter-less`
-- WASM: [`../tree-sitter/less.wasm`](../tree-sitter/less.wasm)
+- Parser artifacts: [pinned Ash grammar release](../../../third_party/ash-grammars/README.md)
 - License: [less.LICENSE.txt](less.LICENSE.txt)
 
 | Local file           | Upstream source                                                                                                                             |

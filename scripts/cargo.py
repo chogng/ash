@@ -21,6 +21,7 @@ from build.lib.cargo import (  # noqa: E402
 from build.lib.cargo_cache import leased_cache, profile_from_arguments  # noqa: E402
 from build.protocol.generate import generate_protocol  # noqa: E402
 from build.lib.sherpa import resolve_sherpa_cargo_env  # noqa: E402
+from build.lib.grammars import resolve_grammars_cargo_env  # noqa: E402
 from build.lib.targets import TARGETS, default_target  # noqa: E402
 from build.lib.v8 import (  # noqa: E402
     DEFAULT_CACHE,
@@ -266,6 +267,8 @@ def main(arguments: list[str] | None = None) -> int:
     ):
         environment["CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO"] = "packed"
     packages = cargo_command_packages(args.cargo, cargo_arguments, REPOSITORY_ROOT)
+    if "ash-grammars" in packages:
+        environment.update(resolve_grammars_cargo_env(target))
     if "ash-app-server-protocol" in packages:
         # Prepare outside Cargo's build lock; the exporter bootstraps without metadata.
         generate_protocol(root=REPOSITORY_ROOT, cargo=args.cargo)

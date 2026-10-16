@@ -111,7 +111,7 @@ The current declarative pack contains the following package directories:
   configuration, Tree-sitter queries/parsers, and—where upstream provides them—snippets.
   JSONL and code snippets reuse the JSON parser with distinct file associations and snippets.
   PHP includes HTML highlighting outside PHP tags. Log highlights timestamps and severity levels
-  without interpreting unstructured text as declarations. Its pinned parser uses a package-local Rust binding.
+  without interpreting unstructured text as declarations. Its parser comes from the pinned Ash grammar release.
   Clojure includes EDN and Babashka files; Groovy includes Gradle and Jenkinsfile variants.
   CoffeeScript includes CSON configuration and indentation folding; Perl includes POD comments.
   Julia Markdown and Raku remain separate modes.
@@ -135,28 +135,25 @@ The current declarative pack contains the following package directories:
   `editor.semanticTokenColorCustomizations.rules`. The `editor.action.inspectTMScopes` command
   reports the active parser's captures and resolved syntax style.
 
-Built-in languages use Tree-sitter by default. Rust links the grammar dependencies in
-`ash-syntax`; the Web Worker loads portable parser assets from each language package.
-Queries live in `queries/` beside their provenance and licenses. JavaScript, TypeScript
-and Rust use the existing `@vscode/tree-sitter-wasm` assets; the other parser assets and
-hashes are declared in each package's `tree-sitter/grammars.json`. Both runtimes register
-parsers and queries generated from these manifests; package-supplied WASM paths are
-resolved from the locked dependency. The generated files and assets are checked during
-normal build preparation:
+Built-in languages use Tree-sitter by default. Rust links the precompiled static
+library through `ash-grammars`; the Web Worker loads all 48 grammar modules from
+the same pinned release. Ash keeps editor queries in `queries/` beside their
+provenance and licenses. Each package's `tree-sitter/grammars.json` declares language
+IDs, aliases, queries and optional persisted-snapshot query bindings. It does not
+contain parser sources or compiler settings.
+
+Normal preparation downloads and verifies missing artifacts, then reuses the
+validated cache. Grammar source compilation and updates belong to the public
+[ash-grammars repository](https://github.com/chogng/ash-grammars). The consumer lock,
+cache contract and update procedure are documented in
+[third_party/ash-grammars](../third_party/ash-grammars/README.md).
 
 ```sh
+pnpm tree-sitter:prepare
 pnpm tree-sitter:generate
 pnpm tree-sitter:verify
-ASH_TREE_SITTER_CLI=/path/to/tree-sitter pnpm tree-sitter:build <grammar>
 ```
 
-Use Tree-sitter CLI 0.26.3 and wasi-sdk 29 for reproducible rebuilds. `gitcommit` also
-requires `ASH_WASI_CC=/path/to/wasi-sdk-29/bin/clang`: its generated lexer is split into
-small equivalent state helpers for LLVM, and only the required `iswcntrl` libc object
-is linked (license in `git-base/tree-sitter/musl.LICENSE.txt`). The shipped parser is
-compared with the original C parser against all 64 upstream corpus examples.
-Gitignore, bazelrc, and dotenv have package-local Rust bindings because their upstreams do not
-publish usable Cargo bindings; they do not introduce another shared syntax engine.
 Docker Compose file names select `dockercompose` and reuse the YAML parser and queries.
 The common project language packages provide offline syntax and editing resources; their
 declarations do not install or start C/C++, Java, C#, PowerShell, or other language servers.

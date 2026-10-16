@@ -9,8 +9,7 @@ The Web host loads the packaged WASM assets. Rust links the grammar dependencies
 - Upstream: [tree-sitter-grammars/tree-sitter-toml](https://github.com/tree-sitter-grammars/tree-sitter-toml)
 - Revision: `64b56832c2cffe41758f28e05c756a3a98d16f41`
 - Grammar version: `0.7.0`
-- Rust dependency: `tree-sitter-toml-ng`
-- WASM: [`../tree-sitter/toml.wasm`](../tree-sitter/toml.wasm)
+- Parser artifacts: [pinned Ash grammar release](../../../third_party/ash-grammars/README.md)
 - License: [toml.LICENSE.txt](toml.LICENSE.txt)
 
 | Local file           | Upstream source                                                                                                                                         |

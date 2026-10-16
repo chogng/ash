@@ -7,7 +7,7 @@ Rust and browser hosts use the same pinned parser and composed queries. WASM is 
 - Source: `tree-sitter-clojure@0.1.0`
 - Source archive SHA-256: `4004884cc509449a1d78fa3e1f02b4e953d0a8065984445304795e72e885338c`
 - License: [clojure.LICENSE.txt](clojure.LICENSE.txt)
-- WASM: [clojure.wasm](../tree-sitter/clojure.wasm)
+- Parser artifacts: [pinned Ash grammar release](../../../third_party/ash-grammars/README.md)
 
 The original grammar and queries are CC0. A local LanguageFn binding avoids an unused additional Tree-sitter runtime. Ash adds form-keyword captures.
 

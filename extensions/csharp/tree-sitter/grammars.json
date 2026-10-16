@@ -1,22 +1,10 @@
 [
   {
     "name": "csharp",
-    "source": {
-      "crate": "tree-sitter-c-sharp",
-      "version": "0.23.5",
-      "root": "."
-    },
-    "wasm": {
-      "path": "tree-sitter/csharp.wasm",
-      "sha256": "d66ba3ed6f45f8d6a9197be9953b08f6d3d02180f9a9da089115ec67f748e3c1"
-    },
     "highlights": ["queries/csharp.scm"],
     "tags": ["queries/csharp.tags.scm"],
     "folds": ["queries/csharp.folds.scm"],
     "injections": [],
-    "rust": {
-      "language": "tree_sitter_c_sharp::LANGUAGE"
-    },
     "languages": [
       {
         "id": "csharp",

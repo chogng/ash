@@ -3,6 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
+import { pythonCommand } from '../python.ts';
 
 const repositoryRoot = resolve(import.meta.dirname, '../..');
 const require = createRequire(join(repositoryRoot, 'package.json'));
@@ -52,7 +53,16 @@ export async function prepareElectronAddons(applicationRoot: string, options: { 
 			// A successful .forge-meta check cannot repair a corrupt/missing binding.
 			// Force applies only after our runtime probe fails, or on explicit request.
 			const { rebuild } = await import('@electron/rebuild');
-			await rebuild({ buildPath: applicationRoot, electronVersion: version, platform: process.platform, arch: process.arch, onlyModules: [addon.name], force: true, disablePreGypCopy: true });
+			// electron-rebuild's node-gyp worker discovers Python through the environment.
+			// Share the repository interpreter used by the other preparation steps.
+			const previousPython = process.env.PYTHON;
+			process.env.PYTHON = pythonCommand([]).command;
+			try {
+				await rebuild({ buildPath: applicationRoot, electronVersion: version, platform: process.platform, arch: process.arch, onlyModules: [addon.name], force: true, disablePreGypCopy: true });
+			} finally {
+				if (previousPython === undefined) delete process.env.PYTHON;
+				else process.env.PYTHON = previousPython;
+			}
 			await validate();
 		}
 		await cacheBinding(cache, binary);

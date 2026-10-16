@@ -1,22 +1,10 @@
 [
   {
     "name": "log",
-    "source": {
-      "crate": "tree-sitter-log",
-      "version": "0.0.1",
-      "root": "."
-    },
-    "wasm": {
-      "path": "tree-sitter/log.wasm",
-      "sha256": "206c8e42c8f2e0593d19dcc5c3eef8c29aa280c767d81fc9311b6da8f5edf267"
-    },
     "highlights": ["queries/log.scm"],
     "tags": [],
     "folds": [],
     "injections": [],
-    "rust": {
-      "language": "tree_sitter_log::LANGUAGE"
-    },
     "languages": [
       {
         "id": "log",

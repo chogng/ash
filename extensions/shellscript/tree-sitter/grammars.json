@@ -1,21 +1,9 @@
 [
   {
     "name": "bash",
-    "source": {
-      "crate": "tree-sitter-bash",
-      "version": "0.25.1",
-      "root": "."
-    },
-    "wasm": {
-      "path": "tree-sitter/bash.wasm",
-      "sha256": "3ad20050b90b7537100769f0ade23f54663f2e397f88b6b91ae5307f41a3b28d"
-    },
     "highlights": ["queries/bash.scm"],
     "tags": ["queries/bash.tags.scm"],
     "injections": [],
-    "rust": {
-      "language": "tree_sitter_bash::LANGUAGE"
-    },
     "languages": [
       {
         "id": "shell",

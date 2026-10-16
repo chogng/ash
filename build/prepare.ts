@@ -14,8 +14,8 @@ export async function prepareGenerated(): Promise<void> {
 	const { generateLocalization } = await import('./resources/localization.ts');
 	await generateLocalization();
 	await runBun(['check', '-p', 'tsconfig.common.json', '--all']);
-	const { verifyTreeSitterGrammars } = await import('./treeSitter.ts');
-	await verifyTreeSitterGrammars();
+	const { prepareTreeSitterGrammars } = await import('./treeSitter.ts');
+	await prepareTreeSitterGrammars();
 	const { prepareBuiltinExtensions } = await import('./builtin/extensions.ts');
 	await prepareBuiltinExtensions();
 	await runBun(['build/resources/icons/generate.ts', '--check']);

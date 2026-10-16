@@ -27,7 +27,8 @@ impl AppServer {
                     name.into(),
                 )
                 .map_err(|error| error.to_string())?;
-                let runtime = self.issue_runtime().map_err(|error| error.to_string())?;
+                let runtime =
+                    super::request_dispatch::runtime().map_err(|error| error.to_string())?;
                 let mut issues = Vec::new();
                 // Read both states before reconciling. A failed page never retires existing work.
                 for state in [github::IssueState::Open, github::IssueState::Closed] {
@@ -113,8 +114,7 @@ impl AppServer {
                     name.into(),
                 )
                 .map_err(|error| error.to_string())?;
-                let result = self
-                    .issue_runtime()
+                let result = super::request_dispatch::runtime()
                     .map_err(|error| error.to_string())?
                     .block_on(github.issue(&repository, number));
                 match result {

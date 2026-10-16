@@ -39,6 +39,7 @@ use crate::chunker::source_revision;
 use crate::error::io_error;
 use crate::memory_store::InMemoryCodebaseIndexStore;
 use crate::overlay::CodebaseOverlay;
+use crate::scanner::is_hard_excluded_path;
 use crate::scanner::prepare_relative_file;
 use crate::scanner::scan_dir;
 use crate::store::CodebaseIndexStore;
@@ -133,6 +134,9 @@ impl Codebase {
         let mut relative_paths = observed_paths
             .iter()
             .filter_map(|path| self.root.project_observed_path(path))
+            // Match the scanner's exclusions before the full-index fallback: build
+            // output cannot change the indexed subset even when a limit was reached.
+            .filter(|path| path == Path::new(".git/info/exclude") || !is_hard_excluded_path(path))
             .collect::<Vec<_>>();
         relative_paths.sort_unstable();
         relative_paths.dedup();
@@ -149,9 +153,6 @@ impl Codebase {
         for relative_path in relative_paths {
             if relative_path.as_os_str().is_empty() || is_ignore_control_path(&relative_path) {
                 return self.reconcile().map(RefreshOutcome::Rebuilt);
-            }
-            if is_hard_excluded_path(&relative_path) {
-                continue;
             }
             let candidate = self.root.canonical_path().join(&relative_path);
             if candidate.is_dir() {
@@ -572,15 +573,6 @@ fn is_ignore_control_path(relative_path: &Path) -> bool {
         .and_then(|name| name.to_str())
         .is_some_and(|name| matches!(name, ".gitignore" | ".ignore" | ".gitmodules"))
         || relative_path == Path::new(".git/info/exclude")
-}
-
-fn is_hard_excluded_path(relative_path: &Path) -> bool {
-    relative_path.components().any(|component| {
-        component
-            .as_os_str()
-            .to_str()
-            .is_some_and(|name| matches!(name, ".git" | ".ash" | "node_modules" | "target"))
-    })
 }
 
 fn validate_limits(limits: &CodebaseLimits) -> Result<(), CodebaseError> {

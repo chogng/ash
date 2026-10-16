@@ -1,0 +1,7 @@
+package(default_visibility = ["//visibility:public"])
+
+# Give the generated crate repository access to the product-owned selection.
+alias(
+    name = "library",
+    actual = "@//third_party/ash-grammars:library",
+)

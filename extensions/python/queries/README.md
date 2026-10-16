@@ -9,8 +9,7 @@ The Web host loads the packaged WASM assets. Rust links the grammar dependencies
 - Upstream: [tree-sitter/tree-sitter-python](https://github.com/tree-sitter/tree-sitter-python)
 - Revision: `293fdc02038ee2bf0e2e206711b69c90ac0d413f`
 - Grammar version: `0.25.0`
-- Rust dependency: `tree-sitter-python`
-- WASM: [`../tree-sitter/python.wasm`](../tree-sitter/python.wasm)
+- Parser artifacts: [pinned Ash grammar release](../../../third_party/ash-grammars/README.md)
 - License: [python.LICENSE.txt](python.LICENSE.txt)
 
 | Local file                         | Upstream source                                                                                                                                  |

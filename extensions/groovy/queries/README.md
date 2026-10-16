@@ -6,7 +6,7 @@ Rust and browser hosts use the same pinned parser and composed queries. WASM is 
 - Revision: `2a6ddd558b6aa39c5b77d8db9fe9baf817486b2c`
 - Source: `tree-sitter-groovy@0.0.1`
 - License: [groovy.LICENSE.txt](groovy.LICENSE.txt)
-- WASM: [groovy.wasm](../tree-sitter/groovy.wasm)
+- Parser artifacts: [pinned Ash grammar release](../../../third_party/ash-grammars/README.md)
 
 The Git dependency and browser parser use the same unmodified revision. Highlights retain upstream capture names. This grammar supports Groovy dynamic parameters and Gradle/Jenkins closure syntax.
 

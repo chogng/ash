@@ -213,7 +213,7 @@ Sherpa ONNX 静态库使用按版本共享的校验缓存，位于 `third_party/
 
 ### Electron 开发运行包
 
-`pnpm prepare:electron` 准备并缓存开发运行包，macOS 包含 Ash 名称和图标。Desktop build/dev 与 CI 在准备阶段调用；TS 启动器和测试只读取产物路径，缺失或过期时提示重新准备，不在启动时复制或签名。
+`pnpm prepare:electron` 准备并缓存开发运行包，macOS 包含 Ash 名称和图标。主可执行文件保留 `Electron` 名称：Electron 根据该文件名判断 `app.isPackaged`，改名会让源码目录启动误用发布包路径。Desktop build/dev 与 CI 在准备阶段调用；TS 启动器和测试只读取产物路径，缺失或过期时提示重新准备，不在启动时复制或签名。
 
 ### Electron 平台模块
 
@@ -397,11 +397,11 @@ WER 的行为与权限参考 [Microsoft 的本地 dump 文档](https://learn.mic
 
 配置以 [`Cargo.toml`](../Cargo.toml) 与 [`.cargo/config.toml`](../.cargo/config.toml) 为准：
 
-| Profile     | 用途                                                  | 调试信息       |
-| ----------- | ----------------------------------------------------- | -------------- |
-| `dev`       | 普通开发构建，保留增量编译                            | `limited`      |
-| `dev-small` | Code 等产品开发程序；按包调整优化级别和 codegen units | 关闭并剥离符号 |
-| `ci-test`   | 包级完整验证、TUI 单测与 PTY 场景，共用编译产物       | `limited`      |
+| Profile     | 用途                                                                | 调试信息       |
+| ----------- | ------------------------------------------------------------------- | -------------- |
+| `dev`       | 普通开发构建，保留增量编译                                          | `limited`      |
+| `dev-small` | Code 等产品开发程序；关闭本地 LTO，按包调整优化级别和 codegen units | 关闭并剥离符号 |
+| `ci-test`   | 包级完整验证、TUI 单测与 PTY 场景，共用编译产物                     | `limited`      |
 
 `ci-test` 继承 `test` 的优化配置：共享包为 1，TUI 为 0，App Server 及其客户端为 `s`。不要全局降到 0，否则 macOS 服务程序的 `__eh_frame` 可能超过 compact-unwind 的 16 MiB 偏移限制。
 
@@ -467,6 +467,8 @@ just bench-build ash-cli --profile dev-small --jobs 4 --compare .build/build-hea
 
 `--absolute-regression 2` 可额外允许两秒以内的波动。RSS 是 `time` 报告的最大驻留集；产物大小是 Cargo 输出文件大小。空输出目录不会清空系统或外部编译器缓存，touch 场景也不能证明实际代码编辑的重编译速度。
 
+测量真实源码编辑时，恢复原内容后保留新的文件修改时间，再构建最终产物。把修改时间退回编辑前可能让另一个 profile 误用实验源码的缓存；仅触碰时间戳且内容未变的场景不受此限制。
+
 ### CI 检查
 
 [blocking-ci.yml](../.github/workflows/blocking-ci.yml) 是常规检查的 PR、main 推送和 merge queue 入口。路径规则集中在 [ci-workflows.json](../.github/ci-workflows.json)，选择器读取完整 Git diff，不受 GitHub 路径过滤的文件数量限制；没有基线的新分支和手动运行检查全部常规工作流。子工作流保留独立手动入口，Bazel 的 release 入口和依赖安全的每周检查也保留。平台与发布工作流继续使用自己的入口。
@@ -511,6 +513,14 @@ python -B scripts/check_blob_size.py --head HEAD
 2026-10-07，在同一 macOS arm64、Rust 1.98.0、12 个任务和已缓存依赖条件下，协议生成器从 `dev` 改用 `dev-small`：三轮触碰协议库源码时间戳后，生成阶段的中位数从 12.96 降到 7.35 秒；无改动重跑为 0.93 与 0.99 秒。生成器程序从 17.9 增至 23.1 MB，不进入产品包。此结果覆盖协议生成阶段，不代表完整桌面构建或实际协议字段编辑提速，也没有证明冷构建收益。
 
 同日，在相同条件下，Electron 后端监听器根据 Cargo 的协议生成器依赖图跳过普通业务源码保存时的协议生成。三轮触碰 `crates/app-server/src/server/operations.rs` 后，从文件变更到后端构建成功的中位数从 6.02 降到 4.95 秒，约减少 18%。两组均使用已缓存的 `dev-small` 产物，包含 250 毫秒防抖及首次依赖图查询，App Server 与 Remote Server 均实际重编译。测量期间暂停另一个源码监听器，完成后恢复；有并发构建或锁等待的早期数据已排除。此结果覆盖后端监听器的时间戳触碰重编译，不代表真实功能编辑、冷构建或完整桌面启动提速。
+
+2026-10-16，修复 Desktop 监听器已准备协议、但底层二进制构建仍重复准备的问题。监听器调用 `build/desktop/develop.py --protocol-prepared`，直接构建默认仍检查协议；协议依赖变更、生成失败重试和构建期间的新保存仍由监听器处理。相同 macOS arm64、Rust 1.98.0、`dev-small` 热缓存下，交替运行默认与已准备路径各三次：无改动阶段中位数为 1.77 → 1.63 秒，触碰上述业务源码后的中位数为 8.48 → 8.32 秒，两条路径均确认 App Server 与 Remote Server 实际重编译。触碰构建最大 RSS 中位数均约 1850 MiB，产物 generation 相同。结果波动大于这次耗时差，尚不能证明稳定的增量编译提速；此测量只覆盖监听器调用的后端构建阶段，不包含防抖、首次依赖发现，也未测量真实功能编辑、冷构建或其他平台。原始命令、逐轮日志和测量脚本在 `.build/perf-desktop-20261016/build-paired.json` 及同目录下。
+
+同日，`dev-small` 显式设置 `lto = "off"`，关闭默认 `false` 仍执行的 crate 内 ThinLTO；其余优化级别、CGU、增量编译和发布 profile 保持原设置。在同一工具链、12 个任务和热缓存下，分别三次修改 `operations.rs` 的 `instructions-init-v1` 版本值，监听器调用的完整后端构建与 generation 发布阶段中位数为 16.07 → 8.17 秒，约减少 49%；最大 RSS 中位数为 1821 → 1635 MiB。Cargo timings 中 App Server 的代码生成从约 8.6 降至 0.5 秒，App Server 和 Remote Server 均实际重编译。无改动中位数为 1.69 → 1.72 秒。计时不含监听器防抖、首次依赖发现、前端构建或应用重启，未证明所有业务编辑或其他平台的同等收益。单独限制提示词函数内联、降低 App Server 优化级别和移动指令选择逻辑的候选均未显示足够收益，未保留。
+
+同一提交和依赖锁定下，另用 `just bench-build ash-app-server --profile dev-small --jobs 12 --source crates/app-server/src/server/operations.rs` 在隔离输出目录各跑三轮。默认功能集的首次构建中位数为 202.36 → 170.25 秒，约减少 16%；无改动为 2.35 → 2.34 秒，时间戳触碰为 6.83 → 6.66 秒。候选触碰的三次耗时为 6.54、12.08、6.66 秒，保留全部样本，不将这组波动解释为稳定提速。首次构建最大 RSS 中位数为 3943 → 4150 MiB，增加约 5%；触碰构建为 1851 → 1648 MiB。原始报告分别在 `.build/build-health/ash-app-server-dev-small-el3s_mak/report.json` 和 `.build/build-health/ash-app-server-dev-small-ga8z7go5/report.json`。这里的首次构建只清空独立输出目录，保留系统缓存，不代表整个 Desktop 首次构建。
+
+此开发配置有体积代价：Desktop 构建的 App Server 为 221.29 → 246.11 MiB，Remote Server 为 166.03 → 176.10 MiB。在相同 Desktop 产物、隔离用户目录和 8 个各 4000 行的 TypeScript 文件下，实测两个后端 generation，均通过 30 次构建目录写入及 24 次编辑器打开/关闭断言：后端空闲 RSS 为 166.3 → 169.6 MiB，关闭编辑器后为 169.6 → 171.9 MiB；打开文件中位数为 137.3 → 138.6 毫秒，编辑阶段后端累计 CPU 为 1.76 → 1.98 秒。这是一次受控场景对比，不代表正式包占用或所有运行时负载都无回归。构建原始命令、Cargo timings、逐轮数据及运行场景保存在 `.build/perf-incremental-20261016/`，汇总为 `build-summary.json` 和 `runtime-summary.json`。
 
 工具库补齐没有证明产品构建提速；参数库拆分、过程宏优化与此前构建依赖 profile 对齐候选均未证明收益，未保留。原始测量保存在 `.build/build-health/`；已提交的详细记录可从本文 Git 历史查阅。
 

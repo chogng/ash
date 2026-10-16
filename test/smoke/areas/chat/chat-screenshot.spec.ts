@@ -6,6 +6,19 @@ import type { ElectronApplication, Page } from '@playwright/test';
 
 const screenshotShortcut = process.platform === 'darwin' ? 'Control+Meta+a' : 'Control+Alt+s';
 
+test('Agents screenshot shortcut survives initial navigation, reload and reopening', { tag: ['@electron-ui'] }, async ({ application, workbench, target }) => {
+	let page = await workbench.openAgentsWindow(target.kind);
+	const synchronize = async (): Promise<void> => {
+		const result = await page.evaluate(() => (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke('ash:screenshot:shortcut', { accelerator: '', label: '', global: false }));
+		expect(result).toEqual({ available: false, activeLabel: '' });
+	};
+	await synchronize();
+	await workbench.reloadWindow(page);
+	await synchronize();
+	page = await workbench.reopenAgentsWindow(application, page);
+	await synchronize();
+});
+
 async function screenOverlay(application: ElectronApplication, chinese = false): Promise<Page> {
 	await expect.poll(() => application.windows().filter(page => page.url().includes('/screenshot/screenshot.html')).length).toBeGreaterThan(0);
 	const page = application.windows().find(page => page.url().includes('/screenshot/screenshot.html'))!;

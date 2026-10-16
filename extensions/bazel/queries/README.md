@@ -9,8 +9,7 @@ The Web host loads the packaged WASM assets. Rust links the grammar dependencies
 - Upstream: [tree-sitter-grammars/tree-sitter-starlark](https://github.com/tree-sitter-grammars/tree-sitter-starlark)
 - Revision: `a453dbf3ba433db0e5ec621a38a7e59d72e4dc69`
 - Grammar version: `1.3.0`
-- Rust dependency: `tree-sitter-starlark`
-- WASM: [`../tree-sitter/starlark.wasm`](../tree-sitter/starlark.wasm)
+- Parser artifacts: [pinned Ash grammar release](../../../third_party/ash-grammars/README.md)
 - License: [starlark.LICENSE.txt](starlark.LICENSE.txt)
 
 | Local file                                         | Upstream source                                                                                                                                             |
@@ -26,8 +25,7 @@ The Web host loads the packaged WASM assets. Rust links the grammar dependencies
 - Upstream: [zaucy/tree-sitter-bazelrc](https://github.com/zaucy/tree-sitter-bazelrc)
 - Revision: `3cea80b67f53178518e2c5f5011b51a4f8f6c0a5`
 - Grammar version: `1.0.0`
-- Rust dependency: `tree-sitter-bazelrc`
-- WASM: [`../tree-sitter/bazelrc.wasm`](../tree-sitter/bazelrc.wasm)
+- Parser artifacts: [pinned Ash grammar release](../../../third_party/ash-grammars/README.md)
 - License: [bazelrc.LICENSE.txt](bazelrc.LICENSE.txt)
 
 | Local file                 | Upstream source                                                                                                                             |

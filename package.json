@@ -185,8 +185,8 @@
     "test:browser:integration:prepared": "bun check -p test/integration/browser/tsconfig.json --all && node test/integration/browser/run.ts",
     "tree-sitter:generate": "node build/treeSitterRegistry.ts",
     "language:generate": "node build/languageRegistry.ts",
-    "tree-sitter:verify": "node build/treeSitter.ts --verify",
-    "tree-sitter:build": "node build/treeSitter.ts --build"
+    "tree-sitter:verify": "node build/treeSitterRegistry.ts --check && node build/python.ts -B -m build.lib.grammars --wasm --verify",
+    "tree-sitter:prepare": "node build/treeSitter.ts"
   },
   "devDependencies": {
     "@ash/typescript-compiler": "npm:typescript@7.0.2",

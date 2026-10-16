@@ -279,7 +279,7 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 	async updateChildren(element: TInput | T = this.requireInput(), options: AsyncDataTreeUpdateOptions = {}): Promise<void> {
 		const parentId = element === this.input ? undefined : this.getId(element as T);
 		if (parentId !== undefined && !this.states.has(parentId)) throw new RangeError(`Unknown AsyncDataTree element: ${parentId}`);
-		if (options.deferIfCollapsed && !this.compressionEnabled && parentId !== undefined && this.tree.isCollapsed(element as T) === true) {
+		if (options.deferIfCollapsed && parentId !== undefined && this.canDeferChildren(element as T)) {
 			this.invalidateChildren(parentId);
 			return;
 		}
@@ -289,12 +289,20 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 			// A change arriving during a read must be resolved after that read, not lost to request coalescing.
 			await current.promise.catch(() => undefined);
 			if (this.isDisposed || generation !== this.generation || parentId !== undefined && !this.states.has(parentId)) return;
-			if (!this.compressionEnabled && parentId !== undefined && this.tree.isCollapsed(element as T) === true) {
+			if (parentId !== undefined && this.canDeferChildren(element as T)) {
 				this.invalidateChildren(parentId);
 				return;
 			}
 		}
 		await this.loadChildren(element, parentId, this.generation, { ...options, recursive: options.recursive !== false });
+	}
+
+	private canDeferChildren(element: T): boolean {
+		if (this.tree.isCollapsed(element) !== true) return false;
+		const chain = this.compressionEnabled ? this.tree.getCompressedTreeNode?.(element) : undefined;
+		// Interior segments define the visible compact label. Only the final segment's
+		// children are hidden and can be discarded without shortening that label.
+		return !chain || this.getId(chain.elements.at(-1)!) === this.getId(element);
 	}
 
 	private invalidateChildren(parentId: string): void {
@@ -334,7 +342,7 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 				const resolvedCompact = new Set<string>();
 				if (this.compressionEnabled && this.options.isIncompressible) {
 					const ids = parentId === undefined ? this.rootChildren : this.states.get(parentId)!.children!;
-					await Promise.all(ids.map(id => this.resolveCompactChain(id, generation, resolvedCompact)));
+					await Promise.all(ids.map(id => this.resolveCompactChain(id, generation, resolvedCompact, options.deferIfCollapsed)));
 					if (!this.isCurrentRequest(requestKey, request)) return;
 				}
 				const viewState = this.getViewState();
@@ -395,9 +403,14 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 		this.setSelection((state.selection ?? []).flatMap(id => this.states.has(id) ? [this.states.get(id)!.element] : []));
 	}
 
-	private async resolveCompactChain(id: string, generation: number, resolved: Set<string>): Promise<void> {
+	private async resolveCompactChain(id: string, generation: number, resolved: Set<string>, deferIfCollapsed = false): Promise<void> {
 		const state = this.states.get(id);
 		if (!state?.hasChildren || this.options.isIncompressible?.(state.element)) return;
+		if (deferIfCollapsed && this.canDeferChildren(state.element)) {
+			this.invalidateChildren(id);
+			resolved.add(id);
+			return;
+		}
 		// Inspect only the continuation of a single-directory chain. Branches stay lazy.
 		let children: readonly T[];
 		try {
@@ -409,7 +422,7 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 		if (generation !== this.generation || this.isDisposed || this.states.get(id) !== state) return;
 		this.replaceChildren(id, children);
 		resolved.add(id);
-		if (children.length === 1) await this.resolveCompactChain(this.getId(children[0]!), generation, resolved);
+		if (children.length === 1) await this.resolveCompactChain(this.getId(children[0]!), generation, resolved, deferIfCollapsed);
 	}
 
 	private async readChildren(element: TInput | T, isCurrent: () => boolean): Promise<Iterable<T>> {

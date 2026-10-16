@@ -1,22 +1,10 @@
 [
   {
     "name": "dart",
-    "source": {
-      "crate": "tree-sitter-dart",
-      "version": "0.2.0",
-      "root": "."
-    },
-    "wasm": {
-      "path": "tree-sitter/dart.wasm",
-      "sha256": "cce7c8ab7763c4997a25c66676e425618209205d2733661c72973e6b2bf2b0ad"
-    },
     "highlights": ["queries/dart.scm"],
     "tags": ["queries/dart.tags.scm"],
     "folds": ["queries/dart.folds.scm"],
     "injections": [],
-    "rust": {
-      "language": "tree_sitter_dart::LANGUAGE"
-    },
     "languages": [
       {
         "id": "dart",

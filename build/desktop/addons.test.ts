@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import test from 'node:test';
+import { pythonCommand } from '../python.ts';
 
 test('addon preparation validates installed, cached and rebuilt bindings against Electron', async t => {
 	const root = await mkdtemp(join(tmpdir(), 'ash-desktop-addons-'));
@@ -20,7 +21,8 @@ test('addon preparation validates installed, cached and rebuilt bindings against
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 export async function rebuild(options) {
-  await appendFile(join(options.buildPath, 'rebuilds.jsonl'), JSON.stringify(options) + '\\n');
+  await appendFile(join(options.buildPath, 'rebuilds.jsonl'), JSON.stringify({ ...options, python: process.env.PYTHON }) + '\\n');
+  if (await readFile(join(options.buildPath, 'fail-build')).catch(() => undefined)) throw new Error('Rebuild failed');
   for (const name of options.onlyModules) {
     const directory = join(options.buildPath, 'node_modules', name, 'build/Release');
     await mkdir(directory, { recursive: true });
@@ -40,6 +42,9 @@ export async function rebuild(options) {
 	}
 	await mkdir(join(root, 'build/desktop'), { recursive: true });
 	await copyFile(join(import.meta.dirname, 'addons.ts'), join(root, 'build/desktop/addons.ts'));
+	await copyFile(join(import.meta.dirname, '../python.ts'), join(root, 'build/python.ts'));
+	const previousPython = process.env.PYTHON;
+	const expectedPython = pythonCommand([]).command;
 	const probes: string[][] = [];
 	// This fixture models the loader result, not a fake production addon. The
 	// actual Electron binary is exercised separately against the installed modules.
@@ -53,6 +58,7 @@ export async function rebuild(options) {
 		return new childProcess.ChildProcess();
 	});
 	const { prepareElectronAddons } = await import(pathToFileURL(join(root, 'build/desktop/addons.ts')).href);
+	const { pythonCommand: fixturePythonCommand } = await import(pathToFileURL(join(root, 'build/python.ts')).href);
 	const binary = join(root, 'node_modules/native-keymap/build/Release/keymapping.node');
 	const cacheDirectory = join(root, '.build/desktop-addons/v1', `${process.platform}-${process.arch}`, '44.4.5');
 	const rebuilds = async () => (await readFile(join(root, 'rebuilds.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line));
@@ -78,6 +84,8 @@ export async function rebuild(options) {
 	assert.equal((await rebuilds()).length, 1);
 	assert.deepEqual((await rebuilds())[0].onlyModules, ['native-keymap']);
 	assert.equal((await rebuilds())[0].disablePreGypCopy, true);
+	assert.equal((await rebuilds())[0].python, fixturePythonCommand([]).command);
+	assert.equal(process.env.PYTHON, previousPython, 'preparation restores the caller environment');
 
 	// Integrity alone is insufficient: even checksummed bytes must load in Electron.
 	const incompatible = Buffer.from('incompatible binding');
@@ -100,4 +108,20 @@ export async function rebuild(options) {
 	await prepareElectronAddons(root);
 	assert.equal(await readFile(binary, 'utf8'), 'loadable');
 	assert.equal((await rebuilds()).length, 4, 'failed builds must not overwrite the valid cached binding');
+
+	// Compiler failures must preserve both an unset and an explicitly configured interpreter.
+	try {
+		await writeFile(join(root, 'fail-build'), 'yes');
+		for (const configuredPython of [undefined, expectedPython]) {
+			if (configuredPython === undefined) delete process.env.PYTHON;
+			else process.env.PYTHON = configuredPython;
+			const selectedPython = fixturePythonCommand([]).command;
+			await assert.rejects(prepareElectronAddons(root, { force: true }), /Rebuild failed/);
+			assert.equal((await rebuilds()).at(-1).python, selectedPython);
+			assert.equal(process.env.PYTHON, configuredPython);
+		}
+	} finally {
+		if (previousPython === undefined) delete process.env.PYTHON;
+		else process.env.PYTHON = previousPython;
+	}
 });

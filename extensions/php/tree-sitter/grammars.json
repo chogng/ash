@@ -1,22 +1,10 @@
 [
   {
     "name": "php",
-    "source": {
-      "crate": "tree-sitter-php",
-      "version": "0.25.1",
-      "root": "php"
-    },
-    "wasm": {
-      "path": "tree-sitter/php.wasm",
-      "sha256": "1c4a82c3271a18e9efea91a4eef6a8dcb324a8378dcc55dc7d1ae72c72b65f5c"
-    },
     "highlights": ["queries/php.scm"],
     "tags": ["queries/php.tags.scm"],
     "folds": ["queries/php.folds.scm"],
     "injections": ["queries/php.injections.scm"],
-    "rust": {
-      "language": "tree_sitter_php::LANGUAGE_PHP"
-    },
     "languages": [
       {
         "id": "php",

@@ -20,14 +20,61 @@ use super::serialize_response;
 use ash_app_server_protocol::protocol::registry::ClientMethod;
 use ash_app_server_protocol::rpc::JsonRpcVersion;
 use ash_async_utils::CancellationToken;
+use std::collections::BTreeMap;
 use std::time::Instant;
 use std::time::SystemTime;
+
+/// Connection-wide uniqueness without retaining every ID in a sequential client stream.
+/// Disjoint inclusive intervals also preserve arbitrary ordering and gaps; evicting old
+/// IDs or keeping only a high-water mark would change the protocol's replay checks.
+#[derive(Debug, Default)]
+pub(super) struct RequestIds {
+    ranges: BTreeMap<u64, u64>,
+}
+
+impl RequestIds {
+    pub(super) fn insert(&mut self, id: u64) -> bool {
+        let previous = self
+            .ranges
+            .range(..=id)
+            .next_back()
+            .map(|(&start, &end)| (start, end));
+        if previous.is_some_and(|(_, end)| id <= end) {
+            return false;
+        }
+        let next = self
+            .ranges
+            .range(id..)
+            .next()
+            .map(|(&start, &end)| (start, end));
+        let left = previous.filter(|(_, end)| end.checked_add(1) == Some(id));
+        let right = next.filter(|(start, _)| id.checked_add(1) == Some(*start));
+        match (left, right) {
+            (Some((start, _)), Some((next_start, next_end))) => {
+                *self.ranges.get_mut(&start).expect("existing interval") = next_end;
+                self.ranges.remove(&next_start);
+            }
+            (Some((start, _)), None) => {
+                *self.ranges.get_mut(&start).expect("existing interval") = id;
+            }
+            (None, Some((start, end))) => {
+                self.ranges.remove(&start);
+                self.ranges.insert(id, end);
+            }
+            (None, None) => {
+                self.ranges.insert(id, id);
+            }
+        }
+        true
+    }
+}
 
 impl RequestLane {
     fn for_method(method: Option<ClientMethod>) -> Self {
         match method {
             Some(ClientMethod::SessionRuntimeInvoke) => Self::Network,
-            Some(method) if super::github_processor::GitHubRequestProcessor::handles(method) => Self::Network,
+            Some(method) if super::github_processor::GitHubRequestProcessor::handles(method)
+                || super::issue_operations::IssueRequestProcessor::handles(method) => Self::Network,
             Some(
                 ClientMethod::VoiceStartCancel
                 | ClientMethod::VoiceStop
@@ -71,8 +118,6 @@ impl RequestLane {
                 | ClientMethod::ToolResourceOpen
                 | ClientMethod::GitHubAccountList
                 | ClientMethod::GitHubAccountConnect
-                | ClientMethod::IssueList
-                | ClientMethod::IssueRead
                 | ClientMethod::GitCommand
                 | ClientMethod::GitClone
                 | ClientMethod::GitCloneTo
@@ -128,13 +173,12 @@ impl AppServer {
         let method = client_method(&prepared.request.method).expect("network method is registered");
         let params = std::mem::take(&mut prepared.request.params);
         let token = prepared.cancellation.clone();
-        let run = admission.permit.is_ok() && !token.is_cancelled();
+        if admission.permit.is_err() || token.is_cancelled() {
+            return Box::pin(async { None });
+        }
         if method == ClientMethod::SessionRuntimeInvoke {
             let runtimes = self.session_runtimes.clone();
             return Box::pin(async move {
-                if !run {
-                    return None;
-                }
                 // Provisioning has bounded network admission and its own profile owner.
                 // A build must not hold the global Session/Settings lock or a UI worker.
                 Some(
@@ -153,11 +197,26 @@ impl AppServer {
                 )
             });
         }
+        if super::issue_operations::IssueRequestProcessor::handles(method) {
+            let processor = self.issue_processor.clone();
+            let github = self.github_processor().cloned();
+            let config = self.config.clone();
+            return Box::pin(async move {
+                Some(match processor {
+                    Some(processor) => {
+                        let client = github.and_then(|provider| provider.client(&token));
+                        processor
+                            .request(method, &params, client, config.as_deref())
+                            .await
+                    }
+                    None => Err(super::issue_operations::issue_error(
+                        "Issue runtime unavailable".into(),
+                    )),
+                })
+            });
+        }
         let processor = self.github_processor().cloned();
         Box::pin(async move {
-            if !run {
-                return None;
-            }
             Some(match processor {
                 Ok(processor) => processor.request(method, &params, &token).await,
                 Err(error) => Err(error),
@@ -486,3 +545,7 @@ impl AppServer {
         delivered
     }
 }
+
+#[cfg(test)]
+#[path = "request_processing_tests.rs"]
+mod tests;

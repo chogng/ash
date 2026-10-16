@@ -82,6 +82,33 @@ test('bundled launchers resolve the same prepared runtime without running prepar
 	assert.equal(execFileSync(process.execPath, [output], { encoding: 'utf8' }).trim(), expected);
 });
 
+test('macOS development runtime keeps source-directory launches in development mode', { skip: process.platform !== 'darwin' }, t => {
+	const root = resolve(import.meta.dirname, '../..');
+	const executable = prepareDevelopmentElectron(root);
+	const directory = mkdtempSync(join(tmpdir(), 'ash-electron-development-'));
+	t.after(() => rmSync(directory, { recursive: true, force: true }));
+	writeFileSync(join(directory, 'package.json'), JSON.stringify({ main: 'main.cjs' }));
+	writeFileSync(join(directory, 'main.cjs'), `
+		const { app, BrowserWindow } = require('electron');
+		app.setActivationPolicy('accessory');
+		app.disableHardwareAcceleration();
+		app.whenReady().then(async () => {
+			const window = new BrowserWindow({ show: false });
+			await window.loadURL('about:blank');
+			console.log(JSON.stringify({ isPackaged: app.isPackaged, defaultApp: process.defaultApp, page: await window.webContents.executeJavaScript('location.href') }));
+			window.destroy();
+			app.quit();
+		}).catch(error => { console.error(error); app.exit(1); });
+	`);
+	const environment = { ...process.env };
+	delete environment.ELECTRON_RUN_AS_NODE;
+	delete environment.ELECTRON_FORCE_IS_PACKAGED;
+	const runtime = JSON.parse(execFileSync(executable, [directory, `--user-data-dir=${join(directory, 'user-data')}`], {
+		env: environment, encoding: 'utf8', timeout: 15_000,
+	}));
+	assert.deepEqual(runtime, { isPackaged: false, defaultApp: true, page: 'about:blank' });
+});
+
 function plist(bundle: string): Record<string, string> {
 	return JSON.parse(execFileSync('/usr/bin/plutil', ['-convert', 'json', '-o', '-', join(bundle, 'Contents/Info.plist')], { encoding: 'utf8' }));
 }

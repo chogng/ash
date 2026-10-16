@@ -13,6 +13,7 @@ from build.lib.cargo import parse_cargo_message
 from build.lib.cargo import resolve_cargo_target_directory
 from build.lib.cargo_cache import leased_cache
 from build.lib.sherpa import resolve_sherpa_cargo_env
+from build.lib.grammars import resolve_grammars_cargo_env
 from build.lib.targets import TargetSpec
 from build.lib.v8 import resolve_v8_cargo_env
 from build.lib.cargo_selection import cargo_command_packages
@@ -69,6 +70,8 @@ _BINARIES = {
 
 def cargo_environment(spec: TargetSpec, packages: set[str]) -> dict[str, str]:
     environment = os.environ.copy()
+    if "ash-grammars" in packages:
+        environment.update(resolve_grammars_cargo_env(spec.target))
     if "v8" in packages:
         environment.update(resolve_v8_cargo_env(spec, environ=environment))
     if "sherpa-onnx-sys" in packages:
@@ -84,6 +87,7 @@ def build_binaries(
     cargo: str,
     cargo_profile: str,
     host_build: bool = False,
+    protocol_prepared: bool = False,
 ) -> Dict[str, Path]:
     if (
         any(
@@ -125,7 +129,9 @@ def build_binaries(
     if "ash-voice-host" in missing:
         command.extend(["--features", "ash-voice-host/host"])
     packages = cargo_command_packages(cargo, command[1:], repository_root)
-    if "ash-app-server-protocol" in packages:
+    # Watchers prepare protocol changes before this call and serialize subsequent
+    # saves. Direct builds still own preparation when no caller has done it.
+    if not protocol_prepared and "ash-app-server-protocol" in packages:
         generate_protocol(root=repository_root, cargo=cargo)
     environment = cargo_environment(spec, packages)
     if cargo_profile == "release" and "apple-darwin" in spec.target:

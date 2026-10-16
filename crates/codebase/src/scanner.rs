@@ -43,10 +43,7 @@ pub(crate) fn scan_dir(root: &Dir, limits: &CodebaseLimits) -> Result<DirScan, C
         .filter_entry(|entry| {
             entry.depth() == 0
                 || !entry.file_type().is_some_and(|kind| kind.is_dir())
-                || !matches!(
-                    entry.file_name().to_str(),
-                    Some(".git" | ".ash" | "node_modules" | "target")
-                )
+                || !is_hard_excluded_path(Path::new(entry.file_name()))
         });
     let mut walk_error_count = 0usize;
     let mut paths = builder
@@ -124,6 +121,16 @@ pub(crate) fn scan_dir(root: &Dir, limits: &CodebaseLimits) -> Result<DirScan, C
         skipped_file_count,
         file_limit_hit,
         source_bytes_limit_hit,
+    })
+}
+
+// Full scans, watcher invalidations and overlays share these runtime exclusions.
+// Other hidden paths may be explicitly included by ignore-file allow rules.
+pub(crate) fn is_hard_excluded_path(relative_path: &Path) -> bool {
+    relative_path.components().any(|component| {
+        component.as_os_str().to_str().is_some_and(|name| {
+            matches!(name, ".git" | ".ash" | ".build" | "node_modules" | "target")
+        })
     })
 }
 

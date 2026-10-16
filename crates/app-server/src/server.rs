@@ -140,7 +140,6 @@ mod instruction_operations;
 mod interaction_runtime;
 mod issue_operations;
 mod issue_reporter_operations;
-mod issue_runtime;
 mod language_document_features;
 mod language_operations;
 mod language_runtime;
@@ -336,8 +335,7 @@ pub struct AppServer {
     _interaction_deadline_watcher: interaction_runtime::InteractionDeadlineWatcher,
     git_turn_changes: Option<Arc<git_turn_changes_runtime::GitTurnChangesRuntime>>,
     dir_services: Option<Arc<thread_dirs::ThreadDirs>>,
-    issue_runtime: Option<Arc<issue_runtime::IssueRuntime>>,
-    issue_cache: Option<Arc<Mutex<ash_state::SqliteIssueCache>>>,
+    issue_processor: Option<Arc<issue_operations::IssueRequestProcessor>>,
     thread_pull_requests: Option<Arc<ash_state::SqliteThreadStore>>,
     projects: Option<Arc<ash_projects::ProjectCoordinator>>,
     teams: Option<Arc<ash_teams::TeamCoordinator>>,
@@ -388,7 +386,7 @@ struct ConnectionMutableState {
     extension_hosts: Option<extension_host_runtime::ExtensionHostRuntime>,
     closed: bool,
     initialized: bool,
-    request_ids: BTreeSet<u64>,
+    request_ids: request_processing::RequestIds,
     extension_packages_leases: BTreeSet<String>,
     directory_grants_host: bool,
 }
@@ -803,8 +801,7 @@ impl AppServer {
             _interaction_deadline_watcher: interaction_deadline_watcher,
             git_turn_changes: None,
             dir_services: None,
-            issue_runtime: None,
-            issue_cache: None,
+            issue_processor: None,
             thread_pull_requests: None,
             projects: None,
             teams: None,
@@ -872,7 +869,7 @@ impl AppServer {
     }
 
     pub(crate) fn with_local_dir_services(
-        mut self,
+        self,
         database_path: &std::path::Path,
         profile_root: &std::path::Path,
         dir_root: &std::path::Path,
@@ -893,7 +890,6 @@ impl AppServer {
         let hooks = self
             .local_hook_runtime()
             .ok_or_else(|| "local directory services require the Hook runtime".to_string())?;
-        self.issue_runtime = Some(issue_runtime::IssueRuntime::open(dir_root)?);
         let dirs = thread_dirs::ThreadDirs::open(
             profile_root,
             dir_root,
@@ -913,9 +909,10 @@ impl AppServer {
         )?;
         let mut server = self.with_git_turn_changes_runtime(runtime)?;
         server.dir_services = Some(dirs);
-        server.issue_cache = Some(Arc::new(Mutex::new(ash_state::SqliteIssueCache::open(
+        server.issue_processor = Some(Arc::new(issue_operations::IssueRequestProcessor::open(
+            dir_root,
             database_path,
-        )?)));
+        )?));
         Ok(server)
     }
 
@@ -2689,7 +2686,19 @@ impl AppServer {
                 &request.params,
             ),
             Some(ClientMethod::IssueConfigure) => self.issue_configure(&request.params),
-            Some(ClientMethod::IssueList) => self.issue_list(&request.params, cancellation),
+            Some(method @ (ClientMethod::IssueList | ClientMethod::IssueRead)) => {
+                let processor = self.issue_processor.as_ref().ok_or_else(|| {
+                    issue_operations::issue_error("Issue runtime unavailable".into())
+                })?;
+                request_dispatch::runtime()
+                    .map_err(|error| issue_operations::issue_error(error.to_string()))?
+                    .block_on(processor.request(
+                        method,
+                        &request.params,
+                        self.github_client(cancellation),
+                        self.config.as_deref(),
+                    ))
+            }
             Some(ClientMethod::IssueReporterRead) => self.issue_reporter_read(),
             Some(ClientMethod::IssueReporterSearch) => {
                 self.issue_reporter_search(&request.params, cancellation)
@@ -2698,7 +2707,6 @@ impl AppServer {
                 self.issue_reporter_search_cancel(connection, &request.params)
             }
             Some(ClientMethod::IssueReporterSubmit) => self.issue_reporter_submit(&request.params),
-            Some(ClientMethod::IssueRead) => self.issue_read(&request.params, cancellation),
             Some(ClientMethod::SessionCreate) => self.session_create(connection, &request.params),
             Some(ClientMethod::SessionRuntimeInvoke) => Self::invoke_session_runtime(
                 self.session_runtimes.as_ref(),

@@ -393,6 +393,120 @@ fn hard_excluded_runtime_paths_do_not_force_rebuilds() {
 }
 
 #[test]
+fn hidden_build_outputs_do_not_rescan_sources() {
+    let directory = dir();
+    fs::write(directory.path().join("visible.rs"), "fn visible() {}\n").unwrap();
+    let index = memory_index(&directory);
+    let before = index.rebuild().unwrap();
+    fs::create_dir_all(directory.path().join(".build/output")).unwrap();
+    fs::write(
+        directory.path().join(".build/output/generated.rs"),
+        "fn generated() {}\n",
+    )
+    .unwrap();
+
+    for path in [
+        ".build",
+        ".build/output",
+        ".build/output/generated.rs",
+        ".build/.gitignore",
+    ] {
+        assert_eq!(
+            index
+                .refresh_observed_paths(&[directory.path().join(path)])
+                .unwrap(),
+            RefreshOutcome::NoChange,
+            "build artifact {path} must not rescan the project"
+        );
+    }
+    assert_eq!(index.snapshot().unwrap(), before);
+}
+
+#[test]
+fn excluded_paths_do_not_rescan_a_full_index_but_source_changes_do() {
+    let directory = dir();
+    fs::write(directory.path().join("a.rs"), "fn first() {}\n").unwrap();
+    fs::write(directory.path().join("b.rs"), "fn second() {}\n").unwrap();
+    let limits = CodebaseLimits::default().with_max_files(NonZeroUsize::new(1).unwrap());
+    let index = Codebase::open_memory(Dir::open_local(directory.path()).unwrap(), limits).unwrap();
+    let before = index.rebuild().unwrap();
+    assert!(before.file_limit_hit);
+    for path in [
+        "target/generated.rs",
+        "node_modules/package/index.js",
+        ".build/output",
+        ".git/objects/pack",
+    ] {
+        assert_eq!(
+            index
+                .refresh_observed_paths(&[directory.path().join(path)])
+                .unwrap(),
+            RefreshOutcome::NoChange
+        );
+    }
+    fs::remove_file(directory.path().join("a.rs")).unwrap();
+    assert!(matches!(
+        index
+            .refresh_observed_paths(&[directory.path().join("a.rs")])
+            .unwrap(),
+        RefreshOutcome::Rebuilt(_)
+    ));
+    assert_eq!(
+        index.search(&CodebaseQuery::new("second")).unwrap().len(),
+        1
+    );
+}
+
+#[test]
+fn git_info_exclude_still_invalidates_the_source_index() {
+    let directory = dir();
+    fs::write(directory.path().join("visible.rs"), "fn visible() {}\n").unwrap();
+    let index = memory_index(&directory);
+    index.rebuild().unwrap();
+    fs::create_dir(directory.path().join(".git/info")).unwrap();
+    let exclude = directory.path().join(".git/info/exclude");
+    fs::write(&exclude, "visible.rs\n").unwrap();
+    assert!(matches!(
+        index.refresh_observed_paths(&[exclude]).unwrap(),
+        RefreshOutcome::Rebuilt(_)
+    ));
+    assert_eq!(index.snapshot().unwrap().indexed_file_count, 0);
+}
+
+#[test]
+fn explicitly_included_hidden_sources_refresh_but_build_outputs_stay_excluded() {
+    let directory = dir();
+    fs::write(
+        directory.path().join(".gitignore"),
+        "!.config/\n!.config/**\n!.build/\n!.build/**\n",
+    )
+    .unwrap();
+    fs::create_dir(directory.path().join(".config")).unwrap();
+    fs::create_dir(directory.path().join(".build")).unwrap();
+    let source = directory.path().join(".config/source.rs");
+    fs::write(&source, "fn before() {}\n").unwrap();
+    fs::write(
+        directory.path().join(".build/output.rs"),
+        "fn generated() {}\n",
+    )
+    .unwrap();
+    let index = memory_index(&directory);
+    assert_eq!(index.rebuild().unwrap().indexed_file_count, 1);
+    fs::write(&source, "fn after() {}\n").unwrap();
+    assert!(matches!(
+        index.refresh_observed_paths(&[source]).unwrap(),
+        RefreshOutcome::Published(_)
+    ));
+    assert_eq!(index.search(&CodebaseQuery::new("after")).unwrap().len(), 1);
+    assert!(
+        index
+            .search(&CodebaseQuery::new("generated"))
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[test]
 fn query_is_literal_bounded_and_empty_query_is_rejected() {
     let directory = dir();
     fs::write(
