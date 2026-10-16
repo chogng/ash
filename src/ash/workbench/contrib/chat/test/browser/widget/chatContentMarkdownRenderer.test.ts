@@ -6,6 +6,8 @@ import { resolve } from 'node:path';
 import { suite, test, suiteSetup, suiteTeardown } from 'mocha';
 import { startMarkdownMathExtension } from '../../../../../../../../test/fixtures/markdownExtension.js';
 import { Emitter, Event } from '../../../../../../base/common/event.js';
+import { DeferredPromise } from '../../../../../../base/common/async.js';
+import { DisposableStore, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../../../../platform/agentHost/common/extensionHostApi.js';
 import { createDisconnectedExtensionHostApi } from '../../../../../../platform/agentHost/browser/extensionHostApi.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
@@ -143,6 +145,61 @@ suite('Shared chat Markdown rendering', () => {
 		assert.deepEqual(Array.from(result.element.querySelectorAll('.ash-chat-markdown-media'), item => item.textContent), ['Diagram', 'Demo']);
 		assert.doesNotMatch(result.element.innerHTML, /chatgpt|https:\/\/example/u);
 	});
+
+	for (const disposeBeforeLoad of [false, true]) {
+		test(`pending workspace images ${disposeBeforeLoad ? 'ignore completion after disposal' : 'load before unavailable media receives a text fallback'}`, async () => {
+			using resources = new DisposableStore();
+			const objectUrl = 'blob:https://ash.invalid/workspace-image';
+			const created: Blob[] = [];
+			const revoked: string[] = [];
+			const urls = document.defaultView!.URL;
+			for (const key of ['createObjectURL', 'revokeObjectURL'] as const) {
+				const descriptor = Object.getOwnPropertyDescriptor(urls, key);
+				Object.defineProperty(urls, key, {
+					configurable: true,
+					value: key === 'createObjectURL' ? (blob: Blob) => { created.push(blob); return objectUrl; } : (value: string) => { revoked.push(value); },
+				});
+				resources.add(toDisposable(() => {
+					if (descriptor) Object.defineProperty(urls, key, descriptor);
+					else Reflect.deleteProperty(urls, key);
+				}));
+			}
+			using scope = services();
+			using renderer = scope.createInstance(ChatContentMarkdownRenderer);
+			const read = new DeferredPromise<Blob>();
+			const completed = new DeferredPromise<void>();
+			const requests: string[] = [];
+			using result = renderer.render({ value: '![Workspace](ash-remote://ssh+host/image.png)\n\n![Blocked](https://example.com/image)' }, {
+				sanitizerConfig: { replaceWithPlaintext: false },
+				imageResourceLoader: resource => { requests.push(resource.toString()); return read.p; },
+				asyncRenderCallback: () => { void completed.complete(); },
+			});
+			const image = result.element.querySelector('img[alt="Workspace"]');
+			assert.ok(image, 'A pending file image must remain owned by the base renderer');
+			assert.equal(image.hasAttribute('src'), false);
+			assert.deepEqual(requests, ['ash-remote://ssh+host/image.png']);
+			assert.deepEqual(created, []);
+			if (disposeBeforeLoad) result.dispose();
+			const blob = new Blob([new Uint8Array([137, 80, 78, 71])], { type: 'image/png' });
+			await read.complete(blob);
+			if (disposeBeforeLoad) {
+				// Drain the settled resource promise; a disposed render must neither update nor notify.
+				await new Promise<void>(resolve => setImmediate(resolve));
+				assert.deepEqual(created, []);
+				assert.deepEqual(revoked, []);
+				assert.equal(image.hasAttribute('src'), false);
+				assert.equal(completed.isSettled, false);
+			} else {
+				await completed.p;
+				assert.equal(result.element.querySelector('img'), image);
+				assert.equal(image.getAttribute('src'), objectUrl);
+				assert.deepEqual(created, [blob]);
+				assert.deepEqual(Array.from(result.element.querySelectorAll('.ash-chat-markdown-media'), item => item.textContent), ['Blocked']);
+				result.dispose();
+				assert.deepEqual(revoked, [objectUrl]);
+			}
+		});
+	}
 
 	test('does not render code examples or currency as math, and retains invalid formulas', async () => {
 		using scope = services();
