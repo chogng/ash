@@ -257,7 +257,7 @@ pub fn snapshot(
     }
     let label = api.text(
         match primary {
-            "sync" => "command.git.sync",
+            "sync" => "git.menu.sync",
             "publish" => "command.git.publish",
             _ => "git.commit",
         },
