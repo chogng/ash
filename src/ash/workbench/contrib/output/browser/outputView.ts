@@ -19,6 +19,8 @@ import { Separator, SubmenuAction, type IAction } from "../../../../base/common/
 import type { Icon } from "../../../../base/common/icon.js";
 import { MutableDisposable, toDisposable, type IDisposable, type IReference } from "../../../../base/common/lifecycle.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
+import { LogLevel } from '../../../../platform/log/common/log.js';
+import { CONTEXT_SAVED_LOGS_AVAILABLE, OPEN_SAVED_LOGS_COMMAND_ID } from '../../../services/output/common/output.js';
 import { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
 import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import { IStorageService } from "../../../../platform/storage/common/storage.js";
@@ -63,7 +65,7 @@ export class OutputViewPane extends ViewPane {
 		@IStorageService private readonly storageService: IStorageService,
 		@ITextModelService private readonly textModels: ITextModelService,
 		@ICommandService private readonly commands: ICommandService,
-		@IContextKeyService contextKeys: IContextKeyService,
+		@IContextKeyService private readonly contextKeys: IContextKeyService,
 		@IAccessibleViewService accessibleView: IAccessibleViewService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 	) {
@@ -252,10 +254,10 @@ export class OutputViewPane extends ViewPane {
 
 	private createTitleActions(active: IOutputChannel | undefined): readonly IAction[] {
 		return [
-			this.action(SelectChannelActionId, active?.label ?? localize('output.selectChannel', 'Select Output Channel'), localize('output.selectChannel', 'Select Output Channel'), undefined, this.outputService.channels.length > 0, undefined, () => undefined),
+			this.action(SelectChannelActionId, active?.label ?? localize('output.selectChannel', 'Select Output Channel'), active ? localize('output.selectNamedChannel', 'Select Output Channel: {0}', active.label) : localize('output.selectChannel', 'Select Output Channel'), undefined, this.outputService.channels.length > 0, undefined, () => undefined),
 			this.action(FilterActionId, localize('output.filter', 'Filter Output'), localize('output.filter', 'Filter Output'), Lxicon.filter, Boolean(active), undefined, () => undefined),
 			this.action(ClearChannelActionId, localize('output.clear', 'Clear Output'), active ? localize('output.clearChannel', 'Clear {0}', active.label) : localize('output.clear', 'Clear Output'), Lxicon.eraser, (active?.entries.length ?? 0) > 0, undefined, () => active?.clear()),
-			this.action(AutoScrollActionId, localize('output.autoScroll', 'Auto Scroll'), this.autoScroll ? localize('output.autoScrollOn', 'Auto Scroll: On') : localize('output.autoScrollOff', 'Auto Scroll: Off'), Lxicon.pinned, Boolean(active), this.autoScroll, () => this.toggleAutoScroll()),
+			this.action(AutoScrollActionId, localize('output.autoScroll', 'Auto Scroll'), this.autoScroll ? localize('output.pauseFollow', 'Pause Following Output') : localize('output.resumeFollow', 'Follow New Output'), this.autoScroll ? Lxicon.pause : Lxicon.arrowDown, Boolean(active), this.autoScroll, () => this.toggleAutoScroll()),
 			this.action(MoreActionId, localize('output.more', 'More Output Actions'), localize('output.more', 'More Output Actions'), Lxicon.ellipsis, Boolean(active), undefined, () => undefined),
 		];
 	}
@@ -269,7 +271,7 @@ export class OutputViewPane extends ViewPane {
 		const channel = this.outputService.activeChannel;
 		const categories = categoriesOf(channel?.entries ?? []);
 		const levelActions = (["trace", "debug", "information", "warning", "error"] as const).map(severity => this.action(`ash.output.filter.minimum.${severity}`, severityLabel(severity), localize('output.showMinimum', 'Show {0} and above', severityLabel(severity)), undefined, true, undefined, () => this.filters.setMinimumSeverity(severity)));
-		const logLevel = new SubmenuAction("ash.output.filter.minimum", localize('output.logLevel', 'Log Level'), levelActions);
+		const logLevel = new SubmenuAction("ash.output.filter.minimum", localize('output.displayLevel', 'Minimum Display Level'), levelActions);
 		const severityActions = OutputSeverities.map(severity => this.action(`ash.output.filter.severity.${severity}`, severityLabel(severity), localize('output.showSeverity', 'Show {0}', severityLabel(severity)), undefined, true, this.filters.isSeverityVisible(severity), () => this.filters.setSeverityVisible(severity, !this.filters.isSeverityVisible(severity))));
 		const categoryActions = categories.map(category => this.action(`ash.output.filter.category.${category}`, category, localize('output.showCategory', 'Show category {0} in this channel. Changing an older saved global choice moves only that category to this channel.', category), undefined, true, this.filters.isCategoryVisible(category, channel!.id), () => this.filters.setCategoryVisible(category, !this.filters.isCategoryVisible(category, channel!.id), channel!.id)));
 		return [logLevel, new Separator(), ...severityActions, ...(categoryActions.length ? [new Separator(), ...categoryActions] : []), new Separator(), this.action("ash.output.filter.reset", localize('output.reset', 'Reset Filters'), localize('output.resetTooltip', 'Reset Output Filters'), undefined, true, undefined, () => { this.filterInput.value = ""; this.filters.reset(); })];
@@ -278,9 +280,18 @@ export class OutputViewPane extends ViewPane {
 	private moreActions(): readonly IAction[] {
 		const active = this.outputService.activeChannel;
 		if (!active) return [];
+		const logger = active.descriptor.logger;
+		const recordingLevels = logger ? Object.values(LogLevel).map(level => this.action(
+			`ash.output.recordingLevel.${level}`,
+			level === LogLevel.Off ? localize('output.levelOff', 'Off') : severityLabel(level),
+			localize('output.recordingLevelTooltip', 'Change which messages this producer records'),
+			undefined, true, logger.control.getLevel() === level, () => logger.control.setLevel(level),
+		)) : [];
 		return [
+			...(logger ? [new SubmenuAction('ash.output.recordingLevel', localize('output.recordingLevel', 'Set {0} Recording Level', logger.label), recordingLevels)] : []),
 			this.action("ash.output.openInEditor", localize('output.openEditor', 'Open Output in Editor'), localize('output.openChannel', 'Open {0} in Editor', active.label), Lxicon.linkExternal, true, undefined, () => this.commands.executeCommand(OPEN_OUTPUT_IN_EDITOR_COMMAND_ID)),
 			this.action("ash.output.export", localize('output.export', 'Export Output…'), localize('output.exportChannel', 'Export {0}', active.label), Lxicon.download, true, undefined, () => this.commands.executeCommand(EXPORT_OUTPUT_COMMAND_ID)),
+			...(this.contextKeys.getValue<boolean>(CONTEXT_SAVED_LOGS_AVAILABLE.key) ? [this.action(OPEN_SAVED_LOGS_COMMAND_ID, localize('output.openSavedLogs', 'Open Saved Logs…'), localize('output.openSavedLogs', 'Open Saved Logs…'), undefined, true, undefined, () => this.commands.executeCommand(OPEN_SAVED_LOGS_COMMAND_ID))] : []),
 		];
 	}
 

@@ -1,6 +1,7 @@
 import type { Event } from '../../../base/common/event.js';
 import type { IServerChannel } from '../../../base/parts/ipc/common/ipc.js';
 import { validateLogEntry } from '../common/logIpc.js';
+import { isRecord } from '../../../base/common/types.js';
 import type { LoggerService } from '../node/loggerService.js';
 
 export class LoggerChannel implements IServerChannel {
@@ -15,6 +16,16 @@ export class LoggerChannel implements IServerChannel {
 		if (command === 'flush' && arg === undefined) {
 			await this.loggerService.flush();
 			return undefined as T;
+		}
+		if (command === 'list' && arg === undefined) {
+			return await this.loggerService.getLogFiles(context.replace(':', '-')) as T;
+		}
+		if (command === 'read' && isRecord(arg) && typeof arg.id === 'string' && arg.id.length <= 512) {
+			const cursor = arg.cursor;
+			if (cursor !== undefined && (!isRecord(cursor) || typeof cursor.generation !== 'string' || cursor.generation.length > 128 || !Number.isSafeInteger(cursor.offset) || (cursor.offset as number) < 0)) {
+				throw new TypeError('Invalid log cursor');
+			}
+			return await this.loggerService.readLogFile(arg.id, cursor as { generation: string; offset: number; } | undefined) as T;
 		}
 		throw new Error(`Unknown logger command: ${command}`);
 	}

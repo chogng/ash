@@ -50,6 +50,7 @@ import { ElectronWindow } from './window.js';
 import { registerLocalTranscriptionService } from '../services/localTranscription/electron-browser/localTranscriptionService.js';
 import { NativeWorkbenchStorageService } from '../services/storage/electron-browser/storageService.js';
 import { LoggerChannelClient } from '../../platform/log/common/logIpc.js';
+import { ILoggerService } from '../../platform/log/common/log.js';
 import { ElectronWorkbenchEnvironmentService } from '../services/environment/electron-browser/environmentService.js';
 import { ProxyChannel } from '../../base/parts/ipc/common/ipc.js';
 import { IBrowserViewService, ipcBrowserViewChannelName } from '../../platform/browserView/common/browserView.js';
@@ -127,6 +128,7 @@ export class DesktopMain extends Disposable {
 			const workbench = this._register(await startWorkbench({
 				...this.options,
 				serviceCollection: new ServiceCollection(
+					[ILoggerService, logger],
 					[IPolicyService, this._register(new PolicyChannelClient(mainProcessService.getChannel('policy')))],
 					[IBrowserViewService, ProxyChannel.toService<IBrowserViewService>(mainProcessService.getChannel(ipcBrowserViewChannelName))],
 					[IMainProcessService, mainProcessService],

@@ -39,3 +39,15 @@
 .ash-output-warning {
 	color: var(--ash-warning-foreground);
 }
+
+.ash-output-title-actions [data-action-id="ash.output.selectChannel"] {
+	min-width: 0;
+	max-width: 24ch;
+}
+
+.ash-output-title-actions
+	[data-action-id="ash.output.selectChannel"]
+	> .ash-button {
+	min-width: 0;
+	max-width: 100%;
+}

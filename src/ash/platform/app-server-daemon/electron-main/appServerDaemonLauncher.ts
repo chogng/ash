@@ -1,4 +1,5 @@
-import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
+import { type ChildProcessWithoutNullStreams, spawn, execFile } from "node:child_process";
+import { promisify } from 'node:util';
 import { createHash } from "node:crypto";
 import { createReadStream, existsSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
@@ -172,6 +173,19 @@ export class AppServerDaemonLauncher extends AbstractDisposable implements IAppS
 		this.assertNotDisposed();
 		this.developmentRuntime?.assertActive();
 		return this.spawnProcess(this.executable, this.options.args, { environment: this.environmentValue });
+	}
+
+	/** The daemon owns endpoint layout. Read its diagnostic location without starting a backend. */
+	async getLogPath(): Promise<string> {
+		await this.validate();
+		const { stdout } = await promisify(execFile)(this.executable, ['version'], {
+			env: { ...this.environmentValue }, timeout: 5_000, maxBuffer: 64 * 1024, windowsHide: true,
+		});
+		const value: unknown = JSON.parse(stdout);
+		if (!value || typeof value !== 'object' || !('logPath' in value) || typeof value.logPath !== 'string' || !isAbsolute(value.logPath)) {
+			throw new TypeError('Invalid daemon log location');
+		}
+		return value.logPath;
 	}
 
 	protected override disposeCore(): void {

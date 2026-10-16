@@ -26,6 +26,18 @@ test("LogService isolates a failing sink", () => {
 	assert.equal(sinkErrors.length, 1);
 });
 
+test('LogService defaults to Info and changes production verbosity independently of consumers', () => {
+	const entries: LogEntry[] = [];
+	using service = new LogService({ sinks: [{ log: entry => entries.push(entry) }] });
+	service.trace('NativeEditContext.focus');
+	service.debug('debug message');
+	service.info('ready');
+	assert.deepEqual(entries.map(entry => entry.message), ['ready']);
+	service.setLevel(LogLevel.Trace);
+	service.trace('NativeEditContext.focus');
+	assert.deepEqual(entries.map(entry => entry.message), ['ready', 'NativeEditContext.focus']);
+});
+
 test("log levels, null logging, and console logging expose the complete platform contract", () => {
 	assert.equal(canLog(LogLevel.Info, LogLevel.Debug), false);
 	assert.equal(canLog(LogLevel.Info, LogLevel.Error), true);

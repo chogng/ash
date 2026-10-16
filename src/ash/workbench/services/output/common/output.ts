@@ -1,4 +1,5 @@
 import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
+import type { ILogger } from '../../../../platform/log/common/log.js';
 import type { URI } from '../../../../base/common/uri.js';
 import type { ITextModel } from '../../../../editor/common/model.js';
 import type { Event } from "../../../../base/common/event.js";
@@ -36,6 +37,8 @@ export interface IOutputChannelDescriptor {
 	readonly source?: OutputChannelSource;
 	readonly extensionId?: string;
 	readonly languageId?: string;
+	/** Optional control owned by the producer; display filtering never changes it. */
+	readonly logger?: { readonly label: string; readonly control: ILogger; };
 }
 
 /** One atomic content-model transition. */
@@ -66,6 +69,7 @@ export interface IOutputChannel extends IDisposable {
 	readonly kind: OutputChannelKind;
 	readonly entries: readonly IOutputEntry[];
 	readonly onDidChange: Event<IOutputChannelChange>;
+	readonly onDidDispose: Event<void>;
 	loadModel(): Promise<ITextModel>;
 	append(entry: IOutputEntryInput): void;
 	appendLine(entry: IOutputEntryInput): void;
@@ -97,6 +101,7 @@ export const SHOW_OUTPUT_CHANNELS_COMMAND_ID = "workbench.action.output.showChan
 export const CLEAR_OUTPUT_COMMAND_ID = "workbench.action.output.clear";
 export const OPEN_OUTPUT_IN_EDITOR_COMMAND_ID = "workbench.action.output.openInEditor";
 export const EXPORT_OUTPUT_COMMAND_ID = "workbench.action.output.export";
+export const OPEN_SAVED_LOGS_COMMAND_ID = 'workbench.action.output.openSavedLogs';
 
 export const OUTPUT_MODE_ID = 'Log';
 export const LOG_MODE_ID = 'log';
@@ -120,3 +125,4 @@ export interface IOutputViewFilters {
 }
 
 export const CONTEXT_IN_OUTPUT = new RawContextKey<boolean>('inOutput', false);
+export const CONTEXT_SAVED_LOGS_AVAILABLE = new RawContextKey<boolean>('output.hasSavedLogs', false);

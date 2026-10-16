@@ -18,6 +18,7 @@ suite('Terminal scoped logging', () => {
 		const entries: LogEntry[] = [];
 		let flushed = false;
 		const host = lifetime.add(new LogService({
+			level: LogLevel.Trace,
 			sinks: [{ log: entry => entries.push(entry) }],
 			flush: async () => { flushed = true; },
 		}));

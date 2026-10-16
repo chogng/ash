@@ -2,16 +2,35 @@ import type { IChannel } from '../../../base/parts/ipc/common/ipc.js';
 import { isRecord } from '../../../base/common/types.js';
 import { IMainProcessService } from '../../ipc/common/mainProcessService.js';
 import { ConsoleLogSink } from './consoleLogSink.js';
-import { isLogLevel, LogLevel, type ILoggerService, type ILogSink, type LogEntry } from './log.js';
+import { isLogLevel, LogLevel, type ILoggerService, type ILogSink, type LogEntry, type ILogFileService, type ILogFile, type ILogFileReadResult } from './log.js';
 import { LogService } from './logServiceImpl.js';
 
 /** The authenticated channel supplies the source window; entries cannot choose files. */
 export class LoggerChannelClient implements ILoggerService, ILogSink {
 	private readonly channel: IChannel;
 	private writes: Promise<void> = Promise.resolve();
+	readonly files: ILogFileService;
 
 	constructor(@IMainProcessService mainProcessService: IMainProcessService) {
 		this.channel = mainProcessService.getChannel('logger');
+		this.files = {
+			list: async () => {
+				await this.writes;
+				const value = await this.channel.call<unknown>('list');
+				if (!Array.isArray(value) || value.some(file => !isRecord(file) || typeof file.id !== 'string' || typeof file.source !== 'string' || (file.format !== 'text' && file.format !== 'jsonl') || typeof file.live !== 'boolean' || typeof file.currentWindow !== 'boolean')) {
+					throw new TypeError('Invalid log file catalog');
+				}
+				return value as ILogFile[];
+			},
+			read: async (id, cursor) => {
+				await this.writes;
+				const value = await this.channel.call<unknown>('read', { id, cursor });
+				if (!isRecord(value) || typeof value.text !== 'string' || value.text.length > 1024 * 1024 || typeof value.gap !== 'boolean' || !isRecord(value.cursor) || typeof value.cursor.generation !== 'string' || !Number.isSafeInteger(value.cursor.offset) || (value.cursor.offset as number) < 0) {
+					throw new TypeError('Invalid log file content');
+				}
+				return value as unknown as ILogFileReadResult;
+			},
+		};
 	}
 
 	public createLogger(category: string): LogService {

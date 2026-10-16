@@ -122,12 +122,15 @@ export class OutputService extends Disposable implements IOutputService {
 
 class OutputChannel extends Disposable implements IOutputChannel {
 	readonly onDidChange;
+	private readonly disposeEmitter = this._register(new Emitter<void>());
+	readonly onDidDispose = this.disposeEmitter.event;
 
 	constructor(readonly uri: URI, readonly descriptor: IOutputChannelDescriptor, private readonly model: InMemoryOutputChannelModel, unregister: () => void, private readonly reveal: (options?: IOutputChannelRevealOptions) => void) {
 		super();
 		this.onDidChange = model.onDidChange;
 		this._register(model);
 		this._register(toDisposable(() => {
+			this.disposeEmitter.fire();
 			unregister();
 		}));
 	}
@@ -160,7 +163,7 @@ function normalizeDescriptor(descriptor: IOutputChannelDescriptor): IOutputChann
 	const extensionId = descriptor.extensionId === undefined ? undefined : validateIdentity(descriptor.extensionId, "Output extension id");
 	const languageId = descriptor.languageId === undefined ? undefined : validateIdentity(descriptor.languageId, "Output language id");
 	if (source === "extension" && !extensionId) throw new TypeError("Extension Output channels require an extension id");
-	return Object.freeze({ id, label, kind, source, ...(extensionId ? { extensionId } : {}), ...(languageId ? { languageId } : {}) });
+	return Object.freeze({ id, label, kind, source, ...(extensionId ? { extensionId } : {}), ...(languageId ? { languageId } : {}), ...(descriptor.logger ? { logger: descriptor.logger } : {}) });
 }
 
 function validateIdentity(value: string, label: string): string {

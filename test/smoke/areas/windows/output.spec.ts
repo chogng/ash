@@ -1,13 +1,142 @@
 import { execFile } from 'node:child_process';
-import { writeFile } from 'node:fs/promises';
+import { writeFile, mkdir, readdir, readFile, appendFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { expect, test } from '../../../automation/test.js';
 import type { ElectronApplication } from '@playwright/test';
 import { readStorageEntries, seedStorageOnNextLoad } from '../../../automation/storage.js';
 import { StorageScope, StorageTarget } from '../../../../src/ash/platform/storage/common/storage.js';
+import { appServerDaemonExecutablePath, appServerExecutablePath } from '../../../../src/ash/platform/app-server-daemon/node/appServerDaemonPackage.js';
 
 const execute = promisify(execFile);
+
+for (const locale of ['en', 'zh-CN']) {
+	test.describe(`Desktop saved Output (${locale})`, () => {
+		test.use({ electronUserSettings: { 'window.menuStyle': 'custom', 'workbench.locale': locale } });
+		test('recording level, saved history and live reload use the existing log files', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, workbench, reloadWorkbench }, testInfo) => {
+			const chinese = locale === 'zh-CN';
+			const page = workbench.page;
+			const labels = chinese ? {
+				window: '窗口', recording: '设置工作台记录级别', trace: '跟踪', info: '信息',
+				ready: '窗口日志已初始化。', follow: '暂停跟随输出', resume: '跟随新增输出',
+			} : {
+				window: 'Window', recording: 'Set Workbench Recording Level', trace: 'Trace', info: 'Info',
+				ready: 'Window logging initialized.', follow: 'Pause Following Output', resume: 'Follow New Output',
+			};
+			const { logs, windowId } = await (application as ElectronApplication).evaluate(({ app, BrowserWindow }) => ({ logs: app.getPath('logs'), windowId: BrowserWindow.getAllWindows()[0]!.id }));
+			const session = '20200101T000000000-00000000-0000-0000-0000-000000000000';
+			await mkdir(join(logs, session), { recursive: true });
+			const historicRecord = { timestampMillis: 42, level: 'warning', category: 'saved-source', message: 'historic-output-token 中文', error: 'original error context' };
+			await writeFile(join(logs, session, 'window-99.log'), JSON.stringify(historicRecord) + '\n');
+			const selectWindow = async () => {
+				await workbench.quickaccess.runCommand('workbench.action.output.showChannels');
+				await workbench.quickaccess.select(labels.window);
+			};
+			await selectWindow();
+			const output = page.locator('[data-view-id="ash.output"]');
+			const visible = output.locator('.view-lines');
+			const filter = output.getByRole('searchbox');
+			await filter.fill(labels.ready);
+			await expect(visible).toContainText(labels.ready);
+			await expect(visible).toContainText('[information] [logs]');
+			await filter.fill('');
+			const follow = page.locator('[data-action-id="ash.output.autoScroll"] button');
+			await expect(follow).toHaveAttribute('aria-pressed', 'true');
+			await follow.hover();
+			await expect(page.getByRole('tooltip')).toContainText(labels.follow);
+			await follow.click();
+			await expect(follow).toHaveAttribute('aria-pressed', 'false');
+			await filter.hover();
+			await follow.hover();
+			await expect(page.getByRole('tooltip')).toContainText(labels.resume);
+			await follow.click();
+			const setLevel = async (level: string) => {
+				await page.locator('[data-action-id="ash.output.more"] button').click();
+				const submenu = page.getByRole('menuitem', { name: labels.recording, exact: true });
+				await submenu.focus();
+				await submenu.press('ArrowRight');
+				await page.getByRole('menuitemcheckbox', { name: level, exact: true }).click();
+			};
+			await setLevel(labels.trace);
+			await output.locator('.stanza-editor-input').focus();
+			await filter.fill('NativeEditContext');
+			await expect(visible).toContainText('NativeEditContext.focus');
+			await setLevel(labels.info);
+			await filter.fill('');
+			await output.locator('.stanza-editor-input').focus();
+			await page.keyboard.press('Alt+F1');
+			await expect(page.locator('.ash-accessible-view-content')).toHaveValue(chinese ? /打开已保存的日志/u : /Open Saved Logs opens current or retained log files/u);
+			await page.keyboard.press('Escape');
+			const current = (await readdir(logs)).filter(name => /^\d{8}T/.test(name) && name !== session).sort().at(-1)!;
+			const windowLog = join(logs, current, `window-${windowId}.log`);
+			await expect.poll(() => readFile(windowLog, 'utf8')).toContain('NativeEditContext.focus');
+			await workbench.quickaccess.runCommand('workbench.action.output.clear');
+			await expect(visible).toHaveText('');
+			expect(await readFile(windowLog, 'utf8')).toContain(labels.ready);
+			await appendFile(windowLog, JSON.stringify({ ...historicRecord, message: 'after-clear-output-token' }) + '\n');
+			await expect(visible).toContainText('after-clear-output-token');
+			await expect(visible).not.toContainText(labels.ready);
+			await page.reload();
+			await workbench.waitForReady();
+			await selectWindow();
+			await filter.fill(labels.ready);
+			await expect(visible).toContainText(labels.ready);
+			await filter.fill('after-clear-output-token');
+			await expect(visible).toContainText('after-clear-output-token');
+			await filter.fill('');
+			await workbench.quickaccess.runCommand('workbench.action.output.openSavedLogs');
+			await workbench.quickaccess.select(`${chinese ? '窗口 99' : 'Window 99'} — 2020-01-01 00:00:00 UTC`);
+			await expect(visible).toContainText('1970-01-01T00:00:00.042Z [warning] [saved-source] historic-output-token 中文');
+			await expect(visible).toContainText('original error context');
+			const selector = await page.locator('[data-action-id="ash.output.selectChannel"]').boundingBox();
+			const actions = await page.locator('[data-action-id="ash.output.more"]').boundingBox();
+			expect(selector!.x + selector!.width).toBeLessThanOrEqual(actions!.x);
+			await page.locator('[data-action-id="ash.output.more"] button').click();
+			await expect(page.getByRole('menuitem', { name: labels.recording, exact: true })).toHaveCount(0);
+			await page.keyboard.press('Escape');
+			await testInfo.attach(`saved-output-${locale}`, { body: await page.screenshot(), contentType: 'image/png' });
+			const restarted = await reloadWorkbench();
+			await restarted.workbench.quickaccess.runCommand('workbench.action.output.openSavedLogs');
+			await restarted.workbench.quickaccess.select(`${chinese ? '窗口 99' : 'Window 99'} — 2020-01-01 00:00:00 UTC`);
+			await expect(restarted.workbench.page.locator('[data-view-id="ash.output"] .view-lines')).toContainText('historic-output-token 中文');
+		});
+	});
+}
+
+test('Local App Server Output follows actual daemon diagnostics without deleting the source on clear', { tag: ['@electron-app-server'] }, async ({ application, workbench, reloadWorkbench }) => {
+	const host = await (application as ElectronApplication).evaluate(({ app }) => ({ appPath: app.getAppPath(), profile: process.env.ASH_HOME! }));
+	const location = { appPath: host.appPath, isPackaged: false, platform: process.platform, resourcesPath: '' };
+	const daemon = appServerDaemonExecutablePath(location);
+	const env = { ...process.env, ASH_HOME: host.profile, ASH_APP_SERVER_PATH: appServerExecutablePath(location) };
+	const status = JSON.parse((await execute(daemon, ['version'], { env, timeout: 10_000 })).stdout) as { logPath: string; };
+	const failConnection = () => new Promise<void>((resolve, reject) => {
+		// A separate test-owned carrier sends invalid input. The managed backend
+		// emits the diagnostic; the production window's connection stays intact.
+		const carrier = execFile(daemon, ['connect'], { env, timeout: 5_000 }, error => {
+			if (error && 'killed' in error && error.killed) reject(error);
+			else resolve();
+		});
+		carrier.stdin!.end('{invalid-json}\n');
+	});
+	await failConnection();
+	await expect.poll(() => readFile(status.logPath, 'utf8')).toContain('invalid App Server inbound JSON');
+	const selectLog = async () => {
+		await workbench.quickaccess.runCommand('workbench.action.output.showChannels');
+		await workbench.quickaccess.select('Local App Server');
+	};
+	await selectLog();
+	let visible = workbench.page.locator('[data-view-id="ash.output"] .view-lines');
+	await expect(visible).toContainText('invalid App Server inbound JSON');
+	await workbench.quickaccess.runCommand('workbench.action.output.clear');
+	await expect(visible).toHaveText('');
+	expect(await readFile(status.logPath, 'utf8')).toContain('invalid App Server inbound JSON');
+	await failConnection();
+	await expect(visible).toContainText('invalid App Server inbound JSON');
+	({ workbench } = await reloadWorkbench());
+	visible = workbench.page.locator('[data-view-id="ash.output"] .view-lines');
+	await selectLog();
+	await expect(visible).toContainText('invalid App Server inbound JSON');
+});
 
 test.describe('Git-backed ordinary Output', () => {
 	test.use({ gitRepository: true });
@@ -241,8 +370,8 @@ test.describe('Git-backed Output smart scrolling', () => {
 			};
 			try {
 				await workbench.quickaccess.runCommand('workbench.action.output.showChannels');
-				await workbench.quickaccess.select('App Server');
-				const otherBefore = await rawText('App Server connection');
+				await workbench.quickaccess.select(target.kind === 'electron' ? (locale === 'zh-CN' ? 'App Server 连接' : 'App Server Connection') : 'App Server');
+				const otherBefore = await rawText('[connection]');
 				await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 				await workbench.quickaccess.runCommand('git.showOutput');
 				await workbench.quickaccess.runCommand('workbench.action.output.clear');
@@ -310,8 +439,8 @@ test.describe('Git-backed Output smart scrolling', () => {
 				await input.press('ArrowUp');
 				await expect(autoScroll).toHaveAttribute('aria-pressed', 'false');
 				await workbench.quickaccess.runCommand('workbench.action.output.showChannels');
-				await workbench.quickaccess.select('App Server');
-				const otherAfter = await rawText('App Server connection');
+				await workbench.quickaccess.select(target.kind === 'electron' ? (locale === 'zh-CN' ? 'App Server 连接' : 'App Server Connection') : 'App Server');
+				const otherAfter = await rawText('[connection]');
 				expect(otherAfter).toBe(otherBefore);
 				const status = await execute('git', ['status', '--porcelain=v2', '--untracked-files=all'], { cwd: testWorkspace.directory });
 				expect(status.stdout.trim().split('\n')).toHaveLength(21);
@@ -341,8 +470,9 @@ for (const locale of ['en', 'zh-CN']) {
 		let page = workbench.page;
 		const labels = locale === 'zh-CN' ? { filter: '筛选输出', reset: '重置筛选', unsupported: '已保留由较新版本保存的筛选条件。本窗口中的修改不会保存。', categoryHelp: '类别选项作用于所选通道。旧版保存的类别选项仍作用于所有通道，直到逐项更改；每次只将该类别迁移到所选通道。重置筛选会清除所有通道的类别选项。' } : { filter: 'Filter Output', reset: 'Reset Filters', unsupported: 'A newer saved filter is preserved. Changes in this window are not saved.', categoryHelp: 'Category choices apply to the selected channel. Older saved category choices apply to all channels until you change each category; only that category moves to the selected channel. Reset Filters clears category choices for all channels.' };
 		const output = () => page.locator('[data-view-id="ash.output"]');
-		const lines = async (): Promise<string[]> => (await output().locator('.view-line').allTextContents()).map(line => line.replaceAll('\u00a0', ' ')).filter(Boolean);
-		const select = async (channel: string): Promise<void> => {
+		const lines = async (): Promise<string[]> => (await output().locator('.view-line').allTextContents()).map(line => line.replaceAll('\u00a0', ' ').replace(/^\d{4}-\d{2}-\d{2}T\S+ \[[^\]]+\] \[[^\]]+\] /u, '')).filter(Boolean);
+		const select = async (requested: string): Promise<void> => {
+			const channel = requested === 'Window' && locale === 'zh-CN' ? '窗口' : requested === 'App Server' && target.kind === 'electron' ? (locale === 'zh-CN' ? 'App Server 连接' : 'App Server Connection') : requested;
 			await workbench.quickaccess.runCommand('workbench.action.output.showChannels');
 			await workbench.quickaccess.select(channel);
 			await expect(page.locator('.ash-output-title-actions')).toContainText(channel);
@@ -395,15 +525,15 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect(input).toBeFocused();
 		await select('Window');
 		await readWindowStart();
-		await expect.poll(lines).toContain('Workbench restored');
+		await expect.poll(async () => (await lines()).join('')).toContain('Workbench restored');
 		await workbench.quickaccess.runCommand('workbench.action.output.openInEditor');
 		const rawEditor = workbench.editors.groupAt(0).content;
 		const rawLines = async (): Promise<string[]> => (await rawEditor.locator('.view-line').allTextContents()).map(line => line.replaceAll('\u00a0', ' ')).filter(Boolean);
 		const rawWindow = await rawLines();
-		expect(rawWindow).toContain('Workbench restored');
+		expect(rawWindow.join('')).toContain('Workbench restored');
 		await category('lifecycle', true, true);
-		await expect.poll(lines).not.toContain('Workbench restored');
-		// Window keeps appending focus traces; filtering must retain the original prefix.
+		await expect.poll(async () => (await lines()).join('')).not.toContain('Workbench restored');
+		// Filtering must retain the original text, including the new metadata prefix.
 		await expect.poll(async () => (await rawLines()).slice(0, rawWindow.length)).toEqual(rawWindow);
 		await select('Extension Host');
 		await expect.poll(lines).toEqual(hostBaseline);
@@ -411,16 +541,16 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect.poll(lines).not.toContain('Extension Host fleet is ready.');
 		await select('Window');
 		await category('lifecycle', false, false);
-		await expect.poll(lines).not.toContain('Workbench restored');
+		await expect.poll(async () => (await lines()).join('')).not.toContain('Workbench restored');
 		await reset();
 		await readWindowStart();
-		await expect.poll(lines).toContain('Workbench restored');
+		await expect.poll(async () => (await lines()).join('')).toContain('Workbench restored');
 		const legacy = JSON.stringify({ syntaxVersion: 2, text: '', hiddenSeverities: [], hiddenCategories: ['lifecycle', 'connection'] });
 		// Existing storage fixtures seed only saved data before the next owner loads.
 		await seedStorageOnNextLoad(application, page, identity, { 'output.filterState': { value: legacy, target: StorageTarget.MACHINE } });
 		await reloadSeededOwner();
 		await select('Window');
-		await expect.poll(lines).not.toContain('Workbench restored');
+		await expect.poll(async () => (await lines()).join('')).not.toContain('Workbench restored');
 		await category('lifecycle', false, false);
 		await select('Extension Host');
 		await expect.poll(lines).not.toContain('Extension Host fleet is ready.');
@@ -430,7 +560,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await select('Window');
 		await category('lifecycle', false, true);
 		await readWindowStart();
-		await expect.poll(lines).toContain('Workbench restored');
+		await expect.poll(async () => (await lines()).join('')).toContain('Workbench restored');
 		await select('Extension Host');
 		await expect.poll(lines).toContain('Extension Host fleet is ready.');
 		await category('lifecycle', true, false);
@@ -456,7 +586,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await select('Window');
 		await expect(output().getByRole('searchbox', { name: labels.filter, exact: true })).toHaveAttribute('title', labels.unsupported);
 		await category('lifecycle', true, true);
-		await expect.poll(lines).not.toContain('Workbench restored');
+		await expect.poll(async () => (await lines()).join('')).not.toContain('Workbench restored');
 		await select('Extension Host');
 		await expect.poll(lines).toContain('Extension Host fleet is ready.');
 		expect(await savedFilter()).toBe(future);

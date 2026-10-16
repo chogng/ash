@@ -45,6 +45,34 @@ export const ILoggerService = createServiceIdentifier<ILoggerService>("loggerSer
 
 export interface ILoggerService {
 	createLogger(category: string): ILogger;
+	/** Host-owned saved logs, when this runtime has persistent logging. */
+	readonly files?: ILogFileService;
+}
+
+export interface ILogFile {
+	readonly id: string;
+	readonly source: string;
+	readonly format: 'jsonl' | 'text';
+	readonly live: boolean;
+	readonly currentWindow: boolean;
+}
+
+export interface ILogFileCursor {
+	readonly generation: string;
+	readonly offset: number;
+}
+
+export interface ILogFileReadResult {
+	readonly text: string;
+	readonly cursor: ILogFileCursor;
+	/** The source rotated, truncated, or exceeded the bounded read window. */
+	readonly gap: boolean;
+}
+
+/** Reads only host-enumerated sources; callers never supply filesystem paths. */
+export interface ILogFileService {
+	list(): Promise<readonly ILogFile[]>;
+	read(id: string, cursor?: ILogFileCursor): Promise<ILogFileReadResult>;
 }
 
 /** A logger owns its filtering and the lifetime of its sink subscriptions. */

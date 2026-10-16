@@ -1,6 +1,6 @@
 import { Disposable, toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
 import { Emitter } from '../../../base/common/event.js';
-import { canLog, LogLevel, type ILogger, type ILoggerService, type ILogServiceHost, type ILogSink, type LogEntry, type LogEntryLevel } from "./log.js";
+import { canLog, DEFAULT_LOG_LEVEL, LogLevel, type ILogger, type ILoggerService, type ILogServiceHost, type ILogSink, type LogEntry, type LogEntryLevel } from "./log.js";
 
 export interface LogServiceOptions {
 	readonly sinks?: readonly ILogSink[];
@@ -22,9 +22,7 @@ export class LogService extends Disposable implements ILogServiceHost, ILogger, 
 
 	constructor(private readonly options: LogServiceOptions = {}) {
 		super();
-		// Existing structured host loggers retain their original verbosity. Named
-		// child loggers can be filtered independently without another I/O queue.
-		this.level = options.level ?? LogLevel.Trace;
+		this.level = options.level ?? DEFAULT_LOG_LEVEL;
 		this.now = options.now ?? Date.now;
 		this.onSinkError = options.onSinkError ?? reportSinkFailure;
 		for (const sink of options.sinks ?? []) this.sinks.add(sink);

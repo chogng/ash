@@ -309,7 +309,21 @@ export class AshApplication extends Disposable {
 	private storageMainService: StorageMainService | undefined;
 	private agentsWindowInvitations!: AgentsWindowInvitationState;
 	private invitationPersistence: Promise<void> = Promise.resolve();
-	private readonly loggerService = this._register(new LoggerService({ logsHome: app.getPath('logs') }));
+	private readonly loggerService = this._register(new LoggerService({
+		logsHome: app.getPath('logs'),
+		appServerLog: async () => {
+			if (this.appServerStartupMode === 'disabled') return undefined;
+			const connection = createAppServerDaemonLauncher({
+				packageLocation: { appPath: app.getAppPath(), expectedVersion: app.getVersion(), isPackaged: app.isPackaged, platform: process.platform, resourcesPath: process.resourcesPath },
+				sourceEnvironment: process.env, profileRoot: this.profileRoot, electronExecutable: process.execPath, role: 'workbench',
+			});
+			try { return await connection.launcher.getLogPath(); }
+			catch (error) {
+				this.logService.warn('logs', 'Could not resolve the Local App Server diagnostic log', error);
+				return undefined;
+			} finally { connection.launcher.dispose(); }
+		},
+	}));
 	private readonly logService = this._register(this.loggerService.createLogger('main'));
 	private readonly maintenance = this._register(new MutableDisposable<IDisposable>());
 	private closePersistentServicesPromise: Promise<void> | undefined;

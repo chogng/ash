@@ -109,22 +109,26 @@ test('editor document links open from the keyboard and modifier click', async ({
 		await page.keyboard.press('ControlOrMeta+Home');
 		for (const [index, method] of ['keyboard', 'pointer'].entries()) {
 			const popupOpened = electron ? undefined : page.context().waitForEvent('page');
-			if (method === 'keyboard') {
-				await workbench.quickaccess.runCommand('editor.action.openLink');
-			} else {
-				const bounds = await link.boundingBox();
-				expect(bounds).not.toBeNull();
-				const point = { x: bounds!.x + bounds!.width / 2, y: bounds!.y + bounds!.height / 2 };
-				await page.mouse.move(point.x, point.y);
-				await page.mouse.click(point.x, point.y);
-				await page.keyboard.down('ControlOrMeta');
-				try {
-					await expect(page.locator('.stanza-editor-link-target')).toHaveCount(1);
+			// A fresh profile must approve this untrusted destination before host opening.
+			const confirmation = await workbench.dialogs.confirm(application, 'Open External Link', 'Open', async () => {
+				if (method === 'keyboard') {
+					await workbench.quickaccess.runCommand('editor.action.openLink');
+				} else {
+					const bounds = await link.boundingBox();
+					expect(bounds).not.toBeNull();
+					const point = { x: bounds!.x + bounds!.width / 2, y: bounds!.y + bounds!.height / 2 };
+					await page.mouse.move(point.x, point.y);
 					await page.mouse.click(point.x, point.y);
-				} finally {
-					await page.keyboard.up('ControlOrMeta');
+					await page.keyboard.down('ControlOrMeta');
+					try {
+						await expect(page.locator('.stanza-editor-link-target')).toHaveCount(1);
+						await page.mouse.click(point.x, point.y);
+					} finally {
+						await page.keyboard.up('ControlOrMeta');
+					}
 				}
-			}
+			});
+			expect(confirmation.detail).toBe(href);
 			if (electron) {
 				await expect.poll(() => electron.evaluate(({ BrowserWindow }) => {
 					const state = (globalThis as typeof globalThis & { externalOpening: ExternalOpening; }).externalOpening;
@@ -160,13 +164,14 @@ test('editor Open Link and Output help are localized after a display-language re
 	({ workbench } = await restartWorkbench());
 	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
 	await workbench.editors.groupAt(0).content.locator('.stanza-editor-input').focus();
-	await workbench.page.keyboard.press('F1');
-	const picker = workbench.page.locator('.ash-quick-pick');
-	await picker.getByRole('combobox').fill('打开链接');
-	await expect(picker.locator('.ash-quick-pick-row-label').filter({ hasText: /^打开链接$/u })).toBeVisible();
-	await picker.getByRole('combobox').press('Escape');
+	// Keep the command prefix: replacing it switches Quick Access to file search.
+	await workbench.quickaccess.open('>打开链接');
+	await expect(workbench.quickaccess.element.getByRole('tab', { name: '命令', exact: true })).toHaveAttribute('aria-selected', 'true');
+	const openLink = workbench.quickaccess.items.filter({ has: workbench.page.locator('.ash-quick-pick-row-description').getByText('editor.action.openLink', { exact: true }) });
+	await expect(openLink.locator('.ash-quick-pick-row-label')).toHaveText('打开链接');
+	await workbench.quickaccess.close();
 	await workbench.quickaccess.runCommand('workbench.action.output.showChannels');
-	await workbench.quickaccess.select('Window');
+	await workbench.quickaccess.select('窗口');
 	const output = workbench.page.locator('[data-view-id="ash.output"]');
 	await expect(output.getByRole('searchbox', { name: '筛选输出', exact: true })).toBeVisible();
 	await output.locator('.stanza-editor-input').focus();

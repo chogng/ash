@@ -6,7 +6,7 @@ active channel, workspace-scoped selection persistence, and channel removal
 fallback. Producers own the `IOutputChannel` returned by `createChannel`, append
 typed entries to it, and dispose it when that producer disappears.
 
-`OutputChannel` privately owns bounded in-memory retention, sequence assignment,
+`InMemoryOutputChannelModel` owns bounded in-memory retention, sequence assignment,
 clear semantics, and content change delivery. It does not know about Panel DOM,
 Language Servers, extensions, tasks, or transport DTOs. A duplicate channel id,
 unknown selection, invalid severity, or use after disposal fails synchronously.
@@ -61,3 +61,34 @@ Export writes the complete retained text, irrespective of the panel filter.
 `services/output/browser/systemOutputService.ts` remains the Window/App Server
 log adapter. Shared Workbench services depend on the Output contract, not on the
 contribution implementation.
+
+Desktop supplies `ILoggerService.files` through its authenticated Main logger
+channel. The existing Node `LoggerService` remains the only owner of Desktop
+log writes, rotation and session retention. It enumerates those files directly
+and returns bounded complete-line reads with a file generation and byte cursor;
+the renderer never supplies a filesystem path. Rotated files and previous
+sessions remain available through **Output: Open Saved Logs…**.
+
+`SystemOutputService` reads the current Window and Main files into channel caches
+instead of appending a second copy from the live log sink. Saved JSON records keep
+their original time, severity, category and error context. Current sources are
+polled once per second, with a one-MiB read limit and an explicit gap notice on
+rotation, truncation or a tail jump. The reader belongs to its channel; channel
+disposal cancels its scheduled work and ignores an in-flight response.
+
+The Local App Server source reads the daemon's existing stdout/stderr file. Its
+location comes from the daemon's read-only `version` lifecycle command, so
+Desktop does not duplicate endpoint-layout rules, parse App Server RPC, start
+another backend or copy that log into Desktop history. Raw backend diagnostics
+remain raw text; the adapter does not invent severity or original timestamps.
+The connection-state channel is separate from this process log. Browser hosts
+without saved logs retain their in-memory Window and connection-state channels.
+
+Clear empties the channel cache and discards a pre-clear in-flight snapshot,
+while retaining the incremental read cursor. It never truncates a source file. Reloading
+reconstructs the view from the retained file tail. Display filters only affect
+the view. A descriptor may expose a named producer's logger control; Window's
+recording-level menu controls the Workbench logger, while independently owned
+loggers in the same file retain their own levels. Historical and raw-file sources
+do not advertise recording-level control. Loggers default to Info unless their
+owner explicitly requests another level.

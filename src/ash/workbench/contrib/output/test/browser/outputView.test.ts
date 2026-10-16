@@ -18,6 +18,7 @@ import { Selection } from '../../../../../editor/common/core/selection.js';
 import '../../browser/output.contribution.js';
 import { DefaultSettings } from '../../../../services/preferences/common/settingsModels.js';
 import { createSettingsLayout } from '../../../preferences/browser/settingsLayout.js';
+import { openLogOutput } from '../../../../services/output/browser/systemOutputService.js';
 
 interface OutputViewTestEnvironment {
 	readonly channel: IOutputChannel;
@@ -203,6 +204,21 @@ test('ordinary Output filters individual lines without changing the shared text 
 	view.filter('');
 	assert.deepEqual(await view.visibleLines(), ['keep first', 'drop', 'keep banned', 'last keep']);
 	assert.equal(view.editor.getModel(), reference.object.textEditorModel);
+});
+
+test('raw saved backend logs filter model lines independently of filesystem read chunks', async () => {
+	using resources = new DisposableStore();
+	const view = await createOutputView(resources);
+	const text = 'keep first\ndrop middle\nkeep last\n';
+	const channel = resources.add(openLogOutput(view.output, {
+		list: async () => [],
+		read: async () => ({ text, gap: false, cursor: { generation: 'raw-file', offset: text.length } }),
+	}, { id: 'saved/backend', source: 'app-server', format: 'text', live: false, currentWindow: false }));
+	view.output.selectChannel(channel.id);
+	await waitForChannel(view.editor, channel);
+	view.filter('keep');
+	assert.deepEqual(await view.visibleLines(), ['keep first', 'keep last']);
+	assert.equal(view.editor.getModel()!.getValue(), text);
 });
 
 test('ordinary Output matches split writes, split CRLF and an unfinished last line on every append', async () => {

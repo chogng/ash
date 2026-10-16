@@ -93,7 +93,8 @@ export class InMemoryOutputChannelModel extends Disposable implements IOutputCha
 	}
 
 	clear(): void {
-		if (this.retainedEntries.length === 0) return;
+		// Clearing also communicates reading intent while an asynchronous producer
+		// update is pending, even when no content has been retained yet.
 		this.retainedEntries.length = 0;
 		this.retainedBytes = 0;
 		if (this.textModel) this.modelService.updateModel(this.textModel, "");

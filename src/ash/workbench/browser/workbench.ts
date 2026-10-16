@@ -919,7 +919,7 @@ export class Workbench extends Disposable {
 			if (reason !== 'pageHide') workingCopyBackupTracker.cancelShutdown();
 		}));
 		const outputService = services.get(IOutputService);
-		const systemOutputService = this._register(new SystemOutputService(outputService, api.appServer));
+		const systemOutputService = this._register(new SystemOutputService(outputService, api.appServer, logService, services.get(ILoggerService).files));
 		this._register(logService.registerSink(systemOutputService));
 		const serviceContributionReady: Promise<void>[] = [];
 		services.registerInstance(IAccessibleViewInformationService, this._register(new AccessibleViewInformationService(storage)));
