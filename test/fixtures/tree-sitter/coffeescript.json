@@ -1,0 +1,225 @@
+{
+  "upstream": "https://github.com/svkozak/tree-sitter-coffeescript",
+  "revision": "3bb4dbd68ca926c76b3baadb529da4de3726ea37",
+  "license": "../../../extensions/coffeescript/queries/coffeescript.LICENSE.txt",
+  "cases": [
+    {
+      "name": "boolean-aliases.txt: boolean aliases",
+      "source": "enabled = yes\nlights_on = on\ndisabled = no\npowered = off\n",
+      "topLevelStatements": 4
+    },
+    {
+      "name": "chained-comparison.txt: chained comparison",
+      "source": "if 0 < age < 100 then valid = true\n",
+      "topLevelStatements": 1
+    },
+    {
+      "name": "class-nested-properties.txt: class nested properties",
+      "source": "class Widget\n  events:\n    theme:\n      dark: true\n",
+      "topLevelStatements": 1
+    },
+    {
+      "name": "class-property-block.txt: class property block",
+      "source": "class Widget\n  events:\n    click: ->\n      @ready = true\n  initialize: ->\n    @ready = false\n",
+      "topLevelStatements": 1
+    },
+    {
+      "name": "comprehension-when.txt: comprehensions with when",
+      "source": "evens = (n for n in numbers when n is 2)\nkeys = (key for key of items when key isnt \"skip\")\n",
+      "topLevelStatements": 2
+    },
+    {
+      "name": "do-block.txt: do block",
+      "source": "do ->\n  value = \"ready\"\n",
+      "upstreamSource": "do ->:\n  value = \"ready\"\n",
+      "topLevelStatements": 1
+    },
+    {
+      "name": "for-by.txt: for by loop",
+      "source": "for i in [0..4] by 2\n  next = i\n",
+      "upstreamSource": "for i in [0..4] by 2:\n  next = i\n",
+      "topLevelStatements": 1
+    },
+    {
+      "name": "for-own-loop.txt: for own loop",
+      "source": "for own key of inventory\n  value = key\n",
+      "upstreamSource": "for own key of inventory:\n  value = key\n",
+      "topLevelStatements": 1
+    },
+    {
+      "name": "function-expression.txt: function expressions",
+      "source": "square = (x) -> x * x\nidentity = x -> x\nbuild = (factory) ->\n  factory ->\n    result = factory()\n    result\n",
+      "topLevelStatements": 3
+    },
+    {
+      "name": "import-export.txt: import export syntax",
+      "source": "import View from 'views'\nimport { EncounterSettingsView, AbCIIExportView as ExportView } from './encounter'\nimport * as Helpers from './helpers'\nimport { something } from 'module'\nimport 'polyfill'\n\nexport { View, EncounterSettingsView as Settings }\nexport * from './helpers'\nexport default View\n",
+      "topLevelStatements": 8
+    },
+    {
+      "name": "instanceof-operator.txt: instanceof operator",
+      "source": "valid = obj instanceof Klass\n",
+      "topLevelStatements": 1
+    },
+    {
+      "name": "is-operator.txt: is / isnt operators",
+      "source": "value is 0\nvalue isnt null\n",
+      "topLevelStatements": 2
+    },
+    {
+      "name": "loop-control.txt: loop control",
+      "source": "for item in [1, 2, 3]\n  if item is 2 then break\n  if item is 1 then continue\n",
+      "upstreamSource": "for item in [1, 2, 3]:\n  if item is 2 then break\n  if item is 1 then continue\n",
+      "topLevelStatements": 1
+    },
+    {
+      "name": "member-access.txt: member access",
+      "source": "console.log\n",
+      "topLevelStatements": 1
+    },
+    {
+      "name": "member-function-call.txt: member function call",
+      "source": "object.method()\n",
+      "topLevelStatements": 1
+    },
+    {
+      "name": "module-syntax.txt: module syntax",
+      "source": "import helper from \"./utils\"\nexport {helper}\nmodule.exports = helper\n",
+      "upstreamSource": "import helper from \"./utils\"\nexport helper\nmodule.exports = helper\n",
+      "topLevelStatements": 3
+    },
+    {
+      "name": "null-undefined.txt: null and undefined",
+      "source": "value = null\nmissing = undefined\n",
+      "topLevelStatements": 2
+    },
+    {
+      "name": "postfix-conditional.txt: postfix conditional",
+      "source": "log(\"ready\") if initialized\n",
+      "topLevelStatements": 1
+    },
+    {
+      "name": "range-syntax.txt: range syntax",
+      "source": "values = [1..3]\nothers = [0...3]\n",
+      "topLevelStatements": 2
+    },
+    {
+      "name": "spread-destructuring.txt: spread in destructuring",
+      "source": "[first, second, ...rest] = items\n",
+      "topLevelStatements": 1
+    },
+    {
+      "name": "string-interpolation.txt: string interpolation",
+      "source": "message = \"Hi, I'm #{@name} #team\"\n",
+      "topLevelStatements": 1
+    },
+    {
+      "name": "super-call.txt: super call",
+      "source": "class Pup extends Animal\n  constructor: (name) -> super(name)\n",
+      "upstreamSource": "class Pup extends Animal:\n  constructor: (name) ->: super(name)\n",
+      "topLevelStatements": 1
+    },
+    {
+      "name": "switch-statement.txt: switch statement",
+      "source": "switch day\n  when \"Mon\", \"Tue\" then \"weekday\"\n  else\n    \"other\"\n",
+      "upstreamSource": "switch day\n  when \"Mon\", \"Tue\" then break\n  else then continue\n",
+      "topLevelStatements": 1
+    },
+    {
+      "name": "then-block.txt: then keyword",
+      "source": "if ready then result = \"ok\"\n",
+      "topLevelStatements": 1
+    },
+    {
+      "name": "throw-statement.txt: throw statement",
+      "source": "throw new Error(\"boom\")\n",
+      "topLevelStatements": 1
+    },
+    {
+      "name": "triple-backtick-html-fallback.txt: embedded html fallback",
+      "source": "template = ```\n<section>\n  <p>Fallback</p>\n</section>\n```\n",
+      "topLevelStatements": 1
+    },
+    {
+      "name": "triple-backtick-html.txt: embedded html block",
+      "source": "template = ```html\n<div class=\"card\">\n  <span>Hello</span>\n</div>\n```\n",
+      "topLevelStatements": 1
+    },
+    {
+      "name": "try-statement.txt: try statement",
+      "source": "try\n  risky()\ncatch error\n  handle(error)\nfinally\n  cleanup()\n",
+      "upstreamSource": "try:\n  risky()\ncatch (error):\n  handle(error)\nfinally:\n  cleanup()\n",
+      "topLevelStatements": 1
+    },
+    {
+      "name": "Ash: flat LF",
+      "source": "enabled = yes\nlights_on = on\ndisabled = no\n",
+      "topLevelStatements": 3
+    },
+    {
+      "name": "Ash: flat CRLF",
+      "source": "enabled = yes\r\nlights_on = on\r\n",
+      "topLevelStatements": 2
+    },
+    {
+      "name": "Ash: no final newline",
+      "source": "enabled = yes\nlights_on = on",
+      "topLevelStatements": 2
+    },
+    {
+      "name": "Ash: comments and blank lines",
+      "source": "first = 1\n\n# 你好🙂\nsecond = 2\n\n",
+      "topLevelStatements": 2
+    },
+    {
+      "name": "Ash: nested functions and dedents",
+      "source": "outer = ->\n  inner = ->\n    one = 1\n    two = 2\n  result = inner()\n  result\nfinished = yes\n",
+      "topLevelStatements": 2
+    },
+    {
+      "name": "Ash: comments at block boundaries",
+      "source": "greet = (name) ->\n  # body\n  text = \"你好🙂\"\n  text\n# outside\ndone = greet(\"hello\")\n",
+      "topLevelStatements": 2
+    },
+    {
+      "name": "Ash: block comments",
+      "source": "greet = ->\n  ###\n  explanation\n  ###\n  \"hello\"\ndone = yes\n",
+      "topLevelStatements": 2
+    },
+    {
+      "name": "Ash: tab indentation",
+      "source": "outer = ->\n\tinner = ->\n\t\tvalue = 1\n\t\tvalue\n\tinner()\ndone = yes\n",
+      "topLevelStatements": 2
+    },
+    {
+      "name": "Ash: nested if else",
+      "source": "choose = (v) ->\n  if v\n    a = 1\n    b = 2\n  else\n    a = 3\n  a\ndone = yes\n",
+      "topLevelStatements": 2
+    },
+    {
+      "name": "Ash: inline branches end at newline",
+      "source": "if ready then result = 1\nfollowing = 2\n",
+      "topLevelStatements": 2
+    },
+    {
+      "name": "Ash: inline functions end at newline",
+      "source": "first = -> 1\nsecond = -> 2\n",
+      "topLevelStatements": 2
+    },
+    {
+      "name": "Ash: blank document",
+      "source": "\r\n\r\n",
+      "topLevelStatements": 0
+    },
+    {
+      "name": "Ash: comment document",
+      "source": "# 你好🙂\n",
+      "topLevelStatements": 0
+    }
+  ],
+  "referenceCompiler": {
+    "name": "coffeescript",
+    "version": "2.7.0",
+    "integrity": "sha512-hzWp6TUE2d/jCcN67LrW1eh5b/rSDKQK6oD6VMLlggYVUUFexgTH9z3dNYihzX4RMhze5FTUsUmOXViJKFQR/A=="
+  }
+}

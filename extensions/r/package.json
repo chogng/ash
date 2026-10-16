@@ -1,0 +1,35 @@
+{
+  "name": "r",
+  "publisher": "ash",
+  "version": "1.0.0",
+  "license": "MIT",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "r",
+        "aliases": [
+          "R",
+          "r"
+        ],
+        "extensions": [
+          ".r",
+          ".rhistory",
+          ".rprofile",
+          ".rt"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "r",
+        "path": "./snippets/code.code-snippets"
+      }
+    ]
+  }
+}

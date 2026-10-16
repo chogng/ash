@@ -1,0 +1,30 @@
+[
+  {
+    "name": "coffeescript",
+    "source": {
+      "crate": "tree-sitter-coffeescript",
+      "version": "0.0.1",
+      "root": "."
+    },
+    "wasm": {
+      "path": "tree-sitter/coffeescript.wasm",
+      "sha256": "6dd41105855fee99427971f4847f066e6b5dee9ad51c8dde60556b80f979fe56"
+    },
+    "highlights": ["queries/coffeescript.scm"],
+    "tags": ["queries/coffeescript.tags.scm"],
+    "folds": ["queries/coffeescript.folds.scm"],
+    "injections": [],
+    "rust": {
+      "language": "tree_sitter_coffeescript::LANGUAGE"
+    },
+    "languages": [
+      {
+        "id": "coffeescript",
+        "variant": "Coffeescript",
+        "editorLanguage": "coffeescript",
+        "editorIds": ["coffeescript"],
+        "aliases": ["coffee"]
+      }
+    ]
+  }
+]

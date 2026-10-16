@@ -908,7 +908,7 @@ test('built-in language associations agree with ash-language on the shared confo
 
 test('common project language packages register resources and localize English and Chinese labels', async () => {
 	using localization = toDisposable(resetNlsResolver);
-	const packages = ['bat', 'cpp', 'csharp', 'java', 'powershell', 'docker', 'make', 'dotenv'];
+	const packages = ['bat', 'cpp', 'csharp', 'java', 'powershell', 'docker', 'make', 'dotenv', 'lua', 'ruby', 'php', 'swift', 'dart', 'log', 'json', 'r', 'julia', 'clojure', 'groovy', 'coffeescript', 'perl'];
 	const extensions = await Promise.all(packages.map(async directory => {
 		const manifestJson = await readFile(`extensions/${directory}/package.json`, 'utf8');
 		const manifest = JSON.parse(manifestJson);
@@ -930,7 +930,11 @@ test('common project language packages register resources and localize English a
 		const labels = new MainThreadLocalization(languagePacks, api);
 		for (const extension of extensions) {
 			const manifest = JSON.parse(await labels.localizeManifest(extension.id, extension.manifestJson, 1));
-			assert.match(manifest.displayName, locale === 'en' ? /Language Support$/ : /语言支持$/);
+			if (extension.name === 'json') {
+				assert.deepEqual(manifest.contributes.languages.find((language: { id: string; }) => language.id === 'snippets').aliases, [locale === 'en' ? 'Code Snippets' : '代码片段', 'snippets']);
+			} else {
+				assert.match(manifest.displayName, locale === 'en' ? /(?:Language|File) Support$/ : /(?:语言|文件)支持$/);
+			}
 		}
 	}
 });

@@ -1,0 +1,10 @@
+{
+  "function": {
+    "prefix": "sub",
+    "body": [
+      "sub ${1:greet} {",
+      "\t$0",
+      "}"
+    ]
+  }
+}

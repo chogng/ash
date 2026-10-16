@@ -10,6 +10,7 @@ test('browser packaging excludes Rust-only extensions and rejects missing JS man
 	try {
 		await mkdir(join(directory, 'build/builtin'), { recursive: true });
 		await copyFile(resolve(import.meta.dirname, 'extensions.ts'), join(directory, 'build/builtin/extensions.ts'));
+		await copyFile(resolve(import.meta.dirname, 'extensionWebviews.ts'), join(directory, 'build/builtin/extensionWebviews.ts'));
 		await mkdir(join(directory, 'build/resources'), { recursive: true });
 		await copyFile(resolve(import.meta.dirname, '../resources/languagePacks.ts'), join(directory, 'build/resources/languagePacks.ts'));
 		await mkdir(join(directory, 'localization'), { recursive: true });
@@ -26,6 +27,17 @@ test('browser packaging excludes Rust-only extensions and rejects missing JS man
 		await writeFile(join(directory, 'extensions/git/src/main.rs'), 'fn main() {}');
 		await writeFile(join(directory, 'extensions/git/Cargo.toml'), '[package]');
 		await writeFile(join(directory, 'extensions/git/package.nls.zh-CN.json'), JSON.stringify({ displayName: 'Git 支持' }));
+		await mkdir(join(directory, 'extensions/language/tree-sitter/parser/src'), { recursive: true });
+		await mkdir(join(directory, 'extensions/language/tree-sitter/nested'), { recursive: true });
+		await mkdir(join(directory, 'extensions/language/queries'), { recursive: true });
+		await writeFile(join(directory, 'extensions/language/package.json'), JSON.stringify({ publisher: 'test', name: 'language', version: '1.0.0' }));
+		await writeFile(join(directory, 'extensions/language/tree-sitter/parser/Cargo.toml'), '[package]\nname = "tree-sitter-parser"');
+		const parserSource = await open(join(directory, 'extensions/language/tree-sitter/parser/src/parser.c'), 'w');
+		try { await parserSource.truncate(17 * 1024 * 1024); }
+		finally { await parserSource.close(); }
+		for (const path of ['tree-sitter/parser.wasm', 'tree-sitter/nested/parser.wasm', 'tree-sitter/grammars.json', 'queries/highlights.scm', 'queries/LICENSE.txt']) {
+			await writeFile(join(directory, 'extensions/language', path), path);
+		}
 		await mkdir(join(directory, 'extensions/language-pack/translations'), { recursive: true });
 		const catalog = { schemaVersion: 1, locale: 'zh-CN', catalogVersion: 'ash-1', bundles: { ash: { hello: '你好' } } };
 		await writeFile(join(directory, 'extensions/language-pack/package.json'), JSON.stringify({ publisher: 'test', name: 'language-pack', version: '1.0.0', engines: { ash: '*' }, contributes: { localizations: [{ languageId: 'zh-CN', translations: [{ id: 'ash', path: 'localization/package.json' }] }] } }));
@@ -43,8 +55,9 @@ test('browser packaging excludes Rust-only extensions and rejects missing JS man
 		assert.ifError(packaged.error);
 		assert.equal(packaged.status, 0, packaged.stderr);
 		const bundle = JSON.parse(await readFile(join(directory, '.build/builtin/fixture.json'), 'utf8'));
-		assert.deepEqual(bundle.catalog.extensions.map((extension: { id: string; }) => extension.id), ['test.git', 'test.language-pack', 'test.theme-defaults']);
+		assert.deepEqual(bundle.catalog.extensions.map((extension: { id: string; }) => extension.id), ['test.git', 'test.language', 'test.language-pack', 'test.theme-defaults']);
 		assert.deepEqual(Object.keys(bundle.resources['test.git']).sort(), ['package.json', 'package.nls.zh-CN.json']);
+		assert.deepEqual(Object.keys(bundle.resources['test.language']).sort(), ['package.json', 'queries/LICENSE.txt', 'queries/highlights.scm', 'tree-sitter/grammars.json', 'tree-sitter/nested/parser.wasm', 'tree-sitter/parser.wasm']);
 		assert.equal(bundle.catalog.extensions.find((extension: { id: string; }) => extension.id === 'test.language-pack').sourceKind, 'builtIn');
 		assert.deepEqual(JSON.parse(Buffer.from(bundle.resources['test.language-pack']['localization/package.json'], 'base64').toString('utf8')), catalog);
 		await mkdir(join(directory, 'extensions/broken-js'));
@@ -63,6 +76,7 @@ test('browser Git packages publish their bundled frontend without a Rust runtime
 	try {
 		await mkdir(join(directory, 'build/builtin'), { recursive: true });
 		await copyFile(resolve(import.meta.dirname, 'extensions.ts'), join(directory, 'build/builtin/extensions.ts'));
+		await copyFile(resolve(import.meta.dirname, 'extensionWebviews.ts'), join(directory, 'build/builtin/extensionWebviews.ts'));
 		await mkdir(join(directory, 'build/resources'), { recursive: true });
 		await copyFile(resolve(import.meta.dirname, '../resources/languagePacks.ts'), join(directory, 'build/resources/languagePacks.ts'));
 		await mkdir(join(directory, 'localization'), { recursive: true });
@@ -159,6 +173,7 @@ for (const resource of ['manifest', 'file'] as const) {
 			// language packs or other resources in the developer's checkout.
 			await mkdir(join(directory, 'build/builtin'), { recursive: true });
 			await copyFile(resolve(import.meta.dirname, 'extensions.ts'), join(directory, 'build/builtin/extensions.ts'));
+			await copyFile(resolve(import.meta.dirname, 'extensionWebviews.ts'), join(directory, 'build/builtin/extensionWebviews.ts'));
 			await mkdir(join(directory, 'build/resources'), { recursive: true });
 			await copyFile(resolve(import.meta.dirname, '../resources/languagePacks.ts'), join(directory, 'build/resources/languagePacks.ts'));
 			await mkdir(join(directory, 'localization'), { recursive: true });

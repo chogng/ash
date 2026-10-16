@@ -18,6 +18,32 @@ const declarations: Readonly<Record<string, { offSide: boolean; markers?: { star
 	"starlark": {
 		"offSide": true
 	},
+	"clojure": {
+		"offSide": false,
+		"markers": {
+			"start": {
+				"source": "^\\s*;+\\s*#?region\\b",
+				"flags": ""
+			},
+			"end": {
+				"source": "^\\s*;+\\s*#?endregion\\b",
+				"flags": ""
+			}
+		}
+	},
+	"coffeescript": {
+		"offSide": true,
+		"markers": {
+			"start": {
+				"source": "^\\s*#\\s*#?region\\b",
+				"flags": ""
+			},
+			"end": {
+				"source": "^\\s*#\\s*#?endregion\\b",
+				"flags": ""
+			}
+		}
+	},
 	"c": {
 		"offSide": false,
 		"markers": {
@@ -96,6 +122,19 @@ const declarations: Readonly<Record<string, { offSide: boolean; markers?: { star
 			}
 		}
 	},
+	"dart": {
+		"offSide": false,
+		"markers": {
+			"start": {
+				"source": "^\\s*//\\s*#?region\\b",
+				"flags": ""
+			},
+			"end": {
+				"source": "^\\s*//\\s*#?endregion\\b",
+				"flags": ""
+			}
+		}
+	},
 	"dockerfile": {
 		"offSide": false,
 		"markers": {
@@ -123,6 +162,19 @@ const declarations: Readonly<Record<string, { offSide: boolean; markers?: { star
 		}
 	},
 	"go": {
+		"offSide": false,
+		"markers": {
+			"start": {
+				"source": "^\\s*//\\s*#?region\\b",
+				"flags": ""
+			},
+			"end": {
+				"source": "^\\s*//\\s*#?endregion\\b",
+				"flags": ""
+			}
+		}
+	},
+	"groovy": {
 		"offSide": false,
 		"markers": {
 			"start": {
@@ -213,6 +265,58 @@ const declarations: Readonly<Record<string, { offSide: boolean; markers?: { star
 			}
 		}
 	},
+	"jsonl": {
+		"offSide": false,
+		"markers": {
+			"start": {
+				"source": "^\\s*//\\s*#?region\\b",
+				"flags": ""
+			},
+			"end": {
+				"source": "^\\s*//\\s*#?endregion\\b",
+				"flags": ""
+			}
+		}
+	},
+	"snippets": {
+		"offSide": false,
+		"markers": {
+			"start": {
+				"source": "^\\s*//\\s*#?region\\b",
+				"flags": ""
+			},
+			"end": {
+				"source": "^\\s*//\\s*#?endregion\\b",
+				"flags": ""
+			}
+		}
+	},
+	"julia": {
+		"offSide": false,
+		"markers": {
+			"start": {
+				"source": "^\\s*#\\s*#?region\\b",
+				"flags": ""
+			},
+			"end": {
+				"source": "^\\s*#\\s*#?endregion\\b",
+				"flags": ""
+			}
+		}
+	},
+	"lua": {
+		"offSide": false,
+		"markers": {
+			"start": {
+				"source": "^\\s*--\\s*#?region\\b",
+				"flags": ""
+			},
+			"end": {
+				"source": "^\\s*--\\s*#?endregion\\b",
+				"flags": ""
+			}
+		}
+	},
 	"makefile": {
 		"offSide": false,
 		"markers": {
@@ -239,6 +343,32 @@ const declarations: Readonly<Record<string, { offSide: boolean; markers?: { star
 			}
 		}
 	},
+	"perl": {
+		"offSide": false,
+		"markers": {
+			"start": {
+				"source": "^\\s*#\\s*#?region\\b",
+				"flags": ""
+			},
+			"end": {
+				"source": "^\\s*#\\s*#?endregion\\b",
+				"flags": ""
+			}
+		}
+	},
+	"php": {
+		"offSide": false,
+		"markers": {
+			"start": {
+				"source": "^\\s*//\\s*#?region\\b",
+				"flags": ""
+			},
+			"end": {
+				"source": "^\\s*//\\s*#?endregion\\b",
+				"flags": ""
+			}
+		}
+	},
 	"powershell": {
 		"offSide": false,
 		"markers": {
@@ -261,6 +391,32 @@ const declarations: Readonly<Record<string, { offSide: boolean; markers?: { star
 			},
 			"end": {
 				"source": "^\\s*#\\s*endregion\\b",
+				"flags": ""
+			}
+		}
+	},
+	"r": {
+		"offSide": false,
+		"markers": {
+			"start": {
+				"source": "^\\s*#\\s*#?region\\b",
+				"flags": ""
+			},
+			"end": {
+				"source": "^\\s*#\\s*#?endregion\\b",
+				"flags": ""
+			}
+		}
+	},
+	"ruby": {
+		"offSide": false,
+		"markers": {
+			"start": {
+				"source": "^\\s*#\\s*#?region\\b",
+				"flags": ""
+			},
+			"end": {
+				"source": "^\\s*#\\s*#?endregion\\b",
 				"flags": ""
 			}
 		}
@@ -300,6 +456,19 @@ const declarations: Readonly<Record<string, { offSide: boolean; markers?: { star
 			},
 			"end": {
 				"source": "^\\s*--\\s*#endregion\\b",
+				"flags": ""
+			}
+		}
+	},
+	"swift": {
+		"offSide": false,
+		"markers": {
+			"start": {
+				"source": "^\\s*//\\s*#?region\\b",
+				"flags": ""
+			},
+			"end": {
+				"source": "^\\s*//\\s*#?endregion\\b",
 				"flags": ""
 			}
 		}

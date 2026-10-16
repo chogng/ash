@@ -19,3 +19,7 @@ The Web host loads the packaged WASM assets. Rust links the grammar dependencies
 
 Ash-authored `*.folds.scm` and additional `*.tags.scm` queries provide structural folding
 and outline entries for these grammars; they are covered by the repository license.
+
+JSON, JSON with Comments, JSON Lines, and Code Snippets share the same parser and query resources.
+The grammar accepts multiple JSON values and comments. JSONL keeps one record per line; snippets
+retain JSON-with-comments editing and snippet bodies. Each mode owns its file associations.

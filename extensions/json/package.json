@@ -12,8 +12,7 @@
           "json"
         ],
         "extensions": [
-          ".json",
-          ".jsonl"
+          ".json"
         ],
         "filenames": [
           "composer.lock",
@@ -51,6 +50,44 @@
           "**/.github/hooks/*.json"
         ],
         "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "jsonl",
+        "aliases": [
+          "%jsonl.alias%",
+          "jsonl"
+        ],
+        "extensions": [
+          ".jsonl",
+          ".ndjson"
+        ],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "snippets",
+        "aliases": [
+          "%snippets.alias%",
+          "snippets"
+        ],
+        "extensions": [
+          ".code-snippets"
+        ],
+        "filenamePatterns": [
+          "**/User/snippets/*.json",
+          "**/User/profiles/*/snippets/*.json",
+          "**/snippets*.json"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "jsonl",
+        "path": "./snippets/jsonl.code-snippets"
+      },
+      {
+        "language": "snippets",
+        "path": "./snippets/snippets.code-snippets"
       }
     ]
   }

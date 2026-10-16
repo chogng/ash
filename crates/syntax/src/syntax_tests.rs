@@ -1227,6 +1227,25 @@ fn python_queries_keep_incremental_highlights_and_symbols() {
 }
 
 #[test]
+fn coffeescript_parses_the_official_compiler_validated_corpus() {
+    let corpus: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../test/fixtures/tree-sitter/coffeescript.json"
+    ))
+    .unwrap();
+    let cases = corpus["cases"].as_array().unwrap();
+    assert_eq!(cases.len(), 41);
+    for case in cases {
+        let document = SyntaxDocument::open(
+            SyntaxLanguage::Coffeescript,
+            DocumentRevision::new(1),
+            case["source"].as_str().unwrap(),
+        )
+        .unwrap();
+        assert!(!document.snapshot().has_errors(), "{}", case["name"]);
+    }
+}
+
+#[test]
 fn bundled_languages_parse_and_highlight_expected_lexemes() {
     let samples: Vec<serde_json::Value> = serde_json::from_str(include_str!(
         "../../../test/fixtures/tree-sitter/languages.json"

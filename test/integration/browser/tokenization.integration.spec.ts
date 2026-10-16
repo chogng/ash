@@ -71,6 +71,20 @@ test('common project languages resolve from file names and paint bundled syntax'
 		['Makefile', 'makefile', '# Build\nall:\n\t@echo hello\n', '# Build', 'comment'],
 		['.env.local', 'dotenv', '# Settings\nNAME=hello\n', '# Settings', 'comment'],
 		['compose.dev.yaml', 'dockercompose', 'services:\n  app:\n    image: "alpine:3.22"\n', 'alpine:3.22', 'string'],
+		['main.lua', 'lua', 'local function greet() return 42 end', 'function', 'keyword'],
+		['Gemfile', 'ruby', 'source "https://example.com"', 'source', 'function'],
+		['index.php', 'php', '<?php echo "hello";', 'echo', 'keyword'],
+		['main.swift', 'swift', 'func greet() { return }', 'func', 'keyword'],
+		['main.dart', 'dart', 'void main() { return; }', 'return', 'keyword'],
+		['events.ndjson', 'jsonl', '{"count": 1}\n{"count": 42}\n', '42', 'number'],
+		['user.code-snippets', 'snippets', '// snippet\n{"demo":{"prefix":"d","body":["hello"]}}', '// snippet', 'comment'],
+		["analysis.R", "r", "greet <- function(name) {\n  return(\"你好🙂\")\n}\n", "function", "keyword"],
+		["main.jl", "julia", "function greet(name)\n  return \"你好🙂\"\nend\n", "function", "keyword"],
+		["src/main.clj", "clojure", "(defn greet [name]\n  (str \"你好🙂\" name))\n", "defn", "keyword"],
+		["build.gradle", "groovy", "def greet(name) {\n  return \"你好🙂\"\n}\n", "def", "keyword"],
+		["main.coffee", "coffeescript", "class Greeter\n  greet: (name) ->\n    \"你好🙂\"\n", "class", "keyword"],
+		["main.pl", "perl", "sub greet {\n  return \"你好🙂\";\n}\n", "return", "keyword"],
+		['server.log.12', 'log', '2026-10-16T10:30:00Z ERROR failed', 'ERROR', 'keyword'],
 	] as const;
 	for (const [filename, languageId, text, lexeme, type] of samples) {
 		const actual = await page.evaluate(({ filename, text }) => window.tokenizationIntegration.openResource(`/project/${filename}`, text), { filename, text });

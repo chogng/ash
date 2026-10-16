@@ -265,7 +265,13 @@ fn compile_glob(pattern: &str) -> Regex {
         match character {
             '*' if characters.peek() == Some(&'*') => {
                 characters.next();
-                expression.push_str(".*");
+                // Directory globs include paths rooted directly at the next segment.
+                if characters.peek() == Some(&'/') {
+                    characters.next();
+                    expression.push_str("(?:.*/)?");
+                } else {
+                    expression.push_str(".*");
+                }
             }
             '*' => expression.push_str("[^/]*"),
             '?' => expression.push_str("[^/]"),

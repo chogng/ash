@@ -167,5 +167,115 @@
         2
       ]
     ]
+  },
+  {
+    "language": "lua",
+    "offSide": false,
+    "text": "-- #region functions\nlocal value = 1\n-- #endregion\n",
+    "regions": [
+      [
+        0,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "ruby",
+    "offSide": false,
+    "text": "# region methods\nvalue = 1\n# endregion\n",
+    "regions": [
+      [
+        0,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "swift",
+    "offSide": false,
+    "text": "// #region functions\nlet value = 1\n// #endregion\n",
+    "regions": [
+      [
+        0,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "dart",
+    "offSide": false,
+    "text": "// #region functions\nvar value = 1;\n// #endregion\n",
+    "regions": [
+      [
+        0,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "r",
+    "offSide": false,
+    "text": "# #region greet\nvalue = 42\n# #endregion\n",
+    "regions": [
+      [
+        0,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "julia",
+    "offSide": false,
+    "text": "# #region greet\nvalue = 42\n# #endregion\n",
+    "regions": [
+      [
+        0,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "clojure",
+    "offSide": false,
+    "text": "; #region greet\n(def value 42)\n; #endregion\n",
+    "regions": [
+      [
+        0,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "groovy",
+    "offSide": false,
+    "text": "// #region greet\nvalue = 42\n// #endregion\n",
+    "regions": [
+      [
+        0,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "coffeescript",
+    "offSide": true,
+    "text": "# #region greet\nvalue = 42\n# #endregion\n",
+    "regions": [
+      [
+        0,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "perl",
+    "offSide": false,
+    "text": "# #region greet\nvalue = 42\n# #endregion\n",
+    "regions": [
+      [
+        0,
+        2
+      ]
+    ]
   }
 ]

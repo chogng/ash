@@ -1,0 +1,9 @@
+{
+  "function": {
+    "prefix": "function",
+    "body": [
+      "${1:greet} = (${2:name}) ->",
+      "\t$0"
+    ]
+  }
+}

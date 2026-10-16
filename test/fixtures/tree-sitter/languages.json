@@ -264,5 +264,166 @@
     "lexeme": "alpine:3.22",
     "capture": "string",
     "tokenType": "string"
+  },
+  {
+    "language": "lua",
+    "text": "local function greet(name)\n  return \"你好🙂\"\nend\n",
+    "lexeme": "function",
+    "capture": "keyword",
+    "tokenType": "keyword"
+  },
+  {
+    "language": "ruby",
+    "text": "def greet(name)\n  \"你好🙂\"\nend\n",
+    "lexeme": "def",
+    "capture": "keyword",
+    "tokenType": "keyword"
+  },
+  {
+    "language": "php",
+    "text": "<?php\nfunction greet($name) {\n  return \"你好🙂\";\n}\n",
+    "lexeme": "return",
+    "capture": "keyword",
+    "tokenType": "keyword"
+  },
+  {
+    "language": "swift",
+    "text": "func greet() -> String {\n  return \"你好🙂\"\n}\n",
+    "lexeme": "func",
+    "capture": "keyword",
+    "tokenType": "keyword"
+  },
+  {
+    "language": "dart",
+    "text": "String greet() {\n  return \"你好🙂\";\n}\n",
+    "lexeme": "return",
+    "capture": "keyword",
+    "tokenType": "keyword"
+  },
+  {
+    "language": "jsonl",
+    "text": "{\"message\":\"你好🙂\"}\n{\"count\":42}\n",
+    "lexeme": "42",
+    "capture": "number",
+    "tokenType": "number"
+  },
+  {
+    "language": "snippets",
+    "text": "// reusable snippet\n{\"demo\":{\"prefix\":\"demo\",\"body\":[\"你好🙂\"]}}\n",
+    "lexeme": "// reusable snippet",
+    "capture": "comment",
+    "tokenType": "comment"
+  },
+  {
+    "language": "log",
+    "text": "2026-10-16T10:30:00Z ERROR request failed \"你好🙂\"\n",
+    "lexeme": "ERROR",
+    "capture": "keyword",
+    "tokenType": "keyword"
+  },
+  {
+    "language": "log",
+    "text": "2026-10-16T10:30:00Z INFO completed\r\n",
+    "lexeme": "2026-10-16",
+    "capture": "number",
+    "tokenType": "number"
+  },
+  {
+    "language": "php",
+    "text": "<?php echo \"你好🙂\"; ?><h1>Hello</h1>",
+    "lexeme": "h1",
+    "capture": "tag",
+    "tokenType": "tag"
+  },
+  {
+    "language": "r",
+    "text": "greet <- function(name) {\n  return(\"你好🙂\")\n}\n",
+    "lexeme": "function",
+    "capture": "keyword",
+    "tokenType": "keyword"
+  },
+  {
+    "language": "julia",
+    "text": "function greet(name)\n  return \"你好🙂\"\nend\n",
+    "lexeme": "function",
+    "capture": "keyword",
+    "tokenType": "keyword"
+  },
+  {
+    "language": "clojure",
+    "text": "(defn greet [name]\n  (str \"你好🙂\" name))\n",
+    "lexeme": "defn",
+    "capture": "keyword",
+    "tokenType": "keyword"
+  },
+  {
+    "language": "groovy",
+    "text": "def greet(name) {\n  return \"你好🙂\"\n}\n",
+    "lexeme": "def",
+    "capture": "keyword",
+    "tokenType": "keyword"
+  },
+  {
+    "language": "coffeescript",
+    "text": "class Greeter\n  greet: (name) ->\n    \"你好🙂\"\n",
+    "lexeme": "class",
+    "capture": "keyword",
+    "tokenType": "keyword"
+  },
+  {
+    "language": "perl",
+    "text": "sub greet {\n  return \"你好🙂\";\n}\n",
+    "lexeme": "return",
+    "capture": "keyword",
+    "tokenType": "keyword"
+  },
+  {
+    "language": "clojure",
+    "text": "{:message \"你好🙂\" :count 42}\n",
+    "lexeme": ":message",
+    "capture": "constant",
+    "tokenType": "constant"
+  },
+  {
+    "language": "groovy",
+    "text": "pipeline {\n  agent any\n  stages { stage(\"Build\") { steps { echo \"你好🙂\" } } }\n}\n",
+    "lexeme": "Build",
+    "capture": "string",
+    "tokenType": "string"
+  },
+  {
+    "language": "coffeescript",
+    "text": "\"display-name\": \"你好🙂\"\ncount: 42\n",
+    "lexeme": "42",
+    "capture": "number",
+    "tokenType": "number"
+  },
+  {
+    "language": "perl",
+    "text": "=pod\n你好🙂\n=cut\n\nsub greet { return 42; }\n",
+    "lexeme": "=pod",
+    "capture": "comment",
+    "tokenType": "comment"
+  },
+  {
+    "language": "coffeescript",
+    "text": "greet = (name) ->\n  \"你好🙂\"",
+    "lexeme": "greet",
+    "capture": "function",
+    "tokenType": "function"
+  },
+  {
+    "language": "coffeescript",
+    "text": "greet = (name) ->\n  # body\n  text = \"你好🙂\"\n  text\n# outside\ndone = greet(\"hello\")\n",
+    "lexeme": "hello",
+    "capture": "string",
+    "tokenType": "string"
+  },
+  {
+    "language": "coffeescript",
+    "text": "enabled = yes\r\nlights_on = on\r\n",
+    "lexeme": "lights_on",
+    "capture": "variable",
+    "tokenType": "variable"
   }
 ]

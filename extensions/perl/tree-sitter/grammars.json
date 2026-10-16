@@ -1,0 +1,30 @@
+[
+  {
+    "name": "perl",
+    "source": {
+      "crate": "tree-sitter-perl",
+      "version": "1.1.2",
+      "root": "."
+    },
+    "wasm": {
+      "path": "tree-sitter/perl.wasm",
+      "sha256": "8093d04055908aed9cb74e1f728dfe1f2a9e2b1201d5af4478c6b4203fce0d42"
+    },
+    "highlights": ["queries/perl.scm"],
+    "tags": ["queries/perl.tags.scm"],
+    "folds": ["queries/perl.folds.scm"],
+    "injections": [],
+    "rust": {
+      "language": "tree_sitter_perl::LANGUAGE"
+    },
+    "languages": [
+      {
+        "id": "perl",
+        "variant": "Perl",
+        "editorLanguage": "perl",
+        "editorIds": ["perl"],
+        "aliases": []
+      }
+    ]
+  }
+]

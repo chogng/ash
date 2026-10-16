@@ -30,6 +30,28 @@ export const syntaxLanguageDefinitions = [
 		"aliases": []
 	},
 	{
+		"id": "clojure",
+		"editorLanguage": "clojure",
+		"editorIds": [
+			"clojure"
+		],
+		"aliases": [
+			"clj",
+			"cljs",
+			"edn"
+		]
+	},
+	{
+		"id": "coffeescript",
+		"editorLanguage": "coffeescript",
+		"editorIds": [
+			"coffeescript"
+		],
+		"aliases": [
+			"coffee"
+		]
+	},
+	{
 		"id": "c",
 		"editorLanguage": "c",
 		"editorIds": [
@@ -81,6 +103,14 @@ export const syntaxLanguageDefinitions = [
 		"editorLanguage": "less",
 		"editorIds": [
 			"less"
+		],
+		"aliases": []
+	},
+	{
+		"id": "dart",
+		"editorLanguage": "dart",
+		"editorIds": [
+			"dart"
 		],
 		"aliases": []
 	},
@@ -147,6 +177,14 @@ export const syntaxLanguageDefinitions = [
 		"editorLanguage": "go",
 		"editorIds": [
 			"go"
+		],
+		"aliases": []
+	},
+	{
+		"id": "groovy",
+		"editorLanguage": "groovy",
+		"editorIds": [
+			"groovy"
 		],
 		"aliases": []
 	},
@@ -220,6 +258,50 @@ export const syntaxLanguageDefinitions = [
 		"aliases": []
 	},
 	{
+		"id": "jsonl",
+		"editorLanguage": "jsonl",
+		"editorIds": [
+			"jsonl"
+		],
+		"aliases": [
+			"ndjson"
+		]
+	},
+	{
+		"id": "snippets",
+		"editorLanguage": "snippets",
+		"editorIds": [
+			"snippets"
+		],
+		"aliases": []
+	},
+	{
+		"id": "julia",
+		"editorLanguage": "julia",
+		"editorIds": [
+			"julia"
+		],
+		"aliases": []
+	},
+	{
+		"id": "log",
+		"editorLanguage": "log",
+		"editorIds": [
+			"log"
+		],
+		"aliases": []
+	},
+	{
+		"id": "lua",
+		"editorLanguage": "lua",
+		"editorIds": [
+			"lua"
+		],
+		"aliases": [
+			"lua"
+		]
+	},
+	{
 		"id": "makefile",
 		"editorLanguage": "makefile",
 		"editorIds": [
@@ -248,6 +330,22 @@ export const syntaxLanguageDefinitions = [
 		]
 	},
 	{
+		"id": "perl",
+		"editorLanguage": "perl",
+		"editorIds": [
+			"perl"
+		],
+		"aliases": []
+	},
+	{
+		"id": "php",
+		"editorLanguage": "php",
+		"editorIds": [
+			"php"
+		],
+		"aliases": []
+	},
+	{
 		"id": "powershell",
 		"editorLanguage": "powershell",
 		"editorIds": [
@@ -266,6 +364,24 @@ export const syntaxLanguageDefinitions = [
 		],
 		"aliases": [
 			"py"
+		]
+	},
+	{
+		"id": "r",
+		"editorLanguage": "r",
+		"editorIds": [
+			"r"
+		],
+		"aliases": []
+	},
+	{
+		"id": "ruby",
+		"editorLanguage": "ruby",
+		"editorIds": [
+			"ruby"
+		],
+		"aliases": [
+			"rb"
 		]
 	},
 	{
@@ -294,6 +410,14 @@ export const syntaxLanguageDefinitions = [
 		"editorLanguage": "sql",
 		"editorIds": [
 			"sql"
+		],
+		"aliases": []
+	},
+	{
+		"id": "swift",
+		"editorLanguage": "swift",
+		"editorIds": [
+			"swift"
 		],
 		"aliases": []
 	},

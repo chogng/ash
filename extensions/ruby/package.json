@@ -1,0 +1,65 @@
+{
+  "name": "ruby",
+  "publisher": "ash",
+  "version": "1.0.0",
+  "license": "MIT",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "ruby",
+        "aliases": [
+          "Ruby",
+          "rb"
+        ],
+        "extensions": [
+          ".rb",
+          ".rbx",
+          ".rjs",
+          ".gemspec",
+          ".rake",
+          ".ru",
+          ".podspec",
+          ".rbi"
+        ],
+        "filenames": [
+          "rakefile",
+          "gemfile",
+          "guardfile",
+          "podfile",
+          "capfile",
+          "cheffile",
+          "hobofile",
+          "vagrantfile",
+          "appraisals",
+          "rantfile",
+          "berksfile",
+          "berksfile.lock",
+          "thorfile",
+          "puppetfile",
+          "dangerfile",
+          "brewfile",
+          "fastfile",
+          "appfile",
+          "deliverfile",
+          "matchfile",
+          "scanfile",
+          "snapfile",
+          "gymfile"
+        ],
+        "firstLine": "^#!\\s*/.*\\bruby\\b",
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "ruby",
+        "path": "./snippets/code.code-snippets"
+      }
+    ]
+  }
+}

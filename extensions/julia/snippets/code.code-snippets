@@ -1,0 +1,10 @@
+{
+  "function": {
+    "prefix": "function",
+    "body": [
+      "function ${1:greet}(${2:name})",
+      "\t$0",
+      "end"
+    ]
+  }
+}

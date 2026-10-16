@@ -1,0 +1,30 @@
+[
+  {
+    "name": "clojure",
+    "source": {
+      "crate": "tree-sitter-clojure",
+      "version": "0.1.0",
+      "root": "."
+    },
+    "wasm": {
+      "path": "tree-sitter/clojure.wasm",
+      "sha256": "e85de0293b74a1bf84717056e741f316b45ba115f77b0e05d11123b855a0bbfd"
+    },
+    "highlights": ["queries/clojure.scm"],
+    "tags": ["queries/clojure.tags.scm"],
+    "folds": ["queries/clojure.folds.scm"],
+    "injections": [],
+    "rust": {
+      "language": "tree_sitter_clojure::LANGUAGE"
+    },
+    "languages": [
+      {
+        "id": "clojure",
+        "variant": "Clojure",
+        "editorLanguage": "clojure",
+        "editorIds": ["clojure"],
+        "aliases": ["clj", "cljs", "edn"]
+      }
+    ]
+  }
+]

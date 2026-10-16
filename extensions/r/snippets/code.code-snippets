@@ -1,0 +1,10 @@
+{
+  "function": {
+    "prefix": "function",
+    "body": [
+      "${1:greet} <- function(${2:name}) {",
+      "\t$0",
+      "}"
+    ]
+  }
+}

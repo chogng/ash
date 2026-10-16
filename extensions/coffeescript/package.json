@@ -1,0 +1,35 @@
+{
+  "name": "coffeescript",
+  "publisher": "ash",
+  "version": "1.0.0",
+  "license": "MIT",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "coffeescript",
+        "aliases": [
+          "CoffeeScript",
+          "coffeescript",
+          "coffee"
+        ],
+        "extensions": [
+          ".coffee",
+          ".cson",
+          ".iced"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "coffeescript",
+        "path": "./snippets/code.code-snippets"
+      }
+    ]
+  }
+}

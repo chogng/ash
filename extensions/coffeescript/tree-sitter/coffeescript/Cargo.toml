@@ -1,0 +1,18 @@
+[package]
+name = "tree-sitter-coffeescript"
+version = "0.0.1"
+edition = "2024"
+license = "MIT"
+build = "build.rs"
+
+# Isolated binding for the pinned upstream parser.
+[workspace]
+
+[lib]
+path = "lib.rs"
+
+[dependencies]
+tree-sitter-language = "0.1"
+
+[build-dependencies]
+cc = "1"

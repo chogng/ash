@@ -50,6 +50,20 @@ const DECLARATIONS: &[Association] = &[
         first_line: None,
     },
     Association {
+        id: "clojure",
+        extensions: &[".clj", ".cljs", ".cljc", ".cljx", ".clojure", ".edn", ".bb"],
+        filenames: &[],
+        patterns: &[],
+        first_line: None,
+    },
+    Association {
+        id: "coffeescript",
+        extensions: &[".coffee", ".cson", ".iced"],
+        filenames: &[],
+        patterns: &[],
+        first_line: None,
+    },
+    Association {
         id: "c",
         extensions: &[".c", ".i"],
         filenames: &[],
@@ -91,6 +105,13 @@ const DECLARATIONS: &[Association] = &[
     Association {
         id: "scss",
         extensions: &[".scss"],
+        filenames: &[],
+        patterns: &[],
+        first_line: None,
+    },
+    Association {
+        id: "dart",
+        extensions: &[".dart"],
         filenames: &[],
         patterns: &[],
         first_line: None,
@@ -143,6 +164,13 @@ const DECLARATIONS: &[Association] = &[
         filenames: &[],
         patterns: &[],
         first_line: None,
+    },
+    Association {
+        id: "groovy",
+        extensions: &[".groovy", ".gvy", ".gradle", ".jenkinsfile", ".nf"],
+        filenames: &["jenkinsfile"],
+        patterns: &["jenkinsfile*"],
+        first_line: Some("^#!.*\\bgroovy\\b"),
     },
     Association {
         id: "html",
@@ -208,7 +236,7 @@ const DECLARATIONS: &[Association] = &[
     },
     Association {
         id: "json",
-        extensions: &[".json", ".jsonl"],
+        extensions: &[".json"],
         filenames: &["composer.lock", ".watchmanconfig"],
         patterns: &[],
         first_line: None,
@@ -233,6 +261,45 @@ const DECLARATIONS: &[Association] = &[
             "typedoc.json",
         ],
         patterns: &["**/.github/hooks/*.json"],
+        first_line: None,
+    },
+    Association {
+        id: "jsonl",
+        extensions: &[".jsonl", ".ndjson"],
+        filenames: &[],
+        patterns: &[],
+        first_line: None,
+    },
+    Association {
+        id: "snippets",
+        extensions: &[".code-snippets"],
+        filenames: &[],
+        patterns: &[
+            "**/user/snippets/*.json",
+            "**/user/profiles/*/snippets/*.json",
+            "**/snippets*.json",
+        ],
+        first_line: None,
+    },
+    Association {
+        id: "julia",
+        extensions: &[".jl"],
+        filenames: &[],
+        patterns: &[],
+        first_line: Some("^#!\\s*/.*\\bjulia[0-9.-]*\\b"),
+    },
+    Association {
+        id: "log",
+        extensions: &[".log"],
+        filenames: &[],
+        patterns: &["*.log.?", "*.log.*"],
+        first_line: None,
+    },
+    Association {
+        id: "lua",
+        extensions: &[".lua"],
+        filenames: &[],
+        patterns: &[],
         first_line: None,
     },
     Association {
@@ -264,6 +331,20 @@ const DECLARATIONS: &[Association] = &[
         first_line: None,
     },
     Association {
+        id: "perl",
+        extensions: &[".pl", ".pm", ".pod", ".t", ".psgi"],
+        filenames: &[],
+        patterns: &[],
+        first_line: Some("^#!.*\\bperl\\b"),
+    },
+    Association {
+        id: "php",
+        extensions: &[".php", ".php4", ".php5", ".phtml", ".ctp"],
+        filenames: &[],
+        patterns: &[],
+        first_line: Some("^#!\\s*/.*\\bphp\\b"),
+    },
+    Association {
         id: "powershell",
         extensions: &[".ps1", ".psm1", ".psd1", ".pssc", ".psrc"],
         filenames: &[],
@@ -278,6 +359,46 @@ const DECLARATIONS: &[Association] = &[
         filenames: &["sconstruct", "sconscript"],
         patterns: &[],
         first_line: Some("^#!\\s*/?.*\\bpython[0-9.-]*\\b"),
+    },
+    Association {
+        id: "r",
+        extensions: &[".r", ".rhistory", ".rprofile", ".rt"],
+        filenames: &[],
+        patterns: &[],
+        first_line: None,
+    },
+    Association {
+        id: "ruby",
+        extensions: &[
+            ".rb", ".rbx", ".rjs", ".gemspec", ".rake", ".ru", ".podspec", ".rbi",
+        ],
+        filenames: &[
+            "rakefile",
+            "gemfile",
+            "guardfile",
+            "podfile",
+            "capfile",
+            "cheffile",
+            "hobofile",
+            "vagrantfile",
+            "appraisals",
+            "rantfile",
+            "berksfile",
+            "berksfile.lock",
+            "thorfile",
+            "puppetfile",
+            "dangerfile",
+            "brewfile",
+            "fastfile",
+            "appfile",
+            "deliverfile",
+            "matchfile",
+            "scanfile",
+            "snapfile",
+            "gymfile",
+        ],
+        patterns: &[],
+        first_line: Some("^#!\\s*/.*\\bruby\\b"),
     },
     Association {
         id: "rust",
@@ -338,6 +459,13 @@ const DECLARATIONS: &[Association] = &[
     Association {
         id: "sql",
         extensions: &[".sql", ".dsql"],
+        filenames: &[],
+        patterns: &[],
+        first_line: None,
+    },
+    Association {
+        id: "swift",
+        extensions: &[".swift"],
         filenames: &[],
         patterns: &[],
         first_line: None,
@@ -516,6 +644,21 @@ const FOLDING_DECLARATIONS: &[FoldingDeclaration] = &[
         markers: None,
     },
     FoldingDeclaration {
+        id: "clojure",
+        off_side: false,
+        markers: Some((
+            "^\\s*;+\\s*#?region\\b",
+            "",
+            "^\\s*;+\\s*#?endregion\\b",
+            "",
+        )),
+    },
+    FoldingDeclaration {
+        id: "coffeescript",
+        off_side: true,
+        markers: Some(("^\\s*#\\s*#?region\\b", "", "^\\s*#\\s*#?endregion\\b", "")),
+    },
+    FoldingDeclaration {
         id: "c",
         off_side: false,
         markers: Some((
@@ -571,6 +714,16 @@ const FOLDING_DECLARATIONS: &[FoldingDeclaration] = &[
         )),
     },
     FoldingDeclaration {
+        id: "dart",
+        off_side: false,
+        markers: Some((
+            "^\\s*//\\s*#?region\\b",
+            "",
+            "^\\s*//\\s*#?endregion\\b",
+            "",
+        )),
+    },
+    FoldingDeclaration {
         id: "dockerfile",
         off_side: false,
         markers: Some(("^\\s*#\\s*#?region\\b", "", "^\\s*#\\s*#?endregion\\b", "")),
@@ -582,6 +735,16 @@ const FOLDING_DECLARATIONS: &[FoldingDeclaration] = &[
     },
     FoldingDeclaration {
         id: "go",
+        off_side: false,
+        markers: Some((
+            "^\\s*//\\s*#?region\\b",
+            "",
+            "^\\s*//\\s*#?endregion\\b",
+            "",
+        )),
+    },
+    FoldingDeclaration {
+        id: "groovy",
         off_side: false,
         markers: Some((
             "^\\s*//\\s*#?region\\b",
@@ -651,6 +814,41 @@ const FOLDING_DECLARATIONS: &[FoldingDeclaration] = &[
         )),
     },
     FoldingDeclaration {
+        id: "jsonl",
+        off_side: false,
+        markers: Some((
+            "^\\s*//\\s*#?region\\b",
+            "",
+            "^\\s*//\\s*#?endregion\\b",
+            "",
+        )),
+    },
+    FoldingDeclaration {
+        id: "snippets",
+        off_side: false,
+        markers: Some((
+            "^\\s*//\\s*#?region\\b",
+            "",
+            "^\\s*//\\s*#?endregion\\b",
+            "",
+        )),
+    },
+    FoldingDeclaration {
+        id: "julia",
+        off_side: false,
+        markers: Some(("^\\s*#\\s*#?region\\b", "", "^\\s*#\\s*#?endregion\\b", "")),
+    },
+    FoldingDeclaration {
+        id: "lua",
+        off_side: false,
+        markers: Some((
+            "^\\s*--\\s*#?region\\b",
+            "",
+            "^\\s*--\\s*#?endregion\\b",
+            "",
+        )),
+    },
+    FoldingDeclaration {
         id: "makefile",
         off_side: false,
         markers: Some(("^\\s*#\\s*#?region\\b", "", "^\\s*#\\s*#?endregion\\b", "")),
@@ -666,6 +864,21 @@ const FOLDING_DECLARATIONS: &[FoldingDeclaration] = &[
         )),
     },
     FoldingDeclaration {
+        id: "perl",
+        off_side: false,
+        markers: Some(("^\\s*#\\s*#?region\\b", "", "^\\s*#\\s*#?endregion\\b", "")),
+    },
+    FoldingDeclaration {
+        id: "php",
+        off_side: false,
+        markers: Some((
+            "^\\s*//\\s*#?region\\b",
+            "",
+            "^\\s*//\\s*#?endregion\\b",
+            "",
+        )),
+    },
+    FoldingDeclaration {
         id: "powershell",
         off_side: false,
         markers: Some(("^\\s*#region\\b", "", "^\\s*#endregion\\b", "")),
@@ -674,6 +887,16 @@ const FOLDING_DECLARATIONS: &[FoldingDeclaration] = &[
         id: "python",
         off_side: true,
         markers: Some(("^\\s*#\\s*region\\b", "", "^\\s*#\\s*endregion\\b", "")),
+    },
+    FoldingDeclaration {
+        id: "r",
+        off_side: false,
+        markers: Some(("^\\s*#\\s*#?region\\b", "", "^\\s*#\\s*#?endregion\\b", "")),
+    },
+    FoldingDeclaration {
+        id: "ruby",
+        off_side: false,
+        markers: Some(("^\\s*#\\s*#?region\\b", "", "^\\s*#\\s*#?endregion\\b", "")),
     },
     FoldingDeclaration {
         id: "rust",
@@ -699,6 +922,16 @@ const FOLDING_DECLARATIONS: &[FoldingDeclaration] = &[
         id: "sql",
         off_side: true,
         markers: Some(("^\\s*--\\s*#region\\b", "", "^\\s*--\\s*#endregion\\b", "")),
+    },
+    FoldingDeclaration {
+        id: "swift",
+        off_side: false,
+        markers: Some((
+            "^\\s*//\\s*#?region\\b",
+            "",
+            "^\\s*//\\s*#?endregion\\b",
+            "",
+        )),
     },
     FoldingDeclaration {
         id: "typescript",

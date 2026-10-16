@@ -279,7 +279,11 @@ function matchesGlob(pattern: string, value: string): boolean {
 		if (character === "*") {
 			if (pattern[index + 1] === "*") {
 				index += 1;
-				expression += ".*";
+				// A directory glob also matches paths rooted directly at the next segment.
+				if (pattern[index + 1] === "/") {
+					index += 1;
+					expression += "(?:.*/)?";
+				} else expression += ".*";
 			} else {
 				expression += "[^/]*";
 			}

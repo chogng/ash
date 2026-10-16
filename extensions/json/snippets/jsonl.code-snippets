@@ -1,0 +1,6 @@
+{
+  "record": {
+    "prefix": "record",
+    "body": "{\"${1:key}\": ${0:null}}"
+  }
+}

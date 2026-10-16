@@ -1,0 +1,37 @@
+{
+  "name": "perl",
+  "publisher": "ash",
+  "version": "1.0.0",
+  "license": "MIT",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "perl",
+        "aliases": [
+          "Perl",
+          "perl"
+        ],
+        "extensions": [
+          ".pl",
+          ".pm",
+          ".pod",
+          ".t",
+          ".psgi"
+        ],
+        "firstLine": "^#!.*\\bperl\\b",
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "perl",
+        "path": "./snippets/code.code-snippets"
+      }
+    ]
+  }
+}

@@ -603,5 +603,222 @@
         2
       ]
     ]
+  },
+  {
+    "language": "lua",
+    "text": "local function greet(name)\n  return \"你好🙂\"\nend\n",
+    "symbols": [
+      "greet"
+    ],
+    "folds": [
+      [
+        0,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "ruby",
+    "text": "class Greeter\n  def greet\n    \"你好🙂\"\n  end\nend\n",
+    "symbols": [
+      "Greeter",
+      "greet"
+    ],
+    "folds": [
+      [
+        0,
+        4
+      ],
+      [
+        1,
+        3
+      ]
+    ]
+  },
+  {
+    "language": "php",
+    "text": "<?php\nfunction greet($name) {\n  return \"你好🙂\";\n}\n",
+    "symbols": [
+      "greet"
+    ],
+    "folds": [
+      [
+        1,
+        3
+      ]
+    ]
+  },
+  {
+    "language": "swift",
+    "text": "func greet() -> String {\n  return \"你好🙂\"\n}\n",
+    "symbols": [
+      "greet"
+    ],
+    "folds": [
+      [
+        0,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "dart",
+    "text": "String greet() {\n  return \"你好🙂\";\n}\n",
+    "symbols": [
+      "greet"
+    ],
+    "folds": [
+      [
+        0,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "jsonl",
+    "text": "{\"first\": 1}\n{\"second\": 2}\n",
+    "symbols": [
+      "first",
+      "second"
+    ],
+    "folds": [],
+    "noFolds": true
+  },
+  {
+    "language": "snippets",
+    "text": "// snippets\n{\n  \"demo\": {\n    \"prefix\": \"demo\",\n    \"body\": [\"hello\"]\n  }\n}\n",
+    "symbols": [
+      "demo",
+      "prefix",
+      "body"
+    ],
+    "folds": [
+      [
+        1,
+        6
+      ],
+      [
+        2,
+        5
+      ]
+    ]
+  },
+  {
+    "language": "log",
+    "text": "2026-10-16 INFO started\nplain log text\n2026-10-16 ERROR failed\n",
+    "symbols": [],
+    "folds": [],
+    "exactSymbols": true,
+    "noFolds": true
+  },
+  {
+    "language": "r",
+    "text": "greet <- function(name) {\n  return(\"你好🙂\")\n}\n",
+    "symbols": [
+      "greet"
+    ],
+    "folds": [
+      [
+        0,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "julia",
+    "text": "function greet(name)\n  return \"你好🙂\"\nend\n",
+    "symbols": [
+      "greet"
+    ],
+    "folds": [
+      [
+        0,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "clojure",
+    "text": "(defn greet [name]\n  (str \"你好🙂\" name))\n",
+    "symbols": [
+      "greet"
+    ],
+    "folds": [
+      [
+        0,
+        1
+      ]
+    ]
+  },
+  {
+    "language": "groovy",
+    "text": "def greet(name) {\n  return \"你好🙂\"\n}\n",
+    "symbols": [
+      "greet"
+    ],
+    "folds": [
+      [
+        0,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "coffeescript",
+    "text": "class Greeter\n  greet: (name) ->\n    \"你好🙂\"\n",
+    "symbols": [
+      "Greeter",
+      "greet"
+    ],
+    "folds": [
+      [
+        0,
+        3
+      ],
+      [
+        1,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "perl",
+    "text": "sub greet {\n  return \"你好🙂\";\n}\n",
+    "symbols": [
+      "greet"
+    ],
+    "folds": [
+      [
+        0,
+        2
+      ]
+    ]
+  },
+  {
+    "language": "coffeescript",
+    "text": "greet = (name) ->\n  \"你好🙂\"",
+    "symbols": [
+      "greet"
+    ],
+    "folds": [
+      [
+        0,
+        1
+      ]
+    ]
+  },
+  {
+    "language": "coffeescript",
+    "text": "greet = (name) ->\n  # body\n  text = \"你好🙂\"\n  text\n# outside\ndone = greet(\"hello\")\n",
+    "symbols": [
+      "greet"
+    ],
+    "folds": [
+      [
+        0,
+        4
+      ]
+    ],
+    "exactSymbols": true
   }
 ]

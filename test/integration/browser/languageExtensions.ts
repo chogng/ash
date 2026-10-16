@@ -19,6 +19,18 @@ import docker from '../../../extensions/docker/package.json' with { type: 'json'
 import make from '../../../extensions/make/package.json' with { type: 'json' };
 import dotenv from '../../../extensions/dotenv/package.json' with { type: 'json' };
 import yaml from '../../../extensions/yaml/package.json' with { type: 'json' };
+import lua from '../../../extensions/lua/package.json' with { type: 'json' };
+import ruby from '../../../extensions/ruby/package.json' with { type: 'json' };
+import php from '../../../extensions/php/package.json' with { type: 'json' };
+import swift from '../../../extensions/swift/package.json' with { type: 'json' };
+import dart from '../../../extensions/dart/package.json' with { type: 'json' };
+import log from '../../../extensions/log/package.json' with { type: 'json' };
+import r from '../../../extensions/r/package.json' with { type: 'json' };
+import julia from '../../../extensions/julia/package.json' with { type: 'json' };
+import clojure from '../../../extensions/clojure/package.json' with { type: 'json' };
+import groovy from '../../../extensions/groovy/package.json' with { type: 'json' };
+import coffeescript from '../../../extensions/coffeescript/package.json' with { type: 'json' };
+import perl from '../../../extensions/perl/package.json' with { type: 'json' };
 import type { ExtensionDescriptor } from '../../../src/ash/platform/extensions/common/extensionApi.js';
 import { AppServerExtensionService, type AppServerExtensionServiceOptions } from '../../../src/ash/workbench/services/extensions/browser/appServerExtensionService.js';
 
@@ -28,6 +40,12 @@ const resourceUrls = import.meta.glob<string>([
 	'../../../extensions/{javascript,typescript-basics,json,rust,shellscript,bazel,markdown-basics}/snippets/*',
 	'../../../extensions/{cpp,java,csharp,powershell,bat,docker,make,dotenv,yaml}/*language-configuration.json',
 	'../../../extensions/{cpp,java,csharp,powershell,bat,docker,make,dotenv}/snippets/*',
+	'../../../extensions/{lua,ruby,php,swift,dart,log}/*language-configuration.json',
+	'../../../extensions/{r,julia,clojure,groovy,coffeescript,perl}/*language-configuration.json',
+	'../../../extensions/{r,julia,clojure,groovy,coffeescript,perl}/snippets/*',
+	'../../../extensions/{r,julia,clojure,groovy,coffeescript,perl}/package.nls*.json',
+	'../../../extensions/{lua,ruby,php,swift,dart,json}/snippets/*',
+	'../../../extensions/{lua,ruby,php,swift,dart,log,json}/package.nls*.json',
 ], { eager: true, query: '?url', import: 'default' });
 
 export async function createLanguageExtensions(options: Omit<AppServerExtensionServiceOptions, 'api' | 'eventApi'>): Promise<AppServerExtensionService> {
@@ -53,6 +71,18 @@ export async function createLanguageExtensions(options: Omit<AppServerExtensionS
 		['make', make],
 		['dotenv', dotenv],
 		['yaml', yaml],
+		['lua', lua],
+		['ruby', ruby],
+		['php', php],
+		['swift', swift],
+		['dart', dart],
+		['log', log],
+		['perl', perl],
+		['coffeescript', coffeescript],
+		['groovy', groovy],
+		['clojure', clojure],
+		['julia', julia],
+		['r', r],
 	] as const;
 	for (const [directory, manifest] of manifests) {
 		const manifestJson = JSON.stringify(manifest);

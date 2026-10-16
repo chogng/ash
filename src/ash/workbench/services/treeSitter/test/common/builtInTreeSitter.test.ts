@@ -129,6 +129,66 @@ test('Git commit WASM matches the unmodified parser on all 64 upstream corpus ex
 	} finally { parser.delete(); }
 });
 
+test('CoffeeScript parses the official-compiler-validated corpus through edits and undo', async () => {
+	const corpus = JSON.parse(readFileSync('test/fixtures/tree-sitter/coffeescript.json', 'utf8')) as { cases: { name: string; source: string; topLevelStatements: number; }[]; };
+	assert.equal(corpus.cases.length, 41);
+	const grammar = (await load('coffeescript'))!;
+	const parser = new grammar.Parser();
+	parser.setLanguage(grammar.language);
+	try {
+		for (const sample of corpus.cases) {
+			let tree = parser.parse(sample.source)!;
+			const check = () => {
+				assert.equal(tree.rootNode.hasError, false, sample.name);
+				const sequence = tree.rootNode.namedChildren.find(node => node?.type === 'statement_sequence');
+				assert.equal(sequence?.namedChildren.filter(node => node?.type === 'statement').length ?? 0, sample.topLevelStatements, sample.name);
+			};
+			try {
+				check();
+				tree.edit({ startIndex: 0, oldEndIndex: 0, newEndIndex: 1, startPosition: { row: 0, column: 0 }, oldEndPosition: { row: 0, column: 0 }, newEndPosition: { row: 1, column: 0 } });
+				const edited = parser.parse('\n' + sample.source, tree)!;
+				tree.delete();
+				tree = edited;
+				check();
+				tree.edit({ startIndex: 0, oldEndIndex: 1, newEndIndex: 0, startPosition: { row: 0, column: 0 }, oldEndPosition: { row: 1, column: 0 }, newEndPosition: { row: 0, column: 0 } });
+				const restored = parser.parse(sample.source, tree)!;
+				tree.delete();
+				tree = restored;
+				check();
+			} finally { tree.delete(); }
+		}
+	} finally { parser.delete(); }
+});
+
+test('CoffeeScript recovers from an incomplete parameter list and excessive indentation', async () => {
+	const grammar = (await load('coffeescript'))!;
+	const parser = new grammar.Parser();
+	parser.setLanguage(grammar.language);
+	try {
+		const source = 'greet = (name) ->\n  name\nfollowing = yes\n';
+		let tree = parser.parse(source)!;
+		try {
+			tree.edit({ startIndex: 13, oldEndIndex: 14, newEndIndex: 13, startPosition: { row: 0, column: 13 }, oldEndPosition: { row: 0, column: 14 }, newEndPosition: { row: 0, column: 13 } });
+			const incomplete = parser.parse(source.slice(0, 13) + source.slice(14), tree)!;
+			tree.delete();
+			tree = incomplete;
+			assert.equal(tree.rootNode.hasError, true);
+			tree.edit({ startIndex: 13, oldEndIndex: 13, newEndIndex: 14, startPosition: { row: 0, column: 13 }, oldEndPosition: { row: 0, column: 13 }, newEndPosition: { row: 0, column: 14 } });
+			const restored = parser.parse(source, tree)!;
+			tree.delete();
+			tree = restored;
+			assert.equal(tree.rootNode.hasError, false);
+		} finally { tree.delete(); }
+		// Beyond the scanner's serialized-state budget, malformed trees must remain recoverable.
+		const deep = parser.parse(Array.from({ length: 520 }, (_, depth) => '  '.repeat(depth) + 'if yes\n').join('') + '  '.repeat(520) + 'value = 1\n')!;
+		try { assert.equal(deep.rootNode.hasError, true); }
+		finally { deep.delete(); }
+		const clean = parser.parse(source)!;
+		try { assert.equal(clean.rootNode.hasError, false); }
+		finally { clean.delete(); }
+	} finally { parser.delete(); }
+});
+
 test('Git ignore distinguishes escaped prefixes, operators and complete character classes', async () => {
 	for (const text of [String.raw`\#literal`, String.raw`\!literal`, String.raw`\*literal`, 'prefix#!literal']) {
 		const tokens = await highlighted('ignore', text);

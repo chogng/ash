@@ -1,0 +1,5 @@
+{
+  "displayName": "Log File Support",
+  "description": "Identify log files and highlight timestamps, severity levels, strings, and numbers.",
+  "languageName": "Log"
+}

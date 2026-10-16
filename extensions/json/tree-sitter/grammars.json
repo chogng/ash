@@ -31,6 +31,20 @@
         "editorLanguage": "jsonc",
         "editorIds": ["jsonc"],
         "aliases": []
+      },
+      {
+        "id": "jsonl",
+        "variant": "Jsonl",
+        "editorLanguage": "jsonl",
+        "editorIds": ["jsonl"],
+        "aliases": ["ndjson"]
+      },
+      {
+        "id": "snippets",
+        "variant": "Snippets",
+        "editorLanguage": "snippets",
+        "editorIds": ["snippets"],
+        "aliases": []
       }
     ],
     "folds": ["queries/json.folds.scm"]

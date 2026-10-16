@@ -1,0 +1,30 @@
+[
+  {
+    "name": "groovy",
+    "source": {
+      "crate": "tree-sitter-groovy",
+      "version": "0.0.1",
+      "root": "."
+    },
+    "wasm": {
+      "path": "tree-sitter/groovy.wasm",
+      "sha256": "6f4dcb427672fef2726e5865de0fd5d3f9a3a8e46a989d2d60fcd005c282bbcf"
+    },
+    "highlights": ["queries/groovy.scm"],
+    "tags": ["queries/groovy.tags.scm"],
+    "folds": ["queries/groovy.folds.scm"],
+    "injections": [],
+    "rust": {
+      "language": "tree_sitter_groovy::language()"
+    },
+    "languages": [
+      {
+        "id": "groovy",
+        "variant": "Groovy",
+        "editorLanguage": "groovy",
+        "editorIds": ["groovy"],
+        "aliases": []
+      }
+    ]
+  }
+]

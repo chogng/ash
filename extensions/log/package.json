@@ -1,0 +1,29 @@
+{
+  "name": "log",
+  "publisher": "ash",
+  "version": "1.0.0",
+  "license": "MIT",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "log",
+        "aliases": [
+          "%languageName%"
+        ],
+        "extensions": [
+          ".log"
+        ],
+        "filenamePatterns": [
+          "*.log.?",
+          "*.log.*"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ]
+  }
+}

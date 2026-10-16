@@ -99,7 +99,7 @@ for (const sample of samples) {
 test('new project languages retain highlights through offline edits and undo', async ({ page }) => {
 	await page.goto('/treeSitter.html?backend=offline');
 	await expect.poll(() => page.evaluate(() => window.treeSitterIntegration?.state().execution)).toBe('worker');
-	const languages = new Set(['c', 'cpp', 'java', 'csharp', 'powershell', 'bat', 'dockerfile', 'makefile', 'dotenv', 'dockercompose']);
+	const languages = new Set(['c', 'cpp', 'java', 'csharp', 'powershell', 'bat', 'dockerfile', 'makefile', 'dotenv', 'dockercompose', 'lua', 'ruby', 'php', 'swift', 'dart', 'jsonl', 'snippets', 'log', 'r', 'julia', 'clojure', 'groovy', 'coffeescript', 'perl']);
 	for (const sample of samples.filter(sample => languages.has(sample.language))) {
 		await page.evaluate(sample => window.treeSitterIntegration.open(sample.language, sample.text), sample);
 		await page.evaluate(() => window.treeSitterIntegration.ready());
@@ -122,6 +122,7 @@ for (const sample of [
 	{ language: 'html', text: '<script>const value = "你好🙂";</script>\n<style>body { color: red; }</style>', lexeme: 'const', tokenType: 'keyword' },
 	{ language: 'html', text: '<script type="application/json">{"value": 42}</script>', lexeme: '42', tokenType: 'number' },
 	{ language: 'html', text: '<style>body { color: red; }</style>', lexeme: 'color', tokenType: 'variable' },
+	{ language: 'php', text: '<?php echo "你好🙂"; ?><h1>Hello</h1>', lexeme: 'h1', tokenType: 'tag' },
 	{ language: 'markdown', text: '# Title\n\n```python\ndef greet():\n    return "你好🙂"\n```\n', lexeme: 'def', tokenType: 'keyword' },
 	{ language: 'markdown', text: 'Some **strong text**.\n', lexeme: 'strong text', tokenType: 'source' },
 	{ language: 'diff', text: 'diff --git a/main.js b/main.js\n--- a/main.js\n+++ b/main.js\n@@ -1 +1 @@\n-const old = 1;\n+const value = 2;\n', lexeme: 'const', tokenType: 'keyword' },

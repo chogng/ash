@@ -1,0 +1,5 @@
+{
+  "displayName": "日志文件支持",
+  "description": "识别日志文件，并高亮时间戳、日志级别、字符串和数字。",
+  "languageName": "日志"
+}

@@ -1,0 +1,30 @@
+[
+  {
+    "name": "julia",
+    "source": {
+      "crate": "tree-sitter-julia",
+      "version": "0.23.1",
+      "root": "."
+    },
+    "wasm": {
+      "path": "tree-sitter/julia.wasm",
+      "sha256": "fa3ba1745b49efdf9cb1857273be2ef18887c476f5d1a8c84644afac296fc6d5"
+    },
+    "highlights": ["queries/julia.scm"],
+    "tags": ["queries/julia.tags.scm"],
+    "folds": ["queries/julia.folds.scm"],
+    "injections": [],
+    "rust": {
+      "language": "tree_sitter_julia::LANGUAGE"
+    },
+    "languages": [
+      {
+        "id": "julia",
+        "variant": "Julia",
+        "editorLanguage": "julia",
+        "editorIds": ["julia"],
+        "aliases": []
+      }
+    ]
+  }
+]

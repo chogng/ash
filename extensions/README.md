@@ -12,13 +12,14 @@ Except for this README and `BUILD.bazel`, each direct child must be a package di
 `package.json`. TextMate packages may put raw JSON or PLIST grammars below the package and reference
 them from `contributes.grammars[].path`.
 Built-in language packages own Tree-sitter queries in `queries/` and parser declarations in `tree-sitter/grammars.json`.
-Additional query sets cover CSS/SCSS/Less, Go, HTML, JSON/JSONC, Python, Shell, INI/Properties,
+Additional query sets cover CSS/SCSS/Less, Go, HTML, JSON/JSONC/JSONL/Snippets, Lua, Ruby, PHP,
+Swift, Dart, Log, R, Julia, Clojure, Groovy, CoffeeScript, Perl, Python, Shell, INI/Properties,
 Markdown (block and inline), SQL, TOML, XML/DTD/XSL, YAML, Diff, Git commit/rebase/ignore,
 and Starlark/Bazelrc. Each package's `queries/README.md` pins the upstream grammar revision,
 lists source files and licenses, and records query composition or local compatibility changes.
 Existing JavaScript/JSX, TypeScript/TSX and Rust capture names remain adapted to editor theme scopes;
 new query sets retain upstream capture names. Git ignore highlights are authored in Ash because
-its upstream grammar ships no queries.
+its upstream grammar ships no queries; Log highlights use Ash-authored theme-compatible captures.
 
 All built-in languages use the same package declarations. `pnpm tree-sitter:generate`
 produces the Rust language registry, protocol enum and server adapter, plus the Web
@@ -26,6 +27,8 @@ language metadata and WASM/query imports. It includes editor IDs, code-fence ali
 embedded-language IDs, and query composition. Rust parsers remain statically linked
 Cargo dependencies; browser parsers remain bundled WASM assets. This registry serves
 the built-in package set and does not introduce per-language processes.
+Cargo source directories beneath `tree-sitter/` are build inputs and are excluded from
+runtime extension packages; adjacent WASM, manifests, queries, and licenses remain packaged.
 
 The declarative loader reads resources without executing package code. Packages with a `browser`
 entry are separately bundled and executed by the TS
@@ -98,9 +101,16 @@ and codec support belong to the browser/Electron media engine.
 
 The current declarative pack contains the following package directories:
 
-- `bat`, `bazel` (Starlark/bazelrc), `cpp` (C/C++), `csharp`, `css` (CSS/Less/SCSS), `diff`, `docker`, `dotenv`, `git-base`, `go`, `html`, `ini`, `java`, `javascript`, `json`, `make`, `markdown-basics`, `powershell`, `python`, `rust`, `shellscript`, `sql`,
+- `bat`, `bazel` (Starlark/bazelrc), `clojure`, `coffeescript`, `cpp` (C/C++), `csharp`, `css` (CSS/Less/SCSS), `dart`, `diff`, `docker`, `dotenv`, `git-base`, `go`, `groovy`, `html`, `ini`, `java`, `javascript`, `json`, `julia`, `log`, `lua`, `make`, `markdown-basics`, `perl`, `php`, `powershell`, `python`, `r`, `ruby`, `rust`, `shellscript`, `sql`, `swift`,
   `toml`, `typescript-basics`, `xml`, and `yaml` provide language IDs, file associations, language
   configuration, Tree-sitter queries/parsers, and—where upstream provides them—snippets.
+  JSONL and code snippets reuse the JSON parser with distinct file associations and snippets.
+  PHP includes HTML highlighting outside PHP tags. Log highlights timestamps and severity levels
+  without interpreting unstructured text as declarations. Its pinned parser uses a package-local Rust binding.
+  Clojure includes EDN and Babashka files; Groovy includes Gradle and Jenkinsfile variants.
+  CoffeeScript includes CSON configuration and indentation folding; Perl includes POD comments.
+  Julia Markdown and Raku remain separate modes.
+  Ruby covers source files and project files such as Gemfile; embedded templates are separate modes.
   Bazel associates `BUILD`, `WORKSPACE`, `MODULE.bazel`, `.bazel`, and `.bzl` files with
   Starlark; `.bazelrc` and `bazel.rc` use a separate configuration grammar. Starlark
   editing includes comment toggling, bracket/quote pairs, block indentation, and folding.

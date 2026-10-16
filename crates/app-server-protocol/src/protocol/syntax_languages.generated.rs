@@ -10,6 +10,10 @@ pub enum SyntaxLanguageDto {
     Starlark,
     #[serde(rename = "bazelrc")]
     Bazelrc,
+    #[serde(rename = "clojure")]
+    Clojure,
+    #[serde(rename = "coffeescript")]
+    Coffeescript,
     #[serde(rename = "c")]
     C,
     #[serde(rename = "cpp")]
@@ -22,6 +26,8 @@ pub enum SyntaxLanguageDto {
     Scss,
     #[serde(rename = "less")]
     Less,
+    #[serde(rename = "dart")]
+    Dart,
     #[serde(rename = "diff")]
     Diff,
     #[serde(rename = "dockerfile")]
@@ -36,6 +42,8 @@ pub enum SyntaxLanguageDto {
     Gitignore,
     #[serde(rename = "go")]
     Go,
+    #[serde(rename = "groovy")]
+    Groovy,
     #[serde(rename = "html")]
     Html,
     #[serde(rename = "ini")]
@@ -52,22 +60,42 @@ pub enum SyntaxLanguageDto {
     Json,
     #[serde(rename = "jsonc")]
     Jsonc,
+    #[serde(rename = "jsonl")]
+    Jsonl,
+    #[serde(rename = "snippets")]
+    Snippets,
+    #[serde(rename = "julia")]
+    Julia,
+    #[serde(rename = "log")]
+    Log,
+    #[serde(rename = "lua")]
+    Lua,
     #[serde(rename = "makefile")]
     Makefile,
     #[serde(rename = "markdown")]
     Markdown,
     #[serde(rename = "markdown_inline")]
     MarkdownInline,
+    #[serde(rename = "perl")]
+    Perl,
+    #[serde(rename = "php")]
+    Php,
     #[serde(rename = "powershell")]
     Powershell,
     #[serde(rename = "python")]
     Python,
+    #[serde(rename = "r")]
+    R,
+    #[serde(rename = "ruby")]
+    Ruby,
     #[serde(rename = "rust")]
     Rust,
     #[serde(rename = "shell")]
     Shell,
     #[serde(rename = "sql")]
     Sql,
+    #[serde(rename = "swift")]
+    Swift,
     #[serde(rename = "toml")]
     Toml,
     #[serde(rename = "typescript")]

@@ -220,5 +220,191 @@
     "path": "script",
     "firstLine": "#!/usr/bin/make -f",
     "language": "makefile"
+  },
+  {
+    "path": "src/main.lua",
+    "language": "lua"
+  },
+  {
+    "path": "script.rb",
+    "language": "ruby"
+  },
+  {
+    "path": "Gemfile",
+    "language": "ruby"
+  },
+  {
+    "path": "Rakefile",
+    "language": "ruby"
+  },
+  {
+    "path": "Vagrantfile",
+    "language": "ruby"
+  },
+  {
+    "path": "plugin.gemspec",
+    "language": "ruby"
+  },
+  {
+    "path": "index.php",
+    "language": "php"
+  },
+  {
+    "path": "view.phtml",
+    "language": "php"
+  },
+  {
+    "path": "main.swift",
+    "language": "swift"
+  },
+  {
+    "path": "lib/main.dart",
+    "language": "dart"
+  },
+  {
+    "path": "events.jsonl",
+    "language": "jsonl"
+  },
+  {
+    "path": "events.ndjson",
+    "language": "jsonl"
+  },
+  {
+    "path": "config.json",
+    "language": "json"
+  },
+  {
+    "path": "project.code-snippets",
+    "language": "snippets"
+  },
+  {
+    "path": "User/snippets/ruby.json",
+    "language": "snippets"
+  },
+  {
+    "path": "User/profiles/dev/snippets/lua.json",
+    "language": "snippets"
+  },
+  {
+    "path": "server.log",
+    "language": "log"
+  },
+  {
+    "path": "server.log.1",
+    "language": "log"
+  },
+  {
+    "path": "server.log.12",
+    "language": "log"
+  },
+  {
+    "path": "script",
+    "firstLine": "#!/usr/bin/env ruby",
+    "language": "ruby"
+  },
+  {
+    "path": "script",
+    "firstLine": "#!/usr/bin/env php",
+    "language": "php"
+  },
+  {
+    "path": "analysis.R",
+    "language": "r"
+  },
+  {
+    "path": "session.Rhistory",
+    "language": "r"
+  },
+  {
+    "path": ".Rprofile",
+    "language": "r"
+  },
+  {
+    "path": "main.jl",
+    "language": "julia"
+  },
+  {
+    "path": "src/main.clj",
+    "language": "clojure"
+  },
+  {
+    "path": "src/app.cljs",
+    "language": "clojure"
+  },
+  {
+    "path": "deps.edn",
+    "language": "clojure"
+  },
+  {
+    "path": "build.bb",
+    "language": "clojure"
+  },
+  {
+    "path": "build.gradle",
+    "language": "groovy"
+  },
+  {
+    "path": "Jenkinsfile",
+    "language": "groovy"
+  },
+  {
+    "path": "ci/Jenkinsfile.release",
+    "language": "groovy"
+  },
+  {
+    "path": "app.gvy",
+    "language": "groovy"
+  },
+  {
+    "path": "main.coffee",
+    "language": "coffeescript"
+  },
+  {
+    "path": "config.cson",
+    "language": "coffeescript"
+  },
+  {
+    "path": "async.iced",
+    "language": "coffeescript"
+  },
+  {
+    "path": "main.pl",
+    "language": "perl"
+  },
+  {
+    "path": "lib/Module.pm",
+    "language": "perl"
+  },
+  {
+    "path": "docs.pod",
+    "language": "perl"
+  },
+  {
+    "path": "test.t",
+    "language": "perl"
+  },
+  {
+    "path": "app.psgi",
+    "language": "perl"
+  },
+  {
+    "path": "script",
+    "firstLine": "#!/usr/bin/env julia",
+    "language": "julia"
+  },
+  {
+    "path": "script",
+    "firstLine": "#!/usr/bin/julia-1.11",
+    "language": "julia"
+  },
+  {
+    "path": "script",
+    "firstLine": "#!/usr/bin/env groovy",
+    "language": "groovy"
+  },
+  {
+    "path": "script",
+    "firstLine": "#!/usr/bin/env perl",
+    "language": "perl"
   }
 ]

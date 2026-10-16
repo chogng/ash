@@ -33,3 +33,13 @@ test("first-line associations accept VS Code extension regex compatibility escap
 	assert.equal(registry.resolveLanguageId({ resource: URI.file("C:\\project\\document"), firstLine: "<?xml version=\"1.0\"?>" }), "xml");
 	assert.equal(registry.resolveLanguageId({ resource: URI.file("C:\\project\\image"), firstLine: "<svg viewBox=\"0 0 10 10\">" }), "xml");
 });
+
+test("directory globs recognize snippets at the root and in nested profiles", () => {
+	using registry = new LanguagesRegistry();
+	using json = registry.register({ id: "json", extensions: [".json"] });
+	using snippets = registry.register({ id: "snippets", filenamePatterns: ["**/User/snippets/*.json"] });
+	for (const path of ["User/snippets/ruby.json", "/home/me/User/snippets/ruby.json"]) {
+		assert.equal(registry.resolveLanguageId({ resource: URI.from({ scheme: "untitled", path }) }), "snippets", path);
+	}
+	assert.equal(registry.resolveLanguageId({ resource: URI.from({ scheme: "untitled", path: "User/snippets/nested/ruby.json" }) }), "json");
+});

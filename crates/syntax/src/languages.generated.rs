@@ -6,12 +6,15 @@ const TEST_LANGUAGES: &[SyntaxLanguage] = &[
     SyntaxLanguage::Bat,
     SyntaxLanguage::Starlark,
     SyntaxLanguage::Bazelrc,
+    SyntaxLanguage::Clojure,
+    SyntaxLanguage::Coffeescript,
     SyntaxLanguage::C,
     SyntaxLanguage::Cpp,
     SyntaxLanguage::Csharp,
     SyntaxLanguage::Css,
     SyntaxLanguage::Scss,
     SyntaxLanguage::Less,
+    SyntaxLanguage::Dart,
     SyntaxLanguage::Diff,
     SyntaxLanguage::Dockerfile,
     SyntaxLanguage::Dotenv,
@@ -19,6 +22,7 @@ const TEST_LANGUAGES: &[SyntaxLanguage] = &[
     SyntaxLanguage::Gitrebase,
     SyntaxLanguage::Gitignore,
     SyntaxLanguage::Go,
+    SyntaxLanguage::Groovy,
     SyntaxLanguage::Html,
     SyntaxLanguage::Ini,
     SyntaxLanguage::Properties,
@@ -27,14 +31,24 @@ const TEST_LANGUAGES: &[SyntaxLanguage] = &[
     SyntaxLanguage::Javascriptreact,
     SyntaxLanguage::Json,
     SyntaxLanguage::Jsonc,
+    SyntaxLanguage::Jsonl,
+    SyntaxLanguage::Snippets,
+    SyntaxLanguage::Julia,
+    SyntaxLanguage::Log,
+    SyntaxLanguage::Lua,
     SyntaxLanguage::Makefile,
     SyntaxLanguage::Markdown,
     SyntaxLanguage::MarkdownInline,
+    SyntaxLanguage::Perl,
+    SyntaxLanguage::Php,
     SyntaxLanguage::Powershell,
     SyntaxLanguage::Python,
+    SyntaxLanguage::R,
+    SyntaxLanguage::Ruby,
     SyntaxLanguage::Rust,
     SyntaxLanguage::Shell,
     SyntaxLanguage::Sql,
+    SyntaxLanguage::Swift,
     SyntaxLanguage::Toml,
     SyntaxLanguage::Typescript,
     SyntaxLanguage::Typescriptreact,
@@ -49,12 +63,15 @@ pub enum SyntaxLanguage {
     Bat,
     Starlark,
     Bazelrc,
+    Clojure,
+    Coffeescript,
     C,
     Cpp,
     Csharp,
     Css,
     Scss,
     Less,
+    Dart,
     Diff,
     Dockerfile,
     Dotenv,
@@ -62,6 +79,7 @@ pub enum SyntaxLanguage {
     Gitrebase,
     Gitignore,
     Go,
+    Groovy,
     Html,
     Ini,
     Properties,
@@ -70,14 +88,24 @@ pub enum SyntaxLanguage {
     Javascriptreact,
     Json,
     Jsonc,
+    Jsonl,
+    Snippets,
+    Julia,
+    Log,
+    Lua,
     Makefile,
     Markdown,
     MarkdownInline,
+    Perl,
+    Php,
     Powershell,
     Python,
+    R,
+    Ruby,
     Rust,
     Shell,
     Sql,
+    Swift,
     Toml,
     Typescript,
     Typescriptreact,
@@ -94,12 +122,15 @@ impl SyntaxLanguage {
             "bat" => Some(Self::Bat),
             "starlark" => Some(Self::Starlark),
             "bazelrc" => Some(Self::Bazelrc),
+            "clojure" => Some(Self::Clojure),
+            "coffeescript" => Some(Self::Coffeescript),
             "c" => Some(Self::C),
             "cpp" => Some(Self::Cpp),
             "csharp" => Some(Self::Csharp),
             "css" => Some(Self::Css),
             "scss" => Some(Self::Scss),
             "less" => Some(Self::Less),
+            "dart" => Some(Self::Dart),
             "diff" => Some(Self::Diff),
             "dockerfile" => Some(Self::Dockerfile),
             "dotenv" => Some(Self::Dotenv),
@@ -107,6 +138,7 @@ impl SyntaxLanguage {
             "git-rebase" => Some(Self::Gitrebase),
             "ignore" => Some(Self::Gitignore),
             "go" => Some(Self::Go),
+            "groovy" => Some(Self::Groovy),
             "html" => Some(Self::Html),
             "ini" => Some(Self::Ini),
             "properties" => Some(Self::Properties),
@@ -115,13 +147,23 @@ impl SyntaxLanguage {
             "javascriptreact" | "jsx-tags" => Some(Self::Javascriptreact),
             "json" => Some(Self::Json),
             "jsonc" => Some(Self::Jsonc),
+            "jsonl" => Some(Self::Jsonl),
+            "snippets" => Some(Self::Snippets),
+            "julia" => Some(Self::Julia),
+            "log" => Some(Self::Log),
+            "lua" => Some(Self::Lua),
             "makefile" => Some(Self::Makefile),
             "markdown" => Some(Self::Markdown),
+            "perl" => Some(Self::Perl),
+            "php" => Some(Self::Php),
             "powershell" => Some(Self::Powershell),
             "python" => Some(Self::Python),
+            "r" => Some(Self::R),
+            "ruby" => Some(Self::Ruby),
             "rust" => Some(Self::Rust),
             "shellscript" => Some(Self::Shell),
             "sql" => Some(Self::Sql),
+            "swift" => Some(Self::Swift),
             "toml" => Some(Self::Toml),
             "typescript" => Some(Self::Typescript),
             "typescriptreact" => Some(Self::Typescriptreact),
@@ -138,12 +180,15 @@ impl SyntaxLanguage {
             Self::Bat => "bat",
             Self::Starlark => "starlark",
             Self::Bazelrc => "bazelrc",
+            Self::Clojure => "clojure",
+            Self::Coffeescript => "coffeescript",
             Self::C => "c",
             Self::Cpp => "cpp",
             Self::Csharp => "csharp",
             Self::Css => "css",
             Self::Scss => "scss",
             Self::Less => "less",
+            Self::Dart => "dart",
             Self::Diff => "diff",
             Self::Dockerfile => "dockerfile",
             Self::Dotenv => "dotenv",
@@ -151,6 +196,7 @@ impl SyntaxLanguage {
             Self::Gitrebase => "gitrebase",
             Self::Gitignore => "gitignore",
             Self::Go => "go",
+            Self::Groovy => "groovy",
             Self::Html => "html",
             Self::Ini => "ini",
             Self::Properties => "properties",
@@ -159,14 +205,24 @@ impl SyntaxLanguage {
             Self::Javascriptreact => "javascriptreact",
             Self::Json => "json",
             Self::Jsonc => "jsonc",
+            Self::Jsonl => "jsonl",
+            Self::Snippets => "snippets",
+            Self::Julia => "julia",
+            Self::Log => "log",
+            Self::Lua => "lua",
             Self::Makefile => "makefile",
             Self::Markdown => "markdown",
             Self::MarkdownInline => "markdown_inline",
+            Self::Perl => "perl",
+            Self::Php => "php",
             Self::Powershell => "powershell",
             Self::Python => "python",
+            Self::R => "r",
+            Self::Ruby => "ruby",
             Self::Rust => "rust",
             Self::Shell => "shell",
             Self::Sql => "sql",
+            Self::Swift => "swift",
             Self::Toml => "toml",
             Self::Typescript => "typescript",
             Self::Typescriptreact => "typescriptreact",
@@ -182,12 +238,15 @@ impl SyntaxLanguage {
             Self::Bat => "bat",
             Self::Starlark => "starlark",
             Self::Bazelrc => "bazelrc",
+            Self::Clojure => "clojure",
+            Self::Coffeescript => "coffeescript",
             Self::C => "c",
             Self::Cpp => "cpp",
             Self::Csharp => "csharp",
             Self::Css => "css",
             Self::Scss => "scss",
             Self::Less => "less",
+            Self::Dart => "dart",
             Self::Diff => "diff",
             Self::Dockerfile => "dockerfile",
             Self::Dotenv => "dotenv",
@@ -195,6 +254,7 @@ impl SyntaxLanguage {
             Self::Gitrebase => "git-rebase",
             Self::Gitignore => "ignore",
             Self::Go => "go",
+            Self::Groovy => "groovy",
             Self::Html => "html",
             Self::Ini => "ini",
             Self::Properties => "properties",
@@ -203,14 +263,24 @@ impl SyntaxLanguage {
             Self::Javascriptreact => "javascriptreact",
             Self::Json => "json",
             Self::Jsonc => "jsonc",
+            Self::Jsonl => "jsonl",
+            Self::Snippets => "snippets",
+            Self::Julia => "julia",
+            Self::Log => "log",
+            Self::Lua => "lua",
             Self::Makefile => "makefile",
             Self::Markdown => "markdown",
             Self::MarkdownInline => "markdown",
+            Self::Perl => "perl",
+            Self::Php => "php",
             Self::Powershell => "powershell",
             Self::Python => "python",
+            Self::R => "r",
+            Self::Ruby => "ruby",
             Self::Rust => "rust",
             Self::Shell => "shellscript",
             Self::Sql => "sql",
+            Self::Swift => "swift",
             Self::Toml => "toml",
             Self::Typescript => "typescript",
             Self::Typescriptreact => "typescriptreact",
@@ -231,12 +301,15 @@ impl SyntaxLanguage {
             "bat" | "batch" | "cmd" => Some(Self::Bat),
             "starlark" => Some(Self::Starlark),
             "bazelrc" => Some(Self::Bazelrc),
+            "clojure" | "clj" | "cljs" | "edn" => Some(Self::Clojure),
+            "coffeescript" | "coffee" => Some(Self::Coffeescript),
             "c" => Some(Self::C),
             "cpp" | "c++" | "cxx" => Some(Self::Cpp),
             "csharp" | "cs" | "c-sharp" | "c#" => Some(Self::Csharp),
             "css" => Some(Self::Css),
             "scss" => Some(Self::Scss),
             "less" => Some(Self::Less),
+            "dart" => Some(Self::Dart),
             "diff" => Some(Self::Diff),
             "dockerfile" | "docker" | "containerfile" => Some(Self::Dockerfile),
             "dotenv" | "env" => Some(Self::Dotenv),
@@ -244,6 +317,7 @@ impl SyntaxLanguage {
             "gitrebase" | "git-rebase" | "git_rebase" | "git-rebase-todo" => Some(Self::Gitrebase),
             "gitignore" | "ignore" => Some(Self::Gitignore),
             "go" => Some(Self::Go),
+            "groovy" => Some(Self::Groovy),
             "html" => Some(Self::Html),
             "ini" => Some(Self::Ini),
             "properties" => Some(Self::Properties),
@@ -252,14 +326,24 @@ impl SyntaxLanguage {
             "javascriptreact" | "jsx-tags" | "jsx" => Some(Self::Javascriptreact),
             "json" => Some(Self::Json),
             "jsonc" => Some(Self::Jsonc),
+            "jsonl" | "ndjson" => Some(Self::Jsonl),
+            "snippets" => Some(Self::Snippets),
+            "julia" => Some(Self::Julia),
+            "log" => Some(Self::Log),
+            "lua" => Some(Self::Lua),
             "makefile" | "make" => Some(Self::Makefile),
             "markdown" | "md" => Some(Self::Markdown),
             "markdown_inline" | "markdown-inline" => Some(Self::MarkdownInline),
+            "perl" => Some(Self::Perl),
+            "php" => Some(Self::Php),
             "powershell" | "ps1" | "pwsh" => Some(Self::Powershell),
             "python" | "py" => Some(Self::Python),
+            "r" => Some(Self::R),
+            "ruby" | "rb" => Some(Self::Ruby),
             "rust" | "rs" => Some(Self::Rust),
             "shell" | "shellscript" | "bash" | "sh" => Some(Self::Shell),
             "sql" => Some(Self::Sql),
+            "swift" => Some(Self::Swift),
             "toml" => Some(Self::Toml),
             "typescript" | "ts" => Some(Self::Typescript),
             "typescriptreact" | "tsx" => Some(Self::Typescriptreact),
@@ -315,6 +399,38 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
             injections: "",
             folds: "",
+        },
+        SyntaxLanguage::Clojure => LanguageDefinition {
+            language: tree_sitter_clojure::LANGUAGE.into(),
+            highlights: concat!(include_str!(
+                "../../../extensions/clojure/queries/clojure.scm"
+            )),
+            tags: &[concat!(include_str!(
+                "../../../extensions/clojure/queries/clojure.tags.scm"
+            ))],
+            editor_highlights: concat!(include_str!(
+                "../../../extensions/clojure/queries/clojure.scm"
+            )),
+            injections: "",
+            folds: concat!(include_str!(
+                "../../../extensions/clojure/queries/clojure.folds.scm"
+            )),
+        },
+        SyntaxLanguage::Coffeescript => LanguageDefinition {
+            language: tree_sitter_coffeescript::LANGUAGE.into(),
+            highlights: concat!(include_str!(
+                "../../../extensions/coffeescript/queries/coffeescript.scm"
+            )),
+            tags: &[concat!(include_str!(
+                "../../../extensions/coffeescript/queries/coffeescript.tags.scm"
+            ))],
+            editor_highlights: concat!(include_str!(
+                "../../../extensions/coffeescript/queries/coffeescript.scm"
+            )),
+            injections: "",
+            folds: concat!(include_str!(
+                "../../../extensions/coffeescript/queries/coffeescript.folds.scm"
+            )),
         },
         SyntaxLanguage::C => LanguageDefinition {
             language: tree_sitter_c::LANGUAGE.into(),
@@ -418,6 +534,18 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
                 "../../../extensions/css/queries/less.folds.scm"
             )),
         },
+        SyntaxLanguage::Dart => LanguageDefinition {
+            language: tree_sitter_dart::LANGUAGE.into(),
+            highlights: concat!(include_str!("../../../extensions/dart/queries/dart.scm")),
+            tags: &[concat!(include_str!(
+                "../../../extensions/dart/queries/dart.tags.scm"
+            ))],
+            editor_highlights: concat!(include_str!("../../../extensions/dart/queries/dart.scm")),
+            injections: "",
+            folds: concat!(include_str!(
+                "../../../extensions/dart/queries/dart.folds.scm"
+            )),
+        },
         SyntaxLanguage::Diff => LanguageDefinition {
             language: tree_sitter_diff::LANGUAGE.into(),
             highlights: concat!(include_str!("../../../extensions/diff/queries/diff.scm")),
@@ -517,6 +645,22 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             editor_highlights: concat!(include_str!("../../../extensions/go/queries/go.scm")),
             injections: "",
             folds: concat!(include_str!("../../../extensions/go/queries/go.folds.scm")),
+        },
+        SyntaxLanguage::Groovy => LanguageDefinition {
+            language: tree_sitter_groovy::language().into(),
+            highlights: concat!(include_str!(
+                "../../../extensions/groovy/queries/groovy.scm"
+            )),
+            tags: &[concat!(include_str!(
+                "../../../extensions/groovy/queries/groovy.tags.scm"
+            ))],
+            editor_highlights: concat!(include_str!(
+                "../../../extensions/groovy/queries/groovy.scm"
+            )),
+            injections: "",
+            folds: concat!(include_str!(
+                "../../../extensions/groovy/queries/groovy.folds.scm"
+            )),
         },
         SyntaxLanguage::Html => LanguageDefinition {
             language: tree_sitter_html::LANGUAGE.into(),
@@ -624,6 +768,62 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
                 "../../../extensions/json/queries/json.folds.scm"
             )),
         },
+        SyntaxLanguage::Jsonl => LanguageDefinition {
+            language: tree_sitter_json::LANGUAGE.into(),
+            highlights: tree_sitter_json::HIGHLIGHTS_QUERY,
+            tags: &[concat!(include_str!(
+                "../../../extensions/json/queries/json.tags.scm"
+            ))],
+            editor_highlights: concat!(include_str!("../../../extensions/json/queries/json.scm")),
+            injections: "",
+            folds: concat!(include_str!(
+                "../../../extensions/json/queries/json.folds.scm"
+            )),
+        },
+        SyntaxLanguage::Snippets => LanguageDefinition {
+            language: tree_sitter_json::LANGUAGE.into(),
+            highlights: tree_sitter_json::HIGHLIGHTS_QUERY,
+            tags: &[concat!(include_str!(
+                "../../../extensions/json/queries/json.tags.scm"
+            ))],
+            editor_highlights: concat!(include_str!("../../../extensions/json/queries/json.scm")),
+            injections: "",
+            folds: concat!(include_str!(
+                "../../../extensions/json/queries/json.folds.scm"
+            )),
+        },
+        SyntaxLanguage::Julia => LanguageDefinition {
+            language: tree_sitter_julia::LANGUAGE.into(),
+            highlights: concat!(include_str!("../../../extensions/julia/queries/julia.scm")),
+            tags: &[concat!(include_str!(
+                "../../../extensions/julia/queries/julia.tags.scm"
+            ))],
+            editor_highlights: concat!(include_str!("../../../extensions/julia/queries/julia.scm")),
+            injections: "",
+            folds: concat!(include_str!(
+                "../../../extensions/julia/queries/julia.folds.scm"
+            )),
+        },
+        SyntaxLanguage::Log => LanguageDefinition {
+            language: tree_sitter_log::LANGUAGE.into(),
+            highlights: concat!(include_str!("../../../extensions/log/queries/log.scm")),
+            tags: &[""],
+            editor_highlights: concat!(include_str!("../../../extensions/log/queries/log.scm")),
+            injections: "",
+            folds: "",
+        },
+        SyntaxLanguage::Lua => LanguageDefinition {
+            language: tree_sitter_lua::LANGUAGE.into(),
+            highlights: concat!(include_str!("../../../extensions/lua/queries/lua.scm")),
+            tags: &[concat!(include_str!(
+                "../../../extensions/lua/queries/lua.tags.scm"
+            ))],
+            editor_highlights: concat!(include_str!("../../../extensions/lua/queries/lua.scm")),
+            injections: "",
+            folds: concat!(include_str!(
+                "../../../extensions/lua/queries/lua.folds.scm"
+            )),
+        },
         SyntaxLanguage::Makefile => LanguageDefinition {
             language: tree_sitter_make::LANGUAGE.into(),
             highlights: concat!(include_str!("../../../extensions/make/queries/make.scm")),
@@ -666,6 +866,32 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             )),
             folds: "",
         },
+        SyntaxLanguage::Perl => LanguageDefinition {
+            language: tree_sitter_perl::LANGUAGE.into(),
+            highlights: concat!(include_str!("../../../extensions/perl/queries/perl.scm")),
+            tags: &[concat!(include_str!(
+                "../../../extensions/perl/queries/perl.tags.scm"
+            ))],
+            editor_highlights: concat!(include_str!("../../../extensions/perl/queries/perl.scm")),
+            injections: "",
+            folds: concat!(include_str!(
+                "../../../extensions/perl/queries/perl.folds.scm"
+            )),
+        },
+        SyntaxLanguage::Php => LanguageDefinition {
+            language: tree_sitter_php::LANGUAGE_PHP.into(),
+            highlights: concat!(include_str!("../../../extensions/php/queries/php.scm")),
+            tags: &[concat!(include_str!(
+                "../../../extensions/php/queries/php.tags.scm"
+            ))],
+            editor_highlights: concat!(include_str!("../../../extensions/php/queries/php.scm")),
+            injections: concat!(include_str!(
+                "../../../extensions/php/queries/php.injections.scm"
+            )),
+            folds: concat!(include_str!(
+                "../../../extensions/php/queries/php.folds.scm"
+            )),
+        },
         SyntaxLanguage::Powershell => LanguageDefinition {
             language: tree_sitter_powershell::LANGUAGE.into(),
             highlights: concat!(include_str!(
@@ -696,6 +922,28 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             injections: "",
             folds: concat!(include_str!(
                 "../../../extensions/python/queries/python.folds.scm"
+            )),
+        },
+        SyntaxLanguage::R => LanguageDefinition {
+            language: tree_sitter_r::LANGUAGE.into(),
+            highlights: concat!(include_str!("../../../extensions/r/queries/r.scm")),
+            tags: &[concat!(include_str!(
+                "../../../extensions/r/queries/r.tags.scm"
+            ))],
+            editor_highlights: concat!(include_str!("../../../extensions/r/queries/r.scm")),
+            injections: "",
+            folds: concat!(include_str!("../../../extensions/r/queries/r.folds.scm")),
+        },
+        SyntaxLanguage::Ruby => LanguageDefinition {
+            language: tree_sitter_ruby::LANGUAGE.into(),
+            highlights: concat!(include_str!("../../../extensions/ruby/queries/ruby.scm")),
+            tags: &[concat!(include_str!(
+                "../../../extensions/ruby/queries/ruby.tags.scm"
+            ))],
+            editor_highlights: concat!(include_str!("../../../extensions/ruby/queries/ruby.scm")),
+            injections: "",
+            folds: concat!(include_str!(
+                "../../../extensions/ruby/queries/ruby.folds.scm"
             )),
         },
         SyntaxLanguage::Rust => LanguageDefinition {
@@ -734,6 +982,18 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             injections: "",
             folds: concat!(include_str!(
                 "../../../extensions/sql/queries/sql.folds.scm"
+            )),
+        },
+        SyntaxLanguage::Swift => LanguageDefinition {
+            language: tree_sitter_swift::LANGUAGE.into(),
+            highlights: concat!(include_str!("../../../extensions/swift/queries/swift.scm")),
+            tags: &[concat!(include_str!(
+                "../../../extensions/swift/queries/swift.tags.scm"
+            ))],
+            editor_highlights: concat!(include_str!("../../../extensions/swift/queries/swift.scm")),
+            injections: "",
+            folds: concat!(include_str!(
+                "../../../extensions/swift/queries/swift.folds.scm"
             )),
         },
         SyntaxLanguage::Toml => LanguageDefinition {

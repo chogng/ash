@@ -11,176 +11,237 @@ import resource7 from "../../../../../../extensions/bazel/queries/starlark.injec
 import resource8 from "../../../../../../extensions/bazel/tree-sitter/bazelrc.wasm?url&no-inline";
 import resource9 from "../../../../../../extensions/bazel/queries/bazelrc.scm?raw";
 import resource10 from "../../../../../../extensions/bazel/queries/bazelrc.tags.scm?raw";
-import resource11 from "../../../../../../extensions/cpp/tree-sitter/c.wasm?url&no-inline";
-import resource12 from "../../../../../../extensions/cpp/queries/c.scm?raw";
-import resource13 from "../../../../../../extensions/cpp/queries/c.tags.scm?raw";
-import resource14 from "../../../../../../extensions/cpp/queries/c.folds.scm?raw";
-import resource15 from "../../../../../../extensions/cpp/tree-sitter/cpp.wasm?url&no-inline";
-import resource16 from "../../../../../../extensions/cpp/queries/cpp.scm?raw";
-import resource17 from "../../../../../../extensions/cpp/queries/cpp.tags.scm?raw";
-import resource18 from "../../../../../../extensions/cpp/queries/cpp.folds.scm?raw";
-import resource19 from "../../../../../../extensions/csharp/tree-sitter/csharp.wasm?url&no-inline";
-import resource20 from "../../../../../../extensions/csharp/queries/csharp.scm?raw";
-import resource21 from "../../../../../../extensions/csharp/queries/csharp.tags.scm?raw";
-import resource22 from "../../../../../../extensions/csharp/queries/csharp.folds.scm?raw";
-import resource23 from "../../../../../../extensions/css/tree-sitter/css.wasm?url&no-inline";
-import resource24 from "../../../../../../extensions/css/queries/css.scm?raw";
-import resource25 from "../../../../../../extensions/css/queries/css.tags.scm?raw";
-import resource26 from "../../../../../../extensions/css/queries/css.folds.scm?raw";
-import resource27 from "../../../../../../extensions/css/tree-sitter/scss.wasm?url&no-inline";
-import resource28 from "../../../../../../extensions/css/queries/scss.scm?raw";
-import resource29 from "../../../../../../extensions/css/queries/scss.tags.scm?raw";
-import resource30 from "../../../../../../extensions/css/queries/scss.folds.scm?raw";
-import resource31 from "../../../../../../extensions/css/tree-sitter/less.wasm?url&no-inline";
-import resource32 from "../../../../../../extensions/css/queries/less.scm?raw";
-import resource33 from "../../../../../../extensions/css/queries/less.tags.scm?raw";
-import resource34 from "../../../../../../extensions/css/queries/less.folds.scm?raw";
-import resource35 from "../../../../../../extensions/diff/tree-sitter/diff.wasm?url&no-inline";
-import resource36 from "../../../../../../extensions/diff/queries/diff.scm?raw";
-import resource37 from "../../../../../../extensions/diff/queries/diff.tags.scm?raw";
-import resource38 from "../../../../../../extensions/diff/queries/diff.folds.scm?raw";
-import resource39 from "../../../../../../extensions/diff/queries/diff.injections.scm?raw";
-import resource40 from "../../../../../../extensions/docker/tree-sitter/containerfile.wasm?url&no-inline";
-import resource41 from "../../../../../../extensions/docker/queries/containerfile.scm?raw";
-import resource42 from "../../../../../../extensions/docker/queries/containerfile.folds.scm?raw";
-import resource43 from "../../../../../../extensions/dotenv/tree-sitter/dotenv.wasm?url&no-inline";
-import resource44 from "../../../../../../extensions/dotenv/queries/dotenv.scm?raw";
-import resource45 from "../../../../../../extensions/dotenv/queries/dotenv.tags.scm?raw";
-import resource46 from "../../../../../../extensions/git-base/tree-sitter/gitcommit.wasm?url&no-inline";
-import resource47 from "../../../../../../extensions/git-base/queries/gitcommit.scm?raw";
-import resource48 from "../../../../../../extensions/git-base/queries/gitcommit.tags.scm?raw";
-import resource49 from "../../../../../../extensions/git-base/queries/gitcommit.folds.scm?raw";
-import resource50 from "../../../../../../extensions/git-base/queries/gitcommit.injections.scm?raw";
-import resource51 from "../../../../../../extensions/git-base/tree-sitter/git-rebase.wasm?url&no-inline";
-import resource52 from "../../../../../../extensions/git-base/queries/git-rebase.scm?raw";
-import resource53 from "../../../../../../extensions/git-base/queries/git-rebase.tags.scm?raw";
-import resource54 from "../../../../../../extensions/git-base/queries/git-rebase.injections.scm?raw";
-import resource55 from "../../../../../../extensions/git-base/tree-sitter/gitignore.wasm?url&no-inline";
-import resource56 from "../../../../../../extensions/git-base/queries/gitignore.scm?raw";
-import resource57 from "../../../../../../extensions/git-base/queries/gitignore.tags.scm?raw";
-import resource58 from "../../../../../../extensions/go/tree-sitter/go.wasm?url&no-inline";
-import resource59 from "../../../../../../extensions/go/queries/go.scm?raw";
-import resource60 from "../../../../../../extensions/go/queries/go.tags.scm?raw";
-import resource61 from "../../../../../../extensions/go/queries/go.folds.scm?raw";
-import resource62 from "../../../../../../extensions/html/tree-sitter/html.wasm?url&no-inline";
-import resource63 from "../../../../../../extensions/html/queries/html.scm?raw";
-import resource64 from "../../../../../../extensions/html/queries/html.tags.scm?raw";
-import resource65 from "../../../../../../extensions/html/queries/html.folds.scm?raw";
-import resource66 from "../../../../../../extensions/html/queries/html.injections.scm?raw";
-import resource67 from "../../../../../../extensions/ini/tree-sitter/ini.wasm?url&no-inline";
-import resource68 from "../../../../../../extensions/ini/queries/ini.scm?raw";
-import resource69 from "../../../../../../extensions/ini/queries/ini.tags.scm?raw";
-import resource70 from "../../../../../../extensions/ini/queries/ini.folds.scm?raw";
-import resource71 from "../../../../../../extensions/ini/tree-sitter/properties.wasm?url&no-inline";
-import resource72 from "../../../../../../extensions/ini/queries/properties.scm?raw";
-import resource73 from "../../../../../../extensions/ini/queries/properties.tags.scm?raw";
-import resource74 from "../../../../../../extensions/ini/queries/properties.folds.scm?raw";
-import resource75 from "../../../../../../extensions/java/tree-sitter/java.wasm?url&no-inline";
-import resource76 from "../../../../../../extensions/java/queries/java.scm?raw";
-import resource77 from "../../../../../../extensions/java/queries/java.tags.scm?raw";
-import resource78 from "../../../../../../extensions/java/queries/java.folds.scm?raw";
-import resource79 from "@vscode/tree-sitter-wasm/wasm/tree-sitter-javascript.wasm?url&no-inline";
-import resource80 from "../../../../../../extensions/javascript/queries/javascript.scm?raw";
-import resource81 from "../../../../../../extensions/javascript/queries/jsx.scm?raw";
-import resource82 from "../../../../../../extensions/javascript/queries/javascript.tags.scm?raw";
-import resource83 from "../../../../../../extensions/javascript/queries/javascript.folds.scm?raw";
-import resource84 from "../../../../../../extensions/json/tree-sitter/json.wasm?url&no-inline";
-import resource85 from "../../../../../../extensions/json/queries/json.scm?raw";
-import resource86 from "../../../../../../extensions/json/queries/json.tags.scm?raw";
-import resource87 from "../../../../../../extensions/json/queries/json.folds.scm?raw";
-import resource88 from "../../../../../../extensions/make/tree-sitter/make.wasm?url&no-inline";
-import resource89 from "../../../../../../extensions/make/queries/make.scm?raw";
-import resource90 from "../../../../../../extensions/make/queries/make.folds.scm?raw";
-import resource91 from "../../../../../../extensions/markdown-basics/tree-sitter/markdown.wasm?url&no-inline";
-import resource92 from "../../../../../../extensions/markdown-basics/queries/markdown.scm?raw";
-import resource93 from "../../../../../../extensions/markdown-basics/queries/markdown.tags.scm?raw";
-import resource94 from "../../../../../../extensions/markdown-basics/queries/markdown.folds.scm?raw";
-import resource95 from "../../../../../../extensions/markdown-basics/queries/markdown.injections.scm?raw";
-import resource96 from "../../../../../../extensions/markdown-basics/tree-sitter/markdown-inline.wasm?url&no-inline";
-import resource97 from "../../../../../../extensions/markdown-basics/queries/markdown-inline.scm?raw";
-import resource98 from "../../../../../../extensions/markdown-basics/queries/markdown-inline.injections.scm?raw";
-import resource99 from "../../../../../../extensions/powershell/tree-sitter/powershell.wasm?url&no-inline";
-import resource100 from "../../../../../../extensions/powershell/queries/powershell.scm?raw";
-import resource101 from "../../../../../../extensions/powershell/queries/powershell.tags.scm?raw";
-import resource102 from "../../../../../../extensions/powershell/queries/powershell.folds.scm?raw";
-import resource103 from "../../../../../../extensions/python/tree-sitter/python.wasm?url&no-inline";
-import resource104 from "../../../../../../extensions/python/queries/python.scm?raw";
-import resource105 from "../../../../../../extensions/python/queries/python.tags.scm?raw";
-import resource106 from "../../../../../../extensions/python/queries/python.folds.scm?raw";
-import resource107 from "@vscode/tree-sitter-wasm/wasm/tree-sitter-rust.wasm?url&no-inline";
-import resource108 from "../../../../../../extensions/rust/queries/rust.scm?raw";
-import resource109 from "../../../../../../extensions/rust/queries/rust.tags.scm?raw";
-import resource110 from "../../../../../../extensions/rust/queries/rust.folds.scm?raw";
-import resource111 from "../../../../../../extensions/shellscript/tree-sitter/bash.wasm?url&no-inline";
-import resource112 from "../../../../../../extensions/shellscript/queries/bash.scm?raw";
-import resource113 from "../../../../../../extensions/shellscript/queries/bash.tags.scm?raw";
-import resource114 from "../../../../../../extensions/shellscript/queries/bash.folds.scm?raw";
-import resource115 from "../../../../../../extensions/sql/tree-sitter/sql.wasm?url&no-inline";
-import resource116 from "../../../../../../extensions/sql/queries/sql.scm?raw";
-import resource117 from "../../../../../../extensions/sql/queries/sql.tags.scm?raw";
-import resource118 from "../../../../../../extensions/sql/queries/sql.folds.scm?raw";
-import resource119 from "../../../../../../extensions/toml/tree-sitter/toml.wasm?url&no-inline";
-import resource120 from "../../../../../../extensions/toml/queries/toml.scm?raw";
-import resource121 from "../../../../../../extensions/toml/queries/toml.tags.scm?raw";
-import resource122 from "../../../../../../extensions/toml/queries/toml.folds.scm?raw";
-import resource123 from "@vscode/tree-sitter-wasm/wasm/tree-sitter-typescript.wasm?url&no-inline";
-import resource124 from "../../../../../../extensions/typescript-basics/queries/typescript.scm?raw";
-import resource125 from "../../../../../../extensions/typescript-basics/queries/typescript.tags.scm?raw";
-import resource126 from "../../../../../../extensions/typescript-basics/queries/typescript.folds.scm?raw";
-import resource127 from "@vscode/tree-sitter-wasm/wasm/tree-sitter-tsx.wasm?url&no-inline";
-import resource128 from "../../../../../../extensions/typescript-basics/queries/tsx.folds.scm?raw";
-import resource129 from "../../../../../../extensions/xml/tree-sitter/xml.wasm?url&no-inline";
-import resource130 from "../../../../../../extensions/xml/queries/xml.scm?raw";
-import resource131 from "../../../../../../extensions/xml/queries/xml.tags.scm?raw";
-import resource132 from "../../../../../../extensions/xml/queries/xml.folds.scm?raw";
-import resource133 from "../../../../../../extensions/xml/tree-sitter/dtd.wasm?url&no-inline";
-import resource134 from "../../../../../../extensions/xml/queries/dtd.scm?raw";
-import resource135 from "../../../../../../extensions/xml/queries/dtd.tags.scm?raw";
-import resource136 from "../../../../../../extensions/xml/queries/dtd.folds.scm?raw";
-import resource137 from "../../../../../../extensions/yaml/tree-sitter/yaml.wasm?url&no-inline";
-import resource138 from "../../../../../../extensions/yaml/queries/yaml.scm?raw";
-import resource139 from "../../../../../../extensions/yaml/queries/yaml.tags.scm?raw";
-import resource140 from "../../../../../../extensions/yaml/queries/yaml.folds.scm?raw";
+import resource11 from "../../../../../../extensions/clojure/tree-sitter/clojure.wasm?url&no-inline";
+import resource12 from "../../../../../../extensions/clojure/queries/clojure.scm?raw";
+import resource13 from "../../../../../../extensions/clojure/queries/clojure.tags.scm?raw";
+import resource14 from "../../../../../../extensions/clojure/queries/clojure.folds.scm?raw";
+import resource15 from "../../../../../../extensions/coffeescript/tree-sitter/coffeescript.wasm?url&no-inline";
+import resource16 from "../../../../../../extensions/coffeescript/queries/coffeescript.scm?raw";
+import resource17 from "../../../../../../extensions/coffeescript/queries/coffeescript.tags.scm?raw";
+import resource18 from "../../../../../../extensions/coffeescript/queries/coffeescript.folds.scm?raw";
+import resource19 from "../../../../../../extensions/cpp/tree-sitter/c.wasm?url&no-inline";
+import resource20 from "../../../../../../extensions/cpp/queries/c.scm?raw";
+import resource21 from "../../../../../../extensions/cpp/queries/c.tags.scm?raw";
+import resource22 from "../../../../../../extensions/cpp/queries/c.folds.scm?raw";
+import resource23 from "../../../../../../extensions/cpp/tree-sitter/cpp.wasm?url&no-inline";
+import resource24 from "../../../../../../extensions/cpp/queries/cpp.scm?raw";
+import resource25 from "../../../../../../extensions/cpp/queries/cpp.tags.scm?raw";
+import resource26 from "../../../../../../extensions/cpp/queries/cpp.folds.scm?raw";
+import resource27 from "../../../../../../extensions/csharp/tree-sitter/csharp.wasm?url&no-inline";
+import resource28 from "../../../../../../extensions/csharp/queries/csharp.scm?raw";
+import resource29 from "../../../../../../extensions/csharp/queries/csharp.tags.scm?raw";
+import resource30 from "../../../../../../extensions/csharp/queries/csharp.folds.scm?raw";
+import resource31 from "../../../../../../extensions/css/tree-sitter/css.wasm?url&no-inline";
+import resource32 from "../../../../../../extensions/css/queries/css.scm?raw";
+import resource33 from "../../../../../../extensions/css/queries/css.tags.scm?raw";
+import resource34 from "../../../../../../extensions/css/queries/css.folds.scm?raw";
+import resource35 from "../../../../../../extensions/css/tree-sitter/scss.wasm?url&no-inline";
+import resource36 from "../../../../../../extensions/css/queries/scss.scm?raw";
+import resource37 from "../../../../../../extensions/css/queries/scss.tags.scm?raw";
+import resource38 from "../../../../../../extensions/css/queries/scss.folds.scm?raw";
+import resource39 from "../../../../../../extensions/css/tree-sitter/less.wasm?url&no-inline";
+import resource40 from "../../../../../../extensions/css/queries/less.scm?raw";
+import resource41 from "../../../../../../extensions/css/queries/less.tags.scm?raw";
+import resource42 from "../../../../../../extensions/css/queries/less.folds.scm?raw";
+import resource43 from "../../../../../../extensions/dart/tree-sitter/dart.wasm?url&no-inline";
+import resource44 from "../../../../../../extensions/dart/queries/dart.scm?raw";
+import resource45 from "../../../../../../extensions/dart/queries/dart.tags.scm?raw";
+import resource46 from "../../../../../../extensions/dart/queries/dart.folds.scm?raw";
+import resource47 from "../../../../../../extensions/diff/tree-sitter/diff.wasm?url&no-inline";
+import resource48 from "../../../../../../extensions/diff/queries/diff.scm?raw";
+import resource49 from "../../../../../../extensions/diff/queries/diff.tags.scm?raw";
+import resource50 from "../../../../../../extensions/diff/queries/diff.folds.scm?raw";
+import resource51 from "../../../../../../extensions/diff/queries/diff.injections.scm?raw";
+import resource52 from "../../../../../../extensions/docker/tree-sitter/containerfile.wasm?url&no-inline";
+import resource53 from "../../../../../../extensions/docker/queries/containerfile.scm?raw";
+import resource54 from "../../../../../../extensions/docker/queries/containerfile.folds.scm?raw";
+import resource55 from "../../../../../../extensions/dotenv/tree-sitter/dotenv.wasm?url&no-inline";
+import resource56 from "../../../../../../extensions/dotenv/queries/dotenv.scm?raw";
+import resource57 from "../../../../../../extensions/dotenv/queries/dotenv.tags.scm?raw";
+import resource58 from "../../../../../../extensions/git-base/tree-sitter/gitcommit.wasm?url&no-inline";
+import resource59 from "../../../../../../extensions/git-base/queries/gitcommit.scm?raw";
+import resource60 from "../../../../../../extensions/git-base/queries/gitcommit.tags.scm?raw";
+import resource61 from "../../../../../../extensions/git-base/queries/gitcommit.folds.scm?raw";
+import resource62 from "../../../../../../extensions/git-base/queries/gitcommit.injections.scm?raw";
+import resource63 from "../../../../../../extensions/git-base/tree-sitter/git-rebase.wasm?url&no-inline";
+import resource64 from "../../../../../../extensions/git-base/queries/git-rebase.scm?raw";
+import resource65 from "../../../../../../extensions/git-base/queries/git-rebase.tags.scm?raw";
+import resource66 from "../../../../../../extensions/git-base/queries/git-rebase.injections.scm?raw";
+import resource67 from "../../../../../../extensions/git-base/tree-sitter/gitignore.wasm?url&no-inline";
+import resource68 from "../../../../../../extensions/git-base/queries/gitignore.scm?raw";
+import resource69 from "../../../../../../extensions/git-base/queries/gitignore.tags.scm?raw";
+import resource70 from "../../../../../../extensions/go/tree-sitter/go.wasm?url&no-inline";
+import resource71 from "../../../../../../extensions/go/queries/go.scm?raw";
+import resource72 from "../../../../../../extensions/go/queries/go.tags.scm?raw";
+import resource73 from "../../../../../../extensions/go/queries/go.folds.scm?raw";
+import resource74 from "../../../../../../extensions/groovy/tree-sitter/groovy.wasm?url&no-inline";
+import resource75 from "../../../../../../extensions/groovy/queries/groovy.scm?raw";
+import resource76 from "../../../../../../extensions/groovy/queries/groovy.tags.scm?raw";
+import resource77 from "../../../../../../extensions/groovy/queries/groovy.folds.scm?raw";
+import resource78 from "../../../../../../extensions/html/tree-sitter/html.wasm?url&no-inline";
+import resource79 from "../../../../../../extensions/html/queries/html.scm?raw";
+import resource80 from "../../../../../../extensions/html/queries/html.tags.scm?raw";
+import resource81 from "../../../../../../extensions/html/queries/html.folds.scm?raw";
+import resource82 from "../../../../../../extensions/html/queries/html.injections.scm?raw";
+import resource83 from "../../../../../../extensions/ini/tree-sitter/ini.wasm?url&no-inline";
+import resource84 from "../../../../../../extensions/ini/queries/ini.scm?raw";
+import resource85 from "../../../../../../extensions/ini/queries/ini.tags.scm?raw";
+import resource86 from "../../../../../../extensions/ini/queries/ini.folds.scm?raw";
+import resource87 from "../../../../../../extensions/ini/tree-sitter/properties.wasm?url&no-inline";
+import resource88 from "../../../../../../extensions/ini/queries/properties.scm?raw";
+import resource89 from "../../../../../../extensions/ini/queries/properties.tags.scm?raw";
+import resource90 from "../../../../../../extensions/ini/queries/properties.folds.scm?raw";
+import resource91 from "../../../../../../extensions/java/tree-sitter/java.wasm?url&no-inline";
+import resource92 from "../../../../../../extensions/java/queries/java.scm?raw";
+import resource93 from "../../../../../../extensions/java/queries/java.tags.scm?raw";
+import resource94 from "../../../../../../extensions/java/queries/java.folds.scm?raw";
+import resource95 from "@vscode/tree-sitter-wasm/wasm/tree-sitter-javascript.wasm?url&no-inline";
+import resource96 from "../../../../../../extensions/javascript/queries/javascript.scm?raw";
+import resource97 from "../../../../../../extensions/javascript/queries/jsx.scm?raw";
+import resource98 from "../../../../../../extensions/javascript/queries/javascript.tags.scm?raw";
+import resource99 from "../../../../../../extensions/javascript/queries/javascript.folds.scm?raw";
+import resource100 from "../../../../../../extensions/json/tree-sitter/json.wasm?url&no-inline";
+import resource101 from "../../../../../../extensions/json/queries/json.scm?raw";
+import resource102 from "../../../../../../extensions/json/queries/json.tags.scm?raw";
+import resource103 from "../../../../../../extensions/json/queries/json.folds.scm?raw";
+import resource104 from "../../../../../../extensions/julia/tree-sitter/julia.wasm?url&no-inline";
+import resource105 from "../../../../../../extensions/julia/queries/julia.scm?raw";
+import resource106 from "../../../../../../extensions/julia/queries/julia.tags.scm?raw";
+import resource107 from "../../../../../../extensions/julia/queries/julia.folds.scm?raw";
+import resource108 from "../../../../../../extensions/log/tree-sitter/log.wasm?url&no-inline";
+import resource109 from "../../../../../../extensions/log/queries/log.scm?raw";
+import resource110 from "../../../../../../extensions/lua/tree-sitter/lua.wasm?url&no-inline";
+import resource111 from "../../../../../../extensions/lua/queries/lua.scm?raw";
+import resource112 from "../../../../../../extensions/lua/queries/lua.tags.scm?raw";
+import resource113 from "../../../../../../extensions/lua/queries/lua.folds.scm?raw";
+import resource114 from "../../../../../../extensions/make/tree-sitter/make.wasm?url&no-inline";
+import resource115 from "../../../../../../extensions/make/queries/make.scm?raw";
+import resource116 from "../../../../../../extensions/make/queries/make.folds.scm?raw";
+import resource117 from "../../../../../../extensions/markdown-basics/tree-sitter/markdown.wasm?url&no-inline";
+import resource118 from "../../../../../../extensions/markdown-basics/queries/markdown.scm?raw";
+import resource119 from "../../../../../../extensions/markdown-basics/queries/markdown.tags.scm?raw";
+import resource120 from "../../../../../../extensions/markdown-basics/queries/markdown.folds.scm?raw";
+import resource121 from "../../../../../../extensions/markdown-basics/queries/markdown.injections.scm?raw";
+import resource122 from "../../../../../../extensions/markdown-basics/tree-sitter/markdown-inline.wasm?url&no-inline";
+import resource123 from "../../../../../../extensions/markdown-basics/queries/markdown-inline.scm?raw";
+import resource124 from "../../../../../../extensions/markdown-basics/queries/markdown-inline.injections.scm?raw";
+import resource125 from "../../../../../../extensions/perl/tree-sitter/perl.wasm?url&no-inline";
+import resource126 from "../../../../../../extensions/perl/queries/perl.scm?raw";
+import resource127 from "../../../../../../extensions/perl/queries/perl.tags.scm?raw";
+import resource128 from "../../../../../../extensions/perl/queries/perl.folds.scm?raw";
+import resource129 from "../../../../../../extensions/php/tree-sitter/php.wasm?url&no-inline";
+import resource130 from "../../../../../../extensions/php/queries/php.scm?raw";
+import resource131 from "../../../../../../extensions/php/queries/php.tags.scm?raw";
+import resource132 from "../../../../../../extensions/php/queries/php.folds.scm?raw";
+import resource133 from "../../../../../../extensions/php/queries/php.injections.scm?raw";
+import resource134 from "../../../../../../extensions/powershell/tree-sitter/powershell.wasm?url&no-inline";
+import resource135 from "../../../../../../extensions/powershell/queries/powershell.scm?raw";
+import resource136 from "../../../../../../extensions/powershell/queries/powershell.tags.scm?raw";
+import resource137 from "../../../../../../extensions/powershell/queries/powershell.folds.scm?raw";
+import resource138 from "../../../../../../extensions/python/tree-sitter/python.wasm?url&no-inline";
+import resource139 from "../../../../../../extensions/python/queries/python.scm?raw";
+import resource140 from "../../../../../../extensions/python/queries/python.tags.scm?raw";
+import resource141 from "../../../../../../extensions/python/queries/python.folds.scm?raw";
+import resource142 from "../../../../../../extensions/r/tree-sitter/r.wasm?url&no-inline";
+import resource143 from "../../../../../../extensions/r/queries/r.scm?raw";
+import resource144 from "../../../../../../extensions/r/queries/r.tags.scm?raw";
+import resource145 from "../../../../../../extensions/r/queries/r.folds.scm?raw";
+import resource146 from "../../../../../../extensions/ruby/tree-sitter/ruby.wasm?url&no-inline";
+import resource147 from "../../../../../../extensions/ruby/queries/ruby.scm?raw";
+import resource148 from "../../../../../../extensions/ruby/queries/ruby.tags.scm?raw";
+import resource149 from "../../../../../../extensions/ruby/queries/ruby.folds.scm?raw";
+import resource150 from "@vscode/tree-sitter-wasm/wasm/tree-sitter-rust.wasm?url&no-inline";
+import resource151 from "../../../../../../extensions/rust/queries/rust.scm?raw";
+import resource152 from "../../../../../../extensions/rust/queries/rust.tags.scm?raw";
+import resource153 from "../../../../../../extensions/rust/queries/rust.folds.scm?raw";
+import resource154 from "../../../../../../extensions/shellscript/tree-sitter/bash.wasm?url&no-inline";
+import resource155 from "../../../../../../extensions/shellscript/queries/bash.scm?raw";
+import resource156 from "../../../../../../extensions/shellscript/queries/bash.tags.scm?raw";
+import resource157 from "../../../../../../extensions/shellscript/queries/bash.folds.scm?raw";
+import resource158 from "../../../../../../extensions/sql/tree-sitter/sql.wasm?url&no-inline";
+import resource159 from "../../../../../../extensions/sql/queries/sql.scm?raw";
+import resource160 from "../../../../../../extensions/sql/queries/sql.tags.scm?raw";
+import resource161 from "../../../../../../extensions/sql/queries/sql.folds.scm?raw";
+import resource162 from "../../../../../../extensions/swift/tree-sitter/swift.wasm?url&no-inline";
+import resource163 from "../../../../../../extensions/swift/queries/swift.scm?raw";
+import resource164 from "../../../../../../extensions/swift/queries/swift.tags.scm?raw";
+import resource165 from "../../../../../../extensions/swift/queries/swift.folds.scm?raw";
+import resource166 from "../../../../../../extensions/toml/tree-sitter/toml.wasm?url&no-inline";
+import resource167 from "../../../../../../extensions/toml/queries/toml.scm?raw";
+import resource168 from "../../../../../../extensions/toml/queries/toml.tags.scm?raw";
+import resource169 from "../../../../../../extensions/toml/queries/toml.folds.scm?raw";
+import resource170 from "@vscode/tree-sitter-wasm/wasm/tree-sitter-typescript.wasm?url&no-inline";
+import resource171 from "../../../../../../extensions/typescript-basics/queries/typescript.scm?raw";
+import resource172 from "../../../../../../extensions/typescript-basics/queries/typescript.tags.scm?raw";
+import resource173 from "../../../../../../extensions/typescript-basics/queries/typescript.folds.scm?raw";
+import resource174 from "@vscode/tree-sitter-wasm/wasm/tree-sitter-tsx.wasm?url&no-inline";
+import resource175 from "../../../../../../extensions/typescript-basics/queries/tsx.folds.scm?raw";
+import resource176 from "../../../../../../extensions/xml/tree-sitter/xml.wasm?url&no-inline";
+import resource177 from "../../../../../../extensions/xml/queries/xml.scm?raw";
+import resource178 from "../../../../../../extensions/xml/queries/xml.tags.scm?raw";
+import resource179 from "../../../../../../extensions/xml/queries/xml.folds.scm?raw";
+import resource180 from "../../../../../../extensions/xml/tree-sitter/dtd.wasm?url&no-inline";
+import resource181 from "../../../../../../extensions/xml/queries/dtd.scm?raw";
+import resource182 from "../../../../../../extensions/xml/queries/dtd.tags.scm?raw";
+import resource183 from "../../../../../../extensions/xml/queries/dtd.folds.scm?raw";
+import resource184 from "../../../../../../extensions/yaml/tree-sitter/yaml.wasm?url&no-inline";
+import resource185 from "../../../../../../extensions/yaml/queries/yaml.scm?raw";
+import resource186 from "../../../../../../extensions/yaml/queries/yaml.tags.scm?raw";
+import resource187 from "../../../../../../extensions/yaml/queries/yaml.folds.scm?raw";
 import type { SyntaxLanguage } from '../../../../platform/syntax/common/syntaxApi.js';
 
 export const bundledTreeSitterGrammars = {
 	"bat": { url: resource0, query: resource1, tags: '', folds: resource2, injections: '' },
 	"starlark": { url: resource3, query: resource4, tags: resource5, folds: resource6, injections: resource7 },
 	"bazelrc": { url: resource8, query: resource9, tags: resource10, folds: '', injections: '' },
-	"c": { url: resource11, query: resource12, tags: resource13, folds: resource14, injections: '' },
-	"cpp": { url: resource15, query: resource12 + '\n' + resource16, tags: resource17, folds: resource18, injections: '' },
-	"csharp": { url: resource19, query: resource20, tags: resource21, folds: resource22, injections: '' },
-	"css": { url: resource23, query: resource24, tags: resource25, folds: resource26, injections: '' },
-	"scss": { url: resource27, query: resource24 + '\n' + resource28, tags: resource25 + '\n' + resource29, folds: resource30, injections: '' },
-	"less": { url: resource31, query: resource24 + '\n' + resource32, tags: resource25 + '\n' + resource33, folds: resource34, injections: '' },
-	"diff": { url: resource35, query: resource36, tags: resource37, folds: resource38, injections: resource39 },
-	"dockerfile": { url: resource40, query: resource41, tags: '', folds: resource42, injections: '' },
-	"dotenv": { url: resource43, query: resource44, tags: resource45, folds: '', injections: '' },
-	"gitcommit": { url: resource46, query: resource47, tags: resource48, folds: resource49, injections: resource50 },
-	"gitrebase": { url: resource51, query: resource52, tags: resource53, folds: '', injections: resource54 },
-	"gitignore": { url: resource55, query: resource56, tags: resource57, folds: '', injections: '' },
-	"go": { url: resource58, query: resource59, tags: resource60, folds: resource61, injections: '' },
-	"html": { url: resource62, query: resource63, tags: resource64, folds: resource65, injections: resource66 },
-	"ini": { url: resource67, query: resource68, tags: resource69, folds: resource70, injections: '' },
-	"properties": { url: resource71, query: resource72, tags: resource73, folds: resource74, injections: '' },
-	"java": { url: resource75, query: resource76, tags: resource77, folds: resource78, injections: '' },
-	"javascript": { url: resource79, query: resource80 + '\n' + resource81, tags: resource82, folds: resource83, injections: '' },
-	"javascriptreact": { url: resource79, query: resource80 + '\n' + resource81, tags: resource82, folds: resource83, injections: '' },
-	"json": { url: resource84, query: resource85, tags: resource86, folds: resource87, injections: '' },
-	"jsonc": { url: resource84, query: resource85, tags: resource86, folds: resource87, injections: '' },
-	"makefile": { url: resource88, query: resource89, tags: '', folds: resource90, injections: '' },
-	"markdown": { url: resource91, query: resource92, tags: resource93, folds: resource94, injections: resource95 },
-	"markdown_inline": { url: resource96, query: resource97, tags: '', folds: '', injections: resource98 },
-	"powershell": { url: resource99, query: resource100, tags: resource101, folds: resource102, injections: '' },
-	"python": { url: resource103, query: resource104, tags: resource105, folds: resource106, injections: '' },
-	"rust": { url: resource107, query: resource108, tags: resource109, folds: resource110, injections: '' },
-	"shell": { url: resource111, query: resource112, tags: resource113, folds: resource114, injections: '' },
-	"sql": { url: resource115, query: resource116, tags: resource117, folds: resource118, injections: '' },
-	"toml": { url: resource119, query: resource120, tags: resource121, folds: resource122, injections: '' },
-	"typescript": { url: resource123, query: resource80 + '\n' + resource124, tags: resource82 + '\n' + resource125, folds: resource126, injections: '' },
-	"typescriptreact": { url: resource127, query: resource80 + '\n' + resource81 + '\n' + resource124, tags: resource82 + '\n' + resource125, folds: resource128, injections: '' },
-	"xml": { url: resource129, query: resource130, tags: resource131, folds: resource132, injections: '' },
-	"dtd": { url: resource133, query: resource134, tags: resource135, folds: resource136, injections: '' },
-	"dockercompose": { url: resource137, query: resource138, tags: resource139, folds: resource140, injections: '' },
-	"yaml": { url: resource137, query: resource138, tags: resource139, folds: resource140, injections: '' },
+	"clojure": { url: resource11, query: resource12, tags: resource13, folds: resource14, injections: '' },
+	"coffeescript": { url: resource15, query: resource16, tags: resource17, folds: resource18, injections: '' },
+	"c": { url: resource19, query: resource20, tags: resource21, folds: resource22, injections: '' },
+	"cpp": { url: resource23, query: resource20 + '\n' + resource24, tags: resource25, folds: resource26, injections: '' },
+	"csharp": { url: resource27, query: resource28, tags: resource29, folds: resource30, injections: '' },
+	"css": { url: resource31, query: resource32, tags: resource33, folds: resource34, injections: '' },
+	"scss": { url: resource35, query: resource32 + '\n' + resource36, tags: resource33 + '\n' + resource37, folds: resource38, injections: '' },
+	"less": { url: resource39, query: resource32 + '\n' + resource40, tags: resource33 + '\n' + resource41, folds: resource42, injections: '' },
+	"dart": { url: resource43, query: resource44, tags: resource45, folds: resource46, injections: '' },
+	"diff": { url: resource47, query: resource48, tags: resource49, folds: resource50, injections: resource51 },
+	"dockerfile": { url: resource52, query: resource53, tags: '', folds: resource54, injections: '' },
+	"dotenv": { url: resource55, query: resource56, tags: resource57, folds: '', injections: '' },
+	"gitcommit": { url: resource58, query: resource59, tags: resource60, folds: resource61, injections: resource62 },
+	"gitrebase": { url: resource63, query: resource64, tags: resource65, folds: '', injections: resource66 },
+	"gitignore": { url: resource67, query: resource68, tags: resource69, folds: '', injections: '' },
+	"go": { url: resource70, query: resource71, tags: resource72, folds: resource73, injections: '' },
+	"groovy": { url: resource74, query: resource75, tags: resource76, folds: resource77, injections: '' },
+	"html": { url: resource78, query: resource79, tags: resource80, folds: resource81, injections: resource82 },
+	"ini": { url: resource83, query: resource84, tags: resource85, folds: resource86, injections: '' },
+	"properties": { url: resource87, query: resource88, tags: resource89, folds: resource90, injections: '' },
+	"java": { url: resource91, query: resource92, tags: resource93, folds: resource94, injections: '' },
+	"javascript": { url: resource95, query: resource96 + '\n' + resource97, tags: resource98, folds: resource99, injections: '' },
+	"javascriptreact": { url: resource95, query: resource96 + '\n' + resource97, tags: resource98, folds: resource99, injections: '' },
+	"json": { url: resource100, query: resource101, tags: resource102, folds: resource103, injections: '' },
+	"jsonc": { url: resource100, query: resource101, tags: resource102, folds: resource103, injections: '' },
+	"jsonl": { url: resource100, query: resource101, tags: resource102, folds: resource103, injections: '' },
+	"snippets": { url: resource100, query: resource101, tags: resource102, folds: resource103, injections: '' },
+	"julia": { url: resource104, query: resource105, tags: resource106, folds: resource107, injections: '' },
+	"log": { url: resource108, query: resource109, tags: '', folds: '', injections: '' },
+	"lua": { url: resource110, query: resource111, tags: resource112, folds: resource113, injections: '' },
+	"makefile": { url: resource114, query: resource115, tags: '', folds: resource116, injections: '' },
+	"markdown": { url: resource117, query: resource118, tags: resource119, folds: resource120, injections: resource121 },
+	"markdown_inline": { url: resource122, query: resource123, tags: '', folds: '', injections: resource124 },
+	"perl": { url: resource125, query: resource126, tags: resource127, folds: resource128, injections: '' },
+	"php": { url: resource129, query: resource130, tags: resource131, folds: resource132, injections: resource133 },
+	"powershell": { url: resource134, query: resource135, tags: resource136, folds: resource137, injections: '' },
+	"python": { url: resource138, query: resource139, tags: resource140, folds: resource141, injections: '' },
+	"r": { url: resource142, query: resource143, tags: resource144, folds: resource145, injections: '' },
+	"ruby": { url: resource146, query: resource147, tags: resource148, folds: resource149, injections: '' },
+	"rust": { url: resource150, query: resource151, tags: resource152, folds: resource153, injections: '' },
+	"shell": { url: resource154, query: resource155, tags: resource156, folds: resource157, injections: '' },
+	"sql": { url: resource158, query: resource159, tags: resource160, folds: resource161, injections: '' },
+	"swift": { url: resource162, query: resource163, tags: resource164, folds: resource165, injections: '' },
+	"toml": { url: resource166, query: resource167, tags: resource168, folds: resource169, injections: '' },
+	"typescript": { url: resource170, query: resource96 + '\n' + resource171, tags: resource98 + '\n' + resource172, folds: resource173, injections: '' },
+	"typescriptreact": { url: resource174, query: resource96 + '\n' + resource97 + '\n' + resource171, tags: resource98 + '\n' + resource172, folds: resource175, injections: '' },
+	"xml": { url: resource176, query: resource177, tags: resource178, folds: resource179, injections: '' },
+	"dtd": { url: resource180, query: resource181, tags: resource182, folds: resource183, injections: '' },
+	"dockercompose": { url: resource184, query: resource185, tags: resource186, folds: resource187, injections: '' },
+	"yaml": { url: resource184, query: resource185, tags: resource186, folds: resource187, injections: '' },
 } satisfies Record<SyntaxLanguage, { url: string; query: string; tags: string; folds: string; injections: string; }>;
