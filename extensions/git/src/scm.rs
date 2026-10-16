@@ -123,10 +123,9 @@ pub fn snapshot(
                 open["tooltip"] = json!(label);
                 actions.push(open);
             }
-            if !staged { actions.push(action(api,&action_id("stage"),"git.stageChanges","check",!repository.is_busy())); }
-            if staged { actions.push(action(api,&action_id("unstage"),"git.unstageChanges","remove",!repository.is_busy())); }
             if !change.conflicted && change.worktree_status != "unmodified" { actions.push(action(api,&action_id("discard"),"git.discardChanges","discard",!repository.is_busy())); }
-            if !change.conflicted && change.worktree_status != "deleted" { actions.push(action(api,&action_id("delete"),"git.deleteFile","trash",!repository.is_busy())); }
+            if !staged { actions.push(action(api,&action_id("stage"),"git.stageChanges","add",!repository.is_busy())); }
+            if staged { actions.push(action(api,&action_id("unstage"),"git.unstageChanges","remove",!repository.is_busy())); }
             json!({"id":format!("{group}:{}",change.path),"sourceUri":file_uri(&repository.root_uri,&change.path).unwrap_or_else(|_|repository.root_uri.clone()),
                 "path":change.path,"originalPath":change.original_path,"decorations":decoration(api,change,staged),"openLabel":api.text("git.openChangePath",&[&change.path,&api.text(key,&[])]),"actions":actions})
         }).collect();
@@ -148,22 +147,22 @@ pub fn snapshot(
                 api,
                 "stageAll",
                 "git.menu.stageAll",
-                "check",
+                "add",
                 !repository.is_busy(),
             )],
             _ => vec![
                 action(
                     api,
-                    "stageAll",
-                    "git.menu.stageAll",
-                    "check",
+                    "discardAll",
+                    "git.discardChanges",
+                    "discard",
                     !repository.is_busy(),
                 ),
                 action(
                     api,
-                    "discardAll",
-                    "git.discardChanges",
-                    "discard",
+                    "stageAll",
+                    "git.menu.stageAll",
+                    "add",
                     !repository.is_busy(),
                 ),
             ],

@@ -509,6 +509,7 @@
       {
         "command": "git.stageAll",
         "title": "%git.menu.stageAll%",
+        "icon": "$(add)",
         "category": "Git",
         "enablement": "!scmBusy"
       },
@@ -563,6 +564,7 @@
       {
         "command": "git.unstageAll",
         "title": "%git.menu.unstageAll%",
+        "icon": "$(remove)",
         "category": "Git",
         "enablement": "!scmBusy"
       },
@@ -649,11 +651,13 @@
       {
         "command": "git.stageFile",
         "title": "git.stageFile",
+        "icon": "$(add)",
         "enablement": "!scmBusy"
       },
       {
         "command": "git.unstageFile",
         "title": "git.unstageFile",
+        "icon": "$(remove)",
         "enablement": "!scmBusy"
       },
       {

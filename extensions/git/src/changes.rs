@@ -151,7 +151,7 @@ impl GitRuntime {
                 "git.stageChanges"
             };
             let label = self.api.text(key, &[]);
-            items.push(json!({"binary":original["contentType"]=="application/octet-stream" || modified["contentType"]=="application/octet-stream","id":change.path,"label":change.path,"original":original,"modified":modified,"goToFile":{"resource":file_uri(&repository.root_uri,&change.path)?,"label":change.path},"actions":[{"id":if staged {"unstage"} else {"stage"},"label":label,"tooltip":label,"command":if staged {"git.unstageFile"} else {"git.stageFile"},"icon":if staged {"remove"} else {"check"},"arguments":[repository.descriptor.id,change.path,scope]}]}));
+            items.push(json!({"binary":original["contentType"]=="application/octet-stream" || modified["contentType"]=="application/octet-stream","id":change.path,"label":change.path,"original":original,"modified":modified,"goToFile":{"resource":file_uri(&repository.root_uri,&change.path)?,"label":change.path},"actions":[{"id":if staged {"unstage"} else {"stage"},"label":label,"tooltip":label,"command":if staged {"git.unstageFile"} else {"git.stageFile"},"icon":if staged {"remove"} else {"add"},"arguments":[repository.descriptor.id,change.path,scope]}]}));
         }
         let label = self.api.text(
             match scope {
