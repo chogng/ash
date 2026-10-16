@@ -33,7 +33,7 @@ test("pnpm owns every repository Node project with one lockfile", () => {
 	assert.equal(rootManifest.scripts?.preinstall, "node build/pnpm/preinstall.ts");
 	assert.ok(lockfile.includes(`specifier: runtime:${readFileSync(join(repositoryRoot, ".nvmrc"), "utf8").trim()}`));
 	const packages = [...workspace.matchAll(/^  - (.+)$/gm)].map((match) => match[1]);
-	assert.deepEqual(packages, ["build", "extensions/markdown-language-features", "test/scenario"]);
+	assert.deepEqual(packages, ["build", "extensions/markdown-math", "extensions/markdown-language-features", "test/scenario"]);
 	assert.doesNotMatch(workspace, /^storeDir:/m);
 	for (const dependency of ["electron", "esbuild", "sharp", "unrs-resolver", "workerd"]) {
 		assert.match(workspace, new RegExp(`^  ${dependency}: true$`, "m"));
@@ -49,7 +49,7 @@ test("pnpm owns every repository Node project with one lockfile", () => {
 		assert.equal(manifest.pnpm, undefined, `${directory}/package.json must not duplicate workspace pnpm policy`);
 		assert.equal(existsSync(join(repositoryRoot, directory, "package-lock.json")), false, directory);
 		assert.equal(existsSync(join(repositoryRoot, directory, "pnpm-lock.yaml")), false, directory);
-		assert.match(lockfile, new RegExp(`^  ${directory}:$`, "m"));
+		assert.match(lockfile, new RegExp(`^  ${directory}:(?: \\{\\})?$`, "m"));
 		for (const script of Object.values(manifest.scripts ?? {})) {
 			assert.doesNotMatch(script, /(^|[;&|]\s*)npm(?:\s|$)/, `${directory} scripts must use pnpm`);
 			assert.doesNotMatch(script, /node\s+(?:-e|--eval)\b/, `${directory} scripts must use owned TypeScript files`);

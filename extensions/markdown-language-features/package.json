@@ -457,12 +457,12 @@
     ]
   },
   "private": true,
-  "dependencies": {
-    "katex": "0.18.2"
-  },
   "ashRuntime": {
     "kind": "rust",
     "entrypoint": "ash-markdown-language-features",
+    "requires": {
+      "math.render.v1": "vscode.markdown-math"
+    },
     "webviews": [
       {
         "entry": "src/richEditor.js",

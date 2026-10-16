@@ -1,5 +1,6 @@
 packages:
   - build
+  - extensions/markdown-math
   - extensions/markdown-language-features
   - test/scenario
 engineStrict: true

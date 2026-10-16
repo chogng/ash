@@ -65,6 +65,7 @@ pub(crate) struct EditorExtensionDeployment {
     pub(crate) command: ExtensionLaunchCommand,
     pub(crate) workspace_read: WorkspaceReadAccess,
     pub(crate) credential_providers: Vec<String>,
+    pub(crate) backend_channels: BTreeMap<String, String>,
     pub(crate) protocol_limits: Option<external_ext_protocol::ProtocolLimits>,
     pub(crate) params: ActivateParams,
     pub(crate) authority: Arc<dyn ActivationAuthority>,
@@ -85,6 +86,7 @@ pub(super) fn built_in_deployments(
         .ok_or(ExtensionHostRuntimeError::Internal)?;
     let mut deployments = vec![
         product_ssh_deployment(directory)?,
+        product_markdown_math_deployment(directory)?,
         product_markdown_deployment(directory)?,
     ];
     let git_manifest: serde_json::Value =
@@ -130,6 +132,7 @@ fn product_ssh_deployment(
         .map_err(ExtensionHostRuntimeError::Host)?,
         workspace_read: WorkspaceReadAccess::Denied,
         credential_providers: Vec::new(),
+        backend_channels: BTreeMap::new(),
         protocol_limits: None,
         params: ActivateParams {
             initialization: None,
@@ -152,6 +155,54 @@ fn product_ssh_deployment(
     })
 }
 
+pub(super) fn product_markdown_math_deployment(
+    directory: &Path,
+) -> Result<EditorExtensionDeployment, ExtensionHostRuntimeError> {
+    let manifest = include_str!("../../../../../extensions/markdown-math/package.json");
+    let source = include_str!("../../../../../extensions/markdown-math/src/lib.rs");
+    let contract = include_str!("../../../../../crates/utils/markdown-math/src/lib.rs");
+    let digest = format!(
+        "sha256:{:x}",
+        Sha256::digest(format!("{manifest}\0{source}\0{contract}"))
+    );
+    let id = "vscode.markdown-math".to_owned();
+    Ok(EditorExtensionDeployment {
+        scope: EditorExtensionScope::Product,
+        id: id.clone(),
+        version: "1.0.0".into(),
+        package_digest: digest.clone(),
+        command: ExtensionLaunchCommand::new(
+            directory.join(format!("ash-markdown-math{}", std::env::consts::EXE_SUFFIX)),
+            std::iter::empty::<String>(),
+            directory,
+            BTreeMap::new(),
+        )
+        .map_err(ExtensionHostRuntimeError::Host)?,
+        workspace_read: WorkspaceReadAccess::Denied,
+        credential_providers: Vec::new(),
+        backend_channels: BTreeMap::new(),
+        protocol_limits: None,
+        params: ActivateParams {
+            initialization: None,
+            extension_id: id,
+            package: PackageBinding {
+                package_id: "vscode.markdown-math@1.0.0".into(),
+                package_digest: digest,
+                entrypoint: "ash-markdown-math".into(),
+            },
+            runtime_api_version: 1,
+            activation_events: vec!["onCapability:math.render.v1".into()],
+            capabilities: vec![ExtensionCapability::DataChannel],
+        },
+        authority: Arc::new(ProductAuthority),
+        activation: Some(ActivationPlan {
+            events: vec!["onCapability:math.render.v1".into()],
+            commands: Vec::new(),
+        }),
+        activation_failure: None,
+    })
+}
+
 fn product_markdown_deployment(
     directory: &Path,
 ) -> Result<EditorExtensionDeployment, ExtensionHostRuntimeError> {
@@ -159,6 +210,7 @@ fn product_markdown_deployment(
         include_str!("../../../../../extensions/markdown-language-features/package.json");
     let source = [
         include_str!("../../../../../extensions/markdown-language-features/src/parser.rs"),
+        include_str!("../../../../../extensions/markdown-language-features/src/math.rs"),
         include_str!("../../../../../extensions/markdown-language-features/src/lib.rs"),
         include_str!("../../../../../extensions/markdown-language-features/src/language.rs"),
         include_str!("../../../../../extensions/markdown-language-features/package.nls.json"),
@@ -189,6 +241,12 @@ fn product_markdown_deployment(
         .map_err(ExtensionHostRuntimeError::Host)?,
         workspace_read: WorkspaceReadAccess::Read,
         credential_providers: Vec::new(),
+        backend_channels: serde_json::from_str::<serde_json::Value>(manifest)
+            .ok()
+            .and_then(|manifest| {
+                serde_json::from_value(manifest["ashRuntime"]["requires"].clone()).ok()
+            })
+            .ok_or(ExtensionHostRuntimeError::Internal)?,
         protocol_limits: Some(external_ext_protocol::ProtocolLimits {
             maximum_frame_bytes: 32 * 1024 * 1024,
             maximum_payload_bytes: 24 * 1024 * 1024,
@@ -277,6 +335,7 @@ fn product_git_deployment(
         .map_err(ExtensionHostRuntimeError::Host)?,
         workspace_read: WorkspaceReadAccess::Read,
         credential_providers: vec!["github".into()],
+        backend_channels: BTreeMap::new(),
         protocol_limits: Some(external_ext_protocol::ProtocolLimits {
             maximum_frame_bytes: 32 * 1024 * 1024,
             maximum_payload_bytes: 24 * 1024 * 1024,
@@ -346,6 +405,7 @@ pub(crate) struct ActivationPlan {
 
 #[derive(Clone, Debug)]
 pub(in crate::server) enum ActivationEvent {
+    Capability(String),
     Command(String),
     Language(String),
     TaskType(Option<String>),
@@ -384,6 +444,10 @@ impl ActivationPlan {
             return true;
         }
         match event {
+            ActivationEvent::Capability(channel) => self
+                .events
+                .iter()
+                .any(|event| event == &format!("onCapability:{channel}")),
             ActivationEvent::Command(command) => self
                 .events
                 .iter()
@@ -501,6 +565,7 @@ pub(super) fn plugin_deployments(
                 package_digest: package.package_digest().as_str().to_string(),
                 command,
                 credential_providers: Vec::new(),
+                backend_channels: BTreeMap::new(),
                 protocol_limits: None,
                 workspace_read: if package.manifest().permissions.iter().any(|permission| {
                     matches!(

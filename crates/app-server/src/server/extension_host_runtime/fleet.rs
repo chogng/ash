@@ -114,7 +114,7 @@ impl RuntimeInner {
         Ok(self.snapshot())
     }
 
-    fn build_entry(
+    pub(super) fn build_entry(
         &self,
         authorization: Option<&Authorization>,
         deployment: &EditorExtensionDeployment,
@@ -146,6 +146,7 @@ impl RuntimeInner {
                 activation_gate: Arc::new(std::sync::Mutex::new(())),
                 version,
                 workspace_read: deployment.workspace_read,
+                backend_channels: deployment.backend_channels.clone(),
                 supervisor: None,
                 fallback,
                 failure: Some(projection::ExtensionHostRuntimeFailure {
@@ -251,6 +252,7 @@ impl RuntimeInner {
                     activation_gate: Arc::new(std::sync::Mutex::new(())),
                     version,
                     workspace_read: deployment.workspace_read,
+                    backend_channels: deployment.backend_channels.clone(),
                     supervisor: Some(supervisor),
                     fallback,
                     failure,
@@ -267,6 +269,7 @@ impl RuntimeInner {
                 activation_gate: Arc::new(std::sync::Mutex::new(())),
                 version,
                 workspace_read: deployment.workspace_read,
+                backend_channels: deployment.backend_channels.clone(),
                 supervisor: None,
                 fallback,
                 failure: Some(runtime_failure(&error, None)),

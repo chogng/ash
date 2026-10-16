@@ -1,14 +1,10 @@
-import katex from 'katex';
-import 'katex/dist/katex.min.css';
+import '../../markdown-math/src/styles.js';
 import '../media/markdown.css';
 
 const api = acquireVsCodeApi();
 const root = document.getElementById('markdown-preview');
 
 function equal(current, next) {
-	if (current instanceof Element && next instanceof Element && current.hasAttribute('data-math')) {
-		return current.getAttribute('data-math') === next.getAttribute('data-math') && current.getAttribute('data-display') === next.getAttribute('data-display');
-	}
 	return current.isEqualNode(next);
 }
 
@@ -43,10 +39,6 @@ window.addEventListener('message', event => {
 	const scroll = document.scrollingElement;
 	const top = scroll.scrollTop;
 	patch(root, content.content);
-	for (const element of root.querySelectorAll('[data-math]:not([data-rendered])')) {
-		katex.render(element.dataset.math, element, { displayMode: element.dataset.display === 'true', throwOnError: false, trust: false });
-		element.dataset.rendered = 'true';
-	}
 	scroll.scrollTop = top;
 });
 

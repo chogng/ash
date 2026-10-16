@@ -13,6 +13,123 @@ use serde_json::json;
 use std::time::Duration;
 use std::time::Instant;
 
+#[test]
+fn declared_capability_calls_activate_the_exact_real_provider_and_obey_cancellation_and_revocation()
+{
+    use ash_external_ext::ActivationAuthority;
+    use ash_external_ext::ActivationLease;
+    use ash_external_ext::ExtensionHostLimits;
+    use ash_external_ext::HostErrorCode;
+    use ash_external_ext::HostEventContext;
+    use ash_external_ext::RestartPolicy;
+    use external_ext_protocol::ExtensionClientOperation;
+    use external_ext_protocol::ExtensionClientResult;
+    use std::collections::BTreeMap;
+    use std::num::NonZeroU64;
+    use std::sync::Arc;
+    use std::sync::Mutex;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::Ordering;
+
+    struct Switch(Arc<AtomicBool>);
+    impl ActivationAuthority for Switch {
+        fn authorizes(&self) -> bool {
+            self.0.load(Ordering::Acquire)
+        }
+        fn acquire(&self) -> Option<Box<dyn ActivationLease>> {
+            self.authorizes()
+                .then(|| Box::new(AllowedLease) as Box<dyn ActivationLease>)
+        }
+    }
+    let executable = std::path::PathBuf::from(
+        std::env::var_os("ASH_MARKDOWN_MATH_BIN")
+            .expect("Cargo test wrapper prepares the real math extension"),
+    );
+    let runtime = super::ExtensionHostRuntime::start(
+        super::source::BuiltInEditorExtensions::Omitted,
+        None,
+        None,
+        None,
+        Arc::new(ash_external_ext::ProductExecutableLauncher::new(executable.clone()).unwrap()),
+        ExtensionHostLimits::default(),
+        RestartPolicy::default(),
+        Arc::new(super::super::update_broker::UpdateBroker::default()),
+        Arc::new(crate::client_host::ClientHost::default()),
+        None,
+    )
+    .unwrap();
+    let enabled = Arc::new(AtomicBool::new(true));
+    let mut deployment =
+        super::source::product_markdown_math_deployment(executable.parent().unwrap()).unwrap();
+    deployment.authority = Arc::new(Switch(enabled.clone()));
+    let entry = runtime
+        .inner
+        .build_entry(None, &deployment, NonZeroU64::new(1).unwrap());
+    runtime
+        .inner
+        .state
+        .lock()
+        .unwrap()
+        .entries
+        .insert(deployment.id.clone(), entry);
+    let mut binding = super::EditorClientBinding {
+        runtime: Arc::downgrade(&runtime.inner),
+        backend_channels: BTreeMap::new(),
+        credential_providers: Vec::new(),
+        credential_services: Arc::new(Mutex::new(BTreeMap::new())),
+        client_host: Arc::new(crate::client_host::ClientHost::default()),
+        owner: 7,
+        extension_id: "vscode.markdown-language-features".into(),
+        workspace_read: super::source::WorkspaceReadAccess::Denied,
+        files: Err(test_files_unavailable()),
+    };
+    let operation = || ExtensionClientOperation::BackendRequest {
+        capability: "math.render.v1".into(),
+        method: "receiveData".into(),
+        params: json!({"formulas":[{"source":"\\frac{a}{b}","display":"block"}]}),
+        progress: None,
+    };
+    let source = ash_async_utils::CancellationSource::new();
+    let invoke = |binding: &super::EditorClientBinding| {
+        binding.request(
+            HostEventContext::new(1, 1),
+            operation(),
+            &source.token(),
+            Duration::from_secs(10),
+        )
+    };
+    assert_eq!(
+        invoke(&binding).unwrap_err().code,
+        HostErrorCode::PermissionDenied
+    );
+    assert!(
+        runtime.inner.state.lock().unwrap().entries[&deployment.id]
+            .pending_activation
+            .is_some()
+    );
+    binding
+        .backend_channels
+        .insert("math.render.v1".into(), deployment.id.clone());
+    let result = invoke(&binding).unwrap();
+    assert!(
+        matches!(result, ExtensionClientResult::Value { value } if value["html"][0].as_str().unwrap().contains("katex-display"))
+    );
+    assert!(
+        runtime.inner.state.lock().unwrap().entries[&deployment.id]
+            .pending_activation
+            .is_none()
+    );
+    enabled.store(false, Ordering::Release);
+    assert!(matches!(
+        invoke(&binding).unwrap_err().code,
+        HostErrorCode::PermissionDenied | HostErrorCode::RegistrationNotFound
+    ));
+    enabled.store(true, Ordering::Release);
+    source.cancel();
+    assert_eq!(invoke(&binding).unwrap_err().code, HostErrorCode::Cancelled);
+    runtime.shutdown();
+}
+
 #[path = "extension_host_window_tests.rs"]
 mod windows;
 
@@ -65,6 +182,26 @@ fn markdown_product_registration_owns_views_and_obeys_profile_policy() {
     assert_eq!(markdown.activation.as_ref().unwrap().commands.len(), 7);
     assert!(!markdown.authority.authorizes());
     assert!(markdown.authority.acquire().is_none());
+    assert_eq!(
+        markdown
+            .backend_channels
+            .get("math.render.v1")
+            .map(String::as_str),
+        Some("vscode.markdown-math")
+    );
+    let math = deployments
+        .iter()
+        .find(|entry| entry.id == "vscode.markdown-math")
+        .unwrap();
+    assert_eq!(
+        math.params.capabilities,
+        [ash_external_ext::ExtensionCapability::DataChannel]
+    );
+    assert!(math.activation.as_ref().unwrap().matches(
+        &super::source::ActivationEvent::Capability("math.render.v1".into())
+    ));
+    assert!(math.backend_channels.is_empty());
+    assert!(!math.authority.authorizes());
 }
 
 #[test]
@@ -486,6 +623,7 @@ fn assert_lazy_activation_fence(event: super::source::ActivationEvent) {
         state.entries.insert(
             "lazy".into(),
             super::RuntimeEntry {
+                backend_channels: std::collections::BTreeMap::new(),
                 activation_gate: Arc::new(std::sync::Mutex::new(())),
                 client_scope: super::EditorClientScope::Unsupported,
                 window_deployment: None,
@@ -844,6 +982,8 @@ fn credentials_are_private_to_admitted_consumers_and_never_relayed_to_the_render
         })
     });
     let mut binding = super::EditorClientBinding {
+        runtime: std::sync::Weak::new(),
+        backend_channels: BTreeMap::new(),
         credential_providers: Vec::new(),
         credential_services: Arc::new(Mutex::new(BTreeMap::from([("github".into(), handler)]))),
         client_host: client,

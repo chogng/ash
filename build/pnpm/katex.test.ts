@@ -1,25 +1,16 @@
 import assert from 'node:assert/strict';
-import { createRequire } from 'node:module';
+import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import test from 'node:test';
+import { compileExtensionWebviews } from '../builtin/extensionWebviews.ts';
 
-// Resolve through the product's consumer so this checks the renderer actually bundled by Ash.
-const extensionRequire = createRequire(resolve(import.meta.dirname, '../../extensions/markdown-language-features/package.json'));
-const katex = extensionRequire('katex');
-
-test('Markdown math does not inherit permission to load external resources from renderer options', () => {
-	const formula = String.raw`\includegraphics{https://audit-image.invalid/pixel}`;
-	const inherited = Object.assign(Object.create({ trust: true }), { throwOnError: false });
-	assert.doesNotMatch(katex.renderToString(formula, inherited), /<img\b/u);
-	assert.doesNotMatch(katex.renderToString(formula, { throwOnError: false }), /<img\b/u);
-	// An explicitly trusted caller still has the documented opt-in; the regression is inheritance.
-	assert.match(katex.renderToString(formula, { trust: true }), /<img\b/u);
-});
-
-test('Markdown math keeps inline, display, matrix and invalid-expression rendering', () => {
-	for (const formula of [String.raw`E=mc^2`, String.raw`\frac{a}{b}`, String.raw`\begin{pmatrix}a&b\\c&d\end{pmatrix}`]) {
-		assert.match(katex.renderToString(formula), /class="katex"/u);
+test('Markdown views package formula styles and fonts without a JavaScript formula engine', async () => {
+	const root = resolve(import.meta.dirname, '../../extensions/markdown-language-features');
+	const manifest = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8'));
+	const views = await compileExtensionWebviews(root, manifest.ashRuntime.webviews);
+	for (const view of manifest.ashRuntime.webviews) {
+		assert.match(views.resources[view.style], /@font-face/u);
+		assert.match(views.resources[view.style], /KaTeX_Main/u);
+		assert.doesNotMatch(views.resources[view.script], /KaTeX parse error|Too many expansions/u);
 	}
-	assert.match(katex.renderToString(String.raw`\sum_{i=1}^{n} i`, { displayMode: true }), /class="katex-display"/u);
-	assert.match(katex.renderToString(String.raw`\unknownAuditCommand`, { throwOnError: false }), /#cc0000|katex-error/u);
 });

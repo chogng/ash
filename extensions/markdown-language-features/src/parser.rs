@@ -14,6 +14,38 @@ pub(crate) struct Document {
     pub(crate) blocks: Vec<Block>,
 }
 
+impl Document {
+    pub(crate) fn render_math(
+        &mut self,
+        client: &external_ext_sdk::client::Client,
+        configuration: &serde_json::Value,
+        token: &external_ext_sdk::CancellationToken,
+    ) -> Result<(), ExtensionError> {
+        let mut formulas = Vec::new();
+        for block in &mut self.blocks {
+            block.content.visit_math(&mut |value, display, _| {
+                formulas.push(ash_utils_markdown_math::Formula {
+                    source: value.into(),
+                    display: if display {
+                        ash_utils_markdown_math::Display::Block
+                    } else {
+                        ash_utils_markdown_math::Display::Inline
+                    },
+                })
+            });
+        }
+        if let Some(html) = super::math::render(client, formulas, configuration, token)? {
+            let mut html = html.into_iter();
+            for block in &mut self.blocks {
+                block
+                    .content
+                    .visit_math(&mut |_, _, rendered| *rendered = html.next());
+            }
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct Block {
     start: u32,
@@ -48,6 +80,7 @@ enum Node {
     Math {
         value: String,
         display: bool,
+        html: Option<String>,
     },
     Task {
         checked: bool,
@@ -58,6 +91,32 @@ enum Node {
     Raw {
         value: String,
     },
+}
+
+impl Node {
+    fn visit_math(&mut self, visitor: &mut impl FnMut(&str, bool, &mut Option<String>)) {
+        match self {
+            Self::Math {
+                value,
+                display,
+                html,
+            } => visitor(value, *display, html),
+            Self::Element { children, .. }
+            | Self::OrderedList { children, .. }
+            | Self::Link { children, .. }
+            | Self::Image { children, .. } => {
+                for child in children {
+                    child.visit_math(visitor);
+                }
+            }
+            Self::Text { .. }
+            | Self::Code { .. }
+            | Self::Task { .. }
+            | Self::Break
+            | Self::Rule
+            | Self::Raw { .. } => {}
+        }
+    }
 }
 
 // This private render wire format avoids repeating field names for every inline
@@ -84,7 +143,11 @@ impl Serialize for Node {
                 children,
             } => ("img", destination, children).serialize(serializer),
             Self::Code { value } => ("code", value).serialize(serializer),
-            Self::Math { value, display } => ("math", value, display).serialize(serializer),
+            Self::Math {
+                value,
+                display,
+                html,
+            } => ("math", value, display, html).serialize(serializer),
             Self::Task { checked, offset } => ("task", checked, offset).serialize(serializer),
             Self::Break => ["br"].serialize(serializer),
             Self::Rule => ["hr"].serialize(serializer),
@@ -120,6 +183,7 @@ enum Element {
 /// definitions, front matter and whitespace which do not produce parser events.
 pub(crate) fn parse_checked(
     source: &str,
+    math_enabled: bool,
     check: impl Fn() -> Result<(), ExtensionError>,
 ) -> Result<Document, ExtensionError> {
     check()?;
@@ -142,7 +206,11 @@ pub(crate) fn parse_checked(
     let options = Options::ENABLE_TABLES
         | Options::ENABLE_STRIKETHROUGH
         | Options::ENABLE_TASKLISTS
-        | Options::ENABLE_MATH
+        | if math_enabled {
+            Options::ENABLE_MATH
+        } else {
+            Options::empty()
+        }
         | Options::ENABLE_YAML_STYLE_METADATA_BLOCKS
         | Options::ENABLE_PLUSES_DELIMITED_METADATA_BLOCKS;
     let mut events = Parser::new_ext(source, options)
@@ -157,7 +225,15 @@ pub(crate) fn parse_checked(
             blocks.push(raw_block(source, cursor..range.start, &offsets));
         }
         let end = range.end;
-        let content = node(event, range.clone(), &mut events, source, &offsets, 0);
+        let content = node(
+            event,
+            range.clone(),
+            &mut events,
+            source,
+            &offsets,
+            0,
+            math_enabled,
+        );
         blocks.push(Block {
             start: offsets[range.start],
             end: offsets[end],
@@ -189,6 +265,7 @@ fn node<'a>(
     source: &str,
     offsets: &[u32],
     depth: usize,
+    math_enabled: bool,
 ) -> Node {
     match event {
         Event::Start(tag) => {
@@ -216,7 +293,15 @@ fn node<'a>(
                 if matches!(event, Event::End(_)) {
                     break;
                 }
-                children.push(node(event, range, events, source, offsets, depth + 1));
+                children.push(node(
+                    event,
+                    range,
+                    events,
+                    source,
+                    offsets,
+                    depth + 1,
+                    math_enabled,
+                ));
             }
             let element = |tag, children| Node::Element { tag, children };
             match tag {
@@ -236,6 +321,22 @@ fn node<'a>(
                 Tag::List(Some(first)) => Node::OrderedList { first, children },
                 Tag::List(None) => element(Element::Ul, children),
                 Tag::Item => element(Element::Li, children),
+                Tag::CodeBlock(pulldown_cmark::CodeBlockKind::Fenced(info))
+                    if math_enabled && info.split_whitespace().next() == Some("math") =>
+                {
+                    let value = children
+                        .into_iter()
+                        .filter_map(|child| match child {
+                            Node::Text { value } => Some(value),
+                            _ => None,
+                        })
+                        .collect();
+                    Node::Math {
+                        value,
+                        display: true,
+                        html: None,
+                    }
+                }
                 Tag::CodeBlock(_) => element(Element::Pre, children),
                 Tag::Table(_) => element(Element::Table, children),
                 Tag::TableHead => element(Element::Thead, children),
@@ -274,10 +375,12 @@ fn node<'a>(
         Event::InlineMath(value) => Node::Math {
             value: value.into_string(),
             display: false,
+            html: None,
         },
         Event::DisplayMath(value) => Node::Math {
             value: value.into_string(),
             display: true,
+            html: None,
         },
         Event::TaskListMarker(checked) => Node::Task {
             checked,

@@ -116,6 +116,7 @@ class PackageTests(unittest.TestCase):
                 "ash-app-server-daemon",
                 "ash-code-mode-host",
                 "ash-git-extension",
+                "ash-markdown-math",
                 "ash-markdown-language-features",
                 "ash-github-authentication",
                 "ash-github-extension",
@@ -311,6 +312,7 @@ class PackageTests(unittest.TestCase):
         "make",
         "markdown-basics",
         "markdown-language-features",
+        "markdown-math",
         "media-preview",
         "powershell",
         "python",
@@ -429,6 +431,9 @@ class PackageTests(unittest.TestCase):
                 ripgrep,
                 test_tgrep_resolution(root),
                 node,
+                markdown_math_binary=executable_file(
+                    root / "math-extension", b"math-extension"
+                ),
                 markdown_extension_binary=executable_file(
                     root / "markdown-language-features", b"markdown-extension"
                 ),
@@ -582,6 +587,17 @@ class PackageTests(unittest.TestCase):
                 b"markdown-extension",
                 (output / "bin" / "ash-markdown-language-features").read_bytes(),
             )
+            self.assertEqual(
+                b"math-extension", (output / "bin" / "ash-markdown-math").read_bytes()
+            )
+            math = output / "ash-resources/extensions/markdown-math"
+            self.assertEqual(
+                "ash-markdown-math",
+                json.loads((math / "package.json").read_text())["ashRuntime"][
+                    "entrypoint"
+                ],
+            )
+            self.assertFalse((math / "src").exists())
             markdown = output / "ash-resources/extensions/markdown-language-features"
             self.assertEqual(
                 "rust",
@@ -728,6 +744,9 @@ class PackageTests(unittest.TestCase):
                 test_tgrep_resolution(root),
                 None,
                 protocol_metadata=generated_protocol,
+                markdown_math_binary=executable_file(
+                    root / "math-extension", b"math-extension"
+                ),
                 markdown_extension_binary=executable_file(
                     root / "markdown-language-features", b"markdown-extension"
                 ),
@@ -1036,6 +1055,9 @@ class PackageTests(unittest.TestCase):
                 test_tgrep_resolution(root),
                 node,
                 bubblewrap,
+                markdown_math_binary=executable_file(
+                    root / "math-extension", b"math-extension"
+                ),
                 markdown_extension_binary=executable_file(
                     root / "markdown-language-features", b"markdown-extension"
                 ),
@@ -1128,6 +1150,9 @@ class PackageTests(unittest.TestCase):
                 ),
                 windows_sandbox_service_binary=executable_file(
                     root / "sandbox-service-source.exe", b"sandbox-service"
+                ),
+                markdown_math_binary=executable_file(
+                    root / "math-extension", b"math-extension"
                 ),
                 markdown_extension_binary=executable_file(
                     root / "markdown-language-features", b"markdown-extension"

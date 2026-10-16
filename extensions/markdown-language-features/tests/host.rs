@@ -65,6 +65,32 @@ struct Running {
     authority: Arc<Authority>,
     launcher: Arc<Launcher>,
 }
+impl Running {
+    fn invoke(
+        &self,
+        request: ExtensionInvocation,
+    ) -> Result<ash_external_ext::InvokeResult, ExtensionHostError> {
+        self.host
+            .begin_invoke(request)?
+            .wait_with_client(|operation, _, _| {
+                if let external_ext_protocol::ExtensionClientOperation::ReadConfiguration {
+                    ..
+                } = operation
+                {
+                    Ok(
+                        external_ext_protocol::ExtensionClientResult::Configuration {
+                            value: json!({}),
+                        },
+                    )
+                } else {
+                    Err(ash_external_ext::HostFailure {
+                        code: HostErrorCode::RegistrationNotFound,
+                        message: "optional capability unavailable".into(),
+                    })
+                }
+            })
+    }
+}
 impl Drop for Running {
     fn drop(&mut self) {
         self.host.shutdown().unwrap();
@@ -144,12 +170,7 @@ fn real_product_process_preserves_utf16_source_and_rejects_invalid_contracts() {
     let running = start();
     let text =
         "\u{feff}# 中文😀\r\n\r\n**保真** [引用][id]  \r\n\r\n[id]: <https://example.com>\r\n";
-    let result = running
-        .host
-        .invoke(invocation(snapshot(text)))
-        .unwrap()
-        .payload["update"]
-        .clone();
+    let result = running.invoke(invocation(snapshot(text))).unwrap().payload["update"].clone();
     assert_eq!(result["version"], 7);
     assert_eq!(result["uri"], "file:///synthetic.md");
     let blocks = result["blocks"].as_array().unwrap();
@@ -160,11 +181,7 @@ fn real_product_process_preserves_utf16_source_and_rejects_invalid_contracts() {
     }
     assert_eq!(offset, text.encode_utf16().count() as u64);
     let deep = format!("{}deep\n", "> ".repeat(256));
-    let nested = running
-        .host
-        .invoke(invocation(snapshot(&deep)))
-        .unwrap()
-        .payload;
+    let nested = running.invoke(invocation(snapshot(&deep))).unwrap().payload;
     assert_eq!(
         nested["update"]["blocks"][0][1].as_u64().unwrap(),
         deep.len() as u64
@@ -172,7 +189,7 @@ fn real_product_process_preserves_utf16_source_and_rejects_invalid_contracts() {
     let mut invalid = snapshot(text);
     invalid["version"] = json!(0);
     assert!(matches!(
-        running.host.invoke(invocation(invalid)),
+        running.invoke(invocation(invalid)),
         Err(ExtensionHostError::HostRejected {
             code: HostErrorCode::InvalidRequest,
             ..
@@ -197,7 +214,6 @@ fn real_parser_is_cancellable_and_remains_usable() {
     ));
     assert!(
         running
-            .host
             .invoke(invocation(snapshot("# After cancellation")))
             .is_ok()
     );
@@ -213,7 +229,6 @@ fn product_process_transports_large_wide_and_nested_render_trees() {
     assert!(source.len() > 1024 * 1024);
     let running = start();
     let result = running
-        .host
         .invoke(invocation(snapshot(&source)))
         .unwrap()
         .payload["update"]
@@ -236,7 +251,6 @@ fn four_megabytes_of_prose_fit_the_response_contract_and_leave_the_process_usabl
     assert!(source.len() >= 4 * 1024 * 1024);
     let running = start();
     let result = running
-        .host
         .invoke(invocation(snapshot(&source)))
         .unwrap()
         .payload;
@@ -250,7 +264,7 @@ fn four_megabytes_of_prose_fit_the_response_contract_and_leave_the_process_usabl
     // The larger source still fits the input contract, but its render tree does
     // not fit the output quota. That must not retire this extension incarnation.
     assert!(matches!(
-        running.host.invoke(invocation(snapshot(&source.repeat(2)))),
+        running.invoke(invocation(snapshot(&source.repeat(2)))),
         Err(ExtensionHostError::HostRejected {
             code: HostErrorCode::QuotaExceeded,
             ..
@@ -258,7 +272,6 @@ fn four_megabytes_of_prose_fit_the_response_contract_and_leave_the_process_usabl
     ));
     assert!(
         running
-            .host
             .invoke(invocation(snapshot("# Still alive")))
             .is_ok()
     );
@@ -281,15 +294,10 @@ fn revocation_blocks_calls_and_process_crash_recovers_a_new_incarnation() {
     let restored = running.host.reconcile().unwrap();
     assert_eq!(restored.status, ExtensionHostStatus::Ready);
     assert_ne!(old, restored.incarnation);
-    assert!(
-        running
-            .host
-            .invoke(invocation(snapshot("# Recovered")))
-            .is_ok()
-    );
+    assert!(running.invoke(invocation(snapshot("# Recovered"))).is_ok());
     running.authority.0.store(false, Ordering::Release);
     assert!(matches!(
-        running.host.invoke(invocation(snapshot("# Denied"))),
+        running.invoke(invocation(snapshot("# Denied"))),
         Err(ExtensionHostError::AuthorityDenied)
     ));
 }

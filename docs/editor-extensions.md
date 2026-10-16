@@ -85,6 +85,11 @@ Workspace edit 的 `entries` 按顺序执行：`kind: textDocument` 带 `resourc
 内部 `parser` 模块使用 `pulldown-cmark` 解析带版本的源码快照，返回渲染节点和 UTF-16 源码范围；
 不再注册独立的解析扩展或跨扩展解析命令。通用 Rust SDK 提供命令、自定义文本编辑器、语言 Provider 和文档观察。
 高亮、大纲、折叠与结构选择由编辑器已有的共享 Tree-sitter 提供，grammar/query 继续归 `markdown-basics`。
+公式转换由独立启停的 `markdown-math` Rust 扩展通过 `katex-rs = 0.3.0` 提供。
+Markdown 识别行内、块级公式和 `math` 围栏，按文档顺序一次提交 `math.render.v1` 请求；
+每次渲染独享宏定义，返回 HTML + MathML。共享宿主按产品包声明的 channel→provider 授权路由，
+首次调用才激活精确 Provider，继承调用取消、截止时间和扩展生命周期。停用数学扩展时保留公式源码。
+公式字体和样式由数学包提供并编入 Markdown 静态视图，浏览器不再运行 KaTeX JS 公式转换。
 静态浏览器视图资源随功能扩展打包，通过通用 CustomTextEditor 宿主加载；没有 JS 扩展入口。
 桌面端和已连接后端的 Web 使用同一 Rust Provider；纯 Web 的语法 WASM 降级不提供可执行扩展能力。
 客户端 JSON envelope 上限为 64 MiB、100 万节点、每集合 262144 项及深度 160，允许快照和渲染树一同传输；

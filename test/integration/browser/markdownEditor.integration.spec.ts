@@ -127,6 +127,26 @@ test('disabling the Rust Markdown provider retains the canonical source and its 
 	expect(await page.evaluate(() => window.ashMarkdownHost.saved)).toBe(initial);
 });
 
+test('disabling math refreshes an open preview without changing its source', async ({ page }) => {
+	const runtime = await startMarkdownExtension();
+	try {
+		await page.route('**/__markdown_render**', async route => {
+			const query = new URL(route.request().url()).searchParams;
+			await route.fulfill({ json: await runtime.render(query.get('view') ?? 'vscode.markdown.editor', { document: { languageId: 'markdown', ...route.request().postDataJSON() } }) });
+		});
+		const frame = await openHost(page, 'en', 'vscode.markdown.preview.editor');
+		const text = '# Math\n\n$E=mc^2$\n';
+		await page.evaluate(text => window.ashMarkdownHost.edit(0, window.ashMarkdownHost.text.length, text), text);
+		await expect(frame.locator('.katex')).toHaveCount(1);
+		const expectedSource = await page.evaluate(() => window.ashMarkdownHost.text);
+		await runtime.disableMath();
+		await page.evaluate(() => window.ashMarkdownHost.refreshPackages());
+		await expect(frame.locator('.katex')).toHaveCount(0);
+		await expect(frame.locator('#markdown-preview')).toContainText('E=mc^2');
+		expect(await page.evaluate(() => window.ashMarkdownHost.text)).toBe(expectedSource);
+	} finally { await runtime.dispose(); }
+});
+
 test('Rust Markdown extension and shared host preserve Chinese composition, source, saves and history', async ({ page, context }, testInfo) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));

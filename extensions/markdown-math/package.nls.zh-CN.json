@@ -1,0 +1,7 @@
+{
+  "displayName": "Markdown 数学",
+  "description": "为 Markdown 预览和富文本编辑器提供 LaTeX 公式渲染能力。",
+  "math.settings": "Markdown 数学",
+  "math.enabled": "在 Markdown 预览和富文本编辑器中渲染数学公式。",
+  "math.macros": "Markdown 公式的自定义 LaTeX 宏。宏定义在每次文档渲染之间相互隔离。"
+}

@@ -7,6 +7,7 @@ import { IStorageService } from '../../../../platform/storage/common/storage.js'
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import { getWindow, h, type IDimension } from '../../../../base/browser/dom.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
+import type { Event } from '../../../../base/common/event.js';
 import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
@@ -43,6 +44,8 @@ export interface CustomTextEditorContent {
 export interface CustomTextEditorProvider {
 	readonly viewType: string;
 	readonly displayName: string;
+	/** Invalidates rendered content when package-owned dependencies change. */
+	readonly onDidChange?: Event<void>;
 	render(document: CustomTextEditorDocument, signal: AbortSignal): Promise<CustomTextEditorContent>;
 }
 
@@ -160,6 +163,10 @@ export class WebviewEditor extends EditorPane implements IEditorPane {
 			resources.add(model.onDidChangeContent(() => { if (!this.applyingEdit) schedule.schedule(); }));
 			resources.add(this.filesConfiguration.onDidChangeReadonly(() => { updateReadonly(); schedule.schedule(); }));
 			resources.add(this.themes.onDidColorThemeChange(() => schedule.schedule()));
+			// Providers read client configuration during render. A setting change must
+			// not require editing the document to refresh its existing sandbox.
+			resources.add(this.configuration.onDidChangeConfiguration(() => schedule.schedule()));
+			if (this.provider.onDidChange) resources.add(this.provider.onDidChange(() => schedule.schedule()));
 			await render();
 			inputSignal.throwIfAborted();
 		} catch (error) {

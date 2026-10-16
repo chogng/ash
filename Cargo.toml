@@ -56,6 +56,7 @@ members = [
     "extensions/github",
     "extensions/remote-ssh",
     "extensions/markdown-language-features",
+    "extensions/markdown-math",
     "extensions/git",
     "extensions/dev-containers",
     "crates/external-agent-migration",
@@ -200,6 +201,7 @@ members = [
     "crates/utils/home-dir",
     "crates/utils/image",
     "crates/utils/json-to-toml",
+    "crates/utils/markdown-math",
     "crates/utils/output-truncation",
     "crates/utils/path-uri",
     "crates/utils/path-utils",
@@ -229,6 +231,8 @@ publish = false
 version = "0.1.0"
 
 [workspace.dependencies]
+katex-rs = "=0.3.0"
+ash-utils-markdown-math = { path = "crates/utils/markdown-math" }
 trash = { version = "5.2.9", default-features = false, features = ["coinit_multithreaded", "chrono"] }
 mxc-sdk = "=1.0.0"
 testing = { package = "ash-testing", path = "crates/testing" }

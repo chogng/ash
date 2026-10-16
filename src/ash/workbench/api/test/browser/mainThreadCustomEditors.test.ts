@@ -42,6 +42,39 @@ test('Rust custom editor resources stay within their enabled package and follow 
 });
 
 type Handler = (operation: string, payload: JsonValue, signal: AbortSignal) => Promise<JsonValue>;
+
+test('independent Markdown math shares macros across formulas and follows settings and disablement', async () => {
+	const { handlers } = await loadMarkdown('en', [], { markdown: { math: { macros: { '\\RR': '\\mathbb{R}' } } } });
+	const signal = new AbortController().signal;
+	const document = { uri: 'untitled:/math.md', version: 1, languageId: 'markdown', text: '$\\newcommand{\\ashfoo}{x^2}\\ashfoo$\n\n$\\ashfoo+\\RR$\n\n```math\n\\frac{1}{2}\n```\n' };
+	const preview = () => handlers.get('vscode.markdown.preview.editor')!('resolveCustomTextEditor', { document }, signal) as Promise<{ update: { html: string; }; }>;
+	const initial = await preview();
+	assert.equal((initial.update.html.match(/class="katex"/g) ?? []).length, 3);
+	assert.doesNotMatch(initial.update.html, /#cc0000|katex-error/);
+	const rich = await handlers.get('vscode.markdown.editor')!('resolveCustomTextEditor', { document }, signal);
+	assert.match(JSON.stringify(rich), /katex-display/);
+	const empty = { contents: {}, keys: [], overrides: [] };
+	await handlers.get('vscode.workspace.events')!('workspaceEvent', {
+		type: 'configuration', revision: 1, emit: true,
+		configurationValues: { markdown: { math: { enabled: false } } },
+		configurationData: { defaults: empty, application: empty, userLocal: empty, userRemote: empty, workspace: empty, policy: empty, folders: [] },
+		change: { keys: ['markdown.math'], overrides: [] },
+	}, signal);
+	const disabled = await preview();
+	assert.doesNotMatch(disabled.update.html, /class="katex"/);
+	assert.match(disabled.update.html, /\\ashfoo/);
+	assert.match(disabled.update.html, /<pre><code class="language-math">/);
+	await handlers.get('vscode.workspace.events')!('workspaceEvent', {
+		type: 'configuration', revision: 2, emit: true, configurationValues: {},
+		configurationData: { defaults: empty, application: empty, userLocal: empty, userRemote: empty, workspace: empty, policy: empty, folders: [] },
+		change: { keys: ['markdown.math'], overrides: [] },
+	}, signal);
+	await activeRuntime!.disableMath();
+	const unavailable = await preview();
+	assert.doesNotMatch(unavailable.update.html, /class="katex"/);
+	assert.match(unavailable.update.html, /data-math=/);
+	assert.match(unavailable.update.html, /\\frac\{1\}\{2\}/);
+});
 let activeRuntime: Awaited<ReturnType<typeof startMarkdownExtension>> | undefined;
 before(function () { this.timeout(600000); prepareMarkdownExtension(); });
 afterEach(async () => { await activeRuntime?.dispose(); activeRuntime = undefined; });
@@ -97,7 +130,8 @@ test('heading links share preview slugs and destination ranges even when titles 
 	assert.equal(preview.editable, false);
 	assert.match(preview.update.html, /id="cafe\u0301"/u);
 	assert.doesNotMatch(preview.update.html, /title: hidden/u);
-	assert.match(preview.update.html, /data-math="E=mc\^2"/u);
+	assert.match(preview.update.html, /class="katex"/u);
+	assert.match(preview.update.html, /annotation encoding="application\/x-tex">E=mc\^2/);
 });
 
 test('link diagnostics reuse target snapshots without listing unrelated open documents', async () => {

@@ -92,6 +92,7 @@ def build_package_directory(
     remote_runtime_release: Optional[Dict[str, str]] = None,
     symbols_dir: Optional[Path] = None,
     git_extension_binary: Optional[Path] = None,
+    markdown_math_binary: Optional[Path] = None,
     markdown_extension_binary: Optional[Path] = None,
     github_authentication_binary: Optional[Path] = None,
     github_extension_binary: Optional[Path] = None,
@@ -100,6 +101,8 @@ def build_package_directory(
 ) -> None:
     if git_extension_binary is None:
         raise RuntimeError("Git extension executable is required in product packages")
+    if markdown_math_binary is None:
+        raise RuntimeError("Math extension executable is required in product packages")
     if markdown_extension_binary is None:
         raise RuntimeError(
             "Markdown extension executable is required in product packages"
@@ -156,6 +159,7 @@ def build_package_directory(
             "appServerDaemon": str(app_server_daemon_binary),
             "codeModeHost": str(code_mode_host_binary),
             "gitExtension": str(git_extension_binary),
+            "markdownMath": str(markdown_math_binary),
             "markdownExtension": str(markdown_extension_binary),
             "githubAuthentication": str(github_authentication_binary),
             "githubExtension": str(github_extension_binary),
@@ -738,6 +742,9 @@ def system_signing_artifacts(package: Path, spec: TargetSpec) -> Dict[str, Path]
         "gitExtension": package
         / "bin"
         / ("ash-git-extension" + spec.executable_suffix),
+        "markdownMath": package
+        / "bin"
+        / ("ash-markdown-math" + spec.executable_suffix),
         "markdownExtension": package
         / "bin"
         / ("ash-markdown-language-features" + spec.executable_suffix),
@@ -823,6 +830,7 @@ def record_system_signing(
             "codeModeHost",
             "jsExtensionHost",
             "gitExtension",
+            "markdownMath",
             "markdownExtension",
             "githubAuthentication",
             "githubExtension",

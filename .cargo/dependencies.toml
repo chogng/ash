@@ -59,18 +59,18 @@ reason = "Current upstream API families: 0.1.7 via cipher, digest; 0.2.2 via dig
 
 [[multiple_versions]]
 name = "darling"
-versions = ["0.20.11", "0.24.0"]
-reason = "0.20 via cached/derive_builder; 0.24 via instability. Macro API families remain isolated."
+versions = ["0.20.11", "0.24.1"]
+reason = "0.20 via cached/derive_builder; 0.24.1 via instability and katex-rs -> bon-macros. Macro API families remain isolated."
 
 [[multiple_versions]]
 name = "darling_core"
-versions = ["0.20.11", "0.24.0"]
-reason = "Matches darling and darling_macro 0.20 (cached/derive_builder) and 0.24 (instability)."
+versions = ["0.20.11", "0.24.1"]
+reason = "Matches darling and darling_macro 0.20 (cached/derive_builder) and 0.24.1 (instability and katex-rs -> bon-macros)."
 
 [[multiple_versions]]
 name = "darling_macro"
-versions = ["0.20.11", "0.24.0"]
-reason = "Derive implementations for the reviewed darling 0.20 and 0.24 API families."
+versions = ["0.20.11", "0.24.1"]
+reason = "Derive implementations for the reviewed darling 0.20 and 0.24.1 API families."
 
 [[multiple_versions]]
 name = "digest"
@@ -189,13 +189,13 @@ reason = "Current upstream API families: 2.2.0 via ecdsa; 3.0.0 via ed25519. Rev
 
 [[multiple_versions]]
 name = "strum"
-versions = ["0.26.3", "0.27.2"]
-reason = "Current upstream API families: 0.26.3 via ratatui; 0.27.2 via ash-tui, biblatex. Review the introducing packages together before changing this set."
+versions = ["0.26.3", "0.27.2", "0.28.0"]
+reason = "Current upstream API families: 0.26.3 via ratatui; 0.27.2 via ash-tui, biblatex; 0.28.0 via katex-rs. Review the introducing packages together before changing this set."
 
 [[multiple_versions]]
 name = "strum_macros"
-versions = ["0.26.4", "0.27.2"]
-reason = "Current upstream API families: 0.26.4 via strum; 0.27.2 via ash-tui, strum. Review the introducing packages together before changing this set."
+versions = ["0.26.4", "0.27.2", "0.28.0"]
+reason = "Current upstream API families: 0.26.4 via strum; 0.27.2 via ash-tui, strum; 0.28.0 via katex-rs and strum 0.28. Review the introducing packages together before changing this set."
 
 [[multiple_versions]]
 name = "syn"
@@ -204,13 +204,13 @@ reason = "Current upstream API families: 2.0.119 via async-recursion, bindgen, b
 
 [[multiple_versions]]
 name = "thiserror"
-versions = ["1.0.69", "2.0.19"]
-reason = "Current upstream API families: 1.0.69 via ansi-to-tui, cairo-rs, calloop and other importers; 2.0.19 via android-activity, mxc-sdk, ash-attachments and other importers. Review the introducing packages together before changing this set."
+versions = ["1.0.69", "2.0.21"]
+reason = "Current upstream API families: 1.0.69 via ansi-to-tui, cairo-rs, calloop and other importers; 2.0.21 via android-activity, mxc-sdk, ash-attachments and other importers. Review the introducing packages together before changing this set."
 
 [[multiple_versions]]
 name = "thiserror-impl"
-versions = ["1.0.69", "2.0.19"]
-reason = "Current upstream API families: 1.0.69 via thiserror; 2.0.19 via thiserror. Review the introducing packages together before changing this set."
+versions = ["1.0.69", "2.0.21"]
+reason = "Current upstream API families: 1.0.69 via thiserror; 2.0.21 via thiserror. Review the introducing packages together before changing this set."
 
 [[multiple_versions]]
 name = "toml_datetime"
@@ -427,3 +427,18 @@ reason = "0.5 through quinn used by the existing product; 0.6 through webrtc-rs 
 name = "x509-parser"
 versions = ["0.16.0", "0.18.1"]
 reason = "0.16 through rtc-dtls; 0.18 through rcgen. Certificate parsing remains in the respective upstream WebRTC packages."
+
+[[multiple_versions]]
+name = "phf"
+versions = ["0.12.1", "0.14.0"]
+reason = "0.12.1 via chrono-tz; katex-rs requires 0.14.0 for generated symbol and metric tables."
+
+[[multiple_versions]]
+name = "phf_shared"
+versions = ["0.12.1", "0.14.0"]
+reason = "Matches phf 0.12.1 (chrono-tz) and phf 0.14.0 (katex-rs and its build-time generators)."
+
+[[multiple_versions]]
+name = "prettyplease"
+versions = ["0.2.37", "0.3.0"]
+reason = "0.2.37 via bindgen and prost-build uses syn 2; katex-rs -> bon-macros uses prettyplease 0.3.0 with syn 3."

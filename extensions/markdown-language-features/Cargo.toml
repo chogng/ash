@@ -6,6 +6,7 @@ license-file.workspace = true
 publish.workspace = true
 
 [dependencies]
+ash-utils-markdown-math.workspace = true
 external-ext-sdk = { package = "ash-external-ext-sdk", path = "../../sdk/rust" }
 pulldown-cmark = { workspace = true, features = ["html"] }
 serde = { workspace = true, features = ["derive"] }
@@ -16,6 +17,7 @@ regex.workspace = true
 
 [dev-dependencies]
 ash-external-ext.workspace = true
+external-ext-protocol.workspace = true
 
 [lints]
 workspace = true

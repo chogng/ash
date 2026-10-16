@@ -323,7 +323,9 @@ importers:
         specifier: 8.0.13
         version: 8.0.13(@types/node@24.13.3)(esbuild@0.27.3)(jiti@2.7.0)(terser@5.50.0)(yaml@2.9.1)
 
-  extensions/markdown-language-features:
+  extensions/markdown-language-features: {}
+
+  extensions/markdown-math:
     dependencies:
       katex:
         specifier: 0.18.2

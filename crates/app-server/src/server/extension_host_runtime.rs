@@ -149,6 +149,7 @@ struct RuntimeEntry {
     activation_gate: Arc<Mutex<()>>,
     version: String,
     workspace_read: source::WorkspaceReadAccess,
+    backend_channels: BTreeMap<String, String>,
     supervisor: Option<ExtensionHostSupervisor>,
     fallback: ExtensionHostExtensionSnapshot,
     failure: Option<ExtensionHostRuntimeFailure>,
@@ -495,6 +496,8 @@ impl ExtensionHostRuntime {
                     let extension_id = extension_id.to_owned();
                     let workspace_read = entry.workspace_read;
                     let binding = EditorClientBinding {
+                        runtime: Arc::downgrade(&self.inner),
+                        backend_channels: entry.backend_channels.clone(),
                         client_host,
                         owner,
                         extension_id,
@@ -743,6 +746,8 @@ impl ExtensionHostRuntime {
 }
 
 struct EditorClientBinding {
+    runtime: Weak<RuntimeInner>,
+    backend_channels: BTreeMap<String, String>,
     credential_providers: Vec<String>,
     credential_services: Arc<Mutex<BTreeMap<String, Arc<CredentialHandler>>>>,
     client_host: Arc<crate::client_host::ClientHost>,
@@ -753,6 +758,213 @@ struct EditorClientBinding {
 }
 
 impl EditorClientBinding {
+    /// A product grant binds a channel to one exact provider deployment. A package
+    /// cannot replace a disabled provider by registering the same channel name.
+    fn request_channel(
+        &self,
+        channel: &str,
+        payload: Value,
+        token: &ash_async_utils::CancellationToken,
+        timeout: Duration,
+    ) -> Result<external_ext_protocol::ExtensionClientResult, ash_external_ext::HostFailure> {
+        use ash_external_ext::HostErrorCode;
+        use ash_external_ext::HostFailure;
+        let failure = |code, message: &str| HostFailure {
+            code,
+            message: message.into(),
+        };
+        let deadline = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis()
+            .saturating_add(timeout.as_millis());
+        let host_failure = |error: ExtensionHostError| {
+            let code = match &error {
+                ExtensionHostError::HostRejected { code, .. } => *code,
+                ExtensionHostError::RequestTimedOut
+                | ExtensionHostError::StartupTimedOut
+                | ExtensionHostError::ShutdownTimedOut => HostErrorCode::DeadlineExceeded,
+                ExtensionHostError::QuotaExceeded(_)
+                | ExtensionHostError::RequestIdentityExhausted => HostErrorCode::QuotaExceeded,
+                ExtensionHostError::AuthorityDenied => HostErrorCode::PermissionDenied,
+                ExtensionHostError::RegistrationNotFound => HostErrorCode::RegistrationNotFound,
+                ExtensionHostError::CrashLoop
+                | ExtensionHostError::IsolationUnavailable
+                | ExtensionHostError::InvalidLimits(_)
+                | ExtensionHostError::InvalidProtocol(_)
+                | ExtensionHostError::HostRestarted
+                | ExtensionHostError::HostExited
+                | ExtensionHostError::OutcomeIndeterminate
+                | ExtensionHostError::SpawnFailed
+                | ExtensionHostError::Transport(_) => HostErrorCode::RegistrationNotFound,
+            };
+            failure(code, "capability invocation failed")
+        };
+        let provider = self
+            .backend_channels
+            .get(channel)
+            .filter(|provider| *provider != &self.extension_id)
+            .ok_or_else(|| {
+                failure(
+                    HostErrorCode::PermissionDenied,
+                    "capability is not granted to this package",
+                )
+            })?;
+        token
+            .check()
+            .map_err(|_| failure(HostErrorCode::Cancelled, "capability request cancelled"))?;
+        let runtime = self.runtime.upgrade().ok_or_else(|| {
+            failure(
+                HostErrorCode::RegistrationNotFound,
+                "capability host is unavailable",
+            )
+        })?;
+        let activation = {
+            let state = runtime.state.lock().map_err(|_| {
+                failure(
+                    HostErrorCode::Internal,
+                    "capability registry is unavailable",
+                )
+            })?;
+            let entry = state.entry(self.owner, provider).ok_or_else(|| {
+                failure(
+                    HostErrorCode::RegistrationNotFound,
+                    "capability provider is unavailable",
+                )
+            })?;
+            entry
+                .pending_activation
+                .as_ref()
+                .map(|_| entry.fallback.activation_generation)
+        };
+        if let Some(generation) = activation {
+            ExtensionHostRuntime {
+                inner: Arc::clone(&runtime),
+            }
+            .activate_by_event(
+                self.owner,
+                provider,
+                generation,
+                source::ActivationEvent::Capability(channel.into()),
+                None,
+                self.files.clone(),
+            )
+            .map_err(|_| {
+                failure(
+                    HostErrorCode::RegistrationNotFound,
+                    "capability activation failed",
+                )
+            })?;
+            token
+                .check()
+                .map_err(|_| failure(HostErrorCode::Cancelled, "capability request cancelled"))?;
+        }
+        let (supervisor, snapshot, binding) = {
+            let state = runtime.state.lock().map_err(|_| {
+                failure(
+                    HostErrorCode::Internal,
+                    "capability registry is unavailable",
+                )
+            })?;
+            let entry = state.entry(self.owner, provider).ok_or_else(|| {
+                failure(
+                    HostErrorCode::RegistrationNotFound,
+                    "capability provider is unavailable",
+                )
+            })?;
+            let supervisor = entry.supervisor.clone().ok_or_else(|| {
+                failure(
+                    HostErrorCode::RegistrationNotFound,
+                    "capability provider is unavailable",
+                )
+            })?;
+            let snapshot = supervisor.snapshot();
+            if snapshot.status != ExtensionHostStatus::Ready || !snapshot.registrations.iter().any(|registration| {
+                registration.registration_id == channel
+                    && matches!(&registration.kind, RegistrationKind::DataChannel { channel_id } if channel_id == channel)
+            }) {
+                return Err(failure(HostErrorCode::RegistrationNotFound, "capability provider is unavailable"));
+            }
+            let binding = EditorClientBinding {
+                runtime: self.runtime.clone(),
+                backend_channels: entry.backend_channels.clone(),
+                credential_providers: Vec::new(),
+                credential_services: Arc::clone(&self.credential_services),
+                client_host: Arc::clone(&self.client_host),
+                owner: self.owner,
+                extension_id: provider.clone(),
+                workspace_read: entry.workspace_read,
+                files: self.files.clone(),
+            };
+            (supervisor, snapshot, binding)
+        };
+        let handle = supervisor
+            .begin_fenced_invoke(
+                ExtensionInvocationTarget {
+                    incarnation: NonZeroU64::new(snapshot.incarnation).ok_or_else(|| {
+                        failure(
+                            HostErrorCode::RegistrationNotFound,
+                            "capability host is unavailable",
+                        )
+                    })?,
+                    activation_generation: NonZeroU64::new(snapshot.activation_generation)
+                        .ok_or_else(|| {
+                            failure(
+                                HostErrorCode::RegistrationNotFound,
+                                "capability host is unavailable",
+                            )
+                        })?,
+                },
+                ExtensionInvocation {
+                    registration_id: channel.into(),
+                    operation: "receiveData".into(),
+                    payload,
+                    deadline_unix_millis: NonZeroU64::new(deadline.min(u64::MAX as u128) as u64)
+                        .ok_or_else(|| {
+                            failure(
+                                HostErrorCode::DeadlineExceeded,
+                                "capability deadline exceeded",
+                            )
+                        })?,
+                },
+            )
+            .map_err(&host_failure)?;
+        let result = std::thread::scope(|scope| {
+            let (done, completion) = std::sync::mpsc::channel();
+            let handle_ref = &handle;
+            scope.spawn(move || {
+                while completion.recv_timeout(Duration::from_millis(10))
+                    == Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+                {
+                    if token.is_cancelled() {
+                        let _ = handle_ref.cancel(CancelReason::Caller);
+                        break;
+                    }
+                }
+            });
+            let result = handle.wait_with_client(|operation, token, remaining| {
+                binding.request(
+                    ash_external_ext::HostEventContext::new(
+                        snapshot.incarnation,
+                        snapshot.activation_generation,
+                    ),
+                    operation,
+                    token,
+                    remaining,
+                )
+            });
+            let _ = done.send(());
+            result
+        })
+        .map_err(host_failure)?;
+        token
+            .check()
+            .map_err(|_| failure(HostErrorCode::Cancelled, "capability request cancelled"))?;
+        Ok(external_ext_protocol::ExtensionClientResult::Value {
+            value: result.payload,
+        })
+    }
+
     fn request(
         &self,
         context: ash_external_ext::HostEventContext,
@@ -760,6 +972,16 @@ impl EditorClientBinding {
         token: &ash_async_utils::CancellationToken,
         timeout: Duration,
     ) -> Result<external_ext_protocol::ExtensionClientResult, ash_external_ext::HostFailure> {
+        if let external_ext_protocol::ExtensionClientOperation::BackendRequest {
+            capability,
+            method,
+            params,
+            progress: None,
+        } = &operation
+            && method == "receiveData"
+        {
+            return self.request_channel(capability, params.clone(), token, timeout);
+        }
         if let external_ext_protocol::ExtensionClientOperation::ReadWorkspaceFile { path } =
             &operation
         {
@@ -949,6 +1171,18 @@ impl RuntimeInner {
         let activation_generation = request.activation_generation;
         let incarnation = request.incarnation;
         let binding = EditorClientBinding {
+            runtime: Arc::downgrade(self),
+            backend_channels: {
+                let state = self
+                    .state
+                    .lock()
+                    .map_err(|_| ExtensionHostRuntimeError::Internal)?;
+                state
+                    .entry(owner, &extension_id)
+                    .ok_or(ExtensionHostRuntimeError::Stale)?
+                    .backend_channels
+                    .clone()
+            },
             client_host,
             owner,
             extension_id,

@@ -315,6 +315,15 @@ def main(arguments: list[str] | None = None) -> int:
         profile=profile_from_arguments(cargo_arguments),
         target_triple=cargo_target(cargo_arguments),
     ):
+        if (
+            cargo_arguments[0] == "test"
+            and "--no-run" not in cargo_arguments
+            and "ASH_MARKDOWN_MATH_BIN" not in environment
+            and "ash-app-server" in packages
+        ):
+            environment["ASH_MARKDOWN_MATH_BIN"] = prepare_test_executable(
+                args.cargo, cargo_arguments, environment, "ash-markdown-math"
+            )
         if needs_code_mode_host:
             environment["ASH_CODE_MODE_HOST_BIN"] = prepare_test_executable(
                 args.cargo, cargo_arguments, environment, "ash-code-mode-host"

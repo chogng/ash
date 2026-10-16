@@ -1,6 +1,7 @@
-//! Markdown policy and rendering run in one optional Rust extension. Editor models,
-//! syntax trees, history and persistence remain owned by the client.
+//! Markdown documents and language features run in this optional Rust extension;
+//! formulas use the independent math capability. Models and history belong to the client.
 mod language;
+mod math;
 mod parser;
 
 use external_ext_sdk::Command;
@@ -116,8 +117,10 @@ impl Extension for MarkdownExtension {
             let rich = view == "vscode.markdown.editor";
             context.editors.register_custom_text_editor(view, messages[title].as_str().unwrap_or(title).to_owned(), selectors, "option".into(), move |document, token| {
                 token.check_cancelled()?;
+                let configuration = client.get_configuration("markdown", Some(document.uri.clone()), &token)?;
                 if rich {
-                    let parsed = parser::parse_checked(&document.text, || token.check_cancelled())?;
+                    let mut parsed = parser::parse_checked(&document.text, math::enabled(&configuration), || token.check_cancelled())?;
+                    parsed.render_math(&client, &configuration, &token)?;
                     let labels: serde_json::Map<String,Value> = messages.as_object().into_iter().flatten().filter_map(|(key,value)| key.strip_prefix("markdown.rich.").map(|key| (key.into(),value.clone()))).collect();
                     let bootstrap = json!({"uri":document.uri,"text":"","version":0,"readOnly":true,"messages":labels}).to_string().replace('<', "\\u003c");
                     Ok(Content {
@@ -127,11 +130,10 @@ impl Extension for MarkdownExtension {
                         resources: Some(Resources { script: "media/richEditor.js".into(), style: "media/richEditor.css".into() }),
                     })
                 } else {
-                    let configuration = client.get_configuration("markdown", Some(document.uri.clone()), &token)?;
                     Ok(Content {
                         html: "<main id=\"markdown-preview\"></main>".into(),
                         editable: false,
-                        update: Some(json!({"type":"preview","html":preview(&document.text, configuration.pointer("/preview/breaks").and_then(Value::as_bool).unwrap_or(false), &token)?})),
+                        update: Some(json!({"type":"preview","html":preview(&document.text, &configuration, &client, &token)?})),
                         resources: Some(Resources { script: "media/preview.js".into(), style: "media/preview.css".into() }),
                     })
                 }
@@ -143,7 +145,8 @@ impl Extension for MarkdownExtension {
 
 fn preview(
     text: &str,
-    breaks: bool,
+    configuration: &Value,
+    client: &external_ext_sdk::client::Client,
     token: &external_ext_sdk::CancellationToken,
 ) -> Result<String, ExtensionError> {
     use pulldown_cmark::Event;
@@ -158,16 +161,41 @@ fn preview(
     let mut heading: Option<(usize, String)> = None;
     let mut slugs = std::collections::BTreeSet::new();
     let mut metadata = false;
+    let math_enabled = math::enabled(configuration);
+    let breaks = configuration
+        .pointer("/preview/breaks")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let mut fence: Option<String> = None;
     for event in Parser::new_ext(
         text,
         Options::ENABLE_TABLES
             | Options::ENABLE_STRIKETHROUGH
             | Options::ENABLE_TASKLISTS
-            | Options::ENABLE_MATH
+            | if math_enabled {
+                Options::ENABLE_MATH
+            } else {
+                Options::empty()
+            }
             | Options::ENABLE_YAML_STYLE_METADATA_BLOCKS
             | Options::ENABLE_PLUSES_DELIMITED_METADATA_BLOCKS,
     ) {
         token.check_cancelled()?;
+        if let Some(source) = &mut fence {
+            match event {
+                Event::End(TagEnd::CodeBlock) => {
+                    events.push(Event::DisplayMath(fence.take().unwrap().into()));
+                }
+                Event::Text(value) => source.push_str(&value),
+                _ => {}
+            }
+            continue;
+        }
+        if matches!(&event, Event::Start(Tag::CodeBlock(pulldown_cmark::CodeBlockKind::Fenced(info))) if math_enabled && info.split_whitespace().next() == Some("math"))
+        {
+            fence = Some(String::new());
+            continue;
+        }
         match &event {
             Event::Start(Tag::MetadataBlock(_)) => {
                 metadata = true;
@@ -203,8 +231,6 @@ fn preview(
         }
         if let Some(event) = match event {
             Event::Html(_) | Event::InlineHtml(_) => None,
-            Event::InlineMath(value) => Some(math_html(&value, false)),
-            Event::DisplayMath(value) => Some(math_html(&value, true)),
             Event::SoftBreak if breaks => Some(Event::HardBreak),
             other => Some(other),
         } {
@@ -212,7 +238,37 @@ fn preview(
         }
     }
     let mut html = String::new();
-    pulldown_cmark::html::push_html(&mut html, events.into_iter());
+    let formulas = events
+        .iter()
+        .filter_map(|event| match event {
+            Event::InlineMath(source) => Some(ash_utils_markdown_math::Formula {
+                source: source.to_string(),
+                display: ash_utils_markdown_math::Display::Inline,
+            }),
+            Event::DisplayMath(source) => Some(ash_utils_markdown_math::Formula {
+                source: source.to_string(),
+                display: ash_utils_markdown_math::Display::Block,
+            }),
+            _ => None,
+        })
+        .collect();
+    let mut rendered = math::render(client, formulas, configuration, token)?
+        .unwrap_or_default()
+        .into_iter();
+    pulldown_cmark::html::push_html(
+        &mut html,
+        events.into_iter().map(|event| match event {
+            Event::InlineMath(value) => rendered
+                .next()
+                .map(|html| Event::Html(html.into()))
+                .unwrap_or_else(|| math_html(&value, false)),
+            Event::DisplayMath(value) => rendered
+                .next()
+                .map(|html| Event::Html(html.into()))
+                .unwrap_or_else(|| math_html(&value, true)),
+            other => other,
+        }),
+    );
     token.check_cancelled()?;
     Ok(html)
 }

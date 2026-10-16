@@ -7,6 +7,13 @@ extension, command or process. Syntax highlighting, outline, folding and structu
 selection use the editor's shared Rust Tree-sitter (and the Web Worker fallback).
 Grammar/query resources remain in `markdown-basics`.
 
+Formula rendering belongs to the independently enabled [`markdown-math`](../markdown-math/README.md)
+Rust extension. Markdown sends inline/display formulas and `math` fences in document
+order through its declared `math.render.v1` capability. Macro definitions are scoped
+to one render. Both views consume the returned HTML + MathML; their static bundles
+include formula styles and fonts, with no JavaScript formula renderer. Missing or
+disabled math retains formula source and does not prevent Markdown editing.
+
 The public Rust SDK registers commands, custom text editors, language providers and
 client document/workspace observations. Versioned snapshots are analysis input;
 the existing client TextModel owns edits, dirty state, save, conflicts and undo/redo.

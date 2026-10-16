@@ -193,6 +193,7 @@ exports.activate = context => {
             package_digest: format!("sha256:{}", "a".repeat(64)),
             command,
             credential_providers: Vec::new(),
+            backend_channels: BTreeMap::new(),
             protocol_limits: None,
             workspace_read: WorkspaceReadAccess::Denied,
             params: ActivateParams {
@@ -278,6 +279,7 @@ fn runtime_with_recipe(
             activation_gate: Arc::new(std::sync::Mutex::new(())),
             version: deployment.version.clone(),
             workspace_read: WorkspaceReadAccess::Denied,
+            backend_channels: BTreeMap::new(),
             supervisor: None,
             failure: None,
             pending_activation: deployment.activation.clone(),

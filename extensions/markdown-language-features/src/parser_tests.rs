@@ -1,6 +1,6 @@
 use super::Node;
 fn parse(source: &str) -> Result<super::Document, external_ext_sdk::ExtensionError> {
-    super::parse_checked(source, || Ok(()))
+    super::parse_checked(source, true, || Ok(()))
 }
 
 #[test]
@@ -44,4 +44,17 @@ fn empty_documents_and_deep_nesting_are_editable() {
     let document = parse(&source).unwrap();
     assert_eq!(document.blocks.last().unwrap().end as usize, source.len());
     assert!(matches!(document.blocks[0].content, Node::Element { .. }));
+}
+
+#[test]
+fn math_fences_share_formula_nodes_and_disabled_math_remains_source() {
+    let source = "$x^2$\n\n$$y^2$$\n\n```math\n\\frac{1}{2}\n```\n";
+    let rendered = serde_json::to_string(&parse(source).unwrap()).unwrap();
+    assert_eq!(rendered.matches("[\"math\"").count(), 3);
+    assert!(rendered.contains("\\\\frac{1}{2}\\n\",true"));
+    let disabled = super::parse_checked(source, false, || Ok(())).unwrap();
+    let disabled = serde_json::to_string(&disabled).unwrap();
+    assert!(!disabled.contains("[\"math\""));
+    assert!(disabled.contains("$x^2$"));
+    assert!(disabled.contains("\"pre\""));
 }

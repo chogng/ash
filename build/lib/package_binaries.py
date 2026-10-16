@@ -41,6 +41,7 @@ _BINARIES = {
     ),
     "ash-external-js-ext": ("ash-external-js-ext", "--external-js-ext-bin"),
     "ash-git-extension": ("ash-git-extension", "--git-extension-bin"),
+    "ash-markdown-math": ("ash-markdown-math", "--markdown-math-bin"),
     "ash-markdown-language-features": (
         "ash-markdown-language-features",
         "--markdown-extension-bin",

@@ -1,0 +1,47 @@
+{
+  "name": "markdown-math",
+  "publisher": "vscode",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "engines": {
+    "vscode": "*"
+  },
+  "contributes": {
+    "configuration": {
+      "title": "%math.settings%",
+      "properties": {
+        "markdown.math.enabled": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "description": "%math.enabled%"
+        },
+        "markdown.math.macros": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "scope": "resource",
+          "description": "%math.macros%"
+        }
+      }
+    }
+  },
+  "ashRuntime": {
+    "kind": "rust",
+    "entrypoint": "ash-markdown-math",
+    "capabilities": [
+      "math.render.v1"
+    ]
+  },
+  "activationEvents": [
+    "onCapability:math.render.v1"
+  ],
+  "dependencies": {
+    "katex": "0.18.2"
+  }
+}

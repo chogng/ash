@@ -1,8 +1,7 @@
 import { Disposable, DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { addDisposableListener } from '../../../src/ash/base/browser/dom.js';
 import { InputBox } from '../../../src/ash/base/browser/ui/inputbox/inputBox.js';
-import katex from 'katex';
-import 'katex/dist/katex.min.css';
+import '../../markdown-math/src/styles.js';
 import { inputEdit, sourceOffset, normalizedOffset, textEdit } from './sourceEdits.js';
 import '../media/richEditor.css';
 
@@ -197,7 +196,7 @@ class MarkdownEditor extends Disposable {
 		this.updateButtons();
 	}
 
-	node([kind, value, detail], header = false, lifetime) {
+	node([kind, value, detail, html], header = false, lifetime) {
 		const children = (parent, nodes) => { for (const child of nodes) parent.append(this.node(child, header, lifetime)); return parent; };
 		switch (kind) {
 			case 't': return document.createTextNode(value);
@@ -207,7 +206,11 @@ class MarkdownEditor extends Disposable {
 			case 'hr': return document.createElement('hr');
 			case 'math': {
 				const element = document.createElement('span');
-				katex.render(value, element, { displayMode: detail, throwOnError: false, trust: false }); return element;
+				// HTML comes from the authorized math provider, with trust disabled.
+				// Missing capabilities retain visible, editable formula source.
+				if (typeof html === 'string') element.innerHTML = html;
+				else element.textContent = value;
+				return element;
 			}
 			case 'el': {
 				const element = document.createElement(header && value === 'td' ? 'th' : value);

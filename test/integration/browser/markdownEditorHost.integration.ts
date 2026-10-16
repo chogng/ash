@@ -1,5 +1,5 @@
 import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
-import { Event } from '../../../src/ash/base/common/event.js';
+import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { Range } from '../../../src/ash/editor/common/core/range.js';
 import { IExtensionHostApi } from '../../../src/ash/platform/agentHost/common/extensionHostApi.js';
@@ -43,7 +43,9 @@ services.registerInstance(IOpenerService, { open: async () => true } as unknown 
 services.registerInstance(INotificationService, lifetime.add(new NotificationService()));
 services.registerInstance(ILanguagePackService, createEmptyTestLanguagePacks());
 const fixture = createBuiltinExtensionFixture();
+const packageChanges = lifetime.add(new Emitter<void>());
 const packages: IExtensionApi = {
+	onDidChange: packageChanges.event,
 	resources: fixture.resources,
 	list: async mode => { const catalog = await fixture.list(mode); return { ...catalog, extensions: catalog.extensions.filter(extension => extension.id === 'vscode.markdown-language-features') }; },
 };
@@ -95,6 +97,7 @@ window.ashMarkdownHost = {
 	undo: () => source.model.undo(),
 	redo: () => source.model.redo(),
 	disable: () => registration.clear(),
+	refreshPackages: () => packageChanges.fire(),
 	get registered() { return EditorPanes.getEditorPanes().some(pane => pane.id === 'vscode.markdown.editor'); },
 };
 
@@ -107,6 +110,7 @@ declare global {
 			edit(start: number, end: number, text: string): void;
 			undo(): void; redo(): void;
 			disable(): void; readonly registered: boolean;
+			refreshPackages(): void;
 		};
 	}
 }

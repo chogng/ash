@@ -1,4 +1,5 @@
 import { match } from '../../../base/common/glob.js';
+import { Event } from '../../../base/common/event.js';
 import { basename } from '../../../base/common/resources.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type ExtensionHostCustomEditorRegistration, type JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
@@ -150,6 +151,7 @@ export class MainThreadCustomEditors extends Disposable {
 					// Readonly policy belongs to the editor model owner, including after configuration changes.
 					return 'update' in result ? { html, editable, update: update && typeof update === 'object' && !Array.isArray(update) ? { ...update, readOnly: document.readOnly } : update } : { html, editable };
 				},
+				onDidChange: this.packages.onDidChange ?? Event.None,
 			} satisfies CustomTextEditorProvider, options.onSave),
 		});
 	}

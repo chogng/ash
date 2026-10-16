@@ -195,6 +195,7 @@ pub(crate) fn deployments(
             package_digest: source.package().digest.clone(),
             command,
             credential_providers: Vec::new(),
+            backend_channels: BTreeMap::new(),
             protocol_limits: None,
             workspace_read:
                 crate::server::extension_host_runtime::source::WorkspaceReadAccess::Denied,
@@ -268,6 +269,7 @@ fn deployment(
         package_digest: source.package().digest.clone(),
         // Executable admission currently carries no directory-read ceiling.
         credential_providers: Vec::new(),
+        backend_channels: BTreeMap::new(),
         protocol_limits: None,
         workspace_read: crate::server::extension_host_runtime::source::WorkspaceReadAccess::Denied,
         command: ExtensionLaunchCommand::new(

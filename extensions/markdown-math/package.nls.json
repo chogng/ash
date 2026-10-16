@@ -1,0 +1,7 @@
+{
+  "displayName": "Markdown Math",
+  "description": "LaTeX formula rendering for Markdown previews and rich editors.",
+  "math.settings": "Markdown Math",
+  "math.enabled": "Render mathematical formulas in Markdown previews and rich editors.",
+  "math.macros": "Custom LaTeX macros for Markdown formulas. Definitions are isolated to each document render."
+}

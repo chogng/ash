@@ -1,0 +1,12 @@
+[package]
+name = "ash-utils-markdown-math"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+
+[lints]
+workspace = true

@@ -86,6 +86,8 @@ Pagination and PDF export remain future work.
 
 `markdown-language-features` is one Rust extension owning Markdown preview, rich editing and
 link semantics. Its private `pulldown-cmark` parser has no separate package or process.
+`markdown-math` is a separate Rust extension owning formula conversion through `katex-rs`;
+Markdown consumes its declared channel and retains source when that capability is unavailable.
 Static JavaScript and CSS implement the sandboxed view; `markdown-basics` owns the grammar
 and queries used by the shared Tree-sitter service. `media-preview`
 declares the image (PNG/JPEG/WebP), audio (MP3/WAV/OGG/OGA), and video (MP4/WebM) editors.
