@@ -1,5 +1,4 @@
 import { validateScreenshotShortcutRequest, validateScreenshotShortcutResult } from '../../common/screenshotProtocol.js';
-import { validateScreenshotPermissionAction, validateScreenshotPermission } from '../../common/screenshotProtocol.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import {
@@ -67,15 +66,6 @@ test('overlay initialization accepts only image, appearance and its localization
 		{ ...initialization, image: new Uint8Array(100) }
 	])
 		assert.throws(() => validateScreenshotInitialization(value));
-});
-
-
-test('permission IPC permits only fixed local actions and validates the returned domain state', () => {
-	for (const value of ['status', 'open-settings', 'reveal-application']) assert.equal(validateScreenshotPermissionAction(value), value);
-	for (const value of [undefined, 'capture', { action: 'reveal-application', path: '/other.app' }]) assert.throws(() => validateScreenshotPermissionAction(value));
-	const permission = { status: 'denied', canOpenSystemSettings: true, applicationPath: '/Applications/Ash.app' };
-	assert.equal(validateScreenshotPermission(permission), permission);
-	for (const value of [{ ...permission, status: 'allowed' }, { ...permission, applicationPath: '../Ash.app' }, { ...permission, canOpenSystemSettings: 'yes' }, { ...permission, windowId: 2 }]) assert.throws(() => validateScreenshotPermission(value));
 });
 
 

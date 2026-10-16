@@ -12,8 +12,6 @@ import {
 	SCREENSHOT_SHORTCUT_CHANNEL,
 	SCREENSHOT_TRIGGER_CHANNEL,
 	validateScreenshotShortcutResult,
-	SCREENSHOT_PERMISSION_CHANNEL,
-	validateScreenshotPermission,
 	SCREENSHOT_CAPTURE_CHANNEL,
 	SCREENSHOT_CANCEL_CHANNEL,
 	validateScreenshotImage,
@@ -28,7 +26,6 @@ import {
 	IScreenshotService,
 	ScreenshotGlobalShortcutSetting,
 	ScreenshotCommandId,
-	type ScreenshotPermission,
 	type ScreenshotShortcutStatus
 } from '../common/screenshot.js';
 
@@ -101,18 +98,6 @@ export class DesktopScreenshotService extends Disposable implements IScreenshotS
 		});
 		this.pendingShortcut = operation.catch(() => { });
 		return operation;
-	}
-
-	public async getPermission(): Promise<ScreenshotPermission> {
-		return validateScreenshotPermission(await invoke<unknown>(SCREENSHOT_PERMISSION_CHANNEL, 'status'));
-	}
-
-	public async openPermissionSettings(): Promise<void> {
-		await invoke<void>(SCREENSHOT_PERMISSION_CHANNEL, 'open-settings');
-	}
-
-	public async revealApplication(): Promise<void> {
-		await invoke<void>(SCREENSHOT_PERMISSION_CHANNEL, 'reveal-application');
 	}
 
 	public async captureScreenshot(signal: AbortSignal): Promise<VSBuffer | undefined> {

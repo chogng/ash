@@ -1,4 +1,4 @@
-import { IScreenshotService } from '../../../screenshot/common/screenshot.js';
+import { ScreenshotGlobalShortcutSetting } from '../../../screenshot/common/screenshot.js';
 import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
 import { resolveKeybinding } from '../../../../../base/common/keybindings.js';
 import { IHostService } from '../../../../services/host/browser/host.js';
@@ -75,7 +75,7 @@ import { IChatSessionNavigationService } from '../../../../services/chat/common/
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { DiskFileSystemProvider } from '../../../../../platform/files/node/diskFileSystemProvider.js';
-import { IAccessibleViewService, AccessibleViewType } from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { IAccessibleViewService, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
@@ -1651,13 +1651,6 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	services.registerInstance(IGitHubReviewModel, disposables.add(services.createInstance(GitHubReviewModel)));
 	services.registerInstance(IWorkbenchHostService, { downloadText: () => assert.fail('Unexpected download'), editUserConfiguration: async () => { openUserToml++; } });
 
-	services.registerInstance(IScreenshotService, {
-		onDidChangeShortcut: Event.None, shortcutStatus: { availability: 'unchecked', global: false, activeLabel: '' }, checkShortcut: async () => { },
-		captureScreenshot: async () => assert.fail('Settings must not capture a screen'),
-		getPermission: async () => ({ status: 'browser', canOpenSystemSettings: false, applicationPath: '' }),
-		openPermissionSettings: async () => assert.fail('Browser settings have no system permission action'),
-		revealApplication: async () => assert.fail('Browser settings have no desktop application'),
-	});
 	services.registerInstance(IKeybindingService, {
 		inChordMode: false, onDidUpdateKeybindings: Event.None, getKeybindings: () => [],
 		enableKeybindingHoldMode: () => undefined, registerSchemaContribution: () => toDisposable(() => { }),
@@ -1696,6 +1689,19 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(agentsGroup.closest('.ash-tree-row')?.getAttribute('aria-expanded'), 'false');
 	assert.equal(root.querySelector('[data-settings-category-id="models"]'), null);
 	await nextTurn();
+	await configuration.updateValue(AccessibilityVerbositySettingId.ChatScreenshot, false);
+	await preferences.openSettings({ section: 'screenshot' });
+	await nextTurn();
+	assert.equal(root.querySelector('[data-settings-item-id="screenshot.section"]'), null);
+	const screenshotSettings = root.querySelector<HTMLElement>('.ash-screenshot-settings')!;
+	assert.ok(screenshotSettings);
+	assert.deepEqual([...screenshotSettings.querySelectorAll<HTMLElement>('[data-settings-item-id]')].map(row => row.dataset.settingsItemId), [ScreenshotGlobalShortcutSetting]);
+	const globalScreenshot = screenshotSettings.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+	assert.ok(globalScreenshot);
+	assert.equal(globalScreenshot.checked, false);
+	globalScreenshot.click();
+	await nextTurn();
+	assert.equal(configuration.getValue(ScreenshotGlobalShortcutSetting), true);
 	await preferences.openSettings({ section: 'accessibilitySignals' });
 	assert.equal(root.querySelector('[data-settings-category-id="accessibilitySignals"]')?.textContent, 'Accessibility Signals');
 	assert.ok(root.querySelector('[data-settings-item-id="accessibility.signalOptions.volume"]'));
@@ -1707,6 +1713,12 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.ok(root.querySelector('[data-settings-item-id="workbench.reduceMotion"]'));
 	assert.ok(root.querySelector(`[data-settings-item-id="${AccessibilityConfiguration.underlineLinks}"]`));
 	assert.ok(root.querySelector('[data-settings-item-id^="accessibility.verbosity."]'));
+	const screenshotHints = root.querySelector<HTMLInputElement>(`[data-settings-item-id="${AccessibilityVerbositySettingId.ChatScreenshot}"] input[type="checkbox"]`);
+	assert.ok(screenshotHints);
+	assert.equal(screenshotHints.checked, false);
+	screenshotHints.click();
+	await nextTurn();
+	assert.equal(configuration.getValue(AccessibilityVerbositySettingId.ChatScreenshot), true);
 	assert.equal(root.querySelector('[data-settings-item-id^="accessibility.signal"]'), null);
 	await preferences.openSettings({ section: 'terminal' });
 	assert.equal(root.querySelector('[data-settings-category-id="terminal"]')?.textContent, 'Terminal');

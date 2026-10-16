@@ -1,7 +1,8 @@
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
-import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
+import type { IResourceEditorInput } from '../../../common/editor.js';
 import './media/keybindingsEditor.css';
+import type { IKeybindingsEditorPane } from '../../../services/preferences/common/preferences.js';
 import { h, isHTMLElement, stopEvent } from '../../../../base/browser/dom.js';
 import type { IDimension } from '../../../../base/browser/dom.js';
 import { isModifierKey, StandardKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
@@ -27,7 +28,7 @@ import { type KeybindingsEditorModel, type KeyboardShortcutItem } from '../../..
 let nextRecorderHelpId = 1;
 
 /** A tab-hosted editor for searching and updating the active keybindings resource. */
-export class KeybindingsEditor extends EditorPane implements IEditorPane {
+export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorPane {
 	public static readonly ID = 'workbench.editor.keybindings';
 	public readonly id = KeybindingsEditor.ID;
 	private input: KeybindingsEditorInput | undefined;
@@ -182,6 +183,11 @@ export class KeybindingsEditor extends EditorPane implements IEditorPane {
 
 	public override focus(): void {
 		this.searchInput?.focus();
+	}
+
+	public search(filter: string): void {
+		if (this.searchInput) this.searchInput.value = filter;
+		this.focus();
 	}
 
 	private createRecorder(ownerDocument: Document): HTMLDivElement {
@@ -512,6 +518,8 @@ function filterItems(items: readonly KeyboardShortcutItem[], query: string): rea
 	const terms = normalized.split(/\s+/).filter(Boolean);
 	return items.filter(item => {
 		const searchable = `${item.commandLabel} ${item.command ?? ''} ${item.key} ${item.keyLabel} ${item.when} ${item.sourceLabel}`.toLocaleLowerCase();
-		return terms.every(term => searchable.includes(term));
+		return terms.every(term => term.startsWith('@command:')
+			? item.command?.toLocaleLowerCase() === term.slice('@command:'.length)
+			: searchable.includes(term));
 	});
 }

@@ -1,11 +1,8 @@
-import type { ScreenshotPermission } from './screenshot.js';
 import { SCREENSHOT_MAX_BYTES, SCREENSHOT_MAX_PIXELS } from '../../../../platform/native/common/native.js';
 import { isRecord } from '../../../../base/common/types.js';
 
 export const SCREENSHOT_SHORTCUT_CHANNEL = 'ash:screenshot:shortcut';
 export const SCREENSHOT_TRIGGER_CHANNEL = 'ash:screenshot:trigger';
-
-export const SCREENSHOT_PERMISSION_CHANNEL = 'ash:screenshot:permission';
 
 export const SCREENSHOT_CAPTURE_CHANNEL = 'ash:screenshot:capture';
 export const SCREENSHOT_CANCEL_CHANNEL = 'ash:screenshot:cancel';
@@ -111,26 +108,6 @@ export function validateScreenshotInitialization(value: unknown): ScreenshotInit
 			throw new TypeError('Invalid screenshot localization');
 	}
 	return value as unknown as ScreenshotInitialization;
-}
-
-export function validateScreenshotPermissionAction(value: unknown): 'status' | 'open-settings' | 'reveal-application' {
-	if (value !== 'status' && value !== 'open-settings' && value !== 'reveal-application')
-		throw new TypeError('Invalid screenshot permission action');
-	return value;
-}
-
-export function validateScreenshotPermission(value: unknown): ScreenshotPermission {
-	if (
-		!isRecord(value) ||
-		Object.keys(value).sort().join(',') !== 'applicationPath,canOpenSystemSettings,status' ||
-		!['not-determined', 'granted', 'denied', 'restricted', 'unknown', 'browser'].includes(value.status as string) ||
-		typeof value.canOpenSystemSettings !== 'boolean' ||
-		typeof value.applicationPath !== 'string' ||
-		value.applicationPath.length > 8192 ||
-		(value.canOpenSystemSettings && !value.applicationPath.startsWith('/'))
-	)
-		throw new TypeError('Invalid screenshot permission status');
-	return value as unknown as ScreenshotPermission;
 }
 
 export interface ScreenshotShortcutRequest {

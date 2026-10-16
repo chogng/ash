@@ -1,7 +1,7 @@
 {
   "ash.settings": {
     "categories.screenshot.label": "截图",
-    "categories.screenshot.description": "管理录屏权限、截图快捷键和辅助功能帮助。",
+    "categories.screenshot.description": "允许在 Ash 处于后台时使用截图快捷键。",
     "section.on": "开启",
     "section.off": "关闭",
     "trace.title": "执行轨迹",

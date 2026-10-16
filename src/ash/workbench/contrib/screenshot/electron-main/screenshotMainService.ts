@@ -3,7 +3,6 @@ import type {
 	IGlobalKeybindingOwner
 } from '../../../../platform/globalKeybindings/electron-main/globalKeybindingsMainService.js';
 import { ScreenshotCommandId } from '../common/screenshot.js';
-import type { ScreenshotPermission } from '../common/screenshot.js';
 import { shell } from 'electron';
 import { basename, dirname } from 'node:path';
 import { formatNlsMessage, localize2 } from '../../../../nls.js';
@@ -31,8 +30,6 @@ import {
 	SCREENSHOT_TRIGGER_CHANNEL,
 	validateScreenshotShortcutRequest,
 	type ScreenshotShortcutRequest,
-	SCREENSHOT_PERMISSION_CHANNEL,
-	validateScreenshotPermissionAction,
 	SCREENSHOT_CAPTURE_CHANNEL,
 	SCREENSHOT_CANCEL_CHANNEL,
 	SCREENSHOT_COMPLETE_CHANNEL,
@@ -131,17 +128,6 @@ export class ScreenshotMainService extends Disposable {
 							!!request.accelerator && this.shortcutOwner.check(request.accelerator, ScreenshotCommandId);
 					}
 					return { available, activeLabel: this.shortcutOwner.getBinding()?.userSettingsLabel ?? '' };
-				}
-			},
-			{
-				channel: SCREENSHOT_PERMISSION_CHANNEL,
-				validate: validateScreenshotPermissionAction,
-				invoke: async (value) => {
-					if (value === 'status') return this.getPermission();
-					if (!this.getPermission().canOpenSystemSettings)
-						throw new Error('System screen capture settings are unavailable');
-					if (value === 'open-settings') await this.openPermissionSettings();
-					else shell.showItemInFolder(this.getPermission().applicationPath);
 				}
 			},
 			{
@@ -330,15 +316,6 @@ export class ScreenshotMainService extends Disposable {
 		capture.views[index]?.focus();
 	}
 
-	private getPermission(): ScreenshotPermission {
-		return {
-			status: process.platform === 'darwin' ? systemPreferences.getMediaAccessStatus('screen') : 'granted',
-			canOpenSystemSettings: process.platform === 'darwin',
-			applicationPath:
-				process.platform === 'darwin' ? dirname(dirname(dirname(app.getPath('exe')))) : app.getPath('exe')
-		};
-	}
-
 	private async openPermissionSettings(): Promise<void> {
 		await shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
 	}
@@ -352,7 +329,9 @@ export class ScreenshotMainService extends Disposable {
 	private async showPermissionGuide(capture: Capture): Promise<void> {
 		if (this.capture !== capture || this.owner.isDestroyed()) return;
 		// TCC identifies the running bundle, which is Electron.app for an unpackaged development launch.
-		const bundlePath = this.getPermission().applicationPath;
+		const bundlePath = process.platform === 'darwin'
+			? dirname(dirname(dirname(app.getPath('exe'))))
+			: app.getPath('exe');
 		const bundleName = basename(bundlePath);
 		const messages = this.options.localization().bundles.ash;
 		const controller = new AbortController();

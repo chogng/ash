@@ -1,3 +1,4 @@
+import type { IEditorPane } from '../../../common/editor.js';
 import { ConfigurationTarget } from '../../../../platform/configuration/common/configuration.js';
 import type { Event } from '../../../../base/common/event.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
@@ -140,12 +141,21 @@ export function validateSettingsEditorOptions(options: IOpenSettingsOptions = {}
 	return options;
 }
 
+/** Initial filter for the graphical Keyboard Shortcuts editor. */
+export interface IOpenKeybindingsEditorOptions {
+	readonly query?: string;
+}
+
+export interface IKeybindingsEditorPane extends IEditorPane {
+	search(filter: string): void;
+}
+
 /** Workbench-level entry point for opening Preferences surfaces. */
 export interface IPreferencesService {
 	/** Opens a settings page or reveals a section in its containing page. */
 	openSettings(options?: IOpenSettingsOptions): Promise<void>;
 	openUserSettings(options?: IOpenSettingsOptions): Promise<void>;
-	openGlobalKeybindingSettings(textual: boolean): Promise<void>;
+	openGlobalKeybindingSettings(textual: boolean, options?: IOpenKeybindingsEditorOptions): Promise<void>;
 }
 
 export const IPreferencesService = createServiceIdentifier<IPreferencesService>('preferencesService');

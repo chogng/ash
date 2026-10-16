@@ -102,10 +102,10 @@ export const SettingsNavigation = [
 			{
 				id: 'screenshot',
 				label: localize({ bundle: 'ash.settings', key: 'categories.screenshot.label' }, 'Screenshot'),
-				description: localize({ bundle: 'ash.settings', key: 'categories.screenshot.description' }, 'Manage screen capture permission, keyboard shortcuts, and accessibility help.'),
-				keywords: ['screenshot', 'screen capture', 'permission', 'shortcut'],
+				description: localize({ bundle: 'ash.settings', key: 'categories.screenshot.description' }, 'Allow the screenshot shortcut to work while Ash is in the background.'),
+				keywords: ['screenshot', 'screen capture', 'background', 'global', 'shortcut'],
 				presentation: 'general',
-				groups: [{ id: 'screenshot-preferences', label: localize('screenshot.settings.title', 'Screen capture'), description: localize('screenshot.settings.description', 'Check permission for the application that is running and configure the screenshot shortcut.'), settings: ['screenshot.*'] }],
+				groups: [{ id: 'screenshot-preferences', label: localize({ bundle: 'ash.settings', key: 'categories.screenshot.label' }, 'Screenshot'), description: '', settings: ['screenshot.*'] }],
 			},
 			{
 				id: 'appearance',

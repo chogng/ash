@@ -66,6 +66,8 @@ test('Keyboard Shortcuts opens as one Editor tab and reconciles resource rows in
 	ownerDocument.body.replaceChildren();
 	let conflictingCommandExecutions = 0;
 	disposables.add(CommandsRegistry.register('test.shortcuts.alpha', () => undefined));
+	disposables.add(CommandsRegistry.register('workbench.action.chat.attachScreenshot', () => undefined));
+	disposables.add(CommandsRegistry.register('workbench.action.chat.attachScreenshot.other', () => undefined));
 	disposables.add(CommandsRegistry.register('test.shortcuts.beta', () => undefined));
 	disposables.add(CommandsRegistry.register('test.shortcuts.conflict', () => { conflictingCommandExecutions += 1; }));
 	disposables.add(KeybindingsRegistry.registerKeybindingRule({
@@ -125,12 +127,17 @@ test('Keyboard Shortcuts opens as one Editor tab and reconciles resource rows in
 	assert.ok(modalHost);
 	assert.equal(modalHost.hidden, false);
 
-	await preferences.openGlobalKeybindingSettings(false);
+	await preferences.openGlobalKeybindingSettings(false, { query: '@command:workbench.action.chat.attachScreenshot' });
+	assert.equal(ownerDocument.querySelectorAll('.ash-keybindings-row').length, 1);
+	assert.ok(shortcutRow(ownerDocument, 'workbench.action.chat.attachScreenshot'));
+	assert.equal(ownerDocument.activeElement, ownerDocument.querySelector('.ash-keybindings-search input'));
 	assert.ok(editor.activeInput instanceof KeybindingsEditorInput);
 	const openedInput = editor.activeInput;
 	const openedModel = await openedInput.resolve();
 	const openedPane = editor.activePane;
-	await preferences.openGlobalKeybindingSettings(false);
+	await preferences.openGlobalKeybindingSettings(false, { query: '@command:test.shortcuts.beta' });
+	assert.equal(ownerDocument.querySelectorAll('.ash-keybindings-row').length, 1);
+	assert.ok(shortcutRow(ownerDocument, 'test.shortcuts.beta'));
 	assert.ok(editor.activeInput instanceof EditorInput, 'The shortcut input owns the resolved model lifetime');
 	assert.ok(editor.activeInput === openedInput, 'Duplicate opens retain the live input identity');
 	assert.ok(await openedInput.resolve() === openedModel, 'Duplicate opens retain the resolved model');
@@ -200,6 +207,13 @@ test('Keyboard Shortcuts opens as one Editor tab and reconciles resource rows in
 	assert.ok(splitGroup !== sourceGroup);
 	assert.ok(sourceGroup.inputs[0] === openedInput && splitGroup.inputs[0] === openedInput, 'Both real group records retain the live input passed to the split');
 	assert.ok(await (splitGroup.inputs[0] as InstanceType<typeof KeybindingsEditorInput>).resolve() === openedModel);
+	const splitSearches = new Map([...ownerDocument.querySelectorAll<HTMLInputElement>('.ash-keybindings-search input')].map(input => [input, input.value]));
+	await preferences.openGlobalKeybindingSettings(false, { query: '@command:test.shortcuts.beta' });
+	assert.equal(splitSearches.size, 2);
+	for (const [input, previousValue] of splitSearches) {
+		assert.equal(input.value, input === ownerDocument.activeElement ? '@command:test.shortcuts.beta' : previousValue);
+	}
+	await preferences.openGlobalKeybindingSettings(false, { query: '' });
 	assert.equal(await sourceGroup.closeEditor(sourceGroup.inputs[0]!), true);
 	assert.deepEqual([openedInput.isDisposed, openedModel.isDisposed(), modelDisposals], [false, false, 0]);
 	await preferences.openGlobalKeybindingSettings(false);

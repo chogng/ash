@@ -4,7 +4,7 @@ import { VSBuffer } from '../../../../base/common/buffer.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IHostService } from '../../../services/host/browser/host.js';
-import { IScreenshotService, type ScreenshotPermission, type ScreenshotShortcutStatus } from '../common/screenshot.js';
+import { IScreenshotService, type ScreenshotShortcutStatus } from '../common/screenshot.js';
 import { captureBrowserScreenshot } from './screenshotEditor.js';
 
 export class BrowserScreenshotService extends Disposable implements IScreenshotService {
@@ -17,18 +17,6 @@ export class BrowserScreenshotService extends Disposable implements IScreenshotS
 		@IConfigurationService private readonly configuration: IConfigurationService
 	) {
 		super();
-	}
-
-	public async getPermission(): Promise<ScreenshotPermission> {
-		return { status: 'browser', canOpenSystemSettings: false, applicationPath: '' };
-	}
-
-	public async openPermissionSettings(): Promise<void> {
-		throw new Error('Screen capture permission is managed by the browser');
-	}
-
-	public async revealApplication(): Promise<void> {
-		throw new Error('A browser host has no desktop application to reveal');
 	}
 
 	public async captureScreenshot(signal: AbortSignal): Promise<VSBuffer | undefined> {

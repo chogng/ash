@@ -10,7 +10,7 @@ import { Registry } from '../../../../platform/registry/common/platform.js';
 import { localize } from '../../../../nls.js';
 import { IEditorService } from '../../editor/common/editorService.js';
 import { IFileTextModelService } from '../../textmodelResolver/common/textModelResourceService.js';
-import { validateSettingsEditorOptions, type IOpenSettingsOptions, type IPreferencesService } from '../common/preferences.js';
+import { validateSettingsEditorOptions, type IOpenSettingsOptions, type IOpenKeybindingsEditorOptions, type IKeybindingsEditorPane, type IPreferencesService } from '../common/preferences.js';
 import { SettingsEditorInput, createUserSettingsEditorInput } from '../common/settingsEditorInput.js';
 import { createKeybindingsJsonEditorInput, isKeybindingsEditorInput, KeybindingsEditorInput } from './keybindingsEditorInput.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -89,7 +89,7 @@ export class PreferencesService extends Disposable implements IPreferencesServic
 		await this.editorService.openEditor(input, { pinned: true, selection });
 	}
 
-	public async openGlobalKeybindingSettings(textual: boolean): Promise<void> {
+	public async openGlobalKeybindingSettings(textual: boolean, options?: IOpenKeybindingsEditorOptions): Promise<void> {
 		if (!textual) {
 			const activeEditor = this.editorService.activeEditor;
 			let input = activeEditor && isKeybindingsEditorInput(activeEditor)
@@ -101,6 +101,12 @@ export class PreferencesService extends Disposable implements IPreferencesServic
 			this.keybindingsEditorInput = new WeakRef(input);
 			using reference = input.acquire();
 			await this.editorService.openEditor(input, { pinned: true });
+			if (options?.query !== undefined) {
+				// The focused pane is the opened target even when split panes share the same input.
+				this.editorService.focusActiveEditor();
+				const pane = this.editorService.visibleEditorPanes.find(pane => pane.id === 'workbench.editor.keybindings' && pane.hasFocus()) as IKeybindingsEditorPane | undefined;
+				pane?.search(options.query);
+			}
 			return;
 		}
 		const resource = this.profiles.currentProfile.keybindingsResource;

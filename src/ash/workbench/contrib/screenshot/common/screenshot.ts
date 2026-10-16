@@ -3,13 +3,6 @@ import type { VSBuffer } from '../../../../base/common/buffer.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { localize } from '../../../../nls.js';
 
-/** Current local screen permission and the application identified by the OS. */
-export interface ScreenshotPermission {
-	readonly status: 'not-determined' | 'granted' | 'denied' | 'restricted' | 'unknown' | 'browser';
-	readonly canOpenSystemSettings: boolean;
-	readonly applicationPath: string;
-}
-
 export const ScreenshotGlobalShortcutSetting = 'screenshot.globalShortcut';
 export const ScreenshotCommandId = 'workbench.action.chat.attachScreenshot';
 
@@ -25,10 +18,6 @@ export interface IScreenshotService {
 	readonly shortcutStatus: ScreenshotShortcutStatus;
 	checkShortcut(): Promise<void>;
 	captureScreenshot(signal: AbortSignal): Promise<VSBuffer | undefined>;
-	/** Live local OS state; never saved as a workbench setting. */
-	getPermission(): Promise<ScreenshotPermission>;
-	openPermissionSettings(): Promise<void>;
-	revealApplication(): Promise<void>;
 }
 
 export const IScreenshotService = createServiceIdentifier<IScreenshotService>('screenshotService');
