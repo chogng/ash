@@ -4,10 +4,178 @@ use super::server;
 use ash_automation::AutomationStore;
 use ash_protocol::AutomationRun;
 use ash_protocol::AutomationRunStatus;
+use ash_protocol::AutomationSession;
 use serde_json::json;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
+
+fn create_run(
+    store: &AutomationStore,
+    directory: &std::path::Path,
+    session: AutomationSession,
+) -> AutomationRun {
+    let now = ash_automation::now().unwrap();
+    let request: ash_automation::AutomationWrite = serde_json::from_value(json!({
+        "command_id":"create", "id":"test", "expected_revision":0, "status":"paused",
+        "definition":{"title":"Test", "prompt":"Say hello", "directory":directory,
+            "session":session, "schedule":{"type":"interval", "anchor":0, "minutes":60}}
+    }))
+    .unwrap();
+    store.write(&request, now).unwrap();
+    store.run_now("test", "manual", now).unwrap()
+}
+
+#[test]
+fn automation_session_deletion_stops_runs_even_before_first_observation() {
+    for recorded in [false, true] {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Arc::new(AutomationStore::open(&dir.path().join("state.db")).unwrap());
+        let server =
+            super::server_with_model(Arc::new(super::AppServerInteractiveModel::default()))
+                .with_tool_service(
+                    Arc::new(super::AppServerInteractiveTool),
+                    Arc::new(super::ShellTestPolicy),
+                )
+                .with_automation_store(Arc::clone(&store));
+        let mut connection = server.connection();
+        initialize(&server, &mut connection);
+        let mut observed = create_run(&store, dir.path(), AutomationSession::New);
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while observed.status != AutomationRunStatus::NeedsInput && Instant::now() < deadline {
+            observed = server
+                .advance_automation_run(&observed, ash_automation::now().unwrap())
+                .unwrap();
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(
+            observed.status,
+            AutomationRunStatus::NeedsInput,
+            "{observed:?}"
+        );
+        if recorded {
+            store.observe(&observed).unwrap();
+        }
+        let deleted = call(
+            &server,
+            &mut connection,
+            json!({"jsonrpc":"2.0", "id":2, "method":"session/request", "params":{
+                "commandId":"delete", "sessionId":observed.session_id,
+                "request":{"type":"delete"}
+            }}),
+        );
+        assert_eq!(deleted["result"]["type"], "deleted", "{deleted}");
+        assert!(store.active_runs().unwrap().is_empty());
+        let stopped = store.runs("test", 50).unwrap().remove(0);
+        assert_eq!(stopped.status, AutomationRunStatus::Stopped);
+        assert!(stopped.finished_at.is_some());
+        // A scheduler observation taken before deletion cannot revive the terminal run.
+        store.observe(&observed).unwrap();
+        assert!(store.active_runs().unwrap().is_empty());
+        assert_eq!(store.stop_run(&stopped.id).unwrap(), stopped);
+        let next = store
+            .run_now("test", "next", ash_automation::now().unwrap())
+            .unwrap();
+        let stopping = store.stop_run(&next.id).unwrap();
+        let stopped = server
+            .advance_automation_run(&stopping, ash_automation::now().unwrap())
+            .unwrap();
+        store.observe(&stopped).unwrap();
+        let deleted = call(
+            &server,
+            &mut connection,
+            json!({"jsonrpc":"2.0", "id":3, "method":"automation/delete",
+                "params":{"id":"test", "expectedRevision":1}}),
+        );
+        assert!(deleted.get("error").is_none(), "{deleted}");
+    }
+}
+
+#[test]
+fn automation_session_deletion_stops_pending_continuations() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = Arc::new(AutomationStore::open(&dir.path().join("state.db")).unwrap());
+    let server = server().with_automation_store(Arc::clone(&store));
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let session = super::create_session(&server, &mut connection, 2, "target");
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+    let run = create_run(
+        &store,
+        dir.path(),
+        AutomationSession::Continue {
+            session_id: ash_protocol::SessionId::new(session_id).unwrap(),
+            thread_id: ash_protocol::ThreadId::new(session_id).unwrap(),
+        },
+    );
+    let now = ash_automation::now().unwrap();
+    let mut unrelated_definition = run.definition.clone();
+    unrelated_definition.session = AutomationSession::New;
+    store
+        .write(
+            &ash_automation::AutomationWrite {
+                command_id: "create-unrelated".into(),
+                id: "unrelated".into(),
+                expected_revision: 0,
+                definition: unrelated_definition,
+                status: ash_protocol::AutomationStatus::Paused,
+            },
+            now,
+        )
+        .unwrap();
+    let unrelated = store.run_now("unrelated", "unrelated", now).unwrap();
+    server.drain_notifications(&mut connection);
+    let deleted = call(
+        &server,
+        &mut connection,
+        json!({"jsonrpc":"2.0", "id":3, "method":"session/request", "params":{
+            "commandId":"delete", "sessionId":session_id, "request":{"type":"delete"}
+        }}),
+    );
+    assert_eq!(deleted["result"]["type"], "deleted", "{deleted}");
+    assert_eq!(store.active_runs().unwrap(), vec![unrelated]);
+    assert!(
+        server
+            .drain_notifications(&mut connection)
+            .iter()
+            .any(|notification| notification.contains("\"method\":\"automation/changed\""))
+    );
+    assert_eq!(
+        store.stop_run(&run.id).unwrap().status,
+        AutomationRunStatus::Stopped
+    );
+}
+
+#[test]
+fn automation_missing_target_is_terminal_including_after_a_stop_request() {
+    for stopping in [false, true] {
+        let dir = tempfile::tempdir().unwrap();
+        let store = AutomationStore::open(&dir.path().join("state.db")).unwrap();
+        let server = server();
+        let mut run = create_run(
+            &store,
+            dir.path(),
+            AutomationSession::Continue {
+                session_id: ash_protocol::SessionId::new("deleted").unwrap(),
+                thread_id: ash_protocol::ThreadId::new("deleted").unwrap(),
+            },
+        );
+        // Also exercise a run whose target was already observed before it disappeared.
+        if stopping {
+            run.session_id = Some(ash_protocol::SessionId::new("deleted").unwrap());
+            run.thread_id = Some(ash_protocol::ThreadId::new("deleted").unwrap());
+            store.observe(&run).unwrap();
+            run = store.stop_run(&run.id).unwrap();
+        }
+        let now = ash_automation::now().unwrap();
+        let observed = server.advance_automation_run(&run, now).unwrap();
+        assert_eq!(observed.status, AutomationRunStatus::Stopped);
+        assert_eq!(observed.finished_at, Some(now));
+        store.observe(&observed).unwrap();
+        assert!(store.active_runs().unwrap().is_empty());
+        store.run_now("test", "next", now).unwrap();
+    }
+}
 
 #[test]
 fn automation_preview_validates_rules_without_creating_plans_or_runs() {

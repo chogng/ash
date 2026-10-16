@@ -84,6 +84,44 @@ fn overlapping_and_missed_repetitions_are_recorded_without_starting_more_runs() 
 }
 
 #[test]
+fn active_runs_remain_visible_after_skipped_runs_fill_the_history_page() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = AutomationStore::open(&dir.path().join("state.db")).unwrap();
+    store.write(&request(dir.path()), time(0)).unwrap();
+    store.poll(time(59_000), time(60_000)).unwrap();
+    let mut active = store.active_runs().unwrap().remove(0);
+    for minute in 2..=52 {
+        store
+            .poll(time(minute * 60_000 - 1), time(minute * 60_000))
+            .unwrap();
+    }
+    for status in [
+        AutomationRunStatus::Pending,
+        AutomationRunStatus::Running,
+        AutomationRunStatus::NeedsInput,
+        AutomationRunStatus::Stopping,
+    ] {
+        active.status = status;
+        store.observe(&active).unwrap();
+        let page = store.runs("daily", 50).unwrap();
+        assert_eq!(page.len(), 51);
+        assert_eq!(page.last(), Some(&active));
+        assert!(
+            page[..50]
+                .iter()
+                .all(|run| { run.status == AutomationRunStatus::Skipped && run.id != active.id })
+        );
+    }
+    active.status = AutomationRunStatus::Stopped;
+    active.finished_at = Some(time(53 * 60_000));
+    store.observe(&active).unwrap();
+    let page = store.runs("daily", 50).unwrap();
+    assert_eq!(page.len(), 50);
+    assert!(page.iter().all(|run| run.id != active.id));
+    assert!(store.active_runs().unwrap().is_empty());
+}
+
+#[test]
 fn overdue_once_runs_after_restart_and_does_not_repeat() {
     let dir = tempfile::tempdir().unwrap();
     let store = AutomationStore::open(&dir.path().join("state.db")).unwrap();

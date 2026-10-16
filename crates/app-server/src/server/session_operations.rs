@@ -542,6 +542,7 @@ impl AppServer {
             )
             .map_err(core_error)?;
         self.notify_session_end(&session_id);
+        self.stop_session_automations(&session_id)?;
         if let Some(queue) = &self.queue {
             queue.delete_session(&session_id).map_err(|_| {
                 RpcError::new(

@@ -1,4 +1,7 @@
 use super::AppServer;
+use super::RpcError;
+use super::automation_operations::error as automation_error;
+use super::core_error;
 use super::operations::{ThreadMutation, TurnModelSelection};
 use ash_app_server_protocol::protocol::turn::InputItem;
 use ash_protocol::AutomationRun;
@@ -6,12 +9,54 @@ use ash_protocol::AutomationRunStatus;
 use ash_protocol::AutomationSession;
 use ash_protocol::CommandId;
 use ash_protocol::ContentDigest;
+use ash_protocol::SessionId;
 use ash_protocol::TurnStatus;
 use ash_protocol::UnixMillis;
 use core_api::AgentRuntime;
+use core_api::CoreError;
 use core_api::StartThreadRequest;
 
 impl AppServer {
+    /// Called after archiving has committed the Session's terminal events and before deleting
+    /// its Threads. Finish durable runs first so concurrent observations cannot revive them.
+    pub(super) fn stop_session_automations(&self, session_id: &SessionId) -> Result<(), RpcError> {
+        let Some(store) = self.automation.as_deref() else {
+            return Ok(());
+        };
+        let now = ash_automation::now().map_err(automation_error)?;
+        let mut changed = false;
+        for mut run in store.active_runs().map_err(automation_error)? {
+            let target_session = match &run.session_id {
+                Some(id) => Some(id.clone()),
+                None => match &run.definition.session {
+                    AutomationSession::Continue { session_id, .. } => Some(session_id.clone()),
+                    AutomationSession::New => {
+                        // Execution may have created the Session before the scheduler saved its
+                        // first observation. Resolve the same durable creation receipt.
+                        let command = command_id("session", &run.id)
+                            .map_err(|error| core_error(CoreError::Execution(error)))?;
+                        self.agent_runtime()
+                            .read_started_thread(&command)
+                            .map_err(core_error)?
+                            .map(|thread| thread.session_id)
+                    }
+                },
+            };
+            if target_session.as_ref() != Some(session_id) {
+                continue;
+            }
+            run.status = AutomationRunStatus::Stopped;
+            run.finished_at = Some(now);
+            run.message = None;
+            store.observe(&run).map_err(automation_error)?;
+            changed = true;
+        }
+        if changed {
+            self.updates.publish_automation_changed();
+        }
+        Ok(())
+    }
+
     /// Advances one durable automation run through the existing Session and Turn execution path.
     /// The caller supplies a directory-scoped server and retains the original run identity.
     pub fn advance_automation_run(
@@ -74,8 +119,18 @@ impl AppServer {
                     self.agent_runtime().read_thread(thread_id)
                 }
             },
-        }
-        .map_err(|error| error.to_string())?;
+        };
+        let snapshot = match snapshot {
+            Ok(snapshot) => snapshot,
+            // A deleted target cannot make progress or be interrupted. It is a terminal
+            // cancellation, whereas storage/transport errors still require reconciliation.
+            Err(CoreError::NotFound(_)) => {
+                observed.status = AutomationRunStatus::Stopped;
+                observed.finished_at = Some(now);
+                return Ok(observed);
+            }
+            Err(error) => return Err(error.to_string()),
+        };
         if let AutomationSession::Continue { session_id, .. } = &run.definition.session {
             if session_id != &snapshot.session_id {
                 return Err("Automation session and thread do not match".into());

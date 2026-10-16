@@ -150,7 +150,9 @@ automation 通过窄的执行请求和结果契约与现有 Agent 能力协作�
 
 Agents Window 从 Activity Bar 的 **Automations** 入口（`clockface` / `clockfaceFilled`）执行 `sessionsView.manageAutomations`，打开占满内容区域的独立管理视图，隐藏 Chat 侧栏和各面板，退出后恢复原布局。创建和编辑在对话框中进行；任务详情和运行结果留在 Automations 中，只有显式“打开对话”才切换到 Chat。UI contribution 由 `automationsView.ts` 持有，`sessions.contribution.ts` 在 `BlockRestore` 阶段注册，自动化 contribution 仅注册服务。启动恢复底层会话和布局时保留 Custom View，用户显式导航时关闭；前进、后退可在两者间访问。后端通过 `contracts.automation.version = 1` 发布能力；没有该能力的宿主不显示管理入口。计划明确保存执行目录和新建或继续对话的目标，不随活动窗口改变。新建表单从当前 Sessions 对话捕获本地执行目录；运行记录通过当前 Agents Window 的会话导航打开。共享产品契约位于 `workbench/contrib/chat/common/automations`，后端领域接口与 App Server adapter 留在 platform；Rust 后台调度、持久化和执行不依赖管理窗口的存活。
 
-固定间隔最多为 525600 分钟；每个 profile 最多保存 1000 个计划。历史每次最多读取 100 条，界面按计划读取最近 50 条。计划暂停与停止当前运行分开；删除仍有运行的计划会返回冲突。删除的计划身份不可重新使用，已有运行历史仍保留在存储中。
+固定间隔最多为 525600 分钟；每个 profile 最多保存 1000 个计划。已结束的历史每次最多读取 100 条，界面按计划读取最近 50 条；活动运行独立于历史上限查询，并在同一快照中一起返回，避免被重叠调度产生的跳过记录挤出。计划暂停与停止当前运行分开；删除仍有运行的计划会返回冲突。删除的计划身份不可重新使用，已有运行历史仍保留在存储中。
+
+删除关联 Session 时，App Server 先归档并中断执行，再终结关联的活动运行，最后清除 Thread 历史；尚未写入首次运行观察的 Session 通过稳定创建命令查找。调度核对中确认目标 Thread 已不存在时，将运行记为已停止；其他读取错误保留原身份等待重试。
 
 当前夏令时策略是跳过不存在的本地时间，并选择重复本地时间的第一次；夏令时空缺本身不另外生成运行记录。关机或长时间休眠错过的周期触发合并为一条跳过记录；一次性计划恢复后补执行。日期库仅在 automation 日历计算和 TUI 绝对日期展示中使用，不改变 Agent loop 的计时类型。
 

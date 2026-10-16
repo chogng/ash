@@ -244,14 +244,24 @@ impl AutomationStore {
         Ok(())
     }
 
+    /// Returns recent terminal history plus the active run, even when it predates that page.
     pub fn runs(&self, id: &str, limit: u32) -> Result<Vec<AutomationRun>, AutomationError> {
         let connection = self
             .connection
             .lock()
             .map_err(|_| AutomationError::LockPoisoned)?;
         let mut statement = connection.prepare(
-            "SELECT record FROM automation_runs WHERE automation_id = ?1
-            ORDER BY created_at DESC, id DESC LIMIT ?2",
+            "WITH history AS (
+               SELECT record, created_at, id FROM automation_runs
+               WHERE automation_id = ?1 AND active = 0
+               ORDER BY created_at DESC, id DESC LIMIT ?2
+             )
+             SELECT record FROM (
+               SELECT record, created_at, id FROM automation_runs
+               WHERE automation_id = ?1 AND active = 1
+               UNION ALL
+               SELECT record, created_at, id FROM history
+             ) ORDER BY created_at DESC, id DESC",
         )?;
         let records = statement.query_map(params![id, limit.clamp(1, 100)], |row| {
             row.get::<_, String>(0)

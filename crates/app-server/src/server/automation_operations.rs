@@ -111,7 +111,7 @@ impl AppServer {
     }
 }
 
-fn error(error: AutomationError) -> RpcError {
+pub(super) fn error(error: AutomationError) -> RpcError {
     match error {
         AutomationError::Invalid(_) => RpcError::new(-32602, AppServerErrorName::InvalidParams),
         AutomationError::NotFound => RpcError::new(-32101, AppServerErrorName::AutomationNotFound),
