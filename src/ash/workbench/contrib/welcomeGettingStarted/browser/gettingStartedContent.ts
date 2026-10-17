@@ -251,7 +251,7 @@ export class GettingStarted extends Disposable {
 				actions: [{
 					id: 'gettingStarted.removeRecent',
 					label: localize('gettingStarted.removeRecent', 'Remove {0} from Recents', project.name),
-					tooltip: localize('gettingStarted.removeRecentTooltip', 'Remove from Recents'),
+					tooltip: localize('gettingStarted.removeRecentTooltip', 'Remove'),
 					icon: Lxicon.close,
 					enabled: true,
 					run: () => this.run(onRemove),

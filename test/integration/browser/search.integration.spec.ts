@@ -1,5 +1,25 @@
 import { expect, test } from '@playwright/test';
 
+test('Search ActionBar centers icon-only actions and keeps text actions visible', async ({ page }) => {
+	await page.goto('/search.html');
+	const replaceAll = page.getByRole('button', { name: 'Replace All', exact: true });
+	const preserveCase = page.getByRole('button', { name: 'Preserve Case', exact: true });
+	for (const theme of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
+		await page.evaluate(theme => window.ashSearchIntegration.setTheme(theme), theme);
+		for (const width of [180, 400]) {
+			await page.evaluate(width => window.ashSearchIntegration.setWidth(width), width);
+			const button = (await replaceAll.boundingBox())!;
+			const icon = (await replaceAll.locator('svg').boundingBox())!;
+			expect(icon.x + icon.width / 2).toBeCloseTo(button.x + button.width / 2, 2);
+			expect(icon.y + icon.height / 2).toBeCloseTo(button.y + button.height / 2, 2);
+			await expect(preserveCase.locator('.ash-action-label-text')).toBeVisible();
+			await expect(preserveCase).toHaveText('AB');
+		}
+	}
+	await preserveCase.click();
+	await expect(preserveCase).toHaveAttribute('aria-pressed', 'true');
+});
+
 test('Search reserves its result viewport when expanded inputs and filters compete with another pane', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));

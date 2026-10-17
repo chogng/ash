@@ -160,8 +160,6 @@
 }
 
 .ash-getting-started-recent-item {
-	/* Extend the hover target while keeping labels aligned with the cards. */
-	margin-inline: calc(-1 * var(--ash-spacing-size80));
 	position: relative;
 	min-width: 0;
 	border-radius: var(--ash-cornerRadius-small);
@@ -178,10 +176,12 @@
 	display: grid;
 	box-sizing: border-box;
 	width: 100%;
+	height: var(--ash-list-rowHeight);
 	min-width: 0;
-	padding: var(--ash-spacing-size80);
+	padding: 0 var(--ash-spacing-size80);
 	border: 0;
 	border-radius: inherit;
+	align-items: center;
 	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 	gap: var(--ash-spacing-size120);
 	color: var(--ash-foreground);
@@ -204,13 +204,14 @@ button.ash-getting-started-recent-content:focus-visible {
 }
 
 .ash-getting-started-recent-actions {
+	/* Fit the action inside the compact row's focus stroke. */
+	--ash-toolbar-actionSize: 20px;
 	position: absolute;
-	inset-inline-end: var(--ash-spacing-size20);
-	top: var(--ash-spacing-size20);
-	bottom: var(--ash-spacing-size20);
+	inset-inline-end: var(--ash-strokeThickness);
+	top: var(--ash-strokeThickness);
+	bottom: var(--ash-strokeThickness);
 	display: flex;
 	align-items: center;
-	padding-inline: var(--ash-spacing-size40);
 	opacity: 0;
 	pointer-events: none;
 	background: var(--ash-editor-background);

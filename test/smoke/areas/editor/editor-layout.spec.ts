@@ -722,7 +722,7 @@ test.describe('welcome brand', () => {
 	});
 });
 
-test('recent projects align with the welcome action cards', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, workbench }) => {
+test('recent projects align with the welcome action cards', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, workbench }, testInfo) => {
 	const page = workbench.page;
 	await page.keyboard.press('F1');
 	await page.locator('.ash-quick-pick').getByRole('combobox').fill('Welcome');
@@ -731,19 +731,41 @@ test('recent projects align with the welcome action cards', { tag: ['@electron-u
 	const recent = welcome.locator('.ash-getting-started-recent');
 	await expect(recent).toBeVisible();
 	await expect(recent.locator('.ash-getting-started-recent-item')).toHaveCount(1);
-	const [leftCard, rightCard, heading, name, path] = await Promise.all([
+	const [leftCard, rightCard, heading, row, name, path] = await Promise.all([
 		welcome.locator('.ash-getting-started-card').first().boundingBox(),
 		welcome.locator('.ash-getting-started-card').nth(1).boundingBox(),
 		recent.locator('h2').boundingBox(),
+		recent.locator('.ash-getting-started-recent-item').boundingBox(),
 		recent.locator('.ash-getting-started-recent-name').boundingBox(),
 		recent.locator('.ash-getting-started-recent-path').boundingBox(),
 	]);
-	expect(leftCard && rightCard && heading && name && path ? {
+	expect(leftCard && rightCard && heading && row && name && path ? {
 		headingLeft: Math.round(heading.x - leftCard.x),
+		rowLeft: Math.round(row.x - leftCard.x),
+		rowRight: Math.round(row.x + row.width - rightCard.x - rightCard.width),
 		nameLeft: Math.round(name.x - leftCard.x),
 		pathRight: Math.round(path.x + path.width - rightCard.x - rightCard.width),
-	} : null).toEqual({ headingLeft: 0, nameLeft: 0, pathRight: 0 });
+	} : null).toEqual({ headingLeft: 0, rowLeft: 0, rowRight: 0, nameLeft: 8, pathRight: -8 });
 	await expect(recent.locator('.ash-getting-started-recent-path')).toHaveCSS('text-align', 'right');
+	const item = recent.locator('.ash-getting-started-recent-item');
+	const remove = item.locator('.ash-getting-started-recent-actions button');
+	for (const state of ['hover', 'focus'] as const) {
+		if (state === 'hover') await item.hover();
+		else await remove.focus();
+		await expect(item.locator('.ash-getting-started-recent-actions')).toHaveCSS('opacity', '1');
+		const rowBox = (await item.boundingBox())!;
+		const buttonBox = (await remove.boundingBox())!;
+		const iconBox = (await remove.locator('svg').boundingBox())!;
+		expect(rowBox.height).toBe(22);
+		expect(buttonBox.width).toBe(20);
+		expect(buttonBox.height).toBe(20);
+		expect(iconBox.x + iconBox.width / 2).toBeCloseTo(buttonBox.x + buttonBox.width / 2, 2);
+		expect(iconBox.y + iconBox.height / 2).toBeCloseTo(buttonBox.y + buttonBox.height / 2, 2);
+		expect(rowBox.x + rowBox.width - buttonBox.x - buttonBox.width).toBeCloseTo(1, 2);
+		expect(rowBox.x).toBe(leftCard!.x);
+		expect(rowBox.x + rowBox.width).toBe(rightCard!.x + rightCard!.width);
+		await item.screenshot({ path: testInfo.outputPath(`recents-${state}.png`) });
+	}
 });
 
 test("editor layout remains valid across workbench window sizes", async ({ driver, workbench }) => {
