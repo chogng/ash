@@ -75,6 +75,7 @@ export default defineConfig({
 				themes: resolve(import.meta.dirname, "themes.html"),
 				themeEditor: resolve(import.meta.dirname, 'themeEditor.html'),
 				webTransport: resolve(import.meta.dirname, 'webTransport.html'),
+				appServerDecode: resolve(import.meta.dirname, 'appServerDecode.html'),
 				files: resolve(import.meta.dirname, 'files.html'),
 				fileMenus: resolve(import.meta.dirname, 'fileMenus.html'),
 				dialog: resolve(import.meta.dirname, "dialog.html"),

@@ -1,3 +1,5 @@
+import type { VSBuffer } from '../../../base/common/buffer.js';
+
 export const WEB_APP_SERVER_PROTOCOL_VERSION = 1;
 export const WEB_APP_SERVER_CONNECT_EVENT = "ash:app-server:connect";
 export const WEB_APP_SERVER_CONNECTED_EVENT = "ash:app-server:connected";
@@ -10,8 +12,18 @@ export const WEB_APP_SERVER_CLOSED_EVENT = "ash:app-server:closed";
  * length metadata. It lets the protocol client reuse that boundary's check.
  */
 export class AppServerFrame {
+	/** Set synchronously when consumption continues in a Worker. Completion always
+	 * resolves, including connection retirement; protocol failures travel via close.
+	 */
+	public consumed: Promise<void> | undefined;
 	constructor(readonly frame: string, readonly byteLength: number) { }
 }
+
+// Keep read credit local to this carrier, without changing ISocket or retaining
+// received buffers after their consumer and ACK callback release them.
+const readConsumption = new WeakMap<VSBuffer, Promise<void>>();
+export function deferAppServerRead(buffer: VSBuffer, consumed: Promise<void>): void { readConsumption.set(buffer, consumed); }
+export function getAppServerReadConsumption(buffer: VSBuffer): Promise<void> | undefined { return readConsumption.get(buffer); }
 
 /** Carries one renderer's frames and may deliver events synchronously.
  * Disconnect releases this lease; intentional closure means a local stop or

@@ -13,7 +13,7 @@ import { InstantiationService } from '../../../instantiation/common/instantiatio
 import { IRemoteSocketFactoryService, RemoteSocketFactoryService } from '../../../remote/common/remoteSocketFactoryService.js';
 import { ManagedRemoteConnection, RemoteConnectionType, WebSocketRemoteConnection } from '../../../remote/common/remoteAuthorityResolver.js';
 import { AppServerSocketTransport } from '../../browser/appServerSocketTransport.js';
-import { AppServerFrame, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT } from '../../common/appServerTransport.js';
+import { AppServerFrame, getAppServerReadConsumption, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT } from '../../common/appServerTransport.js';
 
 class PeerSocket extends Disposable implements ISocket {
 	private readonly data = this._register(new Emitter<VSBuffer>());
@@ -32,8 +32,10 @@ class PeerSocket extends Disposable implements ISocket {
 		this.written.push(buffer.toString());
 		this.respondToWrite?.(buffer.toString());
 	}
-	public receive(bytes: Uint8Array<ArrayBuffer>): void {
-		this.data.fire(VSBuffer.wrap(bytes));
+	public receive(bytes: Uint8Array<ArrayBuffer>): VSBuffer {
+		const buffer = VSBuffer.wrap(bytes);
+		this.data.fire(buffer);
+		return buffer;
 	}
 	public endPeer(): void { this.endEvent.fire(); }
 	public closePeer(): void {
@@ -66,6 +68,27 @@ async function connect(transport: AppServerSocketTransport): Promise<void> {
 	transport.send(WEB_APP_SERVER_CONNECT_EVENT);
 	await ready;
 }
+
+test('async frame consumption retains read credit for following partial chunks and the latest frame', async () => {
+	using socket = new PeerSocket();
+	const assembly = assemble(socket);
+	using services = assembly.services;
+	using transport = assembly.transport;
+	await connect(transport);
+	const first = new DeferredPromise<void>();
+	const second = new DeferredPromise<void>();
+	let frames = 0;
+	transport.on(WEB_APP_SERVER_FRAME_EVENT, value => { (value as AppServerFrame).consumed = ++frames === 1 ? first.p : second.p; });
+	const receive = (text: string): VSBuffer => socket.receive(new TextEncoder().encode(text));
+	assert.equal(getAppServerReadConsumption(receive('{')), undefined, 'first frame fragments must release credit to avoid deadlock');
+	assert.equal(getAppServerReadConsumption(receive('}\n{')), first.p);
+	assert.equal(getAppServerReadConsumption(receive(' ')), first.p);
+	assert.equal(getAppServerReadConsumption(receive('}\n')), second.p);
+	await first.complete();
+	assert.equal(getAppServerReadConsumption(receive('{')), second.p, 'older completion must not release newer work');
+	await second.complete();
+	assert.equal(getAppServerReadConsumption(receive(' ')), undefined);
+});
 
 test('App Server socket adapter preserves split UTF-8 frames and serializes one LF per request', async () => {
 	using socket = new PeerSocket();

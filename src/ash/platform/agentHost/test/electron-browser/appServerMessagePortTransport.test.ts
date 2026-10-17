@@ -6,6 +6,8 @@ import { setup, suite, suiteSetup, suiteTeardown, teardown, test } from 'mocha';
 import { DisposableTracker, installDisposableTracker } from '../../../../base/common/lifecycle.js';
 import type { ISandboxGlobals } from '../../../../base/parts/sandbox/electron-browser/sandboxTypes.js';
 import { VSBuffer } from '../../../../base/common/buffer.js';
+import { deferAppServerRead } from '../../common/appServerTransport.js';
+import { DeferredPromise } from '../../../../base/common/async.js';
 
 suite('App Server MessagePort transport', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
@@ -182,6 +184,29 @@ suite('App Server MessagePort transport', () => {
 		});
 	}
 
+
+	for (const retire of [false, true]) test(`asynchronous reads retain ACK credit and ${retire ? 'retirement prevents a late ACK' : 'completion returns it'}`, async () => {
+		using transport = new Transport(() => { });
+		const ready = transport.acquire();
+		const channel = new MessageChannel();
+		try {
+			requests[0].resolve({ enabled: true, byteStream: true });
+			dom.window.dispatchEvent(new dom.window.MessageEvent('message', { source: dom.window as unknown as Window, data: { nonce: requests[0].nonce }, ports: [channel.port1 as unknown as MessagePort] }));
+			await ready;
+			const consumed = new DeferredPromise<void>();
+			const delivered = new DeferredPromise<void>();
+			using subscription = transport.socket.onData(data => { deferAppServerRead(data, consumed.p); void delivered.complete(); });
+			const post = mock.method(channel.port1, 'postMessage');
+			try {
+				channel.port2.postMessage({ data: new TextEncoder().encode('{}\n') });
+				await delivered.p;
+				assert.equal(post.mock.calls.length, 0);
+				if (retire) transport.dispose();
+				await consumed.complete();
+				assert.deepEqual(post.mock.calls.map(call => call.arguments[0]), retire ? [{ intentional: true }] : [{ ack: true }]);
+			} finally { post.mock.restore(); }
+		} finally { channel.port1.close(); channel.port2.close(); }
+	});
 
 	test('releasing the renderer lease tells Main that the closure is intentional', async () => {
 		using transport = new Transport(() => { });

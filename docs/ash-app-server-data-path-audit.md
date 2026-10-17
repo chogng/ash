@@ -4,7 +4,7 @@
 
 审计基线的结论：Ash Main 已经透明转发字节，避免了 Owl 在 Browser UI 线程完整解析 JSON 的问题。但 Renderer 的 framing 存在可复现的复制放大，完整帧还会重新 UTF-8 编码、同步解析和递归 schema 校验。聊天消费者没有使用后端已有的有界历史能力，进一步放大输入。背压能够限制传输中的字节块，不能等同于限制完整响应处理成本、总内存或控制消息延迟。
 
-**实施状态：两批 P1 已实现。** 第 1～4 节保留 manifest 对应的优化前审计快照；固定页 framing、接收端副本与重复编码见第 7 节；Code Chat 的有界历史接入、翻页、回放与审批保护见第 8 节。Worker、JSON.parse／schema 调度和后端输出调整仍是后续候选。
+**实施状态：三批 P1 已实现。** 第 1～4 节保留 manifest 对应的优化前审计快照；固定页 framing、接收端副本与重复编码见第 7 节；Code Chat 的有界历史、翻页、回放与审批保护见第 8 节；大帧解析与 schema 校验的 Worker、顺序队列及异步 ACK 见第 9 节。后端输出预算、Worker 结果复制和领域应用仍有后续工作。
 
 证据快照与文件 hash 见 [manifest.json](research/ash-app-server-data-path-2026-10-17/manifest.json)，实验脚本见 [probe.cjs](research/ash-app-server-data-path-2026-10-17/probe.cjs)。这是调查时的实现，不替代 [前端与 App Server 连接边界](frontend-app-server-boundary.md)或产品契约。工作区有并发开发活动；后续修改前应重新核对文件 hash。
 
@@ -204,6 +204,8 @@ Rust writer 单次写完整 frame；字节流、framing 与后端输出队列都
 
 Worker 不宜作为第一步自动选择：仅把完整解析对象从 Worker clone 回 Renderer，仍可能留下大量复制及业务归一化长任务。反之，只消除复制也无法让完整 JSON.parse 可抢占；两类问题需要分别解决。
 
+后续用户将 parse／schema Worker 明确提前为第三批 P1，实施与实测见第 9 节；本表保留审计时的原始排序。
+
 ## 6. 测量、验证与限制
 
 ### 6.1 本次实际执行
@@ -385,7 +387,10 @@ just test ash-core --lib thread_history_
 
 第一批已本地提交为 `656ba0fed`，没有推送。提交门禁因 10 个不在提交范围内的文件格式问题失败，
 本批文件的独立格式和 whitespace 检查通过后，按仓库规定完成本地提交；没有宣称全局门禁通过。
-第二批使用独立提交，未混入第一批提交。
+第二批已独立本地提交为 `c77786dee29e563dccff6bbcd138eb72db6fef01`，没有推送。
+提交前的 `just commit-check origin/main` 因提交外 10 个 TS 文件和 `docs/ash-desktop-architecture.md`
+的格式问题失败；本批 17 文件的独立格式检查及 working-tree／staged whitespace 检查通过，
+按提交工作流的范围外失败例外完成本地提交。
 
 **仍存在的成本：** 20 Turn 是条数边界，单个巨大 Turn 仍可能产生大 JSON；本批没有 Worker 或时间片调度，
 JSON.parse／schema／DOM 仍同步运行。用户主动加载的旧页继续保留，多年断线后的补齐也可能需要很多有界请求；
@@ -395,3 +400,131 @@ JSON.parse／schema／DOM 仍同步运行。用户主动加载的旧页继续保
 后端 `read_voice_transcripts` 仍按整个 Thread 的 sequence 读取语音，再按当前页可见 Item 锚点组装。
 没有 Item 锚点的语音会进入多个页面，由前端按稳定 ID 去重；这类语音历史与 Thread 级元数据
 也不受 20 Turn 条数限制。本次性能 fixture 没有语音，不能据此推断长语音会话的收益。
+
+## 9. 第三批 P1：大帧解析与 schema 校验移入 Worker
+
+### 9.1 职责与执行路径
+
+`AppServerProtocolClient` 仍是每个 Renderer connection 的唯一协议 owner，持有 pending method、
+初始化与兼容检查、请求 timeout、审批与取消、generation。Main 与 Rust 协议均未改动。
+
+- 小于 **256 KiB wire bytes** 的帧同步解析；达到阈值时懒创建一个专属 Web Worker，后续复用。
+  Desktop Renderer 与 Web 使用相同实现；没有全局 Worker 的 Node 测试／工具环境复用同步 decoder。
+  浏览器 Worker 的创建、通信或解析失败会关闭连接，不静默回退为 UI 大帧解析。
+- `appServerProtocolDecoding.ts` 在两条路径使用同一生成 decoder：JSON.parse、envelope、对应 method
+  的 result schema，或 notification／server-request schema。没有调整生成 schema 或放宽非法输入检查。
+- job 只携带接收时的 `firstRequestId` 与最多 128 个 pending `(id, method)` 路由快照。
+  Worker 不持有业务请求表，也不执行 handler。快照防止提前到达、延后解码的响应冒充未来请求。
+- 私有 Worker 通道复用 `WebWorkerClient/Server`，校验 channel、version、job ID、错误及取消消息。
+  Worker 入口检查 job 字段、frame 字符长度与路由条数。返回侧检查 envelope 与当前 job 的路由配对；
+  完整 payload 已由同应用 bundle 中、没有插件入口的固定 Worker 校验，不在 UI 再递归走一遍。
+  这不是接受后端提供的“已验证”标记，不能把该结果入口接给不可信插件 Worker。
+- 初始化的生成 schema 也只检查一次；Renderer 再检查 server identity、protocol major、schema hash、
+  capabilities 和绝对 userHome。保留接收 unknown 的 `validateAppServerInitializeResult` 给独立 RPC 边界；
+  已解码的同进程调用使用 `checkAppServerInitializeCompatibility`，避免第二次 schema 遍历。
+
+源码入口：`src/ash/platform/agentHost/browser/appServerFrameDecoder.ts`、
+`appServerProtocolDecoding.ts`、`appServerProtocolWorkerMain.ts`、`appServerProtocolClient.ts`，
+以及 `src/ash/platform/agentHost/common/appServerProtocolCompatibility.ts`。
+Worker 是 Renderer 协议客户端的实现细节，不是新的 app-server 或业务状态 owner。
+
+### 9.2 顺序、容量、关闭与背压
+
+大帧解码期间，同连接后到的小帧进入串行队列，response、notification、host request、取消不会越过前帧。
+队列的活动帧与等待帧合计最多 **4096 帧／320 MiB wire bytes**；超限关闭连接并拒绝 pending，
+不静默丢帧。连续消费等待帧达到约 4 ms 时使用 `setTimeout(0)` 让出一个真实任务，
+而非只在 microtask 中循环。单个小帧的 schema、listener 或领域回调依然不可抢占。
+
+每个异步 job 使用 request timeout 作为解码期限；没有 pending 请求的大 notification 也受保护。
+显式 disconnect／dispose、解码错误和超时立即终止 Worker、清空队列并兑现全部 consumption Promise。
+旧 drain 通过队列对象身份与 generation 检查，不能清理或派发新连接的工作。
+收到 peer EOF／close 时先完成已收到的帧，再发布关闭；等待期间拒绝新请求。这样响应后紧跟 EOF
+不会因为异步解析而丢掉最后一条响应。已知 EOF 时不再启动 host effects 或向失效 carrier 回复，
+此前接收的响应与通知仍继续排空。初始化 host effects 仍在兼容检查通过之后才执行。
+
+异步解析不能直接沿用“onData 返回就 ACK”：否则消息交给 Worker 后，Main 会立即恢复 stdout。
+本批给 `AppServerFrame` 添加只在同进程使用的 consumption Promise，并以弱引用表把它关联到 socket
+收到的 VSBuffer；`MessagePortSocket` 等消费完成才 ACK。后续没有 LF 的部分帧也继承当前未完成
+consumption，Main 原有 **4 个未 ACK chunk 后暂停 stdout** 的规则因此继续有效。
+第一条未完成大帧的前置分片仍立即 ACK，否则可能在收到完整 JSON 前耗尽 credit，形成死锁。
+较早帧完成不会清除较新帧的消费标记；端口退休后不发送迟到 ACK。
+
+该 ACK 只覆盖协议解码与分发完成，不代表所有 Promise 链中的领域转换、Chat 模型应用或 DOM 绘制完成。
+浏览器 WebSocket 没有接收 pause API；接收队列提供硬上限和超限关闭，不能声称该路径已有网络反压。
+wire bytes 上限不是 RSS／JS heap 上限，UTF-16 字符串、Worker 输入与输出、UI 对象图、部分帧 pages
+及领域模型可能同时存在；没有把内存成本从统计中隐藏到 Worker。
+
+### 9.3 真实 Chromium 前后对比
+
+新增 `appServerDecode.integration.spec.ts` 与专用构建页面。两种方案经过相同生产
+`AppServerProtocolClient`、真实生成 schema 与 response 分发；优化前方案注入同步 decoder，
+等价复现 `c77786dee` 的 JSON.parse＋对应 schema 操作，优化后使用真正的 Web Worker。
+旧协议／transport 源码备份保留在本机 investigation 的 `baseline/`。
+
+每个场景先测两种方案首次使用，然后交替顺序测 **5 对 warm 样本**，每次通过 Renderer CDP 在相同点 GC。
+read 结果的 thread 与 transcript 均包含相同内容，验证 Turn 数、最后文本与 ready 状态，
+两次 rAF 后再停止心跳；断言仅大帧创建 Worker，小帧不创建。基础响应 JSON 预先生成，
+逐帧字符串组装和 UTF-8 编码计长在阶段计时与心跳区间外，仍计入外层 CDP TaskDuration。
+场景不经过真实后端、Main IPC、framing／UTF-8 decode、领域 adapter、Chat render 或完整 Desktop。
+
+本机 macOS ARM64／Apple M5，Playwright Chromium **149.0.7827.55**。下表为 5 次中位数，时间均为 ms：
+
+| 相同响应          | wire bytes | 同步派发耗时：前 → 后 | 最长计时器间隔：前 → 后 | 到已验证响应：前 → 后 | Renderer CDP TaskDuration：前 → 后 |
+| ----------------- | ---------: | --------------------: | ----------------------: | --------------------: | ---------------------------------: |
+| 1 Turn，小帧对照  |      9,492 |             0.2 → 0.3 |               4.6 → 4.5 |             0.2 → 0.3 |                          1.4 → 1.5 |
+| 128 Turn，多对象  |  1,131,168 |             5.6 → 0.3 |               5.8 → 4.5 |             5.6 → 6.1 |                          7.4 → 2.9 |
+| 2048 Turn，多对象 | 18,107,467 |            88.6 → 2.4 |              88.9 → 9.9 |          88.6 → 136.5 |                       103.9 → 27.8 |
+| 1 Turn，巨大文本  | 16,778,516 |             3.1 → 2.3 |               4.2 → 4.6 |             3.1 → 9.5 |                        18.4 → 18.9 |
+
+18.1 MB 多对象场景中，原来的约 **88 ms long task** 在 warm Worker 样本中未出现；解码等待期间
+有约 15 次 rAF 回调机会。最长计时器间隔约降低 **89%**，主线程 TaskDuration 约降低 **73%**，
+但响应总耗时增加约 **54%**。这是 UI 响应性与通信成本的取舍，不是总吞吐提升。
+巨大文本场景主要是少量长字符串，JSON.parse 和 schema 原本仅约 3 ms，Worker 往返反而增加延迟，
+没有证明所有超过阈值的帧都会加速。未来阈值或传输策略应结合实际 payload 形状继续测量。
+
+计时器有约 4 ms 的浏览器调度底噪；rAF 是绘制机会，不是输入延迟或逐像素呈现。
+PerformanceObserver long task 按与解码区间重叠的任务统计，可能包含该任务中的结果断言；
+TaskDuration 也包含准备与验证的主线程工作，不等于表内派发耗时，更不包含 Worker CPU。
+首次 Worker 使用包含 bundle 加载、初始化与 schema 缓存，原始样本单独保留；不能用 warm 数据代表冷启动。
+没有采集 heap／RSS，不能据此宣称内存下降或完整 Desktop 加速。
+
+样本与日志：`.build/investigations/app-server-decode-p1-2026-10-17/`，包括
+`comparison-results.json`、`comparison-summary.json`、`verification.json`、源码备份、检查及失败修复日志。
+重现入口：
+
+```sh
+pnpm test:browser:integration appServerDecode.integration.spec.ts --project=chromium
+```
+
+### 9.4 回归验证与剩余工作
+
+定向单测覆盖 lazy threshold、Worker 复用／失败／reset、非法 JSON／schema／routing、结构化错误、
+未知 host method、旧 response、异步审批取消与迟到结果、接收时路由快照、连接更换、bytes／count 溢出、
+大初始化兼容检查、解码与请求超时、EOF 顺序、部分帧 ACK 及端口退休；复跑原有生成 decoder 边界测试。
+真实 Chromium 构建并运行生产 Worker，同时验证响应内容和小帧不创建 Worker；额外将 2000 条小通知
+排在大响应后，再发送 EOF，验证顺序、通知完整交付和队列中间有真实浏览器 timer 执行。
+
+首轮边界单测的错误 fixture 使用了无效的 error.data，初始化 fixture 修改了受 identity 检查的 name，
+已分别改为生成契约中的 InternalError 和较长 version；失败日志保留，没有放宽产品校验。
+首轮 long task 统计遗漏了开始时间早于计时起点的重叠任务，已修正并重新采样。
+异步取消测试改为等待取消帧自己的 consumption；首帧完成与取消帧之间允许真实任务让出，
+不能用首帧完成代替取消已经处理的断言。
+
+仍需处理的成本是 Renderer 的最终 framing 合并与 UTF-8 decode、完整字符串发送／对象图回传的
+structured clone、领域 adapter、列表派生与 DOM，以及后端超大单 Turn 的输出。当前完整对象回传还不是
+有界的领域增量；输入减量与字节预算仍有必要。相同连接的大帧会延迟后续审批／取消，这是保序的代价，
+Worker 不消除 wire 队头阻塞。后端输出队列与跨窗口总内存预算不在本批改动范围。
+
+实际验证：先完成 **97 项定向单测／5 文件**，EOF 补充及等待语义修正后，相关 **41 项复测通过**，
+去重共 98 项；**2 项 Chromium 场景通过**（含 48 个性能样本），EOF 修改后相关浏览器场景复测通过。
+Renderer 类型检查 4,169 文件、完整 browser integration 类型检查 4,115 文件通过。
+本批 18 文件格式及 whitespace 检查通过。未运行真实 Electron Desktop／后端端到端场景。
+
+正常 `pnpm test:browser:integration` 的准备阶段被范围外的中文条目
+`zh-CN/ash/languageServer.installingRust` 的 Unknown translation 错误阻断。
+复用已有生成协议／资源、完成完整 browser integration 类型检查后，运行仓库原有
+`node test/integration/browser/run.ts appServerDecode.integration.spec.ts --project=chromium`，
+该 runner 的真实构建与两项测试成功。Vite 输出现有 tree-sitter direct eval 警告、Node 输出现有
+NO_COLOR／FORCE_COLOR 提示。本批没有改动这些依赖或翻译文件，没有宣称完整准备命令成功。
+
+第三批使用独立本地提交；后续 Worker 通信优化另行记录，不混入本批。

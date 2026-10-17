@@ -7,6 +7,7 @@ import { generateUuid } from '../../../base/common/uuid.js';
 import { invoke, subscribe } from '../../ipc/electron-browser/rendererIpc.js';
 import { VSBuffer } from '../../../base/common/buffer.js';
 import { Emitter } from '../../../base/common/event.js';
+import { getAppServerReadConsumption } from '../common/appServerTransport.js';
 import { SocketCloseEventType, type ISocket, type SocketCloseEvent, type SocketDiagnosticsEventType } from '../../../base/parts/ipc/common/ipc.net.js';
 
 /** Acquires and owns a renderer-exclusive MessagePort without interpreting protocol messages. */
@@ -142,10 +143,12 @@ class MessagePortSocket extends Disposable implements ISocket {
 				const data = value.data.buffer instanceof ArrayBuffer
 					? new Uint8Array(value.data.buffer, value.data.byteOffset, value.data.byteLength)
 					: new Uint8Array(value.data);
-				this.dataEmitter.fire(VSBuffer.wrap(data));
-				if (!this.closed) {
-					port.postMessage({ ack: true });
-				}
+				const buffer = VSBuffer.wrap(data);
+				this.dataEmitter.fire(buffer);
+				const ack = (): void => { if (!this.closed) port.postMessage({ ack: true }); };
+				const consumed = getAppServerReadConsumption(buffer);
+				if (consumed) { void consumed.then(ack, () => this.finish(new Error('App Server read failed'))); }
+				else { ack(); }
 				return;
 			}
 			if (value.intentional === true) {

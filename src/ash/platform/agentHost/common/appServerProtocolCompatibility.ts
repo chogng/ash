@@ -33,7 +33,13 @@ export interface ValidateAppServerInitializeOptions {
 }
 
 export function validateAppServerInitializeResult(value: unknown, options: ValidateAppServerInitializeOptions = {}): InitializeResult {
-	const initialized = decodeAppServerResult('initialize', value);
+	return checkAppServerInitializeCompatibility(decodeAppServerResult('initialize', value), options);
+}
+
+/** The protocol decoder owns schema validation. Typed callers only check the
+ * negotiated contract here, so a large initialization is not walked twice.
+ */
+export function checkAppServerInitializeCompatibility(initialized: InitializeResult, options: ValidateAppServerInitializeOptions = {}): InitializeResult {
 	const { serverInfo, protocolVersion, capabilities } = initialized;
 	if (options.expectedServerName && serverInfo.name !== options.expectedServerName) {
 		throw new Error(`Unexpected App Server identity: ${serverInfo.name}`);

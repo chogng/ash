@@ -5,7 +5,7 @@ import { SocketCloseEventType, type ISocket, type SocketCloseEvent } from '../..
 import { IRemoteSocketFactoryService } from '../../remote/common/remoteSocketFactoryService.js';
 import { RemoteConnectionType } from '../../remote/common/remoteAuthorityResolver.js';
 import type { IAddressProvider } from '../../remote/common/remoteAgentConnection.js';
-import { AppServerFrame, type AppServerTransport, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_CLOSED_EVENT } from '../common/appServerTransport.js';
+import { AppServerFrame, deferAppServerRead, type AppServerTransport, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_CLOSED_EVENT } from '../common/appServerTransport.js';
 
 const framePageBytes = 64 * 1024;
 const maxFrameBytes = 320 * 1024 * 1024;
@@ -24,6 +24,7 @@ export class AppServerSocketTransport extends Disposable implements AppServerTra
 	private messageFraming = false;
 	private parts: VSBuffer[] = [];
 	private bufferedBytes = 0;
+	private pendingConsumption: Promise<void> | undefined;
 
 	constructor(private readonly connection: SocketConnection, @IRemoteSocketFactoryService private readonly factories: IRemoteSocketFactoryService) {
 		super();
@@ -89,6 +90,9 @@ export class AppServerSocketTransport extends Disposable implements AppServerTra
 				if (this.socket === socket) {
 					// WebSocket already owns the message boundary; stream carriers use JSONL.
 					if (isWebSocket) { this.acceptFrame(data); } else { this.acceptData(data); }
+					// Partial chunks arriving behind an asynchronous frame also retain
+					// credit, so the existing Main stdout pause reaches the slow consumer.
+					if (this.pendingConsumption) { deferAppServerRead(data, this.pendingConsumption); }
 				}
 			}));
 			resources.add(socket.onClose(event => {
@@ -164,7 +168,12 @@ export class AppServerSocketTransport extends Disposable implements AppServerTra
 				throw new Error('App Server JSONL requires nonempty LF frames');
 			}
 			const frame = new TextDecoder('utf-8', { fatal: true }).decode(bytes.buffer);
-			this.emit(WEB_APP_SERVER_FRAME_EVENT, new AppServerFrame(frame, bytes.byteLength));
+			const payload = new AppServerFrame(frame, bytes.byteLength);
+			this.emit(WEB_APP_SERVER_FRAME_EVENT, payload);
+			if (this.socket && payload.consumed) {
+				const consumed = this.pendingConsumption = payload.consumed;
+				void consumed.then(() => { if (this.pendingConsumption === consumed) this.pendingConsumption = undefined; });
+			}
 			return this.socket !== undefined;
 		} catch (error) {
 			this.disconnect();
@@ -199,6 +208,7 @@ export class AppServerSocketTransport extends Disposable implements AppServerTra
 		this.connectionResources.clear();
 		this.parts = [];
 		this.bufferedBytes = 0;
+		this.pendingConsumption = undefined;
 	}
 
 	private emit(event: string, payload: unknown): void {
