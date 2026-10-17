@@ -16,10 +16,10 @@ function records(directory: string): readonly { resource: string; content: strin
 	finally { database.close(); }
 }
 
-async function profile(): Promise<string> {
+async function profile(locale = 'en'): Promise<string> {
 	const directory = await mkdtemp(join(tmpdir(), 'ash-backup-'));
 	await mkdir(join(directory, 'profile'), { recursive: true });
-	await writeFile(join(directory, 'profile', 'settings.json'), JSON.stringify({ 'window.restoreWindows': 'none', 'workbench.startupEditor': 'none' }));
+	await writeFile(join(directory, 'profile', 'settings.json'), JSON.stringify({ 'window.restoreWindows': 'none', 'workbench.startupEditor': 'none', 'workbench.locale': locale }));
 	return directory;
 }
 
@@ -70,29 +70,38 @@ test('Desktop restores an unsaved file from shared storage despite window restor
 	} finally { try { await desktop?.close(); } finally { await rm(directory, { recursive: true, force: true }); } }
 });
 
-test('Desktop reopens an empty workspace with its untitled draft exactly once after backend restart', async () => {
-	test.setTimeout(120_000);
-	const directory = await profile();
-	let desktop: ElectronLaunchResult | undefined;
-	try {
-		desktop = await launchElectron({ appServerMode: 'required', userDataDirectory: directory });
-		const page = desktop.driver.workbench.page;
-		await page.keyboard.press('ControlOrMeta+N');
-		await page.locator('[data-part="editor"] .stanza-editor-input').focus();
-		await page.keyboard.type('unsaved empty workspace draft');
-		await expect.poll(() => records(directory).some(record => JSON.parse(record.content).content === 'unsaved empty workspace draft')).toBe(true);
-		await desktop.close();
-		desktop = undefined;
-		desktop = await launchElectron({ appServerMode: 'required', userDataDirectory: directory });
-		const recovered = await recoveredWindow(desktop, 'unsaved empty workspace draft');
-		await expect(recovered.page.locator('.ash-tab').filter({ hasText: 'Untitled-1' })).toHaveAttribute('data-state', 'dirty');
-		expect(desktop.application.windows()).toHaveLength(2);
-		await recovered.page.reload({ waitUntil: 'domcontentloaded' });
-		await recoveredWindow(desktop, 'unsaved empty workspace draft');
-		expect(desktop.application.windows()).toHaveLength(2);
-		expect(records(directory)).toHaveLength(1);
-	} finally { try { await desktop?.close(); } finally { await rm(directory, { recursive: true, force: true }); } }
-});
+for (const locale of ['en', 'zh-CN']) {
+	test(`Desktop reopens an empty workspace with its untitled draft exactly once after backend restart in ${locale}`, async () => {
+		test.setTimeout(120_000);
+		const directory = await profile(locale);
+		let desktop: ElectronLaunchResult | undefined;
+		try {
+			desktop = await launchElectron({ appServerMode: 'required', userDataDirectory: directory });
+			const page = desktop.driver.workbench.page;
+			await page.keyboard.press('ControlOrMeta+N');
+			await page.locator('[data-part="editor"] .stanza-editor-input').focus();
+			await page.keyboard.type('unsaved empty workspace draft');
+			await expect.poll(() => records(directory).some(record => JSON.parse(record.content).content === 'unsaved empty workspace draft')).toBe(true);
+			await desktop.close();
+			desktop = undefined;
+			desktop = await launchElectron({ appServerMode: 'required', userDataDirectory: directory });
+			const recovered = await recoveredWindow(desktop, 'unsaved empty workspace draft');
+			await expect(recovered.page.locator('.ash-tab').filter({ hasText: 'Untitled-1' })).toHaveAttribute('data-state', 'dirty');
+			expect(desktop.application.windows()).toHaveLength(2);
+			const input = recovered.page.locator('[data-part="editor"] .stanza-editor-input');
+			await input.focus();
+			await input.press('ControlOrMeta+End');
+			await input.press('End');
+			await input.type(' edited after recovery');
+			const edited = 'unsaved empty workspace draft edited after recovery';
+			await expect.poll(() => records(directory).some(record => JSON.parse(record.content).content === edited)).toBe(true);
+			await recovered.page.reload({ waitUntil: 'domcontentloaded' });
+			await recoveredWindow(desktop, edited);
+			expect(desktop.application.windows()).toHaveLength(2);
+			expect(records(directory)).toHaveLength(1);
+		} finally { try { await desktop?.close(); } finally { await rm(directory, { recursive: true, force: true }); } }
+	});
+}
 
 test('Desktop migrates an IndexedDB draft only after shared storage acknowledges its content', async () => {
 	test.setTimeout(90_000);

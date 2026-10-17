@@ -50,6 +50,8 @@ import { getIconDefinition } from '../../../../../platform/theme/common/iconRegi
 import { BrowserWorkingCopyService } from '../../../../services/workingCopy/browser/browserWorkingCopyService.js';
 import { IndexedDbWorkingCopyBackupService } from '../../../../services/workingCopy/browser/indexedDbWorkingCopyBackupService.js';
 import { WorkingCopyBackupTracker } from '../../../../services/workingCopy/browser/workingCopyBackupTracker.js';
+import { UntitledTextEditorInput } from '../../../../services/untitled/common/untitledTextEditorInput.js';
+import { UntitledTextEditorModel } from '../../../../services/untitled/common/untitledTextEditorModel.js';
 
 const uriIdentityServices = new TestUriIdentityServices();
 suiteTeardown(() => uriIdentityServices.dispose());
@@ -495,6 +497,41 @@ for (const close of ['abort', 'clear', 'dispose'] as const) {
 		assert.deepEqual([parts, text.isDisposed(), pane.getControl()], [0, true, undefined]);
 	});
 }
+
+test('restored untitled editor inputs retain their draft content, language and editable working copy', async () => {
+	const dom = createTestDom('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using closeWindow = toDisposable(() => dom.window.close());
+	const resourceStore = new BrowserTextResourceStore(new ImmediateTextFiles('unrelated file content'));
+	using languages = new LanguageService();
+	using language = languages.registerLanguage({ id: 'typescript' });
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, { languageService: languages });
+	using services = paneServices(models);
+	const resource = URI.parse('untitled:/Untitled-7');
+	using draft = services.createInstance(UntitledTextEditorModel, resource, 'Recovered', 'recovered draft 内容', 'typescript');
+	using input = new UntitledTextEditorInput(draft);
+	using copies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
+	using pane = createPane(services, resourceStore, { workingCopyService: copies });
+	pane.create(dom.window.document.querySelector<HTMLElement>('main')!);
+	await pane.setInput(input, new AbortController().signal);
+
+	assert.equal(pane.getValue(), 'recovered draft 内容');
+	assert.equal(pane.getStatus().languageId, 'typescript');
+	assert.equal(pane.isDirty, true);
+	const control = pane.getControl();
+	assert.ok(control instanceof CodeEditorWidget);
+	assert.equal(control.getOption(EditorOption.readOnly), false);
+	assert.equal(copies.get(resource)[0], pane.workingCopy);
+	assert.equal(pane.workingCopy?.backupKind, 'text');
+	await draft.resolve();
+	assert.equal(draft.textEditorModel, models.getModel(resource));
+	pane.workingCopy!.restoreBackup('edited after recovery');
+	assert.equal(draft.textEditorModel!.getValue(), 'edited after recovery');
+
+	pane.clearInput();
+	assert.deepEqual(copies.get(resource), []);
+	assert.equal(draft.textEditorModel!.getValue(), 'edited after recovery');
+});
 
 test("Stanza editor pane saves and reverts its shared model reference", async () => {
 	const dom = createTestDom("<!doctype html><body><main></main></body>");

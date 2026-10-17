@@ -180,32 +180,34 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		validateInput(input);
 		throwIfCancelled(signal, "Text model acquisition was cancelled");
 		using identityLifetime = this.uriIdentity.retainUri(input.resource);
-		input = { ...input, resource: await this.uriIdentity.resolveCanonicalUri(input.resource, signal) };
+		// Editor inputs can expose bootstrap content and language through prototype getters.
+		// Canonicalize the resource without flattening away that input metadata.
+		const resource = await this.uriIdentity.resolveCanonicalUri(input.resource, signal);
 		throwIfCancelled(signal, "Text model acquisition was cancelled");
 		this.ensureAlive();
-		const key = input.resource.toString();
-		const current = this.findEntry(input.resource);
+		const key = resource.toString();
+		const current = this.findEntry(resource);
 		if (current) return this.acquireReference(current[0], current[1], signal);
 
 		const content = await this.resourceStore.resolve({
-			resource: input.resource,
-			languageId: input.languageId ?? this.options.languageService?.guessLanguageIdByFilepathOrFirstLine(input.resource) ?? undefined,
+			resource,
+			languageId: input.languageId ?? this.options.languageService?.guessLanguageIdByFilepathOrFirstLine(resource) ?? undefined,
 			...(input.initialText === undefined ? {} : { bootstrapText: input.initialText }),
 			...(input.encoding === undefined ? {} : { encoding: input.encoding }),
 		}, signal);
 		throwIfCancelled(signal, "Text model acquisition was cancelled");
 		this.ensureAlive();
-		const concurrent = this.findEntry(input.resource);
+		const concurrent = this.findEntry(resource);
 		if (concurrent) return this.acquireReference(concurrent[0], concurrent[1], signal);
 		const languageSelection = this.options.languageService
 			? input.languageId !== undefined
 				? this.options.languageService.createById(input.languageId)
 				: input.contentType !== undefined
 					? this.options.languageService.createByMimeType(input.contentType)
-					: this.options.languageService.createByFilepathOrFirstLine(input.resource, firstLine(content.text))
+					: this.options.languageService.createByFilepathOrFirstLine(resource, firstLine(content.text))
 			: undefined;
 		const model = new TextModel(modelText(content), {
-			resource: input.resource,
+			resource,
 			languageConfigurationService: this.options.languageConfigurationService,
 			languageId: languageSelection?.languageId ?? input.languageId,
 			maintenance: this.options.maintenance,
@@ -222,12 +224,12 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 			} : {}),
 		});
 		if (languageSelection) model.setLanguage(languageSelection);
-		this.undoRedoParticipant.restore(input.resource, model);
+		this.undoRedoParticipant.restore(resource, model);
 		const dirtyEmitter = new Emitter<void>();
 		const externalChangeEmitter = new Emitter<void>();
 		const entry: TextModelEntry = {
-			identityLifetime: this.uriIdentity.retainUri(input.resource),
-			resource: input.resource,
+			identityLifetime: this.uriIdentity.retainUri(resource),
+			resource,
 			model,
 			dirtyEmitter,
 			externalChangeEmitter,
@@ -239,14 +241,14 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 			languageChangeListener: model.onDidChangeLanguage(event => this.modelLanguageChanged.fire({ model, oldLanguageId: event.oldLanguage })),
 			fileChangeListener: this.resourceStore.onDidChange(event => this.acceptFileChange(entry, event)),
 			// Untitled content has no persisted baseline, including caller supplied initial text.
-			savedText: input.resource.scheme === Schemas.untitled ? "" : model.getText(),
+			savedText: resource.scheme === Schemas.untitled ? "" : model.getText(),
 			revision: content.revision,
 			encoding: content.encoding,
 			savedEncoding: content.encoding,
 			updatingFile: false,
 			completingSave: false,
-			dirty: input.resource.scheme === Schemas.untitled && model.getText().length > 0,
-			notifiedDirty: input.resource.scheme === Schemas.untitled && model.getText().length > 0,
+			dirty: resource.scheme === Schemas.untitled && model.getText().length > 0,
+			notifiedDirty: resource.scheme === Schemas.untitled && model.getText().length > 0,
 			hasExternalChange: false,
 			disposed: false,
 			saveQueue: Promise.resolve(),
