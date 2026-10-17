@@ -24,6 +24,7 @@ export default defineConfig({
 		rolldownOptions: {
 			output: rendererOutput,
 			input: {
+				gettingStarted: resolve(import.meta.dirname, 'gettingStarted.html'),
 				markdownEditor: resolve(import.meta.dirname, 'markdownEditor.html'),
 				markdownEditorHost: resolve(import.meta.dirname, 'markdownEditorHost.html'),
 				chatgptNavigation: resolve(import.meta.dirname, 'chatgptNavigation.html'),

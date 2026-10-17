@@ -1,3 +1,5 @@
+import { URI } from '../../../../base/common/uri.js';
+import { IWorkspacesService } from '../../../../platform/workspaces/common/workspaces.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
@@ -26,6 +28,7 @@ export class GettingStartedPage extends EditorPane implements IEditorPane {
 
 	constructor(
 		@IRecentWorkspacesService private readonly recentWorkspaces: IRecentWorkspacesService,
+		@IWorkspacesService private readonly workspacesService: IWorkspacesService,
 		@IWorkspaceOpenService private readonly workspaceOpenService: IWorkspaceOpenService,
 		@ICommandService private readonly commandService: ICommandService,
 		@IContextKeyService private readonly contextKeyService: IContextKeyService,
@@ -90,6 +93,7 @@ export class GettingStartedPage extends EditorPane implements IEditorPane {
 		return this.recentWorkspaces.recentWorkspaces.map(project => ({
 			name: project.name,
 			path: project.path,
+			onRemove: () => this.workspacesService.removeRecentlyOpened([URI.file(project.root)]),
 			...(this.workspaceOpenService.canOpenWorkspace ? {
 				onOpen: () => this.recentWorkspaces.openWorkspace(project.root),
 			} : {}),

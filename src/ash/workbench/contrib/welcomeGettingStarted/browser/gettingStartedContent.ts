@@ -1,6 +1,9 @@
 import './media/gettingStarted.css';
 import './gettingStartedColors.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
+import { LabelActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
+import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
+import { getHoverDelegate } from '../../../../base/browser/ui/hover/hoverDelegate.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -14,6 +17,7 @@ export interface IGettingStartedProject {
 	readonly name: string;
 	readonly path: string;
 	readonly onOpen?: GettingStartedAction;
+	readonly onRemove?: GettingStartedAction;
 }
 
 /** Actions and data used by the Welcome page. */
@@ -73,8 +77,24 @@ export class GettingStarted extends Disposable {
 	}
 
 	public setRecentProjects(projects: readonly IGettingStartedProject[]): void {
+		// Rebuilding the list must not strand keyboard focus on a removed action.
+		const items = [...this.recentSection.querySelectorAll<HTMLElement>('.ash-getting-started-recent-item')];
+		const activeElement = this.domNode.ownerDocument.activeElement;
+		const focusedIndex = items.findIndex(item => item.contains(activeElement));
+		const focusedAction = items[focusedIndex]?.querySelector('.ash-getting-started-recent-actions')?.contains(activeElement);
+		const focusedPath = this.recentProjects[focusedIndex]?.path;
 		this.recentProjects = projects;
 		this.renderRecentProjects(this.recentSection);
+		if (focusedIndex !== -1) {
+			const nextItems = this.recentSection.querySelectorAll<HTMLElement>('.ash-getting-started-recent-item');
+			const retainedIndex = projects.findIndex(project => project.path === focusedPath);
+			const nextItem = nextItems[retainedIndex === -1 ? Math.min(focusedIndex, nextItems.length - 1) : retainedIndex];
+			const target = retainedIndex !== -1 && focusedAction
+				? nextItem?.querySelector<HTMLElement>('.ash-getting-started-recent-actions button')
+				: nextItem?.querySelector<HTMLElement>('button');
+			const fallback = this.domNode.querySelector<HTMLButtonElement>('.ash-getting-started-card:not(:disabled)');
+			(target ?? fallback ?? this.domNode).focus();
+		}
 	}
 
 	private createBrand(ownerDocument: Document): HTMLElement {
@@ -193,7 +213,7 @@ export class GettingStarted extends Disposable {
 
 		const ownerDocument = section.ownerDocument;
 		const title = h(ownerDocument, 'h2');
-		title.textContent = localize('gettingStarted.recentProjects', 'Recent projects');
+		title.textContent = localize('gettingStarted.recents', 'Recents');
 
 		const list = h(ownerDocument, 'div');
 		list.className = 'ash-getting-started-recent-list';
@@ -207,18 +227,37 @@ export class GettingStarted extends Disposable {
 		ownerDocument: Document,
 		project: IGettingStartedProject,
 	): HTMLElement {
-		if (project.onOpen) {
-			const item = h(ownerDocument, 'button');
-			item.type = 'button';
-			item.className = 'ash-getting-started-recent-item';
-			const onOpen = project.onOpen;
-			this.recentDisposables.add(addDisposableListener(item, 'click', () => this.run(onOpen)));
-			this.appendRecentProjectContent(ownerDocument, item, project);
-			return item;
-		}
 		const item = h(ownerDocument, 'div');
 		item.className = 'ash-getting-started-recent-item';
-		this.appendRecentProjectContent(ownerDocument, item, project);
+		const content = h(ownerDocument, project.onOpen ? 'button' : 'div');
+		content.className = 'ash-getting-started-recent-content';
+		if (content.tagName === 'BUTTON') {
+			(content as HTMLButtonElement).type = 'button';
+		}
+		if (project.onOpen) {
+			const onOpen = project.onOpen;
+			this.recentDisposables.add(addDisposableListener(content, 'click', () => this.run(onOpen)));
+		}
+		this.appendRecentProjectContent(ownerDocument, content, project);
+		item.append(content);
+		if (project.onRemove) {
+			const actions = h(ownerDocument, 'div');
+			actions.className = 'ash-getting-started-recent-actions';
+			item.append(actions);
+			const onRemove = project.onRemove;
+			this.recentDisposables.add(new ActionBar(actions, {
+				ariaLabel: localize('gettingStarted.recentActions', 'Actions for {0}', project.name),
+				actionViewItemProvider: action => new LabelActionViewItem(action, { label: '', ariaLabel: action.label }),
+				actions: [{
+					id: 'gettingStarted.removeRecent',
+					label: localize('gettingStarted.removeRecent', 'Remove {0} from Recents', project.name),
+					tooltip: localize('gettingStarted.removeRecentTooltip', 'Remove from Recents'),
+					icon: Lxicon.close,
+					enabled: true,
+					run: () => this.run(onRemove),
+				}],
+			}));
+		}
 		return item;
 	}
 
@@ -230,11 +269,11 @@ export class GettingStarted extends Disposable {
 		const name = h(ownerDocument, 'span');
 		name.className = 'ash-getting-started-recent-name';
 		name.textContent = project.name;
-		name.title = project.name;
+		this.recentDisposables.add(getHoverDelegate().setupDelayedHover(name, () => ({ content: project.name })));
 		const path = h(ownerDocument, 'span');
 		path.className = 'ash-getting-started-recent-path';
 		path.textContent = project.path;
-		path.title = project.path;
+		this.recentDisposables.add(getHoverDelegate().setupDelayedHover(path, () => ({ content: project.path })));
 		item.append(name, path);
 	}
 

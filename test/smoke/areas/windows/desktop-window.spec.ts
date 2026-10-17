@@ -1,5 +1,5 @@
 import { expect, test } from '../../../automation/test.js';
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parseWorkspace } from '../../../../src/ash/platform/workspace/common/workspace.js';
 import { URI } from '../../../../src/ash/base/common/uri.js';
@@ -60,6 +60,49 @@ for (const entry of ['welcome', 'explorer', 'recent'] as const) {
 		}
 	});
 }
+
+test('desktop Recents removes shared history without deleting projects and stays empty after restart', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ workbench, reloadWorkbench }, testInfo) => {
+	const folder = testInfo.outputPath('Alpha project');
+	const workspace = testInfo.outputPath('Team #1.code-workspace');
+	const workspaceContents = JSON.stringify({ folders: [{ path: folder }] });
+	await mkdir(folder, { recursive: true });
+	await writeFile(workspace, workspaceContents);
+	const history = (command: string, arg?: unknown): Promise<unknown> => workbench.page.evaluate(({ command, arg }) => globalThis.ashTestMainProcess.call('workspaces', command, arg), { command, arg });
+	await history('clearRecentlyOpened');
+	await history('addRecentlyOpened', {
+		workspaces: [
+			{ folderUri: URI.file(folder).toString(), label: 'Alpha' },
+			{ workspace: { id: 'team', configPath: URI.file(workspace).toString() }, label: 'Team' },
+		]
+	});
+	const page = workbench.page;
+	const recents = page.locator('.ash-getting-started-recent');
+	await expect(recents.getByRole('heading', { name: 'Recents', exact: true })).toBeVisible();
+	await expect(recents.locator('.ash-getting-started-recent-item')).toHaveCount(2);
+	const alpha = recents.locator('.ash-getting-started-recent-item').filter({ hasText: 'Alpha' });
+	await alpha.locator('.ash-getting-started-recent-content').focus();
+	await page.keyboard.press('Tab');
+	await expect(alpha.getByRole('button', { name: 'Remove Alpha from Recents', exact: true })).toBeFocused();
+	await page.keyboard.press('Enter');
+	await expect(alpha).toHaveCount(0);
+	const team = recents.locator('.ash-getting-started-recent-item');
+	await expect(team.locator('.ash-getting-started-recent-content')).toBeFocused();
+	await expect.poll(() => history('getRecentlyOpened')).toEqual({
+		workspaces: [
+			{ workspace: { id: 'team', configPath: URI.file(workspace).toString() }, label: 'Team' },
+		]
+	});
+	await team.hover();
+	await team.getByRole('button', { name: 'Remove Team from Recents', exact: true }).click();
+	await expect(recents).toBeHidden();
+	await expect(page.getByRole('button', { name: 'Open folder', exact: true })).toBeFocused();
+	await expect.poll(() => history('getRecentlyOpened')).toEqual({ workspaces: [] });
+	expect((await stat(folder)).isDirectory()).toBe(true);
+	expect(await readFile(workspace, 'utf8')).toBe(workspaceContents);
+	({ workbench } = await reloadWorkbench());
+	await expect(workbench.page.locator('.ash-getting-started-recent')).toBeHidden();
+	expect(await history('getRecentlyOpened')).toEqual({ workspaces: [] });
+});
 
 test('desktop window commands update and persist zoom', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	if (target.kind !== 'electron' || !('windows' in application)) return;

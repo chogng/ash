@@ -68,7 +68,7 @@ AccessibleViewRegistry.register({
 		return new AccessibleContentProvider(
 			AccessibleViewProviderId.GettingStarted,
 			{ type: AccessibleViewType.Help },
-			() => localize('gettingStarted.accessibilityHelp', 'Welcome\nUse Tab and Shift+Tab to move between actions and recent projects. Press Enter to activate the focused item. Clone repo asks for a repository URL and a destination folder.'),
+			() => localize('gettingStarted.accessibilityHelp', 'Welcome\nUse Tab and Shift+Tab to move between actions and Recents. Press Enter to activate the focused item. Each recent item has a Remove from Recents button; use Enter or Space to remove its history entry. Clone repo asks for a repository URL and a destination folder.'),
 			() => {
 				if (isHTMLElement(focused) && focused.isConnected) {
 					focused.focus();

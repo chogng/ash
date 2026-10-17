@@ -13,6 +13,7 @@ import { GettingStarted } from '../../browser/gettingStartedContent.js';
 import { GettingStartedPage } from '../../browser/gettingStarted.js';
 const GitCloneCommandId = 'git.clone';
 import type { IGitHubConnectionService } from '../../../../services/accounts/common/gitHubConnectionService.js';
+import type { IWorkspacesService } from '../../../../../platform/workspaces/common/workspaces.js';
 import type { IRecentWorkspacesService } from '../../../../services/workspaces/common/recentWorkspacesService.js';
 import type { IWorkspaceOpenService } from '../../../../services/workspaces/browser/workspaceOpenService.js';
 
@@ -30,6 +31,7 @@ suite('Welcome page', () => {
 		using services = createTestComponentServices(undefined, undefined, dom.window.document);
 		using page = new GettingStartedPage(
 			recent,
+			{} as IWorkspacesService,
 			workspace,
 			commands,
 			contextKeys,
@@ -65,9 +67,10 @@ suite('Welcome page', () => {
 		const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 		try {
 			setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
-			using translated = new GettingStarted(dom.window.document.body, { recentProjects: [{ name: 'ash', path: '~/Desktop' }] });
+			using translated = new GettingStarted(dom.window.document.body, { recentProjects: [{ name: 'ash', path: '~/Desktop', onRemove: () => { } }] });
 			assert.deepEqual([...translated.domNode.querySelectorAll('.ash-getting-started-card')].map(card => card.querySelector('.ash-getting-started-card-label')?.textContent), ['打开文件夹', '克隆仓库', '通过 SSH 连接', '连接 GitHub']);
-			assert.equal(translated.domNode.querySelector('h2')?.textContent, '最近的项目');
+			assert.equal(translated.domNode.querySelector('h2')?.textContent, '最近打开');
+			assert.equal(translated.domNode.querySelector('.ash-getting-started-recent-actions button')?.getAttribute('aria-label'), '从最近打开中移除 ash');
 		} finally {
 			resetNlsResolver();
 		}
@@ -78,15 +81,18 @@ suite('Welcome page', () => {
 	test('shows all recent projects and hides the section when empty', () => {
 		const dom = new JSDOM('<!doctype html><body></body>');
 		let openCount = 0;
+		let removeCount = 0;
 		const page = new GettingStarted(dom.window.document.body, {
 			recentProjects: Array.from({ length: 6 }, (_, index) => ({
 				name: `project-${index + 1}`,
 				path: `/workspaces/project-${index + 1}`,
 				onOpen: () => { openCount += 1; },
+				onRemove: () => { removeCount += 1; },
 			})),
 		});
 		const section = page.domNode.querySelector<HTMLElement>('.ash-getting-started-recent')!;
-		const items = section.querySelectorAll<HTMLButtonElement>('.ash-getting-started-recent-item');
+		const items = section.querySelectorAll<HTMLButtonElement>('.ash-getting-started-recent-content');
+		const removeButtons = section.querySelectorAll<HTMLButtonElement>('.ash-getting-started-recent-actions button');
 		assert.equal(section.hidden, false);
 		assert.deepEqual([...items].map(item => [
 			item.querySelector('.ash-getting-started-recent-name')?.textContent,
@@ -99,7 +105,9 @@ suite('Welcome page', () => {
 		assert.equal(section.hidden, true);
 		assert.equal(section.childElementCount, 0);
 		items[0]?.click();
+		removeButtons[0]?.click();
 		assert.equal(openCount, 1);
+		assert.equal(removeCount, 0);
 		page.setRecentProjects([{ name: 'new-project', path: '/workspaces/new-project' }]);
 		assert.equal(section.hidden, false);
 		assert.equal(section.querySelector('.ash-getting-started-recent-name')?.textContent, 'new-project');

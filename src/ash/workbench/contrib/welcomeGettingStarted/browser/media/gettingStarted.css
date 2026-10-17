@@ -160,25 +160,114 @@
 }
 
 .ash-getting-started-recent-item {
+	/* Extend the hover target while keeping labels aligned with the cards. */
+	margin-inline: calc(-1 * var(--ash-spacing-size80));
+	position: relative;
+	min-width: 0;
+	border-radius: var(--ash-cornerRadius-small);
+}
+
+.ash-getting-started-recent-item:hover,
+.ash-getting-started-recent-item:focus-within {
+	background: var(--ash-list-hoverBackground);
+	outline: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
+	outline-offset: -1px;
+}
+
+.ash-getting-started-recent-content {
 	display: grid;
+	box-sizing: border-box;
 	width: 100%;
 	min-width: 0;
-	padding: 8px 0;
+	padding: var(--ash-spacing-size80);
 	border: 0;
+	border-radius: inherit;
 	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 	gap: var(--ash-spacing-size120);
 	color: var(--ash-foreground);
 	background: transparent;
 	font: inherit;
-	text-align: left;
+	text-align: start;
 }
 
-button.ash-getting-started-recent-item {
+button.ash-getting-started-recent-content {
 	cursor: pointer;
 }
 
-button.ash-getting-started-recent-item:hover {
-	color: var(--ash-accent-foreground);
+.ash-getting-started-recent-item:has(:focus-visible) {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+
+button.ash-getting-started-recent-content:focus-visible {
+	outline: none;
+}
+
+.ash-getting-started-recent-actions {
+	position: absolute;
+	inset-inline-end: var(--ash-spacing-size20);
+	top: var(--ash-spacing-size20);
+	bottom: var(--ash-spacing-size20);
+	display: flex;
+	align-items: center;
+	padding-inline: var(--ash-spacing-size40);
+	opacity: 0;
+	pointer-events: none;
+	background: var(--ash-editor-background);
+	border-radius: var(--ash-cornerRadius-small);
+}
+
+.ash-getting-started-recent-item:hover .ash-getting-started-recent-actions,
+.ash-getting-started-recent-item:focus-within
+	.ash-getting-started-recent-actions {
+	background:
+		linear-gradient(
+			var(--ash-list-hoverBackground),
+			var(--ash-list-hoverBackground)
+		),
+		var(--ash-editor-background);
+}
+
+/* Cover only the path; the row keeps its full-width layout and focus outline. */
+.ash-getting-started-recent-actions::before {
+	content: "";
+	position: absolute;
+	inset-block: 0;
+	inset-inline-end: 100%;
+	width: var(--ash-spacing-size160);
+	background: inherit;
+	mask-image: linear-gradient(to right, transparent, black);
+	pointer-events: none;
+}
+
+.ash-getting-started-recent-actions:dir(rtl)::before {
+	mask-image: linear-gradient(to left, transparent, black);
+}
+
+.ash-getting-started-recent-item:hover .ash-getting-started-recent-actions,
+.ash-getting-started-recent-item:focus-within
+	.ash-getting-started-recent-actions {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.ash-getting-started-recent-actions .ash-action-label {
+	box-sizing: border-box;
+	width: var(--ash-toolbar-actionSize);
+	height: var(--ash-toolbar-actionSize);
+	padding: 0;
+	color: var(--ash-foreground);
+}
+
+.ash-getting-started-recent-actions .ash-action-label:hover {
+	background: var(--ash-toolbar-hoverBackground);
+}
+
+@media (hover: none) {
+	.ash-getting-started-recent-actions {
+		opacity: 1;
+		pointer-events: auto;
+	}
 }
 
 .ash-getting-started-recent-name,
