@@ -49,7 +49,9 @@ def main(arguments: list[str] | None = None) -> int:
     if not product_services.is_file():
         raise RuntimeError(f"Ash product services are missing: {product_services}")
 
-    returncode, built = code_build.build_binaries(["ash"], environment)
+    returncode, built = code_build.build_binaries(
+        ["ash", "ash-app-server-daemon"], environment
+    )
     if returncode != 0:
         return returncode
     with code_build.stage_runtime(built) as executables:
@@ -60,7 +62,7 @@ def main(arguments: list[str] | None = None) -> int:
         arguments = arguments or []
         if run.requires_selected_server(arguments):
             prepared = subprocess.run(
-                [str(executable), "app-server", "daemon", "ensure-selected"],
+                [str(executables["ash-app-server-daemon"]), "ensure-selected"],
                 cwd=run.REPOSITORY_ROOT,
                 env=environment,
                 stdout=subprocess.DEVNULL,

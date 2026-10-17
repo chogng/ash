@@ -909,6 +909,7 @@ dependencies = [
  "ash-utils-cargo-bin",
  "ash-utils-cli",
  "ash-utils-home-dir",
+ "ash-utils-path",
  "chrono",
  "clap",
  "ed25519-dalek",

@@ -51,7 +51,6 @@ test("native host routes validate folder picking and developer tools", async () 
 		getTitleBarStyle: () => 'custom',
 		isAdmin: async () => false,
 		performDialogOperation: () => undefined,
-		performShellCommand: async () => '',
 		pickFolder: async () => {
 			pickedFolder = "/tmp/trusted-folder";
 			return pickedFolder;
@@ -186,8 +185,6 @@ test("desktop commands are available from the command palette", async () => {
 		onDidRequestOpenExternalUri: () => ({ dispose() { } }),
 		openExternal: async () => { throw new Error('unused'); },
 		showMessageBox: async () => { throw new Error('unused'); },
-		installShellCommand: async () => '',
-		uninstallShellCommand: async () => '',
 		listWindows: async () => [],
 		focusWindowById: async () => { },
 		focusWindow: async () => { },

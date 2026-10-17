@@ -87,9 +87,8 @@ pub(super) struct PackageArgs {
 }
 
 pub(super) fn connect() -> Result<AppServerSession, CliError> {
-    let executable = std::env::current_exe().map_err(CliError::failure)?;
+    let executable = crate::app_server::daemon_executable().map_err(CliError::failure)?;
     let command = StdioAppServerCommand::new(executable)
-        .with_argument("app-server")
         .with_argument("connect")
         .with_environment_variable("ASH_HOME", crate::profile_root()?.into_os_string())
         .without_environment_variable("ASH_WORKSPACE_ROOT");

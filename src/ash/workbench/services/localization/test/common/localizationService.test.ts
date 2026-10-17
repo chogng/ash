@@ -216,8 +216,7 @@ suite('Workbench localization', () => {
 			commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.navigateForwardInEditLocations' }, 'Go Forward in Edit Locations')),
 			commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.navigateBackInNavigationLocations' }, 'Go Back in Navigation Locations')),
 			commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.navigateForwardInNavigationLocations' }, 'Go Forward in Navigation Locations')),
-			commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.installShellCommand' }, 'Install ash Command in PATH')),
-		], ['文件', '显示面板', '打开 Agents 窗口', '在 Agents 中打开', '在 Agents 窗口中打开', '打开文件夹...', '开发者：切换开发者工具', '切换窗口...', '后退', '前进', '返回上一编辑位置', '前往下一编辑位置', '返回上一跳转位置', '前往下一跳转位置', '在 PATH 中安装 ash 命令']);
+		], ['文件', '显示面板', '打开 Agents 窗口', '在 Agents 中打开', '在 Agents 窗口中打开', '打开文件夹...', '开发者：切换开发者工具', '切换窗口...', '后退', '前进', '返回上一编辑位置', '前往下一编辑位置', '返回上一跳转位置', '前往下一跳转位置']);
 		assert.equal(localization.translate('ash', 'openAgentsWindow.systemWideFailed', 'Some system-wide shortcuts could not be registered ({0}); they may be used by another application.', { '0': 'Ctrl+A' }), '部分系统级快捷键无法注册（Ctrl+A）；它们可能已被其他应用占用。');
 		assert.equal(localization.translate('ash', 'sessions.list.search', 'Search sessions'), '搜索会话');
 		assert.equal(localization.translate('ash', 'sessions.menu.workbench', 'Return to Workbench'), '返回工作台');

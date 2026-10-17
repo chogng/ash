@@ -24,7 +24,7 @@ test('a system event wins over an older startup read and disposed windows ignore
 		getOSColorScheme: () => new Promise(resolve => pending.push(resolve)),
 		onDidChangeColorScheme: listener => events.event(listener),
 		onDidRequestOpenExternalUri: () => ({ dispose() { } }),
-		openExternal: unexpected, showMessageBox: unexpected, installShellCommand: unexpected, uninstallShellCommand: unexpected,
+		openExternal: unexpected, showMessageBox: unexpected,
 		listWindows: unexpected, focusWindowById: unexpected, focusWindow: unexpected, closeWindow: unexpected, closeOtherWindows: unexpected,
 		getZoomLevel: unexpected, onDidChangeZoomLevel: unexpected, setZoomLevel: unexpected,
 		getAuxiliaryWindowState: async () => { throw new Error('Unused window state'); },

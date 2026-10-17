@@ -59,7 +59,6 @@ export const NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL =
 	"ash:native-host:accessibility-support-changed";
 export const NATIVE_HOST_SYNC_SYSTEM_WIDE_KEYBINDINGS_CHANNEL =
 	'ash:native-host:sync-system-wide-keybindings';
-export const NATIVE_HOST_SHELL_COMMAND_CHANNEL = 'ash:native-host:shell-command';
 export const NATIVE_HOST_DIALOG_CHANNEL = 'ash:native-host:dialog';
 export const NATIVE_HOST_REVEAL_FILE_CHANNEL = 'ash:native-host:reveal-file';
 
@@ -91,13 +90,6 @@ export function validateNativeDialogOperation(value: unknown): NativeDialogOpera
 	}
 	if (options.textWidth !== undefined && (typeof options.textWidth !== 'number' || !Number.isFinite(options.textWidth) || options.textWidth < 0)) throw new TypeError('Invalid message box text width');
 	return operation as NativeDialogOperation;
-}
-
-export type ShellCommandOperation = 'install' | 'uninstall';
-
-export function validateShellCommandOperation(value: unknown): ShellCommandOperation {
-	if (value !== 'install' && value !== 'uninstall') throw new TypeError('Invalid shell command operation');
-	return value;
 }
 
 export interface INativeSystemWideKeybinding {
@@ -162,8 +154,6 @@ export interface INativeHostApi extends ICommonNativeHostService {
 	getOSColorScheme(): Promise<IColorScheme>;
 	onDidChangeColorScheme(listener: (scheme: IColorScheme) => void): DisposableHandle;
 	showMessageBox(options: MessageBoxOptions): Promise<MessageBoxReturnValue>;
-	installShellCommand(): Promise<string>;
-	uninstallShellCommand(): Promise<string>;
 	listWindows(): Promise<readonly IWorkbenchWindowInfo[]>;
 	focusWindowById(windowId: number): Promise<void>;
 	focusWindow(windowName?: string): Promise<void>;

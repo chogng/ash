@@ -4,27 +4,15 @@ import { Emitter } from '../../../../base/common/event.js';
 import { colorSchemeChannel } from '../../electron-main/nativeHostIpc.js';
 import type { IColorScheme } from '../../../window/common/window.js';
 import { WINDOW_ALWAYS_ON_TOP_CHANGED_CHANNEL, type IWindowAlwaysOnTopChangedEvent } from '../../../window/common/window.js';
-import { isAdmin, performShellCommand } from '../../electron-main/nativeHostMainService.js';
+import { isAdmin } from '../../electron-main/nativeHostMainService.js';
 import { nativeHostIpcRoutes, type INativeHostMainService } from '../../electron-main/nativeHostIpc.js';
-import { NATIVE_HOST_IS_ADMIN_CHANNEL, NATIVE_HOST_SHELL_COMMAND_CHANNEL, NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL, NATIVE_HOST_OPEN_WORKSPACE_CHANNEL } from '../../common/nativeHost.js';
+import { NATIVE_HOST_IS_ADMIN_CHANNEL, NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL, NATIVE_HOST_OPEN_WORKSPACE_CHANNEL } from '../../common/nativeHost.js';
 import type { BrowserWindow } from 'electron';
 import type { MessageBoxReturnValue } from '../../../../base/parts/sandbox/common/electronTypes.js';
 import type { ISandboxGlobals } from '../../../../base/parts/sandbox/electron-browser/sandboxTypes.js';
 import type { IMainProcessService } from '../../../ipc/common/mainProcessService.js';
 import { DialogMainService } from '../../../dialogs/electron-main/dialogMainService.js';
 import { validateNativeDialogOperation, validateOpenDialogResult, validateSaveDialogResult, validateMessageBoxResult } from '../../common/nativeHost.js';
-
-test('shell command IPC reaches the system host and rejects an unsupported installation before writing files', async () => {
-	const route = nativeHostIpcRoutes({
-		performShellCommand: operation => performShellCommand(operation, { isPackaged: false, executablePath: process.execPath }),
-	} as INativeHostMainService).find(route => route.channel === NATIVE_HOST_SHELL_COMMAND_CHANNEL)!;
-	assert.throws(() => route.validate('erase'), /Invalid shell command operation/);
-	for (const operation of ['install', 'uninstall']) {
-		await assert.rejects(async () => route.invoke(route.validate(operation)), process.platform === 'darwin'
-			? /requires a packaged Ash application/
-			: /requires macOS/);
-	}
-});
 
 test('window frame reads use the creation value and reject renderer arguments', async () => {
 	const route = nativeHostIpcRoutes({ getTitleBarStyle: () => 'custom' } as INativeHostMainService).find(route => route.channel === 'ash:native-host:get-title-bar-style')!;

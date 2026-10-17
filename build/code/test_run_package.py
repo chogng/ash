@@ -23,6 +23,7 @@ class PackageRunnerTests(unittest.TestCase):
             backend.touch()
             services.touch()
             staged = Path(temporary) / "staged-ash"
+            daemon = Path(temporary) / "staged-daemon"
             environment = {"PATH": "tools"}
             with (
                 patch.dict(run_package.os.environ, environment, clear=True),
@@ -35,7 +36,9 @@ class PackageRunnerTests(unittest.TestCase):
                 patch.object(
                     run_package.code_build,
                     "stage_runtime",
-                    return_value=nullcontext({"ash": staged}),
+                    return_value=nullcontext(
+                        {"ash": staged, "ash-app-server-daemon": daemon}
+                    ),
                 ),
                 patch.object(run_package.subprocess, "run") as subprocess_run,
             ):
@@ -61,7 +64,7 @@ class PackageRunnerTests(unittest.TestCase):
                         check=False,
                     ),
                     call(
-                        [str(staged), "app-server", "daemon", "ensure-selected"],
+                        [str(daemon), "ensure-selected"],
                         cwd=run_package.run.REPOSITORY_ROOT,
                         env=runtime,
                         stdout=run_package.subprocess.DEVNULL,
@@ -90,6 +93,7 @@ class PackageRunnerTests(unittest.TestCase):
             product_services.touch()
             built = Path(temporary) / "built-ash"
             staged = Path(temporary) / "staged-ash"
+            daemon = Path(temporary) / "staged-daemon"
             environment = {"PATH": "tools"}
             with (
                 patch.dict(run_package.os.environ, environment, clear=True),
@@ -102,7 +106,9 @@ class PackageRunnerTests(unittest.TestCase):
                 patch.object(
                     run_package.code_build,
                     "stage_runtime",
-                    return_value=nullcontext({"ash": staged}),
+                    return_value=nullcontext(
+                        {"ash": staged, "ash-app-server-daemon": daemon}
+                    ),
                 ),
                 patch.object(run_package.subprocess, "run") as subprocess_run,
             ):
@@ -115,7 +121,7 @@ class PackageRunnerTests(unittest.TestCase):
                     run_package.main(["app-server", "backend", "version"]), 0
                 )
 
-            build.assert_called_once_with(["ash"], environment)
+            build.assert_called_once_with(["ash", "ash-app-server-daemon"], environment)
             subprocess_run.assert_has_calls(
                 [
                     call(

@@ -360,6 +360,59 @@ fn app_launch_forwards_default_and_relative_targets_without_starting_backend() {
     assert!(!profile.exists());
 }
 
+#[cfg(unix)]
+#[test]
+fn daemon_entrypoints_and_internal_clients_use_the_packaged_connector() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let root = tempfile::tempdir().unwrap();
+    let binaries = root.path().join("package with 空格/bin");
+    std::fs::create_dir_all(&binaries).unwrap();
+    let executable = binaries.join("ash");
+    cargo_bin::copy_executable(&cargo_bin::cargo_bin!("ash").unwrap(), &executable).unwrap();
+    let daemon = binaries.join("ash-app-server-daemon");
+    std::fs::write(
+        &daemon,
+        "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$ASH_TEST_DAEMON_ARGUMENTS\"\nexit 29\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&daemon, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let record = root.path().join("arguments");
+    for (arguments, expected, code) in [
+        (vec!["app-server", "connect"], "connect\n", 29),
+        (
+            vec![
+                "app-server",
+                "daemon",
+                "version",
+                "--product-services",
+                "配置 with spaces.json",
+            ],
+            "version\n--product-services\n配置 with spaces.json\n",
+            29,
+        ),
+        (vec!["sessions"], "connect\n", 1),
+        (vec!["ask", "hello"], "connect\n", 1),
+    ] {
+        let output = Command::new(&executable)
+            .args(arguments)
+            .current_dir(root.path())
+            .env("ASH_HOME", root.path().join("profile"))
+            .env("ASH_TEST_DAEMON_ARGUMENTS", &record)
+            .env_remove("ASH_WORKSPACE_ROOT")
+            .output()
+            .unwrap();
+        assert_eq!(
+            output.status.code(),
+            Some(code),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(std::fs::read_to_string(&record).unwrap(), expected);
+        std::fs::remove_file(&record).unwrap();
+    }
+}
+
 #[test]
 fn exec_reuses_the_profile_daemon_without_a_local_backend_executable() {
     let mut harness = Harness::new();
@@ -403,6 +456,7 @@ fn selected_managed_cli_ensures_the_local_daemon_without_a_pinned_cli_switching_
     let selected_package = install.join("versions/selected");
     let cli_name = format!("ash{}", std::env::consts::EXE_SUFFIX);
     let backend_name = format!("ash-app-server{}", std::env::consts::EXE_SUFFIX);
+    let daemon_name = format!("ash-app-server-daemon{}", std::env::consts::EXE_SUFFIX);
     let mut selected_build_id = String::new();
     for (package, version) in [(&old_package, "0.1.0"), (&selected_package, "0.2.0")] {
         let binaries = package.join("bin");
@@ -413,18 +467,27 @@ fn selected_managed_cli_ensures_the_local_daemon_without_a_pinned_cli_switching_
         )
         .unwrap();
         cargo_bin::copy_executable(&harness.backend, &binaries.join(&backend_name)).unwrap();
-        let files = [cli_name.as_str(), backend_name.as_str()]
-            .into_iter()
-            .map(|name| {
-                (
-                    format!("bin/{name}"),
-                    format!(
-                        "{:x}",
-                        sha2::Sha256::digest(std::fs::read(binaries.join(name)).unwrap())
-                    ),
-                )
-            })
-            .collect::<std::collections::BTreeMap<_, _>>();
+        cargo_bin::copy_executable(
+            &harness.backend.with_file_name(&daemon_name),
+            &binaries.join(&daemon_name),
+        )
+        .unwrap();
+        let files = [
+            cli_name.as_str(),
+            backend_name.as_str(),
+            daemon_name.as_str(),
+        ]
+        .into_iter()
+        .map(|name| {
+            (
+                format!("bin/{name}"),
+                format!(
+                    "{:x}",
+                    sha2::Sha256::digest(std::fs::read(binaries.join(name)).unwrap())
+                ),
+            )
+        })
+        .collect::<std::collections::BTreeMap<_, _>>();
         let mut metadata = serde_json::json!({
             "version": version,
             "buildProfile": "dev-small",
@@ -897,4 +960,122 @@ fn credential_storage_commands_select_files_without_a_keyring_and_authorize_expl
         .unwrap();
     assert!(chinese_help.status.success());
     assert!(String::from_utf8_lossy(&chinese_help.stdout).contains("未加密凭据"));
+}
+
+#[test]
+fn managed_installer_reinstalls_and_launches_from_unicode_paths() {
+    use sha2::Digest;
+
+    let directory = TempDir::new().unwrap();
+    let root = directory.path();
+    let cli = cargo_bin::cargo_bin!("ash").unwrap();
+    let binary_name = format!("ash{}", std::env::consts::EXE_SUFFIX);
+    let install_root = root.join("安装 %! with spaces");
+    let launchers = root.join("命令 with spaces");
+    let mut previous = None;
+    for generation in ["first", "second"] {
+        let package = root.join(generation);
+        let binary = package.join("bin").join(&binary_name);
+        std::fs::create_dir_all(binary.parent().unwrap()).unwrap();
+        cargo_bin::copy_executable(&cli, &binary).unwrap();
+        std::fs::write(package.join("generation.txt"), generation).unwrap();
+        let files = [format!("bin/{binary_name}"), "generation.txt".to_owned()]
+            .into_iter()
+            .map(|path| {
+                let hash = format!(
+                    "{:x}",
+                    sha2::Sha256::digest(std::fs::read(package.join(&path)).unwrap())
+                );
+                (path, hash)
+            })
+            .collect::<std::collections::BTreeMap<_, _>>();
+        let mut metadata = serde_json::json!({
+            "layoutVersion": 2, "version": env!("CARGO_PKG_VERSION"), "target": build_info::TARGET,
+            "buildProfile": "release", "javascriptRuntime": {"kind": "packagedNode"},
+            "protocol": {"major": 1, "schemaHash": format!("sha256:{}", "0".repeat(64))},
+            "components": {"cli": {"binarySha256": files[&format!("bin/{binary_name}")], "updatePublicKey": "01".repeat(32)}}
+        });
+        metadata.sort_all_objects();
+        let mut digest = sha2::Sha256::new();
+        digest.update(b"ash-package-build-v2\0");
+        digest.update(serde_json::to_vec(&metadata).unwrap());
+        digest.update(b"\0");
+        for (path, hash) in &files {
+            digest.update(path.as_bytes());
+            digest.update(b"\0");
+            digest.update(hash.as_bytes());
+            digest.update(b"\0");
+        }
+        metadata["buildId"] = format!("sha256:{:x}", digest.finalize()).into();
+        metadata["files"] = serde_json::to_value(files).unwrap();
+        std::fs::write(
+            package.join("ash-package.json"),
+            serde_json::to_vec(&metadata).unwrap(),
+        )
+        .unwrap();
+        let output = Command::new(&binary)
+            .arg("install-managed")
+            .arg("--package")
+            .arg(&package)
+            .arg("--install-root")
+            .arg(&install_root)
+            .arg("--bin-dir")
+            .arg(&launchers)
+            .env("LC_ALL", "zh_CN.UTF-8")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(String::from_utf8_lossy(&output.stdout).contains("Ash 已安装到"));
+        #[cfg(unix)]
+        let selected = std::fs::canonicalize(install_root.join("current")).unwrap();
+        #[cfg(windows)]
+        let selected = install_root
+            .join("versions")
+            .join(std::fs::read_to_string(install_root.join("current")).unwrap());
+        assert_eq!(
+            std::fs::read_to_string(selected.join("generation.txt")).unwrap(),
+            generation
+        );
+        if let Some(previous) = &previous {
+            assert_ne!(&selected, previous);
+        }
+        previous = Some(selected);
+    }
+    let launch = || {
+        #[cfg(unix)]
+        let mut command = Command::new(launchers.join("ash"));
+        #[cfg(windows)]
+        let mut command = {
+            use std::os::windows::process::CommandExt;
+            let mut command = Command::new("cmd.exe");
+            // No console: the launcher must not rely on chcp or an OEM encoding.
+            command
+                .creation_flags(0x08000000)
+                .args(["/D", "/S", "/C"])
+                .raw_arg(format!(
+                    "\"\"{}\" --version\"",
+                    launchers.join("ash.cmd").display()
+                ));
+            command
+        };
+        #[cfg(unix)]
+        command.arg("--version");
+        command.output()
+    };
+    let output = launch().unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let expected = Command::new(&cli).arg("--version").output().unwrap();
+    assert_eq!(output.stdout, expected.stdout);
+    // The stable Windows adapter must execute the selected CLI, rather than run
+    // the product code from its original immutable hard link.
+    std::fs::remove_file(previous.unwrap().join("bin").join(binary_name)).unwrap();
+    assert!(launch().map_or(true, |output| !output.status.success()));
 }

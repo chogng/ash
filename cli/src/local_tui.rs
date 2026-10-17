@@ -33,8 +33,8 @@ fn run_entry(mut dir_root: PathBuf, profile_root: PathBuf, entry: Entry) -> Resu
     if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
         return Err("interactive mode requires a TTY; use `ash ask` or `ash exec` instead".into());
     }
-    let executable =
-        env::current_exe().map_err(|error| format!("could not resolve ash executable: {error}"))?;
+    let executable = crate::app_server::daemon_executable()
+        .map_err(|error| format!("could not resolve ash executable: {error}"))?;
     let mut session = connect_or_reconnect(&executable, &dir_root, &profile_root)?;
     let announcement = crate::announcement::start()?;
     let (updater, notices) = match crate::update::AutomaticUpdater::start(session.client()) {
@@ -139,7 +139,6 @@ fn connect(
     profile_root: &std::path::Path,
 ) -> Result<AppServerSession, ClientError> {
     let command = StdioAppServerCommand::new(executable)
-        .with_argument("app-server")
         .with_argument("connect")
         .with_environment_variable("ASH_HOME", profile_root.as_os_str())
         .with_environment_variable("ASH_WORKSPACE_ROOT", dir_root.as_os_str());

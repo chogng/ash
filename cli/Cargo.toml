@@ -20,7 +20,7 @@ clap = { workspace = true, features = ["derive"] }
 chrono = { workspace = true }
 rand = { workspace = true }
 ash-utils-home-dir = { workspace = true }
-ash-app-server-daemon = { workspace = true }
+ash-utils-path = { workspace = true }
 process-hardening = { workspace = true }
 ash-package-store = { workspace = true }
 build-info = { workspace = true }
@@ -46,6 +46,7 @@ arg0 = { workspace = true }
 ash-tui = { workspace = true }
 
 [dev-dependencies]
+ash-app-server-daemon = { workspace = true }
 github-extension = { package = "ash-github-extension", path = "../extensions/github" }
 flate2 = { workspace = true }
 tar = { workspace = true }

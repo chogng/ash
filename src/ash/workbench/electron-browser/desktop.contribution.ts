@@ -4,7 +4,6 @@ import {
 import {
 	ToggleDevToolsAction,
 } from "./actions/developerActions.js";
-import { InstallShellCommandAction, UninstallShellCommandAction } from './actions/installActions.js';
 import './parts/dialogs/dialog.contribution.js';
 import '../contrib/files/electron-browser/fileActions.contribution.js';
 import { IInstantiationService } from '../../platform/instantiation/common/instantiation.js';
@@ -135,6 +134,4 @@ registerAction2(ShowNextWindowTabAction);
 registerAction2(ShowPreviousWindowTabAction);
 registerAction2(MoveWindowTabToNewWindowAction);
 registerAction2(MergeWindowTabsAction);
-registerAction2(InstallShellCommandAction);
-registerAction2(UninstallShellCommandAction);
 registerWorkbenchContribution('workbench.contrib.nativeWindow', WorkbenchPhase.AfterRestored, accessor => accessor.get(IInstantiationService).createInstance(NativeWindow));

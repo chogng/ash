@@ -92,6 +92,12 @@ jobs:
         shell: bash
         run: ${{ matrix.python }} -B scripts/cargo.py --deny-warnings check --workspace --exclude ash-external-js-ext --all-targets --locked --keep-going
 
+      - name: Test managed CLI installation and launcher boundaries
+        shell: bash
+        run: |
+          ${{ matrix.python }} -B scripts/cargo.py test -p ash-cli --lib install::tests --locked
+          ${{ matrix.python }} -B scripts/cargo.py --process-tests test -p ash-cli --test commands managed_installer_ --locked
+
       - name: Test macOS sandbox and large-workspace file tools
         if: runner.os == 'macOS'
         shell: bash
@@ -168,13 +174,14 @@ jobs:
           python3 -B scripts/cargo.py --deny-warnings build
           -p ash-cli --bin ash
           -p ash-app-server --bin ash-app-server
+          -p ash-app-server-daemon --bin ash-app-server-daemon
           -p ash-remote-server --bin ash-remote-server
           --profile ci-test --locked
 
-      - name: Compile stdio and connection library tests
+      - name: Compile CLI and connection library tests
         run: |
           python3 -B scripts/cargo.py --deny-warnings test \
-            -p ash-cli --test stdio --profile ci-test --locked --no-run
+            -p ash-cli --test stdio --test commands --profile ci-test --locked --no-run
           python3 -B scripts/cargo.py --deny-warnings test \
             -p ash-app-server-client -p ash-remote-connections \
             --lib --profile ci-test --locked --no-run
@@ -184,6 +191,12 @@ jobs:
         run: >-
           python3 -B scripts/cargo.py --deny-warnings --process-tests test
           -p ash-cli --test stdio --profile ci-test --locked
+
+      - name: Test CLI daemon composition and backend selection
+        timeout-minutes: 10
+        run: >-
+          python3 -B scripts/cargo.py --deny-warnings --process-tests test
+          -p ash-cli --test commands daemon --profile ci-test --locked
 
       - name: Test client EOF cleanup and SSH compatibility rejection
         timeout-minutes: 15

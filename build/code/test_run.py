@@ -56,7 +56,7 @@ class SourceRunnerTests(unittest.TestCase):
         subprocess_run.assert_has_calls(
             [
                 call(
-                    [str(staged["ash"]), "app-server", "daemon", "ensure-selected"],
+                    [str(staged["ash-app-server-daemon"]), "ensure-selected"],
                     cwd=run.REPOSITORY_ROOT,
                     env=runtime,
                     stdout=run.subprocess.DEVNULL,
@@ -293,6 +293,11 @@ class SourceRunnerTests(unittest.TestCase):
         self.packages.assert_called_once()
 
     def test_development_binaries_include_platform_children(self) -> None:
+        for platform in ("win32", "linux", "darwin"):
+            self.assertIn(
+                "ash-app-server-daemon",
+                build.development_binaries(platform_name=platform),
+            )
         self.assertNotIn(
             "ash-command-runner",
             build.development_binaries(platform_name="win32"),
@@ -379,6 +384,7 @@ class SourceRunnerTests(unittest.TestCase):
         return {
             "ash": root / "ash.exe",
             "ash-app-server": root / "ash-app-server.exe",
+            "ash-app-server-daemon": root / "ash-app-server-daemon.exe",
             "ash-code-mode-host": root / "ash-code-mode-host.exe",
             "ash-voice-host": root / "ash-voice-host.exe",
             "tgrep": root / "tgrep.exe",

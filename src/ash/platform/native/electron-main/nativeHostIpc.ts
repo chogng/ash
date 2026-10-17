@@ -20,14 +20,12 @@ import {
 	NATIVE_HOST_SET_WINDOW_DIMMED_CHANNEL,
 	NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL,
 	NATIVE_HOST_SYNC_SYSTEM_WIDE_KEYBINDINGS_CHANNEL,
-	NATIVE_HOST_SHELL_COMMAND_CHANNEL,
 	NATIVE_HOST_DIALOG_CHANNEL,
 	NATIVE_HOST_REVEAL_FILE_CHANNEL,
 	type INativeSystemWideKeybinding,
 	type INativeSystemWideKeybindingResult,
 	type INativeWindowTheme,
 	type IOpenAgentsWindowOptions,
-	type ShellCommandOperation,
 	type NativeDialogOperation,
 	validateAccessibilitySupportRead,
 	validateNativeWindowTheme,
@@ -39,7 +37,6 @@ import {
 	validateSaveDialogOptions,
 	validateToggleDeveloperTools,
 	validateSystemWideKeybindings,
-	validateShellCommandOperation,
 	validateNativeDialogOperation,
 	validateRevealFilePath,
 } from "../common/nativeHost.js";
@@ -58,7 +55,6 @@ export interface INativeHostMainService {
 	getTitleBarStyle(): TitleBarStyleConfiguration;
 	isAdmin(): Promise<boolean>;
 	performDialogOperation(operation: NativeDialogOperation): unknown;
-	performShellCommand(operation: ShellCommandOperation): Promise<string>;
 	pickFolder(): Promise<string | undefined>;
 	showOpenDialog(options: OpenDialogOptions): Promise<OpenDialogReturnValue>;
 	openWorkspace(root: string, forceNewWindow?: boolean): Promise<void>;
@@ -112,11 +108,6 @@ export function nativeHostIpcRoutes(
 			channel: NATIVE_HOST_DIALOG_CHANNEL,
 			validate: validateNativeDialogOperation,
 			invoke: operation => service.performDialogOperation(operation as NativeDialogOperation),
-		},
-		{
-			channel: NATIVE_HOST_SHELL_COMMAND_CHANNEL,
-			validate: validateShellCommandOperation,
-			invoke: operation => service.performShellCommand(operation as ShellCommandOperation),
 		},
 		{
 			channel: NATIVE_HOST_GET_ACCESSIBILITY_SUPPORT_CHANNEL,

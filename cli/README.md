@@ -61,8 +61,10 @@
 - `exec` 中需要把选项样式的文字作为任务内容时，用 `--` 分隔。
 - `app` 接受目录、文件或工作区文件，先解析为绝对路径，再交给桌面已有启动入口处理。macOS 查找 `/Applications/Ash.app` 和 `~/Applications/Ash.app`；Windows 查找 `%LOCALAPPDATA%/Programs/Ash/Ash.exe` 及 Program Files 下的 Ash 安装。其他位置或 Linux 源码启动包装器使用 `--app-path PATH`；macOS 支持 `.app` 或可执行文件，其他平台使用可执行文件。未找到时返回错误，不自动下载安装。
 - `app` 不加载 profile 或启动 CLI 后端；桌面应用负责连接和窗口生命周期，CLI 完成交接后退出。`app` 命令的帮助及错误文案通过 `LC_ALL`、`LC_MESSAGES`、`LANG` 依次选择语言，支持英语、中文、日语和法语，未知语言使用英语。
+- PATH 中的 `ash` 由独立 CLI 的安装和更新流程维护；打开桌面使用 `ash app`。
 - 同一个插件 ID 安装了多个版本时，变更命令必须加 `--version VERSION`。启用不自动授予权限。
-- 管理命令连接当前 `ASH_HOME` 的 daemon；尚未运行时按既有生命周期启动。命令退出只关闭自身连接。
+- 管理、非交互与 TUI 连接直接启动同包的 `ash-app-server-daemon connect`，连接当前 `ASH_HOME` 的 daemon；尚未运行时按既有生命周期启动。命令退出只关闭自身连接。
+- `ash app-server connect` 与 `ash app-server daemon ...` 也交给该独立程序；CLI 不内嵌 daemon 命令实现。Unix 透传入口直接替换进程，保留 PID、信号与退出状态。
 - 本地连接复用当前 profile 选中的后台版本；首次没有后台包时，从完整的调用方安装包复制一份到 profile。CLI 更新不会替换正在运行的后台；明确执行 `ash app-server daemon ensure-selected` 才选择调用方的版本，切换可能中断任务。
 - `ash app-server daemon update` 单独安装已签名的 stable 后台版本，不更新 CLI，并取消 `ensure-selected` 对调用方构建的固定。带可信公钥的 release 后台运行时也会定时检查 stable 版本；正在运行的任务继续使用旧版，后台下次启动或明确执行 `restart` 后使用新版。
 - `ask` 和 `exec` 也通过相同的 profile daemon 执行 Turn；与同时运行的桌面端共用 Session、Thread 和后台任务状态。
@@ -175,11 +177,25 @@ notice. A missing locale, failed request or invalid feed displays no notice.
 for local verification. An empty value disables the request. It is independent of
 the authenticated software-update endpoints and cannot change what gets installed.
 
-The [Pages workflow](../.github/workflows/pages.yml) publishes the canonical installers from
-`build/code/` whenever they change on `main`. Its static artifact contains `.nojekyll`
+The [Pages workflow](../.github/workflows/pages.yml) publishes the installers from
+`build/code/` at the latest released tag after platform publication, on an installer change, or on manual dispatch.
+It never publishes a main-branch installer ahead of its matching CLI. Its static artifact contains `.nojekyll`
 at the root and the two scripts at the public `/cli/` URL path; no Jekyll build runs. Installation packages
 remain GitHub Release assets and must be published before installation can succeed.
 On macOS, Linux, and WSL, ensure `~/.local/bin` is on `PATH` to invoke `ash` after installation.
+
+The verified download invokes the internal `install-managed` entry point. Bootstrap and updates
+share the installation's OS file lock, immutable package publication, package identity checks,
+and atomic `current` replacement. A concurrent publisher fails without changing the selection
+and can be retried. Staging lives on the destination filesystem so temporary-directory volume
+boundaries do not affect publication. Existing unrelated launchers are preserved.
+On Windows, an ASCII `ash.cmd` calls an immutable `ash-launcher.exe` adapter, hard-linked from
+the initial CLI package when possible. Its adjacent UTF-8 `ash-launcher.json` binds the install
+root; only that root's `current` pointer selects the product version. The adapter runs before
+product parsing and internal helper roles, forwards OS arguments, and preserves the child exit
+code. It does not depend on a console or a code page. Reinstallation migrates the exact legacy
+Ash command file while preserving other launchers. Unix App Server forwarding replaces the CLI
+process, preserving its PID and signal-based exit status.
 
 `cli/tests/remote_connect.rs` exercises target resolution, the real local Remote Server
 broker, trusted runtime preparation, and `--check` through a fake OpenSSH executable.
@@ -194,7 +210,7 @@ just check ash-cli
 just test ash-utils-cli
 just test ash-utils-cargo-bin
 just test ash-cli --lib
-python3 -B scripts/cargo.py build -p ash-cli --bin ash -p ash-app-server --bin ash-app-server
+python3 -B scripts/cargo.py build -p ash-cli --bin ash -p ash-app-server --bin ash-app-server -p ash-app-server-daemon --bin ash-app-server-daemon --profile ci-test --locked
 just test-processes ash-cli --test commands --test stdio
 just rust-warnings ash-cli
 just dependencies
@@ -203,5 +219,5 @@ just dependencies
 - `src/cli_tests.rs` 和 `src/exec_tests.rs` 验证命令图、帮助、透传与参数到实际执行模式的转换。
 - `login_tests.rs` 验证精确登录身份、失败与断线处理。
 - `tests/commands.rs` 使用独立的临时 `ASH_HOME`、`CODEX_HOME`、`ZCODE_DATA_BASE_DIR` 和真实 CLI；夹具启动并回收 daemon，验证跨进程配置、插件权限、会话生命周期、诊断和退出码。使用 `test-processes` 在 Cargo 的 Windows Job 外运行，以验证版本切换时 daemon 的独立生命周期；普通 `test` 的 Job 禁止该进程脱离，导致创建失败。
-- `tests/stdio.rs` 验证 App Server stdio 握手、目录隔离，以及显式 shutdown 和 Drop 后立即删除 profile。客户端先关闭 stdin，再等待转发的服务进程退出，确保 Windows SQLite 句柄已释放。Unix 用例另检查 CLI、真实服务端和 SSH 传输的 PID 已退出，并用 `lsof` 检查目录内没有打开的文件；删除成功不能替代句柄检查。真实 OpenSSH 回环用例使用临时密钥和严格 host-key 校验，覆盖 shutdown 与 Drop；独立后台应跨连接保留，随后由正式 stop 命令关闭并回收。夹具所需 `lsof`、`ssh-keygen`、`/usr/bin/ssh` 和 `/usr/sbin/sshd` 缺失时测试失败。运行前同一 profile 构建 CLI、App Server、Remote Server 和 JS Extension Host，并按 Ash 的 runtime lock 准备 ripgrep，通过 `ASH_RG_PATH` 提供给宿主；Linux/macOS 由 `rust-warnings.yml` 的 `stdio-lifecycle` 作业运行完整目标。完整 TUI 行为使用产品已有 PTY 场景。
+- `tests/stdio.rs` 验证 App Server stdio 握手、目录隔离，以及显式 shutdown 和 Drop 后立即删除 profile。客户端先关闭 stdin，再等待转发的服务进程退出，确保 Windows SQLite 句柄已释放。Unix 用例另检查 CLI、真实服务端和 SSH 传输的 PID 已退出，并用 `lsof` 检查目录内没有打开的文件；删除成功不能替代句柄检查。真实 OpenSSH 回环用例使用临时密钥和严格 host-key 校验，覆盖 shutdown 与 Drop；独立后台应跨连接保留，随后由正式 stop 命令关闭并回收。夹具所需 `lsof`、`ssh-keygen`、`/usr/bin/ssh` 和 `/usr/sbin/sshd` 缺失时测试失败。运行前同一 profile 构建 CLI、App Server、独立 daemon、Remote Server 和 JS Extension Host，并按 Ash 的 runtime lock 准备 ripgrep，通过 `ASH_RG_PATH` 提供给宿主；Linux/macOS 由 `rust-warnings.yml` 的 `stdio-lifecycle` 作业运行完整目标。完整 TUI 行为使用产品已有 PTY 场景。
 - `tests/commands.rs` 中的 `app_` 用例无需 App Server，验证真实 CLI 启动、路径透传、错误和中文帮助。设置 `ASH_CLI_EXECUTABLE` 为编译出的 `ash` 的绝对路径后，执行 `pnpm run test:smoke:ui:no-compile test/smoke/areas/windows/launch.spec.ts --grep 'ash app hands'`，通过真实 Electron 窗口验证交接；Unix 覆盖可执行文件，macOS 另覆盖 `.app` 与 LaunchServices。

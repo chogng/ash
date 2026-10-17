@@ -3,6 +3,10 @@ fn main() {
         eprintln!("process hardening failed: {error}");
         std::process::exit(1);
     }
+    #[cfg(windows)]
+    if let Some(code) = ash_cli::run_managed_launcher() {
+        std::process::exit(code);
+    }
     let _package_lease = match std::env::current_exe()
         .and_then(ash_package_store::acquire_package_lease_for_executable)
     {

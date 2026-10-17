@@ -7,7 +7,7 @@ import { PolicyChannel } from '../../platform/policy/common/policyIpc.js';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { WebviewProtocolProvider } from '../../platform/webview/electron-main/webviewProtocolProvider.js';
-import { isAdmin, performShellCommand } from '../../platform/native/electron-main/nativeHostMainService.js';
+import { isAdmin } from '../../platform/native/electron-main/nativeHostMainService.js';
 import { ChecksumService, checksumChannel } from '../../platform/checksum/node/checksumService.js';
 import { ProcessMainService } from '../../platform/process/electron-main/processMainService.js';
 import { IGPUProcessMainService } from '../../platform/gpu/electron-main/gpuProcessMainService.js';
@@ -1531,7 +1531,6 @@ export class AshApplication extends Disposable {
 			releaseAgentsWindowInvitation: id => this.agentsWindowInvitations.release(window.id, id),
 			isAdmin,
 			performDialogOperation: operation => this.dialogs.perform(window, operation),
-			performShellCommand: operation => performShellCommand(operation, { isPackaged: app.isPackaged, executablePath: process.execPath }),
 			pickFolder: async () => {
 				const result = await this.dialogs.showOpenDialog({ title: 'Add Directory', properties: ['openDirectory'] }, window);
 				return result.canceled ? undefined : result.filePaths[0];

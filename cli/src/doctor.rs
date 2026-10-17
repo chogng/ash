@@ -76,15 +76,13 @@ pub(super) fn run(options: Options) -> Result<(), CliError> {
     );
     report.record(
         "app-server executable",
-        ash_app_server_daemon::backend_executable_path()
-            .map_err(CliError::failure)
-            .and_then(|path| {
-                if path.is_file() {
-                    Ok(path.display().to_string())
-                } else {
-                    Err(CliError::failure(format!("not found: {}", path.display())))
-                }
-            }),
+        crate::app_server::backend_executable().and_then(|path| {
+            if path.is_file() {
+                Ok(path.display().to_string())
+            } else {
+                Err(CliError::failure(format!("not found: {}", path.display())))
+            }
+        }),
     );
     match management::connect() {
         Ok(session) => {

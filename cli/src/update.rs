@@ -15,9 +15,9 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 use ureq_update as ureq;
 
-const REPOSITORY: &str = "chogng/ash";
+pub(super) const REPOSITORY: &str = "chogng/ash";
 const RELEASE_API: &str = "https://api.github.com/repos/chogng/ash/releases/latest";
-const INSTALL_MARKER: &str = "install.json";
+pub(super) const INSTALL_MARKER: &str = "install.json";
 const CHECKED_AT_PREFIX: &str = "last-update-check";
 const UPDATE_STATUS: &str = "update-status.json";
 const UPDATE_LOCK: &str = "update.lock";
@@ -151,7 +151,7 @@ fn managed_install_paths(executable: &Path) -> Option<(&Path, &Path, &Path)> {
     Some((versions.parent()?, versions, package))
 }
 
-fn require_install_marker(root: &Path) -> Result<(), String> {
+pub(super) fn require_install_marker(root: &Path) -> Result<(), String> {
     let marker: InstallMarker = serde_json::from_slice(
         &fs::read(root.join(INSTALL_MARKER)).map_err(|_| managed_install_required())?,
     )
@@ -214,32 +214,61 @@ impl ManagedInstall {
     }
 
     fn select(&self, package: &Path) -> Result<(), String> {
-        let name = package
-            .file_name()
-            .ok_or_else(|| "installed package has no version directory name".to_owned())?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::symlink;
-            let next = self.root.join(".current-next");
-            let _ = fs::remove_file(&next);
-            symlink(Path::new("versions").join(name), &next)
-                .map_err(|error| format!("could not prepare the Ash version pointer: {error}"))?;
-            fs::rename(&next, self.root.join("current"))
-                .map_err(|error| format!("could not select the new Ash version: {error}"))?;
-        }
-        #[cfg(windows)]
-        {
-            let next = self.root.join("current.next");
-            fs::write(&next, name.to_string_lossy().as_bytes())
-                .map_err(|error| format!("could not prepare the Ash version pointer: {error}"))?;
-            let current = self.root.join("current");
-            fs::remove_file(&current)
-                .map_err(|error| format!("could not replace the Ash version pointer: {error}"))?;
-            fs::rename(&next, current)
-                .map_err(|error| format!("could not select the new Ash version: {error}"))?;
-        }
-        Ok(())
+        select_package(&self.root, package)
     }
+}
+
+/// Called only while holding the installation's update lock. A failed replacement
+/// leaves the previous selection available to launchers and running clients.
+pub(super) fn select_package(root: &Path, package: &Path) -> Result<(), String> {
+    let name = package
+        .file_name()
+        .ok_or_else(|| "installed package has no version directory name".to_owned())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::symlink;
+        let next = root.join(".current-next");
+        match fs::remove_file(&next) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(crate::nls::format(
+                    crate::nls::Message::UpdateSelectFailed,
+                    error.to_string(),
+                ));
+            }
+        }
+        symlink(Path::new("versions").join(name), &next)
+            .and_then(|()| fs::rename(&next, root.join("current")))
+            .map_err(|error| {
+                crate::nls::format(crate::nls::Message::UpdateSelectFailed, error.to_string())
+            })?;
+    }
+    #[cfg(windows)]
+    {
+        // Antivirus scanners and launchers can briefly open the pointer without
+        // delete sharing. Retry atomic replacement; never delete the old pointer.
+        let mut attempt = 0;
+        loop {
+            match ash_utils_path::write_atomically(
+                &root.join("current"),
+                name.to_string_lossy().as_bytes(),
+            ) {
+                Ok(()) => break,
+                Err(error) if matches!(error.raw_os_error(), Some(5 | 32 | 33)) && attempt < 10 => {
+                    attempt += 1;
+                    thread::sleep(Duration::from_millis(attempt * attempt * 50));
+                }
+                Err(error) => {
+                    return Err(crate::nls::format(
+                        crate::nls::Message::UpdateSelectFailed,
+                        error.to_string(),
+                    ));
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 fn managed_install_required() -> String {
@@ -308,24 +337,7 @@ fn run_for_install(
         let archive = transport.stage_package(&resolved.release.package, &staging)?;
         ash_product_update::extract_package(&archive, resolved.release.package.format, &package)
             .map_err(package_error)?;
-        let metadata = validate_package(&package, &latest, target)?;
-        let id = format!(
-            "{}-{}",
-            latest,
-            metadata
-                .build_id
-                .strip_prefix("sha256:")
-                .and_then(|value| value.get(..16))
-                .ok_or_else(|| "package buildId is invalid".to_owned())?
-        );
-        let installed = install.versions.join(id);
-        if installed.exists() {
-            validate_package(&installed, &latest, target)?;
-        } else {
-            fs::rename(&package, &installed).map_err(|error| {
-                format!("could not publish the downloaded Ash version: {error}")
-            })?;
-        }
+        let installed = publish_package(&install.versions, &package, &latest, target)?;
         install.select(&installed)?;
         record_check(&install.root, policy)?;
         Ok(UpdateOutcome::Installed {
@@ -335,6 +347,34 @@ fn run_for_install(
     })();
     let _ = fs::remove_dir_all(&staging);
     result
+}
+
+pub(super) fn publish_package(
+    versions: &Path,
+    package: &Path,
+    version: &Version,
+    target: &str,
+) -> Result<PathBuf, String> {
+    let identity = validate_package(package, version, target)?;
+    let id = format!(
+        "{}-{}",
+        version,
+        identity
+            .build_id
+            .strip_prefix("sha256:")
+            .and_then(|value| value.get(..16))
+            .ok_or("package buildId is invalid")?
+    );
+    let installed = versions.join(id);
+    if installed.exists() {
+        if validate_package(&installed, version, target)? != identity {
+            return Err(crate::nls::text(crate::nls::Message::UpdateBuildMismatch).into());
+        }
+    } else {
+        fs::rename(package, &installed)
+            .map_err(|error| format!("could not publish the downloaded Ash version: {error}"))?;
+    }
+    Ok(installed)
 }
 
 struct ResolvedRelease {
@@ -508,7 +548,7 @@ fn elapsed_label(seconds: u64) -> String {
     }
 }
 
-fn clean_staging(versions: &Path) -> Result<(), String> {
+pub(super) fn clean_staging(versions: &Path) -> Result<(), String> {
     for entry in fs::read_dir(versions)
         .map_err(|error| format!("could not inspect the Ash version store: {error}"))?
     {
@@ -572,17 +612,24 @@ fn unix_time() -> Result<u64, String> {
         .map_err(|error| format!("system clock is before the Unix epoch: {error}"))
 }
 
-struct UpdateLock {
+pub(super) struct UpdateLock {
     file: File,
 }
 
 impl UpdateLock {
-    fn acquire(root: &Path) -> Result<Self, String> {
-        let path = root.join(UPDATE_LOCK);
+    pub(super) fn acquire(root: &Path) -> Result<Self, String> {
+        Self::acquire_path(&root.join(UPDATE_LOCK))
+    }
+
+    pub(super) fn acquire_launcher(bin: &Path) -> Result<Self, String> {
+        Self::acquire_path(&bin.join(".ash-launcher.lock"))
+    }
+
+    fn acquire_path(path: &Path) -> Result<Self, String> {
         let file = OpenOptions::new()
             .write(true)
             .create(true)
-            .open(&path)
+            .open(path)
             .map_err(|error| format!("could not open the Ash update lock: {error}"))?;
         file.try_lock_exclusive()
             .map_err(|error| format!("another Ash update is active: {error}"))?;
@@ -705,7 +752,7 @@ fn read_update_public_key(package: &Path) -> Result<ash_product_update::UpdatePu
         .map_err(|_| "installed package update public key is invalid".to_owned())
 }
 
-fn validate_package(
+pub(super) fn validate_package(
     package: &Path,
     expected_version: &Version,
     expected_target: &str,
@@ -760,7 +807,7 @@ fn validate_package(
     Ok(identity)
 }
 
-fn current_target() -> Result<&'static str, String> {
+pub(super) fn current_target() -> Result<&'static str, String> {
     if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
         Ok("aarch64-apple-darwin")
     } else if cfg!(all(target_os = "macos", target_arch = "x86_64")) {

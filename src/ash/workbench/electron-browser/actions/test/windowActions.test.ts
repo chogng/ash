@@ -7,7 +7,7 @@ import { ILayoutService } from '../../../../platform/layout/browser/layoutServic
 import { InstantiationService } from '../../../../platform/instantiation/common/instantiationService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../platform/configuration/common/inMemoryConfigurationService.js';
-import { NATIVE_HOST_OPEN_WINDOW_CHANNEL, NATIVE_HOST_DIALOG_CHANNEL, NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL, NATIVE_HOST_SHELL_COMMAND_CHANNEL } from '../../../../platform/native/common/nativeHost.js';
+import { NATIVE_HOST_OPEN_WINDOW_CHANNEL, NATIVE_HOST_DIALOG_CHANNEL, NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL } from '../../../../platform/native/common/nativeHost.js';
 import type { INativeHostApi } from '../../../../platform/native/common/nativeHost.js';
 import { nativeHostIpcRoutes } from '../../../../platform/native/electron-main/nativeHostIpc.js';
 import { INativeHostService } from '../../../common/services.js';
@@ -23,7 +23,7 @@ suiteTeardown(() => {
 	else Reflect.deleteProperty(globalThis, 'window');
 });
 
-test('desktop dialog and shell routes reject malformed requests', async () => {
+test('desktop dialog and window routes reject malformed requests', async () => {
 	const operations: unknown[] = [];
 	const routes = nativeHostIpcRoutes({
 		getAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },
@@ -34,7 +34,6 @@ test('desktop dialog and shell routes reject malformed requests', async () => {
 		getTitleBarStyle: () => 'custom',
 		isAdmin: async () => false,
 		performDialogOperation: operation => { operations.push(operation); },
-		performShellCommand: async operation => operation,
 		pickFolder: async () => undefined, showOpenDialog: async () => ({ canceled: true, filePaths: [] }), openWorkspace: async () => { },
 		openWindow: async options => { operations.push(options); },
 		openAgentsWindow: async options => { operations.push(options ?? 'openAgentsWindow'); },
@@ -45,9 +44,7 @@ test('desktop dialog and shell routes reject malformed requests', async () => {
 		syncSystemWideKeybindings: () => ({ failed: [] }),
 	});
 	const dialog = routes.find(route => route.channel === NATIVE_HOST_DIALOG_CHANNEL);
-	const shell = routes.find(route => route.channel === NATIVE_HOST_SHELL_COMMAND_CHANNEL);
 	assert.ok(dialog);
-	assert.ok(shell);
 	assert.throws(() => dialog.validate({ kind: 'show', id: 0, options: { type: 'info', message: 'Hello' } }), /Invalid dialog ID/);
 	assert.throws(() => dialog.validate({ kind: 'show', id: 1, options: { type: 'info', message: 'Hello', execute: 'bad' } }), /Invalid message box options/);
 	assert.deepEqual(dialog.validate({ kind: 'show', id: 2, options: { type: 'warning', message: 'Choose', buttons: ['First', 'Second', 'Cancel'], cancelId: 2 } }),
@@ -56,8 +53,6 @@ test('desktop dialog and shell routes reject malformed requests', async () => {
 	assert.throws(() => dialog.validate({ kind: 'show', id: 4, options: { type: 'critical', message: 'Choose', buttons: ['First', 'Cancel'] } }), /Invalid message box options/);
 	await dialog.invoke(dialog.validate({ kind: 'show', id: 1, options: { type: 'info', message: 'Hello' } }));
 	assert.equal(operations.length, 1);
-	assert.throws(() => shell.validate('erase'), /Invalid shell command operation/);
-	assert.equal(await shell.invoke(shell.validate('install')), 'install');
 	const openAgents = routes.find(route => route.channel === NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL);
 	assert.ok(openAgents);
 	assert.throws(() => openAgents.validate({ windowId: 1 }), /Invalid Agents Window options/);
@@ -103,8 +98,6 @@ test('desktop window commands reach the window host', async () => {
 		onDidRequestOpenExternalUri: () => ({ dispose() { } }),
 		openExternal: async () => { throw new Error('unused'); },
 		showMessageBox: async () => { throw new Error('unused'); },
-		installShellCommand: async () => '',
-		uninstallShellCommand: async () => '',
 		listWindows: async () => [],
 		focusWindowById: async id => { calls.push(`focus:${id}`); },
 		focusWindow: async () => { calls.push('focusSelf'); },

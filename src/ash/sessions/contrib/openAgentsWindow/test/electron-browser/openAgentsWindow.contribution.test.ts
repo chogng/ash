@@ -75,8 +75,6 @@ class Fixture extends Disposable {
 			onDidRequestOpenExternalUri: () => ({ dispose() { } }),
 			openExternal: async () => { throw new Error('unused'); },
 			showMessageBox: async () => { throw new Error('unused'); },
-			installShellCommand: async () => '',
-			uninstallShellCommand: async () => '',
 			listWindows: async () => [],
 			focusWindowById: async () => { },
 			focusWindow: async () => { },

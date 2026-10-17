@@ -45,6 +45,7 @@ def requires_selected_server(arguments: list[str]) -> bool:
         "app-server",
         "remote",
         "update",
+        "install-managed",
     }
 
 
@@ -65,7 +66,7 @@ def main(arguments: list[str] | None = None) -> int:
         environment = runtime_environment(environment, executables)
         if requires_selected_server(arguments):
             prepared = subprocess.run(
-                [str(executables["ash"]), "app-server", "daemon", "ensure-selected"],
+                [str(executables["ash-app-server-daemon"]), "ensure-selected"],
                 cwd=REPOSITORY_ROOT,
                 env=environment,
                 stdout=subprocess.DEVNULL,

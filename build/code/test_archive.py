@@ -213,14 +213,18 @@ class AshCodeArchiveTests(unittest.TestCase):
                 )
 
     @unittest.skipIf(os.name == "nt", "the POSIX installer is tested on POSIX hosts")
-    def test_posix_installer_publishes_a_version_and_stable_launcher(self) -> None:
+    def test_posix_installer_delegates_verified_packages_with_special_paths(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             fixture = root / "fixture"
             executable = fixture / "bin/ash"
             executable.parent.mkdir(parents=True)
             executable.write_text(
-                "#!/bin/sh\nprintf 'ash 1.2.3\\n'\n", encoding="utf-8"
+                '#!/bin/sh\nprintf "%s\\0" "$@" > "$ASH_TEST_INVOCATION"\n'
+                'test -f "$3/bin/ash"\n',
+                encoding="utf-8",
             )
             executable.chmod(0o755)
             target = {
@@ -259,8 +263,11 @@ class AshCodeArchiveTests(unittest.TestCase):
                 encoding="utf-8",
             )
             curl.chmod(0o755)
-            install_root = root / "install"
-            launcher_root = root / "launchers"
+            install_root = root / "安装 with spaces"
+            launcher_root = root / "命令 with spaces"
+            temporary_root = root / "temporary with spaces"
+            temporary_root.mkdir()
+            invocation = root / "invocation"
             environment = {
                 **os.environ,
                 "PATH": f"{tools}:/usr/bin:/bin",
@@ -268,6 +275,8 @@ class AshCodeArchiveTests(unittest.TestCase):
                 "ASH_BIN_DIR": str(launcher_root),
                 "ASH_TEST_ARCHIVE": str(archive),
                 "ASH_TEST_CHECKSUM": str(checksum),
+                "ASH_TEST_INVOCATION": str(invocation),
+                "TMPDIR": str(temporary_root),
             }
 
             result = subprocess.run(
@@ -279,13 +288,29 @@ class AshCodeArchiveTests(unittest.TestCase):
                 text=True,
             )
 
-            self.assertIn("Installed Ash Code 1.2.3", result.stdout)
-            selected = (install_root / "current").readlink()
-            self.assertEqual(selected.parts[0], "versions")
-            self.assertTrue((install_root / selected / "bin/ash").is_file())
+            self.assertEqual(result.returncode, 0)
+            arguments = invocation.read_bytes().decode().split("\0")[:-1]
+            self.assertEqual(arguments[:2], ["install-managed", "--package"])
+            self.assertTrue(Path(arguments[2]).is_relative_to(temporary_root))
             self.assertEqual(
-                (launcher_root / "ash").readlink(),
-                install_root / "current/bin/ash",
+                arguments[3:],
+                ["--install-root", str(install_root), "--bin-dir", str(launcher_root)],
+            )
+            self.assertFalse(
+                Path(arguments[2]).exists(), "bootstrap staging must be cleaned"
+            )
+            invocation.unlink()
+            checksum.write_text(f"{'0' * 64}  {release_name}\n", encoding="ascii")
+            rejected = subprocess.run(
+                ["sh", "build/code/install.sh"],
+                cwd=archive_builder.REPOSITORY_ROOT,
+                env=environment,
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(rejected.returncode, 0)
+            self.assertFalse(
+                invocation.exists(), "unverified packages must never execute"
             )
 
 

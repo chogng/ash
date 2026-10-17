@@ -29,6 +29,7 @@ DEVELOPMENT_RUNTIME_ROOT = REPOSITORY_ROOT / ".build" / "code" / "dev"
 BINARY_PACKAGES = {
     "ash": "ash-cli",
     "ash-app-server": "ash-app-server",
+    "ash-app-server-daemon": "ash-app-server-daemon",
     "ash-code-mode-host": "ash-code-mode-host",
     "ash-voice-host": "ash-voice-host",
     "bwrap": "ash-bwrap",
@@ -40,6 +41,7 @@ def development_binaries(*, platform_name: str | None = None) -> list[str]:
     binaries = [
         "ash",
         "ash-app-server",
+        "ash-app-server-daemon",
         "ash-code-mode-host",
         "ash-voice-host",
     ]

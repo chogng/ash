@@ -30,6 +30,18 @@ pub(crate) enum Message {
     ExecChangesFailed,
     ExecChangesUnavailable,
     UpdatePackageFailed,
+    InstallFailed,
+    Installed,
+    InstallLauncherKept,
+    InstallUnmanagedCurrent,
+    InstallUnsupportedFile,
+    #[cfg(windows)]
+    InstallForeignLauncher,
+    #[cfg(windows)]
+    InstallLauncherFailed,
+    InstallRecursivePath,
+    UpdateSelectFailed,
+    UpdateBuildMismatch,
 }
 
 pub(crate) fn text(message: Message) -> &'static str {
@@ -48,6 +60,42 @@ pub(crate) fn format(message: Message, argument: impl AsRef<str>) -> String {
 fn localized(message: Message, locale: &str) -> &'static str {
     let language = locale.split(['-', '_', '.']).next().unwrap_or_default();
     match (message, language) {
+        (Message::InstallUnmanagedCurrent, "zh") => "拒绝替换非 Ash 管理的版本指针：{0}",
+        (Message::InstallUnmanagedCurrent, _) => {
+            "Refusing to replace an unmanaged Ash current path: {0}"
+        }
+        (Message::InstallUnsupportedFile, "zh") => "安装包包含链接或不支持的文件。",
+        (Message::InstallUnsupportedFile, _) => "The package contains a link or unsupported file.",
+        #[cfg(windows)]
+        (Message::InstallForeignLauncher, "zh") => "Windows 启动器的安装绑定无效或属于其他安装。",
+        #[cfg(windows)]
+        (Message::InstallForeignLauncher, _) => {
+            "The Windows launcher binding is invalid or belongs to another installation."
+        }
+        #[cfg(windows)]
+        (Message::InstallLauncherFailed, "zh") => "无法启动已安装的 Ash：{0}",
+        #[cfg(windows)]
+        (Message::InstallLauncherFailed, _) => "Could not launch the installed Ash: {0}",
+        (Message::InstallRecursivePath, "zh") => "安装和启动器路径不能位于包目录内。",
+        (Message::InstallRecursivePath, _) => {
+            "Installation and launcher paths must not overlap a package directory."
+        }
+        (Message::UpdateSelectFailed, "zh") => "无法切换 Ash 版本：{0}",
+        (Message::UpdateSelectFailed, _) => "Could not select the Ash version: {0}",
+        (Message::UpdateBuildMismatch, "zh") => "已安装的 Ash 包具有不同的构建标识。",
+        (Message::UpdateBuildMismatch, _) => {
+            "The installed Ash package has a different build identity."
+        }
+        (Message::InstallFailed, "zh") => "无法安装 Ash：{0}",
+        (Message::InstallFailed, _) => "Could not install Ash: {0}",
+        (Message::Installed, "zh") => "Ash 已安装到 {0}",
+        (Message::Installed, _) => "Installed Ash at {0}",
+        (Message::InstallLauncherKept, "zh") => {
+            "已保留现有启动器 {0}；可直接运行安装目录中的 Ash。"
+        }
+        (Message::InstallLauncherKept, _) => {
+            "Kept the existing launcher at {0}; run Ash from its installation directory directly."
+        }
         (Message::SecretsAbout, "zh") => "管理当前配置目录的凭据存储。",
         (Message::SecretsAbout, _) => "Manage credential storage for the current profile.",
         (Message::SecretsStatusHelp, "zh") => "静默检查凭据存储并输出 JSON 状态。",

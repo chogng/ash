@@ -85,8 +85,6 @@ test('Electron titlebars apply the active theme and release their subscriptions 
 			onDidRequestOpenExternalUri: () => ({ dispose() { } }),
 			openExternal: async () => { throw new Error('unused'); },
 			showMessageBox: async () => { throw new Error('unused'); },
-			installShellCommand: async () => '',
-			uninstallShellCommand: async () => '',
 			listWindows: async () => [],
 			focusWindowById: async () => { },
 			focusWindow: async () => { },

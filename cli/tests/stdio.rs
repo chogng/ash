@@ -118,6 +118,33 @@ fn ash_code_cli_forwards_app_server_output_and_exit_status() {
     fs::remove_dir_all(root).unwrap();
 }
 
+#[cfg(unix)]
+#[test]
+fn ash_code_cli_app_server_handoff_preserves_pid_and_signal() {
+    use std::os::unix::process::ExitStatusExt;
+    use std::process::Stdio;
+
+    let directory = tempfile::tempdir().unwrap();
+    let backend = directory.path().join("server with spaces");
+    fs::write(
+        &backend,
+        "#!/bin/sh\nprintf '%s\\n' \"$$\"\nkill -TERM \"$$\"\n",
+    )
+    .unwrap();
+    fs::set_permissions(&backend, fs::Permissions::from_mode(0o755)).unwrap();
+    let child = std::process::Command::new(env!("CARGO_BIN_EXE_ash"))
+        .args(["app-server", "--listen", "stdio://"])
+        .env("ASH_APP_SERVER_PATH", backend)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let cli_pid = child.id();
+    let output = child.wait_with_output().unwrap();
+    assert_eq!(output.stdout, format!("{cli_pid}\n").as_bytes());
+    assert_eq!(output.status.signal(), Some(15));
+}
+
 #[test]
 fn ash_code_app_server_without_dir_does_not_inherit_its_current_directory() {
     let root = test_root("empty-dir");
