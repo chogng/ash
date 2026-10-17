@@ -11,6 +11,16 @@ const artifact = Object.freeze({
 	sha256: "a".repeat(64),
 });
 
+test('Windows runtime installation accepts the platform-specific executable receipt', async () => {
+	const executable = 'C:/Users/开发者/Ash remote/runtimes/x86_64-pc-windows-msvc/0.1.0/abc/bin/ash-remote-server.exe';
+	const installer = new RemoteRuntimeInstaller({
+		remoteExecutable: 'ash-remote', sshExecutable: 'ssh', environment: {},
+		artifact: { ...artifact, target: 'x86_64-pc-windows-msvc' }, installRoot: 'C:/Users/开发者/Ash remote',
+		runCommand: async () => ({ exitCode: 0, stdout: executable + '\r\n', stderr: '' }),
+	});
+	assert.equal(await installer.install('windows-dev'), executable);
+});
+
 test("Electron Main delegates installation to the shared ash remote command", async () => {
 	let invocation: { executable: string; args: readonly string[]; environment: NodeJS.ProcessEnv; } | undefined;
 	const installer = new RemoteRuntimeInstaller({
@@ -55,12 +65,12 @@ test("artifact environment override is all-or-nothing and rejects unsupported ta
 		() => remoteRuntimeArtifactFromEnvironment({
 			ASH_REMOTE_RUNTIME_ARCHIVE: artifact.archivePath,
 			ASH_REMOTE_RUNTIME_VERSION: artifact.version,
-			ASH_REMOTE_RUNTIME_TARGET: "x86_64-pc-windows-msvc",
+			ASH_REMOTE_RUNTIME_TARGET: "x86_64-pc-windows-gnu",
 			ASH_REMOTE_RUNTIME_ARCHIVE_SIZE: String(artifact.archiveSize),
 			ASH_REMOTE_RUNTIME_UNPACKED_SIZE: String(artifact.unpackedSize),
 			ASH_REMOTE_RUNTIME_SHA256: artifact.sha256,
 		}),
-		/Unsupported POSIX/,
+		/Unsupported Remote/,
 	);
 });
 

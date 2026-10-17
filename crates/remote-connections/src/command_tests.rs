@@ -145,7 +145,7 @@ fn install_requires_exact_catalog_integrity_and_package_target() {
 }
 
 #[test]
-fn install_rejects_windows_zero_sizes_and_incomplete_records() {
+fn install_rejects_unsupported_targets_zero_sizes_and_incomplete_records() {
     let base = [
         "install",
         "--host",
@@ -155,7 +155,7 @@ fn install_rejects_windows_zero_sizes_and_incomplete_records() {
         "--version",
         "0.1.0",
         "--target",
-        "x86_64-pc-windows-msvc",
+        "x86_64-pc-windows-gnu",
         "--archive-size",
         "1",
         "--unpacked-size",
@@ -166,7 +166,7 @@ fn install_rejects_windows_zero_sizes_and_incomplete_records() {
     assert!(
         parse(strings(base))
             .unwrap_err()
-            .contains("unsupported POSIX")
+            .contains("unsupported Remote")
     );
     assert!(
         parse(strings([

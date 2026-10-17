@@ -66,6 +66,8 @@ fn platform_probe_parses_each_supported_package_target() {
         ("linux:x86_64:musl", "x86_64-unknown-linux-musl"),
         ("macos:aarch64:none", "aarch64-apple-darwin"),
         ("macos:x86_64:none", "x86_64-apple-darwin"),
+        ("windows:x86_64:msvc", "x86_64-pc-windows-msvc"),
+        ("windows:aarch64:msvc", "aarch64-pc-windows-msvc"),
     ];
 
     for (probe, target) in probes {
@@ -366,6 +368,9 @@ enum PackageVariant {
     HostProvidedNode,
     LinkedEntrypoint,
     MetadataBytes(usize),
+    ExtraPath(&'static str),
+    #[cfg(windows)]
+    LargeBinary,
 }
 
 #[test]
@@ -386,11 +391,143 @@ fn installer_accepts_full_release_manifests_but_bounds_metadata_memory() {
     }
 }
 
+#[test]
+fn windows_archives_require_exe_payloads_and_reject_filesystem_aliases() {
+    let root = tempfile::tempdir().unwrap();
+    let platform = RemotePlatform::windows(RemoteArchitecture::X86_64);
+    let artifact = package_artifact_for_platform(root.path(), PackageVariant::Canonical, platform);
+    artifact.open_verified().unwrap();
+    let command =
+        remote_runtime_install_command(&artifact, &RemoteRuntimeInstallLocation::UserData);
+    assert!(
+        command.len() < 8000,
+        "command must fit Windows cmd.exe: {}",
+        command.len()
+    );
+    assert!(!command.contains(['$', '`', '%']));
+    for path in [
+        "BIN/ASH-REMOTE-SERVER.EXE",
+        "ash-path/NUL.txt",
+        "ash-path/file:stream",
+        "ash-path/trailing.",
+        "ash-path/trailing ",
+    ] {
+        let artifact =
+            package_artifact_for_platform(root.path(), PackageVariant::ExtraPath(path), platform);
+        assert!(artifact.open_verified().is_err(), "{path}");
+    }
+}
+
+#[cfg(windows)]
+#[test]
+fn powershell_installer_preserves_binary_uploads_and_reuses_immutable_runtime() {
+    use std::os::windows::process::CommandExt;
+    use std::process::Command;
+    use std::process::Stdio;
+    let root = tempfile::tempdir().unwrap();
+    let artifact = package_artifact_for_platform(
+        root.path(),
+        PackageVariant::LargeBinary,
+        RemotePlatform::windows(RemoteArchitecture::X86_64),
+    );
+    // Exceed OpenSSH's input window with incompressible bytes. A tiny fixture or
+    // a regular input file hides ConsoleStream's nonblocking-pipe failure.
+    assert!(artifact.integrity().archive_size().get() > 3 * 1024 * 1024);
+    artifact.open_verified().unwrap();
+    for (shell, args) in [
+        ("cmd.exe", vec!["/d", "/s", "/c"]),
+        (
+            "powershell.exe",
+            vec!["-NoProfile", "-NonInteractive", "-Command"],
+        ),
+    ] {
+        let install_root = root.path().join(format!("安装 O'Brien $literal% {shell}"));
+        let location = RemoteRuntimeInstallLocation::Absolute(
+            RemoteRuntimeInstallRoot::parse(install_root.to_str().unwrap()).unwrap(),
+        );
+        let command = remote_runtime_install_command(&artifact, &location);
+        for expected in [
+            "__ASH_REMOTE_RUNTIME_INSTALLED__:",
+            "__ASH_REMOTE_RUNTIME_REUSED__:",
+        ] {
+            let mut process = Command::new(shell);
+            process.args(&args);
+            if shell == "cmd.exe" {
+                // OpenSSH supplies shell syntax after /c. Rust's normal CRT quoting
+                // would turn the nested PowerShell command into a string expression.
+                process.raw_arg(&command);
+            } else {
+                process.arg(&command);
+            }
+            let mut child = process
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .unwrap();
+            let mut input = File::open(artifact.archive()).unwrap();
+            let mut stdin = child.stdin.take().unwrap();
+            let upload = std::thread::spawn(move || std::io::copy(&mut input, &mut stdin));
+            let output = child.wait_with_output().unwrap();
+            let uploaded = upload.join().unwrap();
+            assert!(
+                output.status.success(),
+                "{}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            if expected == "__ASH_REMOTE_RUNTIME_INSTALLED__:" {
+                assert_eq!(uploaded.unwrap(), artifact.integrity().archive_size().get());
+            }
+            let receipt = String::from_utf8(output.stdout).unwrap();
+            assert!(receipt.contains(expected), "{receipt}");
+            let installed = super::install::parse_install_receipt(&receipt, &artifact)
+                .unwrap()
+                .unwrap();
+            assert!(Path::new(installed.runtime().executable()).starts_with(&install_root));
+            assert_eq!(fs::read(installed.runtime().executable()).unwrap(), b"ash");
+            let package = Path::new(installed.runtime().executable())
+                .parent()
+                .unwrap()
+                .parent()
+                .unwrap();
+            assert_eq!(
+                fs::read(package.join("ash-resources/binary.dat")).unwrap(),
+                binary_fixture()
+            );
+        }
+    }
+}
+
+#[cfg(windows)]
+fn binary_fixture() -> Vec<u8> {
+    (0u32..98_304)
+        .flat_map(|counter| Sha256::digest(counter.to_le_bytes()))
+        .collect()
+}
+
 fn package_artifact(root: &Path, variant: PackageVariant) -> RemoteRuntimeArtifact {
+    package_artifact_for_platform(root, variant, TARGET)
+}
+
+fn package_artifact_for_platform(
+    root: &Path,
+    variant: PackageVariant,
+    platform: RemotePlatform,
+) -> RemoteRuntimeArtifact {
+    let suffix = platform.executable_suffix();
     let archive_path = root.join("ash-package.tar.gz");
     let archive_file = File::create(&archive_path).unwrap();
     let encoder = GzEncoder::new(archive_file, Compression::default());
     let mut builder = Builder::new(encoder);
+    let mut directory = Header::new_gnu();
+    directory.set_entry_type(EntryType::Directory);
+    directory.set_size(0);
+    directory.set_mode(0o755);
+    directory.set_cksum();
+    builder
+        .append_data(&mut directory, "bin/", std::io::empty())
+        .unwrap();
     let javascript_runtime = match variant {
         PackageVariant::HostProvidedNode => "hostProvidedNode",
         _ => "packagedNode",
@@ -398,8 +535,8 @@ fn package_artifact(root: &Path, variant: PackageVariant) -> RemoteRuntimeArtifa
     let mut metadata = json!({
         "layoutVersion": 2,
         "version": VERSION,
-        "target": TARGET.target_triple(),
-        "entrypoint": "bin/ash-app-server",
+        "target": platform.target_triple(),
+        "entrypoint": format!("bin/ash-app-server{suffix}"),
         "pathDir": "ash-path",
         "resourcesDir": "ash-resources",
         "javascriptRuntime": { "kind": javascript_runtime },
@@ -419,17 +556,65 @@ fn package_artifact(root: &Path, variant: PackageVariant) -> RemoteRuntimeArtifa
             header.set_link_name("../outside/ash").unwrap();
             header.set_cksum();
             builder
-                .append_data(&mut header, "bin/ash-remote-server", std::io::empty())
+                .append_data(
+                    &mut header,
+                    &format!("bin/ash-remote-server{suffix}"),
+                    std::io::empty(),
+                )
                 .unwrap();
         }
-        _ => unpacked_size += append_file(&mut builder, "bin/ash-remote-server", b"ash", 0o755),
+        _ => {
+            unpacked_size += append_file(
+                &mut builder,
+                &format!("bin/ash-remote-server{suffix}"),
+                b"ash",
+                0o755,
+            )
+        }
     }
-    unpacked_size += append_file(&mut builder, "bin/ash-app-server-daemon", b"daemon", 0o755);
-    unpacked_size += append_file(&mut builder, "bin/ash-app-server", b"daemon", 0o755);
-    unpacked_size += append_file(&mut builder, "ash-path/rg", b"ripgrep", 0o755);
-    unpacked_size += append_file(&mut builder, "ash-resources/tgrep/tgrep", b"tgrep", 0o755);
+    unpacked_size += append_file(
+        &mut builder,
+        &format!("bin/ash-app-server-daemon{suffix}"),
+        b"daemon",
+        0o755,
+    );
+    unpacked_size += append_file(
+        &mut builder,
+        &format!("bin/ash-app-server{suffix}"),
+        b"daemon",
+        0o755,
+    );
+    unpacked_size += append_file(
+        &mut builder,
+        &format!("ash-path/rg{suffix}"),
+        b"ripgrep",
+        0o755,
+    );
+    unpacked_size += append_file(
+        &mut builder,
+        &format!("ash-resources/tgrep/tgrep{suffix}"),
+        b"tgrep",
+        0o755,
+    );
     if !matches!(variant, PackageVariant::HostProvidedNode) {
-        unpacked_size += append_file(&mut builder, "ash-resources/node/bin/node", b"node", 0o755);
+        unpacked_size += append_file(
+            &mut builder,
+            &format!("ash-resources/node/bin/node{suffix}"),
+            b"node",
+            0o755,
+        );
+    }
+    if let PackageVariant::ExtraPath(path) = variant {
+        unpacked_size += append_file(&mut builder, path, b"unexpected", 0o644);
+    }
+    #[cfg(windows)]
+    if let PackageVariant::LargeBinary = variant {
+        unpacked_size += append_file(
+            &mut builder,
+            "ash-resources/binary.dat",
+            &binary_fixture(),
+            0o644,
+        );
     }
     let encoder = builder.into_inner().unwrap();
     encoder.finish().unwrap();
@@ -439,7 +624,7 @@ fn package_artifact(root: &Path, variant: PackageVariant) -> RemoteRuntimeArtifa
     RemoteRuntimeArtifact::new(
         archive_path,
         RemoteRuntimeVersion::parse(VERSION).unwrap(),
-        TARGET,
+        platform,
         RemoteRuntimeArtifactIntegrity::new(
             NonZeroU64::new(bytes.len() as u64).unwrap(),
             NonZeroU64::new(unpacked_size).unwrap(),

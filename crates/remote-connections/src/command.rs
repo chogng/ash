@@ -171,7 +171,7 @@ fn parse_fetch(arguments: &[String]) -> Result<RemoteCommand, String> {
         "--target" => assign_once(
             &mut platform,
             RemotePlatform::from_target_triple(value)
-                .ok_or_else(|| format!("unsupported POSIX Remote target: {value}"))?,
+                .ok_or_else(|| format!("unsupported Remote target: {value}"))?,
             name,
         ),
         "--cache-root" => assign_once(&mut cache_root, PathBuf::from(value), name),
@@ -369,7 +369,7 @@ fn parse_install(arguments: &[String]) -> Result<RemoteCommand, String> {
         "--target" => assign_once(
             &mut platform,
             RemotePlatform::from_target_triple(value)
-                .ok_or_else(|| format!("unsupported POSIX Remote target: {value}"))?,
+                .ok_or_else(|| format!("unsupported Remote target: {value}"))?,
             name,
         ),
         "--archive-size" => assign_once(&mut archive_size, parse_size(value, name)?, name),

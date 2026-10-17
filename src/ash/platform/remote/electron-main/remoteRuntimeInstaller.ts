@@ -1,12 +1,15 @@
 import type { RemoteRuntimeInstallProgress } from "../common/remoteRuntimeInstallProgress.js";
+import { isWindowsRemotePath } from "../common/remote.js";
 import { isAbsolute } from "node:path";
 import { isRecord } from "../../../base/common/types.js";
 import { isNonNegativeSafeInteger, isPositiveSafeInteger } from "../../../base/common/numbers.js";
-import { isCanonicalAbsolutePosixPath, normalizeCredentialFreeSshHost, type RunRemoteCommand, runRemoteCommand, validLocalCommand } from "./remoteCommand.js";
+import { isCanonicalAbsoluteRemotePath, normalizeCredentialFreeSshHost, type RunRemoteCommand, runRemoteCommand, validLocalCommand } from "./remoteCommand.js";
 
 export type { RunRemoteCommand, RemoteCommandResult } from "./remoteCommand.js";
 
-const POSIX_REMOTE_TARGETS = new Set([
+const REMOTE_TARGETS = new Set([
+	"x86_64-pc-windows-msvc",
+	"aarch64-pc-windows-msvc",
 	"aarch64-apple-darwin",
 	"aarch64-unknown-linux-gnu",
 	"aarch64-unknown-linux-musl",
@@ -54,7 +57,7 @@ export class RemoteRuntimeInstaller {
 	constructor(readonly options: RemoteRuntimeInstallerOptions) {
 		validateTrustedRemoteRuntimeArtifact(options.artifact);
 		if (!validLocalCommand(options.remoteExecutable) || !validLocalCommand(options.sshExecutable)) throw new Error("Remote installer executables must be non-empty and contain no control characters");
-		if (options.installRoot !== undefined && !isCanonicalAbsolutePosixPath(options.installRoot)) throw new Error("Remote runtime install root must be a canonical absolute POSIX path");
+		if (options.installRoot !== undefined && !isCanonicalAbsoluteRemotePath(options.installRoot)) throw new Error("Remote runtime install root must be a canonical absolute remote path");
 		this.runCommand = options.runCommand ?? runRemoteCommand;
 	}
 
@@ -94,7 +97,8 @@ export class RemoteRuntimeInstaller {
 			throw new Error(`Remote runtime installation failed: ${diagnostic}`);
 		}
 		const executable = result.stdout.split(/\r?\n/u).map(line => line.trim()).reverse().find(line => line.length > 0);
-		if (executable === undefined || !isCanonicalAbsolutePosixPath(executable) || !executable.endsWith("/bin/ash-remote-server")) {
+		const suffix = artifact.target.endsWith("-windows-msvc") ? ".exe" : "";
+		if (executable === undefined || !isCanonicalAbsoluteRemotePath(executable) || isWindowsRemotePath(executable) !== (suffix === ".exe") || !executable.endsWith(`/bin/ash-remote-server${suffix}`)) {
 			throw new Error("Remote runtime installation did not return a valid immutable executable path");
 		}
 		return executable;
@@ -178,7 +182,7 @@ export function remoteRuntimeArtifactFromEnvironment(environment: NodeJS.Process
 export function validateTrustedRemoteRuntimeArtifact(artifact: TrustedRemoteRuntimeArtifact): void {
 	if (!isAbsolute(artifact.archivePath) || !validLocalCommand(artifact.archivePath)) throw new Error("Remote runtime archive path must be an absolute local path");
 	if (!VERSION_PATTERN.test(artifact.version)) throw new Error("Remote runtime artifact version is invalid");
-	if (!POSIX_REMOTE_TARGETS.has(artifact.target)) throw new Error(`Unsupported POSIX Remote runtime target: ${artifact.target}`);
+	if (!REMOTE_TARGETS.has(artifact.target)) throw new Error(`Unsupported Remote runtime target: ${artifact.target}`);
 	if (!Number.isSafeInteger(artifact.archiveSize) || artifact.archiveSize <= 0) throw new Error("Remote runtime archive size must be a positive safe integer");
 	if (!Number.isSafeInteger(artifact.unpackedSize) || artifact.unpackedSize <= 0) throw new Error("Remote runtime unpacked size must be a positive safe integer");
 	if (!SHA256_PATTERN.test(artifact.sha256)) throw new Error("Remote runtime SHA-256 must be 64 lowercase hex characters");

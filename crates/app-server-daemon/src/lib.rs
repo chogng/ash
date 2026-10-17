@@ -84,6 +84,11 @@ impl SshConnectionOptions {
     pub fn runtime(&self) -> &str {
         self.runtime.executable()
     }
+
+    /// Uses the same OS-specific launch contract as direct Remote clients.
+    pub fn remote_command(&self) -> String {
+        remote::remote_runtime_command(self.root.as_ref(), &self.runtime)
+    }
 }
 
 /// Profile, directory grant, and product-service inputs for one daemon connection.

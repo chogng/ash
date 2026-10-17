@@ -6,6 +6,14 @@ use super::RemotePlatform;
 fn supported_remote_platforms_map_to_canonical_package_targets() {
     let targets = [
         (
+            RemotePlatform::windows(RemoteArchitecture::X86_64),
+            "x86_64-pc-windows-msvc",
+        ),
+        (
+            RemotePlatform::windows(RemoteArchitecture::Aarch64),
+            "aarch64-pc-windows-msvc",
+        ),
+        (
             RemotePlatform::linux(RemoteArchitecture::Aarch64, RemoteLinuxLibc::Gnu),
             "aarch64-unknown-linux-gnu",
         ),
@@ -37,7 +45,7 @@ fn supported_remote_platforms_map_to_canonical_package_targets() {
         assert_eq!(RemotePlatform::from_target_triple(target), Some(platform));
     }
     assert_eq!(
-        RemotePlatform::from_target_triple("x86_64-pc-windows-msvc"),
+        RemotePlatform::from_target_triple("x86_64-pc-windows-gnu"),
         None
     );
 }

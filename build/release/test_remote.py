@@ -16,6 +16,22 @@ from build.release.remote import (
 
 
 class RemoteReleaseTests(unittest.TestCase):
+    def test_windows_runtime_archives_bind_exe_payloads_to_the_catalog(self):
+        for target in ("x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc"):
+            with (
+                self.subTest(target=target),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
+                root = Path(temporary)
+                (root / "source").mkdir()
+                package = create_runtime_package(
+                    root / "source", target, media_distribution="none"
+                )
+                self.assertTrue((package / "bin/ash-remote-server.exe").is_file())
+                archive = root / f"ash-remote-{target}.tar.gz"
+                archive_package(package, archive, unsigned=True)
+                self.assertEqual(archive_record(archive)[0]["target"], target)
+
     def test_publication_rejects_local_media_download_descriptors(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

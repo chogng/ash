@@ -74,6 +74,34 @@ fn remote_command_quotes_the_dir_and_runtime_as_independent_arguments() {
 }
 
 #[test]
+fn windows_launch_keeps_unicode_and_shell_metacharacters_as_literal_data() {
+    use base64::Engine;
+    let profile = RemoteProfile::new(
+        SshTarget::new(
+            SshHost::parse("windows-dev").unwrap(),
+            RemoteDirPath::parse("C:/开发 O'Brien/$data").unwrap(),
+        ),
+        RemoteRuntime::new("C:/Program Files/Ash/ash-remote-server.exe").unwrap(),
+    );
+    let command = remote_app_server_command(&profile);
+    let encoded = command
+        .strip_prefix("powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand ")
+        .unwrap();
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(encoded)
+        .unwrap();
+    let utf16 = bytes
+        .chunks_exact(2)
+        .map(|b| u16::from_le_bytes([b[0], b[1]]))
+        .collect::<Vec<_>>();
+    let script = String::from_utf16(&utf16).unwrap();
+    assert!(script.contains("$env:ASH_WORKSPACE_ROOT='C:/开发 O''Brien/$data'"));
+    assert!(script.contains("$s.FileName='C:/Program Files/Ash/ash-remote-server.exe'"));
+    assert!(script.contains("$s.UseShellExecute=$false"));
+    assert!(script.contains("$p.WaitForExit(); exit $p.ExitCode"));
+}
+
+#[test]
 fn remote_runtime_probe_is_shell_quoted_and_reports_a_resolved_executable() {
     let profile = RemoteProfile::new(
         SshTarget::new(

@@ -82,8 +82,9 @@ export class AppServerConnectionRelay extends Disposable {
 			}
 			if (this.state === 'ready') { return; }
 			if (!this.renderer || this.renderer.isDestroyed()) { return; }
+			const initializeTimeoutMs = this.options.processLauncher.initializeTimeoutMs ?? 15_000;
 			ready = new Promise<void>((resolve, reject) => {
-				resources.add(disposableTimeout(() => reject(new Error('Renderer initialization timed out')), 15_000));
+				resources.add(disposableTimeout(() => reject(new Error('Renderer initialization timed out')), initializeTimeoutMs));
 				resources.add(token.onCancellationRequested(() => reject(new CancellationError())));
 				resources.add(this.onStateChange(state => {
 					if (state !== 'ready' && state !== 'crashed') { return; }

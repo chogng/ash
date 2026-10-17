@@ -80,7 +80,7 @@ resolver 的可选回调，`NativeExtensionService` 注册 provider，平台 res
 `workbench/services/workspaces/common/workspaceTrust.ts` 使用同一主机的 canonical 目录身份查询
 Rust 权限，不允许 canonical URI 将目录授权改向其他主机或本机文件系统。
 通用 Remote URI 的 authority 由 `platform/remote/common/remoteHosts.ts` 读取，不限定 resolver 前缀；
-`team+` 等扩展端点的文件夹与 SSH 文件夹共用 canonical POSIX 路径及权限检查。OpenSSH host alias
+`team+` 等扩展端点的文件夹与 SSH 文件夹共用 canonical 绝对路径及权限检查。OpenSSH host alias
 校验只在 SSH 身份与执行入口生效，不参与其他 provider 的资源身份解析。
 
 `ResolvedOptions` 随端点一起发布、重连一起清除；`isTrusted=false` 限制 UI 信任视图，true 不能
@@ -280,9 +280,10 @@ URL 票据只存在 fragment，需与 SSH 访问权限一同使用；票据只�
 ## Workspace 与安全边界
 
 Remote 单文件夹使用 `ash-remote://ssh+<host>/<absolute-path>` 作为资源身份。`host` 只能是没有
-凭证的 OpenSSH 配置名称；路径必须是 canonical POSIX 绝对路径。Renderer 只把 Workspace 内资源
+凭证的 OpenSSH 配置名称；路径必须是 canonical POSIX、Windows 盘符或 UNC 绝对路径。Renderer 只把 Workspace 内资源
 转换成 root-relative App Server 请求，远端 App Server 再执行 canonical root confinement。路径按
-POSIX 字符原样保留；反斜杠是合法文件名字符，不会被 Desktop 改写成分隔符。
+POSIX 字符原样保留，反斜杠仍是合法文件名字符。Windows 路径统一保存为正斜杠、盘符大写；
+URI 使用 `/C:/...` 表示盘符路径，解码后恢复 `C:/...`。
 
 SSH launcher 使用 `BatchMode=yes`，不会在后台窗口等待密码输入。用户、端口、代理跳转、主机密钥
 和私钥选择都由 OpenSSH 配置及 ssh-agent 管理。本机进程环境只提供给受信任的 SSH 客户端；发往
@@ -555,9 +556,9 @@ Desktop Main 仍可通过一组 all-or-nothing 的受信环境覆盖接入单个
   本地/网络认证 catalog、内容寻址缓存与不可变安装；app 与 Desktop 都已消费缺失/不兼容自动安装和
   credential-free active/previous profile；Desktop 已提供 Main-owned 显式回滚与重连。正式生产
   publisher/feed、企业代理配置、下载重试/断点续传和旧缓存/runtime GC 仍未完成。
-- 当前 SSH shell、Workspace identity 和 installer 都是 POSIX contract。Linux 是主要远端目标，
-  macOS 已支持 package target；Windows OpenSSH Remote 需要独立 PowerShell/path/installer 策略，
-  当前不会被静默当成 Linux。
+- Windows OpenSSH 使用显式 PowerShell 平台探测、安装和启动策略，支持 x64/ARM64 MSVC 包、盘符及 UNC 路径。
+  PowerShell 5.1 启动通过继承原始标准流保持协议字节；安装要求系统 `tar.exe`。Windows 源码包支持与
+  正式发布矩阵分开管理，当前自动发布仍只有 macOS/Linux。
 - `ash remote connect` 已能从认证 catalog 自动准备 managed runtime。正式打包产品可从
   `ash-package.json` 取得签名产品 binding；未打包开发构建没有隐式发布信任根，必须显式传入本地或
   HTTPS catalog 及 SHA-256。CLI 当前只输出粗粒度准备阶段，没有 Desktop/app 的图形进度、取消和

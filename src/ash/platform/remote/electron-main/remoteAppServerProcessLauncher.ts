@@ -3,8 +3,8 @@ import { URI } from "../../../base/common/uri.js";
 import { AppServerProtocolIncompatibleError } from "../../agentHost/common/appServerProtocolCompatibility.js";
 import type { IAppServerProcessLauncher } from "../../agentHost/electron-main/appServerProcessLauncher.js";
 import type { AppServerDaemonLauncher } from "../../app-server-daemon/electron-main/appServerDaemonLauncher.js";
-import { createSshRemoteWorkspaceUri, getRemoteAuthority, getRemoteWorkspacePath, type SshRemoteAuthority } from "../common/remote.js";
-import { isCanonicalAbsolutePosixPath, validLocalCommand } from "./remoteCommand.js";
+import { createSshRemoteWorkspaceUri, getRemoteAuthority, getRemoteWorkspacePath, isWindowsRemotePath, SSH_REMOTE_INITIALIZE_TIMEOUT_MS, type SshRemoteAuthority } from "../common/remote.js";
+import { isCanonicalAbsoluteRemotePath, validLocalCommand } from "./remoteCommand.js";
 
 interface SshRuntimeProbeOptions {
 	readonly environment: NodeJS.ProcessEnv;
@@ -59,6 +59,7 @@ export class RemoteAppServerProcessLauncher implements IAppServerProcessLauncher
 	private provisionAttempted = false;
 
 	readonly description: string;
+	readonly initializeTimeoutMs = SSH_REMOTE_INITIALIZE_TIMEOUT_MS;
 
 	constructor(readonly options: RemoteAppServerProcessLauncherOptions) {
 		const authority = options.workspace instanceof URI ? getRemoteAuthority(options.workspace) : options.workspace;
@@ -77,7 +78,7 @@ export class RemoteAppServerProcessLauncher implements IAppServerProcessLauncher
 		return this.options.rollbackRuntime !== undefined && this.profileWorkspacePath !== undefined;
 	}
 
-	/** Absolute POSIX Workspace root selected for the next Remote App Server connection. */
+	/** Absolute remote OS Workspace root selected for the next connection. */
 	get workspaceRoot(): string | undefined {
 		return this.workspacePath;
 	}
@@ -94,7 +95,7 @@ export class RemoteAppServerProcessLauncher implements IAppServerProcessLauncher
 		if (!this.profileResolved && this.options.resolveRuntime && this.profileWorkspacePath !== undefined) {
 			const stored = await this.options.resolveRuntime(this.host, this.profileWorkspacePath);
 			if (stored !== undefined) {
-				if (!isCanonicalAbsolutePosixPath(stored)) throw new Error("Stored Remote runtime is not a canonical absolute POSIX path");
+				if (!isCanonicalAbsoluteRemotePath(stored)) throw new Error("Stored Remote runtime is not a canonical absolute remote path");
 				this.remoteExecutable = stored;
 			}
 			this.profileResolved = true;
@@ -121,7 +122,7 @@ export class RemoteAppServerProcessLauncher implements IAppServerProcessLauncher
 		const rollbackRuntime = this.options.rollbackRuntime;
 		if (!rollbackRuntime || this.profileWorkspacePath === undefined) throw new Error("Remote runtime rollback is not available for this connection");
 		const runtime = await rollbackRuntime(this.host, this.profileWorkspacePath, this.options.sshExecutable);
-		if (!validLocalCommand(runtime) || !isCanonicalAbsolutePosixPath(runtime)) {
+		if (!validLocalCommand(runtime) || !isCanonicalAbsoluteRemotePath(runtime)) {
 			throw new Error("Remote runtime rollback returned an invalid executable path");
 		}
 		this.remoteExecutable = runtime;
@@ -151,7 +152,7 @@ export class RemoteAppServerProcessLauncher implements IAppServerProcessLauncher
 		try {
 			this.provisionAttempted = true;
 			const installedExecutable = await provisionRuntime(this.host);
-			if (!validLocalCommand(installedExecutable) || !isCanonicalAbsolutePosixPath(installedExecutable)) {
+			if (!validLocalCommand(installedExecutable) || !isCanonicalAbsoluteRemotePath(installedExecutable)) {
 				throw new SshRuntimeProbeError("runtime-unavailable", "Remote runtime installer returned an invalid executable path");
 			}
 			this.remoteExecutable = installedExecutable;
@@ -170,12 +171,17 @@ export class RemoteAppServerProcessLauncher implements IAppServerProcessLauncher
 		}
 	}
 
-	private probe(executable: string): Promise<SshRuntimeProbeResult> {
-		return this.probeRuntime(
+	private async probe(executable: string): Promise<SshRuntimeProbeResult> {
+		const windows = isWindowsRemotePath(this.workspacePath ?? executable);
+		const result = await this.probeRuntime(
 			this.options.sshExecutable,
-			sshRuntimeProbeArguments(this.host, executable),
+			sshRuntimeProbeArguments(this.host, executable, windows),
 			{ environment: this.options.localEnvironment },
 		);
+		if (windows || this.workspacePath !== undefined || resolvedRuntime(result) !== undefined || runtimeMissing(result)) return result;
+		// An authority can be opened before its workspace is selected. Windows OpenSSH
+		// may use cmd.exe or PowerShell, so a failed POSIX probe needs an OS-safe fallback.
+		return this.probeRuntime(this.options.sshExecutable, sshRuntimeProbeArguments(this.host, executable, true), { environment: this.options.localEnvironment });
 	}
 }
 
@@ -183,7 +189,7 @@ const RUNTIME_FOUND_MARKER = "__ASH_REMOTE_RUNTIME_FOUND__:";
 const RUNTIME_MISSING_MARKER = "__ASH_REMOTE_RUNTIME_MISSING__";
 
 /** Builds the non-interactive SSH command used by Main to classify runtime availability. */
-export function sshRuntimeProbeArguments(host: string, executable: string): readonly string[] {
+export function sshRuntimeProbeArguments(host: string, executable: string, windows = false): readonly string[] {
 	return [
 		"-T",
 		"-o",
@@ -191,11 +197,16 @@ export function sshRuntimeProbeArguments(host: string, executable: string): read
 		"-o",
 		"ConnectTimeout=10",
 		host,
-		remoteRuntimeProbeCommand(executable),
+		remoteRuntimeProbeCommand(executable, windows),
 	];
 }
 
-function remoteRuntimeProbeCommand(executable: string): string {
+function remoteRuntimeProbeCommand(executable: string, windows: boolean): string {
+	if (windows) {
+		const literal = `'${executable.replaceAll("'", "''")}'`;
+		const script = `$ErrorActionPreference='Stop'; [Console]::OutputEncoding=New-Object System.Text.UTF8Encoding($false); $c=Get-Command -Name ([WildcardPattern]::Escape(${literal})) -CommandType Application -ErrorAction SilentlyContinue; if ($c) { [Console]::WriteLine('${RUNTIME_FOUND_MARKER}'+$c[0].Source.Replace('\\','/')); exit 0 }; [Console]::WriteLine('${RUNTIME_MISSING_MARKER}'); exit 127`;
+		return `powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand ${Buffer.from(script, "utf16le").toString("base64")}`;
+	}
 	const quotedExecutable = quotePosixShellArgument(executable);
 	return `if command -v ${quotedExecutable} >/dev/null 2>&1; then printf '%s%s\\n' '${RUNTIME_FOUND_MARKER}' \"$(command -v ${quotedExecutable})\"; else printf '%s\\n' '${RUNTIME_MISSING_MARKER}'; exit 127; fi`;
 }
@@ -209,7 +220,7 @@ function resolvedRuntime(result: SshRuntimeProbeResult): string | undefined {
 	const resolved = result.stdout.split(/\r?\n/u).map(line => line.trim()).find(line => line.startsWith(RUNTIME_FOUND_MARKER));
 	if (resolved === undefined) return undefined;
 	const executable = resolved.slice(RUNTIME_FOUND_MARKER.length).trim();
-	if (!isCanonicalAbsolutePosixPath(executable)) throw new SshRuntimeProbeError("transport", "Remote runtime probe returned a non-canonical executable path");
+	if (!isCanonicalAbsoluteRemotePath(executable)) throw new SshRuntimeProbeError("transport", "Remote runtime probe returned a non-canonical executable path");
 	return executable;
 }
 

@@ -7,6 +7,7 @@ import http.server
 import json
 import os
 import queue
+import re
 import shlex
 import subprocess
 import sys
@@ -67,7 +68,10 @@ def verify(
             mode = "managed" if managed else "stdio"
             start_calls = len(Model.calls)
             with (
-                tempfile.TemporaryDirectory(prefix="ash-release-remote-") as temp,
+                # Windows AF_UNIX endpoints include the profile path plus a digest.
+                tempfile.TemporaryDirectory(
+                    prefix="ash-rm-" if os.name == "nt" else "ash-release-remote-"
+                ) as temp,
                 (base / f"{mode}.stderr.log").open("w") as errors,
             ):
                 home = Path(temp) / "profile"
@@ -75,13 +79,30 @@ def verify(
                 workspace.mkdir()
                 env = {k: v for k, v in os.environ.items() if not k.startswith("ASH_")}
                 env.update(ASH_HOME=str(home), ASH_WORKSPACE_ROOT=str(workspace))
-                args = [str(package / "bin/ash-remote-server")] + (
+                suffix = ".exe" if os.name == "nt" else ""
+                args = [str(package / f"bin/ash-remote-server{suffix}")] + (
                     ["connect"] if managed else ["app-server", "--listen", "stdio://"]
                 )
 
                 def command(arguments):
                     if ssh is None:
                         return arguments
+                    if os.name == "nt":
+                        import base64
+
+                        def quote(value):
+                            return "'" + str(value).replace("'", "''") + "'"
+
+                        # Inherited byte streams avoid PowerShell's text pipeline.
+                        script = f"$env:ASH_HOME={quote(home)}; $env:ASH_WORKSPACE_ROOT={quote(workspace)}; $p=New-Object Diagnostics.ProcessStartInfo; $p.FileName={quote(arguments[0])}; $p.Arguments={quote(subprocess.list2cmdline(arguments[1:]))}; $p.UseShellExecute=$false; $c=[Diagnostics.Process]::Start($p); $c.WaitForExit(); exit $c.ExitCode"
+                        encoded = base64.b64encode(script.encode("utf-16le")).decode()
+                        return [
+                            str(ssh),
+                            "-T",
+                            host,
+                            "powershell.exe -NoProfile -NonInteractive -EncodedCommand "
+                            + encoded,
+                        ]
                     remote = [
                         "env",
                         f"ASH_HOME={home}",
@@ -98,6 +119,7 @@ def verify(
                         stdout=subprocess.PIPE,
                         stderr=errors,
                         text=True,
+                        encoding="utf-8",
                     )
 
                 process = start_connection()
@@ -129,7 +151,10 @@ def verify(
                     wire.append({"request": request})
                     process.stdin.write(json.dumps(request) + "\n")
                     process.stdin.flush()
-                    deadline = time.monotonic() + 40
+                    # Initial profile installation can copy hundreds of MB on Windows.
+                    deadline = time.monotonic() + (
+                        180 if method == "initialize" else 40
+                    )
                     while True:
                         value = replies.get(
                             timeout=max(0.01, deadline - time.monotonic())
@@ -178,8 +203,16 @@ def verify(
                             "lifecycle": {"type": "connectionOwned"},
                             "execution": {
                                 "type": "process",
-                                "program": "/bin/sh",
+                                "program": "powershell.exe"
+                                if os.name == "nt"
+                                else "/bin/sh",
                                 "args": [
+                                    "-NoProfile",
+                                    "-Command",
+                                    "[IO.File]::WriteAllText((Join-Path $pwd 'terminal-marker.txt'), 'release-terminal-ok')",
+                                ]
+                                if os.name == "nt"
+                                else [
                                     "-c",
                                     "printf release-terminal-ok > terminal-marker.txt",
                                 ],
@@ -303,6 +336,29 @@ def verify(
                         "Remote installed optional capabilities"
                     )
                     if managed:
+                        reconnectable = rpc(
+                            "terminal/create",
+                            {
+                                "rows": 24,
+                                "cols": 80,
+                                "profile": {
+                                    "type": "custom",
+                                    "name": "Release reconnect",
+                                    "path": [
+                                        str(
+                                            Path(os.environ["SystemRoot"])
+                                            / "System32/WindowsPowerShell/v1.0/powershell.exe"
+                                        )
+                                        if os.name == "nt"
+                                        else "/bin/sh"
+                                    ],
+                                    "args": ["-NoLogo", "-NoProfile"]
+                                    if os.name == "nt"
+                                    else [],
+                                },
+                                "lifecycle": {"type": "reconnectable"},
+                            },
+                        )
                         process.stdin.close()
                         try:
                             process.wait(timeout=10)
@@ -323,6 +379,42 @@ def verify(
                                 "capabilities": {},
                             },
                         )
+                        terminal = reconnectable["terminalId"]
+                        attached = rpc(
+                            "terminal/attach",
+                            {
+                                "terminalId": terminal,
+                                "reconnectToken": reconnectable["reconnect"][
+                                    "reconnectToken"
+                                ],
+                                "rows": 30,
+                                "cols": 100,
+                            },
+                        )
+                        assert (
+                            attached["reconnect"]["reconnectToken"]
+                            != reconnectable["reconnect"]["reconnectToken"]
+                        )
+                        rpc(
+                            "terminal/write",
+                            {
+                                "terminalId": terminal,
+                                "data": "[IO.File]::WriteAllText((Join-Path $pwd 'reattached.txt'), 'release-reattached-ok')\r"
+                                if os.name == "nt"
+                                else "printf release-reattached-ok > reattached.txt\n",
+                            },
+                        )
+                        deadline = time.monotonic() + 10
+                        while (
+                            not (workspace / "reattached.txt").exists()
+                            and time.monotonic() < deadline
+                        ):
+                            time.sleep(0.05)
+                        assert (
+                            rpc("fs/readFile", {"path": "reattached.txt"})["content"]
+                            == "release-reattached-ok"
+                        )
+                        rpc("terminal/close", {"terminalId": terminal})
                         assert (
                             rpc("fs/readFile", {"path": "probe.txt"})["content"]
                             == "release-remote-edit-ok"
@@ -349,6 +441,7 @@ def verify(
                         "installedCapabilities": 0,
                         "transport": "OpenSSH" if ssh is not None else "local stdio",
                         "reconnected": managed,
+                        "terminalReattached": managed,
                     }
                     reports.append(report)
                     print(json.dumps(report), flush=True)
@@ -357,7 +450,12 @@ def verify(
                     raise
                 finally:
                     (base / f"{mode}-wire.json").write_text(
-                        json.dumps(wire, indent=2) + "\n"
+                        re.sub(
+                            r'("reconnectToken":\s*")[^"]+',
+                            r"\1<redacted>",
+                            json.dumps(wire, indent=2),
+                        )
+                        + "\n"
                     )
                     process.stdin.close()
                     try:
@@ -372,7 +470,10 @@ def verify(
                             status = subprocess.run(
                                 command(
                                     [
-                                        str(package / "bin/ash-app-server-daemon"),
+                                        str(
+                                            package
+                                            / f"bin/ash-app-server-daemon{suffix}"
+                                        ),
                                         "version",
                                     ]
                                 ),
@@ -401,7 +502,10 @@ def verify(
                     if managed:
                         stopped = subprocess.run(
                             command(
-                                [str(package / "bin/ash-app-server-daemon"), "stop"]
+                                [
+                                    str(package / f"bin/ash-app-server-daemon{suffix}"),
+                                    "stop",
+                                ]
                             ),
                             env=env,
                             stdout=subprocess.PIPE,

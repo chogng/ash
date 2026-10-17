@@ -1,6 +1,6 @@
 use std::fmt;
 
-/// A processor architecture supported by the POSIX SSH Remote runtime.
+/// A processor architecture supported by the SSH Remote runtime.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RemoteArchitecture {
     Aarch64,
@@ -24,7 +24,7 @@ pub enum RemoteLinuxLibc {
     Musl,
 }
 
-/// A supported POSIX Remote platform and its exact package target.
+/// A supported Remote platform and its exact package target.
 ///
 /// Constructors keep impossible combinations out of the model: macOS has no Linux libc choice,
 /// while Linux always identifies the package ABI as GNU or musl.
@@ -35,6 +35,9 @@ pub enum RemotePlatform {
         libc: RemoteLinuxLibc,
     },
     MacOs {
+        architecture: RemoteArchitecture,
+    },
+    Windows {
         architecture: RemoteArchitecture,
     },
 }
@@ -61,6 +64,8 @@ impl RemotePlatform {
             )),
             b"aarch64-apple-darwin" => Some(Self::mac_os(RemoteArchitecture::Aarch64)),
             b"x86_64-apple-darwin" => Some(Self::mac_os(RemoteArchitecture::X86_64)),
+            b"aarch64-pc-windows-msvc" => Some(Self::windows(RemoteArchitecture::Aarch64)),
+            b"x86_64-pc-windows-msvc" => Some(Self::windows(RemoteArchitecture::X86_64)),
             _ => None,
         }
     }
@@ -75,10 +80,25 @@ impl RemotePlatform {
         Self::MacOs { architecture }
     }
 
+    /// Creates a Windows MSVC package target.
+    pub const fn windows(architecture: RemoteArchitecture) -> Self {
+        Self::Windows { architecture }
+    }
+
+    /// Selects the executable suffix used by this package, independent of the client OS.
+    pub const fn executable_suffix(self) -> &'static str {
+        match self {
+            Self::Windows { .. } => ".exe",
+            Self::Linux { .. } | Self::MacOs { .. } => "",
+        }
+    }
+
     /// Returns the architecture shared by platform probing and artifact selection.
     pub const fn architecture(self) -> RemoteArchitecture {
         match self {
-            Self::Linux { architecture, .. } | Self::MacOs { architecture } => architecture,
+            Self::Linux { architecture, .. }
+            | Self::MacOs { architecture }
+            | Self::Windows { architecture } => architecture,
         }
     }
 
@@ -107,6 +127,12 @@ impl RemotePlatform {
             Self::MacOs {
                 architecture: RemoteArchitecture::X86_64,
             } => "x86_64-apple-darwin",
+            Self::Windows {
+                architecture: RemoteArchitecture::Aarch64,
+            } => "aarch64-pc-windows-msvc",
+            Self::Windows {
+                architecture: RemoteArchitecture::X86_64,
+            } => "x86_64-pc-windows-msvc",
         }
     }
 }

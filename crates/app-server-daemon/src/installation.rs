@@ -10,6 +10,7 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use ash_package_store::PackageStore;
+use ash_package_store::validate_package_identity;
 use serde::Deserialize;
 
 const STORE_DIRECTORY: &str = "app-server-packages";
@@ -127,6 +128,38 @@ fn install_from_client_with_electron(
 
     let store_root = profile_root.join(STORE_DIRECTORY);
     let store = PackageStore::open(&store_root).map_err(|error| error.to_string())?;
+    let installation = runtime_binding
+        .as_ref()
+        .map(serde_json::to_value)
+        .transpose()
+        .map_err(|error| error.to_string())?;
+    if let Some(current) = store.current().map_err(|error| error.to_string())?
+        && current.installation == installation
+    {
+        // A different selection still goes through the normal installation path, so
+        // updating can replace a damaged old package without trying to execute it.
+        let mut selected_metadata = Vec::new();
+        fs::File::open(current.package_root.join(METADATA_FILE))
+            .map_err(|error| error.to_string())?
+            .take(MAX_METADATA_BYTES + 1)
+            .read_to_end(&mut selected_metadata)
+            .map_err(|error| error.to_string())?;
+        // Reconnecting must not copy and delete the entire package again. On Windows
+        // those writes can outlast terminal leases. Verify both immutable packages
+        // before reusing the selection, including a caller changed after packaging.
+        if selected_metadata == metadata {
+            let selected = validate_package_identity(&current.package_root)
+                .map_err(|error| error.to_string())?;
+            if selected.build_id == files.build_id
+                && validate_package_identity(source).map_err(|error| error.to_string())? == selected
+            {
+                if selection == ClientSelection::Explicit {
+                    write_pin(&store_root, &files.build_id)?;
+                }
+                return Ok(backend_in(&current.package_root));
+            }
+        }
+    }
     let nonce = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|error| error.to_string())?

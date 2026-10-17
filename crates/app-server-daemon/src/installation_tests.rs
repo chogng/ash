@@ -65,6 +65,31 @@ fn failed_explicit_install_keeps_the_previous_pin() {
 }
 
 #[test]
+fn repeated_selection_repins_verified_contents_and_rejects_tampering() {
+    let directory = TempDir::new().unwrap();
+    let source = package(directory.path(), "client", "0.1.0");
+    let profile = directory.path().join("profile");
+    let selected = install_from_client(&profile, &source, ClientSelection::Explicit).unwrap();
+    clear_pin(&profile).unwrap();
+    assert_eq!(
+        install_from_client(&profile, &source, ClientSelection::Explicit).unwrap(),
+        selected
+    );
+    assert!(selected_is_pinned(&profile).unwrap());
+
+    // An unchanged manifest does not authorize changed caller or installed bytes.
+    fs::write(&source, b"changed caller").unwrap();
+    assert!(install_from_client(&profile, &source, ClientSelection::Explicit).is_err());
+    fs::write(&source, b"0.1.0").unwrap();
+    fs::write(&selected, b"changed installed package").unwrap();
+    assert!(install_from_client(&profile, &source, ClientSelection::Explicit).is_err());
+
+    let update = package(directory.path(), "updated-client", "0.2.0");
+    let updated = install_from_client(&profile, &update, ClientSelection::Explicit).unwrap();
+    assert_eq!(fs::read(updated).unwrap(), b"0.2.0");
+}
+
+#[test]
 fn release_backend_must_have_its_own_javascript_runtime() {
     let directory = TempDir::new().unwrap();
     let executable = package(directory.path(), "client", "0.1.0");

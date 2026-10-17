@@ -1866,6 +1866,7 @@
     "openEditors": "打开的编辑器"
   },
   "ash.workbench": {
+    "remote.workspace.absolutePath": "远程工作区的绝对路径（例如 /srv/project 或 C:/work/project）",
     "diffView": "差异视图",
     "diffView.inline": "行内",
     "diffView.sideBySide": "并排",

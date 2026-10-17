@@ -179,7 +179,9 @@ impl RemoteLaunch {
     pub(in crate::managed) fn from_environment() -> Self {
         Self {
             executable: std::env::var_os("ASH_SSH_PATH").unwrap_or_else(|| "ssh".into()),
-            initialize_timeout: Duration::from_secs(10),
+            // The first connection installs the remote profile's immutable package;
+            // Windows file scanning can take longer than an ordinary SSH handshake.
+            initialize_timeout: Duration::from_secs(180),
         }
     }
 }

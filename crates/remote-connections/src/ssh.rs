@@ -9,8 +9,11 @@ use ash_app_server_client::StdioAppServerCommand;
 use ash_app_server_protocol::protocol::common::ClientCapabilities;
 use ash_app_server_protocol::protocol::common::ClientInfo;
 use ash_app_server_protocol::protocol::initialize::InitializeResult;
+use ash_remote::RemotePathStyle;
 use ash_remote::RemoteProfile;
 use ash_remote::RemoteRuntime;
+use ash_remote::powershell_command;
+use ash_remote::quote_powershell_argument;
 pub use ash_remote::remote_app_server_command;
 
 const DEFAULT_CONNECT_TIMEOUT_SECONDS: NonZeroU16 = NonZeroU16::new(10).expect("non-zero");
@@ -96,7 +99,14 @@ impl SshAppServerConnectionOptions {
                 "-o".to_owned(),
                 format!("ConnectTimeout={}", self.connect_timeout_seconds),
                 self.profile.target().host().as_str().to_owned(),
-                remote_runtime_probe_command(self.profile.runtime().executable()),
+                match self.profile.target().dir().style() {
+                    RemotePathStyle::Posix => {
+                        remote_runtime_probe_command(self.profile.runtime().executable())
+                    }
+                    RemotePathStyle::Windows => {
+                        windows_runtime_probe_command(self.profile.runtime().executable())
+                    }
+                },
             ])
             .output()
             .map_err(|error| RemoteConnectionError::transport(error.to_string()))?;
@@ -179,6 +189,15 @@ pub(crate) fn remote_runtime_probe_command(executable: &str) -> String {
     format!(
         "if command -v {executable} >/dev/null 2>&1; then printf '%s%s\\n' {found_marker} \"$(command -v {executable})\"; else printf '%s\\n' {missing_marker}; exit 127; fi"
     )
+}
+
+fn windows_runtime_probe_command(executable: &str) -> String {
+    powershell_command(&format!(
+        "$ErrorActionPreference='Stop'; [Console]::OutputEncoding=New-Object System.Text.UTF8Encoding($false); $c=Get-Command -Name ([WildcardPattern]::Escape({})) -CommandType Application -ErrorAction SilentlyContinue; if ($c) {{ [Console]::WriteLine('{}'+$c[0].Source.Replace('\\','/')); exit 0 }}; [Console]::WriteLine('{}'); exit 127",
+        quote_powershell_argument(executable),
+        RUNTIME_FOUND_MARKER,
+        RUNTIME_MISSING_MARKER,
+    ))
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

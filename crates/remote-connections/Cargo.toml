@@ -15,6 +15,7 @@ name = "ash_remote_connections"
 path = "src/lib.rs"
 
 [dependencies]
+base64 = { workspace = true }
 ash-utils-home-dir = { workspace = true }
 build-info = { workspace = true }
 ash-package-store = { workspace = true }

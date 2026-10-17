@@ -38,8 +38,7 @@ def archive_package(package: Path, output: Path, *, unsigned: bool = False) -> N
     spec = target_spec(metadata["target"])
     validate_package_directory(package, spec)
     if (
-        spec.is_windows
-        or metadata["buildProfile"] != "release"
+        metadata["buildProfile"] != "release"
         or metadata["javascriptRuntime"] != {"kind": "packagedNode"}
         or "remoteServer" not in metadata["components"]
         or {"voiceHost", "livekitClient", "recognizer", "livekit"}
@@ -47,7 +46,7 @@ def archive_package(package: Path, output: Path, *, unsigned: bool = False) -> N
         or any(name in metadata["files"] for name in LOCAL_MEDIA_DESCRIPTORS)
         or output.name != f"ash-remote-{spec.target}.tar.gz"
     ):
-        raise ValueError("Remote releases require a media-free POSIX release package")
+        raise ValueError("Remote releases require a media-free release package")
     if not unsigned:
         require_verified_system_signing(package, spec)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -97,8 +96,7 @@ def archive_record(archive: Path) -> tuple[dict, dict]:
         raise ValueError("Remote archive file hashes differ from its package manifest")
     spec = target_spec(metadata["target"])
     if (
-        spec.is_windows
-        or metadata.get("buildProfile") != "release"
+        metadata.get("buildProfile") != "release"
         or metadata.get("javascriptRuntime") != {"kind": "packagedNode"}
         or archive.name != f"ash-remote-{spec.target}.tar.gz"
         or not {"appServer", "appServerDaemon", "remoteServer", "node"}.issubset(

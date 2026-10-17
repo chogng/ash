@@ -20,6 +20,20 @@ from build.lib.targets import TARGETS
 
 
 class RemotePackageTests(unittest.TestCase):
+    def test_windows_targets_reach_the_shared_media_free_builder(self):
+        for target in ("x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc"):
+            with (
+                self.subTest(target=target),
+                patch.object(remote, "build_package", return_value=0) as build,
+            ):
+                self.assertEqual(
+                    remote.main(["--target", target, "--package-dir", "unused"]), 0
+                )
+                args = build.call_args.args[0]
+                self.assertEqual(args.target, target)
+                self.assertEqual(args.media_distribution, "none")
+                self.assertEqual(args.javascript_runtime, "packaged-node")
+
     def test_remote_rejects_local_media_inputs_before_preparation(self) -> None:
         with patch.object(app_server, "generate_protocol") as prepare:
             for flag in (
@@ -56,7 +70,6 @@ class RemotePackageTests(unittest.TestCase):
                     "--media-distribution",
                     "optional",
                 ],
-                ["--target", "x86_64-pc-windows-msvc"],
                 [
                     "--target",
                     "aarch64-apple-darwin",

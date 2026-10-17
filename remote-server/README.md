@@ -22,6 +22,18 @@ The installer consumes a rootless `tar.gz` containing this package. The build
 entrypoint assembles the directory. Installation, compatibility checks, activation and rollback are
 described in [`docs/remote-development.md`](../docs/remote-development.md).
 
+Windows builds accept `x86_64-pc-windows-msvc` and `aarch64-pc-windows-msvc` from a
+matching Visual Studio Developer PowerShell. Use `just remote-package --target
+x86_64-pc-windows-msvc --package-dir dist/ash-remote`. Programs use `.exe`; the
+client recognizes drive/UNC workspace paths and invokes Windows PowerShell 5.1
+explicitly over OpenSSH. Installation requires Windows `tar.exe` and defaults to
+`%LOCALAPPDATA%\Ash\remote`. The published release matrix below is separate from
+source-build target support; it does not yet publish Windows artifacts.
+The first SSH initialization includes installing the profile's immutable package,
+so SSH clients allow up to three minutes for that handshake. Later connections
+verify and reuse the selection without recopying the package; the smoke runner
+reattaches a live terminal after reconnecting to guard its lease deadline.
+
 ## Independent release and first connection
 
 Source stays in this repository: [`runtime.md`](runtime.md) documents the connector;

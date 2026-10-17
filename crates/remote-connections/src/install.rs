@@ -11,6 +11,7 @@ use std::process::Command;
 use std::process::Stdio;
 use std::thread;
 
+use ash_remote::RemoteDirPath;
 use ash_remote::RemotePlatform;
 use ash_remote::RemoteRuntime;
 use ash_remote::SshHost;
@@ -18,8 +19,8 @@ use ash_remote::SshHost;
 mod artifact_validation;
 mod progress;
 mod protocol;
+mod windows;
 
-use artifact_validation::is_canonical_absolute_posix_path;
 pub(crate) use artifact_validation::open_and_validate_artifact;
 pub use progress::RemoteRuntimeInstallProgress;
 use progress::upload_archive;
@@ -30,6 +31,7 @@ pub use protocol::parse_remote_platform;
 use protocol::remote_install_failure;
 pub use protocol::remote_platform_probe_command;
 pub use protocol::remote_runtime_install_command;
+use protocol::windows_platform_probe_command;
 
 const DEFAULT_CONNECT_TIMEOUT_SECONDS: NonZeroU16 = NonZeroU16::new(10).expect("non-zero");
 const MAX_DIAGNOSTIC_BYTES: usize = 64 * 1024;
@@ -171,30 +173,31 @@ impl RemoteRuntimeArtifact {
     }
 }
 
-/// A canonical absolute POSIX root selected for Remote runtime objects.
+/// A canonical absolute root selected for Remote runtime objects.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct RemoteRuntimeInstallRoot(String);
+pub struct RemoteRuntimeInstallRoot(RemoteDirPath);
 
 impl RemoteRuntimeInstallRoot {
-    /// Parses a canonical absolute POSIX path without shell control characters.
+    /// Parses a canonical absolute path without shell control characters.
     pub fn parse(value: impl AsRef<str>) -> Result<Self, RemoteRuntimeArtifactError> {
-        let value = value.as_ref().trim();
-        if !is_canonical_absolute_posix_path(value) {
+        let path = RemoteDirPath::parse(value)
+            .map_err(|_| RemoteRuntimeArtifactError::InvalidInstallRoot)?;
+        if path.is_root() {
             return Err(RemoteRuntimeArtifactError::InvalidInstallRoot);
         }
-        Ok(Self(value.to_owned()))
+        Ok(Self(path))
     }
 
     /// Returns the path used only as a quoted value in the remote installation script.
     pub fn as_str(&self) -> &str {
-        &self.0
+        self.0.as_str()
     }
 }
 
 /// How a host chooses the root for immutable Remote runtime objects.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum RemoteRuntimeInstallLocation {
-    /// Uses `$XDG_DATA_HOME/ash/remote` or `$HOME/.local/share/ash/remote` on the Remote host.
+    /// Uses the remote user's data directory (`%LOCALAPPDATA%\Ash\remote` on Windows).
     UserData,
     /// Uses an explicit absolute path selected by a trusted product coordinator.
     Absolute(RemoteRuntimeInstallRoot),
@@ -245,29 +248,40 @@ impl SshRemoteRuntimeInstaller {
 
     /// Probes the exact package target before a product selects or uploads an artifact.
     pub fn probe_platform(&self) -> Result<RemotePlatform, RemoteRuntimeInstallError> {
-        let output = Command::new(&self.ssh_executable)
-            .args(self.ssh_arguments(remote_platform_probe_command()))
-            .output()
-            .map_err(|error| RemoteRuntimeInstallError::transport(error.to_string()))?;
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        if let Some(platform) = parse_remote_platform(&stdout) {
-            return Ok(platform);
+        let mut last_diagnostic = String::new();
+        // Existing POSIX hosts keep their probe. An unrecognized default shell can
+        // instead be Windows OpenSSH (cmd.exe or PowerShell); no shell is reconfigured.
+        for command in [
+            remote_platform_probe_command(),
+            windows_platform_probe_command(),
+        ] {
+            let output = Command::new(&self.ssh_executable)
+                .args(self.ssh_arguments(command))
+                .output()
+                .map_err(|error| RemoteRuntimeInstallError::transport(error.to_string()))?;
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            if let Some(platform) =
+                parse_remote_platform(&stdout).filter(|_| output.status.success())
+            {
+                return Ok(platform);
+            }
+            if let Some(diagnostic) = stdout
+                .lines()
+                .find_map(|line| line.strip_prefix(PLATFORM_UNSUPPORTED_MARKER))
+            {
+                return Err(RemoteRuntimeInstallError::new(
+                    RemoteRuntimeInstallFailureKind::UnsupportedPlatform,
+                    format!("unsupported Remote platform: {}", diagnostic.trim()),
+                ));
+            }
+            let stderr = bounded_lossy(&output.stderr);
+            last_diagnostic = if stderr.is_empty() {
+                format!("Remote platform probe exited with {}", output.status)
+            } else {
+                format!("Remote platform probe failed: {stderr}")
+            };
         }
-        if let Some(diagnostic) = stdout
-            .lines()
-            .find_map(|line| line.strip_prefix(PLATFORM_UNSUPPORTED_MARKER))
-        {
-            return Err(RemoteRuntimeInstallError::new(
-                RemoteRuntimeInstallFailureKind::UnsupportedPlatform,
-                format!("unsupported Remote platform: {}", diagnostic.trim()),
-            ));
-        }
-        let stderr = bounded_lossy(&output.stderr);
-        Err(RemoteRuntimeInstallError::transport(if stderr.is_empty() {
-            format!("Remote platform probe exited with {}", output.status)
-        } else {
-            format!("Remote platform probe failed: {stderr}")
-        }))
+        Err(RemoteRuntimeInstallError::transport(last_diagnostic))
     }
 
     /// Validates, uploads, verifies, and atomically installs one immutable runtime package.
@@ -300,11 +314,27 @@ impl SshRemoteRuntimeInstaller {
                 ),
             ));
         }
+        if let RemoteRuntimeInstallLocation::Absolute(root) = &self.location {
+            let style = root.0.style();
+            let windows = matches!(platform, RemotePlatform::Windows { .. });
+            if (style == ash_remote::RemotePathStyle::Windows) != windows {
+                return Err(RemoteRuntimeInstallError::new(
+                    RemoteRuntimeInstallFailureKind::PlatformMismatch,
+                    "Remote installation root uses the wrong platform's path syntax",
+                ));
+            }
+        }
         archive
             .seek(SeekFrom::Start(0))
             .map_err(RemoteRuntimeInstallError::artifact_unavailable)?;
 
         let remote_command = remote_runtime_install_command(artifact, &self.location);
+        if matches!(platform, RemotePlatform::Windows { .. }) && remote_command.len() > 8000 {
+            return Err(RemoteRuntimeInstallError::new(
+                RemoteRuntimeInstallFailureKind::RemotePrerequisite,
+                "Windows installation command exceeds the cmd.exe limit; select a shorter install root",
+            ));
+        }
         let mut child = Command::new(&self.ssh_executable)
             .args(self.ssh_arguments(remote_command))
             .stdin(Stdio::piped())
@@ -464,8 +494,9 @@ impl fmt::Display for RemoteRuntimeArtifactError {
             Self::InvalidSha256 => {
                 formatter.write_str("Remote runtime SHA-256 must be 64 lowercase hex characters")
             }
-            Self::InvalidInstallRoot => formatter
-                .write_str("Remote runtime install root must be a canonical absolute POSIX path"),
+            Self::InvalidInstallRoot => {
+                formatter.write_str("Remote runtime install root must be a canonical absolute path")
+            }
         }
     }
 }

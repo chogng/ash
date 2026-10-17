@@ -1,5 +1,7 @@
 use ash_remote::RemoteArchitecture;
+use ash_remote::RemoteDirPath;
 use ash_remote::RemoteLinuxLibc;
+use ash_remote::RemotePathStyle;
 use ash_remote::RemotePlatform;
 use ash_remote::RemoteRuntime;
 
@@ -9,7 +11,6 @@ use super::RemoteRuntimeInstallDisposition;
 use super::RemoteRuntimeInstallError;
 use super::RemoteRuntimeInstallFailureKind;
 use super::RemoteRuntimeInstallLocation;
-use super::artifact_validation::is_canonical_absolute_posix_path;
 use crate::ssh::quote_posix_shell_argument;
 
 pub(super) const PLATFORM_UNSUPPORTED_MARKER: &str = "__ASH_REMOTE_PLATFORM_UNSUPPORTED__:";
@@ -24,6 +25,12 @@ pub fn remote_platform_probe_command() -> String {
         "os=$(uname -s 2>/dev/null) || {{ printf '%s%s\\n' {unsupported} 'uname-unavailable'; exit 64; }}; arch=$(uname -m 2>/dev/null) || {{ printf '%s%s\\n' {unsupported} 'architecture-unavailable'; exit 64; }}; case \"$arch\" in arm64|aarch64) arch=aarch64 ;; amd64|x86_64) arch=x86_64 ;; *) printf '%s%s/%s\\n' {unsupported} \"$os\" \"$arch\"; exit 64 ;; esac; case \"$os\" in Darwin) printf '%s%s\\n' {supported} \"macos:$arch:none\" ;; Linux) if getconf GNU_LIBC_VERSION >/dev/null 2>&1; then libc=gnu; else ldd_output=$(ldd --version 2>&1 || true); case \"$ldd_output\" in *musl*) libc=musl ;; *) printf '%s%s/%s/%s\\n' {unsupported} \"$os\" \"$arch\" 'unknown-libc'; exit 64 ;; esac; fi; printf '%s%s\\n' {supported} \"linux:$arch:$libc\" ;; *) printf '%s%s/%s\\n' {unsupported} \"$os\" \"$arch\"; exit 64 ;; esac",
         supported = quote_posix_shell_argument(PLATFORM_MARKER),
         unsupported = quote_posix_shell_argument(PLATFORM_UNSUPPORTED_MARKER),
+    )
+}
+
+pub(super) fn windows_platform_probe_command() -> String {
+    ash_remote::powershell_command(
+        "$a=$env:PROCESSOR_ARCHITEW6432; if (!$a) {$a=$env:PROCESSOR_ARCHITECTURE}; switch ($a) {'AMD64' {$a='x86_64'} 'ARM64' {$a='aarch64'} default {[Console]::WriteLine('__ASH_REMOTE_PLATFORM_UNSUPPORTED__:windows/'+$a); exit 64}}; [Console]::WriteLine('__ASH_REMOTE_PLATFORM__:windows:'+$a+':msvc')",
     )
 }
 
@@ -52,6 +59,8 @@ pub fn parse_remote_platform(stdout: &str) -> Option<RemotePlatform> {
         )),
         "macos:aarch64:none" => Some(RemotePlatform::mac_os(RemoteArchitecture::Aarch64)),
         "macos:x86_64:none" => Some(RemotePlatform::mac_os(RemoteArchitecture::X86_64)),
+        "windows:x86_64:msvc" => Some(RemotePlatform::windows(RemoteArchitecture::X86_64)),
+        "windows:aarch64:msvc" => Some(RemotePlatform::windows(RemoteArchitecture::Aarch64)),
         _ => None,
     }
 }
@@ -61,6 +70,9 @@ pub fn remote_runtime_install_command(
     artifact: &RemoteRuntimeArtifact,
     location: &RemoteRuntimeInstallLocation,
 ) -> String {
+    if matches!(artifact.platform, RemotePlatform::Windows { .. }) {
+        return super::windows::install_command(artifact, location);
+    }
     let root_selection = match location {
         RemoteRuntimeInstallLocation::UserData => concat!(
             "if [ -n \"${XDG_DATA_HOME:-}\" ]; then install_root=\"${XDG_DATA_HOME}/ash/remote\"; ",
@@ -155,8 +167,15 @@ pub fn parse_install_receipt(
         ));
     };
     if digest != artifact.integrity.sha256
-        || !is_canonical_absolute_posix_path(executable)
-        || !executable.ends_with("/bin/ash-remote-server")
+        || RemoteRuntime::new_exact_executable(executable).is_err()
+        || RemoteDirPath::parse(executable).is_ok_and(|path| {
+            (path.style() == RemotePathStyle::Windows)
+                != matches!(artifact.platform, RemotePlatform::Windows { .. })
+        })
+        || !executable.ends_with(&format!(
+            "/bin/ash-remote-server{}",
+            artifact.platform.executable_suffix()
+        ))
     {
         return Err(RemoteRuntimeInstallError::new(
             RemoteRuntimeInstallFailureKind::RemoteRejected,

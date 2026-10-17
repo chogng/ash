@@ -6,6 +6,25 @@ import { AppServerProtocolIncompatibleError } from "../../../agentHost/common/ap
 import { createSshRemoteWorkspaceUri } from "../../../../platform/remote/common/remote.js";
 import { RemoteAppServerProcessLauncher, SshRuntimeProbeError, sshRuntimeProbeArguments } from "../../../../platform/remote/electron-main/remoteAppServerProcessLauncher.js";
 
+test('Windows launcher probes PowerShell and passes canonical drive paths to the carrier', async () => {
+	let command = '';
+	let environment: Readonly<Record<string, string>> | undefined;
+	const executable = 'C:/Program Files/Ash/ash-remote-server.exe';
+	const launcher = new RemoteAppServerProcessLauncher({
+		workspace: createSshRemoteWorkspaceUri('windows-dev', "c:\\开发 O'Brien"),
+		sshExecutable: 'ssh', remoteExecutable: executable, localEnvironment: {},
+		carrier: createCarrier((_executable, _args, options) => { environment = options.environment; return {} as ChildProcessWithoutNullStreams; }),
+		probeRuntime: async (_executable, args) => { command = args.at(-1)!; return { exitCode: 0, stdout: `__ASH_REMOTE_RUNTIME_FOUND__:${executable}\r\n`, stderr: '' }; },
+	});
+	await launcher.validate();
+	launcher.launch();
+	assert.match(command, /^powershell.exe .* -EncodedCommand /);
+	const script = Buffer.from(command.split(' ').at(-1)!, 'base64').toString('utf16le');
+	assert.ok(script.includes("[WildcardPattern]::Escape('C:/Program Files/Ash/ash-remote-server.exe')"));
+	assert.equal(environment?.ASH_REMOTE_ROOT, "C:/开发 O'Brien");
+	assert.equal(environment?.ASH_REMOTE_RUNTIME, executable);
+});
+
 test('Remote launcher starts a local daemon carrier with a remote connection scope', () => {
 	const launches: Array<{ executable: string; args: readonly string[]; environment: Readonly<Record<string, string>>; }> = [];
 	const child = {} as ChildProcessWithoutNullStreams;
@@ -41,7 +60,7 @@ test('Remote launcher retargets the same authority without opening the path loca
 	launcher.launch();
 	assert.equal(launcher.options.carrier.environment.ASH_REMOTE_ROOT, '/srv/two');
 	assert.equal(launcher.options.carrier.environment.ASH_WORKSPACE_ROOT, undefined);
-	assert.throws(() => launcher.replaceWorkspaceRoot('relative'), /absolute POSIX path/);
+	assert.throws(() => launcher.replaceWorkspaceRoot('relative'), /must be absolute/);
 });
 
 test("Desktop validates the selected runtime before starting the App Server", async () => {

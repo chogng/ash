@@ -82,8 +82,18 @@ the authorized change through the repository commit workflow.
 Windows OpenSSH often starts `cmd.exe`. For nontrivial commands, upload a reviewed
 PowerShell script and invoke `powershell.exe -NoProfile -File` with correctly quoted
 paths. Alternatively encode a reviewed PowerShell command as UTF-16LE for
-`-EncodedCommand`; pass user data separately, never interpolate untrusted text into
-shell source. Do not assume the SSH working directory is the repository.
+`-EncodedCommand`; quote literal values before encoding, because encoding is not
+shell escaping. Do not assume the SSH working directory is the repository.
+Keep protocol and archive bytes out of PowerShell's text pipeline: use inherited
+standard handles for child processes. PowerShell 5.1 `ConsoleStream` can deadlock on
+OpenSSH input; uploads must use the installer's `FileStream` over the borrowed stdin
+handle. Exercise uploads larger than the SSH window, not just tiny archives.
+Windows OpenSSH's default `cmd.exe` limits command lines to 8191 characters; use the
+existing compressed installer loader or upload a script when encoding exceeds it.
+The first Remote handshake can include installing the profile's complete package.
+Keep its startup budget distinct from ordinary RPC timeouts, and verify that a
+subsequent connection reuses verified package contents before the terminal lease
+expires. Successful reinitialization alone does not prove terminal reattachment.
 
 Use [environment setup](../setup-environment/SKILL.md) for missing build inputs and
 [Rust development](../rust-development/SKILL.md) for Rust changes. An SSH session
@@ -93,13 +103,19 @@ codes, collect output and verify the remote Git SHA with each result. Use dedica
 test profiles instead of the user's Ash data. Service restarts can interrupt other
 connections using that profile; inspect their ownership before restarting.
 
+If execution policy blocks an npm-installed PowerShell shim, invoke `pnpm.cmd`
+without changing the user's policy. After an authorized pnpm upgrade, verify the
+version resolved in a fresh SSH session: `pnpm self-update` can leave an older
+npm-owned shim first on PATH, which needs updating in its existing Node prefix.
+
 ## Distinguish the product boundary
 
 Before promising a Windows Ash Remote connection, inspect
 [the target declaration](../../../remote-server/package.json),
 [the package builder](../../../build/remote.py) and
-[remote development](../../../docs/remote-development.md). At creation of this
-skill, the package builder explicitly accepts POSIX targets only. An OpenSSH login
+[remote development](../../../docs/remote-development.md). The builder accepts
+Windows MSVC x64/ARM64 targets and the installer uses explicit PowerShell commands.
+An OpenSSH login
 or a Windows App Server build is not proof of Remote bootstrap, installation,
 path handling, protocol initialization, terminals, or reconnect support.
 

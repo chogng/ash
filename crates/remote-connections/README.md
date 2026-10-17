@@ -2,7 +2,7 @@
 
 `ash-remote-connections` 是 `app`、Desktop Main 和其他原生产品可复用的本机 Remote backend
 连接层。它负责构造本机 OpenSSH 子进程命令，为 `ash-app-server-client` 提供 Remote App Server
-stdio backend，并提供 POSIX 平台探测、
+stdio backend，并提供 POSIX/Windows 平台探测、
 不可变完整包安装、发布认证后的网络制品物化、无凭据运行时代际存储和命名目标目录。它不负责
 Renderer 状态、SSH 凭据、发布频道/签名策略、产品配置档案位置、激活时机或远端领域服务。Electron Main 通过本机
 `ash-remote install` 命令委托安装，同时保留自己的窗口和进程协调器。
@@ -22,6 +22,8 @@ ssh -T -o BatchMode=yes -o ConnectTimeout=<seconds> <host> <remote command>
 `remote_app_server_command` 独立引用每个 POSIX shell 参数，只传递 `ASH_WORKSPACE_ROOT`、选中的运行时
 可执行文件和 `connect`。该命令把标准输入输出代理到按工作区复用的远端守护进程；SSH
 仍由本机产品宿主持有，可在不替换远端 App Server 的情况下替换传输连接。
+Windows 路径选择 UTF-16LE 编码的 PowerShell 命令，并通过 `ProcessStartInfo` 继承原始标准流，
+避免 PowerShell 5.1 的文本管道改写协议字节。无需修改 Windows OpenSSH 的默认 shell。
 
 选中的运行时提供 `ash-remote-server` 的命令契约。连接层使用产品指定的精确可执行路径。产品协调器可另行调用
 `SshRemoteRuntimeInstaller` 安装完整的 packaged-node Ash 分发包，再用返回的精确可执行路径创建新
@@ -39,8 +41,12 @@ Server，执行 canonical initialize/schema 协商，捕获 `InitializeResult`�
 
 ## 运行时安装契约
 
-`SshRemoteRuntimeInstaller::probe_platform` 把 POSIX `uname` 和 Linux libc 探测映射为六个 canonical
-macOS/Linux package target。当前 POSIX 实现拒绝 Windows OpenSSH 远端。
+`SshRemoteRuntimeInstaller::probe_platform` 先执行 POSIX `uname`/libc 探测；无法识别 shell 时再执行
+PowerShell 架构探测，支持 macOS、Linux GNU/musl 和 Windows MSVC 的 x64/ARM64 target。
+Windows 安装器要求系统 `tar.exe`，默认根为 `%LOCALAPPDATA%\Ash\remote`；使用独占文件句柄锁、
+受限 ACL staging 与目录重命名提交不可变安装。客户端在上传前额外拒绝 Windows 保留名、ADS、
+尾部点/空格及大小写冲突，必需程序使用 `.exe` 后缀。
+二进制上传通过原始 stdin 句柄的 `FileStream` 读取，避免 PowerShell 5.1 `ConsoleStream` 在 SSH 管道上阻塞。
 `RemoteRuntimeArtifact` 把本机 rootless `tar.gz` 绑定到产品发布目录提供的可信版本、target、压缩
 大小、展开大小和 SHA-256。`RemoteRuntimeCatalog::load_verified` 是共享的本机发现边界：它先用产品
 宿主已认证的摘要校验完整目录，再拒绝未知字段、重复 target 和逃逸 archive 路径，最后为每个平台

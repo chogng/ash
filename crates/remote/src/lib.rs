@@ -6,14 +6,19 @@
 
 mod launch;
 mod platform;
+mod powershell;
 mod target;
 
 pub use launch::remote_app_server_command;
+pub use launch::remote_runtime_command;
 pub use platform::RemoteArchitecture;
 pub use platform::RemoteLinuxLibc;
 pub use platform::RemotePlatform;
+pub use powershell::powershell_command;
+pub use powershell::quote_powershell_argument;
 pub use target::RemoteAddressError;
 pub use target::RemoteDirPath;
+pub use target::RemotePathStyle;
 pub use target::RemoteProfile;
 pub use target::RemoteRuntime;
 pub use target::SshHost;

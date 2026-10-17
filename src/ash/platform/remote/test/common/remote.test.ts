@@ -4,6 +4,21 @@ import { createSshRemoteWorkspaceUri } from "../../../../platform/remote/common/
 import { getRemoteWorkspacePath } from "../../../../platform/remote/common/remote.js";
 import { URI } from '../../../../base/common/uri.js';
 
+test('Windows drive and UNC workspaces round-trip independently of the client OS', () => {
+	for (const [input, expected] of [
+		['c:\\Users\\开发者\\Ash project', 'C:/Users/开发者/Ash project'],
+		['\\\\server\\share\\project', '//server/share/project'],
+		['C:/', 'C:/'],
+	]) {
+		const uri = createSshRemoteWorkspaceUri('windows-dev', input!);
+		assert.equal(getRemoteWorkspacePath(uri), expected);
+		assert.equal(getRemoteWorkspacePath(URI.parse(uri.toString())), expected);
+	}
+	for (const path of ['C:relative', 'C:/../project', 'C:/NUL.txt', 'C:/NUL .txt', 'C:/file:stream', 'C:/x ', '//server', 'C:/x\n']) {
+		assert.throws(() => createSshRemoteWorkspaceUri('windows-dev', path));
+	}
+});
+
 test("Remote Workspace URIs preserve legal POSIX backslashes", () => {
 	const resource = createSshRemoteWorkspaceUri("BUILD-LINUX", "/srv/project\\archive");
 

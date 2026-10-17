@@ -28,7 +28,7 @@ pub(super) fn serve(
             "ConnectTimeout=10",
             target.host(),
         ])
-        .arg(remote_command(target))
+        .arg(target.remote_command())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()?;
@@ -84,19 +84,6 @@ pub(super) fn serve(
         let _ = child.wait();
         result
     })
-}
-
-fn remote_command(target: &SshConnectionOptions) -> String {
-    let mut args = vec!["env".to_owned()];
-    match target.root() {
-        Some(root) => args.push(format!("ASH_WORKSPACE_ROOT={root}")),
-        None => args.extend(["-u".into(), "ASH_WORKSPACE_ROOT".into()]),
-    }
-    args.extend([target.runtime().into(), "connect".into()]);
-    args.into_iter()
-        .map(|arg| format!("'{}'", arg.replace('\'', "'\\''")))
-        .collect::<Vec<_>>()
-        .join(" ")
 }
 
 #[cfg(test)]

@@ -24,15 +24,12 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
         or not isinstance(targets, list)
         or not targets
         or any(
-            not isinstance(target, str)
-            or target not in TARGETS
-            or TARGETS[target].is_windows
-            for target in targets
+            not isinstance(target, str) or target not in TARGETS for target in targets
         )
         or len(set(targets)) != len(targets)
     ):
         raise ValueError(
-            "Remote packages require packaged Node and unique supported POSIX targets"
+            "Remote packages require packaged Node and unique supported targets"
         )
     args.target = args.target or default_target()
     if args.target not in targets:

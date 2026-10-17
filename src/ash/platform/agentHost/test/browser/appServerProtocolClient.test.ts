@@ -10,11 +10,13 @@ import { AppServerProtocolIncompatibleError } from '../../common/appServerProtoc
 import { appServerRequest } from '../../browser/appServerRequest.js';
 import { type AppServerTransport, WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION } from '../../common/appServerTransport.js';
 import { createTestInitializeResult } from '../common/testAppServerProtocol.js';
+import { SSH_REMOTE_INITIALIZE_TIMEOUT_MS } from '../../../remote/common/remote.js';
 
 class ProtocolTransport implements AppServerTransport {
 	private readonly listeners = new Map<string, Set<(payload: unknown) => void>>();
 	public readonly frames: Record<string, unknown>[] = [];
 	public shouldCloseSynchronously = false;
+	public initializeDelayMs = 0;
 	public onInitialize: (() => void) | undefined;
 	public onDisconnect: (() => void) | undefined;
 	constructor(private readonly initialize: () => unknown = createTestInitializeResult) { }
@@ -36,7 +38,10 @@ class ProtocolTransport implements AppServerTransport {
 		} else if (event === WEB_APP_SERVER_FRAME_EVENT) {
 			const frame = JSON.parse((payload as { frame: string; }).frame) as Record<string, unknown>;
 			this.frames.push(frame);
-			if (frame.method === 'initialize') { this.frame({ id: frame.id, result: this.initialize() }); this.onInitialize?.(); }
+			if (frame.method === 'initialize') {
+				const reply = () => { this.frame({ id: frame.id, result: this.initialize() }); this.onInitialize?.(); };
+				if (this.initializeDelayMs) { setTimeout(reply, this.initializeDelayMs); } else { reply(); }
+			}
 		}
 	}
 
@@ -50,6 +55,25 @@ class ProtocolTransport implements AppServerTransport {
 }
 
 const flushHandlers = (): Promise<void> => new Promise<void>(resolve => setImmediate(resolve));
+
+test('SSH cold package initialization can outlast ordinary request deadlines', async () => {
+	mock.timers.enable({ apis: ['setTimeout'] });
+	try {
+		const transport = new ProtocolTransport();
+		transport.initializeDelayMs = 65_000;
+		const client = new AppServerProtocolClient(transport, { initializeTimeoutMs: SSH_REMOTE_INITIALIZE_TIMEOUT_MS, requestTimeoutMs: 100 });
+		using cleanup = toDisposable(() => client.dispose());
+		const connected = client.connect();
+		await flushHandlers();
+		mock.timers.tick(65_000);
+		await connected;
+		assert.equal(client.state, 'ready');
+		const request = assert.rejects(client.request(APP_SERVER_METHODS['session/list'], {}), /timed out/i);
+		mock.timers.tick(100);
+		await request;
+		assert.equal(client.state, 'crashed');
+	} finally { mock.timers.reset(); }
+});
 
 test('connection recovery coalesces replacement, preserves the cause and reuses the protocol client', async () => {
 	mock.timers.enable({ apis: ['setTimeout'] });

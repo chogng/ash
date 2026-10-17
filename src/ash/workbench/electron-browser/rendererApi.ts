@@ -50,6 +50,7 @@ import type { IAppServerApi } from "../../platform/agentHost/common/appServerApi
 import type { RendererHostCapabilities } from "../../platform/renderer/common/rendererHost.js";
 import { createRemoteAgentApi } from "../../platform/remote/electron-browser/remoteAgentApi.js";
 import { createRemoteConnectionApi } from "../../platform/remote/electron-browser/remoteConnectionApi.js";
+import { SSH_REMOTE_INITIALIZE_TIMEOUT_MS } from '../../platform/remote/common/remote.js';
 import type { IWorkspaceTrustRequestService } from '../../platform/workspace/common/workspaceTrust.js';
 import { InstantiationService } from '../../platform/instantiation/common/instantiationService.js';
 
@@ -105,7 +106,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			performance.mark('ash.rendererApi.initialized');
 			if (remoteConnection.kind === 'ssh') {
 				const workspaceConnection = resources.add(connectionServices.createInstance(LocalAgentHostServiceClient, {
-					clientName: 'ash-desktop-remote', initializeTimeoutMs: 30_000,
+					clientName: 'ash-desktop-remote', initializeTimeoutMs: SSH_REMOTE_INITIALIZE_TIMEOUT_MS,
 					capabilities: {
 						directoryGrantsHost: { version: 1 },
 						agentInteractions: { version: 1, kinds: ['approval', 'permissions', 'userInput'] },

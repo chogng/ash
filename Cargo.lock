@@ -2521,6 +2521,9 @@ dependencies = [
 [[package]]
 name = "ash-remote"
 version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+]
 
 [[package]]
 name = "ash-remote-connections"
@@ -2536,6 +2539,7 @@ dependencies = [
  "ash-remote-profile-store",
  "ash-utils-home-dir",
  "ash-utils-path",
+ "base64 0.22.1",
  "flate2",
  "serde",
  "serde_json",

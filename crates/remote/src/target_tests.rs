@@ -59,3 +59,50 @@ fn exact_runtime_requires_a_canonical_absolute_posix_executable() {
         );
     }
 }
+
+#[test]
+fn windows_paths_are_normalized_without_using_the_clients_filesystem() {
+    for (input, expected) in [
+        (
+            r"c:\Users\开发者\Ash project",
+            "C:/Users/开发者/Ash project",
+        ),
+        (r"\\server\share\project", "//server/share/project"),
+        ("C:/", "C:/"),
+    ] {
+        let path = RemoteDirPath::parse(input).unwrap();
+        assert_eq!(path.as_str(), expected);
+        assert_eq!(path.style(), super::RemotePathStyle::Windows);
+    }
+    for invalid in [
+        r"C:relative",
+        r"\project",
+        r"\\?\C:\project",
+        "C:/../project",
+        "C:/project/",
+        "C://project",
+        "C:/file:stream",
+        "C:/NUL.txt",
+        "C:/NUL .txt",
+        "C:/COM¹",
+        "C:/x.",
+        "C:/x ",
+        "C:/x\n",
+        "//server",
+        "//server/share/../project",
+    ] {
+        assert!(RemoteDirPath::parse(invalid).is_err(), "{invalid:?}");
+    }
+    assert!(RemoteRuntime::new_exact_executable("C:/").is_err());
+    assert!(RemoteRuntime::new_exact_executable("//server/share").is_err());
+    assert_eq!(
+        RemoteRuntime::new_exact_executable(r"c:\Program Files\Ash\ash-remote-server.exe")
+            .unwrap()
+            .executable(),
+        "C:/Program Files/Ash/ash-remote-server.exe"
+    );
+    assert_eq!(
+        RemoteDirPath::parse(r"/srv/back\slash").unwrap().as_str(),
+        r"/srv/back\slash"
+    );
+}

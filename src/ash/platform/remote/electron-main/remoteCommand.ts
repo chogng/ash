@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { throwIfCancelled } from "../../../base/common/cancellation.js";
 import { CancellationError } from "../../../base/common/errors.js";
+import { normalizeRemoteWorkspacePath } from "../common/remote.js";
 
 const SSH_HOST_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,251}[A-Za-z0-9])?$/;
 const MAX_OUTPUT_LENGTH = 1024 * 1024;
@@ -28,9 +29,12 @@ export function validLocalCommand(value: string): boolean {
 	return value.trim().length > 0 && !value.includes("\0") && !value.includes("\n") && !value.includes("\r");
 }
 
-export function isCanonicalAbsolutePosixPath(value: string): boolean {
-	if (!value.startsWith("/") || value === "/" || value.endsWith("/") || value.includes("\0") || value.includes("\n") || value.includes("\r")) return false;
-	return value.split("/").slice(1).every(segment => segment.length > 0 && segment !== "." && segment !== "..");
+export function isCanonicalAbsoluteRemotePath(value: string): boolean {
+	try {
+		return normalizeRemoteWorkspacePath(value) === value && !value.endsWith("/") && !(value.startsWith("//") && value.slice(2).split("/").length < 3);
+	} catch {
+		return false;
+	}
 }
 
 export function runRemoteCommand(executable: string, args: readonly string[], environment: NodeJS.ProcessEnv, observer?: RemoteCommandObserver): Promise<RemoteCommandResult> {

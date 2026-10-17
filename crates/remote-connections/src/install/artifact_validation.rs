@@ -7,6 +7,8 @@ use std::io::SeekFrom;
 use std::path::Component;
 use std::path::Path;
 
+use ash_remote::RemoteDirPath;
+use ash_remote::RemotePlatform;
 use flate2::read::GzDecoder;
 use serde_json::Value;
 use sha2::Digest;
@@ -84,6 +86,7 @@ fn validate_package_archive(
         ))
     })?;
     let mut paths = BTreeSet::new();
+    let mut windows_paths = BTreeSet::new();
     let mut unpacked_size = 0_u64;
     let mut metadata = None;
     for entry in entries {
@@ -92,6 +95,7 @@ fn validate_package_archive(
                 "runtime artifact contains an invalid tar entry: {error}"
             ))
         })?;
+        let entry_type = entry.header().entry_type();
         let path = entry.path().map_err(|error| {
             RemoteRuntimeInstallError::artifact_integrity(format!(
                 "runtime artifact contains an invalid path: {error}"
@@ -107,13 +111,33 @@ fn validate_package_archive(
             )));
         }
         let path = path.into_owned();
+        if matches!(artifact.platform, RemotePlatform::Windows { .. }) {
+            let value = path.to_str().ok_or_else(|| {
+                RemoteRuntimeInstallError::artifact_integrity("Windows archive path is not UTF-8")
+            })?;
+            // Tar directory headers conventionally end in '/', unlike workspace paths.
+            let value = if entry_type.is_dir() {
+                value.strip_suffix('/').unwrap_or(value)
+            } else {
+                value
+            };
+            // Tar paths use slashes even on a POSIX client. Windows aliases, ADS,
+            // devices and case collisions must be rejected before extraction.
+            if value.contains('\\')
+                || RemoteDirPath::parse(format!("C:/{value}")).is_err()
+                || !windows_paths.insert(value.to_lowercase())
+            {
+                return Err(RemoteRuntimeInstallError::artifact_integrity(format!(
+                    "runtime artifact has an unsafe Windows path: {value}"
+                )));
+            }
+        }
         if !paths.insert(path.clone()) {
             return Err(RemoteRuntimeInstallError::artifact_integrity(format!(
                 "runtime artifact repeats path: {}",
                 path.display()
             )));
         }
-        let entry_type = entry.header().entry_type();
         if !entry_type.is_file() && !entry_type.is_dir() {
             return Err(RemoteRuntimeInstallError::artifact_integrity(format!(
                 "runtime artifact contains a linked or special entry: {}",
@@ -148,8 +172,13 @@ fn validate_package_archive(
             artifact.integrity.unpacked_size
         )));
     }
-    for required in [
-        "ash-package.json",
+    let suffix = artifact.platform.executable_suffix();
+    if !paths.contains(Path::new("ash-package.json")) {
+        return Err(RemoteRuntimeInstallError::artifact_integrity(
+            "runtime artifact is missing ash-package.json",
+        ));
+    }
+    for executable in [
         "bin/ash-app-server-daemon",
         "bin/ash-remote-server",
         "bin/ash-app-server",
@@ -157,7 +186,8 @@ fn validate_package_archive(
         "ash-resources/tgrep/tgrep",
         "ash-resources/node/bin/node",
     ] {
-        if !paths.contains(Path::new(required)) {
+        let required = format!("{executable}{suffix}");
+        if !paths.contains(Path::new(&required)) {
             return Err(RemoteRuntimeInstallError::artifact_integrity(format!(
                 "runtime artifact is missing `{required}`"
             )));
@@ -186,7 +216,13 @@ fn validate_package_metadata(
         ("layoutVersion", Value::from(2)),
         ("version", Value::from(artifact.version.as_str())),
         ("target", Value::from(artifact.platform.target_triple())),
-        ("entrypoint", Value::from("bin/ash-app-server")),
+        (
+            "entrypoint",
+            Value::from(format!(
+                "bin/ash-app-server{}",
+                artifact.platform.executable_suffix()
+            )),
+        ),
         ("pathDir", Value::from("ash-path")),
         ("resourcesDir", Value::from("ash-resources")),
     ];
@@ -203,17 +239,4 @@ fn validate_package_metadata(
         ));
     }
     Ok(())
-}
-
-pub(super) fn is_canonical_absolute_posix_path(value: &str) -> bool {
-    !value.is_empty()
-        && value.starts_with('/')
-        && !value.ends_with('/')
-        && !value.contains('\0')
-        && !value.contains('\n')
-        && !value.contains('\r')
-        && value
-            .split('/')
-            .skip(1)
-            .all(|segment| !segment.is_empty() && !matches!(segment, "." | ".."))
 }

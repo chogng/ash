@@ -9,11 +9,12 @@ store credentials, decide how a runtime is installed, or render a Remote UI.
 
 - `SshHost::parse` accepts only an OpenSSH host alias. User names, passwords, shell syntax, and
   control characters never enter the profile.
-- `RemoteDirPath::parse` accepts one canonical absolute POSIX Directory root.
+- `RemoteDirPath::parse` accepts a canonical absolute POSIX, Windows drive or UNC root.
+  Windows separators normalize to `/`; literal POSIX backslashes are preserved.
 - `RemoteRuntime::new` identifies a runtime selected by an installer or an already-compatible
   `ash code` CLI. It is an executable reference, not a product identity.
-- `RemotePlatform` represents only the currently supported POSIX package targets: Linux GNU/musl
-  and macOS on `aarch64`/`x86_64`. It cannot represent a Linux target without a libc ABI.
+- `RemotePlatform` represents Linux GNU/musl, macOS and Windows MSVC on `aarch64`/`x86_64`.
+  It cannot represent a Linux target without a libc ABI.
 
 The profile is deliberately credential-free. A product host passes its SSH agent and OpenSSH
 configuration only when it asks `ash-remote-connections` to connect.
