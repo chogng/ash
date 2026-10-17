@@ -789,3 +789,304 @@ pnpm test:browser:integration:prepared appServerCodec.integration.spec.ts appSer
 `.build/investigations/app-server-protobuf-p1-2026-10-17/`：`final-app-server-codec-comparison.json`、
 `final-comparison-summary.json`、`browser-protobuf-final.log`、`browser-contracts-final.log`、`unit.log`
 及类型检查日志；成功报告为 `.build/desktop/playwright/editor-browser-o59Eea/report/index.html`。
+
+## 12. 是否必须复制：Zed、VS Code 与 Ash 的可选路径
+
+2026-10-17 继续对照本地 Zed `56934ec056`、VS Code `a2acc8c864a` 的源码。
+这里比较具体边界，不把某个应用整体称为“零复制”，也不把结构化克隆的语义等同于可数出的物理内存复制次数。
+
+### 12.1 必须重建普通 JS 对象，不代表必须传整棵对象
+
+当前 Ash 的 `AppServerFrameDecoder.decode` 将大帧交给 Worker，完整校验后回传普通 JS 对象。
+独立 JS 堆之间不能直接移动或共享这棵普通对象图；当前消息机制会在接收端重建它。
+同一 JS 上下文的服务调用则可以直接传引用，不需要因“使用 Electron”而复制所有值。
+字符串等底层存储是否被引擎共享属于实现细节，不能从 API 调用次数推断每个字节必然被复制几次。
+
+| 路径                            | 可以省掉的成本                       | 仍然存在的工作                                          |
+| ------------------------------- | ------------------------------------ | ------------------------------------------------------- |
+| 同进程 Rust `move` / `Arc<T>`   | 可以避免重新序列化及深复制数据内容   | 所有权、线程安全、引用计数；外层集合可能仍要复制        |
+| Worker 转移 `ArrayBuffer`       | 转移底层内存所有权，避免克隆该块字节 | 消息元数据、调度、接收端视图；发送方原 buffer 被 detach |
+| Worker 共享 `SharedArrayBuffer` | 两侧读取同一数据块                   | 同步、生命周期、边界校验；不共享任意 JS 对象            |
+| 二进制视图按需读取              | 避免预先展开完整对象图               | 格式验证、访问器、需要时的字符串解码与 UI 数据构造      |
+| 源头限制输出、按需取正文        | 少传、少解析、少校验、少复制、少应用 | 翻页、版本、取消、审批和消费背压的完整语义              |
+
+浏览器 Worker 的 buffer 转移与共享内存行为分别见
+[Transferable objects](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Transferable_objects)
+和 [SharedArrayBuffer](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/SharedArrayBuffer)。
+
+### 12.2 Zed 的优势来自可共享的进程内数据结构
+
+本地 `../zed/crates/gpui/src/app/context.rs:872` 的 `background_spawn` 接收 `Send` future，
+返回 `Task<R>`，结果同样要求 `Send`；这条同进程任务路径没有要求先转成 JSON 再重建结果。
+`../zed/crates/agent/src/thread.rs:1298` 的历史使用 `Vec<Arc<Message>>`，
+`to_db` 在第 1950 行克隆这个集合，再于第 1973 行把结果移进后台任务。
+这里会分配／复制外层 Vec、增加每个 Arc 的引用计数，但不会因此深复制每条 Message 的正文。
+不能将它写成整个快照创建是 O(1) 或没有任何复制。
+
+跨进程／网络另有成本：`../zed/crates/rpc/src/message_stream.rs:48` 将 Envelope 编码、zstd 压缩并发送，
+第 87 行开始解压并解码接收的消息。Zed 的这条 RPC 同样没有消除编码与结果构造；
+其进程内 `Arc` 不能直接跨到 Ash 的独立 Rust app-server 和 Chromium JS 堆。
+
+### 12.3 VS Code 同样区分对象消息与可转移字节
+
+本地 `../vscode/src/vs/base/common/worker/webWorker.ts:264` 的 `_send` 收集请求的顶层
+`ArrayBuffer` 参数或直接为 `ArrayBuffer` 的返回值，加入 transfer list。
+普通对象及其任意嵌套字段不会因此自动变成可转移结果。
+`../vscode/src/vs/workbench/services/extensions/common/rpcProtocol.ts:42` 的扩展 RPC 路径
+仍使用 `JSON.stringify` / `JSON.parse`，并把 `VSBuffer` 引用从 JSON 中单独提取、恢复。
+`../vscode/src/vs/base/parts/ipc/common/ipc.mp.ts:59` 的 MessagePort 协议发送字节，
+也不能据此声称整个扩展调用没有复制。
+
+与减少载荷有关的例子是 `../vscode/src/vs/workbench/api/common/extHostChatAgents2.ts:92`：
+Chat progress 先入队，再在 microtask 中批量调用 `$handleProgressChunk`，发送本次进度块。
+它能减少调用次数；这段代码本身不能证明存在与 Ash 相同的字节额度或消费 ACK。
+
+### 12.4 Ash 后续优先级与可验证假设
+
+1. **先继续限制完整结果规模。** 第 8 节已接入有界历史，但 Turn 数上界不等于字节上界。
+   单个超大 Turn、重复正文、工具输出仍值得检查。正文按需获取、合适的摘要与字节预算可同时减少
+   编码、传输、解码、校验、克隆和领域应用；翻页、回放、审批与取消必须保持原有语义。
+2. **对大数值结果试验紧凑 buffer 回传，并让消费者持续使用视图。** 如 syntax 的定宽 tuple，
+   可考虑连续 `Uint32Array`，Worker 校验后转移底层 buffer，客户端以领域访问器读取。
+   当前 `src/ash/platform/syntax/browser/syntaxApi.ts:59` 等处会将 tuple 映射成领域对象；
+   若立即 `Array.from` 并展开全部对象，只会把分配和阻塞移回 UI，不能算解决了结果构造。
+   适配层应继续隐藏 wire DTO，并保证 buffer 所有权、有效期、版本与取消语义。
+3. **需要大规模随机访问时，再比较二进制视图。** FlatBuffers 可以直接访问已编码数据，
+   不要求先展开成另一棵完整对象图，见[官方说明](https://flatbuffers.dev/)。
+   可将已校验 buffer 转移给 UI，通过领域访问器按需读取；边界验证、JS 字符串创建和最终 UI 构造仍需付费。
+   这比仅换 Protobuf codec 改动更大，必须保留字段存在性、整数精度、非法输入和协议演进语义。
+4. **共享内存保留为特定场景候选。** `SharedArrayBuffer` 适合双方反复读取／写入的固定布局数据，
+   不是共享普通 JS 对象的开关；并发写入需要适当同步，浏览器产品还需核对安全上下文和跨源隔离要求。
+   字节池若在 UI 仍持有视图时被复用会产生错误，ACK／归还时机必须覆盖实际读取生命周期。
+   它本身也不打通独立 Rust 进程到 Renderer 的共享内存通道。
+
+另有一个局部副本：`appServerConnectionRelay.ts:247` 的 `new Uint8Array(chunk)` 会复制现有 Buffer 内容；
+这与仅创建同一 buffer 的 view 不同。是否可安全删除需检查池化 backing store、准确范围、序列化和 chunk 生命周期，
+并单独实测收益。Electron 当前公开的
+[`MessagePortMain.postMessage`](https://www.electronjs.org/docs/latest/api/message-port-main#portpostmessagemessage-transfer)
+的 transfer 参数是 `MessagePortMain[]`，不能直接套用浏览器 Worker 的 ArrayBuffer transfer 写法。
+
+第 11 节同一次测量中，长历史总响应中位数为 23.8 ms，Worker 返回交付约 11.1 ms（其中发送侧约 5.0 ms）；
+数值 tuple 返回交付约 8.1 ms（发送侧约 4.2 ms）。这些说明结果通路值得优化，
+但返回交付还包含调度与接收，不能当成可完全消除的纯 memcpy 时间，也不能承诺等量加速。
+上述紧凑结果、二进制视图及共享内存方案尚未实施或基准验证；本节只补充源码证据与下一步实验优先级。
+
+## 13. 外部项目与 crates.io 复核：更高收益的候选
+
+2026-10-17 查阅 DuckDB-Wasm、Tauri、VS Code、Ajv 与相关 Rust crate 的官方文档和源码，
+并增加两个隔离实验。结论是继续减少结果的重复内容、通用对象构造和跨线程对象交付；
+没有证据支持仅替换一种 codec 就能显著加速全部链路。本节不修改线上协议、依赖或产品实现。
+
+### 13.1 首选结构性改动：同一个 Item 正文只传一次
+
+当前 `SessionThreadReadResult` / `SessionThreadSubscribeResult` 同时携带 Thread 与 transcript；
+`ThreadTranscriptSnapshot::from_thread` 还会 clone 原 Item。语义上已知的条目身份，可以用于组织
+一个权威内容集合与有版本的引用，不必对所有字符串做通用指纹去重。
+后者是第 10.3 节已经验证过会退化的不同算法。
+
+用第 11 节同一份 `threadWorkload`，仅在一个字节数模型中把 transcript 的重复 Item 换成 `itemRef`，
+保留 entry、turn、transient 等元数据，再完整恢复并 `deepStrictEqual` 原响应：
+
+| 夹具                       | 当前 JSON 字节 | 引用表示字节 |   减少 |
+| -------------------------- | -------------: | -----------: | -----: |
+| 20 Turn，每条 4 KiB 正文   |        177,221 |       94,131 | 46.88% |
+| 2048 Turn，每条 4 KiB 正文 |     18,107,467 |    9,595,041 | 47.01% |
+
+这是**表示方式的体积实验**，不是已实现的新 DTO 或性能结果。生产版本还必须核对条目 scope、revision、
+更新／删除、暂态 transcript Item、回放和审批；不能把不在 canonical Thread 中的暂态条目错误地改为悬空引用。
+协议变更仍由共享协议 crate 拥有，App、Browser、TUI 消费者一起适配。
+引用关系应保持到 Worker 交付与领域适配，避免回传前又展开成两份完整对象。
+客户端也不能据此建立第二份权威历史。
+
+该夹具减少约 47% 字节，显著高于第 11 节 Protobuf 的约 4.9%；这不表示真实耗时会等比例下降。
+正常有界 20 Turn 在第 11 节已经只有约 0.2 ms 的解码响应，优化价值主要在较大的正文、峰值内存与高频更新。
+
+### 13.2 新实测候选：Worker 校验后只回确认，UI 解析原字符串
+
+当前 UI 已拥有不可变的原始 frame 字符串。另一种私有 Worker 交付方式是：
+
+```text
+UI 保留该 job 的原始 JSON
+  → Worker JSON.parse + 完整生成 schema 校验
+  → 仅返回 job / method / id 等确认元数据
+  → UI 解析同一个原始 JSON，交给领域消费者
+```
+
+它多做一次 `JSON.parse`，但省掉完整对象图的 Worker 发送序列化与 UI 接收重建。
+这不是字节零复制，也不说明重复解析通常更快；它依赖具体数据形状和 V8 的实际成本。
+
+隔离实验使用真实 Chromium 149.0.7827.55 Worker 与当次生成的生产 decoder，
+两种方式都完整校验同一响应。每个场景先运行一次，再交错运行 9 个 warm 样本／方式，
+每次 warm 前通过 CDP 回收 UI 垃圾，Worker 保留正常 GC；总计 120 个样本。
+同一个页面中的两种 Worker 均已 ready，不包含冷启动。
+每个结果在响应与心跳计时停止后完整比较序列化结果，另确认两种方式都拒绝非法 Turn.kind。
+
+下表为同次隔离实验各列独立 warm 中位数，单位 ms：
+
+| 场景                                  | 完整对象回传响应 | 仅确认后再解析响应 | 确认方式 UI 再解析 | UI 心跳最大间隔：对象 → 确认 |
+| ------------------------------------- | ---------------: | -----------------: | -----------------: | ---------------------------: |
+| 20 Turn，177,221 bytes                |              0.4 |                0.3 |                0.0 |                    0.3 → 0.3 |
+| 2048 Turn，18,107,467 bytes           |             25.6 |               18.5 |                5.7 |                    8.1 → 8.4 |
+| 单大文本，16,778,516 bytes            |              7.9 |                5.9 |                1.8 |                    4.5 → 4.8 |
+| 65,536 个数值 tuple，1,670,907 bytes  |             14.6 |                9.9 |                4.2 |                    5.4 → 5.2 |
+| Unicode，5,063,328 bytes              |              5.8 |                7.1 |                3.2 |                    5.4 → 6.7 |
+| 262,144 个数值 tuple，7,269,147 bytes |             63.3 |               36.7 |               13.6 |                  22.0 → 15.1 |
+
+长历史响应约少 27.7%，普通数值 tuple 约少 32.2%，大数值 tuple 约少 42.0%；
+Unicode 响应约增加 22.4%。长历史和大文本心跳中位数略升，不能称为全面减少 UI 卡顿。
+0.0 表示计时精度下的中位数；各列中位数也不能简单相加。
+
+该探针没有接入完整 ProtocolClient、Electron relay、真实 app-server、领域 adapter 和 DOM，
+也未测峰值内存；不能把这些数字当成 Desktop 的端到端加速。
+比第 11 节更简单的 harness 只允许比较本表两列，不能将跨次绝对值之差计为新收益。
+20 Turn 强制走 Worker 只是实验对照，线上仍应保留当前小帧同步路径。
+
+若继续产品化，确认必须绑定原 job、不可变 frame、method、connection generation 和生成 schema 版本；
+恢复后的 envelope 要保持当前 decoder 的规范化语义。错误、断开、取消、晚到响应、server request、
+顺序派发和消费 ACK 必须跑现有契约测试；ACK 不能在 UI 再解析／必要交付完成前提前释放。
+尤其不能让超大／对象密集数据无条件回到 UI 的不可抢占 `JSON.parse`。
+这支持一个**有条件选择的候选路径**，不支持全量替换当前 Worker 输出。
+
+### 13.3 外部实现可以借鉴的具体机制
+
+- **DuckDB-Wasm：数据批次与可转移结果。** 官方的 `query()` 取得完整结果，`send()` 按需取得 Arrow record batch，
+  见[查询文档](https://duckdb.org/docs/preview/clients/wasm/query)。
+  [Worker dispatcher](https://github.com/duckdb/duckdb-wasm/blob/main/packages/duckdb-wasm/src/parallel/worker_dispatcher.ts)
+  对完整查询及结果块均把 `result.buffer` 放进 transfer list。这证明可将大结果设计成二进制视图和有界批次，
+  而非先展开为整棵 JS 对象；不证明其 Wasm 内部或整条链路没有任何复制。
+- **VS Code：数值结果持续保留紧凑表示。** 本地
+  `../vscode/src/vs/editor/common/services/semanticTokensDto.ts:67` 将 full／delta token 编成连续 Uint32Array，
+  解码在对齐且字节序合适时使用同一 buffer 的视图，非对齐路径会复制。
+  [公开 API](https://code.visualstudio.com/api/references/vscode-api#SemanticTokens)也直接接收 Uint32Array。
+  Ash syntax 可以借鉴这种领域契约，而非先转 binary 后立刻还原所有嵌套数组。
+  本次 65,536 × 6 个 Uint32 的裸数据为 1,572,864 bytes，接近当前 1,670,907-byte JSON，
+  且尚不含 header／元数据；它的主要目标是减少对象分配和交付，不应先承诺 wire bytes 大幅缩小。
+- **Tauri：区分小控制消息与大数据交付。** [Channel 源码](https://github.com/tauri-apps/tauri/blob/dev/crates/tauri/src/ipc/channel.rs)
+  区分 JSON 与 Raw body，小数据直接通知，大数据排队后由前端 fetch；Raw 对前端表现为 ArrayBuffer。
+  普通 `Vec<u8>` 作为 Serialize 值仍会成为 JSON 数字数组，小 Raw 也有转换路径，不能称为普遍零复制。
+  [官方 channel 文档](https://tauri.app/develop/calling-frontend/#channels)强调有序交付；
+  这本身不等于 Ash 的消费 ACK 或字节额度。可借鉴大正文／资源按需取、控制响应保持小帧，不能照搬 API 替换 Electron。
+- **Ajv：把 schema 工作放进构建阶段。** [Standalone validator](https://ajv.js.org/standalone.html)
+  在构建期生成直接校验函数，避免每次运行时解释 schema，也避免浏览器运行时 Function 编译。
+  当前 Ash 仍使用通用解释器，值得与专用生成函数做完整拒绝语义的差分对比。
+  第 10.3 节失败的是闭包缓存候选，不代表构建期代码生成已失败。
+  JTD 编译 parser 可融合解析与校验，但[其 union 能力](https://ajv.js.org/guide/typescript.html#type-safe-unions)
+  不等同于现有完整 JSON Schema，不能静默丢掉范围、oneOf 唯一性或额外字段约束。
+
+### 13.4 crate 选择：先消除中间表示，再比较解析器
+
+crates.io API 当次观测到 `serde_json 1.0.154`、`sonic-rs 0.5.10`、`rkyv 0.8.18`、
+`flatbuffers 25.12.19`、`arrow 60.0.0`。这里只记录研究对象，未修改 lockfile 或安装这些版本。
+
+| 工具                                 | 值得研究的位置                                            | 对当前瓶颈的限制                                             |
+| ------------------------------------ | --------------------------------------------------------- | ------------------------------------------------------------ |
+| `serde_json::to_writer` / `RawValue` | typed response 直接编码；已校验原始 JSON 的透明嵌入／转发 | 不消除 Renderer 的对象构造或 Worker 克隆                     |
+| `sonic-rs`                           | Rust 的长字符串编码、只读取少数字段的 gateway 等热点      | 不替换 Chromium 内置 JSON.parse；需要兼容性与目标 CPU 实测   |
+| `flatbuffers`                        | Rust／TS 都通过访问器读取的大结构                         | 消费端必须保留视图；验证、字符串与协议演进仍有工作           |
+| `arrow`                              | 大型表状／数值批次                                        | 对通用 Chat 对象过重，定宽 tuple 可以先用更小的专用表示      |
+| `rkyv`                               | Rust 间共享或持久化的 archived 数据                       | 不会自动让现有 TS 消费者读取 Rust 内存，需要额外布局／访问层 |
+
+当前 `server.rs:4579` 的 `result<T>` 先 `serde_json::to_value`，再由第 4597 行序列化为 String。
+比“换更快 Value 实现”更值得先试的是直接序列化 typed envelope，避免为输出再造一棵完整 Value。
+[`to_writer`](https://docs.rs/serde_json/latest/serde_json/fn.to_writer.html)可以对 Serialize 值直接编码，
+[`RawValue`](https://docs.rs/serde_json/latest/serde_json/value/struct.RawValue.html)可以保留合法 JSON 片段而不展开它。
+要保留当前原子 frame、序列化失败处理、队列字节预算和 gateway resource 路由；
+不能未经预算就把可失败的半条响应直接写入 socket。
+
+[`sonic-rs`](https://docs.rs/sonic-rs/latest/sonic_rs/)提供 aarch64 SIMD 与 LazyValue，但官方另有兼容性说明。
+simdjson 的 [On-Demand](https://github.com/simdjson/simdjson/blob/master/doc/ondemand_design.md)
+支持跳过未消费值的转换；按需访问不保证未经访问的数据已经完成所有应用约束验证。
+不能借惰性解析跳过 Ash 所需的边界校验，也不能把作者的 Rust／C++ benchmark 移植成 Electron 的预期倍数。
+[`rkyv`](https://docs.rs/rkyv/latest/rkyv/)的 archived 访问与验证、
+[`FlatBuffers`](https://flatbuffers.dev/)的二进制访问、
+[`Arrow JS`](https://arrow.apache.org/js/current/)的 typed-array vector，针对的是不同消费模型。
+
+### 13.5 建议实施顺序与证据位置
+
+按收益范围优先做：有版本的 Item 去重、单页字节预算与大正文按需取；
+随后比较 Worker 小确认路径、构建期专用 validator、Rust typed response 直接编码。
+数值密集路径再做可转移的领域视图原型，通用协议的二进制替换与跨进程共享内存继续后置。
+它们可以分别实验，不应一次混入一个无法归因的性能提交。
+
+性能验证应补上当前微基准没有覆盖的 Rust 结果构造、编码、gateway、连接程序、Main relay、领域应用和绘制，
+至少记录首个可用页面、总耗时、UI 停顿分位数、审批／取消延迟和各进程内存。
+还要在合理低配 CPU 上设 UI 同步解析预算，避免 M5 的中位数掩盖长尾。
+
+所有原始证据在 `.build/investigations/app-server-next-options-2026-10-17/`：
+`sources.json` 记录外部原始源码／crate API 的 URL 与 SHA256，`probe-inputs.json` 记录夹具与 decoder，
+`representation-byte-probe.json` 记录表示方式体积，`receipt-results.json` 保留 120 个原始样本和摘要。
+本轮探针所有 fixture 的结果对比与非法 kind 拒绝检查通过；未运行产品全链路或新的回归测试套件。
+
+```sh
+node .build/investigations/app-server-next-options-2026-10-17/representation-byte-probe.mjs
+node .build/investigations/app-server-next-options-2026-10-17/receipt-probe.mjs
+```
+
+## 14. Codex／Claude 团队公开方案与 X 原帖
+
+2026-10-17 继续检索公开资料，并用浏览器直接读取下列 X 原帖和讨论串，展开了 Codex 性能帖的完整内容。
+搜索引擎和新闻聚合页只用于发现线索；以下判断以原帖、官方文档或官方仓库为依据。
+X 搜索页要求登录，本轮没有登录；可公开访问的具体原帖可读，不能据此声称覆盖了 X 的全部讨论。
+
+### 14.1 X 上可以确认的团队说明
+
+| 日期与出处                                                                                                                                               | 团队公开说法                                                                                | 对 Ash 的启发与证据边界                                                     |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| 2026-05-16，[OpenAIDevs 性能帖](https://x.com/OpenAIDevs/status/2055718005309575431)                                                                     | 切换线程的重渲染约少 75%；部分流式路径消除了无效重渲染；部分大型仓库 Git 操作约快 10～50 倍 | 指向无效派生、渲染和后台工作；不是 JSON 或 IPC 的速度倍数，也未公开具体实现 |
+| 2026-08-24，[ClaudeDevs 流式渲染帖](https://x.com/ClaudeDevs/status/2092006814804214163)                                                                 | 只更新还在变化的内容；团队报告慢笔记本卡顿减少，以及 120Hz 设备上的流畅度改善               | 把每次增量的消费成本与传输成本一起测；这些数字属于团队测试条件              |
+| 2026-04-01，[Boris 的新 renderer 讨论串](https://x.com/bcherny/status/2039421575422980329)及[视口说明](https://x.com/bcherny/status/2039421581907374320) | 将整个终端视口的渲染控制移到应用层，并报告长对话下稳定的相关 CPU／内存开销                  | 是 CLI 终端 renderer 方案；不能外推整个应用 RSS 恒定或 Electron IPC 零复制  |
+
+[Boris 在 2026-09-23 的原帖](https://x.com/bcherny/status/2102854267782705648)
+直接引用 ClaudeDevs 的[复盘发布帖](https://x.com/ClaudeDevs/status/2102839691154427983)，
+链接到 [How we made claude.ai 3x faster in two weeks](https://claude.dev/blog/how-we-made-claude-ai-faster/)。
+文章作者为 Raymond Wang、Sam Attard 和 Issac G.；这是网页／Desktop 团队的性能复盘，不是某一 codec 的 benchmark。
+
+复盘中与本次问题最相关的机制是：缓存已完成的 Markdown 块、把增长中的代码围栏分词放进 Worker、
+减少主线程重复克隆 IndexedDB 缓存快照，以及以 8.33 ms 帧预算验证流式显示。
+这些是团队公开描述，尚未在 Ash 上实测。Claude Code 的
+[官方 fullscreen 文档](https://code.claude.com/docs/en/fullscreen)另明确说明只保留可见消息的渲染树，
+并使用终端 alternate screen buffer；这是限制渲染工作量的具体实现。
+复盘也有通过一次代码块字符串复制改善正则高亮的案例；减少复制应服务于总耗时和交互延迟，不能作为绝对目标。
+
+### 14.2 Codex 的正式方向：历史按需加载，而非完整重建
+
+- 2026-07-15 合并的 [PR #33364](https://github.com/openai/codex/pull/33364)
+  引入 paginated history：resume 不携带完整 turns，历史通过 turn／item cursor 分页，最新记录通过 live notification 到达。
+  当时显式选择 history mode 是实验能力。
+- 2026-08-25 合并的 [PR #40676](https://github.com/openai/codex/pull/40676)
+  弃用 paginated thread 的全历史 hydration，并引导客户端走分页接口。
+- [当日官方 App Server 文档](https://developers.openai.com/codex/app-server/)
+  说明新的持久化本地 thread 默认使用分页；显式指定 history mode 仍是单独的实验选项。
+  读取历史与恢复执行具有不同语义，不能为了显示一个旧会话就无条件触发较重的 resume 流程。
+
+一个重要反例是 legacy 分支：本地 `../codex/codex-rs/app-server/src/request_processors/thread_processor.rs:3123`
+仍明确说明，此分支分页减少网络输出，但每次请求仍会完整重放 rollout，等待独立的 turn metadata 索引。
+公开的[版本固定源码](https://github.com/openai/codex/blob/e3465b4/codex-rs/app-server/src/request_processors/thread_processor.rs)
+及 [issue #33786](https://github.com/openai/codex/issues/33786)也提供了该历史问题的证据。
+issue 中的机器、时延和内存数字是报告者的观测，不能代表所有 Codex 版本。
+对 Ash 而言，必须分别检查“输出是有界页”和“后端取得该页的工作量是否有界”。
+
+本次没有找到上述团队公开推荐通过 Protobuf、rkyv 或共享任意 JS 对象来消除 Desktop UI 复制的证据。
+Codex 包内的 ACK／IPC 分片分析仍属于本仓库先前的安装包调查，不能改标为团队在 X 上公开说明。
+
+### 14.3 对照 Ash 后，新增加的优先检查项
+
+本轮源码核对发现：
+
+1. `ChatMarkdownContentPart.tryIncrementalUpdate` 第 49 行仍进入完整的 `render`；第 71 行调用
+   `markdownRenderer.render(markdown, ...)` 后，才计算新节点指纹并复用旧 DOM。
+   因此节点复用不等于已避免全文解析、净化和新节点构造。
+2. 第 89～108 行遍历新旧节点并计算内容指纹，第 110 行起逐个调用 code block 的 `render`。
+   需要测量调用频率、处理文本量，以及 code block 内部是否真正重做分词／布局；不能只从入口调用推断重活次数。
+3. 下游标准 renderer 的 `src/ash/base/browser/markdownRenderer.ts` 还具有完整输入的 lexer 路径。
+   流式长回复应检查每次 delta 的累计处理量，尤其是已结束段落、增长中的代码围栏、表格和后续内容修正。
+4. `read_session_thread_history` 的有界分支进入 `agent_runtime().read_thread_history`。
+   下一轮继续追到实际存储／快照 owner，确认页成本不会随全部历史反复增长，并量化 read、subscribe 和后台刷新是否重复做同一工作。
+
+上述是源码证据与待验证假设，没有运行新的 Chat 场景，不能报告 Ash 已存在可量化的 75% 或数倍回归。
+建议在第 13 节的传输／校验候选之外，优先补一个代表性的“长文本＋代码块持续流式输出”场景，
+将全文 lexer 调用数、累计输入字符数、code block 实际更新、布局和每帧耗时一起记录。
+若证实每个 chunk 重做前缀，则冻结已完成块并只更新不稳定尾部；必须同时覆盖 provider 修正、未闭合围栏、
+Markdown 净化、数学内容、选择、焦点和代码模型生命周期。
+
+这条消费端路径可能比继续压缩几个毫秒的 codec 更影响日常流畅度，具体优先级由 Ash 的端到端 profile 决定。
