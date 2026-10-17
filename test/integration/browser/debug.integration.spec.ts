@@ -271,6 +271,7 @@ test('breakpoints edit expressions by keyboard, update gutter state and support 
 	await expect(checkbox).toBeFocused();
 	await expect(page.locator('.ash-debug-breakpoint-gutter.disabled')).toHaveCount(1);
 	const action = first.locator('.ash-debug-breakpoint');
+	await expect(action).toHaveCSS('height', '22px');
 	await action.focus();
 	await action.press('F2');
 	const condition = page.getByRole('textbox', { name: 'Expression condition', exact: true });

@@ -56,9 +56,9 @@
 
 .ash-open-editors-close {
 	display: inline-flex;
-	width: var(--ash-spacing-size200);
-	height: var(--ash-spacing-size200);
-	flex: 0 0 var(--ash-spacing-size200);
+	width: var(--ash-toolbar-actionSize);
+	height: var(--ash-toolbar-actionSize);
+	flex: 0 0 var(--ash-toolbar-actionSize);
 	align-items: center;
 	justify-content: center;
 	padding: 0;

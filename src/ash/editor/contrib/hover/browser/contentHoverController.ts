@@ -11,8 +11,6 @@ import { type View } from "../../../browser/view.js";
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { isMacintosh } from '../../../../base/common/platform.js';
 import { HoverParticipantRegistry, type HoverAnchor, type IEditorHoverParticipant, type IRenderedHoverParts } from './hoverTypes.js';
-import { bindColorTheme } from '../../../../platform/theme/browser/themeStyles.js';
-import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { observeResize } from '../../../../base/browser/observer.js';
 import { localize } from '../../../../nls.js';
 
@@ -36,7 +34,6 @@ export class ContentHoverController extends Disposable implements IContentWidget
 		private readonly editor: ICodeEditor,
 		private readonly onError: (error: unknown) => void,
 		@ILanguageFeaturesService private readonly languageFeatures: ILanguageFeaturesService,
-		@IThemeService themeService: IThemeService,
 	) {
 		super();
 		this.element = h(viewport.domNode.domNode.ownerDocument, "div");
@@ -47,7 +44,6 @@ export class ContentHoverController extends Disposable implements IContentWidget
 		this.element.tabIndex = -1;
 		this.participants = HoverParticipantRegistry.getAll().map(Participant => new Participant(editor));
 		editor.addContentWidget(this);
-		this._register(bindColorTheme(themeService, this.element));
 		this._register(observeResize(this.element, () => { if (!this.element.hidden) { editor.layoutContentWidget(this); } }));
 		this.modifierKeys = ModifierKeyEmitter.getInstance(this.element.ownerDocument.defaultView!);
 		this._register(this.modifierKeys.event(() => {

@@ -34,7 +34,6 @@ import { IAccessibleViewService, AccessibilityVerbositySettingId, AccessibleView
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { Colors } from '../../../../platform/theme/common/colorRegistry.js';
 import { IThemeService, type IColorTheme } from '../../../../platform/theme/common/themeService.js';
-import { bindColorTheme } from '../../../../platform/theme/browser/themeStyles.js';
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { IEditorPartsService } from '../../../browser/parts/editor/editorParts.js';
 import { TextResourceEditor } from '../../../browser/parts/editor/textResourceEditor.js';
@@ -673,8 +672,6 @@ export class ThemeEditor extends EditorPane {
 				configure: panel => {
 					const lifetime = new DisposableStore();
 					panel.classList.add('ash-theme-editor-color-popup');
-					// The popup can mount outside the auxiliary workbench's themed root.
-					lifetime.add(bindColorTheme(this.themes, panel));
 					lifetime.add(this.contextKeys.createScoped(panel)).createKey(ThemeEditorFocused.key, true);
 					return lifetime;
 				},

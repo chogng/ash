@@ -14,7 +14,7 @@ import { URI } from '../../../src/ash/base/common/uri.js';
 import { IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../src/ash/platform/instantiation/common/serviceCollection.js';
-import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { bindTestColorTheme } from './themeFixture.js';
 import { lightColorTheme, darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { create, createModel } from '../../../src/ash/editor/standalone/browser/standaloneEditor.js';
@@ -37,7 +37,7 @@ if (new URLSearchParams(location.search).get('locale') === 'zh-cn') {
 const store = new DisposableStore();
 const themes = { light: lightColorTheme, dark: darkColorTheme, hcDark: highContrastDarkColorTheme, hcLight: highContrastLightColorTheme };
 const theme = store.add(new TestThemeService(themes.light));
-store.add(bindColorTheme(theme, document.body));
+store.add(bindTestColorTheme(theme, document.body));
 const resource = URI.file('/workspace/main.ts');
 const debug = store.add(new MockDebugService({ name: 'main.ts', resource }));
 const session = debug.sessions[0] as MockDebugSession;

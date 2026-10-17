@@ -25,8 +25,8 @@
 	gap: 8px;
 	align-items: center;
 	box-sizing: border-box;
-	min-height: 24px;
-	padding: 4px 8px;
+	min-height: var(--ash-list-rowHeight);
+	padding: 0 8px;
 	cursor: default;
 }
 

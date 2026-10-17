@@ -21,10 +21,12 @@ test('history rows retain identity and reserve title width when the pane resizes
 			const graph = element.querySelector('.ash-scm-graph-graph')!.getBoundingClientRect();
 			const title = element.querySelector('.ash-scm-graph-subject')!.getBoundingClientRect();
 			const row = element.querySelector('.ash-scm-graph-row')!.getBoundingClientRect();
-			return { left: title.left - graph.right, right: row.right - title.right };
+			return { left: title.left - graph.right, right: row.right - title.right, rowHeight: row.height, graphHeight: graph.height };
 		});
 		expect(geometry.left).toBeCloseTo(0, 1);
 		expect(geometry.right).toBeCloseTo(8, 1);
+		expect(geometry.rowHeight).toBe(22);
+		expect(geometry.graphHeight).toBe(22);
 	}
 	await commit.locator('.ash-scm-graph-row').hover({ position: { x: 80, y: 10 } });
 	const overlay = commit.locator('.ash-scm-graph-overlay');

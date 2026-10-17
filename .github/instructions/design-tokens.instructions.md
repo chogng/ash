@@ -13,24 +13,14 @@ Ash ships a design-system **size** ramp. These tokens are registered in [baseSiz
 
 ## Rows and toolbar actions
 
-The 22px default is pending implementation.
+Use the semantic tokens below for row and action geometry, use `border-box` for icon action areas, reserve spacing tokens for spacing, and keep CSS and JS defaults in sync through [uiSizes.ts](../../src/ash/base/common/uiSizes.ts).
 
-For icon buttons, 22×22px / 24×24px defines the layout, hover and click area, including padding; the icon itself remains 16px or 12px.
-
-```css
-/* Single-line list/tree row height */
-/* dense/default */ height: 22px;
-/* roomy         */ height: 24px;
-
-/* dropdown options, default collapsible pane headers, breadcrumbs, status bar */
-height: 22px;
-
-/* Icon buttons: hover/click area includes padding; glyphs stay 16px or 12px */
-box-sizing: border-box;
-/* dense/default */ width: 22px; height: 22px;
-/* roomy         */ width: 24px; height: 24px;  /* e.g. modern UI activity-bar overflow, Chat tip toolbars, automation/comparison card actions */
-/* code-adjacent */ width: 20px; height: 20px;  /* 16px glyphs; preserve editor line height */
-```
+| Use | Size | CSS | JS |
+| --- | --- | --- | --- |
+| Single-line lists, trees, suggestions and dropdown options | 22px | `var(--ash-list-rowHeight)` | `listRowHeight` |
+| Standard toolbar icon actions | 22×22px | `var(--ash-toolbar-actionSize)` | `defaultToolbarActionSize` |
+| Code-adjacent icon actions | 20×20px | Override `--ash-toolbar-actionSize` locally | Match the component's geometry |
+| Explicit roomy rows / actions | 24px / 24×24px | Override the corresponding token locally | Match the component's geometry |
 
 ## Spacing — padding, margin, gap
 

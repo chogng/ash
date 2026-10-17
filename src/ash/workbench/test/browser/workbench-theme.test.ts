@@ -23,6 +23,10 @@ class ThemeWindow extends Disposable {
 	public readonly services = this._register(new InstantiationService());
 	public readonly themes: WorkbenchThemeService;
 
+	get styles(): CSSStyleDeclaration {
+		return this.browser.window.getComputedStyle(this.browser.window.document.documentElement);
+	}
+
 	constructor() {
 		super();
 		this._register(toDisposable(() => this.browser.window.close()));
@@ -41,8 +45,8 @@ class ThemeWindow extends Disposable {
 
 test('Activity Bar badge theme colors respect profile and theme-specific overrides and reset independently', async () => {
 	using window = new ThemeWindow();
-	const { configuration, root } = window;
-	const read = (): string[] => ['background', 'foreground'].map(part => root.style.getPropertyValue(`--ash-activityBarBadge-${part}`));
+	const { configuration } = window;
+	const read = (): string[] => ['background', 'foreground'].map(part => window.styles.getPropertyValue(`--ash-activityBarBadge-${part}`));
 	const defaults = read();
 	await configuration.updateValue(WorkbenchConfiguration.colorCustomizations, {
 		'badge.background': '#111111',
@@ -76,13 +80,13 @@ test('system theme follows the OS while explicit themes remain stable', async ()
 
 test('workbench colors follow theme changes and keep editor group borders visible in high contrast', async () => {
 	using window = new ThemeWindow();
-	const { configuration, root } = window;
+	const { configuration } = window;
 	const colors = () => ({
-		workbench: root.style.getPropertyValue('--ash-workbench-background'),
-		tab: root.style.getPropertyValue('--ash-editor-tabBackground'),
-		titleBar: root.style.getPropertyValue('--ash-titleBar-background'),
-		sideBar: root.style.getPropertyValue('--ash-sideBar-background'),
-		groupBorder: root.style.getPropertyValue('--ash-editorGroup-border'),
+		workbench: window.styles.getPropertyValue('--ash-workbench-background'),
+		tab: window.styles.getPropertyValue('--ash-editor-tabBackground'),
+		titleBar: window.styles.getPropertyValue('--ash-titleBar-background'),
+		sideBar: window.styles.getPropertyValue('--ash-sideBar-background'),
+		groupBorder: window.styles.getPropertyValue('--ash-editorGroup-border'),
 	});
 	assert.deepEqual(colors(), {
 		workbench: '#ffffff', tab: '#eeeeee', titleBar: '#ffffff',
@@ -128,7 +132,7 @@ test('dynamic theme registration and replacement update the active window withou
 		id: 'extension-demo-dark', label: 'Updated', colorScheme: ColorScheme.HighContrastDark,
 		colorOverrides: { 'editor.background': '#123456' },
 	})]);
-	assert.deepEqual([themes.getColorTheme().label, root.getAttribute('data-color-scheme'), root.style.getPropertyValue('--ash-editor-background'), changes],
+	assert.deepEqual([themes.getColorTheme().label, root.getAttribute('data-color-scheme'), window.styles.getPropertyValue('--ash-editor-background'), changes],
 		['Updated', ColorScheme.HighContrastDark, '#123456', 1]);
 	registration.dispose();
 	assert.equal(root.getAttribute('data-color-theme'), 'ash-light');
@@ -154,7 +158,7 @@ test('unrelated registrations do not notify colors or file icons and disposal re
 		themes.dispose();
 		assert.equal(systemTheme.listenerCount, 1);
 		assert.equal(root.getAttribute('data-color-theme'), null);
-		assert.equal(root.style.getPropertyValue('--ash-editor-background'), '');
+		assert.equal(window.styles.getPropertyValue('--ash-editor-background'), '');
 		systemTheme.setMatches(true);
 		await configuration.updateValue(WorkbenchConfiguration.colorTheme, 'ash-dark');
 		assert.deepEqual([colors, icons], [1, 1]);

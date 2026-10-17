@@ -300,7 +300,7 @@ test("standalone theme APIs register, select, and project a named theme", () => 
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	const editor = stanza.editor.create(container, { value: "theme", theme: "standalone-test" });
 	assert.equal(container.getAttribute("data-color-theme"), "standalone-test");
-	assert.equal(container.style.getPropertyValue("--ash-editor-background"), "#101010");
+	assert.equal(dom.window.getComputedStyle(dom.window.document.documentElement).getPropertyValue("--ash-editor-background"), "#101010");
 
 	stanza.editor.setTheme("ash-light");
 	assert.equal(container.getAttribute("data-color-theme"), "ash-light");

@@ -35,7 +35,7 @@ import { HoverConfiguration } from '../../../src/ash/platform/hover/common/hover
 import { StandaloneServiceCollection } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
 import { Link } from '../../../src/ash/platform/opener/browser/link.js';
 import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
-import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { bindTestColorTheme } from './themeFixture.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { OutputViewPane } from '../../../src/ash/workbench/contrib/output/browser/outputView.js';
@@ -102,7 +102,7 @@ const opened: string[] = [];
 opener.setDefaultExternalOpener({ openExternal: async href => { opened.push(href); return true; } });
 const themes = [darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme];
 const themeService = resources.add(new TestThemeService(darkColorTheme));
-resources.add(bindColorTheme(themeService, document.body));
+resources.add(bindTestColorTheme(themeService, document.body));
 const link = resources.add(services.createInstance(Link, document.querySelector<HTMLElement>('#default-link')!, {
 	label: 'Documentation', href: 'https://example.test/docs', title: 'Read documentation',
 }, {}));

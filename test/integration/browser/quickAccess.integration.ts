@@ -38,7 +38,7 @@ import { IKeybindingService } from '../../../src/ash/platform/keybinding/common/
 import { Event } from '../../../src/ash/base/common/event.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
-import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { bindTestColorTheme } from './themeFixture.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { IEditorPartsService } from '../../../src/ash/workbench/browser/parts/editor/editorParts.js';
@@ -188,7 +188,7 @@ if (parameters.get('reopen') === '1') {
 }
 const quickAccess = quickInput.quickAccess;
 const theme = parameters.get('theme') === 'hc' ? highContrastDarkColorTheme : parameters.get('theme') === 'dark' ? darkColorTheme : lightColorTheme;
-resources.add(bindColorTheme(resources.add(new TestThemeService(theme)), document.body));
+resources.add(bindTestColorTheme(resources.add(new TestThemeService(theme)), document.body));
 const executions: string[] = [];
 for (const label of ['Alpha Format', 'Zulu Format', 'Format']) {
 	resources.add(registerAction2(class extends Action2 {

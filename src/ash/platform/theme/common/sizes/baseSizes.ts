@@ -1,5 +1,5 @@
 import { localize } from "../../../../nls.js";
-import { listRowHeight } from "../../../../base/common/uiSizes.js";
+import { defaultToolbarActionSize, listRowHeight } from "../../../../base/common/uiSizes.js";
 import { registerSize } from "../sizeRegistry.js";
 import { size } from "../sizeUtils.js";
 
@@ -223,7 +223,7 @@ export const toolbarItemGap = length(
 
 export const toolbarActionSize = length(
 	"toolbar.actionSize",
-	24,
+	defaultToolbarActionSize,
 	localize("size.toolbar.actionSize", "Standard square hit area for toolbar icon actions."),
 );
 

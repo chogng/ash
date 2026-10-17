@@ -1,6 +1,9 @@
+import { ManagedStyleSheet } from '../../../base/browser/domStylesheets.js';
+import { colorCssVariable } from '../../../platform/theme/common/colorUtils.js';
+import { asCssVariableName, sizeValueToCss } from '../../../platform/theme/common/sizeUtils.js';
 import { Emitter, Event } from '../../../base/common/event.js';
 import { setIconResolver } from '../../../base/browser/ui/lxicons/lxicon.js';
-import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable, type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { createColorTheme, darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme, lightColorTheme } from '../../../platform/theme/common/colorTheme.js';
 import { noFileIconTheme, defaultProductIconTheme, type IColorTheme } from '../../../platform/theme/common/themeService.js';
 import { ColorScheme, isDarkColorScheme } from '../../../platform/theme/common/theme.js';
@@ -30,9 +33,23 @@ export class StandaloneThemeService extends Disposable implements IStandaloneThe
 	private readonly forcedColors: MediaQueryList;
 	private selectedThemeId = lightColorTheme.id;
 	private autoDetectHighContrast = true;
+	private readonly documentStyles = new Map<Document, {
+		readonly styles: ManagedStyleSheet;
+		readonly metadata: IDisposable;
+		references: number;
+	}>();
 
 	constructor(ownerWindow: Window) {
 		super();
+		this._register(toDisposable(() => {
+			for (const entry of this.documentStyles.values()) {
+				entry.styles.dispose();
+				entry.metadata.dispose();
+			}
+			this.documentStyles.clear();
+		}));
+		// Host-level menus outlive individual editors; other documents follow their container lifetimes.
+		this._register(this.registerEditorContainer(ownerWindow.document.documentElement));
 		setIconResolver(ownerWindow.document, icon => getIconDefinition(icon));
 		for (const theme of [lightColorTheme, darkColorTheme, highContrastLightColorTheme, highContrastDarkColorTheme]) {
 			this.themes.set(theme.id, theme === lightColorTheme ? this.colorTheme : withTokenTheme(theme, definitionForScheme(theme.colorScheme)));
@@ -47,7 +64,74 @@ export class StandaloneThemeService extends Disposable implements IStandaloneThe
 		this._register(toDisposable(() => this.forcedColors.removeEventListener('change', handleForcedColorsChange)));
 		this.applySelectedTheme();
 		this.updateColorMap();
-		this._register(Colors.onDidChange(() => this.changed.fire(this.colorTheme)));
+		this.updateThemeStyles();
+		this._register(Colors.onDidChange(() => {
+			this.updateThemeStyles();
+			this.changed.fire(this.colorTheme);
+		}));
+	}
+
+	/** One stylesheet per registered document also themes its overflow widgets and menus. */
+	public registerEditorContainer(domNode: HTMLElement): IDisposable {
+		const document = domNode.ownerDocument;
+		let entry = this.documentStyles.get(document);
+		if (!entry) {
+			entry = {
+				styles: new ManagedStyleSheet(document),
+				metadata: this.registerThemeClasses(document.documentElement),
+				references: 0,
+			};
+			this.documentStyles.set(document, entry);
+			this.updateThemeStyles();
+		}
+		entry.references++;
+		const metadata = domNode === document.documentElement ? undefined : this.registerThemeClasses(domNode);
+		return toDisposable(() => {
+			metadata?.dispose();
+			if (this.documentStyles.get(document) !== entry || --entry.references !== 0) return;
+			this.documentStyles.delete(document);
+			entry.styles.dispose();
+			entry.metadata.dispose();
+		});
+	}
+
+	private registerThemeClasses(domNode: HTMLElement): IDisposable {
+		const attributes = ['data-color-theme', 'data-color-scheme'].map(name => [name, domNode.getAttribute(name)] as const);
+		const classes = ['hc-black', 'hc-light', 'ash-high-contrast'].map(name => [name, domNode.classList.contains(name)] as const);
+		const update = (): void => {
+			const theme = this.colorTheme;
+			domNode.setAttribute('data-color-theme', theme.id);
+			domNode.setAttribute('data-color-scheme', theme.colorScheme);
+			domNode.classList.toggle('hc-black', theme.colorScheme === ColorScheme.HighContrastDark);
+			domNode.classList.toggle('hc-light', theme.colorScheme === ColorScheme.HighContrastLight);
+			domNode.classList.toggle('ash-high-contrast', isHighContrast(theme.colorScheme));
+		};
+		update();
+		const listener = this.onDidColorThemeChange(update);
+		return toDisposable(() => {
+			listener.dispose();
+			for (const [name, value] of attributes) {
+				if (value === null) domNode.removeAttribute(name);
+				else domNode.setAttribute(name, value);
+			}
+			for (const [name, present] of classes) domNode.classList.toggle(name, present);
+		});
+	}
+
+	private updateThemeStyles(): void {
+		const theme = this.colorTheme;
+		const declarations = theme.colorEntries.map(({ id, value }) => `${colorCssVariable(id)}: ${value?.toString() ?? 'initial'};`);
+		for (const { id, value } of theme.sizeEntries) {
+			declarations.push(`${asCssVariableName(id)}: ${sizeValueToCss(value)};`);
+		}
+		declarations.push(
+			`color-scheme: ${isDarkColorScheme(theme.colorScheme) ? 'dark' : 'light'};`,
+			`forced-color-adjust: ${isHighContrast(theme.colorScheme) ? 'none' : 'auto'};`,
+			`--ash-shadow-lg: ${isHighContrast(theme.colorScheme) ? 'none' : '0 0 12px rgba(0, 0, 0, 0.14)'};`,
+		);
+		for (const entry of this.documentStyles.values()) {
+			entry.styles.setText(`:root {\n${declarations.join('\n')}\n}`);
+		}
 	}
 
 	public defineTheme(themeName: string, themeData: IStandaloneThemeData): void {
@@ -168,6 +252,7 @@ export class StandaloneThemeService extends Disposable implements IStandaloneThe
 		}
 		this.colorTheme = theme;
 		this.updateColorMap();
+		this.updateThemeStyles();
 		this.changed.fire(theme);
 	}
 

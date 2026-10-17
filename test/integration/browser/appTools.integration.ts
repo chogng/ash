@@ -58,7 +58,7 @@ import type { ISessionsService } from '../../../src/ash/sessions/services/sessio
 import { setNlsMessages } from '../../../src/ash/nls.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import '../../../src/ash/platform/theme/common/sizes/baseSizes.js';
-import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { bindTestColorTheme } from './themeFixture.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 
@@ -102,7 +102,7 @@ const colorThemes = { dark: darkColorTheme, light: lightColorTheme, hcDark: high
 const themeId = new URL(location.href).searchParams.get('theme') as keyof typeof colorThemes | null;
 const colorTheme = themeId && Object.hasOwn(colorThemes, themeId) ? colorThemes[themeId] : darkColorTheme;
 const theme = resources.add(new TestThemeService(colorTheme));
-resources.add(bindColorTheme(theme, document.documentElement));
+resources.add(bindTestColorTheme(theme, document.documentElement));
 const transport = new Transport();
 const client = new AppServerProtocolClient(transport);
 resources.add(toDisposable(() => client.dispose()));

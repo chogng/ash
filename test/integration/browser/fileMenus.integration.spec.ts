@@ -15,13 +15,14 @@ for (const locale of ['en', 'zh-CN']) {
 			top: element.getBoundingClientRect().top,
 			lineHeight: getComputedStyle(element).lineHeight,
 		})));
-		expect(rowGeometry.map(row => [row.height, row.lineHeight])).toEqual([[24, '24px'], [24, '24px'], [24, '24px']]);
-		expect(rowGeometry.slice(1).map((row, index) => row.top - rowGeometry[index]!.top)).toEqual([24, 24]);
+		expect(rowGeometry.map(row => [row.height, row.lineHeight])).toEqual([[22, '22px'], [22, '22px'], [22, '22px']]);
+		expect(rowGeometry.slice(1).map((row, index) => row.top - rowGeometry[index]!.top)).toEqual([22, 22]);
 		const iconActions = page.locator('#explorer .ash-toolbar .ash-action-view-item.icon > .ash-button');
 		expect(await iconActions.count()).toBeGreaterThan(0);
 		for (const action of await iconActions.all()) {
-			await expect(action).toHaveCSS('width', '24px');
-			await expect(action).toHaveCSS('height', '24px');
+			await expect(action).toHaveCSS('width', '22px');
+			await expect(action).toHaveCSS('height', '22px');
+			expect(await action.boundingBox()).toMatchObject({ width: 22, height: 22 });
 			await expect(action.locator('.ash-icon').first()).toHaveCSS('width', '16px');
 			await expect(action.locator('.ash-icon').first()).toHaveCSS('height', '16px');
 		}

@@ -17,7 +17,7 @@ import { IStorageService } from '../../../src/ash/platform/storage/common/storag
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { lightColorTheme, darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
-import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { bindTestColorTheme } from './themeFixture.js';
 import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
 import { IAuxiliaryWindowService, BrowserAuxiliaryWindowService } from '../../../src/ash/workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { IChatService } from '../../../src/ash/workbench/services/chat/common/chatService.js';
@@ -44,7 +44,7 @@ root.className = 'ash-workbench';
 root.style.cssText = 'height:100vh;position:relative';
 document.body.append(root);
 const theme = resources.add(new TestThemeService(({ dark: darkColorTheme, hcDark: highContrastDarkColorTheme, hcLight: highContrastLightColorTheme } as const)[parameters.get('theme') as 'dark'] ?? lightColorTheme));
-resources.add(bindColorTheme(theme, root));
+resources.add(bindTestColorTheme(theme, root));
 services.registerInstance(IThemeService, theme);
 services.registerInstance(IStorageService, resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'voice-test', flushInterval: 0 })));
 services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));

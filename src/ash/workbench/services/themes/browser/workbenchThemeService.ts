@@ -20,9 +20,10 @@ import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContra
 import { applyThemeCustomizations, ThemeConfigurationSettings } from '../common/themeConfiguration.js';
 import { noFileIconTheme, defaultProductIconTheme, type IFileIconTheme, type IColorTheme, type IProductIconTheme, type IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { getIconDefinition, getIconRegistry } from '../../../../platform/theme/common/iconRegistry.js';
-import { bindColorTheme } from '../../../../platform/theme/browser/themeStyles.js';
+import { ManagedStyleSheet } from '../../../../base/browser/domStylesheets.js';
+import { generateColorThemeCSS } from './colorThemeCss.js';
 import type { IResourceIconRenderer } from '../../../browser/labels.js';
-import { isDarkColorScheme } from '../../../../platform/theme/common/theme.js';
+import { ColorScheme, isDarkColorScheme } from '../../../../platform/theme/common/theme.js';
 import { WorkbenchConfiguration } from '../../../common/configuration.js';
 import { SystemColorThemePreference, WorkbenchThemesRegistry } from '../../../common/theme.js';
 import type { IUserThemeDeleteResult, IUserThemeLoadIssue, IUserThemeSaveResult, IUserThemeService, IUserThemeSource } from '../../../common/userThemes.js';
@@ -47,6 +48,7 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 	private readonly productIconThemeChange = this._register(new Emitter<IProductIconTheme>());
 	public readonly onDidProductIconThemeChange = this.productIconThemeChange.event;
 	private iconStyles: HTMLStyleElement | undefined;
+	private colorStyles: ManagedStyleSheet | undefined;
 
 	constructor(
 		private readonly container: HTMLElement,
@@ -65,6 +67,21 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 			throw new Error('Workbench themes are already initialized');
 		}
 		this.initialized = true;
+		this.colorStyles = this._register(new ManagedStyleSheet(this.container.ownerDocument));
+		// The document scope also covers popups mounted outside the workbench container.
+		const root = this.container.ownerDocument.documentElement;
+		for (const target of new Set([root, this.container])) {
+			const attributes = ['data-color-theme', 'data-color-scheme'].map(name => [name, target.getAttribute(name)] as const);
+			const classes = ['hc-black', 'hc-light', 'ash-high-contrast'].map(name => [name, target.classList.contains(name)] as const);
+			this._register(toDisposable(() => {
+				for (const [name, value] of attributes) {
+					if (value === null) target.removeAttribute(name);
+					else target.setAttribute(name, value);
+				}
+				for (const [name, present] of classes) target.classList.toggle(name, present);
+			}));
+		}
+		this._register(this.onDidColorThemeChange(() => this.applyColorTheme()));
 		this._register(new IconsStyleSheet(this.container.ownerDocument, this));
 		const iconStyles = this.container.ownerDocument.createElement('style');
 		this.container.ownerDocument.head.append(iconStyles);
@@ -100,7 +117,7 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 		this._register(getTokenClassificationRegistry().onDidChange(() => this.colorThemeChange.fire(this.colorTheme)));
 		this._register(this.hostColorScheme.onDidChangeColorScheme(() => this.updateColorTheme()));
 		this.updateColorTheme();
-		this._register(bindColorTheme(this, this.container));
+		this.applyColorTheme();
 		this.updateFileIconTheme();
 		this.updateProductIconTheme();
 	}
@@ -177,6 +194,18 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 			? this.deferredColorTheme
 			: registeredTheme ?? WorkbenchThemesRegistry.getColorTheme(bootstrap.id) ?? bootstrap;
 		return applyThemeCustomizations(theme, this.configurationService);
+	}
+
+	private applyColorTheme(): void {
+		const theme = this.colorTheme;
+		this.colorStyles?.setText(generateColorThemeCSS(theme, ':root, .ash-workbench').code);
+		for (const target of new Set([this.container.ownerDocument.documentElement, this.container])) {
+			target.setAttribute('data-color-theme', theme.id);
+			target.setAttribute('data-color-scheme', theme.colorScheme);
+			target.classList.toggle('hc-black', theme.colorScheme === ColorScheme.HighContrastDark);
+			target.classList.toggle('hc-light', theme.colorScheme === ColorScheme.HighContrastLight);
+			target.classList.toggle('ash-high-contrast', theme.colorScheme === ColorScheme.HighContrastDark || theme.colorScheme === ColorScheme.HighContrastLight);
+		}
 	}
 
 	private updateColorTheme(): void {

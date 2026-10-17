@@ -21,7 +21,7 @@ import { IStorageService } from '../../../src/ash/platform/storage/common/storag
 import { ILayoutService } from '../../../src/ash/platform/layout/browser/layoutService.js';
 import { INotificationService, NotificationSeverity, type NotificationAction, type NotificationHandle } from '../../../src/ash/platform/notification/common/notification.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
-import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { bindTestColorTheme } from './themeFixture.js';
 import { lightColorTheme, darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { IMenuService } from '../../../src/ash/platform/actions/common/actions.js';
@@ -69,7 +69,7 @@ setARIAContainer(root);
 
 const theme = resources.add(new TestThemeService(({ dark: darkColorTheme, hcDark: highContrastDarkColorTheme, hcLight: highContrastLightColorTheme } as const)[parameters.get('theme') as 'dark'] ?? lightColorTheme));
 
-resources.add(bindColorTheme(theme, root));
+resources.add(bindTestColorTheme(theme, root));
 services.registerInstance(IThemeService, theme);
 
 services.registerInstance(IStorageService, resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'automations', flushInterval: 0 })));

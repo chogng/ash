@@ -44,7 +44,7 @@ import { IStatusbarService, StatusbarService, StatusbarAlignment } from '../../.
 import { StatusbarEntryItem } from '../../../src/ash/workbench/browser/parts/statusbar/statusbarItem.js';
 import { ScmViewPane } from '../../../src/ash/workbench/contrib/scm/browser/scmViewPane.js';
 import { Pane, PaneView } from '../../../src/ash/base/browser/ui/splitview/paneview.js';
-import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { bindTestColorTheme } from './themeFixture.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
@@ -479,7 +479,7 @@ const gitSettingsIntegration = {
 		container.style.marginLeft = '32px';
 		document.body.append(container);
 		lifetime.add(toDisposable(() => container.remove()));
-		lifetime.add(bindColorTheme(new TestThemeService(lightColorTheme), container));
+		lifetime.add(bindTestColorTheme(new TestThemeService(lightColorTheme), container));
 		const binding = lifetime.add(ui.createInstance(ExtensionSettingBinding, descriptor.configuration));
 		const renderer = lifetime.add(ui.createInstance(SettingsRenderer, container, { onStatus: (message: string, isError: boolean) => { if (isError) errors.push(message); } }));
 		container.append(renderer.render({ ...descriptor, binding } as typeof descriptor));
@@ -507,7 +507,7 @@ function mountChangesPane(viewId = 'fixture.changes'): void {
 	const ui = lifetime.add(createTestEditorServices(undefined, viewId === 'ash.gitView' ? services : undefined));
 	registerCodeEditorServices(ui);
 	scmPaneTheme = ui.get(IThemeService) as TestThemeService;
-	lifetime.add(bindColorTheme(ui.get(IThemeService), host));
+	lifetime.add(bindTestColorTheme(ui.get(IThemeService), host));
 	ui.registerInstance(ISCMService, scm);
 	ui.registerInstance(ISCMViewService, view);
 	const panes = lifetime.add(new PaneView(host));

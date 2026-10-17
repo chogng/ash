@@ -4,7 +4,6 @@ import { ILanguageConfigurationService } from '../../common/languages/languageCo
 import { ILanguageFeaturesService } from '../../common/services/languageFeatures.js';
 import { URI } from '../../../base/common/uri.js';
 import { type IDisposable } from '../../../base/common/lifecycle.js';
-import { bindColorTheme } from '../../../platform/theme/browser/themeStyles.js';
 import type { ICodeEditor } from '../../browser/editorBrowser.js';
 import type { IDimension } from '../../common/core/2d/dimension.js';
 import type { ICodeEditorViewState } from '../../common/editorCommon.js';
@@ -16,6 +15,7 @@ import { TextModel } from '../../common/model/textModel.js';
 import { IModelService } from '../../common/services/model.js';
 import type { IEditorOptions } from '../../common/config/editorOptions.js';
 import { IStandaloneThemeService } from '../common/standaloneTheme.js';
+import { StandaloneThemeService } from './standaloneThemeService.js';
 
 type StandaloneCodeEditorOptions = Omit<CodeEditorWidgetOptions,
 	'container' | 'model' |
@@ -66,7 +66,7 @@ export class StandaloneEditor extends CodeEditorWidget implements IStandaloneCod
 		modelToDispose: TextModel | null,
 		ownsModel: boolean,
 		@IInstantiationService instantiationService: IInstantiationService,
-		@IStandaloneThemeService standaloneThemeService: IStandaloneThemeService,
+		@IStandaloneThemeService standaloneThemeService: StandaloneThemeService,
 		@ILanguageConfigurationService languageConfigurationService: ILanguageConfigurationService,
 		@ILanguageFeaturesService languageFeaturesService: ILanguageFeaturesService,
 		@IContextKeyService contextKeyService: IContextKeyService,
@@ -74,7 +74,7 @@ export class StandaloneEditor extends CodeEditorWidget implements IStandaloneCod
 		@IModelService modelService: IModelService,
 	) {
 		// Theme variables must be ready before the view handles a theme event.
-		const themeBinding = bindColorTheme(standaloneThemeService, options.container);
+		const themeBinding = standaloneThemeService.registerEditorContainer(options.container);
 		try {
 			super(options, instantiationService, standaloneThemeService, languageConfigurationService, languageFeaturesService, contextKeyService, codeEditorService);
 		} catch (error) {

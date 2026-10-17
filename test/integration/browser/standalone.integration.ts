@@ -68,7 +68,7 @@ import { IFileService } from '../../../src/ash/platform/files/common/files.js';
 import { MemoryFileService, MemoryResourceStore, TestDialogService } from '../../../src/ash/workbench/contrib/bulkEdit/test/browser/bulkEditTestServices.js';
 import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 import { Event as EventUtils } from '../../../src/ash/base/common/event.js';
-import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { bindTestColorTheme } from './themeFixture.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import '../../../src/ash/workbench/contrib/bulkEdit/browser/preview/bulkEdit.css';
 import type { IQuickPickItem } from '../../../src/ash/platform/quickinput/common/quickInput.js';
@@ -2940,7 +2940,7 @@ window.ashStandaloneIntegration = {
 				host.style.width = '800px';
 				host.style.height = '320px';
 				document.body.append(host);
-				actionPreviewResources.add(bindColorTheme(parent.get(IThemeService), host));
+				actionPreviewResources.add(bindTestColorTheme(parent.get(IThemeService), host));
 				actionPreviewResources.add(toDisposable(() => host.remove()));
 				const diff = actionPreviewResources.add(registerTestComponentServices(services).createInstance(MultiDiffEditor, {
 					modelService: services.get(ITextModelResourceService),
@@ -2959,7 +2959,7 @@ window.ashStandaloneIntegration = {
 		editorHost.style.height = '100px';
 		const paneHost = h(document, 'div');
 		paneHost.id = 'action-preview-pane';
-		actionPreviewResources.add(bindColorTheme(parent.get(IThemeService), paneHost));
+		actionPreviewResources.add(bindTestColorTheme(parent.get(IThemeService), paneHost));
 		document.body.append(editorHost, paneHost);
 		actionPreviewResources.add(toDisposable(() => { editorHost.remove(); paneHost.remove(); }));
 		const pane = actionPreviewResources.add(services.createInstance(BulkEditPane, paneHost, { id: BulkEditPane.ID, title: 'Refactor Preview' }));

@@ -48,6 +48,10 @@ test('host styles reach nested inputs, select popups, submenus, tree find and di
 		await expect(select).toHaveCSS('background-color', colors['selection-background']!);
 		await select.click();
 		await expect(page.locator('.ash-select-box-list')).toHaveCSS('background-color', colors['error-foreground']!);
+		for (const option of await page.locator('.ash-select-box-option').all()) {
+			expect((await option.boundingBox())!.height).toBe(22);
+			await expect(option.locator('.ash-icon')).toHaveCSS('height', '16px');
+		}
 		await page.keyboard.press('Escape');
 		const submenu = page.getByRole('menuitem', { name: 'Styled submenu', exact: true });
 		await submenu.focus();
@@ -234,17 +238,18 @@ test('decoration icons follow SVG and font product themes while retaining the la
 	expect(errors).toEqual([]);
 });
 
-test('an active workbench theme includes later colors and restores host variables on disposal', async ({ page }) => {
+test('an active workbench theme includes later colors and preserves host overrides on disposal', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
 	await page.goto('/themes.html');
 	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 	const root = page.locator('#root');
-	await root.evaluate(element => element.style.setProperty('--ash-test-browserLate', '#fedcba', 'important'));
 	await page.evaluate(() => window.registerLateThemeColor());
 	expect(await root.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-test-browserLate'))).toBe('#123456');
 	await page.getByRole('button', { name: 'Light', exact: true }).click();
 	expect(await root.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-test-browserLate'))).toBe('#abcdef');
+	await root.evaluate(element => element.style.setProperty('--ash-test-browserLate', '#fedcba', 'important'));
+	expect(await root.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-test-browserLate'))).toBe('#fedcba');
 	await page.evaluate(() => window.disposeThemeRoot());
 	expect(await root.evaluate(element => [element.style.getPropertyValue('--ash-test-browserLate'), element.style.getPropertyPriority('--ash-test-browserLate')])).toEqual(['#fedcba', 'important']);
 	expect(errors).toEqual([]);
@@ -597,4 +602,36 @@ test('resource labels keep the filename readable before truncating its directory
 	await expect.poll(layout).toEqual({ nameFits: true, directoryFits: true, nameContained: true, directoryVisible: true });
 	await page.evaluate(() => window.disposeIconLabels());
 	await expect(host.locator('.ash-icon-label')).toHaveCount(0);
+});
+
+
+test('window theme styles reach popups outside the workbench without inline theme bindings', async ({ page }) => {
+	await page.goto('/themes.html');
+	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+	await page.evaluate(() => {
+		const popup = document.createElement('div');
+		popup.id = 'detached-theme-probe';
+		popup.className = 'ash-context-view-default';
+		document.body.append(popup);
+	});
+	const popup = page.locator('#detached-theme-probe');
+	for (const id of ['ash-dark', 'ash-light', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
+		await page.evaluate(id => window.selectColorTheme(id), id);
+		await expect(page.locator('html')).toHaveAttribute('data-color-theme', id);
+		const colors = await page.locator('#root').evaluate(root => ({
+			background: getComputedStyle(root).getPropertyValue('--ash-editor-background').trim(),
+			body1: getComputedStyle(root).getPropertyValue('--ash-fontSize-body1').trim(),
+		}));
+		expect(await popup.evaluate(element => ({
+			background: getComputedStyle(element).getPropertyValue('--ash-editor-background').trim(),
+			body1: getComputedStyle(element).getPropertyValue('--ash-fontSize-body1').trim(),
+			inline: element.style.length,
+		}))).toEqual({ ...colors, inline: 0 });
+		if (id.includes('high-contrast')) {
+			await expect(popup).toHaveCSS('box-shadow', 'none');
+			await expect(page.locator('html')).toHaveClass(/ash-high-contrast/);
+		}
+	}
+	await page.evaluate(() => window.disposeThemeRoot());
+	expect(await popup.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-background'))).toBe('');
 });

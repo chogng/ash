@@ -123,7 +123,7 @@
 .ash-debug-breakpoint {
 	flex: 1;
 	min-width: 0;
-	height: 22px;
+	height: var(--ash-list-rowHeight);
 	padding: 0 var(--ash-spacing-size60);
 	overflow: hidden;
 	border: var(--ash-strokeThickness) solid transparent;

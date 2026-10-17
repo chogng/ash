@@ -18,7 +18,7 @@ import { IGitHubService } from '../../../src/ash/platform/github/common/githubSe
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
-import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { bindTestColorTheme } from './themeFixture.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../src/ash/workbench/common/contributions.js';
@@ -104,7 +104,7 @@ services.registerInstance(IAccountService, { onDidChangeAccounts: accounts.event
 services.registerInstance(IGitHubConnectionService, { isConnecting: false, connect: async () => { }, cancel: async () => { } });
 const host = resources.add(WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, [GitHubLinkPresentationContribution.ID]));
 host.advance(WorkbenchPhase.BlockRestore);
-resources.add(bindColorTheme(theme, document.body));
+resources.add(bindTestColorTheme(theme, document.body));
 const opener = services.get(IOpenerService);
 const opened: string[] = [];
 opener.setDefaultExternalOpener({ openExternal: async href => { opened.push(href); return true; } });

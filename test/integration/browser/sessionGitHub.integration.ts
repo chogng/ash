@@ -15,7 +15,7 @@ import { createTestInitializeResult } from '../../../src/ash/platform/agentHost/
 import { AppServerGitHubService } from '../../../src/ash/platform/github/browser/appServerGitHubService.js';
 import type { IAccountService, AccountState } from '../../../src/ash/platform/accounts/common/accountService.js';
 import { ConsoleLogger } from '../../../src/ash/platform/log/common/log.js';
-import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { bindTestColorTheme } from './themeFixture.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { darkColorTheme, highContrastDarkColorTheme, lightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import type { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
@@ -141,7 +141,7 @@ const client = new AppServerProtocolClient(transport);
 resources.add(toDisposable(() => client.dispose()));
 await client.connect();
 const theme = resources.add(new TestThemeService(darkColorTheme));
-resources.add(bindColorTheme(theme, document.body));
+resources.add(bindTestColorTheme(theme, document.body));
 const selected = resources.add(new Emitter<void>());
 const statusChanged = resources.add(new Emitter<ReturnType<typeof gitStatus>>());
 const accountsChanged = resources.add(new Emitter<AccountState>());

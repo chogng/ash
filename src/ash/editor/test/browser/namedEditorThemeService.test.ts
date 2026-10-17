@@ -265,3 +265,56 @@ test('overview ruler colors use solid backgrounds and retain theme-specific bord
 		highContrastLightBackground: '#ffffff',
 	});
 });
+
+
+test('standalone container registration follows schemes and restores host metadata without inline theme copies', () => {
+	const { service } = createThemeService();
+	using active = service;
+	const host = browserEnvironment.window.document.createElement('div');
+	host.classList.add('host-class', 'hc-light');
+	host.setAttribute('data-color-theme', 'host-theme');
+	host.style.setProperty('--ash-editor-background', 'hotpink', 'important');
+	using registration = service.registerEditorContainer(host);
+	for (const theme of [darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme, lightColorTheme]) {
+		service.setColorTheme(theme);
+		assert.equal(host.getAttribute('data-color-theme'), theme.id);
+		assert.equal(host.classList.contains('hc-black'), theme === highContrastDarkColorTheme);
+		assert.equal(host.classList.contains('hc-light'), theme === highContrastLightColorTheme);
+		assert.equal(host.style.getPropertyValue('--ash-editor-background'), 'hotpink');
+		assert.equal(host.style.getPropertyPriority('--ash-editor-background'), 'important');
+		assert.equal(browserEnvironment.window.getComputedStyle(browserEnvironment.window.document.documentElement).getPropertyValue('--ash-editor-background'), theme.getColorCss('editor.background'));
+	}
+	registration.dispose();
+	service.setColorTheme(darkColorTheme);
+	assert.equal(host.getAttribute('data-color-theme'), 'host-theme');
+	assert.equal(host.getAttribute('data-color-scheme'), null);
+	assert.deepEqual([...host.classList], ['host-class', 'hc-light']);
+	service.dispose();
+	assert.equal(browserEnvironment.window.getComputedStyle(browserEnvironment.window.document.documentElement).getPropertyValue('--ash-editor-background'), '');
+});
+
+
+test('standalone editors in another document share theme styles until the last container releases them', () => {
+	const { service } = createThemeService();
+	using active = service;
+	const other = new JSDOM('<!doctype html><body><main></main><aside></aside></body>');
+	try {
+		const root = other.window.document.documentElement;
+		root.setAttribute('data-color-theme', 'host-theme');
+		using first = service.registerEditorContainer(other.window.document.querySelector('main')!);
+		using second = service.registerEditorContainer(other.window.document.querySelector('aside')!);
+		service.setColorTheme(darkColorTheme);
+		assert.equal(other.window.document.querySelectorAll('style').length, 1);
+		assert.equal(other.window.getComputedStyle(root).getPropertyValue('--ash-editor-background'), '#1e1e1e');
+		first.dispose();
+		service.setColorTheme(highContrastLightColorTheme);
+		assert.equal(root.getAttribute('data-color-theme'), highContrastLightColorTheme.id);
+		assert.equal(root.classList.contains('hc-light'), true);
+		second.dispose();
+		assert.equal(other.window.document.querySelector('style'), null);
+		assert.equal(root.getAttribute('data-color-theme'), 'host-theme');
+		assert.equal(root.classList.contains('hc-light'), false);
+		service.setColorTheme(lightColorTheme);
+		assert.equal(root.getAttribute('data-color-theme'), 'host-theme');
+	} finally { other.window.close(); }
+});

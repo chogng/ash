@@ -6,8 +6,6 @@ import { localize } from '../../../../nls.js';
 import { type Color } from '../../../../base/common/color.js';
 import { ColorPicker } from '../../../../base/browser/ui/colorPicker/colorPicker.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
-import { bindColorTheme } from '../../../../platform/theme/browser/themeStyles.js';
-import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { ContentWidgetPositionPreference, type ICodeEditor, type IContentWidget, type IContentWidgetPosition } from '../../../browser/editorBrowser.js';
 import { type Position } from '../../../common/core/position.js';
 import { type ColorPickerModel } from './colorPickerModel.js';
@@ -28,7 +26,7 @@ export class ColorPickerWidget extends Disposable implements IContentWidget {
 	private focusPending = false;
 	private registered = true;
 
-	constructor(private readonly editor: ICodeEditor, private readonly onColorChange: (color: Color) => void, onApply: () => void, onCancel: () => void, @IThemeService themeService: IThemeService) {
+	constructor(private readonly editor: ICodeEditor, private readonly onColorChange: (color: Color) => void, onApply: () => void, onCancel: () => void) {
 		super();
 		const ownerDocument = editor.getDomNode()!.ownerDocument;
 		this.picker = this._register(new ColorPicker(ownerDocument, 'embedded'));
@@ -70,7 +68,6 @@ export class ColorPickerWidget extends Disposable implements IContentWidget {
 			properties: { hidden: true },
 		}, heading, this.picker.domNode, actions);
 		focusedWidgets.set(this.domNode, this);
-		this._register(bindColorTheme(themeService, this.domNode));
 		this._register(this.picker.onDidChangeColor(color => {
 			if (!this.model) { return; }
 			this.model.color = color;

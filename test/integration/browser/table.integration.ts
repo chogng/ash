@@ -35,7 +35,7 @@ import { IConfigurationService } from '../../../src/ash/platform/configuration/c
 import { DictationConfiguration } from '../../../src/ash/workbench/contrib/chat/common/constants.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { ILocalTranscriptionModelService, DictationModelState, type ILocalTranscriptionModelSnapshot, type IDictationModelStatus } from '../../../src/ash/platform/localTranscription/common/localTranscription.js';
-import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { bindTestColorTheme } from './themeFixture.js';
 import { lightColorTheme, darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { LocalTranscriptionModelControls } from '../../../src/ash/workbench/contrib/localTranscription/browser/localTranscriptionModelControls.js';
@@ -186,7 +186,7 @@ services.registerInstance(ILocalTranscriptionModelService, backend);
 const root = document.getElementById('models')!;
 root.style.width = '760px';
 const theme = resources.add(new TestThemeService(lightColorTheme));
-resources.add(bindColorTheme(theme, document.body));
+resources.add(bindTestColorTheme(theme, document.body));
 const controls = resources.add(services.createInstance(LocalTranscriptionModelControls, root));
 controls.setVisible(true);
 registerCodeEditorServices(services);

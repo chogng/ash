@@ -64,7 +64,6 @@ import { HoverService, IHoverService } from '../../../platform/hover/browser/hov
 import { IKeybindingService, KeybindingContextKeys, type KeybindingsSchemaContribution } from '../../../platform/keybinding/common/keybinding.js';
 import { KeybindingResolver, KeybindingResolveKind } from '../../../platform/keybinding/common/keybindingResolver.js';
 import { INotificationService, NotificationSeverity, type NotificationAction, type NotificationHandle, type NotificationItem, type NotificationOptions } from '../../../platform/notification/common/notification.js';
-import { bindColorTheme } from '../../../platform/theme/browser/themeStyles.js';
 import { IAccessibilityService } from '../../../platform/accessibility/common/accessibility.js';
 import { AccessibilitySignalService, IAccessibilitySignalService } from '../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 import { AccessibilityService } from '../../../platform/accessibility/browser/accessibilityService.js';
@@ -434,9 +433,8 @@ class StandaloneContextViewService extends ContextView implements IContextViewSe
 	// Child views need a stable host: showing this view replaces its own content.
 	get container(): HTMLElement { return this.element.ownerDocument.body; }
 
-	constructor(@IThemeService themeService: IThemeService) {
+	constructor() {
 		super(document.body);
-		this._register(bindColorTheme(themeService, this.element));
 	}
 }
 

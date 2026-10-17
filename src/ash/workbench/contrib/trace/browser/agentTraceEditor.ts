@@ -227,7 +227,6 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 			findWidgetStyles: defaultFindWidgetStyles,
 			ariaLabel: localize('agentTrace.timeline', 'Execution timeline'),
 			scrolling: 'managed',
-			getHeight: () => 24,
 			indent: 12,
 			indentGuides: 'always',
 			expandOnlyOnTwistieClick: true,

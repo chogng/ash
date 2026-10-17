@@ -37,7 +37,7 @@ import { IDialogsModel, IWorkbenchDialogHandler } from '../../../src/ash/workben
 import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
 import { BrowserDialogHandler } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.js';
 import { DialogHandlerContribution } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.web.contribution.js';
-import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { bindTestColorTheme } from './themeFixture.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { darkColorTheme, highContrastDarkColorTheme, lightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
@@ -130,7 +130,7 @@ const services = resources.add(new InstantiationService());
 services.registerInstance(IStorageService, resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'github-review', backend: window.localStorage, flushInterval: 0 })));
 setIconResolver(document, icon => getIconDefinition(icon));
 const theme = resources.add(new TestThemeService(darkColorTheme)); services.registerInstance(IThemeService, theme);
-resources.add(bindColorTheme(theme, document.body));
+resources.add(bindTestColorTheme(theme, document.body));
 const transport = new ReviewTransport(); const client = new AppServerProtocolClient(transport); resources.add(toDisposable(() => client.dispose())); await client.connect();
 services.registerInstance(IGitHubService, new AppServerGitHubService(client));
 const localRepository = { id: 'local-repo', label: 'Local repo', path: '/workspace', root: URI.file('/workspace') };

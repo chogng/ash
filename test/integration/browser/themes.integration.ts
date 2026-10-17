@@ -62,7 +62,7 @@ import { WorkbenchThemeService } from '../../../src/ash/workbench/services/theme
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { TextModel } from '../../../src/ash/editor/common/model/textModel.js';
 import { registerColor } from '../../../src/ash/platform/theme/common/colorUtils.js';
-import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { bindTestColorTheme } from './themeFixture.js';
 import { highContrastDarkColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { registerIcon } from '../../../src/ash/platform/theme/common/iconRegistry.js';
 import { Button } from '../../../src/ash/base/browser/ui/button/button.js';
@@ -268,7 +268,7 @@ window.mountNestedHighContrastWidget = () => {
 	host.append(widget);
 	document.querySelector<HTMLElement>('#root')!.append(host);
 	const service = new TestThemeService(highContrastDarkColorTheme);
-	const binding = bindColorTheme(service, host);
+	const binding = bindTestColorTheme(service, host);
 	nestedHighContrastWidget = { host, service, binding };
 };
 window.disposeNestedHighContrastWidget = () => {

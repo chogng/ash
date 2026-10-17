@@ -23,7 +23,7 @@ import { BrowserContextViewService } from '../../../src/ash/platform/contextview
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
 import { INotificationService, NotificationSeverity } from '../../../src/ash/platform/notification/common/notification.js';
-import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { bindTestColorTheme } from './themeFixture.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { NotificationsCenter } from '../../../src/ash/workbench/browser/parts/notifications/notificationsCenter.js';
@@ -75,7 +75,7 @@ services.registerInstance(IKeybindingService, {
 services.registerInstance(IContextMenuService, resources.add(services.createInstance(BrowserContextMenuService)));
 const runner = resources.add(services.createInstance(NotificationActionRunner));
 const themes = resources.add(new TestThemeService(lightColorTheme));
-resources.add(bindColorTheme(themes, root));
+resources.add(bindTestColorTheme(themes, root));
 const statusbar = resources.add(new StatusbarService());
 const center = resources.add(services.createInstance(NotificationsCenter, root, feedback, runner, statusbar, undefined));
 services.registerInstance(IExtensionApi, { list: async () => ({ generation: 1, diagnostics: [], extensions: [{ id: 'fixture.git', displayName: 'Git' }] }) } as unknown as import('../../../src/ash/platform/extensions/common/extensionApi.js').IExtensionApi);

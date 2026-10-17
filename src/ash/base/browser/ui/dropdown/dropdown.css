@@ -81,7 +81,7 @@
 .ash-toolbar .ash-dropdown-with-primary-primary.icon > .ash-button {
 	width: var(--ash-toolbar-actionSize);
 	min-width: var(--ash-toolbar-actionSize);
-	padding: 4px;
+	padding: 0;
 	border-radius: var(--ash-cornerRadius-small) 0 0
 		var(--ash-cornerRadius-small);
 }
@@ -89,7 +89,7 @@
 .ash-toolbar .ash-dropdown-with-primary-dropdown > .ash-button {
 	width: var(--ash-toolbar-actionSize);
 	min-width: var(--ash-toolbar-actionSize);
-	padding: 4px 2px;
+	padding: 0 2px;
 	border-radius: 0 var(--ash-cornerRadius-small) var(--ash-cornerRadius-small)
 		0;
 }

@@ -1537,7 +1537,10 @@ for (const locale of ['en', 'zh-CN']) {
 		const more = row.getByRole('button', { name: labels.more, exact: true });
 		const openMore = async () => { await row.hover(); await more.click(); };
 		await expect(title).toBeVisible();
-		expect((await row.boundingBox())!.height).toBe(24);
+		expect((await row.boundingBox())!.height).toBe(22);
+		await expect(more).toHaveCSS('width', '22px');
+		await expect(more).toHaveCSS('height', '22px');
+		expect(await more.boundingBox()).toMatchObject({ width: 22, height: 22 });
 		await page.locator('#editor').hover();
 		await expect(toolbar).toHaveCSS('opacity', '0');
 		await row.hover();

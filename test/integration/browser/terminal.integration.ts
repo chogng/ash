@@ -33,7 +33,7 @@ import { ITerminalProcessService } from '../../../src/ash/platform/terminal/comm
 import { OperatingSystem } from '../../../src/ash/base/common/platform.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
-import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { bindTestColorTheme } from './themeFixture.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { IMenuService, MenuId } from '../../../src/ash/platform/actions/common/actions.js';
 import { IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
@@ -154,7 +154,7 @@ const instance = createFixtureInstance('test-terminal');
 const widgetServices = store.add(createCodeEditorServices(store).createChild());
 widgetServices.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 const themeService = store.add(new TestThemeService(darkColorTheme));
-if (new URLSearchParams(location.search).has('find') || new URLSearchParams(location.search).has('browser')) { store.add(bindColorTheme(themeService, document.body)); }
+if (new URLSearchParams(location.search).has('find') || new URLSearchParams(location.search).has('browser')) { store.add(bindTestColorTheme(themeService, document.body)); }
 widgetServices.registerInstance(IThemeService, themeService);
 widgetServices.registerInstance(ITerminalLogService, new NullLoggerService());
 widgetServices.registerInstance(ITerminalConfigurationService, store.add(widgetServices.createInstance(TerminalConfigurationService)));

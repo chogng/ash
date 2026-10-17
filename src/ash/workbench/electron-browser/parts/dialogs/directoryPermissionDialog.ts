@@ -1,13 +1,12 @@
 import { addDisposableListener } from '../../../../base/browser/dom.js';
-import { Event } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { DialogResult, type DialogRequest } from '../../../../platform/dialogs/common/dialogs.js';
 import type { IWorkspaceTrustRequestService, WorkspaceTrustChoice } from '../../../../platform/workspace/common/workspaceTrust.js';
 import { invoke } from '../../../../platform/ipc/electron-browser/rendererIpc.js';
-import { bindColorTheme } from '../../../../platform/theme/browser/themeStyles.js';
+import { ManagedStyleSheet } from '../../../../base/browser/domStylesheets.js';
+import { generateColorThemeCSS } from '../../../services/themes/browser/colorThemeCss.js';
 import { darkColorTheme, lightColorTheme } from '../../../../platform/theme/common/colorTheme.js';
-import { noFileIconTheme, defaultProductIconTheme, type IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { BrowserDialogHandler } from '../../../browser/parts/dialogs/dialog.js';
 
 /** Presents directory authorization in the window before or after Workbench startup. */
@@ -33,15 +32,7 @@ export class DirectoryPermissionDialog extends Disposable implements IWorkspaceT
 		try {
 			if (!this.container.hasAttribute('data-color-theme')) {
 				const theme = ownerWindow.matchMedia('(prefers-color-scheme: dark)').matches ? darkColorTheme : lightColorTheme;
-				const service: IThemeService = {
-					onDidColorThemeChange: Event.None,
-					onDidProductIconThemeChange: Event.None,
-					onDidFileIconThemeChange: Event.None,
-					getColorTheme: () => theme,
-					getProductIconTheme: () => defaultProductIconTheme,
-					getFileIconTheme: () => noFileIconTheme,
-				};
-				resources.add(bindColorTheme(service, this.container));
+				resources.add(new ManagedStyleSheet(this.container.ownerDocument, generateColorThemeCSS(theme, ':root').code));
 			}
 			const outcome = await this.handler.showDialog(prompt, controller.signal);
 			switch (outcome.button) {

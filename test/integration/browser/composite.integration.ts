@@ -45,7 +45,7 @@ import '../../../src/ash/base/browser/ui/actionbar/actionbar.css';
 import '../../../src/ash/base/browser/ui/grid/grid.css';
 import '../../../src/ash/base/browser/ui/splitview/splitview.css';
 import '../../../src/ash/platform/theme/common/sizes/baseSizes.js';
-import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { bindTestColorTheme } from './themeFixture.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
@@ -299,7 +299,7 @@ if (new URLSearchParams(location.search).has('partWidth')) {
 	host.style.cssText = 'width:1000px;height:400px';
 	document.body.prepend(host);
 	resources.add(toDisposable(() => host.remove()));
-	resources.add(bindColorTheme(services.get(IThemeService), host));
+	resources.add(bindTestColorTheme(services.get(IThemeService), host));
 	class WidthView extends FocusView {
 		private width = 300;
 		override get minimumWidth(): number { return this.width; }
@@ -342,7 +342,7 @@ if (new URLSearchParams(location.search).has('paneTransitions')) {
 	paneHost.style.cssText = 'position:fixed;top:0;right:0;width:300px;height:600px';
 	document.body.append(paneHost);
 	resources.add(toDisposable(() => paneHost.remove()));
-	resources.add(bindColorTheme(services.get(IThemeService), paneHost));
+	resources.add(bindTestColorTheme(services.get(IThemeService), paneHost));
 	const paneView = resources.add(new PaneView(paneHost));
 	for (const title of ['Changes', 'Agent Review', 'Graph']) {
 		const pane = resources.add(new Pane(paneHost, { id: `transition.${title}`, title, collapsed: title !== 'Changes' }));
@@ -392,7 +392,7 @@ const models = resources.add(uriIdentityServices.createInstance(BrowserTextModel
 modelServices.registerInstance(IFileTextModelService, models);
 modelServices.registerInstance(ITextModelResourceService, models);
 const editorServices = resources.add(createTestEditorServices(undefined, modelServices));
-resources.add(bindColorTheme(editorServices.get(IThemeService), document.documentElement));
+resources.add(bindTestColorTheme(editorServices.get(IThemeService), document.documentElement));
 if (new URLSearchParams(location.search).has('editorTabs')) {
 	await import('../../../src/ash/workbench/contrib/modernUI/browser/media/roundedCorners.css');
 	await import('../../../src/ash/workbench/contrib/modernUI/browser/media/editorBorder.css');

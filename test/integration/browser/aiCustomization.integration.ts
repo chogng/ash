@@ -18,7 +18,7 @@ import { InstantiationService } from '../../../src/ash/platform/instantiation/co
 import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { darkColorTheme, highContrastDarkColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
-import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { bindTestColorTheme } from './themeFixture.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
@@ -45,7 +45,7 @@ const services = resources.add(new InstantiationService());
 const keys = resources.add(new ContextKeyService());
 const views = resources.add(new BrowserContextViewService(document.body));
 const theme = resources.add(new TestThemeService(new URLSearchParams(location.search).has('hc') ? highContrastDarkColorTheme : darkColorTheme));
-resources.add(bindColorTheme(theme, document.documentElement));
+resources.add(bindTestColorTheme(theme, document.documentElement));
 const workspace = resources.add(new WorkspaceContextService({ id: 'fixture', folders: [{ id: 'folder', name: 'fixture', index: 0, uri: URI.file('/fixture') }] }));
 const saved = resources.add(new Emitter<ITextFileSaveEvent>());
 let reads = 0;

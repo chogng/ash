@@ -19,7 +19,7 @@ import { getSingletonServiceDescriptors } from '../../../src/ash/platform/instan
 import { ServiceCollection } from '../../../src/ash/platform/instantiation/common/serviceCollection.js';
 import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
 import { IExtensionService } from '../../../src/ash/workbench/services/extensions/common/extensionService.js';
-import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { bindTestColorTheme } from './themeFixture.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
@@ -130,7 +130,7 @@ services.registerInstance(IEditorService, {
 });
 const theme = resources.add(new TestThemeService(darkColorTheme));
 services.registerInstance(IThemeService, theme);
-resources.add(bindColorTheme(theme, document.body));
+resources.add(bindTestColorTheme(theme, document.body));
 const commands = resources.add(new CommandService(services));
 window.ashIssueReporterIntegration = {
 	requests: transport.requests, opened,

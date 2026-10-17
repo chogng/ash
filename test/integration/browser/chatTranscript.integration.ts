@@ -95,7 +95,7 @@ import { CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID } from '../../../src/ash/workbench
 import '../../../src/ash/sessions/browser/workbenchChat.contribution.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
-import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { bindTestColorTheme } from './themeFixture.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { localize, setNlsMessages } from '../../../src/ash/nls.js';
@@ -128,7 +128,7 @@ const dialogs = resources.add(new DialogService());
 services.registerInstance(IDialogService, dialogs);
 services.registerInstance(IDialogsModel, dialogs.model);
 resources.add(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(document.body)));
-resources.add(bindColorTheme(theme, document.body));
+resources.add(bindTestColorTheme(theme, document.body));
 let clipboardText = '';
 let clipboardReady = Promise.resolve();
 let releaseClipboard!: () => void;

@@ -18,7 +18,7 @@ import { ILogService, NullLoggerService } from '../../../src/ash/platform/log/co
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
 import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
 import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
-import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { bindTestColorTheme } from './themeFixture.js';
 import { darkColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { getIconDefinition } from '../../../src/ash/platform/theme/common/iconRegistry.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
@@ -60,7 +60,7 @@ services.registerInstance(IConfigurationService, resources.add(new InMemoryConfi
 services.registerInstance(IStorageService, resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'browser-view-layout', backend: localStorage, flushInterval: 0 })));
 const theme = resources.add(new TestThemeService(darkColorTheme));
 services.registerInstance(IThemeService, theme);
-resources.add(bindColorTheme(theme, document.body));
+resources.add(bindTestColorTheme(theme, document.body));
 setIconResolver(document, getIconDefinition);
 const commands = resources.add(new CommandService(services));
 services.registerInstance(IMenuService, new MenuService(commands, contexts));

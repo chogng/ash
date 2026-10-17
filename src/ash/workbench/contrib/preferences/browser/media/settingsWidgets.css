@@ -154,7 +154,7 @@
 	z-index: 1;
 	display: flex;
 	width: 32px;
-	height: 24px;
+	height: var(--ash-toolbar-actionSize);
 	align-items: center;
 	justify-content: center;
 	transform: translateY(-50%);
@@ -170,10 +170,10 @@
 }
 
 .ash-setting-item-actions > .ash-setting-item-actions-trigger {
-	width: 24px;
-	min-width: 24px;
-	height: 24px;
-	min-height: 24px;
+	width: var(--ash-toolbar-actionSize);
+	min-width: var(--ash-toolbar-actionSize);
+	height: var(--ash-toolbar-actionSize);
+	min-height: var(--ash-toolbar-actionSize);
 	box-sizing: border-box;
 	padding: 0;
 	color: var(--ash-description-foreground);

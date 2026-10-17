@@ -1,7 +1,7 @@
 import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
 import { InMemoryConfigurationService } from '../../../src/ash/platform/configuration/common/inMemoryConfigurationService.js';
 import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
-import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { bindTestColorTheme } from './themeFixture.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { ModelPickerWidget, type ModelPickerPresentation } from '../../../src/ash/sessions/contrib/chat/browser/modelPickerWidget.js';
@@ -19,7 +19,7 @@ const resources = new DisposableStore();
 const themes = { light: lightColorTheme, dark: darkColorTheme, hcDark: highContrastDarkColorTheme, hcLight: highContrastLightColorTheme };
 const themeName = new URLSearchParams(location.search).get('theme') ?? 'light';
 const theme = resources.add(new TestThemeService(themes[themeName as keyof typeof themes]));
-resources.add(bindColorTheme(theme, document.body));
+resources.add(bindTestColorTheme(theme, document.body));
 const views = resources.add(new BrowserContextViewService(document.body));
 const configuration = resources.add(new InMemoryConfigurationService());
 const levels = [

@@ -2,25 +2,20 @@ import type { RemoteRuntimeInstallProgressState } from "../../../platform/remote
 import { addDisposableListener } from "../../../base/browser/dom.js";
 import { DisposableStore, toDisposable } from "../../../base/common/lifecycle.js";
 import { createRemoteRuntimeInstallProgressApi } from "../../../platform/remote/electron-browser/remoteRuntimeInstallProgressApi.js";
-import { bindColorTheme } from "../../../platform/theme/browser/themeStyles.js";
+import { ManagedStyleSheet } from "../../../base/browser/domStylesheets.js";
+import { generateColorThemeCSS } from "../../../workbench/services/themes/browser/colorThemeCss.js";
 import { darkColorTheme } from "../../../platform/theme/common/colorTheme.js";
 import { lightColorTheme } from "../../../platform/theme/common/colorTheme.js";
-import { noFileIconTheme, defaultProductIconTheme, type IColorTheme, type IThemeService } from "../../../platform/theme/common/themeService.js";
-import { Emitter, Event } from "../../../base/common/event.js";
 
 const api = createRemoteRuntimeInstallProgressApi();
 const resources = new DisposableStore();
 const preferredColorScheme = window.matchMedia("(prefers-color-scheme: light)");
-const themeChanges = resources.add(new Emitter<IColorTheme>());
-const themeService: IThemeService = {
-	onDidColorThemeChange: themeChanges.event,
-	onDidProductIconThemeChange: Event.None,
-	onDidFileIconThemeChange: Event.None,
-	getColorTheme: () => preferredColorScheme.matches ? lightColorTheme : darkColorTheme,
-	getProductIconTheme: () => defaultProductIconTheme,
-	getFileIconTheme: () => noFileIconTheme,
+const themeStyles = resources.add(new ManagedStyleSheet(document));
+const updateColorScheme = (): void => {
+	const theme = preferredColorScheme.matches ? lightColorTheme : darkColorTheme;
+	themeStyles.setText(generateColorThemeCSS(theme, ':root').code);
 };
-resources.add(bindColorTheme(themeService, document.documentElement));
+updateColorScheme();
 const host = requiredElement("remote-install-host", HTMLParagraphElement);
 const stage = requiredElement("remote-install-stage", HTMLParagraphElement);
 const progress = requiredElement("remote-install-progress", HTMLProgressElement);
@@ -30,7 +25,6 @@ const cancel = requiredElement("remote-install-cancel", HTMLButtonElement);
 // ContextBridge cleanup handles expose dispose(), while the renderer store also requires Symbol.dispose.
 const progressSubscription = api.onDidChange(render);
 resources.add(toDisposable(() => progressSubscription.dispose()));
-const updateColorScheme = (): void => themeChanges.fire(themeService.getColorTheme());
 resources.add(addDisposableListener(preferredColorScheme, "change", updateColorScheme));
 resources.add(addDisposableListener(window, "beforeunload", () => resources.dispose(), { once: true }));
 resources.add(addDisposableListener(cancel, "click", () => {

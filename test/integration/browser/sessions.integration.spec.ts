@@ -324,7 +324,11 @@ test.describe('Sessions settings components', () => {
 		await expect(empty).toBeHidden();
 		await expect(search).toBeFocused();
 		await setting.hover();
-		await setting.getByRole('button', { name: 'More actions for Compact Activity Bar', exact: true }).click();
+		const more = setting.getByRole('button', { name: 'More actions for Compact Activity Bar', exact: true });
+		const actionBounds = await more.boundingBox();
+		expect(actionBounds).toMatchObject({ width: 22, height: 22 });
+		await expect(more.locator('svg')).toHaveCSS('width', '16px');
+		await more.click();
 		await settings.getByRole('menuitem', { name: 'Reset Setting', exact: true }).click();
 		await expect(setting).toHaveCount(0);
 		await expect(empty).toBeVisible();

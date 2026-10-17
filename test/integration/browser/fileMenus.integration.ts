@@ -37,7 +37,7 @@ import { IExplorerService } from '../../../src/ash/workbench/contrib/files/brows
 import { VIEW_ID } from '../../../src/ash/workbench/contrib/files/common/files.js';
 import { ResourceSchemeContext } from '../../../src/ash/workbench/common/contextkeys.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
-import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { bindTestColorTheme } from './themeFixture.js';
 import { localize, setNlsMessages } from '../../../src/ash/nls.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import '../../../src/ash/base/browser/ui/styles.css';
@@ -106,7 +106,7 @@ class Editors extends TestEditorService {
 }
 services.registerInstance(IEditorService, new Editors());
 services.registerInstance(IExplorerService, lifetime.add(services.createInstance(ExplorerService)));
-lifetime.add(bindColorTheme(services.get(IThemeService), document.body));
+lifetime.add(bindTestColorTheme(services.get(IThemeService), document.body));
 const explorer = lifetime.add(services.createInstance(ExplorerView, document.getElementById('explorer')!, { id: VIEW_ID, title: 'Explorer' }));
 document.getElementById('explorer')!.append(explorer.element);
 explorer.setVisible(true);

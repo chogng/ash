@@ -8,14 +8,13 @@ import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableMap, Disposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import { IStorageService, StorageScope, StorageTarget } from "../../../../platform/storage/common/storage.js";
-import { bindColorTheme } from "../../../../platform/theme/browser/themeStyles.js";
 import { getIconDefinition } from "../../../../platform/theme/common/iconRegistry.js";
 import { IThemeService } from "../../../../platform/theme/common/themeService.js";
 import type { IAuxiliaryWindowState } from '../../../../platform/window/common/window.js';
 import { localize } from '../../../../nls.js';
 
-const WORKBENCH_ROOT_CLASSES = ["ash-reduce-motion", "ash-enable-motion", "ash-reduce-transparency", "ash-underline-links"] as const;
-const WORKBENCH_ROOT_ATTRIBUTES = ["data-os", "data-runtime", "data-workbench-state"] as const;
+const WORKBENCH_ROOT_CLASSES = ["ash-reduce-motion", "ash-enable-motion", "ash-reduce-transparency", "ash-underline-links", "hc-black", "hc-light", "ash-high-contrast"] as const;
+const WORKBENCH_ROOT_ATTRIBUTES = ["data-os", "data-runtime", "data-workbench-state", "data-color-theme", "data-color-scheme"] as const;
 const AUXILIARY_WINDOW_STATE_KEY = 'auxiliaryEditorWindowState';
 
 export interface AuxiliaryWindowBounds {
@@ -181,7 +180,6 @@ export class AuxiliaryWindow extends Disposable implements IAuxiliaryWindow {
 			attributeFilter: ["class", ...WORKBENCH_ROOT_ATTRIBUTES],
 		}));
 		this.syncWorkbenchRoot(workbenchRoot);
-		this._register(bindColorTheme(themeService, this.container));
 		const targetDocument = window.document;
 		const updateIcons = (): void => setIconResolver(
 			targetDocument,
@@ -235,11 +233,18 @@ export class AuxiliaryWindow extends Disposable implements IAuxiliaryWindow {
 	private syncWorkbenchRoot(source: HTMLElement): void {
 		for (const className of WORKBENCH_ROOT_CLASSES) {
 			this.container.classList.toggle(className, source.classList.contains(className));
+			if (className === 'hc-black' || className === 'hc-light' || className === 'ash-high-contrast') {
+				this.window.document.documentElement.classList.toggle(className, source.classList.contains(className));
+			}
 		}
 		for (const name of WORKBENCH_ROOT_ATTRIBUTES) {
 			const value = source.getAttribute(name);
 			if (value === null) this.container.removeAttribute(name);
 			else this.container.setAttribute(name, value);
+			if (name === 'data-color-theme' || name === 'data-color-scheme') {
+				if (value === null) this.window.document.documentElement.removeAttribute(name);
+				else this.window.document.documentElement.setAttribute(name, value);
+			}
 		}
 	}
 

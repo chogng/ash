@@ -1,3 +1,4 @@
+import { listRowHeight } from '../../../../base/common/uiSizes.js';
 import './media/timelinePane.css';
 import { h } from '../../../../base/browser/dom.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
@@ -158,7 +159,7 @@ export class TimelinePane extends ViewPane {
 		try {
 			const previous = this.timelines.get(source);
 			const pageSize = this.configuration.getValue<number | null>('timeline.pageSize');
-			const request = this.timeline.getTimeline(source, uri, { cursor: append ? previous?.paging?.cursor : undefined, limit: pageSize ?? Math.max(1, Math.ceil(this.contentElement.clientHeight / 22)), cacheResults: true, resetCache: !append }, token);
+			const request = this.timeline.getTimeline(source, uri, { cursor: append ? previous?.paging?.cursor : undefined, limit: pageSize ?? Math.max(1, Math.ceil(this.contentElement.clientHeight / listRowHeight)), cacheResults: true, resetCache: !append }, token);
 			const result = await request?.result;
 			if (this.isDisposed || generation !== this.generation || this.pending.get(source) !== lifetime || token.token.isCancellationRequested) return;
 			if (result) {

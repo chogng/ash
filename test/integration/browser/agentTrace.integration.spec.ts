@@ -34,6 +34,8 @@ test('Execution Trace uses shared tree, tabs and resizable panes across themes a
 		await page.evaluate(id => window.agentTraceIntegration.setTheme(id), id);
 		await expect(page.locator('#root')).toHaveAttribute('data-color-theme', id);
 		await failure.click();
+		await expect(failure).toHaveCSS('height', '22px');
+		await expect(failure).toHaveCSS('line-height', '22px');
 		await expect(failure).toHaveAttribute('aria-selected', 'true');
 		await expect(viewer.getByRole('tabpanel')).toBeVisible();
 		await expect(viewer.getByRole('tabpanel')).toContainText('Fixture failure');

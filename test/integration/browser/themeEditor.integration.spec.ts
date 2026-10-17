@@ -127,7 +127,10 @@ for (const theme of ['ash-light', 'ash-high-contrast-dark']) {
 			return getComputedStyle(element).backgroundColor === color;
 		})).toBe(true);
 		const arrowBounds = await dropdown.boundingBox();
-		expect(arrowBounds!.width).toBe(await dropdown.evaluate(element => parseFloat(getComputedStyle(element).getPropertyValue('--ash-toolbar-actionSize'))));
+		expect(arrowBounds!.width).toBe(22);
+		expect(arrowBounds!.height).toBe(22);
+		await expect(dropdown.locator('.ash-dropdown-menu-indicator .ash-icon')).toHaveCSS('width', '16px');
+		await expect(dropdown.locator('.ash-dropdown-menu-indicator .ash-icon')).toHaveCSS('height', '16px');
 		await apply.focus();
 		await apply.press('ArrowRight');
 		await expect(dropdown).toBeFocused();
@@ -171,7 +174,11 @@ test('design token links navigate across groups, follow changes and restore afte
 	await page.evaluate(text => window.themeEditorTest.setSource(text.replace('#bb8855', '#447799')), source);
 	await expect(frame.locator('#app')).toHaveCSS('--ash-foreground', '#447799');
 	await expect(frame.locator('#app')).toHaveCSS('--ash-input-foreground', '#aabbcc');
-	await row.getByRole('button', { name: 'Remove the override for input.foreground', exact: true }).click();
+	const reset = row.getByRole('button', { name: 'Remove the override for input.foreground', exact: true });
+	await row.hover();
+	expect(await reset.boundingBox()).toMatchObject({ width: 22, height: 22 });
+	await expect(reset.locator('svg')).toHaveCSS('width', '16px');
+	await reset.click();
 	await expect(row.locator('.ash-theme-color-source')).toHaveText('Linked to foreground');
 	await expect(hex).toHaveValue('447799');
 	await expect(frame.locator('#app')).toHaveCSS('--ash-input-foreground', '#447799');
@@ -253,7 +260,7 @@ test('draft edits only the isolated preview and Save and Apply switches the main
 	await popup.getByRole('searchbox', { name: 'Search colors' }).fill('editor.background');
 	const hex = popup.getByRole('textbox', { name: 'Hex color for editor.background', exact: true });
 	await editColor(hex, '#112233');
-	await expect.poll(() => popup.frameLocator('.ash-theme-editor-preview').locator('#app').evaluate(element => element.style.getPropertyValue('--ash-editor-background'))).toBe('#112233');
+	await expect.poll(() => popup.frameLocator('.ash-theme-editor-preview').locator('#app').evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-background'))).toBe('#112233');
 	const source = await page.evaluate(() => window.themeEditorTest.source());
 	expect(source).toContain('// keep this comment');
 	expect(source).toContain('"#112233"');
@@ -263,13 +270,13 @@ test('draft edits only the isolated preview and Save and Apply switches the main
 	await page.evaluate(() => window.themeEditorTest.undo());
 	await expect.poll(() => hex.inputValue()).toBe('101525');
 	await editColor(hex, '#223344');
-	await expect.poll(() => popup.frameLocator('.ash-theme-editor-preview').locator('#app').evaluate(element => element.style.getPropertyValue('--ash-editor-background'))).toBe('#223344');
-	await expect.poll(() => page.locator('#main').evaluate(element => element.style.getPropertyValue('--ash-editor-background'))).toBe('#101525');
+	await expect.poll(() => popup.frameLocator('.ash-theme-editor-preview').locator('#app').evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-background'))).toBe('#223344');
+	await expect.poll(() => page.locator('#main').evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-background'))).toBe('#101525');
 	await chooseSaveAction(popup, 'Save');
 	await expect.poll(() => page.evaluate(() => window.themeEditorTest.persisted())).toContain('#223344');
-	await expect.poll(() => page.locator('#main').evaluate(element => element.style.getPropertyValue('--ash-editor-background'))).toBe('#101525');
+	await expect.poll(() => page.locator('#main').evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-background'))).toBe('#101525');
 	await popup.getByRole('button', { name: 'Save and Apply', exact: true }).click();
-	await expect.poll(() => page.locator('#main').evaluate(element => element.style.getPropertyValue('--ash-editor-background'))).toBe('#223344');
+	await expect.poll(() => page.locator('#main').evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-background'))).toBe('#223344');
 	await page.evaluate(() => window.themeEditorTest.close());
 	await expect.poll(() => popup.isClosed()).toBe(true);
 	expect(errors).toEqual([]);
@@ -296,7 +303,7 @@ test('shared color picker edits alpha and formats, follows JSON and Undo, and re
 	await value.fill('336699');
 	await value.press('Enter');
 	await expect(hex).toHaveValue('336699');
-	await expect.poll(() => popup.frameLocator('.ash-theme-editor-preview').locator('#app').evaluate(element => element.style.getPropertyValue('--ash-editor-background'))).toBe('rgba(51, 102, 153, 0.5)');
+	await expect.poll(() => popup.frameLocator('.ash-theme-editor-preview').locator('#app').evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-background'))).toBe('rgba(51, 102, 153, 0.5)');
 	await page.evaluate(() => window.themeEditorTest.undo());
 	await expect(hex).toHaveValue('101525');
 	await expect(value).toHaveValue('101525');
@@ -365,7 +372,7 @@ for (const [theme, scheme] of [['ash-high-contrast-dark', 'hcDark'], ['ash-high-
 		await popup.getByRole('searchbox', { name: 'Search colors' }).fill('editor.background');
 		await popup.getByRole('button', { name: 'Choose color for editor.background', exact: true }).click();
 		const picker = popup.getByRole('dialog', { name: 'Color picker', exact: true });
-		await expect(picker).toHaveAttribute('data-color-scheme', scheme);
+		await expect(popup.locator('html')).toHaveAttribute('data-color-scheme', scheme);
 		await expect(picker).toHaveCSS('box-shadow', 'none');
 		await expect(picker).toHaveCSS('border-style', 'solid');
 		const area = picker.getByRole('slider', { name: 'Saturation and brightness', exact: true });
@@ -384,7 +391,7 @@ test('JSON updates colors, rejects invalid saves, retains valid preview and rese
 	await expect(popup.getByRole('textbox', { name: 'Hex color for editor.background', exact: true })).toHaveValue('ABCDEF');
 	await page.evaluate(() => window.themeEditorTest.setSource('{"colors":'));
 	await expect(popup.locator('.ash-theme-editor-message')).toHaveClass(/error/);
-	await expect.poll(() => popup.frameLocator('.ash-theme-editor-preview').locator('#app').evaluate(element => element.style.getPropertyValue('--ash-editor-background'))).toBe('rgba(171, 205, 239, 0.5)');
+	await expect.poll(() => popup.frameLocator('.ash-theme-editor-preview').locator('#app').evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-background'))).toBe('rgba(171, 205, 239, 0.5)');
 	await chooseSaveAction(popup, 'Save');
 	await expect(popup.locator('.ash-theme-editor-message')).toContainText('Could not save');
 	expect(await page.evaluate(() => window.themeEditorTest.persisted())).toContain('#101525');
@@ -408,7 +415,7 @@ test('Save as runs inside the auxiliary window and persists a selectable user th
 	expect(await page.evaluate(() => window.themeEditorTest.persisted())).toContain('#101525');
 	await expect(popup.locator('.ash-theme-editor-message')).not.toHaveClass(/error/);
 	await page.evaluate(() => window.themeEditorTest.close());
-	await expect.poll(() => page.locator('#main').evaluate(element => element.style.getPropertyValue('--ash-editor-background'))).toBe('#101525');
+	await expect.poll(() => page.locator('#main').evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-background'))).toBe('#101525');
 });
 
 test('Save as reverts the original shared JSON working copy without writing the original file', async ({ page }) => {
@@ -553,10 +560,10 @@ test('closing an unsaved preview leaves the main window unchanged and leaves the
 	const popup = await openEditor(page);
 	await popup.getByRole('searchbox', { name: 'Search colors' }).fill('editor.background');
 	await editColor(popup.getByRole('textbox', { name: 'Hex color for editor.background', exact: true }), '#556677');
-	await expect.poll(() => popup.frameLocator('.ash-theme-editor-preview').locator('#app').evaluate(element => element.style.getPropertyValue('--ash-editor-background'))).toBe('#556677');
+	await expect.poll(() => popup.frameLocator('.ash-theme-editor-preview').locator('#app').evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-background'))).toBe('#556677');
 	await page.evaluate(() => window.themeEditorTest.close());
 	await expect.poll(() => popup.isClosed()).toBe(true);
-	await expect.poll(() => page.locator('#main').evaluate(element => element.style.getPropertyValue('--ash-editor-background'))).toBe('#101525');
+	await expect.poll(() => page.locator('#main').evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-background'))).toBe('#101525');
 	expect(await page.evaluate(() => window.themeEditorTest.persisted())).toContain('#101525');
 });
 
@@ -577,7 +584,7 @@ test('built-in themes open their clean source and only Save as creates a user th
 	await popup.getByRole('searchbox', { name: 'Search colors' }).fill('editor.background');
 	await editColor(popup.getByRole('textbox', { name: 'Hex color for editor.background', exact: true }), '#667788');
 	await popup.getByRole('button', { name: 'Save and Apply', exact: true }).click();
-	await expect.poll(() => page.locator('#main').evaluate(element => element.style.getPropertyValue('--ash-editor-background'))).toBe('#667788');
+	await expect.poll(() => page.locator('#main').evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-background'))).toBe('#667788');
 	await page.evaluate(() => window.themeEditorTest.close());
 });
 
@@ -725,7 +732,7 @@ test('shared Workbench editors, file tree, split groups and terminal stay in the
 	expect(await page.evaluate(() => window.themeEditorTest.persisted())).toBe(source);
 	await popup.getByRole('searchbox', { name: 'Search colors' }).fill('editor.background');
 	await editColor(popup.getByRole('textbox', { name: 'Hex color for editor.background', exact: true }), '#335577');
-	await expect.poll(() => frame.locator('#app').evaluate(element => element.style.getPropertyValue('--ash-editor-background'))).toBe('#335577');
+	await expect.poll(() => frame.locator('#app').evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-background'))).toBe('#335577');
 	expect(await page.evaluate(() => window.themeEditorTest.colorMap())).toEqual(colorMap);
 	await expect(page.locator('#main')).toHaveCSS('background-color', 'rgb(16, 21, 37)');
 	await popup.screenshot({ path: testInfo.outputPath('shared-workbench-interaction.png') });
@@ -946,14 +953,14 @@ test('preview follows consecutive shared color field commits', async ({ page }) 
 		const input = element as HTMLInputElement;
 		const preview = element.ownerDocument.querySelector<HTMLIFrameElement>('.ash-theme-editor-preview')!;
 		const colors = new Set<string>();
-		const initial = preview.contentDocument!.getElementById('app')!.style.getPropertyValue('--ash-editor-background');
+		const initial = preview.contentWindow!.getComputedStyle(preview.contentDocument!.getElementById('app')!).getPropertyValue('--ash-editor-background');
 		let last = '';
 		for (let index = 0; index < 40; index++) {
 			await new Promise<void>(resolve => element.ownerDocument.defaultView!.requestAnimationFrame(() => resolve()));
 			last = '#' + (0x223300 + index).toString(16);
 			input.value = last;
 			input.dispatchEvent(new Event('change', { bubbles: true }));
-			const value = preview.contentDocument!.getElementById('app')!.style.getPropertyValue('--ash-editor-background');
+			const value = preview.contentWindow!.getComputedStyle(preview.contentDocument!.getElementById('app')!).getPropertyValue('--ash-editor-background');
 			if (value !== initial) colors.add(value);
 		}
 		return { colors: [...colors], last };
@@ -1006,7 +1013,7 @@ test('switches to the production Agent Window, edits its colors and keeps one is
 	const color = popup.getByRole('textbox', { name: 'Hex color for sessions.activityBar.foreground', exact: true });
 	await expect(color).toBeVisible();
 	await editColor(color, '#ff9900');
-	await expect.poll(() => frame.locator('#app').evaluate(element => element.style.getPropertyValue('--ash-sessions-activityBar-foreground'))).toBe('#ff9900');
+	await expect.poll(() => frame.locator('#app').evaluate(element => getComputedStyle(element).getPropertyValue('--ash-sessions-activityBar-foreground'))).toBe('#ff9900');
 	const navigation = frame.locator('.ash-sessions-activity-content');
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(navigation.getByRole('button', { name: 'Code', exact: true })).toHaveAttribute('aria-current', 'page');
@@ -1019,7 +1026,7 @@ test('switches to the production Agent Window, edits its colors and keeps one is
 	await expect(popup.locator('iframe.ash-theme-editor-preview')).toHaveCount(1);
 	await agent.click();
 	await expect(frame.locator('.ash-sessions-window')).toBeVisible();
-	await expect.poll(() => frame.locator('#app').evaluate(element => element.style.getPropertyValue('--ash-sessions-activityBar-foreground'))).toBe('#ff9900');
+	await expect.poll(() => frame.locator('#app').evaluate(element => getComputedStyle(element).getPropertyValue('--ash-sessions-activityBar-foreground'))).toBe('#ff9900');
 	expect(await page.evaluate(() => window.themeEditorTest.source())).toContain('#ff9900');
 	expect(await page.evaluate(() => window.themeEditorTest.persisted())).not.toContain('#ff9900');
 	expect(errors).toEqual([]);

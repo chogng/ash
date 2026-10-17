@@ -134,7 +134,7 @@
 .ash-chatgpt-navigation .ash-chatgpt-conversation {
 	width: 100%;
 	flex-shrink: 0;
-	min-height: var(--ash-list-rowHeight, 24px);
+	min-height: var(--ash-list-rowHeight, 22px);
 	padding-block: 0;
 	overflow: hidden;
 	white-space: nowrap;
@@ -182,8 +182,8 @@
 }
 
 .ash-chatgpt-conversation-actions .ash-action-label {
-	width: var(--ash-toolbar-actionSize, 24px);
-	height: var(--ash-toolbar-actionSize, 24px);
+	width: var(--ash-toolbar-actionSize, 22px);
+	height: var(--ash-toolbar-actionSize, 22px);
 	min-height: 0;
 	padding: 0;
 	gap: 0;

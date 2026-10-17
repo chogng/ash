@@ -8,7 +8,7 @@ import { InMemoryConfigurationService } from '../../../src/ash/platform/configur
 import { IContextViewService } from '../../../src/ash/platform/contextview/browser/contextView.js';
 import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
-import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { bindTestColorTheme } from './themeFixture.js';
 import { darkColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { getIconDefinition } from '../../../src/ash/platform/theme/common/iconRegistry.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
@@ -32,7 +32,7 @@ services.registerInstance(IContextViewService, resources.add(new BrowserContextV
 services.registerInstance(IConfigurationService, resources.add(new InMemoryConfigurationService()));
 services.registerSingleton(IActionWidgetService, () => services.createInstance(ActionWidgetService));
 const theme = resources.add(new TestThemeService(darkColorTheme));
-resources.add(bindColorTheme(theme, document.body));
+resources.add(bindTestColorTheme(theme, document.body));
 setIconResolver(document, getIconDefinition);
 const widget = services.get(IActionWidgetService);
 const source = document.querySelector<HTMLButtonElement>('#source')!;

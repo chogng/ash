@@ -24,7 +24,7 @@ import { createDisconnectedExtensionHostApi } from '../../../src/ash/platform/ag
 import { normalizeExtensionHostSnapshot } from '../../../src/ash/platform/agentHost/browser/extensionHostProtocol.js';
 import { IAgentThreadService } from '../../../src/ash/platform/agentHost/common/agentService.js';
 import { ChatResponseResourceFileSystemProvider, IChatResponseResourceFileSystemProvider } from '../../../src/ash/workbench/contrib/chat/common/widget/chatResponseResourceFileSystemProvider.js';
-import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { bindTestColorTheme } from './themeFixture.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
@@ -142,7 +142,7 @@ resources.add(new DialogHandlerContribution(dialogs.model, new BrowserDialogHand
 services.registerInstance(IClipboardService, { writeText: async (value: string) => { document.body.dataset.copiedLink = value; } } as IClipboardService);
 registerCodeEditorServices(services);
 
-resources.add(bindColorTheme(services.get(IThemeService), document.body));
+resources.add(bindTestColorTheme(services.get(IThemeService), document.body));
 services.registerInstance(IChatResponseResourceFileSystemProvider, resources.add(new ChatResponseResourceFileSystemProvider()));
 const chat = resources.add(services.createInstance(ChatGPTService));
 services.registerInstance(IChatGPTService, chat);

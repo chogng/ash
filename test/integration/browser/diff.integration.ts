@@ -18,7 +18,7 @@ import '../../../src/ash/base/browser/ui/grid/grid.css';
 import { CancellationToken, CancellationTokenSource } from '../../../src/ash/base/common/cancellation.js';
 import { DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
-import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { bindTestColorTheme } from './themeFixture.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { InMemoryConfigurationService } from '../../../src/ash/platform/configuration/common/inMemoryConfigurationService.js';
 import { DiffEditorWidget } from '../../../src/ash/editor/browser/widget/diffEditor/diffEditorWidget.js';
@@ -274,7 +274,7 @@ function createSessionChangesPane(): SessionChangesEditor {
 		sessionServices.registerInstance(IMultiDiffSourceResolverService, resources.add(new MultiDiffSourceResolverService()));
 		sessionTheme = resources.add(new TestThemeService(darkColorTheme));
 		sessionServices.registerInstance(IThemeService, sessionTheme);
-		resources.add(bindColorTheme(sessionTheme, document.getElementById('session-changes')!));
+		resources.add(bindTestColorTheme(sessionTheme, document.getElementById('session-changes')!));
 		sessionServices.registerInstance(IStorageService, resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'diff-integration', flushInterval: 0 })));
 		sessionServices.registerInstance(IDialogService, { confirm: async () => ({ confirmed: false }) } as unknown as IDialogService);
 		sessionServices.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
@@ -499,7 +499,7 @@ const harness = {
 		}
 		const contexts = services.get(IContextKeyService);
 		titleTheme = services.get(IThemeService) as TestThemeService;
-		resources.add(bindColorTheme(services.get(IThemeService), document.documentElement));
+		resources.add(bindTestColorTheme(services.get(IThemeService), document.documentElement));
 		let storedEncoding = 'utf8';
 		const store: ITextResourceStore = {
 			onDidChange: Event.None,
@@ -809,7 +809,7 @@ const harness = {
 		return { title: setting.title, description: setting.description };
 	},
 	setTheme(themeId: string): { marker: string; background: string; } {
-		themeBinding ??= resources.add(bindColorTheme(editorServices.themeService, document.body));
+		themeBinding ??= resources.add(bindTestColorTheme(editorServices.themeService, document.body));
 		editorServices.themeService.setTheme(themeId);
 		const theme = editorServices.themeService.getColorTheme();
 		const cssColor = (id: string) => {

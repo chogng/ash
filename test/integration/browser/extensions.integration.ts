@@ -32,7 +32,7 @@ import { ExtensionResourceLoaderService } from '../../../src/ash/platform/extens
 import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
 import { IMarkdownRendererService, MarkdownRendererService } from '../../../src/ash/platform/markdown/browser/markdownRenderer.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
-import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { bindTestColorTheme } from './themeFixture.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
@@ -368,7 +368,7 @@ services.registerInstance(ICodeEditorService, { getActiveCodeEditor: () => ({ ge
 const themeName = new URLSearchParams(location.search).get('theme');
 const themeService = disposables.add(new TestThemeService(themeName === 'light' ? lightColorTheme : themeName === 'hc' ? highContrastDarkColorTheme : darkColorTheme));
 services.registerInstance(IThemeService, themeService);
-disposables.add(bindColorTheme(themeService, document.body));
+disposables.add(bindTestColorTheme(themeService, document.body));
 services.registerInstance(IStorageService, disposables.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'extensions-fixture', backend: window.localStorage, flushInterval: 0 })));
 services.registerInstance(IGlobalExtensionEnablementService, disposables.add(services.createInstance(GlobalExtensionEnablementService)));
 let pane: ExtensionsEditor | undefined;

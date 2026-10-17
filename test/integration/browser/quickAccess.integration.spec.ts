@@ -54,6 +54,8 @@ for (const variant of [
 		await page.setViewportSize({ width: 600, height: 600 });
 		const bounds = await shortcut.boundingBox();
 		const rowBounds = await row.boundingBox();
+		expect(rowBounds!.height).toBe(22);
+		expect((await row.locator('.ash-quick-pick-row-content').boundingBox())!.height).toBe(22);
 		expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(rowBounds!.x + rowBounds!.width);
 		await picker.screenshot({ path: testInfo.outputPath('command-keycaps.png') });
 		await input.fill('>Zulu Format');

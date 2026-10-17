@@ -95,7 +95,7 @@ import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser
 import { registerTestDictationOnboarding } from '../../../src/ash/workbench/test/common/testDictationServices.js';
 import { formatNlsMessage, setNlsResolver } from '../../../src/ash/nls.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
-import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { bindTestColorTheme } from './themeFixture.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { EventType, Gesture } from '../../../src/ash/base/browser/touch.js';
@@ -125,7 +125,7 @@ setARIAContainer(document.body);
 const themes = { dark: darkColorTheme, light: lightColorTheme, hcDark: highContrastDarkColorTheme, hcLight: highContrastLightColorTheme };
 const themeName = new URLSearchParams(location.search).get('theme') as keyof typeof themes | null;
 const theme = resources.add(new TestThemeService(themes[themeName ?? 'dark']));
-resources.add(bindColorTheme(theme, document.body));
+resources.add(bindTestColorTheme(theme, document.body));
 if (new URLSearchParams(location.search).has('gestureAncestor')) {
 	const main = document.querySelector('main')!;
 	resources.add(Gesture.addTarget(main));

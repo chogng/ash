@@ -17,7 +17,7 @@ import { setNlsMessages } from '../../../src/ash/nls.js';
 import { InMemoryConfigurationService } from '../../../src/ash/platform/configuration/common/inMemoryConfigurationService.js';
 import { ContextKeyService, IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { type IFileDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
-import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { bindTestColorTheme } from './themeFixture.js';
 import { lightColorTheme, darkColorTheme, highContrastLightColorTheme, highContrastDarkColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { SymphonyTasksView } from '../../../src/ash/sessions/contrib/symphony/browser/symphonyViews.js';
@@ -68,7 +68,7 @@ if (params.get('locale') === 'zh-CN') {
 }
 const resources = new DisposableStore();
 const root = document.querySelector<HTMLElement>('#root')!;
-resources.add(bindColorTheme(resources.add(new TestThemeService(params.has('hc') ? highContrastDarkColorTheme : params.has('hcLight') ? highContrastLightColorTheme : params.has('dark') ? darkColorTheme : lightColorTheme)), root));
+resources.add(bindTestColorTheme(resources.add(new TestThemeService(params.has('hc') ? highContrastDarkColorTheme : params.has('hcLight') ? highContrastLightColorTheme : params.has('dark') ? darkColorTheme : lightColorTheme)), root));
 const contextKeys = resources.add(new ContextKeyService());
 const configuration = resources.add(new InMemoryConfigurationService());
 const notifications = resources.add(new NotificationService());

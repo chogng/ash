@@ -1,3 +1,7 @@
+import { ILanguageService } from '../../../../../../editor/common/languages/language.js';
+import { LanguageService } from '../../../../../../editor/common/services/languageService.js';
+import { IHostColorSchemeService } from '../../../../../services/themes/common/hostColorSchemeService.js';
+import { WorkbenchThemeService } from '../../../../../services/themes/browser/workbenchThemeService.js';
 import { WindowTitle } from '../../../titlebar/windowTitle.js';
 import { ILocalizationService } from '../../../../../services/localization/common/localizationService.js';
 import { TestUriIdentityServices } from '../../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
@@ -3670,7 +3674,14 @@ test("BrowserAuxiliaryWindowService opens, registers, mirrors styles, and releas
 	assert.throws(() => missingServices.createInstance(BrowserAuxiliaryWindowService, opener.window as unknown as Window, root), /themeService/);
 	missingServices.dispose();
 	const services = new InstantiationService();
-	const themes = new TestThemeService(lightColorTheme);
+	using configuration = new InMemoryConfigurationService();
+	using languages = new LanguageService();
+	services.registerInstance(IConfigurationService, configuration);
+	services.registerInstance(ILanguageService, languages);
+	services.registerInstance(IHostColorSchemeService, { dark: false, highContrast: false, onDidChangeColorScheme: Event.None });
+	const themes = services.createInstance(WorkbenchThemeService, root);
+	themes.initialize();
+	await themes.setColorTheme(lightColorTheme.id);
 	services.registerInstance(IThemeService, themes);
 	const storage = new BrowserStorageService({ ownerWindow: opener.window as unknown as Window, workspaceId: 'workspace', backend: opener.window.localStorage, flushInterval: 0 });
 	services.registerInstance(IStorageService, storage);
@@ -3690,7 +3701,7 @@ test("BrowserAuxiliaryWindowService opens, registers, mirrors styles, and releas
 	assert.equal(auxiliary.container.classList.contains("ash-reduce-motion"), true);
 	assert.equal(auxiliary.container.getAttribute("data-os"), "windows");
 	assert.equal(auxiliary.container.getAttribute("data-color-scheme"), lightColorTheme.colorScheme);
-	assert.equal(auxiliary.container.style.getPropertyValue("--ash-editor-background"), lightColorTheme.getColorCss("editor.background"));
+	assert.equal(popup.window.getComputedStyle(popup.window.document.documentElement).getPropertyValue("--ash-editor-background"), lightColorTheme.getColorCss("editor.background"));
 	assert.match(popup.window.document.head.textContent ?? "", /mirrored/);
 	assert.equal(service.getWindow(auxiliary.id), auxiliary);
 	Object.defineProperties(popup.window, {
@@ -3704,12 +3715,12 @@ test("BrowserAuxiliaryWindowService opens, registers, mirrors styles, and releas
 	assert.deepEqual(auxiliary.createState(), { width: 740, height: 560, left: 120, top: 90, featureWidthOffset: 0, featureHeightOffset: 0 });
 	let closed = 0;
 	auxiliary.onDidClose(() => closed++);
-	themes.setColorTheme(highContrastDarkColorTheme);
+	await themes.setColorTheme(highContrastDarkColorTheme.id);
 	root.classList.remove("ash-reduce-motion");
 	root.classList.add("ash-underline-links");
 	await nextTask();
 	assert.equal(auxiliary.container.getAttribute("data-color-scheme"), highContrastDarkColorTheme.colorScheme);
-	assert.equal(auxiliary.container.style.getPropertyValue("--ash-editor-background"), highContrastDarkColorTheme.getColorCss("editor.background"));
+	assert.equal(popup.window.getComputedStyle(popup.window.document.documentElement).getPropertyValue("--ash-editor-background"), highContrastDarkColorTheme.getColorCss("editor.background"));
 	assert.equal(auxiliary.container.classList.contains("ash-reduce-motion"), false);
 	assert.equal(auxiliary.container.classList.contains("ash-underline-links"), true);
 

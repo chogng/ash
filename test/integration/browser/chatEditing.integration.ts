@@ -20,7 +20,7 @@ import { ILogService } from '../../../src/ash/platform/log/common/log.js';
 import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
-import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { bindTestColorTheme } from './themeFixture.js';
 import { highContrastDarkColorTheme, lightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
@@ -148,7 +148,7 @@ services.registerInstance(IChatService, {
 		return { sessionId: 'session', threadId: 'restored' };
 	},
 } as unknown as IChatService);
-resources.add(bindColorTheme(resources.add(new TestThemeService(locale === 'en' ? lightColorTheme : highContrastDarkColorTheme)), document.body));
+resources.add(bindTestColorTheme(resources.add(new TestThemeService(locale === 'en' ? lightColorTheme : highContrastDarkColorTheme)), document.body));
 setARIAContainer(document.body);
 
 async function write(resource: URI, threadId: string, text: string): Promise<void> {

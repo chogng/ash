@@ -1,3 +1,4 @@
+import { defaultToolbarActionSize } from '../../../base/common/uiSizes.js';
 import { defaultButtonStyles } from '../../../platform/theme/browser/defaultStyles.js';
 import "./compositebar/compositebar.css";
 import { IActivityService, NumberBadge } from "../../services/activity/common/activity.js";
@@ -37,8 +38,6 @@ export interface ICompositeBarOptions {
 
 /** Visual density selected by the Part hosting a CompositeBar. */
 export type CompositeBarPresentation = "icon" | "label";
-
-const OVERFLOW_BUTTON_WIDTH = 24;
 
 const HIDDEN_VIEW_CONTAINERS_KEY = 'workbench.activityBar.hiddenViewContainers';
 const DISABLED_BADGES_KEY = 'workbench.activityBar.disabledBadges';
@@ -264,7 +263,7 @@ export class CompositeBar extends Disposable {
 		const availableWidth = this.domNode.clientWidth;
 		if (availableWidth <= 0) return;
 
-		const visibleContainers = this.visibleContainersForWidth(availableWidth, OVERFLOW_BUTTON_WIDTH + this.actionBarItemGap);
+		const visibleContainers = this.visibleContainersForWidth(availableWidth, defaultToolbarActionSize + this.actionBarItemGap);
 		const visibleContainerIds = visibleContainers.map((container) => container.id);
 		const overflowingContainerIds = new Set(this.displayedContainers
 			.filter((container) => !visibleContainerIds.includes(container.id))

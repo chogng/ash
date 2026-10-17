@@ -18,7 +18,7 @@ import { INotificationService } from '../../../src/ash/platform/notification/com
 import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
-import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { bindTestColorTheme } from './themeFixture.js';
 import { darkColorTheme, highContrastDarkColorTheme, lightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
@@ -91,7 +91,7 @@ resources.add(opener.registerExternalOpener({ openExternal: async target => { co
 const themes = [darkColorTheme, lightColorTheme, highContrastDarkColorTheme];
 const theme = resources.add(new TestThemeService(darkColorTheme));
 services.registerInstance(IThemeService, theme);
-resources.add(bindColorTheme(theme, document.body));
+resources.add(bindTestColorTheme(theme, document.body));
 services.registerInstance(IWorkspaceContextService, resources.add(new WorkspaceContextService({ id: 'url-integration', folders: [] })));
 registerTestComponentServices(services);
 services.registerInstance(IFilesConfigurationService, resources.add(services.createInstance(FilesConfigurationService)));

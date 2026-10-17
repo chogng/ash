@@ -93,13 +93,13 @@ test('base colors support disconnected schemes and yield to a registered extensi
 			// A configuration change resolves the current host scheme.
 			await configuration.updateValue('workbench.colorCustomizations', { 'editor.foreground': dark ? '#eeeeee' : '#111111' });
 			assert.equal(active.getColorTheme().id, id);
-			assert(browser.window.document.body.style.getPropertyValue('--ash-editor-background'));
+			assert(browser.window.getComputedStyle(browser.window.document.documentElement).getPropertyValue('--ash-editor-background'));
 		}
 		Object.assign(colors, { dark: false, highContrast: false });
 		const extension = parseUserColorTheme('{"colors":{"editor.background":"#123456"}}', 'pending-extension-theme');
 		using registration = WorkbenchThemesRegistry.registerColorThemes([extension]);
 		assert.equal(active.getColorTheme().getColorCss('editor.background'), '#123456');
-		assert.equal(browser.window.document.body.style.getPropertyValue('--ash-editor-background'), '#123456');
+		assert.equal(browser.window.getComputedStyle(browser.window.document.documentElement).getPropertyValue('--ash-editor-background'), '#123456');
 	} finally { browser.window.close(); }
 });
 
@@ -131,7 +131,7 @@ test('temporary previews update bound windows, keep settings unchanged, and rest
 		const second = parseUserColorTheme('{"colors":{"editor.background":"#abcdef"}}', 'second-preview');
 		using older = active.previewColorTheme(first);
 		assert.equal(active.getColorTheme(), first);
-		assert.equal(browser.window.document.body.style.getPropertyValue('--ash-editor-background'), '#123456');
+		assert.equal(browser.window.getComputedStyle(browser.window.document.documentElement).getPropertyValue('--ash-editor-background'), '#123456');
 		assert.equal(configuration.getValue(WorkbenchConfiguration.colorTheme), original);
 		using newer = active.previewColorTheme(second);
 		older.update(parseUserColorTheme('{"colors":{"editor.background":"#112233"}}', 'first-preview'));
@@ -172,7 +172,7 @@ test('persisted color customizations override themes, update live, and restore t
 		], ['#456789', '#112233', 0.65, theme.semanticTokenRules]);
 		assert.equal(active.getColorTheme().getColor('editor.inactiveSelectionBackground')?.rgba.r, 69);
 		await configuration.updateValue(WorkbenchConfiguration.colorCustomizations, { 'editor.inactiveSelectionBackground': '#765432' });
-		assert.equal(browser.window.document.body.style.getPropertyValue('--ash-editor-inactiveSelectionBackground'), '#765432');
+		assert.equal(browser.window.getComputedStyle(browser.window.document.documentElement).getPropertyValue('--ash-editor-inactiveSelectionBackground'), '#765432');
 		assert.equal(active.getColorTheme().getColorCss('editor.selectionForeground'), '#abcdef');
 		await configuration.updateValue(WorkbenchConfiguration.colorCustomizations, undefined);
 		assert.equal(active.getColorTheme(), theme);
@@ -362,7 +362,7 @@ test('active user themes apply overrides for colors registered after theme loadi
 		assert.deepEqual({
 			before: before.find(entry => entry.id === 'test.workbenchLate'),
 			resolved: theme.colors['test.workbenchLate'],
-			css: browser.window.document.body.style.getPropertyValue('--ash-test-workbenchLate'),
+			css: browser.window.getComputedStyle(browser.window.document.documentElement).getPropertyValue('--ash-test-workbenchLate'),
 			changes,
 			tokenRules: theme.semanticTokenRules,
 		}, {
@@ -557,7 +557,7 @@ test('theme save, rename, reload, and delete keep identity in the filename', asy
 		assert.equal(saved.theme.label, 'Renamed Theme');
 		assert.equal(saved.theme.getColorCss('editor.background'), '#202530');
 		assert.equal(activeThemes.getColorTheme(), saved.theme);
-		assert.equal(browser.window.document.body.style.getPropertyValue('--ash-editor-background'), '#202530');
+		assert.equal(browser.window.getComputedStyle(browser.window.document.documentElement).getPropertyValue('--ash-editor-background'), '#202530');
 		await service.reload();
 		assert.equal(service.getSource(saved.theme.id), replacement);
 		await service.delete(saved.theme.id);

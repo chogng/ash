@@ -20,7 +20,7 @@ import { MarkerDecorationsService } from '../../../src/ash/editor/common/service
 import { ICodeEditorService } from '../../../src/ash/editor/browser/services/codeEditorService.js';
 import { StandaloneCodeEditorService } from '../../../src/ash/editor/standalone/browser/standaloneCodeEditorService.js';
 import { IInlineCompletionsService, InlineCompletionsService } from '../../../src/ash/editor/browser/services/inlineCompletionsService.js';
-import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { bindTestColorTheme } from './themeFixture.js';
 import { EditorOption, type IEditorScrollbarOptions, type IEditorOptions } from '../../../src/ash/editor/common/config/editorOptions.js';
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import '../../../src/ash/workbench/contrib/codeEditor/browser/quickaccess/gotoLineQuickAccess.js';
@@ -196,7 +196,7 @@ services.registerInstance(IConfigurationService, configurationService);
 services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
 const themeService = disposables.add(new TestThemeService(darkColorTheme));
 services.registerInstance(IThemeService, themeService);
-disposables.add(bindColorTheme(themeService, root));
+disposables.add(bindTestColorTheme(themeService, root));
 services.registerInstance(ILanguageFeaturesService, languageFeaturesService);
 disposables.add(services.createInstance(WorkbenchLanguageFeatures));
 services.registerInstance(ILanguageConfigurationService, languageConfigurationService);

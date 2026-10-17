@@ -17,7 +17,7 @@ import { BrowserContextMenuService } from '../../../src/ash/platform/contextview
 import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
 import { HoverService, IHoverService } from '../../../src/ash/platform/hover/browser/hoverService.js';
 import { ILayoutService } from '../../../src/ash/platform/layout/browser/layoutService.js';
-import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { bindTestColorTheme } from './themeFixture.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
@@ -39,7 +39,7 @@ registerCodeEditorServices(dependencies);
 const services = resources.add(dependencies.createChild());
 const themes = services.get(IThemeService) as TestThemeService;
 themes.setColorTheme(lightColorTheme);
-resources.add(bindColorTheme(themes, root));
+resources.add(bindTestColorTheme(themes, root));
 services.registerInstance(ILayoutService, { mainContainer: root } as ILayoutService);
 services.registerInstance(IMenuService, services.createInstance(MenuService));
 services.registerInstance(IContextViewService, resources.add(new BrowserContextViewService(root)));

@@ -13,8 +13,6 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ActionListItemKind } from '../../../../platform/actionWidget/browser/actionList.js';
 import { IActionWidgetService } from '../../../../platform/actionWidget/browser/actionWidget.js';
-import { bindColorTheme } from '../../../../platform/theme/browser/themeStyles.js';
-import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { ContentWidgetPositionPreference, type ICodeEditor, type IContentWidget, type IContentWidgetPosition } from '../../../browser/editorBrowser.js';
 import { IBulkEditService, ResourceFileEdit, ResourceTextEdit } from '../../../browser/services/bulkEditService.js';
 import { Range } from '../../../common/core/range.js';
@@ -52,14 +50,11 @@ class PostEditWidget<T extends TransferEdit> extends Disposable implements ICont
 		onDismiss: () => void,
 		configureAction: IAction | undefined,
 		@IActionWidgetService private readonly actionWidgetService: IActionWidgetService,
-		@IThemeService themeService: IThemeService,
 	) {
 		super();
 		const document = editor.getDomNode()!.ownerDocument;
 		this.domNode = h(document, 'div');
 		this.domNode.className = 'stanza-editor-post-edit-selector';
-		// Overflow content widgets are mounted outside the editor's theme root.
-		this._register(bindColorTheme(themeService, this.domNode));
 		this.actions = Separator.join(edits.allEdits.map((edit, index) => ({
 			id: `${id}.${index}`,
 			label: edit.title,

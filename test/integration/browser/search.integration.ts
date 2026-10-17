@@ -14,7 +14,7 @@ import type { IAction } from '../../../src/ash/base/common/actions.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { IContentSearchService, type IContentSearchQuery } from '../../../src/ash/platform/search/common/search.js';
-import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { bindTestColorTheme } from './themeFixture.js';
 import { lightColorTheme, darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { ViewContainerLocation, WorkbenchViewContainerId, IViewDescriptorService, WorkbenchViewRegistry } from '../../../src/ash/workbench/common/views.js';
@@ -88,7 +88,7 @@ if (new URLSearchParams(location.search).get('locale') === 'zh-CN') {
 const store = new DisposableStore();
 const themes = { light: lightColorTheme, dark: darkColorTheme, hcDark: highContrastDarkColorTheme, hcLight: highContrastLightColorTheme };
 const theme = store.add(new TestThemeService(themes.light));
-store.add(bindColorTheme(theme, document.body));
+store.add(bindTestColorTheme(theme, document.body));
 const queries: IContentSearchQuery[] = [];
 const opened: { resource: string; options: EditorOpenOptions | undefined; target: EditorOpenTarget | undefined; }[] = [];
 let finishLateSearch: (() => void) | undefined;

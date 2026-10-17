@@ -1,3 +1,4 @@
+import { listRowHeight } from '../../../../base/common/uiSizes.js';
 import { localize } from '../../../../nls.js';
 import { svg as createSvgElement } from "../../../../base/browser/dom.js";
 import { findLastIdx } from "../../../../base/common/arraysFind.js";
@@ -16,7 +17,7 @@ registerColor('scmGraph.historyItemHoverLabelForeground', {
 	dark: 'panel.background', light: 'panel.background', hcDark: 'panel.background', hcLight: 'panel.background',
 }, { description: 'History item hover label foreground color.', owner: 'workbench.scm' });
 
-const LaneHeight = 22;
+const LaneHeight = listRowHeight;
 const LaneWidth = 11;
 const CurveRadius = 5;
 const ColorCount = 8;

@@ -120,16 +120,28 @@
 .ash-quick-pick-list:not(.ash-quick-pick-list-menu)
 	.ash-quick-pick-row-content {
 	box-sizing: border-box;
-	min-height: 24px;
+	min-height: var(--ash-list-rowHeight);
 	gap: var(--ash-spacing-size60);
 	padding: 0 var(--ash-spacing-size60);
-	line-height: 24px;
+	line-height: var(--ash-list-rowHeight);
 }
 
 .ash-quick-pick-list:not(.ash-quick-pick-list-menu)
 	.ash-list-row:not(:first-child)
 	.has-separator {
-	border-top: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	position: relative;
+}
+
+/* A group separator must not add to the measured single-line row height. */
+.ash-quick-pick-list:not(.ash-quick-pick-list-menu)
+	.ash-list-row:not(:first-child)
+	.has-separator::before {
+	content: "";
+	position: absolute;
+	inset: 0 0 auto;
+	height: var(--ash-strokeThickness);
+	background: var(--ash-widget-border);
+	pointer-events: none;
 }
 
 .ash-quick-pick-separator {
@@ -184,6 +196,7 @@
 	flex: 1 1 0;
 	grid-template-columns: minmax(0, auto) minmax(0, 1fr);
 	align-items: baseline;
+	line-height: normal;
 	column-gap: var(--ash-spacing-size80);
 }
 
@@ -288,9 +301,9 @@
 	order: 2;
 	flex: 0 0 auto;
 	place-items: center;
-	width: 24px;
-	height: 24px;
-	padding: 4px;
+	width: var(--ash-toolbar-actionSize);
+	height: var(--ash-toolbar-actionSize);
+	padding: 0;
 	border: 0;
 	border-radius: var(--ash-cornerRadius-small);
 	color: inherit;

@@ -23,7 +23,7 @@ import { IMainProcessService } from '../../../src/ash/platform/ipc/common/mainPr
 import { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
 import { BrowserLayoutService, ILayoutService } from '../../../src/ash/platform/layout/browser/layoutService.js';
 import type { IProcessService, IResolvedProcessInformation } from '../../../src/ash/platform/process/common/process.js';
-import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { bindTestColorTheme } from './themeFixture.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
@@ -61,7 +61,7 @@ services.registerInstance(IClipboardService, resources.add(new BrowserClipboardS
 let pane: ProcessExplorerEditor | undefined;
 services.registerInstance(IEditorPart, { get activePane() { return pane; } } as IEditorPart);
 services.registerInstance(IAccessibleViewService, resources.add(services.createInstance(AccessibleViewService)));
-resources.add(bindColorTheme(theme, document.body));
+resources.add(bindTestColorTheme(theme, document.body));
 
 let requests = 0;
 let fail = false;

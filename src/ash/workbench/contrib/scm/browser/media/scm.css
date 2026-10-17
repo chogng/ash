@@ -74,10 +74,10 @@
 	display: grid;
 	grid-template-columns: auto minmax(0, 1fr);
 	min-width: 0;
-	min-height: 22px;
+	min-height: var(--ash-list-rowHeight);
 	align-items: center;
 	padding: 0 8px 0 0;
-	line-height: 22px;
+	line-height: var(--ash-list-rowHeight);
 }
 
 .ash-scm-graph-commit.selected {
@@ -149,7 +149,7 @@
 }
 
 .ash-scm-graph-graph {
-	height: 22px;
+	height: var(--ash-list-rowHeight);
 	flex: 0 0 auto;
 	overflow: visible;
 }
@@ -352,7 +352,7 @@
 }
 
 .ash-scm-graph-changes li:not(.ash-scm-graph-directory) {
-	height: 22px;
+	height: var(--ash-list-rowHeight);
 }
 
 .ash-scm-graph-directory {
@@ -369,8 +369,8 @@
 	display: flex;
 	width: calc(100% - var(--scm-graph-content-x, 22px));
 	margin-left: var(--scm-graph-content-x, 22px);
-	height: 22px;
-	min-height: 22px;
+	height: var(--ash-list-rowHeight);
+	min-height: var(--ash-list-rowHeight);
 	justify-content: flex-start;
 	padding: 0 8px 0
 		calc(var(--scm-graph-change-depth, 0) * var(--ash-spacing-size120));
@@ -416,7 +416,7 @@
 	position: relative;
 	display: flex;
 	width: calc(100% - var(--scm-graph-content-x, 22px));
-	height: 22px;
+	height: var(--ash-list-rowHeight);
 	min-width: 0;
 	align-items: center;
 	border: 0;

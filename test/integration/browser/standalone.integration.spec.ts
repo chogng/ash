@@ -3766,6 +3766,7 @@ test('completion arrow keys select a suggestion before editor navigation', async
 	await page.keyboard.press('Control+Space');
 	const options = page.locator('#caller .stanza-editor-completion-option');
 	await expect(options).toHaveCount(2);
+	for (const option of await options.all()) expect((await option.boundingBox())!.height).toBe(22);
 	await expect(options.nth(0)).toHaveAttribute('aria-selected', 'true');
 	expect(await page.evaluate(() => window.ashStandaloneIntegration.getCallerPosition())).toEqual({ lineNumber: 1, column: 4 });
 
@@ -3777,6 +3778,15 @@ test('completion arrow keys select a suggestion before editor navigation', async
 	expect(await page.evaluate(() => window.ashStandaloneIntegration.getCallerPosition())).toEqual({ lineNumber: 1, column: 4 });
 	await page.keyboard.press('Enter');
 	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('conconsole');
+	await page.evaluate(() => {
+		window.ashStandaloneIntegration.updateContributionOptions({ fontSize: 24, lineHeight: 32 });
+		window.ashStandaloneIntegration.enableCompletionNavigation();
+	});
+	await input.focus();
+	await page.keyboard.press('Control+Space');
+	await expect(options).toHaveCount(2);
+	for (const option of await options.all()) expect((await option.boundingBox())!.height).toBeGreaterThanOrEqual(32);
+	await page.keyboard.press('Escape');
 	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	expect(errors).toEqual([]);
 });
@@ -5960,7 +5970,14 @@ test('color picker popup follows all themes outside the editor clipping region a
 	expect(pickerBounds!.y + pickerBounds!.height).toBeGreaterThan(editorBounds!.y + editorBounds!.height);
 	for (const theme of ['ash-dark', 'ash-light', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 		await page.evaluate(theme => window.ashStandaloneIntegration.setActionMenuTheme(theme), theme);
-		await expect(picker).toHaveAttribute('data-color-theme', theme);
+		await expect(page.locator('html')).toHaveAttribute('data-color-theme', theme);
+		const background = await picker.evaluate(element => {
+			const probe = document.createElement('span');
+			probe.style.color = 'var(--ash-editor-widgetBackground)';
+			element.append(probe);
+			try { return getComputedStyle(probe).color; } finally { probe.remove(); }
+		});
+		await expect(picker).toHaveCSS('background-color', background);
 		await expect(picker).toHaveCSS('font-size', '12px');
 		await expect(picker).toHaveCSS('border-radius', '8px');
 		if (theme.includes('high-contrast')) {

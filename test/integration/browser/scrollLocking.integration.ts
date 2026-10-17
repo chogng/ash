@@ -14,7 +14,7 @@ import { ICommandService } from '../../../src/ash/platform/commands/common/comma
 import { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
 import { KeybindingRegistry } from '../../../src/ash/platform/keybinding/common/keybindingsRegistry.js';
-import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import { bindTestColorTheme } from './themeFixture.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { EditorPart } from '../../../src/ash/workbench/browser/parts/editor/editorPart.js';
 import { EditorPaneRegistry } from '../../../src/ash/workbench/browser/editor.js';
@@ -60,7 +60,7 @@ resources.add(registry.registerKeybindingRule({ command: 'workbench.action.holdL
 resources.add(registry.registerKeybindingRule({ command: 'workbench.action.toggleLockedScrolling', keybinding: Keybinding.single(physicalKey('KeyL', { ctrlKey: true, shiftKey: true })) }));
 services.registerInstance(IAccessibilityService, resources.add(new AccessibilityService({ root, contextKeyService: contexts, configurationService: services.get(IConfigurationService) })));
 registerCodeEditorServices(services);
-resources.add(bindColorTheme(services.get(IThemeService), root));
+resources.add(bindTestColorTheme(services.get(IThemeService), root));
 const store: ITextResourceStore = {
 	onDidChange: Event.None,
 	resolve: async request => ({ resource: request.resource, text: request.bootstrapText ?? '', revision: undefined }),
