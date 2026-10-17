@@ -1,54 +1,265 @@
+import { localize } from "../../../../nls.js";
 import { listRowHeight } from "../../../../base/common/uiSizes.js";
 import { registerSize } from "../sizeRegistry.js";
 import { size } from "../sizeUtils.js";
 
+// Import after NLS initialization: registration captures descriptions in the startup language.
+// Exports are registered token IDs; numeric values and units remain owned by the size registry.
 const owner = "platform.ui";
-const dimension = (id: string, value: number, description: string): string => registerSize(id, size(value), { description, owner });
-const scalar = (id: string, value: number, description: string): string => registerSize(id, size(value, "unitless"), { description, owner });
-const duration = (id: string, value: number, description: string): string => registerSize(id, size(value, "ms"), { description, owner });
 
-for (const value of [0, 2, 4, 6, 8, 10, 12, 16, 20, 24, 28, 32, 36, 40]) {
-	const name = value === 0 ? "None" : String(value * 10);
-	dimension(`spacing.size${name}`, value, `Standard ${value}px spacing.`);
+/** Registers a pixel length and returns its token ID. */
+function length(id: string, value: number, description: string): string {
+	return registerSize(id, size(value), { description, owner });
 }
 
-export const cornerRadiusXSmall = dimension("cornerRadius.xSmall", 2, "Radius for very compact elements.");
-export const cornerRadiusSmall = dimension("cornerRadius.small", 4, "Radius for controls.");
-export const cornerRadiusMedium = dimension("cornerRadius.medium", 6, "Radius for inner surfaces.");
-export const cornerRadiusLarge = dimension("cornerRadius.large", 8, "Radius for prominent surfaces.");
-export const cornerRadiusXLarge = dimension("cornerRadius.xLarge", 12, "Radius for large surfaces.");
-export const cornerRadiusCircle = dimension("cornerRadius.circle", 9999, "Radius for round buttons, dots, and pills.");
-export const lxiconFontSize = dimension("lxiconFontSize", 16, "Standard Lxicon glyph size.");
-export const lxiconFontSizeCompact = dimension("lxiconFontSize.compact", 12, "Compact Lxicon glyph size.");
+/** Registers a unitless value so CSS serialization does not append a length unit. */
+function scalar(id: string, value: number, description: string): string {
+	return registerSize(id, size(value, "unitless"), { description, owner });
+}
 
-export const fontSizeHeading1 = dimension("fontSize.heading1", 26, "Largest heading font size.");
-export const fontSizeHeading2 = dimension("fontSize.heading2", 18, "Title heading font size.");
-export const fontSizeHeading3 = dimension("fontSize.heading3", 13, "Subtitle heading font size.");
-export const fontSizeBody1 = dimension("fontSize.body1", 13, "Primary body font size.");
-export const fontSizeBody2 = dimension("fontSize.body2", 11, "Secondary body font size.");
-export const fontSizeLabel1 = dimension("fontSize.label1", 12, "Section title and tab label font size.");
-export const fontSizeLabel2 = dimension("fontSize.label2", 11, "Metadata label font size.");
-export const fontSizeLabel3 = dimension("fontSize.label3", 10, "Badge label font size.");
-export const fontWeightRegular = scalar("fontWeight.regular", 400, "Regular font weight for un-emphasized text.");
-export const fontWeightSemiBold = scalar("fontWeight.semiBold", 600, "Strong font weight paired with any font-size role for tabs, headings, and emphasized text.");
-export const strokeThickness = dimension("strokeThickness", 1, "Standard UI border thickness.");
+/** Registers an animation duration in milliseconds, independently of the length scale. */
+function duration(id: string, value: number, description: string): string {
+	return registerSize(id, size(value, "ms"), { description, owner });
+}
 
-export const animationDurationFast = duration("animation.durationFast", 120, "Short UI state transition duration.");
-export const animationDurationNormal = duration("animation.durationNormal", 200, "Standard UI animation duration.");
-export const animationDurationSlow = duration("animation.durationSlow", 350, "Emphasized UI animation duration.");
+// Spacing IDs encode tenths of a pixel (size80 = 8px); zero uses the explicit sizeNone token.
+for (const value of [0, 2, 4, 6, 8, 10, 12, 16, 20, 24, 28, 32, 36, 40]) {
+	const name = value === 0 ? "None" : String(value * 10);
+	length(
+		`spacing.size${name}`,
+		value,
+		localize("size.spacing", "Standard {0}px spacing.", value),
+	);
+}
 
-export const tabHeight = dimension("tab.height", 24, "Standard height for TabList tabs.");
-dimension("list.rowHeight", listRowHeight, "Standard height for single-line list and tree rows.");
-export const tabListContentInset = dimension("tabList.contentInset", 4, "Horizontal inset between an inset TabList and its first or last tab.");
-export const tabListItemContentInset = dimension("tabList.itemContentInset", 6, "Horizontal inset between a TabList item's edge and its label content.");
-export const compositeBarContentInset = dimension("compositeBar.contentInset", 4, "Horizontal inset between a CompositeBar and its first or last action.");
-export const paneTitleHeight = dimension("pane.titleHeight", 32, "Standard height for a Workbench pane title.");
-export const actionBarGap = dimension("actionBar.gap", 2, "Gap between action bar items.");
-export const toolbarItemGap = dimension("toolbar.itemGap", 2, "Gap before a toolbar item.");
-export const toolbarActionSize = dimension("toolbar.actionSize", 24, "Standard square hit area for toolbar icon actions.");
-export const scrollbarSize = dimension("scrollbar.size", 10, "Default scrollbar thickness.");
-export const treeIndent = dimension("tree.indent", 8, "Default tree nesting indentation.");
-export const sashDragAreaSize = dimension("sash.dragAreaSize", 4, "Default pointer target size for draggable Sash separators.");
-export const sashHoverFeedbackSize = dimension("sash.hoverFeedbackSize", 1, "Default visible feedback size for hovered Sash separators.");
-export const modalEditorWidth = dimension("modalEditor.width", 960, "Preferred modal editor width.");
-export const modalEditorHeight = dimension("modalEditor.height", 720, "Preferred modal editor height.");
+// Surface radii increase with prominence; fully rounded shapes use a separate circle token.
+export const cornerRadiusXSmall = length(
+	"cornerRadius.xSmall",
+	2,
+	localize("size.cornerRadius.xSmall", "Radius for very compact elements."),
+);
+
+export const cornerRadiusSmall = length(
+	"cornerRadius.small",
+	4,
+	localize("size.cornerRadius.small", "Radius for controls."),
+);
+
+export const cornerRadiusMedium = length(
+	"cornerRadius.medium",
+	6,
+	localize("size.cornerRadius.medium", "Radius for inner surfaces."),
+);
+
+export const cornerRadiusLarge = length(
+	"cornerRadius.large",
+	8,
+	localize("size.cornerRadius.large", "Radius for prominent surfaces."),
+);
+
+export const cornerRadiusXLarge = length(
+	"cornerRadius.xLarge",
+	12,
+	localize("size.cornerRadius.xLarge", "Radius for large surfaces."),
+);
+
+// An oversized radius lets CSS clamp rounding to the element's bounds without knowing its dimensions.
+export const cornerRadiusCircle = length(
+	"cornerRadius.circle",
+	9999,
+	localize("size.cornerRadius.circle", "Radius for round buttons, dots, and pills."),
+);
+
+// Glyph sizes are independent of the surrounding control's layout and pointer target size.
+export const lxiconFontSize = length(
+	"lxiconFontSize",
+	16,
+	localize("size.lxiconFontSize", "Standard Lxicon glyph size."),
+);
+
+export const lxiconFontSizeCompact = length(
+	"lxiconFontSize.compact",
+	12,
+	localize("size.lxiconFontSize.compact", "Compact Lxicon glyph size."),
+);
+
+// Typography roles describe text hierarchy; emphasis pairs a size role with a separate weight token.
+export const fontSizeHeading1 = length(
+	"fontSize.heading1",
+	26,
+	localize("size.fontSize.heading1", "Largest heading font size."),
+);
+
+export const fontSizeHeading2 = length(
+	"fontSize.heading2",
+	18,
+	localize("size.fontSize.heading2", "Title heading font size."),
+);
+
+export const fontSizeHeading3 = length(
+	"fontSize.heading3",
+	13,
+	localize("size.fontSize.heading3", "Subtitle heading font size."),
+);
+
+export const fontSizeBody1 = length(
+	"fontSize.body1",
+	13,
+	localize("size.fontSize.body1", "Primary body font size."),
+);
+
+export const fontSizeBody2 = length(
+	"fontSize.body2",
+	11,
+	localize("size.fontSize.body2", "Secondary body font size."),
+);
+
+export const fontSizeLabel1 = length(
+	"fontSize.label1",
+	12,
+	localize("size.fontSize.label1", "Section title and tab label font size."),
+);
+
+export const fontSizeLabel2 = length(
+	"fontSize.label2",
+	11,
+	localize("size.fontSize.label2", "Metadata label font size."),
+);
+
+export const fontSizeLabel3 = length(
+	"fontSize.label3",
+	10,
+	localize("size.fontSize.label3", "Badge label font size."),
+);
+
+export const fontWeightRegular = scalar(
+	"fontWeight.regular",
+	400,
+	localize("size.fontWeight.regular", "Regular font weight for un-emphasized text."),
+);
+
+export const fontWeightSemiBold = scalar(
+	"fontWeight.semiBold",
+	600,
+	localize(
+		"size.fontWeight.semiBold",
+		"Strong font weight paired with any font-size role for tabs, headings, and emphasized text.",
+	),
+);
+
+export const strokeThickness = length(
+	"strokeThickness",
+	1,
+	localize("size.strokeThickness", "Standard UI border thickness."),
+);
+
+// Shared motion timings let components choose an emphasis level without inventing per-widget durations.
+export const animationDurationFast = duration(
+	"animation.durationFast",
+	120,
+	localize("size.animation.durationFast", "Short UI state transition duration."),
+);
+
+export const animationDurationNormal = duration(
+	"animation.durationNormal",
+	200,
+	localize("size.animation.durationNormal", "Standard UI animation duration."),
+);
+
+export const animationDurationSlow = duration(
+	"animation.durationSlow",
+	350,
+	localize("size.animation.durationSlow", "Emphasized UI animation duration."),
+);
+
+// Component geometry complements the generic scales when a widget needs a shared layout contract.
+export const tabHeight = length(
+	"tab.height",
+	24,
+	localize("size.tab.height", "Standard height for TabList tabs."),
+);
+// Keep CSS row sizing tied to the same constant used by list and tree layout calculations.
+length(
+	"list.rowHeight",
+	listRowHeight,
+	localize("size.list.rowHeight", "Standard height for single-line list and tree rows."),
+);
+
+export const tabListContentInset = length(
+	"tabList.contentInset",
+	4,
+	localize("size.tabList.contentInset", "Horizontal inset between an inset TabList and its first or last tab."),
+);
+
+export const tabListItemContentInset = length(
+	"tabList.itemContentInset",
+	6,
+	localize("size.tabList.itemContentInset", "Horizontal inset between a TabList item's edge and its label content."),
+);
+
+export const compositeBarContentInset = length(
+	"compositeBar.contentInset",
+	4,
+	localize("size.compositeBar.contentInset", "Horizontal inset between a CompositeBar and its first or last action."),
+);
+
+export const paneTitleHeight = length(
+	"pane.titleHeight",
+	32,
+	localize("size.pane.titleHeight", "Standard height for a Workbench pane title."),
+);
+
+export const actionBarGap = length(
+	"actionBar.gap",
+	2,
+	localize("size.actionBar.gap", "Gap between action bar items."),
+);
+
+export const toolbarItemGap = length(
+	"toolbar.itemGap",
+	2,
+	localize("size.toolbar.itemGap", "Gap before a toolbar item."),
+);
+
+export const toolbarActionSize = length(
+	"toolbar.actionSize",
+	24,
+	localize("size.toolbar.actionSize", "Standard square hit area for toolbar icon actions."),
+);
+
+export const scrollbarSize = length(
+	"scrollbar.size",
+	10,
+	localize("size.scrollbar.size", "Default scrollbar thickness."),
+);
+
+export const treeIndent = length(
+	"tree.indent",
+	8,
+	localize("size.tree.indent", "Default tree nesting indentation."),
+);
+
+// Keep the separator's pointer target independent of its visible hover feedback thickness.
+export const sashDragAreaSize = length(
+	"sash.dragAreaSize",
+	4,
+	localize("size.sash.dragAreaSize", "Default pointer target size for draggable Sash separators."),
+);
+
+export const sashHoverFeedbackSize = length(
+	"sash.hoverFeedbackSize",
+	1,
+	localize("size.sash.hoverFeedbackSize", "Default visible feedback size for hovered Sash separators."),
+);
+
+export const modalEditorWidth = length(
+	"modalEditor.width",
+	960,
+	localize("size.modalEditor.width", "Preferred modal editor width."),
+);
+
+export const modalEditorHeight = length(
+	"modalEditor.height",
+	720,
+	localize("size.modalEditor.height", "Preferred modal editor height."),
+);
