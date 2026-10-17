@@ -124,6 +124,7 @@ mod skill {
     use super::description_popup_layout;
     use crate::render::RenderContext;
     use crate::render::horizontal_margin;
+    use ash_utils_plugins::mention_syntax::TOOL_MENTION_SIGIL;
     use ratatui::Frame;
     use ratatui::layout::Rect;
     use ratatui::style::Style;
@@ -141,7 +142,9 @@ mod skill {
             .items
             .iter()
             .map(|item| {
-                let label_width = format!("${}  ", item.name()).width().min(u16::MAX as usize);
+                let label_width = format!("{TOOL_MENTION_SIGIL}{}  ", item.name())
+                    .width()
+                    .min(u16::MAX as usize);
                 description_height(
                     item.description(),
                     popup_width.saturating_sub(label_width as u16),
@@ -183,7 +186,7 @@ mod skill {
             let index = layout.first_item + offset;
             let item = &popup.items[index];
             let style = super::item_style(index, popup.selected, hovered, pressed, context);
-            let label = format!("${}  ", item.name());
+            let label = format!("{TOOL_MENTION_SIGIL}{}  ", item.name());
             let label_width = label.width().min(usize::from(layout.area.width)) as u16;
             frame.render_widget(
                 Paragraph::new(Span::styled(label, style)),

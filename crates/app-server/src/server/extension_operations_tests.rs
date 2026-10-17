@@ -46,7 +46,7 @@ fn a_changed_gallery_is_rejected_before_provider_io() {
     let manager = ash_core_plugins::ExtensionPackageManager::open(
         root.path(),
         ash_core_plugins::ExtensionSources::new([(
-            ash_plugin::ExtensionSourceId::new("configured-source").unwrap(),
+            ash_utils_plugins::ExtensionSourceId::new("configured-source").unwrap(),
             Arc::new(GalleryWithoutIo) as Arc<dyn ash_core_plugins::ExtensionSource>,
         )])
         .unwrap(),

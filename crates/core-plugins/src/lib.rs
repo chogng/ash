@@ -21,10 +21,10 @@ use ash_plugin::PluginErrorKind;
 use ash_plugin::PluginManifest;
 use ash_plugin::PluginPackageDigest;
 use ash_plugin::PluginPackageDigestAlgorithm;
-use ash_plugin::PluginPackageId;
 use ash_plugin::PluginPackageSource;
 use ash_plugin::PluginPath;
 use ash_plugin::PluginVersion;
+use ash_utils_plugins::PluginPackageId;
 
 pub use editor_extension_policy::EditorExtensionPolicy;
 pub use editor_extension_policy::EditorExtensionPolicyAction;

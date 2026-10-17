@@ -1,7 +1,7 @@
 # Plugin
 
-- Defines `name@extensions` Plugin identities with shared construction and serialization validation.
-- Defines the `.ash-plugin` package format, its publisher-owned package identity, contribution paths and permissions.
+- Consumes shared Plugin identities and package discovery from [`ash-utils-plugins`](../utils/plugins/README.md).
+- Defines the `.ash-plugin` package format, contribution paths and permissions.
 - Validates one package observation and computes its deterministic content identity.
 - Contains no installation, Extensions, activation, credential or runtime lifecycle.
 

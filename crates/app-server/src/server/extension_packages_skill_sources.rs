@@ -3,8 +3,6 @@ use std::sync::Mutex;
 
 use ash_core_plugins::CapabilityKind;
 use ash_core_plugins::ExtensionPackageManager;
-use ash_protocol::SkillName;
-use ash_protocol::SkillSourceId;
 use ash_skills::SkillSourceRoot;
 use ash_skills_extension::DynamicSkillSourceProvider;
 use ash_skills_extension::DynamicSkillSourceSnapshot;
@@ -61,20 +59,12 @@ impl DynamicSkillSourceProvider for ExtensionsSkillSourceProvider {
             }
             state.generation.max(1)
         };
-        let mut roots = Vec::new();
-        for source in sources {
-            let id = SkillSourceId::new(format!(
-                "extension_packages-{}:skill-source:{}",
-                source.package().id,
-                source.id()
-            ))
+        let roots = sources
+            .iter()
+            .filter_map(|source| source.skill_root())
+            .map(SkillSourceRoot::from_plugin)
+            .collect::<Result<Vec<_>, _>>()
             .map_err(|error| error.to_string())?;
-            let name = SkillName::new(source.id()).map_err(|error| error.to_string())?;
-            roots.push(
-                SkillSourceRoot::extension_packages(id, name, source.host_path())
-                    .map_err(|error| error.to_string())?,
-            );
-        }
         Ok(DynamicSkillSourceSnapshot { generation, roots })
     }
 }

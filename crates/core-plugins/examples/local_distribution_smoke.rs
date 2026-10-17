@@ -31,7 +31,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     )?;
     let registry = Arc::new(ExtensionsRemoteClient::new(config));
     let providers = ash_core_plugins::ExtensionSources::new([(
-        ash_plugin::ExtensionSourceId::new("local")?,
+        ash_utils_plugins::ExtensionSourceId::new("local")?,
         registry as Arc<dyn ash_core_plugins::ExtensionSource>,
     )])?;
     let manager = ExtensionPackageManager::open(state_root.join("manager"), providers)?;

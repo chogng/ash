@@ -67,9 +67,8 @@ fn effective_plugin_contributions_project_only_declared_exact_skill_directories(
             .unwrap();
     }
 
-    let snapshot = PluginSkillSourceProvider::new(authority)
-        .snapshot()
-        .unwrap();
+    let provider = PluginSkillSourceProvider::new(authority.clone());
+    let snapshot = provider.snapshot().unwrap();
     let catalog = ash_skills::SkillCatalog::discover(snapshot.roots).unwrap();
 
     assert_eq!(catalog.snapshot().list().len(), 1);
@@ -78,4 +77,13 @@ fn effective_plugin_contributions_project_only_declared_exact_skill_directories(
         catalog.snapshot().list()[0].id().source.as_str(),
         "plugin-acme/review:skill-source:review"
     );
+
+    authority
+        .apply(PluginAuthorityCommandRequest {
+            command_id: PluginAuthorityCommandId::new("disable").unwrap(),
+            expected_revision: authority.snapshot().revision(),
+            command: PluginAuthorityCommand::Disable { package: installed },
+        })
+        .unwrap();
+    assert!(provider.snapshot().unwrap().roots.is_empty());
 }

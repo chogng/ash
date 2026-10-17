@@ -286,7 +286,7 @@ fn hex(bytes: &[u8]) -> String {
 
 fn providers(provider: Arc<dyn ExtensionSource>) -> ash_core_plugins::ExtensionSources {
     ash_core_plugins::ExtensionSources::new([(
-        ash_plugin::ExtensionSourceId::new("test").unwrap(),
+        ash_utils_plugins::ExtensionSourceId::new("test").unwrap(),
         provider,
     )])
     .unwrap()

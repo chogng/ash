@@ -11,6 +11,7 @@ name = "ash_core_plugins"
 path = "src/lib.rs"
 
 [dependencies]
+ash-utils-plugins = { workspace = true }
 ash-http-client.workspace = true
 async-trait.workspace = true
 bytes.workspace = true

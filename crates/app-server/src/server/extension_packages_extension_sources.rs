@@ -151,7 +151,7 @@ fn normalized_extension_manifest(source: &LocalCapabilitySource) -> Result<Strin
             .map_err(|_| "Extensions language manifest is unavailable".to_string())?,
     )
     .map_err(|_| "Extensions language manifest is invalid".to_string())?;
-    let plugin = ash_plugin::PluginId::parse(&source.package().id)
+    let plugin = ash_utils_plugins::PluginId::parse(&source.package().id)
         .map_err(|_| "Extensions language package identity is invalid".to_string())?;
     manifest.insert("name".into(), plugin.plugin_name().into());
     manifest.insert("publisher".into(), plugin.source_id().as_str().into());

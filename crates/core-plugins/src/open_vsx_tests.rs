@@ -122,7 +122,7 @@ fn search_uses_open_vsx_without_downloading_packages_and_preserves_named_source(
     let search = "https://registry.example/api/-/search?query=sample+language&size=50&targetPlatform=universal";
     http.responses.lock().unwrap().insert(search.into(), HttpResponse::new(200, Vec::new(), br#"{"extensions":[{"namespace":"publisher","name":"sample","version":"1.0.0","displayName":"Sample","description":"Fixture"}]}"#.to_vec()));
     let providers = crate::ExtensionSources::new([(
-        ash_plugin::ExtensionSourceId::new("open-vsx").unwrap(),
+        ash_utils_plugins::ExtensionSourceId::new("open-vsx").unwrap(),
         client(Arc::clone(&http)) as Arc<dyn ExtensionSource>,
     )])
     .unwrap();
@@ -163,7 +163,7 @@ fn gallery_reads_verified_resources_without_installing_or_activating_the_package
     let manager = crate::ExtensionPackageManager::open(
         root.path(),
         crate::ExtensionSources::new([(
-            ash_plugin::ExtensionSourceId::new("custom-source").unwrap(),
+            ash_utils_plugins::ExtensionSourceId::new("custom-source").unwrap(),
             client(Arc::clone(&http)) as Arc<dyn ExtensionSource>,
         )])
         .unwrap(),
@@ -233,7 +233,7 @@ fn install_update_reopen_and_uninstall_use_the_existing_manager_without_running_
     let root = tempfile::tempdir().unwrap();
     let providers = || {
         crate::ExtensionSources::new([(
-            ash_plugin::ExtensionSourceId::new("open-vsx").unwrap(),
+            ash_utils_plugins::ExtensionSourceId::new("open-vsx").unwrap(),
             Arc::clone(&client) as Arc<dyn ExtensionSource>,
         )])
         .unwrap()
@@ -422,7 +422,7 @@ fn live_open_vsx_installs_and_removes_a_universal_vsix() {
     let manager = crate::ExtensionPackageManager::open(
         root.path(),
         crate::ExtensionSources::new([(
-            ash_plugin::ExtensionSourceId::new("open-vsx").unwrap(),
+            ash_utils_plugins::ExtensionSourceId::new("open-vsx").unwrap(),
             client as Arc<dyn ExtensionSource>,
         )])
         .unwrap(),

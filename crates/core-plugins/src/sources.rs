@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use ash_plugin::ExtensionSourceId;
+use ash_utils_plugins::ExtensionSourceId;
 use serde::Deserialize;
 use serde::Serialize;
 use url::Url;

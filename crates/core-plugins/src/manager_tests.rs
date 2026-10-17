@@ -189,6 +189,12 @@ fn local_capability_sources_revalidate_the_immutable_artifact() {
         .unwrap();
     assert_eq!(sources.len(), 1);
     assert_eq!(sources[0].id(), "demo");
+    let skill_root = sources[0].skill_root().unwrap();
+    assert_eq!(
+        skill_root.source_id(),
+        "extension_packages-demo@test:skill-source:demo"
+    );
+    assert_eq!(skill_root.path, sources[0].host_path());
     assert_eq!(sources[0].runtime(), None);
     assert!(sources[0].language_ids().is_empty());
     assert_eq!(
@@ -456,7 +462,7 @@ fn hex(bytes: &[u8]) -> String {
 
 fn providers(provider: Arc<dyn ExtensionSource>) -> crate::ExtensionSources {
     crate::ExtensionSources::new([(
-        ash_plugin::ExtensionSourceId::new("test").unwrap(),
+        ash_utils_plugins::ExtensionSourceId::new("test").unwrap(),
         provider,
     )])
     .unwrap()
@@ -503,11 +509,11 @@ impl ExtensionSource for VersionProvider {
 fn named_providers() -> crate::ExtensionSources {
     crate::ExtensionSources::new([
         (
-            ash_plugin::ExtensionSourceId::new("team").unwrap(),
+            ash_utils_plugins::ExtensionSourceId::new("team").unwrap(),
             Arc::new(VersionProvider("1.0.0")) as Arc<dyn ExtensionSource>,
         ),
         (
-            ash_plugin::ExtensionSourceId::new("third-party").unwrap(),
+            ash_utils_plugins::ExtensionSourceId::new("third-party").unwrap(),
             Arc::new(VersionProvider("2.0.0")) as Arc<dyn ExtensionSource>,
         ),
     ])
@@ -537,7 +543,7 @@ fn catalog_pages_route_one_source_and_reject_disabled_or_invalid_requests() {
     request.source_id = "team".into();
     sources
         .disabled
-        .insert(ash_plugin::ExtensionSourceId::new("team").unwrap());
+        .insert(ash_utils_plugins::ExtensionSourceId::new("team").unwrap());
     assert!(sources.search_page(request).is_err());
 }
 
@@ -647,7 +653,7 @@ fn provider_routing_rejects_unknown_sources_and_mismatched_identity_or_version_b
 
 #[test]
 fn duplicate_provider_names_are_rejected_and_search_limit_applies_across_sources() {
-    let name = ash_plugin::ExtensionSourceId::new("team").unwrap();
+    let name = ash_utils_plugins::ExtensionSourceId::new("team").unwrap();
     assert!(
         crate::ExtensionSources::new([
             (
@@ -792,7 +798,7 @@ impl ExtensionSource for PayloadProvider {
 fn cached_artifacts_still_require_each_providers_signed_file_statistics() {
     let root = tempfile::tempdir().unwrap();
     let mut sources = vec![(
-        ash_plugin::ExtensionSourceId::new("original").unwrap(),
+        ash_utils_plugins::ExtensionSourceId::new("original").unwrap(),
         Arc::new(FakeRegistry) as Arc<dyn ExtensionSource>,
     )];
     for (name, files, bytes) in [
@@ -800,7 +806,7 @@ fn cached_artifacts_still_require_each_providers_signed_file_statistics() {
         ("wrong-size", 1, 0),
     ] {
         sources.push((
-            ash_plugin::ExtensionSourceId::new(name).unwrap(),
+            ash_utils_plugins::ExtensionSourceId::new(name).unwrap(),
             Arc::new(PayloadProvider(Arc::new(move || {
                 let mut payload = FakePayload::new("1.0.0");
                 payload.file_count = files;
@@ -847,7 +853,7 @@ fn concurrent_sources_share_one_artifact_and_keep_independent_installations() {
     })));
     let sources = crate::ExtensionSources::new(["first", "second"].map(|name| {
         (
-            ash_plugin::ExtensionSourceId::new(name).unwrap(),
+            ash_utils_plugins::ExtensionSourceId::new(name).unwrap(),
             Arc::clone(&provider),
         )
     }))
@@ -905,11 +911,11 @@ fn invalid_versions_are_rejected_before_provider_io_and_invalid_search_results_a
     let root = tempfile::tempdir().unwrap();
     let sources = crate::ExtensionSources::new([
         (
-            ash_plugin::ExtensionSourceId::new("test").unwrap(),
+            ash_utils_plugins::ExtensionSourceId::new("test").unwrap(),
             Arc::new(NoIo) as Arc<dyn ExtensionSource>,
         ),
         (
-            ash_plugin::ExtensionSourceId::new("healthy").unwrap(),
+            ash_utils_plugins::ExtensionSourceId::new("healthy").unwrap(),
             Arc::new(FakeRegistry) as Arc<dyn ExtensionSource>,
         ),
     ])
@@ -992,7 +998,7 @@ fn added_sources_persist_identity_revision_and_paused_state() {
     let manager =
         ExtensionPackageManager::open(root.path(), providers(Arc::new(FakeRegistry))).unwrap();
     let config = crate::AshExtensionSourceConfig {
-        id: ash_plugin::ExtensionSourceId::new("community").unwrap(),
+        id: ash_utils_plugins::ExtensionSourceId::new("community").unwrap(),
         metadata_base_url: "https://extensions.example/metadata/".into(),
         targets_base_url: "https://extensions.example/targets/".into(),
         trusted_root_json: include_str!("../../../resources/product-services/extensions-root.json")
@@ -1051,7 +1057,7 @@ fn source_validation_does_not_change_persisted_revision() {
     let manager =
         ExtensionPackageManager::open(root.path(), providers(Arc::new(FakeRegistry))).unwrap();
     let mut config = crate::AshExtensionSourceConfig {
-        id: ash_plugin::ExtensionSourceId::new("community").unwrap(),
+        id: ash_utils_plugins::ExtensionSourceId::new("community").unwrap(),
         metadata_base_url: "http://extensions.example/metadata/".into(),
         targets_base_url: "https://extensions.example/targets/".into(),
         trusted_root_json: include_str!("../../../resources/product-services/extensions-root.json")
@@ -1127,11 +1133,11 @@ fn a_failed_source_does_not_hide_healthy_source_results() {
     let root = tempfile::tempdir().unwrap();
     let sources = crate::ExtensionSources::new([
         (
-            ash_plugin::ExtensionSourceId::new("test").unwrap(),
+            ash_utils_plugins::ExtensionSourceId::new("test").unwrap(),
             Arc::new(FakeRegistry) as Arc<dyn ExtensionSource>,
         ),
         (
-            ash_plugin::ExtensionSourceId::new("offline").unwrap(),
+            ash_utils_plugins::ExtensionSourceId::new("offline").unwrap(),
             Arc::new(UnavailableRegistry) as Arc<dyn ExtensionSource>,
         ),
     ])

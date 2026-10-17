@@ -2,7 +2,7 @@ use crate::ConfigError;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-pub use plugin::PluginPackageId;
+pub use ash_utils_plugins::PluginPackageId;
 pub use plugin::PluginVersion;
 
 /// Desired participation of a requested Plugin in future activation resolution.

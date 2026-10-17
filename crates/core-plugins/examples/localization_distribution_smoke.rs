@@ -22,7 +22,7 @@ use ash_core_plugins::RemoteExtensionsConfig;
 use ash_core_plugins::SearchPackagesRequest;
 use ash_core_plugins::UninstallMode;
 use ash_core_plugins::UninstallPackageRequest;
-use ash_plugin::ExtensionSourceId;
+use ash_utils_plugins::ExtensionSourceId;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use url::Url;

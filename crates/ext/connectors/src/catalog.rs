@@ -13,13 +13,13 @@ use crate::ConnectorSnapshotGeneration;
 use ash_core_plugins::PluginActivationSnapshot;
 use ash_plugin::LocalPluginPackage;
 use ash_plugin::PluginManifest;
-use ash_plugin::PluginPackageId;
 use ash_tools::CapabilityDiscoveryId;
 use ash_tools::CapabilityDiscoverySnapshot;
 use ash_tools::DiscoverableCapability;
 use ash_tools::DiscoverableConnectorInfo;
 use ash_tools::DiscoveryAction;
 use ash_tools::DiscoveryValueError;
+use ash_utils_plugins::PluginPackageId;
 
 /// Plugin-projected Connector definitions plus their backend-neutral domain snapshot.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -88,10 +88,12 @@ impl ConnectorCatalog {
                     id.clone(),
                     connector.display_name.clone(),
                     connector.description.clone(),
-                    ConnectorRuntimeBinding::mcp_server(format!(
-                        "plugin:{}:mcp:{}",
-                        manifest.id, connector.mcp_server
-                    ))?,
+                    ConnectorRuntimeBinding::mcp_server(
+                        ash_utils_plugins::mcp_connector::plugin_mcp_server_id(
+                            &manifest.id,
+                            connector.mcp_server.as_str(),
+                        ),
+                    )?,
                 )?
                 .with_authorization_revision(authorization_revision.clone())?;
                 definitions.push(definition);

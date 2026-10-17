@@ -15,6 +15,10 @@ integration。共享 runtime、watcher、enablement overlay、activation contrib
 model-safe-point reload 属于 [`ash-skills-extension`](../ext/skills/README.md)；App Server 只装配
 扩展并投影协议 DTO。
 
+插件来源通过 `ash-utils-plugins::PluginSkillRoot` 接入，统一携带精确目录、Skill 名称与来源命名规则；
+`SkillSourceRoot::from_plugin` 将描述转换成受控 Skill root。插件声明遍历和 immutable package
+路径解析归 `ash-core-plugins`，本 crate 保留 Skill schema、目录和内容校验。
+
 Repository-owned built-in content 位于 [`assets/`](assets)，打包后位于
 `ash-resources/skills/`。package host 通过
 `InstallContext::bundled_resource_directory("skills")` 取得 candidate，再用

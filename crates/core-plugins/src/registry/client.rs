@@ -181,7 +181,7 @@ fn package_id(plugin_name: &str) -> Result<String, ExtensionsClientError> {
             "this registry requires a publisher-qualified plugin name",
         )
     })?;
-    ash_plugin::PluginPackageId::new(format!("{publisher}/{name}"))
+    ash_utils_plugins::PluginPackageId::new(format!("{publisher}/{name}"))
         .map(|id| id.to_string())
         .map_err(|_| ExtensionsClientError::invalid_request("invalid registry plugin name"))
 }

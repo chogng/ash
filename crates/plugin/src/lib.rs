@@ -1,12 +1,10 @@
-//! Shared Plugin identities, manifests, paths, and validated package observations.
+//! Plugin manifests, paths, and validated package observations.
 
 mod error;
 mod identity;
 mod manifest;
 mod package;
-mod package_id;
 mod path;
-mod plugin_id;
 
 pub use error::{PluginError, PluginErrorKind};
 pub use identity::{
@@ -28,11 +26,7 @@ pub use package::{
 };
 pub use path::{InvalidPluginPath, PluginPath};
 
-pub use package_id::InvalidPluginPackageId;
-pub use package_id::PluginPackageId;
-pub use plugin_id::ExtensionSourceId;
-pub use plugin_id::InvalidPluginId;
-pub use plugin_id::PluginId;
+use ash_utils_plugins::PluginPackageId;
 
 pub use manifest::EditorExtensionApi;
 pub use manifest::EditorExtensionRuntime;

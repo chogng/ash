@@ -2523,11 +2523,11 @@ fn shared_profile_runtime_owns_exactly_one_extension_packages_authority() {
     .unwrap();
     let first_config = BTreeMap::from([
         (
-            ash_plugin::ExtensionSourceId::new("ash").unwrap(),
+            ash_utils_plugins::ExtensionSourceId::new("ash").unwrap(),
             first_config,
         ),
         (
-            ash_plugin::ExtensionSourceId::new("vendor").unwrap(),
+            ash_utils_plugins::ExtensionSourceId::new("vendor").unwrap(),
             vendor,
         ),
     ]);
@@ -2544,7 +2544,7 @@ fn shared_profile_runtime_owns_exactly_one_extension_packages_authority() {
     )
     .unwrap();
     let second_config = BTreeMap::from([(
-        ash_plugin::ExtensionSourceId::new("ash").unwrap(),
+        ash_utils_plugins::ExtensionSourceId::new("ash").unwrap(),
         second_config,
     )]);
     let error = match runtime.plugins_manager(second_config, None) {

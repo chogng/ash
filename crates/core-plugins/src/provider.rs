@@ -11,8 +11,8 @@ use crate::PackageDetails;
 use crate::PackageRef;
 use crate::SearchPackagesRequest;
 use crate::SearchPackagesResult;
-use ash_plugin::ExtensionSourceId;
-use ash_plugin::PluginId;
+use ash_utils_plugins::ExtensionSourceId;
+use ash_utils_plugins::PluginId;
 
 /// Manager-only normalized capability layout carried with one verified download.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -259,7 +259,7 @@ impl ExtensionSources {
                 "existing installations have no source identity; reopen once with only their original source configured before adding sources",
             )
         })?;
-        let package = ash_plugin::PluginPackageId::new(value)
+        let package = ash_utils_plugins::PluginPackageId::new(value)
             .map_err(|_| ExtensionsClientError::storage())?;
         PluginId::new(package.as_str().replace('/', "."), name.clone())
             .map_err(|_| ExtensionsClientError::storage())

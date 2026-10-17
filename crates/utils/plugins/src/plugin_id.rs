@@ -1,3 +1,5 @@
+//! Source-qualified plugin identity shared independently of package management.
+
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;

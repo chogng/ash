@@ -4,6 +4,7 @@ use crate::package::digest::scan_and_digest;
 use crate::{
     PluginError, PluginErrorKind, PluginPackageDigest, PluginPackageId, PluginPath, PluginVersion,
 };
+use ash_utils_plugins::plugin_namespace::discover_plugin_roots;
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -120,12 +121,12 @@ impl LocalPluginCatalog {
     /// package children. Unrelated child directories are ignored.
     pub fn discover(source_directory: impl AsRef<Path>) -> Result<Self, PluginError> {
         let source_directory = validate_root(source_directory.as_ref())?;
-        let own_marker = source_directory.join(".ash-plugin");
-        let candidates = if marker_exists(&own_marker)? {
-            vec![source_directory]
-        } else {
-            discover_children(&source_directory)?
-        };
+        let candidates = discover_plugin_roots(&source_directory).map_err(|_| {
+            PluginError::new(
+                PluginErrorKind::SourceUnavailable,
+                "local Plugin discovery directory or marker cannot be inspected",
+            )
+        })?;
 
         let mut packages = candidates
             .into_iter()
@@ -181,43 +182,6 @@ fn validate_root(root: &Path) -> Result<PathBuf, PluginError> {
             "local Plugin source cannot be canonicalized",
         )
     })
-}
-
-fn discover_children(source_directory: &Path) -> Result<Vec<PathBuf>, PluginError> {
-    let mut entries: Vec<_> = fs::read_dir(source_directory)
-        .map_err(|_| {
-            PluginError::new(
-                PluginErrorKind::SourceUnavailable,
-                "local Plugin discovery directory cannot be read",
-            )
-        })?
-        .collect::<Result<_, _>>()
-        .map_err(|_| {
-            PluginError::new(
-                PluginErrorKind::SourceUnavailable,
-                "local Plugin discovery directory cannot be read",
-            )
-        })?;
-    entries.sort_by_key(|entry| entry.file_name());
-    let mut candidates = Vec::new();
-    for entry in entries {
-        let path = entry.path();
-        if marker_exists(&path.join(".ash-plugin"))? {
-            candidates.push(path);
-        }
-    }
-    Ok(candidates)
-}
-
-fn marker_exists(marker: &Path) -> Result<bool, PluginError> {
-    match fs::symlink_metadata(marker) {
-        Ok(_) => Ok(true),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
-        Err(_) => Err(PluginError::new(
-            PluginErrorKind::SourceUnavailable,
-            "local Plugin marker cannot be inspected",
-        )),
-    }
 }
 
 fn validate_contribution_paths(

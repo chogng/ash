@@ -673,7 +673,7 @@ impl<'a> ExtensionPackagesRequestProcessor<'a> {
 
     pub(super) fn extension_source_add(&self, params: &Value) -> Result<Value, RpcError> {
         let params: ash_app_server_protocol::protocol::extension_packages::ExtensionsAddSourceParams = decode(params)?;
-        let id = ash_plugin::ExtensionSourceId::new(params.source_id)
+        let id = ash_utils_plugins::ExtensionSourceId::new(params.source_id)
             .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
         let manager = self
             .plugins_manager
@@ -697,7 +697,7 @@ impl<'a> ExtensionPackagesRequestProcessor<'a> {
 
     pub(super) fn extension_source_set_enabled(&self, params: &Value) -> Result<Value, RpcError> {
         let params: ash_app_server_protocol::protocol::extension_packages::ExtensionsSetSourceEnabledParams = decode(params)?;
-        let id = ash_plugin::ExtensionSourceId::new(params.source_id)
+        let id = ash_utils_plugins::ExtensionSourceId::new(params.source_id)
             .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
         let manager = self
             .plugins_manager

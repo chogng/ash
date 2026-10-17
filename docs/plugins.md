@@ -2,9 +2,10 @@
 
 本页中的 Plugin 是包格式、来源授权和集成 bundle 的技术概念；所属产品分类见 [Extensions 的产品层级](editor-extensions.md#extensions-的产品层级)。
 
-> 物理位置：`crates/plugin/`、`crates/core-plugins/`
-> Rust crate：`ash_plugin`、`ash_core_plugins`
-> 当前状态：`ash-plugin` 已拥有 Plugin identity、manifest、path 与 package observation；
+> 物理位置：`crates/utils/plugins/`、`crates/plugin/`、`crates/core-plugins/`
+> Rust crate：`ash_utils_plugins`、`ash_plugin`、`ash_core_plugins`
+> 当前状态：`ash-utils-plugins` 拥有共享身份、目录发现、技能根描述、贡献命名与提及语法；
+> `ash-plugin` 已拥有 manifest、path 与 package observation；
 > `ash-core-plugins` 已拥有 local/Extensions package store、durable authority、activation、lease 与远端 registry 接入；
 > Connector 领域类型、目录发现、连接状态持久化和认证流程统一归 `crates/ext/connectors`。
 > App Server 已能从注入的 activation 自动接线 Connector 与 MCP，通用 OAuth
@@ -134,7 +135,7 @@ termination 的 platform launcher；没有该 launcher 时 Host capability 必�
 
 ## 2. 当前仓库审计
 
-当前 `ash-plugin` 实现 strict v1 manifest、Plugin identity/SemVer、portable package-relative path、本地 package 安全校验和确定性 digest。`ash-core-plugins` 实现 discovery、稳定 staging snapshot、内容寻址 object、durable authority、原子 activation generation 与 Extensions package lifecycle。
+当前 `ash-utils-plugins` 实现共享 Plugin identity 与 package-root discovery；`ash-plugin` 实现 strict v1 manifest、SemVer、portable package-relative path、本地 package 安全校验和确定性 digest。`ash-core-plugins` 实现来源发现、稳定 staging snapshot、内容寻址 object、durable authority、原子 activation generation 与 Extensions package lifecycle。
 
 User/Directory TOML 与 App Server 已能表达 exact legacy Plugin request 和 desired enablement。
 Package store 安全保存既有 local-development immutable object，
@@ -166,10 +167,18 @@ Plugin v1 contributions = Skills + Connectors + MCP server declarations
 
 ## 3. 职责与非职责
 
-### 3.1 `ash-plugin` 拥有
+### 3.1 公共契约与 `ash-plugin`
+
+`ash-utils-plugins` 统一拥有 Plugin／source／package ID 的构造和序列化校验、
+`.ash-plugin` marker 与清单位置、直接子目录发现、精确 `PluginSkillRoot` 描述、稳定 Skill source ID、
+Connector 与 MCP 共用的插件 MCP 路由名，以及纯文本 `$`／`@` 提及符号。
+它不持有安装、授权或 activation 状态。`ash-core-plugins` 从有效包生成描述；Skills 验证并消费描述，
+App Server 不再解析插件技能声明或自行拼接其身份。
+
+`ash-plugin` 拥有：
 
 - Plugin package layout 和 manifest schema；
-- stable Plugin identity、version、digest 和 origin；
+- package version、digest 和 origin，并消费公共 Plugin identity；
 - contribution discovery、path containment、compatibility 和 conflict validation；
 - executable Editor Extension 的 exact program、Host RPC v1、activation trigger 与 capability ceiling 声明；
 - local package provenance、content validation 与 digest。
@@ -199,8 +208,12 @@ Plugin v1 contributions = Skills + Connectors + MCP server declarations
 ## 4. 目标依赖与组合
 
 ```text
+                      ash-utils-plugins
+           shared identity / discovery / contribution naming
+                              ▲
+                              │
                          ash-plugin
-               identity / manifest / package observation
+                   manifest / package observation
                               ▲
                               │
                      ash-core-plugins

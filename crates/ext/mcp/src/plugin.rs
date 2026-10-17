@@ -72,8 +72,11 @@ impl PluginConnectorMcpRuntimeProvider {
                 });
             for contribution in &manifest.contributions.mcp_servers {
                 let server_id =
-                    McpServerId::new(format!("plugin:{}:mcp:{}", manifest.id, contribution.id))
-                        .map_err(|error| runtime_error(error.to_string()))?;
+                    McpServerId::new(ash_utils_plugins::mcp_connector::plugin_mcp_server_id(
+                        &manifest.id,
+                        contribution.id.as_str(),
+                    ))
+                    .map_err(|error| runtime_error(error.to_string()))?;
                 let definition = parse_definition(package, &contribution.definition)?;
                 validate_definition_permissions(package, &definition)?;
                 let connectors = manifest

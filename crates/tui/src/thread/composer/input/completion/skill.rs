@@ -1,6 +1,7 @@
 //! `$skill` query, completion, and exact Skill binding state owned by `ChatInput`.
 
 use ash_protocol::SkillRef;
+use ash_utils_plugins::mention_syntax::TOOL_MENTION_SIGIL;
 use std::ops::Range;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -123,7 +124,7 @@ impl SkillCompletionState {
         self.close_popup();
         Some(SkillCompletion {
             range,
-            value: format!("${}", item.name),
+            value: format!("{TOOL_MENTION_SIGIL}{}", item.name),
             skill: item.skill,
         })
     }
@@ -170,7 +171,7 @@ fn active_skill(text: &str, cursor: usize) -> Option<(Range<usize>, &str)> {
         .map(|(offset, _)| cursor + offset)
         .unwrap_or(text.len());
     let token = text.get(start..end)?;
-    let query = token.strip_prefix('$')?;
+    let query = token.strip_prefix(TOOL_MENTION_SIGIL)?;
     query
         .chars()
         .all(|character| {

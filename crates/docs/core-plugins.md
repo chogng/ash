@@ -181,6 +181,9 @@ repository 链接用于展示与审计，但不会让 Renderer 绕过 Core Plugi
 
 ## 插件标识与 provider
 
+共享 `PluginId`、`ExtensionSourceId` 和 `PluginPackageId` 由 `ash-utils-plugins` 定义与校验；
+来源 adapter 负责包格式映射，Manager 负责安装和授权状态。
+
 | 值                  | 格式与用途                                                                 |
 | ------------------- | -------------------------------------------------------------------------- |
 | `PluginId`          | `name@source`，用于发现、查询、安装和更新；名称不要求发布者前缀            |

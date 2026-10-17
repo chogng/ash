@@ -2,6 +2,8 @@ use crate::SkillError;
 use crate::SkillErrorKind;
 use crate::SkillName;
 use crate::SkillSourceId;
+use ash_utils_plugins::PluginSkillRoot;
+use ash_utils_plugins::PluginSkillSource;
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -67,22 +69,19 @@ impl SkillSourceRoot {
         Self::new(id, SkillSourceKind::Directory, root.as_ref())
     }
 
-    /// Creates a source for one exact manifest-declared Skill directory in a verified Plugin.
-    pub fn plugin(
-        id: SkillSourceId,
-        name: SkillName,
-        root: impl AsRef<Path>,
-    ) -> Result<Self, SkillError> {
-        Self::new_exact(id, SkillSourceKind::Plugin, name, root.as_ref())
-    }
-
-    /// Creates a source for one exact Skill capability in a Extensions-verified package.
-    pub fn extension_packages(
-        id: SkillSourceId,
-        name: SkillName,
-        root: impl AsRef<Path>,
-    ) -> Result<Self, SkillError> {
-        Self::new_exact(id, SkillSourceKind::Registry, name, root.as_ref())
+    /// Admits one package-owned descriptor to Skill discovery after validating its Skill contract.
+    pub fn from_plugin(root: PluginSkillRoot) -> Result<Self, SkillError> {
+        let id = SkillSourceId::new(root.source_id()).map_err(|error| {
+            SkillError::new(SkillErrorKind::SourceUnavailable, error.to_string())
+        })?;
+        let name = SkillName::new(root.skill_name).map_err(|error| {
+            SkillError::new(SkillErrorKind::SourceUnavailable, error.to_string())
+        })?;
+        let kind = match root.source {
+            PluginSkillSource::LocalPlugin => SkillSourceKind::Plugin,
+            PluginSkillSource::Extensions => SkillSourceKind::Registry,
+        };
+        Self::new_exact(id, kind, name, &root.path)
     }
 
     pub fn view(&self) -> &SkillSourceView {

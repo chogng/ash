@@ -1,5 +1,69 @@
 use super::*;
 use std::fs;
+use tempfile::tempdir;
+
+#[test]
+fn package_descriptors_preserve_source_identity_and_only_scan_the_declared_skill() {
+    let root = tempdir().unwrap();
+    fs::create_dir_all(root.path().join("nested")).unwrap();
+    for (path, name) in [
+        (root.path().to_path_buf(), "review"),
+        (root.path().join("nested"), "hidden"),
+    ] {
+        fs::write(
+            path.join("SKILL.md"),
+            format!("---\nname: {name}\ndescription: Review code.\n---\nInstructions"),
+        )
+        .unwrap();
+    }
+    for (source, package, expected_id, expected_kind) in [
+        (
+            PluginSkillSource::LocalPlugin,
+            "acme/review",
+            "plugin-acme/review:skill-source:review",
+            SkillSourceKind::Plugin,
+        ),
+        (
+            PluginSkillSource::Extensions,
+            "review@team",
+            "extension_packages-review@team:skill-source:review",
+            SkillSourceKind::Registry,
+        ),
+    ] {
+        let source = SkillSourceRoot::from_plugin(PluginSkillRoot {
+            path: root.path().to_path_buf(),
+            source,
+            plugin_id: package.into(),
+            skill_name: "review".into(),
+        })
+        .unwrap();
+        assert_eq!(source.view().id().as_str(), expected_id);
+        assert_eq!(source.view().kind(), expected_kind);
+        assert!(!source.view().allows_automatic_activation());
+        let catalog = crate::SkillCatalog::discover(vec![source]).unwrap();
+        assert_eq!(catalog.snapshot().list().len(), 1);
+        assert_eq!(catalog.snapshot().list()[0].id().name.as_str(), "review");
+    }
+}
+
+#[test]
+fn package_descriptors_still_require_a_valid_skill_name_and_existing_directory() {
+    let root = tempdir().unwrap();
+    for (name, path) in [
+        ("Invalid_Name", root.path().to_path_buf()),
+        ("review", root.path().join("missing")),
+    ] {
+        assert!(
+            SkillSourceRoot::from_plugin(PluginSkillRoot {
+                path,
+                source: PluginSkillSource::LocalPlugin,
+                plugin_id: "acme/review".into(),
+                skill_name: name.into(),
+            })
+            .is_err()
+        );
+    }
+}
 
 #[test]
 fn source_root_debug_output_does_not_expose_the_host_path() {

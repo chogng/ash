@@ -337,7 +337,7 @@ fn installed_theme_enters_the_shared_declarative_extension_catalog() {
     let root = tempfile::tempdir().unwrap();
     let sources = ash_core_plugins::ExtensionSources::new(["test", "vendor"].map(|name| {
         (
-            ash_plugin::ExtensionSourceId::new(name).unwrap(),
+            ash_utils_plugins::ExtensionSourceId::new(name).unwrap(),
             Arc::new(LanguageRegistry) as Arc<dyn ExtensionSource>,
         )
     }))
@@ -755,7 +755,7 @@ fn make_executable(_: &Path) {}
 
 fn providers(provider: Arc<dyn ExtensionSource>) -> ash_core_plugins::ExtensionSources {
     ash_core_plugins::ExtensionSources::new([(
-        ash_plugin::ExtensionSourceId::new("test").unwrap(),
+        ash_utils_plugins::ExtensionSourceId::new("test").unwrap(),
         provider,
     )])
     .unwrap()

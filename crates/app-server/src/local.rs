@@ -827,11 +827,12 @@ pub struct LocalProfileRuntime {
 }
 
 struct ProfileExtensionsAuthority {
-    config: BTreeMap<ash_plugin::ExtensionSourceId, ash_core_plugins::RemoteExtensionsConfig>,
+    config:
+        BTreeMap<ash_utils_plugins::ExtensionSourceId, ash_core_plugins::RemoteExtensionsConfig>,
     manager: Arc<ash_core_plugins::ExtensionPackageManager>,
     _watcher: Option<crate::server::extension_packages_runtime::ExtensionsChangeWatcher>,
     open_vsx: Option<(
-        ash_plugin::ExtensionSourceId,
+        ash_utils_plugins::ExtensionSourceId,
         ash_core_plugins::OpenVsxConfig,
     )>,
 }
@@ -1049,9 +1050,12 @@ impl LocalProfileRuntime {
 
     fn plugins_manager(
         &self,
-        config: BTreeMap<ash_plugin::ExtensionSourceId, ash_core_plugins::RemoteExtensionsConfig>,
+        config: BTreeMap<
+            ash_utils_plugins::ExtensionSourceId,
+            ash_core_plugins::RemoteExtensionsConfig,
+        >,
         open_vsx: Option<(
-            ash_plugin::ExtensionSourceId,
+            ash_utils_plugins::ExtensionSourceId,
             ash_core_plugins::OpenVsxConfig,
         )>,
     ) -> Result<Arc<ash_core_plugins::ExtensionPackageManager>, OpenAppServerError> {
@@ -3363,9 +3367,12 @@ fn open_error(error: impl fmt::Display) -> OpenAppServerError {
 }
 
 fn extension_packages_providers(
-    sources: &BTreeMap<ash_plugin::ExtensionSourceId, ash_core_plugins::RemoteExtensionsConfig>,
+    sources: &BTreeMap<
+        ash_utils_plugins::ExtensionSourceId,
+        ash_core_plugins::RemoteExtensionsConfig,
+    >,
     open_vsx: Option<&(
-        ash_plugin::ExtensionSourceId,
+        ash_utils_plugins::ExtensionSourceId,
         ash_core_plugins::OpenVsxConfig,
     )>,
 ) -> Result<ash_core_plugins::ExtensionSources, OpenAppServerError> {

@@ -1,3 +1,5 @@
+//! Publisher-owned identity for the Ash plugin package format.
+
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
@@ -98,3 +100,7 @@ fn is_plugin_id_segment(value: &str) -> bool {
             .bytes()
             .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
 }
+
+#[cfg(test)]
+#[path = "package_id_tests.rs"]
+mod tests;

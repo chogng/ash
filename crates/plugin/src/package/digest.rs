@@ -1,5 +1,5 @@
-use crate::manifest::PLUGIN_MANIFEST_PATH;
 use crate::{PluginError, PluginErrorKind, PluginPackageDigest, PluginPath};
+use ash_utils_plugins::plugin_namespace::PLUGIN_MANIFEST_PATH;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::fs::{self, File, Metadata};

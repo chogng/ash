@@ -1,6 +1,7 @@
 //! Workspace-file mention query and completion state owned by `ChatInput`.
 
 use ash_file_search::PathSearchSnapshot;
+use ash_utils_plugins::mention_syntax::PLUGIN_TEXT_MENTION_SIGIL;
 use std::ops::Range;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -26,7 +27,7 @@ pub(super) fn active_mention(text: &str, cursor: usize) -> Option<ActiveMention<
         .map(|(offset, _)| cursor + offset)
         .unwrap_or(text.len());
     let token = text.get(start..end)?;
-    let query = token.strip_prefix('@')?;
+    let query = token.strip_prefix(PLUGIN_TEXT_MENTION_SIGIL)?;
     Some(ActiveMention {
         range: start..end,
         query,
@@ -200,7 +201,7 @@ impl MentionPopup {
             .filter(|plugin| plugin.id.to_ascii_lowercase().starts_with(&query))
             .map(|plugin| MentionMatch {
                 label: plugin.id.clone(),
-                completion: format!("@{}", plugin.id),
+                completion: format!("{PLUGIN_TEXT_MENTION_SIGIL}{}", plugin.id),
                 kind: MentionMatchKind::Plugin,
                 indices: (0..query.chars().count()).collect(),
                 score: u32::MAX,

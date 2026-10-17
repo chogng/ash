@@ -2,7 +2,7 @@ use crate::AshExtensionSourceConfig;
 use crate::ExtensionSourceDescription;
 use crate::ExtensionSourcesSnapshot;
 use crate::sources::source_provider;
-use ash_plugin::ExtensionSourceId;
+use ash_utils_plugins::ExtensionSourceId;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -63,7 +63,7 @@ pub struct ExtensionPackageManager {
 #[derive(Clone, Default, Deserialize, Serialize)]
 struct DurableState {
     #[serde(default)]
-    sources: BTreeMap<ash_plugin::ExtensionSourceId, crate::AshExtensionSourceConfig>,
+    sources: BTreeMap<ash_utils_plugins::ExtensionSourceId, crate::AshExtensionSourceConfig>,
     #[serde(default)]
     source_revision: u64,
     installations: BTreeMap<String, InstallationRecord>,
@@ -108,6 +108,16 @@ pub struct LocalCapabilitySource {
 }
 
 impl LocalCapabilitySource {
+    /// Describes an exact Skill without exposing package naming conventions to its consumer.
+    pub fn skill_root(&self) -> Option<ash_utils_plugins::PluginSkillRoot> {
+        (self.kind == CapabilityKind::Skill).then(|| ash_utils_plugins::PluginSkillRoot {
+            path: self.host_path.clone(),
+            source: ash_utils_plugins::PluginSkillSource::Extensions,
+            plugin_id: self.package.id.clone(),
+            skill_name: self.id.clone(),
+        })
+    }
+
     pub fn package(&self) -> &PackageRef {
         &self.package
     }
@@ -199,11 +209,11 @@ impl ExtensionPackageManager {
         let (extension_packages, _, _) = providers.extension_gallery()?.ok_or_else(|| {
             ExtensionsClientError::invalid_request("no extension resource gallery is configured")
         })?;
-        let package_id =
-            ash_plugin::PluginId::new(format!("{publisher}.{name}"), extension_packages.clone())
-                .map_err(|_| {
-                    ExtensionsClientError::invalid_request("invalid extension identity")
-                })?;
+        let package_id = ash_utils_plugins::PluginId::new(
+            format!("{publisher}.{name}"),
+            extension_packages.clone(),
+        )
+        .map_err(|_| ExtensionsClientError::invalid_request("invalid extension identity"))?;
         let downloaded = self.source_providers()?.download(DownloadPackageRequest {
             package_id: package_id.to_string(),
             version: Some(version.to_owned()),
@@ -291,7 +301,7 @@ impl ExtensionPackageManager {
                     providers.legacy_id(&installation.package.id)?.to_string();
                 installation.installation_id = installation_id(&installation.package);
             } else {
-                ash_plugin::PluginId::parse(&installation.package.id)
+                ash_utils_plugins::PluginId::parse(&installation.package.id)
                     .map_err(|_| ExtensionsClientError::storage())?;
             }
             if installations

@@ -15,6 +15,7 @@ use super::wrap::wrap_input;
 use crate::keymap::KeyEvent;
 use ash_protocol::SkillRef;
 use ash_slash_commands::SlashCommandOrigin;
+use ash_utils_plugins::mention_syntax::TOOL_MENTION_SIGIL;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyModifiers;
 use message_history::MessageHistory;
@@ -94,7 +95,7 @@ impl QueuedChatInput {
                             .iter()
                             .enumerate()
                             .filter_map(|(index, skill)| {
-                                let selector = format!("${}", skill.id.name);
+                                let selector = format!("{TOOL_MENTION_SIGIL}{}", skill.id.name);
                                 remaining
                                     .match_indices(&selector)
                                     .find(|(offset, _)| {
@@ -142,7 +143,7 @@ impl QueuedChatInput {
             input.textarea.insert_text(" ");
             let element = input
                 .textarea
-                .insert_element(&format!("${}", skill.id.name));
+                .insert_element(&format!("{TOOL_MENTION_SIGIL}{}", skill.id.name));
             input.skill_bindings.push((element, skill));
         }
         Self {

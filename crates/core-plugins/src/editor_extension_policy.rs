@@ -203,7 +203,7 @@ impl EditorExtensionPolicy {
             || durable
                 .disabled_extensions
                 .iter()
-                .any(|id| ash_plugin::PluginId::parse(id).is_err() && !valid_built_in_id(id))
+                .any(|id| ash_utils_plugins::PluginId::parse(id).is_err() && !valid_built_in_id(id))
             || durable.records.iter().any(|(key, record)| {
                 !valid_binding(&record.package, &CapabilityRef { id: key.clone() })
             })
@@ -363,7 +363,7 @@ fn valid_built_in_id(id: &str) -> bool {
 fn valid_binding(package: &PackageRef, capability: &CapabilityRef) -> bool {
     !capability.id.is_empty()
         && capability.id.len() <= 512
-        && ash_plugin::PluginId::parse(&package.id).is_ok()
+        && ash_utils_plugins::PluginId::parse(&package.id).is_ok()
         && ash_plugin::PluginVersion::new(&package.version).is_ok()
         && ash_plugin::PluginPackageDigest::new(&package.digest).is_ok()
 }

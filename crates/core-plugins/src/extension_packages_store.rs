@@ -370,7 +370,7 @@ fn encode_hex(bytes: &[u8]) -> String {
 impl Store {
     pub(crate) fn source_cache_root(
         &self,
-        id: &ash_plugin::ExtensionSourceId,
+        id: &ash_utils_plugins::ExtensionSourceId,
     ) -> std::path::PathBuf {
         self.root
             .join("source-cache")

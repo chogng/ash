@@ -1,4 +1,4 @@
-use ash_plugin::ExtensionSourceId;
+use ash_utils_plugins::ExtensionSourceId;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::fs;

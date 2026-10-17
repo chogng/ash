@@ -1,3 +1,5 @@
+use ash_utils_plugins::PluginSkillRoot;
+use ash_utils_plugins::PluginSkillSource;
 use std::collections::BTreeSet;
 
 use crate::InstalledPluginPackage;
@@ -71,6 +73,25 @@ impl PluginActivationSnapshot {
 
     pub fn packages(&self) -> &[InstalledPluginPackage] {
         &self.packages
+    }
+
+    /// Resolves only declared Skills from the exact effective package set.
+    ///
+    /// Keeping manifest traversal here lets runtime composition consume the shared descriptor
+    /// without learning package layout or bypassing immutable-object containment checks.
+    pub fn skill_roots(&self) -> Result<Vec<PluginSkillRoot>, PluginError> {
+        let mut roots = Vec::new();
+        for package in &self.packages {
+            for contribution in &package.manifest().contributions.skills {
+                roots.push(PluginSkillRoot {
+                    path: package.resolve_directory(&contribution.path)?,
+                    source: PluginSkillSource::LocalPlugin,
+                    plugin_id: package.manifest().id.to_string(),
+                    skill_name: contribution.id.to_string(),
+                });
+            }
+        }
+        Ok(roots)
     }
 }
 
