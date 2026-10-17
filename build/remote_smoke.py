@@ -155,6 +155,12 @@ def verify(
                             "capabilities": {},
                         },
                     )
+                    # This disposable profile has no credentials. Use the explicit private-file
+                    # mode so anonymous model acceptance never depends on a desktop keyring.
+                    assert rpc("secrets/storageMode/set", {"mode": "file"}) == {
+                        "status": "available",
+                        "mode": "file",
+                    }
                     rpc(
                         "fs/writeFile",
                         {"path": "probe.txt", "content": "release-remote-edit-ok"},

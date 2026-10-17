@@ -68,6 +68,18 @@ SSH server. An initially missing runtime triggers the public HTTPS download; a s
 connection reuses the activated path without provisioning. Editing, terminal and
 Agent smoke checks then run from that installed published package.
 
+Before publishing, use the same acceptance entrypoint with `--catalog-dir DIR`
+instead of `--binding-file FILE`. `DIR` contains a locally built archive and its
+`catalog.json` from `build/release/remote.py catalog`. This exercises the existing
+local-artifact provisioner, real SSH installation, Desktop initialization, reconnect,
+editing, terminals and a complete Agent turn without publishing a release first.
+The report distinguishes local installation from a published HTTPS download; only
+the latter verifies the public release download path.
+
+Smoke tests use disposable, credential-free profiles with explicitly selected
+private-file secret storage. They do not require a desktop keyring or change the
+product's default encrypted storage policy.
+
 For signed macOS publication, set repository variable `ASH_MACOS_SIGNING_IDENTITY`
 to the Developer ID Application identity and configure these repository Actions secrets:
 `ASH_MACOS_CERTIFICATE_P12` (base64 certificate and private key),

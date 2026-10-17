@@ -2280,6 +2280,25 @@ fn encrypted_storage_shared_profile_runtime_reuses_one_store_across_env_hosts() 
 
 #[test]
 fn encrypted_storage_unavailable_keyring_keeps_local_composition_running() {
+    struct FixtureModel;
+    impl OperationClient for FixtureModel {
+        fn execute(&self, request: &ClientRequest) -> Result<ClientResponse, ClientError> {
+            panic!(
+                "unexpected non-streaming fixture request: {}",
+                request.url()
+            );
+        }
+
+        fn execute_streaming(
+            &self,
+            request: &ClientRequest,
+            sink: &mut dyn ash_client::OperationStreamSink,
+        ) -> Result<ClientResponse, ClientError> {
+            assert_eq!(request.url(), "https://release.example.test/v1/responses");
+            sink.emit(b"data: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"release-agent-ok\"}]}]}}\n\n")?;
+            Ok(ClientResponse::new(200, vec![], vec![]))
+        }
+    }
     let profile = tempfile::tempdir().unwrap();
     let mut runtime = LocalProfileRuntime::open(profile.path()).unwrap();
     runtime.secrets = Arc::new(
@@ -2293,6 +2312,7 @@ fn encrypted_storage_unavailable_keyring_keeps_local_composition_running() {
         AppServerOptions::new(profile.path())
             .with_profile_runtime(Arc::new(runtime))
             .with_codex_home(profile.path().join("codex"))
+            .with_model_operation_client(Arc::new(FixtureModel))
             .without_built_in_skills(),
     )
     .unwrap();
@@ -2311,6 +2331,72 @@ fn encrypted_storage_unavailable_keyring_keeps_local_composition_running() {
         response["result"],
         serde_json::json!({"status":"unavailable","mode":"encrypted"})
     );
+    let next_id = std::cell::Cell::new(3);
+    let rpc = |connection: &mut ConnectionState, method: &str, params: serde_json::Value| {
+        let id = next_id.get();
+        next_id.set(id + 1);
+        let response = local_call(
+            &server,
+            connection,
+            serde_json::json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}),
+        );
+        assert!(response.get("error").is_none(), "{method}: {response}");
+        response["result"].clone()
+    };
+    // Headless acceptance profiles contain no credentials. Explicit file storage keeps
+    // their anonymous model fixture independent of an unavailable desktop keyring.
+    let storage = rpc(
+        &mut connection,
+        "secrets/storageMode/set",
+        serde_json::json!({"mode":"file"}),
+    );
+    assert_eq!(
+        storage,
+        serde_json::json!({"status":"available","mode":"file"})
+    );
+    rpc(
+        &mut connection,
+        "provider/configure",
+        serde_json::json!({"commandId":"release-model-config","expectedRevision":0,"config":{
+            "connection":"custom-release","provider":"custom-release","baseUrl":"https://release.example.test/v1",
+            "custom":{"name":"Release fixture","protocol":"responses","model":"fixture-model","contextWindow":272000}
+        }}),
+    );
+    let created = rpc(
+        &mut connection,
+        "session/create",
+        serde_json::json!({"commandId":"release-create","title":"Headless release fixture","executionTarget":null}),
+    );
+    let session = &created["session"]["sessionId"];
+    let thread = &created["session"]["threads"][0]["threadId"];
+    let initial = rpc(
+        &mut connection,
+        "session/thread/read",
+        serde_json::json!({"sessionId":session,"threadId":thread}),
+    );
+    rpc(
+        &mut connection,
+        "session/request",
+        serde_json::json!({"commandId":"release-turn","sessionId":session,"request":{
+            "type":"startTurn","threadId":thread,"expectedSequence":initial["thread"]["sequence"],
+            "model":{"provider":"custom-release","model":"fixture-model"},"input":[{"type":"text","text":"Reply release-agent-ok"}]
+        }}),
+    );
+    let deadline = std::time::Instant::now() + Duration::from_secs(15);
+    loop {
+        let snapshot = rpc(
+            &mut connection,
+            "session/thread/read",
+            serde_json::json!({"sessionId":session,"threadId":thread}),
+        );
+        let turn = &snapshot["thread"]["turns"][0];
+        if turn["status"] == "completed" {
+            assert!(snapshot.to_string().contains("release-agent-ok"));
+            break;
+        }
+        assert!(std::time::Instant::now() < deadline, "{snapshot}");
+        std::thread::sleep(Duration::from_millis(10));
+    }
 }
 
 #[test]
