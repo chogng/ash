@@ -2355,6 +2355,8 @@ impl TestRepository {
         std::fs::create_dir_all(&root).unwrap();
         let repository = Self { root };
         repository.git(&["init", "--initial-branch=main"]);
+        // Checkout bytes must not inherit the developer's line-ending preference.
+        repository.git(&["config", "core.autocrlf", "false"]);
         repository.git(&["config", "user.name", "Ash Test"]);
         repository.git(&["config", "user.email", "ash@example.invalid"]);
         repository

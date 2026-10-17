@@ -19,6 +19,7 @@ remote execution boundary 上传递文件位置的 contract，不替代当前 Ap
 | `from_native_path`                                   | 按显式 `PathConvention` 解析 POSIX、drive 或 UNC path         | 不访问文件系统                                                                                    |
 | `basename` / `parent` / `ancestors` / `join`         | 跨 host lexical path operations                               | 不解析 symlink、case alias 或 Unicode filesystem normalization                                    |
 | `starts_with` / `relative_path_from` / `overlaps`    | 按路径语法、authority 和解码后的完整段判断包含与交叠          | 编码后的分隔符不参与判断；大小写仍敏感                                                            |
+| `relative_components_from`                           | 返回 UTF-8 相对路径段，供 Git 等领域按自己的分隔符连接        | 不转换为当前主机路径；拒绝编码分隔符和非 UTF-8 段                                                 |
 | `lexical_depth` / `decoded_path_bytes` / `is_opaque` | 检查路径层级、无损读取路径字节和识别不透明路径                | 不访问文件系统                                                                                    |
 | `join_descendant`                                    | 拼接相对子路径，拒绝父目录、绝对路径及 Windows 流组件         | 不替代文件系统授权与符号链接检查                                                                  |
 | `PathConvention`                                     | 显式选择 POSIX/Windows grammar                                | 不代表一台具体机器或授权环境                                                                      |

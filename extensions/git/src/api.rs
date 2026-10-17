@@ -346,6 +346,28 @@ impl Api {
             token,
         )?)
     }
+    pub fn changes_summary(
+        &self,
+        repository: &Repository,
+        token: &CancellationToken,
+    ) -> Result<model::ChangesSummary, ExtensionError> {
+        #[derive(serde::Deserialize)]
+        struct Response {
+            status: Status,
+            // Only the number of readable text paths is needed for summary completeness.
+            diffs: Vec<serde::de::IgnoredAny>,
+            statistics: model::CommitStatistics,
+        }
+        let response: Response =
+            decode(self.repository_request(repository, "textDiff", json!({}), token)?)?;
+        let files = response.status.changes.len();
+        Ok(model::ChangesSummary {
+            files,
+            additions: response.statistics.additions,
+            deletions: response.statistics.deletions,
+            partial: response.diffs.len() < files,
+        })
+    }
     pub fn change_file(
         &self,
         repository: &Repository,

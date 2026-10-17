@@ -736,6 +736,12 @@ pub struct CommitStatistics {
     pub additions: u64,
     pub deletions: u64,
 }
+pub struct ChangesSummary {
+    pub files: usize,
+    pub additions: u64,
+    pub deletions: u64,
+    pub partial: bool,
+}
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CommitDetails {

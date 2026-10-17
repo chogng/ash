@@ -32,7 +32,7 @@ test('Git branch picker explains occupancy and switches after the other worktree
 		await run('git', ['worktree', 'remove', linked], { cwd });
 		await workbench.quickaccess.runCommand('git.switchBranch');
 		await picker.getByRole('combobox').fill('occupied');
-		await expect(picker.getByRole('option', { name: 'occupied', exact: true })).toBeVisible();
+		await expect(picker.getByRole('option', { name: /^occupied [0-9a-f]{7}$/u })).toBeVisible();
 		await picker.getByRole('combobox').press('Enter');
 		await expect(page.locator('[data-statusbar-item-id="ash.status.git.branch"]')).toContainText('occupied');
 		expect((await run('git', ['branch', '--show-current'], { cwd })).stdout.trim()).toBe('occupied');
@@ -110,24 +110,20 @@ test.describe('Git branch lifecycle', () => {
 });
 
 
-test('Git commands report an unavailable repository without opening an input when disconnected', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench }) => {
+test('Disconnected Workbench does not expose commands from an unavailable Git extension', { tag: ['@browser-ui', '@electron-ui'] }, async ({ workbench }) => {
 	const page = workbench.page;
-	for (const [command, message] of [
-		['git.stash', 'Git operation failed:'],
-		['git.continue', 'Git operation failed:'],
-		['git.stageHunk', 'Git operation failed:'],
-		['git.init', 'Git operation failed:'],
-		['git.branch', 'Could not create branch:'],
-		['git.deleteBranch', 'Could not delete branch:'],
-		['git.createWorktree', 'Could not create or open worktree:'],
-		['git.openWorktree', 'Could not open worktree:'],
-		['git.deleteWorktree', 'Could not delete worktree:'],
+	// The Rust provider and its admitted catalog live on App Server. A disconnected
+	// window has no local JavaScript fallback that can register these commands.
+	for (const command of [
+		'git.stash', 'git.continue', 'git.stageHunk', 'git.init', 'git.branch',
+		'git.deleteBranch', 'git.createWorktree', 'git.openWorktree', 'git.deleteWorktree',
 	]) {
-		await workbench.quickaccess.runCommand(command!);
-		await page.getByRole('button', { name: 'Show Notification Center', exact: true }).click();
-		await expect(page.getByRole('region', { name: 'Notification Center', exact: true })).toContainText(message!);
-		await page.keyboard.press('Escape');
+		await workbench.quickaccess.open(`>${command}`);
+		await expect(workbench.quickaccess.items.filter({ has: page.locator('.ash-quick-pick-row-description').getByText(command, { exact: true }) })).toHaveCount(0);
+		await workbench.quickaccess.close();
 		await expect(page.locator('.ash-quick-pick')).toHaveCount(0);
-		await expect(page.getByRole('dialog', { name: 'Quick Input', exact: true })).toHaveCount(0);
 	}
+	await workbench.git.open();
+	await expect(page.locator('[data-view-id="ash.gitView"]')).toContainText('No source control providers registered.');
+	await expect(page.locator('.ash-scm-input')).toBeHidden();
 });

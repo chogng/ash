@@ -55,9 +55,16 @@ export class MainThreadSCM extends Disposable {
 		private readonly decorations: IDecorationsService,
 		@IContextKeyService private readonly contextKeys: IContextKeyService) {
 		super();
-		this._register(commandRegistry.register('workbench.scm.action.retryInitialization', () => Promise.all(
-			[...this.registrations].map(([, owner]) => owner).filter(owner => owner.initialization === 'failed').map(owner => this.initialize(owner))
-		)));
+		this._register(commandRegistry.register('workbench.scm.action.retryInitialization', async () => {
+			const registered = new Set([...this.registrations].map(([, owner]) => owner.source.extensionId));
+			if ([...this.initializationContexts].some(([id, context]) => context.get() === 'failed' && !registered.has(id))) {
+				// A process can fail before registering SCM. The fleet owner publishes its
+				// replacement and activates it through the usual startup path.
+				await this.api.reconcile('restartFailed');
+			}
+			await Promise.all([...this.registrations].map(([, owner]) => owner)
+				.filter(owner => owner.initialization === 'failed').map(owner => this.initialize(owner)));
+		}));
 		this._register(toDisposable(() => {
 			for (const queue of this.decorationQueues) queue.clearPending();
 			for (const context of this.initializationContexts.values()) context.reset();
@@ -100,7 +107,7 @@ export class MainThreadSCM extends Disposable {
 				}
 			}
 		}
-		this.updateInitializationContexts();
+		this.updateInitializationContexts(snapshot);
 	}
 	private initialize(owner: SCMRegistration): Promise<void> {
 		if (owner.initializing) return owner.initializing;
@@ -132,7 +139,7 @@ export class MainThreadSCM extends Disposable {
 		owner.initialization = 'failed';
 		this.updateInitializationContexts();
 	}
-	private updateInitializationContexts(): void {
+	private updateInitializationContexts(snapshot?: ExtensionHostFleetSnapshot): void {
 		if (this.isDisposed) return;
 		const states = new Map<string, SCMRegistration['initialization'][]>();
 		for (const [, owner] of this.registrations) {
@@ -140,9 +147,20 @@ export class MainThreadSCM extends Disposable {
 			values.push(owner.initialization);
 			states.set(owner.source.extensionId, values);
 		}
+		// Failed activation has no SCM registration to initialize or retry. Include
+		// the runtime lifecycle so the welcome view cannot remain "scanning" forever.
+		if (snapshot) {
+			for (const runtime of snapshot.extensions) {
+				if (states.has(runtime.id) || runtime.lifecycle === 'ready') continue;
+				const failed = runtime.lifecycle === 'failed' || runtime.lifecycle === 'crashLoop' || runtime.lifecycle === 'stopped';
+				states.set(runtime.id, [failed ? 'failed' : 'initializing']);
+			}
+		}
 		this.contextKeys.bufferChangeEvents(() => {
-			for (const [id, context] of this.initializationContexts) {
-				if (!states.has(id)) { context.reset(); this.initializationContexts.delete(id); }
+			if (snapshot) {
+				for (const [id, context] of this.initializationContexts) {
+					if (!states.has(id)) { context.reset(); this.initializationContexts.delete(id); }
+				}
 			}
 			for (const [id, values] of states) {
 				let context = this.initializationContexts.get(id);
@@ -355,7 +373,10 @@ export class MainThreadSCM extends Disposable {
 	public clear(): void {
 		this.registrations.clearAndDisposeAll();
 		for (const queue of this.decorationQueues) queue.clearPending();
-		this.updateInitializationContexts();
+		this.contextKeys.bufferChangeEvents(() => {
+			for (const context of this.initializationContexts.values()) context.reset();
+			this.initializationContexts.clear();
+		});
 	}
 }
 interface ProviderSnapshot {

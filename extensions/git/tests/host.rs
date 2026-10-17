@@ -199,7 +199,7 @@ impl Client {
                     }
                     "conflictFile" => {
                         assert!(self.conflict_comparison.load(Ordering::Acquire));
-                        json!({"current":{"kind":"binary","data":"AAEA"},"result":{"kind":"binary","data":"AAIA"}})
+                        json!({"stageIds":[null,null,null],"resultObjectId":null,"base":{"kind":"missing"},"current":{"kind":"binary","data":"AAEA"},"incoming":{"kind":"missing"},"result":{"kind":"binary","data":"AAIA"}})
                     }
                     "changeFile" => {
                         if self.binary_comparison.load(Ordering::Acquire) {

@@ -45,6 +45,7 @@ test.describe('Git repository operations', () => {
 	});
 
 	test('Changes title menus rename branches, manage tags and remotes, stash, amend and undo', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, testWorkspace, workbench }) => {
+		test.slow(); // Exercises several sequential repository mutations and confirmations.
 		const cwd = testWorkspace.directory;
 		const page = workbench.page;
 		const git = async (...args: string[]) => (await run('git', args, { cwd })).stdout.trim();
@@ -78,7 +79,7 @@ test.describe('Git repository operations', () => {
 		expect(await readFile(testWorkspace.file, 'utf8')).toBe('const value = 1;\n');
 		await workbench.git.selectTitleMenu(application, ['Stash', 'Pop Stash…']);
 		await choose(page, 'ui-stash');
-		await expect.poll(() => git('stash', 'list')).toBe('');
+		await expect.poll(() => git('for-each-ref', '--format=%(refname)', 'refs/stash')).toBe('');
 		expect(await readFile(testWorkspace.file, 'utf8')).toBe('const value = 7;\n');
 
 		await workbench.git.open();
@@ -86,14 +87,14 @@ test.describe('Git repository operations', () => {
 		await expect(page.locator('.ash-scm-changes')).toContainText('main.ts');
 		await workbench.quickaccess.runCommand('git.stageAll');
 		await expect(page.getByRole('treeitem', { name: /^Staged Changes/u }).first()).toBeVisible();
-		expect(await git('show', ':main.ts')).toBe('const value = 7;');
+		await expect.poll(() => git('show', ':main.ts')).toBe('const value = 7;');
 		const input = page.locator('.ash-scm-input');
 		const editor = input.getByRole('textbox', { name: /^Commit message/u });
 		await editor.focus();
 		await page.keyboard.insertText('Commit to amend');
 		// Creating the target through SCM keeps its HEAD owner current before Amend.
 		await workbench.git.selectTitleMenu(application, ['Commit', 'Commit Staged']);
-		await expect.poll(() => git('log', '-1', '--format=%s')).toBe('Commit to amend');
+		await expect.poll(() => git('log', '-1', '--format=%s'), { timeout: 30_000 }).toBe('Commit to amend');
 		await expect(input.locator('.stanza-editor-placeholder-text')).toBeVisible();
 		const head = await git('rev-parse', 'HEAD');
 		await expect(page.locator('.ash-scm-status')).toContainText(`Created commit ${head.slice(0, 7)}.`);
@@ -101,10 +102,10 @@ test.describe('Git repository operations', () => {
 		await editor.focus();
 		await page.keyboard.insertText('UI amended commit\n\nComplete amended body.');
 		await workbench.dialogs.confirm(application, 'Confirm Git Operation', 'Continue', () => workbench.git.selectTitleMenu(application, ['Commit', 'Amend Last Commit…']));
-		await expect.poll(() => git('log', '-1', '--format=%s')).toBe('UI amended commit');
+		await expect.poll(() => git('log', '-1', '--format=%s'), { timeout: 30_000 }).toBe('UI amended commit');
 		await expect(input.locator('.stanza-editor-placeholder-text')).toBeVisible();
-		await workbench.dialogs.confirm(application, 'Confirm Git Operation', 'Continue', () => workbench.git.selectTitleMenu(application, ['Commit', 'Undo Last Commit']));
-		await expect.poll(() => git('rev-parse', 'HEAD')).toBe(parent);
+		await workbench.dialogs.confirm(application, 'Confirm Git Operation', 'Continue', () => workbench.git.selectTitleMenu(application, ['Commit', 'Undo Last Commit']), 30_000);
+		await expect.poll(() => git('rev-parse', 'HEAD'), { timeout: 30_000 }).toBe(parent);
 		await expect(input.locator('.view-lines')).toContainText('UI amended commit');
 		await expect(input.locator('.view-lines')).toContainText('Complete amended body.');
 		expect(await git('show', ':main.ts')).toBe('const value = 7;');
@@ -112,6 +113,7 @@ test.describe('Git repository operations', () => {
 	});
 
 	test('SCM commit scopes preserve partial staging, cancel without mutation and require untracked opt-in', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, testWorkspace, workbench }) => {
+		test.slow(); // Three commit scopes share the same staged and unstaged fixture.
 		const cwd = testWorkspace.directory;
 		const page = workbench.page;
 		const git = async (...args: string[]) => (await run('git', args, { cwd })).stdout.trim();
@@ -134,7 +136,7 @@ test.describe('Git repository operations', () => {
 		await writeDraft('Staged subject');
 		await workbench.git.selectTitleMenu(application, ['Commit', 'Commit All…']);
 		await expect(page.locator('.ash-quick-pick').getByRole('option', { name: /^Tracked changes only/u })).toBeVisible();
-		await expect(page.getByRole('toolbar', { name: 'Source control actions', exact: true }).getByRole('button', { name: 'Refresh', exact: true })).toBeDisabled();
+		await expect(page.locator('[data-view-id="ash.gitView"] [data-action-id="git.refresh"] button')).toBeDisabled();
 		await page.keyboard.press('Escape');
 		await expect(page.locator('.ash-quick-pick')).toBeHidden();
 		expect(await git('rev-parse', 'HEAD')).toBe(initialHead);
@@ -206,7 +208,8 @@ test.describe('Git repository operations', () => {
 		const input = page.locator('.ash-scm-input');
 		await input.getByRole('textbox', { name: /^Commit message/u }).focus();
 		await page.keyboard.insertText('Previous subject\n\nPrevious complete body.');
-		await page.getByRole('toolbar', { name: 'Source control actions', exact: true }).getByRole('button', { name: 'Refresh', exact: true }).click();
+		await page.locator('[data-view-id="ash.gitView"] .ash-pane-view-header').hover();
+		await page.locator('[data-view-id="ash.gitView"] [data-action-id="git.refresh"] button').click();
 		await expect(page.locator('.ash-scm-commit')).toBeEnabled();
 		await workbench.git.selectTitleMenu(application, ['Commit', 'Commit Staged']);
 		await expect.poll(() => git('log', '-1', '--format=%B')).toBe('Previous subject\n\nPrevious complete body.');
@@ -248,12 +251,12 @@ test.describe('Git repository operations', () => {
 
 		await workbench.quickaccess.runCommand('git.stageHunk');
 		await choose(page, 'main.ts');
-		await page.locator('.ash-quick-pick').getByRole('option').first().click();
+		await page.getByRole('dialog', { name: 'Choose a change block', exact: true }).getByRole('option').first().click();
 		await expect.poll(index).toBe(original.replace('line 2\n', 'changed 2\n'));
 		expect(await readFile(testWorkspace.file, 'utf8')).toBe(changed);
 		await workbench.quickaccess.runCommand('git.unstageHunk');
 		await choose(page, 'main.ts');
-		await page.locator('.ash-quick-pick').getByRole('option').first().click();
+		await page.getByRole('dialog', { name: 'Choose a change block', exact: true }).getByRole('option').first().click();
 		await expect.poll(index).toBe(original);
 
 		await workbench.openExplorer();
@@ -327,18 +330,21 @@ test.describe('SCM commit authorization', () => {
 				dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [folder] })) as typeof dialog.showOpenDialog;
 			}, child);
 		}
-		await workbench.quickaccess.runCommand('workbench.action.files.openFolder');
-		if (target.kind === 'electron') {
-			await page.getByRole('dialog', { name: 'Ash', exact: true }).getByRole('button', { name: 'Trust Folder & Enable Features', exact: true }).click();
-		} else {
-			const picker = page.getByRole('dialog', { name: 'Choose a server folder', exact: true });
-			await picker.getByText('commit-child', { exact: true }).click();
-			await picker.getByText('Select this folder', { exact: true }).click();
-			await page.getByRole('dialog', { name: 'Authorize Server Folder', exact: true }).getByRole('button', { name: 'Open Folder', exact: true }).click();
-		}
-		await workbench.waitForReady();
-		await expect(page.locator('.ash-explorer').getByRole('treeitem', { name: /^inside\.ts(?:,|$)/u })).toBeVisible();
-		await workbench.git.open();
+		const parentPrompt = await workbench.dialogs.expectMessage(application, 'Confirm', async () => {
+			await workbench.quickaccess.runCommand('workbench.action.files.openFolder');
+			if (target.kind === 'electron') {
+				await page.getByRole('dialog', { name: 'Ash', exact: true }).getByRole('button', { name: 'Trust Folder & Enable Features', exact: true }).click();
+			} else {
+				const picker = page.getByRole('dialog', { name: 'Choose a server folder', exact: true });
+				await picker.getByText('commit-child', { exact: true }).click();
+				await picker.getByText('Select this folder', { exact: true }).click();
+				await page.getByRole('dialog', { name: 'Authorize Server Folder', exact: true }).getByRole('button', { name: 'Open Folder', exact: true }).click();
+			}
+			await workbench.waitForReady();
+			await expect(page.locator('.ash-explorer').getByRole('treeitem', { name: /^inside\.ts(?:,|$)/u })).toBeVisible();
+			await workbench.git.open();
+		});
+		expect(parentPrompt.buttons).toContain('Open Repository Folder');
 		const input = page.locator('.ash-scm-input');
 		await input.getByRole('textbox', { name: /^Commit message/u }).focus();
 		await page.keyboard.insertText('Keep unauthorized draft');
@@ -349,7 +355,7 @@ test.describe('SCM commit authorization', () => {
 			await workbench.quickaccess.runCommand(scope === 'staged' ? 'git.commitStaged' : 'git.commitAll');
 			if (scope !== 'staged') await choose(page, scope === 'tracked' ? 'Tracked changes only' : 'Tracked and untracked changes');
 			await expect(page.locator('.ash-scm-status')).toHaveText(deniedMessage);
-			await expect(page.getByRole('toolbar', { name: 'Source control actions', exact: true }).getByRole('button', { name: 'Refresh', exact: true })).toBeEnabled();
+			await expect(page.locator('[data-view-id="ash.gitView"] [data-action-id="git.refresh"] button')).toBeEnabled();
 			expect(await git('rev-parse', 'HEAD')).toBe(head);
 			expect(await readFile(join(cwd, '.git/index'))).toEqual(index);
 			expect(await readFile(testWorkspace.file, 'utf8')).toBe('staged outside\n');
@@ -395,30 +401,30 @@ test('Git initialization creates the authorized workspace repository and stages 
 	await workbench.quickaccess.runCommand('git.init');
 	await page.locator('.ash-quick-pick').getByRole('option').first().click();
 	await enter(page, 'review-main');
-	await expect(page.getByRole('region', { name: 'Notifications' })).toContainText('Git repository initialized.');
+	await expect(page.getByRole('region', { name: 'Notifications' })).toContainText('Git repository initialized.', { timeout: 30_000 });
 	await expect.poll(async () => (await run('git', ['symbolic-ref', '--short', 'HEAD'], { cwd: testWorkspace.directory })).stdout.trim()).toBe('review-main');
 	const original = await readFile(testWorkspace.file, 'utf8');
 	await workbench.quickaccess.runCommand('git.stageHunk');
 	await choose(page, 'main.ts');
-	await page.locator('.ash-quick-pick').getByRole('option').first().click();
+	await page.getByRole('dialog', { name: 'Choose a change block', exact: true }).getByRole('option').first().click();
 	await expect(page.getByRole('region', { name: 'Notifications' })).toContainText('Selected changes updated in the index.');
 	await expect.poll(async () => (await run('git', ['show', ':main.ts'], { cwd: testWorkspace.directory })).stdout).toBe(original);
 	await workbench.quickaccess.runCommand('git.unstageHunk');
 	await choose(page, 'main.ts');
-	await page.locator('.ash-quick-pick').getByRole('option').first().click();
+	await page.getByRole('dialog', { name: 'Choose a change block', exact: true }).getByRole('option').first().click();
 	await expect.poll(async () => (await run('git', ['ls-files', 'main.ts'], { cwd: testWorkspace.directory })).stdout).toBe('');
 	expect(await readFile(testWorkspace.file, 'utf8')).toBe(original);
 });
 
 async function enter(page: Page, value: string): Promise<void> {
-	const input = page.getByRole('dialog', { name: 'Quick Input', exact: true }).getByRole('textbox');
+	const input = page.getByRole('dialog').getByRole('textbox');
 	await expect(input).toBeVisible();
 	await input.fill(value);
 	await input.press('Enter');
 }
 async function choose(page: Page, label: string): Promise<void> {
 	const picker = page.locator('.ash-quick-pick');
-	await expect(picker.getByRole('combobox')).toBeVisible();
+	await expect(picker.getByRole('combobox')).toBeVisible({ timeout: 30_000 });
 	await picker.getByRole('combobox').fill(label);
 	await picker.getByRole('option').filter({ hasText: label }).first().click();
 }

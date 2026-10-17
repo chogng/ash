@@ -34,7 +34,8 @@ fn operations_coordinate_across_processes_without_repository_metadata() {
             .unwrap();
         assert!(
             output.status.success(),
-            "{}",
+            "{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr)
         );
         std::fs::read_to_string(path.join("result")).unwrap()

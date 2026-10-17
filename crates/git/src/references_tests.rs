@@ -465,7 +465,25 @@ async fn reviewed_remote_checkout_and_push_pin_repositories_commits_and_local_br
     let source = TestRepository::init();
     source.write("file.txt", "initial\n");
     source.commit_all("Initial");
-    let remote_url = format!("file://localhost{}", remote.root().display());
+    // Exercise Git's real SSH transport and pack processes without a network host.
+    // file://localhost names a UNC share on Windows, and URL rewrites also change
+    // the reviewed identity returned by `git remote get-url`.
+    let transport = remote.root().join("test-ssh.sh");
+    let quote = |value: &str| format!("'{}'", value.replace('\'', "'\\''"));
+    std::fs::write(
+        &transport,
+        format!(
+            "case \"$*\" in\n*git-upload-pack*) exec git upload-pack {root};;\n*git-receive-pack*) exec git receive-pack {root};;\n*) exit 1;;\nesac\n",
+            root = quote(remote.root().to_str().unwrap()),
+        ),
+    ).unwrap();
+    source.git(&[
+        "config",
+        "core.sshCommand",
+        &format!("sh {}", quote(transport.to_str().unwrap())),
+    ]);
+    source.git(&["config", "ssh.variant", "simple"]);
+    let remote_url = "ssh://ash-test/owner/reviewed.git";
     source.git(&["remote", "add", "origin", &remote_url]);
     source.git(&["push", "origin", "main", "HEAD:refs/pull/7/head"]);
     let head = source.git(&["rev-parse", "HEAD"]);

@@ -43,12 +43,7 @@ impl GitRuntime {
             // current-side and working-file snapshots here so the total file count stays honest.
             let status = self.api.status(repository, Some(token))?;
             for change in status.changes.iter().filter(|change| change.conflicted) {
-                let file = self.api.repository_request(
-                    repository,
-                    "conflictFile",
-                    json!({"path":change.path}),
-                    token,
-                )?;
+                let file = self.api.conflict_file(repository, &change.path, token)?;
                 let resource = file_uri(&repository.root_uri, &change.path)?;
                 let mut snapshot = url::Url::parse("git-conflict:/").expect("constant URI");
                 snapshot.set_path(&change.path);
@@ -60,14 +55,14 @@ impl GitRuntime {
                 let mut current = snapshot.clone();
                 current.query_pairs_mut().append_pair("side", "current");
                 snapshot.query_pairs_mut().append_pair("side", "result");
-                let original = content_input(&file["current"], current.to_string(), &change.path);
-                let modified = content_input(&file["result"], snapshot.to_string(), &change.path);
+                let original = content_input(&file.current, current.to_string(), &change.path);
+                let modified = content_input(&file.result, snapshot.to_string(), &change.path);
                 let label = if repositories.len() > 1 {
                     format!("{}: {}", repository.descriptor.label, change.path)
                 } else {
-                    change.path.clone()
+                    change.path.to_string()
                 };
-                items.push(json!({"id":format!("{}:{}",repository.descriptor.id,change.path),"label":label,"original":original,"modified":modified,"binary":file["current"]["kind"]=="binary" || file["result"]["kind"]=="binary","goToFile":{"resource":resource,"label":change.path},"actions":[]}));
+                items.push(json!({"id":format!("{}:{}",repository.descriptor.id,change.path),"label":label,"original":original,"modified":modified,"binary":file.current.is_binary() || file.result.is_binary(),"goToFile":{"resource":resource,"label":change.path},"actions":[]}));
             }
         }
         let label = self.api.text("git.workspaceChanges", &[]);

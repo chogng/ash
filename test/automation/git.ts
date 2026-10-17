@@ -24,9 +24,11 @@ export class Git {
 
 	async selectTitleMenu(application: PlaywrightApplication, path: readonly string[]): Promise<void> {
 		await this.open();
+		await this.page.locator('[data-view-id="ash.gitView"] .ash-pane-view-header').hover();
 		const toolbar = this.page.getByRole('toolbar', { name: 'Source control actions', exact: true });
 		// Refresh becomes enabled only after the selected provider has finished its operation.
-		await expect(toolbar.getByRole('button', { name: 'Refresh', exact: true })).toBeEnabled();
+		await expect(this.page.locator('[data-view-id="ash.gitView"] [data-action-id="git.refresh"] button')).toBeEnabled();
+		await this.page.locator('[data-view-id="ash.gitView"] .ash-pane-view-header').hover();
 		await this.menus.select(application, () => toolbar.getByRole('button', { name: 'More Actions', exact: true }).click(), path);
 	}
 }

@@ -1,4 +1,5 @@
 use super::git_turn_changes_message::spawn_message_job;
+use super::git_turn_changes_runtime::GitRuntimeHandle;
 use super::git_turn_changes_runtime::GitTurnChangesRuntime;
 use core_api::CoreError;
 use core_api::HookExecutionEvent;
@@ -24,6 +25,41 @@ use worktree::ManagedDirOwner;
 struct ExecutionRootBinding {
     binding: worktree::ManagedDirBinding,
     source: ash_file_access::Dir,
+}
+
+impl HookExecutionObserver for GitRuntimeHandle {
+    fn will_execute(&self, event: &HookExecutionEvent) -> Result<(), CoreError> {
+        let runtime = self.upgrade()?;
+        HookExecutionObserver::will_execute(runtime.as_ref(), event)
+    }
+
+    fn did_finish(&self, event: &HookExecutionEvent) {
+        if let Some(runtime) = self.0.upgrade() {
+            HookExecutionObserver::did_finish(runtime.as_ref(), event);
+        }
+    }
+}
+
+impl TurnExecutionObserver for GitRuntimeHandle {
+    fn will_execute(&self, event: &TurnExecutionStarted) -> Result<(), CoreError> {
+        TurnExecutionObserver::will_execute(self.upgrade()?.as_ref(), event)
+    }
+
+    fn did_finish(&self, event: &TurnExecutionFinished) {
+        if let Some(runtime) = self.0.upgrade() {
+            TurnExecutionObserver::did_finish(runtime.as_ref(), event);
+        }
+    }
+
+    fn tool_will_execute(&self, event: &TurnToolExecutionStarted) -> Result<(), CoreError> {
+        self.upgrade()?.tool_will_execute(event)
+    }
+
+    fn tool_did_finish(&self, event: &TurnToolExecutionFinished) {
+        if let Some(runtime) = self.0.upgrade() {
+            runtime.tool_did_finish(event);
+        }
+    }
 }
 
 impl TurnExecutionObserver for GitTurnChangesRuntime {

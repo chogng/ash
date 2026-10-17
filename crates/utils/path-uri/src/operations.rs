@@ -93,8 +93,42 @@ impl PathUri {
 
     /// Returns the decoded native relative path from `base` to this URI.
     pub fn relative_path_from(&self, base: &Self) -> Option<String> {
-        if self == base {
+        let relative = self.relative_encoded_components_from(base)?;
+        if relative.is_empty() {
             return Some(String::new());
+        }
+        let separator = match self.infer_path_convention()? {
+            PathConvention::Posix => "/",
+            PathConvention::Windows => "\\",
+        };
+        Some(
+            relative
+                .into_iter()
+                .map(decode_segment)
+                .collect::<Vec<_>>()
+                .join(separator),
+        )
+    }
+
+    /// Returns UTF-8 relative path components without choosing a platform separator.
+    ///
+    /// Consumers such as Git can join these with their domain's separator. Authority,
+    /// drive spelling and containment use the same rules as `relative_path_from`;
+    /// ambiguous encoded separators and non-UTF-8 components are rejected.
+    pub fn relative_components_from(&self, base: &Self) -> Option<Vec<String>> {
+        self.relative_encoded_components_from(base)?
+            .into_iter()
+            .map(|segment| {
+                urlencoding::decode(segment)
+                    .ok()
+                    .map(std::borrow::Cow::into_owned)
+            })
+            .collect()
+    }
+
+    fn relative_encoded_components_from(&self, base: &Self) -> Option<Vec<&str>> {
+        if self == base {
+            return Some(Vec::new());
         }
         if self.opaque_path_bytes().is_some()
             || base.opaque_path_bytes().is_some()
@@ -109,18 +143,7 @@ impl PathUri {
         if !segments_start_with(&path, &base) {
             return None;
         }
-        let relative = &path[base.len()..];
-        let separator = match convention {
-            PathConvention::Posix => "/",
-            PathConvention::Windows => "\\",
-        };
-        Some(
-            relative
-                .iter()
-                .map(|segment| decode_segment(segment))
-                .collect::<Vec<_>>()
-                .join(separator),
-        )
+        Some(path[base.len()..].to_vec())
     }
 
     /// Lexically resolves absolute or relative native path text against this URI.

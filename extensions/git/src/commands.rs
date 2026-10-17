@@ -99,26 +99,12 @@ impl GitRuntime {
                 let mut deletions = 0_u64;
                 let mut partial = false;
                 for repository in repositories {
-                    let diff =
-                        self.api
-                            .repository_request(&repository, "textDiff", json!({}), token)?;
+                    let summary = self.api.changes_summary(&repository, token)?;
                     // Non-text paths still count as files; line statistics apply to readable text.
-                    let changed = diff["status"]["changes"]
-                        .as_array()
-                        .ok_or_else(|| invalid("Git changes unavailable"))?
-                        .len();
-                    files += changed as u64;
-                    partial |= diff["diffs"]
-                        .as_array()
-                        .ok_or_else(|| invalid("Git text changes unavailable"))?
-                        .len()
-                        < changed;
-                    additions += diff["statistics"]["additions"]
-                        .as_u64()
-                        .ok_or_else(|| invalid("Git statistics unavailable"))?;
-                    deletions += diff["statistics"]["deletions"]
-                        .as_u64()
-                        .ok_or_else(|| invalid("Git statistics unavailable"))?;
+                    files += summary.files as u64;
+                    partial |= summary.partial;
+                    additions += summary.additions;
+                    deletions += summary.deletions;
                 }
                 return Ok(
                     json!({"files":files,"additions":additions,"deletions":deletions,"partial":partial}),

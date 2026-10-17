@@ -294,6 +294,7 @@ for (const language of ['en', 'zh-CN']) test(`SCM commit message action handles 
 		await input.locator('.ash-scm-input-editor').click({ position: { x: 10, y: 10 } });
 		await expect(editor).toBeFocused();
 		await editor.pressSequentially('Keep my draft');
+		await expect.poll(() => page.evaluate(() => window.gitScmPaneIntegration.draft())).toBe('Keep my draft');
 		await page.evaluate(() => window.gitScmPaneIntegration.configureGenerator());
 		await expect(button).toBeEnabled();
 		await page.keyboard.press('Tab');

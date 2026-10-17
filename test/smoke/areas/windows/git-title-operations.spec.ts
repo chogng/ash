@@ -18,7 +18,7 @@ test('Changes title commit submenu commits staged content and discard preserves 
 	await workbench.git.selectTitleMenu(application, ['Changes', 'Stage All Changes']);
 	await expect.poll(() => git('show', ':main.ts')).toBe('const value = 8;');
 	// The backend index is updated before the response unlocks the commit input.
-	await expect(page.getByRole('toolbar', { name: 'Source control actions', exact: true }).getByRole('button', { name: 'Commit Staged', exact: true })).toBeEnabled();
+	await expect(page.locator('[data-view-id="ash.gitView"] [data-action-id="git.commitStaged"] button')).toBeEnabled();
 	const editor = page.locator('.ash-scm-input').getByRole('textbox', { name: /^Commit message/u });
 	await editor.focus();
 	await page.keyboard.insertText('Commit from submenu');
@@ -30,10 +30,10 @@ test('Changes title commit submenu commits staged content and discard preserves 
 	const untracked = join(cwd, 'keep-untracked.txt');
 	await writeFile(untracked, 'keep this file\n');
 	await expect(page.locator('.ash-scm-change')).toHaveCount(2);
-	const cancelled = await workbench.dialogs.expectMessage(application, 'Confirm', () => workbench.git.selectTitleMenu(application, ['Changes', 'Discard All Changes…']));
+	const cancelled = await workbench.dialogs.expectMessage(application, 'Confirm Git Operation', () => workbench.git.selectTitleMenu(application, ['Changes', 'Discard All Changes…']));
 	expect(cancelled.message).toContain('Discard changes in main.ts?');
 	expect(await readFile(testWorkspace.file, 'utf8')).toBe('const value = 9;\n');
-	await workbench.dialogs.confirm(application, 'Confirm', 'Confirm', () => workbench.git.selectTitleMenu(application, ['Changes', 'Discard All Changes…']));
+	await workbench.dialogs.confirm(application, 'Confirm Git Operation', 'Continue', () => workbench.git.selectTitleMenu(application, ['Changes', 'Discard All Changes…']));
 	await expect.poll(() => readFile(testWorkspace.file, 'utf8')).toBe('const value = 8;\n');
 	expect(await readFile(untracked, 'utf8')).toBe('keep this file\n');
 	expect(await git('status', '--porcelain')).toBe('?? keep-untracked.txt');
@@ -61,7 +61,7 @@ test('Changes title stash menu includes untracked files, applies without droppin
 	expect(await git('stash', 'list')).toContain('title-stash-all');
 	await workbench.git.selectTitleMenu(application, ['Stash', 'Delete Stash…']);
 	await workbench.dialogs.confirm(application, 'Confirm Git Operation', 'Continue', () => choose(page, 'title-stash-all'));
-	await expect.poll(() => git('stash', 'list')).toBe('');
+	await expect.poll(() => git('for-each-ref', '--format=%(refname)', 'refs/stash')).toBe('');
 	expect(await readFile(testWorkspace.file, 'utf8')).toBe('const value = 11;\n');
 	expect(await readFile(untracked, 'utf8')).toBe('stash this file\n');
 });
@@ -86,6 +86,7 @@ test('Changes title cherry-pick menu copies the selected commit onto the current
 });
 
 test('Changes title remote menus fetch, pull, push and delete an actual remote branch', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench, testWorkspace }) => {
+	test.slow(); // Four transport operations against an actual remote repository.
 	const cwd = testWorkspace.directory;
 	const git = async (...args: string[]) => (await run('git', args, { cwd })).stdout.trim();
 	// Local remotes live under .git so they stay inside the authorized workspace
@@ -112,10 +113,10 @@ test('Changes title remote menus fetch, pull, push and delete an actual remote b
 	const remoteHead = await remoteGit('rev-parse', 'HEAD');
 	const previousHead = await git('rev-parse', 'HEAD');
 	await workbench.git.selectTitleMenu(application, ['Fetch']);
-	await expect.poll(() => git('rev-parse', 'refs/remotes/origin/main')).toBe(remoteHead);
+	await expect.poll(() => git('rev-parse', 'refs/remotes/origin/main'), { timeout: 30_000 }).toBe(remoteHead);
 	expect(await git('rev-parse', 'HEAD')).toBe(previousHead);
 	await workbench.git.selectTitleMenu(application, ['Pull, Push', 'Pull']);
-	await expect.poll(() => git('rev-parse', 'HEAD')).toBe(remoteHead);
+	await expect.poll(() => git('rev-parse', 'HEAD'), { timeout: 30_000 }).toBe(remoteHead);
 	expect(await readFile(join(cwd, 'remote.txt'), 'utf8')).toBe('pulled from remote\n');
 	await workbench.git.selectTitleMenu(application, ['Pull']);
 	await workbench.git.selectTitleMenu(application, ['Pull, Push', 'Fetch']);
@@ -125,7 +126,7 @@ test('Changes title remote menus fetch, pull, push and delete an actual remote b
 	const localHead = await git('rev-parse', 'HEAD');
 	await workbench.git.selectTitleMenu(application, ['Push']);
 	const bareGit = async (...args: string[]) => (await run('git', args, { cwd: remote })).stdout.trim();
-	await expect.poll(() => bareGit('rev-parse', 'refs/heads/main')).toBe(localHead);
+	await expect.poll(() => bareGit('rev-parse', 'refs/heads/main'), { timeout: 30_000 }).toBe(localHead);
 	await workbench.git.selectTitleMenu(application, ['Pull, Push', 'Push']);
 	await workbench.git.selectTitleMenu(application, ['Branch', 'Delete Remote Branch…']);
 	await workbench.dialogs.confirm(application, 'Confirm Git Operation', 'Continue', () => choose(workbench.page, 'origin/title-delete'));
@@ -135,6 +136,7 @@ test('Changes title remote menus fetch, pull, push and delete an actual remote b
 
 test('Changes title clone menu creates a real desktop checkout and is disabled in the browser', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, workbench, testWorkspace }) => {
 	await workbench.git.open();
+	await workbench.page.locator('[data-view-id="ash.gitView"] .ash-pane-view-header').hover();
 	const toolbar = workbench.page.getByRole('toolbar', { name: 'Source control actions', exact: true });
 	const menu = await workbench.menus.inspect(application, () => toolbar.getByRole('button', { name: 'More Actions', exact: true }).click());
 	expect(menu.find(item => item.label === 'Clone')?.enabled).toBe(target.kind === 'electron');
@@ -151,13 +153,14 @@ test('Changes title clone menu creates a real desktop checkout and is disabled i
 			dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder] });
 		}, destination);
 		await workbench.git.selectTitleMenu(application, ['Clone']);
-		const input = workbench.page.getByRole('textbox', { name: 'Clone Repository', exact: true });
+		const input = workbench.page.getByRole('dialog', { name: 'Clone Repository', exact: true }).getByRole('textbox');
 		await input.fill(remote);
 		const result = await workbench.dialogs.expectMessage(application, 'Repository cloned', () => input.press('Enter'));
 		const checkout = join(destination, 'title-clone-source');
 		expect(result.message).toContain(await realpath(checkout));
 		expect((await run('git', ['rev-parse', 'HEAD'], { cwd: checkout })).stdout).toBe((await run('git', ['rev-parse', 'HEAD'], { cwd })).stdout);
-		expect(await readFile(join(checkout, 'main.ts'), 'utf8')).toBe('const value = 1;\n');
+		// Clone honors the host's checkout line-ending policy.
+		expect((await readFile(join(checkout, 'main.ts'), 'utf8')).replace(/\r\n/g, '\n')).toBe('const value = 1;\n');
 	} finally {
 		await application.evaluate(({ dialog }, original) => { dialog.showOpenDialog = original; }, original);
 		await original.dispose();
@@ -165,7 +168,7 @@ test('Changes title clone menu creates a real desktop checkout and is disabled i
 });
 
 async function enter(page: Page, value: string): Promise<void> {
-	const input = page.getByRole('dialog', { name: 'Quick Input', exact: true }).getByRole('textbox');
+	const input = page.getByRole('dialog').getByRole('textbox');
 	await input.fill(value);
 	await input.press('Enter');
 }

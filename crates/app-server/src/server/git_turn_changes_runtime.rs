@@ -59,6 +59,36 @@ pub(super) struct GitTurnChangesRuntime {
     pub(super) history_restorations: std::path::PathBuf,
 }
 
+/// Callback registries can outlive the App Server; they must not own its directories.
+pub(super) struct GitRuntimeHandle(pub(super) std::sync::Weak<GitTurnChangesRuntime>);
+
+impl GitRuntimeHandle {
+    pub(super) fn upgrade(&self) -> Result<Arc<GitTurnChangesRuntime>, core_api::CoreError> {
+        self.0
+            .upgrade()
+            .ok_or_else(|| core_api::CoreError::Execution("Thread file owner was disposed".into()))
+    }
+}
+
+impl Drop for GitTurnChangesRuntime {
+    fn drop(&mut self) {
+        // File and Hook services can still be retained by callback registries. Their
+        // Thread grants belong to this runtime and must release Windows handles now.
+        let bindings = self
+            .dirs
+            .bindings
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for (thread, binding) in bindings.iter() {
+            self.dirs.file_access.unbind_thread_dir(thread);
+            self.dirs.hooks.unbind_thread_dir(thread);
+            if let Err(error) = self.dirs.release_search(binding.checkout_root()) {
+                log::warn!("cannot release disposed Thread search directory: {error}");
+            }
+        }
+    }
+}
+
 impl GitTurnChangesRuntime {
     pub(super) fn open(
         database_path: &Path,
@@ -92,7 +122,7 @@ impl GitTurnChangesRuntime {
             file_watchers: RwLock::new(BTreeMap::new()),
             history_restorations: database_path.with_extension("history-restorations"),
         });
-        let hook_observer: Arc<dyn core_api::HookExecutionObserver> = runtime.clone();
+        let hook_observer = Arc::new(GitRuntimeHandle(Arc::downgrade(&runtime)));
         dirs.hooks.set_execution_observer(hook_observer);
         for (thread_id, binding) in runtime
             .dirs

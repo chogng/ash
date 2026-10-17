@@ -47,7 +47,16 @@ impl RepositoryOperationLock {
             std::sync::TryLockError::Poisoned(_) => io::Error::other("repository lock poisoned"),
         })?;
         let file = self.open()?;
-        file.try_lock_exclusive()?;
+        file.try_lock_exclusive().map_err(|error| {
+            // fs2 reports Windows lock contention as ERROR_LOCK_VIOLATION, whose
+            // std::io kind is not WouldBlock. Callers must queue on OS contention
+            // just as they do when another thread holds the local mutex.
+            if error.raw_os_error() == fs2::lock_contended_error().raw_os_error() {
+                io::Error::new(io::ErrorKind::WouldBlock, error)
+            } else {
+                error
+            }
+        })?;
         Ok(RepositoryOperationGuard {
             file,
             _local: local,

@@ -24,7 +24,7 @@ const provider = (value = 'draft', inputRevision = 0): JsonValue => ({ id: 'repo
 function fleet(providers: JsonValue[] = [provider()]): ExtensionHostFleetSnapshot {
 	return { generation: 1, extensions: [{ id: 'ash.git', version: '1.0.0', packageDigest: 'sha256:' + 'a'.repeat(64), runtimeApiVersion: 1, ...source, lifecycle: 'ready', failure: undefined, registrations: [{ kind: 'sourceControl', registrationId: 'ash.scm', revision: 1, providers }], stderr: '', outputEvents: [] }] };
 }
-function fixture(invoke: IExtensionHostApi['invoke'], providers?: JsonValue[]) {
+function fixture(invoke: IExtensionHostApi['invoke'], providers?: JsonValue[], reconcile?: IExtensionHostApi['reconcile']) {
 	const lifetime = new DisposableStore();
 	const scm = lifetime.add(new SCMService()); const view = lifetime.add(new SCMViewService(scm));
 	const quickDiff = lifetime.add(new QuickDiffService()); const resolvers = lifetime.add(new MultiDiffSourceResolverService());
@@ -32,7 +32,7 @@ function fixture(invoke: IExtensionHostApi['invoke'], providers?: JsonValue[]) {
 	const decorations = { registerDecorationsProvider(value: IDecorationsProvider) { decorationProviders.add(value); return { dispose: () => decorationProviders.delete(value) }; } } as unknown as IDecorationsService;
 	const contexts = lifetime.add(new ContextKeyService());
 	const commands = new CommandRegistry();
-	const bridge = lifetime.add(new MainThreadSCM(10_000, error => errors.push(error), commands, { invoke } as IExtensionHostApi, scm, view, {} as ICommandService, resolvers, quickDiff, decorations, contexts));
+	const bridge = lifetime.add(new MainThreadSCM(10_000, error => errors.push(error), commands, { invoke, reconcile } as IExtensionHostApi, scm, view, {} as ICommandService, resolvers, quickDiff, decorations, contexts));
 	bridge.update(fleet(providers));
 	return { lifetime, scm, view, bridge, decorationProviders, errors, contexts, commands };
 }
@@ -444,6 +444,42 @@ test('SCM retiring an initializer cancels delayed retries and cannot overwrite i
 		assert.equal(attempts, 1);
 		assert.notEqual(value.contexts.getValue('scm.providerState.ash.git'), 'failed');
 	} finally { mock.timers.reset(); }
+});
+
+test('SCM reports activation failure before registration and retries through the fleet owner', async () => {
+	const modes: string[] = [];
+	const ready = fleet([]);
+	const value = fixture(async () => null, [], async mode => { modes.push(mode); return ready; });
+	using cleanup = value.lifetime;
+	await settleCallbacks();
+	const runtime = ready.extensions[0]!;
+	for (const lifecycle of ['failed', 'crashLoop', 'stopped'] as const) {
+		value.bridge.update({ generation: 2, extensions: [{ ...runtime, lifecycle, registrations: [] }] });
+		assert.equal(value.contexts.getValue('scm.providerState.ash.git'), 'failed');
+		assert.equal([...value.scm.repositories].length, 0);
+	}
+	await value.commands.getCommand('workbench.scm.action.retryInitialization')!({} as ServicesAccessor);
+	assert.deepEqual(modes, ['restartFailed']);
+	value.bridge.update({ generation: 3, extensions: [{ ...runtime, lifecycle: 'dormant', registrations: [] }] });
+	assert.equal(value.contexts.getValue('scm.providerState.ash.git'), 'initializing');
+	value.bridge.update(ready);
+	await settleCallbacks();
+	assert.equal(value.contexts.getValue('scm.providerState.ash.git'), 'ready');
+	value.bridge.clear();
+	assert.notEqual(value.contexts.getValue('scm.providerState.ash.git'), 'ready');
+});
+
+test('SCM initialization completion preserves another runtime activation failure until it is retired', async () => {
+	const initialized = new DeferredPromise<JsonValue>();
+	const value = fixture(() => initialized.p, []);
+	using cleanup = value.lifetime;
+	const ready = fleet([]);
+	value.bridge.update({ generation: 2, extensions: [...ready.extensions, { ...ready.extensions[0]!, id: 'test.failed', lifecycle: 'failed', registrations: [] }] });
+	await initialized.complete(null);
+	await settleCallbacks();
+	assert.equal(value.contexts.getValue('scm.providerState.test.failed'), 'failed');
+	value.bridge.update(ready);
+	assert.notEqual(value.contexts.getValue('scm.providerState.test.failed'), 'failed');
 });
 
 test('Git welcome predicates distinguish scanning, failure, disconnected and confirmed empty states in English and Chinese', async () => {

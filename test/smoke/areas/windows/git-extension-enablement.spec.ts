@@ -1,12 +1,14 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { appendFile, cp, readFile, writeFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
 import type { Workbench } from '../../../automation/workbench.js';
 
 async function toggleGit(workbench: Workbench, state: 'Enabled' | 'Disabled'): Promise<void> {
 	await workbench.quickaccess.runCommand('ash.extensions.manageBuiltIn');
-	const extension = workbench.page.locator('.ash-extensions [data-package-id="ash.git"]');
-	await extension.click();
-	const details = workbench.page.locator('.ash-extension-editor');
+	await workbench.page.getByRole('searchbox', { name: 'Search Extensions', exact: true }).fill('ash.git');
+	const extension = workbench.page.getByRole('listbox', { name: 'Extensions', exact: true }).locator('[data-package-id="ash.git"]');
+	await extension.getByText('ash.git', { exact: true }).first().click();
+	const details = workbench.page.locator('.ash-extension-editor:visible').filter({ hasText: 'ash.git' });
 	await expect(details).toContainText(state);
 	await details.getByRole('button', { name: state === 'Enabled' ? 'Disable' : 'Enable', exact: true }).click();
 	await expect(details).toContainText(state === 'Enabled' ? 'Disabled' : 'Enabled');
@@ -19,8 +21,23 @@ test.describe('Git extension enablement in the full product', () => {
 
 	for (const reloadMode of ['restart', 'renderer reload'] as const) {
 		const title = reloadMode === 'restart' ? 'disabled Git preserves independent SCM, editable diff, undo and saving through enablement and reload' : 'disabled Git preserves independent SCM, editable diff, undo and saving through enablement and renderer reload';
-		test(title, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench, reloadWorkbench }, testInfo) => {
-			test.skip(!process.env.ASH_WEB_EXTENSION_PATHS?.includes('scm-extension'), 'Requires the independent SCM extension fixture.');
+		test(title, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, testWorkspace, workbench, reloadWorkbench }, testInfo) => {
+			test.slow(); // Installs a provider, exercises editing, and restores two windows.
+			// Exercise an admitted package through the public install flow. Merely exposing a
+			// package in ASH_WEB_EXTENSION_PATHS does not authorize its scripts to execute.
+			await cp(resolve(import.meta.dirname, '../../../fixtures/scm-extension'), join(testWorkspace.directory, 'scm-fixture'), { recursive: true });
+			await appendFile(join(testWorkspace.directory, '.git/info/exclude'), '\n/scm-fixture/\n');
+			await workbench.quickaccess.runCommand('ash.extensions.installLocal');
+			const install = workbench.page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
+			await install.getByRole('textbox').fill('scm-fixture');
+			await workbench.dialogs.expectMessage(application, 'Information', () => install.getByRole('button', { name: 'Install', exact: true }).click());
+			await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
+			await workbench.page.getByRole('listbox', { name: 'Installed Extensions', exact: true }).locator('[data-package-id="ash-test/scm-fixture"]').click();
+			const details = workbench.page.locator('.ash-extension-editor:visible').filter({ hasText: 'ash-test/scm-fixture' });
+			await details.getByRole('button', { name: 'Enable', exact: true }).click();
+			await expect(details).toHaveAttribute('aria-busy', 'false');
+			await expect(details.getByRole('button', { name: 'Disable', exact: true })).toBeVisible();
+			await workbench.dialogs.confirm(application, 'Independent SCM fixture', 'Grant permissions', () => details.getByRole('button', { name: 'Grant permissions', exact: true }).click());
 			const reload = async (): Promise<void> => {
 				if (reloadMode === 'restart') {
 					({ workbench } = await reloadWorkbench());
@@ -39,7 +56,7 @@ test.describe('Git extension enablement in the full product', () => {
 				await testInfo.attach('Git activation log', { body: log, contentType: 'text/plain' });
 				throw new Error(log, { cause: error });
 			}
-			await expect(workbench.page.getByRole('button', { name: 'Open Changes for main.ts', exact: true })).toBeVisible();
+			await expect(workbench.page.getByRole('button', { name: 'Open main.ts for Changes', exact: true })).toBeVisible();
 			await workbench.quickaccess.runCommand('ash.scm.fixture.activate');
 			const changes = workbench.page.locator('[data-view-id="ash.gitView"]');
 			await expect(changes.locator('.stanza-editor-placeholder-text')).toHaveText('Independent message');
@@ -55,7 +72,7 @@ test.describe('Git extension enablement in the full product', () => {
 			await workbench.page.keyboard.insertText('const value = 3;\n');
 			await expect(group.tabs.filter({ hasText: 'Independent comparison' })).toHaveAttribute('aria-label', /unsaved/u);
 			await toggleGit(workbench, 'Enabled');
-			await expect(workbench.page.getByRole('button', { name: 'Open Changes for main.ts', exact: true })).toHaveCount(0);
+			await expect(workbench.page.getByRole('button', { name: 'Open main.ts for Changes', exact: true })).toHaveCount(0);
 			await expect(workbench.page.getByRole('button', { name: 'Open independent diff', exact: true })).toBeVisible();
 			await expect(changes.locator('.stanza-editor-placeholder-text')).toHaveText('Independent message');
 			await expect(diff).toBeVisible();
@@ -93,7 +110,7 @@ test.describe('Git extension enablement in the full product', () => {
 				await expect(workbench.editors.groupAt(0).content.locator('.stanza-diff-editor:visible .modified .stanza-editor-line-text')).toContainText(['const value = 3;']);
 			}
 			await workbench.quickaccess.runCommand('ash.scm.fixture.activate');
-			await expect(workbench.page.getByRole('button', { name: 'Open Changes for main.ts', exact: true })).toHaveCount(0);
+			await expect(workbench.page.getByRole('button', { name: 'Open main.ts for Changes', exact: true })).toHaveCount(0);
 			await expect(workbench.page.getByRole('button', { name: 'Open independent diff', exact: true })).toBeVisible();
 			if (reloadMode === 'renderer reload') {
 				// CDP reload bypasses the Desktop shutdown handshake; exercise editors again in the new realm.
@@ -104,7 +121,7 @@ test.describe('Git extension enablement in the full product', () => {
 			await expect(workbench.page.locator('.ash-scm-repository-name')).toHaveCount(2);
 			await reload();
 			await workbench.git.open();
-			await expect(workbench.page.getByRole('button', { name: 'Open Changes for main.ts', exact: true })).toBeVisible();
+			await expect(workbench.page.getByRole('button', { name: 'Open main.ts for Changes', exact: true })).toBeVisible();
 			await expect(workbench.page.locator('.ash-scm-input')).toBeVisible();
 			await expect.poll(() => readFile(testWorkspace.file, 'utf8')).toBe('const value = 3;\n');
 			await workbench.page.screenshot({ path: testInfo.outputPath('git-reenabled-after-reload.png') });

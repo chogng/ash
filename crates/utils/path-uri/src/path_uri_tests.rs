@@ -136,6 +136,54 @@ fn containment_rejects_encoded_native_separators() {
 }
 
 #[test]
+fn relative_components_preserve_names_without_host_path_conversion() {
+    for root in [
+        "file:///workspace",
+        "file:///c:/workspace",
+        "file://server/share/workspace",
+    ] {
+        let root = PathUri::parse(root).unwrap();
+        let child = root.join_descendant("src/中文 +%20.txt").unwrap();
+        assert_eq!(
+            child.relative_components_from(&root),
+            Some(vec!["src".into(), "中文 +%20.txt".into()])
+        );
+        assert_eq!(root.relative_components_from(&root), Some(Vec::new()));
+        for suffix in ["src%2Fsecret", "%FF.txt"] {
+            let child = PathUri::parse(&format!("{root}/{suffix}")).unwrap();
+            assert_eq!(child.relative_components_from(&root), None);
+        }
+        let sibling = PathUri::parse(&format!("{root}-other/file.txt")).unwrap();
+        assert_eq!(sibling.relative_components_from(&root), None);
+    }
+    let root = PathUri::parse("file:///c:/workspace").unwrap();
+    let child = PathUri::parse("file:///C:/workspace/file.txt").unwrap();
+    assert_eq!(
+        child.relative_components_from(&root),
+        Some(vec!["file.txt".into()])
+    );
+    assert_eq!(
+        PathUri::parse("file:///C:/workspace/src%5Csecret")
+            .unwrap()
+            .relative_components_from(&root),
+        None
+    );
+    assert_eq!(
+        PathUri::parse("file://other/share/workspace/file.txt")
+            .unwrap()
+            .relative_components_from(&root),
+        None
+    );
+    let posix = PathUri::parse("file:///workspace").unwrap();
+    assert_eq!(
+        PathUri::parse("file:///workspace/back%5Cslash")
+            .unwrap()
+            .relative_components_from(&posix),
+        Some(vec!["back\\slash".into()])
+    );
+}
+
+#[test]
 fn containment_decodes_segments_without_crossing_path_conventions() {
     let root = PathUri::parse("file:///work").unwrap();
     let encoded = PathUri::parse("file:///w%6Frk/src/%FF.rs").unwrap();

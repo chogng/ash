@@ -210,4 +210,19 @@ async fn retained_object_reads_survive_linked_checkout_removal_and_gc() {
             .await
             .is_err()
     );
+    // std canonicalization produces a device path on Windows; the Git boundary
+    // must accept it when releasing the last reference after checkout removal.
+    let git_dir = std::fs::canonicalize(repository.common_dir()).unwrap();
+    let reference = crate::GitPrivateRef::new("refs/ash/changes/retained/after".into()).unwrap();
+    for _ in 0..2 {
+        client
+            .delete_private_ref_at_git_dir(&git_dir, &reference)
+            .await
+            .unwrap();
+    }
+    assert!(
+        fixture
+            .git(&["for-each-ref", reference.as_str()])
+            .is_empty()
+    );
 }

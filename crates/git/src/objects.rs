@@ -269,7 +269,7 @@ impl GitClient {
         git_directory: &Path,
         reference: &GitPrivateRef,
     ) -> GitResult<()> {
-        let directory = std::fs::canonicalize(git_directory)
+        let directory = dunce::canonicalize(git_directory)
             .map_err(|error| GitError::io("resolve checkpoint Git directory", error))?;
         self.run_mutation(
             &directory,
@@ -333,7 +333,7 @@ impl GitClient {
         before: &GitTreeId,
         after: &GitTreeId,
     ) -> GitResult<Vec<GitTreeChange>> {
-        let git_directory = std::fs::canonicalize(git_directory)
+        let git_directory = dunce::canonicalize(git_directory)
             .map_err(|error| GitError::io("resolve object store", error))?;
         let raw = self
             .run_query(
@@ -389,7 +389,7 @@ impl GitClient {
         object_id: &str,
         max_bytes: usize,
     ) -> GitResult<(Vec<u8>, bool)> {
-        let git_directory = std::fs::canonicalize(git_directory)
+        let git_directory = dunce::canonicalize(git_directory)
             .map_err(|error| GitError::io("resolve object store", error))?;
         validate_object_id(object_id, "blob object ID")?;
         if max_bytes == 0 {
@@ -436,7 +436,7 @@ impl GitClient {
                 requirement: "must be non-zero",
             });
         }
-        let directory = std::fs::canonicalize(git_directory)
+        let directory = dunce::canonicalize(git_directory)
             .map_err(|error| GitError::io("resolve retained Git object directory", error))?;
         let output = self
             .run_query(
