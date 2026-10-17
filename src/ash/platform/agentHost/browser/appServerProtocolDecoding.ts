@@ -22,7 +22,11 @@ export type DecodedAppServerFrame = DecodedAppServerCall
 
 /** Both paths share parsing and method-specific generated payload validation. */
 export function decodeAppServerFrame(frame: string, context: AppServerDecodeContext): DecodedAppServerFrame {
-	const message: unknown = JSON.parse(frame);
+	return decodeAppServerMessage(JSON.parse(frame), context);
+}
+
+/** Validate and route one decoded wire value; codecs do not own request state. */
+export function decodeAppServerMessage(message: unknown, context: AppServerDecodeContext): DecodedAppServerFrame {
 	const envelope = decodeAppServerEnvelope(message);
 	if (envelope.kind === 'notification') return { kind: 'notification', notification: decodeAppServerNotification(message) };
 	if (envelope.kind === 'serverRequest') {

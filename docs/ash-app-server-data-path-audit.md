@@ -629,3 +629,163 @@ own-property 与 closed record 契约，并复测生产 Worker 及协议客户�
 研究参考：[Off-main-thread](https://web.dev/articles/off-main-thread) 说明 Worker 与通信开销的取舍；
 [Ajv standalone](https://ajv.js.org/standalone.html) 提供构建时生成校验函数的后续候选。
 这些资料支撑方案选择，未把外部 benchmark 的倍数套用到 Ash。
+
+## 11. Protobuf 原型与优化后 JSON 的同数据对比
+
+### 11.1 原型范围与不变的协议 owner
+
+第 10 节校验优化已独立本地提交为 `e50d1e0c2fa5b10372327d200a356a619cb955ba`，未推送。
+提交门禁执行后被范围外 13 个未暂存 TypeScript 文件的格式问题阻断；4 个提交文件的定向格式、
+working-tree／staged whitespace 检查和第 10 节测试通过，按仓库本地提交流程完成。
+
+本原型只进入 `test/integration/browser/protobufPrototype/` 与专用浏览器 fixture，未切换产品 wire
+协议，未增加实验 method、版本协商或 gRPC。Main relay、JSON 行 framing、Electron IPC、后端及
+生产 Worker 默认实现保持原路径。唯一生产代码整理是把 `decodeAppServerFrame` 的 JSON.parse
+之后部分提取为 `decodeAppServerMessage`，由原函数及原型复用。请求路由、pending 生命周期、
+审批、取消、timeout、connection generation、EOF 和 schema 仍归现有协议客户端所有。
+
+原型注入 `AppServerFrameDecoder`：test carrier 用 token 将已收到的 string／buffer 交给 decoder，
+`AppServerFrame.byteLength` 使用本地实际编码长度，接收队列按相同的 4096 帧／320 MiB 限额计费。
+token 不做 base64、不 stringify 已解码的 Protobuf 结果，也不向生产 transport 暴露新入口。
+消费或连接退休时释放输入记录，没有创建第二份业务 pending map。
+
+使用 **protobufjs 8.8.1／protobufjs-cli 2.7.1**，均为 devDependencies。`model.ts` 是测试 wire
+模型的唯一输入，由现有 browser Vite buildStart 生成 `.build/protobuf-prototype/wire.proto` 和 fixture
+目录下 ignored 的 `codec.js`；`codec.d.ts` 声明实际生成 runtime 的接口。静态代码生成在构建阶段执行，
+Worker 不解析 `.proto` 或运行动态代码生成。两种 codec 使用同一个 Worker bundle；冷启动数字
+不能当作分别打包后的产品加载成本。
+
+Thread read 与 syntax/query 的测量字段使用类型化 Protobuf：安全计数采用 uint64，坐标数组采用
+packed uint32；其他字段／控制消息使用 lossless JSON value 表示，未把整个 JSON 文本塞进 bytes。
+它覆盖两种被测 payload 的机械映射，不是完整产品协议的 `.proto` 迁移方案。
+
+### 11.2 保留值、校验与背压
+
+- proto2 optional 标量与外层 array message 保留缺失字段与 `0`／`false`／空数组的区别，
+  不用自动默认值补齐原协议的必填字段。
+- 允许的额外字段通过显式名称和值传递；恢复 own keys 时使用 defineProperty，保留 `__proto__`，
+  不触发原型 setter。未知的原型 wire 字段号被拒绝，不静默丢弃后接受消息。
+- 64 位领域字符串保持字符串；uint64 转 JS 后仍受相同 safe integer／范围校验。
+  无法由某个 typed field 精确表示的值走显式 value 表示，再由原 schema 决定是否拒绝，
+  不截断负数、小数、超界数或把 `-0` 改成 `0`。
+- string 使用严格 UTF-8 Reader 并保留 BOM。JSON 能表示的孤立 UTF-16 surrogate 值／字段名
+  使用显式 UTF-16 bytes 扩展恢复，不能被编码器替换字符。该扩展是保留现有 JSON 值域的原型设计，
+  不代表标准 Protobuf string 本身支持这些值。
+- 解码后的新对象树原地去掉生成类的 prototype、展开数组 wrapper、合并额外字段，得到原有 plain
+  own-field 形状；避免在 Worker 中再复制一整棵规范化结果。之后仍执行同一套完整生成 schema，
+  不把 Protobuf 的结构解码当作取值／必填／枚举／tuple 长度等约束已经验证。
+- protobuf.js 的小输出可能只是池化 backing buffer 的一段 view。只有独占完整 buffer 才直接 transfer；
+  否则复制准确范围，该复制计入编码时间并记录 `inputBackingCopyBytes`，避免发送范围外字节或 detach
+  编码器的共享池。进入 Worker 的两个二进制方案均断言 buffer 确实 detached。
+
+实际浏览器测试暂停首个大响应的 Worker，模拟 carrier 在 4 个未消费**完整帧**后停止交付，释放后
+验证 20 条 notification 全部保序到达，再排空 EOF。这个测试证明消费 Promise 没有在 postMessage
+后提前释放；它不是 Electron 的 chunk carrier，也没有验证新二进制 framing。原有真实 transport
+单测继续覆盖 Main 的 4 个未 ACK **chunk**、部分帧 ACK、端口退休和容量失败；未改变这些实现。
+
+另测 host request 取消只回复一次、迟到 handler 不再回复、disconnect 兑现消费并拒绝 pending、
+重连忽略 retired response、坏 JSON／Protobuf 关闭连接并释放消费，以及 Unicode、未知字段、
+缺失数组、非法 kind、负计数、unsafe integer、截断数据和非法 UTF-8。修复的是原型适配器及 fixture，
+没有放宽原生成 schema。早期错误／超时日志保留在 investigation 中。
+
+### 11.3 采样与计时定义
+
+三种方案是 JSON string、JSON UTF-8 ArrayBuffer transfer 对照、Protobuf ArrayBuffer transfer。
+第二种用于分离“换格式”与“只转移输入 buffer”的收益。都沿用生产 **256 KiB wire bytes** 阈值；
+有界 20 Turn 场景在 UI 同步解析，其余大场景使用真实 Worker。threadWorkload 与第 9 节 fixture
+共用同一 builder，完整结果比较包含 thread 与 transcript 的两份正文，而非只检查条目数量。
+
+每场景每 codec 记录 first-use 一次，再轮转 codec 顺序采集 **7 组 warm**，6 场景合计 **144 样本**。
+每个 warm 样本前通过 Renderer CDP GC；Worker 继续正常 GC。计时包含实际解析、恢复对象形状、
+完整 schema／路由校验、输入发送、结果 structured clone 及 UI 接收；心跳在响应完成时停止，
+完整内容断言不计入响应耗时。first-use 与 warm 分开保存，不跨第 9／10 节不同运行直接比较绝对值。
+
+`parseMs` 对 JSON bytes 包含 UTF-8 decode；`normalizeMs` 单列 Protobuf 形状恢复；`validateMs`
+是相同生成 schema 与路由。`serializeMs` 是 Worker 同步 postMessage 时间；`returnDeliveryMs` 从
+Worker 发送前到 UI 接收，包含该序列化、调度和接收反序列化，二者重叠，不能相加当作复制总成本。
+各列独立取中位数，也不能要求列中位数之和等于总耗时中位数。
+
+编码／必要的 UTF-8 计长与池化 buffer 复制另记 `encodeMs`，在响应和心跳计时外；
+`encodeAndResponseMs` 是每个样本的 JS 编码加响应成本，不是 Rust 后端的端到端延迟。
+没有测 Rust 编码、网络、framing、Main IPC、Chat adapter／DOM 或峰值内存；不能由组件数据宣称
+完整 Desktop 加速或 RSS 下降。完整结果回传仍是 structured clone，Protobuf 并不让普通 JS 对象零复制。
+
+### 11.4 结果：缩小部分载荷，没有获得总耗时优势
+
+Apple M5／macOS ARM64，Node **24.21.0**、Chromium **149.0.7827.55**。下表取最终原地转换版本的
+7 次 warm 中位数；时间为 ms，体积为 bytes。只在本表内比较，不把前轮不同负载下的绝对时间
+当作这次原型的加速收益。
+
+| 相同数据                          |   JSON → Protobuf bytes | Worker | JSON 响应 | JSON bytes 响应 | Protobuf 响应 | JS 编码：JSON → Protobuf |
+| --------------------------------- | ----------------------: | :----: | --------: | --------------: | ------------: | -----------------------: |
+| 有界 20 Turn                      |       177,221 → 168,135 |   否   |       0.2 |             0.2 |           0.6 |                0.1 → 0.5 |
+| 2048 Turn 长历史                  | 18,107,467 → 17,222,287 |   是   |      23.8 |            24.1 |          31.3 |              23.2 → 45.7 |
+| 1 Turn，巨大文本                  | 16,778,516 → 16,777,660 |   是   |       6.9 |             6.5 |           6.1 |              13.5 → 25.4 |
+| 65,536 个六元数值 tuple           |     1,670,907 → 999,298 |   是   |      14.0 |            14.6 |          14.9 |               2.9 → 10.3 |
+| BOM／中文／emoji／组合字符／NUL   |       791,621 → 577,735 |   是   |       0.9 |             1.4 |           1.1 |                1.3 → 2.0 |
+| safe integer／额外字段／surrogate |       358,412 → 302,433 |   是   |       1.3 |             1.3 |           2.2 |                0.6 → 2.4 |
+
+长历史只减少约 **4.9%** wire bytes，响应从 **23.8 → 31.3 ms**。数值 tuple 减少约 **40.2%**
+wire bytes，但响应 **14.0 → 14.9 ms**，没有体现出总耗时优势；小幅差值不作统计显著性结论。
+大文本的响应约少 0.8 ms，而 JS 编码约多 11.9 ms。对应的 JS 编码加响应中位数是
+**20.3 → 30.9 ms**；长历史为 **46.3 → 77.0 ms**，数值 tuple 为 **16.9 → 25.3 ms**。
+这些相加指标仍不代表未测的 Rust 编码或实际网络延迟。
+
+关键阶段拆分如下，发送侧与返回交付重叠，不能相加：
+
+| 数据／codec            | 解析 | 形状恢复 | 同一 schema／路由校验 | Worker 发送侧序列化 | 返回交付（含序列化） |
+| ---------------------- | ---: | -------: | --------------------: | ------------------: | -------------------: |
+| 长历史／JSON           |  3.0 |      0.0 |                   6.9 |                 5.0 |                 11.1 |
+| 长历史／JSON bytes     |  5.9 |      0.0 |                   7.1 |                 4.9 |                 11.2 |
+| 长历史／Protobuf       |  6.7 |      6.3 |                   7.1 |                 4.7 |                 10.2 |
+| 大文本／JSON           |  1.8 |      0.0 |                   0.1 |                 1.6 |                  2.9 |
+| 大文本／JSON bytes     |  3.3 |      0.0 |                   0.1 |                 1.6 |                  2.9 |
+| 大文本／Protobuf       |  2.7 |      0.1 |                   0.1 |                 1.6 |                  2.7 |
+| 数值 tuple／JSON       |  2.2 |      0.0 |                   3.6 |                 4.2 |                  8.1 |
+| 数值 tuple／JSON bytes |  2.5 |      0.0 |                   3.6 |                 4.2 |                  8.5 |
+| 数值 tuple／Protobuf   |  2.6 |      1.0 |                   3.7 |                 4.2 |                  7.2 |
+
+单纯把 JSON string 换成可 transfer 的 UTF-8 buffer，长历史的 UI 发送从约 0.9 ms 降到计时精度内
+的 0.0 ms，但 Worker 的 decode／parse 从 3.0 增至 5.9 ms，总响应 23.8 → 24.1 ms。
+结果对象回传在三种格式下都仍有成本，数值 tuple 的发送侧同为 4.2 ms；不能把输入零复制当作
+整条链路已经零复制。0.0 是浏览器计时精度与中位数结果，不是数学意义上的零耗时。
+
+最初的 Protobuf 版本重新创建规范化对象树；其长历史恢复阶段约 11.9 ms，数值 tuple 约 7.7 ms。
+最终版本原地转换，并给安全计数采用 varint，避免把这部分可消除的复制留在比较对象里。
+两轮 JSON 基线也发生变化，不能把两轮 Protobuf 总耗时差全部归因于该修改。
+
+### 11.5 判断、验证与复现
+
+这版**保留现有对象形状与完整生成 schema**的原型不支持全量迁移 Protobuf：常见的有界 20 Turn
+JSON 路径已经很短；长正文不因字段编号编码而消失；数值数组虽能缩小 wire bytes，恢复 JS tuple
+和完整对象回传仍有成本。只有实际网络／带宽场景证明体积占主导时，才值得进一步评估该收益。
+
+优先继续减少重复正文、有界分页加字节预算；数值结果可单独研究 typed array／更有界的消费契约，
+同时衡量领域适配与回传成本。若研究生成式校验，JSON 也应使用同一生成校验器作为对照，
+不能把减少校验工作全算成二进制编码收益。本次未替换 schema，因而也不证明生成式／融合校验
+没有潜力。未建模领域的 generic fallback、UTF-16 扩展、原型 wire 深度限制和真实二进制 framing
+仍需完整迁移设计；这里没有声称所有产品消息已经具备可发布的二进制协议。
+
+生产客户端／decoder／socket／MessagePort 的 **102 项单测、5 文件通过**。完整 browser integration
+类型检查通过，production Renderer 与 protocol 类型检查通过。最终完整构建的 **7 项 Chromium
+测试通过**，包括原生产 Worker 的 3 项场景和原型的 4 项场景，采集 **144 个 codec 样本**及原有
+48 个 Worker 对照样本。旧让出测试在空 listener 的 2000 条通知不足 4 ms 时会偶发失败，现仅在
+该功能 fixture 中每 100 条加入 1 ms 的受控 listener 工作，确保确实跨越让出预算；性能采样不调用它。
+
+早期测试发现池化 view 不能直接把整个 backing buffer 交付，以及 `--force-number` 的静态 reader
+仍可返回 Long，已分别加入准确范围复制与显式安全转换，未放宽校验。一次完整测试的 7 项断言
+虽通过，但 runner 清理阶段的系统 ps 查询超时，按失败保留日志；随后使用仓库 Node runner
+重新完成构建、7 项测试及正常退出。没有修改系统安全设置或用户应用进程。
+
+复现入口：
+
+```sh
+pnpm test:browser:integration appServerCodec.integration.spec.ts appServerDecode.integration.spec.ts --project=chromium
+# 复用已生成的协议／资源时，仍执行完整 integration typecheck：
+pnpm test:browser:integration:prepared appServerCodec.integration.spec.ts appServerDecode.integration.spec.ts --project=chromium
+```
+
+原始样本、首次使用数据、各次失败和最终报告保存在
+`.build/investigations/app-server-protobuf-p1-2026-10-17/`：`final-app-server-codec-comparison.json`、
+`final-comparison-summary.json`、`browser-protobuf-final.log`、`browser-contracts-final.log`、`unit.log`
+及类型检查日志；成功报告为 `.build/desktop/playwright/editor-browser-o59Eea/report/index.html`。

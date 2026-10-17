@@ -1,9 +1,10 @@
-import { APP_SERVER_METHODS, type SessionThreadReadResult } from '../../../.build/protocol/typescript/index.js';
+import { APP_SERVER_METHODS } from '../../../.build/protocol/typescript/index.js';
 import { AppServerFrameDecoder } from '../../../src/ash/platform/agentHost/browser/appServerFrameDecoder.js';
 import { AppServerProtocolClient } from '../../../src/ash/platform/agentHost/browser/appServerProtocolClient.js';
 import { decodeAppServerFrame, type AppServerDecodeContext, type DecodedAppServerFrame } from '../../../src/ash/platform/agentHost/browser/appServerProtocolDecoding.js';
 import { AppServerFrame, type AppServerTransport, WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT } from '../../../src/ash/platform/agentHost/common/appServerTransport.js';
 import { createTestInitializeResult } from '../../../src/ash/platform/agentHost/test/common/testAppServerProtocol.js';
+import { threadWorkload } from './protobufPrototype/workload.js';
 
 type Variant = 'before' | 'worker';
 class BeforeDecoder extends AppServerFrameDecoder {
@@ -39,12 +40,7 @@ async function prepare(turns: number, textBytes: number): Promise<void> {
 	clients.clear();
 	expectedTurns = turns;
 	expectedTextBytes = textBytes;
-	const usage = { modelInvocations: 0, inputTokens: { reported: 0, complete: true }, outputTokens: { reported: 0, complete: true }, cachedInputTokens: { reported: 0, complete: true }, cacheWriteInputTokens: { reported: 0, complete: true }, reasoningTokens: { reported: 0, complete: true } };
-	const items = Array.from({ length: turns }, (_, index) => ({ type: 'agentMessage' as const, itemId: `answer-${index}`, turnId: `turn-${index}`, text: 'x'.repeat(textBytes) }));
-	const result: SessionThreadReadResult = {
-		thread: { sessionId: 'session', threadId: 'thread', agentId: 'agent', origin: { type: 'root' }, title: 'Decode workload', status: 'active', sequence: turns, advisor: { type: 'off' }, usage, referenceCost: { knownAmounts: [], complete: true }, hookRuns: [], turns: items.map(item => ({ turnId: item.turnId, status: 'completed', kind: 'coding', mode: 'agent', toolMode: 'direct', approvalMode: 'manual', usage, items: [item] })) },
-		transcript: { sessionId: 'session', threadId: 'thread', durableSequence: turns, revision: turns, entries: items.map(item => ({ type: 'item', entryId: `item:${item.itemId}`, turnId: item.turnId, item, transient: false })) },
-	};
+	const result = threadWorkload(turns, textBytes);
 	wireResult = JSON.stringify(result);
 	for (const variant of ['before', 'worker'] as const) {
 		const transport = new ResponseTransport();
@@ -100,6 +96,9 @@ async function burst() {
 	using subscription = client.onNotification(notification => {
 		if (notification.method !== 'session/deleted') throw new Error('Unexpected burst notification');
 		received.push(notification.params.sessionId);
+		// Give this functional yield scenario enough listener work to cross the
+		// drain budget even on fast machines. Performance samples do not call burst.
+		if (received.length % 100 === 0) { const start = performance.now(); while (performance.now() - start < 1) { /* Test-owned listener work. */ } }
 		if (received.length === 1) setTimeout(() => yielded(received.length), 0);
 		if (received.length === 2000) completed();
 	});
