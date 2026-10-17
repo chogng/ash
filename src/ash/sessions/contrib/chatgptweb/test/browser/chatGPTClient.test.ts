@@ -199,6 +199,36 @@ suite('Bundled ChatGPT client', () => {
 		assert.deepEqual(body.messages[0].content, { content_type: 'text', parts: ['Follow up'] });
 	});
 
+	test('separates tool calls and results from answers in history and streamed snapshots', async () => {
+		const input = '{"path":"/GitHub/fixture/fetch_file","args":{"path":"README.md"}}';
+		const messages = [
+			{ id: 'question', author: { role: 'user' }, content: { content_type: 'text', parts: [input] } },
+			{ id: 'call', author: { role: 'assistant' }, recipient: 'functions.execute', channel: 'commentary', content: { content_type: 'code', text: input } },
+			{ id: 'result', author: { role: 'tool', name: 'functions.execute' }, status: 'failed', content: { content_type: 'text', parts: ['File unavailable'] } },
+			{ id: 'progress', author: { role: 'assistant' }, channel: 'commentary', content: { content_type: 'text', parts: ['Checking another source'] } },
+			{ id: 'answer', author: { role: 'assistant' }, recipient: 'all', channel: 'final', content: { content_type: 'code', text: input } },
+		];
+		const client = new ChatGPTClient((async () => json({ current_node: 'answer', mapping: Object.fromEntries(messages.map((message, index) => [message.id, { parent: messages[index - 1]?.id, message }])) })) as typeof fetch);
+		const history = await client.history('fixture', signal());
+		assert.equal(history.parentId, 'answer');
+		assert.deepEqual(history.messages.map(message => message.activity), [
+			undefined, { kind: 'call', tool: 'functions.execute', failed: false },
+			{ kind: 'result', tool: 'functions.execute', failed: true },
+			{ kind: 'progress', tool: undefined, failed: false }, undefined,
+		]);
+		assert.equal(history.messages[0]!.text, input);
+		assert.equal(history.messages[1]!.text, input);
+		assert.equal(history.messages[4]!.text, '```\n' + input + '\n```');
+		const stream = new ReadableStream<Uint8Array>({
+			start(controller) {
+				controller.enqueue(new TextEncoder().encode(messages.map(message => `data: ${JSON.stringify({ conversation_id: 'fixture', message })}\n\n`).join('') + 'data: [DONE]\n\n'));
+				controller.close();
+			}
+		});
+		const updates = await collect(decodeChatGPTStream(stream, signal()));
+		assert.deepEqual(updates.map(update => update.message), history.messages);
+	});
+
 	test('omits empty history messages while retaining content and the actual continuation node', async () => {
 		const client = new ChatGPTClient((async () => {
 			return json({

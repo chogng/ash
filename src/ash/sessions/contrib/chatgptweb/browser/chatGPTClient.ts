@@ -49,6 +49,8 @@ export interface ChatGPTMessage {
 	readonly text: string;
 	readonly resources?: readonly ChatGPTResource[];
 	readonly references?: readonly ChatGPTReference[];
+	/** Execution content stays in the conversation record, separate from answer Markdown. */
+	readonly activity?: { readonly kind: 'call' | 'result' | 'progress'; readonly tool?: string; readonly failed: boolean; };
 }
 export interface ChatGPTHistory {
 	readonly id: string;
@@ -204,7 +206,7 @@ export class ChatGPTClient {
 				&& isRecord(node.message.metadata) && typeof node.message.metadata.thinking_effort === 'string') {
 				thinkingEffort = node.message.metadata.thinking_effort;
 			}
-			if (message && (message.text.trim() || message.resources?.length)) { messages.push(message); }
+			if (message && (message.activity || message.text.trim() || message.resources?.length)) { messages.push(message); }
 			nodeId = typeof node.parent === 'string' ? node.parent : undefined;
 		}
 		return {
@@ -359,12 +361,27 @@ export class ChatGPTClient {
 }
 
 function readMessage(value: unknown, conversationId: string | undefined): ChatGPTMessage | undefined {
-	if (!isRecord(value) || typeof value.id !== 'string' || !isRecord(value.author) || !['user', 'assistant'].includes(value.author.role as string)
+	if (!isRecord(value) || typeof value.id !== 'string' || !isRecord(value.author) || !['user', 'assistant', 'tool'].includes(value.author.role as string)
 		|| !isRecord(value.content)) { return undefined; }
 	if (isRecord(value.metadata) && value.metadata.is_visually_hidden_from_conversation === true) { return undefined; }
 	// The web sends this turn-status node separately from the answer. Treating
 	// it as opaque media creates a content-free message with a web-view link.
 	if (value.content.content_type === 'reasoning_recap') { return undefined; }
+	const recipient = typeof value.recipient === 'string' && value.recipient !== 'all' ? value.recipient : undefined;
+	const result = value.author.role === 'tool';
+	const progress = value.author.role === 'assistant' && ['analysis', 'commentary'].includes(value.channel as string);
+	if (result || (value.author.role === 'assistant' && recipient) || progress) {
+		const text = typeof value.content.text === 'string' ? value.content.text : Array.isArray(value.content.parts)
+			? value.content.parts.map(part => typeof part === 'string' ? part : isRecord(part) && typeof part.text === 'string' ? part.text : JSON.stringify(part)).join('\n') : '';
+		return {
+			id: value.id, role: 'assistant', text,
+			activity: {
+				kind: result ? 'result' : recipient ? 'call' : 'progress',
+				tool: result ? typeof value.author.name === 'string' ? value.author.name : undefined : recipient,
+				failed: ['failed', 'error'].includes(value.status as string) || (isRecord(value.metadata) && value.metadata.is_error === true),
+			},
+		};
+	}
 	const url = conversationId ? `https://chatgpt.com/c/${encodeURIComponent(conversationId)}` : 'https://chatgpt.com/';
 	const fallback = `[${localize('sessions.chatgpt.viewContent', 'View this content in ChatGPT')}](${url})`;
 	const resources: ChatGPTResource[] = [];

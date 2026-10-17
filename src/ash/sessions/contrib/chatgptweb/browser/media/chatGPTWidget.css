@@ -135,6 +135,50 @@
 .ash-chatgpt-message-body a {
 	color: var(--ash-accent-foreground, LinkText);
 }
+.ash-chatgpt-activity {
+	min-width: 0;
+	margin-bottom: var(--ash-spacing-size120);
+	color: var(--ash-description-foreground, GrayText);
+	font-size: var(--ash-fontSize-label1, 12px);
+}
+.ash-chatgpt-activity-summary {
+	padding: var(--ash-spacing-size60) var(--ash-spacing-size40);
+	cursor: pointer;
+	border-radius: var(--ash-cornerRadius-small);
+}
+.ash-chatgpt-activity-summary:hover {
+	background: var(--ash-list-hoverBackground, ButtonFace);
+}
+.ash-chatgpt-activity-summary:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder, Highlight);
+	outline-offset: -1px;
+}
+.ash-chatgpt-activity-label {
+	display: inline-block;
+	max-width: calc(100% - 24px);
+	vertical-align: bottom;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+.ash-chatgpt-activity.failed > summary {
+	color: var(--ash-error-foreground, CanvasText);
+}
+.ash-chatgpt-activity-entry {
+	margin-inline-start: var(--ash-spacing-size120);
+	overflow-wrap: anywhere;
+}
+.ash-chatgpt-activity-content {
+	margin: var(--ash-spacing-size40) 0 var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size80);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	color: var(--ash-foreground, CanvasText);
+	background: var(--ash-text-codeBlockBackground, Canvas);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, transparent);
+	border-radius: var(--ash-cornerRadius-medium);
+}
 .ash-chatgpt-footer {
 	width: 100%;
 	max-width: 808px;

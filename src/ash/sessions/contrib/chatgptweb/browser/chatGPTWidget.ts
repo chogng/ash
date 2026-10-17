@@ -17,6 +17,10 @@ import './media/chatGPTWidget.css';
 export class ChatGPTWidget extends Disposable {
 	private readonly markdownRenderer: ChatContentMarkdownRenderer;
 	private readonly rendered = new Map<string, { element: HTMLElement; body: HTMLElement; markdown?: IRenderedMarkdown; attachments?: ChatAttachmentsContentPart; resources: readonly ChatGPTResource[]; text: string; }>();
+	private readonly activities = new Map<string, {
+		element: HTMLDetailsElement; summary: HTMLElement; label: HTMLElement; active: boolean;
+		entries: Map<string, { element: HTMLDetailsElement; summary: HTMLElement; content: HTMLElement; }>;
+	}>();
 	private renderedConversationId: string | undefined;
 	private readonly scroll = this.element('div', 'ash-chatgpt-scroll');
 	private readonly messages = this.element('div', 'ash-chatgpt-messages');
@@ -82,6 +86,63 @@ export class ChatGPTWidget extends Disposable {
 	public setScrollingOptimization(enabled: boolean): void { this.root.classList.toggle('optimize-scrolling', enabled); }
 	private atBottom(): boolean { return this.scroll.scrollHeight - this.scroll.scrollTop - this.scroll.clientHeight < 80; }
 	private roleLabel(role: ChatGPTMessage['role']): string { return role === 'user' ? localize('sessions.chatgpt.you', 'You') : 'ChatGPT'; }
+
+	private renderActivity(id: string, messages: readonly ChatGPTMessage[], active: boolean): HTMLDetailsElement {
+		let row = this.activities.get(id);
+		if (!row) {
+			const element = this.element('details', 'ash-chatgpt-activity');
+			const summary = this.element('summary', 'ash-chatgpt-activity-summary');
+			const label = this.element('span', 'ash-chatgpt-activity-label');
+			label.setAttribute('aria-live', 'polite');
+			summary.append(label);
+			element.append(summary);
+			row = { element, summary, label, active, entries: new Map() };
+			this.activities.set(id, row);
+		}
+		// Collapse once when the answer starts. Later answer deltas must not close
+		// details the user has deliberately reopened, or remove their keyboard focus.
+		if (row.active && !active) {
+			if (row.element.contains(row.element.ownerDocument.activeElement)) { row.summary.focus({ preventScroll: true }); }
+			row.element.open = false;
+		}
+		row.active = active;
+		row.element.classList.toggle('complete', !active);
+		const latest = messages.at(-1)!;
+		const failed = messages.some(message => message.activity?.failed);
+		const steps = messages.length === 1 ? localize('sessions.chatgpt.activityOneStep', '1 step') : localize('sessions.chatgpt.activitySteps', '{0} steps', messages.length);
+		const label = failed ? localize('sessions.chatgpt.activityFailed', 'Execution process · Some steps failed') : active
+			? latest.activity?.tool ? localize('sessions.chatgpt.activityUsing', 'Using {0}… · {1}', latest.activity.tool, steps)
+				: localize('sessions.chatgpt.activityWorking', 'Working… · {0}', steps)
+			: localize('sessions.chatgpt.activityComplete', 'Execution process · {0}', steps);
+		if (row.label.textContent !== label) { row.label.textContent = label; }
+		row.label.title = label;
+		row.element.classList.toggle('failed', failed);
+		const ids = new Set(messages.map(message => message.id));
+		for (const [entryId, entry] of row.entries) {
+			if (!ids.has(entryId)) { entry.element.remove(); row.entries.delete(entryId); }
+		}
+		for (const message of messages) {
+			let entry = row.entries.get(message.id);
+			if (!entry) {
+				const element = this.element('details', 'ash-chatgpt-activity-entry');
+				const summary = this.element('summary', 'ash-chatgpt-activity-summary');
+				const content = this.element('pre', 'ash-chatgpt-activity-content');
+				element.append(summary, content);
+				entry = { element, summary, content };
+				row.entries.set(message.id, entry);
+				row.element.append(element);
+			}
+			const activity = message.activity!;
+			const name = activity.kind === 'call' ? localize('sessions.chatgpt.activityCall', 'Tool call: {0}', activity.tool ?? '')
+				: activity.kind === 'result' ? localize('sessions.chatgpt.activityResult', 'Tool result: {0}', activity.tool ?? '')
+					: localize('sessions.chatgpt.activityProgress', 'Progress');
+			entry.summary.textContent = activity.failed ? localize('sessions.chatgpt.activityStepFailed', '{0} · Failed', name) : name;
+			// Tool input is untrusted data, never Markdown or executable rich content.
+			if (entry.content.textContent !== message.text) { entry.content.textContent = message.text; }
+		}
+		return row.element;
+	}
+
 	private render(state: ChatGPTState): void {
 		const conversationChanged = state.conversationId !== this.renderedConversationId;
 		const follow = this.atBottom() || conversationChanged;
@@ -96,11 +157,37 @@ export class ChatGPTWidget extends Disposable {
 			state.stopped ? localize('sessions.chatgpt.replyStopped', 'Reply stopped') : '';
 		this.status.hidden = !this.status.textContent;
 		this.messages.setAttribute('aria-busy', String(state.sending || state.busy));
-		const ids = new Set(state.messages.map(message => message.id));
+		const ids = new Set(state.messages.filter(message => !message.activity).map(message => message.id));
+		// One execution entry per user turn, derived from the service-owned record.
+		const groups = new Map<string, ChatGPTMessage[]>();
+		let group: ChatGPTMessage[] | undefined;
+		let latest: ChatGPTMessage | undefined;
+		for (const message of state.messages) {
+			if (message.activity || message.text.trim() || message.resources?.length) { latest = message; }
+			if (message.role === 'user') { group = undefined; }
+			if (message.activity) {
+				if (!group) { group = []; groups.set(message.id, group); }
+				group.push(message);
+			}
+		}
+		for (const [id, row] of this.activities) {
+			if (!groups.has(id)) { row.element.remove(); this.activities.delete(id); }
+		}
 		for (const [id, row] of this.rendered) {
 			if (!ids.has(id)) { row.markdown?.dispose(); row.attachments?.dispose(); row.element.remove(); this.rendered.delete(id); }
 		}
+		let previous: HTMLElement | undefined;
+		const place = (element: HTMLElement): void => {
+			const next = previous ? previous.nextElementSibling : this.messages.firstElementChild;
+			if (next !== element) { this.messages.insertBefore(element, next); }
+			previous = element;
+		};
 		for (const message of state.messages) {
+			if (message.activity) {
+				const activities = groups.get(message.id);
+				if (activities) { place(this.renderActivity(message.id, activities, state.sending && activities.at(-1) === latest)); }
+				continue;
+			}
 			let row = this.rendered.get(message.id);
 			if (!row) {
 				const element = this.element('article', `ash-chatgpt-turn ${message.role}`);
@@ -109,8 +196,8 @@ export class ChatGPTWidget extends Disposable {
 				element.append(body);
 				row = { element, body, resources: [], text: '' };
 				this.rendered.set(message.id, row);
-				this.messages.append(element);
 			}
+			place(row.element);
 			row.element.classList.toggle('complete', !state.sending || message !== state.messages.at(-1));
 			const contentIdentity = JSON.stringify([message.text, message.references]);
 			if (row.text !== contentIdentity) {

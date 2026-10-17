@@ -1,5 +1,17 @@
 {
   "ash": {
+    "sessions.chatgpt.activityOneStep": "1 个步骤",
+    "sessions.chatgpt.activitySteps": "{0} 个步骤",
+    "sessions.chatgpt.activityFailed": "执行过程 · 部分步骤失败",
+    "sessions.chatgpt.activityUsing": "正在使用 {0}… · {1}",
+    "sessions.chatgpt.activityWorking": "正在执行… · {0}",
+    "sessions.chatgpt.activityComplete": "执行过程 · {0}",
+    "sessions.chatgpt.activityCall": "工具调用：{0}",
+    "sessions.chatgpt.activityResult": "工具结果：{0}",
+    "sessions.chatgpt.activityProgress": "进展",
+    "sessions.chatgpt.activityStepFailed": "{0} · 失败",
+    "sessions.chatgpt.activityAccessible": "执行步骤：{0}",
+    "sessions.chatgpt.executionHelp": "工具活动会在同一行更新。聚焦执行摘要后，按 Enter 或空格展开步骤，再展开某个步骤即可查看原始输入或结果。开始回答时，执行过程会自动折叠，并保留在回答上方。失败步骤会持续显示在摘要中。",
     "sessions.chatgpt.more": "更多操作",
     "sessions.chatgpt.pin": "置顶聊天",
     "sessions.chatgpt.unpin": "取消置顶聊天",
