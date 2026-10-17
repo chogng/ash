@@ -112,11 +112,13 @@ export interface ISettingsEditorModel extends IDisposable {
 /** Opening options for the supported local user Settings surfaces. */
 export interface IOpenSettingsOptions {
 	readonly target?: ConfigurationTarget;
-	/** Initial graphical search; an empty string clears a reused surface's query. */
+	/** Overrides the default settings editor for this opening request only. */
+	readonly jsonEditor?: boolean;
+	/** Initial search; JSON reveals an exact registered setting ID when supplied. */
 	readonly query?: string;
 	/** Ash Settings page or section identity; independent of the configuration target. */
 	readonly section?: string;
-	/** JSONC only. Graphical Settings uses query to find a setting. */
+	/** Reveals a setting in JSONC, or filters the graphical editor to its ID. */
 	readonly revealSetting?: { readonly key: string; readonly edit?: boolean; };
 }
 
@@ -125,12 +127,24 @@ export function validateSettingsEditorOptions(options: IOpenSettingsOptions = {}
 	if (typeof options !== 'object' || options === null || Array.isArray(options)) {
 		throw new TypeError(localize({ bundle: 'ash.settings', key: 'open.invalidOptions' }, 'Settings opening options must be an object.'));
 	}
-	const unsupported = Object.keys(options).find(key => key !== 'query' && key !== 'section' && key !== 'target');
+	const unsupported = Object.keys(options).find(key => key !== 'query' && key !== 'section' && key !== 'target' && key !== 'jsonEditor' && key !== 'revealSetting');
 	if (unsupported !== undefined) {
 		throw new TypeError(localize({ bundle: 'ash.settings', key: 'open.unsupportedOption' }, 'Settings opening option {0} is not supported.', unsupported));
 	}
 	if (options.query !== undefined && typeof options.query !== 'string') {
 		throw new TypeError(localize({ bundle: 'ash.settings', key: 'open.invalidQuery' }, 'The Settings query must be a string.'));
+	}
+	if (options.jsonEditor !== undefined && typeof options.jsonEditor !== 'boolean') {
+		throw new TypeError(localize({ bundle: 'ash.settings', key: 'open.invalidEditor' }, 'The JSON editor option must be true or false.'));
+	}
+	if (options.revealSetting !== undefined) {
+		const reveal = options.revealSetting;
+		if (!reveal || typeof reveal !== 'object' || Array.isArray(reveal)
+			|| typeof reveal.key !== 'string' || !reveal.key.trim()
+			|| reveal.edit !== undefined && typeof reveal.edit !== 'boolean'
+			|| Object.keys(reveal).some(key => key !== 'key' && key !== 'edit')) {
+			throw new TypeError(localize({ bundle: 'ash.settings', key: 'open.invalidReveal' }, 'A setting to reveal must have a key and an optional edit flag.'));
+		}
 	}
 	if (options.section !== undefined && (typeof options.section !== 'string' || options.section.trim().length === 0)) {
 		throw new TypeError(localize({ bundle: 'ash.settings', key: 'open.invalidSection' }, 'The Settings section must be a non-empty string.'));

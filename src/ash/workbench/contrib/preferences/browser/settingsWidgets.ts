@@ -17,6 +17,7 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import { HoverConfiguration } from '../../../../platform/hover/common/hoverService.js';
+import { IHoverService } from '../../../../platform/hover/browser/hoverService.js';
 import type { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import { parseJsonc } from '../../../../base/common/jsonc.js';
 import type { JsonSchema } from '../../../../base/common/jsonSchema.js';
@@ -116,7 +117,6 @@ interface SettingActionsOptions {
 	readonly reference: SettingReference;
 	readonly onError: (error: unknown) => void;
 	readonly copySettingAsJSON?: () => string;
-	readonly openSettings?: () => Promise<void>;
 }
 
 class SettingActions extends Disposable {
@@ -181,15 +181,6 @@ class SettingActions extends Disposable {
 				tooltip: '',
 				enabled: true,
 				run: () => this.run(() => this.clipboardService.writeText(this.options.copySettingAsJSON!())),
-			});
-		}
-		if (this.options.openSettings) {
-			actions.push({
-				id: 'settings.editInSettingsJson',
-				label: localize({ bundle: 'ash.settings', key: 'json.edit' }, 'Edit in settings.json'),
-				tooltip: '',
-				enabled: true,
-				run: () => this.run(this.options.openSettings!),
 			});
 		}
 		this.setOpen(true);
@@ -266,7 +257,6 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 					const value = inspected.userLocalValue === undefined ? inspected.defaultValue : inspected.userLocalValue;
 					return `${JSON.stringify(setting.key)}: ${JSON.stringify(value, null, 2)}`;
 				},
-				openSettings: !descriptor.binding && options.onOpenSettings ? () => options.onOpenSettings!(descriptor.configuration.key) : undefined,
 			}));
 		} catch (error) {
 			this.dispose();
@@ -647,6 +637,196 @@ class StringMapSuggestions extends Disposable {
 	}
 }
 
+/** Edits path rules as a list; configuration remains the owner of defaults and overrides. */
+class ExcludeSettingWidget extends AbstractSettingWidget<IStringMapSetting, Record<string, unknown>> {
+	private readonly rows: HTMLDivElement;
+	private readonly addButton: Button;
+	private readonly rowDisposables = this._register(new DisposableStore());
+	private renderedValue: Record<string, unknown> | undefined;
+	private readonly conditional: boolean;
+
+	constructor(container: HTMLElement, descriptor: IStringMapSetting, options: SettingWidgetOptions,
+		@IConfigurationService private readonly configurationService: IConfigurationService,
+		@IContextViewService contextViewProvider: IContextViewService,
+		@IInstantiationService instantiationService: IInstantiationService,
+		@IHoverService private readonly hoverService: IHoverService,
+	) {
+		const binding = configurationSettingBinding(configurationService, descriptor.configuration);
+		super(container, descriptor, {
+			...binding,
+			updateValue: value => configurationService.updateValue(descriptor.id, Object.keys(value).length ? value : undefined),
+		}, options, configurationService, contextViewProvider, instantiationService);
+		this.conditional = ['files.exclude', 'search.exclude', 'explorer.autoRevealExclude'].includes(descriptor.id);
+		this.domNode.classList.add('ash-pattern-setting');
+		this.domNode.dataset.configurationKey = descriptor.id;
+		this.rows = h(container.ownerDocument, 'div');
+		this.rows.className = 'ash-pattern-list';
+		this.rows.setAttribute('role', 'list');
+		this.rows.setAttribute('aria-label', descriptor.title);
+		const actions = h(container.ownerDocument, 'div');
+		actions.className = 'ash-pattern-actions';
+		this.addButton = this._register(new Button(actions, {
+			label: descriptor.addLabel, size: 'small', onClick: () => this.editRule(),
+		}));
+		this.domNode.append(this.copyDomNode, this.rows, actions);
+		this.bindState(state => {
+			if (!state.isPending && !sameStringMap(this.renderedValue, state.value)) this.renderRows();
+			this.addButton.enabled = !state.isPending;
+			for (const control of this.rows.querySelectorAll<HTMLInputElement | HTMLButtonElement>('input, button')) control.disabled = state.isPending;
+		});
+	}
+
+	protected updateControl(descriptor: IStringMapSetting): void {
+		this.addButton.label = descriptor.addLabel;
+		this.rows.setAttribute('aria-label', descriptor.title);
+		this.renderRows();
+	}
+
+	private renderRows(): void {
+		this.rowDisposables.clear();
+		this.rows.replaceChildren();
+		this.renderedValue = this.model.state.value;
+		for (const [pattern, rule] of Object.entries(this.model.state.value)) {
+			if (!rule) continue;
+			const row = h(this.domNode.ownerDocument, 'div');
+			row.className = 'ash-pattern-row';
+			row.dataset.pattern = pattern;
+			row.tabIndex = 0;
+			row.setAttribute('role', 'listitem');
+			const text = h(row.ownerDocument, 'span');
+			text.className = 'ash-pattern-text';
+			text.textContent = pattern;
+			row.append(text);
+			const sibling = typeof rule === 'object' && rule !== null && 'when' in rule ? String(rule.when) : undefined;
+			if (sibling !== undefined) {
+				const condition = h(row.ownerDocument, 'span');
+				condition.className = 'ash-pattern-condition';
+				condition.textContent = localize({ bundle: 'ash.settings', key: 'patterns.when' }, 'When: {0}', sibling);
+				row.append(condition);
+			}
+			const label = sibling === undefined ? pattern : localize({ bundle: 'ash.settings', key: 'patterns.conditionLabel' }, '{0}, when a sibling matches {1}', pattern, sibling);
+			row.setAttribute('aria-label', label);
+			row.setAttribute('aria-description', localize({ bundle: 'ash.settings', key: 'patterns.rowHelp' }, 'Press Enter to edit. Press Delete to remove this rule. Use arrow keys to move between rules.'));
+			this.rowDisposables.add(this.hoverService.setupDelayedHover(row, { content: label }));
+			const actions = h(row.ownerDocument, 'span');
+			actions.className = 'ash-pattern-row-actions';
+			row.append(actions);
+			this.rowDisposables.add(new Button(actions, {
+				label: localize({ bundle: 'ash.settings', key: 'patterns.edit' }, 'Edit'),
+				ariaLabel: localize({ bundle: 'ash.settings', key: 'patterns.editLabel' }, 'Edit rule {0}', pattern),
+				size: 'small', onClick: () => this.editRule(pattern),
+			}));
+			this.rowDisposables.add(new Button(actions, {
+				label: this.descriptor.removeLabel,
+				ariaLabel: localize({ bundle: 'ash.settings', key: 'patterns.removeLabel' }, 'Remove rule {0}', pattern),
+				size: 'small', onClick: () => { void this.saveRule(pattern); },
+			}));
+			this.rowDisposables.add(addDisposableListener(row, 'keydown', event => {
+				if (event.target !== row || this.model.state.isPending) return;
+				if (event.key === 'Enter') { stopEvent(event); this.editRule(pattern); }
+				else if (event.key === 'Delete') { stopEvent(event); void this.saveRule(pattern); }
+				else if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+					stopEvent(event);
+					const next = (event.key === 'ArrowUp' ? row.previousElementSibling : row.nextElementSibling) as HTMLElement | null;
+					next?.focus();
+				}
+			}));
+			this.rows.append(row);
+		}
+	}
+
+	private editRule(original?: string): void {
+		if (this.model.state.isPending) return;
+		this.renderRows();
+		const document = this.domNode.ownerDocument;
+		const editor = h(document, 'div');
+		editor.className = 'ash-pattern-editor';
+		editor.setAttribute('role', 'listitem');
+		const pattern = h(document, 'input');
+		pattern.type = 'text';
+		pattern.value = original ?? '';
+		pattern.placeholder = this.descriptor.keyLabel;
+		pattern.setAttribute('aria-label', this.descriptor.keyLabel);
+		editor.append(pattern);
+		const sibling = h(document, 'input');
+		if (this.conditional) {
+			const rule = original === undefined ? undefined : this.model.state.value[original];
+			sibling.type = 'text';
+			sibling.value = typeof rule === 'object' && rule !== null && 'when' in rule ? String(rule.when) : '';
+			sibling.placeholder = localize({ bundle: 'ash.settings', key: 'patterns.sibling' }, 'When a sibling matches (optional)');
+			sibling.setAttribute('aria-label', sibling.placeholder);
+			editor.append(sibling);
+		}
+		const help = h(document, 'span');
+		help.className = 'ash-pattern-help';
+		help.textContent = localize({ bundle: 'ash.settings', key: 'patterns.editHelp' }, 'Use * or ** to match paths. Enter saves; Escape cancels.');
+		pattern.setAttribute('aria-description', help.textContent);
+		if (this.conditional) sibling.setAttribute('aria-description', localize({ bundle: 'ash.settings', key: 'patterns.siblingHelp' }, 'Apply this rule only when a matching file exists in the same folder. Use $(basename) for the matched file name without its extension.'));
+		editor.append(help);
+		const save = (): void => {
+			const key = pattern.value.trim();
+			const duplicate = key !== original && Object.hasOwn(this.model.state.value, key) && !!this.model.state.value[key];
+			pattern.setAttribute('aria-invalid', String(!key || duplicate));
+			if (!key || duplicate) {
+				this.reportStatus(duplicate ? this.descriptor.duplicateMessage : localize({ bundle: 'ash.settings', key: 'patterns.required' }, 'Enter a path pattern.'), true);
+				pattern.focus();
+				return;
+			}
+			void this.saveRule(original, key, this.conditional ? sibling.value.trim() : '');
+		};
+		const cancel = (): void => {
+			this.reportStatus('', false);
+			this.renderRows();
+			this.focusRule(original);
+		};
+		const actions = h(document, 'div');
+		actions.className = 'ash-pattern-actions';
+		this.rowDisposables.add(new Button(actions, { label: localize({ bundle: 'ash.settings', key: 'patterns.save' }, 'Save'), size: 'small', onClick: save }));
+		this.rowDisposables.add(new Button(actions, { label: localize({ bundle: 'ash.settings', key: 'patterns.cancel' }, 'Cancel'), size: 'small', onClick: cancel }));
+		editor.append(actions);
+		this.rowDisposables.add(addDisposableListener(editor, 'keydown', event => {
+			if (event.key === 'Escape') { stopEvent(event); cancel(); }
+			else if (event.key === 'Enter' && event.target instanceof document.defaultView!.HTMLInputElement && !event.isComposing) { stopEvent(event); save(); }
+		}));
+		const existing = [...this.rows.children].find(row => (row as HTMLElement).dataset.pattern === original);
+		if (existing) existing.replaceWith(editor);
+		else this.rows.append(editor);
+		pattern.focus();
+	}
+
+	private async saveRule(original: string | undefined, pattern?: string, sibling = ''): Promise<void> {
+		if (this.model.state.isPending) return;
+		const inspected = this.configurationService.inspect<Record<string, unknown>>(this.descriptor.id);
+		const overrides: Record<string, unknown> = Object.assign(Object.create(null), inspected.userLocalValue);
+		// Removing an inherited default requires a false override; deleting its key would reveal it again.
+		if (original !== undefined) {
+			if (inspected.defaultValue && Object.hasOwn(inspected.defaultValue, original) && inspected.defaultValue[original]) overrides[original] = false;
+			else delete overrides[original];
+		}
+		if (pattern !== undefined) {
+			const rule = sibling ? { when: sibling } : true;
+			if (inspected.defaultValue && Object.hasOwn(inspected.defaultValue, pattern) && JSON.stringify(inspected.defaultValue[pattern]) === JSON.stringify(rule)) delete overrides[pattern];
+			else overrides[pattern] = rule;
+		}
+		try {
+			this.descriptor.configuration.parse(overrides);
+			this.reportStatus('', false);
+			await this.model.update(overrides);
+			if (this.isDisposed) return;
+			const restoreFocus = this.domNode.contains(this.domNode.ownerDocument.activeElement) || this.domNode.ownerDocument.activeElement === this.domNode.ownerDocument.body;
+			this.renderRows();
+			if (restoreFocus) this.focusRule(pattern);
+		} catch (error) {
+			if (!this.isDisposed) this.reportStatus(settingErrorMessage(error, localize({ bundle: 'ash.settings', key: 'status.saveFailed' }, 'Unable to save the setting.')), true);
+		}
+	}
+
+	private focusRule(pattern?: string): void {
+		const row = [...this.rows.children].find(row => (row as HTMLElement).dataset.pattern === pattern) as HTMLElement | undefined;
+		(row ?? this.addButton.domNode).focus();
+	}
+}
+
 class StringMapSettingWidget extends AbstractSettingWidget<IStringMapSetting, Record<string, unknown>> {
 	private readonly rows: HTMLDivElement;
 	private readonly addButton: Button;
@@ -675,8 +855,9 @@ class StringMapSettingWidget extends AbstractSettingWidget<IStringMapSetting, Re
 				keyInput.focus();
 			},
 		}));
-		if (!descriptor.binding && options.onOpenSettings) {
-			const editButton = this._register(new Button(actions, {
+		// Nested values retain a JSON fallback; flat maps and path rules have complete UI controls.
+		if (descriptor.structuredValues && !descriptor.binding && options.onOpenSettings) {
+			this._register(new Button(actions, {
 				label: localize({ bundle: 'ash.settings', key: 'json.edit' }, 'Edit in settings.json'),
 				onClick: () => {
 					void options.onOpenSettings!(this.descriptor.configuration.key).catch(error => options.onStatus(settingErrorMessage(error, localize({ bundle: 'ash.settings', key: 'json.openFailed' }, 'Unable to open settings.json.')), true));
@@ -851,6 +1032,9 @@ export function createSettingWidget(container: HTMLElement, setting: ISetting, o
 		case 'text':
 			return instantiationService.createInstance(TextSettingWidget, container, setting, options);
 		case 'stringMap':
+			if (['files.exclude', 'search.exclude', 'explorer.autoRevealExclude', 'files.readonlyInclude', 'files.readonlyExclude', 'workbench.localHistory.exclude'].includes(setting.id)) {
+				return instantiationService.createInstance(ExcludeSettingWidget, container, setting, options);
+			}
 			return instantiationService.createInstance(StringMapSettingWidget, container, setting, options);
 		case 'complex':
 			return instantiationService.createInstance(ComplexSettingWidget, container, setting, options);

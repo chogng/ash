@@ -1,3 +1,4 @@
+import { parseJsonc } from '../../../../src/ash/base/common/jsonc.js';
 import { readUserSettings, writeUserSettings } from '../../../automation/settings.js';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -307,7 +308,7 @@ test('Preferred paste and drop commands reveal editable settings and persist the
 		await expect(tab).toHaveCount(1);
 		await expect(tab.locator('..')).not.toHaveClass(/preview/u);
 		await expect(group.editor.input).toBeFocused();
-		await expect(group.content.locator('.stanza-editor-accessibility-status')).toContainText('2 characters selected');
+		await expect(workbench.page.locator('[data-statusbar-item-id="ash.status.editor.cursor"]')).toContainText('2 selected');
 		await pasteJson(group.editor.input, JSON.stringify(preferences));
 		await group.editor.input.press('ControlOrMeta+S');
 		await expect(tab.locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
@@ -346,6 +347,74 @@ test('Preferred paste and drop JSON completions use registered provider kinds', 
 	}
 });
 
+for (const locale of ['en', 'zh-CN']) {
+	test(`Settings UI and JSON switch without losing drafts and honor the saved default (${locale})`, async ({ workbench, restartWorkbench, reloadWorkbench, runningApplication }, testInfo) => {
+		const chinese = locale === 'zh-CN';
+		if (chinese) {
+			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+			const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
+			await picker.getByRole('combobox').fill('简体中文');
+			await picker.getByRole('combobox').press('Enter');
+			({ workbench } = await restartWorkbench());
+		}
+		const uiLabel = chinese ? '打开设置（图形界面）' : 'Open Settings (UI)';
+		const jsonLabel = chinese ? '打开设置（JSON）' : 'Open Settings (JSON)';
+		const readDefault = async (): Promise<unknown> => (parseJsonc((await readUserSettings(workbench.page)).content) as Record<string, unknown>)['workbench.settings.editor'] ?? 'ui';
+		await workbench.quickaccess.runCommand('workbench.action.openSettings2');
+		let settings = workbench.settingsEditor.element;
+		await workbench.settingsEditor.selectGroup('workbench');
+		await workbench.settingsEditor.selectCategory('settings-editor');
+		await expect(settings.locator('[data-settings-category-id="settings-editor"]')).toHaveText(chinese ? '设置编辑器' : 'Settings Editor');
+		await settings.getByRole('searchbox').fill('@id:workbench.settings.editor');
+		let selector = settings.locator('[data-settings-item-id="workbench.settings.editor"]').getByRole('combobox');
+		await expect(selector).toHaveText('UI');
+		await selector.press('Enter');
+		await workbench.page.getByRole('option', { name: 'JSON', exact: true }).click();
+		await expect.poll(readDefault).toBe('json');
+		await testInfo.attach(`settings-editor-default-${locale}`, { body: await settings.screenshot(), contentType: 'image/png' });
+		await settings.locator('.ash-modal-editor-close').click();
+		await workbench.quickaccess.runCommand('workbench.action.openSettings');
+		let group = workbench.editors.groupAt(0);
+		await expect(group.editor.input).toBeFocused();
+		await expect(settings).toBeHidden();
+		const saved = (await readUserSettings(workbench.page)).content;
+		const draft = '// Unsaved settings draft\n' + JSON.stringify({ ...JSON.parse(saved), 'editor.fontSize': 29 }, null, 2);
+		await group.editor.input.press('ControlOrMeta+A');
+		await pasteJson(group.editor.input, draft);
+		const tab = group.tabs.filter({ hasText: chinese ? '用户设置（JSON）' : 'User Settings (JSON)' });
+		await expect(tab.locator('..')).toHaveAttribute('data-state', 'dirty');
+		await group.title.getByRole('button', { name: uiLabel, exact: true }).press('Enter');
+		await expect(settings).toBeVisible();
+		await settings.getByRole('searchbox').fill('');
+		await settings.getByRole('button', { name: jsonLabel, exact: true }).press('Enter');
+		await expect(settings).toBeHidden();
+		await expect(tab).toHaveCount(1);
+		await group.editor.waitForEditorContents(content => content.includes('// Unsaved settings draft') && content.includes('29'));
+		await expect(tab.locator('..')).toHaveAttribute('data-state', 'dirty');
+		await expect.poll(async () => (await readUserSettings(workbench.page)).content).toBe(saved);
+		await group.editor.input.press('ControlOrMeta+S');
+		await expect(tab.locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
+		await expect.poll(readDefault).toBe('json');
+		({ workbench } = await reloadWorkbench());
+		await workbench.quickaccess.runCommand('workbench.action.openSettings');
+		group = workbench.editors.groupAt(0);
+		await expect(group.editor.input).toBeFocused();
+		await group.title.getByRole('button', { name: uiLabel, exact: true }).press('Enter');
+		settings = workbench.settingsEditor.element;
+		await expect(settings).toBeVisible();
+		await settings.getByRole('searchbox').fill('@id:workbench.settings.editor');
+		selector = settings.locator('[data-settings-item-id="workbench.settings.editor"]').getByRole('combobox');
+		await expect(selector).toHaveText('JSON');
+		await selector.press('Enter');
+		await workbench.page.getByRole('option', { name: 'UI', exact: true }).click();
+		await expect.poll(readDefault).toBe('ui');
+		await settings.locator('.ash-modal-editor-close').click();
+		await workbench.quickaccess.runCommand('workbench.action.openSettings');
+		await expect(settings).toBeVisible();
+		expect(runningApplication.diagnostics.errors).toEqual([]);
+	});
+}
+
 test('Settings JSON opens a pinned tab, reveals a value, saves immediately and persists Chinese labels', async ({ target, workbench, restartWorkbench, runningApplication }) => {
 	const diagnostics = runningApplication.diagnostics;
 	let page = workbench.page;
@@ -358,21 +427,30 @@ test('Settings JSON opens a pinned tab, reveals a value, saves immediately and p
 		await page.getByRole('option', { name: 'Custom', exact: true }).click();
 	}
 	await workbench.settingsEditor.selectEditorCategory('editor-fonts');
+	for (const key of ['workbench.externalUriOpeners', 'files.exclude']) {
+		await settings.getByRole('searchbox').fill(`@id:${key}`);
+		const ordinary = settings.locator(`[data-settings-item-id="${key}"]`);
+		await expect(ordinary).toBeVisible();
+		await expect(ordinary.getByRole('button', { name: 'Edit in settings.json', exact: true })).toHaveCount(0);
+	}
 	await settings.getByRole('searchbox').fill('@id:editor.fontSize');
 	const row = settings.locator('[data-settings-item-id="editor.fontSize"]');
+	await row.getByRole('spinbutton').fill('22');
+	await row.getByRole('spinbutton').press('Tab');
+	await expect.poll(async () => (parseJsonc((await readUserSettings(page)).content) as Record<string, unknown>)['editor.fontSize']).toBe(22);
 	const menu = row.getByRole('button', { name: /^More actions/ });
 	await menu.focus();
 	await menu.press('Enter');
-	const edit = page.getByRole('menuitem', { name: 'Edit in settings.json', exact: true });
-	await edit.focus();
-	await edit.press('Enter');
+	await expect(page.getByRole('menuitem', { name: 'Edit in settings.json', exact: true })).toHaveCount(0);
+	await page.keyboard.press('Escape');
+	await settings.getByRole('button', { name: 'Open Settings (JSON)', exact: true }).press('Enter');
 	await expect(settings).toBeHidden();
 	let group = workbench.editors.groupAt(0);
 	const tab = group.tabs.filter({ hasText: 'User Settings (JSON)' });
 	await expect(tab).toHaveCount(1);
 	await expect(tab.locator('..')).not.toHaveClass(/preview/u);
 	await expect(group.editor.input).toBeFocused();
-	await expect(group.content.locator('.stanza-editor-accessibility-status')).toContainText('2 characters selected');
+	await expect(workbench.page.locator('[data-statusbar-item-id="ash.status.editor.cursor"]')).toContainText('2 selected');
 	await page.keyboard.insertText('23');
 	await group.editor.input.press('ControlOrMeta+S');
 	await expect(tab.locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
@@ -413,7 +491,7 @@ test('Settings JSON opens a pinned tab, reveals a value, saves immediately and p
 	await expect(chineseSettings).toBeHidden();
 	await expect(group.tabs.filter({ hasText: '用户设置（JSON）' })).toHaveCount(1);
 	await expect(group.editor.input).toBeFocused();
-	await expect(group.content.locator('.stanza-editor-accessibility-status')).toContainText('2');
+	await expect(page.locator('[data-statusbar-item-id="ash.status.editor.cursor"]')).toContainText('2');
 	await expect(diagnostics.consoleErrors.filter(error => /Failed to update working-copy backup|InvalidStateError|database connection is closing/u.test(error))).toEqual([]);
 });
 

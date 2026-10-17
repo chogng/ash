@@ -20,6 +20,7 @@ export class DropOrPasteIntoCommands extends Disposable implements IWorkbenchCon
 				get label() { return localize('dropOrPaste.configurePaste', 'Configure preferred paste action...'); },
 				tooltip: '', enabled: true,
 				run: (editor: ICodeEditor) => editor.invokeWithinContext(accessor => accessor.get(IPreferencesService).openUserSettings({
+					jsonEditor: true,
 					revealSetting: { key: pasteAsPreferenceConfig, edit: true },
 				})),
 			}, pasteAsPreferenceConfig],
@@ -28,12 +29,14 @@ export class DropOrPasteIntoCommands extends Disposable implements IWorkbenchCon
 				get label() { return localize('dropOrPaste.configureDrop', 'Configure preferred drop action...'); },
 				tooltip: '', enabled: true,
 				run: (editor: ICodeEditor) => editor.invokeWithinContext(accessor => accessor.get(IPreferencesService).openUserSettings({
+					jsonEditor: true,
 					revealSetting: { key: dropAsPreferenceConfig, edit: true },
 				})),
 			}, dropAsPreferenceConfig],
 		];
 		for (const [action, key] of actions) {
 			this._register(CommandsRegistry.register(action.id, accessor => accessor.get(IPreferencesService).openUserSettings({
+				jsonEditor: true,
 				revealSetting: { key, edit: true },
 			})));
 			this._register(MenusRegistry.appendMenuItem(MenuId.CommandPalette, {

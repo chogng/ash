@@ -4,7 +4,8 @@ import { IUserDataProfileService } from '../../userDataProfile/common/userDataPr
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { editJsonObjectProperty, parseJsonDocument } from '../../../../base/common/json.js';
 import { Range } from '../../../../editor/common/core/range.js';
-import { ConfigurationTarget } from '../../../../platform/configuration/common/configuration.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { WorkbenchConfiguration } from '../../../common/configuration.js';
 import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { localize } from '../../../../nls.js';
@@ -27,6 +28,7 @@ export class PreferencesService extends Disposable implements IPreferencesServic
 		@IFileService private readonly files: IFileService,
 		@IUserDataProfileService private readonly profiles: IUserDataProfileService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@IConfigurationService private readonly configurationService: IConfigurationService,
 	) {
 		super();
 		this._register(toDisposable(() => this.lifetime.abort()));
@@ -34,14 +36,19 @@ export class PreferencesService extends Disposable implements IPreferencesServic
 
 	public async openSettings(options: IOpenSettingsOptions = {}): Promise<void> {
 		const validated = validateSettingsEditorOptions(options);
+		if (validated.jsonEditor ?? this.configurationService.getValue(WorkbenchConfiguration.settingsEditor) === 'json') {
+			await this.openSettingsJson(validated);
+			return;
+		}
 		await this.editorService.openEditor(this.settingsEditorInput, { pinned: true }, 'modalGroup');
-		this.settingsEditorInput.applyOptions(validated);
+		this.settingsEditorInput.applyOptions(validated.revealSetting && validated.query === undefined ? { ...validated, query: `@id:${validated.revealSetting.key}` } : validated);
 	}
 
 	public async openUserSettings(options: IOpenSettingsOptions = {}): Promise<void> {
-		if (options.target !== undefined && options.target !== ConfigurationTarget.USER && options.target !== ConfigurationTarget.USER_LOCAL) {
-			throw new Error(localize({ bundle: 'ash.settings', key: 'json.unsupportedTarget' }, 'This configuration target does not support editing a settings file.'));
-		}
+		await this.openSettings(options);
+	}
+
+	private async openSettingsJson(options: IOpenSettingsOptions): Promise<void> {
 		const input = createUserSettingsEditorInput();
 		if (!this.models.getModel(input.resource)) {
 			try {
@@ -57,7 +64,11 @@ export class PreferencesService extends Disposable implements IPreferencesServic
 				}
 			}
 		}
-		if (!options.revealSetting) {
+		const candidate = options.query?.trim().replace(/^@id:/u, '');
+		const keyFromQuery = candidate && Registry.as<IConfigurationRegistry>(Extensions.Configuration).getConfiguration(candidate) ? candidate : undefined;
+		// Switching editors may reveal an existing value, but must not create an override.
+		const revealSetting = options.revealSetting ?? (keyFromQuery ? { key: keyFromQuery, edit: false } : undefined);
+		if (!revealSetting) {
 			await this.editorService.openEditor(input, { pinned: true });
 			return;
 		}
@@ -65,10 +76,15 @@ export class PreferencesService extends Disposable implements IPreferencesServic
 		using reference = await this.models.acquire(input, this.lifetime.signal);
 		this.lifetime.signal.throwIfAborted();
 		const model = reference.model;
-		const { key, edit } = options.revealSetting;
+		const { key, edit } = revealSetting;
 		let source = model.getValue();
 		let document = parseJsonDocument(source, { allowComments: true, allowTrailingComma: true });
 		if (document.errors.length > 0 || document.root?.type !== 'object') {
+			// A search hint must never block opening JSON to repair an invalid draft.
+			if (!options.revealSetting) {
+				await this.editorService.openEditor(input, { pinned: true });
+				return;
+			}
 			throw new Error(localize({ bundle: 'ash.settings', key: 'json.invalidDocument' }, 'Fix the JSON errors in settings.json before editing a setting.'));
 		}
 		let property = document.root.properties.find(candidate => candidate.key === key);
@@ -84,7 +100,7 @@ export class PreferencesService extends Disposable implements IPreferencesServic
 			document = parseJsonDocument(source, { allowComments: true, allowTrailingComma: true });
 			property = document.root?.type === 'object' ? document.root.properties.find(candidate => candidate.key === key) : undefined;
 		}
-		const node = edit ? property?.valueNode : property?.keyNode;
+		const node = edit || !options.revealSetting ? property?.valueNode : property?.keyNode;
 		const selection = node ? Range.fromPositions(model.positionAt(node.offset), model.positionAt(node.offset + node.length)) : undefined;
 		await this.editorService.openEditor(input, { pinned: true, selection });
 	}

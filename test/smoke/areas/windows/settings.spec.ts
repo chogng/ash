@@ -1,6 +1,118 @@
 import { readUserSettings, writeUserSettings } from '../../../automation/settings.js';
 import { expect, test } from '../../../automation/test.js';
 
+test('Path rule settings use editable lists and persist removal of default rules', async ({ workbench, application, restartWorkbench, reloadWorkbench, target }, testInfo) => {
+	test.setTimeout(120_000);
+	for (const chinese of [false, true]) {
+		await workbench.settingsEditor.openUserSettingsUI();
+		let page = workbench.page;
+		let settings = workbench.settingsEditor.element;
+		let search = settings.getByRole('searchbox');
+		await workbench.settingsEditor.selectEditorCategory('editor-files');
+		await expect(settings.locator('.ash-settings-page h3')).toHaveText(chinese ? '文件' : 'Files');
+		await expect(settings.locator('[data-settings-item-id="workbench.editor.openErrorDialog"]')).toBeVisible();
+		await search.fill('@id:files.exclude');
+		let control = settings.locator('[data-configuration-key="files.exclude"]');
+		let rows = control.locator('.ash-pattern-row');
+		let dsStore = control.locator('[data-pattern="**/.DS_Store"]');
+		const saved = async () => JSON.parse((await readUserSettings(page)).content)['files.exclude'];
+		await expect(rows).toHaveCount(6);
+		await expect(control.getByRole('textbox')).toHaveCount(0);
+		await expect(control).toContainText(chinese ? '在资源管理器中隐藏匹配的文件和文件夹' : 'Hide matching files and folders in Explorer');
+		await search.hover();
+		await expect(dsStore.locator('.ash-pattern-row-actions')).toHaveCSS('opacity', '0');
+		await dsStore.focus();
+		await expect(dsStore.locator('.ash-pattern-row-actions')).toHaveCSS('opacity', '1');
+		await dsStore.press('ArrowDown');
+		await expect(control.locator('[data-pattern="**/Thumbs.db"]')).toBeFocused();
+		await page.keyboard.press('ArrowUp');
+		await expect(dsStore).toBeFocused();
+		await dsStore.press('Tab');
+		await expect(dsStore.getByRole('button').first()).toBeFocused();
+		await page.keyboard.press('Enter');
+		await expect(control.locator('.ash-pattern-editor input').first()).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(dsStore).toBeFocused();
+		await dsStore.press('Delete');
+		await expect(dsStore).toHaveCount(0);
+		await expect.poll(saved).toEqual({ '**/.DS_Store': false });
+		({ workbench, application } = await reloadWorkbench());
+		page = workbench.page;
+		settings = workbench.settingsEditor.element;
+		search = settings.getByRole('searchbox');
+		control = settings.locator('[data-configuration-key="files.exclude"]');
+		rows = control.locator('.ash-pattern-row');
+		dsStore = control.locator('[data-pattern="**/.DS_Store"]');
+		await workbench.settingsEditor.openUserSettingsUI();
+		await search.fill('@id:files.exclude');
+		await expect(dsStore).toHaveCount(0);
+		const add = control.getByRole('button', { name: chinese ? '添加规则' : 'Add pattern', exact: true });
+		await add.click();
+		const editor = control.locator('.ash-pattern-editor');
+		await expect(editor.getByRole('textbox').first()).toBeFocused();
+		await editor.getByRole('textbox').first().fill('**/.DS_Store');
+		await editor.getByRole('textbox').first().press('Enter');
+		await expect(dsStore).toBeFocused();
+		await expect.poll(saved).toBeUndefined();
+		await add.click();
+		await editor.getByRole('textbox').first().fill('**/*.generated.js');
+		await editor.getByRole('textbox').nth(1).fill('$(basename).ts');
+		await editor.getByRole('textbox').nth(1).press('Enter');
+		await expect.poll(saved).toEqual({ '**/*.generated.js': { when: '$(basename).ts' } });
+		const custom = control.locator('[data-pattern="**/*.generated.js"]');
+		await expect(custom).toBeFocused();
+		await expect(custom.locator('.ash-pattern-condition')).toContainText('$(basename).ts');
+		await custom.press('Enter');
+		await editor.getByRole('textbox').first().fill('cancelled');
+		await editor.getByRole('textbox').first().press('Escape');
+		await expect(custom).toBeFocused();
+		await expect(editor).toHaveCount(0);
+		await expect.poll(saved).toEqual({ '**/*.generated.js': { when: '$(basename).ts' } });
+		if (!chinese && target.kind === 'browser') {
+			for (const [colorScheme, forcedColors, theme] of [
+				['dark', 'none', 'ash-dark'], ['dark', 'active', 'ash-high-contrast-dark'],
+				['light', 'active', 'ash-high-contrast-light'], ['light', 'none', 'ash-light'],
+			] as const) {
+				await page.emulateMedia({ colorScheme, forcedColors });
+				await expect(workbench.element).toHaveAttribute('data-color-theme', theme);
+				await rows.first().focus();
+				await expect(rows.first()).toHaveCSS('outline-style', 'solid');
+				await expect(rows.first().locator('.ash-pattern-row-actions')).toHaveCSS('opacity', '1');
+				await testInfo.attach(`path-rules-${theme}`, { body: await settings.screenshot(), contentType: 'image/png' });
+			}
+			await page.setViewportSize({ width: 720, height: 900 });
+			await expect(control).toBeVisible();
+			await expect(control.getByRole('list')).toHaveCount(1);
+			expect(await control.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+			await custom.press('Enter');
+			await expect(editor.getByRole('textbox').first()).toBeFocused();
+			expect(await editor.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+			await testInfo.attach('path-rules-narrow-editor', { body: await settings.screenshot(), contentType: 'image/png' });
+			await editor.getByRole('textbox').first().press('Escape');
+			await page.setViewportSize({ width: 1440, height: 900 });
+		}
+		const size = await control.boundingBox();
+		expect(size!.width).toBeGreaterThan(200);
+		expect(await control.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+		await testInfo.attach(`path-rule-settings-${chinese ? 'zh-CN' : 'en'}`, { body: await control.screenshot(), contentType: 'image/png' });
+		await workbench.menus.select(application, () => control.locator('.ash-setting-item-actions-trigger').click(), [chinese ? '重置设置' : 'Reset Setting']);
+		await expect(rows).toHaveCount(6);
+		await expect.poll(saved).toBeUndefined();
+		await search.fill('@id:explorer.autoRevealExclude');
+		const reveal = settings.locator('[data-configuration-key="explorer.autoRevealExclude"]');
+		await expect(reveal).toContainText(chinese ? '文件仍会显示在资源管理器中' : 'The files remain visible in Explorer');
+		await expect(reveal.locator('.ash-pattern-row')).toHaveCount(0);
+		if (!chinese) {
+			await settings.locator('.ash-modal-editor-close').click();
+			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+			const language = page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
+			await language.fill('简体中文');
+			await language.press('Enter');
+			({ workbench, application } = await restartWorkbench());
+		}
+	}
+});
+
 test('Settings maturity labels and filters work in English and Chinese', async ({ workbench, application, restartWorkbench }, testInfo) => {
 	test.setTimeout(120_000);
 	for (const locale of ['en', 'zh-CN']) {
@@ -601,8 +713,9 @@ test('Settings opens with editor display controls', async ({ target, workbench }
 	await expect(rootDescription).toHaveCount(0);
 
 	await workbench.settingsEditor.selectEditorCategory('editor-opening');
-	await expect(page.getByRole('heading', { name: 'Tabs and editors', exact: true })).toBeVisible();
-	for (const key of ['workbench.editor.showTabs', 'workbench.editor.defaultBinaryEditor']) {
+	await expect(page.locator('.ash-settings-page h3')).toHaveText('Tabs and editors');
+	for (const [category, key] of [['editor-opening', 'workbench.editor.showTabs'], ['editor-files', 'workbench.editor.defaultBinaryEditor']]) {
+		await workbench.settingsEditor.selectEditorCategory(category!);
 		const row = page.locator(`[data-settings-item-id="${key}"]`);
 		const control = row.getByRole('combobox');
 		const [rowBounds, controlBounds] = await Promise.all([row.boundingBox(), control.boundingBox()]);
@@ -657,7 +770,7 @@ test('File opening settings save through their controls and survive reloading th
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
 	const openSettings = async () => {
 		await workbench.quickaccess.runCommand('workbench.action.openSettings');
-		await workbench.settingsEditor.selectEditorCategory('editor-opening');
+		await workbench.settingsEditor.selectEditorCategory('editor-files');
 		await expect(settings.getByRole('heading', { name: 'File opening', exact: true })).toBeVisible();
 	};
 	await openSettings();
@@ -980,7 +1093,8 @@ test.describe('Manage menu', () => {
 		await expect(page.locator('[data-configuration-key="editor.fontFamily"]')).toHaveCSS('height', '24px');
 		await workbench.settingsEditor.selectEditorCategory('editor-display');
 		await expect(page.locator('[data-configuration-key="editor.wordWrap"]').getByRole('combobox')).toHaveCSS('height', '24px');
-		await workbench.settingsEditor.selectEditorCategory('editor-files');
+		await workbench.settingsEditor.selectGroup('features');
+		await workbench.settingsEditor.selectCategory('explorer');
 		await expect(page.locator('[data-configuration-key="explorer.fileNesting.patterns"] .ash-string-map-row input').first()).toHaveCSS('height', '24px');
 	});
 

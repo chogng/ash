@@ -150,6 +150,18 @@ export const SettingsNavigation = [
 				}],
 			},
 			{
+				id: 'settings-editor',
+				label: localize({ bundle: 'ash.settings', key: 'categories.settings-editor.label' }, 'Settings Editor'),
+				description: localize({ bundle: 'ash.settings', key: 'categories.settings-editor.description' }, 'Configure how Ash opens and edits settings.'),
+				presentation: 'general',
+				groups: [{
+					id: 'settings-editor',
+					label: localize({ bundle: 'ash.settings', key: 'categories.settings-editor.label' }, 'Settings Editor'),
+					description: '',
+					settings: ['workbench.settings.*'],
+				}],
+			},
+			{
 				id: 'startup',
 				label: localize({ bundle: 'ash.settings', key: 'categories.startup.label' }, 'Startup'),
 				description: localize({ bundle: 'ash.settings', key: 'categories.startup.description' }, 'Choose what Ash shows when a window opens.'),
@@ -309,36 +321,37 @@ export const SettingsNavigation = [
 				],
 			},
 			{
-				id: 'editor-opening',
-				label: localize({ bundle: 'ash.settings', key: 'categories.editor-opening.label' }, 'Tabs and file opening'),
-				description: localize({ bundle: 'ash.settings', key: 'categories.editor-opening.description' }, 'Configure editor tabs, file opening, and opening confirmations.'),
+				// Claim file-opening choices before the broader workbench.editor.* tab settings.
+				id: 'editor-files',
+				label: localize({ bundle: 'ash.settings', key: 'categories.editor-files.label' }, 'Files'),
+				description: localize({ bundle: 'ash.settings', key: 'categories.editor-files.description' }, 'Configure file visibility, opening, encoding, saving, and local history.'),
 				presentation: 'editor',
 				groups: [
 					{
 						id: 'file-opening',
 						label: localize('settings.editor.fileOpening.label', 'File opening'),
 						description: localize('settings.editor.fileOpening.description', 'Choose how files open and how opening failures are reported.'),
-						settings: ['workbench.editor.openErrorDialog', 'workbench.editor.defaultBinaryEditor', 'workbench.editorLargeFileConfirmation'],
+						settings: ['workbench.editor.openErrorDialog', 'workbench.editor.defaultBinaryEditor', 'workbench.editorLargeFileConfirmation', 'workbench.editor.defaultNewDocumentEditor'],
 					},
-					{
-						id: 'selection',
-						label: localize('settings.editor.selection.label', 'Tabs and editors'),
-						description: localize('settings.editor.selection.description', 'Choose tab appearance and how documents open.'),
-						settings: ['workbench.editor.*', 'workbench.experimental.modernUIEditorTabStyle'],
-					},
-				],
-			},
-			{
-				id: 'editor-files',
-				label: localize({ bundle: 'ash.settings', key: 'categories.editor-files.label' }, 'Files and saving'),
-				description: localize({ bundle: 'ash.settings', key: 'categories.editor-files.description' }, 'Configure file saving, encoding, and local history.'),
-				presentation: 'editor',
-				groups: [
 					{
 						id: 'files',
 						label: localize('settings.editor.files.label', 'Files and saving'),
 						description: localize('settings.editor.files.description', 'Configure file editing and save behavior.'),
 						settings: ['files.*', 'workbench.localHistory.*', 'debug.saveBeforeStart'],
+					},
+				],
+			},
+			{
+				id: 'editor-opening',
+				label: localize({ bundle: 'ash.settings', key: 'categories.editor-opening.label' }, 'Tabs and editors'),
+				description: localize({ bundle: 'ash.settings', key: 'categories.editor-opening.description' }, 'Configure editor tabs, previews, and editor groups.'),
+				presentation: 'editor',
+				groups: [
+					{
+						id: 'selection',
+						label: localize('settings.editor.selection.label', 'Tabs and editors'),
+						description: localize('settings.editor.selection.description', 'Choose tab appearance and how documents open.'),
+						settings: ['workbench.editor.*', 'workbench.experimental.modernUIEditorTabStyle'],
 					},
 				],
 			},

@@ -8,7 +8,10 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IPreferencesService, type IOpenSettingsOptions } from '../../../services/preferences/common/preferences.js';
-import { OpenKeyboardShortcutsCommandId, OpenSettingsCommandId, OpenSettingsJsonCommandId } from '../common/preferences.js';
+import { OpenKeyboardShortcutsCommandId, OpenSettingsCommandId, OpenSettingsJsonCommandId, OpenSettingsUICommandId } from '../common/preferences.js';
+import { ResourceContext } from '../../../common/contextkeys.js';
+import { UserSettingsResource } from '../../../services/preferences/common/settingsEditorInput.js';
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 
 registerAction2(class OpenSettingsAction extends Action2 {
 	constructor() {
@@ -75,7 +78,23 @@ registerAction2(class OpenSettingsJsonAction extends Action2 {
 	}
 
 	override run(accessor: ServicesAccessor): Promise<void> {
-		return accessor.get(IPreferencesService).openUserSettings();
+		return accessor.get(IPreferencesService).openUserSettings({ jsonEditor: true });
+	}
+});
+
+registerAction2(class OpenSettingsUIAction extends Action2 {
+	constructor() {
+		super({
+			id: OpenSettingsUICommandId,
+			title: localize2({ bundle: 'ash.settings', key: 'editor.openUI' }, 'Open Settings (UI)'),
+			icon: Lxicon.settings,
+			f1: true,
+			menu: { id: MenuId.EditorTitle, group: 'navigation', order: 1, when: ContextKeyExpr.equals(ResourceContext.key, UserSettingsResource.toString()) },
+		});
+	}
+
+	override run(accessor: ServicesAccessor): Promise<void> {
+		return accessor.get(IPreferencesService).openSettings({ jsonEditor: false });
 	}
 });
 

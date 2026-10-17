@@ -121,7 +121,7 @@ test('Keyboard Shortcuts opens as one Editor tab and reconciles resource rows in
 		keyboardLayoutService: keyboardLayout,
 	}));
 	const editorService = new BrowserEditorService(editor);
-	const preferences = disposables.add(new PreferencesService(editorService, editorServices.get(IFileTextModelService), resources.files, resources.profiles, editorServices));
+	const preferences = disposables.add(new PreferencesService(editorService, editorServices.get(IFileTextModelService), resources.files, resources.profiles, editorServices, editorServices.get(IConfigurationService)));
 	await preferences.openSettings();
 	const modalHost = ownerDocument.querySelector<HTMLElement>('.ash-modal-editor-host');
 	assert.ok(modalHost);
@@ -360,7 +360,7 @@ for (const cancelled of [false, true]) {
 				throw failure;
 			},
 			focusActiveEditor() { },
-		}, resources.models, resources.files, resources.profiles, resources.services));
+		}, resources.models, resources.files, resources.profiles, resources.services, disposables.add(new InMemoryConfigurationService())));
 		await assert.rejects(preferences.openGlobalKeybindingSettings(false), error => error === failure);
 		assert.deepEqual([openedInputs[0]?.isDisposed, disposed], [true, 1]);
 		await assert.rejects(preferences.openGlobalKeybindingSettings(false), error => error === failure);

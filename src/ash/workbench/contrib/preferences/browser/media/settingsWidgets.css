@@ -15,6 +15,11 @@
 	flex: 1 1 auto;
 }
 
+.ash-settings-open-json {
+	flex-shrink: 0;
+	margin-inline-start: var(--ash-spacing-size40);
+}
+
 .ash-settings-search-filter {
 	width: 30px;
 	min-width: 30px;
@@ -315,6 +320,113 @@
 
 .ash-string-map-actions {
 	display: flex;
+}
+
+.ash-pattern-setting {
+	grid-template-columns: minmax(0, 1fr);
+	gap: var(--ash-spacing-size120);
+}
+
+.ash-pattern-list {
+	min-width: 0;
+}
+
+.ash-pattern-row {
+	display: flex;
+	position: relative;
+	min-width: 0;
+	min-height: 28px;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+	padding-inline: var(--ash-spacing-size80);
+	border-radius: var(--ash-cornerRadius-small);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+}
+
+.ash-pattern-row:hover {
+	background: var(--ash-list-hoverBackground);
+}
+
+.ash-pattern-row:focus-visible,
+.ash-pattern-row:focus-within {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+}
+
+.ash-pattern-text,
+.ash-pattern-condition {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-family: var(--ash-font-family-monospace);
+}
+
+.ash-pattern-text {
+	flex: 1;
+}
+
+.ash-pattern-condition {
+	flex: 0 1 40%;
+	font-size: var(--ash-fontSize-body2);
+	color: var(--ash-description-foreground);
+}
+
+.ash-pattern-row-actions {
+	display: flex;
+	flex-shrink: 0;
+	opacity: 0;
+	pointer-events: none;
+}
+
+.ash-pattern-row:hover > .ash-pattern-row-actions,
+.ash-pattern-row:focus-within > .ash-pattern-row-actions {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.ash-pattern-editor {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size80);
+	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+	border-radius: var(--ash-cornerRadius-small);
+}
+
+.ash-pattern-editor > input {
+	flex: 1 1 12em;
+	min-width: 0;
+	max-width: 100%;
+	min-height: 28px;
+	box-sizing: border-box;
+	padding-inline: var(--ash-spacing-size80);
+	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+	border-radius: var(--ash-cornerRadius-small);
+	background: var(--ash-input-background);
+	color: var(--ash-input-foreground);
+	font: inherit;
+	font-family: var(--ash-font-family-monospace);
+}
+
+.ash-pattern-editor > input:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+}
+
+.ash-pattern-editor > input[aria-invalid="true"] {
+	border-color: var(--ash-error-foreground);
+}
+
+.ash-pattern-help {
+	flex-basis: 100%;
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
+}
+
+.ash-pattern-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80);
 }
 
 @media (max-width: 720px) {

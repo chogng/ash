@@ -85,7 +85,7 @@ export class ExternalUriOpenerService extends Disposable implements IExternalUri
 			return false;
 		}
 		if (picked.opener === 'configure') {
-			await this.preferencesService.openUserSettings({ revealSetting: { key: externalUriOpenersSettingId, edit: true } });
+			await this.preferencesService.openUserSettings({ jsonEditor: true, revealSetting: { key: externalUriOpenersSettingId, edit: true } });
 			return true;
 		}
 		return picked.opener.openExternalUri(uri, ctx, token);

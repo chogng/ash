@@ -15,9 +15,41 @@ import { FileKind, type IFileService } from '../../../../../platform/files/commo
 import { ExplorerFileNestingSettingId } from '../../common/explorerFileNestingTrie.js';
 import { ExplorerItem } from '../../common/explorerModel.js';
 import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
+import { TestConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
+import '../../../../services/filesConfiguration/common/filesConfigurationService.js';
 import { ExplorerDataSource, FileSorter } from '../../browser/views/explorerViewer.js';
 import '../../browser/files.contribution.js';
 import { SortOrder, LexicographicOptions } from '../../common/files.js';
+
+test('Explorer hides default metadata entries at every depth and honors user overrides and resets', async () => {
+	const root = URI.file('/project');
+	using workspace = new WorkspaceContextService({ id: 'project', uri: root });
+	using configuration = new TestConfigurationService();
+	const directories = ['.git', '.svn', '.hg', '.jj', '.vscode', 'src'];
+	const names = [...directories, '.DS_Store', 'Thumbs.db', '.gitignore', 'README.md'];
+	const files = {
+		readDirectory: async (resource: URI) => names.map(name => ({
+			resource: URI.joinPath(resource, name),
+			name,
+			kind: directories.includes(name) ? FileKind.Directory : FileKind.File,
+		})),
+	} as unknown as IFileService;
+	using source = new ExplorerDataSource(new FileSorter(configuration), files, configuration, workspace);
+	const visibleNames = async (resource: URI) => (await source.getChildren(new ExplorerItem(resource, 'project', FileKind.Directory))).map(item => item.name);
+	const visible = ['.vscode', 'src', '.gitignore', 'README.md'];
+	for (const resource of [root, URI.joinPath(root, 'src', 'nested')]) {
+		assert.deepEqual(await visibleNames(resource), visible);
+	}
+
+	await configuration.updateValue('files.exclude', { '**/.DS_Store': false, '**/README.md': true });
+	assert.deepEqual(await visibleNames(root), ['.vscode', 'src', '.DS_Store', '.gitignore']);
+	await configuration.updateValue('files.exclude', {});
+	assert.deepEqual(await visibleNames(root), visible);
+	await configuration.updateValue('files.exclude', { '**/.git': false });
+	assert.deepEqual(await visibleNames(root), ['.git', '.vscode', 'src', '.gitignore', 'README.md']);
+	await configuration.updateValue('files.exclude', undefined);
+	assert.deepEqual(await visibleNames(root), visible);
+});
 
 test('Explorer applies exclusion conditions before nesting and reorders files when settings change', async () => {
 	const root = URI.file('/project');

@@ -13,6 +13,8 @@ import { CLOSE_EDITOR_COMMAND_ID } from '../../../browser/parts/editor/editorCom
 import './media/settingsEditor.css';
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
 import { h } from '../../../../base/browser/dom.js';
+import { Button } from '../../../../base/browser/ui/button/button.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
 import type { IDimension } from '../../../../base/browser/dom.js';
 import type { IContextViewProvider } from '../../../../base/browser/ui/contextview/contextview.js';
 import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
@@ -123,7 +125,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		this.treeModel.setChildren(settingsRootNodes(this.settingsLayout));
 		const settingsRenderer = this._register(this.instantiationService.createInstance(SettingsRenderer, container, {
 			onStatus: this.settingsModel.reportStatus,
-			onOpenSettings: (key: string) => this.preferencesService.openUserSettings({ target: ConfigurationTarget.USER_LOCAL, revealSetting: { key, edit: true } }),
+			onOpenSettings: (key: string) => this.preferencesService.openUserSettings({ jsonEditor: true, target: ConfigurationTarget.USER_LOCAL, revealSetting: { key, edit: true } }),
 		}));
 
 		const ownerDocument = container.ownerDocument;
@@ -135,6 +137,16 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 			contextMenuProvider: this.contextMenuProvider,
 			localizationService: this.localizationService,
 		}));
+		const openJsonLabel = localize({ bundle: 'ash.settings', key: 'editor.openJSON' }, 'Open Settings (JSON)');
+		const openJson = this._register(new Button(this.searchWidget.domNode, {
+			label: openJsonLabel, title: openJsonLabel,
+			icon: Lxicon.code, iconOnly: true, size: 'small',
+			onClick: () => {
+				void this.preferencesService.openUserSettings({ jsonEditor: true, query: this.searchWidget?.value }).catch(error => this.settingsModel.reportStatus(String(error), true));
+			},
+		}));
+		openJson.domNode.classList.add('ash-settings-open-json');
+		openJson.domNode.setAttribute('aria-description', localize({ bundle: 'ash.settings', key: 'editor.switchHelp' }, 'Switch between Settings UI and JSON without changing the default settings editor. Unsaved JSON edits remain in the editor.'));
 		this._register(this.searchWidget.onDidChange(value => this.search(value)));
 		this._register(this.searchWidget.onDidRequestFocusResults(() => this.focusResults()));
 		this.element = h(ownerDocument, 'div');

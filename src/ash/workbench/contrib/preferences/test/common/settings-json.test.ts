@@ -11,7 +11,8 @@ import { IFileService } from '../../../../../platform/files/common/files.js';
 import { IUserDataProfileService } from '../../../../services/userDataProfile/common/userDataProfile.js';
 import { KeybindingTestServices } from '../../../../services/keybinding/test/browser/keybindingTestServices.js';
 import '../../../codeEditor/common/editorConfiguration.js';
-import { ConfigurationTarget } from '../../../../../platform/configuration/common/configuration.js';
+import { ConfigurationTarget, IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { WorkbenchConfiguration } from '../../../../common/configuration.js';
 import { Extensions, type IConfigurationRegistry, type IRegisteredConfiguration } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../../platform/registry/common/platform.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
@@ -226,19 +227,70 @@ test('PreferencesService opens User Settings JSON as a pinned JSON editor input'
 		focusActiveEditor() { },
 	};
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, { onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: '{}', revision: undefined }), save: async () => ({ revision: undefined }) } satisfies ITextResourceStore, {});
-	using preferences = new PreferencesService(editorService, models, keybindingProfile.files, keybindingProfile.profiles, keybindingProfile.services);
+	using configuration = new WorkbenchConfigurationService();
+	using preferences = new PreferencesService(editorService, models, keybindingProfile.files, keybindingProfile.profiles, keybindingProfile.services, configuration);
 
-	await preferences.openUserSettings();
+	await preferences.openUserSettings({ jsonEditor: true });
 	assert.equal((await keybindingProfile.files.readFile(UserSettingsResource)).content, '{}\n');
 	const existing = '// retain this comment\n{ "editor.fontSize": 19 }';
 	await keybindingProfile.files.writeFile({ resource: UserSettingsResource, content: existing });
-	await preferences.openUserSettings();
+	await preferences.openUserSettings({ jsonEditor: true });
 	assert.equal((await keybindingProfile.files.readFile(UserSettingsResource)).content, existing);
 	assert.equal(opened?.input.resource.toString(), UserSettingsResource.toString());
 	assert.equal(opened?.input.languageId, 'jsonc');
 	assert.equal(opened?.input.label, 'User Settings (JSON)');
 	assert.equal(opened?.options?.pinned, true);
 	assert.equal(opened?.target, undefined);
+});
+
+test('PreferencesService honors the persisted default and explicit UI or JSON requests without changing the preference', async () => {
+	using configuration = new WorkbenchConfigurationService();
+	using textFiles = createTestTextFileService(configuration.fileService);
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(textFiles), {});
+	const opens: { input: IResourceEditorInput; options?: EditorOpenOptions; target?: EditorOpenTarget; }[] = [];
+	using preferences = new PreferencesService({
+		...emptyEditorServiceState,
+		openEditor: async (input, options, target) => { opens.push({ input, options, target }); },
+		focusActiveEditor() { },
+	}, models, configuration.fileService, keybindingProfile.profiles, keybindingProfile.services, configuration);
+	assert.equal(configuration.getValue(WorkbenchConfiguration.settingsEditor), 'ui');
+	await preferences.openSettings();
+	assert.ok(opens.at(-1)?.input instanceof SettingsEditorInput);
+	assert.equal(opens.at(-1)?.target, 'modalGroup');
+	await configuration.write('{\n // preserve this comment\n "workbench.settings.editor": "json", "editor.fontSize": 19\n}\n');
+	const source = (await configuration.read()).source;
+	await preferences.openSettings({ query: '@id:editor.fontFamily' });
+	assert.equal(opens.at(-1)?.options?.selection, undefined);
+	using firstReference = await models.acquire(opens.at(-1)!.input, new AbortController().signal);
+	assert.equal(firstReference.model.getValue(), source, 'switching does not insert a setting that was only searched');
+	assert.equal(firstReference.isDirty, false);
+	await preferences.openSettings({ query: '@id:editor.fontSize' });
+	assert.equal(opens.at(-1)?.input.resource.toString(), UserSettingsResource.toString());
+	using reference = await models.acquire(opens.at(-1)!.input, new AbortController().signal);
+	assert.equal(reference.model.getValueInRange(opens.at(-1)!.options!.selection!), '19');
+	const saved = (await configuration.read()).source;
+	await preferences.openUserSettings({ jsonEditor: false });
+	assert.ok(opens.at(-1)?.input instanceof SettingsEditorInput);
+	assert.equal(configuration.getValue(WorkbenchConfiguration.settingsEditor), 'json');
+	await preferences.openUserSettings();
+	assert.equal(opens.at(-1)?.input.resource.toString(), UserSettingsResource.toString());
+	assert.equal((await configuration.read()).source, saved);
+	const model = reference.model;
+	model.pushEditOperations(null, [{ range: model.getFullModelRange(), text: '{ invalid draft' }], null);
+	await preferences.openSettings({ jsonEditor: true, query: '@id:editor.fontSize' });
+	assert.equal(opens.at(-1)?.input.resource.toString(), UserSettingsResource.toString());
+	assert.equal(opens.at(-1)?.options?.selection, undefined);
+	assert.equal(model.getValue(), '{ invalid draft', 'the JSON repair entry retains an invalid unsaved draft');
+	model.pushEditOperations(null, [{ range: model.getFullModelRange(), text: saved }], null);
+	await configuration.updateValue(WorkbenchConfiguration.settingsEditor, 'ui');
+	await preferences.openSettings({ jsonEditor: true });
+	assert.equal(opens.at(-1)?.input.resource.toString(), UserSettingsResource.toString());
+	assert.equal(configuration.getValue(WorkbenchConfiguration.settingsEditor), 'ui');
+	await assert.rejects(configuration.updateValue(WorkbenchConfiguration.settingsEditor, 'unsupported'), /ui or json/u);
+	const count = opens.length;
+	await assert.rejects(preferences.openSettings({ jsonEditor: 'json' } as unknown as IOpenSettingsOptions));
+	await assert.rejects(preferences.openSettings({ jsonEditor: true, revealSetting: { key: '' } }));
+	assert.equal(opens.length, count);
 });
 
 test('PreferencesService passes graphical queries and sections while rejecting unsupported options before opening', async () => {
@@ -257,7 +309,8 @@ test('PreferencesService passes graphical queries and sections while rejecting u
 		focusActiveEditor() { },
 	};
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, { onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: '{}', revision: undefined }), save: async () => ({ revision: undefined }) } satisfies ITextResourceStore, {});
-	using preferences = new PreferencesService(editorService, models, keybindingProfile.files, keybindingProfile.profiles, keybindingProfile.services);
+	using configuration = new WorkbenchConfigurationService();
+	using preferences = new PreferencesService(editorService, models, keybindingProfile.files, keybindingProfile.profiles, keybindingProfile.services, configuration);
 	for (const query of ['editor.fontFamily', 'font & 中文 + @id:editor.font*', '']) {
 		await preferences.openSettings({ query, section: 'models', target: ConfigurationTarget.USER_LOCAL });
 		assert.deepEqual(requests.at(-1), { query, section: 'models', target: ConfigurationTarget.USER_LOCAL });
@@ -265,7 +318,7 @@ test('PreferencesService passes graphical queries and sections while rejecting u
 	}
 	await preferences.openSettings({ target: ConfigurationTarget.USER });
 	assert.equal(opened.at(-1)!.resource.query, '');
-	for (const options of [null, [], true, { query: 1 }, { section: '' }, { section: 1 }, { revealSetting: { key: 'editor.fontFamily' } }, { target: ConfigurationTarget.WORKSPACE }, { target: ConfigurationTarget.USER_REMOTE }]) {
+	for (const options of [null, [], true, { query: 1 }, { section: '' }, { section: 1 }, { revealSetting: { key: 3 } }, { jsonEditor: 'json' }, { target: ConfigurationTarget.WORKSPACE }, { target: ConfigurationTarget.USER_REMOTE }]) {
 		await assert.rejects(preferences.openSettings(options as IOpenSettingsOptions));
 	}
 	assert.equal(opened.length, 4, 'rejected requests never reach EditorService');
@@ -343,9 +396,10 @@ test('PreferencesService uses the shared dirty model, inserts an undoable defaul
 	services.registerInstance(IFileTextModelService, models);
 	services.registerInstance(IFileService, keybindingProfile.files);
 	services.registerInstance(IUserDataProfileService, keybindingProfile.profiles);
+	services.registerInstance(IConfigurationService, configuration);
 	using preferences = services.createInstance(PreferencesService);
 
-	await preferences.openUserSettings({ target: ConfigurationTarget.USER_LOCAL, revealSetting: { key: 'editor.fontSize', edit: true } });
+	await preferences.openUserSettings({ jsonEditor: true, target: ConfigurationTarget.USER_LOCAL, revealSetting: { key: 'editor.fontSize', edit: true } });
 	assert.equal(reference.isDirty, true);
 	assert.equal((await configuration.read()).source, '{}\n');
 	assert.match(reference.model.getText(), /extension.data.*99/u);
@@ -358,9 +412,9 @@ test('PreferencesService uses the shared dirty model, inserts an undoable defaul
 	await reference.save(new AbortController().signal);
 	assert.match((await configuration.read()).source, /"editor.fontSize"/u);
 
-	await preferences.openUserSettings({ revealSetting: { key: 'editor.fontSize' } });
+	await preferences.openUserSettings({ jsonEditor: true, revealSetting: { key: 'editor.fontSize' } });
 	assert.equal(reference.model.getValueInRange(selection!), '"editor.fontSize"');
-	await assert.rejects(preferences.openUserSettings({ target: ConfigurationTarget.WORKSPACE }), /configuration target/u);
+	await assert.rejects(preferences.openUserSettings({ target: ConfigurationTarget.WORKSPACE }), /local user settings/u);
 });
 
 test('revealing existing settings preserves edits and real external conflicts reject saves', async () => {
@@ -377,8 +431,8 @@ test('revealing existing settings preserves edits and real external conflicts re
 		...emptyEditorServiceState,
 		openEditor: async (_input, options) => { selection = options?.selection; },
 		focusActiveEditor() { },
-	}, models, keybindingProfile.files, keybindingProfile.profiles, keybindingProfile.services);
-	await preferences.openUserSettings({ revealSetting: { key: 'editor.fontSize', edit: true } });
+	}, models, keybindingProfile.files, keybindingProfile.profiles, keybindingProfile.services, configuration);
+	await preferences.openUserSettings({ jsonEditor: true, revealSetting: { key: 'editor.fontSize', edit: true } });
 	assert.equal(reference.model.getText(), source);
 	assert.equal(reference.model.getValueInRange(selection!), '18');
 
@@ -389,7 +443,7 @@ test('revealing existing settings preserves edits and real external conflicts re
 	assert.equal(configuration.getValue('editor.fontSize'), 20);
 
 	reference.model.applyEdits([{ range: reference.model.getFullModelRange(), text: '{ broken' }]);
-	await assert.rejects(preferences.openUserSettings({ revealSetting: { key: 'editor.fontSize', edit: true } }), /JSON errors/u);
+	await assert.rejects(preferences.openUserSettings({ jsonEditor: true, revealSetting: { key: 'editor.fontSize', edit: true } }), /JSON errors/u);
 	assert.equal(reference.model.getText(), '{ broken');
 	await assert.rejects(reference.save(new AbortController().signal), TextModelConflictError);
 });

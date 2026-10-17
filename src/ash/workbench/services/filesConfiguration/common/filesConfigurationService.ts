@@ -14,18 +14,25 @@ import { ResourceGlobMatcher } from '../../../common/resources.js';
 
 const registry = Registry.as<IConfigurationRegistry>(Extensions.Configuration);
 const expressionSettings = [
-	['files.readonlyInclude', localize('files.readonlyIncludeTitle', 'Read-only file patterns')],
-	['files.readonlyExclude', localize('files.readonlyExcludeTitle', 'Writable file exceptions')],
-	['files.exclude', localize('files.excludeTitle', 'File exclusion patterns')],
-	['search.exclude', localize('files.searchExcludeTitle', 'Search exclusion patterns')],
-	['explorer.autoRevealExclude', localize('files.autoRevealExcludeTitle', 'Auto-reveal exclusion patterns')],
-	['workbench.localHistory.exclude', localize('files.historyExcludeTitle', 'Local history exclusion patterns')],
+	['files.readonlyInclude', localize('files.readonlyIncludeTitle', 'Read-only file patterns'), localize('files.readonlyIncludeDescription', 'Open matching files as read-only. Add writable exceptions below to allow editing specific files.')],
+	['files.readonlyExclude', localize('files.readonlyExcludeTitle', 'Writable file exceptions'), localize('files.readonlyExcludeDescription', 'Allow editing matching files even when they match a read-only rule. Filesystem permissions still apply.')],
+	['files.exclude', localize('files.excludeTitle', 'File exclusion patterns'), localize('files.excludeDescription', 'Hide matching files and folders in Explorer. Removing a default rule makes those files visible again.')],
+	['search.exclude', localize('files.searchExcludeTitle', 'Search exclusion patterns'), localize('files.searchExcludeDescription', 'Skip matching files and folders when searching the workspace.')],
+	['explorer.autoRevealExclude', localize('files.autoRevealExcludeTitle', 'Auto-reveal exclusion patterns'), localize('files.autoRevealExcludeDescription', 'Keep Explorer from automatically revealing and selecting matching files when you open them. The files remain visible in Explorer.')],
+	['workbench.localHistory.exclude', localize('files.historyExcludeTitle', 'Local history exclusion patterns'), localize('files.historyExcludeDescription', 'Do not save local history entries for matching files.')],
 ] as const;
-for (const [key, title] of expressionSettings) {
+for (const [key, title, description] of expressionSettings) {
 	const conditional = key === 'files.exclude' || key === 'search.exclude' || key === 'explorer.autoRevealExclude';
 	registry.registerConfiguration<IExpression>({
 		key,
-		defaultValue: {},
+		defaultValue: key === 'files.exclude' ? {
+			'**/.git': true,
+			'**/.svn': true,
+			'**/.hg': true,
+			'**/.jj': true,
+			'**/.DS_Store': true,
+			'**/Thumbs.db': true,
+		} : {},
 		scope: ConfigurationScope.RESOURCE,
 		schema: { type: 'object', additionalProperties: conditional ? { anyOf: [{ type: 'boolean' }, { type: 'object', required: ['when'], properties: { when: { type: 'string' } }, additionalProperties: false }] } : { type: 'boolean' } },
 		parse: value => {
@@ -42,7 +49,7 @@ for (const [key, title] of expressionSettings) {
 		},
 		setting: {
 			valueType: 'stringMap', structuredValues: true, title,
-			description: conditional ? localize('files.globDescription', 'Match resource paths with *, **, ?, character classes or alternatives. Use true to enable, false to disable, or {"when":"$(basename).ts"} to require a sibling file.') : localize('files.booleanGlobDescription', 'Match resource paths with *, **, ?, character classes or alternatives. Use true to enable or false to disable a pattern.'),
+			description,
 			keyLabel: localize('files.globPattern', 'Path pattern'),
 			valueLabel: localize('files.globRule', 'Rule'),
 			addLabel: localize('files.globAdd', 'Add pattern'),

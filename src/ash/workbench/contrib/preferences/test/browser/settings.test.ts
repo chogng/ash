@@ -8,6 +8,7 @@ import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from '../
 import { ITelemetryService } from '../../../../../platform/telemetry/common/telemetry.js';
 import { NullTelemetryService } from '../../../../../platform/telemetry/common/telemetryUtils.js';
 import { TestConfigurationFiles } from '../../../../services/configuration/test/common/testServices.js';
+import { HoverService, IHoverService } from '../../../../../platform/hover/browser/hoverService.js';
 import { ISecretStorageStatusService } from '../../../../../platform/secrets/common/secrets.js';
 import { createTestLanguageModelToolsService } from '../../../chat/test/common/tools/testLanguageModelToolsService.js';
 import type { IQuickPick, IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
@@ -462,6 +463,107 @@ test('Built-in Git, Markdown and Media settings localize, persist and reset thro
 	assert.equal(reopened.getValue('git.untrackedChanges'), 'separate');
 });
 
+test('File exclusion Settings show defaults, persist disabled rules and reset through the widget', async () => {
+	using resources = new DisposableStore();
+	const configuration = resources.add(new WorkbenchConfigurationService());
+	const root = h(browserEnvironment.window.document, 'div');
+	browserEnvironment.window.document.body.append(root);
+	resources.add(toDisposable(() => root.remove()));
+	let menuActions: readonly IAction[] = [];
+	const errors: string[] = [];
+	const widget = resources.add(createSettingWidget(resources, root, new DefaultSettings().get('files.exclude'), {
+		configurationService: configuration,
+		contextViewProvider: resources.add(new BrowserContextViewService(root)),
+		contextMenuProvider: { showContextMenu: delegate => { menuActions = delegate.getActions().filter((action): action is IAction => !(action instanceof Separator)); } },
+		clipboardService: {
+			triggerPaste: () => undefined, read: async () => [], readText: async () => '', writeText: async () => { },
+			readFindText: async () => '', writeFindText: async () => { }, readImage: async () => new Uint8Array(),
+			readResources: async () => ({ resources: [], operation: 'copy' }), writeResources: async () => { }, hasResources: async () => false,
+		},
+		onStatus: (message, error) => { if (error) errors.push(message); },
+	}));
+	root.append(widget.domNode);
+	const displayedRules = () => [...widget.domNode.querySelectorAll<HTMLElement>('.ash-pattern-row')].map(row => row.dataset.pattern);
+	const defaults = ['**/.git', '**/.svn', '**/.hg', '**/.jj', '**/.DS_Store', '**/Thumbs.db'];
+	const ruleRow = (pattern: string) => [...widget.domNode.querySelectorAll<HTMLElement>('.ash-pattern-row')].find(row => row.dataset.pattern === pattern)!;
+	const save = async (action: () => void): Promise<void> => {
+		let resolveSaved!: () => void;
+		const saved = new Promise<void>(resolve => { resolveSaved = resolve; });
+		using listener = configuration.onDidChangeConfiguration(event => { if (event.affectsConfiguration('files.exclude')) resolveSaved(); });
+		action();
+		await saved;
+		await nextTurn();
+	};
+	assert.deepEqual(displayedRules(), defaults);
+	assert.equal(widget.domNode.querySelectorAll('input').length, 0, 'rules are readable text until edited');
+	assert.equal(findSettingCategory(createSettingsLayout(new DefaultSettings().all), 'files.exclude'), 'editor-files');
+	await save(() => ruleRow('**/.DS_Store').querySelectorAll<HTMLButtonElement>('button')[1]!.click());
+	assert.deepEqual(displayedRules(), defaults.filter(pattern => pattern !== '**/.DS_Store'));
+	assert.deepEqual(JSON.parse((await configuration.read()).source)['files.exclude'], { '**/.DS_Store': false }, 'only the explicit override is persisted');
+	assert.equal(widget.domNode.classList.contains('is-configured'), true);
+	using reopened = new WorkbenchConfigurationService({ source: (await configuration.read()).source });
+	assert.equal(reopened.getValue<Record<string, boolean>>('files.exclude')['**/.DS_Store'], false);
+	assert.equal(reopened.getValue<Record<string, boolean>>('files.exclude')['**/.git'], true);
+	const add = widget.domNode.querySelector<HTMLButtonElement>(':scope > .ash-pattern-actions button')!;
+	add.click();
+	let inputs = widget.domNode.querySelectorAll<HTMLInputElement>('.ash-pattern-editor input');
+	inputs[0]!.value = '**/.DS_Store';
+	await save(() => inputs[0]!.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
+	assert.deepEqual(displayedRules(), defaults);
+	assert.equal(configuration.inspect('files.exclude').userLocalValue, undefined, 'adding a default restores it without duplicating its value');
+	add.click();
+	inputs = widget.domNode.querySelectorAll<HTMLInputElement>('.ash-pattern-editor input');
+	inputs[0]!.value = '**/*.js';
+	inputs[1]!.value = '$(basename).ts';
+	await save(() => widget.domNode.querySelector<HTMLButtonElement>('.ash-pattern-editor button')!.click());
+	assert.deepEqual(configuration.inspect('files.exclude').userLocalValue, { '**/*.js': { when: '$(basename).ts' } });
+	assert.equal(ruleRow('**/*.js').querySelector('.ash-pattern-condition')!.textContent, 'When: $(basename).ts');
+	ruleRow('**/*.js').querySelector<HTMLButtonElement>('button')!.click();
+	inputs = widget.domNode.querySelectorAll<HTMLInputElement>('.ash-pattern-editor input');
+	inputs[0]!.value = '**/*.cjs';
+	await save(() => inputs[1]!.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
+	assert.deepEqual(configuration.inspect('files.exclude').userLocalValue, { '**/*.cjs': { when: '$(basename).ts' } });
+	assert.equal(browserEnvironment.window.document.activeElement, ruleRow('**/*.cjs'));
+	await save(() => ruleRow('**/*.cjs').dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Delete', bubbles: true })));
+	assert.equal(configuration.inspect('files.exclude').userLocalValue, undefined, 'deleting a custom rule removes its key');
+	add.click();
+	inputs = widget.domNode.querySelectorAll<HTMLInputElement>('.ash-pattern-editor input');
+	inputs[0]!.value = '**/.git';
+	inputs[0]!.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+	assert.equal(inputs[0]!.getAttribute('aria-invalid'), 'true');
+	assert.deepEqual(errors.splice(0), ['Each path pattern must be unique.']);
+	inputs[0]!.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+	assert.equal(widget.domNode.querySelector('.ash-pattern-editor'), null);
+	assert.equal(browserEnvironment.window.document.activeElement, add);
+	assert.equal(configuration.inspect('files.exclude').userLocalValue, undefined, 'cancelling a draft does not save it');
+	const updateValue = configuration.updateValue.bind(configuration);
+	configuration.updateValue = async () => { throw new Error('Settings disk unavailable'); };
+	add.click();
+	inputs = widget.domNode.querySelectorAll<HTMLInputElement>('.ash-pattern-editor input');
+	inputs[0]!.value = '**/unsaved';
+	widget.domNode.querySelector<HTMLButtonElement>('.ash-pattern-editor button')!.click();
+	await nextTurn();
+	assert.equal(widget.domNode.querySelector<HTMLInputElement>('.ash-pattern-editor input')!.value, '**/unsaved');
+	assert.equal(configuration.inspect('files.exclude').userLocalValue, undefined);
+	assert.deepEqual(errors.splice(0), ['Settings disk unavailable']);
+	configuration.updateValue = updateValue;
+	inputs[0]!.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+	await save(() => ruleRow('**/.git').querySelectorAll<HTMLButtonElement>('button')[1]!.click());
+	let resolveReset!: () => void;
+	const resetSaved = new Promise<void>(resolve => { resolveReset = resolve; });
+	using resetListener = configuration.onDidChangeConfiguration(event => {
+		if (event.affectsConfiguration('files.exclude') && configuration.inspect('files.exclude').userLocalValue === undefined) resolveReset();
+	});
+	widget.domNode.querySelector<HTMLButtonElement>('.ash-setting-item-actions-trigger')!.click();
+	await menuActions.find(action => action.id === 'settings.resetSetting')!.run();
+	await resetSaved;
+	await nextTurn();
+	assert.deepEqual(displayedRules(), defaults);
+	assert.equal(configuration.inspect('files.exclude').userLocalValue, undefined);
+	assert.equal(widget.domNode.classList.contains('is-configured'), false);
+	assert.deepEqual(errors, []);
+});
+
 test('URL rule suggestions follow extension registration without changing saved IDs', async () => {
 	using resources = new DisposableStore();
 	const { updateContributedOpeners } = await import('../../../externalUriOpener/common/configuration.js');
@@ -804,15 +906,63 @@ test('empty-editor tips expose translated settings metadata', () => {
 	}
 });
 
+test('Settings Editor belongs to Workbench and localizes the shared default editor preference', async () => {
+	const { SettingsNavigation } = await import('../../browser/settingsLayout.js');
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	try {
+		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+		const defaults = new DefaultSettings();
+		const setting = defaults.get(WorkbenchConfiguration.settingsEditor);
+		assert.equal(setting.title, '默认设置编辑器');
+		assert.equal(setting.valueType, 'select');
+		if (setting.valueType === 'select') {
+			assert.deepEqual(setting.options.map(option => [option.value, option.label]), [['ui', 'UI'], ['json', 'JSON']]);
+		}
+		const layout = createSettingsLayout(defaults.all);
+		assert.equal(findSettingCategory(layout, setting.id), 'settings-editor');
+		const category = layout.find(category => category.id === 'settings-editor')!;
+		assert.equal(category.descriptor.label, 'Settings Editor');
+		assert.equal(chinese.bundles['ash.settings']?.['categories.settings-editor.label'], '设置编辑器');
+		assert.ok(SettingsNavigation.find(group => group.id === 'workbench')?.categories.some(item => item.id === category.id));
+		assert.deepEqual(category.groups.flatMap(group => group.settings.map(item => item.id)), [setting.id]);
+		assert.equal(layout.flatMap(category => category.groups.flatMap(group => group.settings)).filter(item => item.id === setting.id).length, 1);
+	} finally {
+		resetNlsResolver();
+	}
+});
+
+test('Files belongs to Editor and owns file behavior exactly once', async () => {
+	const { SettingsNavigation } = await import('../../browser/settingsLayout.js');
+	const defaults = new DefaultSettings();
+	const layout = createSettingsLayout(defaults.all);
+	const files = layout.find(category => category.id === 'editor-files')!;
+	assert.equal(files.descriptor.label, 'Files');
+	assert.ok(SettingsNavigation.find(group => group.id === 'editor')?.categories.some(category => category.id === files.id));
+	const opening = ['workbench.editor.openErrorDialog', 'workbench.editor.defaultBinaryEditor', 'workbench.editorLargeFileConfirmation', EditorSelectionConfiguration.defaultNewDocumentEditor];
+	const expected = defaults.all.filter(setting => !setting.configuration.source && (setting.id.startsWith('files.') || setting.id.startsWith('workbench.localHistory.') || setting.id === 'debug.saveBeforeStart' || opening.includes(setting.id)));
+	assert.deepEqual(new Set(files.groups.flatMap(group => group.settings.map(setting => setting.id))), new Set(expected.map(setting => setting.id)));
+	for (const setting of expected) {
+		assert.equal(findSettingCategory(layout, setting.id), 'editor-files', setting.id);
+		assert.equal(layout.flatMap(category => category.groups.flatMap(group => group.settings)).filter(item => item.id === setting.id).length, 1, setting.id);
+	}
+	assert.equal(findSettingCategory(layout, 'workbench.editor.showTabs'), 'editor-opening');
+	assert.equal(findSettingCategory(layout, 'explorer.autoRevealExclude'), 'explorer');
+	assert.equal(findSettingCategory(layout, 'search.exclude'), 'search');
+});
+
 test('file opening preferences have a translated group and correctly typed controls', async () => {
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	try {
 		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 		const defaults = new DefaultSettings();
 		const layout = await loadChineseSettingsLayout();
-		const group = layout.createSettingsLayout(defaults.all).find(category => category.id === 'editor-opening')?.groups.find(group => group.id === 'file-opening');
+		const category = layout.createSettingsLayout(defaults.all).find(category => category.id === 'editor-files');
+		assert.equal(category?.descriptor.label, '文件');
+		const group = category?.groups.find(group => group.id === 'file-opening');
 		assert.equal(group?.title, '文件打开');
-		assert.deepEqual(group?.settings.map(setting => ({ id: setting.id, title: setting.title, valueType: setting.valueType })), [
+		assert.equal(group?.settings.length, 4);
+		assert.equal(group?.settings.find(setting => setting.id === EditorSelectionConfiguration.defaultNewDocumentEditor)?.valueType, 'select');
+		assert.deepEqual(group?.settings.filter(setting => setting.id !== EditorSelectionConfiguration.defaultNewDocumentEditor).map(setting => ({ id: setting.id, title: setting.title, valueType: setting.valueType })), [
 			{ id: 'workbench.editor.openErrorDialog', title: '文件打开错误弹窗', valueType: 'boolean' },
 			{ id: 'workbench.editor.defaultBinaryEditor', title: '默认二进制编辑器', valueType: 'select' },
 			{ id: 'workbench.editorLargeFileConfirmation', title: '大文件打开确认（MiB）', valueType: 'number' },
@@ -889,8 +1039,8 @@ test('settingsLayout is the single projection from registered settings to catego
 		'editor-language',
 		'editor-search',
 		'editor-diff',
-		'editor-opening',
 		'editor-files',
+		'editor-opening',
 		'accessibilitySignals',
 		'accessibility',
 		'explorer',
@@ -967,7 +1117,7 @@ test('settingsLayout is the single projection from registered settings to catego
 	if (iconThemeSetting.valueType === 'select') {
 		assert.equal(iconThemeSetting.options.some(option => option.value === iconThemeSetting.configuration.defaultValue), true);
 	}
-	assert.equal(findSettingCategory(layout, EditorSelectionConfiguration.defaultNewDocumentEditor), 'editor-opening');
+	assert.equal(findSettingCategory(layout, EditorSelectionConfiguration.defaultNewDocumentEditor), 'editor-files');
 	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.modernUIEditorTabStyle), 'editor-opening');
 	const tabStyleSetting = defaults.get(WorkbenchConfiguration.modernUIEditorTabStyle);
 	assert.equal(tabStyleSetting.valueType, 'select');
@@ -977,7 +1127,7 @@ test('settingsLayout is the single projection from registered settings to catego
 	}
 	assert.equal(findSettingCategory(layout, 'breadcrumbs.filePath'), 'editor-display');
 	assert.equal(findSettingCategory(layout, 'breadcrumbs.symbolPath'), 'editor-display');
-	assert.equal(findSettingCategory(layout, 'workbench.editorLargeFileConfirmation'), 'editor-opening');
+	assert.equal(findSettingCategory(layout, 'workbench.editorLargeFileConfirmation'), 'editor-files');
 	assert.equal(findSettingCategory(layout, CodeEditorConfiguration.fontFamily), 'editor-fonts');
 	assert.equal(findSettingCategory(layout, CodeEditorConfiguration.renderWhitespace), 'editor-display');
 	assert.equal(findSettingCategory(layout, CodeEditorConfiguration.renderControlCharacters), 'editor-display');
@@ -1546,6 +1696,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	services.registerInstance(ClipboardServiceId, clipboardService);
 	services.registerInstance(IContextMenuService, contextMenuProvider);
 	services.registerInstance(IContextViewService, contextView);
+	services.registerInstance(IHoverService, disposables.add(new HoverService(configuration, contextView, contextMenuProvider)));
 	services.registerInstance(LocalizationServiceId, workbenchLocalization);
 	disposables.add(CommandsRegistry.register('git.readSettings', () => ({ autoFetch, autoFetchPeriod, rebaseWhenSync })));
 	disposables.add(CommandsRegistry.register('git.updateAutoFetch', async (_accessor, value) => gitService.setAutoFetch(value as false | true | 'all')));
@@ -1646,7 +1797,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	editorServices.registerInstance(IEditorPart, editor);
 	editorServices.registerInstance(ICommandService, disposables.add(new CommandService(editorServices)));
 	editorServices.registerInstance(IEditorService, disposables.add(new BrowserEditorService(editor)));
-	const preferences = disposables.add(new PreferencesService(editorServices.get(IEditorService), editorServices.get(IFileTextModelService), keybindingProfile.files, keybindingProfile.profiles, editorServices));
+	const preferences = disposables.add(new PreferencesService(editorServices.get(IEditorService), editorServices.get(IFileTextModelService), keybindingProfile.files, keybindingProfile.profiles, editorServices, configuration));
 	services.registerInstance(IPreferencesService, preferences);
 	services.registerInstance(IOpenerService, { open: async () => true } as unknown as IOpenerService);
 	services.registerInstance(IAccountService, { onDidChangeAccounts: Event.None, onDidCompleteLogin: Event.None, read: async () => ({ revision: 1n, accounts: [] }), startLogin: async () => { throw new Error('Not used'); }, cancelLogin: async () => { }, logout: async () => { } });
@@ -2498,6 +2649,7 @@ function createSettingWidget(resources: import('../../../../../base/common/lifec
 	services.registerInstance(ConfigurationServiceId, options.configurationService);
 	services.registerInstance(IContextViewService, options.contextViewProvider);
 	services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom' as const, ...options.contextMenuProvider, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, hideContextMenu() { } });
+	services.registerInstance(IHoverService, resources.add(new HoverService(options.configurationService, options.contextViewProvider, services.get(IContextMenuService))));
 	return instantiateSettingWidget(container, setting, { onStatus: options.onStatus, onOpenSettings: options.onOpenSettings }, services);
 }
 

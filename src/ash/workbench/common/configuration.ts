@@ -37,6 +37,25 @@ export function getConfigurationMigrations(): readonly ConfigurationMigration[] 
 /** Typed configuration keys owned by the workbench layer. */
 export const WorkbenchConfiguration = Object.freeze({
 	...AccessibilityConfiguration,
+	settingsEditor: configurationRegistry.registerConfiguration<'ui' | 'json'>({
+		key: 'workbench.settings.editor', defaultValue: 'ui', scope: ConfigurationScope.WINDOW,
+		schema: { type: 'string', enum: ['ui', 'json'] },
+		parse(value: unknown): 'ui' | 'json' {
+			if (value !== 'ui' && value !== 'json') throw new TypeError(localize({ bundle: 'ash.settings', key: 'editor.invalid' }, 'Settings editor must be ui or json.'));
+			return value;
+		},
+		setting: {
+			valueType: 'select',
+			get title() { return localize({ bundle: 'ash.settings', key: 'editor.title' }, 'Default settings editor'); },
+			get description() { return localize({ bundle: 'ash.settings', key: 'editor.description' }, 'Choose how Settings opens by default. Switching between UI and JSON for a single visit does not change this preference.'); },
+			get options() {
+				return [
+					{ value: 'ui', label: localize({ bundle: 'ash.settings', key: 'editor.ui' }, 'UI') },
+					{ value: 'json', label: localize({ bundle: 'ash.settings', key: 'editor.json' }, 'JSON') },
+				] as const;
+			},
+		},
+	}),
 	statusBarVisible: configurationRegistry.registerConfiguration<boolean>({
 		key: 'workbench.statusBar.visible', defaultValue: true, scope: ConfigurationScope.WINDOW,
 		parse: value => { if (typeof value !== 'boolean') throw new TypeError('Status bar visibility must be a boolean'); return value; },
