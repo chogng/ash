@@ -141,7 +141,7 @@ impl Calls {
                             media: executable("ASH_LIVEKIT_SERVER_PATH", "livekit-server")?,
                             collaboration: executable(
                                 "ASH_COLLABORATION_SERVER_PATH",
-                                "ash-collaboration-server",
+                                "ash-collab-server",
                             )?,
                         },
                         &home.join("calls.sqlite3"),

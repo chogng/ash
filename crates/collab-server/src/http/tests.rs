@@ -1,7 +1,7 @@
 use super::HttpRuntime;
 use super::serve_listener;
 use crate::CollaborationServerOptions;
-use ash_collaboration::SqliteDocumentCollaborationRooms;
+use ash_collab::SqliteDocumentCollaborationRooms;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::io::Read;

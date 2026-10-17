@@ -1,5 +1,5 @@
 use super::*;
-use ash_collaboration::SqliteDocumentCollaborationRooms;
+use ash_collab::SqliteDocumentCollaborationRooms;
 use std::io::Write;
 use std::net::TcpListener;
 use std::sync::atomic::AtomicBool;

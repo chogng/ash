@@ -85,7 +85,7 @@ reason = "Current upstream API families: 0.1.5 via hashbrown; 0.2.0 via glifo, h
 [[multiple_versions]]
 name = "getrandom"
 versions = ["0.2.17", "0.3.4", "0.4.3"]
-reason = "Current upstream API families: 0.2.17 via mxc-sdk, ash-app-server, ash-collaboration and other importers; 0.3.4 via ahash, rand_core, tokenizers; 0.4.3 via ashpd, jobserver, quinn-proto and other importers. Review the introducing packages together before changing this set."
+reason = "Current upstream API families: 0.2.17 via mxc-sdk, ash-app-server, ash-collab and other importers; 0.3.4 via ahash, rand_core, tokenizers; 0.4.3 via ashpd, jobserver, quinn-proto and other importers. Review the introducing packages together before changing this set."
 
 [[multiple_versions]]
 name = "hashbrown"

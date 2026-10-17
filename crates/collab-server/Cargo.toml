@@ -1,24 +1,24 @@
 [package]
-name = "ash-collaboration-server"
+name = "ash-collab-server"
 version.workspace = true
 edition.workspace = true
 license-file.workspace = true
 publish.workspace = true
 
 [[bin]]
-name = "ash-collaboration-server"
+name = "ash-collab-server"
 path = "src/main.rs"
 
 [lib]
 doctest = false
-name = "ash_collaboration_server"
+name = "ash_collab_server"
 path = "src/lib.rs"
 
 [dependencies]
 process-hardening = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-ash-collaboration = { workspace = true }
+ash-collab = { workspace = true }
 call = { package = "ash-call", path = "../call" }
 livekit-api = { package = "ash-livekit-api", path = "../livekit-api" }
 ash-secrets = { workspace = true }

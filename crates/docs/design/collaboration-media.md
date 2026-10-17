@@ -55,14 +55,14 @@ LiveKit 的 SFU（选择性转发服务器）负责将参与者发布的音视�
 
 ## 2. 当前基础与待补能力
 
-| 当前实现                                                     | 已有职责                                 | 本方案需要补充或调整                                                                         |
-| ------------------------------------------------------------ | ---------------------------------------- | -------------------------------------------------------------------------------------------- |
-| [collaboration](../../collaboration/README.md)               | 结构化文档房间、操作顺序、回放、presence | 与通话关联；继续独立维护文档授权                                                             |
-| [collaboration-server](../../collaboration-server/README.md) | 文档协作 HTTP、鉴权、SQLite 宿主         | 装配通话成员权限、媒体票据和房间管理                                                         |
-| [voice-host](../../voice-host/README.md)                     | CPAL 设备、PCM 管道、Sonora 音频处理     | 接入 LiveKit；完善真实设备与切换验证                                                         |
-| `realtime-webrtc`（已删除）                                  | 原单条双向音频连接、Opus、数据通道       | 双向音频改由 `livekit-client` 对真实 LiveKit Server 验证；自维护 RTP 播放与数据通道 API 退场 |
-| [model-provider](../../model-provider/README.md)             | 模型选择、凭据和模型会话装配             | 增加 GPT-Live 会话能力                                                                       |
-| App Server 与 Core                                           | 产品请求装配、Thread、Turn 和工具执行    | 接收 AI 语音委托，复用权限和任务状态                                                         |
+| 当前实现                                         | 已有职责                                 | 本方案需要补充或调整                                                                         |
+| ------------------------------------------------ | ---------------------------------------- | -------------------------------------------------------------------------------------------- |
+| [collab](../../collab/README.md)                 | 结构化文档房间、操作顺序、回放、presence | 与通话关联；继续独立维护文档授权                                                             |
+| [collab-server](../../collab-server/README.md)   | 文档协作 HTTP、鉴权、SQLite 宿主         | 装配通话成员权限、媒体票据和房间管理                                                         |
+| [voice-host](../../voice-host/README.md)         | CPAL 设备、PCM 管道、Sonora 音频处理     | 接入 LiveKit；完善真实设备与切换验证                                                         |
+| `realtime-webrtc`（已删除）                      | 原单条双向音频连接、Opus、数据通道       | 双向音频改由 `livekit-client` 对真实 LiveKit Server 验证；自维护 RTP 播放与数据通道 API 退场 |
+| [model-provider](../../model-provider/README.md) | 模型选择、凭据和模型会话装配             | 增加 GPT-Live 会话能力                                                                       |
+| App Server 与 Core                               | 产品请求装配、Thread、Turn 和工具执行    | 接收 AI 语音委托，复用权限和任务状态                                                         |
 
 当前 `collaboration` 的 room 是文档房间，并不代表一组人的完整协作会话。原 `realtime-webrtc` 不是 LiveKit 客户端；删除前已核对没有其他生产 crate 依赖它。
 

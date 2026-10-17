@@ -124,7 +124,7 @@ class PackageTests(unittest.TestCase):
                 "ash-dev-container-provider",
                 "ash-debug-lldb",
                 "ash-voice-host",
-                "ash-collaboration-server",
+                "ash-collab-server",
                 "ash-remote",
                 "ash-remote-host",
                 "ash-remote-server",

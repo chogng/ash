@@ -415,7 +415,7 @@ dependencies = [
  "ash-cloud-codebase",
  "ash-codebase",
  "ash-codebase-store",
- "ash-collaboration",
+ "ash-collab",
  "ash-collaboration-mode-templates",
  "ash-config",
  "ash-connectors-extension",
@@ -608,7 +608,7 @@ dependencies = [
  "ash-app-server-protocol-noop-macros",
  "ash-build-info",
  "ash-call-contract",
- "ash-collaboration-contract",
+ "ash-collab-contract",
  "ash-diagnostics",
  "ash-environment",
  "ash-extension-items",
@@ -1033,10 +1033,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "ash-collaboration"
+name = "ash-collab"
 version = "0.1.0"
 dependencies = [
- "ash-collaboration-contract",
+ "ash-collab-contract",
  "getrandom 0.2.17",
  "rusqlite",
  "serde_json",
@@ -1045,7 +1045,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ash-collaboration-contract"
+name = "ash-collab-contract"
 version = "0.1.0"
 dependencies = [
  "schemars",
@@ -1054,18 +1054,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "ash-collaboration-mode-templates"
-version = "0.1.0"
-dependencies = [
- "ash-protocol",
-]
-
-[[package]]
-name = "ash-collaboration-server"
+name = "ash-collab-server"
 version = "0.1.0"
 dependencies = [
  "ash-call",
- "ash-collaboration",
+ "ash-collab",
  "ash-livekit-api",
  "ash-process-hardening",
  "ash-secrets",
@@ -1073,6 +1066,13 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tokio",
+]
+
+[[package]]
+name = "ash-collaboration-mode-templates"
+version = "0.1.0"
+dependencies = [
+ "ash-protocol",
 ]
 
 [[package]]

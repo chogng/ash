@@ -28,9 +28,9 @@ _BINARIES = {
     "ash-package-store": ("ash-package-store", "--package-store-bin"),
     "bwrap": ("ash-bwrap", "--bwrap-bin"),
     "ash-voice-host": ("ash-voice-host", "--voice-host-bin"),
-    "ash-collaboration-server": (
-        "ash-collaboration-server",
-        "--collaboration-server-bin",
+    "ash-collab-server": (
+        "ash-collab-server",
+        "--collab-server-bin",
     ),
     "ash-app-server": ("ash-app-server", "--server-bin"),
     "ash-app-server-daemon": ("ash-app-server-daemon", "--app-server-daemon-bin"),

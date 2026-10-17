@@ -46,7 +46,7 @@ zeroize = { workspace = true }
 ash-protocol = { workspace = true }
 ash-environment = { workspace = true }
 ash-file-access = { workspace = true }
-collaboration = { package = "ash-collaboration-contract", path = "../collaboration-contract" }
+collaboration = { package = "ash-collab-contract", path = "../collab-contract" }
 ash-thread-transcript = { workspace = true }
 ash-utils-path-uri = { workspace = true }
 

@@ -1,7 +1,7 @@
 //! Authenticated HTTP host for durable Document Engine collaboration rooms.
 //!
 //! The host owns HTTP authentication, origin policy, long-poll delivery and
-//! SQLite lifecycle. Ordered room semantics remain in `ash-collaboration`.
+//! SQLite lifecycle. Ordered room semantics remain in `ash-collab`.
 //! It intentionally has no App Server, directory, tool, or session authority.
 
 mod http;

@@ -341,7 +341,7 @@ class PrepareTests(unittest.TestCase):
                 "ash-dev-container-provider",
                 "ash-debug-lldb",
                 "ash-voice-host",
-                "ash-collaboration-server",
+                "ash-collab-server",
                 "ash-windows-sandbox",
                 "ash-windows-sandbox-service",
             ):

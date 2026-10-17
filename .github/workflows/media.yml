@@ -42,12 +42,12 @@ jobs:
         run: python -B scripts/cargo.py check --locked -p ash-livekit-client -p ash-screen-capture -p ash-voice-agent
       - name: Build the collaboration service
         run: |
-          python -B scripts/cargo.py build --locked -p ash-collaboration-server --bin ash-collaboration-server
-          echo "ASH_TEST_COLLABORATION_SERVER=$(node -p 'require("node:path").resolve(".build/cargo/debug/ash-collaboration-server.exe")')" >> "$GITHUB_ENV"
+          python -B scripts/cargo.py build --locked -p ash-collab-server --bin ash-collab-server
+          echo "ASH_TEST_COLLABORATION_SERVER=$(node -p 'require("node:path").resolve(".build/cargo/debug/ash-collab-server.exe")')" >> "$GITHUB_ENV"
       - name: Test rooms, authority and model bridge against the real server
         # Each room test runs a real media server and a CPU video/audio pipeline.
         # Keep their time-based transport assertions independent of other rooms.
-        run: python -B scripts/cargo.py test --locked -p ash-livekit-client -p ash-livekit-api -p ash-call -p ash-collaboration-server -p ash-voice-agent --features ash-call/runtime -- --include-ignored --test-threads=1
+        run: python -B scripts/cargo.py test --locked -p ash-livekit-client -p ash-livekit-api -p ash-call -p ash-collab-server -p ash-voice-agent --features ash-call/runtime -- --include-ignored --test-threads=1
       - name: Test screen capture contracts
         run: python -B scripts/cargo.py test --locked -p ash-screen-capture
       - name: Test speech processing

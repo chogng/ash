@@ -763,7 +763,7 @@ def system_signing_artifacts(package: Path, spec: TargetSpec) -> Dict[str, Path]
         "voiceHost": package / "bin" / ("ash-voice-host" + spec.executable_suffix),
         "collaborationServer": package
         / "bin"
-        / ("ash-collaboration-server" + spec.executable_suffix),
+        / ("ash-collab-server" + spec.executable_suffix),
         "livekit": package / "bin" / ("livekit-server" + spec.executable_suffix),
         "ripgrep": package / "ash-path" / spec.ripgrep_name,
         "tgrep": package / "ash-resources/tgrep" / ("tgrep" + spec.executable_suffix),

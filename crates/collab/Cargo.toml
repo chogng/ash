@@ -1,5 +1,5 @@
 [package]
-name = "ash-collaboration"
+name = "ash-collab"
 version.workspace = true
 edition.workspace = true
 license-file.workspace = true
@@ -7,11 +7,11 @@ publish.workspace = true
 
 [lib]
 doctest = false
-name = "ash_collaboration"
+name = "ash_collab"
 path = "src/lib.rs"
 
 [dependencies]
-contract = { package = "ash-collaboration-contract", path = "../collaboration-contract" }
+contract = { package = "ash-collab-contract", path = "../collab-contract" }
 getrandom = { workspace = true }
 rusqlite = { workspace = true }
 serde_json = { workspace = true }

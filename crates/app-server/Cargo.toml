@@ -95,7 +95,7 @@ ash-apply-patch = { workspace = true }
 agent-roles = { workspace = true }
 ash-async-utils = { workspace = true }
 ash-attachments = { workspace = true }
-ash-collaboration = { workspace = true }
+ash-collab = { workspace = true }
 ash-codebase = { workspace = true }
 ash-codebase-store = { workspace = true }
 ash-cloud-codebase = { workspace = true }

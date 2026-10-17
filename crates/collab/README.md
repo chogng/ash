@@ -1,11 +1,11 @@
-# ash-collaboration
+# ash-collab
 
-`ash-collaboration` owns the backend-neutral authority for ordered Document Engine
+`ash-collab` owns the backend-neutral authority for ordered Document Engine
 structured-document rooms. It does not own HTTP, App Server JSON-RPC,
 Workbench state, sessions, users, or document-schema semantics.
 
 Shared room data and roles are defined in
-[`ash-collaboration-contract`](../collaboration-contract/src/lib.rs).
+[`ash-collab-contract`](../collab-contract/src/lib.rs).
 The protocol depends directly on that contract; this crate uses and re-exports
 the same types while owning room authority and storage.
 
@@ -52,7 +52,7 @@ the backend rather than copied from the browser.
 
 ## Tests
 
-`cargo test -p ash-collaboration` covers room creation, envelope rejection,
+`just test ash-collab` covers room creation, envelope rejection,
 ordered replay, exact retries, SQLite recovery, memberships, credential
 rotation/revocation, audit order, and presence replay. App Server adapter
 coverage is in `crates/app-server/src/server_tests.rs`.

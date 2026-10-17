@@ -223,7 +223,7 @@ def create_runtime_package(
         else None,
         remote_host_binary=executable("ash-remote-host"),
         voice_host_binary=executable("ash-voice-host"),
-        collaboration_server_binary=executable("ash-collaboration-server"),
+        collaboration_server_binary=executable("ash-collab-server"),
         livekit={"executable": str(executable("livekit-server"))},
         symbols_dir=symbols_dir,
     )

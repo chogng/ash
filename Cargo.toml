@@ -30,7 +30,7 @@ members = [
     "crates/response-debug-context",
     "crates/feedback",
     "crates/feedback-contract",
-    "crates/collaboration-contract",
+    "crates/collab-contract",
     "crates/call-contract",
     "crates/queue-contract",
     "crates/features",
@@ -70,8 +70,8 @@ members = [
     "crates/app-server-protocol",
     "crates/app-server-protocol-noop-macros",
     "crates/app-server-transport",
-    "crates/collaboration",
-    "crates/collaboration-server",
+    "crates/collab",
+    "crates/collab-server",
     "crates/codebase",
     "crates/codebase-store",
     "crates/cloud-codebase",
@@ -456,8 +456,8 @@ ash-app-server-daemon = { path = "crates/app-server-daemon" }
 ash-app-server-client = { path = "crates/app-server-client" }
 ash-app-server-protocol = { path = "crates/app-server-protocol" }
 ash-app-server-transport = { path = "crates/app-server-transport" }
-ash-collaboration = { path = "crates/collaboration" }
-ash-collaboration-server = { path = "crates/collaboration-server" }
+ash-collab = { path = "crates/collab" }
+ash-collab-server = { path = "crates/collab-server" }
 ash-codebase = { path = "crates/codebase" }
 ash-codebase-store = { path = "crates/codebase-store" }
 ash-cloud-codebase = { path = "crates/cloud-codebase" }

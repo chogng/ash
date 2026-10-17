@@ -349,7 +349,7 @@ def development_binary_inputs(spec: TargetSpec) -> dict[str, None]:
             "ash-dev-container-provider",
             "ash-debug-lldb",
             "ash-voice-host",
-            "ash-collaboration-server",
+            "ash-collab-server",
         ]
     )
     if spec.is_windows:
@@ -503,7 +503,7 @@ def prepare_development_package(args: argparse.Namespace, *, root: Path = ROOT) 
             lldb_extension_binary=binaries["ash-debug-lldb"],
             remote_host_binary=binaries["ash-remote-host"],
             voice_host_binary=binaries["ash-voice-host"],
-            collaboration_server_binary=binaries["ash-collaboration-server"],
+            collaboration_server_binary=binaries["ash-collab-server"],
             livekit=livekit,
             remote_runtime_bundle=args.remote_runtime_bundle,
             remote_runtime_release=remote_release,

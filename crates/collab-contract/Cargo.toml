@@ -1,9 +1,12 @@
 [package]
-name = "ash-collaboration-contract"
+name = "ash-collab-contract"
 version.workspace = true
 edition.workspace = true
 license-file.workspace = true
 publish.workspace = true
+
+[package.metadata.ash.verify]
+test-packages = ["ash-collab"]
 
 [dependencies]
 schemars = { workspace = true }

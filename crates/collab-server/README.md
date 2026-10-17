@@ -1,8 +1,8 @@
-# ash-collaboration-server
+# ash-collab-server
 
 - Hosts durable document collaboration and call membership APIs.
 - Owns bearer authentication, browser-origin policy, HTTP framing, connection limits and SQLite lifecycle.
-- Delegates document ordering to [`ash-collaboration`](../collaboration/README.md) and call authority to [`call`](../call/README.md).
+- Delegates document ordering to [`ash-collab`](../collab/README.md) and call authority to [`call`](../call/README.md).
 - Manages configured LiveKit rooms through [`livekit-api`](../livekit-api/README.md).
 - Retries durable pending media operations every second, including after restart; pending rooms reject joins until recovery completes.
 - Has no App Server, workspace, tool, terminal or model execution authority.
@@ -47,7 +47,7 @@ only an IP:port because it does not terminate TLS itself.
 ```sh
 export ASH_COLLABORATION_BEARER_TOKEN='a-random-visible-ascii-token-at-least-32-characters'
 export ASH_COLLABORATION_ALLOWED_ORIGIN='https://desktop.example'
-cargo run -p ash-collaboration-server -- 127.0.0.1:8421 /srv/ash/collaboration.sqlite3
+cargo run -p ash-collab-server -- 127.0.0.1:8421 /srv/ash/collaboration.sqlite3
 ```
 
 `ASH_COLLABORATION_ALLOWED_ORIGIN` is a comma-separated allowlist. It must
@@ -91,6 +91,6 @@ and known core transaction kinds; the active browser profile validates its own
 profile-specific schema. Do not expose this endpoint directly to untrusted
 networks without TLS, a strong secret, and an origin allowlist.
 
-`cargo test -p ash-collaboration-server` exercises CORS preflight, auth,
+`just test ash-collab-server` exercises CORS preflight, auth,
 room-role enforcement, credential rotation, audit access, presence, ordered
 updates, and external updates observed through a second host.

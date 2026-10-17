@@ -33,7 +33,7 @@ fn default_protocol_build_does_not_compile_service_implementations() {
     for forbidden in [
         "ash-queue",
         "ash-call",
-        "ash-collaboration",
+        "ash-collab",
         "ash-task-delivery",
         "ash-core",
         "ash-extension-api",

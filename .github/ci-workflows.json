@@ -76,7 +76,7 @@
     "build/lib/livekit.py",
     "third_party/livekit/**",
     "crates/call/**",
-    "crates/collaboration-server/**",
+    "crates/collab-server/**",
     "crates/model-provider/**",
     "crates/model-provider-info/**",
     "crates/ash-api/**",

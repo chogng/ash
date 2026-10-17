@@ -238,7 +238,7 @@ def build_package(args: argparse.Namespace) -> int:
     protocol_metadata = load_protocol_metadata(REPOSITORY_ROOT)
     inputs = {
         "ash-voice-host": None,
-        "ash-collaboration-server": None,
+        "ash-collab-server": None,
         "ash-app-server": args.server_bin,
         "ash-app-server-daemon": args.app_server_daemon_bin,
         "ash-code-mode-host": args.code_mode_host_bin,
@@ -339,7 +339,7 @@ def build_package(args: argparse.Namespace) -> int:
         lldb_extension_binary=binaries["ash-debug-lldb"],
         remote_host_binary=binaries["ash-remote-host"],
         voice_host_binary=binaries["ash-voice-host"],
-        collaboration_server_binary=binaries["ash-collaboration-server"],
+        collaboration_server_binary=binaries["ash-collab-server"],
         protocol_metadata=protocol_metadata,
         update_public_key=args.update_public_key,
         build_profile=args.cargo_profile,

@@ -3,17 +3,17 @@ mod wire;
 
 use crate::CollaborationServerError;
 use crate::CollaborationServerOptions;
-use ash_collaboration::DocumentCollaborationAuditEvent;
-use ash_collaboration::DocumentCollaborationMember;
-use ash_collaboration::DocumentCollaborationOpenParams;
-use ash_collaboration::DocumentCollaborationPrincipal;
-use ash_collaboration::DocumentCollaborationReplay;
-use ash_collaboration::DocumentCollaborationRoomRole;
-use ash_collaboration::DocumentCollaborationSnapshot;
-use ash_collaboration::DocumentCollaborationSubmitParams;
-use ash_collaboration::DocumentCollaborationSubmitResult;
-use ash_collaboration::DocumentCollaborationUpdate;
-use ash_collaboration::SqliteDocumentCollaborationRooms;
+use ash_collab::DocumentCollaborationAuditEvent;
+use ash_collab::DocumentCollaborationMember;
+use ash_collab::DocumentCollaborationOpenParams;
+use ash_collab::DocumentCollaborationPrincipal;
+use ash_collab::DocumentCollaborationReplay;
+use ash_collab::DocumentCollaborationRoomRole;
+use ash_collab::DocumentCollaborationSnapshot;
+use ash_collab::DocumentCollaborationSubmitParams;
+use ash_collab::DocumentCollaborationSubmitResult;
+use ash_collab::DocumentCollaborationUpdate;
+use ash_collab::SqliteDocumentCollaborationRooms;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::json;
@@ -287,14 +287,14 @@ struct RemoteOpenResult {
 
 impl
     From<(
-        ash_collaboration::DocumentCollaborationOpenResult,
+        ash_collab::DocumentCollaborationOpenResult,
         DocumentCollaborationPrincipal,
         DocumentCollaborationRoomRole,
     )> for RemoteOpenResult
 {
     fn from(
         value: (
-            ash_collaboration::DocumentCollaborationOpenResult,
+            ash_collab::DocumentCollaborationOpenResult,
             DocumentCollaborationPrincipal,
             DocumentCollaborationRoomRole,
         ),
