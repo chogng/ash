@@ -20,6 +20,7 @@ struct FakeFactory {
     calls: Arc<Mutex<Vec<(McpServerId, String)>>>,
     shutdowns: Arc<Mutex<Vec<McpServerId>>>,
     resource_csp: Arc<Mutex<Option<serde_json::Value>>>,
+    results: Arc<Mutex<std::collections::VecDeque<Result<CallToolResult, McpSessionError>>>>,
 }
 
 impl McpSessionFactory for FakeFactory {
@@ -33,6 +34,7 @@ impl McpSessionFactory for FakeFactory {
         let calls = Arc::clone(&self.calls);
         let shutdowns = Arc::clone(&self.shutdowns);
         let resource_csp = Arc::clone(&self.resource_csp);
+        let results = Arc::clone(&self.results);
         Box::pin(async move {
             if should_fail {
                 return Err(McpSessionError::Transport("connection refused".into()));
@@ -42,6 +44,7 @@ impl McpSessionFactory for FakeFactory {
                 calls,
                 shutdowns,
                 resource_csp,
+                results,
             }) as Box<dyn McpSession>)
         })
     }
@@ -52,6 +55,7 @@ struct FakeSession {
     calls: Arc<Mutex<Vec<(McpServerId, String)>>>,
     shutdowns: Arc<Mutex<Vec<McpServerId>>>,
     resource_csp: Arc<Mutex<Option<serde_json::Value>>>,
+    results: Arc<Mutex<std::collections::VecDeque<Result<CallToolResult, McpSessionError>>>>,
 }
 
 impl McpSession for FakeSession {
@@ -90,6 +94,9 @@ impl McpSession for FakeSession {
                 .lock()
                 .expect("call log lock")
                 .push((self.server.clone(), request.name.to_string()));
+            if let Some(result) = self.results.lock().unwrap().pop_front() {
+                return result;
+            }
             Ok(CallToolResult::success(vec![ContentBlock::text(
                 self.server.to_string(),
             )]))
@@ -486,4 +493,70 @@ async fn app_resource_csp_is_normalized_at_the_resource_boundary_and_rejects_pol
         );
     }
     runtime.shutdown().await;
+}
+
+#[tokio::test]
+async fn production_metrics_distinguish_tool_errors_transport_and_cancellation_without_content() {
+    let diagnostics = diagnostics::Diagnostics::default();
+    let factory = Arc::new(FakeFactory::default());
+    let mut tool_error = CallToolResult::success(vec![ContentBlock::text("private tool output")]);
+    tool_error.is_error = Some(true);
+    factory.results.lock().unwrap().extend([
+        Ok(CallToolResult::success(vec![ContentBlock::text(
+            "private output",
+        )])),
+        Ok(tool_error),
+        Err(McpSessionError::Transport(
+            "private credential /path".into(),
+        )),
+    ]);
+    let runtime = McpRuntime::start_with_factory(
+        vec![definition("user:mcp:docs")],
+        factory.clone(),
+        McpRuntimeOptions::new("ash-test", "0")
+            .with_metrics(diagnostics.metrics())
+            .with_metric_connectors(std::collections::BTreeMap::from([(
+                McpServerId::new("user:mcp:docs").unwrap(),
+                "test-connector".into(),
+            )])),
+    )
+    .await
+    .unwrap();
+    let binding = runtime.catalog().tools()[0].binding().clone();
+    let cancellation = CancellationSource::new();
+    for _ in 0..3 {
+        let _ = runtime
+            .call_tool(
+                &binding,
+                serde_json::json!({"private": "argument"}),
+                &cancellation.token(),
+            )
+            .await;
+    }
+    cancellation.cancel();
+    assert!(
+        runtime
+            .call_tool(&binding, serde_json::json!({}), &cancellation.token())
+            .await
+            .is_err()
+    );
+    let snapshot = diagnostics.metrics().snapshot();
+    let count = snapshot
+        .iter()
+        .filter(|s| s.name == "ash.mcp.call")
+        .map(|s| s.count)
+        .sum::<u64>();
+    assert_eq!(count, 4);
+    for error in ["tool_result", "mcp_request", "cancellation"] {
+        assert!(
+            snapshot
+                .iter()
+                .any(|s| s.name == "ash.mcp.call.error" && s.tags["error_type"] == error)
+        );
+    }
+    let json = serde_json::to_string(&snapshot).unwrap();
+    assert!(!json.contains("private"));
+    assert!(json.contains("user_mcp_docs"));
+    assert!(json.contains("test-connector"));
+    assert_eq!(factory.calls.lock().unwrap().len(), 3);
 }

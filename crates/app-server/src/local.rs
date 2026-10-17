@@ -1639,14 +1639,19 @@ pub fn open_app_server_with_codebase_providers(
             .preferred_connections(&runtime_config.connections)
             .map_err(open_error)?,
     );
-    let approval_review_model: ash_core::ApprovalReviewerFactory = Arc::new(|model| {
+    let review_metrics = diagnostics.metrics();
+    let approval_review_model: ash_core::ApprovalReviewerFactory = Arc::new(move |model| {
         let Some((identity, runtime)) = model.approval_review_model()? else {
             return Ok(ash_extension_api::ApprovalReviewer::Unavailable);
         };
         let reasoning = runtime.reasoning_config(ModelSelection::ConfiguredDefault)?;
         Ok(guardian_v2::reviewer(
-            guardian_v2::ProviderReviewModel::new(identity, Arc::new(ReviewModelInvoker(runtime)))
-                .with_reasoning(reasoning),
+            guardian_v2::ProviderReviewModel::new(
+                identity,
+                Arc::new(ReviewModelInvoker::new(runtime)?),
+            )
+            .with_reasoning(reasoning)
+            .with_metrics(review_metrics.clone()),
         ))
     });
     let skill_config = Arc::new(LocalSkillConfigProvider {
@@ -1830,7 +1835,7 @@ pub fn open_app_server_with_codebase_providers(
     .with_trace_recorder(trace_recorder)
     .with_home(home)
     .with_network_diagnostics(network.clone(), application_http.clone(), network_services)
-    .with_telemetry(diagnostics, telemetry, analytics)
+    .with_telemetry(diagnostics.clone(), telemetry, analytics)
     .with_model_catalog(direct_catalog)
     .with_secret_store(Arc::clone(&profile_secrets))
     .with_provider_credentials(Arc::new(
@@ -2031,7 +2036,7 @@ pub fn open_app_server_with_codebase_providers(
         server = server.with_plugin_package_service(client);
     }
     server = server.with_editor_extension_policy(editor_extension_policy);
-    let mcp_updates = McpCatalogUpdates::default();
+    let mcp_updates = McpCatalogUpdates::default().with_metrics(diagnostics.metrics());
     mcp_updates.bind_extensions(server.agent_extension_registry());
     let mcp_changes = mcp_updates.subscribe();
     let mcp_runtime_intents = server.mcp_runtime_intents.clone();
@@ -2646,6 +2651,15 @@ struct ConfigBackedModelService {
 }
 
 impl ModelService for ConfigBackedModelService {
+    fn output_transport(
+        &self,
+        selection: ModelSelection<'_>,
+    ) -> Result<ash_protocol::ModelOutputTransport, CoreError> {
+        self.snapshot(selection)?
+            .expect("configuration-backed model snapshot")
+            .output_transport(ModelSelection::ConfiguredDefault)
+    }
+
     fn snapshot(
         &self,
         selection: ModelSelection<'_>,
@@ -3206,6 +3220,13 @@ impl ProviderModelService {
 }
 
 impl ModelService for ProviderModelService {
+    fn output_transport(
+        &self,
+        _: ModelSelection<'_>,
+    ) -> Result<ash_protocol::ModelOutputTransport, CoreError> {
+        Ok(self.invoker.output_transport())
+    }
+
     fn image_input_policy(
         &self,
         _: ModelSelection<'_>,
@@ -3422,10 +3443,16 @@ fn billing_scope_for_config(config: &ash_config::ResolvedConfig) -> ModelBilling
 }
 
 /// Approval reviews share the Turn's model selection while retaining Guardian's request contract.
-struct ReviewModelInvoker(Arc<dyn ModelService>);
+struct ReviewModelInvoker(Arc<dyn ModelService>, ash_protocol::ModelOutputTransport);
+impl ReviewModelInvoker {
+    fn new(service: Arc<dyn ModelService>) -> Result<Self, CoreError> {
+        let transport = service.output_transport(ModelSelection::ConfiguredDefault)?;
+        Ok(Self(service, transport))
+    }
+}
 impl ModelInvoker for ReviewModelInvoker {
     fn output_transport(&self) -> ash_protocol::ModelOutputTransport {
-        ash_protocol::ModelOutputTransport::Unary
+        self.1
     }
     fn invoke_with_cancellation(
         &self,
@@ -3434,30 +3461,46 @@ impl ModelInvoker for ReviewModelInvoker {
     ) -> Result<ash_protocol::ModelResponse, ash_model_provider::ModelProviderError> {
         self.0
             .invoke(ModelSelection::ConfiguredDefault, request, cancellation)
-            .map_err(|error| match error {
-                CoreError::Cancelled(reason) => {
-                    ash_model_provider::ModelProviderError::Cancelled(reason)
-                }
-                CoreError::ModelTransient { failure, retry_at }
-                    if failure.code == ash_protocol::StableTurnErrorCode::RateLimited =>
-                {
-                    ash_model_provider::ModelProviderError::Api(
-                        ash_model_provider::ApiError::RateLimited { retry_at },
-                    )
-                }
-                CoreError::ModelTransient { failure, .. } => {
-                    ash_model_provider::ModelProviderError::Unavailable(failure.message)
-                }
-                error => ash_model_provider::ModelProviderError::InvalidResponse(error.to_string()),
-            })
+            .map_err(review_model_error)
     }
     fn stream_with_cancellation(
         &self,
         request: &ash_protocol::ModelRequest,
         cancellation: &CancellationToken,
-        _: &mut dyn ModelEventSink,
+        sink: &mut dyn ModelEventSink,
     ) -> Result<ash_protocol::ModelResponse, ash_model_provider::ModelProviderError> {
-        self.invoke_with_cancellation(request, cancellation)
+        self.0
+            .stream(
+                ModelSelection::ConfiguredDefault,
+                request,
+                cancellation,
+                &mut ReviewStreamSink(sink),
+            )
+            .map_err(review_model_error)
+    }
+}
+struct ReviewStreamSink<'a>(&'a mut dyn ModelEventSink);
+impl CoreModelStreamSink for ReviewStreamSink<'_> {
+    fn emit(&mut self, event: ash_protocol::ModelStreamEvent) -> Result<(), CoreError> {
+        self.0
+            .emit(event)
+            .map_err(|error| CoreError::Execution(error.to_string()))
+    }
+}
+fn review_model_error(error: CoreError) -> ash_model_provider::ModelProviderError {
+    match error {
+        CoreError::Cancelled(reason) => ash_model_provider::ModelProviderError::Cancelled(reason),
+        CoreError::ModelTransient { failure, retry_at }
+            if failure.code == ash_protocol::StableTurnErrorCode::RateLimited =>
+        {
+            ash_model_provider::ModelProviderError::Api(ash_model_provider::ApiError::RateLimited {
+                retry_at,
+            })
+        }
+        CoreError::ModelTransient { failure, .. } => {
+            ash_model_provider::ModelProviderError::Unavailable(failure.message)
+        }
+        error => ash_model_provider::ModelProviderError::InvalidResponse(error.to_string()),
     }
 }
 
@@ -3515,6 +3558,14 @@ struct FrozenModelService {
     reasoning: Option<ash_protocol::ReasoningConfig>,
 }
 impl ModelService for FrozenModelService {
+    fn output_transport(
+        &self,
+        _: ModelSelection<'_>,
+    ) -> Result<ash_protocol::ModelOutputTransport, CoreError> {
+        self.provider
+            .output_transport(ModelSelection::ConfiguredDefault)
+    }
+
     fn approval_review_model(
         &self,
     ) -> Result<Option<(ash_protocol::ModelRef, Arc<dyn ModelService>)>, CoreError> {

@@ -21,7 +21,14 @@ fn retains_bounded_facts_without_losing_totals() {
             .keys()
             .cloned()
             .collect::<Vec<_>>(),
-        ["activities", "build", "recent", "responses", "usage"]
+        [
+            "activities",
+            "build",
+            "metrics",
+            "recent",
+            "responses",
+            "usage"
+        ]
     );
 }
 

@@ -3560,7 +3560,7 @@ impl ModelService for RateLimitedReviewModel {
 fn review_model_bridge_retains_rate_limit_guidance_from_the_frozen_model_service() {
     let request = ModelRequest::text("review");
     for retry_at in [None, Some(std::time::Instant::now())] {
-        let invoker = ReviewModelInvoker(Arc::new(RateLimitedReviewModel(retry_at)));
+        let invoker = ReviewModelInvoker::new(Arc::new(RateLimitedReviewModel(retry_at))).unwrap();
         assert_eq!(
             invoker.invoke_with_cancellation(&request, &CancellationSource::new().token()),
             Err(ModelProviderError::Api(
@@ -5811,4 +5811,97 @@ fn shared_profile_owns_one_lazy_github_api_runtime_across_directory_hosts() {
     let default_options = AppServerOptions::new(profile.path());
     assert!(default_options.github_extension.is_none());
     assert!(default_options.github_authentication_extension.is_none());
+}
+
+#[test]
+fn production_review_model_bridge_preserves_streaming_for_guardian_metrics() {
+    struct StreamingReview;
+    impl ModelInvoker for StreamingReview {
+        fn output_transport(&self) -> ash_protocol::ModelOutputTransport {
+            ash_protocol::ModelOutputTransport::NativeStreaming
+        }
+        fn invoke_with_cancellation(
+            &self,
+            _: &ModelRequest,
+            _: &CancellationToken,
+        ) -> Result<ModelResponse, ModelProviderError> {
+            panic!("streaming review must use the stream path")
+        }
+        fn stream_with_cancellation(
+            &self,
+            _: &ModelRequest,
+            _: &CancellationToken,
+            sink: &mut dyn ModelEventSink,
+        ) -> Result<ModelResponse, ModelProviderError> {
+            sink.emit(ash_protocol::ModelStreamEvent::TextDelta(
+                "private delta".into(),
+            ))?;
+            Ok(ModelResponse {
+                output: vec![ResponseItem::Text(
+                    r#"{"recommendation":"deny","reason":"private"}"#.into(),
+                )],
+                usage: Some(ash_protocol::ModelUsage {
+                    input_tokens: Some(9),
+                    output_tokens: Some(3),
+                    ..Default::default()
+                }),
+                billing: None,
+                stop_reason: StopReason::Completed,
+            })
+        }
+    }
+    let metrics = diagnostics::Metrics::default();
+    let service = Arc::new(ProviderModelService::new(Arc::new(StreamingReview)));
+    let bridge = ReviewModelInvoker::new(service).unwrap();
+    assert_eq!(
+        bridge.output_transport(),
+        ash_protocol::ModelOutputTransport::NativeStreaming
+    );
+    let model = guardian_v2::ProviderReviewModel::new(
+        ModelRef::new(
+            ProviderId::new("test").unwrap(),
+            ModelId::new("review").unwrap(),
+        ),
+        Arc::new(bridge),
+    )
+    .with_metrics(metrics.clone());
+    let ash_extension_api::ApprovalReviewer::Configured { registry, .. } =
+        guardian_v2::reviewer(model)
+    else {
+        panic!("reviewer unavailable")
+    };
+    let request = ash_action_policy::ActionReviewRequest::new(
+        ash_action_policy::ResolvedAction::new(
+            ash_protocol::ActionDigest::from_canonical_bytes(b"review"),
+            ash_protocol::ActionKind::SystemOperation,
+            "review",
+            ash_protocol::CapabilitySet::new([]),
+        ),
+        ash_protocol::ActionProvenance::new(ash_protocol::ActionSource::BuiltInTool, "test"),
+        ash_action_policy::SandboxCompatibility::NotApplicable {
+            reason: "test".into(),
+        },
+        ash_protocol::ActionPolicyRevision::new("test"),
+    );
+    registry
+        .review(&request, &CancellationSource::new().token())
+        .unwrap();
+    let snapshot = metrics.snapshot();
+    assert!(
+        snapshot
+            .iter()
+            .any(|s| s.name == "ash.guardian.review.ttft_ms" && s.count == 1)
+    );
+    assert!(
+        snapshot
+            .iter()
+            .any(|s| s.name == "ash.guardian.review.tokens"
+                && s.tags["token_type"] == "input"
+                && s.total == 9)
+    );
+    assert!(
+        !serde_json::to_string(&snapshot)
+            .unwrap()
+            .contains("private")
+    );
 }

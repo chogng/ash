@@ -14,6 +14,7 @@ name = "ash-windows-sandbox"
 path = "src/main.rs"
 
 [dependencies]
+diagnostics = { workspace = true }
 ash-sandboxing = { workspace = true }
 ash-file-access = { workspace = true }
 ash-install-context = { workspace = true }

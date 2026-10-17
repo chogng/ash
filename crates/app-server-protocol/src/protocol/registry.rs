@@ -2892,6 +2892,12 @@ use diagnostics::ActivitySummary;
 #[cfg(any(test, feature = "export"))]
 use diagnostics::DiagnosticSnapshot;
 #[cfg(any(test, feature = "export"))]
+use diagnostics::MetricDistribution;
+#[cfg(any(test, feature = "export"))]
+use diagnostics::MetricKind;
+#[cfg(any(test, feature = "export"))]
+use diagnostics::MetricSeries;
+#[cfg(any(test, feature = "export"))]
 use diagnostics::Observation;
 #[cfg(any(test, feature = "export"))]
 use diagnostics::Outcome;
@@ -6827,6 +6833,9 @@ typescript_bindings! {
     FeedbackPrepareParams,
     FeedbackUploadParams,
     DiagnosticSnapshot,
+    MetricSeries,
+    MetricKind,
+    MetricDistribution,
     AuthHeader,
     AuthRecovery,
     DiagnosticOutcome,

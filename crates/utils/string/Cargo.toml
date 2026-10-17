@@ -1,0 +1,18 @@
+[package]
+name = "ash-utils-string"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "ash_utils_string"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

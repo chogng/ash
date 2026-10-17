@@ -1,3 +1,4 @@
+use ash_utils_string::take_bytes_at_char_boundary;
 use std::collections::BTreeSet;
 
 use ash_config::SkillEnablement;
@@ -106,11 +107,7 @@ fn selector_text(input: &[UserInput]) -> String {
         if remaining == 0 {
             break;
         }
-        let mut end = text.len().min(remaining);
-        while !text.is_char_boundary(end) {
-            end -= 1;
-        }
-        result.push_str(&text[..end]);
+        result.push_str(take_bytes_at_char_boundary(text, remaining));
     }
     normalize(&result)
 }

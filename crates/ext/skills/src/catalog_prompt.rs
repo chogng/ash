@@ -5,6 +5,7 @@ use ash_extension_api::PromptFragmentLayer;
 use ash_extension_api::PromptFragmentRetention;
 use ash_extension_api::PromptFragmentSource;
 use ash_skills::SkillCompatibility;
+use ash_utils_string::take_bytes_at_char_boundary;
 
 pub(crate) const MAX_SKILL_CATALOG_PROMPT_BYTES: usize = 8 * 1024;
 const MAX_CATALOG_DESCRIPTION_BYTES: usize = 512;
@@ -38,7 +39,7 @@ pub(crate) fn catalog_prompt(snapshot: &SkillRuntimeSnapshot) -> Option<PromptFr
     let mut included = 0usize;
     for entry in &entries {
         let catalog_entry = &entry.catalog_entry;
-        let description = truncate_utf8(
+        let description = take_bytes_at_char_boundary(
             catalog_entry.metadata().description(),
             MAX_CATALOG_DESCRIPTION_BYTES,
         );
@@ -78,17 +79,6 @@ fn catalog_suffix(omitted: usize) -> String {
     format!(
         "<omitted count=\"{omitted}\">Additional Skill metadata was omitted by the catalog prompt byte limit.</omitted>\n</available-skills>"
     )
-}
-
-fn truncate_utf8(value: &str, maximum_bytes: usize) -> &str {
-    if value.len() <= maximum_bytes {
-        return value;
-    }
-    let mut end = maximum_bytes;
-    while !value.is_char_boundary(end) {
-        end -= 1;
-    }
-    &value[..end]
 }
 
 fn escape_xml(value: &str) -> String {

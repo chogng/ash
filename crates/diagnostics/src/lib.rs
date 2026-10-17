@@ -11,6 +11,15 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use ts_rs::TS;
 
+mod metrics;
+pub use metrics::MetricDistribution;
+pub use metrics::MetricKind;
+pub use metrics::MetricOperation;
+pub use metrics::MetricOutcome;
+pub use metrics::MetricSeries;
+pub use metrics::MetricTimer;
+pub use metrics::Metrics;
+
 #[derive(
     Clone, Copy, Debug, Deserialize, Eq, JsonSchema, Ord, PartialEq, PartialOrd, Serialize, TS,
 )]
@@ -59,6 +68,7 @@ pub struct DiagnosticSnapshot {
     pub recent: Vec<Observation>,
     pub usage: analytics::UsageSnapshot,
     pub responses: Vec<ResponseDiagnostic>,
+    pub metrics: Vec<MetricSeries>,
 }
 
 #[derive(Debug, Default)]
@@ -71,9 +81,15 @@ struct State {
 #[derive(Clone, Debug, Default)]
 pub struct Diagnostics {
     state: Arc<Mutex<State>>,
+    metrics: Metrics,
 }
 
 impl Diagnostics {
+    /// Shares this backend's production meter with its domain runtimes.
+    pub fn metrics(&self) -> Metrics {
+        self.metrics.clone()
+    }
+
     pub fn record(&self, observation: Observation) {
         let mut state = self.state.lock().expect("diagnostics lock poisoned");
         let summary = state.summaries.entry(observation.activity).or_default();
@@ -104,6 +120,7 @@ impl Diagnostics {
             recent: state.recent.iter().cloned().collect(),
             usage,
             responses: state.responses.iter().cloned().collect(),
+            metrics: self.metrics.snapshot(),
         }
     }
 }

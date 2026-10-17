@@ -107,6 +107,7 @@ fn review_adapter_preserves_rate_limit_deadlines_without_retrying_authentication
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(1);
     for retry_at in [None, Some(deadline)] {
         let reviewer = ProviderReviewModel {
+            metrics: diagnostics::Metrics::default(),
             model: model_ref("test", "review-model"),
             reasoning: None,
             invoker: Arc::new(StaticFailureInvoker(ModelProviderError::Api(
@@ -121,6 +122,7 @@ fn review_adapter_preserves_rate_limit_deadlines_without_retrying_authentication
         );
     }
     let reviewer = ProviderReviewModel {
+        metrics: diagnostics::Metrics::default(),
         model: model_ref("test", "review-model"),
         reasoning: None,
         invoker: Arc::new(StaticFailureInvoker(ModelProviderError::AuthFailed(
@@ -273,6 +275,7 @@ fn automatic_review_resolves_provider_default_and_uses_a_review_only_request() {
 #[test]
 fn review_adapter_enforces_the_classifier_response_budget_while_collecting_text() {
     let reviewer = ProviderReviewModel {
+        metrics: diagnostics::Metrics::default(),
         model: model_ref("test", "review-model"),
         reasoning: None,
         invoker: Arc::new(StaticResponseInvoker("x".repeat(20 * 1024))),
@@ -338,6 +341,7 @@ impl ActionPolicyService for AskPolicy {
 #[test]
 fn approval_mode_policy_runs_the_reviewer_only_for_auto_review() {
     let review_model = ProviderReviewModel {
+        metrics: diagnostics::Metrics::default(),
         reasoning: None,
         model: model_ref("test", "review-model"),
         invoker: Arc::new(StaticResponseInvoker(
@@ -435,4 +439,86 @@ fn code_mode_control_grants_only_the_isolated_runtime_capability() {
         policy.decide(&control, &cancellation.token()),
         Err(CoreError::Cancelled(_))
     ));
+}
+
+struct UsageInvoker(protocol::ModelOutputTransport);
+impl ModelInvoker for UsageInvoker {
+    fn output_transport(&self) -> protocol::ModelOutputTransport {
+        self.0
+    }
+    fn stream_with_cancellation(
+        &self,
+        _: &ModelRequest,
+        _: &CancellationToken,
+        sink: &mut dyn model_provider::ModelEventSink,
+    ) -> Result<ModelResponse, ModelProviderError> {
+        sink.emit(protocol::ModelStreamEvent::TextDelta(String::new()))?;
+        sink.emit(protocol::ModelStreamEvent::ReasoningDelta(
+            "private reasoning".into(),
+        ))?;
+        sink.emit(protocol::ModelStreamEvent::TextDelta(
+            "private delta".into(),
+        ))?;
+        Ok(ModelResponse {
+            output: vec![ResponseItem::Text(
+                r#"{"recommendation":"deny","reason":"private reason"}"#.into(),
+            )],
+            usage: Some(protocol::ModelUsage {
+                input_tokens: Some(12),
+                output_tokens: Some(4),
+                cached_input_tokens: Some(5),
+                ..Default::default()
+            }),
+            billing: None,
+            stop_reason: StopReason::Completed,
+        })
+    }
+}
+
+#[test]
+fn production_review_adapter_exports_reported_usage_and_only_real_stream_ttft() {
+    for transport in [
+        protocol::ModelOutputTransport::NativeStreaming,
+        protocol::ModelOutputTransport::Unary,
+    ] {
+        let metrics = diagnostics::Metrics::default();
+        let model = ProviderReviewModel::new(
+            model_ref("test", "review-model"),
+            Arc::new(UsageInvoker(transport)),
+        )
+        .with_metrics(metrics.clone());
+        let mut builder = extension_api::ExtensionRegistryBuilder::new();
+        crate::install(&mut builder, model);
+        let registry = builder.build();
+        registry
+            .review(&review_request(), &CancellationSource::new().token())
+            .unwrap();
+        let snapshot = metrics.snapshot();
+        assert!(snapshot.iter().any(|s| s.name == "ash.guardian.review"
+            && s.tags["status"] == "denied"
+            && s.count == 1));
+        for (kind, count) in [("input", 12), ("output", 4), ("cached_input", 5)] {
+            assert!(
+                snapshot
+                    .iter()
+                    .any(|s| s.name == "ash.guardian.review.tokens"
+                        && s.tags["token_type"] == kind
+                        && s.count == 1
+                        && s.total == count)
+            );
+        }
+        assert_eq!(
+            snapshot
+                .iter()
+                .filter(|s| s.name == "ash.guardian.review.ttft_ms")
+                .map(|s| s.count)
+                .sum::<u64>(),
+            u64::from(transport == protocol::ModelOutputTransport::NativeStreaming)
+        );
+        assert!(
+            !serde_json::to_string(&snapshot)
+                .unwrap()
+                .contains("private")
+        );
+    }
 }

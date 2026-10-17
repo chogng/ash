@@ -201,6 +201,7 @@ members = [
     "crates/utils/json-to-toml",
     "crates/utils/markdown-math",
     "crates/utils/output-truncation",
+    "crates/utils/string",
     "crates/utils/path-uri",
     "crates/utils/path-utils",
     "crates/utils/pty",
@@ -578,6 +579,7 @@ ash-utils-home-dir = { path = "crates/utils/home-dir" }
 ash-utils-image = { path = "crates/utils/image" }
 ash-utils-json-to-toml = { path = "crates/utils/json-to-toml" }
 ash-utils-output-truncation = { path = "crates/utils/output-truncation" }
+ash-utils-string = { path = "crates/utils/string" }
 ash-utils-path = { path = "crates/utils/path-utils" }
 ash-utils-path-uri = { path = "crates/utils/path-uri" }
 ash-utils-stream-parser = { path = "crates/utils/stream-parser" }

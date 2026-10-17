@@ -9,6 +9,7 @@ publish.workspace = true
 doctest = false
 
 [dependencies]
+diagnostics = { workspace = true }
 extension-api = { package = "ash-extension-api", path = "../extension-api" }
 guardian-reviewer = { workspace = true }
 action-policy = { package = "ash-action-policy", path = "../../action-policy" }
@@ -19,6 +20,7 @@ model-provider-info = { workspace = true }
 protocol = { package = "ash-protocol", path = "../../protocol" }
 
 [dev-dependencies]
+serde_json = { workspace = true }
 core-api = { workspace = true }
 ash-core = { workspace = true }
 [lints]

@@ -1565,3 +1565,65 @@ fn queued_modes_survive_reopen_and_use_the_same_init_entrypoint() {
         assert!(response.get("error").is_some(), "{response}");
     }
 }
+
+#[test]
+fn production_skill_metrics_reach_diagnostics_rpc_and_reviewed_feedback() {
+    struct Config;
+    impl ash_skills_extension::SkillConfigSnapshotProvider for Config {
+        fn snapshot(&self) -> Result<ash_config::SkillsConfig, String> {
+            Ok(Default::default())
+        }
+    }
+    struct Events;
+    impl ash_skills_extension::SkillRuntimeEventSink for Events {
+        fn skills_changed(&self, _: u64) {}
+    }
+    let root = tempfile::tempdir().unwrap();
+    std::fs::create_dir(root.path().join("metric-skill")).unwrap();
+    std::fs::write(
+        root.path().join("metric-skill/SKILL.md"),
+        "---\nname: metric-skill\ndescription: private description\n---\nprivate instructions\n",
+    )
+    .unwrap();
+    let diagnostics = diagnostics::Diagnostics::default();
+    let runtime = ash_skills_extension::SkillRuntime::new(
+        ash_skills_extension::BuiltInSkillSource::Root(root.path().to_owned()),
+        Arc::new(Config),
+        Arc::new(Events),
+    )
+    .unwrap();
+    runtime.bind_metrics(diagnostics.metrics());
+    let selected = ash_protocol::SkillRef::follow_latest(ash_protocol::SkillId::new(
+        ash_protocol::SkillSourceId::new("builtin:skill-source:ash-release").unwrap(),
+        ash_protocol::SkillName::new("metric-skill").unwrap(),
+    ));
+    runtime.activate_explicit(&selected).unwrap();
+    let server = server().with_telemetry(
+        diagnostics.clone(),
+        ash_otel::Telemetry::new(diagnostics),
+        Arc::new(analytics::Analytics::default()),
+    );
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let snapshot = call(
+        &server,
+        &mut connection,
+        json!({"jsonrpc":"2.0", "id":2, "method":"diagnostics/read", "params":{}}),
+    );
+    let metrics = snapshot["result"]["metrics"]
+        .as_array()
+        .expect("typed metric snapshot");
+    assert!(metrics.iter().any(|s| s["name"] == "ash.skill.activation"
+        && s["count"] == 1
+        && s["tags"]["skill"] == "metric-skill"));
+    let prepared = call(
+        &server,
+        &mut connection,
+        json!({"jsonrpc":"2.0", "id":3, "method":"feedback/prepare", "params":{"endpoint":"https://feedback.example.test/submit"}}),
+    );
+    let content = prepared["result"]["content"].as_str().unwrap();
+    let feedback: serde_json::Value = serde_json::from_str(content).unwrap();
+    assert_eq!(feedback["metrics"], snapshot["result"]["metrics"]);
+    assert!(!content.contains("private"));
+    assert!(!content.contains(root.path().to_str().unwrap()));
+}

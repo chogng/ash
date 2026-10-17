@@ -742,3 +742,36 @@ fn execute_skill_read(executor: &dyn ash_tools::ToolExecutor, name: &str) -> Too
     );
     pollster::block_on(executor.execute(invocation))
 }
+
+#[test]
+fn production_skill_metrics_follow_real_activation_failures_and_catalog_refreshes() {
+    let root = test_directory("metrics");
+    write_skill(&root, "skill-creator", "private description");
+    let config = Arc::new(TestConfig::new());
+    let runtime = runtime(BuiltInSkillSource::Root(root.clone()), config.clone());
+    let metrics = diagnostics::Metrics::default();
+    runtime.bind_metrics(metrics.clone());
+    let selected = SkillRef::follow_latest(built_in_skill_id("skill-creator"));
+    runtime.activate_explicit(&selected).unwrap();
+    runtime.activate_model_selected(&selected).unwrap();
+    config.set_enablement(&selected.id, SkillEnablement::Disabled);
+    assert!(runtime.activate_explicit(&selected).is_err());
+    runtime.list(SkillCatalogReload::Refresh).unwrap();
+    let snapshot = metrics.snapshot();
+    assert_eq!(
+        snapshot
+            .iter()
+            .filter(|s| s.name == "ash.skill.activation")
+            .map(|s| s.count)
+            .sum::<u64>(),
+        3
+    );
+    assert!(snapshot.iter().any(|s| s.name == "ash.skill.activation"
+        && s.tags["invoke_type"] == "automatic"
+        && s.tags["status"] == "ok"));
+    assert!(snapshot.iter().any(|s| s.name == "ash.skill.activation.error" && s.tags["error_type"] == "activation"));
+    let json = serde_json::to_string(&snapshot).unwrap();
+    assert!(!json.contains("private"));
+    assert!(!json.contains(root.to_str().unwrap()));
+    fs::remove_dir_all(root).unwrap();
+}

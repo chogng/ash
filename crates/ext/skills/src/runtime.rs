@@ -111,6 +111,7 @@ pub struct SkillRuntime {
     pub(crate) dir_root: Mutex<Option<PathBuf>>,
     pub(crate) state: Mutex<SkillRuntimeState>,
     events: Arc<dyn SkillRuntimeEventSink>,
+    metrics: Mutex<diagnostics::Metrics>,
 }
 
 pub(crate) struct SkillRuntimeState {
@@ -140,6 +141,47 @@ enum SourceKind {
 }
 
 impl SkillRuntime {
+    /// Shares the backend's cumulative meter across catalog refreshes and session sources.
+    pub fn bind_metrics(&self, metrics: diagnostics::Metrics) {
+        *self.metrics.lock().expect("Skill metrics lock poisoned") = metrics;
+    }
+
+    fn record_activation(
+        &self,
+        selected: &SkillRef,
+        reason: SkillActivationReason,
+        activate: impl FnOnce() -> Result<ActivatedSkill, String>,
+    ) -> Result<ActivatedSkill, String> {
+        let metrics = self
+            .metrics
+            .lock()
+            .expect("Skill metrics lock poisoned")
+            .clone();
+        let timer = metrics.start(
+            diagnostics::MetricOperation::SkillActivation,
+            &[
+                ("skill", selected.id.name.as_str()),
+                (
+                    "invoke_type",
+                    match reason {
+                        SkillActivationReason::Explicit => "explicit",
+                        SkillActivationReason::Automatic => "automatic",
+                    },
+                ),
+            ],
+        );
+        let result = activate();
+        timer.finish(
+            if result.is_ok() {
+                diagnostics::MetricOutcome::Succeeded
+            } else {
+                diagnostics::MetricOutcome::Failed
+            },
+            result.as_ref().err().map(|_| "activation"),
+        );
+        result
+    }
+
     pub fn new(
         built_in_source: BuiltInSkillSource,
         config: Arc<dyn SkillConfigSnapshotProvider>,
@@ -181,6 +223,7 @@ impl SkillRuntime {
                 snapshot,
             }),
             events,
+            metrics: Mutex::new(diagnostics::Metrics::default()),
         }))
     }
 
@@ -259,11 +302,13 @@ impl SkillRuntime {
         let Some(selected) = crate::selector::select(&state.snapshot, input, excluded) else {
             return Ok(None);
         };
-        state
-            .catalog
-            .activate(&selected, SkillActivationReason::Automatic)
-            .map(Some)
-            .map_err(|error| error.to_string())
+        self.record_activation(&selected, SkillActivationReason::Automatic, || {
+            state
+                .catalog
+                .activate(&selected, SkillActivationReason::Automatic)
+                .map_err(|error| error.to_string())
+        })
+        .map(Some)
     }
 
     pub(crate) fn select_automatic_for_session(
@@ -276,10 +321,12 @@ impl SkillRuntime {
         let Some(selected) = crate::selector::select(snapshot.as_ref(), input, excluded) else {
             return Ok(None);
         };
-        catalog
-            .activate(&selected, SkillActivationReason::Automatic)
-            .map(Some)
-            .map_err(|error| error.to_string())
+        self.record_activation(&selected, SkillActivationReason::Automatic, || {
+            catalog
+                .activate(&selected, SkillActivationReason::Automatic)
+                .map_err(|error| error.to_string())
+        })
+        .map(Some)
     }
 
     /// Reads one inert package resource from an enabled, compatible Skill pinned to an exact
@@ -369,30 +416,32 @@ impl SkillRuntime {
         selected: &SkillRef,
         reason: SkillActivationReason,
     ) -> Result<ActivatedSkill, String> {
-        self.reconcile(SkillCatalogReload::Refresh)?;
-        let state = self
-            .state
-            .lock()
-            .map_err(|_| "Skill runtime lock poisoned".to_string())?;
-        let entry = state
-            .snapshot
-            .entries
-            .iter()
-            .find(|entry| entry.catalog_entry.id() == &selected.id)
-            .ok_or_else(|| format!("Skill '{}' is not available", selected.id.name))?;
-        if entry.enablement != SkillEnablement::Enabled {
-            return Err(format!("Skill '{}' is disabled", selected.id.name));
-        }
-        if !matches!(
-            entry.catalog_entry.compatibility(),
-            SkillCompatibility::Compatible
-        ) {
-            return Err(format!("Skill '{}' is not compatible", selected.id.name));
-        }
-        state
-            .catalog
-            .activate(selected, reason)
-            .map_err(|error| error.to_string())
+        self.record_activation(selected, reason, || {
+            self.reconcile(SkillCatalogReload::Refresh)?;
+            let state = self
+                .state
+                .lock()
+                .map_err(|_| "Skill runtime lock poisoned".to_string())?;
+            let entry = state
+                .snapshot
+                .entries
+                .iter()
+                .find(|entry| entry.catalog_entry.id() == &selected.id)
+                .ok_or_else(|| format!("Skill '{}' is not available", selected.id.name))?;
+            if entry.enablement != SkillEnablement::Enabled {
+                return Err(format!("Skill '{}' is disabled", selected.id.name));
+            }
+            if !matches!(
+                entry.catalog_entry.compatibility(),
+                SkillCompatibility::Compatible
+            ) {
+                return Err(format!("Skill '{}' is not compatible", selected.id.name));
+            }
+            state
+                .catalog
+                .activate(selected, reason)
+                .map_err(|error| error.to_string())
+        })
     }
 
     pub(crate) fn load_frozen(
@@ -433,11 +482,13 @@ impl SkillRuntime {
         selected: &SkillRef,
         reason: SkillActivationReason,
     ) -> Result<ActivatedSkill, String> {
-        let (catalog, snapshot) = self.session_catalog(session_id)?;
-        require_available(snapshot.as_ref(), selected)?;
-        catalog
-            .activate(selected, reason)
-            .map_err(|error| error.to_string())
+        self.record_activation(selected, reason, || {
+            let (catalog, snapshot) = self.session_catalog(session_id)?;
+            require_available(snapshot.as_ref(), selected)?;
+            catalog
+                .activate(selected, reason)
+                .map_err(|error| error.to_string())
+        })
     }
 
     fn session_catalog(

@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 pub const SERVICE_NAME: &str = "AshWindowsSandbox";
 pub const PIPE_NAME: &str = r"\\.\pipe\AshWindowsSandbox";
-pub const PROTOCOL_VERSION: u32 = 2;
+pub const PROTOCOL_VERSION: u32 = 3;
 pub const MAX_MESSAGE_BYTES: usize = 64 * 1024;
 /// The client sends this byte after reading and decoding the complete response.
 pub const RESPONSE_RECEIVED: u8 = 1;
@@ -43,6 +43,7 @@ pub enum Request {
         approved: String,
     },
     Status {},
+    Metrics {},
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -80,9 +81,11 @@ pub fn copy_service_image(
 /// Dispatches on the authenticated pipe thread while it impersonates the caller.
 /// Mutations independently require an elevated administrator token and plan approval.
 #[cfg(windows)]
-pub fn dispatch(message: Message) -> Response {
+pub fn dispatch(message: Message, metrics: &diagnostics::Metrics) -> Response {
     let result = if message.version == PROTOCOL_VERSION {
-        crate::windows::service::dispatch(message.request)
+        measure(operation(&message.request), metrics, || {
+            crate::windows::service::dispatch(message.request, metrics)
+        })
     } else {
         Err("unsupported Windows sandbox service protocol".into())
     };
@@ -95,3 +98,40 @@ pub fn dispatch(message: Message) -> Response {
 #[cfg(test)]
 #[path = "provisioning_tests.rs"]
 mod tests;
+
+#[cfg(any(windows, test))]
+fn operation(request: &Request) -> Option<diagnostics::MetricOperation> {
+    use diagnostics::MetricOperation;
+    match request {
+        Request::Setup { .. } => Some(MetricOperation::WindowsSandboxSetup),
+        Request::Update { .. } => Some(MetricOperation::WindowsSandboxUpdate),
+        Request::Remove { .. } => Some(MetricOperation::WindowsSandboxRemove),
+        Request::SetupPlan { .. }
+        | Request::UpdatePlan { .. }
+        | Request::RemovePlan {}
+        | Request::Status {}
+        | Request::Metrics {} => None,
+    }
+}
+
+#[cfg(any(windows, test))]
+fn measure<T>(
+    operation: Option<diagnostics::MetricOperation>,
+    metrics: &diagnostics::Metrics,
+    run: impl FnOnce() -> Result<T, String>,
+) -> Result<T, String> {
+    let timer = operation.map(|operation| metrics.start(operation, &[("mode", "service")]));
+    let result = run();
+    if let Some(timer) = timer {
+        // Error bodies may contain account names and paths. Keep a stable category only.
+        timer.finish(
+            if result.is_ok() {
+                diagnostics::MetricOutcome::Succeeded
+            } else {
+                diagnostics::MetricOutcome::Failed
+            },
+            result.as_ref().err().map(|_| "provisioning"),
+        );
+    }
+    result
+}

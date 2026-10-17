@@ -81,6 +81,7 @@ pub struct ProviderReviewModel {
     model: ModelRef,
     invoker: Arc<dyn ModelInvoker>,
     reasoning: Option<protocol::ReasoningConfig>,
+    metrics: diagnostics::Metrics,
 }
 
 impl ProviderReviewModel {
@@ -90,6 +91,7 @@ impl ProviderReviewModel {
             model,
             invoker,
             reasoning: None,
+            metrics: diagnostics::Metrics::default(),
         }
     }
 
@@ -97,6 +99,25 @@ impl ProviderReviewModel {
     pub fn with_reasoning(mut self, reasoning: Option<protocol::ReasoningConfig>) -> Self {
         self.reasoning = reasoning;
         self
+    }
+
+    pub fn with_metrics(mut self, metrics: diagnostics::Metrics) -> Self {
+        self.metrics = metrics;
+        self
+    }
+
+    fn metric_tags(&self) -> Vec<(&'static str, String)> {
+        vec![
+            ("guardian_model", self.model.model.to_string()),
+            ("provider", self.model.provider.to_string()),
+            (
+                "reasoning_effort",
+                self.reasoning
+                    .as_ref()
+                    .map(|r| r.effort.to_string())
+                    .unwrap_or_else(|| "default".into()),
+            ),
+        ]
     }
 
     pub fn model(&self) -> &ModelRef {
@@ -128,23 +149,58 @@ impl ReviewModel for ProviderReviewModel {
         cancellation
             .check()
             .map_err(|signal| ReviewModelError::Invocation(signal.reason().to_string()))?;
-        let response = self
-            .invoker
-            .invoke_with_cancellation(&self.request(request), cancellation)
-            .map_err(|error| match error {
-                model_provider::ModelProviderError::Api(
-                    model_provider::ApiError::RateLimited { retry_at },
-                ) => ReviewModelError::RateLimited { retry_at },
-                model_provider::ModelProviderError::Unavailable(message) => {
-                    ReviewModelError::Transient(message)
+        let mut first_token = FirstToken {
+            started: std::time::Instant::now(),
+            elapsed: None,
+        };
+        let invocation = match self.invoker.output_transport() {
+            protocol::ModelOutputTransport::NativeStreaming => self
+                .invoker
+                .stream_with_cancellation(&self.request(request), cancellation, &mut first_token),
+            protocol::ModelOutputTransport::Unary => self
+                .invoker
+                .invoke_with_cancellation(&self.request(request), cancellation),
+        };
+        if let Some(elapsed) = first_token.elapsed {
+            let tags = self.metric_tags();
+            let tags: Vec<_> = tags
+                .iter()
+                .map(|(key, value)| (*key, value.as_str()))
+                .collect();
+            self.metrics.guardian_first_token(&tags, elapsed);
+        }
+        let response = invocation.map_err(|error| match error {
+            model_provider::ModelProviderError::Api(model_provider::ApiError::RateLimited {
+                retry_at,
+            }) => ReviewModelError::RateLimited { retry_at },
+            model_provider::ModelProviderError::Unavailable(message) => {
+                ReviewModelError::Transient(message)
+            }
+            error if error.is_transient() => ReviewModelError::Transient(error.to_string()),
+            error => ReviewModelError::Invocation(error.to_string()),
+        })?;
+        // Usage describes work already billed, even if cancellation now prevents using the answer.
+        if let Some(usage) = &response.usage {
+            let tags = self.metric_tags();
+            let tags: Vec<_> = tags
+                .iter()
+                .map(|(key, value)| (*key, value.as_str()))
+                .collect();
+            for (kind, tokens) in [
+                ("input", usage.input_tokens),
+                ("output", usage.output_tokens),
+                ("cached_input", usage.cached_input_tokens),
+                ("cache_write_input", usage.cache_write_input_tokens),
+                ("reasoning", usage.reasoning_tokens),
+            ] {
+                if let Some(tokens) = tokens {
+                    self.metrics.guardian_tokens(&tags, kind, tokens);
                 }
-                error if error.is_transient() => ReviewModelError::Transient(error.to_string()),
-                error => ReviewModelError::Invocation(error.to_string()),
-            })?;
+            }
+        }
         cancellation
             .check()
             .map_err(|signal| ReviewModelError::Invocation(signal.reason().to_string()))?;
-
         let mut text = String::new();
         for item in response.output {
             match item {
@@ -199,7 +255,11 @@ mod tests;
 
 /// Installs a pooled asynchronous reviewer behind the extension review contract.
 pub fn install(builder: &mut extension_api::ExtensionRegistryBuilder, model: ProviderReviewModel) {
-    builder.approval_reviewer(Arc::new(PooledReviewer(ReviewerPool::new(model))));
+    let metrics = model.metrics.clone();
+    let tags = model.metric_tags();
+    builder.approval_reviewer(Arc::new(PooledReviewer(
+        ReviewerPool::new(model).with_metrics(metrics, tags),
+    )));
 }
 struct PooledReviewer(ReviewerPool<ProviderReviewModel>);
 impl extension_api::ApprovalReviewContributor for PooledReviewer {
@@ -228,5 +288,29 @@ pub fn reviewer(model: ProviderReviewModel) -> extension_api::ApprovalReviewer {
     extension_api::ApprovalReviewer::Configured {
         identity,
         registry: Arc::new(builder.build()),
+    }
+}
+
+// The final response remains authoritative; this sink observes timing without retaining text.
+struct FirstToken {
+    started: std::time::Instant,
+    elapsed: Option<std::time::Duration>,
+}
+impl model_provider::ModelEventSink for FirstToken {
+    fn emit(
+        &mut self,
+        event: protocol::ModelStreamEvent,
+    ) -> Result<(), model_provider::ModelProviderError> {
+        let nonempty = match event {
+            protocol::ModelStreamEvent::TextDelta(text)
+            | protocol::ModelStreamEvent::ReasoningDelta(text)
+            | protocol::ModelStreamEvent::MessageDelta { text, .. } => !text.is_empty(),
+            protocol::ModelStreamEvent::MessageCompleted(_)
+            | protocol::ModelStreamEvent::MessageStarted { .. } => false,
+        };
+        if nonempty && self.elapsed.is_none() {
+            self.elapsed = Some(self.started.elapsed());
+        }
+        Ok(())
     }
 }

@@ -228,6 +228,7 @@ fn advance_listener(pipe: &mut NamedPipeServer, name: &str) -> Result<(), String
 }
 
 async fn listen(name: &str) -> Result<(), String> {
+    let metrics = diagnostics::Metrics::default();
     let mut pipe = listener(name, PipeInstance::First)?;
     report(SERVICE_RUNNING, 0);
     loop {
@@ -251,10 +252,12 @@ async fn listen(name: &str) -> Result<(), String> {
         }
         if let Ok(Ok(message)) = message {
             let raw = pipe.as_raw_handle() as usize;
-            let response =
-                tokio::task::spawn_blocking(move || authenticated_dispatch(raw as HANDLE, message))
-                    .await
-                    .map_err(|error| error.to_string())?;
+            let request_metrics = metrics.clone();
+            let response = tokio::task::spawn_blocking(move || {
+                authenticated_dispatch(raw as HANDLE, message, &request_metrics)
+            })
+            .await
+            .map_err(|error| error.to_string())?;
             let _ = tokio::time::timeout(
                 Duration::from_secs(10),
                 write_response(&mut pipe, &response),
@@ -301,7 +304,11 @@ async fn write_response(pipe: &mut NamedPipeServer, response: &Response) -> Resu
     Ok(())
 }
 
-fn authenticated_dispatch(pipe: HANDLE, message: Message) -> Response {
+fn authenticated_dispatch(
+    pipe: HANDLE,
+    message: Message,
+    metrics: &diagnostics::Metrics,
+) -> Response {
     struct Impersonation;
     impl Drop for Impersonation {
         fn drop(&mut self) {
@@ -348,7 +355,7 @@ fn authenticated_dispatch(pipe: HANDLE, message: Message) -> Response {
         }
         // Dispatch and DPAPI stay on this OS thread. No async suspension may
         // detach request authority from the impersonated Windows token.
-        Ok(dispatch(message))
+        Ok(dispatch(message, metrics))
     })();
     result.unwrap_or_else(|error| Response::Rejected { error })
 }

@@ -45,7 +45,10 @@ pub(crate) fn directory() -> Result<PathBuf, String> {
     Ok(win::program_data()?.join("AshWindowsSandbox"))
 }
 
-pub(crate) fn dispatch(request: Request) -> Result<serde_json::Value, String> {
+pub(crate) fn dispatch(
+    request: Request,
+    metrics: &diagnostics::Metrics,
+) -> Result<serde_json::Value, String> {
     match request {
         Request::SetupPlan { runner, slots } => {
             let runner = std::fs::canonicalize(runner).map_err(|error| error.to_string())?;
@@ -75,6 +78,9 @@ pub(crate) fn dispatch(request: Request) -> Result<serde_json::Value, String> {
         Request::Remove { approved } => {
             runtime::remove(&approved)?;
             Ok(serde_json::json!({"status": "removed"}))
+        }
+        Request::Metrics {} => {
+            serde_json::to_value(metrics.snapshot()).map_err(|error| error.to_string())
         }
         Request::Status {} => Ok(serde_json::json!({
             "status": "ready", "runnerSha256": runtime::available(NetworkMode::Denied)?

@@ -169,3 +169,104 @@ fn absent_rate_limit_guidance_respects_the_review_deadline_and_expired_guidance_
         assert_eq!(pool.active.load(Ordering::SeqCst), 0);
     }
 }
+
+#[test]
+fn production_review_metrics_count_one_decision_after_retries_and_no_denial_error() {
+    let metrics = diagnostics::Metrics::default();
+    let calls = Arc::new(AtomicUsize::new(0));
+    let pool = ReviewerPool::new(TransientModel(calls.clone())).with_metrics(
+        metrics.clone(),
+        vec![("guardian_model", "review model".into())],
+    );
+    pool.submit(request(), &CancellationSource::new().token())
+        .unwrap()
+        .wait()
+        .unwrap();
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    let snapshot = metrics.snapshot();
+    let result = snapshot
+        .iter()
+        .find(|s| s.name == "ash.guardian.review")
+        .unwrap();
+    assert_eq!(result.count, 1);
+    assert_eq!(result.tags["status"], "denied");
+    assert_eq!(result.tags["guardian_model"], "review_model");
+    assert!(
+        !snapshot
+            .iter()
+            .any(|s| s.name == "ash.guardian.review.error")
+    );
+}
+
+#[test]
+fn production_review_metrics_distinguish_deadlines_from_dropped_tasks() {
+    let metrics = diagnostics::Metrics::default();
+    let pool = ReviewerPool::with_limits(
+        WaitingModel(Arc::new(AtomicUsize::new(0))),
+        ReviewLimits {
+            concurrent: 1,
+            timeout: Duration::from_millis(30),
+        },
+    )
+    .unwrap()
+    .with_metrics(metrics.clone(), vec![]);
+    let source = CancellationSource::new();
+    assert!(matches!(
+        pool.submit(request(), &source.token()).unwrap().wait(),
+        Err(AutoReviewError::TimedOut)
+    ));
+    drop(pool.submit(request(), &source.token()).unwrap());
+    let snapshot = metrics.snapshot();
+    assert_eq!(
+        snapshot
+            .iter()
+            .filter(|s| s.name == "ash.guardian.review")
+            .map(|s| s.count)
+            .sum::<u64>(),
+        2
+    );
+    for error in ["timeout", "dropped"] {
+        assert!(
+            snapshot
+                .iter()
+                .any(|s| s.name == "ash.guardian.review.error" && s.tags["error_type"] == error)
+        );
+    }
+}
+
+#[test]
+fn completed_async_review_is_measured_before_the_consumer_waits() {
+    let metrics = diagnostics::Metrics::default();
+    let pool = ReviewerPool::new(TransientModel(Arc::new(AtomicUsize::new(0))))
+        .with_metrics(metrics.clone(), vec![]);
+    let task = pool
+        .submit(request(), &CancellationSource::new().token())
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while !metrics
+        .snapshot()
+        .iter()
+        .any(|s| s.name == "ash.guardian.review")
+    {
+        assert!(
+            Instant::now() < deadline,
+            "review was not measured on completion"
+        );
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    drop(task);
+    let snapshot = metrics.snapshot();
+    assert_eq!(
+        snapshot
+            .iter()
+            .filter(|s| s.name == "ash.guardian.review")
+            .map(|s| s.count)
+            .sum::<u64>(),
+        1
+    );
+    assert!(
+        !snapshot
+            .iter()
+            .any(|s| s.name == "ash.guardian.review.error")
+    );
+}

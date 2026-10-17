@@ -106,7 +106,8 @@ async fn real_pipe_plan_uses_the_caller_and_preserves_thread_identity() {
     let message = read_request(&mut pipe).await.unwrap();
     let raw = pipe.as_raw_handle() as usize;
     let response = tokio::task::spawn_blocking(move || {
-        let response = authenticated_dispatch(raw as HANDLE, message);
+        let response =
+            authenticated_dispatch(raw as HANDLE, message, &diagnostics::Metrics::default());
         let mut token = std::ptr::null_mut();
         assert_eq!(
             unsafe { OpenThreadToken(GetCurrentThread(), TOKEN_QUERY, 1, &mut token) },
@@ -175,10 +176,11 @@ async fn identification_only_client_cannot_dispatch_a_request() {
     pipe.connect().await.unwrap();
     let message = read_request(&mut pipe).await.unwrap();
     let raw = pipe.as_raw_handle() as usize;
-    let response =
-        tokio::task::spawn_blocking(move || authenticated_dispatch(raw as HANDLE, message))
-            .await
-            .unwrap();
+    let response = tokio::task::spawn_blocking(move || {
+        authenticated_dispatch(raw as HANDLE, message, &diagnostics::Metrics::default())
+    })
+    .await
+    .unwrap();
     assert!(
         matches!(response, Response::Rejected { error } if error.contains("impersonation token"))
     );
@@ -326,10 +328,11 @@ async fn restricted_client_is_rejected_before_provisioning() {
     pipe.connect().await.unwrap();
     let message = read_request(&mut pipe).await.unwrap();
     let raw = pipe.as_raw_handle() as usize;
-    let response =
-        tokio::task::spawn_blocking(move || authenticated_dispatch(raw as HANDLE, message))
-            .await
-            .unwrap();
+    let response = tokio::task::spawn_blocking(move || {
+        authenticated_dispatch(raw as HANDLE, message, &diagnostics::Metrics::default())
+    })
+    .await
+    .unwrap();
     assert!(
         matches!(response, Response::Rejected { error } if error.contains("restricted tokens"))
     );

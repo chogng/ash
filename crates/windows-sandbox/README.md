@@ -74,3 +74,5 @@ just test ash-app-server --lib windows_shell_turn_enforces_account_isolation_thr
 ```
 
 网络连接进程归属实现参考 Codex `da20788df913189878ebca7f4963d8a363ee6bf2`；对应许可与归属保存在 `LICENSE-APACHE` 和 `NOTICE`。文件 ACL 日志复用固定版本的 `mxc-sdk` 的 `mxc_common`，不引入 Codex 的协议或产品配置。
+
+服务管理协议版本 3 提供 `ash-windows-sandbox metrics`，读取当前服务进程内 setup/update/remove 的累计次数、失败类别和耗时。测量包围认证后的真实管理 dispatch，安装校验失败也计数；plan、status 和 metrics 读取不计为安装操作。标签只包含固定模式、结果和错误类别，不采集账户、审批摘要、路径或错误正文。服务重启后重新计数；读取要求服务已运行，不触发安装操作。

@@ -19,6 +19,7 @@ pub enum AutoReviewError {
     Transient(String),
     RateLimited { retry_at: Option<Instant> },
     Cancelled,
+    TimedOut,
     InvalidRequest(String),
     RequestTooLarge { bytes: usize },
     InvalidResponse(String),
@@ -31,6 +32,7 @@ impl fmt::Display for AutoReviewError {
             Self::Model(message) | Self::Transient(message) => {
                 write!(formatter, "review model failed: {message}")
             }
+            Self::TimedOut => formatter.write_str("review model failed: review deadline exceeded"),
             Self::Cancelled => formatter.write_str("automatic review was cancelled"),
             Self::RateLimited { .. } => formatter.write_str("review model is rate limited"),
             Self::InvalidRequest(message) => {

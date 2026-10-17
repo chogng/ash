@@ -49,9 +49,15 @@ pub struct McpCatalogUpdates {
     subscribers: Arc<Mutex<Vec<mpsc::Sender<()>>>>,
     extensions: Arc<Mutex<Option<Arc<extension_api::ExtensionRegistry>>>>,
     hooks: Arc<RwLock<Option<Arc<dyn HookService>>>>,
+    pub(crate) metrics: diagnostics::Metrics,
 }
 
 impl McpCatalogUpdates {
+    pub fn with_metrics(mut self, metrics: diagnostics::Metrics) -> Self {
+        self.metrics = metrics;
+        self
+    }
+
     pub fn bind_hooks(&self, hooks: Arc<dyn HookService>) {
         *self
             .hooks

@@ -363,9 +363,21 @@ fn start_mcp_tools_with_updates(
         .with_startup_policy(McpStartupPolicy::RequireAll)
         .with_catalog_generation(catalog_generation)
         .with_first_connection_generation(catalog_generation)
-        .with_mcp_apps();
+        .with_mcp_apps()
+        .with_metric_connectors(
+            authorities
+                .iter()
+                .filter_map(|(server, authority)| {
+                    authority
+                        .connector_fence
+                        .as_ref()
+                        .map(|fence| (server.clone(), fence.connector_id.to_string()))
+                })
+                .collect(),
+        );
     if let Some(updates) = &updates {
         options = options
+            .with_metrics(updates.metrics.clone())
             .with_client_host(updates.client_host())
             .with_form_elicitation();
     }

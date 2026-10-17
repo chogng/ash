@@ -513,6 +513,7 @@ dependencies = [
  "ash-utils-path-uri",
  "ash-utils-plugins",
  "ash-utils-sleep-inhibitor",
+ "ash-utils-string",
  "ash-voice-agent",
  "ash-voice-host",
  "ash-web-search-extension",
@@ -989,6 +990,7 @@ name = "ash-code-mode-protocol"
 version = "0.1.0"
 dependencies = [
  "ash-protocol",
+ "ash-utils-string",
  "schemars",
  "serde",
  "serde_json",
@@ -1018,6 +1020,7 @@ dependencies = [
  "ash-language",
  "ash-model-provider",
  "ash-syntax",
+ "ash-utils-string",
  "ignore",
  "nucleo",
  "sha2 0.10.9",
@@ -1174,6 +1177,7 @@ dependencies = [
  "ash-utils-audio",
  "ash-utils-image",
  "ash-utils-stream-parser",
+ "ash-utils-string",
  "image",
  "opentelemetry",
  "serde",
@@ -1228,6 +1232,7 @@ name = "ash-debug-adapter"
 version = "0.1.0"
 dependencies = [
  "ash-file-access",
+ "ash-utils-string",
  "serde_json",
  "thiserror 2.0.21",
  "tokio",
@@ -1282,6 +1287,9 @@ dependencies = [
  "ash-analytics",
  "ash-build-info",
  "ash-response-debug-context",
+ "ash-utils-string",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "schemars",
  "serde",
  "serde_json",
@@ -1447,6 +1455,7 @@ dependencies = [
  "ash-file-access",
  "ash-file-system",
  "ash-sandboxing",
+ "ash-utils-string",
  "ash-v8-runtime",
  "ash-windows-sandbox",
  "serde",
@@ -1793,6 +1802,7 @@ version = "0.1.0"
 dependencies = [
  "ash-action-policy",
  "ash-async-utils",
+ "ash-diagnostics",
  "ash-guardian-context",
  "ash-protocol",
  "ash-sandboxing",
@@ -1809,11 +1819,13 @@ dependencies = [
  "ash-config",
  "ash-core",
  "ash-core-api",
+ "ash-diagnostics",
  "ash-extension-api",
  "ash-guardian-reviewer",
  "ash-model-provider",
  "ash-model-provider-info",
  "ash-protocol",
+ "serde_json",
 ]
 
 [[package]]
@@ -2122,6 +2134,7 @@ version = "0.1.0"
 dependencies = [
  "ash-async-utils",
  "ash-config",
+ "ash-diagnostics",
  "ash-protocol",
  "ash-rmcp-client",
  "ash-tools",
@@ -2145,6 +2158,7 @@ dependencies = [
  "ash-core",
  "ash-core-api",
  "ash-core-plugins",
+ "ash-diagnostics",
  "ash-extension-api",
  "ash-file-access",
  "ash-file-system",
@@ -2176,6 +2190,7 @@ dependencies = [
  "ash-async-utils",
  "ash-file-access",
  "ash-protocol",
+ "ash-utils-string",
  "base64 0.22.1",
  "schemars",
  "serde",
@@ -2325,6 +2340,7 @@ dependencies = [
  "ash-test-binary-support",
  "ash-tool-executor",
  "ash-utils-pty",
+ "ash-utils-string",
  "dunce",
  "globset",
  "libc",
@@ -2670,6 +2686,7 @@ dependencies = [
  "ash-rollout",
  "ash-state",
  "ash-thread-store",
+ "ash-utils-string",
  "getrandom 0.2.17",
  "serde",
  "serde_json",
@@ -2750,11 +2767,13 @@ version = "0.1.0"
 dependencies = [
  "ash-async-utils",
  "ash-config",
+ "ash-diagnostics",
  "ash-extension-api",
  "ash-file-watcher",
  "ash-protocol",
  "ash-skills",
  "ash-tools",
+ "ash-utils-string",
  "pollster 1.0.1",
  "serde",
  "serde_json",
@@ -2919,6 +2938,7 @@ dependencies = [
  "ash-remote-profile-store",
  "ash-state",
  "ash-task-delivery-contract",
+ "ash-utils-string",
  "base64 0.22.1",
  "rusqlite",
  "serde",
@@ -2999,6 +3019,7 @@ dependencies = [
  "ash-file-access",
  "ash-grammars",
  "ash-sandboxing",
+ "ash-utils-string",
  "serde",
  "serde_json",
  "tempfile",
@@ -3037,6 +3058,7 @@ name = "ash-thread-transcript"
 version = "0.1.0"
 dependencies = [
  "ash-protocol",
+ "ash-utils-string",
  "schemars",
  "serde",
  "serde_json",
@@ -3112,6 +3134,7 @@ dependencies = [
  "ash-utils-image",
  "ash-utils-path",
  "ash-utils-plugins",
+ "ash-utils-string",
  "base64 0.22.1",
  "chrono",
  "crossterm",
@@ -3281,6 +3304,9 @@ dependencies = [
 [[package]]
 name = "ash-utils-output-truncation"
 version = "0.1.0"
+dependencies = [
+ "ash-utils-string",
+]
 
 [[package]]
 name = "ash-utils-path"
@@ -3353,6 +3379,14 @@ name = "ash-utils-stream-parser"
 version = "0.1.0"
 dependencies = [
  "pretty_assertions",
+]
+
+[[package]]
+name = "ash-utils-string"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -3453,6 +3487,7 @@ name = "ash-windows-sandbox"
 version = "0.1.0"
 dependencies = [
  "ash-async-utils",
+ "ash-diagnostics",
  "ash-file-access",
  "ash-install-context",
  "ash-network-proxy",
@@ -3476,6 +3511,7 @@ dependencies = [
 name = "ash-windows-sandbox-service"
 version = "0.1.0"
 dependencies = [
+ "ash-diagnostics",
  "ash-windows-sandbox",
  "serde_json",
  "sha2 0.10.9",

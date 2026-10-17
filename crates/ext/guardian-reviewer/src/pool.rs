@@ -37,6 +37,8 @@ pub struct ReviewerPool<M> {
     active: Arc<AtomicUsize>,
     cooldown: Arc<Mutex<Option<Instant>>>,
     limits: ReviewLimits,
+    metrics: diagnostics::Metrics,
+    metric_tags: Vec<(&'static str, String)>,
 }
 impl<M: ReviewModel + 'static> ReviewerPool<M> {
     pub fn new(model: M) -> Self {
@@ -45,6 +47,8 @@ impl<M: ReviewModel + 'static> ReviewerPool<M> {
             active: Arc::new(AtomicUsize::new(0)),
             cooldown: Arc::new(Mutex::new(None)),
             limits: ReviewLimits::default(),
+            metrics: diagnostics::Metrics::default(),
+            metric_tags: Vec::new(),
         }
     }
     pub fn with_limits(model: M, limits: ReviewLimits) -> Result<Self, AutoReviewError> {
@@ -61,13 +65,67 @@ impl<M: ReviewModel + 'static> ReviewerPool<M> {
             active: Arc::new(AtomicUsize::new(0)),
             cooldown: Arc::new(Mutex::new(None)),
             limits,
+            metrics: diagnostics::Metrics::default(),
+            metric_tags: Vec::new(),
         })
     }
+    /// Injects the host meter and frozen model metadata; request text is never a label.
+    pub fn with_metrics(
+        mut self,
+        metrics: diagnostics::Metrics,
+        tags: Vec<(&'static str, String)>,
+    ) -> Self {
+        self.metrics = metrics;
+        self.metric_tags = tags;
+        self
+    }
+
     /// Starts an asynchronous assessment with cancellation inherited from its caller.
     pub fn submit(
         &self,
         request: ActionReviewRequest,
         cancellation: &CancellationToken,
+    ) -> Result<ReviewTask, AutoReviewError> {
+        let mut tags: Vec<_> = self
+            .metric_tags
+            .iter()
+            .map(|(key, value)| (*key, value.as_str()))
+            .collect();
+        tags.push((
+            "action",
+            match request.action().kind() {
+                protocol::ActionKind::LocalProcess(_) => "local_process",
+                protocol::ActionKind::FileSystemMutation => "file_system_mutation",
+                protocol::ActionKind::NetworkRequest => "network_request",
+                protocol::ActionKind::BrowserInteraction => "browser_interaction",
+                protocol::ActionKind::ExternalServiceMutation => "external_service_mutation",
+                protocol::ActionKind::CredentialUse => "credential_use",
+                protocol::ActionKind::SystemOperation => "system_operation",
+            },
+        ));
+        tags.push((
+            "phase",
+            match request.phase() {
+                protocol::ActionReviewPhase::Initial => "initial",
+                protocol::ActionReviewPhase::SandboxDenial(_) => "sandbox_denial",
+            },
+        ));
+        let timer = self
+            .metrics
+            .start(diagnostics::MetricOperation::GuardianReview, &tags);
+        let metric = Arc::new(Mutex::new(Some(timer)));
+        let result = self.submit_inner(request, cancellation, metric.clone());
+        if let Err(error) = &result {
+            finish_shared_metric(&metric, &Err(error.clone()));
+        }
+        result
+    }
+
+    fn submit_inner(
+        &self,
+        request: ActionReviewRequest,
+        cancellation: &CancellationToken,
+        metric: Arc<Mutex<Option<diagnostics::MetricTimer>>>,
     ) -> Result<ReviewTask, AutoReviewError> {
         let deadline = Instant::now() + self.limits.timeout;
         loop {
@@ -75,9 +133,7 @@ impl<M: ReviewModel + 'static> ReviewerPool<M> {
                 return Err(AutoReviewError::Cancelled);
             }
             if Instant::now() >= deadline {
-                return Err(AutoReviewError::Model(
-                    "review capacity deadline exceeded".into(),
-                ));
+                return Err(AutoReviewError::TimedOut);
             }
             if self
                 .active
@@ -97,6 +153,7 @@ impl<M: ReviewModel + 'static> ReviewerPool<M> {
         let model = self.model.clone();
         let cooldown = self.cooldown.clone();
         let (sender, receiver) = mpsc::sync_channel(1);
+        let worker_metric = metric.clone();
         let worker = std::thread::Builder::new()
             .name("ash-guardian-review".into())
             .spawn(move || {
@@ -117,6 +174,14 @@ impl<M: ReviewModel + 'static> ReviewerPool<M> {
                     }
                     std::thread::sleep(Duration::from_millis(20));
                 }
+                if token
+                    .cancellation()
+                    .is_some_and(|signal| signal.reason() == &CancellationReason::DeadlineExceeded)
+                {
+                    result = Err(AutoReviewError::TimedOut);
+                }
+                // Completion belongs to the worker, even when its consumer waits later.
+                finish_shared_metric(&worker_metric, &result);
                 let _ = sender.send(result);
             })
             .map_err(|e| AutoReviewError::Model(e.to_string()))?;
@@ -126,6 +191,7 @@ impl<M: ReviewModel + 'static> ReviewerPool<M> {
             source,
             deadline,
             _timer: timer,
+            metric,
         })
     }
 }
@@ -189,17 +255,30 @@ pub struct ReviewTask {
     source: CancellationSource,
     deadline: Instant,
     _timer: Deadline,
+    metric: Arc<Mutex<Option<diagnostics::MetricTimer>>>,
 }
 impl ReviewTask {
     pub fn wait(self) -> Result<ClassifierAssessment, AutoReviewError> {
+        let result = self.wait_inner();
+        finish_shared_metric(&self.metric, &result);
+        result
+    }
+
+    fn wait_inner(&self) -> Result<ClassifierAssessment, AutoReviewError> {
         loop {
-            if self.source.token().is_cancelled() {
-                return Err(AutoReviewError::Cancelled);
+            if let Some(signal) = self.source.token().cancellation() {
+                return Err(
+                    if signal.reason() == &CancellationReason::DeadlineExceeded {
+                        AutoReviewError::TimedOut
+                    } else {
+                        AutoReviewError::Cancelled
+                    },
+                );
             }
             if Instant::now() >= self.deadline {
                 self.source
                     .cancel_with(CancellationReason::DeadlineExceeded);
-                return Err(AutoReviewError::Model("review deadline exceeded".into()));
+                return Err(AutoReviewError::TimedOut);
             }
             match self.receiver.recv_timeout(Duration::from_millis(5)) {
                 Ok(result) => return result,
@@ -213,7 +292,16 @@ impl ReviewTask {
 }
 impl Drop for ReviewTask {
     fn drop(&mut self) {
+        // Claim an unfinished measurement before waking the worker through cancellation.
+        let timer = self
+            .metric
+            .lock()
+            .expect("review metrics lock poisoned")
+            .take();
         self.source.cancel_with(CancellationReason::Shutdown);
+        if let Some(timer) = timer {
+            timer.finish(diagnostics::MetricOutcome::Cancelled, Some("dropped"));
+        }
         if let Some(worker) = self.worker.take() {
             let _ = worker.join();
         }
@@ -256,3 +344,61 @@ impl Drop for Deadline {
 #[cfg(test)]
 #[path = "pool_tests.rs"]
 mod tests;
+
+// Review decisions and transport/validation failures are separate metric dimensions.
+fn finish_metric(
+    timer: diagnostics::MetricTimer,
+    result: &Result<ClassifierAssessment, AutoReviewError>,
+) {
+    let (status, error) = match result {
+        Ok(assessment) => match assessment.recommendation() {
+            protocol::ClassifierRecommendation::Approve { .. } => {
+                (diagnostics::MetricOutcome::Succeeded, None)
+            }
+            protocol::ClassifierRecommendation::Deny { .. } => {
+                (diagnostics::MetricOutcome::Denied, None)
+            }
+            protocol::ClassifierRecommendation::AskUser { .. } => {
+                (diagnostics::MetricOutcome::AskUser, None)
+            }
+            protocol::ClassifierRecommendation::ReviseAction { .. } => {
+                (diagnostics::MetricOutcome::ReviseAction, None)
+            }
+        },
+        Err(AutoReviewError::TimedOut) => (diagnostics::MetricOutcome::Failed, Some("timeout")),
+        Err(AutoReviewError::Cancelled) => {
+            (diagnostics::MetricOutcome::Cancelled, Some("cancellation"))
+        }
+        Err(AutoReviewError::Model(_)) => (diagnostics::MetricOutcome::Failed, Some("model")),
+        Err(AutoReviewError::Transient(_)) => {
+            (diagnostics::MetricOutcome::Failed, Some("transient"))
+        }
+        Err(AutoReviewError::RateLimited { .. }) => {
+            (diagnostics::MetricOutcome::Failed, Some("rate_limited"))
+        }
+        Err(AutoReviewError::InvalidRequest(_)) => {
+            (diagnostics::MetricOutcome::Failed, Some("invalid_request"))
+        }
+        Err(AutoReviewError::RequestTooLarge { .. }) => (
+            diagnostics::MetricOutcome::Failed,
+            Some("request_too_large"),
+        ),
+        Err(AutoReviewError::InvalidResponse(_)) => {
+            (diagnostics::MetricOutcome::Failed, Some("invalid_response"))
+        }
+        Err(AutoReviewError::ResponseTooLarge { .. }) => (
+            diagnostics::MetricOutcome::Failed,
+            Some("response_too_large"),
+        ),
+    };
+    timer.finish(status, error);
+}
+
+fn finish_shared_metric(
+    metric: &Mutex<Option<diagnostics::MetricTimer>>,
+    result: &Result<ClassifierAssessment, AutoReviewError>,
+) {
+    if let Some(timer) = metric.lock().expect("review metrics lock poisoned").take() {
+        finish_metric(timer, result);
+    }
+}

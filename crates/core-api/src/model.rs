@@ -39,6 +39,15 @@ pub enum ModelSelection<'a> {
 /// Thread state or mutable product configuration. Implementations should observe `cancellation`
 /// before beginning expensive work and at every safe checkpoint supported by their transport.
 pub trait ModelService: Send + Sync {
+    /// Reports the selected runtime's actual output path. Unary services never synthesize deltas;
+    /// configuration-backed services and their frozen snapshots delegate to the selected invoker.
+    fn output_transport(
+        &self,
+        _: ModelSelection<'_>,
+    ) -> Result<ash_protocol::ModelOutputTransport, CoreError> {
+        Ok(ash_protocol::ModelOutputTransport::Unary)
+    }
+
     /// Freezes a configuration-backed selector for one invocation. Already immutable services
     /// return `None`; callers retain that same service for preparation and invocation.
     fn snapshot(

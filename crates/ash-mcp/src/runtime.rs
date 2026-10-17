@@ -38,6 +38,8 @@ pub struct McpRuntimeOptions {
     loading: ToolLoading,
     catalog_generation: u64,
     first_connection_generation: u64,
+    metrics: diagnostics::Metrics,
+    metric_connectors: BTreeMap<McpServerId, String>,
 }
 
 impl std::fmt::Debug for McpRuntimeOptions {
@@ -76,7 +78,21 @@ impl McpRuntimeOptions {
             loading: ToolLoading::Eager,
             catalog_generation: 1,
             first_connection_generation: 1,
+            metrics: diagnostics::Metrics::default(),
+            metric_connectors: BTreeMap::new(),
         }
+    }
+
+    /// Uses the host meter so replacing a catalog does not reset cumulative observations.
+    pub fn with_metrics(mut self, metrics: diagnostics::Metrics) -> Self {
+        self.metrics = metrics;
+        self
+    }
+
+    /// Attributes connector-backed servers using the host's resolved authority, never tool input.
+    pub fn with_metric_connectors(mut self, connectors: BTreeMap<McpServerId, String>) -> Self {
+        self.metric_connectors = connectors;
+        self
     }
 
     pub fn with_client_timeouts(mut self, timeouts: RmcpTimeouts) -> Self {
@@ -157,6 +173,8 @@ pub struct McpRuntime {
     catalog: McpCatalogSnapshot,
     diagnostics: Vec<McpStartupDiagnostic>,
     limits: McpCatalogLimits,
+    metrics: diagnostics::Metrics,
+    metric_connectors: BTreeMap<McpServerId, String>,
 }
 
 impl McpRuntime {
@@ -270,6 +288,8 @@ impl McpRuntime {
             catalog,
             diagnostics,
             limits: options.catalog_limits,
+            metrics: options.metrics,
+            metric_connectors: options.metric_connectors,
         })
     }
 
@@ -314,6 +334,49 @@ impl McpRuntime {
     }
 
     pub async fn call_tool(
+        &self,
+        binding: &McpToolBinding,
+        arguments: serde_json::Value,
+        cancellation: &CancellationToken,
+    ) -> Result<ToolOutput, McpCallError> {
+        let mut tags = vec![
+            ("server", binding.remote().server().as_str()),
+            ("tool", binding.remote().remote_name()),
+        ];
+        if let Some(connector) = self.metric_connectors.get(binding.remote().server()) {
+            tags.push(("connector_id", connector));
+        }
+        let timer = self
+            .metrics
+            .start(diagnostics::MetricOperation::McpCall, &tags);
+        let result = self.call_tool_inner(binding, arguments, cancellation).await;
+        let (status, error) = match &result {
+            Ok(output) => match output.status() {
+                ash_tools::ToolOutputStatus::Success => {
+                    (diagnostics::MetricOutcome::Succeeded, None)
+                }
+                ash_tools::ToolOutputStatus::Error => {
+                    (diagnostics::MetricOutcome::Failed, Some("tool_result"))
+                }
+            },
+            Err(_) if cancellation.is_cancelled() => {
+                (diagnostics::MetricOutcome::Cancelled, Some("cancellation"))
+            }
+            Err(McpCallError::NotStarted(_)) => {
+                (diagnostics::MetricOutcome::Failed, Some("not_started"))
+            }
+            Err(McpCallError::InvalidResult(_)) => {
+                (diagnostics::MetricOutcome::Failed, Some("invalid_result"))
+            }
+            Err(McpCallError::OutcomeUncertain(_)) => {
+                (diagnostics::MetricOutcome::Failed, Some("mcp_request"))
+            }
+        };
+        timer.finish(status, error);
+        result
+    }
+
+    async fn call_tool_inner(
         &self,
         binding: &McpToolBinding,
         arguments: serde_json::Value,
