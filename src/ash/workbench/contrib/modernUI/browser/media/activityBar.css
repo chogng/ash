@@ -79,6 +79,14 @@
 
 .ash-workbench.modern-ui
 	.ash-workbench-activitybar
+	.ash-composite-bar-vertical.ash-composite-bar-icon
+	.ash-composite-bar-badge {
+	/* Modern items are smaller than the standard 48px activity targets. */
+	inset: auto 0 0 auto;
+}
+
+.ash-workbench.modern-ui
+	.ash-workbench-activitybar
 	.ash-global-composite-bar
 	.ash-action-view-item {
 	height: 36px;
