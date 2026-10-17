@@ -73,6 +73,37 @@ pub(crate) struct EditorExtensionDeployment {
     pub(crate) activation_failure: Option<String>,
 }
 
+impl EditorExtensionDeployment {
+    pub(super) fn is_window_scoped(&self) -> bool {
+        self.command.is_vscode()
+            || self.params.capabilities.iter().any(|capability| {
+                matches!(
+                    capability,
+                    ExtensionCapability::SourceControl | ExtensionCapability::DebugAdapter
+                )
+            })
+    }
+
+    /// Reuse requires identical launch facts and both live authority fences.
+    /// A package revocation must never be hidden by an unchanged digest.
+    pub(super) fn can_reuse(&self, next: &Self) -> bool {
+        self.scope == next.scope
+            && self.id == next.id
+            && self.version == next.version
+            && self.package_digest == next.package_digest
+            && self.command == next.command
+            && self.workspace_read == next.workspace_read
+            && self.credential_providers == next.credential_providers
+            && self.backend_channels == next.backend_channels
+            && self.protocol_limits == next.protocol_limits
+            && self.params == next.params
+            && self.activation == next.activation
+            && self.activation_failure == next.activation_failure
+            && self.authority.authorizes()
+            && next.authority.authorizes()
+    }
+}
+
 pub(super) fn built_in_deployments(
     selection: BuiltInEditorExtensions,
     admission: Option<Arc<dyn crate::ExtensionsEditorExtensionAdmission>>,
@@ -391,6 +422,7 @@ fn product_git_deployment(
         include_str!("../../../../../extensions/git/src/interaction.rs"),
         include_str!("../../../../../sdk/rust/src/terminal.rs"),
         include_str!("../../../../../extensions/git/src/model.rs"),
+        include_str!("../../../../../extensions/git/src/paths.rs"),
         include_str!("../../../../../extensions/git/src/commands.rs"),
         include_str!("../../../../../extensions/git/src/scm.rs"),
         include_str!("../../../../../extensions/git/src/history.rs"),
@@ -734,11 +766,13 @@ pub(super) fn combined_deployments(
             deployments: Vec::new(),
         },
     };
+    if let Some(admission) = extension_packages_admission {
+        snapshot.revision.extension_packages_admission = admission.generation();
+    }
     if let (Some(manager), Some(admission)) = (extension_packages, extension_packages_admission) {
         snapshot.revision.extension_packages = manager
             .generation()
             .map_err(|_| ExtensionHostRuntimeError::Internal)?;
-        snapshot.revision.extension_packages_admission = admission.generation();
         snapshot.deployments.extend(
             extension_packages_editor_extensions::deployments(manager, admission)
                 .map_err(|_| ExtensionHostRuntimeError::Internal)?,
@@ -791,6 +825,7 @@ fn extension_capability(capability: EditorExtensionCapability) -> ExtensionCapab
         }
         EditorExtensionCapability::StatusBar => ExtensionCapability::StatusBar,
         EditorExtensionCapability::Command => ExtensionCapability::Command,
+        EditorExtensionCapability::SourceControl => ExtensionCapability::SourceControl,
         EditorExtensionCapability::LanguageProvider => ExtensionCapability::LanguageProvider,
         EditorExtensionCapability::CustomTextEditor => ExtensionCapability::CustomTextEditor,
         EditorExtensionCapability::DebugAdapter => ExtensionCapability::DebugAdapter,
@@ -813,6 +848,7 @@ fn capability_name(capability: EditorExtensionCapability) -> &'static str {
         EditorExtensionCapability::RemoteAuthorityResolver => "remoteAuthorityResolver",
         EditorExtensionCapability::StatusBar => "statusBar",
         EditorExtensionCapability::Command => "command",
+        EditorExtensionCapability::SourceControl => "sourceControl",
         EditorExtensionCapability::LanguageProvider => "languageProvider",
         EditorExtensionCapability::CustomTextEditor => "customTextEditor",
         EditorExtensionCapability::DebugAdapter => "debugAdapter",

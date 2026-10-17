@@ -1,6 +1,8 @@
+use crate::model;
 use crate::model::Configuration;
 use crate::model::Repository;
 use crate::model::Status;
+use crate::paths::RepoPath;
 use external_ext_sdk::CancellationToken;
 use external_ext_sdk::ExtensionError;
 use external_ext_sdk::HostErrorCode;
@@ -78,7 +80,7 @@ impl Api {
         }))
     }
     /// The adapter adds invocation policy and decodes structured backend failures before models see them.
-    pub fn request(
+    fn request(
         &self,
         method: &str,
         mut params: Value,
@@ -240,17 +242,23 @@ impl Api {
                 }
             };
             if let Some(error) = value.get("backendError") {
+                let message = if error["name"] == "GitUnavailable" {
+                    self.text("git.unavailable", &[])
+                } else {
+                    error["message"]
+                        .as_str()
+                        .filter(|message| !message.is_empty())
+                        .or_else(|| error["name"].as_str())
+                        .unwrap_or("Unavailable")
+                        .to_owned()
+                };
                 return Err(ExtensionError::new(
                     if error["name"] == "RequestCancelled" {
                         HostErrorCode::Cancelled
                     } else {
                         HostErrorCode::Internal
                     },
-                    format!(
-                        "{}: {}",
-                        error["name"].as_str().unwrap_or("Unavailable"),
-                        error["message"].as_str().unwrap_or("")
-                    ),
+                    message,
                 ));
             }
             Ok(value)
@@ -286,6 +294,13 @@ impl Api {
                 .show_message(external_ext_sdk::client::MessageSeverity::Warning, message),
         }
     }
+    pub fn information(&self, key: &str, token: &CancellationToken) -> Result<(), ExtensionError> {
+        self.client.show_message(
+            external_ext_sdk::client::MessageSeverity::Information,
+            self.text(key, &[]),
+            token,
+        )
+    }
     pub fn status(
         &self,
         repository: &Repository,
@@ -298,7 +313,186 @@ impl Api {
             token,
         )?)
     }
-    pub fn repository_request(
+    pub fn installation(
+        &self,
+        configuration: &Configuration,
+        token: Option<&CancellationToken>,
+    ) -> Result<crate::model::Installation, ExtensionError> {
+        let response = self.request("version", json!({}), configuration, token)?;
+        decode(response["installation"].clone())
+    }
+    pub fn discover(
+        &self,
+        folders: &[crate::model::DiscoveryFolder],
+        configuration: &Configuration,
+        token: Option<&CancellationToken>,
+    ) -> Result<crate::model::Discovery, ExtensionError> {
+        decode(self.request(
+            "repositories",
+            json!({"folders": folders, "includeStatus": true}),
+            configuration,
+            token,
+        )?)
+    }
+    pub fn catalog(
+        &self,
+        repository: &Repository,
+        token: Option<&CancellationToken>,
+    ) -> Result<crate::model::Catalog, ExtensionError> {
+        decode(self.request(
+            "catalog",
+            json!({"repositoryId": repository.descriptor.id}),
+            &repository.configuration,
+            token,
+        )?)
+    }
+    pub fn change_file(
+        &self,
+        repository: &Repository,
+        path: &crate::paths::RepoPath,
+        comparison: crate::model::Comparison,
+        token: &CancellationToken,
+    ) -> Result<crate::model::FileComparison, ExtensionError> {
+        decode(self.repository_request(
+            repository,
+            "changeFile",
+            json!({"path":path,"comparison":comparison}),
+            token,
+        )?)
+    }
+    pub fn index_diff(
+        &self,
+        repository: &Repository,
+        path: &crate::paths::RepoPath,
+        comparison: crate::model::Comparison,
+        token: &CancellationToken,
+    ) -> Result<crate::model::IndexDiff, ExtensionError> {
+        decode(self.repository_request(
+            repository,
+            "indexDiff",
+            json!({"path":path,"comparison":comparison}),
+            token,
+        )?)
+    }
+    pub fn edit_index(
+        &self,
+        repository: &Repository,
+        path: &crate::paths::RepoPath,
+        comparison: crate::model::Comparison,
+        reviewed: &crate::model::IndexDiff,
+        selection: crate::model::IndexSelection,
+        token: &CancellationToken,
+    ) -> Result<crate::model::Mutation, ExtensionError> {
+        decode(self.repository_request(repository, "editIndex", json!({"path":path,"comparison":comparison,"expectedOriginal":reviewed.original,"expectedModified":reviewed.modified,"selection":selection}), token)?)
+    }
+    pub fn mutate_paths(
+        &self,
+        repository: &Repository,
+        operation: crate::model::PathMutation,
+        paths: &[crate::paths::RepoPath],
+        token: &CancellationToken,
+    ) -> Result<crate::model::Mutation, ExtensionError> {
+        let method = match operation {
+            crate::model::PathMutation::Stage => "stage",
+            crate::model::PathMutation::Unstage => "unstage",
+            crate::model::PathMutation::Discard => "discardWorktree",
+        };
+        decode(self.repository_request(repository, method, json!({"paths":paths}), token)?)
+    }
+    pub fn review_removal(
+        &self,
+        repository: &Repository,
+        paths: &[crate::paths::RepoPath],
+        token: &CancellationToken,
+    ) -> Result<crate::model::RemovalReview, ExtensionError> {
+        decode(self.repository_request(
+            repository,
+            "reviewRemoval",
+            json!({"paths":paths}),
+            token,
+        )?)
+    }
+    pub fn remove_files(
+        &self,
+        repository: &Repository,
+        review: crate::model::RemovalReview,
+        mode: crate::model::RemovalMode,
+        token: &CancellationToken,
+    ) -> Result<crate::model::Mutation, ExtensionError> {
+        let entries: Vec<_> = review.entries.into_iter().map(|entry| entry.file).collect();
+        decode(self.repository_request(
+            repository,
+            "removeFiles",
+            json!({"entries":entries,"expectedHead":review.head,"mode":mode}),
+            token,
+        )?)
+    }
+    pub fn execute_command(
+        &self,
+        repository: &Repository,
+        command: crate::model::RepositoryCommand,
+        account: Option<&str>,
+        token: &CancellationToken,
+    ) -> Result<crate::model::ExecutedCommand, ExtensionError> {
+        decode(self.repository_request(
+            repository,
+            "executeCommand",
+            json!({"command":command,"credentialAccountId":account}),
+            token,
+        )?)
+    }
+    pub fn commit(
+        &self,
+        repository: &Repository,
+        intent: crate::model::CommitIntent,
+        token: &CancellationToken,
+    ) -> Result<crate::model::Committed, ExtensionError> {
+        decode(self.repository_request(repository, "commit", json!(intent), token)?)
+    }
+    pub fn attribution(
+        &self,
+        repository: &Repository,
+        scope: crate::model::CommitScope,
+        evidence: &[crate::model::EditorEvidence],
+        token: &CancellationToken,
+    ) -> Result<crate::model::Attribution, ExtensionError> {
+        decode(self.repository_request(
+            repository,
+            "aiContribution",
+            json!({"scope":scope,"editorEvidence":evidence}),
+            token,
+        )?)
+    }
+    pub fn transport(
+        &self,
+        repository: &Repository,
+        operation: crate::model::TransportOperation<'_>,
+        options: &crate::model::TransportOptions,
+        synchronizing: bool,
+        token: &CancellationToken,
+    ) -> Result<crate::model::TransportResult, ExtensionError> {
+        use crate::model::TransportOperation;
+        let (method, mut params) = match operation {
+            TransportOperation::Fetch(mode) => ("fetch", json!({"mode":mode})),
+            TransportOperation::Pull {
+                mode,
+                expected_head,
+            } => {
+                let mut params = json!({"mode":mode});
+                if let Some(head) = expected_head {
+                    params["expectedHead"] = json!(head);
+                }
+                ("pull", params)
+            }
+            TransportOperation::Push { expected_head } => {
+                ("push", json!({"expectedHead":expected_head}))
+            }
+        };
+        params["transport"] = json!(options);
+        params["synchronizing"] = json!(synchronizing);
+        decode(self.repository_request(repository, method, params, token)?)
+    }
+    fn repository_request(
         &self,
         repository: &Repository,
         method: &str,
@@ -315,6 +509,288 @@ impl Api {
         }
         Ok(result)
     }
+    pub fn graph(
+        &self,
+        repository: &Repository,
+        query: &model::GraphQuery,
+        token: &CancellationToken,
+    ) -> Result<model::GraphPage, ExtensionError> {
+        decode(self.repository_request(repository, "graph", json!(query), token)?)
+    }
+    pub fn history_refs(
+        &self,
+        repository: &Repository,
+        token: Option<&CancellationToken>,
+    ) -> Result<model::HistoryRefs, ExtensionError> {
+        decode(self.request(
+            "historyRefs",
+            json!({"repositoryId":repository.descriptor.id}),
+            &repository.configuration,
+            token,
+        )?)
+    }
+    pub fn branches(
+        &self,
+        repository: &Repository,
+        token: &CancellationToken,
+    ) -> Result<model::Branches, ExtensionError> {
+        decode(self.repository_request(repository, "branches", json!({}), token)?)
+    }
+    pub fn commit_message(
+        &self,
+        repository: &Repository,
+        object_id: &str,
+        token: &CancellationToken,
+    ) -> Result<model::CommitMessage, ExtensionError> {
+        decode(self.repository_request(
+            repository,
+            "commitMessage",
+            json!({"objectId":object_id}),
+            token,
+        )?)
+    }
+    pub fn commit_details(
+        &self,
+        repository: &Repository,
+        object_id: &str,
+        token: &CancellationToken,
+    ) -> Result<model::CommitDetails, ExtensionError> {
+        decode(self.repository_request(
+            repository,
+            "commitDetails",
+            json!({"objectId":object_id}),
+            token,
+        )?)
+    }
+    pub fn commit_changes(
+        &self,
+        repository: &Repository,
+        object_id: &str,
+        token: &CancellationToken,
+    ) -> Result<model::CommitChanges, ExtensionError> {
+        decode(self.repository_request(
+            repository,
+            "commitChanges",
+            json!({"objectId":object_id}),
+            token,
+        )?)
+    }
+    pub fn compare_changes(
+        &self,
+        repository: &Repository,
+        object_id: &str,
+        base: &str,
+        mode: model::CompareMode,
+        token: &CancellationToken,
+    ) -> Result<model::ComparedChanges, ExtensionError> {
+        decode(self.repository_request(
+            repository,
+            "compareChanges",
+            json!({"objectId":object_id,"baseReference":base,"mode":mode}),
+            token,
+        )?)
+    }
+    pub fn commit_file(
+        &self,
+        repository: &Repository,
+        object_id: &str,
+        path: &RepoPath,
+        parent: Option<&str>,
+        token: &CancellationToken,
+    ) -> Result<model::FileComparison, ExtensionError> {
+        let mut params = json!({"objectId":object_id,"path":path});
+        if let Some(parent) = parent {
+            params["parentObjectId"] = json!(parent);
+        }
+        decode(self.repository_request(repository, "commitFile", params, token)?)
+    }
+    pub fn file_history(
+        &self,
+        repository: &Repository,
+        path: &RepoPath,
+        token: &CancellationToken,
+    ) -> Result<model::FileHistory, ExtensionError> {
+        decode(self.repository_request(repository, "fileHistory", json!({"path":path}), token)?)
+    }
+    pub fn conflict_file(
+        &self,
+        repository: &Repository,
+        path: &RepoPath,
+        token: &CancellationToken,
+    ) -> Result<model::ConflictFile, ExtensionError> {
+        decode(self.repository_request(repository, "conflictFile", json!({"path":path}), token)?)
+    }
+    pub fn complete_conflict(
+        &self,
+        repository: &Repository,
+        resolution: model::ResolveConflict,
+        token: &CancellationToken,
+    ) -> Result<model::Mutation, ExtensionError> {
+        decode(self.repository_request(repository, "completeConflict", json!(resolution), token)?)
+    }
+    pub fn ignored(
+        &self,
+        repository: &Repository,
+        path: &RepoPath,
+        token: &CancellationToken,
+    ) -> Result<bool, ExtensionError> {
+        #[derive(serde::Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Response {
+            ignored_paths: Vec<RepoPath>,
+        }
+        let result: Response = decode(self.repository_request(
+            repository,
+            "checkIgnore",
+            json!({"operationId":crate::commands::random_id()?,"paths":[path]}),
+            token,
+        )?)?;
+        Ok(!result.ignored_paths.is_empty())
+    }
+    pub fn blame(
+        &self,
+        repository: &Repository,
+        path: &RepoPath,
+        line: usize,
+        contents: Option<&str>,
+        token: Option<&CancellationToken>,
+    ) -> Result<model::BlameLine, ExtensionError> {
+        decode(self.request("blame", json!({"repositoryId":repository.descriptor.id,"path":path,"line":line,"contents":contents,"ignoreWhitespace":repository.configuration.boolean("blame.ignoreWhitespace",false)}), &repository.configuration, token)?)
+    }
+    pub fn create_branch(
+        &self,
+        repository: &Repository,
+        name: &str,
+        token: &CancellationToken,
+    ) -> Result<model::Branches, ExtensionError> {
+        decode(self.repository_request(repository, "createBranch", json!({"name":name}), token)?)
+    }
+    pub fn delete_branch(
+        &self,
+        repository: &Repository,
+        name: &str,
+        token: &CancellationToken,
+    ) -> Result<model::Branches, ExtensionError> {
+        decode(self.repository_request(repository, "deleteBranch", json!({"name":name}), token)?)
+    }
+    pub fn switch_branch(
+        &self,
+        repository: &Repository,
+        name: &str,
+        token: &CancellationToken,
+    ) -> Result<model::Mutation, ExtensionError> {
+        decode(self.repository_request(repository, "switchBranch", json!({"name":name,"pullBeforeCheckout":repository.configuration.boolean("pullBeforeCheckout",false)}), token)?)
+    }
+    pub fn upstream_rewritten(
+        &self,
+        repository: &Repository,
+        token: &CancellationToken,
+    ) -> Result<bool, ExtensionError> {
+        #[derive(serde::Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Response {
+            upstream_rewritten: bool,
+        }
+        let result: Response =
+            decode(self.repository_request(repository, "pullPreflight", json!({}), token)?)?;
+        Ok(result.upstream_rewritten)
+    }
+    pub fn read_settings(
+        &self,
+        configuration: &Configuration,
+        token: Option<&CancellationToken>,
+    ) -> Result<model::SettingsSnapshot, ExtensionError> {
+        decode(self.request("readConfig", json!({}), configuration, token)?)
+    }
+    pub fn update_settings(
+        &self,
+        revision: u64,
+        settings: &model::SharedSettings,
+        configuration: &Configuration,
+        token: Option<&CancellationToken>,
+    ) -> Result<model::SettingsUpdated, ExtensionError> {
+        decode(self.request("updateConfig", json!({"commandId":crate::commands::random_id()?,"expectedRevision":revision,"git":settings}), configuration, token)?)
+    }
+    pub fn initialize(
+        &self,
+        folder: &model::WorkspaceFolder,
+        branch: &str,
+        configuration: &Configuration,
+        token: &CancellationToken,
+    ) -> Result<model::Discovery, ExtensionError> {
+        decode(self.request(
+            "initialize",
+            json!({"dirId":folder.id,"initialBranch":branch}),
+            configuration,
+            Some(token),
+        )?)
+    }
+    pub fn clone_repository(
+        &self,
+        url: &str,
+        parent: &ash_utils_path_uri::PathUri,
+        reference: Option<&str>,
+        account: Option<&str>,
+        configuration: &Configuration,
+        token: &CancellationToken,
+    ) -> Result<ash_utils_path_uri::PathUri, ExtensionError> {
+        #[derive(serde::Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Response {
+            repository_path: String,
+        }
+        let result: Response = decode(self.request("clone", json!({"url":url,"parentPath":parent.inferred_native_path_string(),"reference":reference,"credentialAccountId":account}), configuration, Some(token))?)?;
+        crate::paths::target_path(parent, &result.repository_path)
+    }
+    pub fn create_worktree(
+        &self,
+        repository: &Repository,
+        name: &str,
+        token: &CancellationToken,
+    ) -> Result<ash_utils_path_uri::PathUri, ExtensionError> {
+        #[derive(serde::Deserialize)]
+        struct Response {
+            path: String,
+        }
+        let result: Response = decode(self.repository_request(repository, "createWorktree", json!({"name":name,"includeFiles":repository.configuration.strings("worktreeIncludeFiles"),"symlinkFolders":repository.configuration.strings("worktreeSymlinkFolders")}), token)?)?;
+        crate::paths::target_path(&repository.root_uri, &result.path)
+    }
+    pub fn resolve_worktree(
+        &self,
+        repository: &Repository,
+        checkout: &ash_utils_path_uri::PathUri,
+        token: &CancellationToken,
+    ) -> Result<ash_utils_path_uri::PathUri, ExtensionError> {
+        #[derive(serde::Deserialize)]
+        struct Response {
+            path: String,
+        }
+        let result: Response = decode(self.repository_request(
+            repository,
+            "resolveWorktree",
+            json!({"checkoutRoot":checkout.inferred_native_path_string()}),
+            token,
+        )?)?;
+        crate::paths::target_path(&repository.root_uri, &result.path)
+    }
+    pub fn worktrees(
+        &self,
+        repository: &Repository,
+        token: &CancellationToken,
+    ) -> Result<Vec<model::Worktree>, ExtensionError> {
+        decode_worktrees(
+            &repository.root_uri,
+            self.repository_request(repository, "worktrees", json!({}), token)?,
+        )
+    }
+    pub fn delete_worktree(
+        &self,
+        repository: &Repository,
+        checkout: &ash_utils_path_uri::PathUri,
+        token: &CancellationToken,
+    ) -> Result<Vec<model::Worktree>, ExtensionError> {
+        decode_worktrees(&repository.root_uri, self.repository_request(repository, "deleteWorktree", json!({"commandId":crate::commands::random_id()?,"checkoutRoot":checkout.inferred_native_path_string(),"mode":"unbound"}), token)?)
+    }
     pub fn confirm(
         &self,
         key: &str,
@@ -322,7 +798,7 @@ impl Api {
         token: &CancellationToken,
     ) -> Result<bool, ExtensionError> {
         Ok(self.editor(
-            json!({"method":"confirm", "message":self.text(key,arguments)}),
+            json!({"method":"confirm", "title":self.text("git.confirmOperation", &[]), "message":self.text(key,arguments), "primaryButton":self.text("git.confirmOperationButton", &[])}),
             Some(token),
         )?["confirmed"]
             .as_bool()
@@ -372,19 +848,51 @@ pub fn decode<T: DeserializeOwned>(value: Value) -> Result<T, ExtensionError> {
         )
     })
 }
-pub fn file_uri(root: &str, path: &str) -> Result<String, ExtensionError> {
-    let mut uri = url::Url::parse(root).map_err(|_| invalid("Invalid repository URI"))?;
-    {
-        let mut segments = uri
-            .path_segments_mut()
-            .map_err(|_| invalid("Invalid repository URI"))?;
-        segments.pop_if_empty();
-        for segment in path.split('/') {
-            segments.push(segment);
-        }
-    }
-    Ok(uri.to_string())
+pub fn file_uri(
+    root: &ash_utils_path_uri::PathUri,
+    path: &crate::paths::RepoPath,
+) -> Result<String, ExtensionError> {
+    path.resolve(root).map(|uri| uri.to_string())
 }
 pub fn invalid(message: &str) -> ExtensionError {
     ExtensionError::new(HostErrorCode::InvalidRequest, message)
 }
+
+fn decode_worktrees(
+    root: &ash_utils_path_uri::PathUri,
+    response: Value,
+) -> Result<Vec<model::Worktree>, ExtensionError> {
+    #[derive(serde::Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Checkout {
+        checkout_root: String,
+        path: String,
+        branch: Option<String>,
+        head: String,
+        current: bool,
+        state: model::WorktreeState,
+    }
+    #[derive(serde::Deserialize)]
+    struct Response {
+        worktrees: Vec<Checkout>,
+    }
+    let response: Response = decode(response)?;
+    response
+        .worktrees
+        .into_iter()
+        .map(|checkout| {
+            Ok(model::Worktree {
+                checkout_root: crate::paths::target_path(root, &checkout.checkout_root)?,
+                path: crate::paths::target_path(root, &checkout.path)?,
+                branch: checkout.branch,
+                head: checkout.head,
+                current: checkout.current,
+                state: checkout.state,
+            })
+        })
+        .collect()
+}
+
+#[cfg(test)]
+#[path = "api_tests.rs"]
+mod tests;

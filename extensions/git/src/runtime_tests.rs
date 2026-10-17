@@ -29,7 +29,7 @@ fn repository(initial_status: Option<Status>) -> Repository {
             dir_id: None,
             parent_path: None,
         },
-        root_uri: "file:///workspace".into(),
+        root_uri: ash_utils_path_uri::PathUri::parse("file:///workspace").unwrap(),
         configuration: Configuration::default(),
         status: initial_status,
         catalog: None,
@@ -37,10 +37,49 @@ fn repository(initial_status: Option<Status>) -> Repository {
         input_revision: 7,
         operation: None,
         error: String::new(),
+        notice: String::new(),
         commit_editor_head: None,
         blame: None,
         pending_paths: None,
         retired_streams: BTreeSet::new(),
+    }
+}
+
+#[test]
+fn resource_paths_decode_without_host_filesystem_path_rules() {
+    let mut repository = repository(None);
+    for root in [
+        "file:///workspace",
+        "file:///C:/workspace",
+        "file://server/share/workspace",
+    ] {
+        repository.root_uri = ash_utils_path_uri::PathUri::parse(root).unwrap();
+        for (encoded, expected) in [
+            ("image.bin", "image.bin"),
+            ("src/nested/file.txt", "src/nested/file.txt"),
+            ("space%20and+plus%2520.txt", "space and+plus%20.txt"),
+            ("%E4%B8%AD%E6%96%87.txt", "中文.txt"),
+        ] {
+            assert_eq!(
+                crate::changes::relative_resource(&repository, &format!("{root}/{encoded}")),
+                Some(crate::paths::RepoPath::parse(expected).unwrap()),
+                "{root}/{encoded}"
+            );
+        }
+        for resource in [
+            format!("{root}-other/file.txt"),
+            format!("{root}/%FF.txt"),
+            root.into(),
+        ] {
+            assert_eq!(
+                crate::changes::relative_resource(&repository, &resource),
+                None
+            );
+        }
+        assert_eq!(
+            crate::changes::relative_resource(&repository, "file://other/share/workspace/file.txt"),
+            None
+        );
     }
 }
 

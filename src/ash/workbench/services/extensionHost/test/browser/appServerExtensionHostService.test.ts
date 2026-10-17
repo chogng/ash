@@ -866,6 +866,55 @@ test('status bar content snapshots keep a pending command alive and disconnect r
 	assert.equal(statusbar.getEntries(StatusbarAlignment.Right).length, 0);
 });
 
+test('SCM snapshots preserve pending commands until their extension authority is revoked', async () => {
+	const scm = { kind: 'sourceControl' as const, registrationId: 'scm', revision: 1, providers: [] };
+	const api = new FakeExtensionHostApi(snapshot(1, 'acme.run', [scm]));
+	const commands = new CommandRegistry();
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+	using service = services.createInstance(AppServerExtensionHostService, commands, 1_000);
+	await service.start();
+	const result = deferred<JsonValue>();
+	api.invocationResult = result.promise;
+	const handler = commands.getCommand('acme.run')!;
+	const pending = Promise.resolve(handler({} as ServicesAccessor));
+	api.current = snapshot(2, 'acme.run', [{ ...scm, revision: 2 }], '', [], 11);
+	api.emitChanged(2);
+	await waitFor(() => service.currentSnapshot.fleetGeneration === 2);
+	assert.equal(commands.getCommand('acme.run'), handler);
+	assert.equal(api.invocationSignals[0]!.aborted, false);
+	result.resolve({ completed: true });
+	assert.deepEqual(await pending, { completed: true });
+	api.emitConnection('restarting');
+	assert.equal(api.invocationSignals[0]!.aborted, true);
+});
+
+test('registration replacement retires only that registration within a live extension', async () => {
+	const api = new FakeExtensionHostApi(snapshot(1, 'acme.run'));
+	const command = api.current.extensions[0]!.registrations.find(registration => registration.kind === 'command')!;
+	const other = { ...command, registrationId: 'other', command: 'acme.other', title: 'Other' };
+	api.current = { ...api.current, extensions: [{ ...api.current.extensions[0]!, registrations: [command, other] }] };
+	const commands = new CommandRegistry();
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+	using service = services.createInstance(AppServerExtensionHostService, commands, 1_000);
+	await service.start();
+	const result = deferred<JsonValue>();
+	api.invocationResult = result.promise;
+	const pending = Promise.resolve(commands.getCommand('acme.run')!({} as ServicesAccessor));
+	const removed = Promise.resolve(commands.getCommand('acme.other')!({} as ServicesAccessor));
+	const rejected = assert.rejects(removed, /Extension Host fleet generation was replaced/);
+	api.current = { ...api.current, generation: 2, extensions: [{ ...api.current.extensions[0]!, registrations: [command] }] };
+	api.emitChanged(2);
+	await waitFor(() => service.currentSnapshot.fleetGeneration === 2);
+	assert.equal(api.invocationSignals[0]!.aborted, false);
+	assert.equal(api.invocationSignals[1]!.aborted, true);
+	assert.equal(commands.getCommand('acme.other'), undefined);
+	result.resolve({ completed: true });
+	await rejected;
+	assert.deepEqual(await pending, { completed: true });
+});
+
 test('extension API releases named output and providers when its host stops', async () => {
 	const events: readonly ExtensionHostOutputEvent[] = [
 		{ sequence: 1, incarnation: 3, activationGeneration: 11, operation: { operation: 'create', channelId: 'review', label: 'Review', kind: 'output' } },

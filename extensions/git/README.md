@@ -13,6 +13,29 @@ graph cursors, watchers and automatic fetch. `crates/git` owns Git execution and
 Agent worktrees, Turn transactions and TUI retain these shared Rust mechanisms without
 requiring the editor extension or a JavaScript runtime.
 
+## Path and API boundaries
+
+`model.rs` contains extension-owned domain values. Repository roots and workspace
+folders carry `PathUri`; `paths.rs::RepoPath` carries a validated, non-empty Git
+relative name using `/`. It does not reinterpret a POSIX filename through Windows
+path rules. Resource containment and resolution use `ash-utils-path-uri`; actual
+filesystem access converts to an absolute host path at the IO boundary. Lexical
+containment does not replace backend filesystem authorization or identity checks.
+
+`api.rs` is the only owner of backend method names, JSON request assembly, response
+decoding, request policy and invocation-scoped askpass leases. Commands call typed
+operations with domain inputs and results. A reviewed removal carries its file
+revisions and HEAD; an index edit carries its comparison snapshot and typed
+selection. The shared backend still performs the authoritative concurrency checks.
+The public editor SDK uses JSON for presentation and command arguments; those
+values do not serve as a second repository state or backend transport contract.
+
+Worktree and clone responses enter through the adapter using an explicit target
+path convention. Configuration accepts absolute paths or file URIs at its boundary.
+Folder selection returns a URI resolved by the client's shared path service; the
+extension never interprets the selected path using its own process platform.
+An invalid file path fails instead of being displayed as the repository root.
+
 ## Settings and capabilities
 
 The package declares Git settings with runtime consumers. Policies cover repository,
@@ -83,6 +106,12 @@ The product host creates a separate activation for each window. Backend discover
 coalesced SCM publication run independently of UI acknowledgement; an immediate command
 waits for discovery and current scoped policy. Retired activations cancel callbacks, helpers,
 annotations, terminal environment and providers. Re-enabling creates a new activation.
+
+The Workbench separates process authority from executable registration content.
+Replacing one registration cancels only that registration's calls; retiring the
+process cancels every call belonging to it. SCM, output and status-bar snapshots
+retain their own revision and reconciliation owners. Neither a Git status update
+nor another extension's enablement change replaces an unaffected command lifetime.
 
 The background subscription waits for admitted backend notifications and refreshes as soon
 as they arrive. It consumes status snapshots rather than ignore invalidation hints, which

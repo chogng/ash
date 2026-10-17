@@ -31,6 +31,7 @@ import { ICodeEditorService } from '../../../editor/browser/services/codeEditorS
 import { MainThreadEditorChanges } from './mainThreadEditorChanges.js';
 import { Range } from '../../../editor/common/core/range.js';
 import { ITextFileService } from '../../services/textfile/common/textfiles.js';
+import { IPathService } from '../../../platform/path/common/pathService.js';
 /** Editor models, working copies and UI always stay in the client. */
 export class MainThreadEditors extends Disposable {
 	private readonly editSources = this._register(new DisposableMap<string, DisposableStore>());
@@ -75,7 +76,8 @@ export class MainThreadEditors extends Disposable {
 		private readonly codeEditors: ICodeEditorService,
 		@ITextFileService
 		private readonly files: ITextFileService,
-		@IModelService private readonly models: IModelService) {
+		@IModelService private readonly models: IModelService,
+		@IPathService private readonly paths: IPathService) {
 		super();
 		for (const model of models.getModels()) this.trackModel(model);
 		this._register(models.onModelAdded(model => this.trackModel(model)));
@@ -167,8 +169,11 @@ export class MainThreadEditors extends Disposable {
 			}
 			case 'pickFolder': {
 				const folder = await this.workspace.pickFolder(optionalText(request.defaultPath));
+				// The selected path belongs to the filesystem host, which may differ from
+				// both the renderer and the extension process. Only URIs cross this boundary.
+				const resource = folder === undefined ? undefined : await this.paths.fileURI(folder);
 				signal.throwIfAborted();
-				return folder ?? null;
+				return resource?.toString() ?? null;
 			}
 			case 'openWorkspace':
 				if (request.forceNewWindow !== undefined && typeof request.forceNewWindow !== 'boolean') throw new TypeError('Invalid workspace window policy');

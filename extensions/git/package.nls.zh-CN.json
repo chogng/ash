@@ -19,6 +19,7 @@
   "git.menu.checkout": "签出到…",
   "git.menu.fetch": "获取",
   "git.menu.amend": "修改上次提交…",
+  "git.menu.commitStagedAmend": "用暂存的更改修改上次提交…",
   "git.menu.undoCommit": "撤销上次提交",
   "git.menu.stageAll": "暂存所有更改",
   "git.menu.unstageAll": "取消暂存所有更改",

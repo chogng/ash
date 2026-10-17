@@ -3,8 +3,12 @@ use crate::api::decode;
 use crate::api::file_uri;
 use crate::api::invalid;
 use crate::model::Change;
+use crate::model::Comparison;
+use crate::model::FileContent;
+use crate::model::IndexSelection;
 use crate::model::Repository;
 use crate::model::Status;
+use crate::paths::RepoPath;
 use base64::Engine;
 use external_ext_sdk::CancellationToken;
 use external_ext_sdk::ExtensionError;
@@ -102,22 +106,22 @@ impl GitRuntime {
             .ok_or_else(|| invalid("Git change was removed"))?;
         let input = if change.conflicted {
             if repository.configuration.boolean("mergeEditor", false) {
-                json!({"kind":"merge","resource":format!("git-merge:/{}/{}",repository.descriptor.id,path),"resultResource":file_uri(&repository.root_uri,path)?,"label":path,"repositoryId":repository.descriptor.id,"path":path})
+                json!({"kind":"merge","resource":format!("git-merge:/{}/{}",repository.descriptor.id,path),"resultResource":file_uri(&repository.root_uri,&change.path)?,"label":path,"repositoryId":repository.descriptor.id,"path":path})
             } else {
-                json!({"resource":file_uri(&repository.root_uri,path)?,"label":path})
+                json!({"resource":file_uri(&repository.root_uri,&change.path)?,"label":path})
             }
         } else {
             let comparison = if group == "staged" {
-                "staged"
+                Comparison::Staged
             } else {
-                "unstaged"
+                Comparison::Unstaged
             };
             let (original, modified) =
                 self.change_inputs(repository, status, change, comparison, token)?;
             if repository.configuration.boolean("openDiffOnClick", true) {
                 diff_input(original, modified, path)
             } else {
-                json!({"resource":file_uri(&repository.root_uri,path)?,"label":path})
+                json!({"resource":file_uri(&repository.root_uri,&change.path)?,"label":path})
             }
         };
         self.api.editor(json!({"method":"open","input":input,"options":payload["options"],"sideBySide":payload["sideBySide"]==true}),Some(token))
@@ -127,17 +131,14 @@ impl GitRuntime {
         repository: &Repository,
         status: &Status,
         change: &Change,
-        comparison: &str,
+        comparison: Comparison,
         token: &CancellationToken,
     ) -> Result<(Value, Value), ExtensionError> {
-        let file = self.api.repository_request(
-            repository,
-            "changeFile",
-            json!({"path":change.path,"comparison":comparison}),
-            token,
-        )?;
+        let file = self
+            .api
+            .change_file(repository, &change.path, comparison, token)?;
         let original_path = if matches!(
-            (if comparison == "staged" {
+            (if comparison == Comparison::Staged {
                 &change.index_status
             } else {
                 &change.worktree_status
@@ -162,8 +163,8 @@ impl GitRuntime {
             .query_pairs_mut()
             .append_pair("side", "original");
         uri.query_pairs_mut().append_pair("side", "modified");
-        let original = content_input(&file["original"], original_uri.to_string(), original_path);
-        let modified = content_input(&file["modified"], uri.to_string(), &change.path);
+        let original = content_input(&file.original, original_uri.to_string(), original_path);
+        let modified = content_input(&file.modified, uri.to_string(), &change.path);
         Ok((original, modified))
     }
     pub(crate) fn multi_diff(
@@ -205,9 +206,9 @@ impl GitRuntime {
                 &status,
                 change,
                 if scope == "staged" || scope == "uncommitted" && !unstaged {
-                    "staged"
+                    Comparison::Staged
                 } else {
-                    "unstaged"
+                    Comparison::Unstaged
                 },
                 token,
             )?;
@@ -215,7 +216,7 @@ impl GitRuntime {
             // one side changed, its other endpoint already equals HEAD or the working file.
             if scope == "uncommitted" && staged && unstaged {
                 original = self
-                    .change_inputs(repository, &status, change, "staged", token)?
+                    .change_inputs(repository, &status, change, Comparison::Staged, token)?
                     .0;
             }
             let key = if staged {
@@ -264,15 +265,11 @@ impl GitRuntime {
             let path = change["path"]
                 .as_str()
                 .ok_or_else(|| invalid("Invalid history path"))?;
-            let mut params = json!({"objectId":id,"path":path});
-            if let Some(parent) = parent {
-                params["parentObjectId"] = json!(parent);
-            }
-            let file = self
-                .api
-                .repository_request(repository, "commitFile", params, token)?;
+            let file =
+                self.api
+                    .commit_file(repository, id, &RepoPath::parse(path)?, parent, token)?;
             let original_path = change["originalPath"].as_str().unwrap_or(path);
-            items.push(json!({"id":path,"binary":file["original"]["kind"]=="binary" || file["modified"]["kind"]=="binary","label":path,"original":content_input(&file["original"],crate::history::commit_file_uri(&repository.descriptor.id,parent.unwrap_or("root"),original_path,"original"),original_path),"modified":content_input(&file["modified"],crate::history::commit_file_uri(&repository.descriptor.id,id,path,"modified"),path),"actions":[]}));
+            items.push(json!({"id":path,"binary":file.original.is_binary() || file.modified.is_binary(),"label":path,"original":content_input(&file.original,crate::history::commit_file_uri(&repository.descriptor.id,parent.unwrap_or("root"),original_path,"original"),original_path),"modified":content_input(&file.modified,crate::history::commit_file_uri(&repository.descriptor.id,id,path,"modified"),path),"actions":[]}));
         }
         Ok(
             json!({"kind":"multiDiff","resource":format!("git-commit:/{id}?parent={}",parent.unwrap_or("root")),"label":id,"readOnly":true,"items":items}),
@@ -287,16 +284,21 @@ impl GitRuntime {
         let args = payload["arguments"]
             .as_array()
             .ok_or_else(|| invalid("Missing merge arguments"))?;
+        let path = decode(args.first().cloned().unwrap_or(Value::Null))?;
         if payload["methodName"] == "resolve" {
-            return self.api.repository_request(
-                repository,
-                "conflictFile",
-                json!({"path":args.first()}),
-                token,
-            );
+            return self
+                .api
+                .conflict_file(repository, &path, token)
+                .map(|file| json!(file));
         }
-        let result=self.api.repository_request(repository,"completeConflict",json!({"path":args.first(),"expectedStageIds":args.get(1),"expectedResultObjectId":args.get(2),"resolution":args.get(3)}),token)?;
-        self.accept_status(decode(result["status"].clone())?);
+        let resolution = crate::model::ResolveConflict {
+            path,
+            expected_stage_ids: decode(args.get(1).cloned().unwrap_or(Value::Null))?,
+            expected_result_object_id: decode(args.get(2).cloned().unwrap_or(Value::Null))?,
+            resolution: decode(args.get(3).cloned().unwrap_or(Value::Null))?,
+        };
+        let result = self.api.complete_conflict(repository, resolution, token)?;
+        self.accept_status(result.status);
         self.publish()?;
         Ok(Value::Null)
     }
@@ -323,21 +325,16 @@ impl GitRuntime {
             return Ok(Value::Null);
         };
         let comparison = if change.worktree_status != "unmodified" {
-            "unstaged"
+            Comparison::Unstaged
         } else {
-            "staged"
+            Comparison::Staged
         };
-        let file = self.api.repository_request(
-            repository,
-            "changeFile",
-            json!({"path":path,"comparison":comparison}),
-            token,
-        )?;
-        if file["original"]["kind"] == "binary" || file["modified"]["kind"] == "binary" {
+        let file = self.api.change_file(repository, &path, comparison, token)?;
+        if file.original.is_binary() || file.modified.is_binary() {
             return Ok(Value::Null);
         }
         Ok(
-            json!({"label":if comparison=="staged" {"HEAD"} else {"Index"},"originalResource":format!("git-quickdiff:/{path}?revision={}:{}",status.stream_instance_id,status.revision),"revision":format!("{}:{}",status.stream_instance_id,status.revision),"text":file["original"]["text"].as_str().unwrap_or_default()}),
+            json!({"label":if comparison==Comparison::Staged {"HEAD"} else {"Index"},"originalResource":format!("git-quickdiff:/{path}?revision={}:{}",status.stream_instance_id,status.revision),"revision":format!("{}:{}",status.stream_instance_id,status.revision),"text":file.original.text().unwrap_or_default()}),
         )
     }
     pub(crate) fn file_decoration(
@@ -369,16 +366,7 @@ impl GitRuntime {
                 json!({"letter":data["badge"],"tooltip":data["tooltip"],"color":format!("gitDecoration.{kind}ResourceForeground"),"weight":10,"bubble":true,"strikethrough":kind=="deleted"}),
             );
         }
-        let result = self.api.repository_request(
-            repository,
-            "checkIgnore",
-            json!({"operationId":super::commands::random_id()?,"paths":[path]}),
-            token,
-        )?;
-        if result["ignoredPaths"]
-            .as_array()
-            .is_some_and(|paths| !paths.is_empty())
-        {
+        if self.api.ignored(repository, &path, token)? {
             Ok(
                 json!({"color":"gitDecoration.ignoredResourceForeground","tooltip":self.api.text("git.ignored",&[]),"weight":1}),
             )
@@ -453,9 +441,7 @@ impl GitRuntime {
         else {
             return Ok(Value::Null);
         };
-        let history =
-            self.api
-                .repository_request(repository, "fileHistory", json!({"path":path}), token)?;
+        let history = json!(self.api.file_history(repository, &path, token)?);
         let values = history["items"].as_array().cloned().unwrap_or_default();
         let date_key = if repository.configuration.text("timeline.date", "committed") == "authored"
         {
@@ -519,12 +505,7 @@ impl GitRuntime {
         let id = item["objectId"]
             .as_str()
             .ok_or_else(|| invalid("Missing file history ID"))?;
-        let changes = self.api.repository_request(
-            repository,
-            "commitChanges",
-            json!({"objectId":id}),
-            token,
-        )?;
+        let changes = json!(self.api.commit_changes(repository, id, token)?);
         let selected: Vec<_> = changes["changes"]
             .as_array()
             .into_iter()
@@ -552,7 +533,13 @@ impl GitRuntime {
         else {
             return Ok(Value::Null);
         };
-        let result=self.api.repository_request(repository,"blame",json!({"path":path,"line":active["selection"]["startLineNumber"].as_u64().unwrap_or(1),"contents":active["contents"],"ignoreWhitespace":repository.configuration.boolean("blame.ignoreWhitespace",false)}),token)?;
+        let result = json!(self.api.blame(
+            repository,
+            &path,
+            active["selection"]["startLineNumber"].as_u64().unwrap_or(1) as usize,
+            active["contents"].as_str(),
+            Some(token)
+        )?);
         self.api.client.show_message(
             external_ext_sdk::client::MessageSeverity::Information,
             format!(
@@ -573,17 +560,55 @@ impl GitRuntime {
         token: &CancellationToken,
     ) -> Result<Value, ExtensionError> {
         let comparison = if command.starts_with("git.unstage") {
-            "staged"
+            Comparison::Staged
         } else {
-            "unstaged"
+            Comparison::Unstaged
         };
+        if command.ends_with("Ranges") {
+            let active = self
+                .api
+                .editor(json!({"method":"activeEditor"}), Some(token))?;
+            if let Some(path) = active["input"]["resource"]
+                .as_str()
+                .and_then(|resource| relative_resource(repository, resource))
+            {
+                let reviewed = self.api.index_diff(repository, &path, comparison, token)?;
+                if active["contents"].as_str() != reviewed.modified.as_deref() {
+                    return Err(invalid(&self.api.text("git.reopenComparison", &[])));
+                }
+                let start = active["selection"]["startLineNumber"]
+                    .as_u64()
+                    .ok_or_else(|| invalid("Missing editor selection"))?;
+                let mut end = active["selection"]["endLineNumber"]
+                    .as_u64()
+                    .ok_or_else(|| invalid("Missing editor selection"))?;
+                if end > start && active["selection"]["endColumn"] == 1 {
+                    end -= 1;
+                }
+                let result = self.api.edit_index(
+                    repository,
+                    &path,
+                    comparison,
+                    &reviewed,
+                    IndexSelection::Lines {
+                        start: start as usize,
+                        end: end as usize,
+                    },
+                    token,
+                )?;
+                self.accept_status(result.status.clone());
+                self.publish()?;
+                self.api.information("git.indexEdited", token)?;
+                return Ok(json!(result));
+            }
+        }
         let status = self.api.status(repository, Some(token))?;
         let values: Vec<_> = status
             .changes
             .iter()
             .filter(|change| {
                 !change.conflicted
-                    && (if comparison == "staged" {
+                    && (if comparison == Comparison::Staged {
                         &change.index_status
                     } else {
                         &change.worktree_status
@@ -594,14 +619,9 @@ impl GitRuntime {
         let Some(index) = self.choose("git.diff.chooseFile", &values, "path", token)? else {
             return Ok(Value::Null);
         };
-        let path = &values[index]["path"];
-        let reviewed = self.api.repository_request(
-            repository,
-            "indexDiff",
-            json!({"path":path,"comparison":comparison}),
-            token,
-        )?;
-        let hunks = reviewed["hunks"].as_array().cloned().unwrap_or_default();
+        let path: RepoPath = decode(values[index]["path"].clone())?;
+        let reviewed = self.api.index_diff(repository, &path, comparison, token)?;
+        let hunks: Vec<_> = reviewed.hunks.iter().map(|hunk| json!(hunk)).collect();
         let Some(hunk) = self.choose("git.diff.chooseHunk", &hunks, "preview", token)? else {
             return Ok(Value::Null);
         };
@@ -617,14 +637,26 @@ impl GitRuntime {
             let Some(end) = self.api.input("git.diff.endLine", &start, token)? else {
                 return Ok(Value::Null);
             };
-            json!({"kind":"lines","start":start.parse::<usize>().map_err(|_|invalid("Invalid line number"))?,"end":end.parse::<usize>().map_err(|_|invalid("Invalid line number"))?})
+            IndexSelection::Lines {
+                start: start
+                    .parse::<usize>()
+                    .map_err(|_| invalid("Invalid line number"))?,
+                end: end
+                    .parse::<usize>()
+                    .map_err(|_| invalid("Invalid line number"))?,
+            }
         } else {
-            json!({"kind":"hunk","staged":hunks[hunk]["staged"]})
+            IndexSelection::Hunk {
+                index: reviewed.hunks[hunk].index,
+            }
         };
-        let result=self.api.repository_request(repository,"editIndex",json!({"path":path,"comparison":comparison,"expectedOriginal":reviewed["original"],"expectedModified":reviewed["modified"],"selection":selection}),token)?;
-        self.accept_status(decode(result["status"].clone())?);
+        let result = self
+            .api
+            .edit_index(repository, &path, comparison, &reviewed, selection, token)?;
+        self.accept_status(result.status.clone());
         self.publish()?;
-        Ok(result)
+        self.api.information("git.indexEdited", token)?;
+        Ok(json!(result))
     }
     pub(crate) fn diff_action(
         &self,
@@ -654,9 +686,9 @@ impl GitRuntime {
             .map(|(key, value)| (key.into_owned(), value.into_owned()))
             .collect();
         let comparison = if command.contains("unstage") {
-            "staged"
+            Comparison::Staged
         } else {
-            "unstaged"
+            Comparison::Unstaged
         };
         let prefix = format!("/{comparison}/");
         if original.scheme() != "git-change"
@@ -672,7 +704,7 @@ impl GitRuntime {
         {
             return Err(invalid(&self.api.text("git.reopenComparison", &[])));
         }
-        let path = percent_decode_path(&modified.path()[prefix.len()..])?;
+        let path = RepoPath::parse(&percent_decode_path(&modified.path()[prefix.len()..])?)?;
         let capture = || {
             self.api.editor(
                 json!({"method":"diffChange","context":context}),
@@ -689,21 +721,16 @@ impl GitRuntime {
         {
             return Err(invalid(&self.api.text("git.reopenComparison", &[])));
         }
-        let reviewed = self.api.repository_request(
-            repository,
-            "indexDiff",
-            json!({"path":path,"comparison":comparison}),
-            token,
-        )?;
+        let reviewed = self.api.index_diff(repository, &path, comparison, token)?;
         let still_current = |latest: &Value| {
             latest["originalVersion"] == state["originalVersion"]
                 && latest["modifiedVersion"] == state["modifiedVersion"]
                 && latest["originalText"] == state["originalText"]
                 && latest["modifiedText"] == state["modifiedText"]
         };
-        if reviewed["original"].as_str().unwrap_or_default()
+        if reviewed.original.as_deref().unwrap_or_default()
             != state["originalFileText"].as_str().unwrap_or_default()
-            || reviewed["modified"].as_str().unwrap_or_default()
+            || reviewed.modified.as_deref().unwrap_or_default()
                 != state["modifiedFileText"].as_str().unwrap_or_default()
             || !still_current(&capture()?)
         {
@@ -713,10 +740,20 @@ impl GitRuntime {
             if state["contiguous"] != true {
                 return Err(invalid(&self.api.text("git.diff.contiguousSelection", &[])));
             }
-            let result=self.api.repository_request(repository,"editIndex",json!({"path":path,"comparison":comparison,"expectedOriginal":reviewed["original"],"expectedModified":reviewed["modified"],"selection":{"kind":"lines","start":state["start"],"end":state["end"]}}),token)?;
-            self.accept_status(decode(result["status"].clone())?);
+            let result = self.api.edit_index(
+                repository,
+                &path,
+                comparison,
+                &reviewed,
+                IndexSelection::Lines {
+                    start: decode(state["start"].clone())?,
+                    end: decode(state["end"].clone())?,
+                },
+                token,
+            )?;
+            self.accept_status(result.status.clone());
             self.publish()?;
-            return Ok(result);
+            return Ok(json!(result));
         }
         let resource = file_uri(&repository.root_uri, &path)?;
         if query.get("resource") != Some(&resource) {
@@ -741,18 +778,13 @@ impl GitRuntime {
         if confirmed["confirmed"] != true {
             return Ok(Value::Null);
         }
-        let latest = self.api.repository_request(
-            repository,
-            "indexDiff",
-            json!({"path":path,"comparison":comparison}),
-            token,
-        )?;
+        let latest = self.api.index_diff(repository, &path, comparison, token)?;
         if file["text"] != state["modifiedText"]
             || !file["revision"].is_string()
             || dirty()?
             || !still_current(&capture()?)
-            || latest["original"] != reviewed["original"]
-            || latest["modified"] != reviewed["modified"]
+            || latest.original != reviewed.original
+            || latest.modified != reviewed.modified
         {
             return Err(invalid(&self.api.text("git.reopenComparison", &[])));
         }
@@ -785,18 +817,18 @@ impl GitRuntime {
         Ok(result)
     }
 }
-fn content_input(content: &Value, resource: String, label: &str) -> Value {
-    if content["kind"] == "binary" {
+fn content_input(content: &FileContent, resource: String, label: &str) -> Value {
+    if let FileContent::Binary { data } = content {
         let mut input = json!({"resource":resource,"label":label,"readOnly":true,"contentType":"application/octet-stream"});
-        if let Some(bytes) = content["data"]
-            .as_str()
+        if let Some(bytes) = data
+            .as_deref()
             .and_then(|data| base64::engine::general_purpose::STANDARD.decode(data).ok())
         {
             input["initialBytes"] = json!(bytes);
         }
         return input;
     }
-    let text = content["text"].as_str().unwrap_or_default();
+    let text = content.text().unwrap_or_default();
     let mut input = json!({"resource":resource,"label":label,"readOnly":true,"initialText":text.strip_prefix('\u{feff}').unwrap_or(text)});
     if text.starts_with('\u{feff}') {
         input["encoding"] = json!("utf8bom");
@@ -806,23 +838,17 @@ fn content_input(content: &Value, resource: String, label: &str) -> Value {
 fn diff_input(original: Value, modified: Value, label: &str) -> Value {
     json!({"kind":if original["contentType"]=="application/octet-stream" || modified["contentType"]=="application/octet-stream" {"binaryDiff"} else {"diff"},"resource":modified["resource"],"label":label,"original":original,"modified":modified,"readOnly":true})
 }
-pub(crate) fn relative_resource(repository: &Repository, resource: &str) -> Option<String> {
-    let root = url::Url::parse(&repository.root_uri).ok()?;
-    let resource = url::Url::parse(resource).ok()?;
-    if resource.scheme() != root.scheme() || resource.host_str() != root.host_str() {
-        return None;
-    }
-    percent_decode_path(
-        resource
-            .path()
-            .strip_prefix(&format!("{}/", root.path().trim_end_matches('/')))?,
-    )
-    .ok()
+pub(crate) fn relative_resource(
+    repository: &Repository,
+    resource: &str,
+) -> Option<crate::paths::RepoPath> {
+    let resource = ash_utils_path_uri::PathUri::parse(resource).ok()?;
+    crate::paths::RepoPath::from_resource(&repository.root_uri, &resource)
 }
 fn percent_decode_path(path: &str) -> Result<String, ExtensionError> {
-    let uri =
-        url::Url::parse(&format!("file:///{path}")).map_err(|_| invalid("Invalid encoded path"))?;
-    uri.to_file_path()
-        .map(|path| path.to_string_lossy().trim_start_matches('/').to_owned())
+    // This is a repository-relative URI path, not an OS file path. Converting
+    // it through file:/// requires a drive on Windows and loses Git's separators.
+    urlencoding::decode(path)
+        .map(|path| path.into_owned())
         .map_err(|_| invalid("Invalid encoded path"))
 }

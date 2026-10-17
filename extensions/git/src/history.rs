@@ -1,6 +1,8 @@
 use crate::GitRuntime;
+use crate::api::decode;
 use crate::api::invalid;
 use crate::model::Repository;
+use crate::model::RepositoryCommand;
 use base64::Engine;
 use external_ext_sdk::CancellationToken;
 use external_ext_sdk::ExtensionError;
@@ -23,9 +25,7 @@ impl GitRuntime {
                 Ok(Value::Null)
             }
             "provideHistoryItemRefs" => {
-                let refs =
-                    self.api
-                        .repository_request(repository, "historyRefs", json!({}), token)?;
+                let refs = json!(self.api.history_refs(repository, Some(token))?);
                 let filter = arg(0);
                 Ok(json!(
                     refs["references"]
@@ -46,13 +46,17 @@ impl GitRuntime {
                     return Ok(Value::Null);
                 };
                 for reference in values.iter().skip(1) {
-                    ancestor = self.api.repository_request(
-                        repository,
-                        "compareChanges",
-                        json!({"objectId":ancestor,"baseReference":reference,"mode":"mergeBase"}),
-                        token,
-                    )?["baseObjectId"]
-                        .clone();
+                    ancestor = json!(
+                        self.api
+                            .compare_changes(
+                                repository,
+                                &decode::<String>(ancestor)?,
+                                &decode::<String>(reference.clone())?,
+                                crate::model::CompareMode::MergeBase,
+                                token
+                            )?
+                            .base_object_id
+                    );
                 }
                 Ok(ancestor)
             }
@@ -67,16 +71,12 @@ impl GitRuntime {
                 let mut consumed = 0;
                 let mut commits = Vec::new();
                 while commits.len() < limit {
-                    let mut params = json!({"limit":(skip+limit-consumed).min(1000)});
-                    if !cursor.is_null() {
-                        params["cursor"] = cursor;
-                    }
-                    if !options["historyItemRefs"].is_null() {
-                        params["revisions"] = options["historyItemRefs"].clone();
-                    }
-                    let page = self
-                        .api
-                        .repository_request(repository, "graph", params, token)?;
+                    let query = crate::model::GraphQuery {
+                        limit: (skip + limit - consumed).min(1000),
+                        cursor: decode(cursor.clone())?,
+                        revisions: decode(options["historyItemRefs"].clone())?,
+                    };
+                    let page = json!(self.api.graph(repository, &query, token)?);
                     let references = page["references"].as_array().cloned().unwrap_or_default();
                     for commit in page["commits"].as_array().into_iter().flatten() {
                         if consumed >= skip && commits.len() < limit {
@@ -98,12 +98,11 @@ impl GitRuntime {
                 Ok(json!(commits))
             }
             "resolveHistoryItemDetails" => {
-                let mut result = self.api.repository_request(
+                let mut result = json!(self.api.commit_details(
                     repository,
-                    "commitDetails",
-                    json!({"objectId":arg(0)}),
-                    token,
-                )?;
+                    &decode::<String>(arg(0).clone())?,
+                    token
+                )?);
                 result["timestamp"] =
                     json!(result["timestampSeconds"].as_i64().unwrap_or(0) * 1000);
                 Ok(result)
@@ -111,19 +110,19 @@ impl GitRuntime {
             "provideHistoryItemChanges" => {
                 let id = arg(0);
                 let parent = arg(1);
-                let changes = self.api.repository_request(
+                let changes = json!(self.api.commit_changes(
                     repository,
-                    "commitChanges",
-                    json!({"objectId":id}),
-                    token,
-                )?;
+                    &decode::<String>(id.clone())?,
+                    token
+                )?);
                 let changes = if !parent.is_null() && parent != changes["parentObjectId"] {
-                    let comparison = self.api.repository_request(
+                    let comparison = json!(self.api.compare_changes(
                         repository,
-                        "compareChanges",
-                        json!({"objectId":id,"baseReference":parent,"mode":"direct"}),
-                        token,
-                    )?;
+                        &decode::<String>(id.clone())?,
+                        &decode::<String>(parent.clone())?,
+                        crate::model::CompareMode::Direct,
+                        token
+                    )?);
                     json!({"changes":comparison["changes"],"parentObjectId":comparison["baseObjectId"]})
                 } else {
                     changes
@@ -135,13 +134,13 @@ impl GitRuntime {
             }
             "resolveHistoryItemChangeContents" => {
                 let change = arg(1);
-                let mut params = json!({"objectId":arg(0),"path":change["path"]});
-                if !change["parentId"].is_null() {
-                    params["parentObjectId"] = change["parentId"].clone();
-                }
-                let mut file =
-                    self.api
-                        .repository_request(repository, "commitFile", params, token)?;
+                let mut file = json!(self.api.commit_file(
+                    repository,
+                    &decode::<String>(arg(0))?,
+                    &decode(change["path"].clone())?,
+                    change["parentId"].as_str(),
+                    token
+                )?);
                 for side in ["original", "modified"] {
                     if let Some(bytes) = file[side]["data"].as_str().and_then(|data| {
                         base64::engine::general_purpose::STANDARD.decode(data).ok()
@@ -158,12 +157,11 @@ impl GitRuntime {
             }
             "resolveHistoryItemChatContext" | "resolveHistoryItemChangeRangeChatContext" => {
                 let id = arg(0);
-                let changes = self.api.repository_request(
+                let changes = json!(self.api.commit_changes(
                     repository,
-                    "commitChanges",
-                    json!({"objectId":id}),
-                    token,
-                )?;
+                    &decode::<String>(id.clone())?,
+                    token
+                )?);
                 let path = arg(2);
                 let mut output = format!("Commit: {}\n", id.as_str().unwrap_or_default());
                 for change in changes["changes"]
@@ -173,12 +171,13 @@ impl GitRuntime {
                     .filter(|change| path.is_null() || change["path"] == path)
                     .take(40)
                 {
-                    let file = self.api.repository_request(
+                    let file = json!(self.api.commit_file(
                         repository,
-                        "commitFile",
-                        json!({"objectId":id,"path":change["path"]}),
-                        token,
-                    )?;
+                        &decode::<String>(id.clone())?,
+                        &decode(change["path"].clone())?,
+                        None,
+                        token
+                    )?);
                     output.push_str(&format!(
                         "\nFile: {}\n",
                         change["path"].as_str().unwrap_or_default()
@@ -215,12 +214,11 @@ impl GitRuntime {
                 .editor(json!({"method":"clipboard","text":id}), Some(token));
         }
         if command == "git.copyCommitMessage" {
-            let message = self.api.repository_request(
+            let message = json!(self.api.commit_message(
                 repository,
-                "commitMessage",
-                json!({"objectId":id}),
-                token,
-            )?;
+                &decode::<String>(id.clone())?,
+                token
+            )?);
             return self.api.editor(
                 json!({"method":"clipboard","text":message["message"]}),
                 Some(token),
@@ -250,7 +248,9 @@ impl GitRuntime {
                 )? {
                     self.execute(
                         repository,
-                        json!({"kind":"checkoutDetached","objectId":id}),
+                        RepositoryCommand::CheckoutDetached {
+                            object_id: decode(id.clone())?,
+                        },
                         token,
                     )
                 } else {
@@ -273,16 +273,25 @@ impl GitRuntime {
                 self.execute(
                     repository,
                     if command == "git.branch" {
-                        json!({"kind":"createBranchAt","name":name.trim(),"objectId":id})
+                        RepositoryCommand::CreateBranchAt {
+                            name: name.trim().into(),
+                            object_id: decode(id.clone())?,
+                        }
                     } else {
-                        json!({"kind":"createTag","name":name.trim(),"reference":id})
+                        RepositoryCommand::CreateTag {
+                            name: name.trim().into(),
+                            reference: decode(id.clone())?,
+                        }
                     },
                     token,
                 )
             }
             "git.graph.cherryPick" => self.execute(
                 repository,
-                json!({"kind":"cherryPick","reference":id}),
+                RepositoryCommand::CherryPick {
+                    reference: decode(id.clone())?,
+                    mainline: None,
+                },
                 token,
             ),
             "git.graph.checkout" | "git.graph.deleteBranch" | "git.graph.deleteTag" => {
@@ -320,35 +329,38 @@ impl GitRuntime {
                     if reference["category"] == "tag" {
                         return self.execute(
                             repository,
-                            json!({"kind":"deleteTag","name":name}),
+                            RepositoryCommand::DeleteTag { name: name.into() },
                             token,
                         );
                     }
                     if reference["category"] == "localBranch" {
-                        return self.api.repository_request(
-                            repository,
-                            "deleteBranch",
-                            json!({"name":name}),
-                            token,
-                        );
+                        return self
+                            .api
+                            .delete_branch(repository, name, token)
+                            .map(|result| json!(result));
                     }
                     let (remote, branch) = name
                         .split_once('/')
                         .ok_or_else(|| invalid("Invalid remote reference"))?;
                     return self.execute(
                         repository,
-                        json!({"kind":"deleteRemoteBranch","remote":remote,"name":branch}),
+                        RepositoryCommand::DeleteRemoteBranch {
+                            remote: remote.into(),
+                            name: branch.into(),
+                        },
                         token,
                     );
                 }
                 if reference["category"] == "localBranch" {
-                    let result=self.api.repository_request(repository,"switchBranch",json!({"name":name,"pullBeforeCheckout":repository.configuration.boolean("pullBeforeCheckout",false)}),token)?;
+                    let result = json!(self.api.switch_branch(repository, name, token)?);
                     self.accept_status(crate::api::decode(result["status"].clone())?);
                     Ok(result)
                 } else if reference["category"] == "tag" {
                     self.execute(
                         repository,
-                        json!({"kind":"checkoutDetached","objectId":id}),
+                        RepositoryCommand::CheckoutDetached {
+                            object_id: decode(id.clone())?,
+                        },
                         token,
                     )
                 } else {
@@ -361,7 +373,10 @@ impl GitRuntime {
                     };
                     self.execute(
                         repository,
-                        json!({"kind":"checkoutRemoteBranch","reference":name,"name":branch}),
+                        RepositoryCommand::CheckoutRemoteBranch {
+                            reference: name.into(),
+                            name: branch,
+                        },
                         token,
                     )
                 }
@@ -369,9 +384,15 @@ impl GitRuntime {
             "git.graph.compareRef"
             | "git.graph.compareWithMergeBase"
             | "git.graph.compareWithRemote" => {
-                let graph =
-                    self.api
-                        .repository_request(repository, "graph", json!({"limit":1}), token)?;
+                let graph = json!(self.api.graph(
+                    repository,
+                    &crate::model::GraphQuery {
+                        limit: 1,
+                        cursor: None,
+                        revisions: None
+                    },
+                    token
+                )?);
                 let values: Vec<_> = graph["references"]
                     .as_array()
                     .into_iter()
@@ -387,7 +408,17 @@ impl GitRuntime {
                 else {
                     return Ok(Value::Null);
                 };
-                let changes=self.api.repository_request(repository,"compareChanges",json!({"objectId":id,"baseReference":values[index]["objectId"],"mode":if command=="git.graph.compareWithMergeBase" {"mergeBase"} else {"direct"}}),token)?;
+                let changes = json!(self.api.compare_changes(
+                    repository,
+                    &decode::<String>(id.clone())?,
+                    &decode::<String>(values[index]["objectId"].clone())?,
+                    if command == "git.graph.compareWithMergeBase" {
+                        crate::model::CompareMode::MergeBase
+                    } else {
+                        crate::model::CompareMode::Direct
+                    },
+                    token
+                )?);
                 let input = self.committed_diff(
                     repository,
                     id.as_str().ok_or_else(|| invalid("Missing commit ID"))?,

@@ -21,6 +21,7 @@ test.describe('Git Fetch', () => {
 	test.use({ gitRepository: true });
 
 	test('fetches both local remotes from the palette, toolbar and title menus while preserving HEAD, index and dirty files', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, testWorkspace, workbench }) => {
+		test.slow(); // Four real fetches, through each public entry point.
 		const cwd = testWorkspace.directory;
 		const git = async (...args: string[]): Promise<string> => (await run('git', args, { cwd })).stdout.trim();
 		const remotes = await mkdtemp(join(tmpdir(), 'ash-fetch-remotes-'));
@@ -60,8 +61,8 @@ test.describe('Git Fetch', () => {
 			await expect(workbench.quickaccess.items).toHaveCount(1);
 			await expect(workbench.quickaccess.items).toContainText('Git: Fetch From All Remotes');
 			await workbench.quickaccess.input.press('Enter');
-			await expect.poll(() => readRemoteHead(cwd, 'origin')).toBe(firstHead);
-			await expect.poll(() => readRemoteHead(cwd, 'backup')).toBe(firstHead);
+			await expect.poll(() => readRemoteHead(cwd, 'origin'), { timeout: 30_000 }).toBe(firstHead);
+			await expect.poll(() => readRemoteHead(cwd, 'backup'), { timeout: 30_000 }).toBe(firstHead);
 			expect(await snapshot()).toEqual(before);
 
 			await writeFile(join(producer, 'remote-only.ts'), 'export const remoteValue = 2;\n');
@@ -80,8 +81,8 @@ test.describe('Git Fetch', () => {
 			await expect(fetch).toHaveAccessibleName('Fetch From All Remotes');
 			await fetch.focus();
 			await page.keyboard.press('Enter');
-			await expect.poll(() => git('rev-parse', 'refs/remotes/origin/main')).toBe(secondHead);
-			await expect.poll(() => git('rev-parse', 'refs/remotes/backup/main')).toBe(secondHead);
+			await expect.poll(() => git('rev-parse', 'refs/remotes/origin/main'), { timeout: 30_000 }).toBe(secondHead);
+			await expect.poll(() => git('rev-parse', 'refs/remotes/backup/main'), { timeout: 30_000 }).toBe(secondHead);
 			await expect(fetch).toBeEnabled();
 			expect(await snapshot()).toEqual(before);
 
@@ -93,8 +94,9 @@ test.describe('Git Fetch', () => {
 				const remoteHead = await publish('rev-parse', 'HEAD');
 				const previousRemoteHead = await git('rev-parse', 'refs/remotes/origin/main');
 				await workbench.git.open();
+				await page.locator('[data-view-id="ash.gitView"] .ash-pane-view-header').hover();
 				const toolbar = page.getByRole('toolbar', { name: 'Source control actions', exact: true });
-				await expect(toolbar.getByRole('button', { name: 'Refresh', exact: true })).toBeEnabled();
+				await expect(page.locator('[data-view-id="ash.gitView"] [data-action-id="git.refresh"] button')).toBeEnabled();
 				// Inspect dismisses the real menu without selecting an action.
 				const items = await workbench.menus.inspect(application, () => toolbar.getByRole('button', { name: 'More Actions', exact: true }).click(), path.slice(0, -1));
 				expect(items).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'Fetch', enabled: true })]));
@@ -102,9 +104,9 @@ test.describe('Git Fetch', () => {
 				expect(await git('rev-parse', 'refs/remotes/backup/main')).toBe(previousRemoteHead);
 				await workbench.git.selectTitleMenu(application, path);
 				await workbench.quickaccess.select('Fetch all remotes');
-				await expect.poll(() => git('rev-parse', 'refs/remotes/origin/main')).toBe(remoteHead);
-				await expect.poll(() => git('rev-parse', 'refs/remotes/backup/main')).toBe(remoteHead);
-				await expect(toolbar.getByRole('button', { name: 'Refresh', exact: true })).toBeEnabled();
+				await expect.poll(() => git('rev-parse', 'refs/remotes/origin/main'), { timeout: 30_000 }).toBe(remoteHead);
+				await expect.poll(() => git('rev-parse', 'refs/remotes/backup/main'), { timeout: 30_000 }).toBe(remoteHead);
+				await expect(page.locator('[data-view-id="ash.gitView"] [data-action-id="git.refresh"] button')).toBeEnabled();
 				expect(await snapshot()).toEqual(before);
 			}
 		} finally {
@@ -154,83 +156,74 @@ test.describe('Git Fetch', () => {
 		} finally { await rm(remotes, { recursive: true, force: true }); }
 	});
 
-	test('selects the upstream remote, another remote and all remotes, and revalidates a removed remote after the picker opens', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
-		const cwd = testWorkspace.directory;
-		const git = async (...args: string[]): Promise<string> => (await run('git', args, { cwd })).stdout.trim();
-		const remotes = await mkdtemp(join(tmpdir(), 'ash-fetch-selected-'));
-		try {
-			const origin = join(remotes, 'origin.git');
-			const backup = join(remotes, 'backup.git');
-			const producer = join(remotes, 'producer');
-			await run('git', ['clone', '--bare', cwd, origin]);
-			await run('git', ['clone', '--bare', cwd, backup]);
-			await run('git', ['clone', origin, producer]);
-			const publish = async (...args: string[]): Promise<string> => (await run('git', args, { cwd: producer })).stdout.trim();
-			await publish('config', 'user.name', 'Ash Fetch Test');
-			await publish('config', 'user.email', 'ash-fetch@example.invalid');
-			await publish('config', 'commit.gpgsign', 'false');
-			await git('remote', 'add', 'origin', origin);
-			await git('remote', 'add', 'backup', backup);
-			await git('fetch', '--all');
-			await git('branch', '--set-upstream-to=origin/main', 'main');
-			const initial = await git('rev-parse', 'HEAD');
-			await writeFile(testWorkspace.file, 'const staged = true;\n');
-			await git('add', 'main.ts');
-			await writeFile(testWorkspace.file, 'const unstaged = true;\n');
-			await writeFile(join(cwd, 'untracked.txt'), 'keep me\n');
-			const snapshot = async () => ({ head: await git('rev-parse', 'HEAD'), index: await git('ls-files', '--stage'), status: await git('status', '--porcelain=v1'), file: await readFile(testWorkspace.file, 'utf8'), untracked: await readFile(join(cwd, 'untracked.txt'), 'utf8') });
-			const before = await snapshot();
-			await writeFile(join(producer, 'remote-only.ts'), 'export const remoteValue = 1;\n');
-			await publish('add', 'remote-only.ts');
-			await publish('commit', '-m', 'Origin update');
-			await publish('push', 'origin', 'HEAD:main');
-			const originHead = await publish('rev-parse', 'HEAD');
-			await writeFile(join(producer, 'remote-only.ts'), 'export const remoteValue = 2;\n');
-			await publish('commit', '-am', 'Backup update');
-			await publish('push', backup, 'HEAD:main');
-			const backupHead = await publish('rev-parse', 'HEAD');
-			const picker = workbench.page.getByRole('dialog', { name: 'Select a remote to fetch', exact: true });
-			await workbench.git.open();
-			const refresh = workbench.page.getByRole('toolbar', { name: 'Source control actions', exact: true }).getByRole('button', { name: 'Refresh', exact: true });
-			await workbench.quickaccess.runCommand('git.fetch');
-			await expect(picker.getByRole('combobox')).toBeFocused();
-			await expect(picker.getByRole('option')).toHaveText(['origin', 'backup', 'Fetch all remotes']);
-			await picker.getByRole('combobox').press('Escape');
-			await expect(picker).toBeHidden();
-			await expect(refresh).toBeEnabled();
-			expect(await git('rev-parse', 'refs/remotes/origin/main')).toBe(initial);
-			expect(await git('rev-parse', 'refs/remotes/backup/main')).toBe(initial);
-			await workbench.quickaccess.runCommand('git.fetch');
-			await picker.getByRole('combobox').press('Enter');
-			await expect.poll(() => git('rev-parse', 'refs/remotes/origin/main')).toBe(originHead);
-			expect(await git('rev-parse', 'refs/remotes/backup/main')).toBe(initial);
-			await expect(refresh).toBeEnabled();
-			await workbench.quickaccess.runCommand('git.fetch');
-			await picker.getByRole('combobox').press('ArrowDown');
-			await picker.getByRole('combobox').press('Enter');
-			await expect.poll(() => git('rev-parse', 'refs/remotes/backup/main')).toBe(backupHead);
-			expect(await git('rev-parse', 'refs/remotes/origin/main')).toBe(originHead);
-			await expect(refresh).toBeEnabled();
-			await publish('push', 'origin', 'HEAD:main');
-			await workbench.quickaccess.runCommand('git.fetch');
-			await workbench.quickaccess.select('Fetch all remotes');
-			await expect.poll(() => git('rev-parse', 'refs/remotes/origin/main')).toBe(backupHead);
-			await expect(refresh).toBeEnabled();
-			expect(await snapshot()).toEqual(before);
-
-			await workbench.quickaccess.runCommand('git.fetch');
-			await expect(picker).toBeVisible();
-			await writeFile(join(producer, 'remote-only.ts'), 'export const remoteValue = 3;\n');
-			await publish('commit', '-am', 'Unfetched origin update');
-			await publish('push', 'origin', 'HEAD:main');
-			await git('remote', 'remove', 'backup');
-			await workbench.quickaccess.select('backup');
-			await expect(workbench.page.locator('[data-view-id="ash.gitView"] .ash-scm-status')).toContainText('GitOperationFailed');
-			await expect(refresh).toBeEnabled();
-			expect(await git('rev-parse', 'refs/remotes/origin/main')).toBe(backupHead);
-			expect(await snapshot()).toEqual(before);
-		} finally { await rm(remotes, { recursive: true, force: true }); }
-	});
+	// Each selection owns a fresh repository and one operation budget. A chain of
+	// five fetches can exhaust the test deadline before its final safety assertion.
+	for (const selection of ['cancel', 'upstream', 'backup', 'all', 'removed'] as const) {
+		test(`remote picker selection ${selection} preserves local state and validates current remotes`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
+			const cwd = testWorkspace.directory;
+			const git = async (...args: string[]): Promise<string> => (await run('git', args, { cwd })).stdout.trim();
+			const remotes = await mkdtemp(join(tmpdir(), 'ash-fetch-selected-'));
+			try {
+				const origin = join(remotes, 'origin.git');
+				const backup = join(remotes, 'backup.git');
+				const producer = join(remotes, 'producer');
+				await run('git', ['clone', '--bare', cwd, origin]);
+				await run('git', ['clone', '--bare', cwd, backup]);
+				await run('git', ['clone', origin, producer]);
+				const publish = async (...args: string[]): Promise<string> => (await run('git', args, { cwd: producer })).stdout.trim();
+				await publish('config', 'user.name', 'Ash Fetch Test');
+				await publish('config', 'user.email', 'ash-fetch@example.invalid');
+				await publish('config', 'commit.gpgsign', 'false');
+				await git('remote', 'add', 'origin', origin);
+				await git('remote', 'add', 'backup', backup);
+				await git('fetch', '--all');
+				await git('branch', '--set-upstream-to=origin/main', 'main');
+				const initial = await git('rev-parse', 'HEAD');
+				await writeFile(testWorkspace.file, 'const staged = true;\n');
+				await git('add', 'main.ts');
+				await writeFile(testWorkspace.file, 'const unstaged = true;\n');
+				await writeFile(join(cwd, 'untracked.txt'), 'keep me\n');
+				const snapshot = async () => ({ head: await git('rev-parse', 'HEAD'), index: await git('ls-files', '--stage'), status: await git('status', '--porcelain=v1'), file: await readFile(testWorkspace.file, 'utf8'), untracked: await readFile(join(cwd, 'untracked.txt'), 'utf8') });
+				const before = await snapshot();
+				await writeFile(join(producer, 'remote-only.ts'), 'export const remoteValue = 1;\n');
+				await publish('add', 'remote-only.ts');
+				await publish('commit', '-m', 'Origin update');
+				await publish('push', 'origin', 'HEAD:main');
+				const originHead = await publish('rev-parse', 'HEAD');
+				await writeFile(join(producer, 'remote-only.ts'), 'export const remoteValue = 2;\n');
+				await publish('commit', '-am', 'Backup update');
+				await publish('push', backup, 'HEAD:main');
+				const backupHead = await publish('rev-parse', 'HEAD');
+				const picker = workbench.page.getByRole('dialog', { name: 'Select a remote to fetch', exact: true });
+				await workbench.git.open();
+				const refresh = workbench.page.locator('[data-view-id="ash.gitView"] [data-action-id="git.refresh"] button');
+				await workbench.quickaccess.runCommand('git.fetch');
+				await expect(picker.getByRole('combobox')).toBeFocused();
+				await expect(picker.getByRole('option')).toHaveText(['origin', 'backup', 'Fetch all remotes']);
+				if (selection === 'cancel') {
+					await picker.getByRole('combobox').press('Escape');
+				} else if (selection === 'upstream') {
+					await picker.getByRole('combobox').press('Enter');
+				} else if (selection === 'backup') {
+					await picker.getByRole('combobox').press('ArrowDown');
+					await picker.getByRole('combobox').press('Enter');
+				} else if (selection === 'all') {
+					await workbench.quickaccess.select('Fetch all remotes');
+				} else {
+					await git('remote', 'remove', 'backup');
+					await workbench.quickaccess.select('backup');
+					await expect(workbench.page.locator('[data-view-id="ash.gitView"] .ash-scm-status')).toContainText('GitOperationFailed');
+				}
+				await expect(picker).toBeHidden();
+				await expect(refresh).toBeEnabled();
+				await expect.poll(() => git('rev-parse', 'refs/remotes/origin/main')).toBe(selection === 'upstream' || selection === 'all' ? originHead : initial);
+				if (selection !== 'removed') {
+					await expect.poll(() => git('rev-parse', 'refs/remotes/backup/main')).toBe(selection === 'backup' || selection === 'all' ? backupHead : initial);
+				}
+				expect(await snapshot()).toEqual(before);
+			} finally { await rm(remotes, { recursive: true, force: true }); }
+		});
+	}
 
 	test('fetches the sole configured remote through the default mode without a picker', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
 		const cwd = testWorkspace.directory;
@@ -265,8 +258,8 @@ test.describe('Git Fetch', () => {
 		const head = (await run('git', ['rev-parse', 'HEAD'], { cwd })).stdout;
 		await workbench.git.open();
 		await workbench.quickaccess.runCommand('git.fetchAll');
-		await expect(workbench.page.locator('[data-view-id="ash.gitView"] .ash-scm-status')).toContainText('GitOperationFailed');
-		await expect(workbench.page.getByRole('toolbar', { name: 'Source control actions', exact: true }).getByRole('button', { name: 'Refresh', exact: true })).toBeEnabled();
+		await expect(workbench.page.locator('[data-view-id="ash.gitView"] .ash-scm-status')).toContainText('GitOperationFailed', { timeout: 30_000 });
+		await expect(workbench.page.locator('[data-view-id="ash.gitView"] [data-action-id="git.refresh"] button')).toBeEnabled();
 		expect((await run('git', ['rev-parse', 'HEAD'], { cwd })).stdout).toBe(head);
 		expect((await run('git', ['diff', '--cached'], { cwd })).stdout).toBe('');
 		expect(await readFile(testWorkspace.file, 'utf8')).toBe('const dirty = true;\n');

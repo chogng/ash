@@ -85,6 +85,7 @@
   "git.menu.commitAll": "Commit All…",
   "git.menu.commitAllSigned": "Commit All with Sign-off…",
   "git.menu.amend": "Amend Last Commit…",
+  "git.menu.commitStagedAmend": "Amend Last Commit with Staged Changes…",
   "git.menu.commitAllAmend": "Amend Last Commit with All Changes…",
   "git.menu.undoCommit": "Undo Last Commit",
   "git.menu.stageAll": "Stage All Changes",

@@ -175,7 +175,7 @@ const backend = lifetime.add(new MainThreadExtensionBackend(catalog, {
 				sharedGit = { ...update.git };
 				configurationRevision++;
 				configurationEvents.fire({ method: 'config/changed', params: { revision: configurationRevision, generation: configurationRevision } });
-				return { revision: configurationRevision, disposition: 'applied' };
+				return { revision: configurationRevision, generation: 1, disposition: 'updated' };
 			}
 			case 'git/repositories':
 				await startupDiscoveryGate?.p;
@@ -228,13 +228,13 @@ const backend = lifetime.add(new MainThreadExtensionBackend(catalog, {
 
 			case 'git/branch/create': return { branches: [] };
 			case 'git/branch/list': return { branches: [{ name: 'main', objectId: 'a'.repeat(40), current: true, upstream: null, checkedOutElsewhere: false }, { name: 'occupied', objectId: 'a'.repeat(40), current: false, upstream: 'origin/occupied', checkedOutElsewhere: true }] };
-			case 'git/history/refs': return { status: status(), graphRevision: 1, references: [{ name: 'main', objectId: 'a'.repeat(40), kind: 'localBranch', current: true }, { name: 'occupied', objectId: 'a'.repeat(40), kind: 'localBranch', current: false }], branches: [{ name: 'main', current: true, upstream: null, checkedOutElsewhere: false }, { name: 'occupied', current: false, upstream: 'origin/occupied', checkedOutElsewhere: true }], remotes: [] };
+			case 'git/history/refs': return { status: status(), graphRevision: 1, references: [{ name: 'main', objectId: 'a'.repeat(40), kind: 'localBranch', current: true }, { name: 'occupied', objectId: 'a'.repeat(40), kind: 'localBranch', current: false }], branches: [{ name: 'main', objectId: 'a'.repeat(40), current: true, upstream: null, checkedOutElsewhere: false }, { name: 'occupied', objectId: 'a'.repeat(40), current: false, upstream: 'origin/occupied', checkedOutElsewhere: true }], remotes: [] };
 			case 'git/graph': return { commits: [{ objectId: 'a'.repeat(40), parentObjectIds: [], timestampSeconds: 1, subject: 'First commit' }], references: [], remotes: [], hasMore: false, nextCursor: null };
 			case 'git/init': return { repositories: [{ id: 'root', label: 'workspace', path: '' }] };
 			case 'git/clone': return { repositoryPath: '/downloads/clone' };
 			case 'git/stage': revision++; return { status: status() };
-			case 'git/changeFile': return { original: 'old', modified: 'new', binary: false };
-			case 'git/checkIgnore': return { ignored: [] };
+			case 'git/changeFile': return { original: { kind: 'text', text: 'old' }, modified: { kind: 'text', text: 'new' } };
+			case 'git/checkIgnore': return { ignoredPaths: [] };
 			default: throw new Error(`Unexpected domain request ${method}`);
 		}
 	}
@@ -279,7 +279,7 @@ const clientHandler = host.registerClientHandler(async (raw, signal, source): Pr
 			const request = operation.payload as { method: string; uri?: string; text?: string; };
 			if (request.method === 'hostFacts') return { result: 'value', value: { canClone: true, canOpenWorkspace: true } };
 			if (request.method === 'input') return { result: 'value', value: answers.shift() ?? null };
-			if (request.method === 'pickFolder') return { result: 'value', value: '/downloads' };
+			if (request.method === 'pickFolder') return { result: 'value', value: 'file:///downloads' };
 			if (request.method === 'openWorkspace') return { result: 'value', value: null };
 			if (request.method === 'openEditorResources') return { result: 'value', value: [] };
 			if (request.method === 'activeEditor') return { result: 'value', value: { input: null, selection: null, version: null, contents: null } };

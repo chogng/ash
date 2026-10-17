@@ -2,9 +2,28 @@ use crate::GitRuntime;
 use crate::api::decode;
 use crate::api::file_uri;
 use crate::api::invalid;
+use crate::model::AutoFetch;
+use crate::model::CommitHooks;
+use crate::model::CommitIdentity;
+use crate::model::CommitIntent;
+use crate::model::CommitMode;
+use crate::model::CommitScope;
+use crate::model::EditorEvidence;
+use crate::model::EmptyCommit;
+use crate::model::FetchMode;
 use crate::model::Head;
+use crate::model::PathMutation;
+use crate::model::PullMode;
+use crate::model::PushMode;
+use crate::model::RemovalMode;
 use crate::model::Repository;
-use crate::model::Status;
+use crate::model::RepositoryCommand;
+use crate::model::Signing;
+use crate::model::Signoff;
+use crate::model::StashMode;
+use crate::model::TransportOperation;
+use crate::model::TransportOptions;
+use crate::model::TransportOutcome;
 use external_ext_sdk::CancellationToken;
 use external_ext_sdk::ExtensionError;
 use external_ext_sdk::client::ConfigurationTarget;
@@ -34,11 +53,9 @@ impl GitRuntime {
             "git.readSettings" => {
                 let configuration = self.lock().configuration.clone();
                 self.migrate_shared_settings(&configuration, Some(token))?;
-                let current =
-                    self.api
-                        .request("readConfig", json!({}), &configuration, Some(token))?;
+                let current = self.api.read_settings(&configuration, Some(token))?;
                 return Ok(
-                    json!({"autoFetch":match current["git"]["autofetch"].as_str() {Some("off")=>json!(false),Some("all")=>json!("all"),_=>json!(true)},"autoFetchPeriod":current["git"]["autofetchPeriod"],"rebaseWhenSync":current["git"]["rebaseWhenSync"]}),
+                    json!({"autoFetch":match current.git.autofetch {AutoFetch::Off=>json!(false),AutoFetch::All=>json!("all"),AutoFetch::Default=>json!(true)},"autoFetchPeriod":current.git.autofetch_period,"rebaseWhenSync":current.git.rebase_when_sync}),
                 );
             }
             "git.updateRebaseWhenSync" | "git.updateAutoFetch" | "git.updateAutoFetchPeriod" => {
@@ -58,12 +75,15 @@ impl GitRuntime {
                 let mut values = vec![];
                 for repository in repositories {
                     let status = self.api.status(&repository, Some(token))?;
-                    let graph = self.api.repository_request(
+                    let graph = json!(self.api.graph(
                         &repository,
-                        "graph",
-                        json!({"limit":1}),
-                        token,
-                    )?;
+                        &crate::model::GraphQuery {
+                            limit: 1,
+                            cursor: None,
+                            revisions: None
+                        },
+                        token
+                    )?);
                     values.push(json!({"id":repository.descriptor.id,"label":repository.descriptor.label,"path":repository.descriptor.path,"root":repository.root_uri,"head":status.head,"remotes":graph["remotes"],"uncommittedChanges":status.changes.len()}));
                 }
                 return Ok(json!(values));
@@ -125,11 +145,7 @@ impl GitRuntime {
         let repository = self.repository(id)?;
         if command == "git.refresh" {
             self.accept_status(self.api.status(&repository, Some(token))?);
-            let catalog =
-                decode(
-                    self.api
-                        .repository_request(&repository, "catalog", json!({}), token)?,
-                )?;
+            let catalog = decode(json!(self.api.catalog(&repository, Some(token))?))?;
             if let Some(current) = self.lock().repositories.get_mut(&repository.descriptor.id) {
                 current.catalog = Some(catalog);
             }
@@ -217,6 +233,7 @@ impl GitRuntime {
                 },
             );
             repository.error.clear();
+            repository.notice.clear();
         }
         self.publish()?;
         let outcome = if context["type"] == "historyItemViewModel" {
@@ -284,28 +301,50 @@ impl GitRuntime {
                     .filter(|value| value.is_object())
                     .ok_or_else(|| invalid("Missing Git command intent"))?;
                 let account = credential_account(arguments.get(2))?;
-                let result = self.api.repository_request(
+                let result = self.api.execute_command(
                     repository,
-                    "executeCommand",
-                    json!({"command":intent,"credentialAccountId":account}),
+                    decode(intent.clone())?,
+                    account.as_deref(),
                     token,
                 )?;
-                self.accept_status(decode(result["status"].clone())?);
-                Ok(result)
+                self.accept_status(result.status.clone());
+                Ok(json!(result))
             }
             "git.undoCommit" => {
                 let status = self.api.status(repository, Some(token))?;
                 let Some(head) = status.head.object_id() else {
                     return Ok(Value::Null);
                 };
+                let message = json!(self.api.commit_message(repository, head, token)?);
                 if !self.api.confirm("git.undoCommitConfirm", &[head], token)? {
                     return Ok(Value::Null);
                 }
-                self.execute(
+                let result = self.execute(
                     repository,
-                    json!({"kind":"undoCommit","expectedHead":head}),
+                    RepositoryCommand::UndoCommit {
+                        expected_head: head.into(),
+                    },
                     token,
-                )
+                )?;
+                if let Some(current) = self.lock().repositories.get_mut(&repository.descriptor.id) {
+                    let restore = current.draft.trim().is_empty();
+                    if restore {
+                        current.draft = message["message"]
+                            .as_str()
+                            .unwrap_or_default()
+                            .trim_end()
+                            .to_owned();
+                    }
+                    current.notice = self.api.text(
+                        if restore {
+                            "git.undoMessageRestored"
+                        } else {
+                            "git.undoDraftKept"
+                        },
+                        &[],
+                    );
+                }
+                Ok(result)
             }
             _ => self.repository_command(repository, command, token),
         }
@@ -313,18 +352,14 @@ impl GitRuntime {
     pub(crate) fn execute(
         &self,
         repository: &Repository,
-        command: Value,
+        command: RepositoryCommand,
         token: &CancellationToken,
     ) -> Result<Value, ExtensionError> {
-        let result = self.api.repository_request(
-            repository,
-            "executeCommand",
-            json!({"command":command}),
-            token,
-        )?;
-        self.accept_status(decode(result["status"].clone())?);
-        Ok(result)
+        let result = self.api.execute_command(repository, command, None, token)?;
+        self.accept_status(result.status.clone());
+        Ok(json!(result))
     }
+
     fn mutate_paths(
         &self,
         repository: &Repository,
@@ -332,18 +367,18 @@ impl GitRuntime {
         path: Option<&str>,
         token: &CancellationToken,
     ) -> Result<Value, ExtensionError> {
-        let method = if command.starts_with("git.unstage") {
-            "unstage"
+        let operation = if command.starts_with("git.unstage") {
+            PathMutation::Unstage
         } else if command == "git.cleanAll" || command == "git.discardFile" {
-            "discardWorktree"
+            PathMutation::Discard
         } else {
-            "stage"
+            PathMutation::Stage
         };
         // Whole-file index operations target the paths already shown by the owning
         // repository model. Their backend result returns the authoritative status;
         // querying it twice first delays the existing optimistic group update.
         // Discard still reviews fresh state before removing working-tree content.
-        let status = if matches!(method, "stage" | "unstage") {
+        let status = if matches!(operation, PathMutation::Stage | PathMutation::Unstage) {
             match self.repository(Some(&repository.descriptor.id))?.status {
                 Some(status) => status,
                 None => self.api.status(repository, Some(token))?,
@@ -355,14 +390,18 @@ impl GitRuntime {
             .changes
             .iter()
             .filter(|change| path.is_none_or(|path| change.path == path))
-            .filter(|change| match method {
-                "stage" => change.conflicted || change.worktree_status != "unmodified",
-                "unstage" => !change.conflicted && change.index_status != "unmodified",
-                _ => !change.conflicted && change.worktree_status != "unmodified",
+            .filter(|change| match operation {
+                PathMutation::Stage => change.conflicted || change.worktree_status != "unmodified",
+                PathMutation::Unstage => !change.conflicted && change.index_status != "unmodified",
+                PathMutation::Discard => {
+                    !change.conflicted
+                        && change.worktree_status != "unmodified"
+                        && (path.is_some() || change.worktree_status != "untracked")
+                }
             })
             .flat_map(|change| {
                 let mut paths = vec![change.path.clone()];
-                if method != "discardWorktree" {
+                if operation != PathMutation::Discard {
                     if let Some(path) = &change.original_path {
                         paths.push(path.clone());
                     }
@@ -373,7 +412,7 @@ impl GitRuntime {
         if paths.is_empty() {
             return Ok(Value::Null);
         }
-        let removal = if method == "discardWorktree" {
+        let removal = if operation == PathMutation::Discard {
             let untracked: Vec<_> = status
                 .changes
                 .iter()
@@ -385,17 +424,12 @@ impl GitRuntime {
             if untracked.is_empty() {
                 None
             } else {
-                Some(self.api.repository_request(
-                    repository,
-                    "reviewRemoval",
-                    json!({"paths":untracked}),
-                    token,
-                )?)
+                Some(self.api.review_removal(repository, &untracked, token)?)
             }
         } else {
             None
         };
-        if method == "discardWorktree"
+        if operation == PathMutation::Discard
             && !self
                 .api
                 .confirm("git.action.discardConfirm", &[&paths.join(", ")], token)?
@@ -420,7 +454,7 @@ impl GitRuntime {
                 ));
             }
         }
-        if method == "discardWorktree" {
+        if operation == PathMutation::Discard {
             let current = self.api.status(repository, Some(token))?;
             if current.stream_instance_id != status.stream_instance_id
                 || current.revision != status.revision
@@ -428,12 +462,12 @@ impl GitRuntime {
                 return Err(invalid(&self.api.text("git.reopenComparison", &[])));
             }
         }
-        if matches!(method, "stage" | "unstage")
+        if matches!(operation, PathMutation::Stage | PathMutation::Unstage)
             && repository.configuration.boolean("optimisticUpdate", true)
         {
             if let Some(current) = self.lock().repositories.get_mut(&repository.descriptor.id) {
                 current.pending_paths = Some(crate::model::PendingPaths {
-                    operation: if method == "stage" {
+                    operation: if operation == PathMutation::Stage {
                         crate::model::PathOperation::Stage
                     } else {
                         crate::model::PathOperation::Unstage
@@ -446,26 +480,28 @@ impl GitRuntime {
         let mut paths = paths;
         let mut removed = None;
         if let Some(review) = removal {
-            let entries: Vec<_> = review["entries"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .map(|entry| entry["file"].clone())
-                .collect();
-            paths.retain(|path| !entries.iter().any(|entry| entry["path"] == *path));
-            let result=self.api.repository_request(repository,"removeFiles",json!({"entries":entries,"expectedHead":review["head"],"mode":if repository.configuration.boolean("discardUntrackedChangesToTrash",true) {"trash"} else {"permanent"}}),token)?;
-            self.accept_status(decode(result["status"].clone())?);
+            paths.retain(|path| !review.entries.iter().any(|entry| entry.file.path == *path));
+            let mode = if repository
+                .configuration
+                .boolean("discardUntrackedChangesToTrash", true)
+            {
+                RemovalMode::Trash
+            } else {
+                RemovalMode::Permanent
+            };
+            let result = self.api.remove_files(repository, review, mode, token)?;
+            self.accept_status(result.status.clone());
             removed = Some(result);
         }
         let result = if paths.is_empty() {
-            removed.unwrap_or(Value::Null)
+            removed.ok_or_else(|| invalid("Missing removal result"))?
         } else {
             self.api
-                .repository_request(repository, method, json!({"paths":paths}), token)?
+                .mutate_paths(repository, operation, &paths, token)?
         };
-        self.accept_status(decode(result["status"].clone())?);
+        self.accept_status(result.status.clone());
         self.complete_operation(repository, token)?;
-        Ok(result)
+        Ok(json!(result))
     }
     fn delete_file(
         &self,
@@ -474,7 +510,7 @@ impl GitRuntime {
         token: &CancellationToken,
     ) -> Result<Value, ExtensionError> {
         let path = if let Some(path) = path {
-            path.to_owned()
+            crate::paths::RepoPath::parse(path)?
         } else {
             let editor = self
                 .api
@@ -495,17 +531,13 @@ impl GitRuntime {
         {
             return Err(invalid(&self.api.text("git.action.saveConflict", &[&path])));
         }
-        let review = self.api.repository_request(
-            repository,
-            "reviewRemoval",
-            json!({"paths":[path]}),
-            token,
-        )?;
-        let clean_committed = review["entries"].as_array().is_some_and(|entries| {
-            entries
-                .iter()
-                .all(|entry| entry["committed"] == true && entry["changed"] == false)
-        });
+        let review = self
+            .api
+            .review_removal(repository, &[path.clone()], token)?;
+        let clean_committed = review
+            .entries
+            .iter()
+            .all(|entry| entry.committed && !entry.changed);
         if (!clean_committed
             || repository
                 .configuration
@@ -514,21 +546,12 @@ impl GitRuntime {
         {
             return Ok(Value::Null);
         }
-        let entries: Vec<_> = review["entries"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .map(|entry| entry["file"].clone())
-            .collect();
-        let result = self.api.repository_request(
-            repository,
-            "removeFiles",
-            json!({"entries":entries,"expectedHead":review["head"],"mode":"trash"}),
-            token,
-        )?;
-        self.accept_status(decode(result["status"].clone())?);
+        let result = self
+            .api
+            .remove_files(repository, review, RemovalMode::Trash, token)?;
+        self.accept_status(result.status.clone());
         self.complete_operation(repository, token)?;
-        Ok(result)
+        Ok(json!(result))
     }
     fn commit(
         &self,
@@ -552,9 +575,15 @@ impl GitRuntime {
             .name()
             .filter(|_| config.text("branchProtectionPrompt", "alwaysPrompt") != "alwaysCommit")
         {
-            let graph =
-                self.api
-                    .repository_request(repository, "graph", json!({"limit":1}), token)?;
+            let graph = json!(self.api.graph(
+                repository,
+                &crate::model::GraphQuery {
+                    limit: 1,
+                    cursor: None,
+                    revisions: None
+                },
+                token
+            )?);
             let remotes = graph["remotes"].as_array().cloned().unwrap_or_default();
             if remotes
                 .iter()
@@ -604,9 +633,36 @@ impl GitRuntime {
                 before = self.api.status(repository, Some(token))?;
             }
         }
+        if command.contains("Amend") {
+            let Some(head) = before.head.object_id() else {
+                return Err(invalid(&self.api.text("git.noCommitToAmend", &[])));
+            };
+            if self
+                .repository(Some(&repository.descriptor.id))?
+                .draft
+                .trim()
+                .is_empty()
+            {
+                let message = json!(self.api.commit_message(repository, head, token)?);
+                // Do not replace a draft entered while the commit message was being read.
+                if let Some(current) = self.lock().repositories.get_mut(&repository.descriptor.id) {
+                    if current.draft.trim().is_empty() {
+                        current.draft = message["message"]
+                            .as_str()
+                            .unwrap_or_default()
+                            .trim_end()
+                            .to_owned();
+                    }
+                }
+                self.publish()?;
+            }
+        }
         let captured = self.repository(Some(&repository.descriptor.id))?;
         let revision = captured.input_revision;
         let mut message = captured.draft.trim().to_owned();
+        if command.contains("Amend") && !self.api.confirm("git.amendConfirm", &[], token)? {
+            return Ok(Value::Null);
+        }
         if command.ends_with("FromChanges") {
             let Some(value) = self.api.input("git.commitMessageTitle", &message, token)? else {
                 return Ok(Value::Null);
@@ -636,10 +692,19 @@ impl GitRuntime {
                 );
                 if config.boolean("verboseCommit", false) {
                     for change in before.changes.iter().take(50) {
-                        let file=self.api.repository_request(repository,"changeFile",json!({"path":change.path,"comparison":if change.index_status!="unmodified" {"staged"} else {"unstaged"}}),token)?;
+                        let file = self.api.change_file(
+                            repository,
+                            &change.path,
+                            if change.index_status != "unmodified" {
+                                crate::model::Comparison::Staged
+                            } else {
+                                crate::model::Comparison::Unstaged
+                            },
+                            token,
+                        )?;
                         text.push_str(&format!("# --- {}\n", change.path));
-                        for (side, prefix) in [("original", "-"), ("modified", "+")] {
-                            if let Some(contents) = file[side]["text"].as_str() {
+                        for (side, prefix) in [(&file.original, "-"), (&file.modified, "+")] {
+                            if let Some(contents) = side.text() {
                                 for line in
                                     contents.chars().take(100000).collect::<String>().lines()
                                 {
@@ -666,12 +731,16 @@ impl GitRuntime {
             .changes
             .iter()
             .any(|change| change.index_status != "unmodified");
-        let mut scope = "staged";
+        let mut scope = CommitScope::Staged;
         if command.contains("All") || command.ends_with("FromChanges") {
             let scopes = if command.ends_with("FromChanges") {
-                vec!["staged", "tracked", "includeUntracked"]
+                vec![
+                    CommitScope::Staged,
+                    CommitScope::Tracked,
+                    CommitScope::IncludeUntracked,
+                ]
             } else {
-                vec!["tracked", "includeUntracked"]
+                vec![CommitScope::Tracked, CommitScope::IncludeUntracked]
             };
             let Some(index) = self.api.pick(
                 "git.commitScope",
@@ -681,9 +750,9 @@ impl GitRuntime {
                         (
                             self.api.text(
                                 match *scope {
-                                    "staged" => "git.commitStaged",
-                                    "tracked" => "git.commitTracked",
-                                    _ => "git.commitIncludingUntracked",
+                                    CommitScope::Staged => "git.commitStaged",
+                                    CommitScope::Tracked => "git.commitTracked",
+                                    CommitScope::IncludeUntracked => "git.commitIncludingUntracked",
                                 },
                                 &[],
                             ),
@@ -697,7 +766,12 @@ impl GitRuntime {
                 return Ok(Value::Null);
             };
             scope = scopes[index];
-        } else if !staged && !command.contains("Staged") && command != "git.commitEmpty" {
+        } else if !staged
+            && !command.contains("Staged")
+            && command != "git.commitEmpty"
+            // A clean-tree amend only replaces the message; there is nothing to stage.
+            && !(command.contains("Amend") && before.changes.is_empty())
+        {
             let smart = config.boolean("enableSmartCommit", false);
             if !smart
                 && (!config.boolean("suggestSmartCommit", true)
@@ -706,9 +780,9 @@ impl GitRuntime {
                 return Ok(Value::Null);
             }
             scope = if config.text("smartCommitChanges", "all") == "tracked" {
-                "tracked"
+                CommitScope::Tracked
             } else {
-                "includeUntracked"
+                CommitScope::IncludeUntracked
             };
         }
         let skip_hooks = command == "git.commitNoVerify";
@@ -729,8 +803,8 @@ impl GitRuntime {
             .changes
             .iter()
             .filter(|change| {
-                scope == "includeUntracked"
-                    || scope == "tracked" && change.worktree_status != "untracked"
+                scope == CommitScope::IncludeUntracked
+                    || scope == CommitScope::Tracked && change.worktree_status != "untracked"
                     || change.index_status != "unmodified"
             })
             .map(|change| file_uri(&repository.root_uri, &change.path))
@@ -756,19 +830,21 @@ impl GitRuntime {
                 .into_iter()
                 .flatten()
                 .filter_map(|entry| {
-                    crate::changes::relative_resource(repository, entry["uri"].as_str()?)
-                        .map(|path| json!({"path":path,"text":entry["text"]}))
+                    crate::changes::relative_resource(repository, entry["uri"].as_str()?).and_then(
+                        |path| {
+                            Some(EditorEvidence {
+                                path,
+                                text: entry["text"].as_str()?.to_owned(),
+                            })
+                        },
+                    )
                 })
                 .collect();
-            let provenance = self.api.repository_request(
-                repository,
-                "aiContribution",
-                json!({"scope":scope,"editorEvidence":evidence}),
-                token,
-            )?;
-            if provenance["present"] == true {
-                let author = provenance["coAuthor"]
-                    .as_str()
+            let provenance = self.api.attribution(repository, scope, &evidence, token)?;
+            if provenance.present {
+                let author = provenance
+                    .co_author
+                    .as_deref()
                     .unwrap_or("Ash AI <ai@localhost>");
                 let trailer = format!("Co-authored-by: {author}");
                 if !message
@@ -779,32 +855,61 @@ impl GitRuntime {
                 }
             }
         }
-        let mut params = json!({"message":message,"scope":scope,"hooks":if skip_hooks {"skip"} else {"run"},"identity":if config.boolean("requireGitUserConfig",true) {"configured"} else {"inferred"}});
-        if !matches!(before.head, Head::Unborn { .. }) {
-            params["expectedHead"] = json!(before.head);
-        }
-        if command.contains("Amend") {
-            params["mode"] = json!("amend");
-        }
-        if command.contains("Signed") || config.boolean("alwaysSignOff", false) {
-            params["signoff"] = json!("add");
-        }
-        if config.boolean("enableCommitSigning", false) {
-            params["signing"] = json!("required");
-        }
-        if command == "git.commitEmpty" {
-            params["empty"] = json!("allow");
-        }
-        let result = self
-            .api
-            .repository_request(repository, "commit", params, token)?;
-        self.accept_status(decode(result["status"].clone())?);
+        let intent = CommitIntent {
+            message: message.clone(),
+            scope,
+            hooks: if skip_hooks {
+                CommitHooks::Skip
+            } else {
+                CommitHooks::Run
+            },
+            identity: if config.boolean("requireGitUserConfig", true) {
+                CommitIdentity::Configured
+            } else {
+                CommitIdentity::Inferred
+            },
+            expected_head: (!matches!(before.head, Head::Unborn { .. }))
+                .then(|| before.head.clone()),
+            mode: if command.contains("Amend") {
+                CommitMode::Amend
+            } else {
+                CommitMode::Create
+            },
+            signoff: if command.contains("Signed") || config.boolean("alwaysSignOff", false) {
+                Signoff::Add
+            } else {
+                Signoff::None
+            },
+            signing: if config.boolean("enableCommitSigning", false) {
+                Signing::Required
+            } else {
+                Signing::Configured
+            },
+            empty: if command == "git.commitEmpty" {
+                EmptyCommit::Allow
+            } else {
+                EmptyCommit::Reject
+            },
+        };
+        let result = self.api.commit(repository, intent, token)?;
+        self.accept_status(result.status.clone());
         if let Some(current) = self.lock().repositories.get_mut(&repository.descriptor.id) {
             if current.input_revision == revision {
+                // This acknowledges the captured client input; only user edits advance
+                // its revision. A newer draft must not be cleared by this commit.
                 current.draft.clear();
-                current.input_revision += 1;
             }
             current.commit_editor_head = None;
+            let object_id = result.object_id.as_str();
+            let short: String = object_id
+                .chars()
+                .take(config.number("commitShortHashLength", 7) as usize)
+                .collect();
+            current.notice = self
+                .api
+                .text("git.commitCreated", &[&short, ""])
+                .trim_end()
+                .to_owned();
         }
         let uri = commit_uri(&repository.descriptor.id);
         let existing = self.api.editor(
@@ -847,7 +952,7 @@ impl GitRuntime {
                 token,
             )?;
         }
-        Ok(result)
+        Ok(json!(result))
     }
     fn complete_operation(
         &self,
@@ -865,9 +970,60 @@ impl GitRuntime {
         }
         Ok(())
     }
-    fn transport(&self, repository: &Repository) -> Value {
+    fn transport(&self, repository: &Repository) -> TransportOptions {
         let configuration = &repository.configuration;
-        json!({"prune":configuration.boolean("pruneOnFetch",false),"pullTags":configuration.boolean("pullTags",true),"replaceTags":configuration.boolean("replaceTagsWhenPull",false),"autoStash":configuration.boolean("autoStash",false),"followTags":false,"pushMode":"normal"})
+        TransportOptions {
+            prune: configuration.boolean("pruneOnFetch", false),
+            pull_tags: configuration.boolean("pullTags", true),
+            replace_tags: configuration.boolean("replaceTagsWhenPull", false),
+            auto_stash: configuration.boolean("autoStash", false),
+            follow_tags: false,
+            push_mode: PushMode::Normal,
+        }
+    }
+    fn fetch(
+        &self,
+        repository: &Repository,
+        command: &str,
+        token: &CancellationToken,
+    ) -> Result<Value, ExtensionError> {
+        // Fetch does not rewrite HEAD or the index. The catalog owns remote selection;
+        // avoid full working-tree status scans before presenting its picker.
+        let transport = self.transport(repository);
+        let catalog = json!(self.api.catalog(repository, Some(token))?);
+        let mut remotes = catalog["remotes"].as_array().cloned().unwrap_or_default();
+        if remotes.is_empty() {
+            self.api
+                .warning("git.fetchAllNoRemotes", &[], Some(token))?;
+            return Ok(Value::Null);
+        }
+        let upstream = catalog["upstreamRemote"].as_str();
+        remotes.sort_by_key(|remote| remote.as_str() != upstream);
+        let mode = if command == "git.fetchAll" {
+            FetchMode::All
+        } else if remotes.len() > 1 {
+            let mut choices = remotes.clone();
+            choices.push(json!(self.api.text("git.fetchAllRemotesItem", &[])));
+            let Some(index) = self.choose("git.fetchChooseRemote", &choices, "", token)? else {
+                return Ok(Value::Null);
+            };
+            if index == remotes.len() {
+                FetchMode::All
+            } else {
+                FetchMode::Remote(decode(remotes[index].clone())?)
+            }
+        } else {
+            FetchMode::Default
+        };
+        let result = self.api.transport(
+            repository,
+            TransportOperation::Fetch(mode),
+            &transport,
+            false,
+            token,
+        )?;
+        self.accept_status(result.status.clone());
+        Ok(json!(result))
     }
     fn remote(
         &self,
@@ -875,6 +1031,9 @@ impl GitRuntime {
         command: &str,
         token: &CancellationToken,
     ) -> Result<Value, ExtensionError> {
+        if matches!(command, "git.fetch" | "git.fetchAll") {
+            return self.fetch(repository, command, token);
+        }
         let config = &repository.configuration;
         let before = self.api.status(repository, Some(token))?;
         let mut transport = self.transport(repository);
@@ -887,15 +1046,18 @@ impl GitRuntime {
             else {
                 return Ok(Value::Null);
             };
-            let catalog = self
-                .api
-                .repository_request(repository, "catalog", json!({}), token)?;
+            let catalog = json!(self.api.catalog(repository, Some(token))?);
             let remotes = catalog["remotes"].as_array().cloned().unwrap_or_default();
             let mut choices = remotes.clone();
             if remotes.len() > 1 {
                 choices.push(json!(self.api.text("git.menu.addRemote", &[])));
             }
-            let Some(index) = self.choose("git.publishChooseRemote", &choices, "", token)? else {
+            let selected = if choices.len() == 1 {
+                Some(0)
+            } else {
+                self.choose("git.publishChooseRemote", &choices, "", token)?
+            };
+            let Some(index) = selected else {
                 return Ok(Value::Null);
             };
             let remote = if index == remotes.len() {
@@ -905,9 +1067,7 @@ impl GitRuntime {
                 {
                     return Ok(Value::Null);
                 }
-                let catalog =
-                    self.api
-                        .repository_request(repository, "catalog", json!({}), token)?;
+                let catalog = json!(self.api.catalog(repository, Some(token))?);
                 let Some(remote) = catalog["remotes"]
                     .as_array()
                     .and_then(|values| values.iter().find(|value| !remotes.contains(value)))
@@ -919,9 +1079,18 @@ impl GitRuntime {
                 remotes[index].clone()
             };
             self.start_remote_operation(repository)?;
-            let result=self.execute(repository,json!({"kind":"publishBranch","remote":remote,"name":name,"branch":name,"expectedHead":object_id}),token)?;
+            let result = self.execute(
+                repository,
+                RepositoryCommand::PublishBranch {
+                    remote: decode(remote)?,
+                    name: name.clone(),
+                    branch: name.clone(),
+                    expected_head: object_id.clone(),
+                },
+                token,
+            )?;
             self.notify_pushed(repository, token)?;
-            return Ok(result);
+            return Ok(json!(result));
         }
         if command == "git.pushForce" {
             if !config.boolean("allowForcePush", false) {
@@ -936,18 +1105,17 @@ impl GitRuntime {
             {
                 return Ok(Value::Null);
             }
-            transport["pushMode"] = json!(if !config.boolean("useForcePushWithLease", true) {
-                "force"
+            transport.push_mode = if !config.boolean("useForcePushWithLease", true) {
+                PushMode::Force
             } else if config.boolean("useForcePushIfIncludes", true) {
-                "leaseIfIncludes"
+                PushMode::LeaseIfIncludes
             } else {
-                "lease"
-            });
+                PushMode::Lease
+            };
         }
         let sync = matches!(command, "git.sync" | "git.syncRebase");
         let sync_catalog = if sync {
-            self.api
-                .repository_request(repository, "catalog", json!({}), token)?
+            json!(self.api.catalog(repository, Some(token))?)
         } else {
             Value::Null
         };
@@ -984,51 +1152,30 @@ impl GitRuntime {
         {
             return Err(invalid(&self.api.text("git.commitHeadChanged", &[])));
         }
-        if !matches!(command, "git.fetch" | "git.fetchAll") {
-            self.start_remote_operation(repository)?;
-        }
-        let result = if matches!(command, "git.fetch" | "git.fetchAll") {
-            let catalog = self
-                .api
-                .repository_request(repository, "catalog", json!({}), token)?;
-            let remotes = catalog["remotes"].as_array().cloned().unwrap_or_default();
-            let mode = if command == "git.fetchAll" {
-                json!("all")
-            } else if remotes.len() > 1 {
-                let Some(index) = self.choose("git.fetchChooseRemote", &remotes, "", token)? else {
-                    return Ok(Value::Null);
-                };
-                json!({"remote":remotes[index]})
-            } else {
-                json!("default")
-            };
-            self.api.repository_request(
+        self.start_remote_operation(repository)?;
+        let result = if matches!(command, "git.push" | "ash.git.push" | "git.pushForce") {
+            self.api.transport(
                 repository,
-                "fetch",
-                json!({"mode":mode,"transport":transport}),
-                token,
-            )?
-        } else if matches!(command, "git.push" | "ash.git.push" | "git.pushForce") {
-            self.api.repository_request(
-                repository,
-                "push",
-                json!({"transport":transport,"expectedHead":before.head}),
+                TransportOperation::Push {
+                    expected_head: &before.head,
+                },
+                &transport,
+                false,
                 token,
             )?
         } else {
             if config.boolean("fetchOnPull", false) {
-                self.api.repository_request(
+                self.api.transport(
                     repository,
-                    "fetch",
-                    json!({"mode":"all","transport":transport,"synchronizing":sync}),
+                    TransportOperation::Fetch(FetchMode::All),
+                    &transport,
+                    sync,
                     token,
                 )?;
             }
             if !config.boolean("ignoreRebaseWarning", false) {
-                let preflight =
-                    self.api
-                        .repository_request(repository, "pullPreflight", json!({}), token)?;
-                if preflight["upstreamRewritten"] == true {
+                let upstream_rewritten = self.api.upstream_rewritten(repository, token)?;
+                if upstream_rewritten {
                     let choice = self.api.editor(json!({"method":"prompt", "severity":"warning",
                         "message":self.api.text("git.rewrittenPullConfirm", &[]),
                         "buttons":[self.api.text("git.rewrittenPull.always", &[]), self.api.text("git.rewrittenPull.once", &[])]}), Some(token))?;
@@ -1046,17 +1193,26 @@ impl GitRuntime {
                 }
             }
 
-            let mut pull = json!({"mode":if command.ends_with("Rebase") {"rebase"} else if sync {"sync"} else {"configured"},"transport":transport,"synchronizing":sync});
-            if sync {
-                pull["expectedHead"] = serde_json::to_value(&before.head)
-                    .map_err(|_| invalid("Invalid Git sync target"))?;
-            }
-            let mut pulled =
-                self.api
-                    .repository_request(repository, "pull", pull.clone(), token)?;
-            if pulled["outcome"]["kind"] == "tagConflict" {
-                self.accept_status(decode(pulled["status"].clone())?);
-                let tags: Vec<String> = decode(pulled["outcome"]["tags"].clone())?;
+            let mode = if command.ends_with("Rebase") {
+                PullMode::Rebase
+            } else if sync {
+                PullMode::Sync
+            } else {
+                PullMode::Configured
+            };
+            let expected_head = sync.then_some(&before.head);
+            let mut pulled = self.api.transport(
+                repository,
+                TransportOperation::Pull {
+                    mode,
+                    expected_head,
+                },
+                &transport,
+                sync,
+                token,
+            )?;
+            if let TransportOutcome::TagConflict { tags } = &pulled.outcome {
+                self.accept_status(pulled.status.clone());
                 let message = self.api.text("git.tagConflict", &[&tags.join(", ")]);
                 if config.boolean("replaceTagsWhenPull", false) {
                     return Err(invalid(&message));
@@ -1071,20 +1227,27 @@ impl GitRuntime {
                         ConfigurationTarget::User,
                         token,
                     )?,
-                    None if choice["selection"].is_null() => return Ok(pulled),
+                    None if choice["selection"].is_null() => return Ok(json!(pulled)),
                     _ => return Err(invalid("Invalid Git tag conflict selection")),
                 }
-                pull["transport"]["replaceTags"] = json!(true);
-                pulled = self
-                    .api
-                    .repository_request(repository, "pull", pull, token)?;
-                if pulled["outcome"]["kind"] == "tagConflict" {
+                transport.replace_tags = true;
+                pulled = self.api.transport(
+                    repository,
+                    TransportOperation::Pull {
+                        mode,
+                        expected_head,
+                    },
+                    &transport,
+                    sync,
+                    token,
+                )?;
+                if matches!(pulled.outcome, TransportOutcome::TagConflict { .. }) {
                     return Err(invalid(&message));
                 }
             }
-            self.accept_status(decode(pulled["status"].clone())?);
+            self.accept_status(pulled.status.clone());
             if sync {
-                let status: Status = decode(pulled["status"].clone())?;
+                let status = &pulled.status;
                 if status.head.name() != before.head.name()
                     || status.head.upstream().map(|upstream| &upstream.name)
                         != before.head.upstream().map(|upstream| &upstream.name)
@@ -1095,27 +1258,30 @@ impl GitRuntime {
                         .is_none_or(|upstream| upstream.ahead == 0)
                     || sync_catalog["upstreamReadOnly"] == true
                 {
-                    return Ok(pulled);
+                    return Ok(json!(pulled));
                 }
-                transport["followTags"] = json!(config.boolean("followTagsWhenSync", false));
-                self.api.repository_request(
+                transport.follow_tags = config.boolean("followTagsWhenSync", false);
+                self.api.transport(
                     repository,
-                    "push",
-                    json!({"transport":transport,"expectedHead":status.head}),
+                    TransportOperation::Push {
+                        expected_head: &status.head,
+                    },
+                    &transport,
+                    sync,
                     token,
                 )?
             } else {
                 pulled
             }
         };
-        self.accept_status(decode(result["status"].clone())?);
+        self.accept_status(result.status.clone());
         if matches!(
             command,
             "git.push" | "ash.git.push" | "git.pushForce" | "git.sync" | "git.syncRebase"
         ) {
             self.notify_pushed(repository, token)?;
         }
-        Ok(result)
+        Ok(json!(result))
     }
     fn start_remote_operation(&self, repository: &Repository) -> Result<(), ExtensionError> {
         if let Some(current) = self.lock().repositories.get_mut(&repository.descriptor.id) {
@@ -1150,9 +1316,6 @@ impl GitRuntime {
     ) -> Result<Option<usize>, ExtensionError> {
         if values.is_empty() {
             return Ok(None);
-        }
-        if values.len() == 1 {
-            return Ok(Some(0));
         }
         self.api.pick(
             key,
@@ -1201,7 +1364,7 @@ impl GitRuntime {
             let mut validation: Option<String> = None;
             let name = loop {
                 token.check_cancelled()?;
-                let entered=self.api.editor(json!({"method":"input","title":self.api.text("git.newBranchName",&[]),"value":value,"validationMessage":validation}),Some(token))?;
+                let entered=self.api.editor(json!({"method":"input","title":self.api.text("git.createBranchCommandTitle",&[]),"placeHolder":self.api.text("git.newBranchName",&[]),"value":value,"validationMessage":validation}),Some(token))?;
                 let Some(entered) = entered.as_str() else {
                     return Ok(json!(false));
                 };
@@ -1224,17 +1387,14 @@ impl GitRuntime {
                 }
                 break value;
             };
-            self.api
-                .repository_request(repository, "createBranch", json!({"name":name}), token)?;
+            self.api.create_branch(repository, &name, token)?;
             if command == "git.branchForCommit" {
-                let status=self.api.repository_request(repository,"switchBranch",json!({"name":name,"pullBeforeCheckout":config.boolean("pullBeforeCheckout",false)}),token)?;
-                self.accept_status(decode(status["status"].clone())?);
+                let status = self.api.switch_branch(repository, &name, token)?;
+                self.accept_status(status.status);
             }
             Ok(json!(true))
         } else if command == "git.deleteBranch" {
-            let branches = self
-                .api
-                .repository_request(repository, "branches", json!({}), token)?;
+            let branches = json!(self.api.branches(repository, token)?);
             let values: Vec<_> = branches["branches"]
                 .as_array()
                 .into_iter()
@@ -1242,26 +1402,47 @@ impl GitRuntime {
                 .filter(|value| value["current"] != true)
                 .cloned()
                 .collect();
-            let Some(index) = self.choose("git.selectBranch", &values, "name", token)? else {
+            let Some(index) = self.api.pick(
+                "git.selectBranch",
+                values
+                    .iter()
+                    .map(|branch| {
+                        (
+                            branch["name"].as_str().unwrap_or_default().to_owned(),
+                            (branch["checkedOutElsewhere"] == true)
+                                .then(|| self.api.text("git.branchWorktreeOccupancy", &[])),
+                        )
+                    })
+                    .collect(),
+                token,
+            )?
+            else {
                 return Ok(Value::Null);
             };
-            if !self.api.confirm(
-                "git.deleteBranchConfirm",
-                &[values[index]["name"].as_str().unwrap_or_default()],
-                token,
-            )? {
+            if self.explain_branch_occupancy(&values[index], token)? {
                 return Ok(Value::Null);
             }
-            self.api.repository_request(
-                repository,
-                "deleteBranch",
-                json!({"name":values[index]["name"]}),
-                token,
-            )
+            if self.api.editor(
+                json!({
+                    "method":"confirm",
+                    "title":self.api.text("git.deleteBranchCommandTitle", &[]),
+                    "message":self.api.text("git.deleteBranchConfirm", &[values[index]["name"].as_str().unwrap_or_default()]),
+                    "detail":self.api.text("git.deleteBranchDetail", &[]),
+                    "primaryButton":self.api.text("git.deleteBranchButton", &[]),
+                }),
+                Some(token),
+            )?["confirmed"] != true {
+                return Ok(Value::Null);
+            }
+            self.api
+                .delete_branch(
+                    repository,
+                    &decode::<String>(values[index]["name"].clone())?,
+                    token,
+                )
+                .map(|result| json!(result))
         } else {
-            let graph = self
-                .api
-                .repository_request(repository, "historyRefs", json!({}), token)?;
+            let graph = json!(self.api.history_refs(repository, Some(token))?);
             let types = if config.strings("checkoutType").is_empty() {
                 vec!["local".into(), "remote".into(), "tags".into()]
             } else {
@@ -1332,24 +1513,74 @@ impl GitRuntime {
             if reference["current"] == true {
                 return Ok(Value::Null);
             }
+            if let Some(branch) = branches
+                .iter()
+                .find(|branch| branch["name"] == reference["name"])
+                && self.explain_branch_occupancy(branch, token)?
+            {
+                return Ok(Value::Null);
+            }
             match reference["kind"].as_str() {
                 Some("localBranch") => {
-                    let result=self.api.repository_request(repository,"switchBranch",json!({"name":reference["name"],"pullBeforeCheckout":config.boolean("pullBeforeCheckout",false)}),token)?;
+                    let result = match self
+                        .api
+                        .switch_branch(
+                            repository,
+                            &decode::<String>(reference["name"].clone())?,
+                            token,
+                        )
+                        .map(|result| json!(result))
+                    {
+                        Ok(result) => result,
+                        Err(_) => {
+                            token.check_cancelled()?;
+                            self.api
+                                .warning("git.switchBranchRejected", &[], Some(token))?;
+                            return Ok(Value::Null);
+                        }
+                    };
                     self.accept_status(decode(result["status"].clone())?);
                     Ok(result)
                 }
                 Some("remoteBranch") => {
                     let name = reference["name"].as_str().unwrap_or_default();
                     let remote = reference["remoteName"].as_str().unwrap_or_default();
-                    self.execute(repository,json!({"kind":"checkoutRemoteBranch","reference":name,"name":name.strip_prefix(&format!("{remote}/")).unwrap_or(name)}),token)
+                    self.execute(
+                        repository,
+                        RepositoryCommand::CheckoutRemoteBranch {
+                            reference: name.into(),
+                            name: name
+                                .strip_prefix(&format!("{remote}/"))
+                                .unwrap_or(name)
+                                .into(),
+                        },
+                        token,
+                    )
                 }
                 _ => self.execute(
                     repository,
-                    json!({"kind":"checkoutDetached","objectId":reference["objectId"]}),
+                    RepositoryCommand::CheckoutDetached {
+                        object_id: decode(reference["objectId"].clone())?,
+                    },
                     token,
                 ),
             }
         }
+    }
+    fn explain_branch_occupancy(
+        &self,
+        branch: &Value,
+        token: &CancellationToken,
+    ) -> Result<bool, ExtensionError> {
+        if branch["checkedOutElsewhere"] != true {
+            return Ok(false);
+        }
+        self.api.warning(
+            "git.branchCheckedOutElsewhere",
+            &[branch["name"].as_str().unwrap_or_default()],
+            Some(token),
+        )?;
+        Ok(true)
     }
     fn repository_command(
         &self,
@@ -1363,27 +1594,32 @@ impl GitRuntime {
             "git.stashDrop" => "dropStash",
             value => value.strip_prefix("git.").unwrap_or(value),
         };
-        let mut intent = json!({"kind":kind});
-        match kind {
+        let intent = match kind {
             "continue" | "abort" => {
-                let catalog =
-                    self.api
-                        .repository_request(repository, "catalog", json!({}), token)?;
+                let catalog = json!(self.api.catalog(repository, Some(token))?);
                 if catalog["operation"].is_null() {
                     return Ok(Value::Null);
                 }
                 if kind == "abort" && !self.api.confirm("git.abortConfirm", &[], token)? {
                     return Ok(Value::Null);
                 }
-                intent["operation"] = catalog["operation"].clone();
+                let operation = decode(catalog["operation"].clone())?;
+                if kind == "abort" {
+                    RepositoryCommand::Abort { operation }
+                } else {
+                    RepositoryCommand::Continue { operation }
+                }
             }
             "merge" | "rebase" | "cherryPick" => {
-                let graph = self.api.repository_request(
+                let graph = json!(self.api.graph(
                     repository,
-                    "graph",
-                    json!({"limit":200}),
-                    token,
-                )?;
+                    &crate::model::GraphQuery {
+                        limit: 200,
+                        cursor: None,
+                        revisions: None
+                    },
+                    token
+                )?);
                 let values = graph[if kind == "cherryPick" {
                     "commits"
                 } else {
@@ -1409,12 +1645,18 @@ impl GitRuntime {
                 else {
                     return Ok(Value::Null);
                 };
-                intent["reference"] = values[index]["objectId"].clone();
+                let reference = decode(values[index]["objectId"].clone())?;
+                match kind {
+                    "merge" => RepositoryCommand::Merge { reference },
+                    "rebase" => RepositoryCommand::Rebase { reference },
+                    _ => RepositoryCommand::CherryPick {
+                        reference,
+                        mainline: None,
+                    },
+                }
             }
             "renameBranch" => {
-                let branches =
-                    self.api
-                        .repository_request(repository, "branches", json!({}), token)?;
+                let branches = json!(self.api.branches(repository, token)?);
                 let values = branches["branches"].as_array().cloned().unwrap_or_default();
                 let Some(index) = self.choose("git.chooseBranch", &values, "name", token)? else {
                     return Ok(Value::Null);
@@ -1427,13 +1669,21 @@ impl GitRuntime {
                 else {
                     return Ok(Value::Null);
                 };
-                intent["name"] = values[index]["name"].clone();
-                intent["newName"] = json!(name);
+                RepositoryCommand::RenameBranch {
+                    name: decode(values[index]["name"].clone())?,
+                    new_name: name,
+                }
             }
             "deleteRemoteBranch" => {
-                let graph =
-                    self.api
-                        .repository_request(repository, "graph", json!({"limit":1}), token)?;
+                let graph = json!(self.api.graph(
+                    repository,
+                    &crate::model::GraphQuery {
+                        limit: 1,
+                        cursor: None,
+                        revisions: None
+                    },
+                    token
+                )?);
                 let values: Vec<_> = graph["references"]
                     .as_array()
                     .into_iter()
@@ -1459,8 +1709,10 @@ impl GitRuntime {
                 {
                     return Ok(Value::Null);
                 }
-                intent["remote"] = json!(remote);
-                intent["name"] = json!(name);
+                RepositoryCommand::DeleteRemoteBranch {
+                    remote: remote.into(),
+                    name: name.into(),
+                }
             }
             "stash" => {
                 let status = self.api.status(repository, Some(token))?;
@@ -1493,17 +1745,17 @@ impl GitRuntime {
                 else {
                     return Ok(Value::Null);
                 };
-                intent["message"] = json!(message);
-                intent["mode"] = json!(if index == 0 {
-                    "tracked"
-                } else {
-                    "includeUntracked"
-                });
+                RepositoryCommand::Stash {
+                    message,
+                    mode: if index == 0 {
+                        StashMode::Tracked
+                    } else {
+                        StashMode::IncludeUntracked
+                    },
+                }
             }
             "applyStash" | "popStash" | "dropStash" => {
-                let catalog =
-                    self.api
-                        .repository_request(repository, "catalog", json!({}), token)?;
+                let catalog = json!(self.api.catalog(repository, Some(token))?);
                 let values = catalog["stashes"].as_array().cloned().unwrap_or_default();
                 let Some(index) = self.choose("git.chooseStash", &values, "subject", token)? else {
                     return Ok(Value::Null);
@@ -1517,7 +1769,12 @@ impl GitRuntime {
                 {
                     return Ok(Value::Null);
                 }
-                intent["objectId"] = values[index]["objectId"].clone();
+                let object_id = decode(values[index]["objectId"].clone())?;
+                match kind {
+                    "applyStash" => RepositoryCommand::ApplyStash { object_id },
+                    "popStash" => RepositoryCommand::PopStash { object_id },
+                    _ => RepositoryCommand::DropStash { object_id },
+                }
             }
             "createTag" => {
                 let Some(name) = self.api.input("git.tagName", "", token)? else {
@@ -1526,13 +1783,10 @@ impl GitRuntime {
                 let Some(reference) = self.api.input("git.tagReference", "HEAD", token)? else {
                     return Ok(Value::Null);
                 };
-                intent["name"] = json!(name);
-                intent["reference"] = json!(reference);
+                RepositoryCommand::CreateTag { name, reference }
             }
             "deleteTag" | "removeRemote" => {
-                let catalog =
-                    self.api
-                        .repository_request(repository, "catalog", json!({}), token)?;
+                let catalog = json!(self.api.catalog(repository, Some(token))?);
                 let values = catalog[if kind == "deleteTag" {
                     "tags"
                 } else {
@@ -1571,7 +1825,11 @@ impl GitRuntime {
                 )? {
                     return Ok(Value::Null);
                 }
-                intent["name"] = json!(name);
+                if kind == "deleteTag" {
+                    RepositoryCommand::DeleteTag { name: name.into() }
+                } else {
+                    RepositoryCommand::RemoveRemote { name: name.into() }
+                }
             }
             "addRemote" => {
                 let Some(name) = self.api.input("git.remoteName", "", token)? else {
@@ -1580,12 +1838,22 @@ impl GitRuntime {
                 let Some(url) = self.api.input("git.remoteUrl", "", token)? else {
                     return Ok(Value::Null);
                 };
-                intent["name"] = json!(name);
-                intent["url"] = json!(url);
+                RepositoryCommand::AddRemote { name, url }
             }
             _ => return Err(invalid("Unsupported Git command")),
-        }
+        };
         let result = self.execute(repository, intent, token)?;
+        if result["outcome"] == "conflicted" {
+            self.api.warning(
+                if matches!(kind, "applyStash" | "popStash") {
+                    "git.stashConflicts"
+                } else {
+                    "git.integrationConflicts"
+                },
+                &[],
+                Some(token),
+            )?;
+        }
         self.complete_operation(repository, token)?;
         Ok(result)
     }
@@ -1619,34 +1887,31 @@ impl GitRuntime {
         {
             return Err(invalid(&self.api.text("git.legacySettingsInvalid", &[])));
         }
-        let current = self
-            .api
-            .request("readConfig", json!({}), configuration, token)?;
-        let mut desired = current["git"].clone();
+        let current = self.api.read_settings(configuration, token)?;
+        let mut desired = current.git.clone();
         if !mode.is_null() {
-            desired["autofetch"] = if mode == true {
-                json!("default")
+            desired.autofetch = if mode == true {
+                AutoFetch::Default
             } else if mode == false {
-                json!("off")
+                AutoFetch::Off
             } else {
-                mode.clone()
+                AutoFetch::All
             };
         }
         if !period.is_null() {
-            desired["autofetchPeriod"] = period.clone();
+            desired.autofetch_period = decode(period.clone())?;
         }
-        if current["gitConfigured"] == true && desired != current["git"] {
+        if current.git_configured && desired != current.git {
             self.api.warning("git.legacySettingsConflict", &[], token)?;
             *migrated = true;
             return Ok(());
         }
-        if current["gitConfigured"] != true {
-            self.api.request("updateConfig",json!({"commandId":random_id()?,"expectedRevision":current["revision"],"git":desired}),configuration,token)?;
+        if !current.git_configured {
+            self.api
+                .update_settings(current.revision, &desired, configuration, token)?;
         }
-        let durable = self
-            .api
-            .request("readConfig", json!({}), configuration, token)?;
-        if durable["git"] != desired {
+        let durable = self.api.read_settings(configuration, token)?;
+        if durable.git != desired {
             return Err(invalid(&self.api.text("git.legacySettingsConflict", &[])));
         }
         for (key, value) in [("git.autofetch", mode), ("git.autofetchPeriod", period)] {
@@ -1675,44 +1940,50 @@ impl GitRuntime {
     ) -> Result<Value, ExtensionError> {
         let config = self.lock().configuration.clone();
         self.migrate_shared_settings(&config, Some(token))?;
-        let mut current = self
-            .api
-            .request("readConfig", json!({}), &config, Some(token))?;
-        let key = match command {
+        let mut current = self.api.read_settings(&config, Some(token))?;
+        match command {
             "git.updateRebaseWhenSync" => {
-                if !value.is_boolean() {
-                    return Err(invalid(&self.api.text("git.rebaseWhenSync.invalid", &[])));
-                }
-                "rebaseWhenSync"
+                current.git.rebase_when_sync = value
+                    .as_bool()
+                    .ok_or_else(|| invalid(&self.api.text("git.rebaseWhenSync.invalid", &[])))?;
             }
             "git.updateAutoFetchPeriod" => {
-                if !value
+                current.git.autofetch_period = value
                     .as_u64()
-                    .is_some_and(|value| (1..=86400).contains(&value))
-                {
-                    return Err(invalid("Invalid Git autofetch period"));
-                }
-                "autofetchPeriod"
+                    .filter(|value| (1..=86400).contains(value))
+                    .ok_or_else(|| invalid("Invalid Git autofetch period"))?
+                    as u32;
             }
-            _ => "autofetch",
-        };
-        current["git"][key] = if key == "autofetch" {
-            match value {
-                Value::Bool(false) => json!("off"),
-                Value::Bool(true) => json!("default"),
-                value if value == "all" => json!("all"),
-                _ => return Err(invalid("Invalid Git autofetch mode")),
+            _ => {
+                current.git.autofetch = match value {
+                    Value::Bool(false) => AutoFetch::Off,
+                    Value::Bool(true) => AutoFetch::Default,
+                    value if value == "all" => AutoFetch::All,
+                    _ => return Err(invalid("Invalid Git autofetch mode")),
+                };
             }
-        } else {
-            value.clone()
-        };
-        self.api.request("updateConfig",json!({"commandId":random_id()?,"expectedRevision":current["revision"],"git":current["git"]}),&config,Some(token))
+        }
+        self.api
+            .update_settings(current.revision, &current.git, &config, Some(token))
+            .map(|result| json!(result))
     }
+
     fn clone_repository(
         &self,
         arguments: &[Value],
         token: &CancellationToken,
     ) -> Result<Value, ExtensionError> {
+        // SCM title actions receive the selected repository ID. Clone is global,
+        // so that context must not become the URL of the new repository.
+        let arguments = if arguments.len() == 1
+            && arguments[0]
+                .as_str()
+                .is_some_and(|id| self.lock().repositories.contains_key(id))
+        {
+            &[]
+        } else {
+            arguments
+        };
         let config = self.api.configuration(None, Some(token))?;
         let url = if let Some(value) = arguments.first() {
             value
@@ -1723,7 +1994,8 @@ impl GitRuntime {
                 .ok_or_else(|| invalid("Invalid clone URL"))?
                 .to_owned()
         } else {
-            let Some(url) = self.api.input("git.cloneUrl", "", token)? else {
+            let value = self.api.editor(json!({"method":"input", "title":self.api.text("git.cloneUrlTitle", &[]), "placeHolder":self.api.text("git.cloneUrlPlaceholder", &[])}), Some(token))?;
+            let Some(url) = value.as_str().map(str::to_owned) else {
                 return Ok(Value::Null);
             };
             url
@@ -1750,33 +2022,47 @@ impl GitRuntime {
         if !parent.is_string() {
             return Ok(Value::Null);
         }
-        let result = self.api.request(
-            "clone",
-            json!({"url":url.trim(),"parentPath":parent,"reference":reference,"credentialAccountId":account}),
+        let parent =
+            ash_utils_path_uri::PathUri::parse(parent.as_str().expect("checked folder selection"))
+                .map_err(|_| invalid("Invalid clone destination"))?;
+        let cloned = self.api.clone_repository(
+            url.trim(),
+            &parent,
+            reference,
+            account.as_deref(),
             &config,
-            Some(token),
+            token,
         )?;
-        let path = result["repositoryPath"]
-            .as_str()
-            .ok_or_else(|| invalid("Invalid clone path"))?;
+        let path = cloned.inferred_native_path_string();
         let policy = config.text("openAfterClone", "prompt");
         let open = matches!(policy, "always" | "alwaysNewWindow")
             || policy == "whenNoFolderOpen" && self.lock().folders.is_empty()
             || policy == "prompt"
                 && self
                     .api
-                    .confirm("git.cloneCompleteMessage", &[path], token)?;
+                    .editor(json!({"method":"confirm", "title":self.api.text("git.cloneCompleteTitle", &[]), "message":self.api.text("git.cloneCompleteMessage", &[&path]), "primaryButton":self.api.text("git.openClonedRepository", &[])}), Some(token))?["confirmed"] == true;
         if open {
             self.api.editor(json!({"method":"openWorkspace","path":path,"forceNewWindow":policy=="alwaysNewWindow"}),Some(token))?;
         }
-        Ok(result)
+        Ok(json!({"repositoryPath":path}))
     }
     fn initialize_repository(&self, token: &CancellationToken) -> Result<Value, ExtensionError> {
+        // Init is available before SCM has a provider to initialize the workspace cache.
+        self.refresh(Some(token))?;
         let state = self.lock();
         let folders = state.folders.clone();
         drop(state);
         let config = self.api.configuration(None, Some(token))?;
-        let Some(index) = self.choose("git.initFolder", &folders, "name", token)? else {
+        let selected = self.choose(
+            "git.initFolder",
+            &folders
+                .iter()
+                .map(|folder| json!(folder))
+                .collect::<Vec<_>>(),
+            "name",
+            token,
+        )?;
+        let Some(index) = selected else {
             return Ok(Value::Null);
         };
         let Some(branch) = self.api.input(
@@ -1787,14 +2073,12 @@ impl GitRuntime {
         else {
             return Ok(Value::Null);
         };
-        let result = self.api.request(
-            "initialize",
-            json!({"dirId":folders[index]["id"],"initialBranch":branch.trim()}),
-            &config,
-            Some(token),
-        )?;
+        let result = self
+            .api
+            .initialize(&folders[index], branch.trim(), &config, token)?;
         self.refresh(Some(token))?;
-        Ok(result)
+        self.api.information("git.initialized", token)?;
+        Ok(json!(result))
     }
     fn worktree(
         &self,
@@ -1803,20 +2087,28 @@ impl GitRuntime {
         token: &CancellationToken,
     ) -> Result<Value, ExtensionError> {
         if command == "git.createWorktree" {
-            let Some(name) = self.api.input("git.newWorktreeName", "", token)? else {
-                return Ok(Value::Null);
+            let mut value = String::new();
+            let mut validation: Option<String> = None;
+            let name = loop {
+                let entered = self.api.editor(json!({"method":"input", "title":self.api.text("git.createWorktreeCommandTitle", &[]), "placeHolder":self.api.text("git.newWorktreeName", &[]), "value":value, "validationMessage":validation}), Some(token))?;
+                let Some(entered) = entered.as_str() else {
+                    return Ok(Value::Null);
+                };
+                value = entered.trim().to_owned();
+                if value.is_empty()
+                    || value.len() > 64
+                    || !value
+                        .bytes()
+                        .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+                {
+                    validation = Some(self.api.text("git.worktreeNameInvalid", &[]));
+                    continue;
+                }
+                break value;
             };
-            let result = self.api.repository_request(
-                repository,
-                "createWorktree",
-                json!({"name":name.trim(),"includeFiles":repository.configuration.strings("worktreeIncludeFiles"),"symlinkFolders":repository.configuration.strings("worktreeSymlinkFolders")}),
-                token,
-            )?;
-            if self.api.confirm(
-                "git.openWorktreeConfirm",
-                &[result["path"].as_str().unwrap_or_default()],
-                token,
-            )? {
+            let path = self.api.create_worktree(repository, name.trim(), token)?;
+            let result = json!({"path":path.inferred_native_path_string()});
+            if self.api.editor(json!({"method":"confirm", "title":self.api.text("git.openWorktreeCommandTitle", &[]), "message":self.api.text("git.openWorktreeConfirm", &[result["path"].as_str().unwrap_or_default()]), "primaryButton":self.api.text("git.openWorktreeButton", &[])}), Some(token))?["confirmed"] == true {
                 self.api.editor(
                     json!({"method":"openWorkspace","path":result["path"]}),
                     Some(token),
@@ -1824,41 +2116,42 @@ impl GitRuntime {
             }
             return Ok(result);
         }
-        let result = self
-            .api
-            .repository_request(repository, "worktrees", json!({}), token)?;
-        let values = result["worktrees"].as_array().cloned().unwrap_or_default();
-        let Some(index) =
-            self.choose("git.selectWorktreeToOpen", &values, "checkoutRoot", token)?
+        let worktrees = self.api.worktrees(repository, token)?;
+        let values: Vec<_> = worktrees.iter().map(worktree_value).collect();
+        let Some(index) = self.choose(
+            if command == "git.openWorktree" {
+                "git.selectWorktreeToOpen"
+            } else {
+                "git.selectWorktreeToDelete"
+            },
+            &values,
+            "checkoutRoot",
+            token,
+        )?
         else {
             return Ok(Value::Null);
         };
-        let checkout = &values[index]["checkoutRoot"];
+        let checkout = &worktrees[index].checkout_root;
         if command == "git.openWorktree" {
-            let result = self.api.repository_request(
-                repository,
-                "resolveWorktree",
-                json!({"checkoutRoot":checkout}),
-                token,
-            )?;
+            let path = self.api.resolve_worktree(repository, checkout, token)?;
             self.api.editor(
-                json!({"method":"openWorkspace","path":result["path"]}),
+                json!({"method":"openWorkspace","path":path.inferred_native_path_string()}),
                 Some(token),
             )
         } else {
-            if !self.api.confirm(
-                "git.deleteWorktreeConfirm",
-                &[checkout.as_str().unwrap_or_default()],
-                token,
-            )? {
+            if self.api.editor(json!({"method":"confirm", "title":self.api.text("git.deleteWorktreeCommandTitle", &[]), "message":self.api.text("git.deleteWorktreeConfirm", &[&checkout.inferred_native_path_string()]), "detail":self.api.text("git.deleteWorktreeDetail", &[]), "primaryButton":self.api.text("git.deleteWorktreeButton", &[])}), Some(token))?["confirmed"] != true {
                 return Ok(Value::Null);
             }
-            self.api.repository_request(
-                repository,
-                "deleteWorktree",
-                json!({"commandId":random_id()?,"checkoutRoot":checkout,"mode":"unbound"}),
-                token,
-            )
+            let result = self.api.delete_worktree(repository, checkout, token).map(|worktrees| json!({"worktrees":worktrees.iter().map(worktree_value).collect::<Vec<_>>()}));
+            if result.is_err() {
+                token.check_cancelled()?;
+                self.api.warning(
+                    "git.deleteWorktreeFailed",
+                    &[&self.api.text("git.deleteWorktreeRejected", &[])],
+                    Some(token),
+                )?;
+            }
+            result
         }
     }
 }
@@ -1943,4 +2236,8 @@ fn credential_account(value: Option<&Value>) -> Result<Option<&str>, ExtensionEr
         }
         Some(_) => Err(invalid("Invalid credential account selection")),
     }
+}
+
+fn worktree_value(worktree: &crate::model::Worktree) -> Value {
+    json!({"checkoutRoot":worktree.checkout_root.inferred_native_path_string(),"path":worktree.path.inferred_native_path_string(),"branch":worktree.branch,"head":worktree.head,"current":worktree.current,"state":worktree.state})
 }

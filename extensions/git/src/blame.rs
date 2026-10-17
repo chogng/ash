@@ -19,7 +19,7 @@ impl GitRuntime {
                 .repositories
                 .values()
                 .filter(|repository| relative_resource(repository, resource).is_some())
-                .max_by_key(|repository| repository.root_uri.len())
+                .max_by_key(|repository| repository.root_uri.lexical_depth().unwrap_or(0))
                 .cloned()
         });
         let Some(repository) = repository.filter(|repository| {
@@ -76,13 +76,16 @@ impl GitRuntime {
         }
         let path = relative_resource(&repository, resource)
             .ok_or_else(|| invalid("Active file is outside the Git repository"))?;
-        let mut params = json!({"repositoryId":repository.descriptor.id,"path":path,"line":active["selection"]["startLineNumber"],"ignoreWhitespace":repository.configuration.boolean("blame.ignoreWhitespace",false)});
-        if !active["contents"].is_null() {
-            params["contents"] = active["contents"].clone();
-        }
         let response = self
             .api
-            .request("blame", params, &repository.configuration, None);
+            .blame(
+                &repository,
+                &path,
+                active["selection"]["startLineNumber"].as_u64().unwrap_or(1) as usize,
+                active["contents"].as_str(),
+                None,
+            )
+            .map(|line| json!(line));
         let (annotation, label, details) = match response {
             Ok(line) => {
                 let dates=self.api.editor(json!({"method":"formatTimestamps","timestamps":[line["authorTime"].as_i64().unwrap_or(0)*1000]}),None)?;

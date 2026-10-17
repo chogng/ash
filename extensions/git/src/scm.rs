@@ -1,5 +1,4 @@
 use crate::api::Api;
-use crate::api::file_uri;
 use crate::model::Change;
 use crate::model::Head;
 use crate::model::Repository;
@@ -51,7 +50,7 @@ pub fn snapshot(
     repository: &Repository,
     selected: bool,
     selection_revision: u64,
-) -> Value {
+) -> Result<Value, external_ext_sdk::ExtensionError> {
     let configuration = &repository.configuration;
     let changes = repository
         .status
@@ -126,9 +125,9 @@ pub fn snapshot(
             if !change.conflicted && change.worktree_status != "unmodified" { actions.push(action(api,&action_id("discard"),"git.discardChanges","discard",!repository.is_busy())); }
             if !staged { actions.push(action(api,&action_id("stage"),"git.stageChanges","add",!repository.is_busy())); }
             if staged { actions.push(action(api,&action_id("unstage"),"git.unstageChanges","remove",!repository.is_busy())); }
-            json!({"id":format!("{group}:{}",change.path),"sourceUri":file_uri(&repository.root_uri,&change.path).unwrap_or_else(|_|repository.root_uri.clone()),
-                "path":change.path,"originalPath":change.original_path,"decorations":decoration(api,change,staged),"openLabel":api.text("git.openChangePath",&[&change.path,&api.text(key,&[])]),"actions":actions})
-        }).collect();
+            Ok(json!({"id":format!("{group}:{}",change.path),"sourceUri":change.path.resolve(&repository.root_uri)?,
+                "path":change.path,"originalPath":change.original_path,"decorations":decoration(api,change,staged),"openLabel":api.text("git.openChangePath",&[&change.path,&api.text(key,&[])]),"actions":actions}))
+        }).collect::<Result<_, external_ext_sdk::ExtensionError>>()?;
         if resources.is_empty()
             && !(group == "staged"
                 && configuration.boolean("alwaysShowStagedChangesResourceGroup", false))
@@ -323,7 +322,11 @@ pub fn snapshot(
         api.text("git.limitReached", &[])
     } else if repository.is_busy() && configuration.boolean("showProgress", true) {
         api.text("git.operationProgress", &[])
-    } else if repository.error.is_empty() && changes.is_empty() {
+    } else if !repository.error.is_empty() {
+        repository.error.clone()
+    } else if !repository.notice.is_empty() {
+        repository.notice.clone()
+    } else if changes.is_empty() {
         api.text("git.noChanges", &[])
     } else {
         repository.error.clone()
@@ -335,7 +338,8 @@ pub fn snapshot(
         url::form_urlencoded::byte_serialize(repository.descriptor.id.as_bytes())
             .collect::<String>()
     );
-    json!({"id":repository.descriptor.id,"providerId":"git","label":repository.descriptor.label,"rootUri":repository.root_uri,
+    Ok(
+        json!({"id":repository.descriptor.id,"providerId":"git","label":repository.descriptor.label,"rootUri":repository.root_uri,
         "count":count,"selected":selected,"selectionRevision":selection_revision,"groups":groups,
         "input":{"visible":configuration.boolean("showCommitInput",true),"buttonVisible":configuration.value("showActionButton").get(primary).and_then(Value::as_bool).unwrap_or(true),"value":repository.draft,
             "validationMessage":input_validation,"placeholder":api.text("git.commitMessageOnBranch",&[if cfg!(target_os="macos") {"Cmd+Enter"} else {"Ctrl+Enter"},branch.unwrap_or("HEAD")]),"enabled":true,"canAccept":primary!="commit" || !changes.iter().any(|change|change.conflicted) && (staged || smart && !changes.is_empty()),"buttonLabel":label,"buttonTooltip":label},
@@ -345,7 +349,8 @@ pub fn snapshot(
         "multiDiff":{"resourcePrefix":source_uri,"sourceActions":[
             {"id":"staged","label":api.text("git.stagedChanges",&[]),"tooltip":api.text("git.stagedChanges",&[]),"command":"git.openChangesSource","arguments":[repository.descriptor.id,"staged"]},
             {"id":"unstaged","label":api.text("git.changes",&[]),"tooltip":api.text("git.changes",&[]),"command":"git.openChangesSource","arguments":[repository.descriptor.id,"unstaged"]}],
-            "repositoryActions":[{"id":"commit","label":api.text("git.commit",&[]),"tooltip":api.text("git.commit",&[]),"command":"git.commitFromChanges","arguments":[repository.descriptor.id]}]}})
+            "repositoryActions":[{"id":"commit","label":api.text("git.commit",&[]),"tooltip":api.text("git.commit",&[]),"command":"git.commitFromChanges","arguments":[repository.descriptor.id]}]}}),
+    )
 }
 fn validate_input(api: &Api, repository: &Repository) -> Option<String> {
     let configuration = &repository.configuration;

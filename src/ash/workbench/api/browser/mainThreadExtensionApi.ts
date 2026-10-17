@@ -61,7 +61,13 @@ export interface ExtensionApiIssue {
 	readonly message: string;
 }
 
+interface RegistrationLifetime {
+	readonly identity: string;
+	readonly controller: AbortController;
+}
+
 interface ExtensionContributionSet {
+	readonly registrations: ReadonlyMap<string, RegistrationLifetime>;
 	readonly menus: readonly { readonly id: MenuId; readonly item: IMenuItem; }[];
 	readonly commands: readonly CommandDefinition[];
 	readonly languages: Required<LanguageProviderBatch>;
@@ -77,8 +83,8 @@ interface ExtensionContributionSet {
 	readonly controller: AbortController;
 }
 
-interface ContributionSet extends Omit<ExtensionContributionSet, 'controller'> {
-	readonly owners: ReadonlyMap<string, { readonly identity: string; readonly contributions: ExtensionContributionSet; }>;
+interface ContributionSet extends Omit<ExtensionContributionSet, 'controller' | 'registrations'> {
+	readonly owners: ReadonlyMap<string, { readonly identity: string; readonly runtimeIdentity: string; readonly contributions: ExtensionContributionSet; }>;
 }
 
 interface ExtensionOutputCursor {
@@ -397,18 +403,22 @@ export class MainThreadExtensionApi extends Disposable {
 	}
 
 	private buildContributions(snapshot: ExtensionHostFleetSnapshot): ContributionSet {
-		const owners = new Map<string, { readonly identity: string; readonly contributions: ExtensionContributionSet; }>();
+		const owners = new Map<string, { readonly identity: string; readonly runtimeIdentity: string; readonly contributions: ExtensionContributionSet; }>();
 		try {
 			for (const runtime of snapshot.extensions) {
 				const identity = runtimeContributionIdentity(runtime);
+				const runtimeIdentity = runtimeLifetimeIdentity(runtime);
 				const previous = this.activeContributions?.owners.get(runtime.id);
 				owners.set(runtime.id, previous?.identity === identity ? previous : {
-					identity, contributions: this.buildExtensionContributions({ ...snapshot, extensions: [runtime] }),
+					identity, runtimeIdentity, contributions: this.buildExtensionContributions(
+						{ ...snapshot, extensions: [runtime] },
+						previous?.runtimeIdentity === runtimeIdentity ? previous.contributions : undefined,
+					),
 				});
 			}
 		} catch (error) {
 			for (const [id, owner] of owners) {
-				if (owner !== this.activeContributions?.owners.get(id)) owner.contributions.controller.abort(error);
+				retireExtensionContributions(owner.contributions, this.activeContributions?.owners.get(id)?.contributions, error);
 			}
 			throw error;
 		}
@@ -434,12 +444,13 @@ export class MainThreadExtensionApi extends Disposable {
 	private retireContributions(previous: ContributionSet | undefined, current: ContributionSet | undefined, reason: unknown): void {
 		if (!previous) return;
 		for (const [id, owner] of previous.owners) {
-			if (owner !== current?.owners.get(id)) owner.contributions.controller.abort(reason);
+			retireExtensionContributions(owner.contributions, current?.owners.get(id)?.contributions, reason);
 		}
 	}
 
-	private buildExtensionContributions(snapshot: ExtensionHostFleetSnapshot): ExtensionContributionSet {
-		const controller = new AbortController();
+	private buildExtensionContributions(snapshot: ExtensionHostFleetSnapshot, previous?: ExtensionContributionSet): ExtensionContributionSet {
+		const controller = previous?.controller ?? new AbortController();
+		const registrations = new Map<string, RegistrationLifetime>();
 		const commands: CommandDefinition[] = [];
 		const menus: { id: MenuId; item: IMenuItem; }[] = [];
 		const languages = mutableLanguageBatch();
@@ -486,11 +497,13 @@ export class MainThreadExtensionApi extends Disposable {
 			}
 			if (runtime.lifecycle !== "ready" || runtime.incarnation === undefined) continue;
 			for (const registration of runtime.registrations) {
-				if (registration.kind === 'outputEvents' || registration.kind === 'remoteAuthorityResolver' || registration.kind === 'workspaceEvents' || registration.kind === 'statusBar' || registration.kind === 'sourceControl' || registration.kind === 'textDocumentEvents' || registration.kind === 'taskEvents' || registration.kind === 'debugEvents' || registration.kind === 'customTextEditor' || registration.kind === 'dataChannel' || registration.kind === 'speechProvider' || registration.kind === 'linkPresentationProvider' || registration.kind === 'externalUriOpener') {
-					continue;
-				}
+				if (!ownsExecutableContribution(registration)) continue;
 				const runtimeId = runtime.id;
-				const invoke = this.registrationInvoker(runtime, registration, controller.signal);
+				const identity = JSON.stringify(registration);
+				const oldLifetime = previous?.registrations.get(registration.registrationId);
+				const lifetime = oldLifetime?.identity === identity ? oldLifetime : { identity, controller: new AbortController() };
+				registrations.set(registration.registrationId, lifetime);
+				const invoke = this.registrationInvoker(runtime, registration, AbortSignal.any([controller.signal, lifetime.controller.signal]));
 				if (registration.kind === 'remoteConnectionResolver') {
 					remoteResolvers.push({
 						authorityPrefix: registration.authorityPrefix, resolve: async (authority, signal) => {
@@ -574,7 +587,7 @@ export class MainThreadExtensionApi extends Disposable {
 				debugAdapters.push(createExtensionHostDebugAdapterFactory(registration.debuggerType, extensionHostWorkflowProviderId(runtime.id, registration.registrationId), invoke, this.workspace));
 			}
 		}
-		return Object.freeze({ menus: Object.freeze(menus), commands: Object.freeze(commands), languages: freezeLanguageBatch(languages), tasks: Object.freeze(tasks), debugAdapters: Object.freeze(debugAdapters), debugConfigurations: Object.freeze(debugConfigurations), debugTrackers: Object.freeze(debugTrackers), tests: Object.freeze(tests), remoteResolvers: Object.freeze(remoteResolvers), terminalProfiles: Object.freeze(terminalProfiles), terminalEnvironments: Object.freeze(terminalEnvironments), issues: Object.freeze(issues), controller });
+		return Object.freeze({ registrations, menus: Object.freeze(menus), commands: Object.freeze(commands), languages: freezeLanguageBatch(languages), tasks: Object.freeze(tasks), debugAdapters: Object.freeze(debugAdapters), debugConfigurations: Object.freeze(debugConfigurations), debugTrackers: Object.freeze(debugTrackers), tests: Object.freeze(tests), remoteResolvers: Object.freeze(remoteResolvers), terminalProfiles: Object.freeze(terminalProfiles), terminalEnvironments: Object.freeze(terminalEnvironments), issues: Object.freeze(issues), controller });
 	}
 
 	private commandEditorContext(accessor: ServicesAccessor, args: readonly unknown[]) {
@@ -882,12 +895,48 @@ function unsupportedLanguageIssue(runtime: ExtensionHostRuntime, registration: E
 	return { extensionId: runtime.id, registrationId: registration.registrationId, message: `Language registration '${registration.registrationId}' operation(s) ${operations.join(", ")} were not projected because they do not yet have strict Workbench codecs; supported operations remain active` };
 }
 
+/** Process authority and provider data have separate lifetimes. */
+function runtimeLifetimeIdentity(runtime: ExtensionHostRuntime): string {
+	return JSON.stringify([
+		runtime.id, runtime.version, runtime.packageDigest, runtime.runtimeApiVersion,
+		runtime.activationGeneration, runtime.incarnation, runtime.lifecycle,
+	]);
+}
+
 function runtimeContributionIdentity(runtime: ExtensionHostRuntime): string {
-	return JSON.stringify({
-		id: runtime.id, version: runtime.version, packageDigest: runtime.packageDigest, runtimeApiVersion: runtime.runtimeApiVersion,
-		activationGeneration: runtime.activationGeneration, incarnation: runtime.incarnation, lifecycle: runtime.lifecycle, activation: runtime.activation, failure: runtime.failure,
-		registrations: runtime.registrations.filter(registration => registration.kind !== 'statusBar' && registration.kind !== 'outputEvents'),
-	});
+	return JSON.stringify([
+		runtimeLifetimeIdentity(runtime), runtime.activation,
+		// Only registrations installed by this owner affect its contribution batch.
+		// Mutable SCM/status/output snapshots are reconciled by their own owners.
+		runtime.registrations.filter(ownsExecutableContribution),
+	]);
+}
+
+type ExecutableRegistration = Extract<ExtensionHostRegistration, {
+	kind:
+	'command' | 'languageProvider' | 'taskProvider' | 'testProfileProvider' | 'debugAdapter' |
+	'debugConfigurationProvider' | 'debugAdapterTracker' | 'remoteConnectionResolver' |
+	'terminalProfileProvider' | 'terminalEnvironment';
+}>;
+
+function ownsExecutableContribution(registration: ExtensionHostRegistration): registration is ExecutableRegistration {
+	switch (registration.kind) {
+		case 'command': case 'languageProvider': case 'taskProvider': case 'testProfileProvider':
+		case 'debugAdapter': case 'debugConfigurationProvider': case 'debugAdapterTracker':
+		case 'remoteConnectionResolver': case 'terminalProfileProvider': case 'terminalEnvironment':
+			return true;
+		case 'outputEvents': case 'remoteAuthorityResolver': case 'workspaceEvents': case 'statusBar':
+		case 'sourceControl': case 'textDocumentEvents': case 'taskEvents': case 'debugEvents':
+		case 'customTextEditor': case 'dataChannel': case 'speechProvider': case 'linkPresentationProvider': case 'externalUriOpener':
+			return false;
+	}
+}
+
+function retireExtensionContributions(previous: ExtensionContributionSet, current: ExtensionContributionSet | undefined, reason: unknown): void {
+	if (previous.controller !== current?.controller) previous.controller.abort(reason);
+	for (const [id, lifetime] of previous.registrations) {
+		if (lifetime !== current?.registrations.get(id)) lifetime.controller.abort(reason);
+	}
 }
 
 function sameContributions(previous: readonly unknown[] | undefined, current: readonly unknown[]): boolean {

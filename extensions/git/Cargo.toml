@@ -15,12 +15,14 @@ path = "src/main.rs"
 [dependencies]
 base64.workspace = true
 ash-file-identity.workspace = true
+ash-utils-path-uri.workspace = true
 external-ext-sdk = { package = "ash-external-ext-sdk", path = "../../sdk/rust" }
 serde.workspace = true
 serde_json.workspace = true
 url.workspace = true
 getrandom.workspace = true
 regex.workspace = true
+urlencoding.workspace = true
 
 [dev-dependencies]
 ash-external-ext.workspace = true

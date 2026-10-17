@@ -15,16 +15,40 @@ interface Copy {
 	save(signal: AbortSignal): Promise<void>;
 }
 
-function bridge(copies: readonly Copy[], confirm: () => Promise<{ confirmed: boolean; }>, markers: readonly unknown[] = [], codeEditors: unknown = {}, models: unknown = { getModels: () => [], onModelAdded: Event.None, onModelRemoved: Event.None }, prompt?: (options: IActionPromptOptions<number>) => Promise<IActionPromptResult<number>>): MainThreadEditors {
+function bridge(copies: readonly Copy[], confirm: () => Promise<{ confirmed: boolean; }>, markers: readonly unknown[] = [], codeEditors: unknown = {}, models: unknown = { getModels: () => [], onModelAdded: Event.None, onModelRemoved: Event.None }, prompt?: (options: IActionPromptOptions<number>) => Promise<IActionPromptResult<number>>, folderPicker?: { pickFolder(defaultPath?: string): Promise<string | undefined>; fileURI(path: string): Promise<URI>; }): MainThreadEditors {
 	// Only client-owned services used by these boundary scenarios are supplied.
 	const services = [
-		{}, { groups: [] }, {}, { confirm, prompt }, {},
+		{}, { groups: [] }, {}, { confirm, prompt }, folderPicker ?? {},
 		{ getAll: () => copies },
 		{ invokeFunction: (callback: (accessor: { get(): unknown; }) => unknown) => callback({ get: () => ({ read: () => markers }) }) },
-		{}, {}, codeEditors, {}, models,
+		{}, {}, codeEditors, {}, models, folderPicker ?? {},
 	] as unknown as ConstructorParameters<typeof MainThreadEditors>;
 	return new MainThreadEditors(...services);
 }
+
+test('folder selection crosses the extension boundary as a host-resolved URI and honors cancellation', async () => {
+	for (const [path, uri] of [
+		['C:\\中文 space\\100%', 'file:///C:/中文%20space/100%25'],
+		['\\\\server\\share\\folder', 'file://server/share/folder'],
+		['/workspace/literal\\name', 'file:///workspace/literal%5Cname'],
+	]) {
+		let selected: string | undefined = path;
+		let conversions = 0;
+		const controller = new AbortController();
+		using api = bridge([], async () => ({ confirmed: true }), [], {}, undefined, undefined, {
+			pickFolder: async defaultPath => { assert.equal(defaultPath, 'configured folder'); return selected; },
+			fileURI: async value => { assert.equal(value, path); conversions++; return URI.parse(uri); },
+		});
+		const request = { method: 'pickFolder', defaultPath: 'configured folder' };
+		assert.equal(await api.handle(request, controller.signal), URI.parse(uri).toString());
+		selected = undefined;
+		assert.equal(await api.handle(request, controller.signal), null);
+		assert.equal(conversions, 1);
+		controller.abort();
+		await assert.rejects(api.handle(request, controller.signal), /aborted/i);
+		assert.equal(conversions, 1);
+	}
+});
 
 test('extension modal choices preserve labels, selection, cancellation and boundary validation', async () => {
 	let selection: number | undefined = 1;

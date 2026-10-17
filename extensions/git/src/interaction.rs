@@ -212,24 +212,23 @@ impl GitRuntime {
                 .repositories
                 .values()
                 .filter(|repository| {
-                    uri_path(&repository.root_uri)
+                    repository
+                        .root_uri
+                        .to_host_path()
+                        .ok()
                         .and_then(|root| std::fs::canonicalize(root).ok())
                         .is_some_and(|root| cwd.starts_with(root))
                 })
-                .max_by_key(|repository| repository.root_uri.len())
+                .max_by_key(|repository| repository.root_uri.lexical_depth().unwrap_or(0))
                 .cloned()
                 .ok_or_else(|| invalid("Git terminal is outside the active workspace"))?;
             let config = self
                 .api
-                .configuration(Some(repository.root_uri.clone()), None)?;
+                .configuration(Some(repository.root_uri.to_string()), None)?;
             let refs = self
                 .api
-                .request(
-                    "historyRefs",
-                    json!({"repositoryId":repository.descriptor.id}),
-                    &config,
-                    None,
-                )
+                .history_refs(&repository, None)
+                .map(|refs| json!(refs))
                 .unwrap_or(Value::Null);
             let hosts = refs["remotes"]
                 .as_array()
@@ -408,17 +407,6 @@ impl GitRuntime {
     }
 }
 
-fn uri_path(uri: &str) -> Option<PathBuf> {
-    let uri = url::Url::parse(uri).ok()?;
-    if uri.scheme() == "file" {
-        uri.to_file_path().ok()
-    } else {
-        url::Url::parse(&format!("file://{}", uri.path()))
-            .ok()?
-            .to_file_path()
-            .ok()
-    }
-}
 fn prompt_host(prompt: &str) -> Option<String> {
     let value = prompt.split('\'').nth(1)?;
     let url = url::Url::parse(value).ok()?;

@@ -271,7 +271,7 @@
       },
       {
         "command": "git.commitStagedAmend",
-        "title": "%git.menu.amend%",
+        "title": "%git.menu.commitStagedAmend%",
         "category": "Git",
         "enablement": "!scmBusy"
       },

@@ -7,6 +7,7 @@ mod history;
 mod interaction;
 pub use interaction::run_helper;
 mod model;
+mod paths;
 mod scm;
 
 use api::Api;
@@ -20,7 +21,6 @@ use external_ext_sdk::ExtensionContext;
 use external_ext_sdk::ExtensionError;
 use external_ext_sdk::client::BackgroundClient;
 use model::Repository;
-use model::RepositoryDescriptor;
 use model::State;
 use model::Status;
 use serde_json::Value;
@@ -219,7 +219,7 @@ impl GitRuntime {
                             state.selection_revision,
                         )
                     })
-                    .collect(),
+                    .collect::<Result<Vec<_>, _>>()?,
             )
         };
         self.publication.enqueue(revision, snapshots)
@@ -256,30 +256,25 @@ impl GitRuntime {
                 return Ok(state.installation_available);
             }
         }
-        let version = self
-            .api
-            .request("version", json!({}), configuration, token)?;
-        let installation = &version["installation"];
-        let available = match installation["kind"].as_str() {
-            Some("available") => true,
-            Some("missing") => {
+        let available = match self.api.installation(configuration, token)? {
+            model::Installation::Available { version } => !version.is_empty(),
+            model::Installation::Missing => {
                 if !configuration.boolean("ignoreMissingGitWarning", false) {
                     self.api.warning("git.missingInstallation", &[], token)?;
                 }
                 false
             }
-            Some("unsupported") => {
-                let installed = installation["version"]
-                    .as_str()
-                    .ok_or_else(|| invalid("Invalid Git installation version"))?;
-                let minimum = installation["minimumVersion"]
-                    .as_str()
-                    .ok_or_else(|| invalid("Invalid Git minimum version"))?;
-                self.api
-                    .warning("git.unsupportedInstallation", &[minimum, installed], token)?;
+            model::Installation::Unsupported {
+                version,
+                minimum_version,
+            } => {
+                self.api.warning(
+                    "git.unsupportedInstallation",
+                    &[&minimum_version, &version],
+                    token,
+                )?;
                 false
             }
-            _ => return Err(invalid("Invalid Git installation state")),
         };
         let mut state = self.lock();
         state.installation_signature = Some(signature);
@@ -296,6 +291,22 @@ impl GitRuntime {
                 .backend_state("git.repository", after, token)?,
             None => self.api.background.backend_state("git.repository", after)?,
         };
+        if token.is_some() {
+            let state = self.lock();
+            // A command has already crossed the client's configuration/workspace cursor.
+            // When that cursor is current, avoid waiting behind the idle editor/discovery
+            // scan and rereading the same configuration through several IPC round trips.
+            // The background monitor still polls editor-owned discovery and blame facts.
+            if facts["reset"] != true
+                && matches!(facts["connection"].as_str(), Some("ready" | "connected"))
+                && facts["sequence"].as_u64() == Some(state.sequence)
+                && state.discovery_signature.as_ref().is_some_and(|signature| {
+                    signature[0] == facts["generation"] && signature[1] == facts["folders"]
+                })
+            {
+                return Ok(());
+            }
+        }
         self.refresh_with_state(facts, token)
     }
 
@@ -408,7 +419,7 @@ impl GitRuntime {
             }
             return Ok(());
         }
-        let folders: Vec<Value> = decode(facts["folders"].clone())?;
+        let folders: Vec<model::WorkspaceFolder> = decode(facts["folders"].clone())?;
         let mut discovery = Vec::new();
         let editor_resources = self
             .api
@@ -417,10 +428,9 @@ impl GitRuntime {
             .cloned()
             .unwrap_or_default();
         for folder in &folders {
-            let uri = folder["uri"]
-                .as_str()
-                .ok_or_else(|| invalid("Invalid workspace folder URI"))?;
-            let config = self.api.configuration(Some(uri.to_owned()), token)?;
+            let config = self
+                .api
+                .configuration(Some(folder.uri.to_string()), token)?;
             let mode = config.value("autoRepositoryDetection");
             let depth = if mode == &json!(false) || mode == "openEditors" {
                 0
@@ -429,31 +439,29 @@ impl GitRuntime {
             };
             let mut manual = config.strings("scanRepositories");
             if mode == "openEditors" || mode == &json!(true) {
-                if let Ok(root) = url::Url::parse(uri) {
-                    for editor in &editor_resources {
-                        if let Some(editor) = editor
-                            .as_str()
-                            .and_then(|value| url::Url::parse(value).ok())
-                            .filter(|editor| {
-                                editor.scheme() == root.scheme()
-                                    && editor.host_str() == root.host_str()
-                                    && editor.path().starts_with(&format!(
-                                        "{}/",
-                                        root.path().trim_end_matches('/')
-                                    ))
-                            })
-                        {
-                            if let Some((parent, _)) = editor.path()
-                                [root.path().trim_end_matches('/').len() + 1..]
-                                .rsplit_once('/')
-                            {
-                                manual.push(parent.to_owned());
-                            }
-                        }
+                for editor in &editor_resources {
+                    let Some(path) = editor
+                        .as_str()
+                        .and_then(|value| ash_utils_path_uri::PathUri::parse(value).ok())
+                        .and_then(|uri| paths::RepoPath::from_resource(&folder.uri, &uri))
+                    else {
+                        continue;
+                    };
+                    if let Some((parent, _)) = path.rsplit_once('/') {
+                        manual.push(parent.to_owned());
                     }
                 }
             }
-            discovery.push(json!({"dirId":folder["id"],"maxDepth":depth,"ignoredFolders":config.strings("repositoryScanIgnoredFolders"),"scanRepositories":manual,"detectSubmodules":config.boolean("detectSubmodules",true),"submoduleLimit":config.number("detectSubmodulesLimit",10),"detectWorktrees":config.boolean("detectWorktrees",false),"worktreeLimit":config.number("detectWorktreesLimit",50)}));
+            discovery.push(model::DiscoveryFolder {
+                dir_id: folder.id.clone(),
+                max_depth: depth,
+                ignored_folders: config.strings("repositoryScanIgnoredFolders"),
+                scan_repositories: manual,
+                detect_submodules: config.boolean("detectSubmodules", true),
+                submodule_limit: config.number("detectSubmodulesLimit", 10),
+                detect_worktrees: config.boolean("detectWorktrees", false),
+                worktree_limit: config.number("detectWorktreesLimit", 50),
+            });
         }
         let signature = json!([facts["generation"], folders, discovery, configuration.0]);
         let reset = facts["reset"] == true
@@ -471,17 +479,10 @@ impl GitRuntime {
         let descriptors = if let Some(cached) = cached {
             cached
         } else {
-            let result = self.api.request(
-                "repositories",
-                json!({"folders":discovery,"includeStatus":true}),
-                &configuration,
-                token,
-            )?;
-            let descriptors: Vec<RepositoryDescriptor> = decode(result["repositories"].clone())?;
-            if let Some(statuses) = result.get("statuses").filter(|value| !value.is_null()) {
-                for status in decode::<Vec<Status>>(statuses.clone())? {
-                    published_statuses.insert(status.repository_id.clone(), status);
-                }
+            let result = self.api.discover(&discovery, &configuration, token)?;
+            let descriptors = result.repositories;
+            for status in result.statuses.into_iter().flatten() {
+                published_statuses.insert(status.repository_id.clone(), status);
             }
             let mut state = self.lock();
             state.discovery_signature = Some(signature);
@@ -492,17 +493,16 @@ impl GitRuntime {
         for descriptor in descriptors {
             let folder = folders
                 .iter()
-                .find(|folder| descriptor.dir_id.as_deref() == folder["id"].as_str())
+                .find(|folder| descriptor.dir_id.as_deref() == Some(folder.id.as_str()))
                 .or_else(|| (folders.len() == 1).then(|| &folders[0]))
                 .ok_or_else(|| invalid("Git workspace folder was retired"))?;
-            let root_uri = file_uri(folder["uri"].as_str().unwrap_or_default(), &descriptor.path)?;
-            let config = self.api.configuration(Some(root_uri.clone()), token)?;
-            if config.strings("ignoredRepositories").iter().any(|path| {
-                path.trim_end_matches('/') == root_uri.trim_end_matches('/')
-                    || url::Url::parse(&root_uri).ok().is_some_and(|uri| {
-                        uri.path().trim_end_matches('/') == path.trim_end_matches('/')
-                    })
-            }) {
+            let root_uri = paths::repository_root(&folder.uri, &descriptor.path)?;
+            let config = self.api.configuration(Some(root_uri.to_string()), token)?;
+            if config
+                .strings("ignoredRepositories")
+                .iter()
+                .any(|path| paths::matches_configured_root(&root_uri, path))
+            {
                 continue;
             }
             let mut repository = self
@@ -520,6 +520,7 @@ impl GitRuntime {
                     input_revision: 0,
                     operation: None,
                     error: String::new(),
+                    notice: String::new(),
                     commit_editor_head: None,
                     blame: None,
                     retired_streams: Default::default(),
@@ -552,20 +553,10 @@ impl GitRuntime {
                     || repository.status.is_none())
             {
                 repository.status = Some(self.api.status(&repository, token)?);
-                repository.catalog = Some(api::decode(self.api.request(
-                    "catalog",
-                    json!({"repositoryId":repository.descriptor.id}),
-                    &repository.configuration,
-                    token,
-                )?)?);
+                repository.catalog = Some(self.api.catalog(&repository, token)?);
             }
             if repository.catalog.is_none() {
-                repository.catalog = Some(api::decode(self.api.request(
-                    "catalog",
-                    json!({"repositoryId":repository.descriptor.id}),
-                    &repository.configuration,
-                    token,
-                )?)?);
+                repository.catalog = Some(self.api.catalog(&repository, token)?);
             }
             if let Some(parent) = repository.descriptor.parent_path.as_deref() {
                 let policy = repository
@@ -625,6 +616,7 @@ impl GitRuntime {
                     repository.input_revision = current.input_revision;
                     repository.operation = current.operation;
                     repository.error = current.error.clone();
+                    repository.notice = current.notice.clone();
                     repository.commit_editor_head = current.commit_editor_head.clone();
                     repository.blame = current.blame.clone();
                     repository.retired_streams = current.retired_streams.clone();
@@ -744,7 +736,7 @@ impl GitRuntime {
         let mut repository = self.repository(id)?;
         repository.configuration = self
             .api
-            .configuration(Some(repository.root_uri.clone()), Some(token))?;
+            .configuration(Some(repository.root_uri.to_string()), Some(token))?;
         match method {
             "activate" => {
                 {
@@ -757,12 +749,7 @@ impl GitRuntime {
             }
             "refresh" => {
                 self.accept_status(self.api.status(&repository, Some(token))?);
-                let catalog = api::decode(self.api.repository_request(
-                    &repository,
-                    "catalog",
-                    json!({}),
-                    token,
-                )?)?;
+                let catalog = api::decode(json!(self.api.catalog(&repository, Some(token))?))?;
                 if let Some(current) = self.lock().repositories.get_mut(&repository.descriptor.id) {
                     current.catalog = Some(catalog);
                 }
@@ -792,7 +779,7 @@ impl GitRuntime {
                 let path = segments.next();
                 if kind == "openFile" {
                     let path = path.ok_or_else(|| invalid("Missing Git file path"))?;
-                    return self.api.editor(json!({"method":"open","input":{"resource":file_uri(&repository.root_uri,path)?},"options":{"pinned":false}}),Some(token));
+                    return self.api.editor(json!({"method":"open","input":{"resource":file_uri(&repository.root_uri,&paths::RepoPath::parse(path)?)?},"options":{"pinned":false}}),Some(token));
                 }
                 let command = match kind {
                     "stage" => "git.stageFile",
