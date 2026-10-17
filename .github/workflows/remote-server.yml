@@ -137,7 +137,15 @@ jobs:
         run: |
           mkdir -p .build/remote-release/assets
           python3 -B build/release/remote.py archive --package-dir .build/remote-release/runtime --output ".build/remote-release/assets/ash-remote-${{ matrix.target }}.tar.gz"
-          python3 -B build/release/symbols.py archive --package ash-remote=.build/remote-release/runtime --archive "ash-remote=.build/remote-release/assets/ash-remote-${{ matrix.target }}.tar.gz" --output ".build/remote-release/assets/ash-symbols-remote-${{ matrix.target }}.tar.gz"
+          python3 -B build/release/symbols.py archive --package ash-remote=.build/remote-release/runtime --archive "ash-remote=.build/remote-release/assets/ash-remote-${{ matrix.target }}.tar.gz" --output .build/remote-release/symbols
+          symbol_archive="$(find .build/remote-release/symbols -maxdepth 1 -type f -name 'ash-symbols-*.tar.gz' -print -quit)"
+          test -n "$symbol_archive"
+          mv "$symbol_archive" .build/remote-release/assets/
+          mv "$symbol_archive.sha256" .build/remote-release/assets/
+          if find .build/remote-release/assets -mindepth 1 -type d -print -quit | grep -q .; then
+            echo "Remote release assets must contain files, not directories" >&2
+            exit 1
+          fi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: remote-package-${{ matrix.target }}
