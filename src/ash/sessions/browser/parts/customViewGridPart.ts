@@ -74,6 +74,7 @@ export class CustomViewGridPart extends Part implements ICustomViewGridPartServi
 						...defaultButtonStyles,
 						label: action.label,
 						icon: action.icon,
+						presentation: action.id === descriptor.actions?.primaryActionId ? 'primary' : 'quiet',
 						enabled: action.enabled,
 						onClick: () => {
 							void Promise.resolve(action.run()).catch(error => this.notifications.error(String(error)));

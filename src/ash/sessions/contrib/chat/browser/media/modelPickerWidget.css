@@ -152,7 +152,7 @@
 	color: var(--ash-sessions-modelPicker-maximumForeground);
 }
 
-.ash-sessions-model-picker-item[aria-checked="true"] {
+.ash-sessions-model-picker-item.checked {
 	background: var(--ash-list-inactiveSelectionBackground);
 }
 

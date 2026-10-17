@@ -797,7 +797,7 @@ export class AutomationsCustomViewContribution extends Disposable {
 			lifetime.add(views.registerCustomView({
 				id: AUTOMATIONS_CUSTOM_VIEW_ID,
 				ctor: new SyncDescriptor(AutomationsCustomView),
-				actions: { menuId: Menus.CustomViewAutomations }
+				actions: { menuId: Menus.CustomViewAutomations, primaryActionId: 'sessionsView.newAutomation' }
 			}));
 			lifetime.add(registerAutomationsAccessibility());
 			lifetime.add(registerAction2(class NewAutomation extends Action2 {

@@ -9,11 +9,11 @@ import { Emitter, type Event } from "../../../../base/common/event.js";
 import { CommandsRegistry } from "../../../../platform/commands/common/commands.js";
 import { Disposable, DisposableStore, DisposableMap, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { MenuWorkbenchToolBar, WorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
-import { IMenuService, MenuId, type IMenu } from "../../../../platform/actions/common/actions.js";
+import { IMenuService, MenuId, SubmenuItemAction, type IMenu } from "../../../../platform/actions/common/actions.js";
 import { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
 import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
-import { getActionBarActions } from '../../../../platform/actions/browser/menuEntryActionViewItem.js';
+import { createActionViewItem, getActionBarActions } from '../../../../platform/actions/browser/menuEntryActionViewItem.js';
 import { IsAuxiliaryWindowContext, IsCompactTitleBarContext } from '../../../common/contextkeys.js';
 import { Part } from "../../part.js";
 import type { GlobalCompositeBar } from "../globalCompositeBar.js";
@@ -263,7 +263,10 @@ export class BrowserTitlebarPart extends WebTitlebarPart implements ITitlebarPar
 		this.actions = this._register(new WorkbenchToolBar(actionsDomNode, contextMenuService, {
 			ariaLabel: localizationService.translate("ash", "workbench.titleBarGlobalActions", "Title Bar global actions"),
 			presentation: "inherit-foreground",
-			actionViewItemProvider: (action, actionOptions) => this.activityActions?.bar.createActionViewItem(action, actionOptions),
+			actionViewItemProvider: (action, actionOptions) => this.activityActions?.bar.createActionViewItem(action, actionOptions)
+				?? (action instanceof SubmenuItemAction && action.item.isSplitButton
+					? createActionViewItem(action, contextMenuService, { ...actionOptions, buttonPresentation: 'primary' })
+					: undefined),
 		}));
 		this.layoutMenu = this._register(menuService.createMenu(MenuId.LayoutControlMenu, this.contextKeyService));
 		this.globalMenu = this._register(menuService.createMenu(MenuId.TitleBar, this.contextKeyService));

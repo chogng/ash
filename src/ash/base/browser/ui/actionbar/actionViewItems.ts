@@ -16,6 +16,8 @@ const ActionHoverGroupId = "actions";
 /** Presentation options shared by every ActionBar item representation. */
 export interface ActionViewItemOptions {
 	readonly buttonStyles?: IButtonStyles;
+	/** Selects the shared Button presentation for this action's triggers. */
+	readonly buttonPresentation?: IButtonOptions['presentation'];
 	/** Allows the host ActionBar to expose this item as a native drag source. */
 	readonly draggable?: boolean;
 	/** Places the item's managed tooltip relative to its trigger. */
@@ -51,6 +53,7 @@ export abstract class ActionViewItem extends Disposable {
 	protected createButton(container: HTMLElement, options: IButtonOptions): Button {
 		const button = this._register(new Button(container, {
 			...this.actionViewItemOptions.buttonStyles,
+			presentation: this.actionViewItemOptions.buttonPresentation,
 			...options,
 			title: undefined,
 			hoverGroupId: options.hoverGroupId ?? ActionHoverGroupId,

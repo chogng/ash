@@ -312,9 +312,7 @@
 		var(--ash-sideBar-background);
 }
 
-.ash-scm-graph-commit:not(.selected)
-	> .ash-scm-graph-row:hover
-	> .ash-scm-graph-overlay {
+.ash-scm-graph-commit > .ash-scm-graph-row:hover > .ash-scm-graph-overlay {
 	background:
 		linear-gradient(
 			var(
@@ -327,6 +325,17 @@
 			)
 		),
 		var(--scm-graph-row-background);
+}
+
+.ash-scm-graph-commit.selected
+	> .ash-scm-graph-row:hover
+	> .ash-scm-graph-overlay {
+	background:
+		linear-gradient(
+			var(--scm-graph-row-background),
+			var(--scm-graph-row-background)
+		),
+		var(--ash-sideBar-background);
 }
 
 .ash-scm-graph-actions {

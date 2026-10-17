@@ -85,6 +85,8 @@ export abstract class ViewPane extends Pane implements IView {
 		if (!actionId) return undefined;
 		return () => {
 			const entry = [...this.headerActionsElement.querySelectorAll<HTMLElement>('[data-action-id]')].find(element => element.dataset.actionId === actionId);
+			// Revealing the pane's focus actions must precede focusing a control hidden until focus enters it.
+			if (entry && this.isHeaderVisible()) this.element.focus();
 			entry?.querySelector<HTMLElement>('button:not(:disabled), [tabindex]')?.focus();
 		};
 	}

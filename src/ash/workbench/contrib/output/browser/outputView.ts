@@ -237,6 +237,7 @@ export class OutputViewPane extends ViewPane {
 		if (titleStateKey !== this.titleStateKey) {
 			this.titleStateKey = titleStateKey;
 			this.titleActions.updateActions(this.createTitleActions(active));
+			this.titleActions.element.querySelector<HTMLElement>(`[data-action-id="${SelectChannelActionId}"]`)?.classList.add('ash-output-channel-picker');
 			const filtered = OutputSeverities.some(severity => !this.filters.isSeverityVisible(severity)) || categories.some(category => !this.filters.isCategoryVisible(category, active!.id));
 			this.filterWidget.classList.toggle('filtered', filtered);
 			const filterLabel = filtered ? localize('output.filterActive', 'Filter Output (Filters Active)') : localize('output.filter', 'Filter Output');

@@ -40,6 +40,7 @@ import { List } from '../../../../base/browser/ui/list/listWidget.js';
 import { CountBadge } from '../../../../base/browser/ui/countBadge/countBadge.js';
 import { ProgressBar } from '../../../../base/browser/ui/progressbar/progressbar.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
+import { listRowHeight } from '../../../../base/common/uiSizes.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
@@ -227,6 +228,7 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 			findWidgetStyles: defaultFindWidgetStyles,
 			ariaLabel: localize('agentTrace.timeline', 'Execution timeline'),
 			scrolling: 'managed',
+			getHeight: () => listRowHeight,
 			indent: 12,
 			indentGuides: 'always',
 			expandOnlyOnTwistieClick: true,

@@ -31,19 +31,6 @@
 	.ash-custom-view-actions {
 	gap: var(--ash-spacing-size80);
 }
-.ash-sessions-window
-	.ash-custom-view-page[data-custom-view-id="sessions.customView.automations"]
-	[data-action-id="sessionsView.newAutomation"] {
-	background: var(--ash-button-primaryBackground);
-	color: var(--ash-button-primaryForeground);
-	border-radius: var(--ash-cornerRadius-large);
-	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
-}
-.ash-sessions-window
-	.ash-custom-view-page[data-custom-view-id="sessions.customView.automations"]
-	[data-action-id="sessionsView.newAutomation"]:enabled:hover {
-	background: var(--ash-button-primaryHoverBackground);
-}
 .ash-sessions-window .ash-automations {
 	display: flex;
 	flex-direction: column;
@@ -104,7 +91,7 @@
 	color: var(--ash-description-foreground);
 	border-radius: var(--ash-cornerRadius-large);
 }
-.ash-sessions-window .ash-automation-filters .ash-button[aria-pressed="true"] {
+.ash-sessions-window .ash-automation-filters .ash-button.checked {
 	color: var(--ash-foreground);
 	background: var(--ash-list-inactiveSelectionBackground);
 	border-color: var(--ash-contrastBorder, transparent);

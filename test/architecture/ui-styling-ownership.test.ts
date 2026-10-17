@@ -2,6 +2,8 @@ import { strict as assert } from "node:assert";
 import { readdir, readFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { test } from "mocha";
+import { toolbarActionSize } from '../../src/ash/platform/theme/common/sizes/baseSizes.js';
+import { Sizes } from '../../src/ash/platform/theme/common/sizeRegistry.js';
 
 const sharedInteractionSelector = /\.ash-(?:action-bar|button|tab(?:\b|-)|view-pane(?:\b|-))/;
 const ariaStateSelector = /\[aria-(?:checked|pressed|selected)\b/;
@@ -91,12 +93,11 @@ test("Workbench owns the horizontal ActionBar hover skin", async () => {
 });
 
 test("ToolBar icon actions center their content in the 22px borderless hit area", async () => {
-	const sizeSource = await readFile(join(process.cwd(), "src", "ash", "platform", "theme", "common", "sizes", "baseSizes.ts"), "utf8");
 	const toolbarCss = await readFile(join(process.cwd(), "src", "ash", "base", "browser", "ui", "toolbar", "toolbar.css"), "utf8");
 	const tabListCss = await readFile(join(process.cwd(), "src", "ash", "base", "browser", "ui", "tablist", "tablist.css"), "utf8");
 	const compositeBarCss = await readFile(join(process.cwd(), "src", "ash", "workbench", "browser", "parts", "compositebar", "compositebar.css"), "utf8");
 
-	assert.match(sizeSource, /dimension\("toolbar\.actionSize", 22,/);
+	assert.deepEqual(Sizes.getSizes().find(size => size.id === toolbarActionSize)?.value, { value: 22, unit: 'px' });
 	assert.match(
 		toolbarCss,
 		/\.ash-toolbar \.ash-action-view-item\.icon > \.ash-button \{[^}]*width: var\(--ash-toolbar-actionSize\);[^}]*border: 0;[^}]*padding: 0;/s,

@@ -158,7 +158,7 @@
 .ash-screenshot-overlay button:hover {
 	background: var(--ash-toolbar-hoverBackground);
 }
-.ash-screenshot-overlay button[aria-pressed="true"] {
+.ash-screenshot-overlay button.selected {
 	color: var(--ash-button-foreground);
 	background: var(--ash-button-background);
 }

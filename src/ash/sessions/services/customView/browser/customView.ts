@@ -6,7 +6,7 @@ import type { SyncDescriptor } from '../../../../platform/instantiation/common/d
 export interface ICustomViewDescriptor {
 	readonly id: string;
 	readonly ctor: SyncDescriptor<AbstractCustomView>;
-	readonly actions?: { readonly menuId: MenuId; };
+	readonly actions?: { readonly menuId: MenuId; readonly primaryActionId?: string; };
 }
 
 /** The host owns chrome and scrolling; contributed views own only their content and lifetime. */

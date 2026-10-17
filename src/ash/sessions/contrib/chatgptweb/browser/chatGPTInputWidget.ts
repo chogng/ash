@@ -237,6 +237,7 @@ export class ChatGPTInputWidget extends Disposable {
 		const label = this.dictation.action.tooltip ?? this.dictation.action.label;
 		this.dictationButton.setAttribute('aria-label', label);
 		this.dictationButton.setAttribute('aria-pressed', String(this.dictation.isActive));
+		this.dictationButton.classList.toggle('active', this.dictation.isActive);
 		this.dictationButton.title = label;
 		this.renderSend();
 	}

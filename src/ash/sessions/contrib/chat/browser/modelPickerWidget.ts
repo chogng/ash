@@ -301,6 +301,7 @@ export class ModelPickerWidget extends Disposable {
 			button.setAttribute('role', 'menuitemradio');
 			const checked = model.id === this.presentation.selectedModel;
 			button.setAttribute('aria-checked', String(checked));
+			button.classList.toggle('checked', checked);
 			button.tabIndex = checked ? 0 : -1;
 			button.title = model.title;
 			const label = h(popup.ownerDocument, 'span');
@@ -332,6 +333,7 @@ export class ModelPickerWidget extends Disposable {
 			refresh: () => buttons.forEach((button, index) => {
 				const checked = this.presentation.models[index]!.id === this.presentation.selectedModel;
 				button.setAttribute('aria-checked', String(checked));
+				button.classList.toggle('checked', checked);
 				button.tabIndex = checked ? 0 : -1;
 				(button.lastElementChild as HTMLElement).style.visibility = checked ? 'visible' : 'hidden';
 			}),

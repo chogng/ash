@@ -314,8 +314,10 @@ export class ScreenshotEditor extends Disposable {
 		this.commitText();
 		this.tool = tool;
 		this.element.dataset.tool = tool;
-		for (const [candidate, button] of this.toolButtons)
+		for (const [candidate, button] of this.toolButtons) {
 			button.setAttribute('aria-pressed', String(candidate === tool));
+			button.classList.toggle('selected', candidate === tool);
+		}
 		this.imageArea.focus();
 	}
 

@@ -10,7 +10,7 @@
 	margin-left: var(--ash-toolbar-itemGap);
 }
 
-.ash-toolbar-inherit-foreground .ash-button {
+.ash-toolbar-inherit-foreground .ash-button-quiet {
 	color: inherit;
 }
 

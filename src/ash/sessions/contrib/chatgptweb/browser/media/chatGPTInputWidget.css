@@ -50,7 +50,7 @@
 	color: var(--ash-button-foreground);
 }
 
-.ash-chatgpt-dictation[aria-pressed="true"] {
+.ash-chatgpt-dictation.active {
 	background: var(--ash-toolbar-hoverBackground);
 	outline: var(--ash-strokeThickness) solid var(--ash-foreground);
 	outline-offset: -1px;

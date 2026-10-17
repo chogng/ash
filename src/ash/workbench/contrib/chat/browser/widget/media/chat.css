@@ -496,11 +496,6 @@
 }
 
 @container (max-width: 360px) {
-	.ash-chat-input-toolbars {
-		gap: 8px;
-		padding: 0;
-	}
-
 	.ash-chat-input-toolbars.ash-toolbar
 		.ash-chat-input-mode-selector
 		.ash-chat-input-action.ash-chat-input-mode-action {

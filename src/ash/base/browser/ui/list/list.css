@@ -8,7 +8,7 @@
 }
 
 /* Trees own their selection treatments; plain lists consume the host's row colors here. */
-.ash-list:not(.ash-tree) > .ash-list-row:hover:not(.selected) {
+.ash-list:not(.ash-tree) > .ash-list-row:hover {
 	background: var(--ash-list-style-list-hover-background);
 }
 
