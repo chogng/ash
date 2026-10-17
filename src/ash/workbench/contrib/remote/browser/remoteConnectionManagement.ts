@@ -1,4 +1,5 @@
 import { DisposableStore } from "../../../../base/common/lifecycle.js";
+import { localize } from "../../../../nls.js";
 import { DialogSeverity } from "../../../../platform/dialogs/common/dialogs.js";
 import type { IDialogService } from "../../../../platform/dialogs/common/dialogs.js";
 import type { IQuickInputService } from "../../../../platform/quickinput/common/quickInput.js";
@@ -101,7 +102,7 @@ async function promptConnection(quickInput: IQuickInputService, initial?: Remote
 	if (name === undefined) return undefined;
 	const host = await promptText(quickInput, "OpenSSH config host alias", initial?.host);
 	if (host === undefined) return undefined;
-	const workspace = await promptText(quickInput, "Absolute POSIX path to the Remote Workspace", initial?.workspace);
+	const workspace = await promptText(quickInput, localize({ bundle: 'ash.workbench', key: 'remote.workspace.absolutePath' }, "Absolute path to the Remote Workspace (for example, /srv/project or C:/work/project)"), initial?.workspace);
 	if (workspace === undefined) return undefined;
 	return { name, host, workspace };
 }

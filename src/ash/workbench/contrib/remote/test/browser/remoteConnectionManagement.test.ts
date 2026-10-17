@@ -14,8 +14,30 @@ import type { IQuickPickItem } from "../../../../../platform/quickinput/common/q
 import { IRemoteConnectionApi, RemoteConnectionService } from "../../../../../platform/remote/common/remoteConnectionService.js";
 import type { RemoteConnectionDefinition } from "../../../../../platform/remote/common/remoteConnectionService.js";
 import { showRemoteConnectionManager } from "../../browser/remoteConnectionManagement.js";
+import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
 
 const BuildConnection = Object.freeze({ name: "build", host: "build-linux", workspace: "/srv/project" });
+
+test('Remote connection manager accepts Windows paths with a translated prompt', async () => {
+	initializeTestLocalization('zh-CN');
+	try {
+		const quickInput = new TestQuickInputService();
+		const connections = new TestRemoteConnectionService([]);
+		using services = new InstantiationService();
+		services.registerInstance(IRemoteConnectionApi, connections);
+		using service = services.createInstance(RemoteConnectionService);
+		const operation = showRemoteConnectionManager(service, quickInput, new TestDialogService());
+		await acceptPicker(quickInput, 0);
+		await enterText(quickInput, 1, 'windows');
+		await enterText(quickInput, 2, 'windows-dev');
+		assert.match((await pickerAt(quickInput, 3)).placeholder ?? '', /远程工作区.*C:\/work\/project/);
+		await enterText(quickInput, 3, 'c:\\work\\开发 project');
+		await operation;
+		assert.deepEqual(connections.saved, [{ name: 'windows', host: 'windows-dev', workspace: 'c:\\work\\开发 project' }]);
+	} finally {
+		initializeTestLocalization('en');
+	}
+});
 
 test("Remote connection manager adds a credential-free target", async () => {
 	const quickInput = new TestQuickInputService();
