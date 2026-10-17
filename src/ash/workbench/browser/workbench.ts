@@ -682,6 +682,8 @@ export class Workbench extends Disposable {
 		const workspaceTrustService = this._register(services.createInstance(WorkspaceTrustManagementService));
 		services.registerInstance(IWorkspaceTrustManagementService, workspaceTrustService);
 		const workspaceFileService = new AppServerFileSystemProvider({
+			configurationFiles: api.workspaceConfigurationFiles,
+			configuration: () => workspaceContext.getWorkspace().configuration,
 			api: api.fs,
 			resourceApi: api.resource,
 			directories: () => workspaceContext.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
@@ -1350,7 +1352,29 @@ export class Workbench extends Disposable {
 	}
 
 	private async doUpdateWorkspace(workspace: IWorkspace): Promise<void> {
-		if (this.workspaceContext.getWorkspace().id === workspace.id) return;
+		if (this.workspaceContext.getWorkspace().id === workspace.id) {
+			// A folders edit keeps editor models, dirty buffers and the window's storage scope.
+			this.workspaceContext.updateWorkspace(workspace);
+			return;
+		}
+		if (workspace.configuration) {
+			// Entering/saving a workspace from this live window changes its storage
+			// identity, while open editors and unsaved buffers belong to the user.
+			await this.workingCopyBackupTracker.shutdown();
+			try {
+				await this.workingCopyBackups.moveBackups?.({ id: workspace.id, folders: workspace.folders.map(folder => folder.uri), configuration: workspace.configuration, remoteAuthority: workspace.remoteAuthority });
+				await this.storage.flush(WillSaveStateReason.WORKSPACE_CHANGE);
+				using editorStatePause = this.editor.pauseStatePersistence();
+				await this.storage.switchWorkspace(workspace.id);
+				this.workingCopyBackups.switchWorkspace(workspace.id);
+				this.workspaceContext.updateWorkspace(workspace);
+				this.workbenchWindow.setWorkbenchState(workbenchStateFromWorkspace(workspace));
+			} finally {
+				this.workingCopyBackupTracker.cancelShutdown();
+			}
+			await this.workingCopyBackupTracker.flush();
+			return;
+		}
 		await this.workingCopyBackupTracker.flush();
 		await this.storage.flush(WillSaveStateReason.WORKSPACE_CHANGE);
 		using editorStatePause = this.editor.pauseStatePersistence();

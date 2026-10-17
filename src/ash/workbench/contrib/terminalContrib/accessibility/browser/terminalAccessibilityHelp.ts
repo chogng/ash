@@ -12,6 +12,7 @@ export class TerminalAccessibilityHelpProvider extends Disposable implements IAc
 
 	public provideContent(): string {
 		return [
+			localize('terminal.accessibility.workspaceFolders', 'In a multi-root workspace, new terminals use the active file folder or ask you to select a folder. Escape cancels selection. Split terminals keep their parent folder. Workspace folder changes preserve terminals belonging to retained folders.'),
 			localize('terminal.accessibility.overview', 'The terminal sends typed input to its running process. <keybinding:editor.action.accessibleView> opens the retained screen and scrollback as read-only text.'),
 			localize('terminal.accessibility.find', '<keybinding:workbench.action.terminal.focusFind> opens Find. Enter and Shift+Enter navigate its matches. Escape returns focus to the terminal.'),
 			localize('terminal.accessibility.links', '<keybinding:workbench.action.terminal.openDetectedLink> opens a searchable list of file paths and web links. Enter opens the selected file at its reported line and column, or opens the web link. Escape returns focus to the terminal. File paths in output can also be clicked; relative paths use the command’s working directory when available.'),

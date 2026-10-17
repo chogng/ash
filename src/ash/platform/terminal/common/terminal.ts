@@ -80,6 +80,7 @@ export interface ITerminalProfile extends ITerminalProcessProfile {
 }
 
 export interface ICreateContributedTerminalProfileOptions {
+	readonly cwd?: string | import('../../../base/common/uri.js').URI;
 	readonly icon?: ThemeIcon;
 	readonly color?: string;
 }

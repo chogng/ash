@@ -102,7 +102,7 @@ export class WorkspaceContextMainService extends Disposable {
 	}
 
 	public updateWorkspace(workspace: IAnyWorkspaceIdentifier, resolvedWorkspace: IWorkspace = workspaceFromIdentifier(workspace)): void {
-		if (workspace.id === this.workspace.id) {
+		if (workspace.id === this.workspace.id && JSON.stringify(resolvedWorkspace) === JSON.stringify(this.resolvedWorkspace)) {
 			return;
 		}
 		const previous = this.workspace;

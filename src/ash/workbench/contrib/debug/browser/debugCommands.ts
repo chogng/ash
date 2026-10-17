@@ -10,6 +10,7 @@ import { CancellationError, isCancellationError } from '../../../../base/common/
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize, localize2 } from '../../../../nls.js';
+import { pickWorkspaceFolder } from '../../../services/workspaces/browser/workspaceOpenService.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { AppServerAvailableContext } from '../../../common/contextkeys.js';
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
@@ -114,13 +115,15 @@ registerAction2(class ConfigureDebugAction extends Action2 {
 		if (selectedFolder !== undefined && !URI.isUri(selectedFolder) || typeof preserveFocus !== 'boolean') throw new CancellationError();
 		const activeResource = editor.activeEditor?.resource;
 		const selected = accessor.get(IDebugService).getConfigurationManager().selectedConfiguration;
+		const folders = workspace.getWorkspace().folders;
 		const folder = selectedFolder === undefined
-			? workspace.getWorkspace().folders.find(folder => folder.id === selected?.dirId)
-			?? (activeResource ? workspace.getWorkspaceFolder(activeResource) : null) ?? workspace.getWorkspace().folders[0]
+			? folders.find(folder => folder.id === selected?.dirId)
+			?? (activeResource ? workspace.getWorkspaceFolder(activeResource) : null)
+			?? (folders.length === 1 ? folders[0] : folders.length ? await pickWorkspaceFolder(accessor.get(IQuickInputService), folders, localize('debug.selectFolder', 'Select a workspace folder to configure debugging.')) : undefined)
 			: workspace.getWorkspace().folders.find(folder => folder.uri.toString() === selectedFolder.toString());
 		if (selectedFolder && !folder) throw new CancellationError();
 		if (!folder) {
-			await accessor.get(IWorkspaceOpenService).openFolder();
+			if (!folders.length) await accessor.get(IWorkspaceOpenService).openFolder();
 			return;
 		}
 		const files = accessor.get(IFileService);

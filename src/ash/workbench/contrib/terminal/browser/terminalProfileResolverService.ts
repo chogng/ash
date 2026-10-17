@@ -6,7 +6,7 @@ import { ThemeIcon } from '../../../../base/common/themables.js';
 import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ITerminalProcessService, TerminalSettingId, TerminalSettingPrefix, type IShellLaunchConfig, type ITerminalProfile, type ITerminalProfileObject, type TerminalArguments } from '../../../../platform/terminal/common/terminal.js';
-import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { IWorkspaceContextService, type IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
 import { IConfigurationResolverService } from '../../../services/configurationResolver/common/configurationResolver.js';
 import { TERMINAL_CONFIG_SECTION } from '../common/terminal.js';
 import { IEnvironmentVariableService } from '../common/environmentVariable.js';
@@ -43,26 +43,28 @@ export abstract class BaseTerminalProfileResolverService extends Disposable impl
 			?? this.getDefaultIcon();
 	}
 
-	async getEnvironment(remoteAuthority: string | undefined): Promise<Readonly<Record<string, string>>> {
+	async getEnvironment(remoteAuthority: string | undefined, workspaceFolder?: IWorkspaceFolder): Promise<Readonly<Record<string, string>>> {
 		this.assertAuthority(remoteAuthority);
 		const generation = this.generation;
-		const environment = await this.processes.getEnvironment(undefined, this.sessionFolderId());
+		const folder = this.resolveWorkspaceFolder({ remoteAuthority, os: this.processes.operatingSystem!, workspaceFolder });
+		const environment = await this.processes.getEnvironment(undefined, this.folderId(folder));
 		this.assertCurrent(generation);
 		return environment;
 	}
 
 	async getDefaultProfile(options: IShellLaunchConfigResolveOptions): Promise<ITerminalProfile> {
 		this.assertOptions(options);
+		const folder = this.resolveWorkspaceFolder(options);
 		const generation = this.generation;
-		await this.profiles.profilesReady;
+		await this.profiles.refreshAvailableProfiles(this.folderId(folder));
 		this.assertCurrent(generation);
 		const platform = await this.profiles.getPlatformKey();
-		let profile = this.profiles.getDefaultProfile(options.os);
+		let profile = this.profiles.getDefaultProfile(options.os, this.folderId(folder));
 		const kind = options.allowAgentHostShell ? 'agentHostProfile' : options.allowAutomationShell ? 'automationProfile' : undefined;
 		const key = kind === undefined ? undefined : kind === 'automationProfile'
 			? `${TerminalSettingPrefix.AutomationProfile}${platform}`
 			: `${TERMINAL_CONFIG_SECTION}.${kind}.${platform}`;
-		const configured = key ? this.configuration.getValue<ITerminalProfileObject | null>(key) : undefined;
+		const configured = key ? this.configuration.getValue<ITerminalProfileObject | null>(key, { resource: folder?.uri }) : undefined;
 		if (configured?.path) {
 			const name = kind === 'agentHostProfile' ? localize('terminal.profile.agentHostShell', 'Agent host shell') : localize('terminal.profile.automationShell', 'Automation shell');
 			profile = {
@@ -72,12 +74,12 @@ export abstract class BaseTerminalProfileResolverService extends Disposable impl
 			};
 		}
 		if (!profile) {
-			const resolved = await this.processes.resolveProfile({ type: 'default' }, this.sessionFolderId());
+			const resolved = await this.processes.resolveProfile({ type: 'default' }, this.folderId(folder));
 			this.assertCurrent(generation);
 			return { ...resolved.profile, profileName: resolved.profile.title, path: resolved.executable, args: resolved.args };
 		}
-		const environment = await this.getEnvironment(options.remoteAuthority);
-		const resolved = await this.resolveProfile(profile, environment);
+		const environment = await this.processes.getEnvironment(undefined, this.folderId(folder));
+		const resolved = await this.resolveProfile(profile, environment, folder);
 		this.assertCurrent(generation);
 		return resolved;
 	}
@@ -97,15 +99,15 @@ export abstract class BaseTerminalProfileResolverService extends Disposable impl
 		if (typeof shell.args === 'string' && options.os !== OperatingSystem.Windows) throw new Error(localize('terminal.profile.windowsCommandLine', 'Raw command line strings are only supported on Windows.'));
 		const generation = this.generation;
 		const platform = await this.profiles.getPlatformKey();
+		const folder = this.resolveWorkspaceFolder(options);
 		const overrides: Record<string, string | null> = {};
-		mergeEnvironments(overrides, this.configuration.getValue<Readonly<Record<string, string | null>>>(`${TERMINAL_CONFIG_SECTION}.env.${platform}`), options.os !== OperatingSystem.Windows);
-		const environment = await this.getEnvironment(options.remoteAuthority);
+		mergeEnvironments(overrides, this.configuration.getValue<Readonly<Record<string, string | null>>>(`${TERMINAL_CONFIG_SECTION}.env.${platform}`, { resource: folder?.uri }), options.os !== OperatingSystem.Windows);
+		const environment = await this.processes.getEnvironment(undefined, this.folderId(folder));
 		const profile = shell.executable
-			? await this.resolveProfile({ profileId: 'custom', profileName: shell.name ?? localize('terminal.profile.shell', 'Shell'), title: shell.name ?? localize('terminal.profile.shell', 'Shell'), isDefault: false, path: shell.executable, args: shell.args, env: shell.env, icon: shell.icon, color: shell.color }, environment)
+			? await this.resolveProfile({ profileId: 'custom', profileName: shell.name ?? localize('terminal.profile.shell', 'Shell'), title: shell.name ?? localize('terminal.profile.shell', 'Shell'), isDefault: false, path: shell.executable, args: shell.args, env: shell.env, icon: shell.icon, color: shell.color }, environment, folder)
 			: await this.getDefaultProfile(options);
 		mergeEnvironments(overrides, profile.env, options.os !== OperatingSystem.Windows);
 		mergeEnvironments(overrides, shell.env, options.os !== OperatingSystem.Windows);
-		const folder = this.workspace.getWorkspace().folders[0];
 		const resolve = (value: string) => this.variables.resolveWithEnvironment(environment, folder, value);
 		let env: IProcessEnvironment;
 		if (!shouldUseEnvironmentVariableCollection(shell)) {
@@ -128,7 +130,7 @@ export abstract class BaseTerminalProfileResolverService extends Disposable impl
 			}
 			await collection.applyToProcessEnvironment(env, scope, resolve);
 		}
-		const cwd = shell.cwd ?? this.configuration.getValue<string>(TerminalSettingId.Cwd);
+		const cwd = shell.cwd ?? this.configuration.getValue<string>(TerminalSettingId.Cwd, { resource: folder?.uri });
 		const resolvedCwd = cwd ? sanitizeCwd(await resolve(cwd), options.os) : undefined;
 		const resolvedArgs = shell.args === undefined ? profile.args ?? [] : typeof shell.args === 'string' ? await resolve(shell.args) : await Promise.all(shell.args.map(resolve));
 		const executable = typeof profile.path === 'string' ? profile.path : profile.path[0]!;
@@ -142,21 +144,30 @@ export abstract class BaseTerminalProfileResolverService extends Disposable impl
 		if (profile.overrideName && shell.name === undefined) shell.name = profile.profileName;
 	}
 
-	private async resolveProfile(profile: ITerminalProfile, environment: Readonly<Record<string, string>>): Promise<ITerminalProfile> {
-		const folder = this.workspace.getWorkspace().folders[0];
+	private async resolveProfile(profile: ITerminalProfile, environment: Readonly<Record<string, string>>, folder: IWorkspaceFolder | undefined): Promise<ITerminalProfile> {
 		const resolve = (value: string) => this.variables.resolveWithEnvironment(environment, folder, value);
 		const path = await Promise.all((typeof profile.path === 'string' ? [profile.path] : profile.path).map(value => resolve(value.replace(/^~(?=$|[/\\])/, '${userHome}'))));
 		if (typeof profile.args === 'string' && this.processes.operatingSystem !== OperatingSystem.Windows) {
 			throw new Error(localize('terminal.profile.windowsCommandLine', 'Raw command line strings are only supported on Windows.'));
 		}
 		const args = typeof profile.args === 'string' ? await resolve(profile.args) : await Promise.all((profile.args ?? []).map(resolve));
-		const result = await this.processes.resolveProfile({ type: 'custom', name: profile.profileName, path, args }, this.sessionFolderId());
+		const result = await this.processes.resolveProfile({ type: 'custom', name: profile.profileName, path, args }, this.folderId(folder));
 		return { ...profile, path: result.executable, args: result.args };
 	}
 
-	private sessionFolderId(): string | undefined {
+	private resolveWorkspaceFolder(options: IShellLaunchConfigResolveOptions): IWorkspaceFolder | undefined {
 		const folders = this.workspace.getWorkspace().folders;
-		return folders.length === 1 && folders[0]!.id.startsWith('session:') ? folders[0]!.id : undefined;
+		if (options.workspaceFolder) {
+			const folder = folders.find(folder => folder.id === options.workspaceFolder!.id);
+			if (!folder) throw new CancellationError();
+			return folder;
+		}
+		if (folders.length > 1) throw new Error(localize('terminal.selectFolder', 'Select a workspace folder for the terminal.'));
+		return folders[0];
+	}
+
+	private folderId(folder: IWorkspaceFolder | undefined): string | undefined {
+		return folder?.id;
 	}
 
 	/** Uses execution-host launch data; profile and terminal titles are user-editable. */

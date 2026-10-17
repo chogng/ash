@@ -172,3 +172,37 @@ fn backup_rpc_pages_recovery_and_keeps_the_product_host_boundary() {
     server.close_connection(trusted);
     server.close_connection(untrusted);
 }
+
+#[test]
+fn backup_rpc_move_routes_only_product_hosts_and_retires_the_old_catalog() {
+    let directory = tempfile::tempdir().unwrap();
+    let server = server().with_backup_store(Arc::new(
+        ash_state::SqliteBackupStore::open(&directory.path().join("state.db")).unwrap(),
+    ));
+    let mut trusted = server.product_host_connection();
+    initialize(&server, &mut trusted);
+    let record = call(&server, &mut trusted, json!({"jsonrpc":"2.0","id":2,"method":"backup/write","params":{"clientId":"editor","workspace":{"id":"old","folders":[],"configuration":null},"content":{"resource":"untitled:/note","format":"text.v1","content":"draft"},"expectedRevision":null}}))["result"].clone();
+    let request = json!({"jsonrpc":"2.0","id":3,"method":"backup/move","params":{"clientId":"editor","sourceWorkspaceId":"old","workspace":{"id":"new","folders":[],"configuration":null},"backups":[{"resource":"untitled:/note","revision":record["revision"]}]}});
+    let mut untrusted = server.connection();
+    initialize(&server, &mut untrusted);
+    assert_eq!(
+        call(&server, &mut untrusted, request.clone())["error"]["data"]["kind"],
+        "PermissionRequired"
+    );
+    let moved = call(&server, &mut trusted, request);
+    assert_eq!(
+        moved["result"]["backups"],
+        json!([{"resource":"untitled:/note","revision":record["revision"]}])
+    );
+    let catalog = call(
+        &server,
+        &mut trusted,
+        json!({"jsonrpc":"2.0","id":4,"method":"backup/workspaces","params":{"clientId":"editor"}}),
+    );
+    assert_eq!(
+        catalog["result"]["workspaces"],
+        json!([{"id":"new","folders":[],"configuration":null,"remoteAuthority":null}])
+    );
+    server.close_connection(trusted);
+    server.close_connection(untrusted);
+}

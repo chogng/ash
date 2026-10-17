@@ -266,7 +266,7 @@ suite('DAP terminal launch policies through execution owners', () => {
 	}
 });
 
-async function launchWithTerminalRequest(terminals: ITerminalService, argumentsValue: unknown, options: { terminalProcesses?: ITerminalProcessService; configuration?: IConfigurationService; workspace?: WorkspaceContextService; onReady?: (service: DebugService, session: IDebugSession) => Promise<void>; } = {}): Promise<Record<string, unknown>> {
+async function launchWithTerminalRequest(terminals: ITerminalService, argumentsValue: unknown, options: { terminalProcesses?: ITerminalProcessService; configuration?: IConfigurationService; workspace?: WorkspaceContextService; activeResource?: URI; adapterRoutes?: (string | undefined)[]; onReady?: (service: DebugService, session: IDebugSession) => Promise<void>; } = {}): Promise<Record<string, unknown>> {
 	using resources = new DisposableStore();
 	const adapters = resources.add(new AdapterManager());
 	let resolveResponse!: (response: Record<string, unknown>) => void;
@@ -277,7 +277,7 @@ async function launchWithTerminalRequest(terminals: ITerminalService, argumentsV
 	const processes: IDebugAdapterProcessService = {
 		onConnectionState: () => Event.None(() => { }),
 		getConnectionState: async () => 'ready',
-		start: async () => 'adapter-process',
+		start: async request => { options.adapterRoutes?.push(request.dirId); return 'adapter-process'; },
 		send: async (_id, value) => {
 			const message = value as Record<string, unknown>;
 			if (message.type === 'response') { resolveResponse(message); return; }
@@ -315,7 +315,7 @@ async function launchWithTerminalRequest(terminals: ITerminalService, argumentsV
 	services.registerSingleton(ICommandService, () => new CommandService(services));
 	services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));
 	registerTestExtensionService(resources, services);
-	if (!services.has(IEditorService)) services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } });
+	if (!services.has(IEditorService)) services.registerInstance(IEditorService, { ...emptyEditorServiceState, activeEditor: options.activeResource ? { resource: options.activeResource } : undefined, openEditor: async () => { }, focusActiveEditor() { } } as unknown as import('../../../../services/editor/common/editorService.js').IEditorService);
 	if (!services.has(IEditorGroupsService)) services.registerInstance(IEditorGroupsService, {} as IEditorGroupsService);
 	services.registerInstance(ITerminalContributionService, { terminalProfiles: [], onDidChangeTerminalProfiles: Event.None, ...Disposable.None });
 	services.registerSingleton(ITerminalProfileService, () => services.createInstance(TerminalProfileService));
@@ -338,3 +338,22 @@ async function resolveTerminalProfile(selection: import('../../../../../platform
 		args: selection.type === 'custom' ? (typeof selection.args === 'string' ? selection.args : [...selection.args]) : [],
 	};
 }
+
+test('activity-selected debug roots bind the adapter and integrated terminal to the same directory', async () => {
+	using workspace = new WorkspaceContextService({
+		id: 'team', configuration: URI.file('/team.ash-workspace'), folders: [
+			{ id: 'one', name: 'one', uri: URI.file('/first'), index: 0 },
+			{ id: 'two', name: 'two', uri: URI.file('/second'), index: 1 },
+		]
+	});
+	const adapterRoutes: (string | undefined)[] = [];
+	const created: import('../../../../services/terminal/browser/terminal.js').ITerminalCreateOptions[] = [];
+	const terminals = {
+		getProfiles: async () => [{ profileId: 'shell', title: 'shell', isDefault: true }],
+		createTerminal: async (options: import('../../../../services/terminal/browser/terminal.js').ITerminalCreateOptions) => { created.push(options); return { state: 'running', processId: 1234, sendText: async () => { } }; },
+	} as unknown as ITerminalService;
+	const response = await launchWithTerminalRequest(terminals, { args: ['app'] }, { workspace, activeResource: URI.file('/second/main.rs'), adapterRoutes });
+	assert.equal(response.success, true);
+	assert.deepEqual(adapterRoutes, ['two']);
+	assert.equal(created[0]?.dirId, 'two');
+});

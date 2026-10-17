@@ -169,16 +169,12 @@ export function registerTerminalActions(): void {
 			super({ id: TerminalCommandId.NewWithProfile, title: localize2('terminal.profile.newCommand', 'Terminal: Create New Terminal With Profile'), f1: true, precondition: AppServerAvailableContext.isEqualTo(true) });
 		}
 		override async run(accessor: ServicesAccessor, profileId?: unknown): Promise<void> {
-			const profiles = accessor.get(ITerminalProfileService);
 			const view = terminalView(accessor);
 			if (profileId === undefined) {
-				using picker = accessor.get(IInstantiationService).createInstance(TerminalProfileQuickpick);
-				profileId = await picker.showAndGetResult('createInstance');
-				if (profileId === undefined) return;
-			} else {
-				await profiles.refreshAvailableProfiles();
+				await view.createTerminal({ type: 'pick' });
+				return;
 			}
-			if (typeof profileId !== 'string' || !profiles.availableProfiles.some(profile => profile.profileId === profileId) && !profiles.contributedProfiles.some(profile => profileId === `extension:${profile.extensionIdentifier}/${profile.id}`)) {
+			if (typeof profileId !== 'string') {
 				throw new TypeError(localize('terminal.profile.unknown', 'Unknown terminal profile: {0}', String(profileId)));
 			}
 			await view.createTerminal(profileId);

@@ -8,7 +8,10 @@ use ash_app_server_protocol::protocol::backup::BackupListPageParams;
 use ash_app_server_protocol::protocol::backup::BackupListPageResult;
 use ash_app_server_protocol::protocol::backup::BackupListParams;
 use ash_app_server_protocol::protocol::backup::BackupListResult;
+use ash_app_server_protocol::protocol::backup::BackupMoveParams;
+use ash_app_server_protocol::protocol::backup::BackupMoveResult;
 use ash_app_server_protocol::protocol::backup::BackupRecordDto;
+use ash_app_server_protocol::protocol::backup::BackupRevisionDto;
 use ash_app_server_protocol::protocol::backup::BackupWorkspaceDto;
 use ash_app_server_protocol::protocol::backup::BackupWorkspacesParams;
 use ash_app_server_protocol::protocol::backup::BackupWorkspacesResult;
@@ -143,6 +146,49 @@ impl BackupRequestProcessor {
                 )
                 .map_err(backup_error)?,
         ))
+    }
+
+    pub(super) fn move_records(
+        &self,
+        authority: ConnectionAuthority,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: BackupMoveParams = decode(params)?;
+        let store = self.store(authority)?;
+        for resource in params
+            .workspace
+            .folders
+            .iter()
+            .chain(params.workspace.configuration.iter())
+            .chain(params.backups.iter().map(|backup| &backup.resource))
+        {
+            url::Url::parse(resource)
+                .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        }
+        let workspace = BackupWorkspace {
+            id: params.workspace.id,
+            folders: params.workspace.folders,
+            configuration: params.workspace.configuration,
+            remote_authority: params.workspace.remote_authority,
+        };
+        let backups = store
+            .move_records(
+                &params.client_id,
+                &params.source_workspace_id,
+                &workspace,
+                &params
+                    .backups
+                    .into_iter()
+                    .map(|backup| (backup.resource, backup.revision))
+                    .collect::<Vec<_>>(),
+            )
+            .map_err(backup_error)?;
+        result(&BackupMoveResult {
+            backups: backups
+                .into_iter()
+                .map(|(resource, revision)| BackupRevisionDto { resource, revision })
+                .collect(),
+        })
     }
 
     pub(super) fn discard(

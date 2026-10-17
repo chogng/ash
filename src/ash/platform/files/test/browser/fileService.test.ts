@@ -45,6 +45,39 @@ test("AppServerFileSystemProvider passes the paste destination and move request 
 	assert.deepEqual(requests, [{ dirId: 'project', path: 'destination', moveRequested: true }]);
 });
 
+test('workspace configuration access follows the current metadata file without authorizing sibling files', async () => {
+	let configuration = URI.file('/metadata/first.ash-workspace');
+	const bytes = new TextEncoder().encode('{"folders":[]}');
+	using changes = new Emitter<void>();
+	const reads: URI[] = [];
+	const writes: URI[] = [];
+	const stat = (resource: URI): IFileStat => ({ resource, kind: FileKind.File, sizeBytes: bytes.length, readonly: false, modifiedAtMillis: undefined });
+	using provider = new AppServerFileSystemProvider({
+		api: unavailableFileApi(),
+		resourceApi: unavailableResourceApi(),
+		configuration: () => configuration,
+		configurationFiles: {
+			onDidChange: changes.event,
+			read: async resource => { reads.push(resource); return { resource, bytes, revision: '1', stat: stat(resource) }; },
+			write: async resource => { writes.push(resource); return { stat: stat(resource), revision: '2' }; },
+		},
+	});
+	const changed: (readonly URI[] | undefined)[] = [];
+	using listener = provider.onDidChangeFiles(event => changed.push(event.resources));
+	await provider.resolvePathIdentity(configuration);
+	assert.equal((await provider.readTextFile(configuration, 'utf8')).content, '{"folders":[]}');
+	assert.equal((await provider.writeTextFile(configuration, '{}', 'utf8', { create: false, overwrite: true })).revision, '2');
+	assert.deepEqual(reads, [configuration]);
+	assert.deepEqual(writes, [configuration]);
+	const previous = configuration;
+	configuration = URI.file('/metadata/second.ash-workspace');
+	changes.fire();
+	assert.deepEqual(changed, [[configuration]]);
+	assert.deepEqual(await provider.stat(configuration), stat(configuration));
+	await assert.rejects(provider.readFile(previous), /no authorized directory/);
+	await assert.rejects(provider.readFile(URI.file('/metadata/sibling.txt')), /no authorized directory/);
+});
+
 test("workspaceRelativePath confines resources to the folder", () => {
 	const root = URI.parse("file:///C:/project");
 	const releasedResources: string[] = [];

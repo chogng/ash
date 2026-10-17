@@ -1,7 +1,5 @@
 use super::*;
 use std::fs;
-use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
 
 #[test]
 fn parses_codex_style_search_arguments() {
@@ -29,7 +27,8 @@ fn parses_codex_style_search_arguments() {
 
 #[test]
 fn json_output_uses_the_library_search_results() {
-    let directory = temporary_dir();
+    let workspace = tempfile::tempdir().unwrap();
+    let directory = workspace.path();
     fs::create_dir_all(directory.join("src")).unwrap();
     fs::write(directory.join("src/lib.rs"), "contents").unwrap();
     fs::write(directory.join("notes.md"), "contents").unwrap();
@@ -56,12 +55,12 @@ fn json_output_uses_the_library_search_results() {
             .is_some_and(|indices| !indices.is_empty())
     );
     assert!(warnings.is_empty());
-    let _ = fs::remove_dir_all(directory);
 }
 
 #[test]
 fn omitted_pattern_lists_dir_files_in_plain_text() {
-    let directory = temporary_dir();
+    let workspace = tempfile::tempdir().unwrap();
+    let directory = workspace.path();
     fs::write(directory.join("alpha.rs"), "contents").unwrap();
     fs::write(directory.join("beta.rs"), "contents").unwrap();
     let cli = Cli::try_parse_from(["ash-file-search", "-C", directory.to_str().unwrap()]).unwrap();
@@ -72,18 +71,4 @@ fn omitted_pattern_lists_dir_files_in_plain_text() {
 
     assert_eq!(String::from_utf8(output).unwrap(), "alpha.rs\nbeta.rs\n");
     assert!(warnings.is_empty());
-    let _ = fs::remove_dir_all(directory);
-}
-
-fn temporary_dir() -> PathBuf {
-    let path = std::env::temp_dir().join(format!(
-        "ash-file-search-cli-tests-{}-{}",
-        std::process::id(),
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    fs::create_dir_all(&path).unwrap();
-    path
 }

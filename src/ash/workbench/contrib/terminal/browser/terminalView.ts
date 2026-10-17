@@ -42,6 +42,10 @@ import { TerminalTabbedView } from "./terminalTabbedView.js";
 import "./media/terminal.css";
 import { h, addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { observeResize } from "../../../../base/browser/observer.js";
+import { IEditorService } from '../../../services/editor/common/editorService.js';
+import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
+import { pickWorkspaceFolder } from '../../../services/workspaces/browser/workspaceOpenService.js';
+import { TerminalProfileQuickpick } from './terminalProfileQuickpick.js';
 
 const DEFAULT_DIMENSIONS: ITerminalDimensions = { rows: 24, cols: 80 };
 
@@ -69,6 +73,8 @@ export class TerminalViewPane extends ViewPane {
 		@ITerminalProfileResolverService private readonly profileResolver: ITerminalProfileResolverService,
 		@ITerminalProcessService private readonly processes: ITerminalProcessService,
 		@ITerminalGroupService private readonly groups: ITerminalGroupService,
+		@IEditorService private readonly editors: IEditorService,
+		@IQuickInputService private readonly quickInput: IQuickInputService,
 	) {
 		super(container, options);
 		this.terminalService = terminalService;
@@ -169,7 +175,12 @@ export class TerminalViewPane extends ViewPane {
 		this.initializing = true;
 		try {
 			await this.terminalService.whenConnected;
-			await this.profileService.refreshAvailableProfiles();
+			if (this.terminalService.instances.length === 0) {
+				// Creation selects the directory before discovering its profiles.
+				await this.createTerminal(undefined, false);
+			} else {
+				await this.profileService.refreshAvailableProfiles(this.terminalService.activeInstance?.dirId);
+			}
 			if (this.isDisposed) return;
 			this.updateProfiles();
 		} catch {
@@ -178,10 +189,9 @@ export class TerminalViewPane extends ViewPane {
 		} finally {
 			this.initializing = false;
 		}
-		if (this.isBodyVisible() && !this.isDisposed && this.terminalService.instances.length === 0) await this.createTerminal(undefined, false);
 	}
 
-	public async createTerminal(profileId?: string, focus = true, parent?: ITerminalInstance): Promise<void> {
+	public async createTerminal(profileId?: string | { readonly type: 'pick'; }, focus = true, parent?: ITerminalInstance): Promise<void> {
 		if (this.creating || this.isDisposed) return;
 		if (!this.hasWorkspaceFolder()) {
 			this.setStatus("Open a folder to use the terminal.");
@@ -195,18 +205,31 @@ export class TerminalViewPane extends ViewPane {
 		this.titleActions.setCreating(true);
 		this.setStatus(undefined);
 		try {
-			if (profileId === undefined) {
-				if (!this.profileService.availableProfiles.length) await this.profileService.refreshAvailableProfiles();
-				if (this.isDisposed) return;
+			const folders = this.workspaceContext.getWorkspace().folders;
+			const activeResource = this.editors.activeEditor?.resource;
+			const folder = parent ? folders.find(folder => folder.id === parent.dirId)
+				: (activeResource && this.workspaceContext.getWorkspaceFolder(activeResource))
+				|| (folders.length === 1 ? folders[0] : await pickWorkspaceFolder(this.quickInput, folders, localize('terminal.selectFolder', 'Select a workspace folder for the terminal.')));
+			if (!folder || this.isDisposed || !focus && !this.isBodyVisible()) return;
+			await this.profileService.refreshAvailableProfiles(folder.id);
+			if (this.isDisposed || !focus && !this.isBodyVisible()) return;
+			if (typeof profileId === 'object') {
+				using picker = this.instantiation.createInstance(TerminalProfileQuickpick);
+				profileId = await picker.showAndGetResult('createInstance', folder.id);
+				if (profileId === undefined || this.isDisposed) return;
+			}
+			if (profileId !== undefined && !this.profileService.getAvailableProfiles(folder.id).some(profile => profile.profileId === profileId)
+				&& !this.profileService.contributedProfiles.some(profile => `extension:${profile.extensionIdentifier}/${profile.id}` === profileId)) {
+				throw new TypeError(localize('terminal.profile.unknown', 'Unknown terminal profile: {0}', profileId));
 			}
 			const contributed = parent ? undefined : profileId === undefined ? await this.profileService.getContributedDefaultProfile({}) : this.profileService.contributedProfiles.find(profile => profileId === `extension:${profile.extensionIdentifier}/${profile.id}`);
 			if (contributed) {
 				const provider = this.profileService.getContributedProfileProvider(contributed.extensionIdentifier, contributed.id);
 				if (!provider) throw new Error(localize('terminal.profile.providerUnavailable', 'Terminal profile provider is unavailable: {0}', contributed.title));
-				await provider.createContributedTerminalProfile(contributed.options ?? {});
+				await provider.createContributedTerminalProfile({ ...contributed.options, cwd: folder.uri });
 				return;
 			}
-			const profile = profileId === undefined ? this.profileService.getDefaultProfile() : this.profileService.availableProfiles.find(profile => profile.profileId === profileId);
+			const profile = profileId === undefined ? this.profileService.getDefaultProfile(undefined, folder.id) : this.profileService.getAvailableProfiles(folder.id).find(profile => profile.profileId === profileId);
 			const os = this.processes.operatingSystem;
 			if (os === undefined) throw new Error(localize('terminal.profile.platformUnavailable', 'The terminal execution host is not ready.'));
 			const shell: IShellLaunchConfig = parent?.shellLaunchConfig?.executable && profileId === parent.profile.profileId ? { ...parent.shellLaunchConfig }
@@ -221,12 +244,11 @@ export class TerminalViewPane extends ViewPane {
 				}
 				shell.cwd ??= parent.initialCwd;
 			}
-			const resource = this.workspaceContext.getWorkspace().folders[0]?.uri;
-			await this.profileResolver.resolveShellLaunchConfig(shell, { os, remoteAuthority: resource && getRemoteAuthority(resource) });
-			if (this.isDisposed) return;
+			await this.profileResolver.resolveShellLaunchConfig(shell, { os, remoteAuthority: getRemoteAuthority(folder.uri), workspaceFolder: folder });
+			if (this.isDisposed || !focus && !this.isBodyVisible()) return;
 			if (parent && (!this.terminalService.instances.includes(parent) || parent.state !== 'running')) return;
 			const created = await this.terminalService.createTerminal({
-				dirId: parent?.dirId,
+				dirId: folder.id,
 				dimensions: this.activeItem()?.widget.dimensions() ?? DEFAULT_DIMENSIONS,
 				title: profile?.overrideName ? profile.profileName : undefined,
 				profile: profile?.isAutoDetected ? { type: 'profile', profileId: profile.profileId } : { type: 'custom', name: profile?.profileName ?? shell.name ?? localize('terminal.profile.shell', 'Shell'), path: typeof shell.executable === 'string' ? [shell.executable] : shell.executable!, args: shell.args ?? [] },

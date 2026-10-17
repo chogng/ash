@@ -407,3 +407,19 @@ fn directory_grants_host_has_one_wire_name_and_old_methods_are_unregistered() {
         assert!(client_method(&format!("config/directoryGrants/{action}")).is_some());
     }
 }
+
+#[test]
+fn backup_move_contract_uses_revisions_and_rejects_unknown_fields() {
+    use crate::protocol::backup::BackupMoveParams;
+    use crate::protocol::backup::BackupMoveResult;
+    let value = serde_json::json!({"clientId":"editor","sourceWorkspaceId":"old","workspace":{"id":"new","folders":[],"configuration":null,"remoteAuthority":null},"backups":[{"resource":"untitled:/note","revision":"observed"}]});
+    let decoded: BackupMoveParams = serde_json::from_value(value.clone()).unwrap();
+    assert_eq!(serde_json::to_value(decoded).unwrap(), value);
+    let mut invalid = value;
+    invalid["backups"][0]["content"] = serde_json::json!("untrusted");
+    assert!(serde_json::from_value::<BackupMoveParams>(invalid).is_err());
+    let response =
+        serde_json::json!({"backups":[{"resource":"untitled:/note","revision":"committed"}]});
+    let decoded: BackupMoveResult = serde_json::from_value(response.clone()).unwrap();
+    assert_eq!(serde_json::to_value(decoded).unwrap(), response);
+}

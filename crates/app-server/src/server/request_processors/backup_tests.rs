@@ -66,7 +66,7 @@ fn backup_processor_preserves_permissions_and_unavailable_errors_for_every_rpc()
         SqliteBackupStore::open(&directory.path().join("state.db")).unwrap(),
     ));
     let unavailable = BackupRequestProcessor::default();
-    let requests: [(Operation, Value); 5] = [
+    let requests: [(Operation, Value); 6] = [
         (
             BackupRequestProcessor::workspaces,
             json!({"clientId":"editor"}),
@@ -87,6 +87,10 @@ fn backup_processor_preserves_permissions_and_unavailable_errors_for_every_rpc()
                 "content":{"resource":"untitled:/note","format":"text.v1","content":"draft"},
                 "expectedRevision":null
             }),
+        ),
+        (
+            BackupRequestProcessor::move_records,
+            json!({"clientId":"editor", "sourceWorkspaceId":"old", "workspace":{"id":"new","folders":[],"configuration":null},"backups":[]}),
         ),
         (
             BackupRequestProcessor::discard,
@@ -114,4 +118,45 @@ fn backup_processor_preserves_permissions_and_unavailable_errors_for_every_rpc()
         assert_eq!(missing.code, -32002);
         assert_eq!(missing.message, AppServerErrorName::BackupUnavailable);
     }
+}
+
+#[test]
+fn backup_move_rpc_is_atomic_and_validates_reopening_uris() {
+    let directory = tempfile::tempdir().unwrap();
+    let processor = BackupRequestProcessor::new(Arc::new(
+        SqliteBackupStore::open(&directory.path().join("state.db")).unwrap(),
+    ));
+    let record = processor.write(ConnectionAuthority::ProductHost, &json!({"clientId":"editor","workspace":{"id":"old","folders":[],"configuration":null},"content":{"resource":"untitled:/note","format":"text.v1","content":"draft"},"expectedRevision":null})).unwrap();
+    let request = json!({"clientId":"editor","sourceWorkspaceId":"old","workspace":{"id":"new","folders":[],"configuration":"file:///team.ash-workspace"},"backups":[{"resource":"untitled:/note","revision":record["revision"]}]});
+    let mut invalid = request.clone();
+    invalid["workspace"]["configuration"] = json!("relative-path");
+    assert_eq!(
+        processor
+            .move_records(ConnectionAuthority::ProductHost, &invalid)
+            .unwrap_err()
+            .message,
+        AppServerErrorName::InvalidParams
+    );
+    let moved = processor
+        .move_records(ConnectionAuthority::ProductHost, &request)
+        .unwrap();
+    assert_eq!(moved["backups"][0]["revision"], record["revision"]);
+    assert_eq!(
+        processor
+            .list(
+                ConnectionAuthority::ProductHost,
+                &json!({"clientId":"editor","workspaceId":"old"})
+            )
+            .unwrap()["backups"],
+        json!([])
+    );
+    assert_eq!(
+        processor
+            .list(
+                ConnectionAuthority::ProductHost,
+                &json!({"clientId":"editor","workspaceId":"new"})
+            )
+            .unwrap()["backups"],
+        json!([record])
+    );
 }

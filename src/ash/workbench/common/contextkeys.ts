@@ -20,6 +20,7 @@ export const WorkbenchStateContext = new RawContextKey<WorkbenchStateValue>('wor
 
 /** Number of root folders in the current workspace. */
 export const WorkspaceFolderCountContext = new RawContextKey<number>('workspaceFolderCount', 0);
+export const EnterMultiRootWorkspaceSupportContext = new RawContextKey<boolean>('enterMultiRootWorkspaceSupport', false);
 
 /** Whether this window can open a folder as its workspace. */
 export const OpenFolderWorkspaceSupportContext = new RawContextKey<boolean>('openFolderWorkspaceSupport', false);

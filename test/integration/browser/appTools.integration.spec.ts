@@ -91,7 +91,7 @@ for (const platform of ['linux', 'osx', 'windows']) {
 		expect(await page.evaluate(() => window.ashAppToolsIntegration.call({ type: 'openTerminal' }))).toEqual({ opened: true, terminalId: 'terminal-instance-1' });
 		expect(await page.evaluate(() => window.ashAppToolsIntegration.profileSelections)).toContainEqual({ type: 'custom', name: 'Agent host shell', path: [platform === 'windows' ? 'C:\\tools\\pwsh.exe' : '/execution/home/agent/bash'], args: ['-l', 'inherited'] });
 		expect(await page.evaluate(() => ({ created: window.ashAppToolsIntegration.terminalCreations, active: window.ashAppToolsIntegration.activeTerminal, views: window.ashAppToolsIntegration.terminalViews }))).toEqual({
-			created: [{ rows: 24, cols: 80, profile: { type: 'custom', name: 'Agent host shell', path: [platform === 'windows' ? 'C:\\tools\\pwsh.exe' : '/execution/home/agent/bash'], args: ['-l', 'inherited'] }, env: { MODE: 'agent', GLOBAL: '/execution/home', REMOVED: null, PROFILE: 'inherited' }, cwd: platform === 'windows' ? 'C:\\workspace/shell work' : '/workspace/shell work' }],
+			created: [{ dirId: 'app-tools', rows: 24, cols: 80, profile: { type: 'custom', name: 'Agent host shell', path: [platform === 'windows' ? 'C:\\tools\\pwsh.exe' : '/execution/home/agent/bash'], args: ['-l', 'inherited'] }, env: { MODE: 'agent', GLOBAL: '/execution/home', REMOVED: null, PROFILE: 'inherited' }, cwd: platform === 'windows' ? 'C:\\workspace/shell work' : '/workspace/shell work' }],
 			active: 'terminal-instance-1', views: [{ id: 'ash.terminal', focus: true }],
 		});
 		expect(errors).toEqual([]);

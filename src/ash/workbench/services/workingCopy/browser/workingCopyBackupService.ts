@@ -17,6 +17,7 @@ export class WorkingCopyBackupService extends Disposable implements IWorkingCopy
 	private readonly legacyConflicts = new Map<string, WorkingCopyBackup>();
 	private readonly legacy: IndexedDbWorkingCopyBackupService;
 	private preparation: Promise<void> | undefined;
+	private movedRevisions: { workspaceId: string; revisions: ReadonlyMap<string, string>; } | undefined;
 
 	constructor(
 		@IBackupService private readonly backups: IBackupService,
@@ -79,12 +80,29 @@ export class WorkingCopyBackupService extends Disposable implements IWorkingCopy
 		this.revisions.delete(key);
 	}
 
+	async moveBackups(target: IBackupWorkspace): Promise<void> {
+		if (target.id === this.workspaceId) return;
+		const generation = this.workspaceGeneration;
+		const sourceId = this.workspaceId;
+		await this.prepare(generation);
+		const source = await this.backups.list(sourceId);
+		const observed = new Set(source.filter(record => this.revisions.get(record.content.resource.toString()) === record.revision).map(record => record.content.resource.toString()));
+		const moved = await this.backups.move(sourceId, target, source.map(record => ({ resource: record.content.resource, revision: record.revision })));
+		this.assertCurrentWorkspace(generation);
+		// Moving bytes does not acknowledge recovery content. Retain only revisions
+		// already observed by this editor; unknown formats and other writers' newer
+		// source records still require explicit restoration in the destination.
+		this.movedRevisions = { workspaceId: target.id, revisions: new Map(moved.filter(record => observed.has(record.resource.toString())).map(record => [record.resource.toString(), record.revision])) };
+	}
+
 	switchWorkspace(workspaceId: string): void {
 		this.assertNotDisposed();
 		this.legacy.switchWorkspace(workspaceId);
 		this.workspaceId = workspaceId;
 		this.workspaceGeneration++;
 		this.revisions.clear();
+		if (this.movedRevisions?.workspaceId === workspaceId) for (const [key, revision] of this.movedRevisions.revisions) this.revisions.set(key, revision);
+		this.movedRevisions = undefined;
 		this.legacyConflicts.clear();
 		this.preparation = undefined;
 	}

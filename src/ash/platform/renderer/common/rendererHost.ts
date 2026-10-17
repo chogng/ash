@@ -54,6 +54,7 @@ import type { IAgentVoiceService } from '../../agentHost/common/agentService.js'
 import type { ITeamApi } from '../../teams/common/teamApi.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 import type { URI } from '../../../base/common/uri.js';
+import type { IWorkspaceConfigurationFileApi } from '../../workspace/common/workspaceIpc.js';
 import type { ITestExecutionService } from '../../testing/common/testExecutionService.js';
 
 /** Optional product capabilities contributed by a statically selected host bundle. */
@@ -78,6 +79,7 @@ export function mergeRendererHostCapabilities(capabilities: readonly RendererHos
 
 /** Transport-neutral capability set supplied by a renderer host at startup. */
 export interface IRendererHost extends RendererHostCapabilities {
+	readonly workspaceConfigurationFiles?: IWorkspaceConfigurationFileApi;
 	/** Host support is stable for the window; connection state describes temporary availability. */
 	readonly hasAppServer: boolean;
 	/** Actual local OS user directory when supplied by the desktop host. */

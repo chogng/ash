@@ -2007,7 +2007,7 @@ for (const placement of ['task', 'taskPlain', 'defaults', 'taskPlatform', 'defau
 		const [configured] = await tasks.refresh();
 		const run = await tasks.run(configured!);
 		assert.deepEqual(run.task.presentation, { panel: 'dedicated', reveal: 'never', focus: false });
-		assert.deepEqual({ label: run.task.label, group: run.task.group, default: run.task.groupIsDefault, created }, { label: 'TypeScript', group: placement === 'unconfigured' ? 'test' : 'build', default: placement === 'task' ? '**/*.ts' : placement === 'unconfigured' ? true : undefined, created: [{ rows: 24, cols: 80, profile: { type: 'default' }, env: {}, execution: { type: 'process', program: 'compiler', args: [] } }] });
+		assert.deepEqual({ label: run.task.label, group: run.task.group, default: run.task.groupIsDefault, created }, { label: 'TypeScript', group: placement === 'unconfigured' ? 'test' : 'build', default: placement === 'task' ? '**/*.ts' : placement === 'unconfigured' ? true : undefined, created: [{ dirId: 'workspace', rows: 24, cols: 80, profile: { type: 'default' }, env: {}, execution: { type: 'process', program: 'compiler', args: [] } }] });
 		await tasks.terminate(run);
 		assert.deepEqual(closed, ['resolved-task']);
 	});
@@ -2909,4 +2909,31 @@ suite('Agent Task runs through the shared execution owner', () => {
 		workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/replacement') });
 		assert.equal(service.getRun(run.runId), undefined);
 	});
+});
+
+test('multi-root shell tasks resolve profiles and configured environment in their owning directory', async () => {
+	using resources = new DisposableStore();
+	using terminals = new FakeTerminalService();
+	const folders = [
+		{ id: 'one', name: 'one', uri: URI.file('/workspaces/first'), index: 0 },
+		{ id: 'two', name: 'two', uri: URI.file('/workspaces/second'), index: 1 },
+	];
+	using workspace = new WorkspaceContextService({ id: 'team', configuration: URI.file('/team.ash-workspace'), folders });
+	const document = { version: '2.0.0', tasks: [{ label: 'Second shell', type: 'shell', command: 'build', presentation: { reveal: 'never' } }] };
+	const services = taskServices(resources, new FakeFileService(URI.file('/workspaces'), { 'second/.vscode/tasks.json': JSON.stringify(document) }), workspace, terminals);
+	const routes: (string | undefined)[] = [];
+	const processes = services.get(ITerminalProcessService);
+	processes.getEnvironment = async (_profile, dirId) => { routes.push(dirId); return { HOME: '/second-home' }; };
+	await services.get(IConfigurationService).updateValue('terminal.integrated.env.linux', { SELECTED: '${workspaceFolder}' });
+	const creations: ITerminalCreateOptions[] = [];
+	const create = terminals.createTerminal.bind(terminals);
+	terminals.createTerminal = async options => { creations.push(options); return create(options); };
+	using tasks = services.createInstance(TaskService);
+	const task = (await tasks.refresh()).find(task => task.label === 'Second shell')!;
+	const run = await tasks.run(task);
+	assert.equal(creations[0]?.dirId, 'two');
+	assert.equal(creations[0]?.env?.SELECTED, folders[1]!.uri.fsPath);
+	assert.ok(routes.length > 0);
+	assert.ok(routes.every(id => id === 'two'));
+	await tasks.terminate(run);
 });

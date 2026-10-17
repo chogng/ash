@@ -50,7 +50,7 @@ for (const platform of ['linux', 'osx', 'windows']) {
 		};
 	}
 }
-properties[TerminalSettingId.Cwd] = { type: 'string', default: '', maxLength: 32768, get description() { return localize('terminal.profile.cwdDescription', 'Starting directory of a new terminal. Execution authorization still applies.'); } };
+properties[TerminalSettingId.Cwd] = { type: 'string', default: '', scope: ConfigurationScope.RESOURCE, maxLength: 32768, get description() { return localize('terminal.profile.cwdDescription', 'Starting directory of a new terminal. Execution authorization still applies.'); } };
 
 let terminalPlatformConfiguration: IConfigurationNode = {
 	id: 'terminal', scope: ConfigurationScope.WINDOW, properties,

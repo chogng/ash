@@ -186,6 +186,7 @@ test("App Server diagnostics discard a push from a different revision when acqui
 test("App Server diagnostics keep equal relative paths isolated by Workspace folder", async () => {
 	const events = new FakeServerEvents();
 	const api = new FakeLanguageApi();
+	const documents = new FakeCodeIntelligenceDocuments();
 	using workspace = new WorkspaceContextService({
 		id: "multi-root",
 		folders: [
@@ -194,13 +195,14 @@ test("App Server diagnostics keep equal relative paths isolated by Workspace fol
 		],
 		configuration: URI.file("C:/project.code-workspace"),
 	});
-	using service = createDiagnosticsService(api, events, workspace);
+	using service = createDiagnosticsService(api, events, workspace, documents);
 	using model = new TextModel("fn second() {}\n");
 	const resource = URI.file("C:/two/main.rs");
 	using acquisition = service.acquire(resource, "rust", model);
 	await tick();
 
 	assert.equal(api.synchronized[0]!.document.dirId, "two");
+	assert.deepEqual(documents.synchronized, [], 'path-only code-intelligence overlays cannot identify a multi-root document');
 	events.fire({ method: "language/diagnostics", params: { dirId: "two", path: "main.rs", revision: 1, diagnostics: [{ range: { start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 9 } }, severity: "warning", message: "second root", code: null, source: "fixture" }] } });
 	assert.equal(service.getDiagnostics(resource)?.diagnostics[0]?.message, "second root");
 });
@@ -449,6 +451,56 @@ test("uninstall discards pending workspace diagnostic reports and late server no
 	using acquisition = service.acquire(URI.file("/project/main.py"), "python", model);
 	events.fire({ method: "language/diagnostics", params: { path: "main.py", revision: 1, diagnostics: [diagnostic] } });
 	assert.deepEqual(service.getAllDiagnostics(), []);
+});
+
+for (const nested of [false, true]) test(`live folder edits rebind acquired documents and retire old overlays, nested=${nested}`, async () => {
+	using workspace = new WorkspaceContextService({ id: 'one', uri: URI.file('/project') });
+	const api = new FakeLanguageApi();
+	const documents = new FakeCodeIntelligenceDocuments();
+	using service = createDiagnosticsService(api, new FakeServerEvents(), workspace, documents);
+	using model = new TextModel('fn main() {}');
+	const resource = URI.file('/project/child/main.rs');
+	using acquisition = service.acquire(resource, 'rust', model);
+	await tick(); await tick();
+	assert.equal(api.synchronized.length, 1);
+	workspace.updateWorkspace({
+		id: 'team', configuration: URI.file('/team.ash-workspace'), folders: [
+			{ id: 'one', name: 'one', uri: URI.file('/project'), index: 0 },
+			{ id: 'two', name: 'two', uri: URI.file(nested ? '/project/child' : '/other'), index: 1 },
+		]
+	});
+	await tick(); await tick();
+	assert.deepEqual(documents.closed, ['child/main.rs']);
+	assert.equal(api.synchronized.at(-1)?.document.dirId, nested ? 'two' : 'one');
+	assert.equal(api.synchronized.at(-1)?.document.path, nested ? 'main.rs' : 'child/main.rs');
+	acquisition.dispose();
+	await tick();
+	assert.deepEqual(documents.closed, ['child/main.rs'], 'the old overlay closes exactly once');
+});
+
+test('a synchronization in flight retires its old binding before replaying into a new root', async () => {
+	using workspace = new WorkspaceContextService({ id: 'one', uri: URI.file('/project') });
+	const api = new FakeLanguageApi();
+	let release!: () => void;
+	const blocked = new Promise<void>(resolve => { release = resolve; });
+	const synchronize = api.synchronize.bind(api);
+	api.synchronize = async request => { await synchronize(request); if (api.synchronized.length === 1) await blocked; };
+	const documents = new FakeCodeIntelligenceDocuments();
+	using service = createDiagnosticsService(api, new FakeServerEvents(), workspace, documents);
+	using model = new TextModel('fn main() {}');
+	using acquisition = service.acquire(URI.file('/project/child/main.rs'), 'rust', model);
+	await tick();
+	workspace.updateWorkspace({
+		id: 'team', configuration: URI.file('/team.ash-workspace'), folders: [
+			{ id: 'one', name: 'one', uri: URI.file('/project'), index: 0 },
+			{ id: 'two', name: 'two', uri: URI.file('/project/child'), index: 1 },
+		]
+	});
+	release();
+	await tick(); await tick();
+	assert.deepEqual(documents.closed, ['child/main.rs']);
+	assert.deepEqual(api.closed, [{ path: 'child/main.rs' }]);
+	assert.equal(api.synchronized.at(-1)?.document.dirId, 'two');
 });
 
 test('successful saves synchronize the current dirty snapshot before reporting exact saved content', async () => {

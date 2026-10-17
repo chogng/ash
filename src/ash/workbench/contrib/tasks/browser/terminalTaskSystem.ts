@@ -212,7 +212,7 @@ export class TerminalTaskSystem extends Disposable {
 				shellName = executable.split(/[\\/]/).at(-1)!.replace(/\.exe$/i, '').toLowerCase();
 				launch = { executable, args: shell.options?.shellArgs };
 			} else {
-				const resolution = this.profiles.getDefaultProfile({ os: os!, remoteAuthority: getRemoteAuthority(folder.uri), allowAutomationShell: true });
+				const resolution = this.profiles.getDefaultProfile({ os: os!, remoteAuthority: getRemoteAuthority(folder.uri), workspaceFolder: folder, allowAutomationShell: true });
 				const selected = await (signal ? raceCancellationError(resolution, signal) : resolution);
 				assertCurrent();
 				this.assertNotDisposed();
@@ -239,7 +239,7 @@ export class TerminalTaskSystem extends Disposable {
 				mergeEnvironments(env, configuredEnvironments[platform], caseSensitive);
 				mergeEnvironments(env, launch?.env, caseSensitive);
 				if (Object.keys(env).length) {
-					const inherited = await this.profiles.getEnvironment(folder.uri.authority || undefined);
+					const inherited = await this.profiles.getEnvironment(getRemoteAuthority(folder.uri), folder);
 					for (const [key, value] of Object.entries(env)) {
 						env[key] = value === null ? null : await this.resolver.resolveWithEnvironment(inherited, folder, value);
 					}

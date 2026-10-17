@@ -38,11 +38,15 @@ import {
 	type IWatchOptions,
 } from "../../files/common/files.js";
 import { workspaceRelativePath, workspaceResourceFromPath } from "../../workspace/common/workspace.js";
-import { extUri } from '../../../base/common/resources.js';
+import { dirname, extUri } from '../../../base/common/resources.js';
 import type { IFileApi, IFileSystemDirectory } from '../../files/common/fileApi.js';
 import type { ISystemFileTransferService } from '../../files/common/systemFileTransferService.js';
+import type { IWorkspaceConfigurationFileApi } from '../../workspace/common/workspaceIpc.js';
 
 export interface AppServerFileSystemProviderOptions {
+	readonly configurationFiles?: IWorkspaceConfigurationFileApi;
+	/** Current window-owned metadata file, independent of backend-authorized directory roots. */
+	readonly configuration?: () => URI | undefined;
 	readonly api: IFileApi;
 	readonly resourceApi: IResourceApi;
 	/** Environment roots known by the host, independent of the visible Explorer selection. */
@@ -72,6 +76,8 @@ export class AppServerFileSystemProvider extends Disposable implements IFileSyst
 	public readonly onDidChangePathIdentity = this.identityChanges.event;
 	private readonly pathIdentities = new Map<string, PathIdentityState>();
 	private readonly api: IFileApi;
+	private readonly configurationFiles: IWorkspaceConfigurationFileApi | undefined;
+	private readonly configuration: () => URI | undefined;
 	private readonly resourceApi: IResourceApi;
 	private readonly directories: () => readonly IFileSystemDirectory[];
 	private readonly resolvedDirectories = new Map<string, IFileSystemDirectory>();
@@ -84,6 +90,12 @@ export class AppServerFileSystemProvider extends Disposable implements IFileSyst
 	constructor(options: AppServerFileSystemProviderOptions) {
 		super();
 		this.api = options.api;
+		this.configurationFiles = options.configurationFiles;
+		this.configuration = options.configuration ?? (() => undefined);
+		if (this.configurationFiles) this._register(this.configurationFiles.onDidChange(() => {
+			const configuration = this.configuration();
+			if (configuration) this.fileChanges.fire({ resources: [configuration] });
+		}));
 		this.resourceApi = options.resourceApi;
 		this.directories = options.directories ?? (() => []);
 		this._register(this.api.onDidChangeConnection(() => {
@@ -126,6 +138,7 @@ export class AppServerFileSystemProvider extends Disposable implements IFileSyst
 
 	public async resolvePathIdentity(resource: URI): Promise<void> {
 		this.assertNotDisposed();
+		if (this.isConfiguration(resource)) return;
 		const generation = this.api.connectionGeneration;
 		const directory = this.knownDirectory(resource) ?? await this.resolveDirectory(resource);
 		if (this.isDisposed || generation !== this.api.connectionGeneration) { throw canceled(); }
@@ -301,6 +314,7 @@ export class AppServerFileSystemProvider extends Disposable implements IFileSyst
 	}
 
 	async stat(resource: URI): Promise<IFileStat> {
+		if (this.isConfiguration(resource)) return (await this.configurationFiles!.read(resource)).stat;
 		let result;
 		try { result = await this.api.getMetadata(await this.fileTarget(resource)); }
 		catch (error) { if (isFileNotFound(error)) throw new FileNotFoundError(resource); throw error; }
@@ -325,6 +339,7 @@ export class AppServerFileSystemProvider extends Disposable implements IFileSyst
 	}
 
 	async readFile(resource: URI): Promise<IFileBytes> {
+		if (this.isConfiguration(resource)) return this.configurationFiles!.read(resource);
 		let result: FsReadBinaryFileResult;
 		try { result = await this.api.readBinaryFile(await this.fileTarget(resource)); }
 		catch (error) { if (isFileNotFound(error)) throw new FileNotFoundError(resource); throw error; }
@@ -337,6 +352,10 @@ export class AppServerFileSystemProvider extends Disposable implements IFileSyst
 	}
 
 	async readTextFile(resource: URI, encoding: string, options?: IFileReadOptions): Promise<IFileContent> {
+		if (this.isConfiguration(resource)) {
+			const file = await this.configurationFiles!.read(resource);
+			return { resource, content: new TextDecoder().decode(file.bytes), revision: file.revision, encoding: 'utf8' };
+		}
 		try {
 			const { candidateGuessEncodings, ...decoding } = options ?? {};
 			const result = await this.api.readFile({ ...await this.fileTarget(resource), encoding, ...decoding, ...(candidateGuessEncodings === undefined ? {} : { candidateGuessEncodings: candidateGuessEncodings.slice() }) });
@@ -350,6 +369,14 @@ export class AppServerFileSystemProvider extends Disposable implements IFileSyst
 
 	public readFileStream(resource: URI, options: IFileReadStreamOptions, token: CancellationToken): ReadableStreamEvents<Uint8Array> {
 		this.assertNotDisposed();
+		if (this.isConfiguration(resource)) {
+			const stream = newWriteableStream<Uint8Array>(null);
+			void this.readFile(resource).then(file => {
+				if (token.isCancellationRequested) throw canceled();
+				stream.end(file.bytes.slice(options.position ?? 0, options.length === undefined ? undefined : (options.position ?? 0) + options.length));
+			}).catch(error => { stream.error(error); stream.end(); });
+			return stream;
+		}
 		const stream = newWriteableStream<Uint8Array>(null, { highWaterMark: 1 });
 		const lifetime = new DisposableStore();
 		this.reads.set(lifetime, lifetime);
@@ -392,6 +419,10 @@ export class AppServerFileSystemProvider extends Disposable implements IFileSyst
 	}
 
 	private async writeContents(resource: URI, content: string | Uint8Array, encoding: string | undefined, options: IFileWriteOptions, signal?: AbortSignal): Promise<IFileWriteResult> {
+		if (this.isConfiguration(resource)) {
+			if (signal?.aborted) throw canceled();
+			return this.configurationFiles!.write(resource, typeof content === 'string' ? new TextEncoder().encode(content) : content, options);
+		}
 		let mode: FsFileWriteMode;
 		if (options.create) mode = options.overwrite ? 'createOrReplace' : 'create';
 		else if (options.overwrite) mode = 'replace';
@@ -448,6 +479,12 @@ export class AppServerFileSystemProvider extends Disposable implements IFileSyst
 	}
 
 	async createDirectory(resource: URI): Promise<IFileStat> {
+		const configuration = this.configuration();
+		if (this.configurationFiles && configuration && dirname(configuration).toString() === resource.toString()) {
+			// The metadata host already created this directory. This does not grant
+			// browsing or mutation rights to other files beside the workspace file.
+			return { resource, kind: FileKind.Directory, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined };
+		}
 		const result = await this.api.createDirectory(await this.fileTarget(resource));
 		return { resource, kind: fileKind(result.fileType), sizeBytes: result.sizeBytes, readonly: result.readonly, modifiedAtMillis: result.modifiedAtMillis ?? undefined };
 	}
@@ -526,6 +563,10 @@ export class AppServerFileSystemProvider extends Disposable implements IFileSyst
 			...(target.type === 'environment' ? { dirId: target.dirId } : { sessionDirectory: { sessionId: target.sessionId, path: target.path } }),
 			path: workspaceRelativePath(directory.uri, resource),
 		};
+	}
+
+	private isConfiguration(resource: URI): boolean {
+		return this.configurationFiles !== undefined && this.configuration()?.toString() === resource.toString();
 	}
 
 	private async readResourceBytes(resource: ResourceMetadataResult): Promise<Uint8Array> {

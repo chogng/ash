@@ -8,6 +8,10 @@ import { localize } from '../../../nls.js';
 import { ITerminalProcessService, type IShellLaunchConfig, type TerminalArguments } from '../../../platform/terminal/common/terminal.js';
 import { getRemoteAuthority } from '../../../platform/remote/common/remoteHosts.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
+import { URI } from '../../../base/common/uri.js';
+import { IEditorService } from '../../services/editor/common/editorService.js';
+import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
+import { pickWorkspaceFolder } from '../../services/workspaces/browser/workspaceOpenService.js';
 import { IExtensionService } from '../../services/extensions/common/extensionService.js';
 import { ITerminalService, type ITerminalInstance } from '../../services/terminal/browser/terminal.js';
 import { ITerminalProfileResolverService, ITerminalProfileService } from '../../services/terminal/common/terminal.js';
@@ -188,14 +192,23 @@ export class MainThreadTerminalService extends Disposable {
 								name, icon, color,
 								executable: options.shellPath === undefined ? undefined : text(options.shellPath, 32768),
 								args: options.shellArgs === undefined ? undefined : argumentsList(options.shellArgs),
-								cwd: options.cwd === undefined ? undefined : text(options.cwd, 32768),
+								cwd: presentation.cwd !== undefined ? (typeof presentation.cwd === 'string' ? presentation.cwd : presentation.cwd.fsPath) : options.cwd === undefined ? undefined : text(options.cwd, 32768),
 								env: environment(options.env),
 								strictEnv: options.strictEnv === undefined ? undefined : boolean(options.strictEnv),
 							};
-							const resource = this.workspace.getWorkspace().folders[0]?.uri;
-							await this.resolver.resolveShellLaunchConfig(shell, { os, remoteAuthority: resource && getRemoteAuthority(resource) });
+							const folders = this.workspace.getWorkspace().folders;
+							const cwdResource = shell.cwd && /^(?:\/|[a-z]:[\\/]|\\\\)/i.test(shell.cwd) ? URI.file(shell.cwd) : undefined;
+							const namedRoot = shell.cwd?.match(/^\$\{workspaceFolder:([^}]+)\}/)?.[1];
+							const activeResource = folders.length > 1 ? this.instantiation.get(IEditorService).activeEditor?.resource : undefined;
+							const folder = (cwdResource && this.workspace.getWorkspaceFolder(cwdResource))
+								|| (namedRoot && folders.filter(folder => folder.name === namedRoot).length === 1 && folders.find(folder => folder.name === namedRoot))
+								|| (activeResource && this.workspace.getWorkspaceFolder(activeResource))
+								|| (folders.length === 1 ? folders[0] : await pickWorkspaceFolder(this.instantiation.get(IQuickInputService), folders, localize('terminal.selectFolder', 'Select a workspace folder for the terminal.')));
+							if (!folder) throw new CancellationError();
+							await this.resolver.resolveShellLaunchConfig(shell, { os, remoteAuthority: getRemoteAuthority(folder.uri), workspaceFolder: folder });
 							if (lifetime.isDisposed) throw new CancellationError();
 							instance = await this.terminals.createTerminal({
+								dirId: folder.id,
 								dimensions: { cols: 80, rows: 24 }, title: name,
 								profile: { type: 'custom', name, path: typeof shell.executable === 'string' ? [shell.executable] : shell.executable!, args: shell.args ?? [] },
 								env: shell.env, ...(shell.strictEnv === undefined ? {} : { strictEnv: shell.strictEnv }),

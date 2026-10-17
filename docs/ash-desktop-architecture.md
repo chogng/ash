@@ -325,16 +325,15 @@ App Server、模式和产品资源。Windows 最近项目跳转列表由 `Worksp
 
 - `platform/workspace`（单数）定义一个窗口当前工作区的模型、结构化标识、
   `WorkbenchState` 和 `IWorkspaceContextService`；
-- `platform/workspaces`（复数）负责解析、识别和管理工作区。当前已实现启动目标解析，
-  单根 Folder 的运行时 authority 切换，以及已解析 Remote Folder 的同 SSH host 重连；最近项目和
-  Untitled Workspace 尚未实现。
+- `platform/workspaces`（复数）负责解析、识别和管理工作区，包括本地多根文件、最近项目、
+  临时工作区文件、逐目录授权、运行时目录集合更新，以及已解析 Remote Folder 的同 SSH host 重连。
 
-Desktop 在创建窗口前由 `WorkspacesMainService.resolveStartupWorkspace()` 解析一次启动参数，
+Desktop 在创建窗口前由 `WindowsMainService.resolveWorkspaceOpenTarget()` 解析启动目标，
 并产生不可变的 `IAnyWorkspaceIdentifier`：
 
 - 无项目参数为 `Empty`；
 - 目录参数或 `--folder <path>` 为 `Folder`；
-- `.ash-workspace` 文件或 `--workspace <path>` 为 `Workspace`。
+- `.ash-workspace`、`.code-workspace` 文件或 `--workspace <path>` 为 `Workspace`。
 
 `resolveWorkspaceOpenTarget()` 只在 Node/Electron Main 中规范化路径、判断文件类型并为
 Folder/Workspace 产生稳定 ID。标识采用 `{ id }`、`{ id, uri }` 或
@@ -527,13 +526,30 @@ App Server 连接并重新读取 Session/Thread；Renderer 不直接读写 SQLit
 
 当前限制：
 
-- 运行时已支持单根 Folder authority 切换；关闭项目、多根 Workspace 内容切换和最近项目流程尚未实现；
-- `.ash-workspace` 当前只作为窗口身份，尚未定义或解析其内容；
-- 普通单文件参数仍属于空窗口，文件编辑器尚未实现；
+- 运行时支持单根 Folder authority 切换、关闭项目、本地多根 Workspace 文件解析和最近项目；
+- 工作区文件采用 JSONC，`folders` 支持相对路径、绝对路径、本地 `file` URI、目录名称和稳定目录身份；
+- “将文件夹添加到工作区”“从工作区移除文件夹”“将工作区另存为”由工作台 editing service 发起。
+  从单目录增加根时创建 profile 下的临时工作区文件；另存时重算目录相对路径，保留注释及
+  `settings`、`tasks`、`launch`、`extensions` 等其他配置。窗口和编辑器内容在操作中保留；
+- 桌面监听工作区文件所在目录，支持其他编辑器的原子替换。`folders` 变化先解析、逐目录取得授权并
+  通过 renderer 询问 working-copy owner：移除或新增嵌套根若改变脏文件的目录归属，会拒绝更新，要求先保存或还原。
+  主动编辑先按修订号写入元数据，再调用 renderer 所有的 App Server `env/dirs/set`，
+  成功后发布同一窗口的已解析 Workspace。磁盘冲突不会先撤销后端目录；后端拒绝时仅回滚本次写入的
+  文件修订，不覆盖外部更新的版本。外部文件的无效编辑、脏文件拦截或后端拒绝保留上次接受的目录，
+  修正问题后再次保存工作区文件会重试。工作区文件自身通过精确到文件的
+  元数据通道读写和监听，不能借此浏览或修改其父目录内的其他文件；
+- 普通单文件参数复用可包含文件的已有工作区，否则选择共同父目录并取得授权，再打开文件编辑器；
 - Explorer 按需读取目录并消费 `fs/changed` 自动刷新；文件编辑器通过共享文本服务保存。
-- 最近项目和 workspace 配置管理尚未实现；
+- 本地多根的增删、保存和配置文件实时同步已经接通；Remote 多根与跨 authority 根集合仍不支持；
+- LSP 文档按目录 ID 隔离；后端仅接受相对路径的 code-intelligence overlay 仍限单目录窗口，
+  多根窗口不向它提交文档，避免调整根顺序后把同名文件同步进错误索引。根变化会清理保留执行根的旧 overlay，
+  并为现有模型重新计算 LSP 目录 ID 和相对路径；移除的执行根由后端退休流程清理；
 - 空窗口的未保存内容已由共享 Rust 备份服务保存和恢复；恢复身份使用工作区 ID，
-  不依赖磁盘 `backupPath`；
+  不依赖磁盘 `backupPath`。从目录进入工作区或另存工作区时暂停备份生产者，
+  通过 `backup/move` 提交源记录的已观察修订号；Rust 的 SQLite Immediate 事务在同一事务中检查源／目标冲突、
+  移动记录和清理旧 scope。冲突或存储故障整体回滚，不会留下部分移动；返回值仅包含已迁移记录的修订号，
+  前端仅沿用此前已经观察的源修订，不确认尚未解释的格式、其他写入者的新版本或目标中其他尚未恢复的内容。后端需支持该事务方法；不支持时操作明确失败。
+  普通打开另一工作区仍保留其独立备份，不执行迁移；
 - 启动目标无效时记录错误并安全回退到空窗口。
 
 ## 5. 沙箱桥接与 Renderer API
@@ -1030,7 +1046,15 @@ Renderer 对文本输入做 8 ms batch，对 resize 做微任务合并；xterm o
 Rust 的 processInfo 查询实际 cwd（macOS/Linux）和最后一次成功应用的尺寸；不支持查询的平台或退出后 cwd 为 null。
 Unix 显式中断针对 PTY 当前前台进程组，Windows 返回结构化不支持错误；这两项 Rust 出口尚未等同完整前端属性与信号契约。
 
-Terminal 服务要求已打开的 Workspace folder；多根窗口把选定 `dirId` 绑定到该实例，空窗口明确拒绝
+Terminal 服务要求已打开的 Workspace folder；多根窗口使用活动文件所属目录，无法确定时通过可取消的
+文件夹选择器选择执行目录；拆分继承父终端目录。变量、文件夹级 `cwd`、扩展环境变量集合和进程创建
+使用同一个目录。Tasks 的自动化 shell、环境变量读取及 Debug 的 adapter、前置任务和终端也传递同一目录 ID。
+App Server 为兼容不带 `dirId` 的调用保留稳定的执行主目录，显示重排不会切换它；Workbench 的目录选择必须显式传递，不能把后端目录返回顺序当作显示顺序或用户选择。
+profile 发现与解析结果按目录隔离，并发启动不同根的终端不会互相取消。首次显示面板由创建流程完成一次目录选择与 profile 发现，隐藏面板会取消尚未完成的自动创建。
+设置 schema 的默认值通知更新 profile 列表，但不再次回写 profile 建议，避免不同服务作用域之间形成通知循环。
+实例始终保留明确的 `dirId`，增删其他根和调整显示顺序不会改变保留目录中的运行进程。
+`terminal.integrated.env.*` 与 VS Code 一样属于窗口／工作区配置，其变量仍按所选目录展开。
+空窗口明确拒绝
 进程操作。Remote 多根工作区尚未实现。PTY 不跨后端进程重启恢复。每个实例拥有独立 xterm widget，Tab 切换或 Panel 隐藏不会丢失
 窗口生命周期内的 scrollback 与 ANSI parser 状态。xterm、尺寸适配器和样式在创建终端实例时按需加载；
 组件先订阅输出，再加载渲染器，加载期间的输出、命令状态和退出消息按顺序保留。加载完成前关闭
@@ -1262,3 +1286,12 @@ Desktop 完成的最低证据：
 - 不可信网页无法访问应用 IPC；
 - Browser Target 关闭后不会操作其他 Tab；
 - App Server 崩溃、重启和 graceful shutdown 有测试。
+
+多根工作区的验证边界：无窗口回归覆盖目录增删与外部原子替换、脏文件归属拦截、配置写入冲突／回滚、
+备份事务、源／目标并发冲突和存储故障回滚、Tasks／Debug 目录路由、跨根 profile 并发、语言文档重新绑定与在途同步清理。
+`backup/move` 还通过了实际开发包和 Desktop 后端包的独立进程验证：校验包内文件与协议哈希，经 daemon 连接迁移，停止并重启后端后检查恢复内容和旧目录清理。
+完整打包链路已产出使用测试更新密钥及 Remote 发布绑定的未签名 macOS arm64 `.app`，并从其嵌入资源重新执行上述验证，核对包内全部后端资源及协议的哈希。
+包内后端还验证了真实 PTY 的第二根 cwd／环境、重排与移除原主根后的存活、清空根后的进程结束及恢复根后的重新创建。
+这些后端进程验证将包内 Electron 仅作为 Node 运行时使用，不启动窗口；本地测试产物不代表签名、公证、正式发布配置或桌面交互验收已通过。
+桌面 E2E 尚未完整通过，当前不据此声明完整交互验证完成；真实菜单和选择器、环境变量修正后的桌面流程、
+重排／移除和清空／恢复根时的界面与真实 PTY 联动、重开工作区及中文界面仍待桌面验证。

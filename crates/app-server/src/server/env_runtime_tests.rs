@@ -500,6 +500,90 @@ fn env_dirs_set_routes_services_by_stable_folder_id() {
 }
 
 #[test]
+fn env_dirs_set_preserves_retained_terminals_when_other_roots_change() {
+    let first = TestDir::new("roots-retain-first", "first.txt");
+    let second = TestDir::new("roots-retain-second", "second.txt");
+    let third = TestDir::new("roots-retain-third", "third.txt");
+    let server = server().with_local_env_host(None, host_policy()).unwrap();
+    server
+        .activate_local_dirs(vec![
+            ("first".into(), first.authorization()),
+            ("second".into(), second.authorization()),
+        ])
+        .unwrap();
+    let terminals = server.terminal_service_for(Some("second")).unwrap();
+    let files = server.file_system_service_for(Some("second")).unwrap();
+    server
+        .activate_local_dirs(vec![
+            ("first".into(), first.authorization()),
+            ("second".into(), second.authorization()),
+            ("third".into(), third.authorization()),
+        ])
+        .unwrap();
+    assert!(Arc::ptr_eq(
+        &terminals,
+        &server.terminal_service_for(Some("second")).unwrap()
+    ));
+    server
+        .activate_local_dirs(vec![("second".into(), second.authorization())])
+        .unwrap();
+    assert!(Arc::ptr_eq(
+        &terminals,
+        &server.terminal_service_for(Some("second")).unwrap()
+    ));
+    assert!(Arc::ptr_eq(
+        &files,
+        &server.file_system_service_for(Some("second")).unwrap()
+    ));
+    assert!(server.terminal_service_for(Some("first")).is_err());
+    assert!(server.file_system_service_for(Some("third")).is_err());
+}
+
+#[test]
+fn env_dirs_set_preparation_failure_keeps_the_old_execution_root_and_services() {
+    let first = TestDir::new("roots-fail-first", "first.txt");
+    let second = TestDir::new("roots-fail-second", "second.txt");
+    let missing = TestDir::new("roots-fail-missing", "third.txt");
+    let server = server().with_local_env_host(None, host_policy()).unwrap();
+    server
+        .activate_local_dirs(vec![
+            ("first".into(), first.authorization()),
+            ("second".into(), second.authorization()),
+        ])
+        .unwrap();
+    let first_terminals = server.terminal_service_for(Some("first")).unwrap();
+    let second_terminals = server.terminal_service_for(Some("second")).unwrap();
+    let missing_grant = missing.authorization();
+    missing_grant.revoke();
+    let update = server.activate_local_dirs(vec![
+        ("second".into(), second.authorization()),
+        ("missing".into(), missing_grant),
+    ]);
+    assert!(update.is_err());
+    let runtime = server.env_runtime.read().unwrap();
+    assert_eq!(runtime.primary_dir_id.as_deref(), Some("first"));
+    assert_eq!(
+        runtime
+            .selected_grant
+            .as_ref()
+            .unwrap()
+            .dir()
+            .canonical_path(),
+        first.path
+    );
+    assert!(runtime.selected_grant.as_ref().unwrap().is_active());
+    drop(runtime);
+    assert!(Arc::ptr_eq(
+        &first_terminals,
+        &server.terminal_service_for(Some("first")).unwrap()
+    ));
+    assert!(Arc::ptr_eq(
+        &second_terminals,
+        &server.terminal_service_for(Some("second")).unwrap()
+    ));
+}
+
+#[test]
 fn dirs_are_session_scoped_and_removable() {
     let primary = TestDir::new("add-dir-primary", "primary.txt");
     let session_dir = TestDir::new("add-dir-extra", "extra.txt");
@@ -3992,12 +4076,13 @@ fn env_dirs_set_retains_existing_aliases_without_switching_pending_primary() {
         &sessions_files,
         &server.file_system_service_for(Some("sessions")).unwrap()
     ));
-    assert_eq!(
-        server.activate_local_dirs(vec![
-            ("second".into(), second.authorization()),
-            ("sessions".into(), first.authorization())
-        ]),
-        Err(EnvRuntimeError::Busy)
+    assert!(
+        server
+            .activate_local_dirs(vec![
+                ("second".into(), second.authorization()),
+                ("sessions".into(), first.authorization())
+            ])
+            .is_ok()
     );
     assert_eq!(
         server

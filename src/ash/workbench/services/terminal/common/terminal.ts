@@ -6,6 +6,7 @@ import type { ICreateContributedTerminalProfileOptions, IExtensionTerminalProfil
 import type { OperatingSystem } from '../../../../base/common/platform.js';
 import type { ThemeIcon } from '../../../../base/common/themables.js';
 import type Severity from '../../../../base/common/severity.js';
+import type { IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
 
 export interface ITerminalStatus {
 	readonly id: string;
@@ -26,10 +27,11 @@ export interface ITerminalProfileService extends IDisposable {
 	readonly contributedProfiles: readonly IExtensionTerminalProfile[];
 	readonly profilesReady: Promise<void>;
 	readonly onDidChangeAvailableProfiles: Event<readonly ITerminalProfile[]>;
-	refreshAvailableProfiles(): Promise<void>;
+	refreshAvailableProfiles(dirId?: string): Promise<void>;
 	getPlatformKey(): Promise<'linux' | 'osx' | 'windows'>;
 	getDefaultProfileName(): string | undefined;
-	getDefaultProfile(os?: OperatingSystem): ITerminalProfile | undefined;
+	getDefaultProfile(os?: OperatingSystem, dirId?: string): ITerminalProfile | undefined;
+	getAvailableProfiles(dirId?: string): readonly ITerminalProfile[];
 	getContributedDefaultProfile(shellLaunchConfig: IShellLaunchConfig): Promise<IExtensionTerminalProfile | undefined>;
 	registerContributedProfile(args: IRegisterContributedProfileArgs): Promise<void>;
 	registerInternalContributedProfile(profile: IExtensionTerminalProfile): IDisposable;
@@ -49,6 +51,7 @@ export interface ITerminalProfileProvider {
 }
 
 export interface IShellLaunchConfigResolveOptions {
+	readonly workspaceFolder?: IWorkspaceFolder;
 	readonly remoteAuthority: string | undefined;
 	readonly os: OperatingSystem;
 	readonly allowAutomationShell?: boolean;
@@ -63,7 +66,7 @@ export interface ITerminalProfileResolverService {
 	getDefaultShell(options: IShellLaunchConfigResolveOptions): Promise<string>;
 	getDefaultShellArgs(options: IShellLaunchConfigResolveOptions): Promise<TerminalArguments>;
 	getDefaultIcon(): ThemeIcon;
-	getEnvironment(remoteAuthority: string | undefined): Promise<Readonly<Record<string, string>>>;
+	getEnvironment(remoteAuthority: string | undefined, workspaceFolder?: IWorkspaceFolder): Promise<Readonly<Record<string, string>>>;
 }
 
 export const ITerminalProfileResolverService = createServiceIdentifier<ITerminalProfileResolverService>('terminalProfileResolverService');

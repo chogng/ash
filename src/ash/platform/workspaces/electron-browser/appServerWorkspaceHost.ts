@@ -2,6 +2,7 @@ import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
 import { APP_SERVER_METHODS } from '../../../../../.build/protocol/typescript/index.js';
 import { decodeAppServerRequestParams } from '../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 import { isRecord } from '../../../base/common/types.js';
+import { URI } from '../../../base/common/uri.js';
 import { type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { invoke, subscribe } from '../../ipc/electron-browser/rendererIpc.js';
@@ -32,7 +33,7 @@ export async function initializeWorkspace(client: AppServerProtocolClient, works
 	if (dirs.length) { await client.request(APP_SERVER_METHODS['env/dirs/set'], { dirs }); }
 }
 
-export function registerAppServerWorkspaceHost(client: AppServerProtocolClient, ready: () => Promise<void>, workspaceTrust: IWorkspaceTrustRequestService, trustApi: IWorkspaceTrustApi): IDisposable {
+export function registerAppServerWorkspaceHost(client: AppServerProtocolClient, ready: () => Promise<void>, workspaceTrust: IWorkspaceTrustRequestService, trustApi: IWorkspaceTrustApi, validateFolders: (folders: readonly URI[]) => void = () => { }): IDisposable {
 	const subscription = subscribe('ash:workspace:operation', (value: unknown) => {
 		if (!isRecord(value) || typeof value.nonce !== 'string' || !isRecord(value.params)) { return; }
 		const { nonce, operation, params } = value;
@@ -65,6 +66,11 @@ export function registerAppServerWorkspaceHost(client: AppServerProtocolClient, 
 						permissions: params.grant.permissions,
 					});
 					return trustApi.persistGrant(request.path, { type: 'user', commandId: request.commandId, expectedRevision: request.expectedRevision, permissions: request.permissions });
+				}
+				case 'validateFolders': {
+					const request = decodeAppServerRequestParams('env/dirs/set', { dirs: params.folders });
+					validateFolders(request.dirs.map(folder => URI.file(folder.path)));
+					return;
 				}
 				case 'setFolders': return client.request(APP_SERVER_METHODS['env/dirs/set'], decodeAppServerRequestParams('env/dirs/set', { dirs: params.folders }));
 				default: throw new Error('Unknown workspace operation');

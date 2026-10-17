@@ -4066,6 +4066,9 @@ impl AppServer {
             Some(ClientMethod::BackupWrite) => self
                 .backup_processor
                 .write(connection.authority, &request.params),
+            Some(ClientMethod::BackupMove) => self
+                .backup_processor
+                .move_records(connection.authority, &request.params),
             Some(ClientMethod::BackupDiscard) => self
                 .backup_processor
                 .discard(connection.authority, &request.params),

@@ -2,7 +2,7 @@ import { URI } from '../../../base/common/uri.js';
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
 import { APP_SERVER_METHODS, type BackupListPageResult, type BackupRecordDto } from '../../../../../.build/protocol/typescript/index.js';
-import { BackupError, type IBackupContent, type IBackupRecord, type IBackupService, type IBackupWorkspace } from '../common/backup.js';
+import { BackupError, type IBackupContent, type IBackupRecord, type IBackupService, type IBackupWorkspace, type IBackupRevision } from '../common/backup.js';
 
 /** Uses the renderer's existing connection; backups survive that connection's lifetime. */
 export class AppServerBackupService implements IBackupService {
@@ -40,6 +40,15 @@ export class AppServerBackupService implements IBackupService {
 			workspace: { id: workspace.id, folders: workspace.folders.map(folder => folder.toString()), configuration: workspace.configuration?.toString() ?? null, remoteAuthority: workspace.remoteAuthority ?? null },
 			content: { ...content, resource: content.resource.toString() }, expectedRevision: expectedRevision ?? null,
 		}).catch(explain));
+	}
+
+	async move(sourceWorkspaceId: string, workspace: IBackupWorkspace, backups: readonly IBackupRevision[]): Promise<readonly IBackupRevision[]> {
+		const result = await this.client.request(APP_SERVER_METHODS['backup/move'], {
+			clientId: this.clientId, sourceWorkspaceId,
+			workspace: { id: workspace.id, folders: workspace.folders.map(folder => folder.toString()), configuration: workspace.configuration?.toString() ?? null, remoteAuthority: workspace.remoteAuthority ?? null },
+			backups: backups.map(backup => ({ resource: backup.resource.toString(), revision: backup.revision })),
+		}).catch(explain);
+		return result.backups.map(backup => ({ resource: URI.parse(backup.resource), revision: backup.revision }));
 	}
 
 	async discard(workspaceId: string, resource: URI, expectedRevision: string): Promise<void> {

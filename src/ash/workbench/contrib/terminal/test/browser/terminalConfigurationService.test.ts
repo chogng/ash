@@ -34,6 +34,8 @@ import { TerminalProfileService } from '../../browser/terminalProfileService.js'
 import { TerminalProfileQuickpick } from '../../browser/terminalProfileQuickpick.js';
 import { TerminalService } from '../../browser/terminalService.js';
 import type { ITerminalProcessCreateOptions, ITerminalProcessCloseOptions } from '../../../../../platform/terminal/common/terminal.js';
+import { FileService } from '../../../../../platform/files/common/fileService.js';
+import { InMemoryFileSystemProvider } from '../../../../../platform/files/common/inMemoryFilesystemProvider.js';
 
 const shells = [
 	{ profileId: 'host-default', title: 'Host shell', isDefault: true },
@@ -122,6 +124,73 @@ async function waitFor(check: () => boolean): Promise<void> {
 suite('Terminal configuration and interactive profiles', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
+	test('second-root launches use that directory for workspace variables, folder cwd and backend resolution', async () => {
+		using owner = new DisposableStore();
+		const { services, configuration, workspace, processes } = createServices(owner);
+		const files = owner.add(new FileService());
+		const provider = owner.add(new InMemoryFileSystemProvider());
+		owner.add(files.registerProvider('file', provider));
+		const config = URI.file('/workspace/team.ash-workspace');
+		await files.createDirectory(URI.file('/workspace'));
+		await files.createDirectory(URI.file('/second/.vscode'));
+		await files.writeFile({ resource: config, content: JSON.stringify({ folders: [], settings: { 'terminal.integrated.env.windows': { SELECTED: '${workspaceFolder}' } } }) }, { create: true, overwrite: false });
+		await files.writeFile({ resource: URI.file('/second/.vscode/settings.json'), content: JSON.stringify({ 'terminal.integrated.cwd': '${workspaceFolder}/run' }) }, { create: true, overwrite: false });
+		const folders = [
+			{ id: 'one', name: 'one', uri: URI.file('/workspace'), index: 0 },
+			{ id: 'two', name: 'two', uri: URI.file('/second'), index: 1 },
+		];
+		workspace.updateWorkspace({ id: 'multi-root', configuration: config, folders });
+		await configuration.initialize(workspace, files);
+		const routes: (string | undefined)[] = [];
+		processes.getEnvironment = async (_profile, dirId) => { routes.push(dirId); return {}; };
+		const resolver = services.get(ITerminalProfileResolverService);
+		const shell = { executable: '/bin/shell' } as import('../../../../../platform/terminal/common/terminal.js').IShellLaunchConfig;
+		await resolver.resolveShellLaunchConfig(shell, { os: OperatingSystem.Windows, remoteAuthority: undefined, workspaceFolder: folders[1] });
+		assert.equal(shell.cwd, '/second/run');
+		assert.equal(shell.env?.SELECTED, '/second');
+		assert.deepEqual(routes, ['two']);
+		await assert.rejects(resolver.resolveShellLaunchConfig({}, { os: OperatingSystem.Windows, remoteAuthority: undefined }), /Select a workspace folder/);
+	});
+
+	test('profile discovery and executable resolution stay on the selected root after reordering', async () => {
+		using owner = new DisposableStore();
+		const { services, workspace, processes } = createServices(owner, true);
+		const folders = [
+			{ id: 'one', name: 'one', uri: URI.file('/workspace'), index: 0 },
+			{ id: 'two', name: 'two', uri: URI.file('/second'), index: 1 },
+		];
+		workspace.updateWorkspace({ id: 'multi-root', configuration: URI.file('/team.ash-workspace'), folders });
+		const listed: (string | undefined)[] = [];
+		const resolved: (string | undefined)[] = [];
+		processes.listProfiles = async dirId => { listed.push(dirId); return shells; };
+		const resolveProfile = processes.resolveProfile.bind(processes);
+		processes.resolveProfile = async (selection, dirId) => { resolved.push(dirId); return resolveProfile(selection, dirId); };
+		const resolver = services.get(ITerminalProfileResolverService);
+		await resolver.getDefaultProfile({ os: OperatingSystem.Windows, remoteAuthority: undefined, workspaceFolder: folders[1] });
+		workspace.updateWorkspace({ id: 'multi-root', configuration: URI.file('/team.ash-workspace'), folders: [{ ...folders[1]!, index: 0 }, { ...folders[0]!, index: 1 }] });
+		await resolver.getDefaultProfile({ os: OperatingSystem.Windows, remoteAuthority: undefined, workspaceFolder: folders[1] });
+		assert.ok(listed.length >= 2);
+		assert.ok(resolved.length >= 2);
+		assert.ok(listed.every(dirId => dirId === 'two'));
+		assert.ok(resolved.every(dirId => dirId === 'two'));
+	});
+
+	test('concurrent directory profile resolutions keep independent results', async () => {
+		using owner = new DisposableStore();
+		const { services, workspace, processes } = createServices(owner, true);
+		const folders = [
+			{ id: 'one', name: 'one', uri: URI.file('/first'), index: 0 },
+			{ id: 'two', name: 'two', uri: URI.file('/second'), index: 1 },
+		];
+		workspace.updateWorkspace({ id: 'team', configuration: URI.file('/team.ash-workspace'), folders });
+		processes.listProfiles = async dirId => [{ profileId: `${dirId}-shell`, title: `${dirId} shell`, isDefault: true }];
+		processes.resolveProfile = async (_selection, dirId) => ({ profile: { profileId: `${dirId}-shell`, title: `${dirId} shell`, isDefault: true }, executable: `/${dirId}/shell`, args: [] });
+		const resolver = services.get(ITerminalProfileResolverService);
+		const [first, second] = await Promise.all(folders.map(workspaceFolder => resolver.getDefaultProfile({ os: OperatingSystem.Windows, remoteAuthority: undefined, workspaceFolder })));
+		assert.equal(first!.path, '/one/shell');
+		assert.equal(second!.path, '/two/shell');
+	});
+
 	test('terminal fonts inherit the editor face and retain a monospace fallback', async () => {
 		using owner = new DisposableStore();
 		const { services, configuration } = createServices(owner);
@@ -184,6 +253,18 @@ suite('Terminal configuration and interactive profiles', () => {
 		Object.assign(processes, { operatingSystem: undefined });
 		await assert.rejects(profiles.getPlatformKey(), /execution host/);
 		assert.equal(profiles.getDefaultProfileName(), undefined);
+	});
+
+	test('profile catalogs in separate service scopes do not feed schema changes back into each other', async () => {
+		using owner = new DisposableStore();
+		const first = createServices(owner);
+		const second = createServices(owner);
+		await first.profiles.refreshAvailableProfiles();
+		assert.equal(second.profiles.availableProfiles.length, 0);
+		await second.profiles.refreshAvailableProfiles();
+		assert.deepEqual(first.profiles.availableProfiles.map(profile => profile.profileId), ['host-default', 'pwsh']);
+		assert.deepEqual(second.profiles.availableProfiles.map(profile => profile.profileId), ['host-default', 'pwsh']);
+		assert.deepEqual([first.calls(), second.calls()], [1, 1]);
 	});
 
 	test('coalesces discoveries and rejects late results after disconnect or replacement', async () => {
@@ -747,7 +828,7 @@ suite('Terminal configuration and interactive profiles', () => {
 			assert.deepEqual(operations.filter(value => value.operation === 'closeTaskTerminal').map(value => value.payload), [{ ptyId: 'pty.1' }, { ptyId: 'pty.2' }]);
 		} else {
 			assert.deepEqual(launches, [{
-				rows: 24, cols: 80, profile: { type: 'custom', name: 'Extension shell', path: ['/extension/shell'], args: ['environment value'] },
+				dirId: 'test', rows: 24, cols: 80, profile: { type: 'custom', name: 'Extension shell', path: ['/extension/shell'], args: ['environment value'] },
 				env: { GLOBAL: 'global', REMOVED: null, CALLER: 'environment value' }, cwd: '/workspace/run',
 			}]);
 		}
@@ -755,7 +836,7 @@ suite('Terminal configuration and interactive profiles', () => {
 		assert.equal(profiles.getContributedProfileProvider('acme.extension', 'test'), undefined);
 		await terminals.closeTerminal(instance);
 		assert.deepEqual(terminals.instances, []);
-		assert.deepEqual(closed, custom ? [] : [{ terminalId: 'process-1' }]);
+		assert.deepEqual(closed, custom ? [] : [{ dirId: 'test', terminalId: 'process-1' }]);
 	});
 
 	test('extension profile abandons a late PTY result after the workspace changes', async () => {

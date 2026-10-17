@@ -218,7 +218,7 @@ impl SqliteBackupStore {
         {
             validate_id(value)?;
         }
-        if content.content.len() > 8 * 1024 * 1024 || workspace.folders.len() > 128 {
+        if content.content.len() > 8 * 1024 * 1024 || workspace.folders.len() > 256 {
             return Err(BackupError::Invalid);
         }
         let mut connection = self.connection.lock().map_err(storage_error)?;
@@ -276,6 +276,98 @@ impl SqliteBackupStore {
             revision,
             updated_at,
         })
+    }
+
+    /// Moves only observed records, atomically validating both scopes against
+    /// concurrent writers. Returning only revisions keeps responses bounded by
+    /// metadata size even when recovery content requires many read pages.
+    pub fn move_records(
+        &self,
+        client_id: &str,
+        source_workspace_id: &str,
+        workspace: &BackupWorkspace,
+        expected: &[(String, String)],
+    ) -> Result<Vec<(String, String)>, BackupError> {
+        validate_id(client_id)?;
+        validate_id(source_workspace_id)?;
+        validate_id(&workspace.id)?;
+        if source_workspace_id == workspace.id || workspace.folders.len() > 256 {
+            return Err(BackupError::Invalid);
+        }
+        for value in workspace
+            .folders
+            .iter()
+            .chain(workspace.configuration.iter())
+            .chain(workspace.remote_authority.iter())
+        {
+            validate_id(value)?;
+        }
+        let mut resources = std::collections::BTreeSet::new();
+        for (resource, revision) in expected {
+            validate_id(resource)?;
+            validate_id(revision)?;
+            if !resources.insert(resource) {
+                return Err(BackupError::Invalid);
+            }
+        }
+        let mut connection = self.connection.lock().map_err(storage_error)?;
+        let transaction = connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(storage_error)?;
+        let descriptor = serde_json::to_string(workspace).map_err(storage_error)?;
+        if !expected.is_empty() {
+            transaction.execute(
+                "INSERT INTO backup_workspaces VALUES (?1, ?2, ?3) ON CONFLICT(client_id, workspace_id) DO UPDATE SET descriptor = excluded.descriptor",
+                params![client_id, workspace.id, descriptor],
+            ).map_err(storage_error)?;
+        }
+        let mut moved = Vec::with_capacity(expected.len());
+        for (resource, revision) in expected {
+            let source = transaction.query_row(
+                "SELECT resource, format, content, revision, updated_at FROM backup_contents WHERE client_id = ?1 AND workspace_id = ?2 AND resource = ?3",
+                params![client_id, source_workspace_id, resource], read_record,
+            ).optional().map_err(storage_error)?.ok_or(BackupError::Conflict)?;
+            if &source.revision != revision {
+                return Err(BackupError::Conflict);
+            }
+            let target = transaction.query_row(
+                "SELECT resource, format, content, revision, updated_at FROM backup_contents WHERE client_id = ?1 AND workspace_id = ?2 AND resource = ?3",
+                params![client_id, workspace.id, resource], read_record,
+            ).optional().map_err(storage_error)?;
+            let target_revision = if let Some(target) = target {
+                if target.content != source.content {
+                    return Err(BackupError::Conflict);
+                }
+                target.revision
+            } else {
+                transaction
+                    .execute(
+                        "INSERT INTO backup_contents VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                        params![
+                            client_id,
+                            workspace.id,
+                            source.content.resource,
+                            source.content.format,
+                            source.content.content,
+                            source.revision,
+                            source.updated_at
+                        ],
+                    )
+                    .map_err(storage_error)?;
+                source.revision
+            };
+            transaction.execute(
+                "DELETE FROM backup_contents WHERE client_id = ?1 AND workspace_id = ?2 AND resource = ?3",
+                params![client_id, source_workspace_id, resource],
+            ).map_err(storage_error)?;
+            moved.push((resource.clone(), target_revision));
+        }
+        transaction.execute(
+            "DELETE FROM backup_workspaces WHERE client_id = ?1 AND workspace_id = ?2 AND NOT EXISTS (SELECT 1 FROM backup_contents WHERE client_id = ?1 AND workspace_id = ?2)",
+            params![client_id, source_workspace_id],
+        ).map_err(storage_error)?;
+        transaction.commit().map_err(storage_error)?;
+        Ok(moved)
     }
 
     /// Removing a saved or reverted copy cannot discard a newer writer's recovery record.

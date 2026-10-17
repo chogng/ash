@@ -6,6 +6,7 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import type { TerminalProcessConnectionState } from '../../../../platform/terminal/common/terminal.js';
 import type { ITerminalCreateOptions, ITerminalProfile } from '../../../services/terminal/browser/terminal.js';
 import { TerminalInstance } from './terminalInstance.js';
+import { localize } from '../../../../nls.js';
 
 interface InstanceCreationCallbacks {
 	readonly getConnectionState: () => TerminalProcessConnectionState;
@@ -67,9 +68,7 @@ export class TerminalInstanceService extends Disposable {
 		}
 		const workspaceFolder = this.requireWorkspaceFolder(options.dirId);
 		// A Session directory needs its execution route even when it is the only visible folder.
-		const processWorkspaceFolderId = this.workspaceContext.getWorkspace().folders.length > 1 || workspaceFolder.id.startsWith('session:')
-			? workspaceFolder.id
-			: undefined;
+		const processWorkspaceFolderId = workspaceFolder.id;
 		const environment = options.env === undefined ? undefined : Object.freeze({ ...options.env });
 		const execution = options.execution === undefined ? undefined : Object.freeze(options.execution.type === 'process'
 			? { ...options.execution, args: (typeof options.execution.args === 'string' ? options.execution.args : Object.freeze([...options.execution.args])) }
@@ -127,6 +126,7 @@ export class TerminalInstanceService extends Disposable {
 
 	private requireWorkspaceFolder(dirId?: string) {
 		const folders = this.workspaceContext.getWorkspace().folders;
+		if (!dirId && folders.length > 1) throw new Error(localize('terminal.selectFolder', 'Select a workspace folder for the terminal.'));
 		const folder = dirId ? folders.find(folder => folder.id === dirId) : folders[0];
 		if (!folder) throw new Error("TerminalUnavailable: Terminal requires an open workspace folder");
 		return folder;

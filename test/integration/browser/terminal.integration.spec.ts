@@ -1309,7 +1309,7 @@ test('extension terminal profile activates from the picker and persists as the n
 	const picker = page.getByRole('combobox', { name: '选择终端配置', exact: true });
 	await expect(picker).toBeFocused(); await picker.fill('Extension Shell'); await picker.press('Enter');
 	await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.launches().at(-1))).toEqual({
-		profile: { type: 'custom', name: 'Extension Shell', path: ['/home/test/extension-shell'], args: ['literal;$HOME'] }, env: { EXTENSION: 'value' }, cwd: undefined,
+		profile: { type: 'custom', name: 'Extension Shell', path: ['/home/test/extension-shell'], args: ['literal;$HOME'] }, env: { EXTENSION: 'value' }, cwd: '/workspace',
 	});
 	const tab = page.getByRole('tab', { name: 'Extension Shell', exact: true });
 	await expect(tab).toBeVisible();

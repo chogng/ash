@@ -9,8 +9,95 @@ import { BrowserLocalFolderSupportContext, OpenFolderWorkspaceSupportContext, Wo
 import { IHostService } from '../../services/host/browser/host.js';
 import { getWorkspaceRemoteAuthority, IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { IWorkspaceOpenService } from '../../services/workspaces/browser/workspaceOpenService.js';
+import { pickWorkspaceFolder } from '../../services/workspaces/browser/workspaceOpenService.js';
+import { IWorkspaceEditingService } from '../../services/workspaces/common/workspaceEditing.js';
+import { EnterMultiRootWorkspaceSupportContext, WorkspaceFolderCountContext } from '../../common/contextkeys.js';
+import { IFileDialogService } from '../../../platform/dialogs/common/dialogs.js';
+import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
+import { localize } from '../../../nls.js';
+import { status } from '../../../base/browser/ui/aria/aria.js';
+import { IEditorService } from '../../services/editor/common/editorService.js';
 
 export const OpenFolderCommandId = 'workbench.action.files.openFolder';
+
+export class OpenWorkspaceAction extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.action.openWorkspace', title: localize2('workspace.openFile', 'Open Workspace from File...'), f1: true,
+			precondition: EnterMultiRootWorkspaceSupportContext.isEqualTo(true),
+			menu: { id: MenuId.MenubarFileMenu, when: EnterMultiRootWorkspaceSupportContext.isEqualTo(true), group: '2_open', order: 3 }
+		});
+	}
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		const files = await accessor.get(IFileDialogService).showOpenDialog({
+			canSelectFiles: true, canSelectFolders: false,
+			filters: [{ name: localize('workspace.fileType', 'Ash Workspace'), extensions: ['ash-workspace', 'code-workspace'] }]
+		});
+		if (files?.[0]) await accessor.get(IWorkspaceOpenService).openWorkspace(files[0].fsPath);
+	}
+}
+
+export class OpenWorkspaceConfigFileAction extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.action.openWorkspaceConfigFile', title: localize2('workspace.openConfiguration', 'Open Workspace Configuration File'), f1: true,
+			precondition: ContextKeyExpr.and(EnterMultiRootWorkspaceSupportContext.isEqualTo(true), WorkbenchStateContext.isEqualTo('workspace'))
+		});
+	}
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		const resource = accessor.get(IWorkspaceContextService).getWorkspace().configuration;
+		if (resource) await accessor.get(IEditorService).openEditor({ resource }, { pinned: true });
+	}
+}
+
+export class AddRootFolderAction extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.action.addRootFolder', title: localize2('workspace.addFolder', 'Add Folder to Workspace...'), f1: true,
+			precondition: EnterMultiRootWorkspaceSupportContext.isEqualTo(true),
+			menu: { id: MenuId.MenubarFileMenu, when: EnterMultiRootWorkspaceSupportContext.isEqualTo(true), group: '2_open', order: 4 }
+		});
+	}
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		const folders = await accessor.get(IFileDialogService).showOpenDialog({ canSelectFiles: false, canSelectFolders: true, canSelectMany: true, title: localize('workspace.addFolder', 'Add Folder to Workspace...') });
+		if (!folders?.length) return;
+		await accessor.get(IWorkspaceEditingService).addFolders(folders.map(uri => ({ uri })));
+		status(localize('workspace.foldersUpdated', 'Workspace folders updated.'));
+	}
+}
+
+export class RemoveRootFolderAction extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.action.removeRootFolder', title: localize2('workspace.removeFolder', 'Remove Folder from Workspace...'), f1: true,
+			precondition: ContextKeyExpr.and(EnterMultiRootWorkspaceSupportContext.isEqualTo(true), ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0)),
+			menu: { id: MenuId.MenubarFileMenu, when: ContextKeyExpr.and(EnterMultiRootWorkspaceSupportContext.isEqualTo(true), ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0)), group: '2_open', order: 5 }
+		});
+	}
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		const folder = await pickWorkspaceFolder(accessor.get(IQuickInputService), accessor.get(IWorkspaceContextService).getWorkspace().folders, localize('workspace.removeFolder', 'Remove Folder from Workspace...'));
+		if (!folder) return;
+		await accessor.get(IWorkspaceEditingService).removeFolders([folder.uri]);
+		status(localize('workspace.foldersUpdated', 'Workspace folders updated.'));
+	}
+}
+
+export class SaveWorkspaceAsAction extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.action.saveWorkspaceAs', title: localize2('workspace.saveAs', 'Save Workspace As...'), f1: true,
+			precondition: EnterMultiRootWorkspaceSupportContext.isEqualTo(true),
+			menu: { id: MenuId.MenubarFileMenu, when: EnterMultiRootWorkspaceSupportContext.isEqualTo(true), group: '2_open', order: 6 }
+		});
+	}
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		const editing = accessor.get(IWorkspaceEditingService);
+		const target = await editing.pickNewWorkspacePath();
+		if (!target) return;
+		await editing.saveAndEnterWorkspace(target);
+		status(localize('workspace.saved', 'Workspace saved.'));
+	}
+}
 const OpenFolderViaWorkspaceWhen = ContextKeyExpr.and(
 	OpenFolderWorkspaceSupportContext.isEqualTo(false),
 	BrowserLocalFolderSupportContext.isEqualTo(true),

@@ -142,4 +142,17 @@ suite('workspace trust during directory opening', () => {
 			assert.deepEqual(writes, [{ path: '/partial', grant }]);
 		} finally { reply = undefined; }
 	});
+	test('folder validation asks the editor owner without sending a backend directory mutation', async () => {
+		const client = { request: async () => { throw new Error('must not mutate directories'); } } as unknown as AppServerProtocolClient;
+		using registration = host.registerAppServerWorkspaceHost(client, async () => { }, { requestWorkspaceTrust: async () => 'cancel' }, trustApi(new Map(), []), folders => {
+			assert.equal(folders[0]?.fsPath, '/first');
+			throw new Error('unsaved files');
+		});
+		const completion = new Promise<unknown>(resolve => { reply = resolve; });
+		try {
+			listeners.get('ash:workspace:operation')!({ nonce: 'validate', operation: 'validateFolders', params: { folders: [{ id: 'first', path: '/first', grant: { type: 'config' } }] } });
+			assert.deepEqual(await completion, { nonce: 'validate', error: 'unsaved files', failure: undefined });
+		} finally { reply = undefined; }
+	});
+
 });

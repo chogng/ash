@@ -26,9 +26,9 @@ const UNSUPPORTED_DIAGNOSTIC_ERROR_NAMES: ReadonlySet<AppServerErrorName> = new 
 
 interface LanguageDocumentEntry {
 	readonly resource: URI;
-	readonly dirId: string;
-	readonly wireWorkspaceFolderId?: string;
-	readonly path: string;
+	dirId: string;
+	wireWorkspaceFolderId?: string;
+	path: string;
 	readonly languageId: string;
 	readonly model: TextModel;
 	modelListener: IDisposable;
@@ -90,8 +90,17 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 			for (const entry of this.entries.values()) {
 				if (entry.timer !== undefined) clearTimeout(entry.timer);
 				entry.timer = undefined;
-				entry.languageSynchronized = false;
-				entry.codeIntelligenceSynchronized = false;
+				// Drain the old binding before changing its relative path. A backend
+				// reply already in flight must be closed under that original identity.
+				entry.queue = entry.queue.catch(() => undefined).then(async () => {
+					await this.closeEntry(entry);
+					const target = this.workspaceTarget(entry.resource);
+					if (target) {
+						entry.dirId = target.dirId;
+						entry.path = target.path;
+						entry.wireWorkspaceFolderId = this.workspace.getWorkspace().folders.length > 1 ? target.dirId : undefined;
+					}
+				});
 			}
 			this.clearServerDiagnostics();
 			this.queuePermissionRefresh();
@@ -313,6 +322,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 	}
 
 	private async refreshDirAccess(generation: number): Promise<void> {
+		await Promise.all([...this.entries.values()].map(entry => entry.queue));
 		const access = await resolveAppServerLanguageDirAccess(this.workspace, this.workspaceTrust, this.checkWorkspaceTrust);
 		if (!this.alive || generation !== this.permissionRefreshGeneration || this.workspace.getWorkspace().id !== access.workspaceId) return;
 		const support = access.allowed ? await AppServerLanguageSupport.read(this.api, this.workspace) : new AppServerLanguageSupport();
@@ -354,11 +364,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 			// Releasing an editor can queue this close during Workbench disposal.
 			// The connection is gone by the next microtask; only a live owner may send it.
 			if (!this.alive || this.entries.get(key) !== entry || entry.references > 0) return;
-			const closeLanguage = entry.languageSynchronized ? this.api.close({ ...(entry.wireWorkspaceFolderId ? { dirId: entry.wireWorkspaceFolderId } : {}), path: entry.path }) : Promise.resolve();
-			const closeCodeIntelligence = entry.codeIntelligenceSynchronized && this.canSynchronizeCodeIntelligence(entry) ? this.codeIntelligenceDocuments?.close(entry.path).catch(reportCodeIntelligenceSynchronizationError) : undefined;
-			entry.languageSynchronized = false;
-			entry.codeIntelligenceSynchronized = false;
-			await Promise.all([closeLanguage, closeCodeIntelligence]);
+			await this.closeEntry(entry);
 			if (entry.references === 0 && this.entries.get(key) === entry) this.entries.delete(key);
 			this.queueWorkspaceDiagnostics();
 		}).catch(error => { if (this.alive) reportLanguageSynchronizationError(error); });
@@ -412,7 +418,22 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 	}
 
 	private canSynchronizeCodeIntelligence(entry: LanguageDocumentEntry): boolean {
-		return this.workspace.getWorkspace().folders[0]?.id === entry.dirId;
+		// This backend overlay contract has only a relative path, unlike LSP's
+		// directory-scoped documents. Never alias a multi-root file to whichever
+		// directory the backend currently indexes, including after root reordering.
+		const folders = this.workspace.getWorkspace().folders;
+		return folders.length === 1 && folders[0]?.id === entry.dirId;
+	}
+
+	private async closeEntry(entry: LanguageDocumentEntry): Promise<void> {
+		// The backend replaces overlays when their execution root is retired.
+		// A path-only close is safe while that root remains in the directory set.
+		const retained = this.workspace.getWorkspace().folders.some(folder => folder.id === entry.dirId);
+		const closeLanguage = entry.languageSynchronized && retained ? this.api.close({ ...(entry.wireWorkspaceFolderId ? { dirId: entry.wireWorkspaceFolderId } : {}), path: entry.path }).catch(reportLanguageSynchronizationError) : undefined;
+		const closeCodeIntelligence = entry.codeIntelligenceSynchronized && retained ? this.codeIntelligenceDocuments?.close(entry.path).catch(reportCodeIntelligenceSynchronizationError) : undefined;
+		entry.languageSynchronized = false;
+		entry.codeIntelligenceSynchronized = false;
+		await Promise.all([closeLanguage, closeCodeIntelligence]);
 	}
 }
 

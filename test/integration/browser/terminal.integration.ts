@@ -70,6 +70,7 @@ import { Disposable, DisposableStore, toDisposable } from '../../../src/ash/base
 import { extUri } from '../../../src/ash/base/common/resources.js';
 import { BrowserLayoutService } from '../../../src/ash/platform/layout/browser/layoutService.js';
 import { createCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
+import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { XtermTerminal } from '../../../src/ash/workbench/contrib/terminal/browser/xterm/xtermTerminal.js';
 import { TerminalCapability } from '../../../src/ash/platform/terminal/common/capabilities/capabilities.js';
 
@@ -168,6 +169,7 @@ widgetServices.registerInstance(IEditorService, {
 	saveAll: async () => ({ success: true, editors: [] }),
 	focusActiveEditor: () => { },
 });
+widgetServices.registerInstance(IConfigurationService, store.add(new WorkbenchConfigurationService()));
 widgetServices.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 const themeService = store.add(new TestThemeService(darkColorTheme));
 function setTerminalTestTheme(mode: 'dark' | 'light' | 'hcDark' | 'hcLight', overrides?: Readonly<Record<string, string>>): void {
@@ -290,6 +292,7 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 		import('../../../src/ash/base/common/uri.js'),
 	]);
 	const createPane = (root: HTMLElement): Window['ashTerminalPaneIntegration'] & { command(id: string, argument?: unknown): Promise<unknown>; dispose(): void; } => {
+		const paneInstance = new URLSearchParams(location.search).has('windows') ? createFixtureInstance(`window-terminal-${nextFixtureInstance + 1}`) : instance;
 		if (new URLSearchParams(location.search).has('browser')) { root.style.display = 'flex'; root.style.flexDirection = 'column'; }
 		const lifetime = store.add(new DisposableStore());
 		const visibility = lifetime.add(new Emitter<import('../../../src/ash/workbench/services/layout/browser/layoutService.js').WorkbenchPartVisibilityChangeEvent>());
@@ -314,12 +317,12 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 		let creates = 0;
 		const createdProfiles: string[] = [];
 		const launches: { profile: unknown; env: unknown; cwd: unknown; }[] = [];
-		const availableProfiles = new URLSearchParams(location.search).has('profiles') ? [instance.profile, { profileId: 'bash', title: 'Bash', isDefault: false }] : [instance.profile];
+		const availableProfiles = new URLSearchParams(location.search).has('profiles') ? [paneInstance.profile, { profileId: 'bash', title: 'Bash', isDefault: false }] : [paneInstance.profile];
 		let release: (() => void) | undefined;
 		let pending: Promise<void> = Promise.resolve();
-		const instances: ITerminalInstance[] = new URLSearchParams(location.search).has('existing') ? [instance] : [];
+		const instances: ITerminalInstance[] = new URLSearchParams(location.search).has('existing') ? [paneInstance] : [];
 		let activeInstance = instances.at(-1);
-		const workspace = { id: 'workspace', folders: [{ id: 'folder', uri: URI.file('/workspace'), name: 'Workspace', index: 0 }] };
+		const workspace = { id: 'workspace', folders: [{ id: 'workspace', uri: URI.file('/workspace'), name: 'Workspace', index: 0 }] };
 		const setPanel = (value: boolean): void => {
 			visible = value;
 			visibility.fire({ partId: 'panel', visible });
@@ -340,10 +343,10 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 				creates++;
 				const profileId = options.profile?.type === 'profile' ? options.profile.profileId : undefined;
 				const selected = options.profile?.type === 'custom' ? { profileId: `custom:${options.profile.name}`, title: options.profile.name, isDefault: false }
-					: availableProfiles.find(profile => profile.profileId === profileId) ?? instance.profile;
+					: availableProfiles.find(profile => profile.profileId === profileId) ?? paneInstance.profile;
 				createdProfiles.push(selected.profileId);
 				launches.push({ profile: options.profile, env: options.env, cwd: options.cwd });
-				const createdInstance = instances.length === 0 ? instance : createFixtureInstance(`test-terminal-${creates}`);
+				const createdInstance = instances.length === 0 ? paneInstance : createFixtureInstance(`test-terminal-${creates}`);
 				Object.assign(createdInstance, { profile: { ...selected, icon: options.icon, color: options.color }, title: selected.title });
 				instances.push(createdInstance);
 				activeInstance = createdInstance;
@@ -376,7 +379,7 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 		services.registerInstance(ITerminalProcessService, {
 			operatingSystem: new URLSearchParams(location.search).get('os') === 'windows' ? OperatingSystem.Windows : OperatingSystem.Linux, onConnectionState: Event.None,
 			getEnvironment: async () => ({ HOME: '/home/test', PROFILE_ARG: 'literal;$HOME' }),
-			sendSignal: async () => { }, resolveProfile: async (profile: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({ profile: profile.type === 'custom' ? { profileId: `custom:${profile.name}`, title: profile.name, isDefault: false } : instance.profile, executable: profile.type === 'custom' ? profile.path.at(-1)! : '/bin/sh', args: profile.type === 'custom' ? (typeof profile.args === 'string' ? profile.args : [...profile.args]) : [] }),
+			sendSignal: async () => { }, resolveProfile: async (profile: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({ profile: profile.type === 'custom' ? { profileId: `custom:${profile.name}`, title: profile.name, isDefault: false } : paneInstance.profile, executable: profile.type === 'custom' ? profile.path.at(-1)! : '/bin/sh', args: profile.type === 'custom' ? (typeof profile.args === 'string' ? profile.args : [...profile.args]) : [] }),
 		} as unknown as ITerminalProcessService);
 		setupTerminalFixtureServices(services, lifetime);
 		services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
@@ -421,7 +424,7 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 			getWorkspace: () => workspace,
 			getWorkbenchState: () => 2,
 			getWorkspaceFolder: resource => workspace.folders.find(folder => extUri.isEqualOrParent(resource, folder.uri)) ?? null,
-		}, services, profileService, resolver, services.get(ITerminalProcessService), services.get(ITerminalGroupService)));
+		}, services, profileService, resolver, services.get(ITerminalProcessService), services.get(ITerminalGroupService), services.get(IEditorService), services.get(IQuickInputService)));
 		root.append(pane.partTitleProjection.actions!);
 		pane.layout(Math.max(0, root.clientHeight - pane.partTitleProjection.actions!.offsetHeight), 0, root.clientWidth);
 		return {
@@ -436,7 +439,7 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 			ids: () => instances.map(instance => instance.instanceId),
 			activate: id => terminals.setActiveInstance(instances.find(instance => instance.instanceId === id)),
 			activeId: () => terminals.activeInstance?.instanceId,
-			snapshot: () => pane.getTerminalOutput(instance, 100_000, new AbortController().signal),
+			snapshot: () => pane.getTerminalOutput(paneInstance, 100_000, new AbortController().signal),
 			counts: () => ({ profiles, creates }),
 			command: (id: string, argument?: unknown) => commands.executeCommand(id, argument),
 			dispose: () => lifetime.dispose(),

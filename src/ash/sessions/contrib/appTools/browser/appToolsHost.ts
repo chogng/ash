@@ -22,6 +22,10 @@ import { IEditorService } from '../../../../workbench/services/editor/common/edi
 import { createDiffEditorInput } from '../../../../workbench/common/editor/diffEditorInput.js';
 import { IChatSessionNavigationService } from '../../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { ISessionGroupsService, type SessionGroup } from '../../../services/sessions/browser/sessionGroupsService.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
+import { pickWorkspaceFolder } from '../../../../workbench/services/workspaces/browser/workspaceOpenService.js';
+import { getRemoteAuthority } from '../../../../platform/remote/common/remoteHosts.js';
 
 /** Window-owned execution; tool definitions and durable business operations belong to Rust. */
 export class AppToolsHost extends Disposable implements IAppToolsHost {
@@ -39,6 +43,7 @@ export class AppToolsHost extends Disposable implements IAppToolsHost {
 		@IViewsService private readonly views: IViewsService,
 		@IChatSessionNavigationService private readonly navigation: IChatSessionNavigationService,
 		@ISessionGroupsService private readonly groups: ISessionGroupsService,
+		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@IAccessibilityService private readonly accessibility: IAccessibilityService,
 	) {
 		super();
@@ -120,8 +125,13 @@ export class AppToolsHost extends Disposable implements IAppToolsHost {
 		assertCurrent();
 		const os = this.terminalProcesses.operatingSystem;
 		if (os === undefined) throw new Error(localize('terminal.profile.platformUnavailable', 'The terminal execution host is not ready.'));
-		const folder = this.workspace.getWorkspace().folders[0];
-		const options = { os, remoteAuthority: folder?.uri.authority || undefined, allowAgentHostShell: true };
+		const folders = this.workspace.getWorkspace().folders;
+		const activeResource = this.editors.activeEditor?.resource;
+		const folder = (activeResource && this.workspace.getWorkspaceFolder(activeResource))
+			|| (folders.length === 1 ? folders[0] : await pickWorkspaceFolder(this.instantiation.get(IQuickInputService), folders, localize('terminal.selectFolder', 'Select a workspace folder for the terminal.'), signal));
+		assertCurrent();
+		if (!folder) throw new CancellationError();
+		const options = { os, remoteAuthority: getRemoteAuthority(folder.uri), workspaceFolder: folder, allowAgentHostShell: true };
 		const profile = await this.profiles.getDefaultProfile(options);
 		assertCurrent();
 		const shell: IShellLaunchConfig = { name: profile.profileName, executable: profile.path, args: profile.args, env: profile.env, icon: profile.icon, color: profile.color };

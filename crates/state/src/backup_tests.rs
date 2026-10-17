@@ -160,3 +160,127 @@ fn product_formats_and_workspaces_are_isolated_and_retries_are_idempotent() {
         Err(BackupError::Conflict)
     ));
 }
+
+#[test]
+fn moving_recovery_is_atomic_and_keeps_unrelated_target_records() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("state.db");
+    let store = SqliteBackupStore::open(&path).unwrap();
+    let source = store
+        .write("editor", &workspace(), &content("source draft"), None)
+        .unwrap();
+    let mut target = workspace();
+    target.id = "saved".into();
+    target.configuration = Some("file:///saved.ash-workspace".into());
+    let mut unrelated = content("other recovery");
+    unrelated.resource = "untitled:other".into();
+    let other = store.write("editor", &target, &unrelated, None).unwrap();
+    let moved = store
+        .move_records(
+            "editor",
+            "workspace",
+            &target,
+            &[(source.content.resource.clone(), source.revision.clone())],
+        )
+        .unwrap();
+    assert_eq!(
+        moved,
+        vec![(source.content.resource.clone(), source.revision.clone())]
+    );
+    drop(store);
+    let reopened = SqliteBackupStore::open(&path).unwrap();
+    assert!(reopened.list("editor", "workspace").unwrap().is_empty());
+    let records = reopened.list("editor", "saved").unwrap();
+    assert!(records.contains(&source));
+    assert!(records.contains(&other));
+    assert_eq!(reopened.workspaces("editor").unwrap(), vec![target]);
+}
+
+#[test]
+fn a_late_destination_conflict_rolls_back_preceding_moves() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = SqliteBackupStore::open(&directory.path().join("state.db")).unwrap();
+    let first = store
+        .write("editor", &workspace(), &content("first"), None)
+        .unwrap();
+    let mut second_content = content("second");
+    second_content.resource = "untitled:second".into();
+    let second = store
+        .write("editor", &workspace(), &second_content, None)
+        .unwrap();
+    let mut target = workspace();
+    target.id = "saved".into();
+    second_content.content = "different writer".into();
+    let collision = store
+        .write("editor", &target, &second_content, None)
+        .unwrap();
+    let expected = vec![
+        (first.content.resource.clone(), first.revision.clone()),
+        (second.content.resource.clone(), second.revision.clone()),
+    ];
+    assert!(matches!(
+        store.move_records("editor", "workspace", &target, &expected),
+        Err(BackupError::Conflict)
+    ));
+    let records = store.list("editor", "workspace").unwrap();
+    assert!(records.contains(&first));
+    assert!(records.contains(&second));
+    assert_eq!(store.list("editor", "saved").unwrap(), vec![collision]);
+}
+
+#[test]
+fn a_concurrent_source_writer_and_storage_failure_cannot_erase_recovery() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("state.db");
+    let store = SqliteBackupStore::open(&path).unwrap();
+    let old = store
+        .write("editor", &workspace(), &content("old"), None)
+        .unwrap();
+    let peer = SqliteBackupStore::open(&path).unwrap();
+    let latest = peer
+        .write(
+            "editor",
+            &workspace(),
+            &content("latest"),
+            Some(&old.revision),
+        )
+        .unwrap();
+    let mut target = workspace();
+    target.id = "saved".into();
+    assert!(matches!(
+        store.move_records(
+            "editor",
+            "workspace",
+            &target,
+            &[(old.content.resource.clone(), old.revision)]
+        ),
+        Err(BackupError::Conflict)
+    ));
+    store.connection.lock().unwrap().execute_batch("CREATE TRIGGER fail_move BEFORE DELETE ON backup_contents WHEN OLD.workspace_id = 'workspace' BEGIN SELECT RAISE(ABORT, 'injected failure'); END;").unwrap();
+    assert!(matches!(
+        store.move_records(
+            "editor",
+            "workspace",
+            &target,
+            &[(latest.content.resource.clone(), latest.revision.clone())]
+        ),
+        Err(BackupError::Storage(_))
+    ));
+    assert_eq!(store.list("editor", "workspace").unwrap(), vec![latest]);
+    assert!(store.list("editor", "saved").unwrap().is_empty());
+}
+
+#[test]
+fn recovery_accepts_the_workspace_folder_limit() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = SqliteBackupStore::open(&directory.path().join("state.db")).unwrap();
+    let mut workspace = workspace();
+    workspace.folders = (0..256)
+        .map(|index| format!("file:///root-{index}"))
+        .collect();
+    assert!(
+        store
+            .write("editor", &workspace, &content("many roots"), None)
+            .is_ok()
+    );
+}

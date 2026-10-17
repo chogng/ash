@@ -624,13 +624,13 @@ for (const { root, os, folderPath, separator } of [
 		using service = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters, undefined, undefined, undefined, { executionOS: os });
 		const configuration = { id: 'resolved', name: 'Resolved', type: 'example', request: 'launch' as const, adapter: { program: '${workspaceFolder}${pathSeparator}adapter', arguments: ['${env:HOME}'], cwd: '${workspaceFolder}${/}src', env: { MODE: '${env:HOME}', LITERAL: '$HOME', TERM_PROGRAM: null } }, arguments: { cwd: '${workspaceFolder}', args: ['${workspaceFolderBasename}', '${workspaceFolder:project}${pathSeparator}app', '${env:HOME}', '${env:MISSING}'] } };
 		const session = await service.startDebugging(configuration);
-		assert.equal(session.configuration, configuration);
-		const expectedAdapter = { program: `${folderPath}${separator}adapter`, arguments: ['/execution/home'], cwd: `${folderPath}${separator}src`, env: { MODE: '/execution/home', LITERAL: '$HOME', TERM_PROGRAM: null } };
+		assert.deepEqual(session.configuration, { ...configuration, dirId: 'workspace', workspaceFolderName: 'project' });
+		const expectedAdapter = { dirId: 'workspace', program: `${folderPath}${separator}adapter`, arguments: ['/execution/home'], cwd: `${folderPath}${separator}src`, env: { MODE: '/execution/home', LITERAL: '$HOME', TERM_PROGRAM: null } };
 		const expectedLaunch = { cwd: folderPath, args: ['project', `${folderPath}${separator}app`, '/execution/home', ''] };
 		assert.deepEqual(processes.started.at(-1), expectedAdapter);
 		assert.deepEqual(processes.requests.find(request => request.command === 'launch')?.arguments, expectedLaunch);
 		const restarted = await service.restart(session);
-		assert.equal(restarted.configuration, configuration);
+		assert.equal(restarted.configuration, session.configuration);
 		assert.equal(configuration.arguments.cwd, '${workspaceFolder}');
 		assert.deepEqual(processes.started, [expectedAdapter, expectedAdapter]);
 		assert.deepEqual(processes.requests.filter(request => request.command === 'launch').map(request => request.arguments), [expectedLaunch, expectedLaunch]);
@@ -688,11 +688,11 @@ test('DebugService resolves command variables in the executable and task referen
 	using service = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters);
 	const configuration = { id: 'command', name: 'Command', type: 'example', request: 'launch' as const, adapter: { program: '${command:debug.test.adapter}', arguments: ['${workspaceFolder}'] }, arguments: { program: '${command:debug.test.adapter}', cwd: '${workspaceFolder}' }, preLaunchTask: '${command:debug.test.before}', postDebugTask: '${command:debug.test.after}' };
 	const session = await service.startDebugging(configuration);
-	assert.equal(session.configuration, configuration);
-	assert.deepEqual(processes.started.at(-1), { program: '/adapter-1', arguments: ['/workspace'] });
+	assert.deepEqual(session.configuration, { ...configuration, dirId: 'workspace', workspaceFolderName: 'project' });
+	assert.deepEqual(processes.started.at(-1), { dirId: 'workspace', program: '/adapter-1', arguments: ['/workspace'] });
 	assert.deepEqual(processes.requests.find(request => request.command === 'launch')?.arguments, { program: '/adapter-1', cwd: '/workspace' });
 	const restarted = await service.restart(session);
-	assert.deepEqual(processes.started.at(-1), { program: '/adapter-2', arguments: ['/workspace'] });
+	assert.deepEqual(processes.started.at(-1), { dirId: 'workspace', program: '/adapter-2', arguments: ['/workspace'] });
 	await service.stop(restarted);
 	assert.deepEqual(tasks.ran, ['build', 'cleanup', 'build', 'cleanup']);
 	assert.equal(configuration.adapter.program, '${command:debug.test.adapter}');
@@ -725,11 +725,11 @@ test('DebugService uses the selected debugger command aliases once per start and
 	using service = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters, undefined, undefined, extensions);
 	const configuration = { id: 'mapped', name: 'Mapped', type: 'mapped', request: 'launch' as const, adapter: { program: '${command:PickProcess}', arguments: [] }, arguments: { program: '${command:PickProcess}' }, preLaunchTask: 'build' };
 	const session = await service.startDebugging(configuration);
-	assert.deepEqual({ process: processes.started.at(-1), launch: processes.requests.find(request => request.command === 'launch')?.arguments, calls }, { process: { program: '/first', arguments: [] }, launch: { program: '/first' }, calls: 1 });
+	assert.deepEqual({ process: processes.started.at(-1), launch: processes.requests.find(request => request.command === 'launch')?.arguments, calls }, { process: { dirId: 'workspace', program: '/first', arguments: [] }, launch: { program: '/first' }, calls: 1 });
 	command = 'debug.test.alias.second'; generation++;
 	await extensions.reload();
 	const restarted = await service.restart(session);
-	assert.deepEqual({ process: processes.started.at(-1), calls, source: restarted.configuration }, { process: { program: '/second', arguments: [] }, calls: 2, source: configuration });
+	assert.deepEqual({ process: processes.started.at(-1), calls, source: restarted.configuration }, { process: { dirId: 'workspace', program: '/second', arguments: [] }, calls: 2, source: { ...configuration, dirId: 'workspace', workspaceFolderName: 'project' } });
 	await service.stop(restarted);
 	command = 'debug.test.alias.cancel'; generation++;
 	await extensions.reload();
@@ -737,12 +737,12 @@ test('DebugService uses the selected debugger command aliases once per start and
 	await assert.rejects(service.startDebugging(configuration), isCancellationError);
 	assert.deepEqual({ tasks: tasks.ran.length, processes: processes.started.length }, before);
 	const unrelated = await service.startDebugging({ ...configuration, id: 'unrelated', type: 'unrelated' });
-	assert.deepEqual(processes.started.at(-1), { program: '/unmapped', arguments: [] });
+	assert.deepEqual(processes.started.at(-1), { dirId: 'workspace', program: '/unmapped', arguments: [] });
 	await service.stop(unrelated);
 	present = false; generation++;
 	await extensions.reload();
 	const removed = await service.startDebugging(configuration);
-	assert.deepEqual(processes.started.at(-1), { program: '/unmapped', arguments: [] });
+	assert.deepEqual(processes.started.at(-1), { dirId: 'workspace', program: '/unmapped', arguments: [] });
 	await service.stop(removed);
 });
 
@@ -1021,7 +1021,7 @@ test('DebugService keeps a pending launch alive across an unchanged discovery re
 	assert.equal(signal.aborted, false);
 	void result.complete({ program: 'adapter', arguments: [] });
 	const session = await pending;
-	assert.deepEqual(processes.started, [{ program: 'adapter', arguments: [] }]);
+	assert.deepEqual(processes.started, [{ dirId: 'workspace', program: 'adapter', arguments: [] }]);
 	await service.stop(session);
 });
 

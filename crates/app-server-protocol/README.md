@@ -110,10 +110,10 @@ ignore override 语义。对应的 `/cancel` 响应只确认取消请求，原�
 
 ## 未保存内容备份
 
-`backup/workspaces`、`backup/listPage`、`backup/list`、`backup/write` 和 `backup/discard` 仅接受产品 host 连接。
+`backup/workspaces`、`backup/listPage`、`backup/list`、`backup/write`、`backup/move` 和 `backup/discard` 仅接受产品 host 连接。
 Rust 在 profile 的 SQLite 中原子保存工作区重开信息和正文，连接关闭不删除记录。
 `clientId` 是稳定的客户端恢复命名空间，与 connection/window ID 无关；它用于隔离内容格式，并非权限凭证。
-资源使用完整 URI，`format` 和 UTF-8 `content` 由客户端解释。正文最多 8 MiB，工作区最多 128 个目录。
+资源使用完整 URI，`format` 和 UTF-8 `content` 由客户端解释。正文最多 8 MiB，工作区最多 256 个目录。
 
 恢复客户端使用 `backup/listPage`，首个请求的 `afterResource` 为 `null`，后续使用返回的
 `nextResource`，直到其为 `null`。页面按资源 URI 排序，原始内容与记录开销总量最多 8 MiB，
@@ -125,6 +125,12 @@ Rust 在 profile 的 SQLite 中原子保存工作区重开信息和正文，连�
 相同正文的写入重试返回同一记录，不同正文遇到旧 revision 返回 `BackupRevisionConflict`，不自动覆盖。
 查询不消费备份；保存或放弃修改后显式删除，最后一份内容删除时一并清理工作区目录记录。
 服务不可用与存储失败分别返回 `BackupUnavailable`、`BackupOperationFailed`。
+
+工作区另存的 `backup/move` 接收 `sourceWorkspaceId`、目标 `workspace` 和已观察的
+`backups: [{ resource, revision }]`。同一 SQLite Immediate 事务检查源修订和目标正文，
+移动记录并清理空的源目录记录；冲突或存储故障会回滚整批。目标已有相同正文时复用其修订，
+其他目标记录与未在请求中的源记录均保留。返回值仅有迁移记录的 URI 和目标修订，不重传正文。
+客户端先暂停备份生产者，迁移成功后切换恢复 scope；取消等待或连接关闭不撤销已经提交的事务。
 
 Electron 编辑器使用 `ash-editor` 和 `ash.working-copy.v1`，生成备份和重建编辑器由前端负责。
 启动时 renderer 查询待恢复工作区，再交给 Main 打开窗口；Main 不读取备份协议或正文。

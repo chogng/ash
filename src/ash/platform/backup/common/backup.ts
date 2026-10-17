@@ -21,6 +21,11 @@ export interface IBackupRecord {
 	readonly updatedAt: number;
 }
 
+export interface IBackupRevision {
+	readonly resource: URI;
+	readonly revision: string;
+}
+
 export class BackupError extends Error {
 	constructor(public readonly code: 'conflict' | 'unavailable' | 'failed') {
 		super(`Backup ${code}`);
@@ -31,6 +36,8 @@ export class BackupError extends Error {
 /** Profile recovery content in the host-selected client namespace, retained across connection closure. */
 export interface IBackupService {
 	getWorkspaces(): Promise<readonly IBackupWorkspace[]>;
+	/** Atomically moves observed records; either scope conflicting aborts the whole transaction. */
+	move(sourceWorkspaceId: string, target: IBackupWorkspace, backups: readonly IBackupRevision[]): Promise<readonly IBackupRevision[]>;
 	list(workspaceId: string): Promise<readonly IBackupRecord[]>;
 	/** Resolves after durable commit. Undefined creates a record; updates require the last observed revision. */
 	store(workspace: IBackupWorkspace, content: IBackupContent, expectedRevision?: string): Promise<IBackupRecord>;

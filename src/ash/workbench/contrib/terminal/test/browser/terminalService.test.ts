@@ -45,7 +45,7 @@ test('the interrupt command reaches the Rust process port and preserves the term
 	registerTerminalActions();
 	using commands = new CommandService(services);
 	await commands.executeCommand(TerminalCommandId.SendSignal);
-	assert.deepEqual(processes.signalCalls, [{ terminalId: 'terminal-1', signal: 'interrupt' }]);
+	assert.deepEqual(processes.signalCalls, [{ dirId: 'signals', terminalId: 'terminal-1', signal: 'interrupt' }]);
 	assert.equal(instance.state, 'running');
 	assert.deepEqual(processes.closeCalls, []);
 	await assert.rejects(instance.sendSignal('SIGTERM'), /Only SIGINT/);
@@ -140,6 +140,7 @@ test("TerminalService exposes event-driven instances over the process service", 
 	assert.deepEqual(commandStatuses, ["running", "succeeded"]);
 	assert.equal(instance.exitCode, 0);
 	assert.deepEqual(processService.createCalls, [{
+		dirId: 'workspace',
 		rows: 24,
 		cols: 80,
 		profile: { type: "default" },
@@ -179,6 +180,7 @@ test("TerminalService batches input, coalesces resize, and releases terminals", 
 
 	assert.equal(processService.writeCalls[0].data, "ab");
 	assert.deepEqual(processService.resizeCalls[0], {
+		dirId: 'workspace',
 		terminalId: "terminal-1",
 		rows: 31,
 		cols: 101,
@@ -201,7 +203,7 @@ test('TerminalService relaunch retains custom candidates, literal argv, environm
 	await waitFor(() => terminal.state === 'disconnected');
 	processes.emitConnectionState('ready');
 	await terminals.relaunchTerminal(terminal, { rows: 30, cols: 100 });
-	assert.deepEqual(processes.createCalls[1], { rows: 30, cols: 100, profile: { type: 'custom', name: 'Custom shell', path: ['/missing/shell', '/execution/shell'], args: ['literal;$HOME'] }, env: { PROFILE: 'original value', REMOVED: null }, cwd: '/workspace/subdirectory' });
+	assert.deepEqual(processes.createCalls[1], { dirId: 'workspace', rows: 30, cols: 100, profile: { type: 'custom', name: 'Custom shell', path: ['/missing/shell', '/execution/shell'], args: ['literal;$HOME'] }, env: { PROFILE: 'original value', REMOVED: null }, cwd: '/workspace/subdirectory' });
 	assert.equal(terminal.profile.icon?.id, 'terminal-git-bash');
 	assert.equal(terminal.profile.color, 'terminal.ansiGreen');
 });
@@ -236,6 +238,7 @@ test("TerminalService keeps multiple instances and safely relaunches after a cra
 	assert.equal(first.id, "terminal-instance-1");
 	assert.equal(processService.createCalls.length, 3);
 	assert.deepEqual(processService.createCalls[2], {
+		dirId: 'workspace',
 		rows: 25,
 		cols: 90,
 		profile: { type: "profile", profileId: "command-prompt" },
@@ -775,8 +778,8 @@ suite('TerminalService lifecycle', () => {
 		const instance = await terminals.createTerminal({ dimensions: { cols: 80, rows: 24 }, profile: { type: 'default' } });
 		await waitFor(() => processes.writeCalls.length === 1 && processes.resizeCalls.length === 1);
 		assert.deepEqual({ writes: processes.writeCalls, dimensions: processes.resizeCalls }, {
-			writes: [{ terminalId: 'terminal-1', data: 'early input' }],
-			dimensions: [{ terminalId: 'terminal-1', cols: 91, rows: 31 }],
+			writes: [{ dirId: 'workspace', terminalId: 'terminal-1', data: 'early input' }],
+			dimensions: [{ dirId: 'workspace', terminalId: 'terminal-1', cols: 91, rows: 31 }],
 		});
 		await instance.close();
 	});
@@ -997,7 +1000,7 @@ suite('TerminalService lifecycle', () => {
 		oldRead.resolve(readResult({ chunks: [{ sequence: 1, data: new TextEncoder().encode('OLD_OUTPUT') }], nextSequence: 1, exited: true, exitCode: 99 }));
 		await new Promise<void>(resolve => setImmediate(resolve));
 		assert.deepEqual({ output, state: instance.state, exitCode: instance.exitCode, id: instance.id, title: instance.title, pid: instance.processId, reads: processes.readCursors, instances: service.instances.length }, { output: [], state: 'running', exitCode: undefined, id: 'terminal-instance-1', title: 'Replacement', pid: 1002, reads: [0], instances: 1 });
-		assert.deepEqual(processes.createCalls[1], { rows: 24, cols: 80, profile: { type: 'custom', name: 'Replacement', path: ['/custom/shell'], args: ['-l'] }, env: { NEW: 'new', OLD: null }, cwd: '/workspace/new', execution: { type: 'process', program: 'second', args: ['$HOME', ''] } });
+		assert.deepEqual(processes.createCalls[1], { dirId: 'workspace', rows: 24, cols: 80, profile: { type: 'custom', name: 'Replacement', path: ['/custom/shell'], args: ['-l'] }, env: { NEW: 'new', OLD: null }, cwd: '/workspace/new', execution: { type: 'process', program: 'second', args: ['$HOME', ''] } });
 		instance.start();
 		await waitFor(() => processes.readCursors.length === 2);
 		await service.closeTerminal(instance);
@@ -1120,7 +1123,7 @@ suite('TerminalService lifecycle', () => {
 		await waitFor(() => processes.closeCalls.length === 1);
 		assert.equal(processes.createCalls.length, 1);
 		release.resolve(); await replacing;
-		assert.deepEqual(processes.createCalls[1], { rows: 24, cols: 80, profile: { type: 'custom', name: 'Argv', path: ['program.exe'], args: ['', 'two words', 'literal;$HOME'] }, execution: { type: 'process', program: 'program.exe', args: ['', 'two words', 'literal;$HOME'] } });
+		assert.deepEqual(processes.createCalls[1], { dirId: 'workspace', rows: 24, cols: 80, profile: { type: 'custom', name: 'Argv', path: ['program.exe'], args: ['', 'two words', 'literal;$HOME'] }, execution: { type: 'process', program: 'program.exe', args: ['', 'two words', 'literal;$HOME'] } });
 		await instance.reuseTerminal({ name: 'Raw again', executable: 'cmd.exe', args: raw, execution: { type: 'process', program: 'cmd.exe', args: raw }, deferStart: true });
 		processes.queueRead(readResult({ exited: true }));
 		instance.start();
@@ -1192,8 +1195,8 @@ suite('TerminalService lifecycle', () => {
 		await instance.close();
 		assert.deepEqual({ creates: processService.createCalls, closes: processService.closeCalls }, {
 			creates: [
-				{ rows: 24, cols: 80, profile: { type: 'default' } },
-				{ rows: 30, cols: 100, profile: { type: 'profile', profileId: 'command-prompt' } },
+				{ dirId: 'workspace', rows: 24, cols: 80, profile: { type: 'default' } },
+				{ dirId: 'workspace', rows: 30, cols: 100, profile: { type: 'profile', profileId: 'command-prompt' } },
 			],
 			closes: ['terminal-1', 'terminal-2'],
 		});
@@ -1712,7 +1715,7 @@ suite('Terminal Send Sequence', () => {
 		const sending = commands.executeCommand(TerminalCommandId.SendSequence, { text: '${workspaceFolder}' }).then(() => { completed = true; });
 		await waitFor(() => processes.writeCalls.length === 1);
 		assert.deepEqual(resolutions, [{ folder: workspace.getWorkspace().folders[0], value: '${workspaceFolder}' }]);
-		assert.deepEqual(processes.writeCalls, [{ terminalId: 'terminal-1', data: '\x1b[1;5D中文' }]);
+		assert.deepEqual(processes.writeCalls, [{ dirId: 'sequence', terminalId: 'terminal-1', data: '\x1b[1;5D中文' }]);
 		assert.equal(completed, false);
 		acknowledgement.resolve();
 		await sending;
@@ -1764,8 +1767,8 @@ suite('Terminal Send Sequence', () => {
 		await commands.executeCommand(TerminalCommandId.SendSequence, { text: String.raw`\n\r\x1b` });
 		assert.equal(prompts.length, 1);
 		assert.deepEqual(processes.writeCalls, [
-			{ terminalId: 'terminal-1', data: '\x1b[A\r\r\0\\n\\xGG中文' },
-			{ terminalId: 'terminal-1', data: String.raw`\n\r\x1b` },
+			{ dirId: 'sequence', terminalId: 'terminal-1', data: '\x1b[A\r\r\0\\n\\xGG中文' },
+			{ dirId: 'sequence', terminalId: 'terminal-1', data: String.raw`\n\r\x1b` },
 		]);
 	});
 
@@ -1843,7 +1846,7 @@ suite('Terminal Send Sequence', () => {
 		await waitFor(() => processes.writeCalls.length === 1);
 		acknowledgement.reject(failure);
 		await sending;
-		assert.deepEqual(processes.writeCalls, [{ terminalId: 'terminal-1', data: 'sent' }]);
+		assert.deepEqual(processes.writeCalls, [{ dirId: 'sequence', terminalId: 'terminal-1', data: 'sent' }]);
 	});
 });
 

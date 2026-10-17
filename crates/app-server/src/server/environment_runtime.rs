@@ -1603,6 +1603,21 @@ impl AppServer {
                 .map(|(id, dir)| (id.clone(), dir.grant.clone()))
                 .collect::<Vec<_>>();
             dirs.extend(aliases);
+            // Display order belongs to the window. Keep the selected execution
+            // directory while it remains authorized, so reordering folders does
+            // not replace live processes or the Agent's execution context.
+            if let Some(position) = dirs.iter().position(|(id, grant)| {
+                runtime.primary_dir_id.as_ref() == Some(id)
+                    && grant.is_active()
+                    && runtime.selected_grant.as_ref().is_some_and(|current| {
+                        current.dir() == grant.dir()
+                            && current.source() == grant.source()
+                            && current.permissions() == grant.permissions()
+                            && current.is_active()
+                    })
+            }) {
+                dirs.swap(0, position);
+            }
         }
         // Opening another renderer repeats its workspace binding. Identical active
         // authorization is not a transition: preserve the executor, grants and watchers
@@ -1711,105 +1726,155 @@ impl AppServer {
         let primary_id = primary_id.clone();
         let primary = primary.clone();
         let dirs = dirs.into_iter().collect::<BTreeMap<_, _>>();
-        self.activate_dir_runtime(primary, host)?;
-        let (grep, primary_search, primary_terminals, primary_debug_adapters) = {
+        // Prepare every fallible added-directory resource before retiring the old
+        // execution root. Restoring a map cannot resurrect a terminated process.
+        let retained_ids = {
             let runtime = self
                 .env_runtime
                 .read()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-            (
-                runtime.workspace.grep.clone(),
-                runtime.workspace.content_search.clone(),
-                runtime.execution.terminals.clone(),
-                runtime.execution.debug_adapters.clone(),
-            )
-        };
-        let mut directories = BTreeMap::new();
-        for (id, grant) in &dirs {
-            // Input order selects the primary; map ordering must not change its resource owner.
-            let is_primary = id == &primary_id;
-            let file_system = Arc::new(LocalFileSystem::new(grant.clone()));
-            let file_system_watcher =
-                if !is_primary && grant.permissions().allows(Permission::WatchFiles) {
-                    Some(
-                        FileSystemWatcher::start_for_dir(
-                            grant.dir().clone(),
-                            Arc::clone(&self.updates),
-                            id.clone(),
-                        )
-                        .map_err(|error| {
-                            EnvRuntimeError::Failed(format!(
-                                "failed to initialize dir folder watcher: {error}"
-                            ))
-                        })?,
-                    )
-                } else {
-                    None
-                };
-            let content_search = if !grant.permissions().allows(Permission::SearchFiles) {
-                None
-            } else if is_primary {
-                primary_search.clone()
-            } else {
-                grep.as_ref().and_then(|grep| {
-                    let permission = grant.authorize(Permission::SearchFiles).ok()?;
-                    ContentSearchService::new_authorized(permission, grep.clone())
-                        .ok()
-                        .map(Arc::new)
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let ids = runtime
+                .dirs
+                .iter()
+                .filter(|(id, current)| {
+                    dirs.get(*id).is_some_and(|next| {
+                        current.grant.dir() == next.dir()
+                            && current.grant.source() == next.source()
+                            && current.grant.permissions() == next.permissions()
+                            && current.grant.is_active()
+                    })
                 })
-            };
-            let terminals = if !grant.permissions().allows(Permission::ExecuteCommands) {
-                None
-            } else if is_primary {
-                primary_terminals.clone()
-            } else {
-                let capability = grant
-                    .authorize(Permission::ExecuteCommands)
-                    .map_err(|_| EnvRuntimeError::PermissionRequired)?;
-                Some(Arc::new(
-                    exec_server::terminal::TerminalService::new(capability).map_err(|_| {
-                        EnvRuntimeError::Failed(
-                            "failed to initialize dir folder terminal runtime".into(),
+                .map(|(id, _)| id.clone())
+                .collect::<Vec<_>>();
+            ids
+        };
+        let grep = Some(self.open_grep()?);
+        let prepared = (|| {
+            let mut directories = BTreeMap::new();
+            for (id, grant) in &dirs {
+                if retained_ids.contains(id) || id == &primary_id {
+                    continue;
+                }
+                // Input order selects the primary; map ordering must not change its resource owner.
+                let is_primary = id == &primary_id;
+                let file_system = Arc::new(LocalFileSystem::new(grant.clone()));
+                let file_system_watcher =
+                    if !is_primary && grant.permissions().allows(Permission::WatchFiles) {
+                        Some(
+                            FileSystemWatcher::start_for_dir(
+                                grant.dir().clone(),
+                                Arc::clone(&self.updates),
+                                id.clone(),
+                            )
+                            .map_err(|error| {
+                                EnvRuntimeError::Failed(format!(
+                                    "failed to initialize dir folder watcher: {error}"
+                                ))
+                            })?,
                         )
-                    })?,
-                ))
-            };
-            let debug_adapters = if !grant.permissions().allows(Permission::LoadConfig)
-                || !grant.permissions().allows(Permission::ExecuteCommands)
-            {
-                None
-            } else if is_primary {
-                primary_debug_adapters.clone()
-            } else {
-                Some(Arc::new(
-                    crate::debug_service::DebugAdapterService::new(
-                        grant
-                            .authorize(Permission::LoadConfig)
-                            .map_err(|_| EnvRuntimeError::PermissionRequired)?,
-                        grant
-                            .authorize(Permission::ExecuteCommands)
-                            .map_err(|_| EnvRuntimeError::PermissionRequired)?,
-                        exec_server::terminal::safe_process_environment(),
-                    )
-                    .map_err(|_| {
-                        EnvRuntimeError::Failed(
-                            "failed to initialize dir folder debug adapter runtime".into(),
+                    } else {
+                        None
+                    };
+                let content_search = if !grant.permissions().allows(Permission::SearchFiles) {
+                    None
+                } else {
+                    grep.as_ref().and_then(|grep| {
+                        let permission = grant.authorize(Permission::SearchFiles).ok()?;
+                        ContentSearchService::new_authorized(permission, grep.clone())
+                            .ok()
+                            .map(Arc::new)
+                    })
+                };
+                let terminals = if !grant.permissions().allows(Permission::ExecuteCommands) {
+                    None
+                } else {
+                    let capability = grant
+                        .authorize(Permission::ExecuteCommands)
+                        .map_err(|_| EnvRuntimeError::PermissionRequired)?;
+                    Some(Arc::new(
+                        exec_server::terminal::TerminalService::new(capability).map_err(|_| {
+                            EnvRuntimeError::Failed(
+                                "failed to initialize dir folder terminal runtime".into(),
+                            )
+                        })?,
+                    ))
+                };
+                let debug_adapters = if !grant.permissions().allows(Permission::LoadConfig)
+                    || !grant.permissions().allows(Permission::ExecuteCommands)
+                {
+                    None
+                } else {
+                    Some(Arc::new(
+                        crate::debug_service::DebugAdapterService::new(
+                            grant
+                                .authorize(Permission::LoadConfig)
+                                .map_err(|_| EnvRuntimeError::PermissionRequired)?,
+                            grant
+                                .authorize(Permission::ExecuteCommands)
+                                .map_err(|_| EnvRuntimeError::PermissionRequired)?,
+                            exec_server::terminal::safe_process_environment(),
                         )
-                    })?,
-                ))
-            };
+                        .map_err(|_| {
+                            EnvRuntimeError::Failed(
+                                "failed to initialize dir folder debug adapter runtime".into(),
+                            )
+                        })?,
+                    ))
+                };
+                directories.insert(
+                    id.clone(),
+                    DirRuntime {
+                        grant: grant.clone(),
+                        file_system,
+                        _file_system_watcher: file_system_watcher,
+                        content_search,
+                        terminals,
+                        debug_adapters,
+                    },
+                );
+            }
+            Ok::<_, EnvRuntimeError>(directories)
+        })();
+        let mut directories = prepared?;
+        let retained = {
+            let mut runtime = self
+                .env_runtime
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            retained_ids
+                .into_iter()
+                .filter_map(|id| runtime.dirs.remove(&id).map(|directory| (id, directory)))
+                .collect::<BTreeMap<_, _>>()
+        };
+        if let Err(error) = self.activate_dir_runtime(primary.clone(), host) {
+            self.env_runtime
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .dirs
+                .extend(retained);
+            return Err(error);
+        }
+        if !retained.contains_key(&primary_id) {
+            let runtime = self
+                .env_runtime
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             directories.insert(
-                id.clone(),
+                primary_id.clone(),
                 DirRuntime {
-                    grant: grant.clone(),
-                    file_system,
-                    _file_system_watcher: file_system_watcher,
-                    content_search,
-                    terminals,
-                    debug_adapters,
+                    grant: primary,
+                    file_system: runtime
+                        .selected_file_system
+                        .clone()
+                        .expect("activated directory has a filesystem"),
+                    _file_system_watcher: None,
+                    content_search: runtime.workspace.content_search.clone(),
+                    terminals: runtime.execution.terminals.clone(),
+                    debug_adapters: runtime.execution.debug_adapters.clone(),
                 },
             );
         }
+        directories.extend(retained);
         let (previous_watcher, previous_directories) = {
             let mut runtime = self
                 .env_runtime
@@ -1817,13 +1882,23 @@ impl AppServer {
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             let previous_watcher = runtime.workspace._git_watcher.take();
             let previous_directories = std::mem::replace(&mut runtime.dirs, directories);
+            if let Some(primary) = runtime.dirs.get(&primary_id) {
+                let search = primary.content_search.clone();
+                let terminals = primary.terminals.clone();
+                let adapters = primary.debug_adapters.clone();
+                runtime.workspace.content_search = search;
+                runtime.execution.terminals = terminals;
+                runtime.execution.debug_adapters = adapters;
+            }
             runtime.primary_dir_id = Some(primary_id);
             runtime.workspace.git = git;
             runtime.workspace._git_watcher = watcher;
             (previous_watcher, previous_directories)
         };
         drop(previous_watcher);
-        drop(previous_directories);
+        for (_, directory) in previous_directories {
+            directory.retire(None, None, None);
+        }
         self.reset_language_env_runtimes();
         Ok(dirs
             .into_iter()

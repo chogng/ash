@@ -68,9 +68,9 @@ export class TerminalService extends Disposable implements ITerminalService {
 		return this._activeInstance;
 	}
 
-	async getProfiles(): Promise<readonly ITerminalProfile[]> {
-		const folder = this.requireWorkspaceFolder();
-		return this.processService.listProfiles(this.workspaceContext.getWorkspace().folders.length > 1 || folder.id.startsWith('session:') ? folder.id : undefined);
+	async getProfiles(dirId?: string): Promise<readonly ITerminalProfile[]> {
+		const folder = this.requireWorkspaceFolder(dirId);
+		return this.processService.listProfiles(folder.id);
 	}
 
 	async createTerminal(options: ITerminalCreateOptions): Promise<ITerminalInstance> {
@@ -137,7 +137,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 
 	async relaunchTerminal(instance: ITerminalInstance, dimensions: ITerminalDimensions): Promise<void> {
 		if (!instance.isReadOnly) {
-			this.requireWorkspaceFolder();
+			this.requireWorkspaceFolder(instance.dirId);
 		}
 		if (!this._instances.includes(instance as TerminalInstance)) {
 			throw new Error("Terminal must belong to this TerminalService");
@@ -234,6 +234,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 
 	private requireWorkspaceFolder(dirId?: string) {
 		const folders = this.workspaceContext.getWorkspace().folders;
+		if (!dirId && folders.length > 1) throw new Error(localize('terminal.selectFolder', 'Select a workspace folder for the terminal.'));
 		const folder = dirId ? folders.find(folder => folder.id === dirId) : folders[0];
 		if (!folder) throw new Error("TerminalUnavailable: Terminal requires an open workspace folder");
 		return folder;

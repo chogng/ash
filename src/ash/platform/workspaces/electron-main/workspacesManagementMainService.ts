@@ -1,4 +1,18 @@
-import { basename, dirname, isAbsolute, resolve } from 'node:path';
+import { localize } from '../../../nls.js';
+import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
+import { mkdir, readFile } from 'node:fs/promises';
+import { watch } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { editJsonObjectProperty } from '../../../base/common/json.js';
+import { RunOnceScheduler } from '../../../base/common/async.js';
+import { Disposable, MutableDisposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { DiskFileSystemProvider } from '../../files/node/diskFileSystemProvider.js';
+import { FileNotFoundError, FileRevisionConflictError } from '../../files/common/files.js';
+import type { WorkspaceContextMainService } from '../../window/electron-main/window.js';
+import type { WorkspaceEditRequest, WorkspaceConfigurationRequest } from '../../workspace/common/workspaceIpc.js';
+import { hasWorkspaceFileExtension, isWorkspaceIdentifier, serializeWorkspace, getWorkspaceRemoteAuthority } from '../../workspace/common/workspace.js';
+import { getWorkspaceIdentifier } from '../node/workspaces.js';
+import type { WorkspaceTrustGrant } from '../../workspace/common/workspaceTrust.js';
 import { parseJsonc } from '../../../base/common/jsonc.js';
 import { URI } from '../../../base/common/uri.js';
 import { type IAnyWorkspaceIdentifier, type ISingleFolderWorkspaceIdentifier, type IWorkspace, type IWorkspaceFolder, workspaceFromIdentifier } from '../../workspace/common/workspace.js';
@@ -55,5 +69,188 @@ export class WorkspacesManagementMainService {
 			configuration: identifier.configPath,
 			name: workspaceFromIdentifier(identifier).name,
 		});
+	}
+}
+
+/** Serializes metadata edits and external folder changes for one window.
+ * The window context remains authoritative and is published only after metadata
+ * persistence and backend directory acceptance. Invalid external edits retain
+ * the last accepted workspace and are retried on the next filesystem change.
+ */
+export class WorkspaceEditingMainService extends Disposable {
+	private queue: Promise<unknown> = Promise.resolve();
+	private readonly watcher = this._register(new MutableDisposable());
+	private readonly reload = this._register(new RunOnceScheduler(() => {
+		void this.enqueue(() => this.reloadWorkspace()).catch(this.reportError);
+	}, 100));
+
+	constructor(
+		private readonly context: WorkspaceContextMainService,
+		private readonly workspaces: WorkspacesManagementMainService,
+		private readonly untitledHome: string,
+		private readonly host: {
+			resolveGrant(path: string): Promise<WorkspaceTrustGrant | undefined>;
+			persistDirectoryGrant(path: string, grant: WorkspaceTrustGrant): Promise<void>;
+			setFolders(folders: readonly { id: string; path: string; grant: WorkspaceTrustGrant; }[]): Promise<void>;
+			validateFolders(folders: readonly { id: string; path: string; grant: WorkspaceTrustGrant; }[]): Promise<void>;
+		},
+		private readonly reportError: (error: unknown) => void,
+		private readonly runExclusive?: <T>(operation: () => Promise<T>) => Promise<T>,
+		private readonly configurationChanged: () => void = () => { },
+	) {
+		super();
+		this._register(context.onDidChangeWorkspace(() => this.watchConfiguration()));
+		this.watchConfiguration();
+	}
+
+	configuration(request: WorkspaceConfigurationRequest): Promise<unknown> {
+		return this.enqueue(async () => {
+			this.assertNotDisposed();
+			const resource = this.context.getResolvedWorkspace().configuration;
+			if (!resource || resource.toString() !== request.uri) throw new Error('Only the current workspace configuration file is accessible');
+			using disk = new DiskFileSystemProvider([URI.file(dirname(resource.fsPath))]);
+			try {
+				const result = request.operation === 'read' ? await disk.readFile(resource)
+					: await disk.writeFile(resource, new TextEncoder().encode(request.content), request.options);
+				const stat = await disk.stat(resource);
+				return {
+					revision: result.revision, sizeBytes: stat.sizeBytes, readonly: stat.readonly, modifiedAtMillis: stat.modifiedAtMillis,
+					...(request.operation === 'read' && 'bytes' in result ? { content: new TextDecoder('utf-8', { fatal: true }).decode(result.bytes) } : {})
+				};
+			} catch (error) {
+				if (error instanceof FileRevisionConflictError) return { error: 'revisionConflict' };
+				if (error instanceof FileNotFoundError) return { error: 'notFound' };
+				throw error;
+			}
+		});
+	}
+
+	edit(request: WorkspaceEditRequest): Promise<unknown> {
+		return this.enqueue(async () => {
+			this.assertNotDisposed();
+			if (getWorkspaceRemoteAuthority(this.context.getResolvedWorkspace())) throw new Error(localize('workspace.remoteUnavailable', 'Remote multi-root workspaces are unavailable'));
+			const current = this.context.getResolvedWorkspace();
+			const identifier = this.context.getWorkspace();
+			const source = isWorkspaceIdentifier(identifier) ? await readFile(identifier.configPath.fsPath, 'utf8') : '{}\n';
+			const latest = isWorkspaceIdentifier(identifier) ? await this.workspaces.resolveWorkspace(identifier) : current;
+			if (request.operation === 'folders' && JSON.stringify(latest.folders) !== JSON.stringify(current.folders)) {
+				// Index-based edits refer to the list the renderer actually displayed.
+				// Let the external edit settle before retrying, rather than deleting or
+				// inserting against a different on-disk ordering.
+				this.reload.schedule();
+				throw new Error(localize('workspace.changedDuringEdit', 'Workspace file changed during editing'));
+			}
+			let folders = [...latest.folders];
+			if (request.operation === 'folders') {
+				if (request.index > folders.length || request.deleteCount > folders.length - request.index) throw new RangeError(localize('workspace.invalidFolderEdit', 'Workspace folder edit is outside the current list'));
+				const added = await Promise.all(request.folders.map(async entry => {
+					const uri = URI.parse(entry.uri);
+					if (uri.scheme !== 'file' || uri.query || uri.fragment || !isAbsolute(uri.fsPath)) throw new TypeError(localize('workspace.localFoldersOnly', 'Workspace folders must be absolute local directories'));
+					const resolved = await this.workspaces.resolveFolder(uri.fsPath);
+					return { id: resolved.id, uri: resolved.uri, name: entry.name ?? basename(resolved.uri.fsPath), index: 0 };
+				}));
+				folders.splice(request.index, request.deleteCount, ...added);
+			}
+			const identities = new Set<string>();
+			folders = folders.filter(folder => {
+				if (identities.has(folder.id)) return false;
+				identities.add(folder.id);
+				return true;
+			}).map((folder, index) => ({ ...folder, index }));
+			if (folders.length > 256) throw new RangeError(localize('workspace.folderLimit', 'Workspace supports at most 256 folders'));
+			const path = request.operation === 'save' ? resolve(request.path)
+				: current.configuration?.fsPath ?? resolve(this.untitledHome, randomUUID(), 'workspace.ash-workspace');
+			if (!hasWorkspaceFileExtension(path)) throw new TypeError(localize('workspace.invalidExtension', 'Expected an .ash-workspace or .code-workspace file'));
+			const configPath = URI.file(path);
+			const nextIdentifier = getWorkspaceIdentifier(configPath);
+			const next: IWorkspace = { id: nextIdentifier.id, configuration: configPath, name: basename(path).replace(/\.(ash|code)-workspace$/i, ''), folders };
+			// Rebase relative paths when saving elsewhere. Preserve settings, tasks,
+			// launch, extensions, unknown properties and comments outside folders.
+			const output = editJsonObjectProperty(source, 'folders', folders.map(folder => ({
+				path: sep === '\\' ? (relative(dirname(path), folder.uri.fsPath) || '.').replaceAll('\\', '/') : relative(dirname(path), folder.uri.fsPath) || '.', name: folder.name,
+			})));
+			await mkdir(dirname(path), { recursive: true });
+			using disk = new DiskFileSystemProvider([URI.file(dirname(path))]);
+			let revision: string | undefined;
+			let previousContent: Uint8Array | undefined;
+			try {
+				const previous = await disk.readFile(configPath);
+				revision = previous.revision;
+				previousContent = previous.bytes;
+				if (current.configuration?.toString() === configPath.toString() && new TextDecoder().decode(previous.bytes) !== source) throw new Error(localize('workspace.changedDuringEdit', 'Workspace file changed during editing'));
+			} catch (error) { if (!(error instanceof FileNotFoundError)) throw error; }
+			await this.apply(next, async () => {
+				const written = await disk.writeFile(configPath, new TextEncoder().encode(output), { create: true, overwrite: revision !== undefined, expectedRevision: revision });
+				return async () => {
+					if (previousContent) await disk.writeFile(configPath, previousContent, { create: false, overwrite: true, expectedRevision: written.revision });
+					else {
+						if ((await disk.readFile(configPath)).revision !== written.revision) throw new FileRevisionConflictError(configPath);
+						await disk.delete(configPath, 'ignore', 'fileOrEmptyDirectory');
+					}
+				};
+			});
+			return serializeWorkspace(this.context.getResolvedWorkspace());
+		});
+	}
+
+	private enqueue<T>(operation: () => Promise<T>): Promise<T> {
+		const result = this.queue.then(() => this.runExclusive ? this.runExclusive(operation) : operation());
+		this.queue = result.catch(() => undefined);
+		return result;
+	}
+
+	private watchConfiguration(): void {
+		this.watcher.clear();
+		const config = this.context.getResolvedWorkspace().configuration;
+		if (!config) return;
+		try {
+			// Watch the parent so atomic replacement by another editor remains visible.
+			const watcher = watch(dirname(config.fsPath), { persistent: false }, (_event, filename) => {
+				if (!filename || filename.toString() === basename(config.fsPath)) {
+					this.configurationChanged();
+					this.reload.schedule();
+				}
+			});
+			watcher.on('error', this.reportError);
+			this.watcher.value = toDisposable(() => watcher.close());
+		} catch (error) { this.reportError(error); }
+	}
+
+	private async reloadWorkspace(): Promise<void> {
+		if (this.isDisposed) return;
+		const identifier = this.context.getWorkspace();
+		if (!isWorkspaceIdentifier(identifier)) return;
+		const next = await this.workspaces.resolveWorkspace(identifier);
+		if (JSON.stringify(next.folders) !== JSON.stringify(this.context.getResolvedWorkspace().folders)) await this.apply(next);
+	}
+
+	private async apply(next: IWorkspace, persist?: () => Promise<() => Promise<void>>): Promise<void> {
+		const previous = this.context.getResolvedWorkspace();
+		const changed = previous.folders.length !== next.folders.length || previous.folders.some((folder, index) => folder.id !== next.folders[index]?.id);
+		const dirs = next.folders.map(folder => ({ id: folder.id, path: folder.uri.fsPath, grant: { type: 'config' as const } }));
+		if (changed) {
+			await this.host.validateFolders(dirs);
+			for (const folder of next.folders) {
+				const grant = await this.host.resolveGrant(folder.uri.fsPath);
+				if (!grant) throw new Error(localize('workspace.permissionsCancelled', 'Directory permissions were not selected'));
+				await this.host.persistDirectoryGrant(folder.uri.fsPath, grant);
+			}
+		}
+		// Disk conflicts must be detected before retiring any backend resources.
+		// A rejected backend update restores only our metadata revision; an external
+		// writer's newer content is never overwritten by rollback.
+		const rollback = await persist?.();
+		try {
+			if (changed) {
+				await this.host.validateFolders(dirs);
+				await this.host.setFolders(dirs);
+			}
+		} catch (error) {
+			try { await rollback?.(); }
+			catch (failure) { throw new AggregateError([error, failure], 'Workspace update and metadata rollback failed'); }
+			throw error;
+		}
+		this.assertNotDisposed();
+		this.context.updateWorkspace(getWorkspaceIdentifier(next.configuration!), next);
 	}
 }

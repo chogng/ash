@@ -461,9 +461,13 @@ export class DebugService extends Disposable implements IDebugService {
 		const inheritedNoDebug = sessionOptions.noDebug ?? sessionOptions.parentSession?.resolvedConfiguration?.arguments.noDebug;
 		if (inheritedNoDebug !== undefined) current = Object.freeze({ ...current, arguments: Object.freeze({ ...current.arguments, noDebug: inheritedNoDebug }) });
 		if (!this.processes) throw new Error("This host does not provide the Code debug adapter capability");
+		const activeResource = this.editors.activeEditor?.resource;
+		const folders = this.workspace.getWorkspace().folders;
 		const folder = current.dirId === null ? undefined : current.dirId
 			? this.workspace.getWorkspace().folders.find(folder => folder.id === current.dirId)
-			: this.workspace.getWorkspace().folders[0];
+			: (activeResource && this.workspace.getWorkspaceFolder(activeResource)) || (folders.length === 1 ? folders[0] : undefined);
+		if (current.dirId === undefined && folders.length > 1 && !folder) throw new Error(localize('debug.selectFolder', 'Select a workspace folder to configure debugging.'));
+		if (folder && current.dirId === undefined) current = Object.freeze({ ...current, dirId: folder.id, workspaceFolderName: folder.name });
 		const root = folder?.uri;
 		if (current.dirId && !folder) throw new CancellationError();
 		const workspaceGeneration = this.workspaceGeneration;
@@ -531,7 +535,7 @@ export class DebugService extends Disposable implements IDebugService {
 				if (os === undefined) throw new Error(localize('terminal.profile.platformUnavailable', 'The terminal execution host is not ready.'));
 				return runDebuggeeInTerminal(
 					this.terminals, this.terminalProfiles,
-					{ os, remoteAuthority: root && getRemoteAuthority(root), allowAutomationShell: true },
+					{ os, remoteAuthority: root && getRemoteAuthority(root), workspaceFolder: folder, allowAutomationShell: true },
 					value, assertCurrent, current.dirId ?? undefined,
 				);
 			},

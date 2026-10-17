@@ -1,6 +1,7 @@
 import { Disposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
+import type { IBackupWorkspace } from '../../../../platform/backup/common/backup.js';
 
 export interface WorkingCopyBackup {
 	readonly resource: URI;
@@ -17,6 +18,8 @@ export interface IWorkingCopyBackupService extends IDisposable {
 	list(): Promise<readonly WorkingCopyBackup[]>;
 	store(backup: WorkingCopyBackup): Promise<void>;
 	delete(resource: URI): Promise<void>;
+	/** Desktop entry copies recovery durably before retiring the old scope. Producers must be paused. */
+	moveBackups?(target: IBackupWorkspace): Promise<void>;
 	/** Selects a recovery scope without discarding the previous workspace's durable backups. */
 	switchWorkspace(workspaceId: string): void;
 }

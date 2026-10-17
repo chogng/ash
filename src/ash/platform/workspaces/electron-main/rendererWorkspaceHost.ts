@@ -18,6 +18,7 @@ export class RendererWorkspaceHost extends Disposable {
 	public createGrant(path: string, permissions: readonly WorkspaceTrustPermission[]): Promise<WorkspaceTrustGrant> { return this.call('createGrant', { path, permissions }) as Promise<WorkspaceTrustGrant>; }
 	public async persistDirectoryGrant(path: string, grant: WorkspaceTrustGrant): Promise<void> { await this.call('persistDirectoryGrant', { path, grant }); }
 	public async setFolders(folders: readonly { id: string; path: string; grant: WorkspaceTrustGrant; }[]): Promise<void> { await this.call('setFolders', { folders }); }
+	public async validateFolders(folders: readonly { id: string; path: string; grant: WorkspaceTrustGrant; }[]): Promise<void> { await this.call('validateFolders', { folders }); }
 
 	public routes(): readonly IpcRoute<unknown, unknown>[] {
 		return [{

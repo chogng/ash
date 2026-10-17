@@ -103,7 +103,7 @@ import { WindowsStateHandler, WindowSessionStateHandler, type IWindowSessionEntr
 import { WindowsMainService, windowOperationIpcRoute, workspaceContextIpcRoutes, workspaceRecoveryIpcRoute } from "../../platform/windows/electron-main/windowsMainService.js";
 import { LifecycleMainService, windowCloseResponseIpcRoute } from '../../platform/lifecycle/electron-main/lifecycleMainService.js';
 import { defaultWindowState, focusWindow, WorkspaceContextMainService, type IWindowState } from "../../platform/window/electron-main/window.js";
-import { type IAnyWorkspaceIdentifier, type IWorkspace, getWorkspaceRemoteAuthority, isRemoteWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, serializeWorkspace, UNKNOWN_EMPTY_WINDOW_WORKSPACE, WorkbenchState } from "../../platform/workspace/common/workspace.js";
+import { type IAnyWorkspaceIdentifier, type IWorkspace, getWorkspaceRemoteAuthority, hasWorkspaceFileExtension, isRemoteWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, serializeWorkspace, UNKNOWN_EMPTY_WINDOW_WORKSPACE, WorkbenchState } from "../../platform/workspace/common/workspace.js";
 import { createEmptyWorkspaceIdentifier } from "../../platform/workspaces/node/workspaces.js";
 import { packagedRemoteRuntimeCatalogSource } from "../../platform/remote/electron-main/packagedRemoteRuntimeCatalog.js";
 import { RemoteRuntimeInstaller, remoteRuntimeArtifactFromEnvironment } from "../../platform/remote/electron-main/remoteRuntimeInstaller.js";
@@ -125,7 +125,8 @@ import { WORKSPACE_CONTEXT_CHANGED_CHANNEL } from "../../platform/workspace/comm
 import { createAppServerWorkspaceTransitionAdapter, reconnectAppServerWorkspace } from "../../platform/workspaces/electron-main/appServerWorkspaceTransition.js";
 import { DEVELOPMENT_DIR_PERMISSIONS, READ_DIR_PERMISSIONS, type WorkspaceTrustGrant } from '../../platform/workspace/common/workspaceTrust.js';
 import { type IWorkspaceTransitionFailure, type WorkspaceTransitionMainServiceOptions, WorkspaceTransitionFailureKind, WorkspaceTransitionMainService, WorkspaceTransitionStatus } from "../../platform/workspaces/electron-main/workspaceTransitionMainService.js";
-import { WorkspacesManagementMainService } from '../../platform/workspaces/electron-main/workspacesManagementMainService.js';
+import { WorkspaceEditingMainService, WorkspacesManagementMainService } from '../../platform/workspaces/electron-main/workspacesManagementMainService.js';
+import { WORKSPACE_EDIT_CHANNEL, WORKSPACE_EDIT_ERROR_CHANNEL, validateWorkspaceEdit, WORKSPACE_CONFIGURATION_CHANNEL, WORKSPACE_CONFIGURATION_CHANGED_CHANNEL, validateWorkspaceConfigurationRequest } from '../../platform/workspace/common/workspaceIpc.js';
 import { StorageMainService, IApplicationStorageMainService } from '../../platform/storage/electron-main/storageMainService.js';
 import { StorageScope, StorageTarget } from '../../platform/storage/common/storage.js';
 import { AgentsWindowInvitationState, EDITOR_AGENT_HOST_SESSIONS_STORAGE_KEY, AGENTS_WINDOW_TOTAL_SESSIONS_STORAGE_KEY, AGENTS_WINDOW_LAST_SESSION_CREATED_STORAGE_KEY, AGENTS_WINDOW_INVITATION_IMPRESSION_STORAGE_KEY, type IAgentHostEditorState } from '../../platform/chat/common/agentsWindowInvitation.js';
@@ -1452,6 +1453,22 @@ export class AshApplication extends Disposable {
 			return operation.then(() => accepted);
 		};
 		record.replaceWorkspace = workspace => replaceWorkspace(workspace, false);
+		const workspaceEditing = windowDisposables.add(new WorkspaceEditingMainService(
+			workspaceContext, workspaces, join(this.profileRoot, 'workspaces'), {
+			resolveGrant: path => this.resolveDirGrant(workspaceHost, path),
+			persistDirectoryGrant: (path, grant) => workspaceHost.persistDirectoryGrant(path, grant),
+			setFolders: folders => workspaceHost.setFolders(folders),
+			validateFolders: folders => workspaceHost.validateFolders(folders),
+		}, error => {
+			this.logService.error('workspaces', String(error));
+			if (!window.isDestroyed()) window.webContents.send(WORKSPACE_EDIT_ERROR_CHANNEL, error instanceof Error ? error.message : String(error));
+		}, operation => {
+			const result = workspaceOpenQueue.then(operation);
+			workspaceOpenQueue = result.then(() => undefined, () => undefined);
+			return result;
+		},
+			() => { if (!window.isDestroyed()) window.webContents.send(WORKSPACE_CONFIGURATION_CHANGED_CHANNEL); },
+		));
 
 		windowDisposables.add(toDisposable(() => this.dialogs.cancelWindow(window)));
 		const windowControlsOverlay = new WindowControlsOverlay(colors => {
@@ -1489,7 +1506,14 @@ export class AshApplication extends Disposable {
 					if (options.remoteAuthority !== getWorkspaceRemoteAuthority(workspaceContext.getWorkspace())) throw new Error('Reusing a window must preserve its Remote authority');
 					await replaceWorkspace(workspace, true);
 				},
-				openWorkspace: async (root, forceNewWindow) => { if (forceNewWindow) await this.openWorkspace(await workspaces.resolveFolder(root), workspaces, true); else await transitionToFolder(root, true); },
+				openWorkspace: async (root, forceNewWindow) => {
+					if (hasWorkspaceFileExtension(root)) {
+						const workspace = await this.windowsMainService.resolveWorkspaceOpenTarget({ kind: WorkspaceOpenTargetKind.Workspace, path: root }, process.cwd());
+						if (forceNewWindow) await this.openWorkspace(workspace, workspaces, true);
+						else await replaceWorkspace(workspace, true);
+					} else if (forceNewWindow) await this.openWorkspace(await workspaces.resolveFolder(root), workspaces, true);
+					else await transitionToFolder(root, true);
+				},
 				openAgentsWindow: options => this.openSessionsWindow(record.workspaceContext.getWorkspace(), record.workspaceContext.getResolvedWorkspace(), options),
 				syncSystemWideKeybindings: bindings => this.globalKeybindings.updateKeybindings(
 					record.id,
@@ -1497,6 +1521,8 @@ export class AshApplication extends Disposable {
 				),
 			}),
 			...workspaceContextIpcRoutes(workspaceContext),
+			{ channel: WORKSPACE_EDIT_CHANNEL, validate: validateWorkspaceEdit, invoke: (request: unknown) => workspaceEditing.edit(request as ReturnType<typeof validateWorkspaceEdit>) },
+			{ channel: WORKSPACE_CONFIGURATION_CHANNEL, validate: validateWorkspaceConfigurationRequest, invoke: (request: unknown) => workspaceEditing.configuration(request as ReturnType<typeof validateWorkspaceConfigurationRequest>) },
 			workspaceRecoveryIpcRoute(identifiers => this.windowsMainService.restoreWorkspaces(identifiers, async identifier => (await this.openWorkspace(identifier, workspaces))?.window)),
 		];
 		ipcRoutes.push(...this.contextMenuIpcRoutes(systemContextMenu));

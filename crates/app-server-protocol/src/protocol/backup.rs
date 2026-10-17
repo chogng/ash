@@ -93,3 +93,28 @@ pub struct BackupDiscardParams {
     pub resource: String,
     pub expected_revision: String,
 }
+
+/// A caller-observed revision, without duplicating recovery content on the wire.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BackupRevisionDto {
+    pub resource: String,
+    pub revision: String,
+}
+
+/// Moves observed recovery records in one storage transaction. A conflicting
+/// source or destination aborts the entire move without removing source data.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BackupMoveParams {
+    pub client_id: String,
+    pub source_workspace_id: String,
+    pub workspace: BackupWorkspaceDto,
+    pub backups: Vec<BackupRevisionDto>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupMoveResult {
+    pub backups: Vec<BackupRevisionDto>,
+}

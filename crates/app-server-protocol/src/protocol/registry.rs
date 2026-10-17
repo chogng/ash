@@ -129,7 +129,13 @@ use crate::protocol::backup::BackupListParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::backup::BackupListResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::backup::BackupMoveParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::backup::BackupMoveResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::backup::BackupRecordDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::backup::BackupRevisionDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::backup::BackupWorkspaceDto;
 #[cfg(any(test, feature = "export"))]
@@ -4702,6 +4708,7 @@ client_methods! {
     BackupList => "backup/list" { params: BackupListParams, response: BackupListResult, serialization: None, },
     BackupListPage => "backup/listPage" { params: BackupListPageParams, response: BackupListPageResult, serialization: None, },
     BackupWrite => "backup/write" { params: BackupWriteParams, response: BackupRecordDto, serialization: None, },
+    BackupMove => "backup/move" { params: BackupMoveParams, response: BackupMoveResult, serialization: None, },
     BackupDiscard => "backup/discard" { params: BackupDiscardParams, response: (), serialization: None, },
     FsReadBinaryFile => "fs/readBinaryFile" {
         params: FsReadBinaryFileParams,
@@ -5954,6 +5961,9 @@ typescript_bindings! {
     BackupWorkspacesParams,
     BackupWorkspacesResult,
     BackupWriteParams,
+    BackupMoveParams,
+    BackupMoveResult,
+    BackupRevisionDto,
     AccountLoginCancelParams,
     AccountLoginCancelResult,
     AccountLoginCancelStatusDto,

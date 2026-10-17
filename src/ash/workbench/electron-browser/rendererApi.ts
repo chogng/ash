@@ -159,7 +159,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 				clipboardService: new ElectronRendererClipboardService(),
 			}, contributions.map(contribution => (client, appServer) => contribution(client, appServer, localClient)));
 			resources.add(backend.mcpServerManagement);
-			resources.add(registerAppServerWorkspaceHost(client, () => connection.whenConnected(), workspaceTrust, backend.workspaceTrust));
+			resources.add(registerAppServerWorkspaceHost(client, () => connection.whenConnected(), workspaceTrust, backend.workspaceTrust, folders => workspaceApi.validateFolders(folders)));
 			// Editor recovery belongs to this Desktop profile, including SSH workspaces.
 			backend = { ...backend, backup: new AppServerBackupService(localClient, 'ash-editor'), ...(windowExtensions ? { extensionHost: windowExtensions } : {}) };
 			if (client.capabilities?.memories) { backend = { ...backend, memories: resources.add(new AppServerMemoriesService(client)) }; }
@@ -204,6 +204,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			userDataHome,
 			localUserHome: URI.parse(await mainProcessService.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME).call<string>('userHome')),
 			workspace: workspaceApi,
+			workspaceConfigurationFiles: workspaceApi.configurationFiles,
 		};
 	} catch (error) { resources.dispose(); throw error; }
 }

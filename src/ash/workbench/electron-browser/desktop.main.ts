@@ -11,6 +11,15 @@ import { FileUserDataProvider } from '../../platform/userData/common/fileUserDat
 import { RelayURLService } from '../services/url/electron-browser/urlService.js';
 import { IBackupService } from '../../platform/backup/common/backup.js';
 import { ServiceCollection } from '../../platform/instantiation/common/serviceCollection.js';
+import { SyncDescriptor } from '../../platform/instantiation/common/descriptors.js';
+import { IWorkspaceEditingService } from '../services/workspaces/common/workspaceEditing.js';
+import { WorkspaceEditingService } from '../services/workspaces/electron-browser/workspaceEditingService.js';
+import { IContextKeyService } from '../../platform/contextkey/browser/contextKeyService.js';
+import { IWorkspaceContextService, getWorkspaceRemoteAuthority } from '../../platform/workspace/common/workspace.js';
+import { EnterMultiRootWorkspaceSupportContext } from '../common/contextkeys.js';
+import { WORKSPACE_EDIT_ERROR_CHANNEL } from '../../platform/workspace/common/workspaceIpc.js';
+import { INotificationService } from '../../platform/notification/common/notification.js';
+import { localize } from '../../nls.js';
 import { WORKSPACE_RECOVERY_CHANNEL } from '../../platform/window/common/window.js';
 import { serializeWorkspaceIdentifier, type IAnyWorkspaceIdentifier } from '../../platform/workspace/common/workspace.js';
 import { WorkingCopyBackupService } from '../services/workingCopy/browser/workingCopyBackupService.js';
@@ -130,6 +139,7 @@ export class DesktopMain extends Disposable {
 			const workbench = this._register(await startWorkbench({
 				...this.options,
 				serviceCollection: new ServiceCollection(
+					[IWorkspaceEditingService, new SyncDescriptor(WorkspaceEditingService, [api.workspace])],
 					[ILoggerService, logger],
 					[IPolicyService, this._register(new PolicyChannelClient(mainProcessService.getChannel('policy')))],
 					[IBrowserViewService, ProxyChannel.toService<IBrowserViewService>(mainProcessService.getChannel(ipcBrowserViewChannelName))],
@@ -175,7 +185,23 @@ export class DesktopMain extends Disposable {
 					this._register(lifecycleService.onWillShutdown(event => event.join(logger.flush(), 'Desktop logs flush')));
 					return lifecycleService;
 				},
-				createWindow: services => desktopWindow = services.createInstance(ElectronWindow, { invoke, subscribe }),
+				createWindow: services => {
+					const context = services.get(IWorkspaceContextService);
+					if (api.workspace.onWillChangeFolders) this._register(api.workspace.onWillChangeFolders(event => {
+						try { services.get(IWorkspaceEditingService).validateFolders(event.folders); }
+						catch (error) { event.veto(error instanceof Error ? error : new Error(String(error))); }
+					}));
+					const support = EnterMultiRootWorkspaceSupportContext.bindTo(services.get(IContextKeyService));
+					const update = () => support.set(!getWorkspaceRemoteAuthority(context.getWorkspace()));
+					update();
+					this._register(context.onDidChangeWorkspace(update));
+					this._register(toDisposable(() => support.reset()));
+					const errors = subscribe(WORKSPACE_EDIT_ERROR_CHANNEL, value => {
+						if (typeof value === 'string') services.get(INotificationService).error(localize('workspace.reloadFailed', 'Could not update workspace folders. The last accepted folders were kept. {0}', value));
+					});
+					this._register(toDisposable(() => errors.dispose()));
+					return desktopWindow = services.createInstance(ElectronWindow, { invoke, subscribe });
+				},
 				createUserDataFileSystemProvider: async () => new FileUserDataProvider(api.localFiles, api.userDataHome),
 				keyboardLayoutProvider: api.keyboardLayout,
 				userKeyboardLayoutApi: api.userKeyboardLayout,

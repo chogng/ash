@@ -8,6 +8,9 @@ import { DialogSeverity, type IDialogService, IFileDialogService } from '../../.
 import { IPathService } from '../../../../platform/path/common/pathService.js';
 import type { HTMLFileSystemProvider } from '../../../../platform/files/browser/htmlFileSystemProvider.js';
 import { workspaceFromIdentifier, type IWorkspace } from '../../../../platform/workspace/common/workspace.js';
+import type { IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
+import type { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
+import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import {
 	createServiceIdentifier,
 } from "../../../../platform/instantiation/common/instantiation.js";
@@ -23,6 +26,25 @@ export interface IWorkspaceOpenService {
 
 export const IWorkspaceOpenService =
 	createServiceIdentifier<IWorkspaceOpenService>("workspaceOpenService");
+
+/** Uses the shared keyboard-accessible picker; cancellation never chooses a default root. */
+export function pickWorkspaceFolder(quickInput: IQuickInputService, folders: readonly IWorkspaceFolder[], title: string, signal?: AbortSignal): Promise<IWorkspaceFolder | undefined> {
+	if (signal?.aborted) return Promise.resolve(undefined);
+	const lifetime = new DisposableStore();
+	const picker = lifetime.add(quickInput.createQuickPick<{ label: string; description: string; folder: IWorkspaceFolder; }>());
+	picker.items = folders.map(folder => ({ label: folder.name, description: folder.uri.fsPath, folder }));
+	picker.ariaLabel = picker.placeholder = title;
+	return new Promise(resolve => {
+		let result: IWorkspaceFolder | undefined;
+		lifetime.add(picker.onDidAccept(() => { result = picker.selectedItems[0]?.folder; if (result) picker.hide(); }));
+		lifetime.add(picker.onDidHide(() => lifetime.dispose()));
+		const abort = () => { picker.hide(); lifetime.dispose(); };
+		signal?.addEventListener('abort', abort, { once: true });
+		lifetime.add(toDisposable(() => signal?.removeEventListener('abort', abort)));
+		lifetime.add(toDisposable(() => resolve(result)));
+		picker.show();
+	});
+}
 
 export interface IWebWorkspaceDirectoryList {
 	readonly path: string;

@@ -18,6 +18,8 @@ import { IExtensionService } from '../../../../services/extensions/common/extens
 import { ITerminalContributionService, ITerminalProfileResolverService, ITerminalProfileService } from '../../../../services/terminal/common/terminal.js';
 
 import { TerminalProfileService } from '../../browser/terminalProfileService.js';
+import { IEditorService } from '../../../../services/editor/common/editorService.js';
+import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { ITerminalProcessService } from '../../../../../platform/terminal/common/terminal.js';
 import { IMenuService } from '../../../../../platform/actions/common/actions.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
@@ -310,6 +312,8 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 	services.registerInstance(ITerminalContributionService, { terminalProfiles: [], onDidChangeTerminalProfiles: Event.None, ...Disposable.None });
 	services.registerInstance(IExtensionService, { getExtensionPointContributions: () => [], onDidChange: Event.None } as unknown as IExtensionService);
 	services.registerInstance(ITerminalProfileService, resources.add(services.createInstance(TerminalProfileService)));
+	services.registerInstance(IEditorService, { activeEditor: undefined } as unknown as IEditorService);
+	services.registerInstance(IQuickInputService, {} as IQuickInputService);
 	services.registerInstance(ITerminalProfileResolverService, { resolveShellLaunchConfig: async () => { throw new Error('Unexpected shell resolution'); } } as unknown as ITerminalProfileResolverService);
 	services.registerInstance(IWorkbenchLayoutService, resources.add(services.createInstance(WorkbenchLayout, browserEnvironment.window.document.body, { initialDimension: new Dimension(800, 600) })));
 	services.registerInstance(IPreferencesService, { openSettings: async () => { } } as import('../../../../services/preferences/common/preferences.js').IPreferencesService);
