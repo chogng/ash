@@ -110,6 +110,7 @@ pub struct TerminalProcessInfo {
     pub cwd: Option<String>,
     pub rows: u16,
     pub cols: u16,
+    pub has_child_processes: Option<bool>,
 }
 
 /// Sends the supported process-control signal rather than encoding it as terminal input.

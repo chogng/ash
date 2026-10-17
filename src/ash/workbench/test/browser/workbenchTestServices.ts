@@ -40,6 +40,27 @@ import { WorkbenchViewRegistry } from '../../common/views.js';
 import { ViewDescriptorService } from '../../services/views/browser/viewDescriptorService.js';
 import { IFileSearchService } from '../../../platform/search/common/fileSearch.js';
 import { BrowserFileSearchService } from '../../../platform/search/browser/browserFileSearchService.js';
+import { ISecretStorageService, BaseSecretStorageService } from '../../../platform/secrets/common/secrets.js';
+import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
+import { DialogService } from '../../services/dialogs/common/dialogService.js';
+
+/** Explicit window dependencies for fixtures that construct the real terminal owner. */
+export function registerTestTerminalLifecycleServices(services: InstantiationService): void {
+	if (!services.has(IConfigurationService)) services.registerSingleton(IConfigurationService, () => new WorkbenchConfigurationService());
+	if (!services.has(IDialogService)) services.registerSingleton(IDialogService, () => services.createInstance(DialogService));
+	if (!services.has(ISecretStorageService)) services.registerSingleton(ISecretStorageService, () => new BaseSecretStorageService());
+	if (!services.has(IStorageService)) services.registerSingleton(IStorageService, () => new TerminalTestStorage());
+}
+
+class TerminalTestStorage extends BrowserStorageService {
+	private readonly browser: JSDOM;
+	constructor() {
+		const browser = new JSDOM('', { url: 'https://terminal.test' });
+		super({ ownerWindow: browser.window as unknown as Window, workspaceId: 'terminal', flushInterval: 0 });
+		this.browser = browser;
+	}
+	protected override disposeCore(): void { super.disposeCore(); this.browser.window.close(); }
+}
 
 /** Real Output and resolver assembly; filesystem acquisition is an explicit scenario boundary. */
 class TestWorkbenchServices extends InstantiationService {
@@ -70,6 +91,7 @@ export function workbenchInstantiationService(owner?: Pick<DisposableStore, 'add
 		storage = resources.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'test', backend: browser.window.localStorage, flushInterval: 0 }));
 	}
 	services.registerInstance(IStorageService, storage);
+	registerTestTerminalLifecycleServices(services);
 	const fileModels = resources.add(uriIdentityServices.createInstance(BrowserTextModelService, overrides.fileResources ?? {
 		onDidChange: Event.None,
 		resolve: async () => { throw new Error('Filesystem acquisition is outside this Output scenario'); },

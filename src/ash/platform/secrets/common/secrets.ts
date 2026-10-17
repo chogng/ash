@@ -1,5 +1,48 @@
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 import { localize } from '../../../nls.js';
+import { Disposable } from '../../../base/common/lifecycle.js';
+import { Emitter, type Event } from '../../../base/common/event.js';
+
+export interface ISecretStorageProvider {
+	type: 'in-memory' | 'persisted' | 'unknown';
+	get(key: string): Promise<string | undefined>;
+	set(key: string, value: string): Promise<void>;
+	delete(key: string): Promise<void>;
+	keys?(): Promise<string[]>;
+}
+
+export interface ISecretStorageService extends ISecretStorageProvider {
+	readonly onDidChangeSecret: Event<string>;
+}
+
+export const ISecretStorageService = createServiceIdentifier<ISecretStorageService>('secretStorageService');
+
+/** Ephemeral host credentials survive renderer reloads, and disappear with their window.
+ * Profile credentials remain with the shared backend's existing secret store. */
+export class BaseSecretStorageService extends Disposable implements ISecretStorageService {
+	readonly type = 'in-memory' as const;
+	private readonly values = new Map<string, string>();
+	private readonly changed = this._register(new Emitter<string>());
+	readonly onDidChangeSecret = this.changed.event;
+
+	async get(key: string): Promise<string | undefined> { this.validateKey(key); return this.values.get(key); }
+	async keys(): Promise<string[]> { return [...this.values.keys()]; }
+	async set(key: string, value: string): Promise<void> {
+		this.validateKey(key);
+		if (typeof value !== 'string' || value.length > 1024 * 1024 || (!this.values.has(key) && this.values.size >= 64)) throw new Error('Invalid secret storage value');
+		this.values.set(key, value);
+		this.changed.fire(key);
+	}
+	async delete(key: string): Promise<void> {
+		this.validateKey(key);
+		if (this.values.delete(key)) this.changed.fire(key);
+	}
+	private validateKey(key: string): void {
+		this.assertNotDisposed();
+		if (typeof key !== 'string' || !key.length || key.length > 512) throw new Error('Invalid secret storage key');
+	}
+	protected override disposeCore(): void { this.values.clear(); super.disposeCore(); }
+}
 
 /** Current profile storage observation; availability never reveals saved credentials. */
 export type SecretStorageStatus = 'available' | 'unavailable' | 'accessDenied' | 'keyMissing' | 'corrupted' | 'migrationFailed' | 'failure';

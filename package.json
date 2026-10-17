@@ -223,6 +223,7 @@
   "description": "Electron client for the Ash app-server protocol",
   "main": ".build/desktop/main/src/main.js",
   "dependencies": {
+    "@xterm/addon-serialize": "0.14.0",
     "fontkit": "2.0.4",
     "harfbuzzjs": "1.6.3",
     "katex": "0.18.2",

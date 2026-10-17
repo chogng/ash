@@ -13,6 +13,7 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = { workspace = true }
 portable-pty = { workspace = true }
+sysinfo = { workspace = true }
 tokio = { workspace = true, features = ["io-util", "macros", "process", "rt-multi-thread", "sync", "time"] }
 
 [dev-dependencies]
@@ -24,7 +25,6 @@ winapi = { workspace = true, features = ["handleapi", "namedpipeapi", "jobapi2",
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true }
-sysinfo = { workspace = true }
 rustix = { workspace = true, features = ["fs", "termios"] }
 
 # This systems crate is the only local exception to the workspace unsafe ban:

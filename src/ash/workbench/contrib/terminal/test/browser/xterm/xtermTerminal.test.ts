@@ -1,3 +1,5 @@
+import { TestThemeService } from '../../../../../../platform/theme/test/common/testThemeService.js';
+import { lightColorTheme } from '../../../../../../platform/theme/common/colorTheme.js';
 import { TerminalCapability } from '../../../../../../platform/terminal/common/capabilities/capabilities.js';
 import { BufferMarkCapability } from '../../../../../../platform/terminal/common/capabilities/bufferMarkCapability.js';
 import { TerminalCapabilityStore } from '../../../../../../platform/terminal/common/capabilities/terminalCapabilityStore.js';
@@ -30,7 +32,7 @@ function createScreen(lifetime: DisposableStore, viewportY: number, lines: reado
 	} as unknown as Terminal;
 	const capabilities = lifetime.add(new TerminalCapabilityStore());
 	capabilities.add(TerminalCapability.BufferMarkDetection, lifetime.add(new BufferMarkCapability(terminal)));
-	const decorations = lifetime.add(new DecorationAddon(capabilities, lifetime.add(new TestConfigurationService())));
+	const decorations = lifetime.add(new DecorationAddon(capabilities, lifetime.add(new TestConfigurationService()), lifetime.add(new TestThemeService(lightColorTheme))));
 	decorations.activate(terminal);
 	for (const { key } of lines) {
 		const [process, commandId = key] = key.split(':');

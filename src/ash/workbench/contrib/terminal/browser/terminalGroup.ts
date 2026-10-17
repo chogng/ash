@@ -4,6 +4,7 @@ import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { ITerminalService, type ITerminalGroup, type ITerminalInstance } from '../../../services/terminal/browser/terminal.js';
+import type { ITerminalTabLayoutInfoById } from '../../../../platform/terminal/common/terminal.js';
 
 /** Owns one panel group's panes. Moving a pane retains its instance, PTY and xterm buffer. */
 export class TerminalGroup extends Disposable implements ITerminalGroup {
@@ -17,6 +18,7 @@ export class TerminalGroup extends Disposable implements ITerminalGroup {
 	private visible = false;
 	private width = 0;
 	private height = 0;
+	private initialSizes: number[] | undefined;
 
 	constructor(instance: ITerminalInstance, @ITerminalService private readonly terminals: ITerminalService) {
 		super();
@@ -68,6 +70,23 @@ export class TerminalGroup extends Disposable implements ITerminalGroup {
 		this.width = width;
 		this.height = height;
 		this.splitView?.layout(width, height);
+		if (width > 0 && this.initialSizes && this.splitView) {
+			const sizes = this.initialSizes;
+			this.initialSizes = undefined;
+			this.resizePanes(sizes);
+		}
+	}
+
+	resizePanes(relativeSizes: number[]): void {
+		if (!this.splitView || this.width <= 0) { this.initialSizes = [...relativeSizes]; return; }
+		const total = relativeSizes.reduce((sum, size) => sum + size, 0);
+		for (let index = 0; index < relativeSizes.length - 1; index++) this.splitView.resizeView(index, this.width * relativeSizes[index]! / total);
+	}
+
+	getLayoutInfo(isActive: boolean): ITerminalTabLayoutInfoById {
+		const sizes = this.instances.map((_, index) => this.splitView?.getViewSize(index) ?? this.initialSizes?.[index] ?? 1);
+		const total = sizes.reduce((sum, size) => sum + size, 0);
+		return { isActive, activePersistentProcessId: this.activeInstance?.instanceId, terminals: this.instances.map((instance, index) => ({ terminal: instance.instanceId, relativeSize: total > 0 ? sizes[index]! / total : 1 / this.instances.length })) };
 	}
 
 	focusPreviousPane(): void { this.focusPane(-1); }
@@ -83,6 +102,8 @@ export class TerminalGroup extends Disposable implements ITerminalGroup {
 
 	private rebuildLayout(): void {
 		if (!this.container) return;
+		const activeElement = this.container.ownerDocument.activeElement;
+		const focusedInstance = this.instances.find(instance => instance.xterm?.element.contains(activeElement));
 		// Detach before disposing the old layout so xterm's DOM and buffer survive.
 		for (const instance of this.instances) instance.detachFromElement();
 		this.layoutLifetime.clear();
@@ -111,6 +132,8 @@ export class TerminalGroup extends Disposable implements ITerminalGroup {
 		}
 		this.setVisible(this.visible);
 		this.layout(this.width, this.height);
+		// Reparenting a surviving screen blurs its textarea; retain its input focus.
+		focusedInstance?.xterm?.focus();
 	}
 
 	protected override disposeCore(): void {

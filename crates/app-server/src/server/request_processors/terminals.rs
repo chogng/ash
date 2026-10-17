@@ -255,6 +255,7 @@ impl<'ctx, C: TerminalRequestProcessorContext + ?Sized> TerminalRequestProcessor
             cwd: info.cwd,
             rows: info.rows,
             cols: info.cols,
+            has_child_processes: info.has_child_processes,
         })
     }
 

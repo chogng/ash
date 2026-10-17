@@ -157,6 +157,28 @@ impl ProcessHandle {
         self.process_id
     }
 
+    /// Queries the OS process tree at the point of a destructive user action.
+    /// Unknown identity is distinct from an idle shell; callers can protect it conservatively.
+    pub fn has_child_processes(&self) -> Option<bool> {
+        if self.has_exited() {
+            return Some(false);
+        }
+        let pid = sysinfo::Pid::from_u32(self.process_id?);
+        let mut system = sysinfo::System::new();
+        system.refresh_processes_specifics(
+            sysinfo::ProcessesToUpdate::All,
+            true,
+            sysinfo::ProcessRefreshKind::nothing(),
+        );
+        system.process(pid)?;
+        Some(
+            system
+                .processes()
+                .values()
+                .any(|child| child.parent() == Some(pid)),
+        )
+    }
+
     /// Queries the root child's current directory, without substituting its launch directory.
     /// A platform without a process-directory API, or an exited child, returns `None`.
     pub fn current_working_directory(&self) -> io::Result<Option<std::path::PathBuf>> {

@@ -15,8 +15,9 @@ import { localize as resolveNls } from '../../../nls.js';
 import { ViewContainerLocation, type IViewContainerDescriptor } from "../../common/views.js";
 import type { IViewDescriptorService } from "../../common/views.js";
 import { CompositeBarAction, CompositeActionViewItem, CompositeOverflowActivityAction, CompositeOverflowActivityActionViewItem, type IActivityHoverOptions } from "./compositeBarActions.js";
-import { h } from "../../../base/browser/dom.js";
+import { getWindow, h } from "../../../base/browser/dom.js";
 import { observeResize } from "../../../base/browser/observer.js";
+import { AnimationFrameScheduler } from '../../../base/browser/scheduler.js';
 import { StorageScope, StorageTarget, type IStorageService } from '../../../platform/storage/common/storage.js';
 
 /** Construction inputs for a location-specific Composite selector. */
@@ -157,7 +158,12 @@ export class CompositeBar extends Disposable {
 			this.hiddenContainerIds = this.readHiddenContainerIds();
 			this.render();
 		}));
-		if (this.overflowEnabled) this._register(observeResize(this.domNode, () => this.layout()));
+		if (this.overflowEnabled) {
+			// Rendering overflow tabs can change this flex item's width. Defer that
+			// mutation so it cannot invalidate the current ResizeObserver delivery.
+			const layout = this._register(new AnimationFrameScheduler(getWindow(this.domNode), () => this.layout()));
+			this._register(observeResize(this.domNode, () => layout.schedule()));
+		}
 		this._register(activityService.onDidChangeActivity(container => {
 			if (typeof container === 'string' || container.location === this.location) this.render();
 		}));

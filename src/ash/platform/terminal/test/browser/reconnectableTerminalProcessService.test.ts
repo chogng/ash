@@ -15,6 +15,26 @@ const FIRST_TOKEN = "a".repeat(64);
 const SECOND_TOKEN = "b".repeat(64);
 const THIRD_TOKEN = "c".repeat(64);
 
+test('a replacement renderer attaches the original process and rotates its handoff credential', async () => {
+	const supervisor = new TestSupervisor();
+	const original = new ReconnectableTerminalProcessService(supervisor as unknown as AppServerProtocolClient);
+	const created = await original.create({ dirId: 'folder', rows: 24, cols: 80, profile: { type: 'default' } });
+	const credential = await original.getReconnectLease(created.terminalId);
+	original.prepareForReload();
+	await original.close({ terminalId: created.terminalId, dirId: 'folder' });
+	assert.equal(supervisor.requests.some(request => request.method === 'terminal/close'), false);
+	original.dispose();
+	using replacement = new ReconnectableTerminalProcessService(supervisor as unknown as AppServerProtocolClient);
+	const dimensions = { cols: 120, rows: 40, dirId: 'unrelated-ui-state', vt: 'not process state' };
+	const attached = await replacement.attach(credential, dimensions, created.profile);
+	assert.deepEqual(attached.ready, created.ready);
+	assert.equal(supervisor.requests.filter(request => request.method === 'terminal/create').length, 1);
+	assert.deepEqual(supervisor.requests.find(request => request.method === 'terminal/attach')?.params, { terminalId: created.terminalId, dirId: 'folder', reconnectToken: FIRST_TOKEN, cols: 120, rows: 40 });
+	assert.deepEqual(supervisor.requests.at(-1), { method: 'terminal/processInfo', params: { terminalId: created.terminalId, dirId: 'folder' } });
+	assert.equal((await replacement.getReconnectLease(created.terminalId)).reconnectToken, SECOND_TOKEN);
+	await replacement.close({ terminalId: created.terminalId, dirId: 'folder' });
+});
+
 test('display metadata preserves output ordering, nullable env values and per-process command identity', () => {
 	const result = decodeTerminalProcessReadResult({
 		terminalId: 'process-1', nextSequence: 3, outputGap: false,

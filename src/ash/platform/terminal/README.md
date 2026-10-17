@@ -20,18 +20,18 @@ Rust 领域服务拥有完整 Agent loop：模型调用、工具选择与调度�
 
 ## 当前接线
 
-`common/terminal.ts` 同时提供宿主输出 PTY 的启动配置、进程事件、标题属性和启动/关闭契约，供 `services/terminal/common/embedderTerminalService.ts` 与 Terminal contribution 共享。宿主输出 PTY 不声明输入或工作目录；交互 child process 按真实能力提供 input/processBinary/resize/getCwd。原始字节输入不降级为文本输入。扩展 PTY 的 input/resize 等待 provider 回复，关闭撤回排队与进行中的输入，原始错误传回调用方；Shell 的读取结果保留原始字节，原 ProcessManager 增量解码为标准 string `IProcessDataEvent`，并用 `trackCommit` / `writePromise` 连接 xterm 解析与 Renderer 续读。Shell 的输入与尺寸已走原 Rust 进程链；完整 child process 的 signal、通用属性和服务器 flow control 仍待接入，没有添加空操作实现。
+`common/terminal.ts` 同时提供宿主输出 PTY 的启动配置、进程事件、标题属性和启动/关闭契约，供 `services/terminal/common/embedderTerminalService.ts` 与 Terminal contribution 共享。宿主输出 PTY 不声明输入或工作目录；交互 child process 按真实能力提供 input/processBinary/resize/getCwd。原始字节输入不降级为文本输入。扩展 PTY 的 input/resize 等待 provider 回复，关闭撤回排队与进行中的输入，原始错误传回调用方；Shell 的读取结果保留原始字节，原 ProcessManager 增量解码为标准 string `IProcessDataEvent`，并用 `trackCommit` / `writePromise` 连接 xterm 解析与 Renderer 续读。Shell 的输入与尺寸已走原 Rust 进程链；SIGINT 与服务器输出背压已接入；完整 child process 的通用属性仍待补全，没有添加空操作实现。
 
 | 文件                                             | 职责与生产入口                                                                                                                                                                          |
 | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `common/terminal.ts`                             | 前端进程契约：profile、带真实 PID/启动目录的创建、文本或原始字节输入、尺寸、增量字节输出、关闭和连接状态；退出码使用 `undefined` 表达未知，由 `IRendererHost.terminal` 提供给 Workbench |
-| `browser/appServerTerminalProcessService.ts`     | 本地 Electron 与已连接 Web 的协议适配；通过现有 Renderer protocol client 调用 `terminal/*`，创建 `connectionOwned` 进程                                                                 |
-| `browser/reconnectableTerminalProcessService.ts` | SSH Electron 的完整进程适配器：保存和旋转 token，在新 connection generation attach 原 PTY，恢复最后尺寸；宿主直接选择这个服务对象                                                       |
+| `browser/appServerTerminalProcessService.ts`     | 已连接 Web 的协议适配；通过现有 Renderer protocol client 调用 `terminal/*`，创建 `connectionOwned` 进程                                                                                 |
+| `browser/reconnectableTerminalProcessService.ts` | Electron 本地与远程进程适配器：保存和旋转 token，在新 connection generation 或窗口 reload 后 attach 原 PTY，恢复最后尺寸；宿主直接选择这个服务对象                                      |
 | `browser/disconnectedTerminalProcessService.ts`  | 无后端的 UI 运行环境明确拒绝进程操作；不创建模拟 Shell                                                                                                                                  |
 
-两个适配器消费同一个 `AppServerProtocolClient`。创建结果的 ready 信息来自 Rust；文本走 `terminal/write`，原始字节只在适配边界编码为 base64 后走 `terminal/writeBinary`，不经过 UTF-8 转换。普通与 SSH 读取都经过同一 DTO 转换入口，在适配边界把 base64 解码为原始 `Uint8Array`，把 nullable 退出码转为前端 `undefined`；多字节字符和控制字节不会经过逐块文本解码。重连租约管理复用该 client 的状态和代次，只恢复已有 PTY，不自行建立连接。Main 负责 connection acquisition、透明 relay，以及运行时更换通知，不解析 `terminal/*`，也不保存终端 token。
+两个适配器消费同一个 `AppServerProtocolClient`。创建结果的 ready 信息来自 Rust；文本走 `terminal/write`，原始字节只在适配边界编码为 base64 后走 `terminal/writeBinary`，不经过 UTF-8 转换。普通与 SSH 读取都经过同一 DTO 转换入口，在适配边界把 base64 解码为原始 `Uint8Array`，把 nullable 退出码转为前端 `undefined`；多字节字符和控制字节不会经过逐块文本解码。重连租约管理复用该 client 的状态和代次，只恢复已有 PTY，不自行建立连接。Main 负责 connection acquisition、透明 relay、运行时更换通知和通用窗口级内存 SecretStorage，不解析 `terminal/*`，也不拥有终端会话状态。
 
-`terminalId` 与 `dirId` 一起定位对应后端资源；多根 Workspace 必须保留创建时的 `dirId`。本地进程随 connection 关闭而结束。SSH 的 `reconnectable` 进程可在同一后端内保留 30 秒，成功 attach 会旋转 token；后端进程重启、租约过期或明确 runtime replacement 后不能恢复原 PTY。token 只存在于 Renderer 的进程适配层，不进入 Workbench 实例契约、日志、持久化或 Main 的业务状态。
+`terminalId` 与 `dirId` 一起定位对应后端资源；多根 Workspace 必须保留创建时的 `dirId`。Web 的 `connectionOwned` 进程随 connection 关闭而结束。Electron 本地与远程的 `reconnectable` 进程在连接断开后由同一后端保留 30 秒，成功 attach 会旋转 token；后端进程重启、租约过期或明确 runtime replacement 后不能恢复原 PTY。token 平时只归 Renderer 进程适配层；协调 reload 时通过窗口级内存 SecretStorage 短期交接，实际窗口关闭即清空，不写入普通工作区存储、设置或日志。屏幕和布局 checkpoint 由 Workbench 原 owner 保存，不能代替后端租约。
 
 `common/terminal.ts` 导出 `ITerminalProcessService` 的 DI 标识。Workbench 与 Sessions 注册 `IRendererHost.terminal` 后，Terminal contribution 经容器注入进程服务与 Workspace。SSH 宿主不再把普通服务和租约管理的方法拼成另一份对象。三处适配器没有上游同职责的 Rust 协议或 Ash 宿主文件，用户已确认保留这些专属职责；通用 backend、child process 和 process manager 仍须在对应上游路径实现。传输层仍使用 Ash 的创建与分页读取契约；`contrib/terminal/browser/terminalProcessManager.ts` 将其接为输出、命令和退出事件，拥有游标与解析等待。完整 child process/backend API 尚未对齐，见 [Terminal 对齐台账](../../../../docs/terminal-api-alignment-status.md)。
 
@@ -51,7 +51,7 @@ Rust 领域服务拥有完整 Agent loop：模型调用、工具选择与调度�
 
 Common 当前调用链与未完成契约见 [Common 基座台账](../../../../docs/terminal-api-alignment-status.md#common-已接通的行为)。`TerminalCapabilityStore` 登记真实实现，`CwdDetectionCapability` 拥有已提交目录，`BufferMarkCapability` 管理同一 xterm 屏幕的 markers；Rust 继续拥有命令解析、nonce 与 history。marker 契约采用 DOM 无关结构，Common 不引入 xterm 类型包的 DOM globals。
 
-`TerminalDataBufferer` 接原扩展 PTY 的文本源，在初始 open、name、exit 和 shutdown 前排空。ProcessManager 仍唯一拥有 Shell 的读取游标、增量 UTF-8 解码、输入队列和解析等待；断线续读保留不完整字符前缀，输出 gap 重置状态，退出前排空尾部。普通/SSH 协议适配器继续保留原始读取字节和二进制输入，没有声明服务器 flow control / ACK / 持久重播已完成。
+`TerminalDataBufferer` 接原扩展 PTY 的文本源，在初始 open、name、exit 和 shutdown 前排空。ProcessManager 仍唯一拥有 Shell 的读取游标、增量 UTF-8 解码、输入队列和解析等待；断线续读保留不完整字符前缀，输出 gap 重置状态，退出前排空尾部。普通/SSH 协议适配器继续保留原始读取字节和二进制输入。`afterSequence` 是屏幕完成解析后的消费确认；Rust 在未确认输出达到高水位时暂停读取 PTY channel，确认前进后恢复。最近历史仍有界，持久重播不包含在此机制内。
 
 `terminalProfiles.ts` 由真实 ProfileService/schema 消费。`terminalRecorder.ts` 和 `terminalProcess.ts` 的 ReplayEntry 只承接首次 screen 装载前的有限显示回放，保存尺寸并按 xterm write callback 排序；它们不替代 Rust 的输出保留或持久进程恢复。Tasks 消费 `terminalStrings.ts` 的 ANSI 格式，纯环境 helpers 按实际 shell 类型引用字面路径并规范化 cwd。
 

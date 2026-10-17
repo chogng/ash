@@ -15,11 +15,11 @@ export class RemoteTerminalChannelClient extends Disposable {
 		this._register(workspace.onDidChangeWorkspace(() => this.revision++));
 	}
 
-	async createProcess(options: ITerminalProcessCreateOptions): Promise<{ readonly creation: ITerminalProcessCreation; readonly scope: ITerminalExecutionScope; }> {
+	async createProcess(options: ITerminalProcessCreateOptions, attached?: ITerminalProcessCreation): Promise<{ readonly creation: ITerminalProcessCreation; readonly scope: ITerminalExecutionScope; }> {
 		if (this.isDisposed) throw new CancellationError();
 		const scope = terminalExecutionScope(this.workspace.getWorkspace());
 		const revision = this.revision;
-		const creation = await this.processes.create(options);
+		const creation = attached ?? await this.processes.create(options);
 		if (this.isDisposed || revision !== this.revision || !terminalExecutionScopesEqual(scope, terminalExecutionScope(this.workspace.getWorkspace()))) {
 			await this.processes.close({ terminalId: creation.terminalId, ...(options.dirId === undefined ? {} : { dirId: options.dirId }) });
 			throw new CancellationError();

@@ -1811,7 +1811,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		enableKeybindingHoldMode: () => undefined, registerSchemaContribution: () => toDisposable(() => { }),
 		resolveKeybinding, resolveUserBinding: () => undefined, lookupKeybindings: () => [], lookupKeybinding: () => undefined,
 	});
-	services.registerInstance(IHostService, { hasFocus: true, onDidChangeFocus: Event.None, openWindow: async () => { }, restart: async () => { }, getScreenshot: async () => undefined });
+	services.registerInstance(IHostService, { reload: async () => { throw new Error("Unexpected reload in this fixture"); }, hasFocus: true, onDidChangeFocus: Event.None, openWindow: async () => { }, restart: async () => { }, getScreenshot: async () => undefined });
 
 	await preferences.openSettings();
 	const host = root.querySelector<HTMLElement>('.ash-modal-editor-host');

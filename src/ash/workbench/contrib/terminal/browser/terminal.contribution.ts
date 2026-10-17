@@ -28,6 +28,9 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { TerminalConfigurationService } from './terminalConfigurationService.js';
 import { TerminalProfileService } from './terminalProfileService.js';
 import { TerminalService } from './terminalService.js';
+import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { ISecretStorageService } from '../../../../platform/secrets/common/secrets.js';
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { TerminalMainContribution } from './terminalMainContribution.js';
 import { AgentHostOutputChannel } from './agentHostOutputChannel.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -39,7 +42,7 @@ registerWorkbenchContribution(AgentHostOutputChannel.ID, WorkbenchPhase.BlockRes
 
 registerWorkbenchServiceContribution({
 	service: ITerminalService,
-	dependencies: [ITerminalProcessService, IWorkspaceContextService],
+	dependencies: [ITerminalProcessService, IWorkspaceContextService, IConfigurationService, IDialogService, ISecretStorageService, IStorageService],
 	install: context => context.register(context.container.createInstance(TerminalService)),
 });
 

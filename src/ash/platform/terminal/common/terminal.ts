@@ -122,6 +122,7 @@ export interface ITerminalProcessInfo {
 	readonly cwd: string | undefined;
 	readonly rows: number;
 	readonly cols: number;
+	readonly hasChildProcesses?: boolean;
 }
 
 export interface ITerminalProcessCreation {
@@ -129,6 +130,14 @@ export interface ITerminalProcessCreation {
 	readonly terminalId: string;
 	readonly profile: ITerminalProcessProfile;
 	readonly connectionPersistence: TerminalProcessConnectionPersistence;
+}
+
+/** A short-lived bearer credential. Store only through the host secret service. */
+export interface ITerminalReconnectLease {
+	readonly terminalId: string;
+	readonly dirId?: string;
+	readonly reconnectToken: string;
+	readonly reconnectGracePeriodMillis: number;
 }
 
 export interface ITerminalProcessWriteOptions {
@@ -147,6 +156,7 @@ export interface ITerminalProcessResizeOptions {
 export interface ITerminalProcessReadOptions {
 	readonly dirId?: string;
 	readonly terminalId: string;
+	/** Last output committed by the attached screen; advances the producer's consumption acknowledgement. */
 	readonly afterSequence: number;
 	readonly afterCommandSequence: number;
 	readonly maxChunks: number;
@@ -227,6 +237,10 @@ export interface ITerminalProcessService {
 	getEnvironment(names?: readonly string[], dirId?: string): Promise<Readonly<Record<string, string>>>;
 	getProcessInfo(options: ITerminalProcessCloseOptions): Promise<ITerminalProcessInfo>;
 	create(options: ITerminalProcessCreateOptions): Promise<ITerminalProcessCreation>;
+	getReconnectLease?(terminalId: string): Promise<ITerminalReconnectLease | undefined>;
+	/** Called only after every reload shutdown participant has completed successfully. */
+	prepareForReload?(): void;
+	attach?(lease: ITerminalReconnectLease, dimensions: { readonly rows: number; readonly cols: number; }, profile: ITerminalProcessProfile): Promise<ITerminalProcessCreation>;
 	write(options: ITerminalProcessWriteOptions): Promise<void>;
 	sendSignal(options: ITerminalProcessCloseOptions & { readonly signal: 'interrupt'; }): Promise<void>;
 	resize(options: ITerminalProcessResizeOptions): Promise<void>;
@@ -278,6 +292,12 @@ export interface IProcessDataEvent {
 
 export enum ProcessPropertyType {
 	Title = 'title',
+	HasChildProcesses = 'hasChildProcesses',
+}
+
+export interface IProcessPropertyMap {
+	[ProcessPropertyType.Title]: string;
+	[ProcessPropertyType.HasChildProcesses]: boolean;
 }
 
 export interface IProcessProperty {
@@ -306,6 +326,10 @@ export interface ITerminalChildProcess extends IDisposable {
 
 /** Workbench host for a terminal screen; moving it retains the process. */
 export enum TerminalLocation { Panel = 1, Editor = 2 }
+
+export interface IRawTerminalInstanceLayoutInfo<T> { terminal: T; relativeSize: number; }
+export interface IRawTerminalTabLayoutInfo<T> { isActive: boolean; activePersistentProcessId: number | undefined; terminals: IRawTerminalInstanceLayoutInfo<T>[]; }
+export type ITerminalTabLayoutInfoById = IRawTerminalTabLayoutInfo<number>;
 
 /** Parsed display text captured once; it cannot launch or write to a process. */
 export interface ITerminalOutputSnapshot {

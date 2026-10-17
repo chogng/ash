@@ -8,6 +8,7 @@ import type { IResourceEditorInput } from '../../../common/editor.js';
 import { ITerminalService, ITerminalEditorService, type ITerminalInstance } from '../../../services/terminal/browser/terminal.js';
 import { TerminalEditorInput } from './terminalEditorInput.js';
 import './media/terminal.css';
+import { ConfirmResult } from '../../../../platform/dialogs/common/dialogs.js';
 
 /** Hosts the original xterm; disposing a pane releases its DOM lease, not its PTY. */
 export class TerminalEditor extends EditorPane {
@@ -37,6 +38,8 @@ export class TerminalEditor extends EditorPane {
 		if (!(input instanceof TerminalEditorInput)) throw new TypeError('Invalid terminal editor input');
 		this.clearInput();
 		signal.throwIfAborted();
+		await this.terminals.whenConnected;
+		signal.throwIfAborted();
 		const instance = this.editorTerminals.getInstanceFromResource(input.resource);
 		if (!instance) {
 			this.element.textContent = localize('terminal.editor.unavailable', 'This terminal is no longer available. Create a new terminal to start another shell.');
@@ -44,6 +47,14 @@ export class TerminalEditor extends EditorPane {
 			return;
 		}
 		this.element.removeAttribute('role');
+		const terminals = this.terminals;
+		input.closeHandler = {
+			showConfirm: () => terminals.instances.includes(instance),
+			confirm: async () => {
+				await terminals.safeDisposeTerminal(instance);
+				return terminals.instances.includes(instance) ? ConfirmResult.CANCEL : ConfirmResult.DONT_SAVE;
+			},
+		};
 		this.instance = instance;
 		instance.target = TerminalLocation.Editor;
 		instance.attachToElement(this.element);

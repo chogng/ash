@@ -109,6 +109,279 @@ fn output_ring_advances_the_cursor_when_one_oversized_chunk_is_evicted() {
     assert_eq!(result.next_sequence, 1);
 }
 
+#[cfg(unix)]
+#[test]
+fn slow_terminal_consumer_retains_every_output_byte() {
+    use sha2::Digest;
+
+    let root = tempfile::tempdir().unwrap();
+    let service = terminal_service_for(root.path());
+    let mut request = terminal_request(TerminalLifecycle::ConnectionOwned);
+    request.execution = Some(TerminalExecution::Process {
+        program: "/bin/sh".into(),
+        args: TerminalArguments::Argv(vec![
+            "-c".into(),
+            "printf ready > producer-ready; awk 'BEGIN { for (i=0; i<60000; i++) printf \"ROW:%06d abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ\\n\", i }'".into(),
+        ]),
+    });
+    let created = service.create(1, request).unwrap();
+    let ready_deadline = Instant::now() + Duration::from_secs(5);
+    while !root.path().join("producer-ready").exists() {
+        assert!(Instant::now() < ready_deadline, "producer did not start");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    // Deliberately stop consumption, then emulate a screen committing one page at a time.
+    std::thread::sleep(Duration::from_millis(250));
+    let deadline = Instant::now() + Duration::from_secs(30);
+    let mut output = Vec::new();
+    let mut sequence = 0;
+    let mut command_sequence = 0;
+    loop {
+        let result = service
+            .read(
+                1,
+                TerminalReadRequest {
+                    terminal_id: created.terminal_id.clone(),
+                    after_sequence: sequence,
+                    after_command_sequence: command_sequence,
+                    max_chunks: 1,
+                },
+            )
+            .unwrap();
+        assert!(!result.output_gap, "unconsumed terminal output was evicted");
+        sequence = result.next_sequence;
+        command_sequence = result.next_command_sequence;
+        let complete = result.exited && result.chunks.is_empty();
+        output.extend(result.chunks.into_iter().flat_map(|chunk| chunk.data));
+        if complete {
+            assert_eq!(result.exit_code, Some(0));
+            break;
+        }
+        assert!(Instant::now() < deadline, "slow consumer did not finish");
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    let actual = output
+        .into_iter()
+        .filter(|byte| *byte != b'\r')
+        .collect::<Vec<_>>();
+    let expected = (0..60000)
+        .map(|index| {
+            format!(
+                "ROW:{index:06} abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ\n"
+            )
+        })
+        .collect::<String>();
+    assert_eq!(actual.len(), expected.len());
+    assert_eq!(
+        sha2::Sha256::digest(&actual),
+        sha2::Sha256::digest(expected.as_bytes())
+    );
+    service.close(1, &created.terminal_id).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn removing_a_backpressured_terminal_releases_its_process_and_drainer() {
+    enum Removal {
+        Close,
+        ConnectionClosed,
+        Shutdown,
+        LeaseExpired,
+        GrantRevoked,
+    }
+
+    for removal in [
+        Removal::Close,
+        Removal::ConnectionClosed,
+        Removal::Shutdown,
+        Removal::LeaseExpired,
+        Removal::GrantRevoked,
+    ] {
+        let root = tempfile::tempdir().unwrap();
+        let grant = ash_file_access::Grant::for_environment(
+            ash_file_access::Dir::open_local(root.path()).unwrap(),
+            ash_file_access::GrantSource::HostConfiguration,
+            ash_file_access::Permissions::new([Permission::ExecuteCommands]),
+        );
+        let service =
+            TerminalService::new(grant.authorize(Permission::ExecuteCommands).unwrap()).unwrap();
+        let lifecycle = match removal {
+            Removal::LeaseExpired => TerminalLifecycle::Reconnectable,
+            Removal::Close
+            | Removal::ConnectionClosed
+            | Removal::Shutdown
+            | Removal::GrantRevoked => TerminalLifecycle::ConnectionOwned,
+        };
+        let mut request = terminal_request(lifecycle);
+        request.execution = Some(TerminalExecution::Process {
+            program: "/bin/sh".into(),
+            args: TerminalArguments::Argv(vec![
+                "-c".into(),
+                "exec awk 'BEGIN { while (1) print \"abcdefghijklmnopqrstuvwxyz0123456789\" }'"
+                    .into(),
+            ]),
+        });
+        let created = service.create(1, request).unwrap();
+        let (state, process) = {
+            let sessions = service.sessions.lock().unwrap();
+            let session = sessions.get(&created.terminal_id).unwrap();
+            (Arc::downgrade(&session.state), session.process.clone())
+        };
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let full =
+                state.upgrade().unwrap().lock().unwrap().output_bytes >= OUTPUT_HIGH_WATER_BYTES;
+            if full {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "producer did not reach backpressure"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(!process.has_exited());
+        match removal {
+            Removal::Close => service.close(1, &created.terminal_id).unwrap(),
+            Removal::ConnectionClosed => service.close_owner(1),
+            Removal::Shutdown => service.terminate_all(),
+            Removal::LeaseExpired => {
+                service.close_owner(1);
+                remove_expired_sessions(
+                    &mut service.sessions.lock().unwrap(),
+                    Instant::now() + RECONNECT_GRACE_PERIOD,
+                );
+            }
+            Removal::GrantRevoked => {
+                grant.revoke();
+                service.terminate_revoked_dirs();
+            }
+        }
+        assert_eq!(service.active_count(), 0);
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !process.has_exited() || state.upgrade().is_some() {
+            assert!(
+                Instant::now() < deadline,
+                "removed terminal retained its producer or output drainer"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn backpressure_is_isolated_and_a_detached_producer_resumes_after_attach() {
+    let root = tempfile::tempdir().unwrap();
+    let service = terminal_service_for(root.path());
+    let mut request = terminal_request(TerminalLifecycle::Reconnectable);
+    request.execution = Some(TerminalExecution::Process {
+        program: "/bin/sh".into(),
+        args: TerminalArguments::Argv(vec![
+            "-c".into(),
+            "exec awk 'BEGIN { while (1) print \"abcdefghijklmnopqrstuvwxyz0123456789\" }'".into(),
+        ]),
+    });
+    let created = service.create(1, request).unwrap();
+    let state = service.sessions.lock().unwrap()[&created.terminal_id]
+        .state
+        .clone();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        if state.lock().unwrap().output_bytes >= OUTPUT_HIGH_WATER_BYTES {
+            break;
+        }
+        assert!(Instant::now() < deadline);
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    // No acknowledgement: the bounded drainer must remain paused, rather than
+    // evicting unread bytes or occupying the runtime's other worker.
+    std::thread::sleep(Duration::from_millis(30));
+    let paused_sequence = state.lock().unwrap().next_sequence;
+    std::thread::sleep(Duration::from_millis(30));
+    assert_eq!(state.lock().unwrap().next_sequence, paused_sequence);
+    assert!(state.lock().unwrap().output_bytes <= MAX_OUTPUT_BYTES);
+
+    let mut other = terminal_request(TerminalLifecycle::ConnectionOwned);
+    other.execution = Some(TerminalExecution::Process {
+        program: "/bin/sh".into(),
+        args: TerminalArguments::Argv(vec!["-c".into(), "printf 'OTHER_ALIVE\\n'".into()]),
+    });
+    let other = service.create(1, other).unwrap();
+    read_until(&service, &other.terminal_id, "OTHER_ALIVE\r\n");
+    service.close(1, &other.terminal_id).unwrap();
+
+    service.close_owner(1);
+    let attached = service
+        .attach(
+            2,
+            TerminalAttachRequest {
+                terminal_id: created.terminal_id.clone(),
+                reconnect_token: created.reconnect.unwrap().reconnect_token,
+                rows: 24,
+                cols: 80,
+            },
+        )
+        .unwrap();
+    assert_eq!(attached.ready.pid, created.ready.pid);
+    let mut request = TerminalReadRequest {
+        terminal_id: created.terminal_id.clone(),
+        after_sequence: 0,
+        after_command_sequence: 0,
+        max_chunks: 128,
+    };
+    let pending = service.read(2, request.clone()).unwrap();
+    assert!(!pending.output_gap);
+    assert!(!pending.chunks.is_empty());
+    // Merely returning output does not acknowledge consumption or resume reads.
+    assert_eq!(state.lock().unwrap().acknowledged_sequence, 0);
+    request.after_sequence = pending.next_sequence;
+    service.read(2, request.clone()).unwrap();
+    let committed = state.lock().unwrap().acknowledged_sequence;
+    request.after_sequence = 0;
+    service.read(2, request).unwrap();
+    assert_eq!(state.lock().unwrap().acknowledged_sequence, committed);
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while state.lock().unwrap().next_sequence <= paused_sequence {
+        assert!(
+            Instant::now() < deadline,
+            "reattached producer did not resume"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    // Control requests must not wait behind a producer's full output queue.
+    service
+        .send_signal(2, &created.terminal_id, TerminalSignal::Interrupt)
+        .unwrap();
+    let mut sequence = committed;
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let result = service
+            .read(
+                2,
+                TerminalReadRequest {
+                    terminal_id: created.terminal_id.clone(),
+                    after_sequence: sequence,
+                    after_command_sequence: 0,
+                    max_chunks: 128,
+                },
+            )
+            .unwrap();
+        assert!(!result.output_gap);
+        sequence = result.next_sequence;
+        if result.exited && result.chunks.is_empty() {
+            assert_ne!(result.exit_code, Some(0));
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "interrupt did not finish the producer"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    service.close(2, &created.terminal_id).unwrap();
+}
+
 #[test]
 fn terminal_size_and_input_limits_are_explicit() {
     assert_eq!(validate_size(0, 80), Err(TerminalError::InvalidInput));
@@ -286,6 +559,58 @@ fn terminal_binary_input_preserves_nul_and_non_utf8_bytes() {
         "raw output: {:?}",
         String::from_utf8_lossy(&output)
     );
+    service.close(1, &created.terminal_id).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn close_protection_observes_real_child_processes_and_interrupt_returns_to_idle() {
+    let root = tempfile::tempdir().unwrap();
+    let service = terminal_service_for(root.path());
+    let created = service
+        .create(1, terminal_request(TerminalLifecycle::ConnectionOwned))
+        .unwrap();
+    let write = |data: &str| {
+        service
+            .write(
+                1,
+                TerminalWriteRequest {
+                    terminal_id: created.terminal_id.clone(),
+                    data: data.into(),
+                },
+            )
+            .unwrap()
+    };
+    let wait_children = |expected| {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            if service
+                .process_info(1, &created.terminal_id)
+                .unwrap()
+                .has_child_processes
+                == Some(expected)
+            {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "child process state did not become {expected}"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    };
+    write("printf 'CHILD_%s\\n' IDLE\n");
+    read_until(&service, &created.terminal_id, "CHILD_IDLE\r\n");
+    wait_children(false);
+    write("printf 'CHILD_%s\\n' RUNNING; sleep 60\n");
+    read_until(&service, &created.terminal_id, "CHILD_RUNNING\r\n");
+    wait_children(true);
+    service
+        .send_signal(1, &created.terminal_id, TerminalSignal::Interrupt)
+        .unwrap();
+    write("printf 'CHILD_%s\\n' RESUMED\n");
+    read_until(&service, &created.terminal_id, "CHILD_RESUMED\r\n");
+    wait_children(false);
     service.close(1, &created.terminal_id).unwrap();
 }
 

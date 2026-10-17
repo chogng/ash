@@ -2,8 +2,9 @@ import { execFile, type ChildProcess } from "node:child_process";
 import { resolve } from "node:path";
 import { DisposableStore, toDisposable } from "../../src/ash/base/common/lifecycle.js";
 import { promisify } from "node:util";
+import { getEventListeners, type EventEmitter } from 'node:events';
 import { appServerDaemonExecutablePath } from "../../src/ash/platform/app-server-daemon/node/appServerDaemonPackage.js";
-import { _electron, type ElectronApplication, type Request } from "@playwright/test";
+import { _electron, type ElectronApplication, type Request, type Page } from "@playwright/test";
 import { ElectronPlaywrightDriver } from "./electronDriver.js";
 import { WorkbenchDiagnostics } from './playwrightDriver.js';
 import { resolveElectronConfiguration, type ElectronLaunchOptions } from "./electron.js";
@@ -44,6 +45,17 @@ export async function launchElectronApplication(options: ElectronLaunchOptions):
 		timeout: Math.max(1, startupDeadline - Date.now()),
 	});
 	const diagnostics = new WorkbenchDiagnostics(application.context());
+	const observeDialogs = (page: Page): void => {
+		page.on('dialog', dialog => {
+			// Main coordinates product-document reloads. CDP's automatic dismissal
+			// otherwise races its will-prevent-unload decision and can force navigation.
+			if (dialog.type() === 'beforeunload' && /\/(?:workbench|sessions)\.html(?:[?#].*)?$/u.test(page.url())) return;
+			if (getEventListeners(page as unknown as EventEmitter, 'dialog').length === 1) void dialog.dismiss().catch(() => { });
+		});
+	};
+	for (const page of application.context().pages()) observeDialogs(page);
+	application.context().on('page', observeDialogs);
+	application.context().once('close', () => application.context().off('page', observeDialogs));
 	// Playwright releases the application channel on exit; retain the child process for startup diagnostics and cleanup.
 	const electronProcess = application.process();
 	await resource.process(electronProcess);

@@ -2062,10 +2062,19 @@ test("CompositeBar reorders view container tabs through drag and drop", () => {
 });
 
 test("titlebar layout commands toggle shell regions", async () => {
+	const { IPaneCompositePartService } = await import('../../../workbench/services/panecomposite/browser/panecomposite.js');
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const harness = createLayoutHarness(dom.window.document, { defaultLayout: { parts: { panel: true } } });
 	const services = new InstantiationService();
 	services.registerInstance(IWorkbenchLayoutService, harness.layout);
+	const openedPanels: unknown[][] = [];
+	services.registerInstance(IPaneCompositePartService, {
+		onDidPaneCompositeOpen: BaseEvent.None, onDidPaneCompositeClose: BaseEvent.None,
+		getLastActivePaneCompositeId: () => 'test.retained.panel',
+		openPaneComposite: async (id, location, focus) => { openedPanels.push([id, location, focus]); return undefined; },
+		getActivePaneComposite: () => undefined,
+		getPartId: () => 'panel', hideActivePaneComposite() { },
+	});
 	const commands = harness.disposables.add(new CommandService(services));
 
 	assert.equal(harness.layout.isPartVisible("sidebar"), true);
@@ -2085,6 +2094,7 @@ test("titlebar layout commands toggle shell regions", async () => {
 	assert.equal(harness.layout.isPartVisible("panel"), false);
 	await commands.executeCommand(TogglePanelAction.ID);
 	assert.equal(harness.layout.isPartVisible("panel"), true);
+	assert.deepEqual(openedPanels, [['test.retained.panel', ViewContainerLocation.Panel, true]]);
 
 	assert.equal(harness.layout.isPartVisible("editor"), true);
 	await commands.executeCommand('workbench.action.toggleMaximizedPanel');

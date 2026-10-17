@@ -39,6 +39,8 @@ export class TerminalProcessManager extends Disposable {
 	private nextCommandSequence = 0;
 	private pendingCommit: Promise<void> | undefined;
 	private readonly decoder = new TextDecoder('utf-8', { ignoreBOM: true });
+	private pendingUtf8: number[] = [];
+	private suspending = false;
 	get cwdDetection() { return this.commandSource.cwdDetection; }
 	get promptTypeDetection() { return this.commandSource.promptTypeDetection; }
 	public get shellIntegration() { return this.commandSource.shellIntegration; }
@@ -59,6 +61,7 @@ export class TerminalProcessManager extends Disposable {
 
 	public async start(reconnecting = false): Promise<void> {
 		this.assertNotDisposed();
+		this.suspending = false;
 		if (!this.acceptingInput) {
 			this.inputCancellation.value = new CancellationTokenSource();
 		}
@@ -91,6 +94,7 @@ export class TerminalProcessManager extends Disposable {
 				if (result.outputGap) {
 					// A missing byte range cannot complete a retained UTF-8 prefix.
 					const tail = this.decoder.decode();
+					this.pendingUtf8 = [];
 					if (tail) await this.emitProcessData(tail, token);
 					this.outputGapEmitter.fire();
 					await this.emitProcessData('', token, { type: 'outputGap' });
@@ -104,6 +108,7 @@ export class TerminalProcessManager extends Disposable {
 					}
 					this.commandSource.commitThrough(chunk.sequence - 1, token);
 					const data = this.decoder.decode(chunk.data, { stream: true });
+					this.pendingUtf8 = utf8Suffix([...this.pendingUtf8, ...chunk.data]);
 					this.nextSequence = chunk.sequence;
 					await this.emitProcessData(data, token, chunk.shellIntegration);
 					this.commandSource.commitThrough(this.nextSequence, token);
@@ -140,14 +145,14 @@ export class TerminalProcessManager extends Disposable {
 
 	public async sendSignal(signal: string): Promise<void> {
 		this.assertNotDisposed();
-		if (!this.acceptingInput) throw new CancellationError();
+		if (!this.acceptingInput || this.suspending) throw new CancellationError();
 		if (signal !== 'SIGINT') throw new Error(localize('terminal.signal.unsupported', 'Only SIGINT is supported by this terminal host.'));
 		await this.processService.sendSignal({ ...this.identity, signal: 'interrupt' });
 	}
 
 	/** Resolves after every UTF-8 batch containing this input is acknowledged by the process. */
 	public write(data: string): Promise<void> {
-		if (!this.acceptingInput || this.isDisposed) { return Promise.reject(new CancellationError()); }
+		if (!this.acceptingInput || this.suspending || this.isDisposed) { return Promise.reject(new CancellationError()); }
 		if (data.length === 0) { return Promise.resolve(); }
 		const completion = new DeferredPromise<void>();
 		this.pendingInputCompletions.push(completion);
@@ -164,7 +169,7 @@ export class TerminalProcessManager extends Disposable {
 	}
 
 	public processBinary(data: string): Promise<void> {
-		if (!this.acceptingInput || this.isDisposed) {
+		if (!this.acceptingInput || this.suspending || this.isDisposed) {
 			return Promise.reject(new CancellationError());
 		}
 		// Flush every preceding text batch before mouse bytes. Later text queues after them.
@@ -175,7 +180,7 @@ export class TerminalProcessManager extends Disposable {
 
 	public setDimensions(cols: number, rows: number): Promise<void> {
 		const dimensions = { cols, rows };
-		if (!this.acceptingInput || this.isDisposed) { return Promise.reject(new CancellationError()); }
+		if (!this.acceptingInput || this.suspending || this.isDisposed) { return Promise.reject(new CancellationError()); }
 		const completion = new DeferredPromise<void>();
 		this.pendingResizeCompletions.push(completion);
 		this.pendingDimensions = dimensions;
@@ -258,6 +263,23 @@ export class TerminalProcessManager extends Disposable {
 		this.stopInput();
 	}
 
+	/** Freeze only after already accepted stdin and screen writes have committed.
+	 * No new read can acknowledge bytes beyond the saved screen checkpoint. */
+	async serializeState(): Promise<{ readonly sequence: number; readonly pendingUtf8: readonly number[]; }> {
+		this.suspending = true;
+		this.reading.clear();
+		this.flushInput();
+		await this.writeChain;
+		await this.pendingCommit;
+		return { sequence: this.nextSequence, pendingUtf8: [...this.pendingUtf8] };
+	}
+
+	restoreState(state: { readonly sequence: number; readonly pendingUtf8: readonly number[]; }): void {
+		this.nextSequence = state.sequence;
+		this.pendingUtf8 = [...state.pendingUtf8];
+		this.decoder.decode(Uint8Array.from(state.pendingUtf8), { stream: true });
+	}
+
 	protected override disposeCore(): void {
 		this.stop();
 		this.pendingCommit = undefined;
@@ -279,6 +301,22 @@ export class TerminalProcessManager extends Disposable {
 	}
 
 
+}
+
+/** Only an unfinished valid UTF-8 prefix belongs to the decoder across a checkpoint. */
+function utf8Suffix(bytes: readonly number[]): number[] {
+	for (let offset = 1; offset <= Math.min(3, bytes.length); offset++) {
+		const index = bytes.length - offset;
+		const lead = bytes[index]!;
+		if ((lead & 0xc0) === 0x80) continue;
+		const length = lead >= 0xc2 && lead <= 0xdf ? 2 : lead >= 0xe0 && lead <= 0xef ? 3 : lead >= 0xf0 && lead <= 0xf4 ? 4 : 0;
+		if (length <= offset) return [];
+		const suffix = bytes.slice(index);
+		if (suffix.slice(1).some(byte => (byte & 0xc0) !== 0x80)) return [];
+		if (suffix.length > 1 && ((lead === 0xe0 && suffix[1]! < 0xa0) || (lead === 0xed && suffix[1]! >= 0xa0) || (lead === 0xf0 && suffix[1]! < 0x90) || (lead === 0xf4 && suffix[1]! >= 0x90))) return [];
+		return suffix;
+	}
+	return [];
 }
 
 function takeUtf8Prefix(value: string, maximumBytes: number): string {

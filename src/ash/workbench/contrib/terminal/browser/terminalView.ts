@@ -140,8 +140,6 @@ export class TerminalViewPane extends ViewPane {
 		return this.items.get(instance) === item && !signal.aborted ? content : undefined;
 	}
 
-	public async openDetectedLink(): Promise<void> { await this.activeItem()?.widget.openDetectedLink(); }
-
 	override focus(): void {
 		if (!this.isVisible() || this.isDisposed) return;
 		this.setExpanded(true);
@@ -170,6 +168,7 @@ export class TerminalViewPane extends ViewPane {
 		}
 		this.initializing = true;
 		try {
+			await this.terminalService.whenConnected;
 			await this.profileService.refreshAvailableProfiles();
 			if (this.isDisposed) return;
 			this.updateProfiles();
@@ -284,7 +283,7 @@ export class TerminalViewPane extends ViewPane {
 	public async killActive(): Promise<void> {
 		const instance = this.terminalService.activeInstance;
 		if (!instance) return;
-		await this.terminalService.closeTerminal(instance);
+		await this.terminalService.safeDisposeTerminal(instance);
 		if (!this.isDisposed) {
 			if (this.terminalService.instances.length === 0) this.layoutService.hidePart("panel");
 			else this.terminalService.activeInstance?.xterm?.focus();

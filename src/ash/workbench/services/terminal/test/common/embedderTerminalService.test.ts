@@ -1,3 +1,4 @@
+import { registerTestTerminalLifecycleServices } from '../../../../test/browser/workbenchTestServices.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { Emitter, Event } from '../../../../../base/common/event.js';
@@ -212,6 +213,7 @@ function createServices(owner: DisposableStore): { services: InstantiationServic
 		}],
 		[IViewsService, { openView: async (id: string) => { reveals.push(id); return null; } } as IViewsService],
 	)));
+	registerTestTerminalLifecycleServices(services);
 	const terminals = owner.add(services.createInstance(TerminalService));
 	services.registerInstance(ITerminalService, terminals);
 	return { services, terminals, reveals };

@@ -58,9 +58,15 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 use tokio::runtime::Runtime;
+use tokio::sync::Notify;
+use tokio::task::AbortHandle;
 
 const MAX_ACTIVE_TERMINALS: usize = 16;
 const MAX_OUTPUT_BYTES: usize = 1024 * 1024;
+const MAX_OUTPUT_CHUNKS: usize = 16_384;
+// Leave room in the replay ring for one bounded PTY read or parsed OSC record.
+const OUTPUT_HIGH_WATER_BYTES: usize = MAX_OUTPUT_BYTES / 2;
+const OUTPUT_HIGH_WATER_CHUNKS: usize = MAX_OUTPUT_CHUNKS / 2;
 const MAX_INPUT_BYTES: usize = 64 * 1024;
 const RECONNECT_GRACE_PERIOD: Duration = Duration::from_secs(30);
 const RECONNECT_GRACE_PERIOD_MILLIS: u64 = 30_000;
@@ -351,7 +357,8 @@ impl TerminalService {
                 .and_then(|integration| integration.nonce.clone()),
             profile.shell_kind(),
         )));
-        let process = spawn_output_drainers(&self.runtime, spawned, state.clone(), integration);
+        let (process, output_task) =
+            spawn_output_drainers(&self.runtime, spawned, state.clone(), integration);
         sessions.insert(
             terminal_id.clone(),
             TerminalSession {
@@ -365,6 +372,7 @@ impl TerminalService {
                     cols: params.cols,
                 },
                 process,
+                output_task,
                 state,
                 authorization,
             },
@@ -520,6 +528,7 @@ impl TerminalService {
             cwd,
             rows: session.size.rows,
             cols: session.size.cols,
+            has_child_processes: session.process.has_child_processes(),
         })
     }
 
@@ -567,12 +576,18 @@ impl TerminalService {
             .state
             .clone();
         drop(sessions);
-        let state = state.lock().map_err(|_| TerminalError::Busy)?;
+        let mut state = state.lock().map_err(|_| TerminalError::Busy)?;
         if params.after_sequence > state.next_sequence {
             return Err(TerminalError::InvalidInput);
         }
         if params.after_command_sequence > state.command_status.next_event_sequence() {
             return Err(TerminalError::InvalidInput);
+        }
+        // The sole attached screen advances this cursor only after committing the
+        // preceding output. Replayed reads must not move that acknowledgement back.
+        if params.after_sequence > state.acknowledged_sequence {
+            state.acknowledged_sequence = params.after_sequence;
+            state.output_consumed.notify_one();
         }
         Ok(read_state(&params, &state))
     }
@@ -687,8 +702,17 @@ struct TerminalSession {
     owner: TerminalOwner,
     reconnect_token: Option<String>,
     process: Arc<ProcessHandle>,
+    output_task: AbortHandle,
     state: Arc<Mutex<TerminalState>>,
     authorization: Authorization,
+}
+
+impl Drop for TerminalSession {
+    fn drop(&mut self) {
+        // Every removal path, including lease expiry and revoked grants, must
+        // release a drainer waiting for a screen which no longer exists.
+        self.output_task.abort();
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -700,7 +724,9 @@ enum TerminalOwner {
 struct TerminalState {
     chunks: VecDeque<BufferedOutput>,
     next_sequence: u64,
+    acknowledged_sequence: u64,
     output_bytes: usize,
+    output_consumed: Arc<Notify>,
     command_status: TerminalCommandStatusTracker,
     exited: bool,
     output_closed: bool,
@@ -717,7 +743,9 @@ impl TerminalState {
         let mut state = Self {
             chunks: VecDeque::new(),
             next_sequence: 0,
+            acknowledged_sequence: 0,
             output_bytes: 0,
+            output_consumed: Arc::new(Notify::new()),
             command_status: TerminalCommandStatusTracker::new(command_status_mode, nonce),
             exited: false,
             output_closed: false,
@@ -763,7 +791,7 @@ fn spawn_output_drainers(
     spawned: SpawnedProcess,
     state: Arc<Mutex<TerminalState>>,
     integration: Option<ShellIntegration>,
-) -> Arc<ProcessHandle> {
+) -> (Arc<ProcessHandle>, AbortHandle) {
     let SpawnedProcess {
         session,
         mut stdout_rx,
@@ -772,10 +800,28 @@ fn spawn_output_drainers(
     } = spawned;
     let session = Arc::new(session);
     let output_state = state.clone();
-    runtime.spawn(async move {
-        while let Some(bytes) = stdout_rx.recv().await {
-            if let Ok(mut state) = output_state.lock() {
-                for item in state.command_status.parse_output(bytes) {
+    let output_consumed = state
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .output_consumed
+        .clone();
+    let output_task = runtime.spawn(async move {
+        loop {
+            if !wait_for_output_capacity(&output_state, &output_consumed).await {
+                return;
+            }
+            let Some(bytes) = stdout_rx.recv().await else {
+                break;
+            };
+            let parsed = match output_state.lock() {
+                Ok(mut state) => state.command_status.parse_output(bytes),
+                Err(_) => return,
+            };
+            for item in parsed {
+                if !wait_for_output_capacity(&output_state, &output_consumed).await {
+                    return;
+                }
+                if let Ok(mut state) = output_state.lock() {
                     match item {
                         ParsedTerminalOutput::Bytes(bytes) => push_output(&mut state, bytes),
                         ParsedTerminalOutput::CommandStarted => {
@@ -929,7 +975,38 @@ fn spawn_output_drainers(
             }
         }
     });
-    session
+    (session, output_task.abort_handle())
+}
+
+async fn wait_for_output_capacity(state: &Mutex<TerminalState>, consumed: &Notify) -> bool {
+    loop {
+        // notify_one retains a permit if the screen commits between checking the
+        // high-water mark and awaiting. No mutex is held while the producer waits.
+        let notified = consumed.notified();
+        match state.lock() {
+            Ok(state) => {
+                let mut bytes = 0_usize;
+                let mut chunks = 0;
+                for chunk in state
+                    .chunks
+                    .iter()
+                    .rev()
+                    .take_while(|chunk| chunk.sequence > state.acknowledged_sequence)
+                {
+                    bytes = bytes.saturating_add(chunk.retained_bytes);
+                    chunks += 1;
+                    if bytes >= OUTPUT_HIGH_WATER_BYTES || chunks >= OUTPUT_HIGH_WATER_CHUNKS {
+                        break;
+                    }
+                }
+                if bytes < OUTPUT_HIGH_WATER_BYTES && chunks < OUTPUT_HIGH_WATER_CHUNKS {
+                    return true;
+                }
+            }
+            Err(_) => return false,
+        }
+        notified.await;
+    }
 }
 
 fn push_output(state: &mut TerminalState, bytes: Vec<u8>) {
@@ -1003,7 +1080,7 @@ fn shell_boundary_bytes(event: &TerminalShellIntegrationEvent) -> usize {
 
 fn trim_output(state: &mut TerminalState) {
     // Metadata-only children must be bounded even when they produce no display bytes.
-    while state.output_bytes > MAX_OUTPUT_BYTES || state.chunks.len() > 16_384 {
+    while state.output_bytes > MAX_OUTPUT_BYTES || state.chunks.len() > MAX_OUTPUT_CHUNKS {
         let Some(removed) = state.chunks.pop_front() else {
             break;
         };

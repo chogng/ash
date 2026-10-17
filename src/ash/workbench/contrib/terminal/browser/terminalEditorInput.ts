@@ -4,6 +4,7 @@ import type { URI } from '../../../../base/common/uri.js';
 import type { IResourceEditorInput } from '../../../common/editor.js';
 import type { ITerminalInstance } from '../../../services/terminal/browser/terminal.js';
 import { parseTerminalUri } from './terminalUri.js';
+import type { IEditorCloseHandler } from '../../../common/editor/editorInput.js';
 
 /** The editor owns a resource value; the terminal service retains the process and screen. */
 export class TerminalEditorInput implements IResourceEditorInput {
@@ -12,6 +13,7 @@ export class TerminalEditorInput implements IResourceEditorInput {
 	readonly editorId = TerminalEditorInput.ID;
 	readonly readOnly = true;
 	readonly showBreadcrumbs = false;
+	closeHandler: IEditorCloseHandler | undefined;
 
 	constructor(readonly resource: URI, readonly terminalInstance?: ITerminalInstance, readonly onDidChangeLabel?: Event<void>) {
 		parseTerminalUri(resource);

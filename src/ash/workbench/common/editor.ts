@@ -10,6 +10,7 @@ import type { IDisposable } from '../../base/common/lifecycle.js';
 import type { ISize } from '../../base/common/layout.js';
 import type { IComposite, ICompositeControl } from './composite.js';
 import type { IWorkingCopy } from '../services/workingCopy/common/workingCopyService.js';
+import type { IEditorCloseHandler } from './editor/editorInput.js';
 
 /** Format-specific control exposed by a Workbench editor pane. */
 export interface IEditorControl extends ICompositeControl { }
@@ -103,6 +104,7 @@ export interface IEditorIdentifier {
 
 /** A resource requested through the Workbench editor service. */
 export interface IResourceEditorInput {
+	readonly closeHandler?: IEditorCloseHandler;
 	/** Distinguishes an independent custom editor tab from a text tab for the same resource. */
 	readonly editorId?: string;
 	toUntyped?(): IResourceEditorInput;

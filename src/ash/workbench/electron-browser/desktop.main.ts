@@ -33,6 +33,8 @@ import { ElectronRendererClipboardService } from '../../platform/clipboard/elect
 import { invoke, subscribe } from '../../platform/ipc/electron-browser/rendererIpc.js';
 import { InstantiationService } from '../../platform/instantiation/common/instantiationService.js';
 import { IMainProcessService } from '../../platform/ipc/common/mainProcessService.js';
+import { ISecretStorageService } from '../../platform/secrets/common/secrets.js';
+import { SecretStorageService } from '../services/secrets/electron-browser/secretStorageService.js';
 import { ElectronIPCMainProcessService } from '../../platform/ipc/electron-browser/mainProcessService.js';
 import { createElectronRendererApi, type ElectronRendererCapabilityContribution } from './rendererApi.js';
 import { parseWorkspace } from '../../platform/workspace/common/workspace.js';
@@ -132,6 +134,7 @@ export class DesktopMain extends Disposable {
 					[IPolicyService, this._register(new PolicyChannelClient(mainProcessService.getChannel('policy')))],
 					[IBrowserViewService, ProxyChannel.toService<IBrowserViewService>(mainProcessService.getChannel(ipcBrowserViewChannelName))],
 					[IMainProcessService, mainProcessService],
+					[ISecretStorageService, this._register(profileServices.createInstance(SecretStorageService))],
 					[IRemoteAuthorityResolverService, resolver],
 					[IPlaywrightService, playwrightService],
 				),

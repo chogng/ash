@@ -10,7 +10,7 @@ import { BrowserUpdateService, type IUpdateProvider, type IUpdate } from '../../
 function createServices(provider?: IUpdateProvider, restart = async (): Promise<void> => { }): InstantiationService {
 	const services = new InstantiationService();
 	services.registerInstance(IBrowserWorkbenchEnvironmentService, { webviewExternalEndpoint: 'https://{{uuid}}.example.test', options: { updateProvider: provider } });
-	services.registerInstance(IHostService, { hasFocus: true, onDidChangeFocus: Event.None, restart, async openWindow() { }, async getScreenshot() { return undefined; } });
+	services.registerInstance(IHostService, { reload: async () => { throw new Error("Unexpected reload in this fixture"); }, hasFocus: true, onDidChangeFocus: Event.None, restart, async openWindow() { }, async getScreenshot() { return undefined; } });
 	return services;
 }
 

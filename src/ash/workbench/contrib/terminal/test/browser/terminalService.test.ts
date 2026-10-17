@@ -1,3 +1,4 @@
+import { registerTestTerminalLifecycleServices } from '../../../../test/browser/workbenchTestServices.js';
 import { ShellEnvDetectionCapability } from '../../../../../platform/terminal/common/capabilities/shellEnvDetectionCapability.js';
 import { TerminalCapabilityStore, TerminalCapabilityStoreMultiplexer } from '../../../../../platform/terminal/common/capabilities/terminalCapabilityStore.js';
 import { TerminalGroupService } from '../../browser/terminalGroupService.js';
@@ -570,6 +571,7 @@ async function waitFor(condition: () => boolean, timeoutMillis = 1_000): Promise
 
 function terminalServices(processService: ITerminalProcessService, workspace: IWorkspaceContextService): InstantiationService {
 	const services = new InstantiationService(new ServiceCollection([ITerminalProcessService, processService], [IWorkspaceContextService, workspace]));
+	registerTestTerminalLifecycleServices(services);
 	services.registerSingleton(ITerminalService, () => services.createInstance(TerminalService));
 	return services;
 }
@@ -885,6 +887,7 @@ suite('TerminalService lifecycle', () => {
 		const service = services.get(ITerminalService);
 		const created: ITerminalInstance[] = [];
 		using listener = service.onDidCreateInstance(instance => created.push(instance));
+		await service.whenConnected;
 		const pending = service.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
 		services.dispose();
 		creation.resolve();
@@ -1324,6 +1327,7 @@ suite('TerminalService lifecycle', () => {
 		});
 		using services = terminalServices(processService, workspace);
 		const service = services.get(ITerminalService);
+		await service.whenConnected;
 		const cancelled = assert.rejects(service.createTerminal({ dirId: 'second', dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } }), isCancellationError);
 		workspace.updateWorkspace({ id: 'other', uri: URI.file('/other') });
 		services.dispose();
@@ -1336,6 +1340,39 @@ suite('TerminalService lifecycle', () => {
 
 suite('TerminalService output parsing', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('reload checkpoint waits for accepted stdin and screen parsing, then resumes the same UTF-8 stream', async () => {
+		const parsed = deferred<void>();
+		const processes = new TestTerminalProcessService([
+			readResult({ chunks: [{ sequence: 1, data: new Uint8Array([0xe4, 0xb8]) }], nextSequence: 1 }),
+			readResult({ chunks: [{ sequence: 2, data: new Uint8Array([0xad, 0x21]) }], nextSequence: 2, exited: true }),
+		]);
+		using workspace = folderWorkspaceContext();
+		using services = terminalServices(processes, workspace);
+		using original = services.createInstance(TerminalProcessManager, { terminalId: 'terminal-1' });
+		const output: string[] = [];
+		using screen = original.onProcessData(event => { output.push(event.data); event.writePromise = parsed.promise; });
+		const reading = original.start().catch(error => { if (!isCancellationError(error)) throw error; });
+		await waitFor(() => output.length === 1);
+		const input = original.write('accepted-before-reload');
+		let saved = false;
+		const saving = original.serializeState().then(state => { saved = true; return state; });
+		await input;
+		assert.equal(saved, false);
+		assert.deepEqual(processes.readCursors, [0]);
+		await assert.rejects(original.write('after-freeze'), isCancellationError);
+		parsed.resolve();
+		const checkpoint = await saving;
+		await reading;
+		assert.deepEqual(checkpoint, { sequence: 1, pendingUtf8: [0xe4, 0xb8] });
+		using restored = services.createInstance(TerminalProcessManager, { terminalId: 'terminal-1' });
+		restored.restoreState(checkpoint);
+		using restoredScreen = restored.onProcessData(event => output.push(event.data));
+		await restored.start();
+		assert.deepEqual(output, ['', '中!']);
+		assert.deepEqual(processes.readCursors, [0, 1]);
+		assert.deepEqual(processes.writeCalls, [{ terminalId: 'terminal-1', data: 'accepted-before-reload' }]);
+	});
 
 	test('process text decoding retains an incomplete UTF-8 prefix across a transport interruption', async () => {
 		const stale = deferred<ITerminalProcessReadResult>();

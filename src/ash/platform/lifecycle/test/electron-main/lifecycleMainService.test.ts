@@ -4,7 +4,7 @@ import { DeferredPromise } from '../../../../base/common/async.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
-import { WINDOW_CLOSE_RESPONSE_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_PREPARE_LOAD_CHANNEL } from '../../../window/common/window.js';
+import { WINDOW_CLOSE_RESPONSE_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_PREPARE_LOAD_CHANNEL, WINDOW_PREPARE_RELOAD_CHANNEL } from '../../../window/common/window.js';
 import type { IStateService } from '../../../state/node/state.js';
 import { LifecycleMainService, windowCloseResponseIpcRoute } from '../../electron-main/lifecycleMainService.js';
 
@@ -47,6 +47,23 @@ function createStateService(): IStateService {
 
 suite('LifecycleMainService', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('a prevented reload retains the old renderer handshake after loading starts and can be canceled', async () => {
+		const window = new TestWindow();
+		using service = new LifecycleMainService<TestWindow>(() => { }, () => { }, createStateService(), '1.0.0');
+		using registration = service.registerWindow(window);
+		const route = windowCloseResponseIpcRoute(service, window);
+		route.invoke(route.validate({ kind: 'ready' }));
+		window.emitRendererLoading();
+		const reloading = service.unload(window, 'reload');
+		assert.deepEqual(window.messages, [{ channel: WINDOW_PREPARE_RELOAD_CHANNEL, token: 1 }]);
+		route.invoke(route.validate({ kind: 'vetoed', token: 1 }));
+		assert.equal(await reloading, false);
+		assert.equal(window.destroyed, false);
+		window.close();
+		assert.deepEqual(window.messages.at(-1), { channel: WINDOW_PREPARE_CLOSE_CHANNEL, token: 2 });
+		route.invoke(route.validate({ kind: 'complete', token: 2 }));
+	});
 
 	test('loading a workspace shares the shutdown handshake without closing the window', async () => {
 		const window = new TestWindow();

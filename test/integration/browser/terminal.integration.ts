@@ -44,6 +44,8 @@ import { CommandService } from '../../../src/ash/workbench/services/commands/com
 import { CommandRegistry, CommandsRegistry, ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import { KeybindingRegistry } from '../../../src/ash/platform/keybinding/common/keybindingsRegistry.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
+import { FileService } from '../../../src/ash/platform/files/common/fileService.js';
+import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { IUserDataProfileService } from '../../../src/ash/workbench/services/userDataProfile/common/userDataProfile.js';
 import { UserDataProfileService } from '../../../src/ash/workbench/services/userDataProfile/browser/userDataProfileService.js';
 import { ILogService, NullLoggerService } from '../../../src/ash/platform/log/common/log.js';
@@ -152,6 +154,18 @@ function createFixtureInstance(id: string) {
 }
 const instance = createFixtureInstance('test-terminal');
 const widgetServices = store.add(createCodeEditorServices(store).createChild());
+widgetServices.registerInstance(IFileService, store.add(new FileService()));
+widgetServices.registerInstance(IEditorService, {
+	onDidActiveEditorChange: Event.None,
+	onDidVisibleEditorsChange: Event.None,
+	activeEditor: undefined,
+	visibleEditors: [],
+	visibleEditorPanes: [],
+	openEditor: async () => { throw new Error('Terminal fixture does not open editors'); },
+	save: async () => ({ success: true, editors: [] }),
+	saveAll: async () => ({ success: true, editors: [] }),
+	focusActiveEditor: () => { },
+});
 widgetServices.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 const themeService = store.add(new TestThemeService(darkColorTheme));
 function setTerminalTestTheme(mode: 'dark' | 'light' | 'hcDark' | 'hcLight', overrides?: Readonly<Record<string, string>>): void {
@@ -384,6 +398,8 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 		}
 		const pane = lifetime.add(new TerminalViewPane(root, { id: 'terminal', title: 'Terminal' }, terminals, Object.assign(lifetime.add(new BrowserLayoutService({ root })), {
 			onDidChangePartVisibility: visibility.event,
+			onDidChangeAuxiliaryBarMaximized: Event.None, isAuxiliaryBarMaximized: () => false,
+			toggleMaximizedAuxiliaryBar: () => { }, setAuxiliaryBarMaximized: () => false,
 			isPartVisible: () => visible,
 			hasFocus: () => false,
 			getVisibleNeighborPart: () => undefined,
@@ -915,6 +931,8 @@ if (new URLSearchParams(location.search).has('input')) {
 
 			services.registerInstance(IMenuService, new MenuService(commands, services.get(IContextKeyService)));
 			const layout = Object.assign(store.add(new BrowserLayoutService({ root })), {
+				onDidChangeAuxiliaryBarMaximized: Event.None, isAuxiliaryBarMaximized: () => false,
+				toggleMaximizedAuxiliaryBar: () => { }, setAuxiliaryBarMaximized: () => false,
 				onDidChangePartVisibility: Event.None, isPartVisible: () => true, hidePart: () => { }, hasFocus: () => false,
 				setLayoutStyle: () => { }, getVisibleNeighborPart: () => undefined, isPanelMaximized: () => false,
 				toggleMaximizedPanel: () => { }, getPartSize: () => ({ width: root.clientWidth, height: root.clientHeight }),

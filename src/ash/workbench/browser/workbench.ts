@@ -4,7 +4,7 @@ import { UserSettings } from '../../platform/configuration/common/configurationM
 import { extUriBiasedIgnorePathCase } from '../../base/common/resources.js';
 import { NullLoggerService } from '../../platform/log/common/log.js';
 import type { IConfigurationModel } from '../../platform/configuration/common/configuration.js';
-import { ISecretStorageStatusService } from '../../platform/secrets/common/secrets.js';
+import { ISecretStorageStatusService, ISecretStorageService, BaseSecretStorageService } from '../../platform/secrets/common/secrets.js';
 import { IPolicyService, NullPolicyService } from '../../platform/policy/common/policy.js';
 import { MultiplexPolicyService } from '../../platform/policy/common/multiplexPolicyService.js';
 import { AccountPolicyService } from '../services/policies/common/accountPolicyService.js';
@@ -561,6 +561,7 @@ export class Workbench extends Disposable {
 		const hostServices = this._register(new InstantiationService(hostPolicies));
 		const services = this._register(hostServices.createChild(windowServices));
 		services.registerInstance(IStorageService, storageService);
+		if (!services.has(ISecretStorageService)) services.registerInstance(ISecretStorageService, this._register(new BaseSecretStorageService()));
 		const extensionManagementService = this._register(new AppServerExtensionManagementService(api.extensionManagement, api.events));
 		services.registerInstance(IExtensionManagementService, extensionManagementService);
 		const enablement = this._register(services.createInstance(GlobalExtensionEnablementService));

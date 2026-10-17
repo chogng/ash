@@ -749,7 +749,7 @@ test('terminal command markers follow the prompt, execution, result and themed g
 		const decoration = (await success.boundingBox())!;
 		const screen = (await page.locator('.xterm-screen').boundingBox())!;
 		const terminal = (await page.locator('.ash-terminal-instance').boundingBox())!;
-		await expect(page.locator('.ash-terminal-instance')).toHaveCSS('padding-left', '20px');
+		await expect(page.locator('.ash-terminal-instance .xterm')).toHaveCSS('padding-left', '20px');
 		expect(icon.width).toBeCloseTo(16 * scale, 1);
 		expect(icon.height).toBeCloseTo(16 * scale, 1);
 		expect(decoration.height).toBeCloseTo(16 * scale * lineHeight, 1);

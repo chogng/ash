@@ -250,6 +250,7 @@ test('title service shares the resolved title with its registered part and relea
 	let focused = false;
 	const focusChanged = resources.add(new Emitter<boolean>());
 	services.registerInstance(IHostService, {
+		reload: async () => { throw new Error("Unexpected reload in this fixture"); },
 		get hasFocus() { return focused; },
 		onDidChangeFocus: focusChanged.event,
 		async restart() { }, async openWindow() { },

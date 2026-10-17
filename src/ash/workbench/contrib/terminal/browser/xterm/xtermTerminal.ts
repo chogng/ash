@@ -1,4 +1,3 @@
-import type { IXtermCore } from '../xterm-private.js';
 import { LineDataEventAddon } from './lineDataEventAddon.js';
 import { DecorationAddon } from './decorationAddon.js';
 import { TerminalCapability } from '../../../../../platform/terminal/common/capabilities/capabilities.js';
@@ -13,14 +12,11 @@ import * as terminalColors from "../../common/terminalColorRegistry.js";
 
 import type { FitAddon } from "@xterm/addon-fit";
 import type { SearchAddon, ISearchOptions, ISearchResultChangeEvent } from '@xterm/addon-search';
+import type { SerializeAddon } from '@xterm/addon-serialize';
 import type { Terminal, ITheme, ITerminalOptions } from "@xterm/xterm";
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { IThemeService } from "../../../../../platform/theme/common/themeService.js";
-import { IOpenerService } from "../../../../../platform/opener/common/opener.js";
-import { IQuickInputService, type IQuickPickItem } from "../../../../../platform/quickinput/common/quickInput.js";
-import { computeLinks } from "../../../../../editor/common/languages/linkComputer.js";
 import { onUnexpectedError } from "../../../../../base/common/errors.js";
-import { localize } from "../../../../../nls.js";
 import { ITerminalConfigurationService } from "../terminal.js";
 import type { ITerminalDimensions, ITerminalScreenHost, IXtermTerminal } from "../../../../services/terminal/browser/terminal.js";
 import { h } from "../../../../../base/browser/dom.js";
@@ -35,7 +31,6 @@ import { AccessibilitySignal, IAccessibilitySignalService } from '../../../../..
 import { XtermAddonImporter } from './xtermAddonImporter.js';
 import { updateTerminalFontRendering } from './terminalFontRendering.js';
 import { TerminalWidgetManager } from '../widgets/widgetManager.js';
-import { TerminalHover } from '../widgets/terminalHoverWidget.js';
 import type { ITerminalWidget } from '../widgets/widgets.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { TerminalLocation } from '../../../../../platform/terminal/common/terminal.js';
@@ -49,7 +44,6 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 	readonly capabilities = this._register(new TerminalCapabilityStore());
 	private readonly lineData = new LineDataEventAddon();
 	private readonly widgets = this._register(new TerminalWidgetManager());
-	private readonly linkHover = this._register(new MutableDisposable<import('../../../../../base/common/lifecycle.js').IDisposable>());
 	readonly element: HTMLDivElement;
 	private terminal: Terminal | undefined;
 	private fitAddon: FitAddon | undefined;
@@ -69,8 +63,8 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		cols => this.applyDimensions(cols, this.raw.rows),
 		rows => this.applyDimensions(this.raw.cols, rows),
 	));
-	private readonly linkPicker = this._register(new MutableDisposable<DisposableStore>());
 	private searchAddon: SearchAddon | undefined;
+	private serializeAddon: SerializeAddon | undefined;
 	private searchInitialization: Promise<SearchAddon> | undefined;
 	private searchGeneration = 0;
 	private activeSearch: { term: string; options: ISearchOptions; } | undefined;
@@ -83,8 +77,6 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		container: HTMLElement,
 		readonly instance: ITerminalScreenHost,
 		@IThemeService private readonly themeService: IThemeService,
-		@IOpenerService private readonly openerService: IOpenerService,
-		@IQuickInputService private readonly quickInputService: IQuickInputService,
 		@IAccessibilitySignalService private readonly signals: IAccessibilitySignalService,
 		@ITerminalConfigurationService private readonly configuration: ITerminalConfigurationService,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
@@ -129,7 +121,6 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		}
 		this._register(observeResize(this.element, () => this.fit()));
 		this._register(configuration.onConfigChanged(() => {
-			this.linkHover.clear();
 			if (!this.terminal) return;
 			this.terminal.options = this.screenOptions();
 			updateTerminalFontRendering(this.terminal, this.configuration.config.fontRendering);
@@ -143,17 +134,16 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		return this.terminal;
 	}
 
-	initialize(): Promise<void> {
+	initialize(restored?: ITerminalDimensions & { readonly vt: string; }): Promise<void> {
 		this.assertNotDisposed();
-		this.initialization ??= this.loadTerminal();
+		this.initialization ??= this.loadTerminal(restored);
 		return this.initialization;
 	}
 
-	private async loadTerminal(): Promise<void> {
-		const [{ Terminal }, { FitAddon }, { WebLinksAddon }] = await Promise.all([
+	private async loadTerminal(restored?: ITerminalDimensions & { readonly vt: string; }): Promise<void> {
+		const [{ Terminal }, { FitAddon }] = await Promise.all([
 			import("@xterm/xterm"),
 			import("@xterm/addon-fit"),
-			import("@xterm/addon-web-links"),
 			import("@xterm/xterm/css/xterm.css"),
 		]);
 		if (this.isDisposed) return;
@@ -162,34 +152,23 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 			allowProposedApi: true,
 			allowTransparency: false,
 			...this.screenOptions(),
+			...(restored ? { cols: restored.cols, rows: restored.rows } : {}),
 			theme: terminalTheme(this.themeService.getColorTheme(), this.instance.target),
-			linkHandler: { activate: (_event, url) => { void this.openLink(url).catch(onUnexpectedError); } },
 		});
 		this.terminal = terminal;
 		this._register(toDisposable(() => terminal.dispose()));
+		if (restored) {
+			// VT cursor/scroll operations describe the saved grid. Restore before a
+			// FitAddon or DOM observer can resize that grid and reorder its scrollback.
+			await this.parseWrite(restored.vt);
+			if (this.isDisposed) return;
+		}
 		this.fitAddon = new FitAddon();
 		terminal.loadAddon(this.fitAddon);
 		terminal.loadAddon(this.lineData);
 		terminal.loadAddon(this.shellIntegrationAddon);
 		terminal.loadAddon(this.decorationAddon);
 		terminal.loadAddon(this.markNavigationAddon);
-		terminal.loadAddon(new WebLinksAddon((_event, url) => { void this.openLink(url).catch(onUnexpectedError); }, {
-			hover: (_event, url, viewportRange) => {
-				if (!this.configuration.config.showLinkHover || !this.visible) return;
-				const rect = terminal.element?.querySelector('.xterm-screen')?.getBoundingClientRect();
-				if (!rect?.width || !rect.height) return;
-				const cell = (terminal as Terminal & { readonly _core?: IXtermCore; })._core?._renderService?.dimensions?.css?.cell;
-				this.linkHover.value = this.widgets.attachWidget(this.instantiation.createInstance(TerminalHover, {
-					viewportRange,
-					cellDimensions: {
-						width: cell?.width && Number.isFinite(cell.width) ? cell.width : rect.width / terminal.cols,
-						height: cell?.height && Number.isFinite(cell.height) ? cell.height : rect.height / terminal.rows,
-					},
-					terminalDimensions: { width: rect.width, height: rect.height },
-				}, url));
-			},
-			leave: () => this.linkHover.clear(),
-		}));
 		terminal.open(this.element);
 		updateTerminalFontRendering(terminal, this.configuration.config.fontRendering);
 		const bell = terminal.onBell(() => { void this.signals.playSignal(AccessibilitySignal.terminalBell); });
@@ -209,6 +188,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 	private screenOptions(): ITerminalOptions {
 		const config = this.configuration.config;
 		return {
+			overviewRuler: { width: 14, showTopBorder: false, showBottomBorder: false },
 			fontFamily: config.fontFamily, fontSize: config.fontSize,
 			letterSpacing: config.letterSpacing, lineHeight: config.lineHeight,
 			cursorBlink: config.cursorBlinking, cursorStyle: config.cursorStyle === 'line' ? 'bar' : config.cursorStyle,
@@ -219,6 +199,19 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 
 	public write(data: string | Uint8Array, callback?: () => void): void {
 		this.writeWhenReady(terminal => terminal.write(data, callback));
+	}
+
+	/** Disposal also releases initialization/checkpoint waiters when xterm drops queued writes. */
+	private async parseWrite(data: string): Promise<void> {
+		let release: ReturnType<typeof toDisposable> | undefined;
+		try {
+			await new Promise<void>(resolve => {
+				release = this._store.add(toDisposable(resolve));
+				this.raw.write(data, resolve);
+			});
+		} finally {
+			if (release) { this._store.delete(release); release.dispose(); }
+		}
 	}
 
 	private writeWhenReady(write: (terminal: Terminal) => void): void {
@@ -235,7 +228,6 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 	}
 
 	setVisible(visible: boolean): void {
-		if (!visible) this.linkHover.clear();
 		if (this.visible === visible) return;
 		this.visible = visible;
 		if (!visible) this.focusSource = undefined;
@@ -307,6 +299,19 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		return previous ? addon.findPrevious(term, decoratedOptions) : addon.findNext(term, decoratedOptions);
 	}
 
+	async getRangeAsVT(): Promise<string> {
+		await this.initialize();
+		if (!this.serializeAddon) {
+			const Addon = await addonImporter.importAddon('serialize');
+			if (this.isDisposed) throw new CancellationError();
+			this.serializeAddon = new Addon();
+			this.raw.loadAddon(this.serializeAddon);
+		}
+		await this.parseWrite('');
+		if (this.isDisposed) throw new CancellationError();
+		return this.serializeAddon.serialize();
+	}
+
 	private async loadSearchAddon(): Promise<SearchAddon> {
 		await this.initialize();
 		const SearchAddon = await addonImporter.importAddon('search');
@@ -350,51 +355,6 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		return this.lineData.getBufferText(maxCharacters);
 	}
 
-	public async openDetectedLink(): Promise<void> {
-		await this.initialize();
-		this.assertNotDisposed();
-		const buffer = this.raw.buffer.active;
-		const lines: string[] = [];
-		for (let index = 0; index < buffer.length; index++) {
-			const line = buffer.getLine(index)!;
-			// A wrapped screen row continues the same URL; physical newlines separate links.
-			if (line.isWrapped && lines.length > 0) {
-				lines[lines.length - 1] += line.translateToString(true);
-			} else {
-				lines.push(line.translateToString(true));
-			}
-		}
-		const urls = new Set(computeLinks({ getLineCount: () => lines.length, getLineContent: number => lines[number - 1]! }).map(link => String(link.url)).filter(url => /^https?:\/\//iu.test(url)));
-		const session = new DisposableStore();
-		this.linkPicker.value = session;
-		try {
-			const url = await new Promise<string | undefined>(resolve => {
-				session.add(toDisposable(() => resolve(undefined)));
-				const picker = session.add(this.quickInputService.createQuickPick<IQuickPickItem>());
-				picker.ariaLabel = localize('terminal.links.choose', 'Open a terminal link');
-				picker.placeholder = localize('terminal.links.select', 'Select a terminal URL to open');
-				picker.items = Array.from(urls, label => ({ label }));
-				session.add(picker.onDidAccept(() => {
-					const item = picker.selectedItems[0];
-					if (!item) return;
-					return resolve(item.label);
-				}));
-				session.add(picker.onDidHide(() => resolve(undefined)));
-				session.add(picker.onDidBlur(() => resolve(undefined)));
-				picker.show();
-			});
-			// Close Quick Input before opening an editor so its focus restoration cannot steal focus.
-			session.dispose();
-			if (url) { await this.openLink(url); }
-			else { this.focus(); }
-		} finally {
-			session.dispose();
-		}
-	}
-
-	private async openLink(url: string): Promise<void> {
-		await this.openerService.open(url, { openExternal: true, fromUserGesture: true, allowContributedOpeners: true });
-	}
 
 	fit(): void {
 		if (!this.visible || !this.fitAddon || this.isDisposed) return;

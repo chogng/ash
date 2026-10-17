@@ -45,6 +45,10 @@ export class BrowserHostService extends Disposable implements IHostService {
 	}
 
 	public async restart(): Promise<void> {
+		return this.reload();
+	}
+
+	public async reload(): Promise<void> {
 		// A restart retains the workspace and dirty backups; 'load' replaces it.
 		try { await this.lifecycle.shutdown('reload'); }
 		catch (error) { if (error instanceof ShutdownVetoError) { return; } throw error; }

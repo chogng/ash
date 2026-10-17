@@ -168,12 +168,10 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			backend = { ...backend, dictation: createAppServerVoiceCodeTranscriptionBackend(localClient) };
 			if (client.capabilities?.contracts.symphony?.version === 1) { backend = { ...backend, symphony: resources.add(new AppServerSymphonyService(client)) }; }
 			if (client.capabilities?.contracts.automation?.version === 1) { backend = { ...backend, automation: resources.add(new AppServerAutomationService(client)) }; }
-			if (remoteConnection.kind === 'ssh') {
-				const terminals = resources.add(new ReconnectableTerminalProcessService(client));
-				backend = { ...backend, terminal: terminals };
-				const replacement = subscribe('ash:terminal:prepareReplacement', () => terminals.prepareForServerReplacement());
-				resources.add(toDisposable(() => replacement.dispose()));
-			}
+			const terminals = resources.add(new ReconnectableTerminalProcessService(client));
+			backend = { ...backend, terminal: terminals };
+			const replacement = subscribe('ash:terminal:prepareReplacement', () => terminals.prepareForServerReplacement());
+			resources.add(toDisposable(() => replacement.dispose()));
 			await initializeWorkspace(client, workspaceTrust, backend.workspaceTrust, workspaceApi);
 			performance.mark('ash.rendererApi.workspace-initialized');
 		} else {

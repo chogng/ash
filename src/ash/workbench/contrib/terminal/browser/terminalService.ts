@@ -1,4 +1,4 @@
-import { CancellationError } from '../../../../base/common/errors.js';
+import { CancellationError, onUnexpectedError } from '../../../../base/common/errors.js';
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Disposable, DisposableMap } from '../../../../base/common/lifecycle.js';
 import { ITerminalProcessService, type TerminalProcessConnectionState } from "../../../../platform/terminal/common/terminal.js";
@@ -7,9 +7,21 @@ import { IInstantiationService } from "../../../../platform/instantiation/common
 import type { ITerminalCreateOptions, ITerminalDimensions, ITerminalInstance, ITerminalProfile, ITerminalService } from "../../../services/terminal/browser/terminal.js";
 import { TerminalInstance } from './terminalInstance.js';
 import { TerminalInstanceService } from './terminalInstanceService.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { ProcessPropertyType, TerminalLocation } from '../../../../platform/terminal/common/terminal.js';
+import { localize } from '../../../../nls.js';
+import { ISecretStorageService } from '../../../../platform/secrets/common/secrets.js';
+import { IStorageService, StorageScope } from '../../../../platform/storage/common/storage.js';
+import { parseTerminalReloadCredentials, parseTerminalReloadState, TerminalStorageKeys } from '../common/terminalStorageKeys.js';
+import { terminalExecutionScope, terminalExecutionScopesEqual } from '../common/remote/terminal.js';
+import { parseTerminalUri } from './terminalUri.js';
+import { URI } from '../../../../base/common/uri.js';
 
 /** Browser Workbench owner of terminal instances and their process lifecycle. */
 export class TerminalService extends Disposable implements ITerminalService {
+	readonly whenConnected: Promise<void>;
+	private connected = false;
 	private readonly processService: ITerminalProcessService;
 	private readonly _instances: TerminalInstance[] = [];
 	private readonly _onDidCreateInstance = this._register(new Emitter<ITerminalInstance>());
@@ -26,11 +38,20 @@ export class TerminalService extends Disposable implements ITerminalService {
 	readonly onDidChangeInstances: Event<void> = this._onDidChangeInstances.event;
 	readonly onDidChangeActiveInstance: Event<ITerminalInstance | undefined> = this._onDidChangeActiveInstance.event;
 
-	constructor(@ITerminalProcessService processService: ITerminalProcessService, @IWorkspaceContextService private readonly workspaceContext: IWorkspaceContextService, @IInstantiationService private readonly instantiationService: IInstantiationService) {
+	constructor(@ITerminalProcessService processService: ITerminalProcessService, @IWorkspaceContextService private readonly workspaceContext: IWorkspaceContextService, @IInstantiationService private readonly instantiationService: IInstantiationService,
+		@IConfigurationService private readonly configuration: IConfigurationService,
+		@IDialogService private readonly dialogs: IDialogService,
+		@ISecretStorageService private readonly secrets: ISecretStorageService,
+		@IStorageService private readonly storage: IStorageService,
+	) {
 		super();
 		this.processService = processService;
 		this.instanceFactory = this._register(instantiationService.createInstance(TerminalInstanceService));
 		this._register(this.instanceFactory.backend.onDidChangeConnectionState(state => this.setConnectionState(state)));
+		this.whenConnected = this.restoreTerminals().catch(error => {
+			console.error('Terminal reload recovery failed', error);
+			onUnexpectedError(new Error(localize('terminal.reload.failed', 'Could not restore terminal sessions after reload.'), { cause: error }));
+		}).finally(() => { this.connected = true; });
 	}
 
 	protected override disposeCore(): void {
@@ -53,6 +74,48 @@ export class TerminalService extends Disposable implements ITerminalService {
 	}
 
 	async createTerminal(options: ITerminalCreateOptions): Promise<ITerminalInstance> {
+		if (!this.connected) {
+			const scope = terminalExecutionScope(this.workspaceContext.getWorkspace());
+			await this.whenConnected;
+			if (!terminalExecutionScopesEqual(scope, terminalExecutionScope(this.workspaceContext.getWorkspace()))) throw new CancellationError();
+		}
+		return this.createTerminalCore(options);
+	}
+
+	private async restoreTerminals(): Promise<void> {
+		const encoded = await this.secrets.get(TerminalStorageKeys.Reload);
+		if (!encoded || this.isDisposed) return;
+		const credentials = parseTerminalReloadCredentials(encoded);
+		if (credentials.expiresAt < Date.now()) return;
+		const text = this.storage.get(credentials.stateKey, StorageScope.WORKSPACE);
+		if (!text) throw new Error('Terminal checkpoint is missing');
+		const state = parseTerminalReloadState(text);
+		const scope = terminalExecutionScope(this.workspaceContext.getWorkspace());
+		if (scope.workspaceId !== state.workspaceId || scope.remoteAuthority !== state.remoteAuthority) throw new Error('Terminal checkpoint belongs to another workspace or host');
+		// Validate the complete checkpoint before any bearer credential attaches a process.
+		for (const snapshot of state.instances) {
+			if (parseTerminalUri(URI.parse(snapshot.resource)).instanceId !== snapshot.instanceId || !this.workspaceContext.getWorkspace().folders.some(folder => folder.id === snapshot.dirId)) throw new TypeError('Invalid terminal checkpoint identity');
+		}
+		if (!this.processService.attach) throw new Error('Terminal attachment is unavailable');
+		const screens: Promise<unknown>[] = [];
+		for (const snapshot of state.instances) {
+			if (this.isDisposed) throw new CancellationError();
+			const lease = credentials.leases.find(candidate => candidate.terminalId === snapshot.process.terminalId && candidate.dirId === snapshot.processDirId);
+			if (!lease) throw new Error('Terminal recovery credential is missing');
+			const dimensions = { rows: snapshot.rows, cols: snapshot.cols };
+			const process = await this.processService.attach(lease, dimensions, snapshot.process.profile);
+			if (process.ready.pid !== snapshot.process.ready.pid) throw new Error('Terminal process identity changed');
+			const instance = await this.createTerminalCore({
+				dirId: snapshot.dirId, dimensions, profile: { type: 'profile', profileId: snapshot.process.profile.profileId }, title: snapshot.customTitle ?? snapshot.title,
+				attachPersistentProcess: { state: snapshot, process }, deferStart: true
+			});
+			screens.push(instance.xtermReadyPromise);
+		}
+		await Promise.all(screens);
+		this.setActiveInstance(this._instances.find(instance => instance.instanceId === state.activeId));
+	}
+
+	private async createTerminalCore(options: ITerminalCreateOptions): Promise<ITerminalInstance> {
 		if (this.isDisposed) throw new CancellationError();
 		const instance = await this.instanceFactory.createInstance(options, {
 			getConnectionState: () => this.connectionState,
@@ -106,6 +169,21 @@ export class TerminalService extends Disposable implements ITerminalService {
 	async closeTerminal(instance: ITerminalInstance): Promise<void> {
 		if (!this._instances.includes(instance as TerminalInstance)) return;
 		await instance.close();
+	}
+
+	async safeDisposeTerminal(instance: ITerminalInstance): Promise<void> {
+		if (!this._instances.includes(instance as TerminalInstance)) return;
+		const policy = this.configuration.getValue<string>('terminal.integrated.confirmOnKill') ?? 'editor';
+		const confirm = policy === 'always' || policy === (instance.target === TerminalLocation.Editor ? 'editor' : 'panel');
+		if (confirm && await instance.refreshProperty(ProcessPropertyType.HasChildProcesses).catch(() => true)) {
+			const result = await this.dialogs.confirm({
+				message: localize('terminal.confirmKill', 'Terminate the running processes in “{0}”?', instance.title),
+				detail: localize('terminal.confirmKillDetail', 'Closing this terminal will stop its shell and child processes.'),
+				primaryButton: localize('terminal.terminate', 'Terminate'),
+			});
+			if (!result.confirmed) return;
+		}
+		await this.closeTerminal(instance);
 	}
 
 	private removeInstance(instance: TerminalInstance): void {

@@ -19,6 +19,7 @@ import { ThemeMainService } from '../../platform/theme/electron-main/themeMainSe
 import { Server as MainProcessIPCServer } from '../../base/parts/ipc/electron-main/ipc.electron.js';
 import { isRecord } from '../../base/common/types.js';
 import { Emitter, Event } from '../../base/common/event.js';
+import { BaseSecretStorageService } from '../../platform/secrets/common/secrets.js';
 import { OAuthCallbackHost } from "../../platform/connectors/electron-main/oauthCallbackHost.js";
 import { RendererWorkspaceHost } from "../../platform/workspaces/electron-main/rendererWorkspaceHost.js";
 import { AppServerBrowserHost } from "../../platform/agentHost/electron-main/appServerBrowserHost.js";
@@ -224,6 +225,7 @@ export class AshApplication extends Disposable {
 	private readonly remoteTunnel = this._register(new MutableDisposable<RemoteTunnelService>());
 	private readonly windowPortForwarding = new Map<string, SshPortForwardingService>();
 	private readonly browserChannels = new Map<string, { readonly view: IServerChannel<string>; readonly host: IServerChannel<string>; }>();
+	private readonly secretChannels = new Map<string, IServerChannel<string>>();
 	private readonly sharedProcess = this._register(new UtilityProcess({
 		name: 'Ash Browser Automation',
 		entryPoint: fileURLToPath(new URL('../electron-utility/sharedProcess/sharedProcessMain.js', import.meta.url)),
@@ -452,6 +454,18 @@ export class AshApplication extends Disposable {
 		await this.loggerService.initialize();
 		throwIfCancelled(token);
 		this.mainProcessIpcServer.registerChannel('logger', new LoggerChannel(this.loggerService));
+		this.mainProcessIpcServer.registerChannel('secretStorage', {
+			call: <T>(context: string, command: string, arg: unknown) => {
+				const channel = this.secretChannels.get(context);
+				if (!channel) throw new Error('Window secret storage is unavailable');
+				return channel.call<T>(context, command, arg);
+			},
+			listen: <T>(context: string, event: string, arg: unknown) => {
+				const channel = this.secretChannels.get(context);
+				if (!channel) throw new Error('Window secret storage is unavailable');
+				return channel.listen<T>(context, event, arg);
+			},
+		});
 		this.mainProcessIpcServer.registerChannel(chatGPTTransportChannel, {
 			call: <T>(context: string, command: string, arg: unknown) => {
 				const channel = this.chatGPTChannels.get(context);
@@ -1593,9 +1607,22 @@ export class AshApplication extends Disposable {
 		};
 		// BrowserWindow releases its webContents getter on close; cleanup owns the original emitter.
 		const webContents = window.webContents;
+		let reloading = false;
+		const prepareReload = (): void => {
+			if (reloading) return;
+			reloading = true;
+			// Keep the prevented navigation canceled until every renderer participant
+			// has saved its handoff. Main handles only the window lifetime, never PTY data.
+			void this.lifecycleMainService.unload(window, 'reload').then(accepted => {
+				if (accepted && !window.isDestroyed()) webContents.reload();
+			}).catch(error => this.logService.error('window', 'Could not prepare window reload', error)).finally(() => { reloading = false; });
+		};
+		webContents.on('will-prevent-unload', prepareReload);
+		windowDisposables.add(toDisposable(() => webContents.off('will-prevent-unload', prepareReload)));
 		// Reloads replace the product document; link destinations belong to the Browser views.
 		const preventNavigation = (event: ElectronEvent, url: string): void => {
-			if (url !== webContents.getURL()) { event.preventDefault(); }
+			event.preventDefault();
+			if (url === webContents.getURL()) prepareReload();
 		};
 		webContents.on('will-navigate', preventNavigation);
 		windowDisposables.add(toDisposable(() => webContents.off('will-navigate', preventNavigation)));
@@ -1622,6 +1649,9 @@ export class AshApplication extends Disposable {
 
 	private createBrowserServices(window: BrowserWindow, workspaceContext: WorkspaceContextMainService, remotePortForwardingService: SshPortForwardingService, windowDisposables: DisposableStore, supervisor: AppServerConnectionRelay, contextMenu: ElectronContextMenu): InstantiationService {
 		const context = `window:${window.id}`;
+		const secrets = windowDisposables.add(new BaseSecretStorageService());
+		this.secretChannels.set(context, ProxyChannel.fromService(secrets, windowDisposables));
+		windowDisposables.add(toDisposable(() => this.secretChannels.delete(context)));
 		this.windowPortForwarding.set(context, remotePortForwardingService);
 		windowDisposables.add(toDisposable(() => {
 			if (this.windowPortForwarding.get(context) === remotePortForwardingService) {

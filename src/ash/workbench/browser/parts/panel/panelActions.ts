@@ -40,12 +40,15 @@ export class TogglePanelAction extends Action2 {
 		});
 	}
 
-	public override run(accessor: ServicesAccessor): void {
+	public override async run(accessor: ServicesAccessor): Promise<void> {
 		const layout = accessor.get(IWorkbenchLayoutService);
 		if (layout.isPartVisible('panel')) {
 			layout.hidePart('panel');
 		} else {
-			layout.showPart('panel');
+			const panes = accessor.get(IPaneCompositePartService);
+			// User-initiated reopening returns input to the retained active view.
+			const panel = await panes.openPaneComposite(panes.getLastActivePaneCompositeId(ViewContainerLocation.Panel), ViewContainerLocation.Panel, true);
+			if (!panel) layout.showPart('panel');
 		}
 	}
 }

@@ -52,6 +52,10 @@
 	flex: 0 0 auto;
 }
 
+.ash-terminal-tabs .ash-tab:hover {
+	background: var(--ash-list-hoverBackground);
+}
+
 .ash-terminal-tabs .ash-tab.checked {
 	background: var(--ash-list-inactiveSelectionBackground);
 }
@@ -59,10 +63,6 @@
 .ash-terminal-tabs:focus-within .ash-tab.checked {
 	background: var(--ash-list-activeSelectionBackground);
 	color: var(--ash-list-activeSelectionForeground);
-}
-
-.ash-terminal-tabs .ash-tab:not(.checked):hover {
-	background: var(--ash-list-hoverBackground);
 }
 
 .ash-terminal-tabs .ash-tab-label {
@@ -87,6 +87,21 @@
 
 .ash-terminal-tabs .ash-tab-actions {
 	padding-right: 4px;
+}
+
+.ash-terminal-group-branch {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 12px;
+	height: 100%;
+	color: var(--ash-description-foreground);
+	font-family: var(--ash-font-family-monospace);
+}
+
+.ash-terminal-group-branch[hidden],
+.ash-terminal-tabs-narrow .ash-terminal-group-branch {
+	display: none;
 }
 
 .ash-terminal-tabs-narrow .ash-icon-label-text {

@@ -2,13 +2,15 @@ import { TerminalEscapeSequences } from './terminalEscapeSequences.js';
 import type { ThemeIcon } from '../../../../base/common/themables.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { getTerminalUri } from './terminalUri.js';
-import type { URI } from '../../../../base/common/uri.js';
+import { URI } from '../../../../base/common/uri.js';
+import type { ITerminalSerializedState } from '../../../services/terminal/common/terminal.js';
 import { CancellationError, isCancellationError, onUnexpectedError } from '../../../../base/common/errors.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import {
 	TerminalLocation,
 	ProcessPropertyType,
+	type IProcessPropertyMap,
 	type IShellLaunchConfig,
 	type ITerminalChildProcess,
 	type IProcessDataEvent,
@@ -85,6 +87,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	private _state: TerminalInstanceState = "running";
 	private _exitCode: number | undefined;
 	private closed = false;
+	private frozen = false;
 	private closeTask: Promise<void> | undefined;
 	private processCloseTask: Promise<void> | undefined;
 	private relaunchTask: Promise<void> | undefined;
@@ -118,6 +121,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		private waitOnExit: IShellLaunchConfig['waitOnExit'],
 		private dimensions: ITerminalDimensions,
 		private readonly backend: AgentHostTerminalService,
+		private restored: ITerminalSerializedState | undefined,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) {
 		super();
@@ -127,12 +131,19 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 
 		this._profile = profile;
 		this._title = title;
-		this.resource = getTerminalUri(generateUuid(), instanceNumber, title);
+		this.resource = restored ? URI.parse(restored.resource) : getTerminalUri(generateUuid(), instanceNumber, title);
+		if (restored) {
+			this.hostTarget = restored.target;
+			child?.restoreState(restored);
+		}
 		this.onClosed = onClosed;
 		this.writeInitialText();
 		// Creation listeners may send input before output polling starts. The ready
 		// process already exists, so its input owner must exist before publication too.
 		if (!custom) this.createShellProcessManager();
+		// Restored screens must exist even when the panel is hidden. Otherwise new
+		// process output would enter the startup recorder ahead of the saved VT buffer.
+		if (restored && typeof document !== 'undefined') this.attachToElement(document.createElement('div'));
 	}
 
 	protected override disposeCore(): void {
@@ -228,6 +239,10 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		if (this.closed || this.isDisposed) {
 			return;
 		}
+		if (this.frozen && this.screen) {
+			this.frozen = false;
+			this.screen.raw.options.disableStdin = this.isReadOnly;
+		}
 		if (this.customProcess) {
 			const process = this.customProcess;
 			void process.start().catch(() => {
@@ -296,16 +311,18 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		for (const { id, ctor } of TerminalExtensionsRegistry.getTerminalContributions()) {
 			this.contributions.set(id, this.instantiationService.createInstance(ctor, { instance: this }));
 		}
-		this.screenInitialization = screen.initialize().then(async () => {
+		const restored = this.restored;
+		this.screenInitialization = screen.initialize(restored).then(async () => {
 			if (this.isDisposed || screen.isDisposed) { return undefined; }
 			if (truncated) screen.raw.write(`\r\n${localize('terminal.outputTruncated', '[terminal output truncated]')}\r\n`);
-			for (const entry of replay.events) {
+			for (const entry of restored ? [] : replay.events) {
 				if (entry.cols > 0 && entry.rows > 0) screen.raw.resize(entry.cols, entry.rows);
 				await new Promise<void>(resolve => screen.raw.write(entry.data, resolve));
 				if (entry.shellIntegration) screen.handleShellIntegration(entry.shellIntegration);
 				if (this.isDisposed || screen.isDisposed) return undefined;
 			}
-			screen.raw.resize(this.dimensions.cols, this.dimensions.rows);
+			if (!restored) screen.raw.resize(this.dimensions.cols, this.dimensions.rows);
+			this.restored = undefined;
 			// Raw keys and terminal replies must bypass sendText's Enter normalization.
 			const input = screen.raw.onData(data => {
 				if (!this.isReadOnly && !this.closed && this._state === 'running') {
@@ -469,6 +486,28 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		};
 		this.relaunchTask = this.performRelaunch(this.dimensions, replacement).finally(() => { this.relaunchTask = undefined; });
 		return this.relaunchTask;
+	}
+
+	async serializeState(): Promise<ITerminalSerializedState> {
+		const child = this.shellProcessManager;
+		if (!child || this.closed || this.relaunchTask || this.connectionPersistence !== 'reconnectable') throw new Error(localize('terminal.reload.unsupported', 'This terminal cannot preserve its process across a window reload.'));
+		const checkpoint = await child.serializeState();
+		const screen = await this.xtermReadyPromise;
+		if (!screen) throw new Error(localize('terminal.reload.screenUnavailable', 'The terminal screen is unavailable for recovery.'));
+		this.frozen = true;
+		screen.raw.options.disableStdin = true;
+		const vt = await screen.getRangeAsVT();
+		return {
+			instanceId: this.instanceId, resource: this.resource.toString(), dirId: this.dirId, processDirId: this.processWorkspaceFolderId,
+			process: child.creation, title: this.title, customTitle: this.customTitle, target: this.target ?? TerminalLocation.Panel,
+			cols: screen.raw.cols, rows: screen.raw.rows, ...checkpoint, vt
+		};
+	}
+
+	async refreshProperty<T extends ProcessPropertyType>(property: T): Promise<IProcessPropertyMap[T]> {
+		if (property === ProcessPropertyType.Title) return this.title as IProcessPropertyMap[T];
+		if (this._state === 'exited' || this.closed) return false as IProcessPropertyMap[T];
+		return this.shellProcessManager ? this.shellProcessManager.refreshProperty(property) : true as IProcessPropertyMap[T];
 	}
 
 	public close(): Promise<void> {

@@ -1,3 +1,4 @@
+import { registerTestTerminalLifecycleServices } from '../../../../test/browser/workbenchTestServices.js';
 import { IEnvironmentVariableService } from '../../common/environmentVariable.js';
 import { EnvironmentVariableService } from '../../common/environmentVariableService.js';
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
@@ -81,6 +82,7 @@ function createServices(owner: DisposableStore, useInstances = false) {
 	services.registerInstance(IStorageService, { get: (key: string) => stored.get(key), store: (key: string, value: string) => { stored.set(key, value); } } as unknown as IStorageService);
 	services.registerInstance(ITerminalProcessService, processes);
 	services.registerInstance(IEnvironmentVariableService, owner.add(services.createInstance(EnvironmentVariableService)));
+	registerTestTerminalLifecycleServices(services);
 	services.registerInstance(ITerminalService, useInstances
 		? owner.add(services.createInstance(TerminalService))
 		: { ...Disposable.None, getProfiles: () => { calls++; return read(); } } as ITerminalService);

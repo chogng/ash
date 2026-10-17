@@ -149,6 +149,7 @@ export const WINDOW_ALWAYS_ON_TOP_CHANGED_CHANNEL = 'ash:window:always-on-top-ch
 export const WINDOW_FULLSCREEN_CHANGED_CHANNEL = 'ash:window:fullscreen-changed';
 export const WINDOW_PREPARE_CLOSE_CHANNEL = 'ash:window:prepare-close';
 export const WINDOW_PREPARE_LOAD_CHANNEL = 'ash:window:prepare-load';
+export const WINDOW_PREPARE_RELOAD_CHANNEL = 'ash:window:prepare-reload';
 export const WINDOW_CLOSE_RESPONSE_CHANNEL = 'ash:window:close-response';
 export const WINDOW_OPEN_FILES_CHANNEL = 'ash:window:open-files';
 export const WINDOW_OPEN_FILES_RESPONSE_CHANNEL = 'ash:window:open-files-response';

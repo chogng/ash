@@ -5,10 +5,13 @@ import type { IView } from "../../../common/views.js";
 import type { Event } from "../../../../base/common/event.js";
 import type { IDisposable } from "../../../../base/common/lifecycle.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
-import type { IProcessDataEvent, IShellLaunchConfig, TerminalProcessExecution, TerminalProcessProfileSelection, TerminalLocation } from '../../../../platform/terminal/common/terminal.js';
+import type { IProcessDataEvent, IShellLaunchConfig, TerminalProcessExecution, TerminalProcessProfileSelection, TerminalLocation, ProcessPropertyType, IProcessPropertyMap } from '../../../../platform/terminal/common/terminal.js';
 import type { ThemeIcon } from '../../../../base/common/themables.js';
 import type { ITerminalStatus } from '../common/terminal.js';
 import type { ITerminalCapabilityStore } from '../../../../platform/terminal/common/capabilities/capabilities.js';
+import type { ITerminalSerializedState } from '../common/terminal.js';
+import type { ITerminalProcessCreation } from '../../../../platform/terminal/common/terminal.js';
+import type { ITerminalTabLayoutInfoById } from '../../../../platform/terminal/common/terminal.js';
 
 /** Character-cell dimensions used by Workbench terminal callers. */
 export interface ITerminalDimensions {
@@ -85,6 +88,7 @@ export type ITerminalCreateOptions = {
 	readonly waitOnExit?: IShellLaunchConfig['waitOnExit'];
 	/** The caller subscribes to output and exit before opening a custom PTY or polling a process. */
 	readonly deferStart?: boolean;
+	readonly attachPersistentProcess?: { readonly state: ITerminalSerializedState; readonly process: ITerminalProcessCreation; };
 } & (
 		| { readonly profile: ITerminalProfileSelection; readonly config?: never; }
 		| { readonly config: IShellLaunchConfig & Required<Pick<IShellLaunchConfig, 'customPtyImplementation'>>; readonly profile?: never; }
@@ -130,6 +134,8 @@ export interface ITerminalInstance extends IDisposable {
 	resize(dimensions: ITerminalDimensions): void;
 	clearBuffer(): void;
 	reuseTerminal(shell: IShellLaunchConfig): Promise<void>;
+	refreshProperty<T extends ProcessPropertyType>(property: T): Promise<IProcessPropertyMap[T]>;
+	serializeState(): Promise<ITerminalSerializedState>;
 	close(): Promise<void>;
 }
 
@@ -146,8 +152,8 @@ export interface IXtermTerminal extends IDisposable {
 	fit(): void;
 	dimensions(): ITerminalDimensions;
 	clearBuffer(): void;
+	getRangeAsVT(): Promise<string>;
 	getBufferText(maxCharacters: number, signal: AbortSignal): Promise<string | undefined>;
-	openDetectedLink(): Promise<void>;
 	findNext(term: string, searchOptions: ISearchOptions): Promise<boolean>;
 	findPrevious(term: string, searchOptions: ISearchOptions): Promise<boolean>;
 	clearSearchDecorations(): void;
@@ -167,6 +173,7 @@ export interface ITerminalView extends IView {
 
 /** Workbench service contract for terminal instances and active-instance selection. */
 export interface ITerminalService extends IDisposable {
+	readonly whenConnected: Promise<void>;
 	readonly instances: readonly ITerminalInstance[];
 	readonly activeInstance: ITerminalInstance | undefined;
 	readonly onDidCreateInstance: Event<ITerminalInstance>;
@@ -181,6 +188,7 @@ export interface ITerminalService extends IDisposable {
 	setActiveInstance(instance: ITerminalInstance | undefined): void;
 	moveTerminal(instance: ITerminalInstance, targetIndex: number): void;
 	closeTerminal(instance: ITerminalInstance): Promise<void>;
+	safeDisposeTerminal(instance: ITerminalInstance): Promise<void>;
 }
 
 export const ITerminalService = createServiceIdentifier<ITerminalService>("terminalService");
@@ -198,6 +206,8 @@ export interface ITerminalGroup extends IDisposable {
 	layout(width: number, height: number): void;
 	focusPreviousPane(): void;
 	focusNextPane(): void;
+	resizePanes(relativeSizes: number[]): void;
+	getLayoutInfo(isActive: boolean): ITerminalTabLayoutInfoById;
 }
 
 export interface ITerminalGroupService extends IDisposable {

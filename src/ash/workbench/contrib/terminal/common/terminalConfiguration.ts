@@ -48,7 +48,7 @@ properties[`${TERMINAL_CONFIG_SECTION}.cursorBlinking`] = {
 };
 properties[`${TERMINAL_CONFIG_SECTION}.showLinkHover`] = {
 	type: 'boolean', default: true,
-	get description() { return localize('terminal.config.showLinkHover', 'Show a hover with the URL when pointing at a terminal link.'); },
+	get description() { return localize('terminal.config.showLinkHover', 'Show a hover with the file path or URL when pointing at a terminal link.'); },
 };
 for (const [name, defaultValue, choices] of [
 	['cursorStyle', 'block', ['block', 'line', 'underline']],
@@ -80,6 +80,18 @@ for (const name of ['showActiveTerminal', 'showActions'] as const) {
 	};
 }
 registerTerminalPlatformConfiguration();
+properties[`${TERMINAL_CONFIG_SECTION}.confirmOnKill`] = {
+	type: 'string', default: 'editor', enum: ['never', 'editor', 'panel', 'always'],
+	get description() { return localize('terminal.config.confirmOnKill', 'Confirm before closing a terminal with child processes: never, in the editor, in the panel, or always.'); },
+};
+properties[`${TERMINAL_CONFIG_SECTION}.confirmOnExit`] = {
+	type: 'string', default: 'never', enum: ['never', 'always', 'hasChildProcesses'],
+	get description() { return localize('terminal.config.confirmOnExit', 'Confirm before closing the window: never, whenever terminals exist, or when terminals have child processes.'); },
+};
+properties[`${TERMINAL_CONFIG_SECTION}.enablePersistentSessions`] = {
+	type: 'boolean', default: true,
+	get description() { return localize('terminal.config.enablePersistentSessions', 'Preserve terminal processes, history and layout across window reloads.'); },
+};
 Object.assign(properties, terminalContribConfiguration);
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).updateConfigurations({
 	add: [{ id: 'terminal', scope: ConfigurationScope.WINDOW, properties }], remove: [],

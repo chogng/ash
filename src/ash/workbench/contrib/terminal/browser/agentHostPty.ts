@@ -4,6 +4,7 @@ import { ITerminalProcessService, type IProcessDataEvent, type ITerminalProcessC
 import { BasePty } from '../common/basePty.js';
 import { TerminalProcessManager } from './terminalProcessManager.js';
 import { localize } from '../../../../nls.js';
+import { ProcessPropertyType, type IProcessPropertyMap } from '../../../../platform/terminal/common/terminal.js';
 
 /** A client for one Rust-owned process; output and input keep their original commit/ACK mechanism. */
 export class AgentHostPty extends BasePty<IProcessDataEvent> {
@@ -28,6 +29,16 @@ export class AgentHostPty extends BasePty<IProcessDataEvent> {
 	get cwdDetection() { return this.manager.cwdDetection; }
 	get promptTypeDetection() { return this.manager.promptTypeDetection; }
 	get cwd() { return this.manager.cwd; }
+	async refreshProperty<T extends ProcessPropertyType>(property: T): Promise<IProcessPropertyMap[T]> {
+		this.assertCanWrite();
+		if (this.isDisposed || this.closeTask) throw new CancellationError();
+		if (property === ProcessPropertyType.Title) return this.creation.profile.title as IProcessPropertyMap[T];
+		const info = await this.processes.getProcessInfo({ terminalId: this.creation.terminalId, ...(this.dirId === undefined ? {} : { dirId: this.dirId }) });
+		this.assertCanWrite();
+		if (this.isDisposed || this.closeTask) throw new CancellationError();
+		// Failure to inspect a process must not silently authorize killing it.
+		return (info.hasChildProcesses ?? true) as IProcessPropertyMap[T];
+	}
 	async getCwd(): Promise<string> {
 		this.assertNotDisposed();
 		this.assertCanWrite();
@@ -67,6 +78,8 @@ export class AgentHostPty extends BasePty<IProcessDataEvent> {
 	async processBinary(data: string): Promise<void> { this.assertCanWrite(); return this.manager.processBinary(data); }
 	async resize(cols: number, rows: number): Promise<void> { this.assertCanWrite(); return this.manager.setDimensions(cols, rows); }
 	stop(): void { this.manager.stop(); }
+	serializeState() { return this.manager.serializeState(); }
+	restoreState(state: { readonly sequence: number; readonly pendingUtf8: readonly number[]; }): void { this.manager.restoreState(state); }
 	shutdown(_immediate: boolean): void { void this.close().catch(onUnexpectedError); }
 
 	close(): Promise<void> {

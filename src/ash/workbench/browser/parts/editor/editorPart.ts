@@ -383,7 +383,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		const host = this.groupHosts.get(typeof group === 'string' ? group : group.id);
 		if (!host || this._groups.length === 1) return true;
 		// Layout-only owners can replace this group synchronously in the same turn.
-		if (!this.beforeCloseEditor && host.group.editors.every(editor => !editor.isDirty)) {
+		if (!this.beforeCloseEditor && host.group.editors.every(editor => !editor.isDirty && !editor.input.closeHandler?.showConfirm())) {
 			this.removeGroupHost(host);
 			return true;
 		}
@@ -876,6 +876,9 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	}
 
 	private async confirmEditorClose(group: IEditorGroupView | undefined, input: IResourceEditorInput, pane: IEditorPane, closingGroups: readonly EditorGroupId[] = []): Promise<boolean> {
+		if (input.closeHandler?.showConfirm()) {
+			return await input.closeHandler.confirm([{ editor: input, groupId: group?.id ?? '' }]) !== ConfirmResult.CANCEL;
+		}
 		const copies = getEditorWorkingCopies(pane);
 		if (this.beforeCloseEditor) {
 			for (const resource of copies.length ? copies.map(copy => copy.resource) : [input.resource]) {

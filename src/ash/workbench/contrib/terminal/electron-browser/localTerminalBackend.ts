@@ -1,7 +1,7 @@
 import { CancellationError } from '../../../../base/common/errors.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import { ITerminalProcessService, type ITerminalProcessCreateOptions } from '../../../../platform/terminal/common/terminal.js';
+import { ITerminalProcessService, type ITerminalProcessCreation, type ITerminalProcessCreateOptions } from '../../../../platform/terminal/common/terminal.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { terminalExecutionScope, terminalExecutionScopesEqual } from '../common/remote/terminal.js';
 import { BaseTerminalBackend } from '../browser/baseTerminalBackend.js';
@@ -25,12 +25,12 @@ export class LocalTerminalBackend extends BaseTerminalBackend {
 		}));
 	}
 
-	async createProcess(options: ITerminalProcessCreateOptions, id: number): Promise<LocalPty> {
+	async createProcess(options: ITerminalProcessCreateOptions, id: number, attached?: ITerminalProcessCreation): Promise<LocalPty> {
 		if (this.isDisposed) throw new CancellationError();
 		const scope = terminalExecutionScope(this.workspace.getWorkspace());
 		if (scope.remoteAuthority !== undefined) throw new CancellationError();
 		const workspaceRevision = this.workspaceRevision;
-		const creation = await this.processes.create(options);
+		const creation = attached ?? await this.processes.create(options);
 		if (this.isDisposed || this.workspaceRevision !== workspaceRevision || !terminalExecutionScopesEqual(scope, terminalExecutionScope(this.workspace.getWorkspace()))) {
 			await this.processes.close({ terminalId: creation.terminalId, ...(options.dirId === undefined ? {} : { dirId: options.dirId }) });
 			throw new CancellationError();

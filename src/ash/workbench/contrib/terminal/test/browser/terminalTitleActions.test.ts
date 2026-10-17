@@ -299,7 +299,7 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 		instances: [], activeInstance: undefined,
 		onDidCreateInstance: Event.None, onDidDisposeInstance: Event.None, onDidChangeInstances: Event.None, onDidChangeActiveInstance: Event.None,
 		getProfiles: async () => [], createTerminal: async () => { throw new Error('Unexpected shell acquisition'); },
-		relaunchTerminal: async () => { }, setActiveInstance() { }, moveTerminal() { }, closeTerminal: async () => { },
+		relaunchTerminal: async () => { }, setActiveInstance() { }, moveTerminal() { }, whenConnected: Promise.resolve(), safeDisposeTerminal: async () => { }, closeTerminal: async () => { },
 		...toDisposable(() => { }),
 	});
 	services.registerInstance(IConfigurationService, resources.add(new WorkbenchConfigurationService()));
@@ -382,6 +382,7 @@ suite('Terminal context command lifecycle', () => {
 			xtermReadyPromise: Promise.resolve(undefined), getContribution: () => null,
 			start() { }, attachToElement() { }, detachFromElement() { }, async sendSignal() { }, async sendText() { }, async processBinary() { }, resize() { },
 			async reuseTerminal() { }, async close() { }, clearBuffer: () => { effects.push(['clear', instanceId]); },
+			refreshProperty: async () => { throw new Error("No OS process in action fixture"); }, serializeState: async () => { throw new Error("No process checkpoint in action fixture"); },
 		} satisfies ITerminalInstance);
 		const first = create(1);
 		const second = create(2);
@@ -393,7 +394,7 @@ suite('Terminal context command lifecycle', () => {
 			onDidCreateInstance: Event.None, onDidDisposeInstance: Event.None, onDidChangeInstances: Event.None, onDidChangeActiveInstance: Event.None,
 			getProfiles: async () => [], createTerminal: async () => { throw new Error('Unexpected creation'); },
 			setActiveInstance: instance => { active = instance; }, moveTerminal() { },
-			closeTerminal: async instance => { effects.push(['close', instance.instanceId]); instances.splice(instances.indexOf(instance), 1); },
+			whenConnected: Promise.resolve(), safeDisposeTerminal: async instance => { effects.push(['close', instance.instanceId]); instances.splice(instances.indexOf(instance), 1); }, closeTerminal: async instance => { await instance.close(); },
 			relaunchTerminal: async (instance, dimensions) => { effects.push(['relaunch', instance.instanceId, dimensions]); },
 		});
 		using commands = new CommandService(services);

@@ -4,7 +4,7 @@ import { CancellationTokenSource, throwIfCancelled, type CancellationToken } fro
 import { isCancellationError } from '../../../base/common/errors.js';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
 import type { IStateService } from '../../state/node/state.js';
-import { WINDOW_CLOSE_RESPONSE_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_PREPARE_LOAD_CHANNEL, validateWindowCloseResponse, type WindowCloseResponse } from '../../window/common/window.js';
+import { WINDOW_CLOSE_RESPONSE_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_PREPARE_LOAD_CHANNEL, WINDOW_PREPARE_RELOAD_CHANNEL, validateWindowCloseResponse, type WindowCloseResponse } from '../../window/common/window.js';
 
 interface WindowCloseState {
 	ready: boolean;
@@ -119,9 +119,12 @@ export class LifecycleMainService<TWindow extends ILifecycleWindow> extends Disp
 	}
 
 	/** The renderer must finish its shutdown participants before this window loads another workspace. */
-	public unload(window: TWindow): Promise<boolean> {
+	public unload(window: TWindow, reason: 'load' | 'reload' = 'load'): Promise<boolean> {
 		const state = this.closeStates.get(window);
-		if (!state || window.isDestroyed() || !state.ready) throw new Error('Workbench window is not ready to unload');
+		if (!state || window.isDestroyed() || !state.ready && reason !== 'reload') throw new Error('Workbench window is not ready to unload');
+		// A prevented navigation can emit did-start-loading before beforeunload.
+		// Main observed the live product document prevent it, so its participant remains available.
+		if (reason === 'reload') state.ready = true;
 		if (state.pendingToken !== undefined) throw new Error('Workbench window already has a shutdown request');
 		return new Promise<boolean>(resolve => {
 			const token = ++this.nextCloseToken;
@@ -134,7 +137,7 @@ export class LifecycleMainService<TWindow extends ILifecycleWindow> extends Disp
 				resolve(false);
 				this.reportFailure(window, 'The window did not respond to the workspace load request.');
 			}, 30_000);
-			window.webContents.send(WINDOW_PREPARE_LOAD_CHANNEL, token);
+			window.webContents.send(reason === 'reload' ? WINDOW_PREPARE_RELOAD_CHANNEL : WINDOW_PREPARE_LOAD_CHANNEL, token);
 		});
 	}
 

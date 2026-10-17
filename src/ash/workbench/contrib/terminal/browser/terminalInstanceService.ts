@@ -57,6 +57,7 @@ export class TerminalInstanceService extends Disposable {
 				options.waitOnExit ?? options.config.waitOnExit,
 				options.dimensions,
 				this.backend,
+				undefined,
 			);
 			// Acquire the custom handle before this async factory yields. If its window
 			// closes before publication, disposing the instance must still release the host PTY.
@@ -80,7 +81,9 @@ export class TerminalInstanceService extends Disposable {
 			...(options.cwd === undefined ? {} : { cwd: options.cwd }),
 			...(execution === undefined ? {} : { execution }),
 		});
-		const instanceNumber = this.nextInstanceId++;
+		const restored = options.attachPersistentProcess?.state;
+		const instanceNumber = restored?.instanceId ?? this.nextInstanceId++;
+		this.nextInstanceId = Math.max(this.nextInstanceId, instanceNumber + 1);
 		const child = await this.backend.createProcess({
 			...processWorkspaceFolder(processWorkspaceFolderId),
 			rows: options.dimensions.rows,
@@ -90,7 +93,7 @@ export class TerminalInstanceService extends Disposable {
 			...(launch.cwd === undefined ? {} : { cwd: launch.cwd }),
 			...(launch.strictEnv === undefined ? {} : { strictEnv: launch.strictEnv }),
 			...(execution === undefined ? {} : { execution }),
-		}, instanceNumber);
+		}, instanceNumber, options.attachPersistentProcess?.process);
 		const created = child.creation;
 		// A completed backend request still owns a PTY even if its window has closed.
 		if (this.isDisposed) {
@@ -107,7 +110,7 @@ export class TerminalInstanceService extends Disposable {
 			options.title ?? terminalProfileTitle(created.profile),
 			{ ...created.profile, icon: options.icon, color: options.color },
 			created.connectionPersistence,
-			options.title,
+			restored ? restored.customTitle : options.title,
 			callbacks.getConnectionState,
 			() => callbacks.onClosed(instance),
 			callbacks.onTitleChanged,
@@ -117,6 +120,7 @@ export class TerminalInstanceService extends Disposable {
 			options.waitOnExit,
 			options.dimensions,
 			this.backend,
+			restored,
 		);
 		return instance;
 	}

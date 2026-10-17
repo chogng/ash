@@ -1,3 +1,4 @@
+import { registerTestTerminalLifecycleServices } from '../../../../test/browser/workbenchTestServices.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { DeferredPromise } from '../../../../../base/common/async.js';
@@ -42,6 +43,7 @@ function fixture(owner: DisposableStore, remote: boolean) {
 		},
 	} as unknown as ITerminalProcessService;
 	const services = owner.add(new InstantiationService(new ServiceCollection([ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
+	registerTestTerminalLifecycleServices(services);
 	const terminals = owner.add(services.createInstance(TerminalService));
 	services.registerInstance(ITerminalService, terminals);
 	return {
@@ -58,6 +60,7 @@ suite('Terminal execution host boundaries', () => {
 	for (const remote of [false, true]) test(`late ${remote ? 'remote' : 'local'} creation is released after workspace replacement`, async () => {
 		using owner = new DisposableStore();
 		const f = fixture(owner, remote);
+		await f.terminals.whenConnected;
 		const pending = f.create();
 		const rejected = assert.rejects(pending, isCancellationError);
 		f.workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/other') });
@@ -70,6 +73,7 @@ suite('Terminal execution host boundaries', () => {
 	for (const remote of [false, true]) test(`${remote ? 'remote' : 'local'} stdin cannot migrate to a replacement execution host`, async () => {
 		using owner = new DisposableStore();
 		const f = fixture(owner, remote);
+		await f.terminals.whenConnected;
 		const pending = f.create();
 		await f.ready();
 		const instance = await pending;
@@ -84,6 +88,7 @@ suite('Terminal execution host boundaries', () => {
 	test('a remote PTY keeps its original cwd and input lease across folder changes on the same host', async () => {
 		using owner = new DisposableStore();
 		const f = fixture(owner, true);
+		await f.terminals.whenConnected;
 		const pending = f.create();
 		await f.ready();
 		const instance = await pending;
@@ -97,6 +102,7 @@ suite('Terminal execution host boundaries', () => {
 	for (const remote of [false, true]) test(`${remote ? 'remote' : 'local'} cwd queries reject a replaced execution host`, async () => {
 		using owner = new DisposableStore();
 		const f = fixture(owner, remote);
+		await f.terminals.whenConnected;
 		const pending = f.create();
 		await f.ready();
 		const instance = await pending;
@@ -110,6 +116,7 @@ suite('Terminal execution host boundaries', () => {
 	for (const remote of [false, true]) test(`late ${remote ? 'remote' : 'local'} cwd cannot escape a host replacement`, async () => {
 		using owner = new DisposableStore();
 		const f = fixture(owner, remote);
+		await f.terminals.whenConnected;
 		const pending = f.create();
 		await f.ready();
 		const instance = await pending;
@@ -126,6 +133,7 @@ suite('Terminal execution host boundaries', () => {
 	test('Attach to Chat captures before opening the draft and never submits', async () => {
 		using owner = new DisposableStore();
 		const f = fixture(owner, false);
+		await f.terminals.whenConnected;
 		const pending = f.create();
 		await f.ready();
 		const instance = await pending;
@@ -149,6 +157,7 @@ suite('Terminal execution host boundaries', () => {
 	test('capture canceled during the parsed screen read produces no attachment', async () => {
 		using owner = new DisposableStore();
 		const f = fixture(owner, false);
+		await f.terminals.whenConnected;
 		const pending = f.create();
 		await f.ready();
 		const instance = await pending;

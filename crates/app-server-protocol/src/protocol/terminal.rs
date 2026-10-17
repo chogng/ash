@@ -199,6 +199,9 @@ pub struct TerminalProcessInfo {
     pub cwd: Option<String>,
     pub rows: u16,
     pub cols: u16,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub has_child_processes: Option<bool>,
 }
 
 /// Queries process properties without confusing the launch directory with current cwd.

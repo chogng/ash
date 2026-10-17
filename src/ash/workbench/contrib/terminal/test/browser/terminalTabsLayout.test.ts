@@ -16,7 +16,9 @@ import { IMenuService } from '../../../../../platform/actions/common/actions.js'
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
-import { ITerminalService, type ITerminalInstance } from '../../../../services/terminal/browser/terminal.js';
+import { ITerminalService, ITerminalGroupService, type ITerminalInstance } from '../../../../services/terminal/browser/terminal.js';
+import { TerminalGroupService } from '../../browser/terminalGroupService.js';
+import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 
@@ -58,18 +60,20 @@ test("Terminal instance list sash resizes the right column within its bounds", (
 	setIconResolver(dom.window.document, icon => getIconDefinition(icon));
 	const parent = h(dom.window.document, 'main');
 	using changed = new Emitter<void>();
+	using created = new Emitter<ITerminalInstance>();
+	using disposed = new Emitter<ITerminalInstance>();
 	const createInstance = (id: string): ITerminalInstance => ({
-		...Disposable.None, id, instanceId: id === 'one' ? 1 : 2, dirId: 'folder', processId: 1, initialCwd: '/folder', title: id,
+		...Disposable.None, id, instanceId: id === 'one' ? 1 : id === 'two' ? 2 : 3, dirId: 'folder', processId: 1, initialCwd: '/folder', title: id,
 		profile: { profileId: 'shell', title: 'Shell', isDefault: true }, state: 'running', exitCode: undefined,
 		onDidWriteData: Event.None, onDidChangeCommandStatus: Event.None, onDidExit: Event.None, onDidChangeState: Event.None,
-		xterm: undefined, xtermReadyPromise: Promise.resolve(undefined), getContribution: () => null, start() { }, attachToElement() { }, detachFromElement() { }, async sendSignal() { }, async sendText() { }, processBinary: async () => { }, resize() { }, clearBuffer() { }, reuseTerminal: async () => { throw new Error('Layout fixture does not replace processes'); }, close: async () => { },
+		xterm: undefined, xtermReadyPromise: Promise.resolve(undefined), getContribution: () => null, start() { }, attachToElement() { }, detachFromElement() { }, async sendSignal() { }, async sendText() { }, processBinary: async () => { }, resize() { }, clearBuffer() { }, reuseTerminal: async () => { throw new Error('Layout fixture does not replace processes'); }, close: async () => { }, refreshProperty: async () => { throw new Error("No OS process in layout fixture"); }, serializeState: async () => { throw new Error("No process checkpoint in layout fixture"); },
 	});
 	const instances = [createInstance('one'), createInstance('two')];
 	const terminals: ITerminalService = {
-		...Disposable.None, instances, activeInstance: instances[0], onDidCreateInstance: Event.None,
-		onDidDisposeInstance: Event.None, onDidChangeInstances: changed.event, onDidChangeActiveInstance: Event.None,
+		...Disposable.None, instances, activeInstance: instances[0], onDidCreateInstance: created.event,
+		onDidDisposeInstance: disposed.event, onDidChangeInstances: changed.event, onDidChangeActiveInstance: Event.None,
 		getProfiles: async () => [], createTerminal: async () => { throw new Error('Unexpected creation'); },
-		relaunchTerminal: async () => { }, setActiveInstance() { }, moveTerminal() { }, closeTerminal: async () => { },
+		relaunchTerminal: async () => { }, setActiveInstance() { }, moveTerminal() { }, whenConnected: Promise.resolve(), safeDisposeTerminal: async () => { }, closeTerminal: async () => { },
 	};
 	using services = new InstantiationService();
 	using context = new ContextKeyService();
@@ -85,6 +89,9 @@ test("Terminal instance list sash resizes the right column within its bounds", (
 		onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() { }, hideContextMenu() { },
 	});
 	registerTestComponentServices(services, dom.window.document);
+	services.registerInstance(IViewsService, { openView: async () => null } as unknown as IViewsService);
+	using groups = services.createInstance(TerminalGroupService);
+	services.registerInstance(ITerminalGroupService, groups);
 	using layout = services.createInstance(TerminalTabbedView, parent);
 	const tabs = layout.element.querySelector<HTMLElement>('.ash-terminal-tabs')!;
 	dom.window.document.body.append(layout.element);
@@ -96,6 +103,18 @@ test("Terminal instance list sash resizes the right column within its bounds", (
 	assert.equal(panes[0]?.style.width, "880px");
 	assert.equal(panes[1]?.style.width, "120px");
 	assert.equal(sash.getAttribute("aria-label"), "Resize terminal instance list");
+	instances.reverse();
+	changed.fire();
+	assert.deepEqual([...tabs.querySelectorAll('[role="tab"]')].map(row => row.id), ['two-tab', 'one-tab']);
+	instances.reverse();
+	changed.fire();
+	for (const [width, height] of [[0, 0], [1_000, 0], [0, 200]]) {
+		layout.layout(width!, height!);
+		layout.layout(1_000, 200);
+		assert.equal(panes[1]?.style.width, "120px");
+		assert.equal(tabs.classList.contains("ash-terminal-tabs-narrow"), false);
+		assert.equal(services.get(IStorageService).getNumber('tabs-list-width-horizontal', StorageScope.WORKSPACE), 120);
+	}
 
 	sash.dispatchEvent(new dom.window.MouseEvent("pointerdown", { button: 0, clientX: 880, bubbles: true }));
 	dom.window.dispatchEvent(new dom.window.MouseEvent("pointermove", { clientX: 950, bubbles: true }));
@@ -114,7 +133,22 @@ test("Terminal instance list sash resizes the right column within its bounds", (
 	}
 	assert.equal(panes[1]?.style.width, "500px");
 
+	const third = createInstance('three');
+	instances.push(third);
+	created.fire(third);
+	groups.joinInstances([instances[0]!, third]);
+	assert.deepEqual([...tabs.querySelectorAll('[role="tab"]')].map(row => row.id), ['one-tab', 'three-tab', 'two-tab']);
+	groups.joinInstances([instances[0]!, instances[1]!]);
+	assert.deepEqual([...tabs.querySelectorAll('.ash-terminal-group-branch')].map(branch => branch.textContent), ['┌', '├', '└']);
+	assert.equal(tabs.querySelector('[id="three-tab"]')?.getAttribute('aria-description'), 'Split 2 of 3 in terminal group 1');
+	groups.unsplitInstance(third);
+	instances.pop();
+	disposed.fire(third);
+	groups.unsplitInstance(instances[1]!);
+	assert.equal([...tabs.querySelectorAll<HTMLElement>('.ash-terminal-group-branch')].every(branch => branch.hidden), true);
+
 	const second = instances.pop()!;
+	disposed.fire(second);
 	changed.fire();
 	assert.equal(panes[1]?.hidden, true);
 	assert.equal(panes[0]?.style.width, "1000px");
@@ -124,6 +158,7 @@ test("Terminal instance list sash resizes the right column within its bounds", (
 	assert.equal(hiddenSash.getAttribute("aria-disabled"), "true");
 
 	instances.push(second);
+	created.fire(second);
 	changed.fire();
 	assert.equal(panes[1]?.hidden, false);
 	assert.equal(panes[1]?.style.width, "500px");

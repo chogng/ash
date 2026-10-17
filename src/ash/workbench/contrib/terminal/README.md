@@ -4,7 +4,7 @@
 
 当前目录生产 TS/CSS 清单 89 项与参照同路径，缺失 0；文件落位表示实际消费链已接通，并不表示上游所有增强或私有 API 都已实现。
 
-创建由 TerminalInstanceService 保存不可变启动参数，AgentHostTerminalService 按窗口执行目标选择 Local / Remote backend。各 backend 索引原 PTY 句柄；实例持有唯一释放 lease。RemoteTerminalChannelClient 只约束异步请求的 workspace generation 和 input host identity，平台继续唯一拥有真实 attachment/reconnect/ACK，Rust 继续拥有执行、nonce 和 Shell 历史。Desktop 与 Web 入口各自注册 resolver/backend；Desktop shutdown 由生命周期 join 等待原实例关闭。
+创建由 TerminalInstanceService 保存不可变启动参数，AgentHostTerminalService 按窗口执行目标选择 Local / Remote backend。各 backend 索引原 PTY 句柄；实例持有唯一释放 lease。RemoteTerminalChannelClient 只约束异步请求的 workspace generation 和 input host identity，平台继续唯一拥有真实 attachment/reconnect/ACK，Rust 继续拥有执行、nonce 和 Shell 历史。Desktop 与 Web 入口各自注册 resolver/backend；Desktop 的关闭保护与 reload 交接由 TerminalNativeContribution 接入原生命周期，真正退出时才等待实例关闭。
 
 扩展环境变量 collection 通过既有能力准入注册与撤销；EnvironmentVariableService 拥有工作区持久化和合并，resolver 在调用原 create 前准备实际 inherited environment。TerminalContributionService 从 ExtensionService 的已验证声明读 profile；全局 extension point registry 只存校验元数据。
 
@@ -57,20 +57,24 @@ Tasks 通过 `ITerminalInstance.reuseTerminal` 在同一个实例与屏幕上替
 
 Workbench 与 Sessions 核心入口注册所选 `ITerminalProcessService`；共同加载的 Terminal contribution 声明依赖并经容器 `createInstance(TerminalService)` 创建窗口唯一实例服务。缺少进程或 Workspace 注册时，创建立即失败。Terminal View、Tasks、Debug、Testing View 和 voice 消费同一个公开实例契约；共享 services 不导入它。
 
-| 行为       | 当前约定                                                                                                                                                                                                                                                |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 创建       | 验证 Workspace folder；多根窗口保存选定 `dirId`；后端返回真实 profile、PID 与启动目录 后才公布实例；`onDidCreateInstance` 在启动轮询之前触发，界面可先订阅输出；窗口已释放时关闭晚到的 PTY 并取消创建；创建和 Relaunch 开始读取前查询窗口的当前连接状态 |
-| 列表事件   | 创建、释放和移动均触发 `onDidChangeInstances`；事件到达时列表、顺序、标题与活动项已更新，创建的初始连接状态已应用                                                                                                                                       |
-| 输入与尺寸 | 文本与二进制共用发送队列，二进制前先发送全部待处理文本批次；UTF-8 单批不超过 60 KiB；尺寸在微任务内合并；write/processBinary/setDimensions 的 Promise 等待 RPC 确认；关闭/退出/断线拒绝未完成操作，恢复后不回放旧输入                                   |
-| 读取       | 管理器按输出和命令的独立 sequence 续读；有屏幕时等待真实解析；命令事件按 `afterOutputSequence` 发布，分页未排空时不报告退出；后端输出缺口明确提示截断                                                                                                   |
-| 本地断线   | `connectionOwned` 实例进入 `disconnected`，连接重新 ready 不自动创建或恢复 Shell；创建或 Relaunch 返回前已断线时同样适用，不发起读写                                                                                                                    |
-| SSH 断线   | `reconnectable` 实例进入 `reconnecting`；连接 ready 后开始续读，首次成功读取才进入 `running`；创建或 Relaunch 返回前已断线时先保持 reconnecting；恢复失败进入 `error`，由用户 Relaunch                                                                  |
-| 退出与关闭 | 进程退出保留实例与屏幕；close 立即停止输入和读取，同一实例的并发 close 等待同一后端释放结果，完成后移出实例；直接 dispose 同步移出实例并开始关闭 PTY；窗口不持有已释放实例；隐藏 Panel 保留实例                                                         |
-| Relaunch   | 保留 UI 实例身份，创建新 PTY，更新 PID/启动目录并重置两个游标；并发请求合并为一次重启，采用首个请求尺寸；创建期间关闭实例或窗口，关闭晚到的 PTY，close 等待这次清理；创建失败可重新尝试                                                                 |
+| 行为         | 当前约定                                                                                                                                                                                                                                                |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 创建         | 验证 Workspace folder；多根窗口保存选定 `dirId`；后端返回真实 profile、PID 与启动目录 后才公布实例；`onDidCreateInstance` 在启动轮询之前触发，界面可先订阅输出；窗口已释放时关闭晚到的 PTY 并取消创建；创建和 Relaunch 开始读取前查询窗口的当前连接状态 |
+| 列表事件     | 创建、释放和移动均触发 `onDidChangeInstances`；事件到达时列表、顺序、标题与活动项已更新，创建的初始连接状态已应用                                                                                                                                       |
+| 输入与尺寸   | 文本与二进制共用发送队列，二进制前先发送全部待处理文本批次；UTF-8 单批不超过 60 KiB；尺寸在微任务内合并；write/processBinary/setDimensions 的 Promise 等待 RPC 确认；关闭/退出/断线拒绝未完成操作，恢复后不回放旧输入                                   |
+| 读取         | 管理器按输出和命令的独立 sequence 续读；有屏幕时等待真实解析；命令事件按 `afterOutputSequence` 发布，分页未排空时不报告退出；后端输出缺口明确提示截断                                                                                                   |
+| Web 断线     | `connectionOwned` 实例进入 `disconnected`，连接重新 ready 不自动创建或恢复 Shell；创建或 Relaunch 返回前已断线时同样适用，不发起读写                                                                                                                    |
+| Desktop 断线 | 本地与远程 `reconnectable` 实例进入 `reconnecting`；连接 ready 后开始续读，首次成功读取才进入 `running`；创建或 Relaunch 返回前已断线时先保持 reconnecting；恢复失败进入 `error`，由用户 Relaunch                                                       |
+| 退出与关闭   | 进程退出保留实例与屏幕；close 立即停止输入和读取，同一实例的并发 close 等待同一后端释放结果，完成后移出实例；直接 dispose 同步移出实例并开始关闭 PTY；窗口不持有已释放实例；隐藏 Panel 保留实例                                                         |
+| Relaunch     | 保留 UI 实例身份，创建新 PTY，更新 PID/启动目录并重置两个游标；并发请求合并为一次重启，采用首个请求尺寸；创建期间关闭实例或窗口，关闭晚到的 PTY，close 等待这次清理；创建失败可重新尝试                                                                 |
 
 实例 attach 时通过 DI 创建并加载唯一 xterm，包括已有隐藏实例，避免后台 Tasks 等待显示面板才完成；隐藏实例仍不显示、不抢焦点。detach 只将屏幕移出 DOM，reattach 复用屏幕和输入绑定；关闭实例释放屏幕。没有进程的隐藏面板仍不读取 profile、创建 Shell 或加载 xterm。解析等待在断线或关闭时取消；同一 Shell 恢复时先等原屏幕写入，保留已提交字节的游标；Relaunch 更换管理器，旧解析回调不影响新进程。
 
-解析确认约束 Renderer 的续读，不阻塞 Rust 的 OS PTY drainer；后端 bounded ring 仍可能截断超过历史上限的输出，并通过 outputGap 显式报告。完整服务器 flow control 仍待实现。
+解析确认也约束 Rust 的 PTY drainer：下一次读取携带的 `afterSequence` 确认原屏幕已消费的输出；未确认输出达到 512 KiB 或 8192 块时，drainer 等待消费游标前进，再通过已有有界 PTY channel 反向限制子进程输出。约 1 MiB 的 replay ring 继续保留最近输出；读取早于已淘汰的已确认历史仍通过 `outputGap` 显式报告。返回输出本身不算消费，回读旧游标不会撤回确认。关闭、connection 清理、租约过期和授权撤销都会取消等待中的 drainer；暂停一个终端不占用其他终端的异步 worker。
+
+交互关闭通过 `safeDisposeTerminal` 读取实际子进程状态，并按 `confirmOnKill` 的位置策略确认；窗口退出由 `confirmOnExit` 控制。取消不停止输入、输出或进程，窗口关闭取消后恢复原焦点。默认值分别为 `editor` 和 `never`；面板保护需设为 `panel` 或 `always`。
+
+Desktop 默认启用 `enablePersistentSessions`。协调 reload 先冻结原管理器并等待输入及屏幕解析提交，保存原资源身份、输出游标、UTF-8 尾部、VT 屏幕、分屏比例和焦点；租约凭据另存窗口内存 SecretStorage。只有全部 shutdown join 成功才交接客户端，失败恢复原实例读取和输入。新 Renderer 先 attach 原进程、按原网格恢复屏幕，再恢复组布局并续读，避免临时单窗格尺寸破坏历史。隐藏面板同样初始化原屏幕，不抢焦点。应用彻底退出后的 revive 与扩展自供 PTY 恢复仍未实现。
 
 公开契约目前承接 Ash 已有行为；与 VS Code 完整 backend、child process、profile/configuration、group 和 editor terminal API 仍有差异。本批完成对应 owner 与实例装配，不能记为整个 Terminal API 已对齐。
 
@@ -110,7 +114,7 @@ Bash/Zsh 保留用户启动文件与 prompt hooks，Bash 登录配置通过原 r
 
 Send Sequence 由 `terminalContrib/sendSequence` 的单一 contribution 入口注册。`workbench.action.terminal.sendSequence` 接受 `{ text: string }`，或使用 Quick Input 输入支持 `\n`、`\r`、`\xNN` 的序列；参数文本不再做反斜线解码。变量使用实例所属工作区文件夹，由原 ConfigurationResolverService 解析。发送调用原 `sendText(text, false)` 并等待后端确认；不追加执行回车，也不包裹 bracketed paste。提示或解析期间切换活动实例、重连、复用、关闭或更换工作区会使原调用失效。
 
-`terminalGroupService.ts` 现在拥有 panel 组成员，活动组从唯一 TerminalService 派生；`terminalGroup.ts` 使用现有 SplitView 分配组内水平窗格。Split 创建独立 Shell，继承原实例的启动 profile/argv/env 与当前 cwd；当前不拆分扩展自供 PTY。Focus Next/Previous Pane 与 focusAtIndex1–9 使用原实例选择，Unsplit 保留原进程和屏幕。组布局按容器内容尺寸更新字符网格，键盘 sash 使用原 SplitView，移动屏幕不复制输出。关闭一侧后聚焦剩余窗格，最后一个实例关闭才隐藏 panel。完整垂直布局和组持久化仍待补。
+`terminalGroupService.ts` 现在拥有 panel 组成员，活动组从唯一 TerminalService 派生；`terminalGroup.ts` 使用现有 SplitView 分配组内水平窗格。Split 创建独立 Shell，继承原实例的启动 profile/argv/env 与当前 cwd；当前不拆分扩展自供 PTY。Focus Next/Previous Pane 与 focusAtIndex1–9 使用原实例选择，Unsplit 保留原进程和屏幕。组布局按容器内容尺寸更新字符网格，键盘 sash 使用原 SplitView，移动屏幕不复制输出。关闭一侧后聚焦剩余窗格，最后一个实例关闭才隐藏 panel。reload 已保留组成员和宽度；完整垂直布局仍待补。
 
 `terminalStatusList.ts` 只保存进程错误的 UI 消息，Shell/连接状态仍归原实例与进程管理器；`terminalTooltip.ts` 将 profile、PID、cwd、退出码与当前消息提供给列表。Relaunch 清除旧进程错误。`terminalIcons.ts` 给菜单与列表提供语义图标，仍使用产品 icon registry/主题解析。Search addon 构造由 `xtermAddonImporter.ts` 加载，addon 实例仍归原屏幕；`terminalFontRendering.ts` 消费 fontRendering 设置，在 macOS 切换灰度字体平滑并刷新字形缓存，保留原屏幕和内容。
 

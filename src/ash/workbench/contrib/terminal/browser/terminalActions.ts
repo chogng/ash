@@ -237,7 +237,7 @@ export function registerTerminalActions(): void {
 		const instance = resolveInstance(accessor, context);
 		if (!instance) return;
 		if (context === undefined && instance.target !== TerminalLocation.Editor) return terminalView(accessor).killActive();
-		return accessor.get(ITerminalService).closeTerminal(instance);
+		return accessor.get(ITerminalService).safeDisposeTerminal(instance);
 	});
 	CommandsRegistry.register(TerminalCommandId.Clear, (accessor, context) => {
 		if (context === undefined && accessor.get(ITerminalService).activeInstance?.target !== TerminalLocation.Editor) return terminalView(accessor).clearActive();

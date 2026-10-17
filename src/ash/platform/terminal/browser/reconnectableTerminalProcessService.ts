@@ -6,6 +6,7 @@ import type { AppServerProtocolClient } from "../../agentHost/browser/appServerP
 import type {
 	ITerminalProcessCloseOptions, ITerminalProcessCreateOptions, ITerminalProcessCreation,
 	ITerminalProcessInfo,
+	ITerminalReconnectLease,
 	ITerminalProcessProfile, ITerminalProcessReadOptions, ITerminalProcessReadResult,
 	ITerminalProcessResizeOptions, ITerminalProcessService, ITerminalProcessWriteOptions,
 	TerminalProcessConnectionState, ITerminalResolvedProfile, TerminalProcessProfileSelection,
@@ -41,6 +42,7 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 	private readonly wait: (milliseconds: number) => Promise<void>;
 	private readonly reportError: (message: string, error: unknown) => void;
 	private readonly terminals = new Map<string, TerminalRecord>();
+	private readonly handedOff = new Set<string>();
 	private previousState: AppServerConnectionState;
 
 	constructor(private readonly supervisor: AppServerProtocolClient, options: ReconnectableTerminalProcessServiceOptions = {}) {
@@ -52,6 +54,7 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 		this._register(this.supervisor.onStateChange(state => this.acceptConnectionState(state)));
 		this._register(toDisposable(() => {
 			this.terminals.clear();
+			this.handedOff.clear();
 		}));
 	}
 
@@ -127,6 +130,30 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 		}
 	}
 
+	async getReconnectLease(terminalId: string): Promise<ITerminalReconnectLease> {
+		await this.ensureAttached(terminalId);
+		const record = this.requireTerminal(terminalId);
+		return { terminalId, ...workspaceFolder(record.dirId), reconnectToken: record.reconnectToken, reconnectGracePeriodMillis: record.reconnectGracePeriodMillis };
+	}
+
+	async attach(lease: ITerminalReconnectLease, dimensions: { readonly rows: number; readonly cols: number; }, profile: ITerminalProcessProfile): Promise<ITerminalProcessCreation> {
+		if (this.terminals.has(lease.terminalId)) throw new Error('Terminal is already attached');
+		const record: TerminalRecord = {
+			terminalId: lease.terminalId, dirId: lease.dirId,
+			reconnectToken: lease.reconnectToken, reconnectGracePeriodMillis: lease.reconnectGracePeriodMillis,
+			rows: dimensions.rows, cols: dimensions.cols, generation: -1, closing: false,
+		};
+		this.terminals.set(record.terminalId, record);
+		try {
+			await this.ensureAttached(record.terminalId);
+			const info = await this.getProcessInfo({ terminalId: record.terminalId, ...workspaceFolder(record.dirId) });
+			return { terminalId: record.terminalId, ready: info.ready, profile, connectionPersistence: 'reconnectable' };
+		} catch (error) {
+			this.terminals.delete(record.terminalId);
+			throw error;
+		}
+	}
+
 	async resize(params: ITerminalProcessResizeOptions): Promise<void> {
 		const record = this.requireTerminal(params.terminalId);
 		record.rows = params.rows;
@@ -153,6 +180,10 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 	}
 
 	async close(params: ITerminalProcessCloseOptions): Promise<void> {
+		if (this.handedOff.delete(params.terminalId)) {
+			this.terminals.delete(params.terminalId);
+			return;
+		}
 		const record = this.terminals.get(params.terminalId);
 		if (!record) {
 			await this.supervisor.request(APP_SERVER_METHODS["terminal/close"], params);
@@ -167,6 +198,11 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 		} finally {
 			if (this.terminals.get(record.terminalId) === record) this.terminals.delete(record.terminalId);
 		}
+	}
+
+	/** Renderer disposal releases its clients without terminating the handed-off processes. */
+	prepareForReload(): void {
+		for (const record of this.terminals.values()) this.handedOff.add(record.terminalId);
 	}
 
 	/** Drops leases before an intentional runtime replacement changes broker identity. */

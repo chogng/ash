@@ -51,6 +51,8 @@ export class TerminalTabbedView extends Disposable {
 	}
 
 	layout(width: number, height: number): void {
+		// Hidden panels report zero bounds; do not shrink and persist the user's tab width.
+		if (width <= 0 || height <= 0) return;
 		this.splitView.layout(width, height);
 		this.updateTabsWidth();
 	}
