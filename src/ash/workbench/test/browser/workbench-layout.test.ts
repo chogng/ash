@@ -270,17 +270,17 @@ test("Workbench layout hides and restores Parts with context keys", () => {
 		"[data-part='auxiliarybar']",
 	)?.parentElement as HTMLElement | undefined;
 	assert.equal(editorFrame?.className, "ash-workbench-part-frame");
-	assert.equal(editorFrame?.style.paddingLeft, "3px");
-	assert.equal(editorFrame?.style.paddingRight, "3px");
-	assert.equal(editorFrame?.style.paddingBottom, "3px");
-	assert.equal(panelFrame?.style.paddingTop, "3px");
+	assert.equal(editorFrame?.style.paddingLeft, "2px");
+	assert.equal(editorFrame?.style.paddingRight, "2px");
+	assert.equal(editorFrame?.style.paddingBottom, "2px");
+	assert.equal(panelFrame?.style.paddingTop, "2px");
 	assert.equal(sidebarFrame?.style.paddingLeft, "0px");
-	assert.equal(sidebarFrame?.style.paddingRight, "3px");
-	assert.equal(auxiliarybarFrame?.style.paddingLeft, "3px");
-	assert.equal(auxiliarybarFrame?.style.paddingRight, "8px");
+	assert.equal(sidebarFrame?.style.paddingRight, "2px");
+	assert.equal(auxiliarybarFrame?.style.paddingLeft, "2px");
+	assert.equal(auxiliarybarFrame?.style.paddingRight, "4px");
 	for (const sash of harness.container.querySelectorAll<HTMLElement>(".ash-sash")) {
 		assert.equal(sash.classList.contains("ash-sash-inset"), true);
-		assert.equal(sash.style.getPropertyValue("--ash-sash-inset-gap"), "6px");
+		assert.equal(sash.style.getPropertyValue("--ash-sash-inset-gap"), "4px");
 	}
 	harness.layout.hideParts(["sidebar", "auxiliarybar", "panel"]);
 	assert.ok(overlay.isConnected);
@@ -305,13 +305,13 @@ test("Workbench layout hides and restores Parts with context keys", () => {
 	assert.equal(contextKeys.getValue("auxiliaryBarVisible"), false);
 	assert.equal(contextKeys.getValue("panelVisible"), false);
 	assert.equal(contextKeys.getValue("editorAreaVisible"), true);
-	assert.equal(editorFrame?.style.paddingLeft, "6px");
-	assert.equal(editorFrame?.style.paddingRight, "8px");
+	assert.equal(editorFrame?.style.paddingLeft, "4px");
+	assert.equal(editorFrame?.style.paddingRight, "4px");
 	assert.equal(editorFrame?.style.paddingBottom, "0px");
-	assert.equal(panelFrame?.style.paddingLeft, "6px");
+	assert.equal(panelFrame?.style.paddingLeft, "4px");
 	assert.equal(harness.layout.isPartVisible('activitybar'), true);
-	assert.equal(harness.layout.getPartSize('activitybar').width, 54);
-	assert.equal(panelFrame?.style.paddingRight, "8px");
+	assert.equal(harness.layout.getPartSize('activitybar').width, 52);
+	assert.equal(panelFrame?.style.paddingRight, "4px");
 	harness.layout.showPart("agentSidebar");
 	assert.equal(contextKeys.getValue("agentSidebarVisible"), true);
 	harness.layout.hidePart("agentSidebar");
@@ -324,8 +324,8 @@ test("Workbench layout hides and restores Parts with context keys", () => {
 		false,
 	);
 	assert.equal(contextKeys.getValue("sideBarVisible"), true);
-	assert.equal(editorFrame?.style.paddingLeft, "3px");
-	assert.equal(editorFrame?.style.paddingRight, "8px");
+	assert.equal(editorFrame?.style.paddingLeft, "2px");
+	assert.equal(editorFrame?.style.paddingRight, "4px");
 	harness.layout.showPart('panel');
 	harness.layout.hidePart('editor');
 	assert.equal(contextKeys.getValue('panelMaximized'), true);
@@ -347,7 +347,7 @@ test("Workbench layout switches between modern and flat geometry without replaci
 	const editor = harness.container.querySelector<HTMLElement>("[data-part='editor']");
 	const editorFrame = editor?.parentElement as HTMLElement | undefined;
 	const sidebarFrame = harness.container.querySelector<HTMLElement>("[data-part='sidebar']")?.parentElement as HTMLElement | undefined;
-	assert.equal(editorFrame?.style.paddingLeft, "3px");
+	assert.equal(editorFrame?.style.paddingLeft, "2px");
 	assert.equal(sidebarFrame?.style.paddingLeft, "0px");
 	assert.equal(harness.container.querySelectorAll(".ash-sash-inset").length, 4);
 
@@ -364,7 +364,7 @@ test("Workbench layout switches between modern and flat geometry without replaci
 
 	harness.layout.setLayoutStyle("modern");
 
-	assert.equal(editorFrame?.style.paddingLeft, "3px");
+	assert.equal(editorFrame?.style.paddingLeft, "2px");
 	assert.equal(sidebarFrame?.style.paddingLeft, "0px");
 	assert.equal(harness.container.querySelectorAll(".ash-sash-inset").length, 4);
 	assert.deepEqual(harness.layout.state, state);
@@ -436,13 +436,13 @@ test('Activity Bar top and bottom positions keep the full sidebar height', () =>
 		assert.equal(harness.layout.isPartVisible('activitybar'), false);
 		assert.equal(harness.layout.domNode.classList.contains('activitybar-absent'), true);
 		assert.equal(harness.layout.getPartSize('sidebar').height, sidebarHeight);
-		assert.equal(sidebarFrame?.style.paddingLeft, '6px');
+		assert.equal(sidebarFrame?.style.paddingLeft, '4px');
 	}
 
 	harness.layout.setSideBarLocation('right');
-	assert.equal(sidebarFrame?.style.paddingRight, '8px');
+	assert.equal(sidebarFrame?.style.paddingRight, '4px');
 	harness.layout.setActivityBarLocation(ActivityBarPosition.HIDDEN);
-	assert.equal(sidebarFrame?.style.paddingRight, '8px');
+	assert.equal(sidebarFrame?.style.paddingRight, '4px');
 	harness.layout.setActivityBarLocation(ActivityBarPosition.DEFAULT);
 	assert.equal(harness.layout.isPartVisible('activitybar'), true);
 	assert.equal(harness.layout.domNode.classList.contains('activitybar-absent'), false);
@@ -461,7 +461,7 @@ test('Workbench layout assigns the window edge inset on startup from the Activit
 	harness.layout.layout(new Dimension(1_200, 800));
 	const sidebarFrame = harness.container.querySelector<HTMLElement>("[data-part='sidebar']")?.parentElement;
 	assert.equal(harness.layout.domNode.classList.contains('activitybar-absent'), true);
-	assert.equal(sidebarFrame?.style.paddingLeft, '6px');
+	assert.equal(sidebarFrame?.style.paddingLeft, '4px');
 	harness.layout.setLayoutStyle('flat');
 	assert.equal(sidebarFrame?.style.paddingLeft, '0px');
 	harness.disposables.dispose();
@@ -711,14 +711,14 @@ test("Workbench layout derives flexible editor size from the container", () => {
 	);
 	assert.deepEqual(
 		harness.layout.getPartSize("editor"),
-		new Dimension(546, 530),
+		new Dimension(548, 530),
 	);
 	assert.equal(harness.layout.getPartSize("panel").height, 200);
 
 	harness.layout.layout(new Dimension(1_300, 800));
 	assert.equal(harness.layout.getPartSize("sidebar").width, 220);
 	assert.equal(harness.layout.getPartSize("auxiliarybar").width, 380);
-	assert.equal(harness.layout.getPartSize("editor").width, 646);
+	assert.equal(harness.layout.getPartSize("editor").width, 648);
 
 	harness.disposables.dispose();
 	dom.window.close();
@@ -801,7 +801,7 @@ test("Git sidebar uses its preferred reset width and merges a lone view into the
 	harness.layout.resizePart("sidebar", harness.layout.getPartSize("sidebar").with(250));
 	assert.equal(sidebar.preferredWidth, 400);
 	resetWorkbenchSash(dom.window, host, "sidebar", 0);
-	assert.equal(harness.layout.getPartSize("sidebar").width, 403);
+	assert.equal(harness.layout.getPartSize("sidebar").width, 402);
 
 	const changes = composite.getView("test.changes") as GitTestView;
 	const header = changes.element.querySelector<HTMLElement>(".ash-pane-view-header");
@@ -829,7 +829,7 @@ test("Git sidebar uses its preferred reset width and merges a lone view into the
 	harness.layout.setSideBarLocation("right");
 	harness.layout.resizePart("sidebar", harness.layout.getPartSize("sidebar").with(250));
 	resetWorkbenchSash(dom.window, host, "sidebar", 2);
-	assert.equal(harness.layout.getPartSize("sidebar").width, 403);
+	assert.equal(harness.layout.getPartSize("sidebar").width, 402);
 
 	harness.disposables.dispose();
 	disposables.dispose();

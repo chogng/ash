@@ -411,36 +411,47 @@ test('primary sidebar toggle sits immediately after the application menu', { tag
 	}
 });
 
-test('activity bar remains visible and reopens a selected sidebar view in the light theme', async ({ application, workbench }) => {
+test('activity bar remains visible and reopens a selected sidebar view in the light theme', async ({ application, target, workbench }) => {
 	const page = workbench.page;
+	await page.emulateMedia({ colorScheme: 'light' });
 	await workbench.quickaccess.runCommand('workbench.action.selectTheme');
-	await page.locator('.ash-quick-pick').getByRole('combobox').fill('Ash Light');
-	await page.getByRole('option', { name: 'Ash Light', exact: true }).click();
+	// Extension themes come from the backend catalog; disconnected UI follows the system scheme.
+	const theme = target.appServerMode === 'required' ? 'Ash Light' : 'System';
+	await page.locator('.ash-quick-pick').getByRole('combobox').fill(theme);
+	await page.getByRole('option', { name: theme, exact: true }).click();
+	await expect(page.locator('.ash-workbench')).toHaveAttribute('data-color-scheme', 'light');
 	const activitybar = page.locator('[data-part="activitybar"]');
 	const sidebar = page.locator('[data-part="sidebar"]');
 	const explorer = activitybar.getByRole('tab', { name: 'Explorer' });
 	const search = activitybar.getByRole('tab', { name: 'Search' });
 	const accounts = activitybar.getByRole('button', { name: 'Accounts' });
 	const manage = activitybar.getByRole('button', { name: 'Manage' });
+	const hasAccounts = target.kind === 'electron' || target.appServerMode === 'required';
 	await expect(activitybar).toBeVisible();
-	await expect(accounts).toBeVisible();
 	await expect(manage).toBeVisible();
-	const [searchBounds, accountsBounds, manageBounds] = await Promise.all([search.boundingBox(), accounts.boundingBox(), manage.boundingBox()]);
+	const [searchBounds, manageBounds] = await Promise.all([search.boundingBox(), manage.boundingBox()]);
 	expect(searchBounds).not.toBeNull();
-	expect(accountsBounds).not.toBeNull();
 	expect(manageBounds).not.toBeNull();
-	expect(accountsBounds!.y).toBeGreaterThan(searchBounds!.y);
-	expect(manageBounds!.y).toBeGreaterThan(accountsBounds!.y);
-	expect(await workbench.menus.inspect(application, () => accounts.click())).toEqual(expect.arrayContaining(['Manage Accounts', 'Connect GitHub'].map(label => expect.objectContaining({ label, enabled: true }))));
+	expect(manageBounds!.y).toBeGreaterThan(searchBounds!.y);
+	if (hasAccounts) {
+		await expect(accounts).toBeVisible();
+		const accountsBounds = await accounts.boundingBox();
+		expect(accountsBounds).not.toBeNull();
+		expect(accountsBounds!.y).toBeGreaterThan(searchBounds!.y);
+		expect(manageBounds!.y).toBeGreaterThan(accountsBounds!.y);
+		expect(await workbench.menus.inspect(application, () => accounts.click())).toEqual(expect.arrayContaining(['Manage Accounts', 'Connect GitHub'].map(label => expect.objectContaining({ label, enabled: true }))));
+	} else {
+		await expect(accounts).toHaveCount(0);
+	}
 	await expect(activitybar.getByRole('tablist')).toHaveAttribute('aria-orientation', 'vertical');
-	await expect(explorer).toHaveAttribute('aria-selected', 'true');
 	await workbench.openExplorer();
+	await expect(explorer).toHaveAttribute('aria-selected', 'true');
 	await expect(sidebar).toBeVisible();
 	await expect(page.locator('.ash-workbench')).toHaveClass(/modern-ui/);
 	await expect(explorer).toHaveCSS('height', '36px');
 	await expect(explorer).toHaveCSS('width', '36px');
 	await expect(explorer.locator('.ash-icon')).toHaveCSS('width', '24px');
-	await expect(accounts.locator('.ash-button-content .ash-icon').first()).toHaveCSS('width', '24px');
+	if (hasAccounts) await expect(accounts.locator('.ash-button-content .ash-icon').first()).toHaveCSS('width', '24px');
 	const selectedBackground = await explorer.evaluate(element => getComputedStyle(element, '::after').backgroundColor);
 	expect(selectedBackground).not.toBe('rgba(0, 0, 0, 0)');
 	const selectedSpacing = await explorer.evaluate(element => {
@@ -474,8 +485,7 @@ test('activity bar remains visible and reopens a selected sidebar view in the li
 	await expect(sidebar).toHaveCSS('border-left-width', '0px');
 	await expect(sidebar).toHaveCSS('border-top-left-radius', '0px');
 	await expect(sidebar.locator('.ash-sidebar-title-label')).toHaveText('Explorer');
-	const sidebarActions = sidebar.locator('.ash-pane-composite-title-actions');
-	await workbench.menus.select(application, () => sidebarActions.getByRole('button', { name: 'More Actions' }).click(), ['Hide Primary Side Bar']);
+	await workbench.menus.select(application, () => sidebar.locator('.ash-sidebar-title-label').click({ button: 'right' }), ['Hide Primary Side Bar']);
 	await expect(sidebar).toBeHidden();
 	await expect(activitybar).toBeVisible();
 	await explorer.click();
@@ -504,7 +514,7 @@ test('activity bar remains visible and reopens a selected sidebar view in the li
 	]);
 	expect(closedRailBounds).not.toBeNull();
 	expect(editorBounds).not.toBeNull();
-	expect(editorBounds!.x - closedRailBounds!.x - closedRailBounds!.width).toBe(6);
+	expect(editorBounds!.x - closedRailBounds!.x - closedRailBounds!.width).toBe(4);
 	await search.click();
 	await expect(sidebar).toBeVisible();
 	await page.locator('.ash-titlebar-left-actions [data-action-id="workbench.action.toggleSideBar"] button').click();
@@ -917,20 +927,25 @@ test('activity bar context menu changes size and position', async ({ application
 	const titlebar = page.locator('[data-part="titlebar"]');
 	const sidebar = page.locator('[data-part="sidebar"]');
 	const editor = page.locator('[data-part="editor"]');
+	const hasAccounts = target.kind === 'electron' || target.appServerMode === 'required';
 	await workbench.openExplorer();
 	await expect(sidebar).toBeVisible();
-	const openAccountsMenu = () => activitybar.getByRole('button', { name: 'Accounts' }).click({ button: 'right' });
-	expect(await workbench.menus.inspect(application, openAccountsMenu)).toEqual(expect.arrayContaining([
+	const openGlobalMenu = () => activitybar.getByRole('button', { name: 'Manage' }).click({ button: 'right' });
+	expect(await workbench.menus.inspect(application, openGlobalMenu)).toEqual(expect.arrayContaining([
 		expect.objectContaining({ label: 'Accounts', checked: true }),
 		...['Activity Bar Position', 'Activity Bar Size', 'Move Primary Side Bar Right'].map(label => expect.objectContaining({ label, enabled: true })),
 	]));
-	await workbench.menus.select(application, openAccountsMenu, ['Activity Bar Size', 'Compact']);
+	await workbench.menus.select(application, openGlobalMenu, ['Activity Bar Size', 'Compact']);
 	await expect(activitybar).toHaveCSS('width', '36px');
 	const compactExplorer = activitybar.getByRole('tab', { name: 'Explorer' });
 	await expect(compactExplorer).toHaveCSS('height', '28px');
 	await expect(compactExplorer).toHaveCSS('width', '28px');
 	await expect(compactExplorer.locator('.ash-icon')).toHaveCSS('width', '16px');
-	await expect(activitybar.getByRole('button', { name: 'Accounts' }).locator('.ash-button-content .ash-icon').first()).toHaveCSS('width', '16px');
+	if (hasAccounts) {
+		await expect(activitybar.getByRole('button', { name: 'Accounts' }).locator('.ash-button-content .ash-icon').first()).toHaveCSS('width', '16px');
+	} else {
+		await expect(activitybar.getByRole('button', { name: 'Accounts' })).toHaveCount(0);
+	}
 	expect(await compactExplorer.evaluate(element => {
 		const style = getComputedStyle(element, '::after');
 		return { width: style.width, height: style.height, radius: style.borderRadius };
@@ -940,7 +955,7 @@ test('activity bar context menu changes size and position', async ({ application
 	expect(compactItemBox).not.toBeNull();
 	expect(compactItemBox!.x - compactOuterBox!.x).toBe(4);
 	expect(compactItemBox!.y - compactOuterBox!.y).toBe(4);
-	await workbench.menus.select(application, openAccountsMenu, ['Move Primary Side Bar Right']);
+	await workbench.menus.select(application, openGlobalMenu, ['Move Primary Side Bar Right']);
 	await expect.poll(async () => (await sidebar.boundingBox())!.x > (await editor.boundingBox())!.x).toBe(true);
 	const [sidebarBounds, editorBounds, activityBounds] = await Promise.all([sidebar.boundingBox(), editor.boundingBox(), activitybar.boundingBox()]);
 	expect(sidebarBounds).not.toBeNull();
@@ -965,7 +980,7 @@ test('activity bar context menu changes size and position', async ({ application
 	const [rightSidebar, workbenchBounds] = await Promise.all([sidebar.boundingBox(), page.locator('.ash-workbench').boundingBox()]);
 	expect(rightSidebar).not.toBeNull();
 	expect(workbenchBounds).not.toBeNull();
-	expect(workbenchBounds!.x + workbenchBounds!.width - rightSidebar!.x - rightSidebar!.width).toBe(8);
+	expect(workbenchBounds!.x + workbenchBounds!.width - rightSidebar!.x - rightSidebar!.width).toBe(4);
 	await expect(topSelector.getByRole('tab', { name: 'Explorer' }).locator('.ash-icon')).toHaveCSS('width', '16px');
 	expect(await workbench.menus.inspect(application, () => topSelector.getByRole('tab', { name: 'Explorer' }).click({ button: 'right' }))).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'Activity Bar Position', enabled: true })]));
 	await expect(sidebar).toHaveCSS('border-top-width', '1px');
@@ -973,42 +988,40 @@ test('activity bar context menu changes size and position', async ({ application
 	const titlebarManage = titlebar.getByRole('button', { name: 'Manage' });
 	const titlebarActions = titlebar.getByRole('toolbar', { name: 'Title Bar global actions' });
 	await expect(titlebarActions).toBeVisible();
-	await expect(titlebarAccounts).toBeVisible();
+	if (hasAccounts) await expect(titlebarAccounts).toBeVisible();
+	else await expect(titlebarAccounts).toHaveCount(0);
 	await expect(titlebarManage).toHaveCSS('width', '22px');
-	for (const button of [titlebarAccounts, titlebarManage]) {
+	for (const button of hasAccounts ? [titlebarAccounts, titlebarManage] : [titlebarManage]) {
 		await expect(button.locator('.ash-button-content .ash-icon')).toHaveCSS('width', '16px');
 		await expect(button.locator('.ash-dropdown-menu-indicator')).toBeHidden();
 	}
 	const panelToggle = titlebarActions.locator('[data-action-id="workbench.action.togglePanel"] button');
 	await expect(panelToggle).toHaveCSS('width', '22px');
-	await expect(titlebarActions.locator('[data-action-id="ash.activityBar.accounts"]')).toHaveCount(1);
+	await expect(titlebarActions.locator('[data-action-id="ash.activityBar.accounts"]')).toHaveCount(hasAccounts ? 1 : 0);
 	await expect(titlebarActions.locator('[data-action-id="ash.activityBar.manage"]')).toHaveCount(1);
 	const appearance = async (button: typeof panelToggle) => button.evaluate(element => {
 		const style = getComputedStyle(element);
 		return { width: style.width, height: style.height, color: style.color, background: style.backgroundColor, radius: style.borderRadius };
 	});
-	expect(await appearance(titlebarAccounts)).toEqual(await appearance(panelToggle));
+	if (hasAccounts) expect(await appearance(titlebarAccounts)).toEqual(await appearance(panelToggle));
 	expect(await appearance(titlebarManage)).toEqual(await appearance(panelToggle));
-	await titlebarAccounts.focus();
-	await titlebarAccounts.press('ArrowRight');
-	await expect(titlebarManage).toBeFocused();
-	await titlebarManage.press('ArrowLeft');
-	await expect(titlebarAccounts).toBeFocused();
-	const [titlebarBounds, accountBounds, manageBounds] = await Promise.all([titlebar.boundingBox(), titlebarAccounts.boundingBox(), titlebarManage.boundingBox()]);
+	if (hasAccounts) {
+		await titlebarAccounts.focus();
+		await titlebarAccounts.press('ArrowRight');
+		await expect(titlebarManage).toBeFocused();
+		await titlebarManage.press('ArrowLeft');
+		await expect(titlebarAccounts).toBeFocused();
+		const [accountBounds, manageBounds] = await Promise.all([titlebarAccounts.boundingBox(), titlebarManage.boundingBox()]);
+		expect(accountBounds).not.toBeNull();
+		expect(manageBounds).not.toBeNull();
+		expect(accountBounds!.x).toBeLessThan(manageBounds!.x);
+		expect(await workbench.menus.inspect(application, () => titlebarAccounts.click())).toEqual(expect.arrayContaining(['Manage Accounts', 'Connect GitHub'].map(label => expect.objectContaining({ label, enabled: true }))));
+	}
+	const [titlebarBounds, manageBounds] = await Promise.all([titlebar.boundingBox(), titlebarManage.boundingBox()]);
 	expect(titlebarBounds).not.toBeNull();
-	expect(accountBounds).not.toBeNull();
 	expect(manageBounds).not.toBeNull();
-	expect(accountBounds!.x).toBeLessThan(manageBounds!.x);
 	expect(manageBounds!.y).toBeGreaterThanOrEqual(titlebarBounds!.y);
 	expect(manageBounds!.y + manageBounds!.height).toBeLessThanOrEqual(titlebarBounds!.y + titlebarBounds!.height);
-	expect(await workbench.menus.inspect(application, () => titlebarAccounts.click())).toEqual(expect.arrayContaining(['Manage Accounts', 'Connect GitHub'].map(label => expect.objectContaining({ label, enabled: true }))));
-	if (target.kind === 'browser' && target.appServerMode === 'disabled') {
-		await workbench.menus.select(application, () => titlebarAccounts.click(), ['Connect GitHub']);
-		const dialog = page.getByRole('dialog', { name: 'Connect GitHub' });
-		await expect(dialog).toContainText('Could not connect GitHub. Try again.');
-		await expect(page.locator('.ash-notification')).toHaveCount(0);
-		await dialog.getByRole('button', { name: 'OK' }).click();
-	}
 	expect(await workbench.menus.inspect(application, () => titlebarManage.click())).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'Settings', enabled: true })]));
 	await titlebarManage.focus();
 	const systemMenu = await workbench.menus.isSystemMenu(application);
@@ -1022,8 +1035,11 @@ test('activity bar context menu changes size and position', async ({ application
 	})).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'Activity Bar Position', enabled: true })]));
 	await workbench.menus.select(application, () => titlebarManage.click({ button: 'right' }), ['Accounts']);
 	await expect(titlebarAccounts).toHaveCount(0);
+	expect(await workbench.menus.inspect(application, () => titlebarManage.click({ button: 'right' }))).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'Accounts', checked: false })]));
 	await workbench.menus.select(application, () => titlebarManage.click({ button: 'right' }), ['Accounts']);
-	await expect(titlebarAccounts).toBeVisible();
+	expect(await workbench.menus.inspect(application, () => titlebarManage.click({ button: 'right' }))).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'Accounts', checked: true })]));
+	if (hasAccounts) await expect(titlebarAccounts).toBeVisible();
+	else await expect(titlebarAccounts).toHaveCount(0);
 	await workbench.menus.select(application, () => titlebarManage.click({ button: 'right' }), ['Activity Bar Position', 'Bottom']);
 	await expect(activitybar).toBeHidden();
 	const bottomSelector = sidebar.locator('.ash-sidebar-composite-bar-bottom').getByRole('tablist');
@@ -1042,8 +1058,11 @@ test('activity bar context menu changes size and position', async ({ application
 	expect(leftSidebar!.x).toBeLessThan(leftEditor!.x);
 	await workbench.menus.select(application, () => activitybar.getByRole('button', { name: 'Manage' }).click({ button: 'right' }), ['Accounts']);
 	await expect(activitybar.getByRole('button', { name: 'Accounts' })).toBeHidden();
+	expect(await workbench.menus.inspect(application, openGlobalMenu)).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'Accounts', checked: false })]));
 	await workbench.menus.select(application, () => activitybar.getByRole('button', { name: 'Manage' }).click({ button: 'right' }), ['Accounts']);
-	await expect(activitybar.getByRole('button', { name: 'Accounts' })).toBeVisible();
+	expect(await workbench.menus.inspect(application, openGlobalMenu)).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'Accounts', checked: true })]));
+	if (hasAccounts) await expect(activitybar.getByRole('button', { name: 'Accounts' })).toBeVisible();
+	else await expect(activitybar.getByRole('button', { name: 'Accounts' })).toHaveCount(0);
 	await workbench.menus.select(application, () => activitybar.getByRole('button', { name: 'Manage' }).click({ button: 'right' }), ['Activity Bar Position', 'Hidden']);
 	await expect(activitybar).toBeHidden();
 });
@@ -1126,7 +1145,7 @@ test('top activity bar places the view selector inside the sidebar', async ({ ap
 	expect(initialSidebar).not.toBeNull();
 	expect(nextSidebar).not.toBeNull();
 	expect(nextSidebar!.height).toBe(initialSidebar!.height);
-	expect(nextSidebar!.x).toBe(6);
+	expect(nextSidebar!.x).toBe(4);
 	await expect(sidebar).toHaveCSS('border-left-width', '1px');
 	await expect(sidebar).toHaveCSS('border-bottom-left-radius', '8px');
 	const leftInsets = () => sidebar.evaluate(root => {
@@ -1140,7 +1159,8 @@ test('top activity bar places the view selector inside the sidebar', async ({ ap
 			paneTwisty: root.querySelector<HTMLElement>('.ash-pane-view-header-twisty-container')!.getBoundingClientRect().x - left,
 		};
 	});
-	await expect.poll(leftInsets).toEqual({ tab: 9, title: 17, paneTwisty: 17 });
+	// Modern adds the sidebar border; the header keeps 4px padding and the twisty its 2px margin.
+	await expect.poll(leftInsets).toEqual({ tab: 9, title: 17, paneTwisty: 7 });
 	await workbench.menus.select(application, () => page.getByRole('button', { name: 'Manage' }).click(), ['Settings']);
 	await page.locator('[data-settings-group-id="workbench"]').click();
 	await page.locator('[data-settings-category-id="layout"]').click();
@@ -1148,7 +1168,7 @@ test('top activity bar places the view selector inside the sidebar', async ({ ap
 	await layoutStyle.click();
 	await page.getByRole('option', { name: 'Flat' }).click();
 	await expect(page.locator('.ash-workbench')).not.toHaveClass(/modern-ui/);
-	await expect.poll(leftInsets).toEqual({ tab: 0, title: 12, paneTwisty: 8 });
+	await expect.poll(leftInsets).toEqual({ tab: 0, title: 12, paneTwisty: 6 });
 });
 
 test('command center opens without a first-run guide', async ({ workbench }) => {

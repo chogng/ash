@@ -15,9 +15,10 @@ import type { Part } from "./part.js";
 import { WorkbenchPartView } from "./workbenchPartView.js";
 import { IAuxiliaryWindowService, type IAuxiliaryWindow } from '../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 
-const WINDOW_LEFT_EDGE_INSET = 6;
-const WINDOW_RIGHT_EDGE_INSET = 8;
-const PART_GUTTER_HALF = 3;
+const WINDOW_LEFT_EDGE_INSET = 4;
+const WINDOW_RIGHT_EDGE_INSET = 4;
+// Adjacent frames share the gutter; the resize sash uses its full width.
+const PART_GUTTER_HALF = 2;
 const PART_GUTTER_SIZE = PART_GUTTER_HALF * 2;
 const DEFAULT_LAYOUT_WIDTH = 1_024;
 const DEFAULT_LAYOUT_HEIGHT = 768;

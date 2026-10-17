@@ -26,13 +26,14 @@ export async function launchBrowser(options: BrowserLaunchOptions): Promise<Brow
 		throw new Error('A connected browser requires its scenario Web session');
 	}
 	const browser = await chromium.launch({ headless: options.headless });
+	let diagnostics: WorkbenchDiagnostics | undefined;
 	try {
 		const context = await browser.newContext({
 			baseURL: options.baseURL,
 			recordVideo: options.recordVideo ? { dir: options.recordVideo.directory, size: options.recordVideo.size } : undefined,
 			viewport: options.recordVideo?.size,
 		});
-		const diagnostics = new WorkbenchDiagnostics(context);
+		diagnostics = new WorkbenchDiagnostics(context);
 		const videoStartedAt = options.recordVideo ? Date.now() : undefined;
 		const page = await context.newPage();
 		if (webSession) {
@@ -58,7 +59,11 @@ export async function launchBrowser(options: BrowserLaunchOptions): Promise<Brow
 		await driver.workbench.waitForReady();
 		return { application: browser, driver, videoStartedAt };
 	} catch (error) {
+		const startupErrors = [...diagnostics?.pageErrors ?? [], ...diagnostics?.consoleErrors ?? []];
 		await browser.close();
+		if (startupErrors.length > 0) {
+			throw new Error(`Browser Workbench startup failed:\n${startupErrors.join('\n')}`, { cause: error });
+		}
 		throw error;
 	}
 }

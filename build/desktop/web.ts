@@ -1,4 +1,5 @@
 import { execFile, spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 import { promisify } from 'node:util';
@@ -8,6 +9,8 @@ import { prepareAppServer } from './appServer.ts';
 import { buildAppServerEnvironment, type AppServerHostPlatform } from '../../src/ash/platform/agentHost/common/appServerEnvironment.ts';
 import { decodeWebListenInfo } from '../../.build/protocol/typescript/WebProtocolDecoder.ts';
 import type { WebListenInfo } from '../../.build/protocol/typescript/WebListenInfo.ts';
+import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH } from '../../.build/protocol/typescript/protocol.ts';
+import { isRecord } from '../../src/ash/base/common/types.ts';
 
 interface WebLaunch {
 	readonly info: WebListenInfo;
@@ -25,6 +28,15 @@ export async function startWeb(options: { port: number; assets?: string; origin?
 	const suffix = process.platform === 'win32' ? '.exe' : '';
 	const source = options.environment;
 	const executable = source.ASH_APP_SERVER_PATH ?? join(packageRoot, 'bin', `ash-app-server${suffix}`);
+	// Package metadata describes the bundled binary, not a caller's explicit executable override.
+	if (!source.ASH_APP_SERVER_PATH) {
+		const metadata: unknown = JSON.parse(readFileSync(join(packageRoot, 'ash-package.json'), 'utf8'));
+		if (!isRecord(metadata) || !isRecord(metadata.protocol)
+			|| metadata.protocol.major !== APP_SERVER_PROTOCOL_MAJOR
+			|| metadata.protocol.schemaHash !== APP_SERVER_SCHEMA_HASH) {
+			throw new Error(`Prepared Web backend protocol does not match this renderer: ${packageRoot}. Run pnpm prepare:backend:web before reusing the backend.`);
+		}
+	}
 	console.info(`[app-server] Launching Web backend ${executable}`);
 	let hostPlatform: AppServerHostPlatform;
 	switch (process.platform) {
