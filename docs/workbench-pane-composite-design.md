@@ -20,7 +20,7 @@
 
 ## 1. 适用范围
 
-本文适用于 `SidebarPart`、`AuxiliarybarPart`、`Agent Sidebar` 和 `PanelPart`。它们都是某个 `ViewContainerLocation` 的 pane-like host。Editor 使用 editor-group 专用架构管理输入和实例，但 `EditorPane` 与 `PaneComposite` 共用浏览器 `Composite` 的焦点、内容根节点和显隐管理。
+本文适用于 `SidebarPart`、`AuxiliaryBarPart`、`Agent Sidebar` 和 `PanelPart`。它们都是某个 `ViewContainerLocation` 的 pane-like host。Editor 使用 editor-group 专用架构管理输入和实例，但 `EditorPane` 与 `PaneComposite` 共用浏览器 `Composite` 的焦点、内容根节点和显隐管理。
 
 本文不重新定义：
 
@@ -147,7 +147,7 @@ Agent Sidebar 的空 `CompositeBar` root 仍是统一标题结构的一部分，
 
 - `src/ash/workbench/browser/parts/paneCompositePart.ts`
 - `src/ash/workbench/browser/parts/sidebar/sidebarPart.ts`
-- `src/ash/workbench/browser/parts/auxiliarybar/auxiliarybarPart.ts`
+- `src/ash/workbench/browser/parts/auxiliarybar/auxiliaryBarPart.ts`
 - `src/ash/workbench/browser/parts/panel/panelPart.ts`
 - `src/ash/workbench/browser/parts/compositeBar.ts`
 - `src/ash/workbench/browser/workbench.ts`

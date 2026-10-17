@@ -833,7 +833,7 @@ Chat 是独立 contrib，而不是 Auxiliary Bar 的内建内容：
 ```text
 Open Chat / New Chat
   → IViewsService
-  → AuxiliarybarPart
+  → AuxiliaryBarPart
   → Chat ViewContainer
   → ChatViewPane
 
