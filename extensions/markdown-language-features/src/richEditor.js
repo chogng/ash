@@ -1,6 +1,6 @@
 import { Disposable, DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { addDisposableListener } from '../../../src/ash/base/browser/dom.js';
-import { InputBox } from '../../../src/ash/base/browser/ui/inputbox/inputBox.js';
+import { InputBox } from '../../../src/ash/base/browser/ui/inputbox/inputbox.js';
 import '../../markdown-math/src/styles.js';
 import { inputEdit, sourceOffset, normalizedOffset, textEdit } from './sourceEdits.js';
 import '../media/richEditor.css';
