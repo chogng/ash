@@ -31,7 +31,7 @@ export function registerSessionsNavigation(listRoles: () => Promise<readonly Tea
 	const registrations = new DisposableStore();
 	for (const [id, title, key, ctorDescriptor] of [
 		[SESSIONS_NAVIGATION_CONTAINER_ID, 'Chat', 'sessions.activity.chat', new SyncDescriptor(SessionsNavigationView)],
-		[TEAMS_NAVIGATION_CONTAINER_ID, 'Collaboration', 'sessions.activity.colab', new SyncDescriptor(TeamsNavigationView, [listRoles])],
+		[TEAMS_NAVIGATION_CONTAINER_ID, 'Agent Teams', 'sessions.activity.teams', new SyncDescriptor(TeamsNavigationView, [listRoles])],
 	] as const) {
 		registrations.add(SessionsViewRegistry.registerViewContainer({ id, title, localizationKey: { bundle: 'ash', key }, location: ViewContainerLocation.Sidebar, order: 0 }));
 		registrations.add(SessionsViewRegistry.registerViews(id, [{ id: id + '.view', title, localizationKey: { bundle: 'ash', key }, ctorDescriptor, canToggleVisibility: false }]));

@@ -464,6 +464,30 @@ use crate::protocol::codebase_symbols::DocumentOverlaySynchronizeParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::codebase_symbols::SymbolKindDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::collaboration::Channel;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::collaboration::ChannelChange;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::collaboration::ChannelConnectParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::collaboration::ChannelConnection;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::collaboration::ChannelEditParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::collaboration::ChannelInvitation;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::collaboration::ChannelInviteParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::collaboration::ChannelMember;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::collaboration::ChannelResourceAccess;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::collaboration::ChannelResourceParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::collaboration::ChannelRole;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::collaboration::ChannelSnapshot;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::collaboration::DocumentCollaborationOpenParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::collaboration::DocumentCollaborationOpenResult;
@@ -3630,6 +3654,14 @@ client_methods! {
         response: CallStatus,
         serialization: ConnectionExclusive("call"),
     },
+    ChannelConnect => "channels/connect" { params: ChannelConnectParams, response: ChannelConnection, serialization: None, },
+    ChannelRead => "channels/read" { params: EmptyParams, response: Option<ChannelConnection>, serialization: None, },
+    ChannelEdit => "channels/edit" { params: ChannelEditParams, response: ChannelConnection, serialization: None, },
+    ChannelInvite => "channels/invite" { params: ChannelInviteParams, response: ChannelInvitation, serialization: None, },
+    ChannelSignInKey => "channels/signInKey" { params: EmptyParams, response: ChannelInvitation, serialization: None, },
+    ChannelNotes => "channels/notes" { params: ChannelResourceParams, response: ChannelResourceAccess, serialization: None, },
+    ChannelCall => "channels/call" { params: ChannelResourceParams, response: ChannelResourceAccess, serialization: None, },
+    ChannelDisconnect => "channels/disconnect" { params: EmptyParams, response: (), serialization: None, },
     DocumentCollaborationOpen => "document/collaboration/open" {
         params: DocumentCollaborationOpenParams,
         response: DocumentCollaborationOpenResult,
@@ -6191,6 +6223,18 @@ typescript_bindings! {
     CallRole,
     CallSnapshot,
     CallMember,
+    Channel,
+    ChannelRole,
+    ChannelMember,
+    ChannelSnapshot,
+    ChannelChange,
+    ChannelConnectParams,
+    ChannelConnection,
+    ChannelEditParams,
+    ChannelInviteParams,
+    ChannelInvitation,
+    ChannelResourceParams,
+    ChannelResourceAccess,
     MediaState,
     DocumentCollaborationOpenParams,
     DocumentCollaborationSnapshot,

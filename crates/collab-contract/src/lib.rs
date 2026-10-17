@@ -1,5 +1,7 @@
 //! Shared collaboration contracts, independent of execution and storage.
 
+pub mod channels;
+
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;

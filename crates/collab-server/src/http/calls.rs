@@ -60,6 +60,7 @@ impl CallRuntime {
     }
 
     fn recover(&self, updates: &super::UpdateSignal) -> Result<(), Failure> {
+        self.store.refresh_channels()?;
         for pending in self.store.pending_media()? {
             let lock = self.operation_lock(&pending.id)?;
             // A foreground operation owns its own completion. Never hold up
@@ -99,6 +100,26 @@ impl CallRuntime {
                 .media_completed(&snapshot.id, snapshot.revision)
                 .map_err(Failure::from)
         })
+    }
+
+    pub(super) fn open_channel(
+        &self,
+        credential: &str,
+    ) -> Result<(), ash_collab::channels::ChannelError> {
+        use ash_collab::channels::ChannelError;
+        let map = |error| match error {
+            CallError::Denied => ChannelError::Denied,
+            _ => ChannelError::Transport,
+        };
+        let credential = MemberCredential::parse(credential.into()).map_err(map)?;
+        let snapshot = self.store.open_channel(&credential).map_err(map)?;
+        let lock = self
+            .operation_lock(&snapshot.id)
+            .map_err(|_| ChannelError::Storage)?;
+        let _operation = lock.lock().map_err(|_| ChannelError::Storage)?;
+        self.reconcile(self.store.read(&credential).map_err(map)?)
+            .map_err(|_| ChannelError::Transport)?;
+        Ok(())
     }
 }
 

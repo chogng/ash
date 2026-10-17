@@ -51,7 +51,8 @@ import './contrib/url/browser/url.contribution.js';
 import './contrib/folding/browser/folding.contribution.js';
 import './contrib/snippets/browser/snippets.contribution.js';
 import './contrib/scrollLocking/browser/scrollLocking.contribution.js';
-import './contrib/call/browser/call.contribution.js';
+import { registerCallView } from './contrib/call/browser/call.contribution.js';
+import { registerCollaborationViews } from './contrib/collaboration/browser/collaboration.contribution.js';
 import './contrib/agentsVoice/browser/agentsVoice.contribution.js';
 import '../editor/editor.code.all.js';
 import '../editor/standalone/browser/quickAccess/standaloneGotoSymbolQuickAccess.js';
@@ -74,6 +75,8 @@ import { IRendererHostService } from '../platform/renderer/common/rendererHost.j
 import { Disposable } from '../base/common/lifecycle.js';
 
 registerTasksView();
+registerCollaborationViews();
+registerCallView();
 
 registerWorkbenchContribution(
 	'code.contrib.appServerSyntax',

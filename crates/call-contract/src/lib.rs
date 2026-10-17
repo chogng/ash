@@ -71,6 +71,10 @@ pub enum CallDocumentChange {
 #[serde(rename_all = "camelCase")]
 pub struct CallSnapshot {
     pub id: String,
+    /// A channel call inherits its members; independent invitations are disabled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub channel_id: Option<String>,
     #[ts(type = "number")]
     pub revision: u64,
     #[ts(type = "number")]

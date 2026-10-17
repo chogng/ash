@@ -13,3 +13,5 @@ pub use collaboration::DocumentCollaborationSnapshot;
 pub use collaboration::DocumentCollaborationSubmitParams;
 pub use collaboration::DocumentCollaborationSubmitResult;
 pub use collaboration::DocumentCollaborationUpdate;
+
+pub use collaboration::channels::*;

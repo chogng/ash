@@ -11,6 +11,7 @@ import type { EditorPaneOptions } from "./documentEditorPane.js";
 
 /** Product-neutral schema and browser composition for one document kind. */
 export interface EditorProfile {
+	readonly editorId?: string;
 	readonly id: string;
 	readonly contentType: string;
 	readonly createSchema: () => DocumentSchema;
@@ -36,6 +37,7 @@ export function createDocumentEditorPaneOptions(profile: EditorProfile, runtime:
 	return {
 		...runtime,
 		contentType: profile.contentType,
+		editorId: profile.editorId,
 		schema,
 		...(profile.createEmptyDocument ? { createEmptyDocument: () => profile.createEmptyDocument!(schema) } : {}),
 		...(profile.outline === undefined ? {} : { outline: profile.outline }),

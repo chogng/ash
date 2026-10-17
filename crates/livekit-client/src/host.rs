@@ -29,6 +29,7 @@ enum State {
 struct Room {
     commands: mpsc::Sender<Job>,
     events: tokio::sync::Mutex<mpsc::Receiver<MediaEvent>>,
+    finished: tokio::sync::watch::Receiver<Option<Result<(), MediaError>>>,
 }
 struct Job {
     request: Request,
@@ -157,10 +158,21 @@ impl Shared {
                     };
                 }
                 let (reply, result) = oneshot::channel();
+                let closing = matches!(request, Request::Close);
                 tokio::select! {
                     _ = cancelled(token) => Err(MediaError::Timeout),
                     result = async {
-                        room.commands.send(Job { request, token: token.clone(), reply }).await.map_err(|_| MediaError::Connection)?;
+                        let sent = room.commands.send(Job { request, token: token.clone(), reply }).await;
+                        if closing {
+                            // A server-initiated disconnect can retire the actor before
+                            // Close arrives. Await its actual cleanup result in either
+                            // case so room rotation can safely open the next generation.
+                            let mut finished = room.finished.clone();
+                            let outcome = finished.wait_for(|result| result.is_some()).await
+                                .map_err(|_| MediaError::Connection)?;
+                            return outcome.as_ref().expect("completed room cleanup").clone().map(|()| Response::Done);
+                        }
+                        sent.map_err(|_| MediaError::Connection)?;
                         result.await.map_err(|_| MediaError::Connection)?
                     } => result,
                 }
@@ -178,6 +190,7 @@ async fn cancelled(token: &CancellationToken) {
 fn start_room(mut room: MediaRoom) -> Arc<Room> {
     let (commands, mut receiver) = mpsc::channel::<Job>(32);
     let (events, incoming) = mpsc::channel(128);
+    let (completion, finished) = tokio::sync::watch::channel(None);
     tokio::spawn(async move {
         loop {
             tokio::select! {
@@ -185,8 +198,9 @@ fn start_room(mut room: MediaRoom) -> Arc<Room> {
                 command = receiver.recv() => {
                     let Some(job) = command else { break; };
                     if matches!(job.request, Request::Close) {
-                        let result = room.close().await.map(|_| Response::Done);
-                        let _ = job.reply.send(result);
+                        let result = room.close().await;
+                        let _ = job.reply.send(result.clone().map(|()| Response::Done));
+                        let _ = completion.send(Some(result));
                         return;
                     }
                     let result = tokio::select! {
@@ -213,11 +227,12 @@ fn start_room(mut room: MediaRoom) -> Arc<Room> {
                 }
             }
         }
-        let _ = room.close().await;
+        let _ = completion.send(Some(room.close().await));
     });
     Arc::new(Room {
         commands,
         events: tokio::sync::Mutex::new(incoming),
+        finished,
     })
 }
 

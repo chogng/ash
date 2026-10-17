@@ -53,6 +53,7 @@ impl SqliteDocumentCollaborationRooms {
     pub fn open_at(path: impl AsRef<Path>) -> Result<Self, String> {
         let mut connection = Connection::open(path).map_err(sqlite_error)?;
         configure(&mut connection)?;
+        crate::channels::configure_resources(&connection).map_err(|e| e.to_string())?;
         Ok(Self {
             connection: Mutex::new(connection),
         })
@@ -123,7 +124,7 @@ impl SqliteDocumentCollaborationRooms {
     fn open_inner(
         &self,
         principal: Option<&DocumentCollaborationPrincipal>,
-        params: DocumentCollaborationOpenParams,
+        mut params: DocumentCollaborationOpenParams,
     ) -> Result<DocumentCollaborationOpenResult, String> {
         validate_identifier(&params.client_id, "clientId")?;
         validate_identifier(&params.schema_id, "schemaId")?;
@@ -138,6 +139,15 @@ impl SqliteDocumentCollaborationRooms {
             }
             None => create_room_id(&transaction)?,
         };
+        let channel_notes = room_id.starts_with("channel-notes-");
+        if channel_notes {
+            let principal = principal.ok_or("Channel notes require a channel member")?;
+            require_room_role(&transaction, &room_id, &principal.id)?;
+            if params.schema_id != "stanza-document-v1" {
+                return Err("Channel notes require the document schema".into());
+            }
+            params.document = r#"{"format":"ash.document","version":1,"document":{"id":"channel-notes","type":"doc","attrs":{},"marks":[],"content":[{"id":"channel-notes-paragraph","type":"paragraph","attrs":{},"marks":[],"content":[]}]}}"#.into();
+        }
         if let Some(room) = load_room(&transaction, &room_id)? {
             if room.schema_id != params.schema_id {
                 return Err("The collaboration room uses a different document schema".into());
@@ -160,7 +170,7 @@ impl SqliteDocumentCollaborationRooms {
                 params![room_id, params.schema_id, params.document],
             )
             .map_err(sqlite_error)?;
-        if let Some(principal) = principal {
+        if let Some(principal) = principal.filter(|_| !channel_notes) {
             insert_room_member(
                 &transaction,
                 &room_id,
@@ -406,6 +416,25 @@ impl SqliteDocumentCollaborationRooms {
             return Ok(None);
         }
         let connection = self.connection.lock().map_err(lock_error)?;
+        if room_id.starts_with("channel-notes-") {
+            return crate::channels::resource_identity(
+                &connection,
+                &token_hash(access_token),
+                crate::channels::ChannelResourceKind::Notes,
+            )
+            .map(|identity| {
+                identity.filter(|(id, _)| id == room_id).map(|(_, member)| {
+                    DocumentCollaborationPrincipal {
+                        id: member.id,
+                        display_name: member.name,
+                    }
+                })
+            })
+            .or_else(|error| match error {
+                crate::channels::ChannelError::Denied => Ok(None),
+                _ => Err(format!("Collaboration database error: {error}")),
+            });
+        }
         connection.query_row(
             "SELECT principal_id, display_name FROM document_collaboration_room_members WHERE room_id = ?1 AND token_hash = ?2 AND revoked_at_ms IS NULL",
             params![room_id, token_hash(access_token)],
@@ -773,6 +802,22 @@ fn require_room_role(
     room_id: &str,
     principal_id: &str,
 ) -> Result<DocumentCollaborationRoomRole, String> {
+    if room_id.starts_with("channel-notes-") {
+        let member = crate::channels::resource_members(connection, room_id)
+            .map_err(|e| e.to_string())?
+            .unwrap_or_default()
+            .into_iter()
+            .find(|m| m.id == principal_id)
+            .ok_or("The collaboration principal is not a room member")?;
+        // Channel owners administer membership through the channel authority. A note
+        // must never mint an independent invitation that bypasses channel revocation.
+        return Ok(match member.role {
+            crate::channels::ChannelRole::Owner | crate::channels::ChannelRole::Editor => {
+                DocumentCollaborationRoomRole::Editor
+            }
+            crate::channels::ChannelRole::Viewer => DocumentCollaborationRoomRole::Viewer,
+        });
+    }
     connection.query_row(
         "SELECT role FROM document_collaboration_room_members WHERE room_id = ?1 AND principal_id = ?2 AND revoked_at_ms IS NULL",
         params![room_id, principal_id],

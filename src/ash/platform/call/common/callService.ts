@@ -11,6 +11,7 @@ export interface CallDocument {
 	readonly title: string;
 }
 export interface CallState {
+	readonly channelId?: string;
 	readonly connection: 'connecting' | 'connected' | 'reconnecting' | 'ended' | 'failed';
 	readonly muted: boolean;
 	readonly deafened: boolean;
@@ -27,6 +28,7 @@ export type ScreenTarget = { readonly type: 'display' | 'window'; readonly id: s
 export interface ScreenSource { readonly target: ScreenTarget; readonly title: string; readonly width: number; readonly height: number; }
 export interface ScreenFrame { readonly trackId: string; readonly participantId: string; readonly data: Uint8Array<ArrayBuffer>; }
 export interface ICallService {
+	readonly canStart?: boolean;
 	readonly onDidChange: Event<void>;
 	readonly onDidChangeScreens: Event<void>;
 	readonly screens: readonly ScreenFrame[];

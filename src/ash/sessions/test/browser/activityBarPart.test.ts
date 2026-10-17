@@ -64,7 +64,7 @@ test('Sessions common entry registers the shared speech service for unavailable 
 	assert.equal(speech.hasActiveSpeechToTextSession, false);
 });
 
-test('Sessions Activity Bar selects Chat, Collaboration, Library, Code, Creator, and Symphony actions', async () => {
+test('Sessions Activity Bar selects Chat, Collaboration, Agent Teams, Library, Code, Creator, and Symphony actions', async () => {
 	const ownerDocument = browser.window.document;
 	ownerDocument.body.replaceChildren();
 	let accountAnchor: HTMLElement | undefined;
@@ -99,6 +99,7 @@ test('Sessions Activity Bar selects Chat, Collaboration, Library, Code, Creator,
 		})), [
 			{ icon: 'chat-2-filled', disabled: false },
 			{ icon: 'colab', disabled: false },
+			{ icon: 'agent', disabled: false },
 			{ icon: 'projects', disabled: false },
 			{ icon: 'code', disabled: false },
 			{ icon: 'symbol-color', disabled: false },
@@ -107,38 +108,41 @@ test('Sessions Activity Bar selects Chat, Collaboration, Library, Code, Creator,
 		]);
 		assert.deepEqual([...bar.domNode.querySelectorAll('.ash-sessions-activity-top, .ash-sessions-activity-bottom')].map(group =>
 			[...group.querySelectorAll('button')].map(button => button.getAttribute('aria-label')),
-		), [['Chat', 'Collaboration', 'Library', 'Code', 'Creator', 'Symphony'], ['Accounts']]);
+		), [['Chat', 'Collaboration', 'Agent Teams', 'Library', 'Code', 'Creator', 'Symphony'], ['Accounts']]);
 		assert.ok(buttons.every(button => button.classList.contains('icon-only')));
-		assert.equal(bar.domNode.querySelectorAll('.ash-composite-bar-navigation-item > button.ash-sessions-activity-item').length, 6);
+		assert.equal(bar.domNode.querySelectorAll('.ash-composite-bar-navigation-item > button.ash-sessions-activity-item').length, 7);
 		assert.equal(bar.domNode.querySelectorAll('.ash-composite-bar-navigation-item.checked').length, 1);
 		assert.equal(buttons[0]?.getAttribute('aria-current'), 'page');
 		buttons[1]?.click();
-		assert.deepEqual([buttons[0], buttons[1], buttons[2]].map(button => [button?.querySelector('svg')?.getAttribute('data-ash-icon-id'), button?.getAttribute('aria-current')]), [
+		assert.deepEqual([buttons[0], buttons[1], buttons[3]].map(button => [button?.querySelector('svg')?.getAttribute('data-ash-icon-id'), button?.getAttribute('aria-current')]), [
 			['chat-2', null], ['colab-filled', 'page'], ['projects', null],
 		]);
 		buttons[2]?.click();
-		assert.deepEqual([buttons[0], buttons[1], buttons[2]].map(button => [button?.querySelector('svg')?.getAttribute('data-ash-icon-id'), button?.getAttribute('aria-current')]), [
+		assert.equal(buttons[2]?.getAttribute('aria-current'), 'page');
+		assert.equal(buttons[1]?.getAttribute('aria-current'), null);
+		buttons[3]?.click();
+		assert.deepEqual([buttons[0], buttons[1], buttons[3]].map(button => [button?.querySelector('svg')?.getAttribute('data-ash-icon-id'), button?.getAttribute('aria-current')]), [
 			['chat-2', null], ['colab', null], ['projects-filled', 'page'],
 		]);
-		buttons[3]?.click();
-		assert.deepEqual(buttons.slice(0, 4).map(button => [button.parentElement!.classList.contains('checked'), button.getAttribute('aria-current')]), [
-			[false, null], [false, null], [false, null], [true, 'page'],
-		]);
 		buttons[4]?.click();
-		assert.deepEqual([buttons[3], buttons[4]].map(button => [button?.querySelector('svg')?.getAttribute('data-ash-icon-id'), button?.getAttribute('aria-current')]), [
-			['code', null], ['symbol-color-filled', 'page'],
+		assert.deepEqual(buttons.slice(0, 5).map(button => [button.parentElement!.classList.contains('checked'), button.getAttribute('aria-current')]), [
+			[false, null], [false, null], [false, null], [false, null], [true, 'page'],
 		]);
 		buttons[5]?.click();
-		assert.deepEqual([buttons[4], buttons[5]].map(button => button?.getAttribute('aria-current')), [null, 'page']);
+		assert.deepEqual([buttons[4], buttons[5]].map(button => [button?.querySelector('svg')?.getAttribute('data-ash-icon-id'), button?.getAttribute('aria-current')]), [
+			['code', null], ['symbol-color-filled', 'page'],
+		]);
+		buttons[6]?.click();
+		assert.deepEqual([buttons[5], buttons[6]].map(button => button?.getAttribute('aria-current')), [null, 'page']);
 		assert.equal(bar.domNode.querySelectorAll('.ash-composite-bar-navigation-item.checked').length, 1);
 		buttons[0]?.click();
-		assert.deepEqual(selectedActions, ['chat', 'teams', 'library', 'code', 'creator', 'symphony', 'chat']);
+		assert.deepEqual(selectedActions, ['chat', 'collaboration', 'teams', 'library', 'code', 'creator', 'symphony', 'chat']);
 		assert.equal(buttons[0]?.getAttribute('aria-current'), 'page');
-		assert.equal(buttons[4]?.getAttribute('aria-current'), null);
 		assert.equal(buttons[5]?.getAttribute('aria-current'), null);
-		buttons[6]?.click();
+		assert.equal(buttons[6]?.getAttribute('aria-current'), null);
+		buttons[7]?.click();
 		await Promise.resolve();
-		assert.equal(accountAnchor, buttons[6]);
+		assert.equal(accountAnchor, buttons[7]);
 		using titlebar = registerTestComponentServices(services).createInstance(TitlebarPart, ownerDocument.body, 'application-menu');
 		const renderTitlebarAccount = (visible: boolean): void => titlebar.setActivityActions(visible ? [bar.accountAction] : [], (action, options) => bar.createAccountActionViewItem(action, options, 'titlebar'));
 		for (const position of [ActivityBarPosition.TOP, ActivityBarPosition.BOTTOM]) {
@@ -255,9 +259,9 @@ test('navigation order survives a new window and includes new menu contributions
 	assert.equal(bar.domNode.querySelectorAll('button')[3], buttons[4]);
 	await storage.flush();
 	using restored = registerTestComponentServices(services).createInstance(ActivityBarPart, document.body, { showAccountMenu() { } });
-	assert.deepEqual([...restored.domNode.querySelectorAll('button')].slice(0, 5).map(button => button.getAttribute('aria-label')), ['Chat', 'Collaboration', 'Library', 'Creator', 'Code']);
+	assert.deepEqual([...restored.domNode.querySelectorAll('button')].slice(0, 5).map(button => button.getAttribute('aria-label')), ['Chat', 'Agent Teams', 'Library', 'Creator', 'Code']);
 	using contribution = MenusRegistry.appendMenuItem(Menus.ActivityBar, { command: { id: 'test.activity', title: 'Test action', icon: Lxicon.chat2 }, order: 60 });
-	assert.deepEqual([...restored.domNode.querySelectorAll('button')].map(button => button.getAttribute('aria-label')), ['Chat', 'Collaboration', 'Library', 'Creator', 'Code', 'Symphony', 'Test action', 'Accounts']);
+	assert.deepEqual([...restored.domNode.querySelectorAll('button')].map(button => button.getAttribute('aria-label')), ['Chat', 'Agent Teams', 'Library', 'Creator', 'Code', 'Collaboration', 'Symphony', 'Test action', 'Accounts']);
 	assert.equal(restored.domNode.querySelector('button')!.getAttribute('aria-current'), 'page');
 });
 
@@ -300,9 +304,9 @@ function registerMenus(services: InstanceType<typeof InstantiationService>): Ins
 	const commands = resources.add(new CommandService(services, registry));
 	services.registerInstance(ICommandService, commands);
 	services.registerInstance(IMenuService, services.createInstance(MenuService));
-	const keys = new Map(['chat', 'teams', 'library', 'code', 'creator', 'symphony'].map(id => [id, contexts.createKey<boolean>(`sessions.activity.${id}Selected`, id === 'chat')]));
+	const keys = new Map(['chat', 'collaboration', 'teams', 'library', 'code', 'creator', 'symphony'].map(id => [id, contexts.createKey<boolean>(`sessions.activity.${id}Selected`, id === 'chat')]));
 	const select = (id: string): void => contexts.bufferChangeEvents(() => { for (const [candidate, key] of keys) { key.set(candidate === id); } });
-	for (const id of ['chat', 'teams', 'code', 'symphony']) { resources.add(registry.register(`sessions.open.${id}`, () => select(id))); }
+	for (const id of ['chat', 'collaboration', 'teams', 'code', 'symphony']) { resources.add(registry.register(`sessions.open.${id}`, () => select(id))); }
 	for (const id of ['library', 'creator']) {
 		resources.add(registry.register(`sessions.open.${id}`, CommandsRegistry.getCommand(`sessions.open.${id}`)!));
 		resources.add(registry.register(`sessions.show.${id}`, () => select(id)));

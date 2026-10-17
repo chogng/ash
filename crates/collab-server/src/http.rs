@@ -1,4 +1,5 @@
 mod calls;
+mod channels;
 mod wire;
 
 use crate::CollaborationServerError;
@@ -57,7 +58,7 @@ pub(crate) fn serve(options: CollaborationServerOptions) -> Result<(), Collabora
         .as_ref()
         .map(|service| calls::CallRuntime::open(options.database_path(), service.clone()))
         .transpose()?;
-    let mut runtime = HttpRuntime::new(rooms, options);
+    let mut runtime = HttpRuntime::new(rooms, options)?;
     runtime.calls = media;
     let runtime = Arc::new(runtime);
     serve_listener(listener, runtime, Arc::new(AtomicBool::new(false)))
@@ -65,6 +66,7 @@ pub(crate) fn serve(options: CollaborationServerOptions) -> Result<(), Collabora
 
 struct HttpRuntime {
     rooms: SqliteDocumentCollaborationRooms,
+    channels: ash_collab::channels::ChannelStore,
     options: CollaborationServerOptions,
     active_connections: AtomicUsize,
     updates: UpdateSignal,
@@ -72,14 +74,20 @@ struct HttpRuntime {
 }
 
 impl HttpRuntime {
-    fn new(rooms: SqliteDocumentCollaborationRooms, options: CollaborationServerOptions) -> Self {
-        Self {
+    fn new(
+        rooms: SqliteDocumentCollaborationRooms,
+        options: CollaborationServerOptions,
+    ) -> Result<Self, CollaborationServerError> {
+        let channels = ash_collab::channels::ChannelStore::open(options.database_path())
+            .map_err(|e| CollaborationServerError::storage(e.to_string()))?;
+        Ok(Self {
+            channels,
             rooms,
             options,
             active_connections: AtomicUsize::new(0),
             updates: UpdateSignal::default(),
             calls: None,
-        }
+        })
     }
 }
 
@@ -164,6 +172,11 @@ fn handle_connection(
     mut stream: TcpStream,
     runtime: &HttpRuntime,
 ) -> Result<(), CollaborationServerError> {
+    // Accepted sockets can inherit the listener's nonblocking mode on macOS/BSD.
+    // Each connection has a worker; fragmented headers/bodies must wait for the next packet.
+    stream
+        .set_nonblocking(false)
+        .map_err(CollaborationServerError::http)?;
     stream
         .set_read_timeout(Some(Duration::from_secs(30)))
         .map_err(CollaborationServerError::http)?;
@@ -176,7 +189,10 @@ fn handle_connection(
         Err(HttpReadError::Io(error)) => return Err(CollaborationServerError::http(error)),
     };
     let (path, _) = split_target(&request.target);
-    if !path.starts_with(API_ROOT) && !path.starts_with("/v1/calls/") {
+    if !path.starts_with(API_ROOT)
+        && !path.starts_with("/v1/calls/")
+        && !path.starts_with("/v1/channels/")
+    {
         return write_empty_response(&mut stream, 404, "Not Found", &[])
             .map_err(CollaborationServerError::http);
     }
@@ -198,6 +214,9 @@ fn handle_connection(
         headers.push(("WWW-Authenticate", "Bearer"));
         return write_empty_response(&mut stream, 401, "Unauthorized", &headers)
             .map_err(CollaborationServerError::http);
+    }
+    if path.starts_with("/v1/channels/") {
+        return channels::handle(&mut stream, runtime, &request, path);
     }
     if path.starts_with("/v1/calls/") {
         return calls::handle(&mut stream, runtime, &request, path);
@@ -670,7 +689,8 @@ fn authenticate_room_principal(
     request: &HttpRequest,
     room_id: &str,
 ) -> Result<DocumentCollaborationPrincipal, AuthenticationError> {
-    if authorized(request, runtime.options.bearer_token()) {
+    if !room_id.starts_with("channel-notes-") && authorized(request, runtime.options.bearer_token())
+    {
         let principal = bootstrap_principal();
         runtime
             .rooms

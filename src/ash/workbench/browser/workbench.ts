@@ -1,3 +1,4 @@
+import { IChannelService } from "../../platform/collaboration/common/channelService.js";
 import { TreeSitterLibraryService, TreeSitterSyntaxProviders, createTreeSitterSyntaxTokenBackend } from '../services/treeSitter/browser/treeSitterLibraryService.js';
 import { ITreeSitterLibraryService } from '../../editor/common/services/treeSitter/treeSitterLibraryService.js';
 import { UserSettings } from '../../platform/configuration/common/configurationModels.js';
@@ -621,6 +622,7 @@ export class Workbench extends Disposable {
 		if (api.approvalEnvironment) { services.registerInstance(IApprovalEnvironmentService, api.approvalEnvironment); }
 		if (api.memories) { services.registerInstance(IMemoriesService, api.memories); }
 		if (api.memoryDiagnostics) { services.registerInstance(IMemoryDiagnosticsService, api.memoryDiagnostics); }
+		if (api.channels) services.registerInstance(IChannelService, api.channels);
 		if (api.calls) { services.registerInstance(ICallService, api.calls); }
 		services.registerInstance(AppServerApiId, api.appServer);
 		const remoteAgentService = this._register(services.createInstance(AppServerRemoteAgentService, { remoteApi: api.remote }));

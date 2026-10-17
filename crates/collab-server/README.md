@@ -1,6 +1,6 @@
 # ash-collab-server
 
-- Hosts durable document collaboration and call membership APIs.
+- Hosts durable document collaboration, channel spaces and membership, and call membership APIs.
 - Owns bearer authentication, browser-origin policy, HTTP framing, connection limits and SQLite lifecycle.
 - Delegates document ordering to [`ash-collab`](../collab/README.md) and call authority to [`call`](../call/README.md).
 - Manages configured LiveKit rooms through [`livekit-api`](../livekit-api/README.md).
@@ -38,7 +38,56 @@ Mutations and reads return the current call snapshot. Join returns `call`, `memb
 
 Errors contain `error.code` and `error.message`: `invalidInput` (400), `accessDenied` (403), `revisionConflict`/`mediaNotReady` (409), `storageFailure` (500), or `mediaUnavailable` (503). Missing bearer authentication returns 401 through the shared HTTP boundary.
 
-Permission changes replace the media room before new tickets are issued. Pending operations survive restart. The current call coordinator serializes operations within one host process; multi-host media-operation ownership is not implemented. The App Server composes call notifications and local service process management, and the Workbench provides the call UI; this host provides their control APIs. Call snapshots now include owner-managed document references; document authorization remains independent. AI task execution remains unimplemented. See the [full design and acceptance status](../docs/design/collaboration-media.md).
+Permission changes replace the media room before new tickets are issued. Pending operations survive restart. The current call coordinator serializes operations within one host process; multi-host media-operation ownership is not implemented. The App Server composes call notifications and local service process management, and the Workbench provides the call UI; this host provides their control APIs. Call snapshots now include owner-managed document references; document authorization remains independent. The App Server's single-human voice path connects AI delegation to the original Chat task flow; inviting AI into arbitrary multi-human calls remains unimplemented. This host has no task-execution authority. See the [full design and acceptance status](../docs/design/collaboration-media.md).
+
+## Persistent channels
+
+Channels work without LiveKit. The Collaboration panel connects through the App
+Server to this host; its channel tree is no longer a local preview. Use **Connect
+Channels → Create Collaboration Space** with the HTTPS origin and deployment
+administrator credential. Invite people through **Members and Permissions**;
+they paste the resulting invitation into **Join with Invitation**. Keep **Copy My
+Sign-in Key** privately before forgetting an account, especially for the sole
+administrator. Another person's invitation should have its own member identity.
+
+| Method/path                | Input and authorization                                                                           |
+| -------------------------- | ------------------------------------------------------------------------------------------------- |
+| `POST /v1/channels/create` | Deployment bearer; `name`, `memberName`, client-generated `credential`                            |
+| `GET /v1/channels/read`    | Member bearer; returns that member's space snapshot                                               |
+| `POST /v1/channels/edit`   | Member bearer; `spaceId`, `revision`, tagged `change`                                             |
+| `POST /v1/channels/invite` | Owner bearer; `params: {spaceId, revision, name, role}`, generated `credential`                   |
+| `POST /v1/channels/notes`  | Member bearer; `spaceId`, `channelId`; returns scoped notes access                                |
+| `POST /v1/channels/call`   | Member bearer; `spaceId`, `channelId`; joins or starts the channel call and returns scoped access |
+
+Changes are `create` (`name`, nullable `parentId`), `rename` (`channelId`, `name`),
+`remove` (`channelId`, including descendants), `setRole` (`memberId`, `role`), or
+`removeMember` (`memberId`). Every child inherits space membership. Roles are
+`owner`, `editor`, `viewer`; only owners manage membership, and viewers cannot
+modify channels. The last owner is protected. Space IDs and member IDs are
+independent of Agent Teams, document rooms and calls. Member lists describe
+authorization, not online presence.
+
+The same SQLite database persists channels and credential digests across restarts.
+Permission checks and optimistic revision checks run inside the write transaction,
+including across host processes. Removed members immediately lose server access.
+Channel errors return `error.code`: `invalidInput` (400), `accessDenied` (403),
+`revisionConflict` (409), `storageFailure` (500), `transportFailure` (503).
+Requests retain the shared bearer/origin checks and `Cache-Control: no-store`.
+
+Each channel has one durable notes room and a stable call identity. Notes use the
+existing document endpoints with a resource-scoped credential: owners/editors can
+edit and viewers can read. The server creates the initial empty document and checks
+current channel membership on every operation, including long polls. Channel notes
+do not accept independent document invitations or the deployment bootstrap bearer.
+Opening notes requires the renderer's origin in `ASH_COLLABORATION_ALLOWED_ORIGIN`.
+
+Channel calls require LiveKit configuration. Owners/editors may start a call;
+viewers may only join an existing call as listeners. Concurrent starts converge
+on one call, and an ended call can be started again. Call members derive from the
+space membership in the same SQLite transaction. Removed members and role changes
+retire the old media room through the existing recoverable transition flow.
+Manage channel call membership from the space, not standalone call invitations.
+Browser hosts support notes; channel media currently requires the desktop app.
 
 ## Running one host
 

@@ -104,6 +104,7 @@ impl Devices for Audio {
 #[tokio::test]
 async fn reconnect_stops_capture_and_leave_waits_for_media_and_device_cleanup() {
     let snapshot = crate::CallSnapshot {
+        channel_id: None,
         documents: Vec::new(),
         id: "call".into(),
         revision: 1,
@@ -295,6 +296,7 @@ impl RunningCall {
 
     fn with_role(role: crate::CallRole) -> Self {
         let snapshot = crate::CallSnapshot {
+            channel_id: None,
             documents: Vec::new(),
             id: "call".into(),
             revision: 1,

@@ -10,6 +10,7 @@ import type { IGitHubService } from '../../github/common/githubService.js';
 import type { ILocalGitService } from '../../git/common/localGitService.js';
 import type { IBackupService } from '../../backup/common/backup.js';
 import type { INetworkDiagnosticsService } from '../../networkDiagnostics/common/networkDiagnosticsService.js';
+import type { IChannelService } from "../../collaboration/common/channelService.js";
 import type { ICallService } from '../../call/common/callService.js';
 import type { IVoiceCodeTranscriptionBackendService } from './dictation.js';
 import type { ILocalTranscriptionService, ILocalTranscriptionModelService } from '../../localTranscription/common/localTranscription.js';
@@ -88,6 +89,7 @@ export interface IRendererHost extends RendererHostCapabilities {
 	readonly assets: IAssetService;
 	readonly testing: ITestExecutionService;
 	readonly calls?: ICallService;
+	readonly channels?: IChannelService;
 	readonly dictation?: IVoiceCodeTranscriptionBackendService;
 	readonly agentVoice?: IAgentVoiceService;
 	readonly automation?: IAutomationBackendService;

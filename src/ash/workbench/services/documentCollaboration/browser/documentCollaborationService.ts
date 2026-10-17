@@ -1,3 +1,5 @@
+import { IChannelService } from '../../../../platform/collaboration/common/channelService.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { CancellationError } from "../../../../base/common/errors.js";
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
@@ -13,13 +15,20 @@ import { RemoteDocumentCollaborationService } from "./remoteDocumentCollaboratio
 export class DocumentCollaborationService extends Disposable implements IDocumentCollaborationService {
 	private readonly remote = this._register(new RemoteDocumentCollaborationService());
 
-	constructor(private readonly appServer: IDocumentCollaborationService | undefined, @IDialogService private readonly dialogs: IDialogService) {
+	constructor(private readonly appServer: IDocumentCollaborationService | undefined, @IDialogService private readonly dialogs: IDialogService, @IInstantiationService private readonly instantiation: IInstantiationService) {
 		super();
 		if (appServer) this._register(appServer);
 	}
 
 	async open(input: DocumentCollaborationOpenInput, signal: AbortSignal): Promise<DocumentCollaborationRoom> {
 		throwIfCancelled(signal, "Opening a document collaboration room was cancelled");
+		if (input.channel) {
+			const channels = this.instantiation.invokeFunction(accessor => accessor.getOptional(IChannelService));
+			if (!channels) throw new Error(localize('collaboration.unavailable', 'Channels require a connected Ash backend.'));
+			const access = await channels.notes(input.channel);
+			throwIfCancelled(signal);
+			return this.remote.open({ ...input, roomId: access.resourceId }, { endpoint: access.serverUrl, bearerToken: access.credential }, signal);
+		}
 		let endpoint = input.serverUrl;
 		if (endpoint === undefined) {
 			const endpointDialog = await this.dialogs.input({

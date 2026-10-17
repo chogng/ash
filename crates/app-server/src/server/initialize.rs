@@ -205,6 +205,10 @@ impl AppServer {
         }
         if self.home.is_some() {
             capabilities.contracts.insert(
+                "channels".into(),
+                ash_app_server_protocol::protocol::initialize::CapabilityContract { version: 1 },
+            );
+            capabilities.contracts.insert(
                 "calls".into(),
                 ash_app_server_protocol::protocol::initialize::CapabilityContract { version: 1 },
             );

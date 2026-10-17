@@ -2,28 +2,105 @@
 
 Ash 的多人通话、屏幕共享和 GPT Voice 统一使用 LiveKit 房间。GPT Voice 以 AI 协作者身份入房，开发任务交给 Ash 既有 Agent 执行链；`realtime-webrtc` 从目标架构中移除。
 
-- 状态：音频通话已接入 App Server、设备助手和 TypeScript 通话面板；已接入 Windows 显示器/窗口共享与远端画面；完整 AI 协作仍在实施。
-- 核对日期：2026-09-26。
-- 本文负责：crate 边界、部署、房间与权限、AI 接入、实施顺序和验收要求。
+- 状态：结构化文档协同编辑、多人通话和通话内文档关联已接入产品；单人 AI 语音已接入 Chat 与任务链。统一协作面板和频道树已接入 Workbench 与 Sessions，频道、成员及角色由协作服务器持久保存。每个频道已绑定共享笔记与可加入的通话，权限继承空间成员。整个代码项目共享、协作者跟随、多人房间 AI 尚未形成完整产品链路。
+- 核对日期：2026-10-17；本次增加 macOS 上真实 LiveKit 频道通话、两个独立桌面配置和 EarPods 设备联调。此前 Windows x64 验收未复跑。
+- 本文负责：功能命名与实现边界、crate 边界、部署、房间与权限、AI 接入、实施顺序和验收要求。
 - 已新增 `call`、`livekit-client`、`livekit-api`、`voice-agent`，并删除无人调用的 `realtime-webrtc`。
+
+### 功能命名与 Zed 对照
+
+- **协作（Collaboration）**：多人共同工作的总称，包含频道、项目共享、协同编辑、语音和屏幕共享。
+- **协作面板（Collaboration Panel）**：承载协作入口、频道和成员的界面。
+- **频道（Channels）**：持久的团队协作空间，可以有子频道、成员、共享项目、语音和频道笔记。Zed 截图中红框的层级列表应称为“频道树”。
+- **实时协同编辑（Real-time collaborative editing）**：多人同时编辑同一内容并同步修改、光标和选区，是协作中的一项能力。
+
+Zed 左侧打开的 `rooms` 文本是频道笔记（Channel Notes）；频道笔记、频道树和共享代码项目分别承担不同职责。命名及能力范围依据 [Zed Channels](https://zed.dev/docs/collaboration/channels) 和[协作概览](https://zed.dev/docs/collaboration/overview)。
+
+| 对照能力                       | Ash 当前实现                         | 边界与代码依据                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------------------ | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 人类团队的频道树与统一协作面板 | 持久频道与成员权限已接入             | [CollaborationViewPane](../../../src/ash/workbench/contrib/collaboration/browser/collaborationViewPane.ts) 通过领域服务接入 App Server，再访问协作服务器的 [ChannelStore](../../collab/src/channels.rs)。支持多层树、搜索、创建、重命名、删除子树、邀请、角色变更与撤销访问。成员权限在整个空间内继承，SQLite 事务同时校验角色与版本；Calls 独立置于同一侧栏。Workbench 与 Sessions 共享入口，Agent Teams 保持独立 |
+| 频道笔记                       | 每个频道固定一份持久笔记             | 双击频道或按 Enter 打开专用笔记编辑器，复用 Document Engine 的同步、重排与选区；owner/editor 可写，viewer 只读。Workbench 与 Sessions 使用同一份远端正文                                                                                                                                                                                                                                                           |
+| 频道通话                       | 已绑定稳定通话身份并完成真实服务联调 | 频道入口加入已有通话；owner/editor 可在无通话时发起，viewer 仅加入收听。成员变化由服务端换代媒体房间，桌面自动重连；Browser 尚无媒体权限                                                                                                                                                                                                                                                                           |
+| 结构化文档协同编辑             | 已有产品接线                         | [DocumentEditorPane](../../../src/ash/workbench/contrib/documentEditor/browser/documentEditorPane.ts) 接入同步 controller、邀请和成员管理；当前由 Academic 文档配置使用，包含并发变更重排、撤销/重做、远端选区和只读成员                                                                                                                                                                                           |
+| 普通代码文件与整个项目共享     | 尚未接通                             | [Code 编辑器入口](../../../src/ash/workbench/contrib/codeEditor/browser/codeEditor.contribution.ts) 未装配文档协作连接；通话只关联独立文档引用，尚无共享项目的文件树、文件打开/保存/搜索与语言服务授权链路                                                                                                                                                                                                         |
+| 光标选区与跟随协作者           | 选区同步已有；跟随尚未实现           | [文档协作 controller](../../../src/ash/editor/contrib/collaboration/common/controller.ts) 和富文档 widget 发布、显示远端选区；尚未同步协作者的活动文件和视口，也没有跟随入口                                                                                                                                                                                                                                       |
+| 多人语音与通话内文档           | 已有产品接线                         | [Calls 面板](../../../src/ash/workbench/contrib/call/browser/callViewPane.ts) 提供创建、邀请、静音、收听、屏幕共享和文档关联；文档另行授权，打开时使用新的未命名工作副本                                                                                                                                                                                                                                           |
+| 屏幕共享                       | 平台实现与验收不齐                   | 采集已有 macOS 和 Windows 后端，其他平台当前走不支持采集的 [fallback](../../screen-capture/src/fallback.rs)；既有产品端到端验收记录限 Windows x64                                                                                                                                                                                                                                                                  |
+| AI 语音协作                    | 单人 Chat 已接入；多人房间待补       | [Voice 请求处理](../../app-server/src/server/request_processors/voice.rs) 创建“一名人类 + 一名 AI”的本地房间并绑定活动本地 Thread；[ChatWidget](../../../src/ash/workbench/contrib/chat/browser/widget/chatWidget.ts) 将委托交给原 Chat 的 mode、队列和审批链，尚无向任意多人通话邀请 AI 的产品入口                                                                                                                |
+
+当前可确认的阶段是：持久频道树、成员权限、频道笔记和频道通话已接入；距完整团队协作空间，主要还缺代码项目共享、协作者跟随和在线状态。频道资源以空间成员为权限来源，独立文档和通话仍保留各自的邀请机制，Agent Teams 保持独立。
+
+UI 入口：Workbench 命令面板的 `Open Collaboration`；Sessions Activity Bar 的 `Collaboration`。选择 `Connect Channels`，使用协作服务器地址和部署管理员凭据创建空间，或粘贴成员邀请加入。`Members and Permissions` 提供邀请、查看成员、变更角色及撤销访问；频道增删改写入服务器，重载后恢复。选中频道后可打开笔记或选择 `Join or Start Channel Call`；双击或 Enter 打开笔记，选择频道不会自动入会。通话仍由 `ICallService` 提供，须先离开当前通话才能进入另一频道。生产界面不提供本地样例频道；样例数据只存在于 UI 测试。
+
+### 频道后端与权限
+
+- **状态所有者**：`ash-collab` 的 `ChannelStore` 在协作服务器 SQLite 中保存空间、频道树、成员和角色。`ash-collab-contract::channels` 是共享契约；`ash-collab-server` 提供 `/v1/channels/{create,read,edit,invite,notes,call}`。不需要配置 LiveKit 即可使用频道和笔记。
+- **调用链**：面板 → `IChannelService` → `AppServerChannelService` → 每个 Renderer 已有的 protocol client → Main 透明转发 → 共享 App Server → `ChannelAccount` → HTTPS 协作服务器。Main 不增加业务状态或新进程。Browser 使用相同领域 adapter；普通远端目录授权客户端不能读取本机频道凭据。
+- **成员角色**：`owner` 在 UI 中称管理员，可管理频道和成员；`editor` 可创建、重命名、删除频道；`viewer` 只读。子频道继承整个空间的成员权限，当前没有子频道私有覆盖规则。不能降级或移除最后一名管理员，也不能自行移除当前身份。
+- **凭据**：部署管理员凭据仅用于创建空间，不授予已有空间访问权限。每名成员使用独立的 256 位凭据，服务端只存 SHA-256 摘要；邀请凭据只在创建邀请时返回。本机通过已有 `SecretStore` 保存当前空间身份，启动和窗口重载可恢复。每个本机配置当前连接一个空间；切换会替换已保存身份。“复制我的登录密钥”用于私下备份和恢复同一身份；邀请另一人应发放独立邀请。
+- **凭据存储设置**：若宿主无法访问系统钥匙串，在 Settings → Agents → Models 的现有凭据存储区域授权访问，或经确认选择私有文件存储。频道沿用该配置，不自动降级存储方式；无可用存储时连接操作失败并保留错误提示。
+- **一致性与同步**：读取返回成员可访问空间的完整快照；修改携带 `spaceId` 和 `revision`，角色、版本及写入在同一 SQLite 写事务中完成。旧版本返回冲突，前端不会自动重发修改。可见面板或打开的频道笔记约每两秒读取一次，失败时退避到五秒并禁用频道修改；撤销访问会清空缓存树。最后一个订阅者释放后停止轮询。服务器对每次笔记读写独立校验权限，不依赖 UI 轮询。
+- **边界**：服务器限制每空间 1,000 个频道、256 名成员、16 层树及 80 个 UTF-16 名称字符，拒绝重复同级名称、无效父级、控制字符和斜线。客户端只接受 HTTPS 服务 origin（本机开发可用 HTTP），禁止凭据 URL 和重定向，沿用应用网络访问策略。服务端重启或两个宿主共享 SQLite 时仍由数据库保证权限和并发更新。
+- **尚未接入**：共享项目和文件、协作者跟随，以及成员在线状态。成员列表表示已授权身份，不表示在线人数。
+
+### 频道笔记与通话绑定
+
+- **资源身份与凭据**：App Server 的 `channels/notes`、`channels/call` 使用已保存空间身份换取当前成员的单资源凭据。稳定 ID 分别为 `channel-notes-<channelId>`、`channel-call-<channelId>`；凭据不进入编辑器 URI、普通设置或通话快照。SQLite 保存绑定与凭据摘要，客户端断开不删除笔记。删除频道保留不可访问的绑定，避免旧凭据重新创建资源。
+- **笔记**：`SqliteDocumentCollaborationRooms` 保存正文、版本和操作记录。首次打开使用服务器空白文档，不接受客户端植入初稿；频道 owner/editor 映射为文档 editor，viewer 映射为只读，不能通过独立文档邀请修改频道权限。每次提交、重放和长轮询都检查当前成员。界面沿用远端文档传输和本地重排引擎；服务器确认的版本更新工作副本保存基线，未确认输入仍为 dirty，不把新输入误标为已保存。连接失败或权限变化时停止编辑并保留本地改动；重新从频道打开可重新取得权限，已有未保存内容不会被覆盖。
+- **通话**：`CallStore` 在同一数据库事务中读取频道成员；owner/editor/viewer 分别映射 owner/speaker/listener。并发发起收敛到同一通话；结束后可重新发起并增加媒体代次。通话快照中的成员是已授权媒体状态的派生记录，权限来源始终是频道。成员移除或角色改变触发旧媒体房间清理、换代和重新入房；失败时暂停授权并由服务端恢复。频道通话不开放独立邀请或角色修改，统一从空间成员管理操作。
+- **宿主与部署**：Workbench 和 Sessions 注册相同频道笔记编辑器，支持 Desktop 和 Browser。笔记的浏览器请求要求服务端 `ASH_COLLABORATION_ALLOWED_ORIGIN` 包含实际 renderer origin；通话还要求部署 LiveKit。Browser 当前没有本地媒体授权，频道通话按钮会禁用并说明使用桌面应用。现有独立通话文档引用仍需独立文档授权，不会因加入频道通话而扩大访问。
 
 ### 当前实现与验收
 
-| 能力                                      | 当前结果                                                                                                                                                |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| LiveKit 双向音频                          | 真实 Server 1.13.7 与 LiveKit 信令、`webrtc-rs`、Opus 收发测试通过                                                                                      |
-| 成员邀请、撤销、角色变更、房间换代        | SQLite 测试与真实服务 HTTP 测试通过                                                                                                                     |
-| GPT-Live 会话协议                         | 本地 WebSocket 契约测试通过；尚未连接真实模型账户                                                                                                       |
-| AI 混音、重采样与播放清理                 | 单元测试通过；真实 LiveKit + 本地 GPT-Live 模拟服务的三项桥接测试通过                                                                                   |
-| 自建服务接入                              | HTTP 宿主接受部署者的 LiveKit 地址和密钥                                                                                                                |
-| 设备发言权                                | 同一成员只向选中设备签发麦克风权限；切换设备更换房间，双 SQLite 宿主竞争测试通过                                                                        |
-| 成员通知                                  | HTTP 按修订号等待，App Server 向所属窗口发送 `call/changed`                                                                                             |
-| 文档房间关联                              | 已接入通话快照中的文档引用、所有者关联/移除、独立凭证和新未命名工作副本打开；项目共享仍待实现                                                           |
-| App Server 与 UI                          | 通话资源归连接所有；面板提供创建、加入、静音、收听、邀请和离开                                                                                          |
-| Core 任务执行                             | AI 委托尚未接入生产任务链                                                                                                                               |
-| 本地媒体服务与产品打包                    | 固定版本服务器与助手随包分发；本地通话持有服务进程，最后一个通话释放时回收                                                                              |
-| 屏幕共享                                  | Windows 采集、缩放与停止实测通过；真实 LiveKit 视频收发和重复发布测试通过；Windows x64 双窗口产品端到端测试通过（选窗口、远端显示、停止清除、结束通话） |
-| 真实设备、三平台、公网 NAT、真实 GPT-Live | Windows x64 屏幕共享产品链路已验收；ARM64 实机、真实音频设备、公网 NAT 与真实 GPT-Live 仍待验收                                                         |
+下表保留此前已记录的真实 LiveKit 和 Windows x64 验收；“已有接线”表示当前代码已连接相应产品路径，不代表本次完成真机或真实模型验收。本次实际执行结果见本节末尾。
+
+| 能力                                      | 当前结果                                                                                                                                                    |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| LiveKit 双向音频                          | 真实 Server 1.13.7 与 LiveKit 信令、`webrtc-rs`、Opus 收发测试通过                                                                                          |
+| 成员邀请、撤销、角色变更、房间换代        | SQLite 测试与真实服务 HTTP 测试通过                                                                                                                         |
+| GPT-Live 会话协议                         | 已有本地 WebSocket 契约测试覆盖；本次未执行真实模型账户验收                                                                                                 |
+| AI 混音、重采样与播放清理                 | 单元测试通过；真实 LiveKit + 本地 GPT-Live 模拟服务的三项桥接测试通过                                                                                       |
+| 自建服务接入                              | HTTP 宿主接受部署者的 LiveKit 地址和密钥                                                                                                                    |
+| 设备发言权                                | 同一成员只向选中设备签发麦克风权限；切换设备更换房间，双 SQLite 宿主竞争测试通过                                                                            |
+| 成员通知                                  | HTTP 按修订号等待，App Server 向所属窗口发送 `call/changed`                                                                                                 |
+| 文档房间关联                              | 已接入通话快照中的文档引用、所有者关联/移除、独立凭证和新未命名工作副本打开；项目共享仍待实现                                                               |
+| App Server 与 UI                          | 通话资源归连接所有；面板提供创建、加入、静音、收听、邀请和离开                                                                                              |
+| Core 任务执行                             | 单人语音委托已从 `voice/delegation` 经原 Chat 进入现有任务链，并关联队列、Turn 进度和播报；多人房间委托与真实模型端到端仍待验收                             |
+| 本地媒体服务与产品打包                    | 固定版本服务器与助手随包分发；本地通话持有服务进程，最后一个通话释放时回收                                                                                  |
+| 屏幕共享                                  | macOS、Windows 已有采集实现；此前 Windows 采集、缩放与停止、真实 LiveKit 视频收发和重复发布测试通过，Windows x64 双窗口产品端到端测试通过；Linux 采集未实现 |
+| 真实设备、三平台、公网 NAT、真实 GPT-Live | Windows x64 屏幕共享、macOS ARM64 + USB EarPods 单机双客户端音频已验收；Windows ARM64、跨机器／公网 NAT 与真实 GPT-Live 仍待验收                            |
+
+2026-10-17 真实频道通话联调：
+
+- 环境：macOS 27.0.1（26A434）、Apple ARM64、LiveKit Server 1.13.7；本机回环服务使用 HTTP/WS，媒体通过真实 WebRTC/UDP、Opus 收发。两个 Electron 客户端各有独立用户配置、App Server 和频道成员凭据。
+- `livekit-client/tests/channels.rs`：实际启动协作服务和 LiveKit，用两个独立媒体进程验证加入同一频道、双向可辨识音频、静音和恢复，以及 10/20 ms 输入包切换。降为 Viewer 后主动断开旧房间、禁止发布但仍能收听；移除成员后 HTTP 授权拒绝，并验证缓存的发言者、收听者票据不能访问新房间音频。该用例已加入媒体 CI。
+- `test/smoke/areas/call/channel-call.spec.ts`：真实双 Desktop 配置从频道树入房，默认静音、双方开麦和状态同步、停止／恢复收听、降级后的自动重连、移除成员和结束通话。测试通过实际系统音频设备，不注入模拟设备服务。
+- EarPods 实测：USB 麦克风为系统默认输入（44.1 kHz，由设备进程转换到 48 kHz），收到 59 帧有效麦克风输入，另一客户端解码到 117 帧，502 帧可辨识返回测试音送入实际输出设备。用户确认耳机听到了测试音并已说话；不保存录音。输入 20 ms、网络解码 10 ms，因此收发帧数不同。
+- 联调修复：开麦失败后恢复原来的播放会话；旧媒体进程因服务端断开退出后，Close 等待其清理结果，允许客户端正常切换媒体代次；Opus 编码使用固定 10 ms 帧，避免输入包长切换造成声音衰减。
+- 复跑命令、物理设备测试开关与明确的无麦克风验收模式见 [LiveKit 客户端说明](../../livekit-client/README.md#频道通话联调)。这次是同机双客户端；跨机器、公网 NAT/TURN、蓝牙切换、长期通话稳定性仍须单独验收。
+
+此前频道笔记与通话绑定增量验证：
+
+- Rust：`ash-collab` 10 项、`ash-call --features runtime` 15 项、`ash-collab-server --lib` 10 项通过。真实 HTTP/SQLite 测试覆盖多人笔记读写、并发冲突、持久恢复、只读与撤权，以及频道通话并发发起、结束后重开、权限换代、准备阶段降权和媒体清理失败后恢复。通话房间管理使用测试媒体服务；本次未复跑真实 LiveKit/WebRTC 或麦克风设备验收，两项相应测试保持忽略。
+- 协议与宿主：协议生成及 157 项协议/导出契约测试通过；频道 RPC 定向测试覆盖新增两种资源请求的配置身份与连接授权。Protocol、Renderer、automation 类型检查通过；`ash-collab`、`ash-call` 完整 verify、协作服务器和 App Server warnings 检查，以及依赖审计通过。
+- 前端：频道服务、文档 pane、同步 controller、Sessions 布局共 64 项单测通过。覆盖迟到凭据丢弃、服务器确认的保存基线、后续未确认输入保留、未命名文档不访问文件提供者，以及恢复后的已有笔记展开。13 项 Chromium 协作面板测试通过，包含中英文、主题和频道通话入口。中文词条检查为 0 缺失。
+- 产品流程：Electron App Server 与 Browser App Server 各 1 项完整测试通过，覆盖频道创建、笔记写入、Workbench/Sessions 读取与修改、协作服务重启和窗口重载后的正文恢复，以及成员撤权。Electron 验证两个实际窗口；Browser 在同一页面切换产品入口并重新连接。
+- 验证边界：浏览器集成套件的全量 TypeScript 前置检查仍受现有 `terminal.integration.ts`、`chatInput.integration.ts` 的 9 项类型错误阻塞；13 项交互测试使用同一个 `test/integration/browser/run.ts` 直接构建并执行。不能据此声称整个浏览器测试工程类型检查通过。
+
+此前频道、独立文档与媒体接入记录：
+
+- 频道后端接入：当前 `collaboration.integration.spec.ts` 的 12 项 Chromium 测试通过，覆盖原频道操作、中英文及主题，并新增成员邀请、角色变更、撤权、只读和无频道能力宿主。`appServerChannelService.test.ts` 的 2 项测试通过，覆盖版本冲突不重放、撤权清理、相同版本不重建视图、最后视图隐藏后停止轮询及 dispose 后忽略响应。Protocol、Renderer 和 automation 类型检查通过，中文词条检查为 0 缺失。
+- 频道服务：`ash-collab` 10 项测试通过；`ash-collab-server --lib` 8 项通过、1 项忽略（真实 LiveKit）。新增测试使用独立 SQLite 连接及真实 HTTP 客户端验证成员、空间权限、旧版本冲突、并发写入、凭据备份恢复与持久撤权。
+- 协议：`just generate-protocol` 和 `just test ash-app-server-protocol --features export` 通过（148 项库测试及 9 项导出、解码和契约测试），依赖审计通过。
+- App Server：频道 RPC 定向测试通过，覆盖产品窗口与 Browser 访问、无效服务地址、共享配置的断开操作，以及未授权连接被拒绝。
+- 编译检查：`ash-collab` 的完整 `just verify` 通过；`ash-collab-server`、`ash-app-server-protocol`、`ash-app-server` 的 `just rust-warnings`（含所有测试目标）通过。
+- 频道产品流程：`collaboration-backend.spec.ts` 在 Electron App Server 和 Browser App Server 各 1 项通过，覆盖创建空间、跨 Workbench / Sessions 窗口读取、只读邀请、服务与应用重开恢复、撤权后 HTTP 403。Browser 使用现有设置 UI 为隔离测试配置显式选择私有文件凭据存储，未改变产品默认值。
+- 频道 UI 首版：`collaboration.integration.spec.ts` 的 10 项 Chromium 测试通过，覆盖中英文、浅色/深色/两种高对比度、窄侧栏、搜索与折叠恢复、创建子频道、同名/长度校验、键盘重命名、子树移除及无 Calls host；通话使用测试服务，未调用真实媒体设备。
+- 整窗入口：`test/smoke/areas/sessions/collaboration.spec.ts` 在 Browser UI 和 Electron UI 各 1 项通过，验证 Workbench 命令入口、Sessions 协作入口、Agent Teams 独立导航与视图保留。Renderer 与 automation 类型检查、中文词条校验和相关 CSS 检查通过。
+- UI 相关定向单测：Calls 与 SessionsLayoutService 共 12 项通过。整仓测试编译遇到无关的 `workbenchSessions.contribution.test.ts` 导入 `getChatInputChanges` 不存在的问题；使用继承 `tsconfig.test.json` 编译选定测试后执行，不能将此结果表述为整仓单测通过。
+- 前端：通过 `pnpm test:unit` 的 `--run` 选择编辑重排、同步 controller、文档服务、工具栏、文档 pane 和 Calls，共 9 个文件、79 项通过；随后使用 `pnpm test:unit:no-compile` 运行语音控制与朗读命令，共 2 个文件、17 项通过，合计 **96 项通过**。
+- Rust：`just test ash-collab -p ash-collab-server -p ash-call --features ash-call/runtime --lib` 重跑后 **29 项通过、2 项忽略**；忽略项需要显式提供真实 LiveKit 或协作服务程序。
+- 此前跨宿主测试出现过响应头缺失的间歇失败；此次频道 HTTP 联调也遇到连接提前关闭。连接处理现已显式清除 macOS/BSD 从监听 socket 继承的非阻塞模式，保证工作线程等待分段请求。新增强制非阻塞 socket 的分段请求回归，以及原跨宿主测试均通过。
 
 ## 1. 架构决定
 
@@ -55,14 +132,14 @@ LiveKit 的 SFU（选择性转发服务器）负责将参与者发布的音视�
 
 ## 2. 当前基础与待补能力
 
-| 当前实现                                         | 已有职责                                 | 本方案需要补充或调整                                                                         |
-| ------------------------------------------------ | ---------------------------------------- | -------------------------------------------------------------------------------------------- |
-| [collab](../../collab/README.md)                 | 结构化文档房间、操作顺序、回放、presence | 与通话关联；继续独立维护文档授权                                                             |
-| [collab-server](../../collab-server/README.md)   | 文档协作 HTTP、鉴权、SQLite 宿主         | 装配通话成员权限、媒体票据和房间管理                                                         |
-| [voice-host](../../voice-host/README.md)         | CPAL 设备、PCM 管道、Sonora 音频处理     | 接入 LiveKit；完善真实设备与切换验证                                                         |
-| `realtime-webrtc`（已删除）                      | 原单条双向音频连接、Opus、数据通道       | 双向音频改由 `livekit-client` 对真实 LiveKit Server 验证；自维护 RTP 播放与数据通道 API 退场 |
-| [model-provider](../../model-provider/README.md) | 模型选择、凭据和模型会话装配             | 增加 GPT-Live 会话能力                                                                       |
-| App Server 与 Core                               | 产品请求装配、Thread、Turn 和工具执行    | 接收 AI 语音委托，复用权限和任务状态                                                         |
+| 当前实现                                         | 已有职责                                                                            | 本方案需要补充或调整                                                                         |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| [collab](../../collab/README.md)                 | 结构化文档房间、操作顺序、回放、presence、独立文档授权                              | 普通代码文件的协作接线和项目共享尚待补充                                                     |
+| [collab-server](../../collab-server/README.md)   | 文档协作 HTTP、鉴权、SQLite、持久频道树、空间成员与继承权限、通话权限与媒体房间管理 | 频道笔记与通话绑定尚未接入                                                                   |
+| [voice-host](../../voice-host/README.md)         | CPAL 设备、PCM 管道、Sonora 音频处理，已接入 LiveKit 通话                           | 完善真实设备、蓝牙与切换验证                                                                 |
+| `realtime-webrtc`（已删除）                      | 原单条双向音频连接、Opus、数据通道                                                  | 双向音频改由 `livekit-client` 对真实 LiveKit Server 验证；自维护 RTP 播放与数据通道 API 退场 |
+| [model-provider](../../model-provider/README.md) | 模型选择、凭据和语音模型会话装配                                                    | 真实模型账户、计费与语音质量验收                                                             |
+| App Server 与 Core                               | 通话装配、语音转写持久化、单人语音委托与 Thread/Turn 进度关联                       | 多人 AI 的任务归属、远程执行目标和完整产品验收                                               |
 
 当前 `collab` 的 room 是文档房间，并不代表一组人的完整协作会话。原 `realtime-webrtc` 不是 LiveKit 客户端；删除前已核对没有其他生产 crate 依赖它。
 
@@ -70,7 +147,7 @@ LiveKit 的 SFU（选择性转发服务器）负责将参与者发布的音视�
 
 ## 3. Crate 划分
 
-共 **7 个直接相关 crate：新增 4 个，保留并调整 3 个**。已有 App Server、Core、模型与凭据 crate 继续复用，不计入新增能力的拆分数量。
+下表列出媒体与文档实现的 **7 个 crate**。文档房间和通话的共享数据类型分别由 [`collab-contract`](../../collab-contract/src/lib.rs) 与 [`call-contract`](../../call-contract/src/lib.rs) 拥有，App Server 协议和业务实现共同消费这些契约。已有 App Server、Core、模型与凭据 crate 继续复用。
 
 | Crate            | 状态 | 唯一职责                                             | 主要依赖边界                         |
 | ---------------- | ---- | ---------------------------------------------------- | ------------------------------------ |
@@ -87,7 +164,7 @@ LiveKit 的 SFU（选择性转发服务器）负责将参与者发布的音视�
 - `call` 定义业务需要的媒体、设备和服务管理接口；具体实现由宿主注入，避免服务端因复用成员规则而链接 WebRTC 媒体栈。
 - `livekit-client` 同时服务人类客户端和 AI 参与者，公开轨道与帧接口，不依赖 `voice-host`、UI 或具体模型。
 - `livekit-api` 负责 LiveKit API 适配；成员能否入房由 `call` 判断，密钥由已有凭据存储提供。
-- `voice-agent` 使用 App Server 注入的任务执行接口，不复制 Core 的工具循环、权限审批或 Thread 存储。
+- `voice-agent` 产生任务委托提议并接收宿主提供的任务进度说明；App Server 通知原 Chat，由其提交任务，不复制 Core 的工具循环、权限审批或 Thread 存储。
 - App Server 只做产品装配、协议转换和资源绑定；通话规则归 `call`，AI 音频协调归 `voice-agent`。
 - `src` 与 `app` 消费共享业务协议；不通过 `ash-code` 启动或调用这些能力。
 
@@ -169,7 +246,7 @@ LiveKit 官方支持本地启动，但跨平台随产品分发、签名、升级
 
 ## 6. 入房 API 与权限收回
 
-下表是目标能力契约；具体线上类型由所属协议生成器维护。音频通话已提供 `call/start`、`call/read`、`call/control`、`call/leave`、`call/end`、`call/invite`、`call/remove`、`call/role` 和 `call/changed`；屏幕共享增加 `call/screenSources`、`call/screenFrames` 和共享控制，字段与限制见 [App Server 协议](../../app-server-protocol/README.md#通话屏幕共享)；AI 接口尚未提供。
+下表是目标能力契约；具体线上类型由所属协议生成器维护。音频通话已提供 `call/start`、`call/read`、`call/control`、`call/leave`、`call/end`、`call/invite`、`call/remove`、`call/role` 和 `call/changed`；屏幕共享增加 `call/screenSources`、`call/screenFrames` 和共享控制，字段与限制见 [App Server 协议](../../app-server-protocol/README.md#通话屏幕共享)。单人语音另有 `voice/options`、`voice/start`、`voice/start/cancel`、`voice/read`、`voice/input`、`voice/interrupt`、`voice/stop` 和 `voice/delegation/reject`，以及 `voice/changed`、`voice/delegation` 通知，见 [Voice 协议](../../app-server-protocol/src/protocol/voice.rs) 与[注册表](../../app-server-protocol/src/protocol/registry.rs)。它们尚未提供向任意多人通话邀请 AI 的能力。
 
 | 能力           | 输入重点                             | 结果与约束                           |
 | -------------- | ------------------------------------ | ------------------------------------ |
@@ -208,11 +285,13 @@ LiveKit 自建部署不能把“踢出参与者”当作“旧 token 立即失�
 
 ### 模型与执行链
 
+当前生产接线由 Chat 启动：App Server 创建本地通话，验证房间内恰好一名人类和一名 AI，并绑定原活动本地 Thread。模型提出委托后，App Server 通知原 Chat；Chat 使用已有 mode、队列、权限和审批提交任务，App Server 再按同一 command ID 查询任务进度并发送给语音模型。转写写入原 Thread，切换 Chat 会停止该语音会话。多人房间、SSH 或其他远程执行目标仍属于待补能力。
+
 GPT-Live 支持持续双向语音，并将需要推理或工具的工作委托给另一个执行方。Ash 选择由自己接管委托；模型音频通过服务端 WebSocket 接入，房间这一侧仍统一使用 LiveKit。[GPT-Live 接入](https://developers.openai.com/api/docs/guides/live)
 
 ```text
 人类音轨 → LiveKit → voice-agent → model-provider → GPT-Live
-GPT-Live 委托 → voice-agent → 执行主机 App Server → Core Thread / Turn
+GPT-Live 委托 → voice-agent → App Server 通知 → 原 Chat 任务提交 → Core Thread / Turn
 任务进度与结果 → voice-agent → GPT-Live → AI 音轨 → LiveKit → 房间成员
 ```
 
@@ -335,4 +414,4 @@ pnpm exec playwright test --project=electron-app-server test/smoke/areas/call/ca
 - 实际模型测试与无需凭据的本地测试分开记录；模拟事件不能证明模型兼容或真实语音质量。
 - 发布前确定并测量延迟、连续通话资源占用和重连恢复预算；目前没有实测数字，不预先宣称优于其他方案。
 
-**当前验收状态：真实 LiveKit 的多路音频、成员权限与模型模拟桥接已有回归测试；Windows x64 已完成屏幕共享双窗口产品端到端验收，通话运行时与打包路径已有自动化覆盖。Windows ARM64 实机、真实麦克风／扬声器、蓝牙切换、三平台签名、公网 NAT、真实模型账户和生产任务委托仍未完成验收。**
+**当前验收状态：此前已记录真实 LiveKit 多路音频、成员权限、模型模拟桥接和 Windows x64 屏幕共享双窗口产品端到端验收；本次增加 macOS ARM64 + EarPods 的频道音频、两个独立桌面配置和动态撤权验收。单人语音已接入生产 Chat/任务链，且有使用真实房间与本地模型模拟服务的 App Server 用例；这些用例默认忽略，本次未执行。Windows ARM64 实机、macOS 产品屏幕共享、两台物理设备通话、蓝牙切换、三平台签名、公网 NAT、真实模型账户的语音任务端到端和多人 AI 仍待验收；Linux 屏幕采集尚未实现。**

@@ -21,6 +21,8 @@ test("Stanza collaboration submits only the in-flight snapshot while later typin
 	using model = TextModel.create(schema, document);
 	const connection = new FakeDocumentCollaborationConnection(schema, document);
 	using controller = new DocumentCollaborationController(model, connection);
+	const confirmed: string[] = [];
+	using listener = controller.onDidConfirmDocument(document => confirmed.push(firstText(document) ?? ''));
 
 	model.dispatch(new DocumentTransaction().replaceText("text-1", 0, 0, "A"));
 	assert.equal(connection.submissions.length, 1);
@@ -30,8 +32,10 @@ test("Stanza collaboration submits only the in-flight snapshot while later typin
 	assert.equal(firstText(model.document), "ABHello");
 	assert.equal(connection.submissions.length, 1);
 
+	assert.deepEqual(confirmed, []);
 	connection.accept(0, 1);
 	await flushMicrotasks();
+	assert.deepEqual(confirmed, ["AHello"], "later local typing is not yet persisted");
 	assert.equal(connection.submissions.length, 2);
 	assert.equal(connection.submissions[1]!.envelope.sequence, 2);
 	assert.equal(connection.submissions[1]!.envelope.baseVersion, 1);
@@ -41,6 +45,7 @@ test("Stanza collaboration submits only the in-flight snapshot while later typin
 	await flushMicrotasks();
 	assert.equal(firstText(model.document), "ABHello");
 	assert.equal(controller.state, "connected");
+	assert.deepEqual(confirmed, ["AHello", "ABHello"]);
 });
 
 test("Stanza collaboration shares an author's undo and redo as ordered transactions", async () => {

@@ -25,7 +25,7 @@ export class AppServerCallService extends Disposable implements ICallService {
 	private readonly device = generateUuid();
 	public get state(): CallState | undefined { return this.current; }
 
-	constructor(private readonly client: AppServerProtocolClient) {
+	constructor(private readonly client: AppServerProtocolClient, public readonly canStart = true) {
 		super();
 		this._register(client.onNotification(notification => {
 			if (notification.method === 'call/changed') { this.accept(notification.params); }
@@ -97,6 +97,7 @@ export class AppServerCallService extends Disposable implements ICallService {
 		this.mediaEpoch = status.call.mediaEpoch;
 		const role = status.call.members.find(member => member.id === status.memberId)?.role;
 		this.current = {
+			channelId: status.call.channelId ?? undefined,
 			connection: status.connection, muted: status.muted, deafened: status.deafened,
 			microphoneAllowed: status.microphoneAllowed, canManage: role === 'owner',
 			screenSharing: status.screenSharing, screenAllowed: role === 'owner' || role === 'speaker',

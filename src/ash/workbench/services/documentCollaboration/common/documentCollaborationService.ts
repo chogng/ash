@@ -1,3 +1,4 @@
+import type { ChannelReference } from '../../../../platform/collaboration/common/channelService.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import type { DocumentNode } from '../../../../editor/common/model/document.js';
 import type { DocumentSchema } from '../../../../editor/common/model/documentSchema.js';
@@ -12,6 +13,7 @@ export interface DocumentCollaborationOpenInput {
 	readonly document: DocumentNode;
 	/** An explicit document host selected from the call's shared references. */
 	readonly serverUrl?: string;
+	readonly channel?: ChannelReference;
 }
 
 /** Role assigned to a member invited into a collaboration room. */

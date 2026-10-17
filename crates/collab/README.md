@@ -1,8 +1,33 @@
 # ash-collab
 
 `ash-collab` owns the backend-neutral authority for ordered Document Engine
-structured-document rooms. It does not own HTTP, App Server JSON-RPC,
-Workbench state, sessions, users, or document-schema semantics.
+structured-document rooms and persistent human collaboration spaces. It does not own
+HTTP listeners, App Server JSON-RPC, Workbench state, Agent sessions, or document-schema semantics.
+
+`ChannelStore` owns the SQLite channel tree and space-scoped human membership.
+Owners manage members and channels, editors manage channels, and viewers read.
+Subchannels inherit space membership. Every write checks role and revision in
+one immediate transaction; deleting a channel removes its descendants. The last
+owner cannot be removed or demoted. Reads recheck the credential digest, including
+after another host revokes a member. Space/member snapshots never contain tokens.
+
+Channel resources bind a stable notes room and call to each channel. Scoped grants
+are derived from the member credential and resource identity; only their hashes
+are stored. Notes authorization reads current channel membership in the room's
+transaction, rather than copying an independent document ACL. Owners/editors can
+submit and viewers can read; even a space owner cannot issue standalone document
+invitations for channel notes. Deleted channel bindings remain inaccessible so an
+old grant cannot recreate a resource. `ash-call` consumes the same membership
+queries for its transaction and media permission reconciliation.
+
+`ChannelClient` implements the outbound channel protocol. `ChannelAccount` saves
+one current account in the configured `SecretStore`, shared by local windows;
+it does not persist a second channel catalog. Credentials are restored on restart,
+explicitly exportable as a private sign-in key, and forgotten on disconnect.
+Normal reads are bounded requests; the UI owns polling while a panel or channel
+notes editor is active. Connection
+loss does not replay mutations. Creating a space saves its generated owner key
+before the request so an uncertain response can be reconciled by a later read.
 
 Shared room data and roles are defined in
 [`ash-collab-contract`](../collab-contract/src/lib.rs).

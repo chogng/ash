@@ -52,7 +52,7 @@ jobs:
           echo "ASH_RECOGNIZER_PATH=$(node -p 'require("node:path").resolve(".build/cargo/debug/ash-realtime-voice.exe")')" >> "$GITHUB_ENV"
       - name: Test local room and recognition process contracts
         run: |
-          python -B scripts/cargo.py test --locked -p ash-livekit-client --features host --lib --test process --test room --test rooms -- --include-ignored --test-threads=1
+          python -B scripts/cargo.py test --locked -p ash-livekit-client --features host --lib --test process --test room --test rooms --test channels -- --include-ignored --test-threads=1
           python -B scripts/cargo.py test --locked -p ash-realtime-voice --features host
       - name: Test rooms, authority and model bridge against the real server
         # Each room test runs a real media server and a CPU video/audio pipeline.

@@ -12,6 +12,7 @@ name = "call"
 runtime = ["dep:serde", "dep:ash-http-client", "dep:tempfile", "dep:tokio", "dep:ash-package-store", "dep:ash-install-context"]
 
 [dependencies]
+ash-collab = { path = "../collab" }
 ash-package-store = { workspace = true, optional = true, features = ["installation"] }
 ash-install-context = { workspace = true, optional = true }
 contract = { package = "ash-call-contract", path = "../call-contract" }

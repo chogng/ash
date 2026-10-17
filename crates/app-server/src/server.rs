@@ -92,6 +92,10 @@ mod call_adapters;
 mod call_operations;
 mod call_runtime;
 mod call_video;
+#[path = "server/request_processors/channels.rs"]
+mod channel_operations;
+#[cfg(test)]
+mod channel_operations_tests;
 #[path = "server/request_processors/cloud_codebase.rs"]
 mod cloud_codebase_operations;
 #[path = "server/request_processors/codebase.rs"]
@@ -321,6 +325,7 @@ pub struct AppServer {
     dictation_models: realtime_voice::DictationModelManager,
     microphone_gate: Mutex<()>,
     collaboration_processor: collaboration_operations::CollaborationRequestProcessor,
+    channels: ash_collab::channel_client::ChannelAccount,
     pub(super) extensions: Mutex<ExtensionPackages>,
     pub(super) config: Option<Arc<ConfigStore>>,
     home: Option<Arc<ash_home::AshHome>>,
@@ -1264,6 +1269,7 @@ impl AppServer {
             dictation: realtime_voice::DictationManager::default(),
             dictation_models: realtime_voice::DictationModelManager::default(),
             microphone_gate: Mutex::new(()),
+            channels: ash_collab::channel_client::ChannelAccount::default(),
             collaboration_processor: collaboration_operations::CollaborationRequestProcessor::new(
                 Arc::clone(&updates),
             ),
@@ -2430,6 +2436,7 @@ impl AppServer {
     }
 
     pub(crate) fn with_secret_store(mut self, store: Arc<dyn ash_secrets::SecretStore>) -> Self {
+        self.channels.set_secret_store(store.clone());
         self.secret_processor = secret_operations::SecretRequestProcessor::new(store);
         self
     }
@@ -2561,6 +2568,7 @@ impl AppServer {
         mut self,
         policy: ash_http_client::OutboundNetworkPolicy,
     ) -> Self {
+        self.channels.set_network_policy(policy.clone());
         Arc::get_mut(&mut self.calls)
             .expect("Call policy is installed before runtime dispatch")
             .set_network_policy(policy);
@@ -3134,6 +3142,16 @@ impl AppServer {
             ) => self
                 .call_processor()
                 .call_operation(connection, method, &request.params),
+            Some(
+                method @ (ClientMethod::ChannelConnect
+                | ClientMethod::ChannelRead
+                | ClientMethod::ChannelEdit
+                | ClientMethod::ChannelInvite
+                | ClientMethod::ChannelSignInKey
+                | ClientMethod::ChannelDisconnect
+                | ClientMethod::ChannelNotes
+                | ClientMethod::ChannelCall),
+            ) => channel_operations::execute(&self.channels, connection, method, &request.params),
             Some(ClientMethod::DocumentCollaborationOpen) => self
                 .collaboration_processor
                 .document_collaboration_open(connection, &request.params),

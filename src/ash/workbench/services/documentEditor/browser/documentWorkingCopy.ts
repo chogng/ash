@@ -29,8 +29,8 @@ export class DocumentWorkingCopy extends Disposable implements IWorkingCopy {
 	private readonly dirtyEmitter = this._register(new Emitter<void>());
 	private readonly externalChangeEmitter = this._register(new Emitter<void>());
 	private readonly schema: DocumentSchema;
-	private readonly initialDocument: DocumentNode;
-	private readonly initialContent: string;
+	private initialDocument: DocumentNode;
+	private initialContent: string;
 	private savedContent: string;
 	private revision: string | undefined;
 	private dirty = false;
@@ -79,6 +79,15 @@ export class DocumentWorkingCopy extends Disposable implements IWorkingCopy {
 
 	restoreBackup(content: string): void {
 		this.options.model.resetBlocks(parseDocument(content, this.schema, this.options.createEmptyDocument));
+	}
+
+	acceptCollaborationSnapshot(document: DocumentNode): void {
+		this.savedContent = serializeDocument(document, this.schema);
+		// Discarding local edits in a channel returns to the last confirmed version,
+		// rather than to the empty document used before joining the room.
+		this.initialDocument = document;
+		this.initialContent = this.savedContent;
+		this.refreshDirty();
 	}
 
 	save(signal: AbortSignal): Promise<void> {

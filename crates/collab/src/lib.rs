@@ -5,6 +5,8 @@
 //! authority used by a remote collaboration host. Both enforce the exact same
 //! room, version, bounded-history, and replay semantics.
 
+pub mod channel_client;
+pub mod channels;
 mod in_memory;
 mod room;
 mod sqlite;

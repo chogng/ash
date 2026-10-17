@@ -1,3 +1,4 @@
+import { IChannelService, type ChannelReference } from '../../../../platform/collaboration/common/channelService.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
@@ -11,7 +12,7 @@ import { createDefaultDocumentSchema, type DocumentSchema } from '../../../../ed
 import type { DocumentPlugin } from '../../../../editor/common/model/documentPlugin.js';
 import type { TextModelWorkingCopyReference } from '../../../services/textmodelResolver/common/textModelResourceService.js';
 import { assertDefined } from "../../../../base/common/types.js";
-import { MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import { DisposableStore, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { IDimension } from "../../../../base/browser/dom.js";
 import type { URI } from "../../../../base/common/uri.js";
 import { RichTextEditorWidget, type RichTextEditorOptions } from "../../../../editor/browser/widget/richTextEditor/richTextEditorWidget.js";
@@ -31,6 +32,7 @@ import { localize } from '../../../../nls.js';
 
 /** Workbench-only services that complement one document editor. */
 export interface EditorPaneOptions extends RichTextEditorOptions {
+	readonly editorId?: string;
 	readonly contentType: string;
 	readonly collaborationSchemaId?: string;
 	readonly onSave?: () => Promise<void | boolean>;
@@ -42,7 +44,7 @@ export interface EditorPaneOptions extends RichTextEditorOptions {
 
 /** Workbench pane that hosts one structured document editor. */
 export class DocumentEditorPane extends EditorPane implements IEditorPane {
-	readonly id = DOCUMENT_EDITOR_ID;
+	readonly id: string;
 
 	private readonly modelReference = this._register(new MutableDisposable<TextModelWorkingCopyReference>());
 	private readonly schema: DocumentSchema;
@@ -51,6 +53,7 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 	private collaborationService: IDocumentCollaborationService | undefined;
 	private collaboration: CollaborationContribution | undefined;
 	private room: DocumentCollaborationRoom | undefined;
+	private channel: ChannelReference | undefined;
 	private roomRequest: AbortController | undefined;
 	private readonly roomStateListener = this._register(new MutableDisposable<IDisposable>());
 	private editor: RichTextEditorWidget | undefined;
@@ -69,7 +72,8 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
 	) {
-		super(DOCUMENT_EDITOR_ID, themeService, storageService);
+		super(options.editorId ?? DOCUMENT_EDITOR_ID, themeService, storageService);
+		this.id = options.editorId ?? DOCUMENT_EDITOR_ID;
 		this.options = options;
 		this._register(toDisposable(() => this.stopCollaboration()));
 		this.schema = options.schema ?? createDefaultDocumentSchema();
@@ -89,7 +93,8 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 		const { createDocumentCollaborationService, ...editorOptions } = this.options;
 		this.collaborationService = createDocumentCollaborationService ? this._register(createDocumentCollaborationService()) : undefined;
 		const collaboration = this._register(new CollaborationContribution(container, {
-			onStart: roomId => this.startCollaboration(roomId),
+			fixedRoom: () => this.channel ? `channel-notes-${this.channel.channelId}` : undefined,
+			onStart: roomId => this.startCollaboration(roomId, this.channel?.serverUrl, this.channel),
 			onStop: () => this.stopCollaboration(),
 			onInvite: (displayName, role) => this.requireRoom().createInvite(displayName, role, this.roomRequest!.signal),
 			onListMembers: () => this.requireRoom().listMembers(this.roomRequest!.signal),
@@ -130,6 +135,7 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 			reference.dispose();
 			throw error;
 		}
+		this.channel = undefined;
 		this.modelReference.value = reference;
 		editor.layout(this.dimension);
 	}
@@ -195,22 +201,31 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 		};
 	}
 
-	async joinCollaborationDocument(document: CallDocument): Promise<void> {
+	async joinCollaborationDocument(document: CallDocument, channel?: ChannelReference): Promise<void> {
 		if (document.schemaId !== (this.options.collaborationSchemaId ?? 'stanza-document-v1') || document.contentType !== this.options.contentType) {
 			throw new Error(localize('call.document.incompatible', 'This editor cannot open the shared document format.'));
 		}
+		if (this.room?.roomId === document.roomId && this.room.serverUrl === document.serverUrl && !this.roomRequest?.signal.aborted) return;
 		const reference = this.requireWorkingCopy();
 		if (reference.resource.scheme !== 'untitled' || reference.isDirty) {
 			throw new Error(localize('call.document.newCopyRequired', 'Open shared documents in a new untitled editor to preserve local changes.'));
 		}
-		const opened = await this.startCollaboration(document.roomId, document.serverUrl);
+		this.channel = channel;
+		const opened = await this.startCollaboration(document.roomId, document.serverUrl, channel);
 		this.collaboration?.setState('connected', opened);
 	}
 
-	private async startCollaboration(roomId: string | undefined, serverUrl?: string): Promise<CollaborationStartResult> {
+	private async startCollaboration(roomId: string | undefined, serverUrl?: string, channel?: ChannelReference): Promise<CollaborationStartResult> {
 		const service = this.collaborationService;
 		if (!service) throw new Error('Document collaboration is unavailable in this renderer');
 		const reference = this.requireWorkingCopy();
+		const channels = channel ? this.instantiation.invokeFunction(accessor => accessor.getOptional(IChannelService)) : undefined;
+		const memberId = channels?.space?.memberId;
+		const role = channels?.space?.members.find(member => member.id === memberId)?.role;
+		const authorized = () => !channel || !!channels?.space && channels.space.id === channel.spaceId
+			&& channels.space.serverUrl === channel.serverUrl && channels.space.memberId === memberId
+			&& channels.space.channels.some(entry => entry.id === channel.channelId)
+			&& channels.space.members.some(member => member.id === memberId && member.role === role);
 		this.roomRequest?.abort();
 		this.roomStateListener.clear();
 		this.room = undefined;
@@ -218,14 +233,14 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 		const request = new AbortController();
 		this.roomRequest = request;
 		const room = await service.open({
-			roomId,
+			roomId, channel,
 			...(serverUrl === undefined ? {} : { serverUrl }),
 			clientId: `stanza-${generateUuid()}`,
 			schemaId: this.options.collaborationSchemaId ?? 'stanza-document-v1',
 			schema: reference.model.schema,
 			document: reference.model.document,
 		}, request.signal);
-		if (request.signal.aborted || this.isDisposed || this.modelReference.value !== reference) {
+		if (request.signal.aborted || this.isDisposed || this.modelReference.value !== reference || !authorized()) {
 			room.dispose();
 			throw new CancellationError('Opening a document collaboration room was cancelled');
 		}
@@ -238,9 +253,26 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 		try {
 			const controller = this.requireEditor().setCollaborationConnection(room);
 			this.room = room;
-			this.roomStateListener.value = controller.onDidChangeState(change => {
+			const listeners = new DisposableStore();
+			this.roomStateListener.value = listeners;
+			listeners.add(controller.onDidChangeState(change => {
 				this.collaboration?.setState(change.state, { roomId: room.roomId, principalId: room.principalId, canManageMembers: room.canManageMembers, message: change.message });
-			});
+				if (channel && change.state === 'error') {
+					request.abort();
+					listeners.clear();
+				}
+			}));
+			if (channel && channels) {
+				listeners.add(channels.watch());
+				listeners.add(channels.onDidChange(() => {
+					if (!request.signal.aborted && !authorized()) {
+						request.abort();
+						controller.invalidate(localize('collaboration.permissionChanged', 'Channel access changed. Reopen the notes to apply current permissions; unsynced edits are preserved in this editor.'));
+					}
+				}));
+				this.modelService.acceptCollaborationSnapshot(reference.resource, room.initialSnapshot.document);
+				listeners.add(controller.onDidConfirmDocument(document => this.modelService.acceptCollaborationSnapshot(reference.resource, document)));
+			}
 			return { roomId: room.roomId, principalId: room.principalId, canManageMembers: room.canManageMembers };
 		} catch (error) {
 			room.dispose();

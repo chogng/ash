@@ -1,3 +1,4 @@
+import { AppServerChannelService } from "../../platform/collaboration/browser/appServerChannelService.js";
 import { createAppServerSecretStorageStatusService } from '../../platform/secrets/browser/appServerSecretStorageStatusService.js';
 import { AppServerMessageHistoryService } from '../../platform/messageHistory/browser/appServerMessageHistoryService.js';
 import { createExtensionBackendApi } from '../../platform/agentHost/browser/extensionBackendApi.js';
@@ -85,14 +86,15 @@ export async function connectWebRendererApi(transport: AppServerTransport, conne
 		const instanceId = generateUuid();
 		const memoryDiagnostics = connection.capabilities?.contracts.memoryDiagnostics?.version === 1 ? new AppServerMemoryDiagnosticsService(connection, 'browser', async () => [{ instanceId, processId: null, role: 'renderer', phase: 'unknown', metrics: [{ kind: 'domNodes', value: document.getElementsByTagName('*').length, unavailable: null }, { kind: 'javaScriptHeapBytes', value: null, unavailable: 'unsupported' }, { kind: 'residentBytes', value: null, unavailable: 'unsupported' }] }]) : undefined;
 		const memories = connection.capabilities?.memories ? new AppServerMemoriesService(connection) : undefined;
-		const calls = connection.capabilities?.contracts.calls?.version === 1 ? new AppServerCallService(connection) : undefined;
+		const channels = connection.capabilities?.contracts.channels?.version === 1 ? new AppServerChannelService(connection) : undefined;
+		const calls = connection.capabilities?.contracts.calls?.version === 1 ? new AppServerCallService(connection, false) : undefined;
 		const symphony = connection.capabilities?.contracts.symphony?.version === 1 ? new AppServerSymphonyService(connection) : undefined;
 		const automation = connection.capabilities?.contracts.automation?.version === 1 ? new AppServerAutomationService(connection) : undefined;
-		const api = { ...createRendererHost(connection, connectorHostServices, contributions), calls, automation, symphony, memoryDiagnostics, memories };
+		const api = { ...createRendererHost(connection, connectorHostServices, contributions), channels, calls, automation, symphony, memoryDiagnostics, memories };
 		return {
 			api,
 			metadata,
-			dispose: () => { disposed = true; reconnect.dispose(); clearTimeout(retryTimer); releaseWait?.(); memories?.dispose(); memoryDiagnostics?.dispose(); automation?.dispose(); symphony?.dispose(); calls?.dispose(); api.mcpServerManagement.dispose(); connection.dispose(); },
+			dispose: () => { disposed = true; reconnect.dispose(); clearTimeout(retryTimer); releaseWait?.(); memories?.dispose(); memoryDiagnostics?.dispose(); automation?.dispose(); symphony?.dispose(); calls?.dispose(); channels?.dispose(); api.mcpServerManagement.dispose(); connection.dispose(); },
 		};
 	} catch (error) {
 		connection.dispose();

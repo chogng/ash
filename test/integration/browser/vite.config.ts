@@ -25,6 +25,7 @@ export default defineConfig({
 		rolldownOptions: {
 			output: rendererOutput,
 			input: {
+				collaboration: resolve(import.meta.dirname, 'collaboration.html'),
 				gettingStarted: resolve(import.meta.dirname, 'gettingStarted.html'),
 				markdownEditor: resolve(import.meta.dirname, 'markdownEditor.html'),
 				markdownEditorHost: resolve(import.meta.dirname, 'markdownEditorHost.html'),

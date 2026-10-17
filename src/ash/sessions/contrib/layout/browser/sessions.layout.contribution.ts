@@ -5,6 +5,7 @@ import { registerSingleton, InstantiationType } from '../../../../platform/insta
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { ISessionsLayoutService } from '../../../services/layout/common/sessionsLayoutService.js';
 import { SESSIONS_NAVIGATION_CONTAINER_ID, TEAMS_NAVIGATION_CONTAINER_ID } from '../../../browser/parts/sidebar/sidebarPart.js';
+import { COLLABORATION_CONTAINER_ID } from '../../../../workbench/contrib/collaboration/common/collaboration.js';
 import { SessionsLayoutService, documentEntry } from './sessionsLayoutService.js';
 
 class SessionsLayoutContribution extends Disposable {
@@ -14,6 +15,7 @@ class SessionsLayoutContribution extends Disposable {
 		for (const [id, sidebar, focus] of [
 			['chat', SESSIONS_NAVIGATION_CONTAINER_ID, 'conversation'],
 			['teams', TEAMS_NAVIGATION_CONTAINER_ID, 'sidebar'],
+			['collaboration', COLLABORATION_CONTAINER_ID, 'sidebar'],
 		] as const) {
 			this._register(CommandsRegistry.register('sessions.open.' + id, (_accessor, source) => layout.openEntry({
 				id, sidebarContainerId: sidebar, content: 'conversation', focus,

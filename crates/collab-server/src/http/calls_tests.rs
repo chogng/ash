@@ -47,6 +47,8 @@ impl MediaServer {
                     }
                     Err(error) => panic!("{error}"),
                 };
+                // Match the product worker when accept inherits nonblocking mode on macOS.
+                stream.set_nonblocking(false).unwrap();
                 stream
                     .set_read_timeout(Some(Duration::from_secs(2)))
                     .unwrap();
@@ -141,7 +143,8 @@ fn recovery_completes_failed_rotations_without_another_client_request() {
         let mut host = HttpRuntime::new(
             SqliteDocumentCollaborationRooms::open_at(&path).unwrap(),
             options,
-        );
+        )
+        .unwrap();
         host.calls = Some(calls);
         let host = Arc::new(host);
         let generation = host.updates.current();
@@ -205,7 +208,8 @@ fn startup_keeps_pending_rooms_unjoinable_until_media_recovers() {
     let mut host = HttpRuntime::new(
         SqliteDocumentCollaborationRooms::open_at(&path).unwrap(),
         options,
-    );
+    )
+    .unwrap();
     host.calls = Some(calls);
     let host = Arc::new(host);
     let recovery = Recovery::start(&host).unwrap();
@@ -254,7 +258,8 @@ fn document_links_notify_call_members_without_granting_document_access() {
     let mut host = HttpRuntime::new(
         SqliteDocumentCollaborationRooms::open_at(&path).unwrap(),
         options,
-    );
+    )
+    .unwrap();
     host.calls = Some(calls);
     let host = Arc::new(host);
     let document_owner = ash_collab::DocumentCollaborationPrincipal {
@@ -363,4 +368,245 @@ fn http_call(
     let (headers, body) = response.split_once("\r\n\r\n").unwrap();
     let status = headers.split_whitespace().nth(1).unwrap().parse().unwrap();
     (status, serde_json::from_str(body).unwrap_or(Value::Null))
+}
+
+#[test]
+fn channel_calls_converge_and_retire_media_permissions_after_membership_changes() {
+    use ash_collab::channels::*;
+    let media = MediaServer::start();
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("channels.sqlite");
+    let channels = ChannelStore::open(&path).unwrap();
+    let owner = ChannelCredential::generate().unwrap();
+    let editor = ChannelCredential::generate().unwrap();
+    let viewer = ChannelCredential::generate().unwrap();
+    let mut state = channels.create(&owner, "Team", "Alice").unwrap();
+    state = channels
+        .edit(
+            &owner,
+            ChannelEditParams {
+                space_id: state.id.clone(),
+                revision: state.revision,
+                change: ChannelChange::Create {
+                    name: "meeting".into(),
+                    parent_id: None,
+                },
+            },
+        )
+        .unwrap();
+    for (credential, role) in [
+        (&editor, ChannelRole::Editor),
+        (&viewer, ChannelRole::Viewer),
+    ] {
+        state = channels
+            .invite(
+                &owner,
+                ChannelInvite {
+                    params: ChannelInviteParams {
+                        space_id: state.id.clone(),
+                        revision: state.revision,
+                        name: "Member".into(),
+                        role,
+                    },
+                    credential: credential.expose().into(),
+                },
+            )
+            .unwrap();
+    }
+    let target = ChannelResourceParams {
+        space_id: state.id.clone(),
+        channel_id: state.channels[0].id.clone(),
+    };
+    let access = |credential| {
+        channels
+            .resource(credential, target.clone(), ChannelResourceKind::Call)
+            .unwrap()
+    };
+    let owner_key = MemberCredential::parse(access(&owner).credential).unwrap();
+    let editor_key = MemberCredential::parse(access(&editor).credential).unwrap();
+    let viewer_key = MemberCredential::parse(access(&viewer).credential).unwrap();
+    let calls = CallRuntime::open(&path, media.service.clone()).unwrap();
+    assert!(matches!(
+        calls.store.open_channel(&viewer_key),
+        Err(CallError::Denied)
+    ));
+    // Two independent database connections race to create the same channel room.
+    let other = CallRuntime::open(&path, media.service.clone()).unwrap();
+    let (first, second) = thread::scope(|scope| {
+        let first = scope.spawn(|| calls.store.open_channel(&editor_key).unwrap());
+        let second = scope.spawn(|| other.store.open_channel(&owner_key).unwrap());
+        (first.join().unwrap(), second.join().unwrap())
+    });
+    assert_eq!(first.id, second.id);
+    assert_eq!(first.media_room, second.media_room);
+    let editor_id = channels.read(&editor).unwrap().member_id;
+    let owner_id = state.member_id.clone();
+    // The preparing media snapshot still has the original owner. Channel roles
+    // must revoke control even before this media transition can be completed.
+    for (member_id, role) in [
+        (&editor_id, ChannelRole::Owner),
+        (&owner_id, ChannelRole::Editor),
+    ] {
+        state = channels
+            .edit(
+                &owner,
+                ChannelEditParams {
+                    space_id: state.id.clone(),
+                    revision: state.revision,
+                    change: ChannelChange::SetRole {
+                        member_id: member_id.clone(),
+                        role,
+                    },
+                },
+            )
+            .unwrap();
+    }
+    assert!(matches!(
+        calls.store.end(&owner_key, "demoted-owner", first.revision),
+        Err(CallError::Denied)
+    ));
+    state = channels
+        .edit(
+            &editor,
+            ChannelEditParams {
+                space_id: state.id.clone(),
+                revision: state.revision,
+                change: ChannelChange::SetRole {
+                    member_id: owner_id,
+                    role: ChannelRole::Owner,
+                },
+            },
+        )
+        .unwrap();
+    state = channels
+        .edit(
+            &owner,
+            ChannelEditParams {
+                space_id: state.id.clone(),
+                revision: state.revision,
+                change: ChannelChange::SetRole {
+                    member_id: editor_id.clone(),
+                    role: ChannelRole::Editor,
+                },
+            },
+        )
+        .unwrap();
+    let ready = calls.reconcile(first).ok().unwrap();
+    assert!(
+        calls
+            .store
+            .join(&editor_key, "editor-device")
+            .unwrap()
+            .microphone
+    );
+    assert!(
+        !calls
+            .store
+            .join(&viewer_key, "viewer-device")
+            .unwrap()
+            .microphone
+    );
+    assert!(matches!(
+        calls.store.invite(
+            &owner_key,
+            "bypass",
+            ready.revision,
+            &MemberCredential::generate(),
+            CallRole::Speaker
+        ),
+        Err(CallError::Denied)
+    ));
+    state = channels
+        .edit(
+            &owner,
+            ChannelEditParams {
+                space_id: state.id.clone(),
+                revision: state.revision,
+                change: ChannelChange::SetRole {
+                    member_id: editor_id.clone(),
+                    role: ChannelRole::Viewer,
+                },
+            },
+        )
+        .unwrap();
+    let updates = super::super::UpdateSignal::default();
+    calls.recover(&updates).ok().unwrap();
+    let reduced = calls.store.read(&editor_key).unwrap();
+    assert_ne!(reduced.media_room, ready.media_room);
+    assert!(reduced.media_epoch > ready.media_epoch);
+    assert!(
+        !calls
+            .store
+            .join(&editor_key, "editor-device")
+            .unwrap()
+            .microphone
+    );
+    state = channels
+        .edit(
+            &owner,
+            ChannelEditParams {
+                space_id: state.id.clone(),
+                revision: state.revision,
+                change: ChannelChange::RemoveMember {
+                    member_id: editor_id,
+                },
+            },
+        )
+        .unwrap();
+    assert!(matches!(
+        calls.store.read(&editor_key),
+        Err(CallError::Denied)
+    ));
+    *media.fail.lock().unwrap() = Some("DeleteRoom".into());
+    calls.recover(&updates).ok().unwrap();
+    assert!(matches!(
+        calls.store.join(&owner_key, "owner-device"),
+        Err(CallError::NotReady)
+    ));
+    drop(calls);
+    let restored = CallRuntime::open(&path, media.service.clone()).unwrap();
+    restored.recover(&updates).ok().unwrap();
+    let live = restored.store.read(&owner_key).unwrap();
+    assert_eq!(live.media_state, MediaState::Ready);
+    assert_ne!(live.media_room, reduced.media_room);
+    let closing = restored
+        .store
+        .end(&owner_key, "finish-channel-call", live.revision)
+        .unwrap();
+    let closed = restored.reconcile(closing).ok().unwrap();
+    assert_eq!(closed.media_state, MediaState::Closed);
+    assert!(matches!(
+        restored.store.open_channel(&viewer_key),
+        Err(CallError::Denied)
+    ));
+    let restarted = restored.store.open_channel(&owner_key).unwrap();
+    assert_eq!(restarted.id, live.id);
+    assert!(restarted.media_epoch > live.media_epoch);
+    restored.reconcile(restarted).ok().unwrap();
+    channels
+        .edit(
+            &owner,
+            ChannelEditParams {
+                space_id: state.id.clone(),
+                revision: state.revision,
+                change: ChannelChange::Remove {
+                    channel_id: target.channel_id,
+                },
+            },
+        )
+        .unwrap();
+    restored.recover(&updates).ok().unwrap();
+    assert!(matches!(
+        restored.store.read(&owner_key),
+        Err(CallError::Denied)
+    ));
+    assert!(restored.store.pending_media().unwrap().is_empty());
+    assert!(
+        media
+            .requests
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|(method, _)| method == "DeleteRoom")
+    );
 }

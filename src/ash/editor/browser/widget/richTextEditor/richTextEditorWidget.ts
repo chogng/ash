@@ -1,5 +1,5 @@
 import './richTextEditorWidget.css';
-import { Disposable, MutableDisposable, combinedDisposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, combinedDisposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { isSafeInteger } from '../../../../base/common/numbers.js';
 import { assertDefined } from '../../../../base/common/types.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -1331,10 +1331,13 @@ export class RichTextEditorWidget extends Disposable {
 		const controller = new DocumentCollaborationController(this.requireModel(), connection);
 		this.collaborationControllerSlot.value = controller;
 		this.remotePresences = controller.presences;
-		this.collaborationPresenceListenerSlot.value = controller.onDidChangePresence(change => {
+		const listeners = new DisposableStore();
+		this.collaborationPresenceListenerSlot.value = listeners;
+		listeners.add(controller.onDidChangePresence(change => {
 			this.remotePresences = change.presences;
 			this.render();
-		});
+		}));
+		listeners.add(controller.onDidChangeState(() => this.render()));
 		this.render();
 		return controller;
 	}

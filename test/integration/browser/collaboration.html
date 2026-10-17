@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Collaboration panel integration</title>
+		<style>
+			body { margin: 0; }
+			#app { width: min(360px, 100vw); height: 100vh; position: relative; color: var(--ash-foreground); background: var(--ash-sideBar-background); }
+			#title { box-sizing: border-box; height: 44px; margin: 0; padding: 12px 16px; font-size: 13px; font-weight: 600; }
+			#panes { height: calc(100% - 44px); }
+		</style>
+	</head>
+	<body>
+		<main id="app" class="ash-workbench">
+			<h1 id="title"></h1>
+			<div id="panes"></div>
+		</main>
+		<script type="module" src="./collaboration.integration.ts"></script>
+	</body>
+</html>

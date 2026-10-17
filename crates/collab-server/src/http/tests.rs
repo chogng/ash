@@ -77,7 +77,8 @@ fn media_calls_enforce_membership_and_rotate_self_hosted_rooms() {
     let mut runtime = HttpRuntime::new(
         SqliteDocumentCollaborationRooms::open_at(options.database_path()).unwrap(),
         options,
-    );
+    )
+    .unwrap();
     runtime.calls = Some(calls);
     let runtime = Arc::new(runtime);
     let shutdown = Arc::new(AtomicBool::new(false));
@@ -217,10 +218,13 @@ fn remote_host_authenticates_origins_and_orders_cross_client_updates() {
     let options =
         CollaborationServerOptions::new(address, directory.path().join("rooms.sqlite3"), TOKEN)
             .with_allowed_origin(ORIGIN);
-    let runtime = Arc::new(HttpRuntime::new(
-        SqliteDocumentCollaborationRooms::open_at(options.database_path()).unwrap(),
-        options,
-    ));
+    let runtime = Arc::new(
+        HttpRuntime::new(
+            SqliteDocumentCollaborationRooms::open_at(options.database_path()).unwrap(),
+            options,
+        )
+        .unwrap(),
+    );
     let shutdown = Arc::new(AtomicBool::new(false));
     let worker_runtime = runtime.clone();
     let worker_shutdown = shutdown.clone();
@@ -337,10 +341,13 @@ fn remote_host_enforces_room_roles_rotates_credentials_and_exposes_owner_audit()
     let options =
         CollaborationServerOptions::new(address, directory.path().join("rooms.sqlite3"), TOKEN)
             .with_allowed_origin(ORIGIN);
-    let runtime = Arc::new(HttpRuntime::new(
-        SqliteDocumentCollaborationRooms::open_at(options.database_path()).unwrap(),
-        options,
-    ));
+    let runtime = Arc::new(
+        HttpRuntime::new(
+            SqliteDocumentCollaborationRooms::open_at(options.database_path()).unwrap(),
+            options,
+        )
+        .unwrap(),
+    );
     let shutdown = Arc::new(AtomicBool::new(false));
     let worker_runtime = runtime.clone();
     let worker_shutdown = shutdown.clone();
@@ -561,14 +568,20 @@ fn remote_hosts_recheck_shared_sqlite_for_cross_instance_updates() {
         .with_allowed_origin(ORIGIN);
     let options_b = CollaborationServerOptions::new(address_b, &database_path, TOKEN)
         .with_allowed_origin(ORIGIN);
-    let runtime_a = Arc::new(HttpRuntime::new(
-        SqliteDocumentCollaborationRooms::open_at(options_a.database_path()).unwrap(),
-        options_a,
-    ));
-    let runtime_b = Arc::new(HttpRuntime::new(
-        SqliteDocumentCollaborationRooms::open_at(options_b.database_path()).unwrap(),
-        options_b,
-    ));
+    let runtime_a = Arc::new(
+        HttpRuntime::new(
+            SqliteDocumentCollaborationRooms::open_at(options_a.database_path()).unwrap(),
+            options_a,
+        )
+        .unwrap(),
+    );
+    let runtime_b = Arc::new(
+        HttpRuntime::new(
+            SqliteDocumentCollaborationRooms::open_at(options_b.database_path()).unwrap(),
+            options_b,
+        )
+        .unwrap(),
+    );
     let shutdown_a = Arc::new(AtomicBool::new(false));
     let shutdown_b = Arc::new(AtomicBool::new(false));
     let worker_a = thread::spawn({
@@ -717,4 +730,425 @@ fn transaction() -> String {
 
 fn selection() -> &'static str {
     r#"{"kind":"text","anchor":{"nodeId":"text-1","offset":0},"head":{"nodeId":"text-1","offset":1}}"#
+}
+
+#[test]
+fn channel_accounts_share_durable_trees_and_enforce_remote_permissions() {
+    use ash_collab::channel_client::ChannelAccount;
+    use ash_collab::channels::ChannelChange;
+    use ash_collab::channels::ChannelConnectParams;
+    use ash_collab::channels::ChannelEditParams;
+    use ash_collab::channels::ChannelError;
+    use ash_collab::channels::ChannelInviteParams;
+    use ash_collab::channels::ChannelRole;
+    let directory = TempDir::new().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let options =
+        CollaborationServerOptions::new(address, directory.path().join("channels.sqlite"), TOKEN)
+            .with_allowed_origin(ORIGIN);
+    let host = Arc::new(
+        HttpRuntime::new(
+            SqliteDocumentCollaborationRooms::open_at(options.database_path()).unwrap(),
+            options,
+        )
+        .unwrap(),
+    );
+    let shutdown = Arc::new(AtomicBool::new(false));
+    let stop = shutdown.clone();
+    let worker = thread::spawn(move || serve_listener(listener, host, stop).unwrap());
+    let url = format!("http://{address}");
+    let saved = Arc::new(ash_secrets::MemorySecretStore::default());
+    let mut owner = ChannelAccount::default();
+    owner.set_secret_store(saved.clone());
+    let mut state = owner
+        .connect(ChannelConnectParams::Create {
+            server_url: url.clone(),
+            administrator: TOKEN.into(),
+            name: "Team".into(),
+            member_name: "Alice".into(),
+        })
+        .unwrap()
+        .snapshot;
+    let mut editor = ChannelAccount::default();
+    editor.set_secret_store(Arc::new(ash_secrets::MemorySecretStore::default()));
+    let invite = owner
+        .invite(ChannelInviteParams {
+            space_id: state.id.clone(),
+            revision: state.revision,
+            name: "Bob".into(),
+            role: ChannelRole::Editor,
+        })
+        .unwrap();
+    let joined = editor
+        .connect(ChannelConnectParams::Join {
+            server_url: invite.server_url,
+            credential: invite.credential.clone(),
+        })
+        .unwrap();
+    state = joined.snapshot.clone();
+    let edited = editor
+        .edit(ChannelEditParams {
+            space_id: state.id.clone(),
+            revision: state.revision,
+            change: ChannelChange::Create {
+                name: "general".into(),
+                parent_id: None,
+            },
+        })
+        .unwrap();
+    assert_eq!(
+        owner.read().unwrap().unwrap().snapshot.channels,
+        edited.snapshot.channels
+    );
+    // A second window/process restores the profile account without exposing its credential.
+    let mut restored = ChannelAccount::default();
+    restored.set_secret_store(saved);
+    state = restored.read().unwrap().unwrap().snapshot;
+    let backup = owner.sign_in_key().unwrap();
+    let mut another_device = ChannelAccount::default();
+    another_device.set_secret_store(Arc::new(ash_secrets::MemorySecretStore::default()));
+    let recovered = another_device
+        .connect(ChannelConnectParams::Join {
+            server_url: backup.server_url,
+            credential: backup.credential,
+        })
+        .unwrap();
+    assert_eq!(recovered.snapshot.member_id, state.member_id);
+    state = owner
+        .edit(ChannelEditParams {
+            space_id: state.id.clone(),
+            revision: state.revision,
+            change: ChannelChange::SetRole {
+                member_id: joined.snapshot.member_id.clone(),
+                role: ChannelRole::Viewer,
+            },
+        })
+        .unwrap()
+        .snapshot;
+    assert!(matches!(
+        editor.edit(ChannelEditParams {
+            space_id: state.id.clone(),
+            revision: state.revision,
+            change: ChannelChange::Create {
+                name: "denied".into(),
+                parent_id: None
+            }
+        }),
+        Err(ChannelError::Denied)
+    ));
+    assert!(matches!(
+        editor.invite(ChannelInviteParams {
+            space_id: state.id.clone(),
+            revision: state.revision,
+            name: "Mallory".into(),
+            role: ChannelRole::Owner
+        }),
+        Err(ChannelError::Denied)
+    ));
+    owner
+        .edit(ChannelEditParams {
+            space_id: state.id.clone(),
+            revision: state.revision,
+            change: ChannelChange::RemoveMember {
+                member_id: joined.snapshot.member_id,
+            },
+        })
+        .unwrap();
+    assert!(matches!(editor.read(), Err(ChannelError::Denied)));
+    let authorization = format!("Bearer {}", invite.credential);
+    assert_eq!(
+        send(
+            address,
+            "GET",
+            "/v1/channels/read",
+            &[("Authorization", &authorization)],
+            b""
+        )
+        .status,
+        403
+    );
+    assert_eq!(
+        send(address, "GET", "/v1/channels/read", &[], b"").status,
+        401
+    );
+    assert_eq!(
+        send(
+            address,
+            "GET",
+            "/v1/channels/read",
+            &[
+                ("Origin", "https://untrusted.example"),
+                ("Authorization", &format!("Bearer {TOKEN}"))
+            ],
+            b""
+        )
+        .status,
+        403
+    );
+    owner.disconnect().unwrap();
+    assert!(restored.read().unwrap().is_none());
+    shutdown.store(true, Ordering::Release);
+    worker.join().unwrap();
+    let store =
+        ash_collab::channels::ChannelStore::open(directory.path().join("channels.sqlite")).unwrap();
+    assert_eq!(
+        store.read(&ash_collab::channels::ChannelCredential::parse(invite.credential).unwrap()),
+        Err(ChannelError::Denied)
+    );
+}
+
+#[test]
+fn fragmented_channel_request_waits_on_an_accepted_nonblocking_socket() {
+    let directory = TempDir::new().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let options =
+        CollaborationServerOptions::new(address, directory.path().join("channels.sqlite"), TOKEN);
+    let runtime = HttpRuntime::new(
+        SqliteDocumentCollaborationRooms::open_at(options.database_path()).unwrap(),
+        options,
+    )
+    .unwrap();
+    let (accepted, ready) = std::sync::mpsc::channel();
+    let worker = thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        // Force the inherited mode on every OS, not only on macOS/BSD.
+        stream.set_nonblocking(true).unwrap();
+        accepted.send(()).unwrap();
+        super::handle_connection(stream, &runtime).unwrap();
+    });
+    let mut client = TcpStream::connect(address).unwrap();
+    client
+        .set_read_timeout(Some(std::time::Duration::from_secs(2)))
+        .unwrap();
+    client
+        .write_all(b"GET /v1/channels/read HTTP/1.1\r\nHost: localhost\r\n")
+        .unwrap();
+    ready.recv().unwrap();
+    // The second packet arrives after the worker has started reading the first.
+    thread::sleep(std::time::Duration::from_millis(50));
+    client.write_all(b"\r\n").unwrap();
+    let mut response = Vec::new();
+    client.read_to_end(&mut response).unwrap();
+    worker.join().unwrap();
+    assert_eq!(decode_response(&response).status, 401);
+}
+
+#[test]
+fn channel_notes_share_one_durable_room_and_follow_live_channel_permissions() {
+    use ash_collab::channel_client::ChannelAccount;
+    use ash_collab::channels::*;
+    let directory = TempDir::new().unwrap();
+    let path = directory.path().join("notes.sqlite");
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let options =
+        CollaborationServerOptions::new(address, path.clone(), TOKEN).with_allowed_origin(ORIGIN);
+    let host = Arc::new(
+        HttpRuntime::new(
+            SqliteDocumentCollaborationRooms::open_at(&path).unwrap(),
+            options,
+        )
+        .unwrap(),
+    );
+    let shutdown = Arc::new(AtomicBool::new(false));
+    let stop = shutdown.clone();
+    let worker = thread::spawn(move || serve_listener(listener, host, stop).unwrap());
+    let mut owner = ChannelAccount::default();
+    owner.set_secret_store(Arc::new(ash_secrets::MemorySecretStore::default()));
+    let state = owner
+        .connect(ChannelConnectParams::Create {
+            server_url: format!("http://{address}"),
+            administrator: TOKEN.into(),
+            name: "Notes team".into(),
+            member_name: "Alice".into(),
+        })
+        .unwrap()
+        .snapshot;
+    let state = owner
+        .edit(ChannelEditParams {
+            space_id: state.id.clone(),
+            revision: state.revision,
+            change: ChannelChange::Create {
+                name: "design".into(),
+                parent_id: None,
+            },
+        })
+        .unwrap()
+        .snapshot;
+    let invitation = owner
+        .invite(ChannelInviteParams {
+            space_id: state.id.clone(),
+            revision: state.revision,
+            name: "Bob".into(),
+            role: ChannelRole::Editor,
+        })
+        .unwrap();
+    let mut editor = ChannelAccount::default();
+    editor.set_secret_store(Arc::new(ash_secrets::MemorySecretStore::default()));
+    let joined = editor
+        .connect(ChannelConnectParams::Join {
+            server_url: invitation.server_url,
+            credential: invitation.credential,
+        })
+        .unwrap()
+        .snapshot;
+    let target = ChannelResourceParams {
+        space_id: state.id.clone(),
+        channel_id: state.channels[0].id.clone(),
+    };
+    let owner_access = owner
+        .resource(target.clone(), ChannelResourceKind::Notes)
+        .unwrap();
+    let access = editor
+        .resource(target.clone(), ChannelResourceKind::Notes)
+        .unwrap();
+    assert_eq!(access.resource_id, owner_access.resource_id);
+    assert_ne!(access.credential, owner_access.credential);
+    assert_eq!(
+        editor
+            .resource(target.clone(), ChannelResourceKind::Notes)
+            .unwrap()
+            .credential,
+        access.credential
+    );
+    let request = |method: &str, endpoint: &str, token: &str, body: Value, expected| {
+        let response = send(
+            address,
+            method,
+            endpoint,
+            &[
+                ("Origin", ORIGIN),
+                ("Authorization", &format!("Bearer {token}")),
+                ("Content-Type", "application/json"),
+            ],
+            &serde_json::to_vec(&body).unwrap(),
+        );
+        assert_eq!(
+            response.status,
+            expected,
+            "{}",
+            String::from_utf8_lossy(&response.body)
+        );
+        serde_json::from_slice::<Value>(&response.body).unwrap_or(Value::Null)
+    };
+    let open = serde_json::json!({"roomId": access.resource_id, "clientId":"bob", "schemaId":"stanza-document-v1", "document":document("must not initialize shared notes")});
+    let opened = request(
+        "POST",
+        super::OPEN_PATH,
+        &access.credential,
+        open.clone(),
+        200,
+    );
+    assert_eq!(opened["canEdit"], true);
+    assert_eq!(opened["canManageMembers"], false);
+    assert!(
+        !opened["snapshot"]["document"]
+            .as_str()
+            .unwrap()
+            .contains("must not initialize")
+    );
+    let update = serde_json::json!({"roomId":access.resource_id,"clientId":"bob","sequence":1,"baseVersion":0,"transaction":transaction(),"document":document("shared notes")});
+    assert_eq!(
+        request(
+            "POST",
+            super::SUBMIT_PATH,
+            &access.credential,
+            update.clone(),
+            200
+        )["status"],
+        "accepted"
+    );
+    let mut conflict = update.clone();
+    conflict["clientId"] = "alice".into();
+    assert_eq!(
+        request(
+            "POST",
+            super::SUBMIT_PATH,
+            &owner_access.credential,
+            conflict,
+            200
+        )["status"],
+        "conflict"
+    );
+    let read = request(
+        "POST",
+        super::OPEN_PATH,
+        &owner_access.credential,
+        open.clone(),
+        200,
+    );
+    assert_eq!(read["snapshot"]["version"], 1);
+    assert!(
+        read["snapshot"]["document"]
+            .as_str()
+            .unwrap()
+            .contains("shared notes")
+    );
+    request(
+        "POST",
+        super::INVITES_PATH,
+        &owner_access.credential,
+        serde_json::json!({"roomId":access.resource_id,"displayName":"Bypass","role":"owner"}),
+        403,
+    );
+    request(
+        "GET",
+        "/v1/channels/read",
+        &access.credential,
+        Value::Null,
+        403,
+    );
+    let state = owner.read().unwrap().unwrap().snapshot;
+    let state = owner
+        .edit(ChannelEditParams {
+            space_id: state.id.clone(),
+            revision: state.revision,
+            change: ChannelChange::SetRole {
+                member_id: joined.member_id.clone(),
+                role: ChannelRole::Viewer,
+            },
+        })
+        .unwrap()
+        .snapshot;
+    assert_eq!(
+        request(
+            "POST",
+            super::OPEN_PATH,
+            &access.credential,
+            open.clone(),
+            200
+        )["canEdit"],
+        false
+    );
+    request("POST", super::SUBMIT_PATH, &access.credential, update, 403);
+    owner
+        .edit(ChannelEditParams {
+            space_id: state.id,
+            revision: state.revision,
+            change: ChannelChange::RemoveMember {
+                member_id: joined.member_id,
+            },
+        })
+        .unwrap();
+    request(
+        "POST",
+        super::OPEN_PATH,
+        &access.credential,
+        open.clone(),
+        401,
+    );
+    shutdown.store(true, Ordering::Release);
+    worker.join().unwrap();
+    let rooms = SqliteDocumentCollaborationRooms::open_at(path).unwrap();
+    let principal = rooms
+        .principal_for_access_token(&owner_access.resource_id, &owner_access.credential)
+        .unwrap()
+        .unwrap();
+    let persisted = rooms
+        .open_as(&principal, serde_json::from_value(open).unwrap())
+        .unwrap();
+    assert_eq!(persisted.snapshot.version, 1);
+    assert!(persisted.snapshot.document.contains("shared notes"));
 }

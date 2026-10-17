@@ -1,3 +1,5 @@
+import type { DocumentNode } from '../../../../editor/common/model/document.js';
+import type { ChannelReference } from '../../../../platform/collaboration/common/channelService.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
@@ -5,10 +7,10 @@ import type { ITextModelResourceService, TextModelBlockInput, TextModelWorkingCo
 import type { IEditorPane } from '../../../common/editor.js';
 import type { CallDocument } from '../../../../platform/call/common/callService.js';
 
-/** Public document-pane operations used by the Calls contribution. Models remain editor-owned. */
+/** Document-pane operations used by Calls and Channels. Models remain editor-owned. */
 export interface IDocumentCollaborationEditor extends IEditorPane {
 	getCollaborationDocument(): CallDocument | undefined;
-	joinCollaborationDocument(document: CallDocument): Promise<void>;
+	joinCollaborationDocument(document: CallDocument, channel?: ChannelReference): Promise<void>;
 }
 
 export function isDocumentCollaborationEditor(pane: IEditorPane | undefined): pane is IDocumentCollaborationEditor {
@@ -54,5 +56,8 @@ export const DocumentTypes = new class {
 	}
 };
 
-export interface IDocumentEditorTextModelService extends ITextModelResourceService<TextModelBlockInput, TextModelWorkingCopyReference> { }
+export interface IDocumentEditorTextModelService extends ITextModelResourceService<TextModelBlockInput, TextModelWorkingCopyReference> {
+	/** A remote authority saved this exact snapshot; newer local edits remain dirty. */
+	acceptCollaborationSnapshot(resource: URI, document: DocumentNode): void;
+}
 export const IDocumentEditorTextModelService = createServiceIdentifier<IDocumentEditorTextModelService>('documentEditorTextModelService');

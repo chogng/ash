@@ -15,10 +15,41 @@
 真实服务测试需要显式提供已核验的 LiveKit Server。当前验证版本为 1.13.7：
 
 ```sh
-ASH_TEST_LIVEKIT_SERVER=/absolute/path/livekit-server just test ash-livekit-client --test room -- --ignored
+ASH_TEST_LIVEKIT_SERVER=/absolute/path/livekit-server just test ash-livekit-client --features host --test room -- --ignored
 ```
 
 测试启动临时回环服务，验证实际 Opus 音频双向传输，以及共享视频的解码、停止和重新发布。视频源为确定性测试画面；不打开麦克风，不代表真实设备或公网连通性验收。
+
+### 频道通话联调
+
+`tests/channels.rs` 启动真实协作服务和 LiveKit，用两个独立媒体进程通过频道权限入房。
+验证双向可辨识音频、静音与恢复、编辑者降为只读后的收听与发布限制，以及撤权后旧连接退出、缓存票据无法收听或向新房间注入音频。服务进程和临时配置随测试退出清理。
+
+```sh
+scripts/.venv/bin/python -B build/lib/livekit.py aarch64-apple-darwin
+scripts/.venv/bin/python -B scripts/cargo.py build --profile ci-test \
+  -p ash-collab-server -p ash-livekit-client --features ash-livekit-client/host
+ASH_TEST_LIVEKIT_SERVER="$PWD/third_party/.cache/livekit/1.13.7/aarch64-apple-darwin/livekit-server" \
+ASH_TEST_COLLABORATION_SERVER="$PWD/.build/cargo/ci-test/ash-collab-server" \
+ASH_LIVEKIT_CLIENT_PATH="$PWD/.build/cargo/ci-test/ash-livekit-client" \
+just test ash-livekit-client --features host --test channels -- --ignored --nocapture
+```
+
+以上为 macOS ARM64 示例；其他平台使用对应目标与可执行文件后缀。
+显式增加 `ASH_TEST_VOICE_HOST=/absolute/path/ash-voice-host` 可打开真实默认输入和输出：
+戴耳机说话，测试检查麦克风帧在另一客户端解码，并将对方返回的测试音通过设备播放。
+只记录帧数，不保存麦克风录音。没有该变量时完全不打开物理设备。
+
+桌面双配置验收使用 `test/smoke/areas/call/channel-call.spec.ts`：
+
+```sh
+ASH_TEST_LIVEKIT_SERVER=/absolute/path/livekit-server \
+pnpm test:smoke:desktop test/smoke/areas/call/channel-call.spec.ts
+```
+
+它通过频道树加入，验证双方默认静音、开麦状态同步、停止／恢复收听、角色降级后的自动重连和成员移除。
+需要真实输入、输出设备。仅在明确验收无麦克风场景时设置 `ASH_TEST_CALL_ALLOW_NO_MICROPHONE=1`；
+该模式只接受具体的设备缺失错误，并标注物理采集未验证，不能作为真人开麦通过的证据。
 
 - 进程内所有房间共享 Ash 的 HTTP／WebSocket 传输；首次连接前注册一次，再次入房、连接诊断和区域发现继续使用同一网络策略。
 - `stats` 返回 Ash 自己的发布端与订阅端报告计数，不向调用方暴露 SDK 类型。

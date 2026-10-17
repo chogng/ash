@@ -1,3 +1,5 @@
+import type { URI } from '../../../../base/common/uri.js';
+import type { DocumentNode } from '../../../../editor/common/model/document.js';
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { AbstractDisposable, Disposable, DisposableMap } from "../../../../base/common/lifecycle.js";
 import { extUri } from '../../../../base/common/resources.js';
@@ -24,9 +26,12 @@ export class DocumentEditorTextModelService extends Disposable implements IDocum
 		const key = extUri.getComparisonKey(input.resource);
 		const existing = this.entries.get(key);
 		if (existing) { return this.reference(key, existing, input); }
+		// Untitled documents have no file provider. Their durable content comes from
+		// a working-copy backup or the collaboration room after the pane opens.
+		const initialText = input.initialText ?? (input.resource.scheme === 'untitled' ? '' : undefined);
 		const content = await this.textFiles.resolve({
 			resource: input.resource,
-			...(input.initialText === undefined ? {} : { bootstrapText: input.initialText }),
+			...(initialText === undefined ? {} : { bootstrapText: initialText }),
 		}, signal);
 		throwIfCancelled(signal, "Stanza document editor TextModel acquisition was cancelled");
 		this.assertNotDisposed();
@@ -48,6 +53,10 @@ export class DocumentEditorTextModelService extends Disposable implements IDocum
 		const entry = new DocumentModelEntry(model, workingCopy);
 		this.entries.set(key, entry);
 		return this.reference(key, entry, input);
+	}
+
+	acceptCollaborationSnapshot(resource: URI, document: DocumentNode): void {
+		this.entries.get(extUri.getComparisonKey(resource))?.workingCopy.acceptCollaborationSnapshot(document);
 	}
 
 	private reference(key: string, entry: DocumentModelEntry, input: TextModelBlockInput): TextModelWorkingCopyReference {

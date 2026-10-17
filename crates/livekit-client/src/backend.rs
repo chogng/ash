@@ -294,27 +294,32 @@ impl MediaRoom {
         }
         let encoder = self.encoder.as_ref().ok_or(MediaError::Publication)?;
         let mut encoded = [0u8; 4000];
-        let len = encoder
-            .lock()
+        let mut encoder = encoder.lock().await;
+        // Call devices supply 20 ms while other sources supply 10 ms. The pinned
+        // Opus encoder corrupts a sustained tone when its frame duration changes.
+        // Keep the codec and RTP cadence at 10 ms across either input packet size.
+        for frame in samples.chunks_exact(480) {
+            let len = encoder
+                .encode_i16(frame, frame.len(), &mut encoded)
+                .map_err(|_| MediaError::Publication)?;
+            timeout(
+                Duration::from_millis(200),
+                publication.track.write_sample(
+                    publication.ssrc,
+                    publication.payload_type,
+                    &Sample {
+                        data: Bytes::copy_from_slice(&encoded[..len]),
+                        duration: Duration::from_millis(10),
+                        ..Default::default()
+                    },
+                    &[],
+                ),
+            )
             .await
-            .encode_i16(samples, samples.len(), &mut encoded)
+            .map_err(|_| MediaError::Timeout)?
             .map_err(|_| MediaError::Publication)?;
-        timeout(
-            Duration::from_millis(200),
-            publication.track.write_sample(
-                publication.ssrc,
-                publication.payload_type,
-                &Sample {
-                    data: Bytes::copy_from_slice(&encoded[..len]),
-                    duration: Duration::from_millis((samples.len() / 48) as u64),
-                    ..Default::default()
-                },
-                &[],
-            ),
-        )
-        .await
-        .map_err(|_| MediaError::Timeout)?
-        .map_err(|_| MediaError::Publication)
+        }
+        Ok(())
     }
 
     pub fn mute(&self) -> Result<(), MediaError> {

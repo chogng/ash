@@ -828,6 +828,7 @@ name = "ash-call"
 version = "0.1.0"
 dependencies = [
  "ash-call-contract",
+ "ash-collab",
  "ash-http-client",
  "ash-install-context",
  "ash-package-store",
@@ -1039,11 +1040,15 @@ name = "ash-collab"
 version = "0.1.0"
 dependencies = [
  "ash-collab-contract",
+ "ash-http-client",
+ "ash-secrets",
  "getrandom 0.2.17",
  "rusqlite",
+ "serde",
  "serde_json",
  "sha2 0.10.9",
  "tempfile",
+ "url",
 ]
 
 [[package]]
@@ -2005,6 +2010,7 @@ dependencies = [
  "ash-realtime-voice",
  "ash-screen-capture",
  "ash-secrets",
+ "ash-voice-host",
  "ash-websocket-client",
  "async-trait",
  "base64 0.22.1",

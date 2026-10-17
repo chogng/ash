@@ -21,6 +21,7 @@ export interface CollaborationStartResult {
 }
 
 export interface CollaborationContributionOptions {
+	readonly fixedRoom?: () => string | undefined;
 	readonly onStart: (roomId: string | undefined) => Promise<CollaborationStartResult>;
 	readonly onStop: () => void;
 	readonly onInvite: (displayName: string, role: DocumentCollaborationRoomRole) => Promise<DocumentCollaborationInvite>;
@@ -162,7 +163,8 @@ export class CollaborationContribution extends Disposable {
 			return;
 		}
 		const generationBeforeInput = this.startGeneration;
-		const response = await this.dialogs.input({
+		const fixedRoom = this.options.fixedRoom?.();
+		const response = fixedRoom ? { confirmed: true, values: [fixedRoom] } : await this.dialogs.input({
 			title: 'Collaborate',
 			message: 'Enter a collaboration room ID to join, or leave it blank to create one.',
 			inputs: [{ value: '' }],

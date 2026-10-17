@@ -243,7 +243,7 @@ test('Document pane owns and releases the working copy when its input is cleared
 		assert.equal(parent.querySelector('textarea'), null);
 		assert.equal(pane.isDirty, false);
 		await assert.rejects(pane.save(), /no active working copy/);
-		await pane.setInput({ resource: URI.parse('untitled:document/reopened') }, new AbortController().signal);
+		await pane.setInput({ resource: URI.parse('untitled:document/reopened'), initialText: structuredText('Original') }, new AbortController().signal);
 		assert.notEqual(pane.workingCopy, reference);
 		assert.equal(pane.getDocument().content[0]?.content[0]?.text, 'Original');
 	} finally {
@@ -1808,6 +1808,7 @@ class MemoryTextFiles implements ITextFileService {
 	constructor(text: string) { this.text = structuredText(text); }
 
 	async resolve(request: TextFileResolveRequest, _signal: AbortSignal): Promise<ResolvedTextFileContent> {
+		assert.ok(request.resource.scheme !== 'untitled' || request.bootstrapText !== undefined, 'untitled documents must not query a filesystem provider');
 		return {
 			resource: request.resource,
 			text: request.bootstrapText === undefined ? this.text : structuredText(request.bootstrapText),
@@ -1932,7 +1933,7 @@ test('call document joins use a separate untitled working copy and preserve the 
 		assert.equal(selectedServer, document.serverUrl);
 		assert.equal(pane.getDocument().content[0]?.content[0]?.text, 'Remote text');
 		assert.deepEqual(pane.getCollaborationDocument(), { ...document, title: 'shared-notes' });
-		await pane.setInput({ resource: URI.parse('untitled:/pending-shared-notes') }, new AbortController().signal);
+		await pane.setInput({ resource: URI.parse('untitled:/pending-shared-notes'), initialText: structuredText('Local draft') }, new AbortController().signal);
 		let finishOpen!: () => void;
 		pendingOpen = new Promise<void>(resolve => { finishOpen = resolve; });
 		const joining = pane.joinCollaborationDocument(document);
@@ -1945,4 +1946,24 @@ test('call document joins use a separate untitled working copy and preserve the 
 		pane.clearInput();
 		assert.equal(pane.getCollaborationDocument(), undefined);
 	} finally { pane.dispose(); environment.window.close(); }
+});
+
+
+test('a confirmed channel snapshot clears only the matching document baseline', async () => {
+	using copies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
+	using models = new DocumentEditorTextModelService(new MemoryTextFiles('Draft'), copies);
+	const resource = URI.parse('untitled:channel-notes/persistence');
+	using reference = await models.acquire({ resource, contentType: 'test.document', schema: createDefaultDocumentSchema() }, new AbortController().signal);
+	const initial = reference.model.document;
+	reference.model.resetBlocks(reference.model.schema.createDocument([reference.model.schema.createNode('paragraph', { content: [reference.model.schema.createText('Newer local edit')] })]));
+	assert.equal(reference.isDirty, true);
+	models.acceptCollaborationSnapshot(resource, initial);
+	assert.equal(reference.isDirty, true);
+	models.acceptCollaborationSnapshot(resource, reference.model.document);
+	assert.equal(reference.isDirty, false);
+	const confirmed = reference.model.document;
+	reference.model.resetBlocks(initial);
+	await reference.revert(new AbortController().signal);
+	assert.deepEqual(reference.model.document, confirmed);
+	assert.equal(reference.isDirty, false);
 });

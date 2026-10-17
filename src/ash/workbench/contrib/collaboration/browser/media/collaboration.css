@@ -1,0 +1,87 @@
+.ash-collaboration {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+	gap: 8px;
+	padding: 8px 12px;
+}
+.ash-collaboration .collaboration-search {
+	box-sizing: border-box;
+	width: 100%;
+	min-width: 0;
+	flex: none;
+	padding: 6px 8px;
+	font: inherit;
+	color: var(--ash-input-foreground);
+	background: var(--ash-input-background);
+	border: 1px solid var(--ash-input-border, transparent);
+	border-radius: var(--ash-cornerRadius-small);
+}
+.ash-collaboration .collaboration-connection,
+.ash-collaboration .collaboration-empty {
+	color: var(--ash-description-foreground);
+	line-height: 1.5;
+	overflow-wrap: anywhere;
+}
+.ash-collaboration .collaboration-connection {
+	font-size: var(--ash-fontSize-label2);
+}
+.ash-collaboration .collaboration-empty {
+	padding: 12px 0;
+}
+.ash-collaboration .collaboration-tree {
+	flex: 1;
+	min-height: 60px;
+	min-width: 0;
+}
+.ash-collaboration .collaboration-channel {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+	flex: 1;
+}
+.ash-collaboration .collaboration-channel-icon {
+	flex: none;
+	width: 16px;
+	text-align: center;
+	color: var(--ash-description-foreground);
+}
+.ash-collaboration .collaboration-channel-name,
+.ash-collaboration .collaboration-selection-label {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.ash-collaboration .collaboration-selection {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	min-width: 0;
+	flex: none;
+	border-top: 1px solid var(--ash-border);
+	padding-top: 4px;
+}
+.ash-collaboration .collaboration-selection-label {
+	font-size: var(--ash-fontSize-body2);
+}
+.ash-collaboration .collaboration-selection > .ash-toolbar {
+	flex: none;
+}
+.ash-collaboration .collaboration-search:focus-visible {
+	outline: 1px solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+.ash-collaboration .collaboration-search,
+.ash-collaboration .collaboration-selection {
+	border-color: var(
+		--ash-contrastBorder,
+		var(--ash-input-border, transparent)
+	);
+}
+.ash-collaboration [hidden] {
+	display: none;
+}

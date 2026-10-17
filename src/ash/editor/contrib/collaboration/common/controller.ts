@@ -1,3 +1,4 @@
+import type { DocumentNode } from '../../../common/model/document.js';
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { TextModel } from "../../../common/model/textModel.js";
@@ -29,6 +30,9 @@ export interface DocumentCollaborationPresenceChange {
 /** Binds one structured Stanza TextModel to a server-ordered collaboration connection. */
 export class DocumentCollaborationController extends Disposable {
 	private readonly stateEmitter = this._register(new Emitter<DocumentCollaborationStateChange>());
+	private readonly confirmedEmitter = this._register(new Emitter<DocumentNode>());
+	/** The exact server-confirmed document, excluding unacknowledged local edits. */
+	readonly onDidConfirmDocument = this.confirmedEmitter.event;
 	private readonly presenceEmitter = this._register(new Emitter<DocumentCollaborationPresenceChange>());
 	private readonly synchronizer: DocumentCollaborationSynchronizer;
 	private submitting = false;
@@ -71,10 +75,17 @@ export class DocumentCollaborationController extends Disposable {
 	}
 
 	get canEdit(): boolean {
-		return this.connection.canEdit;
+		return this._state === "connected" && this.connection.canEdit;
 	}
 
 
+
+	/** Preserve the local model while suspending a revoked or changed authorization. */
+	invalidate(message: string): void {
+		if (this.isDisposed) return;
+		this.setState('error', message);
+		this.connection.dispose();
+	}
 
 	get state(): DocumentCollaborationState {
 		return this._state;
@@ -139,6 +150,7 @@ export class DocumentCollaborationController extends Disposable {
 				this.receiveRemoteUpdate(update);
 			}
 			this.synchronizeModel();
+			this.confirmedEmitter.fire(this.synchronizer.canonicalDocument);
 			this.submitNext();
 		} catch (error) {
 			this.setState("error", error instanceof Error ? error.message : "Applying a collaboration update failed");
@@ -170,6 +182,7 @@ export class DocumentCollaborationController extends Disposable {
 			this.synchronizer.replaceSnapshot(snapshot.document, snapshot.version);
 			this.synchronizeModel();
 			this.setState("connected");
+			this.confirmedEmitter.fire(this.synchronizer.canonicalDocument);
 		} catch (error) {
 			this.setState("resyncRequired", error instanceof Error ? error.message : "Local updates require a manual collaboration resync");
 		}

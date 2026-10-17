@@ -1,3 +1,4 @@
+import { AppServerChannelService } from "../../platform/collaboration/browser/appServerChannelService.js";
 import type { AppServerProtocolClient } from '../../platform/agentHost/browser/appServerProtocolClient.js';
 import type { IExtensionHostApi } from '../../platform/agentHost/common/extensionHostApi.js';
 import { createAppServerExtensionHostApi } from '../../platform/agentHost/browser/extensionHostApi.js';
@@ -163,6 +164,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			if (client.capabilities?.memories) { backend = { ...backend, memories: resources.add(new AppServerMemoriesService(client)) }; }
 			if (client.capabilities?.contracts.memoryDiagnostics?.version === 1) { backend = { ...backend, memoryDiagnostics: resources.add(new AppServerMemoryDiagnosticsService(client, 'electron', () => invoke<MemoryObservation[]>('ash:memory:collect'))) }; }
 			// Device ownership stays on this computer when the workspace connection is remote.
+			if (localClient.capabilities?.contracts.channels?.version === 1) { backend = { ...backend, channels: resources.add(new AppServerChannelService(localClient)) }; }
 			if (localClient.capabilities?.contracts.calls?.version === 1) { backend = { ...backend, calls: resources.add(new AppServerCallService(localClient)) }; }
 			if (remoteConnection.kind === 'local' && client.capabilities?.contracts.voiceConversation?.version === 1) { backend = { ...backend, agentVoice: resources.add(new AppServerAgentVoiceService(client)) }; }
 			backend = { ...backend, dictation: createAppServerVoiceCodeTranscriptionBackend(localClient) };

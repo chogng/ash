@@ -272,14 +272,28 @@ impl call::Devices for Devices {
         Box::pin(async move {
             if !self.capture {
                 self.host()?.stop().await.map_err(|e| e.to_string())?;
-                self.host()?
+                if let Err(error) = self
+                    .host()?
                     .start(AudioConfig {
                         rate: SampleRate::Hz48000,
                         direction: Direction::Duplex,
                         processing: Processing::Speech,
                     })
                     .await
-                    .map_err(|e| e.to_string())?;
+                {
+                    // Opening capture replaces the playback session. If there is no
+                    // microphone (or permission is denied), keep the joined call audible
+                    // and leave capture off so the user can retry after fixing the device.
+                    self.host()?
+                        .start(AudioConfig {
+                            rate: SampleRate::Hz48000,
+                            direction: Direction::Playback,
+                            processing: Processing::Speech,
+                        })
+                        .await
+                        .map_err(|e| e.to_string())?;
+                    return Err(error.to_string());
+                }
                 self.capture = true;
             }
             self.host()?

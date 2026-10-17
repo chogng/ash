@@ -29,9 +29,84 @@ impl CallStore {
             CREATE TABLE IF NOT EXISTS media_devices(call_id TEXT NOT NULL, member_id TEXT NOT NULL, device_id TEXT NOT NULL, PRIMARY KEY(call_id, member_id));
             CREATE TABLE IF NOT EXISTS media_operations(actor TEXT NOT NULL, operation TEXT NOT NULL, request TEXT NOT NULL, call_id TEXT NOT NULL, PRIMARY KEY(actor, operation));
         ").map_err(storage)?;
+        ash_collab::channels::configure_resources(&connection).map_err(storage)?;
         Ok(Self {
             connection: Mutex::new(connection),
         })
+    }
+
+    /// Joins the channel's existing call, or starts it for an editor/owner. Stable
+    /// channel identity plus an immediate transaction makes simultaneous starts converge.
+    pub fn open_channel(&self, credential: &MemberCredential) -> Result<CallSnapshot, CallError> {
+        let mut connection = self.connection.lock().map_err(storage)?;
+        let tx = connection
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+            .map_err(storage)?;
+        let (id, member) = ash_collab::channels::resource_identity(
+            &tx,
+            &credential.digest(),
+            ash_collab::channels::ChannelResourceKind::Call,
+        )
+        .map_err(channel_error)?
+        .ok_or(CallError::Denied)?;
+        let existing: bool = tx
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM media_calls WHERE id=?1)",
+                [&id],
+                |row| row.get(0),
+            )
+            .map_err(storage)?;
+        let mut call = if existing {
+            sync_channel(&tx, read(&tx, &id)?)?
+        } else {
+            CallSnapshot {
+                channel_id: id.strip_prefix("channel-call-").map(str::to_owned),
+                id,
+                revision: 0,
+                media_epoch: 0,
+                media_room: crate::identifier(),
+                media_state: MediaState::Closed,
+                members: vec![],
+                documents: vec![],
+            }
+        };
+        if call.media_state == MediaState::Closed {
+            if member.role == ash_collab::channels::ChannelRole::Viewer {
+                return Err(CallError::Denied);
+            }
+            call.members = channel_members(&tx, &call.id)?.ok_or(CallError::Denied)?;
+            call.media_room = crate::identifier();
+            call.media_epoch = call.media_epoch.checked_add(1).ok_or(CallError::Conflict)?;
+            call.revision = call.revision.checked_add(1).ok_or(CallError::Conflict)?;
+            call.media_state = MediaState::Preparing;
+            call.documents.clear();
+            save(&tx, &call)?;
+        }
+        tx.commit().map_err(storage)?;
+        Ok(call)
+    }
+
+    /// The media ACL is a derived record of issued permissions, never a channel
+    /// membership authority. Recovery compares it to current channel membership.
+    pub fn refresh_channels(&self) -> Result<(), CallError> {
+        let mut connection = self.connection.lock().map_err(storage)?;
+        let tx = connection
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+            .map_err(storage)?;
+        let ids = {
+            let mut statement = tx
+                .prepare("SELECT id FROM media_calls WHERE id LIKE 'channel-call-%'")
+                .map_err(storage)?;
+            statement
+                .query_map([], |row| row.get::<_, String>(0))
+                .map_err(storage)?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(storage)?
+        };
+        for id in ids {
+            sync_channel(&tx, read(&tx, &id)?)?;
+        }
+        tx.commit().map_err(storage)
     }
 
     /// The product host authenticates permission to create calls before invoking this operation.
@@ -64,6 +139,7 @@ impl CallStore {
             role: CallRole::Owner,
         };
         let call = CallSnapshot {
+            channel_id: None,
             id: crate::identifier(),
             revision: 1,
             media_epoch: 1,
@@ -84,9 +160,14 @@ impl CallStore {
     }
 
     pub fn read(&self, credential: &MemberCredential) -> Result<CallSnapshot, CallError> {
-        let connection = self.connection.lock().map_err(storage)?;
-        let (id, _) = identity(&connection, &credential.digest())?;
-        read(&connection, &id)
+        let mut connection = self.connection.lock().map_err(storage)?;
+        let tx = connection
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+            .map_err(storage)?;
+        let (id, _) = identity(&tx, &credential.digest())?;
+        let call = sync_channel(&tx, read(&tx, &id)?)?;
+        tx.commit().map_err(storage)?;
+        Ok(call)
     }
 
     pub fn invite(
@@ -345,7 +426,7 @@ impl CallStore {
             .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
             .map_err(storage)?;
         let (id, member_id) = identity(&tx, &credential.digest())?;
-        let call = read(&tx, &id)?;
+        let call = sync_channel(&tx, read(&tx, &id)?)?;
         if call.media_state != MediaState::Ready {
             return Err(CallError::NotReady);
         }
@@ -399,9 +480,11 @@ impl CallStore {
             .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
             .map_err(storage)?;
         let (id, member) = identity(&tx, &actor)?;
-        let mut call = read(&tx, &id)?;
-        if !call
-            .members
+        let mut call = sync_channel(&tx, read(&tx, &id)?)?;
+        // A pending media rotation retains its previous ACL until cleanup completes.
+        // Control operations must still use the member's current channel role.
+        let members = channel_members(&tx, &id)?.unwrap_or_else(|| call.members.clone());
+        if !members
             .iter()
             .any(|entry| entry.id == member && entry.role.can_publish_audio())
         {
@@ -444,11 +527,18 @@ impl CallStore {
             .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
             .map_err(storage)?;
         let (id, member) = identity(&tx, &actor)?;
-        let mut call = read(&tx, &id)?;
-        if !call
-            .members
+        let mut call = sync_channel(&tx, read(&tx, &id)?)?;
+        let members = channel_members(&tx, &id)?.unwrap_or_else(|| call.members.clone());
+        if !members
             .iter()
             .any(|entry| entry.id == member && entry.role == CallRole::Owner)
+        {
+            return Err(CallError::Denied);
+        }
+        if id.starts_with("channel-call-")
+            && (request.starts_with("[\"invite\"")
+                || request.starts_with("[\"role\"")
+                || request.starts_with("[\"remove\""))
         {
             return Err(CallError::Denied);
         }
@@ -494,6 +584,15 @@ fn validate_document_server(value: &str) -> Result<(), CallError> {
 }
 
 fn identity(connection: &Connection, actor: &str) -> Result<(String, String), CallError> {
+    if let Some((id, member)) = ash_collab::channels::resource_identity(
+        connection,
+        actor,
+        ash_collab::channels::ChannelResourceKind::Call,
+    )
+    .map_err(channel_error)?
+    {
+        return Ok((id, member.id));
+    }
     connection
         .query_row(
             "SELECT call_id,member_id FROM media_members WHERE credential=?1",
@@ -561,3 +660,66 @@ fn storage(_: impl std::fmt::Display) -> CallError {
 #[cfg(test)]
 #[path = "store_tests.rs"]
 mod tests;
+
+fn channel_error(error: ash_collab::channels::ChannelError) -> CallError {
+    match error {
+        ash_collab::channels::ChannelError::Denied => CallError::Denied,
+        ash_collab::channels::ChannelError::Invalid => CallError::Invalid,
+        ash_collab::channels::ChannelError::Conflict => CallError::Conflict,
+        ash_collab::channels::ChannelError::Storage => CallError::Storage,
+        ash_collab::channels::ChannelError::Transport => CallError::Transport,
+    }
+}
+fn channel_members(
+    connection: &Connection,
+    id: &str,
+) -> Result<Option<Vec<CallMember>>, CallError> {
+    Ok(ash_collab::channels::resource_members(connection, id)
+        .map_err(channel_error)?
+        .map(|members| {
+            members
+                .into_iter()
+                .map(|m| CallMember {
+                    id: m.id,
+                    role: match m.role {
+                        ash_collab::channels::ChannelRole::Owner => CallRole::Owner,
+                        ash_collab::channels::ChannelRole::Editor => CallRole::Speaker,
+                        ash_collab::channels::ChannelRole::Viewer => CallRole::Listener,
+                    },
+                })
+                .collect()
+        }))
+}
+fn sync_channel(
+    connection: &Connection,
+    mut call: CallSnapshot,
+) -> Result<CallSnapshot, CallError> {
+    if !call.id.starts_with("channel-call-") {
+        return Ok(call);
+    }
+    let members = channel_members(connection, &call.id)?.unwrap_or_default();
+    if call.members == members
+        || matches!(call.media_state, MediaState::Closing | MediaState::Closed)
+    {
+        return Ok(call);
+    }
+    // Finish an existing rotation first, then compare again before issuing a ticket.
+    // Keeping its previous_room preserves the durable cleanup obligation after a crash.
+    if !matches!(call.media_state, MediaState::Ready) {
+        return Ok(call);
+    }
+    let reduced = call.members.iter().any(|old| !members.contains(old));
+    call.members = members;
+    if call.members.is_empty() {
+        call.media_state = MediaState::Closing;
+    } else if reduced {
+        call.media_state = MediaState::Rotating {
+            previous_room: call.media_room.clone(),
+        };
+        call.media_room = crate::identifier();
+        call.media_epoch = call.media_epoch.checked_add(1).ok_or(CallError::Conflict)?;
+    }
+    call.revision = call.revision.checked_add(1).ok_or(CallError::Conflict)?;
+    save(connection, &call)?;
+    Ok(call)
+}

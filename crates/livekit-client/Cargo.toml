@@ -47,6 +47,7 @@ url = { workspace = true }
 ash-screen-capture = { path = "../screen-capture", optional = true }
 
 [dev-dependencies]
+voice-host = { package = "ash-voice-host", path = "../voice-host" }
 realtime-voice = { package = "ash-realtime-voice", path = "../realtime-voice" }
 ash-http-client.workspace = true
 call = { package = "ash-call", path = "../call", features = ["runtime"] }
