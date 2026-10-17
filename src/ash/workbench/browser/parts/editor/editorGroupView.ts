@@ -9,6 +9,7 @@ import { Emitter, Event } from "../../../../base/common/event.js";
 import { validateJsonValue } from "../../../../base/common/jsonValue.js";
 import { Disposable, DisposableStore, DisposableMap, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { localize } from "../../../../nls.js";
+import { getKeybindingLabel } from '../../../../base/common/keybindingLabels.js';
 import { URI } from "../../../../base/common/uri.js";
 import { EditorOpenSource, TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
 import type { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";
@@ -290,6 +291,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		this.panes = this._register(new EditorPanes(this.contentDomNode));
 		if (options.keybindingService) {
 			this.watermark = this._register(instantiationService.createInstance(EditorGroupWatermark, this.contentDomNode));
+			this._register(options.keybindingService.onDidUpdateKeybindings(() => this.renderChrome()));
 		}
 		this.domNode.append(this.titleControl.domNode, this.contentDomNode);
 		if (this.scopedContextKeyService) {
@@ -927,7 +929,21 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		if (!this.activeInput) { label = localize('workbench.editorGroup.emptyLabel', 'Empty editor group'); }
 		else if (this.isLocked) { label = localize('workbench.editorGroup.lockedLabel', 'Editor group, locked'); }
 		this.domNode.setAttribute('aria-label', label);
-		this.titleControl.setEditors(this.entries, this.activeInput, this.activePane, this.model.selectedEditorIds);
+		const closeKeybinding = this.keybindingService?.lookupKeybinding('workbench.action.closeActiveEditor');
+		const closeActionTooltip = closeKeybinding
+			? localize('workbench.closeEditorWithKeybinding', 'Close ({0})', getKeybindingLabel(closeKeybinding))
+			: localize('workbench.closeEditor', 'Close');
+		this.titleControl.setEditors(this.entries.map(entry => ({
+			instanceId: entry.instanceId,
+			input: entry.input,
+			panelId: entry.panelId,
+			tabId: entry.tabId,
+			preview: entry.preview,
+			sticky: entry.sticky,
+			isDirty: entry.isDirty,
+			hasExternalChange: entry.hasExternalChange,
+			closeActionTooltip,
+		})), this.activeInput, this.activePane, this.model.selectedEditorIds);
 		// Label and editor-state updates must respect the group's explicit presentation policy.
 		if (!this.titleVisible) { this.titleControl.domNode.hidden = true; }
 		const input = this.activeInput;

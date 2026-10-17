@@ -15,6 +15,7 @@ export interface EditorTabDescriptor {
 	readonly sticky?: boolean;
 	readonly isDirty?: boolean;
 	readonly hasExternalChange?: boolean;
+	readonly closeActionTooltip?: string;
 }
 
 /** Callbacks through which an Editor tab presentation requests group-level mutations. */

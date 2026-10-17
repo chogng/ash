@@ -25,6 +25,8 @@ export interface TabListItem<T> {
 	readonly ariaLabel?: string;
 	readonly ariaDescription?: string;
 	readonly tooltip?: string;
+	/** Host-resolved close tooltip, including its configured shortcut when available. */
+	readonly closeActionTooltip?: string;
 	readonly icon?: Icon;
 	/** Creates a custom label once per item identity; the caller updates it and the view owns its lifetime. */
 	readonly renderLabel?: (container: HTMLElement) => IDisposable;

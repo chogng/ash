@@ -9,6 +9,7 @@ import { ActionBar } from "../actionbar/actionbar.js";
 import { ActionViewItem } from "../actionbar/actionViewItems.js";
 import { IconLabel } from "../iconlabel/iconlabel.js";
 import type { TabListItem } from "./tabList.js";
+import { localize } from "../../../../nls.js";
 
 export const TAB_CLOSE_ACTION_ID = "ash.tab.close";
 
@@ -150,6 +151,12 @@ export class TabActionViewItem<T> extends ActionViewItem {
 			this.label.setLabel(item.label, item.description, { icon: item.icon });
 		}
 		if (previous && previous.label === item.label && previous.actions === item.actions && previous.primaryAction === item.primaryAction) {
+			if (previous.closeActionTooltip !== item.closeActionTooltip && !item.primaryAction && this.onClose) {
+				this.toolbar.value?.updateActions([
+					...(item.actions?.items ?? []),
+					closeTabAction(this.tabAction, this.onClose, this.closeActionIcon),
+				]);
+			}
 			return;
 		}
 		this.toolbar.clear();
@@ -190,11 +197,11 @@ export class TabActionViewItem<T> extends ActionViewItem {
 }
 
 function closeTabAction<T>(action: TabAction<T>, close: (value: T) => void, icon: Icon | undefined): IAction {
-	const label = `Close ${action.tab.label}`;
+	const label = localize('tabList.closeTab', 'Close {0}', action.tab.label);
 	return {
 		id: TAB_CLOSE_ACTION_ID,
 		label,
-		tooltip: label,
+		tooltip: action.tab.closeActionTooltip ?? localize('tabList.close', 'Close'),
 		icon: icon ?? Lxicon.close,
 		enabled: true,
 		run: () => close(action.tab.value),

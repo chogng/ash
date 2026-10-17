@@ -237,6 +237,7 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 					return store;
 				},
 				tooltip: stateLabel ? `${editor.input.resource.toString()} — ${stateLabel}` : editor.input.resource.toString(),
+				closeActionTooltip: editor.closeActionTooltip,
 				ariaLabel: stateLabel ? `${label.name}, ${stateLabel}` : label.name,
 				ariaDescription,
 				...(state ? { state } : {}),

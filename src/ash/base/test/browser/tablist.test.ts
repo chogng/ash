@@ -4,6 +4,9 @@ import { JSDOM } from "jsdom";
 import { TAB_CLOSE_ACTION_ID, TabList, type TabListItem } from "../../browser/ui/tablist/tabList.js";
 import type { IAction } from "../../common/actions.js";
 import { registerLxicon } from "../../common/lxiconsUtil.js";
+import { readFileSync } from "node:fs";
+import { resetNlsResolver, setNlsMessages } from "../../../nls.js";
+import { toDisposable } from "../../common/lifecycle.js";
 
 const customCloseIcon = registerLxicon("tablist-test-close", () => '<svg viewBox="0 0 16 16" data-test-icon="custom-close"><path d="M2 2h12v12H2z"/></svg>');
 
@@ -230,6 +233,7 @@ test("TabList forwards ActionBar drag positions using tab values", () => {
 });
 
 test("TabList renders IconLabel content, custom actions, and its standard close action", () => {
+	using localization = toDisposable(resetNlsResolver);
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const closed: string[] = [];
 	const tabList = new TabList(dom.window.document.body, {
@@ -280,13 +284,28 @@ test("TabList renders IconLabel content, custom actions, and its standard close 
 			.map((item) => item.dataset.actionId),
 		["pin", TAB_CLOSE_ACTION_ID],
 	);
-	assert.equal(closeButton.title, "Close first");
+	assert.equal(closeButton.title, "Close");
+	assert.equal(closeButton.getAttribute("aria-label"), "Close first");
 	assert.equal(closeButton.closest(".ash-action-view-item")?.getAttribute("data-action-id"), TAB_CLOSE_ACTION_ID);
 	assert.equal(closeButton.querySelector("svg.ash-icon")?.getAttribute("data-test-icon"), "custom-close");
 
 	selected.dispatchEvent(keyboardEvent(dom.window, "Delete"));
 	closeButton.click();
 	assert.deepEqual(closed, ["first", "first"]);
+	setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')));
+	tabList.setTabs([tab('launch.json')], 'launch.json');
+	const localizedClose = tabList.element.querySelector<HTMLButtonElement>('.ash-tab-close-action button')!;
+	assert.equal(localizedClose.title, '关闭');
+	assert.equal(localizedClose.getAttribute('aria-label'), '关闭 launch.json');
+	localizedClose.click();
+	assert.deepEqual(closed, ['first', 'first', 'launch.json']);
+	localizedClose.focus();
+	tabList.setTabs([{ ...tab('launch.json'), closeActionTooltip: '关闭（⌘W）' }], 'launch.json');
+	const reboundClose = tabList.element.querySelector<HTMLButtonElement>('.ash-tab-close-action button')!;
+	assert.equal(reboundClose.title, '关闭（⌘W）');
+	assert.equal(dom.window.document.activeElement, reboundClose);
+	tabList.setTabs([tab('launch.json')], 'launch.json');
+	assert.equal(tabList.element.querySelector<HTMLButtonElement>('.ash-tab-close-action button')!.title, '关闭');
 
 	tabList.dispose();
 	dom.window.close();

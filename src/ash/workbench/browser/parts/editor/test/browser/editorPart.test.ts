@@ -1,4 +1,5 @@
 import { ILanguageService } from '../../../../../../editor/common/languages/language.js';
+import { getKeybindingLabel } from '../../../../../../base/common/keybindingLabels.js';
 import { LanguageService } from '../../../../../../editor/common/services/languageService.js';
 import { IHostColorSchemeService } from '../../../../../services/themes/common/hostColorSchemeService.js';
 import { WorkbenchThemeService } from '../../../../../services/themes/browser/workbenchThemeService.js';
@@ -650,6 +651,44 @@ test("EditorPart applies empty-editor tips changes without showing them over an 
 	entry.dispose();
 	keybindings.dispose();
 	dom.window.close();
+});
+
+test('EditorPart close tooltips follow the configured shortcut and its removal', async () => {
+	using localization = toDisposable(resetNlsResolver);
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using cleanup = toDisposable(() => dom.window.close());
+	using registry = new EditorPaneRegistry();
+	using registration = registry.registerEditorPane(descriptor('test.closeTooltip', '.ts', () => new TestEditorPane('test.closeTooltip')));
+	const keybindings = new TestKeybindingService();
+	using bindingCleanup = toDisposable(() => keybindings.dispose());
+	using services = new InstantiationService();
+	services.registerInstance(IKeybindingService, keybindings);
+	using commands = new CommandService(services);
+	services.registerInstance(ICommandService, commands);
+	using editor = createEditorPart(dom.window.document.body, { registry, keybindingService: keybindings }, services);
+	const command = 'workbench.action.closeActiveEditor';
+	const document = input('/project/launch.ts');
+	await editor.openEditor(document, { pinned: true });
+	const closeButton = () => editor.domNode.querySelector<HTMLButtonElement>('.ash-tab-close-action button')!;
+	assert.equal(closeButton().title, 'Close');
+	for (const key of ['w', 'q']) {
+		keybindings.set(command, Keybinding.single(logicalKey(key, { primaryKey: true })));
+		const shortcut = getKeybindingLabel(keybindings.lookupKeybinding(command)!);
+		assert.equal(closeButton().title, `Close (${shortcut})`);
+		assert.equal(closeButton().getAttribute('aria-label'), 'Close launch.ts');
+	}
+	initializeTestLocalization('zh-CN');
+	keybindings.set(command, Keybinding.single(logicalKey('x', { primaryKey: true })));
+	assert.equal(closeButton().title, `关闭（${getKeybindingLabel(keybindings.lookupKeybinding(command)!)}）`);
+	keybindings.set(command, undefined);
+	assert.equal(closeButton().title, '关闭');
+	const closed = new DeferredPromise<void>();
+	using closeListener = editor.onDidChangeEditors(event => {
+		if (event.kind === 'groupChanged' && event.event.kind === 'editorClosed') void closed.complete(undefined);
+	});
+	closeButton().click();
+	await closed.p;
+	assert.equal(editor.activeInput, undefined);
 });
 
 test("EditorPart saves the active pane through the editor contract", async () => {
@@ -4070,8 +4109,9 @@ class TestKeybindingService implements IKeybindingService {
 	readonly inChordMode = false;
 	readonly onDidUpdateKeybindings = this._onDidUpdateKeybindings.event;
 
-	set(command: CommandId, keybinding: Keybinding): void {
-		this.bindings.set(command, resolveKeybinding(keybinding));
+	set(command: CommandId, keybinding: Keybinding | undefined): void {
+		if (keybinding) this.bindings.set(command, resolveKeybinding(keybinding));
+		else this.bindings.delete(command);
 		this._onDidUpdateKeybindings.fire();
 	}
 
