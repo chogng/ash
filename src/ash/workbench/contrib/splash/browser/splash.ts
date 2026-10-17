@@ -61,8 +61,15 @@ export function showPartsSplash(ownerDocument: Document, splash: IPartsSplash): 
 			Object.assign(region.style, {
 				position: 'absolute', left: `${part.left}px`, top: `${part.top}px`,
 				width: `${part.width}px`, height: `${part.height}px`, boxSizing: 'border-box',
-				backgroundColor: part.background, borderRadius: `${part.borderRadius}px`,
-				...(part.borderColor ? { border: `${part.borderWidth}px solid ${part.borderColor}` } : {}),
+				backgroundColor: part.background,
+			});
+			['top', 'right', 'bottom', 'left'].forEach((side, index) => {
+				const border = part.borders[index];
+				region.style.setProperty(`border-${side}`, `${border.width}px ${border.style} ${border.color}`);
+			});
+			['top-left', 'top-right', 'bottom-right', 'bottom-left'].forEach((corner, index) => {
+				const [horizontal, vertical] = part.borderRadii[index];
+				region.style.setProperty(`border-${corner}-radius`, `${horizontal}px ${vertical}px`);
 			});
 			element.append(region);
 		}

@@ -23,13 +23,19 @@ export interface IPartsSplash {
 		readonly foreground: string;
 	};
 	readonly layoutInfo?: {
+		readonly version: 2;
 		readonly width: number;
 		readonly height: number;
 		readonly partBounds: readonly (IPartsSplashPartBounds & {
 			readonly background: string;
-			readonly borderRadius: number;
-			readonly borderColor?: string;
-			readonly borderWidth?: number;
+			/** Clockwise from top-left; each corner keeps its horizontal and vertical radius. */
+			readonly borderRadii: readonly (readonly [number, number])[];
+			/** Clockwise from top, including edges with no visible border. */
+			readonly borders: readonly {
+				readonly width: number;
+				readonly color: string;
+				readonly style: string;
+			}[];
 		})[];
 	};
 }
@@ -51,9 +57,13 @@ export function validatePartsSplash(value: unknown): IPartsSplash {
 		throw new TypeError('Invalid window splash colors');
 	}
 	let layoutInfo: IPartsSplash['layoutInfo'];
+	// Older geometry expanded one edge/corner to all four. Keep its colors only.
+	if (isRecord(value.layoutInfo) && value.layoutInfo.version === undefined) {
+		return { baseTheme: value.baseTheme as ColorScheme, colorInfo: { background, foreground } };
+	}
 	if (value.layoutInfo !== undefined) {
 		const layout = value.layoutInfo;
-		if (!isRecord(layout) || !validSize(layout.width) || !validSize(layout.height)
+		if (!isRecord(layout) || layout.version !== 2 || !validSize(layout.width) || !validSize(layout.height)
 			|| !Array.isArray(layout.partBounds) || layout.partBounds.length > 16) {
 			throw new TypeError('Invalid window splash layout');
 		}
@@ -63,20 +73,30 @@ export function validatePartsSplash(value: unknown): IPartsSplash {
 			if (!isRecord(part) || !validSize(part.width) || !validSize(part.height)
 				|| !validOffset(part.left) || !validOffset(part.top)
 				|| part.left + part.width > width + 1 || part.top + part.height > height + 1
-				|| !validOffset(part.borderRadius) || part.borderRadius > Math.min(part.width, part.height) / 2
 				|| !validSplashColor(part.background)
-				|| (part.borderColor !== undefined && !validSplashColor(part.borderColor))
-				|| ((part.borderColor === undefined) !== (part.borderWidth === undefined))
-				|| (part.borderWidth !== undefined && (!validSize(part.borderWidth) || part.borderWidth > 4))) {
+				|| !Array.isArray(part.borderRadii) || part.borderRadii.length !== 4
+				|| !Array.isArray(part.borders) || part.borders.length !== 4) {
 				throw new TypeError('Invalid window splash part bounds');
 			}
+			const borderRadii = part.borderRadii.map((radius: unknown): readonly [number, number] => {
+				if (!Array.isArray(radius) || radius.length !== 2 || !validOffset(radius[0]) || !validOffset(radius[1])) {
+					throw new TypeError('Invalid window splash corner radius');
+				}
+				return [radius[0], radius[1]];
+			});
+			const borders = part.borders.map((border: unknown) => {
+				if (!isRecord(border) || !validOffset(border.width) || border.width > 4 || !validSplashColor(border.color)
+					|| typeof border.style !== 'string' || !['none', 'hidden', 'solid', 'dotted', 'dashed', 'double', 'groove', 'ridge', 'inset', 'outset'].includes(border.style)) {
+					throw new TypeError('Invalid window splash border');
+				}
+				return { width: border.width, color: border.color, style: border.style };
+			});
 			return {
 				top: part.top, left: part.left, width: part.width, height: part.height,
-				background: part.background, borderRadius: part.borderRadius,
-				...(part.borderColor === undefined ? {} : { borderColor: part.borderColor, borderWidth: part.borderWidth as number }),
+				background: part.background, borderRadii, borders,
 			};
 		});
-		layoutInfo = { width, height, partBounds };
+		layoutInfo = { version: 2, width, height, partBounds };
 	}
 	return {
 		baseTheme: value.baseTheme as ColorScheme,

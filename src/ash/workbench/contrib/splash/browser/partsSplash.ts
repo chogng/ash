@@ -71,15 +71,24 @@ export class PartsSplash extends Disposable {
 			const style = ownerWindow.getComputedStyle(element);
 			if (style.visibility === 'hidden') continue;
 			const fill = Color.Format.CSS.parse(style.backgroundColor)?.flatten(background) ?? background;
-			const borderWidth = Number.parseFloat(style.borderTopWidth);
-			const border = borderWidth > 0 ? Color.Format.CSS.parse(style.borderTopColor)?.flatten(fill) : undefined;
+			const borders = ['top', 'right', 'bottom', 'left'].map(side => ({
+				width: Number.parseFloat(style.getPropertyValue(`border-${side}-width`)) || 0,
+				color: Color.Format.CSS.formatHex(Color.Format.CSS.parse(style.getPropertyValue(`border-${side}-color`))?.flatten(fill) ?? fill),
+				style: style.getPropertyValue(`border-${side}-style`) || 'none',
+			}));
+			const borderRadii = ['top-left', 'top-right', 'bottom-right', 'bottom-left'].map((corner): readonly [number, number] => {
+				const [horizontal, vertical = horizontal] = (style.getPropertyValue(`border-${corner}-radius`) || '0').split(/\s+/);
+				// Computed radii may retain percentages. Resolve each axis against the original border box;
+				// the browser applies the shared overlap reduction when drawing all four corners.
+				const resolve = (value: string, size: number): number => (Number.parseFloat(value) || 0) * (value.endsWith('%') ? size / 100 : 1);
+				return [resolve(horizontal, rect.width), resolve(vertical, rect.height)];
+			});
 			partBounds.push({
 				left, top, width, height,
 				background: Color.Format.CSS.formatHex(fill),
-				borderRadius: Math.min(Number.parseFloat(style.borderTopLeftRadius) || 0, width / 2, height / 2),
-				...(border ? { borderColor: Color.Format.CSS.formatHex(border), borderWidth } : {}),
+				borderRadii, borders,
 			});
 		}
-		return partBounds.length ? { layoutInfo: { width: ownerWindow.innerWidth, height: ownerWindow.innerHeight, partBounds } } : {};
+		return partBounds.length ? { layoutInfo: { version: 2, width: ownerWindow.innerWidth, height: ownerWindow.innerHeight, partBounds } } : {};
 	}
 }

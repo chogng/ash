@@ -75,7 +75,22 @@ test('window splash IPC uses the host scope and preserves validated geometry acr
 			let scope = 'workbench:first';
 			const backgrounds: string[] = [];
 			const [read, write] = windowSplashIpcRoutes(main, () => scope, color => backgrounds.push(color));
-			const snapshot = { baseTheme: ColorScheme.Dark, colorInfo: { background: '#123456', foreground: '#ffffff' }, layoutInfo: { width: 1024, height: 768, partBounds: [{ left: 0, top: 0, width: 300, height: 700, background: '#abcdef', borderRadius: 6 }] } };
+			const snapshot = {
+				baseTheme: ColorScheme.Dark, colorInfo: { background: '#123456', foreground: '#ffffff' },
+				layoutInfo: {
+					version: 2, width: 1024, height: 768,
+					partBounds: [{
+						left: 0, top: 0, width: 300, height: 700, background: '#abcdef',
+						borderRadii: [[6, 8], [0, 0], [0, 0], [6, 8]],
+						borders: [
+							{ width: 0, color: '#abcdef', style: 'none' },
+							{ width: 1, color: '#ffffff', style: 'solid' },
+							{ width: 0, color: '#abcdef', style: 'none' },
+							{ width: 0, color: '#abcdef', style: 'none' },
+						],
+					}],
+				},
+			};
 			assert.throws(() => read.validate({ scope: 'sessions:first' }), /no arguments/);
 			await write.invoke(write.validate({ ...snapshot, scope: 'sessions:first' }));
 			assert.deepEqual(await read.invoke(read.validate(undefined)), snapshot);

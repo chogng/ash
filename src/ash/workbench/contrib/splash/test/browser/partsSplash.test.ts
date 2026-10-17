@@ -15,6 +15,16 @@ import { showStartupError } from '../../../../browser/startupError.js';
 import '../../../../common/theme.js';
 
 const cached: IPartsSplash = { baseTheme: ColorScheme.Dark, colorInfo: { background: '#123456', foreground: '#ffffff' } };
+const drawing = {
+	left: 0, top: 0, width: 300, height: 700, background: '#abcdef',
+	borderRadii: [[6, 8], [0, 0], [0, 0], [12, 10]],
+	borders: [
+		{ width: 0, color: '#abcdef', style: 'none' },
+		{ width: 1, color: '#ffffff', style: 'solid' },
+		{ width: 0, color: '#abcdef', style: 'none' },
+		{ width: 0, color: '#abcdef', style: 'none' },
+	],
+} as const;
 
 function createDom(): JSDOM {
 	const dom = new JSDOM('<!doctype html><html><head></head><body><main id="app"></main></body></html>', { url: 'https://ash.test/browser/workbench/workbench.html' });
@@ -107,16 +117,75 @@ test('startup error removes the decorative splash before focusing its retry acti
 
 
 test('layout cache rejects unbounded geometry and retains only the normalized drawing data', () => {
-	const layoutInfo = { width: 1024, height: 768, partBounds: [{ left: 0, top: 0, width: 300, height: 700, background: '#abcdef', borderRadius: 6, borderColor: '#ffffff', borderWidth: 1, privateContent: 'discard' }] };
+	const layoutInfo = { version: 2, width: 1024, height: 768, partBounds: [{ ...drawing, privateContent: 'discard' }] };
 	const normalized = validatePartsSplash({ ...cached, layoutInfo });
-	assert.deepEqual(normalized.layoutInfo, { width: 1024, height: 768, partBounds: [{ left: 0, top: 0, width: 300, height: 700, background: '#abcdef', borderRadius: 6, borderColor: '#ffffff', borderWidth: 1 }] });
+	assert.deepEqual(normalized.layoutInfo, { ...layoutInfo, partBounds: [drawing] });
 	for (const mutation of [
+		{ ...layoutInfo, version: 3 },
 		{ ...layoutInfo, width: Number.POSITIVE_INFINITY },
 		{ ...layoutInfo, partBounds: Array.from({ length: 17 }, () => layoutInfo.partBounds[0]) },
 		{ ...layoutInfo, partBounds: [{ ...layoutInfo.partBounds[0], left: -1 }] },
 		{ ...layoutInfo, partBounds: [{ ...layoutInfo.partBounds[0], width: 2000 }] },
 		{ ...layoutInfo, partBounds: [{ ...layoutInfo.partBounds[0], background: 'url(secret)' }] },
+		{ ...layoutInfo, partBounds: [{ ...drawing, borderRadii: [[-1, 0], ...drawing.borderRadii.slice(1)] }] },
+		{ ...layoutInfo, partBounds: [{ ...drawing, borderRadii: [[0, Number.POSITIVE_INFINITY], ...drawing.borderRadii.slice(1)] }] },
+		{ ...layoutInfo, partBounds: [{ ...drawing, borderRadii: drawing.borderRadii.slice(1) }] },
+		{ ...layoutInfo, partBounds: [{ ...drawing, borders: drawing.borders.slice(1) }] },
+		...[
+			{ width: -1 }, { width: 5 }, { color: 'url(secret)' }, { style: 'solid; background: url(secret)' },
+		].map(border => ({ ...layoutInfo, partBounds: [{ ...drawing, borders: [{ ...drawing.borders[0], ...border }, ...drawing.borders.slice(1)] }] })),
 	]) assert.throws(() => validatePartsSplash({ ...cached, layoutInfo: mutation }), /splash/);
+});
+
+test('old splash geometry is discarded without losing the saved theme colors', () => {
+	const dom = createDom();
+	try {
+		const previous = { ...cached, layoutInfo: { width: 1024, height: 768, partBounds: [{ left: 0, top: 0, width: 300, height: 700, background: '#abcdef', borderRadius: 6, borderWidth: 1, borderColor: '#ffffff' }] } };
+		assert.deepEqual(validatePartsSplash(previous), cached);
+		const ownerWindow = dom.window as unknown as Window;
+		ownerWindow.localStorage.setItem(browserSplashStorageKey(ownerWindow), JSON.stringify(previous));
+		showPartsSplash(dom.window.document, readBrowserPartsSplash(ownerWindow));
+		assert.equal(dom.window.document.getElementById('ash-parts-splash')!.children.length, 0);
+		assert.equal(dom.window.document.getElementById('ash-parts-splash')!.style.backgroundColor, 'rgb(18, 52, 86)');
+	} finally { dom.window.close(); }
+});
+
+test('capture and startup drawing preserve one-sided borders and independent elliptical corners', async () => {
+	const dom = createDom();
+	try {
+		const ownerDocument = dom.window.document;
+		const root = ownerDocument.getElementById('app')!;
+		const part = ownerDocument.createElement('section');
+		part.className = 'ash-workbench-part';
+		part.style.cssText = 'background: #abcdef; border: 0 none #abcdef; border-right: 1px dashed #ffffff; border-top-left-radius: 6px 8px; border-top-right-radius: 0; border-bottom-right-radius: 0; border-bottom-left-radius: 4% 10px;';
+		part.getBoundingClientRect = () => ({ left: 0, top: 0, right: 300, bottom: 700, width: 300, height: 700 } as DOMRect);
+		root.append(part);
+		using layoutChanged = new Emitter<{ width: number; height: number; }>();
+		using shutdown = new Emitter<IWillShutdownEvent>();
+		using themes = new TestThemeService(createColorTheme({ id: 'splash-geometry', label: 'Test', colorScheme: ColorScheme.Light }));
+		using services = new InstantiationService();
+		const saved: IPartsSplash[] = [];
+		services.registerInstance(IThemeService, themes);
+		services.registerInstance(ILayoutService, { mainContainer: root, onDidLayoutMainContainer: layoutChanged.event } as ILayoutService);
+		services.registerInstance(ILifecycleService, { phase: LifecyclePhase.Restored, when: () => Promise.resolve(), onWillShutdown: shutdown.event } as unknown as ILifecycleService);
+		services.registerInstance(ISplashStorageService, { saveWindowSplash: async splash => { saved.push(validatePartsSplash(JSON.parse(JSON.stringify(splash)))); } });
+		using capture = services.createInstance(PartsSplash);
+		await Promise.resolve();
+		assert.equal(saved.length, 1);
+		assert.deepEqual(saved[0].layoutInfo!.partBounds, [{ ...drawing, borders: drawing.borders.map((border, index) => index === 1 ? { ...border, style: 'dashed' } : border) }]);
+		showPartsSplash(ownerDocument, saved[0]);
+		const region = ownerDocument.querySelector<HTMLElement>('#ash-parts-splash > div')!;
+		assert.equal(region.style.borderTopWidth, '0px');
+		assert.equal(region.style.borderRight, '1px dashed rgb(255, 255, 255)');
+		assert.equal(region.style.borderBottomWidth, '0px');
+		assert.equal(region.style.borderLeftWidth, '0px');
+		assert.equal(region.style.borderTopLeftRadius, '6px 8px');
+		assert.equal(region.style.borderTopRightRadius, '0px 0px');
+		assert.equal(region.style.borderBottomRightRadius, '0px 0px');
+		assert.equal(region.style.borderBottomLeftRadius, '12px 10px');
+		assert.equal(ownerDocument.getElementById('ash-parts-splash')!.getAttribute('aria-hidden'), 'true');
+		assert.equal(ownerDocument.getElementById('ash-parts-splash')!.inert, true);
+	} finally { dom.window.close(); }
 });
 
 test('browser startup fallback resolves all four OS color schemes from registered tokens', () => {
