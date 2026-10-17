@@ -8,6 +8,63 @@ import {
 	decodeAppServerResponse,
 	decodeAppServerServerRequest,
 } from '../../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
+import type { MethodResult } from '../../../../../../.build/protocol/typescript/index.js';
+
+function usageResponse() {
+	const count = { reported: 0, complete: true };
+	const usage = { modelInvocations: 0, inputTokens: { ...count }, outputTokens: { ...count }, cachedInputTokens: { ...count }, cacheWriteInputTokens: { ...count }, reasoningTokens: { ...count } };
+	const result: MethodResult<'session/thread/read'> = {
+		thread: { sessionId: 'session', threadId: 'thread', agentId: 'agent', origin: { type: 'root' }, title: 'Counters', status: 'active', sequence: 0, advisor: { type: 'off' }, usage, referenceCost: { knownAmounts: [], complete: true }, hookRuns: [], turns: [] },
+		transcript: { sessionId: 'session', threadId: 'thread', durableSequence: 0, revision: 0, entries: [] },
+	};
+	return { jsonrpc: '2.0', id: 1, result };
+}
+
+test('warmed record checks preserve nested optional fields, false, zero and allowed extensions', () => {
+	for (let warm = 0; warm < 3; warm++) {
+		const response = usageResponse();
+		response.result.thread.usage.inputTokens = { reported: Number.MAX_SAFE_INTEGER, complete: false };
+		response.result.thread.usage.cacheWriteInputTokens = { reported: 0, complete: false };
+		Object.assign(response.result.thread.usage.inputTokens, { futureCounter: 'preserved' });
+		assert.deepEqual(decodeAppServerResponse('session/thread/read', response), response);
+	}
+});
+
+test('record rejection retains precise field paths after valid values warm schema caches', () => {
+	decodeAppServerResponse('session/thread/read', usageResponse());
+	for (const reported of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1, Infinity, NaN, '0', null]) {
+		const response = usageResponse();
+		Object.assign(response.result.thread.usage.inputTokens, { reported });
+		assert.throws(() => decodeAppServerResponse('session/thread/read', response), error => error instanceof AppServerProtocolDecodeError && error.path === '$.result.thread.usage.inputTokens.reported');
+	}
+	for (const invalid of [{ reported: 0 }, { complete: true }, { reported: 0, complete: 'true' }, Object.assign(Object.create({ complete: true }), { reported: 0 })]) {
+		const response = usageResponse();
+		Object.assign(response.result.thread.usage, { inputTokens: invalid });
+		assert.throws(() => decodeAppServerResponse('session/thread/read', response), AppServerProtocolDecodeError);
+	}
+});
+
+test('closed records retain constant, unknown-field and own-property checks', () => {
+	const value = { kind: 'app-server-listen-info', version: 1, endpoint: 'ws://127.0.0.1:9000' };
+	for (let warm = 0; warm < 2; warm++) assert.deepEqual(decodeAppServerListenInfo(value), value);
+	for (const invalid of [
+		{ ...value, kind: 'other' }, { ...value, version: 2 }, { ...value, extra: true },
+		JSON.parse('{"kind":"app-server-listen-info","version":1,"endpoint":"ws://127.0.0.1:9000","__proto__":null}'),
+		Object.assign(Object.create({ kind: value.kind }), { version: 1, endpoint: value.endpoint }),
+	]) assert.throws(() => decodeAppServerListenInfo(invalid), AppServerProtocolDecodeError);
+});
+
+test('literal union alternatives retain all turn kinds and validate the selected record', () => {
+	for (const kind of ['coding', 'review', 'advisor', 'shell', 'tool', 'contextCompaction'] as const) {
+		const response = usageResponse();
+		const turn = { turnId: 'turn', status: 'completed' as const, kind, mode: 'agent' as const, toolMode: 'direct' as const, approvalMode: 'manual' as const, usage: response.result.thread.usage, items: [] };
+		response.result.thread.turns.push(turn);
+		assert.deepEqual(decodeAppServerResponse('session/thread/read', response), response);
+		for (const invalid of [{ kind: 'future' }, { kind: null }, { kind: { coding: true } }, { kind: 'coding', status: 'future' }, { kind: 'coding', usage: { modelInvocations: -1 } }]) {
+			assert.throws(() => decodeAppServerResponse('session/thread/read', { ...response, result: { ...response.result, thread: { ...response.result.thread, turns: [{ ...turn, ...invalid }] } } }), AppServerProtocolDecodeError);
+		}
+	}
+});
 
 test('backend state watches retain strict callback shapes and legacy one-shot calls', () => {
 	const context = { protocolVersion: 1, requestId: 1, incarnation: 1, activationGeneration: 1 };

@@ -345,9 +345,14 @@ function resolveReference(reference: string, path: string): JsonSchema {
 }
 
 function matches(schema: JsonSchema, value: unknown, path: string): boolean {
-	// Nullable and primitive unions routinely reject alternatives. Their expected
-	// type mismatches must not allocate Error objects and capture JS stacks.
-	if (typeof schema !== 'boolean' && schema.type !== undefined && !matchesType(schema.type, value)) return false;
+	// Reject impossible union alternatives without allocating Error objects and
+	// capturing stacks. A successful candidate still runs the full validator,
+	// including constraints beyond its type, constant or enum membership.
+	if (typeof schema !== 'boolean') {
+		if (schema.type !== undefined && !matchesType(schema.type, value)) return false;
+		if (Object.hasOwn(schema, 'const') && !deepEqual(schema.const, value)) return false;
+		if (schema.enum && !schema.enum.some(item => deepEqual(item, value))) return false;
+	}
 	try {
 		validate(schema, value, path);
 		return true;

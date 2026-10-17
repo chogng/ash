@@ -1,5 +1,40 @@
 import { expect, test } from '@playwright/test';
 
+test('App Server Worker separates parse, validation and result serialization costs', async ({ page }, testInfo) => {
+	await page.goto('/appServerDecode.html');
+	try {
+		await page.evaluate(() => window.ashAppServerDecodeIntegration.prepare(2048, 4096));
+		await page.evaluate(() => window.ashAppServerDecodeIntegration.run('worker'));
+		const worker = page.workers()[0];
+		expect(worker).toBeDefined();
+		await worker.evaluate(() => {
+			const scope = globalThis as unknown as { postMessage(value: unknown): void; decodeTimings?: { parseMs: number; validateMs: number; serializeMs: number; }[]; };
+			const parse = JSON.parse;
+			const post = scope.postMessage.bind(scope);
+			const timings: { parseMs: number; validateMs: number; serializeMs: number; }[] = [];
+			scope.decodeTimings = timings;
+			let started = 0;
+			let parsed = 0;
+			JSON.parse = (text, reviver) => {
+				started = performance.now();
+				const result = parse(text, reviver);
+				parsed = performance.now();
+				return result;
+			};
+			scope.postMessage = value => {
+				const beforeSend = performance.now();
+				post(value);
+				const afterSend = performance.now();
+				if ((value as { kind?: unknown; }).kind === 'result') timings.push({ parseMs: parsed - started, validateMs: beforeSend - parsed, serializeMs: afterSend - beforeSend });
+			};
+		});
+		for (let run = 0; run < 5; run++) await page.evaluate(() => window.ashAppServerDecodeIntegration.run('worker'));
+		const samples = await worker.evaluate(() => (globalThis as unknown as { decodeTimings: { parseMs: number; validateMs: number; serializeMs: number; }[]; }).decodeTimings);
+		expect(samples).toHaveLength(5);
+		await testInfo.attach('app-server-worker-phases.json', { body: JSON.stringify({ scope: 'Test-owned Worker only: parse and validation through the result postMessage call. Serialization is sender-side synchronous postMessage time; input transfer, receiver deserialization, UI task time and cold startup are excluded. Instrumented results are diagnostic, separate from the uninstrumented comparison.', samples }, null, 2), contentType: 'application/json' });
+	} finally { await page.evaluate(() => window.ashAppServerDecodeIntegration.dispose()); }
+});
+
 test('App Server queued notifications yield browser tasks, preserve order and drain before EOF', async ({ page }) => {
 	await page.goto('/appServerDecode.html');
 	try {

@@ -528,3 +528,104 @@ Renderer 类型检查 4,169 文件、完整 browser integration 类型检查 4,1
 NO_COLOR／FORCE_COLOR 提示。本批没有改动这些依赖或翻译文件，没有宣称完整准备命令成功。
 
 第三批使用独立本地提交；后续 Worker 通信优化另行记录，不混入本批。
+
+## 10. Worker 往返成本与更高收益方案
+
+### 10.1 先拆开解析、校验与复制
+
+沿用第 9 节的生产协议客户端与真实 Chromium fixture，另开诊断测试，在测试拥有的 Worker 中
+记录 JSON.parse 起止、解析结束到返回结果前、原始 postMessage 调用起止。预热一次后采集 5 次，
+退出测试时销毁该 Worker。诊断样本与未插桩的性能对照分别记录，不能混用。
+
+18,107,467 bytes／2048 Turn 场景的本轮基线中位数：JSON.parse **6.7 ms**，后续校验与路由
+**128.8 ms**，发送侧 postMessage **9.1 ms**。最后一项只覆盖 Worker 同步序列化调用，
+不含消息调度、Renderer 接收反序列化及后续领域处理，不能当作完整复制成本。
+当前主要开销在解释式 schema 校验；把优化目标只放在 JSON.parse 或发送侧复制会错过大头。
+
+### 10.2 Protobuf 的适用范围
+
+Protobuf 使用字段编号、varint 与 packed repeated 编码，数值数组及大量短记录有减少 wire bytes
+的机会；string 仍是 UTF-8。换编码本身不压缩或去重消息正文，也不提供普通 JS 对象跨 Worker
+转移所有权的能力。[编码规范](https://protobuf.dev/programming-guides/encoding/)、
+[Transferable objects](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Transferable_objects)。
+另一个潜在收益是由生成的二进制 decoder 替代 JSON.parse 与通用 schema 的结构遍历；这需要在保留
+应用约束的前提下实测，不能从 wire bytes 的变化推导 CPU 收益，也不能预先保证比 V8 JSON.parse 快。
+
+当前 18.1 MB fixture 的两处正文合计 `2 × 2048 × 4096 = 16,777,216` bytes，占 **92.65%**。
+假设内容与重复次数不变，即便其余所有开销都消失，体积也最多减少约 **7.35%**；这是针对该 ASCII
+fixture 的上界推算，不是 Protobuf 实测结果。超大单文本场景的正文占比更高。
+去掉重复历史、分页与字节预算可以直接减少需要传输、解码、校验及复制的数据，收益与编码选择相互独立。
+
+Protobuf 迁移也不能把“能解码”当作领域输入已经合法：应用仍需执行必填、范围、长度、枚举、
+身份与关联关系等约束。尤其要明确缺失与 `0`／`false`／空字符串的区别；proto3 基础字段默认的
+implicit presence 会合并这些状态，官方建议使用 `optional` 或相应 explicit presence。
+[字段 presence 说明](https://protobuf.dev/programming-guides/field_presence/)。
+还需保持 64 位值的精确表示、未知字段兼容策略、取消／审批语义及现有连接背压。
+
+推荐原型保持现有请求／响应所有权与 transport，选择有界 Thread 页、数值数组和大文本三种相同
+数据，对比 wire bytes、Rust 编码、Worker 解码与约束校验、UI 对象交付、总耗时及峰值内存。
+若采用二进制，使用 ArrayBuffer 转移输入所有权；Worker 解码为完整 JS 对象后回传仍会 structured
+clone。若要继续减少这部分开销，需要有界输出或改变消费者读取方式，不能只替换 wire codec。
+本轮没有引入 Protobuf、gRPC 或第二套线上协议，没有声称迁移后的速度倍数。
+
+### 10.3 已排除的复制优化
+
+在 ignored investigation 中验证了字符串表／重复文本引用的原型，没有把它接入产品。
+Node structuredClone 的独立诊断中，2048 个 4 KiB 重复文本的原始 clone 中位数约 **7.7 ms**；
+指纹与完整相等检查、打包、clone、恢复合计约 **22.7 ms**。每 Turn 不同、但在两处重复的文本
+也从约 **12.2 ms** 增至 **28.5 ms**。单个巨大重复文本能获益，但不能据此推广到所有响应。
+这不是浏览器链路测量；结论仅用于否决当前通用扫描算法，不能作为产品加速数据。
+
+另一个缓存对象校验 closure 的原型在真实 Chromium 中也回退：18.1 MB 的 Worker 校验中位数
+**128.8 → 138.4 ms**，未插桩的已验证响应 **155.0 → 177.5 ms**。已移除该候选实现，
+源码与原始样本保留在 investigation 中，没有保留更复杂但更慢的路径。
+
+### 10.4 已实施：排除常规 union 分支失败的异常成本
+
+生成 decoder 的 `matches` 会把不匹配的 union 分支转成 false，但原先只提前排除 type 不匹配。
+Turn.kind 是六个 string const 的 oneOf；一个合法 coding 值仍会为另外五个分支创建并捕获异常。
+仅 2048 个 Turn 的这一字段就产生 10,240 次常规分支失败。改动在 const／enum 明确不匹配时
+直接返回 false；真正命中的分支仍走原有完整 validate，oneOf 的唯一匹配与错误路径保持原契约。
+改动位于协议 owner 的 `typescript_decoder.template.ts`，通过正常生成器更新产物。
+
+相同 Chromium **149.0.7827.55**、同一 fixture、本轮修改前后各 48 个样本，warm 结果仍取 5 次中位数。
+表中“修改前”是已包含第三批 Worker 的版本，不能与第 9 节同步版本的“前”混淆。
+
+| 相同响应                        | Worker 到已验证响应：修改前 → 后 | Worker 最长计时器间隔：修改前 → 后 | Worker Renderer CDP TaskDuration：修改前 → 后 | 同步解码到已验证响应：修改前 → 后 |
+| ------------------------------- | -------------------------------: | ---------------------------------: | --------------------------------------------: | --------------------------------: |
+| 9,492 bytes，小帧对照           |                        0.2 → 0.1 |                          4.0 → 4.6 |                                     1.5 → 1.7 |                         0.2 → 0.1 |
+| 1,131,168 bytes，128 Turn       |                       10.8 → 3.2 |                          4.5 → 4.6 |                                     3.4 → 3.5 |                         6.1 → 1.9 |
+| 18,107,467 bytes，2048 Turn     |                     155.0 → 50.6 |                         12.0 → 9.0 |                                   37.6 → 38.2 |                       95.9 → 17.6 |
+| 16,778,516 bytes，1 Turn 大文本 |                      14.3 → 12.2 |                          6.2 → 4.6 |                                   26.9 → 23.5 |                         3.2 → 2.9 |
+
+单位均为 ms；小帧的 Worker 列实际走生产阈值下的同步路径。18.1 MB 诊断样本中，JSON.parse
+**6.7 → 7.0 ms**，后续校验与路由 **128.8 → 15.6 ms**，Worker 发送侧 postMessage
+**9.1 → 9.5 ms**。校验阶段降低约 **88%**，未插桩的 Worker 响应耗时降低约 **67%**。
+这项收益来自减少校验开销，不能声称已经减少对象复制、wire bytes 或 Renderer 总 CPU。
+Worker 主线程 TaskDuration 没有下降；巨大单文本也没有足够的常规 union 失败支撑同等收益。
+最终 Worker 仍比同数据同步解码慢，但把可阻塞主线程的那段工作隔离出去；两者目标需分别衡量。
+
+本机同时有其他编译任务，计时器约 4 ms 的底噪、调度与 CPU 频率会影响绝对数字；没有将巨大文本的
+小幅变化全部归因于本改动。沿用第 9 节的组件测量范围，不包含真实后端、Main IPC、Chat render、
+完整 Desktop 或峰值内存。首次使用样本单独保留，没有用 warm 中位数代表启动体验。
+
+通过 **75 项定向单测／3 文件**，覆盖全部六个 Turn kind、错误 kind／字段／计数、允许的额外字段、
+own-property 与 closed record 契约，并复测生产 Worker 及协议客户端的顺序、审批、超时与关闭行为。
+**3 项 Chromium 测试通过**，包括 48 个未插桩样本、5 个 Worker 阶段样本及 2000 通知后 EOF 的保序让出。
+正常生成协议成功；protocol、Renderer、browser integration 完整类型检查分别覆盖 **1,591／4,169／4,115**
+文件。继续复用第 9 节说明的准备产物，经仓库 raw browser runner 重新构建与运行；没有声称完整准备
+命令或真实 Electron 端到端场景通过。
+
+原始证据位于 `.build/investigations/app-server-worker-transfer-p1-2026-10-17/`：
+`before-app-server-*.json`、`literal-guard-app-server-*.json`、`literal-guard-comparison-summary.json`、
+`rejected-object-checks-summary.json`、字符串表原型、生成与测试日志。后续 Protobuf／生成校验函数原型
+必须以修正后的 JSON decoder 为基线，避免把本可单独消除的异常成本全部算成换编码的收益。
+
+第三批已本地提交为 `14f1d8a6a6e4697f2a3626d44cb2c80414bca2ee`，未推送。
+该提交执行了 `just commit-check origin/main`；门禁被范围外 11 个未暂存 TypeScript 文件的格式问题
+阻断，18 个提交文件的定向格式与 whitespace 检查通过，按仓库提交流程完成独立本地提交。
+本节优化使用下一次独立本地提交，未混入第三批提交。
+
+研究参考：[Off-main-thread](https://web.dev/articles/off-main-thread) 说明 Worker 与通信开销的取舍；
+[Ajv standalone](https://ajv.js.org/standalone.html) 提供构建时生成校验函数的后续候选。
+这些资料支撑方案选择，未把外部 benchmark 的倍数套用到 Ash。
