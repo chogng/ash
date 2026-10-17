@@ -4111,12 +4111,12 @@ impl AppServer {
             Some(ClientMethod::LanguageSynchronize) => self
                 .language_processor(connection.connection_id)
                 .language_synchronize(&request.params, cancellation),
-            Some(ClientMethod::LanguageClose) => self
-                .language_processor(connection.connection_id)
-                .language_close(&request.params, cancellation),
             Some(ClientMethod::LanguageSave) => self
                 .language_processor(connection.connection_id)
                 .language_save(&request.params),
+            Some(ClientMethod::LanguageClose) => self
+                .language_processor(connection.connection_id)
+                .language_close(&request.params, cancellation),
             Some(ClientMethod::LanguageCancel) => self
                 .language_processor(connection.connection_id)
                 .language_cancel(connection, &request.params),
