@@ -248,9 +248,7 @@ impl GitRuntime {
     ) -> Result<bool, ExtensionError> {
         let signature = json!([
             configuration.value("path"),
-            configuration.boolean("ignoreMissingGitWarning", false),
-            configuration.boolean("ignoreLegacyWarning", false),
-            configuration.boolean("ignoreWindowsGit27Warning", false)
+            configuration.boolean("ignoreMissingGitWarning", false)
         ]);
         {
             let state = self.lock();
@@ -262,29 +260,27 @@ impl GitRuntime {
             .api
             .request("version", json!({}), configuration, token)?;
         let installation = &version["installation"];
-        let available = installation["kind"] == "available";
-        if !available && !configuration.boolean("ignoreMissingGitWarning", false) {
-            self.api.warning("git.missingInstallation", &[], token)?;
-        }
-        if available {
-            let display = installation["version"].as_str().unwrap_or_default();
-            if installation["major"]
-                .as_u64()
-                .is_some_and(|major| major < 2)
-                && !configuration.boolean("ignoreLegacyWarning", false)
-            {
-                self.api
-                    .warning("git.legacyInstallation", &[display], token)?;
+        let available = match installation["kind"].as_str() {
+            Some("available") => true,
+            Some("missing") => {
+                if !configuration.boolean("ignoreMissingGitWarning", false) {
+                    self.api.warning("git.missingInstallation", &[], token)?;
+                }
+                false
             }
-            if version["windows"] == true
-                && installation["major"] == 2
-                && matches!(installation["minor"].as_u64(), Some(25 | 26))
-                && !configuration.boolean("ignoreWindowsGit27Warning", false)
-            {
+            Some("unsupported") => {
+                let installed = installation["version"]
+                    .as_str()
+                    .ok_or_else(|| invalid("Invalid Git installation version"))?;
+                let minimum = installation["minimumVersion"]
+                    .as_str()
+                    .ok_or_else(|| invalid("Invalid Git minimum version"))?;
                 self.api
-                    .warning("git.windowsInstallation", &[display], token)?;
+                    .warning("git.unsupportedInstallation", &[minimum, installed], token)?;
+                false
             }
-        }
+            _ => return Err(invalid("Invalid Git installation state")),
+        };
         let mut state = self.lock();
         state.installation_signature = Some(signature);
         state.installation_available = available;
@@ -519,6 +515,7 @@ impl GitRuntime {
                     root_uri: root_uri.clone(),
                     configuration: config.clone(),
                     status: None,
+                    catalog: None,
                     draft: String::new(),
                     input_revision: 0,
                     operation: None,
@@ -555,6 +552,20 @@ impl GitRuntime {
                     || repository.status.is_none())
             {
                 repository.status = Some(self.api.status(&repository, token)?);
+                repository.catalog = Some(api::decode(self.api.request(
+                    "catalog",
+                    json!({"repositoryId":repository.descriptor.id}),
+                    &repository.configuration,
+                    token,
+                )?)?);
+            }
+            if repository.catalog.is_none() {
+                repository.catalog = Some(api::decode(self.api.request(
+                    "catalog",
+                    json!({"repositoryId":repository.descriptor.id}),
+                    &repository.configuration,
+                    token,
+                )?)?);
             }
             if let Some(parent) = repository.descriptor.parent_path.as_deref() {
                 let policy = repository
@@ -589,6 +600,7 @@ impl GitRuntime {
                             .as_ref()
                             .map(|status| (status.stream_instance_id.clone(), status.revision)),
                         repository.configuration.0.clone(),
+                        repository.catalog.clone(),
                     )
                 })
                 .collect();
@@ -602,6 +614,7 @@ impl GitRuntime {
                             .as_ref()
                             .map(|status| (status.stream_instance_id.clone(), status.revision)),
                         repository.configuration.0.clone(),
+                        repository.catalog.clone(),
                     )
                 })
                 .collect();
@@ -744,6 +757,15 @@ impl GitRuntime {
             }
             "refresh" => {
                 self.accept_status(self.api.status(&repository, Some(token))?);
+                let catalog = api::decode(self.api.repository_request(
+                    &repository,
+                    "catalog",
+                    json!({}),
+                    token,
+                )?)?;
+                if let Some(current) = self.lock().repositories.get_mut(&repository.descriptor.id) {
+                    current.catalog = Some(catalog);
+                }
                 self.publish()?;
                 Ok(Value::Null)
             }
@@ -793,6 +815,12 @@ impl GitRuntime {
                     "git.switchBranch"
                 } else if payload["commandId"] == "git.blame" {
                     "git.showBlame"
+                } else if repository
+                    .status
+                    .as_ref()
+                    .is_some_and(|status| status.head.upstream().is_none())
+                {
+                    "git.publish"
                 } else {
                     "git.sync"
                 },

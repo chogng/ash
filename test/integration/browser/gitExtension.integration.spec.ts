@@ -79,7 +79,7 @@ test('Git presentation settings update the Rust extension without restarting its
 		await expect.poll(() => page.evaluate(() => window.gitPresentationIntegration.decoration())).toBeUndefined();
 		await page.evaluate(() => window.gitPresentationIntegration.update('git.openDiffOnClick', false));
 		await page.evaluate(() => window.gitPresentationIntegration.open());
-		expect(await page.evaluate(() => window.gitExtensionIntegration.state().requests.at(-1))).toMatchObject({ method: 'open', input: { resource: 'file:///workspace/one.ts' } });
+		expect(await page.evaluate(() => window.gitExtensionIntegration.state().requests.filter(request => (request as { method?: string; }).method === 'open').at(-1))).toMatchObject({ method: 'open', input: { resource: 'file:///workspace/one.ts' } });
 		await page.evaluate(() => window.gitPresentationIntegration.update('git.untrackedChanges', undefined));
 		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().repositories[0]?.paths)).toEqual(['one.ts', 'new.ts']);
 		expect(await page.evaluate(() => window.gitStartupIntegration.refresh())).toEqual({ generationPreserved: true, providerPreserved: true });
@@ -358,6 +358,30 @@ for (const language of ['en', 'zh-CN']) test(`SCM commit message action handles 
 	} finally { await page.evaluate(() => window.gitExtensionIntegration.dispose()); }
 });
 
+for (const language of ['en', 'zh-CN']) test(`Git rejects an unsupported installation and explains how to upgrade in ${language}`, async ({ page }) => {
+	await page.goto('/gitExtension.html');
+	try {
+		await page.evaluate(async language => {
+			window.gitStartupIntegration.setInstallation({ kind: 'unsupported', version: 'git version 2.39.9', minimumVersion: '2.40.0' });
+			await window.gitPresentationIntegration.update('git.ignoreMissingGitWarning', true);
+			await window.gitExtensionIntegration.activate(language);
+		}, language);
+		const expected = language === 'zh-CN'
+			? 'Ash 需要 Git 2.40.0 或更新版本，当前检测到 git version 2.39.9。请升级 Git 并重启 Ash。如果配置了 git.path，请将它指向升级后的 Git 可执行文件。'
+			: 'Ash requires Git 2.40.0 or newer. Found git version 2.39.9. Upgrade Git and restart Ash. If git.path is configured, point it to the upgraded Git executable.';
+		await expect.poll(() => page.evaluate(() => window.gitStartupIntegration.installationWarnings())).toEqual([expected]);
+		expect(await page.evaluate(() => window.gitExtensionIntegration.state().repositories)).toEqual([]);
+		expect(await page.evaluate(() => window.gitExtensionIntegration.state().calls.filter(call => call.method === 'git/repositories' || call.method === 'git/status'))).toEqual([]);
+		await page.evaluate(() => window.gitStartupIntegration.refresh());
+		expect(await page.evaluate(() => window.gitStartupIntegration.installationWarnings())).toEqual([expected]);
+		await page.evaluate(async () => {
+			window.gitStartupIntegration.setInstallation({ kind: 'available', version: 'git version 2.40.0' });
+			await window.gitPresentationIntegration.update('git.path', '/upgraded/git');
+		});
+		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().repositories.map(repository => repository.id))).toEqual(['root']);
+	} finally { await page.evaluate(() => window.gitExtensionIntegration.dispose()); }
+});
+
 for (const language of ['en', 'zh-CN']) test(`distributed Rust Git registers SCM, commands and history in ${language}`, async ({ page }) => {
 	const errors = collectErrors(page);
 	await page.goto('/gitExtension.html');
@@ -449,25 +473,49 @@ for (const language of ['en', 'zh-CN']) test(`disabled Git stays inactive after 
 });
 
 
-for (const activation of ['click', 'keyboard'] as const) test(`Git statusbar ${activation} synchronizes through the Rust extension and disables pending actions`, async ({ page }) => {
+for (const language of ['en', 'zh-CN']) for (const activation of ['click', 'keyboard'] as const) test(`Git statusbar ${activation} synchronizes through the Rust extension and disables pending actions (${language})`, async ({ page }) => {
 	const errors = collectErrors(page);
 	await page.goto('/gitExtension.html');
 	try {
-		await page.evaluate(async () => { window.gitStatusbarIntegration.configure(true); await window.gitExtensionIntegration.activate('en'); });
+		await page.emulateMedia({ reducedMotion: 'no-preference' });
+		await page.evaluate(async locale => { window.gitStatusbarIntegration.configure(true); await window.gitExtensionIntegration.activate(locale); }, language);
 		const sync = page.locator('[data-statusbar-item-id="ash.status.git.sync"] [role="button"]');
 		const branch = page.locator('[data-statusbar-item-id="ash.status.git.branch"] [role="button"]');
+		const icon = sync.locator('[data-ash-icon-id="sync"]');
 		await expect(sync).toHaveText('3↓ 2↑');
+		await expect(icon).toHaveCSS('animation-name', 'none');
 		if (activation === 'click') await sync.click();
 		else { await sync.focus(); await page.keyboard.press('Enter'); }
 		await expect(sync).toHaveAttribute('aria-disabled', 'true');
 		await expect(branch).toHaveAttribute('aria-disabled', 'true');
-		await expect(sync).toHaveAttribute('aria-label', 'Synchronizing Changes…');
+		await expect(sync).toHaveAttribute('aria-label', language === 'zh-CN' ? '正在同步更改…' : 'Synchronizing Changes…');
+		await expect(icon).toHaveCSS('animation-name', 'ash-statusbar-progress');
+		await expect(icon).toHaveCSS('animation-duration', '1.5s');
+		await expect(icon).toHaveCSS('animation-timing-function', 'steps(30)');
+		await expect(icon).toHaveCSS('transform-origin', '8px 8px');
+		const initialCenter = await icon.evaluate(element => {
+			const bounds = element.getBoundingClientRect();
+			return { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
+		});
+		const initialTransform = await icon.evaluate(element => getComputedStyle(element).transform);
+		await expect.poll(() => icon.evaluate(element => getComputedStyle(element).transform)).not.toBe(initialTransform);
+		const rotatedCenter = await icon.evaluate(element => {
+			const bounds = element.getBoundingClientRect();
+			return { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
+		});
+		expect(rotatedCenter.x).toBeCloseTo(initialCenter.x, 2);
+		expect(rotatedCenter.y).toBeCloseTo(initialCenter.y, 2);
+		await page.emulateMedia({ reducedMotion: 'reduce' });
+		await expect(icon).toHaveCSS('animation-name', 'none');
+		await page.emulateMedia({ reducedMotion: 'no-preference' });
+		await expect(icon).toHaveCSS('animation-name', 'ash-statusbar-progress');
 		await sync.click({ force: true });
 		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().calls.filter(call => call.method === 'git/pull').length)).toBe(1);
 		expect(await page.evaluate(() => window.gitExtensionIntegration.state().calls.filter(call => call.method === 'git/push'))).toEqual([]);
 		await page.evaluate(() => window.gitStatusbarIntegration.release());
 		await expect(sync).not.toHaveAttribute('aria-disabled');
 		await expect(sync).toHaveText('');
+		await expect(icon).toHaveCSS('animation-name', 'none');
 		expect(await page.evaluate(() => window.gitExtensionIntegration.state().calls.filter(call => call.method === 'git/pull' || call.method === 'git/push'))).toMatchObject([
 			{ method: 'git/pull', params: { repositoryId: 'root', mode: 'sync' } },
 			{ method: 'git/push', params: { repositoryId: 'root' } },
@@ -484,7 +532,7 @@ for (const activation of ['statusbar', 'command'] as const) test(`Git statusbar 
 		await expect(publish).toHaveAttribute('aria-label', 'Publish Git branch main');
 		if (activation === 'statusbar') await publish.click();
 		else await page.evaluate(() => window.gitExtensionIntegration.invoke('git.sync', ['root']));
-		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().calls.filter(call => call.method === 'git/command').map(call => call.params))).toEqual([
+		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().calls.filter(call => call.method === 'git/command').map(call => call.params))).toMatchObject([
 			{ repositoryId: 'root', command: { kind: 'publishBranch', remote: 'origin', name: 'main', branch: 'main', expectedHead: 'a'.repeat(40) } },
 		]);
 		await expect(publish).toHaveAttribute('aria-label', /Synchronize Git changes/);
@@ -500,10 +548,12 @@ test('Git statusbar does not push after a failed pull through the Rust extension
 		await expect(sync).toHaveText('3↓ 2↑');
 		await sync.click();
 		await expect(sync).toHaveAttribute('aria-disabled', 'true');
+		await expect(sync.locator('[data-ash-icon-id="sync"]')).toHaveClass(/ash-statusbar-progress/);
 		await page.evaluate(() => window.gitStatusbarIntegration.release());
 		await expect(sync).not.toHaveAttribute('aria-disabled');
 		expect(await page.evaluate(() => window.gitExtensionIntegration.state().calls.filter(call => call.method === 'git/push'))).toEqual([]);
 		await expect(sync).toHaveText('3↓ 2↑');
+		await expect(sync.locator('[data-ash-icon-id="sync"]')).not.toHaveClass(/ash-statusbar-progress/);
 	} finally { await page.evaluate(() => { void window.gitStatusbarIntegration.release(); window.gitExtensionIntegration.dispose(); }); }
 });
 
@@ -514,7 +564,7 @@ for (const command of ['git.pullRebase', 'git.syncRebase'] as const) test(`Git s
 		await page.evaluate(async () => { window.gitStatusbarIntegration.configure(true); await window.gitExtensionIntegration.activate('en'); });
 		await expect(page.locator('[data-statusbar-item-id="ash.status.git.sync"] [role="button"]')).toHaveText('3↓ 2↑');
 		const invocation = page.evaluate(id => window.gitExtensionIntegration.invoke(id, ['root']), command);
-		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().calls.filter(call => call.method === 'git/pull'))).toEqual([
+		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().calls.filter(call => call.method === 'git/pull'))).toMatchObject([
 			{ method: 'git/pull', params: { repositoryId: 'root', mode: 'rebase', transport: { autoStash: false, followTags: false, prune: false, pullTags: true, pushMode: 'normal', replaceTags: false } } },
 		]);
 		await page.evaluate(() => window.gitStatusbarIntegration.release());
@@ -524,6 +574,235 @@ for (const command of ['git.pullRebase', 'git.syncRebase'] as const) test(`Git s
 	} finally { await page.evaluate(() => { void window.gitStatusbarIntegration.release(); window.gitExtensionIntegration.dispose(); }); }
 });
 
+for (const scenario of [
+	{ name: 'incoming only', ahead: 0, afterPullAhead: 0, readOnly: false, pushes: 0 },
+	{ name: 'pull eliminates outgoing commits', ahead: 2, afterPullAhead: 0, readOnly: false, pushes: 0 },
+	{ name: 'pull leaves outgoing commits', ahead: 0, afterPullAhead: 1, readOnly: false, pushes: 1 },
+	{ name: 'read-only upstream', ahead: 2, afterPullAhead: 2, readOnly: true, pushes: 0 },
+]) test(`Git sync decides whether to push after pull: ${scenario.name}`, async ({ page }) => {
+	await page.goto('/gitExtension.html');
+	try {
+		await page.evaluate(async options => {
+			window.gitStatusbarIntegration.configure(true, false, options);
+			await window.gitStatusbarIntegration.release();
+			await window.gitExtensionIntegration.activate('en');
+		}, scenario);
+		await page.evaluate(() => window.gitExtensionIntegration.invoke('git.sync', ['root']));
+		const state = await page.evaluate(() => window.gitExtensionIntegration.state());
+		expect(state.calls.filter(call => call.method === 'git/pull')).toHaveLength(1);
+		expect(state.calls.filter(call => call.method === 'git/push')).toHaveLength(scenario.pushes);
+		expect(state.requests.filter(request => (request as { method?: string; }).method === 'prompt')).toHaveLength(scenario.readOnly ? 0 : 1);
+		expect(state.errors).toEqual([]);
+	} finally { await page.evaluate(() => window.gitExtensionIntegration.dispose()); }
+});
+
+for (const language of ['en', 'zh-CN']) for (const selection of [0, 1, null]) test(`Git sync confirmation respects ${selection === null ? 'cancel' : selection === 1 ? 'do not show again' : 'OK'} (${language})`, async ({ page }) => {
+	await page.goto('/gitExtension.html');
+	try {
+		await page.evaluate(async ({ language, selection }) => {
+			window.gitStatusbarIntegration.configure(true, false, { upstream: 'team/upstream/release' });
+			window.gitStatusbarIntegration.setPromptSelection(selection);
+			await window.gitStatusbarIntegration.release();
+			await window.gitExtensionIntegration.activate(language);
+		}, { language, selection });
+		await page.evaluate(() => window.gitExtensionIntegration.invoke('git.sync', ['root']));
+		const state = await page.evaluate(() => window.gitExtensionIntegration.state());
+		const prompts = state.requests.filter(request => (request as { method?: string; }).method === 'prompt');
+		expect(prompts).toEqual([{
+			method: 'prompt', severity: 'warning',
+			message: language === 'zh-CN' ? '此操作将从“team/upstream/release”拉取提交并向其推送提交。' : 'This action will pull and push commits from and to "team/upstream/release".',
+			buttons: language === 'zh-CN' ? ['确定', '确定，不再显示'] : ['OK', "OK, Don't Show Again"],
+		}]);
+		expect(state.calls.filter(call => call.method === 'git/pull')).toHaveLength(selection === null ? 0 : 1);
+		if (selection !== null) {
+			expect(state.calls.find(call => call.method === 'git/pull')?.params).toMatchObject({ expectedHead: { type: 'branch', name: 'main', upstream: { name: 'team/upstream/release' } } });
+			expect(state.calls.find(call => call.method === 'git/push')?.params).toMatchObject({ expectedHead: { type: 'branch', name: 'main', upstream: { name: 'team/upstream/release' } } });
+		}
+		await expect.poll(() => page.evaluate(() => window.gitStatusbarIntegration.confirmSync())).toBe(selection !== 1);
+		if (selection === 1) {
+			await page.evaluate(() => window.gitExtensionIntegration.invoke('git.sync', ['root']));
+			expect(await page.evaluate(() => window.gitExtensionIntegration.state().requests.filter(request => (request as { method?: string; }).method === 'prompt').length)).toBe(1);
+		}
+		expect(state.errors).toEqual([]);
+	} finally { await page.evaluate(() => window.gitExtensionIntegration.dispose()); }
+});
+
+test('Git sync honors disabled confirmation and existing transport settings', async ({ page }) => {
+	await page.goto('/gitExtension.html');
+	try {
+		await page.evaluate(async () => {
+			window.gitStatusbarIntegration.configure(true);
+			await window.gitStatusbarIntegration.release();
+			await window.gitExtensionIntegration.activate('en');
+			await window.gitPresentationIntegration.update('git.confirmSync', false);
+			await window.gitPresentationIntegration.update('git.fetchOnPull', true);
+			await window.gitPresentationIntegration.update('git.pullTags', false);
+			await window.gitPresentationIntegration.update('git.followTagsWhenSync', true);
+			await window.gitPresentationIntegration.update('git.autoStash', true);
+		});
+		await page.evaluate(() => window.gitExtensionIntegration.invoke('git.sync', ['root']));
+		const state = await page.evaluate(() => window.gitExtensionIntegration.state());
+		expect(state.requests.filter(request => (request as { method?: string; }).method === 'prompt')).toEqual([]);
+		expect(state.calls.filter(call => ['git/fetch', 'git/pull', 'git/push'].includes(call.method))).toMatchObject([
+			{ method: 'git/fetch', params: { transport: { autoStash: true, pullTags: false } } },
+			{ method: 'git/pull', params: { mode: 'sync', transport: { autoStash: true, pullTags: false } } },
+			{ method: 'git/push', params: { transport: { followTags: true } } },
+		]);
+		expect(state.errors).toEqual([]);
+	} finally { await page.evaluate(() => window.gitExtensionIntegration.dispose()); }
+});
+
+
+for (const command of ['git.pull', 'git.push']) test(`Git sync icon spins during ${command}`, async ({ page }) => {
+	await page.goto('/gitExtension.html');
+	try {
+		await page.evaluate(async () => { window.gitStatusbarIntegration.configure(true); await window.gitExtensionIntegration.activate('en'); });
+		const invocation = page.evaluate(command => window.gitExtensionIntegration.invoke(command, ['root']), command);
+		const sync = page.locator('[data-statusbar-item-id="ash.status.git.sync"] [role="button"]');
+		await expect(sync.locator('[data-ash-icon-id="sync"]')).toHaveClass(/ash-statusbar-progress/);
+		await expect(sync).toHaveAttribute('aria-disabled', 'true');
+		await page.evaluate(() => window.gitStatusbarIntegration.release()); await invocation;
+		await expect(sync.locator('[data-ash-icon-id="sync"]')).not.toHaveClass(/ash-statusbar-progress/);
+	} finally { await page.evaluate(() => { void window.gitStatusbarIntegration.release(); window.gitExtensionIntegration.dispose(); }); }
+});
+
+test('Git sync waits for confirmation before spinning and prevents duplicate prompts', async ({ page }) => {
+	await page.goto('/gitExtension.html');
+	try {
+		await page.evaluate(async () => { window.gitStatusbarIntegration.configure(true, false, { holdPrompt: true }); await window.gitExtensionIntegration.activate('en'); });
+		const sync = page.locator('[data-statusbar-item-id="ash.status.git.sync"] [role="button"]');
+		await sync.click();
+		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().requests.filter(request => (request as { method?: string; }).method === 'prompt').length)).toBe(1);
+		await expect(sync.locator('[data-ash-icon-id="sync"]')).not.toHaveClass(/ash-statusbar-progress/);
+		await sync.click({ force: true });
+		expect(await page.evaluate(() => window.gitExtensionIntegration.state().calls.filter(call => call.method === 'git/pull'))).toEqual([]);
+		await page.evaluate(() => window.gitStatusbarIntegration.releasePrompt());
+		await expect(sync.locator('[data-ash-icon-id="sync"]')).toHaveClass(/ash-statusbar-progress/);
+		await page.evaluate(() => window.gitStatusbarIntegration.release());
+		await expect(sync).not.toHaveAttribute('aria-disabled');
+	} finally { await page.evaluate(() => { void window.gitStatusbarIntegration.releasePrompt(); void window.gitStatusbarIntegration.release(); window.gitExtensionIntegration.dispose(); }); }
+});
+
+for (const selection of [0, 1, null]) test(`Git sync rewritten history warning choice ${selection}`, async ({ page }) => {
+	await page.goto('/gitExtension.html');
+	try {
+		await page.evaluate(async selection => {
+			window.gitStatusbarIntegration.configure(true, false, { rewritten: true });
+			window.gitStatusbarIntegration.setPromptSelection(selection);
+			await window.gitStatusbarIntegration.release(); await window.gitExtensionIntegration.activate('en');
+			await window.gitPresentationIntegration.update('git.confirmSync', false);
+			await window.gitPresentationIntegration.update('git.fetchOnPull', true);
+		}, selection);
+		await page.evaluate(() => window.gitExtensionIntegration.invoke('git.sync', ['root']));
+		const state = await page.evaluate(() => window.gitExtensionIntegration.state());
+		expect(state.calls.filter(call => ['git/fetch', 'git/pullPreflight', 'git/pull'].includes(call.method)).map(call => call.method)).toEqual(selection === null ? ['git/fetch', 'git/pullPreflight'] : ['git/fetch', 'git/pullPreflight', 'git/pull']);
+		expect(state.requests.filter(request => (request as { method?: string; }).method === 'prompt')).toMatchObject([{ buttons: ['Always Pull', 'Pull'] }]);
+		await expect.poll(() => page.evaluate(() => window.gitStatusbarIntegration.setting('git.ignoreRebaseWarning'))).toBe(selection === 0);
+	} finally { await page.evaluate(() => window.gitExtensionIntegration.dispose()); }
+});
+
+for (const selection of [0, 1, null]) test(`Git sync tag conflict warning choice ${selection}`, async ({ page }) => {
+	await page.goto('/gitExtension.html');
+	try {
+		await page.evaluate(async selection => {
+			window.gitStatusbarIntegration.configure(true, false, { tagConflict: true }); window.gitStatusbarIntegration.setPromptSelection(selection);
+			await window.gitStatusbarIntegration.release(); await window.gitExtensionIntegration.activate('en');
+			await window.gitPresentationIntegration.update('git.confirmSync', false);
+		}, selection);
+		await page.evaluate(() => window.gitExtensionIntegration.invoke('git.sync', ['root']));
+		const state = await page.evaluate(() => window.gitExtensionIntegration.state());
+		expect(state.calls.filter(call => call.method === 'git/pull')).toHaveLength(selection === null ? 1 : 2);
+		expect(state.calls.filter(call => call.method === 'git/push')).toHaveLength(selection === null ? 0 : 1);
+		expect(state.requests.filter(request => (request as { method?: string; }).method === 'prompt')).toMatchObject([{ severity: 'error', buttons: ['Replace Local Tags', 'Always Replace Local Tags'] }]);
+		await expect.poll(() => page.evaluate(() => window.gitStatusbarIntegration.setting('git.replaceTagsWhenPull'))).toBe(selection === 1);
+	} finally { await page.evaluate(() => window.gitExtensionIntegration.dispose()); }
+});
+
+test('Git sync respects enabled warning and tag replacement settings without prompting', async ({ page }) => {
+	await page.goto('/gitExtension.html');
+	try {
+		await page.evaluate(async () => {
+			window.gitStatusbarIntegration.configure(true, false, { rewritten: true, tagConflict: true }); await window.gitStatusbarIntegration.release(); await window.gitExtensionIntegration.activate('en');
+			for (const [key, value] of [['git.confirmSync', false], ['git.ignoreRebaseWarning', true], ['git.replaceTagsWhenPull', true]] as const) await window.gitPresentationIntegration.update(key, value);
+		});
+		await page.evaluate(() => window.gitExtensionIntegration.invoke('git.sync', ['root']));
+		const state = await page.evaluate(() => window.gitExtensionIntegration.state());
+		expect(state.requests.filter(request => (request as { method?: string; }).method === 'prompt')).toEqual([]);
+		expect(state.calls.filter(call => call.method === 'git/pullPreflight')).toEqual([]);
+		expect(state.calls.filter(call => call.method === 'git/push')).toHaveLength(1);
+	} finally { await page.evaluate(() => window.gitExtensionIntegration.dispose()); }
+});
+
+test('Git sync hides publishing without remotes and respects the statusbar setting', async ({ page }) => {
+	await page.goto('/gitExtension.html');
+	try {
+		await page.evaluate(async () => { window.gitStatusbarIntegration.configure(false, false, { remotes: [] }); await window.gitStatusbarIntegration.release(); await window.gitExtensionIntegration.activate('en'); });
+		await expect(page.locator('[data-statusbar-item-id="ash.status.git.sync"]')).toHaveCount(0);
+		await page.evaluate(async () => { window.gitStatusbarIntegration.configure(true); await window.gitStatusbarIntegration.release(); await window.gitExtensionIntegration.invoke('git.refresh', ['root']); });
+		await expect(page.locator('[data-statusbar-item-id="ash.status.git.sync"]')).toHaveCount(1);
+		await page.evaluate(() => window.gitPresentationIntegration.update('git.enableStatusBarSync', false));
+		await expect(page.locator('[data-statusbar-item-id="ash.status.git.sync"]')).toHaveCount(0);
+	} finally { await page.evaluate(() => window.gitExtensionIntegration.dispose()); }
+});
+
+test('Git sync read-only counts show incoming commits only', async ({ page }) => {
+	await page.goto('/gitExtension.html');
+	try {
+		await page.evaluate(async () => { window.gitStatusbarIntegration.configure(true, false, { readOnly: true }); await window.gitExtensionIntegration.activate('en'); });
+		await expect(page.locator('[data-statusbar-item-id="ash.status.git.sync"] [role="button"]')).toHaveText('3↓');
+	} finally { await page.evaluate(() => { void window.gitStatusbarIntegration.release(); window.gitExtensionIntegration.dispose(); }); }
+});
+
+test('Git sync publish picker can add a remote before publishing', async ({ page }) => {
+	await page.goto('/gitExtension.html');
+	try {
+		await page.evaluate(async () => {
+			window.gitStatusbarIntegration.configure(false, false, { remotes: ['origin', 'backup'] });
+			window.gitStatusbarIntegration.setRemoteSelection(2);
+			window.gitExtensionIntegration.answer(['review', 'https://example.invalid/review.git']);
+			await window.gitExtensionIntegration.activate('en');
+		});
+		await page.locator('[data-statusbar-item-id="ash.status.git.sync"] [role="button"]').click();
+		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().calls.filter(call => call.method === 'git/command').map(call => call.params))).toMatchObject([
+			{ command: { kind: 'addRemote', name: 'review', url: 'https://example.invalid/review.git' } },
+			{ command: { kind: 'publishBranch', remote: 'review', branch: 'main' } },
+		]);
+	} finally { await page.evaluate(() => window.gitExtensionIntegration.dispose()); }
+});
+
+test('Git sync cancellation honors supportCancellation even when progress is hidden', async ({ page }) => {
+	await page.goto('/gitExtension.html');
+	try {
+		await page.evaluate(async () => {
+			window.gitStatusbarIntegration.configure(true); await window.gitExtensionIntegration.activate('en');
+			await window.gitPresentationIntegration.update('git.supportCancellation', true);
+			await window.gitPresentationIntegration.update('git.showProgress', false);
+		});
+		const sync = page.locator('[data-statusbar-item-id="ash.status.git.sync"] [role="button"]'); await sync.click();
+		await expect(page.getByRole('button', { name: 'Cancel', exact: true })).toBeVisible();
+		expect(await page.evaluate(() => window.gitStatusbarIntegration.progress().filter(request => request.progress !== null))).toMatchObject([{ method: 'runTransport', progress: { cancellable: true, title: 'Syncing. Cancelling may cause serious damage to the repository.' } }]);
+		await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+		await expect(sync).not.toHaveAttribute('aria-disabled');
+		expect(await page.evaluate(() => window.gitExtensionIntegration.state().calls.filter(call => call.method === 'git/push'))).toEqual([]);
+		expect(await page.evaluate(() => window.gitExtensionIntegration.state().errors)).toEqual([]);
+	} finally { await page.evaluate(() => { void window.gitStatusbarIntegration.release(); window.gitExtensionIntegration.dispose(); }); }
+});
+
+test('Git sync keeps spinning with progress disabled and does not offer push cancellation', async ({ page }) => {
+	await page.goto('/gitExtension.html');
+	try {
+		await page.evaluate(async () => { window.gitStatusbarIntegration.configure(true); await window.gitExtensionIntegration.activate('en'); await window.gitPresentationIntegration.update('git.showProgress', false); });
+		const sync = page.locator('[data-statusbar-item-id="ash.status.git.sync"] [role="button"]'); await sync.click();
+		await expect(sync.locator('[data-ash-icon-id="sync"]')).toHaveClass(/ash-statusbar-progress/);
+		expect(await page.evaluate(() => window.gitStatusbarIntegration.progress().filter(request => request.progress !== null))).toEqual([]);
+		await page.evaluate(() => window.gitStatusbarIntegration.release()); await expect(sync).not.toHaveAttribute('aria-disabled');
+		await page.evaluate(async () => { window.gitStatusbarIntegration.configure(true); await window.gitPresentationIntegration.update('git.supportCancellation', true); });
+		const push = page.evaluate(() => window.gitExtensionIntegration.invoke('git.push', ['root']));
+		await expect(sync.locator('[data-ash-icon-id="sync"]')).toHaveClass(/ash-statusbar-progress/);
+		expect(await page.evaluate(() => window.gitStatusbarIntegration.progress().filter(request => request.progress !== null))).toEqual([]);
+		await page.evaluate(() => window.gitStatusbarIntegration.release()); await push;
+	} finally { await page.evaluate(() => { void window.gitStatusbarIntegration.release(); window.gitExtensionIntegration.dispose(); }); }
+});
 
 test('Git rebase command labels are localized in Chinese', async ({ page }) => {
 	await page.goto('/gitExtension.html');

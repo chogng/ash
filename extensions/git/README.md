@@ -15,8 +15,8 @@ requiring the editor extension or a JavaScript runtime.
 
 ## Settings and capabilities
 
-The package declares all 105 Git settings from the checked-out reference manifest, with
-runtime consumers. Policies cover repository, submodule and worktree discovery; branch
+The package declares Git settings with runtime consumers. Policies cover repository,
+submodule and worktree discovery; branch
 naming, protection and ordering; fetch, pull, tags and reviewed force-push; commit scope,
 hooks, identity, signing, validation, save checks, message editors and AI co-authors;
 SCM presentation; blame and timeline; recycle-bin behavior; clone destinations and window
@@ -27,6 +27,35 @@ Legacy user autofetch settings migrate through a revision-checked write and veri
 before their old values are cleared. A conflicting explicit shared configuration is retained
 and reported. Other interaction settings use the existing profile/workspace configuration
 service. Settings are read again before commands and scoped by repository.
+
+Synchronization confirms the tracked remote branch when `git.confirmSync` is enabled.
+The modal offers OK, OK without future prompts, and Cancel; suppressing future prompts
+updates that existing setting at user scope. Cancel stops before any fetch, pull or push.
+Synchronization pulls the reviewed upstream explicitly, then pushes only if the resulting
+status has outgoing commits. Read-only remotes (`no_push`) skip confirmation and push.
+`git.fetchOnPull`, `git.pullTags`, `git.autoStash` and `git.followTagsWhenSync` still govern
+their respective transport stages; `git.rebaseWhenSync` retains its shared setting owner.
+Disabling `git.pullTags` or `git.pruneOnFetch` omits the corresponding command-line
+override, preserving Git's own tag-following and pruning configuration. Rewritten-history
+and rejected-tag prompts persist their Always choices through `git.ignoreRebaseWarning`
+and `git.replaceTagsWhenPull`. Tag replacement fetches only the rejected tags before one
+pull retry. Cancellation refreshes repository state and stops synchronization before push;
+`git.supportCancellation` enables fetch/pull cancellation even with `git.showProgress`
+disabled. Push has no cancellation action.
+
+The status-bar sync icon rotates during sync, pull, push and publish, after confirmation.
+It follows `git.enableStatusBarSync`, hides without remotes, and shows only incoming counts
+for read-only remotes. An untracked branch invokes publish; multiple remotes offer a picker
+with Add Remote. Remote-source publisher and push-error handler provider registries are
+not implemented. Automatic stash uses Git's `--autostash`.
+
+Git must meet the shared [minimum version requirement](../../crates/git/README.md#git-版本要求)
+(currently 2.40.0). Installation detection distinguishes missing Git from an unsupported
+version. Unsupported installations show one localized upgrade warning per activation or
+installation configuration change, and repository discovery stays disabled. The warning
+cannot be suppressed with `git.ignoreMissingGitWarning`. Upgrade Git, update `git.path`
+if configured, and restart Ash. Installation support is decided by the shared Git owner;
+the editor does not apply platform-specific version rules or downgrade commands.
 
 Commit and push requests bind the reviewed HEAD. Push and publish send the reviewed object
 explicitly, so a concurrent branch movement cannot substitute another commit. Signing

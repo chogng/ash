@@ -438,9 +438,10 @@ const harness = {
 						const params = operation.params as Record<string, JsonValue>;
 						let value: unknown;
 						switch (operation.method) {
-							case 'version': value = { installation: { kind: 'available', version: 'git version 2.50.0', major: 2, minor: 50, patch: 0 }, windows: false }; break;
+							case 'version': value = { installation: { kind: 'available', version: 'git version 2.50.0' } }; break;
 							case 'repositories': value = { repositories: [{ id: titleGitStatus.repositoryId, label: 'Workspace', path: '', dirId: 'workspace' }] }; break;
 							case 'status': value = { ...titleGitStatus, path: '' }; break;
+							case 'catalog': value = { tags: [], stashes: [], remotes: ['origin'], upstreamReadOnly: false, operation: null }; break;
 							case 'changeFile': value = await titleGit.changeFile(String(params.path)); break;
 							case 'indexDiff': value = await titleGit.indexDiff(String(params.path)); break;
 							case 'editIndex': value = { status: await titleGit.editIndex(String(params.path), String(params.comparison), { original: params.expectedOriginal, modified: params.expectedModified, hunks: [] }, params.selection, String(params.repositoryId)) }; break;

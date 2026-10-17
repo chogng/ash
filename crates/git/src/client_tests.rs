@@ -6,9 +6,85 @@ use super::FsmonitorOverride;
 use super::GitClient;
 use super::GitExecutionLimits;
 use super::GitInvocation;
+use super::GitVersion;
 use super::REPOSITORY_SELECTOR_ENVIRONMENT;
 use crate::GitError;
 use crate::test_support::TestRepository;
+
+#[test]
+fn version_policy_accepts_the_minimum_and_vendor_versions_and_rejects_older_git() {
+    for (version, supported) in [
+        ("git version 1.9.5", false),
+        ("git version 2.26.3", false),
+        ("git version 2.39.9", false),
+        ("git version 2.40.0", true),
+        ("git version 2.40.0.windows.1", true),
+        ("git version 2.50.1 (Apple Git-155)", true),
+        ("git version 3.0.0", true),
+    ] {
+        let parsed = GitVersion::parse("git --version", version.as_bytes()).unwrap();
+        assert_eq!(parsed.display, version);
+        assert_eq!(parsed.check_supported().is_ok(), supported, "{version}");
+    }
+    for version in [
+        "not Git",
+        "git version 2.40",
+        "git version 2.invalid.0",
+        "git version 999999999999.0.0",
+    ] {
+        assert!(matches!(
+            GitVersion::parse("git --version", version.as_bytes()),
+            Err(GitError::InvalidOutput { .. })
+        ));
+    }
+}
+
+#[cfg(unix)]
+#[tokio::test(flavor = "current_thread")]
+async fn version_gate_blocks_queries_mutations_and_streams_before_running_them() {
+    use std::os::unix::fs::PermissionsExt;
+    for version in ["2.39.9", "2.40.0"] {
+        let root = tempfile::tempdir().unwrap();
+        let executable = root.path().join("git");
+        let log = root.path().join("commands");
+        let quoted_log = format!("'{}'", log.display().to_string().replace('\'', "'\\''"));
+        std::fs::write(&executable, format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$*\" >> {quoted_log}\nfor arg do\n if [ \"$arg\" = --version ]; then printf '%s\\n' 'git version {version}'; exit 0; fi\ndone\nexit 0\n"
+        )).unwrap();
+        std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let client = GitClient::with_executable(executable, GitExecutionLimits::default()).unwrap();
+        let other = client.clone();
+        let (query, mutation) = tokio::join!(
+            client.run_query(root.path(), ["status"]),
+            other.run_mutation(root.path(), ["add", "."])
+        );
+        let stream = client.start_query_stream(root.path(), ["log"]).await;
+        let commands = std::fs::read_to_string(&log).unwrap();
+        assert_eq!(
+            commands
+                .lines()
+                .filter(|line| line.ends_with("--version"))
+                .count(),
+            1
+        );
+        if version == "2.39.9" {
+            assert!(matches!(query, Err(GitError::UnsupportedVersion { .. })));
+            assert!(matches!(mutation, Err(GitError::UnsupportedVersion { .. })));
+            assert!(matches!(stream, Err(GitError::UnsupportedVersion { .. })));
+            assert_eq!(
+                commands.lines().count(),
+                1,
+                "only the version probe may run"
+            );
+        } else {
+            assert!(query.unwrap().status.success());
+            assert!(mutation.unwrap().status.success());
+            let mut stream = stream.unwrap();
+            assert_eq!(stream.next_field().await.unwrap(), None);
+            assert_eq!(std::fs::read_to_string(&log).unwrap().lines().count(), 4);
+        }
+    }
+}
 
 #[test]
 fn execution_limits_reject_zero_values() {
@@ -200,7 +276,7 @@ async fn concurrent_clones_reserve_distinct_destinations_before_git_starts() {
     std::os::unix::fs::symlink(&destination, &alias).unwrap();
     let executable = root.path().join("git");
     std::fs::write(&executable, format!(
-        "#!/bin/sh\nfor arg do target=\"$arg\"; done\nprintf '%s' \"$target\" > '{}/'$$\nwhile [ ! -f '{}' ]; do sleep 0.01; done\nmkdir -p \"$target/.git\"\n",
+        "#!/bin/sh\nfor arg do if [ \"$arg\" = --version ]; then printf '%s\\n' 'git version 2.40.0'; exit 0; fi; target=\"$arg\"; done\nprintf '%s' \"$target\" > '{}/'$$\nwhile [ ! -f '{}' ]; do sleep 0.01; done\nmkdir -p \"$target/.git\"\n",
         started.display(), release.display(),
     )).unwrap();
     std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();

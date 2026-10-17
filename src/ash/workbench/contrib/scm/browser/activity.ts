@@ -61,7 +61,7 @@ export class ScmStatusContribution extends Disposable implements IWorkbenchContr
 			if (!activeIds.has(id)) this.entries.deleteAndDispose(id);
 		}
 		for (const command of commands) {
-			const entry = { icon: command.icon, text: command.text, ariaLabel: command.ariaLabel, tooltip: command.tooltip, run: command.run ? () => command.run?.() : undefined };
+			const entry = { icon: command.icon, showProgress: command.showProgress, text: command.text, ariaLabel: command.ariaLabel, tooltip: command.tooltip, run: command.run ? () => command.run?.() : undefined };
 			const current = this.entries.get(command.id);
 			if (current) {
 				current.update(entry);

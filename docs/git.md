@@ -25,6 +25,10 @@ Desktop SCM History / Changes View → generic SCM bridge
 这条依赖方向让目录边界、Git executable identity、process limits 和 output
 parsing 留在 Rust host。Renderer 只拥有展示状态和用户 intent。
 
+Git 必须满足共享的[最低版本要求](../crates/git/README.md#git-版本要求)。Desktop 在发现仓库前
+检查安装版本，不满足要求时停止发现并显示中英文升级提示；后台和其他消费者也不能绕过执行层检查。
+缺少 Git 与版本过旧是不同状态，隐藏缺失提示不会放行旧版。
+
 产品 Git 部署沿用包声明的 `*` 激活事件，在宿主可用时开始初始化，与 Workbench
 恢复并行；不把它改写成等待整个窗口恢复的 `onStartupFinished`。执行授权、窗口 scope
 和客户端回调仍由通用扩展宿主管理。

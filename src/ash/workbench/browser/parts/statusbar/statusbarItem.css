@@ -85,6 +85,24 @@
 	cursor: default;
 }
 
+.ash-statusbar-item-label > .ash-statusbar-progress {
+	animation: ash-statusbar-progress 1500ms steps(30) infinite;
+	transform-box: view-box;
+	transform-origin: 50% 50%;
+}
+
+@keyframes ash-statusbar-progress {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.ash-statusbar-item-label > .ash-statusbar-progress {
+		animation: none;
+	}
+}
+
 .ash-statusbar-item.remote-kind {
 	color: var(--ash-statusBarItem-remoteForeground);
 	background: var(--ash-statusBarItem-remoteBackground);

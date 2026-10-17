@@ -126,6 +126,7 @@ pub struct Repository {
     pub root_uri: String,
     pub configuration: Configuration,
     pub status: Option<Status>,
+    pub catalog: Option<Catalog>,
     pub draft: String,
     pub input_revision: u64,
     pub operation: Option<RepositoryOperation>,
@@ -136,8 +137,18 @@ pub struct Repository {
     pub pending_paths: Option<PendingPaths>,
     pub retired_streams: BTreeSet<String>,
 }
+
+/// Backend-owned remote facts retained with the extension's repository snapshot.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Catalog {
+    pub remotes: Vec<String>,
+    #[serde(default)]
+    pub upstream_read_only: bool,
+}
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub enum RepositoryOperation {
+    Preparing,
     Synchronize,
     Other,
 }

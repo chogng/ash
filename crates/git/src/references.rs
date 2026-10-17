@@ -132,6 +132,7 @@ pub struct GitCatalog {
     pub stashes: Vec<(String, String)>,
     pub remotes: Vec<String>,
     pub upstream_remote: Option<String>,
+    pub upstream_read_only: bool,
     pub operation: Option<GitIntegration>,
 }
 
@@ -225,7 +226,11 @@ impl GitClient {
             })
             .collect::<GitResult<Vec<_>>>()?;
         let stashes = self.stashes(repository).await?;
-        let remotes = self.remote_names(repository).await?;
+        let remote_details = self.remotes(repository).await?;
+        let remotes: Vec<_> = remote_details
+            .iter()
+            .map(|remote| remote.name().to_owned())
+            .collect();
         // Remote names can contain slashes; the display upstream ref cannot identify its owner.
         let upstream = self
             .run_query(
@@ -251,11 +256,22 @@ impl GitClient {
                     Ok(selected)
                 }
             })?;
+        let upstream_read_only = remote_details
+            .iter()
+            .find(|remote| Some(remote.name()) == upstream_remote.as_deref())
+            .is_some_and(|remote| {
+                remote.push_urls().is_empty()
+                    || remote
+                        .push_urls()
+                        .first()
+                        .is_some_and(|url| url == "no_push")
+            });
         Ok(GitCatalog {
             tags,
             stashes,
             remotes,
             upstream_remote,
+            upstream_read_only,
             operation: self.integration_state(repository),
         })
     }

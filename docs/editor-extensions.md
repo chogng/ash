@@ -1034,7 +1034,7 @@ ASH_PLAYWRIGHT_OPEN_VSX=1 pnpm run test:smoke:desktop test/smoke/areas/chat/exte
 [`extensions/git`](../extensions/git/README.md) 是独立 Rust 编辑器扩展，发布为
 `ash-git-extension`，每个窗口拥有独立 activation。扩展拥有 Git 命令、SCM provider、历史、
 quick diff、忽略规则装饰、blame、timeline 和差异策略；manifest 拥有菜单、设置元数据与中英文消息。
-105 项 Git 设置均有运行时消费者。共享 `ash-git` 与 App Server `GitRuntime` / `GitService`
+Git 设置均有运行时消费者；安装版本支持由[共享 Git 契约](../crates/git/README.md#git-版本要求)统一决定。共享 `ash-git` 与 App Server `GitRuntime` / `GitService`
 继续拥有基础执行、目录授权、仓库事实、状态版本、历史游标、监听和自动 fetch；Agent、Turn
 事务与 TUI 直接复用这些机制。
 

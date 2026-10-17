@@ -9,6 +9,9 @@ pub type GitResult<T> = Result<T, GitError>;
 /// Failure returned while configuring, invoking, or parsing a Git operation.
 #[derive(Clone, Debug)]
 pub enum GitError {
+    UnsupportedVersion {
+        installed: String,
+    },
     IndexChanged,
     InvalidConfiguration {
         field: &'static str,
@@ -42,6 +45,9 @@ pub enum GitError {
         exit_code: Option<i32>,
         stderr: String,
     },
+    TagConflict {
+        tags: Vec<String>,
+    },
     InvalidOutput {
         command: String,
         detail: String,
@@ -74,6 +80,11 @@ impl GitError {
 impl fmt::Display for GitError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::UnsupportedVersion { installed } => write!(
+                formatter,
+                "Ash requires Git {} or newer; found {installed}. Upgrade Git and restart Ash.",
+                crate::GitVersion::minimum_supported()
+            ),
             Self::IndexChanged => formatter.write_str("Git index comparison changed"),
             Self::InvalidConfiguration { field, requirement } => {
                 write!(formatter, "Git configuration field {field} {requirement}")
@@ -117,6 +128,9 @@ impl fmt::Display for GitError {
             ),
             Self::InvalidOutput { command, detail } => {
                 write!(formatter, "`{command}` returned invalid output: {detail}")
+            }
+            Self::TagConflict { tags } => {
+                write!(formatter, "Conflicting local tags: {}", tags.join(", "))
             }
         }
     }

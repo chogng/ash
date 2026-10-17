@@ -54,9 +54,9 @@ impl Default for GitTransportOptions {
     }
 }
 
-/// The immutable local commit and tracking branch reviewed by an interactive push.
+/// The local commit and tracking branch reviewed before a pull or push.
 #[derive(Clone, Debug)]
-pub struct GitPushTarget {
+pub struct GitUpstreamTarget {
     pub branch: String,
     pub object_id: String,
     pub upstream: String,
@@ -178,10 +178,7 @@ impl GitClient {
     }
 
     pub async fn remotes(&self, repository: &GitRepository) -> GitResult<Vec<GitRemote>> {
-        let output = self
-            .run_query(repository.worktree_root(), ["remote"])
-            .await?;
-        let remote_names = parse_lines(&output.stdout, &output.command, "remote name")?;
+        let remote_names = self.remote_names(repository).await?;
         let mut remotes = Vec::with_capacity(remote_names.len());
         for name in remote_names {
             let fetch_urls = self
@@ -339,14 +336,10 @@ impl GitClient {
         if let Some(name) = remote {
             self.require_remote(repository, name).await?;
         }
-        let mut arguments = vec![
-            "fetch",
-            if options.prune {
-                "--prune"
-            } else {
-                "--no-prune"
-            },
-        ];
+        let mut arguments = vec!["fetch"];
+        if options.prune {
+            arguments.push("--prune");
+        }
         if all {
             arguments.push("--all");
         }
@@ -365,64 +358,105 @@ impl GitClient {
         mode: GitPullMode,
         options: GitTransportOptions,
     ) -> GitResult<()> {
+        self.pull_from(repository, mode, options, None).await
+    }
+
+    /// Pulls the reviewed upstream explicitly, rejecting a changed local branch or tracking target.
+    pub async fn pull_reviewed(
+        &self,
+        repository: &GitRepository,
+        mode: GitPullMode,
+        target: &GitUpstreamTarget,
+        options: GitTransportOptions,
+    ) -> GitResult<()> {
+        let (remote, branch) = self.reviewed_upstream(repository, target).await?;
+        self.pull_from(repository, mode, options, Some((&remote, &branch)))
+            .await
+    }
+
+    async fn pull_from(
+        &self,
+        repository: &GitRepository,
+        mode: GitPullMode,
+        options: GitTransportOptions,
+        upstream: Option<(&str, &str)>,
+    ) -> GitResult<()> {
         let mut arguments = vec!["pull", "--no-edit"];
         match options.tag_policy {
             GitTagPolicy::Configured => {}
             GitTagPolicy::Include => arguments.push("--tags"),
             GitTagPolicy::Exclude => arguments.push("--no-tags"),
         }
-        if options.replace_tags {
-            arguments.push("--force");
-        }
         if options.auto_stash {
             arguments.push("--autostash");
         }
         match mode {
             GitPullMode::Rebase => arguments.push("--rebase"),
-            GitPullMode::Configured => {
-                // Modern Git requires a divergence policy. Supply the merge default only
-                // when neither branch nor repository/global configuration selected rebase.
-                if !self.has_pull_rebase_configuration(repository).await? {
-                    arguments.push("--no-rebase");
-                }
-            }
+            // Leave merge/rebase/fast-forward selection to Git, including its refusal
+            // to reconcile divergent branches without a configured policy.
+            GitPullMode::Configured => {}
         }
-        self.run_mutation(repository.worktree_root(), arguments)
-            .await?
-            .require_success()?;
-        Ok(())
-    }
-
-    async fn has_pull_rebase_configuration(&self, repository: &GitRepository) -> GitResult<bool> {
-        let branch = self
-            .run_query_unchecked(
-                repository.worktree_root(),
-                ["symbolic-ref", "--quiet", "--short", "HEAD"],
-            )
+        if let Some((remote, branch)) = upstream {
+            arguments.extend(["--", remote, branch]);
+        }
+        let output = self
+            .run_mutation(repository.worktree_root(), &arguments)
             .await?;
-        let mut keys = vec!["pull.rebase".to_owned()];
-        if branch.status.success() {
-            let name = std::str::from_utf8(&branch.stdout)
-                .map_err(|_| {
-                    GitError::invalid_output(&branch.command, "branch name was not UTF-8")
-                })?
-                .trim_end();
-            keys.push(format!("branch.{name}.rebase"));
-        } else if branch.status.code() != Some(1) {
-            branch.require_success()?;
-        }
-        for key in keys {
-            let output = self
-                .run_configuration_probe(repository.worktree_root(), ["config", "--get", &key])
+        let tags = conflicting_tags(&output.stderr);
+        if !output.status.success() && !tags.is_empty() {
+            if !options.replace_tags {
+                return Err(GitError::TagConflict { tags });
+            }
+            // Git has not integrated the fetched history when tag negotiation fails.
+            // Replace only the rejected tags, then retry the same pull once.
+            let remote = match upstream {
+                Some((remote, _)) => remote.to_owned(),
+                None => {
+                    let status = self.snapshot(repository).await?;
+                    let crate::GitHead::Branch {
+                        name,
+                        object_id,
+                        upstream: Some(upstream),
+                    } = status.head()
+                    else {
+                        return Err(GitError::TagConflict { tags });
+                    };
+                    self.reviewed_upstream(
+                        repository,
+                        &GitUpstreamTarget {
+                            branch: name.clone(),
+                            object_id: object_id.clone(),
+                            upstream: upstream.name().to_owned(),
+                        },
+                    )
+                    .await?
+                    .0
+                }
+            };
+            let mut fetch = vec!["fetch".to_owned(), "--force".into(), "--".into(), remote];
+            if tags.len() > 5000 {
+                return Err(invalid("too many conflicting tags"));
+            }
+            for tag in &tags {
+                let reference = format!("refs/tags/{tag}");
+                self.validate_ref(repository, &reference).await?;
+                fetch.push(format!("{reference}:{reference}"));
+            }
+            self.run_mutation(repository.worktree_root(), fetch)
+                .await?
+                .require_success()?;
+            let retried = self
+                .run_mutation(repository.worktree_root(), arguments)
                 .await?;
-            if output.status.success() {
-                return Ok(true);
+            let tags = conflicting_tags(&retried.stderr);
+            if !retried.status.success() && !tags.is_empty() {
+                return Err(GitError::TagConflict { tags });
             }
-            if output.status.code() != Some(1) {
-                output.require_success()?;
-            }
+            retried.require_success()?;
+            return Ok(());
         }
-        Ok(false)
+        output.require_success()?;
+        Ok(())
     }
 
     /// Pushes the current branch to its configured upstream.
@@ -457,9 +491,36 @@ impl GitClient {
     pub async fn push_reviewed(
         &self,
         repository: &GitRepository,
-        target: &GitPushTarget,
+        target: &GitUpstreamTarget,
         options: GitTransportOptions,
     ) -> GitResult<()> {
+        let (remote, branch) = self.reviewed_upstream(repository, target).await?;
+        let root = repository.worktree_root();
+        let mut args = vec!["push".to_owned()];
+        if options.follow_tags {
+            args.push("--follow-tags".into());
+        }
+        match options.push_mode {
+            GitPushMode::Normal => {}
+            GitPushMode::Force => args.push("--force".into()),
+            GitPushMode::Lease => args.push("--force-with-lease".into()),
+            GitPushMode::LeaseIfIncludes => {
+                args.extend(["--force-with-lease".into(), "--force-if-includes".into()])
+            }
+        }
+        args.extend([
+            "--".into(),
+            remote,
+            format!("{}:{branch}", target.object_id),
+        ]);
+        self.run_mutation(root, args).await?.require_success()?;
+        Ok(())
+    }
+    async fn reviewed_upstream(
+        &self,
+        repository: &GitRepository,
+        target: &GitUpstreamTarget,
+    ) -> GitResult<(String, String)> {
         let root = repository.worktree_root();
         if !crate::references::valid_commit_identity(&target.object_id) {
             return Err(invalid("expected a complete commit identity"));
@@ -486,35 +547,20 @@ impl GitClient {
             || !fields[1].starts_with("refs/heads/")
             || fields[2] != target.upstream
         {
-            return Err(invalid("tracking branch changed before push"));
+            return Err(invalid("tracking branch changed before transport"));
         }
-        self.require_remote(repository, fields[0]).await?;
+        if fields[0] != "." {
+            self.require_remote(repository, fields[0]).await?;
+        }
         self.validate_ref(repository, fields[1]).await?;
         let status = self.snapshot(repository).await?;
         if !matches!(status.head(), crate::GitHead::Branch {name,object_id,..} if name==&target.branch && object_id==&target.object_id)
         {
-            return Err(invalid("local branch changed before push"));
+            return Err(invalid("local branch changed before transport"));
         }
-        let mut args = vec!["push".to_owned()];
-        if options.follow_tags {
-            args.push("--follow-tags".into());
-        }
-        match options.push_mode {
-            GitPushMode::Normal => {}
-            GitPushMode::Force => args.push("--force".into()),
-            GitPushMode::Lease => args.push("--force-with-lease".into()),
-            GitPushMode::LeaseIfIncludes => {
-                args.extend(["--force-with-lease".into(), "--force-if-includes".into()])
-            }
-        }
-        args.extend([
-            "--".into(),
-            fields[0].to_owned(),
-            format!("{}:{}", target.object_id, fields[1]),
-        ]);
-        self.run_mutation(root, args).await?.require_success()?;
-        Ok(())
+        Ok((fields[0].to_owned(), fields[1].to_owned()))
     }
+
     /// Pushes exactly the reviewed commit to a task branch, without force or checkout changes.
     pub async fn push_branch_commit(
         &self,
@@ -636,8 +682,8 @@ impl GitClient {
 }
 
 impl GitClient {
-    /// A reflog fork point different from the current merge base means upstream history
-    /// was rewritten after this branch forked. Pulling may replay already integrated work.
+    /// Patch-equivalent commits on opposite sides of the upstream divergence can
+    /// indicate rebased history, even when this checkout has no upstream reflog.
     pub async fn pull_upstream_was_rewritten(&self, repository: &GitRepository) -> GitResult<bool> {
         let status = self.snapshot(repository).await?;
         let crate::GitHead::Branch {
@@ -647,26 +693,38 @@ impl GitClient {
         else {
             return Ok(false);
         };
-        let fork = self
+        let range = format!("HEAD...{}", upstream.name());
+        let comparison = self
             .run_query_unchecked(
                 repository.worktree_root(),
-                ["merge-base", "--fork-point", upstream.name(), "HEAD"],
+                ["log", "--oneline", "--cherry", &range, "--"],
             )
             .await?;
-        if fork.status.code() == Some(1) {
+        if !comparison.status.success() {
             return Ok(false);
         }
-        let fork = fork.require_success()?;
-        let base = self
-            .run_query_unchecked(
-                repository.worktree_root(),
-                ["merge-base", upstream.name(), "HEAD"],
-            )
-            .await?;
-        if base.status.code() == Some(1) {
-            return Ok(true);
-        }
-        let base = base.require_success()?;
-        Ok(fork.stdout != base.stdout)
+        Ok(comparison
+            .stdout
+            .split(|byte| *byte == b'\n')
+            .any(|line| line.starts_with(b"=")))
     }
+}
+
+// Git emits these records under the runner's fixed C locale. Parse them here,
+// where process output becomes domain data, rather than in the editor extension.
+fn conflicting_tags(stderr: &[u8]) -> Vec<String> {
+    let mut tags = std::collections::BTreeSet::new();
+    for line in String::from_utf8_lossy(stderr).lines() {
+        let fields: Vec<_> = line.split_whitespace().collect();
+        if fields.len() == 9
+            && fields[0] == "!"
+            && fields[1] == "[rejected]"
+            && fields[3] == "->"
+            && fields[2] == fields[4]
+            && fields[5..] == ["(would", "clobber", "existing", "tag)"]
+        {
+            tags.insert(fields[2].to_owned());
+        }
+    }
+    tags.into_iter().collect()
 }

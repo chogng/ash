@@ -179,6 +179,23 @@ async fn transport_policy_controls_pruning_tags_and_auto_stash() {
         .unwrap();
     assert_eq!(source.read("tracked.txt"), "local dirty buffer on disk\n");
     assert_eq!(source.read("remote.txt"), "from origin\n");
+    producer.git(&["branch", "configured-prune"]);
+    producer.git(&["push", "origin", "configured-prune"]);
+    client
+        .fetch_with_options(&repository, None, true, options)
+        .await
+        .unwrap();
+    producer.git(&["push", "origin", "--delete", "configured-prune"]);
+    source.git(&["config", "fetch.prune", "true"]);
+    options.prune = false;
+    client
+        .fetch_with_options(&repository, None, true, options)
+        .await
+        .unwrap();
+    assert_eq!(
+        source.git(&["for-each-ref", "refs/remotes/origin/configured-prune"]),
+        ""
+    );
     assert!(
         source
             .git(&["tag", "--list", "release"])
@@ -239,6 +256,189 @@ async fn force_push_with_lease_rejects_unseen_remote_commits() {
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn pull_replaces_only_conflicting_tags_when_requested() {
+    let remote = TestBareRepository::init();
+    let producer = TestRepository::init();
+    producer.write("base.txt", "base\n");
+    producer.commit_all("base");
+    producer.git(&["tag", "release"]);
+    producer.git(&["remote", "add", "origin", remote.root().to_str().unwrap()]);
+    producer.git(&["push", "-u", "origin", "main", "--tags"]);
+    let source = TestRepository::clone_from(remote.root());
+    source.git(&["tag", "local-only"]);
+    let before = source.git(&["rev-parse", "HEAD"]);
+    producer.write("update.txt", "upstream\n");
+    producer.commit_all("update");
+    producer.git(&["tag", "--force", "release"]);
+    producer.git(&["push", "origin", "main", "--force", "--tags"]);
+    let client = GitClient::system();
+    let repository = client.open_repository(source.root()).await.unwrap();
+    let mut options = super::GitTransportOptions {
+        tag_policy: super::GitTagPolicy::Include,
+        ..Default::default()
+    };
+    let error = client
+        .pull_with_options(&repository, super::GitPullMode::Configured, options)
+        .await
+        .unwrap_err();
+    assert!(matches!(error, crate::GitError::TagConflict { tags } if tags == ["release"]));
+    assert_eq!(source.git(&["rev-parse", "HEAD"]), before);
+    assert_eq!(source.git(&["rev-parse", "release"]), before);
+    options.replace_tags = true;
+    client
+        .pull_with_options(&repository, super::GitPullMode::Configured, options)
+        .await
+        .unwrap();
+    assert_eq!(source.read("update.txt"), "upstream\n");
+    assert_eq!(
+        source.git(&["rev-parse", "release"]),
+        producer.git(&["rev-parse", "release"])
+    );
+    assert_eq!(source.git(&["rev-parse", "local-only"]), before);
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn pull_warning_detects_patch_equivalence_without_reflog_history() {
+    let remote = TestBareRepository::init();
+    let producer = TestRepository::init();
+    producer.write("base.txt", "base\n");
+    producer.commit_all("base");
+    producer.git(&["remote", "add", "origin", remote.root().to_str().unwrap()]);
+    producer.git(&["push", "-u", "origin", "main"]);
+    let source = TestRepository::clone_from(remote.root());
+    source.write("change.txt", "same patch\n");
+    source.commit_all("local change");
+    producer.write("change.txt", "same patch\n");
+    producer.commit_all("upstream rebased change");
+    producer.git(&["push", "origin", "main"]);
+    let client = GitClient::system();
+    let repository = client.open_repository(source.root()).await.unwrap();
+    assert!(
+        !client
+            .pull_upstream_was_rewritten(&repository)
+            .await
+            .unwrap()
+    );
+    client.fetch_default(&repository).await.unwrap();
+    source.git(&["reflog", "expire", "--expire=all", "--all"]);
+    assert!(
+        client
+            .pull_upstream_was_rewritten(&repository)
+            .await
+            .unwrap()
+    );
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn reviewed_pull_accepts_a_local_tracking_branch() {
+    let source = TestRepository::init();
+    source.write("base.txt", "base\n");
+    source.commit_all("base");
+    source.git(&["branch", "upstream"]);
+    source.git(&["branch", "--set-upstream-to=upstream", "main"]);
+    let reviewed = super::GitUpstreamTarget {
+        branch: "main".into(),
+        object_id: source.git(&["rev-parse", "HEAD"]),
+        upstream: "upstream".into(),
+    };
+    source.git(&["switch", "upstream"]);
+    source.write("local.txt", "from local tracking branch\n");
+    source.commit_all("upstream update");
+    source.git(&["switch", "main"]);
+    let client = GitClient::system();
+    let repository = client.open_repository(source.root()).await.unwrap();
+    client
+        .pull_reviewed(
+            &repository,
+            super::GitPullMode::Configured,
+            &reviewed,
+            Default::default(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(source.read("local.txt"), "from local tracking branch\n");
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn reviewed_sync_uses_the_tracked_remote_and_branch_despite_push_defaults() {
+    let remote = TestBareRepository::init();
+    let decoy = TestBareRepository::init();
+    let producer = TestRepository::init();
+    producer.write("base.txt", "base\n");
+    producer.commit_all("base");
+    producer.git(&["remote", "add", "origin", remote.root().to_str().unwrap()]);
+    producer.git(&["push", "origin", "main", "main:refs/heads/release"]);
+    let source = TestRepository::clone_from(remote.root());
+    source.git(&["remote", "rename", "origin", "team/upstream"]);
+    source.git(&["switch", "-c", "topic"]);
+    source.git(&["branch", "--set-upstream-to=team/upstream/release"]);
+    source.git(&["remote", "add", "decoy", decoy.root().to_str().unwrap()]);
+    source.git(&["config", "remote.pushDefault", "decoy"]);
+    source.git(&["config", "branch.topic.pushRemote", "decoy"]);
+    source.git(&[
+        "config",
+        "remote.team/upstream.push",
+        "HEAD:refs/heads/wrong",
+    ]);
+    let client = GitClient::system();
+    let repository = client.open_repository(source.root()).await.unwrap();
+    let reviewed = super::GitUpstreamTarget {
+        branch: "topic".into(),
+        object_id: source.git(&["rev-parse", "HEAD"]),
+        upstream: "team/upstream/release".into(),
+    };
+    producer.write("remote.txt", "upstream\n");
+    producer.commit_all("upstream update");
+    producer.git(&["push", "origin", "main:refs/heads/release"]);
+
+    source.git(&["config", "branch.topic.merge", "refs/heads/main"]);
+    assert!(
+        client
+            .pull_reviewed(
+                &repository,
+                super::GitPullMode::Configured,
+                &reviewed,
+                super::GitTransportOptions::default()
+            )
+            .await
+            .is_err()
+    );
+    assert_eq!(source.git(&["rev-parse", "HEAD"]), reviewed.object_id);
+    source.git(&["config", "branch.topic.merge", "refs/heads/release"]);
+    client
+        .pull_reviewed(
+            &repository,
+            super::GitPullMode::Configured,
+            &reviewed,
+            super::GitTransportOptions::default(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(source.read("remote.txt"), "upstream\n");
+    assert_eq!(
+        source.git(&["rev-parse", "HEAD"]),
+        producer.git(&["rev-parse", "HEAD"])
+    );
+
+    source.write("local.txt", "local\n");
+    source.commit_all("local update");
+    let target = super::GitUpstreamTarget {
+        object_id: source.git(&["rev-parse", "HEAD"]),
+        ..reviewed
+    };
+    client
+        .push_reviewed(&repository, &target, super::GitTransportOptions::default())
+        .await
+        .unwrap();
+    assert_eq!(
+        remote.git(&["rev-parse", "refs/heads/release"]),
+        target.object_id
+    );
+    assert_eq!(decoy.git(&["for-each-ref", "refs/heads"]), "");
+    assert_eq!(remote.git(&["for-each-ref", "refs/heads/wrong"]), "");
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn reviewed_push_binds_the_commit_and_tracking_branch() {
     let repository = TestRepository::init();
     let remote = TestBareRepository::init();
@@ -258,7 +458,7 @@ async fn reviewed_push_binds_the_commit_and_tracking_branch() {
     else {
         panic!("tracking branch")
     };
-    let reviewed = super::GitPushTarget {
+    let reviewed = super::GitUpstreamTarget {
         branch: name.clone(),
         object_id: object_id.clone(),
         upstream: upstream.name().to_owned(),
@@ -280,7 +480,7 @@ async fn reviewed_push_binds_the_commit_and_tracking_branch() {
     let crate::GitHead::Branch { object_id, .. } = current.head() else {
         panic!("branch")
     };
-    let current = super::GitPushTarget {
+    let current = super::GitUpstreamTarget {
         object_id: object_id.clone(),
         ..reviewed
     };

@@ -50,6 +50,7 @@ export interface ISCMInput {
 export interface ISCMStatusBarCommand {
 	readonly id: string;
 	readonly icon?: Icon;
+	readonly showProgress?: boolean;
 	readonly text: string;
 	readonly ariaLabel: string;
 	readonly tooltip: string;

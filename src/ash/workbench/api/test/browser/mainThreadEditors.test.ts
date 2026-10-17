@@ -7,6 +7,7 @@ import { MarkerSeverity } from '../../../../platform/markers/common/markers.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../nls.js';
 import { MainThreadEditors } from '../../browser/mainThreadEditors.js';
 import type { ExtensionHostFleetSnapshot } from '../../../../platform/agentHost/common/extensionHostApi.js';
+import type { IActionPromptOptions, IActionPromptResult } from '../../../../platform/dialogs/common/dialogs.js';
 
 interface Copy {
 	resource: URI;
@@ -14,16 +15,36 @@ interface Copy {
 	save(signal: AbortSignal): Promise<void>;
 }
 
-function bridge(copies: readonly Copy[], confirm: () => Promise<{ confirmed: boolean; }>, markers: readonly unknown[] = [], codeEditors: unknown = {}, models: unknown = { getModels: () => [], onModelAdded: Event.None, onModelRemoved: Event.None }): MainThreadEditors {
+function bridge(copies: readonly Copy[], confirm: () => Promise<{ confirmed: boolean; }>, markers: readonly unknown[] = [], codeEditors: unknown = {}, models: unknown = { getModels: () => [], onModelAdded: Event.None, onModelRemoved: Event.None }, prompt?: (options: IActionPromptOptions<number>) => Promise<IActionPromptResult<number>>): MainThreadEditors {
 	// Only client-owned services used by these boundary scenarios are supplied.
 	const services = [
-		{}, { groups: [] }, {}, { confirm }, {},
+		{}, { groups: [] }, {}, { confirm, prompt }, {},
 		{ getAll: () => copies },
 		{ invokeFunction: (callback: (accessor: { get(): unknown; }) => unknown) => callback({ get: () => ({ read: () => markers }) }) },
 		{}, {}, codeEditors, {}, models,
 	] as unknown as ConstructorParameters<typeof MainThreadEditors>;
 	return new MainThreadEditors(...services);
 }
+
+test('extension modal choices preserve labels, selection, cancellation and boundary validation', async () => {
+	let selection: number | undefined = 1;
+	using api = bridge([], async () => ({ confirmed: true }), [], {}, undefined, async options => {
+		assert.equal(options.message, 'Synchronize origin/main?');
+		assert.equal(options.severity, 'warning');
+		assert.deepEqual(options.buttons.map(button => button.label), ['OK', "OK, Don't Show Again"]);
+		return { result: selection === undefined ? undefined : await options.buttons[selection].run({}) };
+	});
+	const request = { method: 'prompt', severity: 'warning', message: 'Synchronize origin/main?', buttons: ['OK', "OK, Don't Show Again"] };
+	const controller = new AbortController();
+	assert.deepEqual(await api.handle(request, controller.signal), { selection: 1 });
+	selection = undefined;
+	assert.deepEqual(await api.handle(request, controller.signal), { selection: null });
+	await assert.rejects(api.handle({ ...request, buttons: [] }, controller.signal), /Invalid extension dialog buttons/);
+	await assert.rejects(api.handle({ ...request, buttons: [123] }, controller.signal), /Invalid extension editor text/);
+	await assert.rejects(api.handle({ ...request, severity: 'fatal' }, controller.signal), /Invalid extension dialog severity/);
+	controller.abort();
+	await assert.rejects(api.handle(request, controller.signal), /aborted/i);
+});
 
 test('repository preparation saves only selected staged copies and stops on cancellation or failed saves', async () => {
 	const saved: string[] = [];

@@ -1,5 +1,6 @@
 import { ViewsRegistry } from '../../../src/ash/workbench/common/views.js';
 import { BrowserProgressService } from '../../../src/ash/platform/progress/browser/progressService.js';
+import { AppServerRemoteError } from '../../../src/ash/platform/agentHost/common/appServerError.js';
 import { RustGitHostFixture } from './rustGitHostFixture.js';
 import '../../../src/ash/workbench/browser/parts/editor/editor.contribution.js';
 import { MenuId, MenusRegistry } from '../../../src/ash/platform/actions/common/actions.js';
@@ -146,6 +147,18 @@ let includeUntracked = false;
 let upstream: { name: string; ahead: number; behind: number; } | null = null;
 let pullGate: DeferredPromise<void> | undefined;
 let pullFailure = false;
+let pullAhead: number | undefined;
+let upstreamReadOnly = false;
+let syncPromptSelection: number | null = 0;
+let syncPromptGate: DeferredPromise<void> | undefined;
+let rewrittenUpstream = false;
+let conflictingTags = false;
+let configuredRemotes = ['origin'];
+let transportCancelled = false;
+let remotePickSelection = 0;
+const progressRequests: { method: string; progress: JsonValue; }[] = [];
+let gitInstallation: JsonValue = { kind: 'available', version: 'git version 2.50.0' };
+const installationWarnings: string[] = [];
 let startupStateGate: DeferredPromise<void> | undefined;
 let startupDiscoveryGate: DeferredPromise<void> | undefined;
 let startupStatusGate: DeferredPromise<void> | undefined;
@@ -167,19 +180,26 @@ const backend = lifetime.add(new MainThreadExtensionBackend(catalog, {
 			case 'git/repositories':
 				await startupDiscoveryGate?.p;
 				return { repositories: [{ id: 'root', label: 'workspace', path: '' }] };
-			case 'git/version': return { installation: { kind: 'available', version: 'git version 2.50.0', major: 2, minor: 50, patch: 0 }, windows: false };
-			case 'git/pullPreflight': return { upstreamRewritten: false };
+			case 'git/version': return { installation: gitInstallation };
+			case 'git/pullPreflight': return { upstreamRewritten: rewrittenUpstream };
 			case 'git/status': await startupStatusGate?.p; return status();
-			case 'git/catalog': return { tags: [], stashes: [], remotes: ['origin'], upstreamRemote: upstream ? 'origin' : null, operation: null };
+			case 'git/catalog': return { tags: [], stashes: [], remotes: configuredRemotes, upstreamRemote: upstream ? 'origin' : null, upstreamReadOnly, operation: null };
+			case 'git/transport/cancel': transportCancelled = true; await pullGate?.complete(); return { status: 'requested' };
 			case 'git/transport': {
-				const transport = params as { operation: { kind: string; mode?: string; }; transport: unknown; };
+				const transport = params as { operation: { kind: string; mode?: string; expectedHead?: JsonValue; }; transport: unknown; };
 				const kind = transport.operation.kind;
 				// Record the stable domain operation as well as the cancellable transport boundary.
-				calls.push({ method: `git/${kind}`, params: { repositoryId: (params as Record<string, JsonValue>).repositoryId, transport: transport.transport, ...(transport.operation.mode ? { mode: transport.operation.mode } : {}) } as JsonValue });
-				if (kind === 'pull') { await pullGate?.p; if (pullFailure) throw new Error('Pull rejected'); if (upstream) upstream = { ...upstream, behind: 0 }; }
-				if (kind === 'push' && upstream) upstream = { ...upstream, ahead: 0 };
+				calls.push({ method: `git/${kind}`, params: { repositoryId: (params as Record<string, JsonValue>).repositoryId, transport: transport.transport, ...(transport.operation.mode ? { mode: transport.operation.mode } : {}), ...(transport.operation.expectedHead ? { expectedHead: transport.operation.expectedHead } : {}) } as JsonValue });
+				if (kind === 'pull') {
+					await pullGate?.p;
+					if (transportCancelled) throw new AppServerRemoteError(-32800, 'Cancelled', { kind: 'RequestCancelled' });
+					if (pullFailure) throw new Error('Pull rejected');
+					if (conflictingTags && !(transport.transport as { replaceTags: boolean; }).replaceTags) return { status: status(), outcome: { kind: 'tagConflict', tags: ['release'] } };
+					if (upstream) upstream = { ...upstream, behind: 0, ahead: pullAhead ?? upstream.ahead };
+				}
+				if (kind === 'push') { await pullGate?.p; if (upstream) upstream = { ...upstream, ahead: 0 }; }
 				revision++;
-				return { status: status() };
+				return { status: status(), outcome: { kind: 'completed' } };
 			}
 			case 'git/pull':
 				await pullGate?.p;
@@ -197,10 +217,11 @@ const backend = lifetime.add(new MainThreadExtensionBackend(catalog, {
 				revision++;
 				return { status: status(), objectId: 'c'.repeat(40) };
 			case 'git/command': {
-				const command = (params as { command: { kind: string; }; }).command;
+				const command = (params as { command: { kind: string; name?: string; remote?: string; }; }).command;
+				if (command.kind === 'addRemote') { configuredRemotes.push(command.name!); return { status: status(), outcome: 'completed', operation: null }; }
 				if (command.kind === 'stash') return { status: status(), outcome: 'completed', operation: null };
 				if (command.kind !== 'publishBranch') throw new Error(`Unexpected Git command ${command.kind}`);
-				upstream = { name: 'origin/main', ahead: 0, behind: 0 };
+				upstream = { name: `${command.remote}/main`, ahead: 0, behind: 0 };
 				revision++;
 				return { status: status(), outcome: 'completed', operation: null };
 			}
@@ -245,7 +266,9 @@ const clientHandler = host.registerClientHandler(async (raw, signal, source): Pr
 		case 'resetConfiguration': await configuration.updateValue(operation.section, undefined); return { result: 'done' };
 		case 'updateConfiguration': await configuration.updateValue(operation.section, operation.value); return { result: 'done' };
 		case 'readInitialization': return { result: 'initialization', initialization: createExtensionHostInitialization(workspace, configuration) };
-		case 'backendRequest': return { result: 'value', value: await backend.handle(source, operation.capability, operation.method, operation.params, 0, signal, operation.progress) };
+		case 'backendRequest':
+			progressRequests.push({ method: operation.method, progress: operation.progress as unknown as JsonValue ?? null });
+			return { result: 'value', value: await backend.handle(source, operation.capability, operation.method, operation.params, 0, signal, operation.progress) };
 		case 'backendState':
 			startupStateReads++;
 			await startupStateGate?.p;
@@ -268,6 +291,7 @@ const clientHandler = host.registerClientHandler(async (raw, signal, source): Pr
 			if (request.method === 'closeRelatedDiffs') return { result: 'value', value: null };
 			if (request.method === 'dirty') return { result: 'value', value: [] };
 			if (request.method === 'confirm') return { result: 'value', value: { confirmed: true } };
+			if (request.method === 'prompt') { await syncPromptGate?.p; return { result: 'value', value: { selection: syncPromptSelection } }; }
 			if (request.method === 'output') {
 				if (outputGate) { waitingOutputs++; await outputGate.p; }
 				return { result: 'value', value: null };
@@ -288,8 +312,11 @@ const clientHandler = host.registerClientHandler(async (raw, signal, source): Pr
 			const result = await invoke(operation.command, operation.arguments);
 			return { result: 'command', hasValue: result !== undefined, value: result ?? null };
 		}
-		case 'showQuickPick': requests.push(operation as unknown as JsonValue); return { result: 'selection', index: 0 };
-		case 'showMessage': if (operation.severity === 'error') errors.push(operation.message); return { result: 'done' };
+		case 'showQuickPick': requests.push(operation as unknown as JsonValue); return { result: 'selection', index: remotePickSelection };
+		case 'showMessage':
+			if (operation.severity === 'error') errors.push(operation.message);
+			if (operation.severity === 'warning') installationWarnings.push(operation.message);
+			return { result: 'done' };
 		default: throw new Error(`Unexpected public SDK request ${operation.operation}`);
 	}
 });
@@ -349,6 +376,8 @@ declare global { interface Window { gitPresentationIntegration: typeof presentat
 window.gitPresentationIntegration = presentationIntegration;
 
 const startupIntegration = {
+	setInstallation: (installation: JsonValue) => { gitInstallation = installation; },
+	installationWarnings: () => [...installationWarnings],
 	failInitialization: (count: number) => { host.initializationFailures = count; },
 	mountWelcome: (locale: 'en' | 'zh-cn') => {
 		scmContexts.setContext('workspaceFolderCount', 1);
@@ -390,6 +419,8 @@ services.registerInstance(ISCMViewService, view);
 services.registerInstance(IStatusbarService, statusbar);
 lifetime.add(services.createInstance(ScmStatusContribution));
 lifetime.add(statusbar.onDidChangeEntries(() => {
+	const ids = new Set(statusbar.getEntries(StatusbarAlignment.Left).map(entry => entry.id));
+	for (const [id, item] of statusItems) { if (!ids.has(id)) { item.dispose(); statusItems.delete(id); } }
 	for (const { id, entry } of statusbar.getEntries(StatusbarAlignment.Left)) {
 		const item = statusItems.get(id);
 		if (item) item.update(entry);
@@ -397,11 +428,24 @@ lifetime.add(statusbar.onDidChangeEntries(() => {
 	}
 }));
 const statusbarIntegration = {
-	configure(tracking: boolean, failPull = false) {
-		upstream = tracking ? { name: 'origin/main', ahead: 2, behind: 3 } : null;
+	configure(tracking: boolean, failPull = false, options?: { upstream?: string; ahead?: number; afterPullAhead?: number; readOnly?: boolean; remotes?: string[]; rewritten?: boolean; tagConflict?: boolean; holdPrompt?: boolean; }) {
+		upstream = tracking ? { name: options?.upstream ?? 'origin/main', ahead: options?.ahead ?? 2, behind: 3 } : null;
+		pullAhead = options?.afterPullAhead;
+		upstreamReadOnly = options?.readOnly === true;
+		configuredRemotes = options?.remotes ?? ['origin'];
+		rewrittenUpstream = options?.rewritten === true;
+		conflictingTags = options?.tagConflict === true;
+		syncPromptGate = options?.holdPrompt ? new DeferredPromise<void>() : undefined;
 		pullGate = new DeferredPromise<void>();
 		pullFailure = failPull;
+		transportCancelled = false;
 	},
+	setPromptSelection: (selection: number | null) => { syncPromptSelection = selection; },
+	setRemoteSelection: (selection: number) => { remotePickSelection = selection; },
+	confirmSync: () => configuration.getValue('git.confirmSync'),
+	setting: (key: string) => configuration.getValue(key),
+	progress: () => progressRequests,
+	releasePrompt: async () => { await syncPromptGate?.complete(); syncPromptGate = undefined; },
 	release: async () => { await pullGate?.complete(); pullGate = undefined; },
 	commandLabels: async () => (await host.list()).extensions.find(extension => extension.id === 'ash.git')!.registrations.flatMap(registration => registration.kind === 'command' ? [{ id: registration.command, title: registration.title }] : []),
 };
@@ -431,6 +475,8 @@ const gitSettingsIntegration = {
 		const container = document.createElement('div');
 		container.id = 'git-settings';
 		container.style.width = '620px';
+		// Settings reserve a gutter outside the row for its actions trigger.
+		container.style.marginLeft = '32px';
 		document.body.append(container);
 		lifetime.add(toDisposable(() => container.remove()));
 		lifetime.add(bindColorTheme(new TestThemeService(lightColorTheme), container));

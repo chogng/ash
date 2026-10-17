@@ -15,6 +15,16 @@ HEAD 与工作树对象，导入验证摘要之外的 Git 完整性和对象类�
 和嵌入仓库不能由单个对象库表示，直接拒绝。持续监听、状态缓存和自动 fetch 由 [App Server GitRuntime](../app-server/src/server/git_runtime.rs) 拥有。App Server 与 Desktop 已通过 Git SCM 纵向切片消费这些能力，但该 service/protocol/UI
 不属于本 crate。
 
+## Git 版本要求
+
+Ash 最低支持 **Git 2.40.0**，Desktop、App Server、TUI 和 Agent 共用此要求。
+现有 tree replay 使用 `merge-tree --merge-base`，该选项由
+[Git 2.40 引入](https://github.com/git/git/blob/v2.40.0/Documentation/RelNotes/2.40.0.txt)。
+最低版本的唯一代码定义在 `GitVersion`。每个 `GitClient` 及其 clone 共享一次可取消的版本探测；
+仓库查询、修改和流式 history 都在启动命令前拒绝旧版，返回包含检测版本、最低版本及升级指引的
+`GitError::UnsupportedVersion`。版本探测本身允许读取旧版身份，供客户端展示本地化升级提示。
+不提供旧版降级命令或手动自动暂存兼容路径。升级 Git 后重启 Ash；配置了 `git.path` 时也需更新对应路径。
+
 ## 为什么不是普通 `git utils`
 
 本 crate 吸收了 Codex `git-utils` 中值得保留的 agent/host 侧优化，但把这些能力组织在一个明确的
@@ -141,7 +151,7 @@ GitClient::worktrees
 GitClient::commit / fetch / pull / push
 └─ GitClient::run_mutation[_with_stdin]
    └─ optional add --update/--all → commit --file=- [--amend] [--signoff]
-      | fetch --all --prune | pull [--no-rebase | --rebase] --no-edit | push
+      | fetch --all --prune | pull [--rebase] --no-edit | push
 
 GitClient::apply_patch
 ├─ extract_patch_paths
@@ -237,7 +247,11 @@ Git revision 或复制统计规则。
 不提供跨进程 Git 写入的原子 CAS。
 Message 从 stdin 读取，成功后返回 HEAD object ID。暂存成功而创建提交失败时保留真实 index，调用方应刷新状态，
 不能假设回滚。Remote mutation non-interactive；`fetch_default` 获取默认远端并 prune，`fetch` 获取全部远端并 prune，
-`pull` 接受 `GitPullMode::Configured` 或 `Rebase`：前者遵循 Git 的分支及仓库/全局变基配置，未配置时采用合并；后者显式使用 `--rebase`。`pull.ff` 由 Git 处理，冲突保留进行中的 merge/rebase 状态；调用方负责发布失败后的真实 snapshot。`push` 使用 repository 当前 upstream/default。
+`pull` 接受 `GitPullMode::Configured` 或 `Rebase`：前者将整合策略交给 Git 的分支及仓库/全局配置，不补默认 merge/rebase 参数；分叉且未配置策略时保留 Git 的拒绝结果。后者显式使用 `--rebase`。`pull.ff` 由 Git 处理，冲突保留进行中的 merge/rebase 状态；调用方负责发布失败后的真实 snapshot。`push` 使用 repository 当前 upstream/default。
+
+交互式同步使用 `GitUpstreamTarget` 绑定确认时的本地分支、提交和 upstream。`pull_reviewed` 与 `push_reviewed` 共用目标校验，拒绝已变化的分支或 tracking 配置，并明确指定远端与分支执行；同步不会受默认推送远端或 refspec 配置改向。
+
+`fetch` 未显式请求 prune 时省略命令行覆盖，保留 Git 配置；pull 的 `GitTagPolicy::Configured` 同样保留 Git 的标签跟随策略。pull 的标签覆盖拒绝由执行 owner 解析为 `GitError::TagConflict`，不要求 UI 解析 stderr。允许替换时只强制获取被拒绝的标签，并重试同一次 pull 一次，不强制更新其他标签。可能改写的 upstream 检查使用双方历史的 patch equivalence，不依赖本地 reflog。
 
 ## 补丁契约
 
@@ -353,7 +367,6 @@ bazel test //crates/git:git-unit-tests
 - App Server 已有 multi-repository registry、watch、revision/event、operation serialization 和连接取消；尚无用户可见的 queue 与 progress；
 - 部分 index 编辑只接受有界 UTF-8 普通文件，拒绝冲突、重命名、子模块和过期比较；
 - 不支持 bare repository，`open_repository` 要求 working tree；
-- repository discovery 依赖支持 `rev-parse --path-format=absolute` 的 Git；
 - patch diagnostics parser 是 best effort，不承诺复现所有 Git 版本的自然语言；
 - text diff snapshot 不是原子快照，且当前只投影 UTF-8 普通文件，不表达 mode-only、binary 或
   symlink 内容变化；

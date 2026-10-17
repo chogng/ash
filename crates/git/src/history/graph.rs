@@ -278,7 +278,9 @@ impl GitClient {
         arguments.extend(
             ["--topo-order", "-z", "--format=%H%x00%P%x00%ct%x00%s", "--"].map(OsString::from),
         );
-        let stream = self.start_query_stream(repository.worktree_root(), arguments)?;
+        let stream = self
+            .start_query_stream(repository.worktree_root(), arguments)
+            .await?;
         Ok(GitGraphCursor {
             stream: Some(stream),
             references,

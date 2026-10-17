@@ -497,6 +497,7 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 			id: string(entry.id), text: string(entry.text), ariaLabel: string(entry.ariaLabel),
 			tooltip: string(entry.tooltip), priority: number(entry.priority), compactGroup: optionalString(entry.compactGroup),
 			icon: entry.icon ? Icon.fromId(string(entry.icon)) : undefined,
+			showProgress: entry.showProgress === true,
 			run: entry.enabled === false ? undefined : () => this.call('statusBar', { commandId: entry.id }).catch(this.reportError),
 		}));
 	}
@@ -616,6 +617,9 @@ function parseProvider(value: JsonValue): ProviderSnapshot {
 		number(command.priority); optionalString(command.icon); optionalString(command.compactGroup);
 		if (command.enabled !== undefined && typeof command.enabled !== 'boolean') {
 			throw new TypeError('Invalid SCM status command availability');
+		}
+		if (command.showProgress !== undefined && typeof command.showProgress !== 'boolean') {
+			throw new TypeError('Invalid SCM status command progress');
 		}
 	}
 	if (entry.rootUri != null) { URI.parse(string(entry.rootUri)); }

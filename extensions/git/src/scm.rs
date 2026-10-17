@@ -210,8 +210,17 @@ pub fn snapshot(
             ),
         };
         statusbar.push(json!({"id":"ash.status.git.branch","text":text,"ariaLabel":branch_aria,"tooltip":branch_tooltip,"priority":900,"compactGroup":"ash.status.git","icon":"git-branch","enabled":!repository.is_busy()}));
-        if configuration.boolean("enableStatusBarSync", true) {
+        if configuration.boolean("enableStatusBarSync", true)
+            && repository
+                .catalog
+                .as_ref()
+                .is_some_and(|catalog| !catalog.remotes.is_empty())
+        {
             let (text, aria, tooltip, icon) = if let Some(upstream) = head.upstream() {
+                let read_only = repository
+                    .catalog
+                    .as_ref()
+                    .is_some_and(|catalog| catalog.upstream_read_only);
                 let counts = api.text(
                     if upstream.ahead + upstream.behind == 1 {
                         "git.status.syncOne"
@@ -222,12 +231,46 @@ pub fn snapshot(
                 );
                 (
                     if upstream.ahead + upstream.behind > 0 {
-                        format!("{}↓ {}↑", upstream.behind, upstream.ahead)
+                        if repository
+                            .catalog
+                            .as_ref()
+                            .is_some_and(|catalog| catalog.upstream_read_only)
+                        {
+                            format!("{}↓", upstream.behind)
+                        } else {
+                            format!("{}↓ {}↑", upstream.behind, upstream.ahead)
+                        }
                     } else {
                         String::new()
                     },
-                    api.text("git.status.sync", &[&counts]),
-                    api.text("git.status.syncTooltip", &[&upstream.name, &counts]),
+                    if read_only {
+                        api.text(
+                            "git.status.pullTooltip",
+                            &[&upstream.behind.to_string(), &upstream.name],
+                        )
+                    } else {
+                        api.text("git.status.sync", &[&counts])
+                    },
+                    if upstream.ahead + upstream.behind == 0 {
+                        api.text("git.status.syncIdle", &[])
+                    } else if upstream.ahead == 0
+                        || repository
+                            .catalog
+                            .as_ref()
+                            .is_some_and(|catalog| catalog.upstream_read_only)
+                    {
+                        api.text(
+                            "git.status.pullTooltip",
+                            &[&upstream.behind.to_string(), &upstream.name],
+                        )
+                    } else if upstream.behind == 0 {
+                        api.text(
+                            "git.status.pushTooltip",
+                            &[&upstream.ahead.to_string(), &upstream.name],
+                        )
+                    } else {
+                        api.text("git.status.syncTooltip", &[&upstream.name, &counts])
+                    },
                     "sync",
                 )
             } else if let Head::Branch { name, .. } = head {
@@ -237,17 +280,22 @@ pub fn snapshot(
                 let label = api.text("git.status.noBranch", &[]);
                 (String::new(), label.clone(), label, "sync")
             };
-            let busy_label = repository.operation.map(|operation| {
-                api.text(
-                    if operation == crate::model::RepositoryOperation::Synchronize {
-                        "git.status.synchronizing"
-                    } else {
-                        "git.operationProgress"
-                    },
-                    &[],
-                )
-            });
-            statusbar.push(json!({"id":"ash.status.git.sync","text":text,"ariaLabel":busy_label.as_deref().unwrap_or(&aria),"tooltip":busy_label.as_deref().unwrap_or(&tooltip),"priority":800,"compactGroup":"ash.status.git","icon":if repository.is_busy() {"refresh"} else {icon},"enabled":!repository.is_busy() && matches!(head,Head::Branch{..})}));
+            let busy_label = repository
+                .operation
+                .filter(|operation| *operation != crate::model::RepositoryOperation::Preparing)
+                .map(|operation| {
+                    api.text(
+                        if operation == crate::model::RepositoryOperation::Synchronize {
+                            "git.status.synchronizing"
+                        } else {
+                            "git.operationProgress"
+                        },
+                        &[],
+                    )
+                });
+            let synchronizing =
+                repository.operation == Some(crate::model::RepositoryOperation::Synchronize);
+            statusbar.push(json!({"id":"ash.status.git.sync","text":text,"ariaLabel":busy_label.as_deref().unwrap_or(&aria),"tooltip":busy_label.as_deref().unwrap_or(&tooltip),"priority":800,"compactGroup":"ash.status.git","icon":if synchronizing {"sync"} else {icon},"showProgress":synchronizing,"enabled":!repository.is_busy() && matches!(head,Head::Branch{..})}));
         }
     }
     if let Some(blame) = &repository.blame {

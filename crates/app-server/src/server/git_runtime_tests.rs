@@ -42,7 +42,7 @@ fn discovery_reuses_equal_scans_within_one_request_but_observes_new_repositories
     std::fs::write(
         &executable,
         format!(
-            "#!/bin/sh\nprintf '%s ' \"$@\" >> {}\nprintf '\\n' >> {}\nexec {} \"$@\"\n",
+            "#!/bin/sh\nfor arg do if [ \"$arg\" = --version ]; then exec {2} \"$@\"; fi; done\nprintf '%s ' \"$@\" >> {}\nprintf '\\n' >> {}\nexec {} \"$@\"\n",
             quote(&log),
             quote(&log),
             quote(&git),
@@ -961,7 +961,7 @@ fn warm_edits_and_known_renames_each_need_only_one_scoped_git_process() {
     std::fs::write(
         &executable,
         format!(
-            "#!/bin/sh\nprintf '%s ' \"$@\" >> {}\nprintf '\\n' >> {}\nexec {} \"$@\"\n",
+            "#!/bin/sh\nfor arg do if [ \"$arg\" = --version ]; then exec {2} \"$@\"; fi; done\nprintf '%s ' \"$@\" >> {}\nprintf '\\n' >> {}\nexec {} \"$@\"\n",
             quote(&log),
             quote(&log),
             quote(&git),
@@ -1051,7 +1051,7 @@ fn ignore_answers_reuse_identity_and_survive_unrelated_edits_but_not_rule_or_ind
     std::fs::write(
         &executable,
         format!(
-            "#!/bin/sh\nprintf '%s ' \"$@\" >> {}\nprintf '\\n' >> {}\nexec {} \"$@\"\n",
+            "#!/bin/sh\nfor arg do if [ \"$arg\" = --version ]; then exec {2} \"$@\"; fi; done\nprintf '%s ' \"$@\" >> {}\nprintf '\\n' >> {}\nexec {} \"$@\"\n",
             quote(&log),
             quote(&log),
             quote(&git),
@@ -1197,7 +1197,7 @@ fn ignore_query_finishing_after_invalidation_cannot_repopulate_the_cache() {
     let quote = |path: &Path| format!("'{}'", path.display().to_string().replace('\'', "'\\''"));
     let git = ash_git::GitClient::system().executable().unwrap();
     std::fs::write(&executable, format!(
-        "#!/bin/sh\nprintf 'start\\n' >> {}\nwhile ! test -f {}; do sleep 0.01; done\nexec {} \"$@\"\n",
+        "#!/bin/sh\nfor arg do if [ \"$arg\" = --version ]; then exec {2} \"$@\"; fi; done\nprintf 'start\\n' >> {}\nwhile ! test -f {}; do sleep 0.01; done\nexec {} \"$@\"\n",
         quote(&started), quote(&release.0), quote(&git),
     )).unwrap();
     std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
@@ -2806,6 +2806,175 @@ fn filtered_graph_cursor_is_bound_to_selection_and_binary_history_retains_bytes(
             .decode(data)
             .unwrap(),
         [0, 1, 255]
+    );
+}
+
+#[test]
+fn sync_tag_conflicts_are_structured_and_replacement_is_explicit() {
+    let (source, target) = pull_test_repositories();
+    source.git(&["tag", "release"]);
+    target.git(&["tag", "release"]);
+    let before = target.git_output(&["rev-parse", "HEAD"]);
+    source.write("upstream.txt", "upstream\n");
+    source.git(&["add", "."]);
+    source.git(&["commit", "-m", "upstream"]);
+    source.git(&["tag", "--force", "release"]);
+    let server = crate::AppServer::new(
+        Arc::new(ash_core::ThreadController::with_store(Arc::new(
+            ash_core::InMemoryThreadStore::default(),
+        ))),
+        Arc::new(crate::local::ProviderModelService::new(Arc::new(
+            ash_model_provider::EchoModel,
+        ))),
+    )
+    .with_ephemeral_env_state()
+    .with_git_root(mutation_authorization(target.root()))
+    .unwrap();
+    let cancellation = ash_async_utils::CancellationSource::new();
+    let head = server.git_status(&serde_json::json!({})).unwrap()["head"].clone();
+    let mut request = serde_json::json!({"operationId":"tag-conflict","repositoryId":null,
+        "transport":ash_app_server_protocol::protocol::git::GitTransportOptionsDto::default(),
+        "operation":{"kind":"pull","mode":"configured","expectedHead":head}});
+    request["transport"]["pullTags"] = serde_json::json!(true);
+    let conflict = server
+        .git_transport(&request, &cancellation.token())
+        .unwrap();
+    assert_eq!(
+        conflict["outcome"],
+        serde_json::json!({"kind":"tagConflict","tags":["release"]})
+    );
+    assert_eq!(conflict["status"]["head"]["objectId"], before);
+    request["transport"]["replaceTags"] = serde_json::json!(true);
+    let completed = server
+        .git_transport(&request, &cancellation.token())
+        .unwrap();
+    assert_eq!(
+        completed["outcome"],
+        serde_json::json!({"kind":"completed"})
+    );
+    assert_eq!(
+        target.git_output(&["rev-parse", "release"]),
+        source.git_output(&["rev-parse", "release"])
+    );
+    source.write("implicit.txt", "auto-follow tags\n");
+    source.git(&["add", "."]);
+    source.git(&["commit", "-m", "auto-follow tags"]);
+    source.git(&["tag", "implicit"]);
+    target.git(&["config", "remote.origin.tagOpt", "--tags"]);
+    request["operation"]["expectedHead"] = completed["status"]["head"].clone();
+    request["transport"]["pullTags"] = serde_json::json!(false);
+    request["transport"]["replaceTags"] = serde_json::json!(false);
+    server
+        .git_transport(&request, &cancellation.token())
+        .unwrap();
+    assert_eq!(
+        target.git_output(&["rev-parse", "implicit"]),
+        source.git_output(&["rev-parse", "implicit"])
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn git_version_reports_an_unsupported_installation_and_operations_require_an_upgrade() {
+    use std::os::unix::fs::PermissionsExt;
+    let repository = TestRepository::init();
+    let scripts = tempfile::tempdir().unwrap();
+    let executable = scripts.path().join("git");
+    let unexpected = scripts.path().join("unexpected-command");
+    std::fs::write(&executable, format!(
+        "#!/bin/sh\nfor arg do if [ \"$arg\" = --version ]; then printf '%s\\n' 'git version 2.39.9'; exit 0; fi; done\ntouch '{}'\nexit 1\n",
+        unexpected.display().to_string().replace('\'', "'\\''")
+    )).unwrap();
+    std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let client =
+        ash_git::GitClient::with_executable(executable, ash_git::GitExecutionLimits::default())
+            .unwrap();
+    let server = crate::AppServer::new(
+        Arc::new(ash_core::ThreadController::with_store(Arc::new(
+            ash_core::InMemoryThreadStore::default(),
+        ))),
+        Arc::new(crate::local::ProviderModelService::new(Arc::new(
+            ash_model_provider::EchoModel,
+        ))),
+    )
+    .with_ephemeral_env_state()
+    .with_git_root(mutation_authorization(repository.root()))
+    .unwrap();
+    let version = crate::git_service::with_client(client.clone(), || {
+        server.git_version(&serde_json::json!({}))
+    })
+    .unwrap();
+    assert_eq!(
+        version["installation"],
+        serde_json::json!({
+            "kind":"unsupported", "version":"git version 2.39.9", "minimumVersion":"2.40.0"
+        })
+    );
+    let error =
+        crate::git_service::with_client(client, || server.git_status(&serde_json::json!({})))
+            .unwrap_err();
+    assert!(
+        error.to_string().contains("requires Git 2.40.0 or newer"),
+        "{error}"
+    );
+    assert!(error.to_string().contains("Upgrade Git"), "{error}");
+    assert!(
+        !unexpected.exists(),
+        "repository commands must not run with unsupported Git"
+    );
+}
+
+#[test]
+fn reviewed_sync_pull_reaches_the_explicit_target_and_rejects_changed_tracking() {
+    let (source, target) = pull_test_repositories();
+    let server = crate::AppServer::new(
+        Arc::new(ash_core::ThreadController::with_store(Arc::new(
+            ash_core::InMemoryThreadStore::default(),
+        ))),
+        Arc::new(crate::local::ProviderModelService::new(Arc::new(
+            ash_model_provider::EchoModel,
+        ))),
+    )
+    .with_ephemeral_env_state()
+    .with_git_root(mutation_authorization(target.root()))
+    .unwrap();
+    let head = server.git_status(&serde_json::json!({})).unwrap()["head"].clone();
+    let before = target.git_output(&["rev-parse", "HEAD"]);
+    source.write("remote.txt", "upstream update\n");
+    source.git(&["add", "."]);
+    source.git(&["commit", "-m", "upstream update"]);
+    let cancellation = ash_async_utils::CancellationSource::new();
+    let request = serde_json::json!({
+        "operationId":"reviewed-sync-pull", "repositoryId":null,
+        "transport":ash_app_server_protocol::protocol::git::GitTransportOptionsDto::default(),
+        "operation":{"kind":"pull","mode":"configured","expectedHead":head}
+    });
+    target.git(&["config", "branch.main.merge", "refs/heads/other"]);
+    assert!(
+        server
+            .git_transport(&request, &cancellation.token())
+            .is_err()
+    );
+    assert_eq!(target.git_output(&["rev-parse", "HEAD"]), before);
+    target.git(&["config", "branch.main.merge", "refs/heads/main"]);
+    let pulled = server
+        .git_transport(&request, &cancellation.token())
+        .unwrap();
+    assert_eq!(
+        pulled["status"]["head"]["objectId"],
+        source.git_output(&["rev-parse", "HEAD"])
+    );
+    assert_eq!(
+        std::fs::read_to_string(target.root().join("remote.txt")).unwrap(),
+        "upstream update\n"
+    );
+
+    let mut invalid = request;
+    invalid["operation"]["expectedHead"] = serde_json::json!({"type":"detached","objectId":before});
+    assert!(
+        server
+            .git_transport(&invalid, &cancellation.token())
+            .is_err()
     );
 }
 

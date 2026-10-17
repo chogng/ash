@@ -997,6 +997,21 @@ pub struct GitOperationResult {
     pub status: GitStatusResult,
 }
 
+/// A recoverable pull conflict is returned with the repository's current status.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitTransportResult {
+    pub status: GitStatusResult,
+    pub outcome: GitTransportOutcomeDto,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+pub enum GitTransportOutcomeDto {
+    Completed,
+    TagConflict { tags: Vec<String> },
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GitCommitResult {
@@ -1185,6 +1200,9 @@ pub struct GitCatalogResult {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub upstream_remote: Option<String>,
+    /// The tracked remote has no usable push URL; synchronization only pulls.
+    #[serde(default)]
+    pub upstream_read_only: bool,
     pub operation: Option<GitIntegrationDto>,
 }
 
@@ -1334,21 +1352,25 @@ pub struct GitDiscoveryParams {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase", tag = "kind")]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "kind"
+)]
 pub enum GitInstallationDto {
     Missing,
+    Unsupported {
+        version: String,
+        minimum_version: String,
+    },
     Available {
         version: String,
-        major: u32,
-        minor: u32,
-        patch: u32,
     },
 }
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GitVersionResult {
     pub installation: GitInstallationDto,
-    pub windows: bool,
 }
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -1376,9 +1398,18 @@ pub struct GitTransportParams {
     deny_unknown_fields
 )]
 pub enum GitTransportOperationDto {
-    Fetch { mode: GitFetchModeDto },
-    Pull { mode: GitPullModeDto },
-    Push { expected_head: GitHeadDto },
+    Fetch {
+        mode: GitFetchModeDto,
+    },
+    Pull {
+        mode: GitPullModeDto,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        expected_head: Option<GitHeadDto>,
+    },
+    Push {
+        expected_head: GitHeadDto,
+    },
 }
 
 /// A conditional leaf removal. The revision comes from git/reviewRemoval.

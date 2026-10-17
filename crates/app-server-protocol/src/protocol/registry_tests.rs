@@ -419,7 +419,10 @@ fn git_fetch_modes_preserve_existing_requests_and_add_one_named_remote() {
         serde_json::json!({"tags":[],"stashes":[],"remotes":["origin"],"operation":null});
     let mut catalog: GitCatalogResult = serde_json::from_value(previous.clone()).unwrap();
     assert_eq!(catalog.upstream_remote, None);
-    assert_eq!(serde_json::to_value(&catalog).unwrap(), previous);
+    assert!(!catalog.upstream_read_only);
+    let mut expected = previous;
+    expected["upstreamReadOnly"] = serde_json::json!(false);
+    assert_eq!(serde_json::to_value(&catalog).unwrap(), expected);
     catalog.upstream_remote = Some("team/backup".into());
     let updated = serde_json::to_value(catalog).unwrap();
     assert_eq!(updated["upstreamRemote"], "team/backup");
@@ -852,5 +855,62 @@ fn git_pull_modes_roundtrip_and_keep_repository_serialization() {
     assert_eq!(
         serde_json::to_value(config).unwrap()["rebaseWhenSync"],
         false
+    );
+}
+
+#[test]
+fn git_transport_pull_keeps_the_reviewed_upstream_and_legacy_requests() {
+    use crate::protocol::git::GitTransportOperationDto;
+    for expected_head in [
+        None,
+        Some(
+            serde_json::json!({"type":"branch","name":"topic","objectId":"a".repeat(40),"upstream":{"name":"team/upstream/release","ahead":2,"behind":1}}),
+        ),
+    ] {
+        let mut value = serde_json::json!({"kind":"pull","mode":"sync"});
+        if let Some(head) = expected_head {
+            value["expectedHead"] = head;
+        }
+        let operation: GitTransportOperationDto = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(serde_json::to_value(operation).unwrap(), value);
+    }
+    assert!(serde_json::from_value::<GitTransportOperationDto>(serde_json::json!({"kind":"pull","mode":"sync","expectedHead":{"type":"branch","name":"topic"}})).is_err());
+}
+
+#[test]
+fn git_transport_recovers_tag_conflicts_without_parsing_error_messages() {
+    use crate::protocol::git::GitTransportOutcomeDto;
+    for value in [
+        serde_json::json!({"kind":"completed"}),
+        serde_json::json!({"kind":"tagConflict","tags":["release","v2"]}),
+    ] {
+        let outcome: GitTransportOutcomeDto = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(serde_json::to_value(outcome).unwrap(), value);
+    }
+    assert!(
+        serde_json::from_value::<GitTransportOutcomeDto>(
+            serde_json::json!({"kind":"tagConflict","tags":[1]})
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn git_installation_distinguishes_missing_supported_and_upgrade_required() {
+    use crate::protocol::git::GitVersionResult;
+    for value in [
+        serde_json::json!({"kind":"missing"}),
+        serde_json::json!({"kind":"available","version":"git version 2.40.0"}),
+        serde_json::json!({"kind":"unsupported","version":"git version 2.39.9","minimumVersion":"2.40.0"}),
+    ] {
+        let value = serde_json::json!({"installation": value});
+        let result: GitVersionResult = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(serde_json::to_value(result).unwrap(), value);
+    }
+    assert!(
+        serde_json::from_value::<GitVersionResult>(
+            serde_json::json!({"installation":{"kind":"unsupported","version":"git version 2.39.9"}})
+        )
+        .is_err()
     );
 }

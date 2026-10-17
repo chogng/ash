@@ -174,8 +174,9 @@ pub(crate) enum GitRemoteMutation<'a> {
     Fetch,
     FetchRemote(&'a str),
     Pull(GitPullMode),
+    PullReviewed(GitPullMode, &'a ash_git::GitUpstreamTarget),
     Push,
-    PushReviewed(&'a ash_git::GitPushTarget),
+    PushReviewed(&'a ash_git::GitUpstreamTarget),
 }
 
 /// Directory-scoped owner of the async Git runtime used by synchronous RPC dispatch.
@@ -1346,6 +1347,11 @@ impl GitService {
                     GitRemoteMutation::Pull(mode) => {
                         self.client()
                             .pull_with_options(&repository, mode, options)
+                            .await
+                    }
+                    GitRemoteMutation::PullReviewed(mode, target) => {
+                        self.client()
+                            .pull_reviewed(&repository, mode, target, options)
                             .await
                     }
                     GitRemoteMutation::Push => {

@@ -33,6 +33,21 @@ async fn catalog_reports_the_configured_upstream_remote_without_splitting_ref_na
             .as_deref(),
         Some("team/backup")
     );
+    assert!(
+        !client
+            .catalog(&repository)
+            .await
+            .unwrap()
+            .upstream_read_only
+    );
+    source.git(&["remote", "set-url", "--push", "team/backup", "no_push"]);
+    assert!(
+        client
+            .catalog(&repository)
+            .await
+            .unwrap()
+            .upstream_read_only
+    );
     source.git(&["switch", "--detach"]);
     assert_eq!(
         client.catalog(&repository).await.unwrap().upstream_remote,

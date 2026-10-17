@@ -160,12 +160,15 @@ impl Client {
                         json!({"revision":shared["revision"],"disposition":"applied"})
                     }
                     "version" => {
-                        json!({"installation":{"kind":"available","version":"git version 2.50.0","major":2,"minor":50,"patch":0},"windows":false})
+                        json!({"installation":{"kind":"available","version":"git version 2.50.0"}})
                     }
                     "repositories" => {
                         json!({"repositories":[{"id":"root","label":"test","path":"","dirId":"workspace"}]})
                     }
                     "status" => self.status(),
+                    "catalog" => {
+                        json!({"tags":[],"stashes":[],"remotes":["origin"],"upstreamReadOnly":false,"operation":null})
+                    }
                     "graph" => {
                         json!({"remotes":[{"name":"origin","identity":{"provider":"github","host":"github.com","owner":"synthetic","repository":"fixture"}}]})
                     }

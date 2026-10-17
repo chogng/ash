@@ -281,7 +281,9 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
     ) -> Result<Value, RpcError> {
         use crate::git_service::GitRemoteMutation;
         use ash_app_server_protocol::protocol::git::GitTransportOperationDto;
+        use ash_app_server_protocol::protocol::git::GitTransportOutcomeDto;
         use ash_app_server_protocol::protocol::git::GitTransportParams;
+        use ash_app_server_protocol::protocol::git::GitTransportResult;
         let params: GitTransportParams = decode(value)?;
         let target = match &params.operation {
             GitTransportOperationDto::Push {
@@ -291,15 +293,32 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
                         object_id,
                         upstream: Some(upstream),
                     },
-            } => Some(ash_git::GitPushTarget {
+            }
+            | GitTransportOperationDto::Pull {
+                expected_head:
+                    Some(GitHeadDto::Branch {
+                        name,
+                        object_id,
+                        upstream: Some(upstream),
+                    }),
+                ..
+            } => Some(ash_git::GitUpstreamTarget {
                 branch: name.clone(),
                 object_id: object_id.clone(),
                 upstream: upstream.name.clone(),
             }),
-            GitTransportOperationDto::Push { .. } => {
+            GitTransportOperationDto::Push { .. }
+            | GitTransportOperationDto::Pull {
+                expected_head: Some(_),
+                ..
+            } => {
                 return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
             }
-            GitTransportOperationDto::Fetch { .. } | GitTransportOperationDto::Pull { .. } => None,
+            GitTransportOperationDto::Fetch { .. }
+            | GitTransportOperationDto::Pull {
+                expected_head: None,
+                ..
+            } => None,
         };
         let operation = match &params.operation {
             GitTransportOperationDto::Fetch { mode } => match mode {
@@ -307,24 +326,36 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
                 GitFetchModeDto::All => GitRemoteMutation::Fetch,
                 GitFetchModeDto::Remote(name) => GitRemoteMutation::FetchRemote(name),
             },
-            GitTransportOperationDto::Pull { mode } => {
-                GitRemoteMutation::Pull(self.resolve_pull_mode(*mode)?)
-            }
+            GitTransportOperationDto::Pull { mode, .. } => match target.as_ref() {
+                Some(target) => {
+                    GitRemoteMutation::PullReviewed(self.resolve_pull_mode(*mode)?, target)
+                }
+                None => GitRemoteMutation::Pull(self.resolve_pull_mode(*mode)?),
+            },
             GitTransportOperationDto::Push { .. } => {
                 GitRemoteMutation::PushReviewed(target.as_ref().expect("validated push target"))
             }
         };
-        let status = self
-            .context
-            .git_runtime_service()?
-            .transport_for(
-                params.repository_id.as_deref(),
-                operation,
-                transport_options(params.transport),
-                cancellation,
-            )
-            .map_err(git_error)?;
-        result(&GitOperationResult { status })
+        let runtime = self.git_runtime_service()?;
+        let outcome = runtime.transport_for(
+            params.repository_id.as_deref(),
+            operation,
+            transport_options(params.transport),
+            cancellation,
+        );
+        let (status, outcome) = match outcome {
+            Ok(status) => (status, GitTransportOutcomeDto::Completed),
+            Err(GitRuntimeError::Service(GitServiceError::Git(GitError::TagConflict { tags }))) => {
+                (
+                    runtime
+                        .status_for(params.repository_id.as_deref())
+                        .map_err(git_error)?,
+                    GitTransportOutcomeDto::TagConflict { tags },
+                )
+            }
+            Err(error) => return Err(git_error(error)),
+        };
+        result(&GitTransportResult { status, outcome })
     }
     fn resolve_pull_mode(&self, mode: GitPullModeDto) -> Result<GitPullMode, RpcError> {
         Ok(match mode {
@@ -354,26 +385,29 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
             .enable_all()
             .build()
             .map_err(|_| RpcError::new(-32603, AppServerErrorName::InternalError))?;
-        let installation = match runtime.block_on(crate::git_service::current_client().version()) {
+        let installation = match runtime
+            .block_on(crate::git_service::current_client().version())
+            .and_then(|version| {
+                version.check_supported()?;
+                Ok(version)
+            }) {
             Ok(version) => GitInstallationDto::Available {
                 version: version.display,
-                major: version.major,
-                minor: version.minor,
-                patch: version.patch,
             },
             Err(GitError::Io { source, .. }) if source.kind() == std::io::ErrorKind::NotFound => {
                 GitInstallationDto::Missing
             }
+            Err(GitError::UnsupportedVersion { installed }) => GitInstallationDto::Unsupported {
+                version: installed,
+                minimum_version: ash_git::GitVersion::minimum_supported(),
+            },
             Err(error) => {
                 return Err(git_error(GitRuntimeError::Service(GitServiceError::Git(
                     error,
                 ))));
             }
         };
-        result(&GitVersionResult {
-            installation,
-            windows: cfg!(windows),
-        })
+        result(&GitVersionResult { installation })
     }
     pub(super) fn git_pull_preflight(&self, value: &Value) -> Result<Value, RpcError> {
         use ash_app_server_protocol::protocol::git::GitPullPreflightResult;
@@ -458,6 +492,7 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
                 .collect(),
             remotes: catalog.remotes,
             upstream_remote: catalog.upstream_remote,
+            upstream_read_only: catalog.upstream_read_only,
             operation: catalog.operation.map(integration_dto),
         })
     }
@@ -1463,6 +1498,13 @@ pub(super) fn git_error(error: GitRuntimeError) -> RpcError {
         GitRuntimeError::Service(GitServiceError::Git(GitError::NotAWorkingTree { .. })) => {
             RpcError::new(-32062, AppServerErrorName::GitNotRepository)
         }
+        GitRuntimeError::Service(GitServiceError::Git(
+            error @ GitError::UnsupportedVersion { .. },
+        )) => RpcError::with_details(
+            -32061,
+            AppServerErrorName::GitOperationFailed,
+            error.to_string(),
+        ),
         GitRuntimeError::Service(GitServiceError::Git(_)) => {
             RpcError::new(-32061, AppServerErrorName::GitOperationFailed)
         }
@@ -1602,7 +1644,7 @@ fn transport_options(
         tag_policy: if value.pull_tags {
             ash_git::GitTagPolicy::Include
         } else {
-            ash_git::GitTagPolicy::Exclude
+            ash_git::GitTagPolicy::Configured
         },
         replace_tags: value.replace_tags,
         auto_stash: value.auto_stash,

@@ -24,6 +24,8 @@ export interface IStatusbarEntry {
 	readonly icon?: Icon;
 	readonly text: string;
 	readonly segments?: readonly IStatusbarEntrySegment[];
+	/** Rotates the entry's icon while its owning operation is pending. */
+	readonly showProgress?: boolean;
 	readonly kind?: StatusbarEntryKind;
 	readonly ariaLabel?: string;
 	readonly tooltip?: string;

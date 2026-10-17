@@ -316,7 +316,7 @@ fn branch_listing_discovers_once_and_refreshes_worktree_occupancy() {
     std::fs::write(
         &executable,
         format!(
-            "#!/bin/sh\nprintf '%s\\n' \"$*\" >> {}\nexec {} \"$@\"\n",
+            "#!/bin/sh\nfor arg do if [ \"$arg\" = --version ]; then exec {1} \"$@\"; fi; done\nprintf '%s\\n' \"$*\" >> {}\nexec {} \"$@\"\n",
             shell_path(&log),
             shell_path(&git_path)
         ),
@@ -418,7 +418,7 @@ fn recording_git(root: &Path) -> (GitClient, std::path::PathBuf) {
     std::fs::write(
         &executable,
         format!(
-            "#!/bin/sh\nprintf '%s\\n' \"$*\" >> {}\nexec {} \"$@\"\n",
+            "#!/bin/sh\nfor arg do if [ \"$arg\" = --version ]; then exec {1} \"$@\"; fi; done\nprintf '%s\\n' \"$*\" >> {}\nexec {} \"$@\"\n",
             shell_path(&commands),
             shell_path(&git_path)
         ),

@@ -12,7 +12,7 @@ import { URI } from '../../../base/common/uri.js';
 import { IEditorService } from '../../services/editor/common/editorService.js';
 import { IEditorPart } from '../../browser/parts/editor/editorPart.js';
 import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
-import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
+import { DialogSeverity, IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { IWorkspaceOpenService } from '../../services/workspaces/browser/workspaceOpenService.js';
 import { IWorkingCopyService } from '../../services/workingCopy/common/workingCopyService.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
@@ -152,6 +152,18 @@ export class MainThreadEditors extends Disposable {
 				const result = await this.dialogs.confirm({ title: optionalText(request.title), message: text(request.message), detail: optionalText(request.detail), primaryButton: optionalText(request.primaryButton) });
 				signal.throwIfAborted();
 				return { confirmed: result.confirmed };
+			}
+			case 'prompt': {
+				if (!Array.isArray(request.buttons) || !request.buttons.length || request.buttons.length > 16) throw new TypeError('Invalid extension dialog buttons');
+				if (request.severity !== undefined && request.severity !== 'info' && request.severity !== 'warning' && request.severity !== 'error') throw new TypeError('Invalid extension dialog severity');
+				const buttons = request.buttons.map((label, index) => ({ label: text(label, 1024), run: () => index }));
+				const result = await this.dialogs.prompt({
+					title: optionalText(request.title), message: text(request.message), detail: optionalText(request.detail),
+					severity: request.severity === 'warning' ? DialogSeverity.Warning : request.severity === 'error' ? DialogSeverity.Error : DialogSeverity.Info,
+					buttons, cancelButton: optionalText(request.cancelButton),
+				});
+				signal.throwIfAborted();
+				return { selection: result.result ?? null };
 			}
 			case 'pickFolder': {
 				const folder = await this.workspace.pickFolder(optionalText(request.defaultPath));

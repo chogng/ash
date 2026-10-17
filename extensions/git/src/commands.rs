@@ -89,6 +89,14 @@ impl GitRuntime {
         let repository = self.repository(id)?;
         if command == "git.refresh" {
             self.accept_status(self.api.status(&repository, Some(token))?);
+            let catalog =
+                decode(
+                    self.api
+                        .repository_request(&repository, "catalog", json!({}), token)?,
+                )?;
+            if let Some(current) = self.lock().repositories.get_mut(&repository.descriptor.id) {
+                current.catalog = Some(catalog);
+            }
             self.publish()?;
             return Ok(Value::Null);
         }
@@ -154,11 +162,24 @@ impl GitRuntime {
             .map_err(|_| invalid("Git operation state failed"))?;
         token.check_cancelled()?;
         if let Some(repository) = self.lock().repositories.get_mut(&repository.descriptor.id) {
-            repository.operation = Some(if matches!(command, "git.sync" | "git.syncRebase") {
-                crate::model::RepositoryOperation::Synchronize
-            } else {
-                crate::model::RepositoryOperation::Other
-            });
+            repository.operation = Some(
+                if matches!(
+                    command,
+                    "git.sync"
+                        | "git.syncRebase"
+                        | "git.pull"
+                        | "git.pullRebase"
+                        | "ash.git.pull"
+                        | "git.push"
+                        | "git.pushForce"
+                        | "ash.git.push"
+                        | "git.publish"
+                ) {
+                    crate::model::RepositoryOperation::Preparing
+                } else {
+                    crate::model::RepositoryOperation::Other
+                },
+            );
             repository.error.clear();
         }
         self.publish()?;
@@ -167,6 +188,13 @@ impl GitRuntime {
         } else {
             self.run_command(command, arguments, &repository, token)
         };
+        // A failed or cancelled Git operation can still update refs, the index or
+        // integration state. Refresh independently of its cancelled invocation token.
+        if outcome.is_err() {
+            if let Ok(status) = self.api.status(&repository, None) {
+                self.accept_status(status);
+            }
+        }
         if let Some(current) = self.lock().repositories.get_mut(&repository.descriptor.id) {
             current.operation = None;
             current.pending_paths = None;
@@ -177,6 +205,13 @@ impl GitRuntime {
             }
         }
         let _ = self.publish();
+        if matches!(command, "git.sync" | "git.syncRebase")
+            && outcome
+                .as_ref()
+                .is_err_and(|error| error.code == external_ext_sdk::HostErrorCode::Cancelled)
+        {
+            return Ok(Value::Null);
+        }
         outcome
     }
     fn run_command(
@@ -820,10 +855,34 @@ impl GitRuntime {
                 .api
                 .repository_request(repository, "catalog", json!({}), token)?;
             let remotes = catalog["remotes"].as_array().cloned().unwrap_or_default();
-            let Some(index) = self.choose("git.publishChooseRemote", &remotes, "", token)? else {
+            let mut choices = remotes.clone();
+            if remotes.len() > 1 {
+                choices.push(json!(self.api.text("git.menu.addRemote", &[])));
+            }
+            let Some(index) = self.choose("git.publishChooseRemote", &choices, "", token)? else {
                 return Ok(Value::Null);
             };
-            let remote = &remotes[index];
+            let remote = if index == remotes.len() {
+                if self
+                    .repository_command(repository, "git.addRemote", token)?
+                    .is_null()
+                {
+                    return Ok(Value::Null);
+                }
+                let catalog =
+                    self.api
+                        .repository_request(repository, "catalog", json!({}), token)?;
+                let Some(remote) = catalog["remotes"]
+                    .as_array()
+                    .and_then(|values| values.iter().find(|value| !remotes.contains(value)))
+                else {
+                    return Ok(Value::Null);
+                };
+                remote.clone()
+            } else {
+                remotes[index].clone()
+            };
+            self.start_remote_operation(repository)?;
             let result=self.execute(repository,json!({"kind":"publishBranch","remote":remote,"name":name,"branch":name,"expectedHead":object_id}),token)?;
             self.notify_pushed(repository, token)?;
             return Ok(result);
@@ -850,37 +909,47 @@ impl GitRuntime {
             });
         }
         let sync = matches!(command, "git.sync" | "git.syncRebase");
-        if matches!(
-            command,
-            "git.pull" | "git.pullRebase" | "ash.git.pull" | "git.sync" | "git.syncRebase"
-        ) && !config.boolean("ignoreRebaseWarning", false)
-        {
-            let preflight =
-                self.api
-                    .repository_request(repository, "pullPreflight", json!({}), token)?;
-            if preflight["upstreamRewritten"] == true
-                && !self.api.confirm("git.rewrittenPullConfirm", &[], token)?
-            {
-                return Ok(Value::Null);
+        let sync_catalog = if sync {
+            self.api
+                .repository_request(repository, "catalog", json!({}), token)?
+        } else {
+            Value::Null
+        };
+        if sync {
+            let catalog = decode(sync_catalog.clone())?;
+            if let Some(current) = self.lock().repositories.get_mut(&repository.descriptor.id) {
+                current.catalog = Some(catalog);
+            }
+        }
+        if sync && sync_catalog["upstreamReadOnly"] != true && config.boolean("confirmSync", true) {
+            let choice = self.api.editor(
+                json!({"method":"prompt", "severity":"warning",
+                    "message":self.api.text("git.syncConfirm", &[&before.head.upstream().expect("sync has upstream").name]),
+                    "buttons":[self.api.text("git.syncConfirm.ok", &[]), self.api.text("git.syncConfirm.neverAgain", &[])]}),
+                Some(token),
+            )?;
+            match choice["selection"].as_u64() {
+                Some(0) => {}
+                Some(1) => self.api.client.update_configuration(
+                    "git.confirmSync",
+                    json!(false),
+                    ConfigurationTarget::User,
+                    token,
+                )?,
+                None if choice["selection"].is_null() => return Ok(Value::Null),
+                _ => return Err(invalid("Invalid Git confirmation selection")),
             }
         }
 
-        if sync
-            && config.boolean("confirmSync", true)
-            && !self.api.confirm(
-                "git.syncConfirm",
-                &[before.head.name().unwrap_or("HEAD")],
-                token,
-            )?
-        {
-            return Ok(Value::Null);
-        }
         let current = self.api.status(repository, Some(token))?;
         if !current.head.same_target(&before.head)
             || current.head.upstream().map(|upstream| &upstream.name)
                 != before.head.upstream().map(|upstream| &upstream.name)
         {
             return Err(invalid(&self.api.text("git.commitHeadChanged", &[])));
+        }
+        if !matches!(command, "git.fetch" | "git.fetchAll") {
+            self.start_remote_operation(repository)?;
         }
         let result = if matches!(command, "git.fetch" | "git.fetchAll") {
             let catalog = self
@@ -915,11 +984,68 @@ impl GitRuntime {
                 self.api.repository_request(
                     repository,
                     "fetch",
-                    json!({"mode":"all","transport":transport}),
+                    json!({"mode":"all","transport":transport,"synchronizing":sync}),
                     token,
                 )?;
             }
-            let pulled=self.api.repository_request(repository,"pull",json!({"mode":if command.ends_with("Rebase") {"rebase"} else if sync {"sync"} else {"configured"},"transport":transport}),token)?;
+            if !config.boolean("ignoreRebaseWarning", false) {
+                let preflight =
+                    self.api
+                        .repository_request(repository, "pullPreflight", json!({}), token)?;
+                if preflight["upstreamRewritten"] == true {
+                    let choice = self.api.editor(json!({"method":"prompt", "severity":"warning",
+                        "message":self.api.text("git.rewrittenPullConfirm", &[]),
+                        "buttons":[self.api.text("git.rewrittenPull.always", &[]), self.api.text("git.rewrittenPull.once", &[])]}), Some(token))?;
+                    match choice["selection"].as_u64() {
+                        Some(0) => self.api.client.update_configuration(
+                            "git.ignoreRebaseWarning",
+                            json!(true),
+                            ConfigurationTarget::User,
+                            token,
+                        )?,
+                        Some(1) => {}
+                        None if choice["selection"].is_null() => return Ok(Value::Null),
+                        _ => return Err(invalid("Invalid Git pull warning selection")),
+                    }
+                }
+            }
+
+            let mut pull = json!({"mode":if command.ends_with("Rebase") {"rebase"} else if sync {"sync"} else {"configured"},"transport":transport,"synchronizing":sync});
+            if sync {
+                pull["expectedHead"] = serde_json::to_value(&before.head)
+                    .map_err(|_| invalid("Invalid Git sync target"))?;
+            }
+            let mut pulled =
+                self.api
+                    .repository_request(repository, "pull", pull.clone(), token)?;
+            if pulled["outcome"]["kind"] == "tagConflict" {
+                self.accept_status(decode(pulled["status"].clone())?);
+                let tags: Vec<String> = decode(pulled["outcome"]["tags"].clone())?;
+                let message = self.api.text("git.tagConflict", &[&tags.join(", ")]);
+                if config.boolean("replaceTagsWhenPull", false) {
+                    return Err(invalid(&message));
+                }
+                let choice = self.api.editor(json!({"method":"prompt", "severity":"error", "message":message,
+                    "buttons":[self.api.text("git.tagConflict.replace", &[]), self.api.text("git.tagConflict.always", &[])]}), Some(token))?;
+                match choice["selection"].as_u64() {
+                    Some(0) => {}
+                    Some(1) => self.api.client.update_configuration(
+                        "git.replaceTagsWhenPull",
+                        json!(true),
+                        ConfigurationTarget::User,
+                        token,
+                    )?,
+                    None if choice["selection"].is_null() => return Ok(pulled),
+                    _ => return Err(invalid("Invalid Git tag conflict selection")),
+                }
+                pull["transport"]["replaceTags"] = json!(true);
+                pulled = self
+                    .api
+                    .repository_request(repository, "pull", pull, token)?;
+                if pulled["outcome"]["kind"] == "tagConflict" {
+                    return Err(invalid(&message));
+                }
+            }
             self.accept_status(decode(pulled["status"].clone())?);
             if sync {
                 let status: Status = decode(pulled["status"].clone())?;
@@ -927,6 +1053,11 @@ impl GitRuntime {
                     || status.head.upstream().map(|upstream| &upstream.name)
                         != before.head.upstream().map(|upstream| &upstream.name)
                     || status.changes.iter().any(|change| change.conflicted)
+                    || status
+                        .head
+                        .upstream()
+                        .is_none_or(|upstream| upstream.ahead == 0)
+                    || sync_catalog["upstreamReadOnly"] == true
                 {
                     return Ok(pulled);
                 }
@@ -949,6 +1080,12 @@ impl GitRuntime {
             self.notify_pushed(repository, token)?;
         }
         Ok(result)
+    }
+    fn start_remote_operation(&self, repository: &Repository) -> Result<(), ExtensionError> {
+        if let Some(current) = self.lock().repositories.get_mut(&repository.descriptor.id) {
+            current.operation = Some(crate::model::RepositoryOperation::Synchronize);
+        }
+        self.publish()
     }
     fn notify_pushed(
         &self,

@@ -6,6 +6,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::ExitStatus;
 use std::process::Stdio;
+use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::io::AsyncBufReadExt;
@@ -17,6 +18,7 @@ use tokio::process::Child;
 use tokio::process::ChildStdin;
 use tokio::process::ChildStdout;
 use tokio::process::Command;
+use tokio::sync::OnceCell;
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
 
@@ -115,6 +117,7 @@ pub struct GitClient {
     limits: GitExecutionLimits,
     similarity_threshold: u8,
     askpass: Option<GitAskPass>,
+    version: Arc<OnceCell<GitVersion>>,
 }
 
 #[derive(Clone, Debug)]
@@ -173,6 +176,7 @@ impl GitClient {
             limits: GitExecutionLimits::default(),
             similarity_threshold: 50,
             askpass: None,
+            version: Arc::new(OnceCell::new()),
         }
     }
 
@@ -196,6 +200,7 @@ impl GitClient {
             limits,
             similarity_threshold: 50,
             askpass: None,
+            version: Arc::new(OnceCell::new()),
         })
     }
 
@@ -609,11 +614,16 @@ impl GitClient {
         .await
     }
 
-    pub(crate) fn start_query_stream<I, S>(&self, cwd: &Path, args: I) -> GitResult<GitQueryStream>
+    pub(crate) async fn start_query_stream<I, S>(
+        &self,
+        cwd: &Path,
+        args: I,
+    ) -> GitResult<GitQueryStream>
     where
         I: IntoIterator<Item = S>,
         S: AsRef<OsStr>,
     {
+        self.check_supported().await?;
         let invocation = GitInvocation::query(cwd, args, FsmonitorOverride::Disabled);
         let (mut command, command_for_log) = self.configure_command(&invocation)?;
         command.stdin(Stdio::null());
@@ -718,6 +728,13 @@ impl GitClient {
     }
 
     async fn run(&self, invocation: GitInvocation) -> GitResult<GitCommandOutput> {
+        self.check_supported().await?;
+        self.run_process(invocation).await
+    }
+
+    // Version probing uses the same bounded process owner, without recursively
+    // entering the gate it is responsible for establishing.
+    async fn run_process(&self, invocation: GitInvocation) -> GitResult<GitCommandOutput> {
         let timeout_duration = invocation.profile.timeout(self.limits);
         let (mut command, command_for_log) = self.configure_command(&invocation)?;
 
@@ -1183,22 +1200,37 @@ pub(crate) fn validate_argument(value: &str) -> GitResult<()> {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GitVersion {
     pub display: String,
-    pub major: u32,
-    pub minor: u32,
-    pub patch: u32,
+    major: u32,
+    minor: u32,
+    patch: u32,
 }
-impl GitClient {
-    pub async fn version(&self) -> GitResult<GitVersion> {
-        let output = self
-            .run_query(&std::env::temp_dir(), ["--version"])
-            .await?
-            .require_success()?;
-        let display = std::str::from_utf8(&output.stdout)
-            .map_err(|_| GitError::invalid_output(&output.command, "Git version is not UTF-8"))?
+impl GitVersion {
+    // Tree replay uses merge-tree --merge-base, introduced in Git 2.40.
+    const MINIMUM_SUPPORTED: (u32, u32, u32) = (2, 40, 0);
+
+    /// The shared minimum version, formatted for installation diagnostics.
+    pub fn minimum_supported() -> String {
+        let (major, minor, patch) = Self::MINIMUM_SUPPORTED;
+        format!("{major}.{minor}.{patch}")
+    }
+
+    /// Rejects installations that cannot execute Ash's existing Git operations.
+    pub fn check_supported(&self) -> GitResult<()> {
+        if (self.major, self.minor, self.patch) < Self::MINIMUM_SUPPORTED {
+            return Err(GitError::UnsupportedVersion {
+                installed: self.display.clone(),
+            });
+        }
+        Ok(())
+    }
+
+    fn parse(command: &str, stdout: &[u8]) -> GitResult<Self> {
+        let display = std::str::from_utf8(stdout)
+            .map_err(|_| GitError::invalid_output(command, "Git version is not UTF-8"))?
             .trim();
-        let value = display.strip_prefix("git version ").ok_or_else(|| {
-            GitError::invalid_output(&output.command, "Git version header is missing")
-        })?;
+        let value = display
+            .strip_prefix("git version ")
+            .ok_or_else(|| GitError::invalid_output(command, "Git version header is missing"))?;
         let mut numbers = value.split('.');
         let mut component = || {
             numbers
@@ -1210,17 +1242,40 @@ impl GitClient {
                 .filter(|part| !part.is_empty())
                 .and_then(|part| part.parse::<u32>().ok())
                 .ok_or_else(|| {
-                    GitError::invalid_output(&output.command, "Git version component is invalid")
+                    GitError::invalid_output(command, "Git version component is invalid")
                 })
         };
         let major = component()?;
         let minor = component()?;
         let patch = component()?;
-        Ok(GitVersion {
+        Ok(Self {
             display: display.into(),
             major,
             minor,
             patch,
         })
+    }
+}
+impl GitClient {
+    // A client and its clones share one cancellation-safe installation probe.
+    // Recreate the client after changing/upgrading Git; failed probes are retried.
+    async fn check_supported(&self) -> GitResult<()> {
+        self.version
+            .get_or_try_init(|| self.version())
+            .await?
+            .check_supported()
+    }
+
+    /// Reads the installation identity even when it is too old for repository operations.
+    pub async fn version(&self) -> GitResult<GitVersion> {
+        let output = self
+            .run_process(GitInvocation::query(
+                &std::env::temp_dir(),
+                ["--version"],
+                FsmonitorOverride::Disabled,
+            ))
+            .await?
+            .require_success()?;
+        GitVersion::parse(&output.command, &output.stdout)
     }
 }

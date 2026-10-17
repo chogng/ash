@@ -32,6 +32,7 @@ fn repository(initial_status: Option<Status>) -> Repository {
         root_uri: "file:///workspace".into(),
         configuration: Configuration::default(),
         status: initial_status,
+        catalog: None,
         draft: "Retained draft".into(),
         input_revision: 7,
         operation: None,

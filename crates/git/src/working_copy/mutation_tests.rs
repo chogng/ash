@@ -534,6 +534,7 @@ async fn fetches_pulls_and_pushes_against_a_local_remote() {
     second.commit_all("local divergence");
     let local_head = second.git(&["rev-parse", "HEAD"]);
 
+    second.git(&["config", "pull.rebase", "false"]);
     client
         .pull(&second_repository, GitPullMode::Configured)
         .await
@@ -641,6 +642,57 @@ async fn rejected_branch_switch_preserves_the_current_branch_and_worktree() {
     assert!(matches!(error, GitError::CommandFailed { .. }));
     assert_eq!(repository.git(&["branch", "--show-current"]), "main");
     assert_eq!(repository.read("tracked.txt"), "local\n");
+}
+
+#[tokio::test]
+async fn pull_without_a_configured_policy_rejects_divergence() {
+    // Isolate Git configuration in a child instead of changing this test process's
+    // environment or depending on the developer's global pull preferences.
+    if std::env::var_os("ASH_GIT_TEST_PULL_POLICY").is_none() {
+        let configuration = tempfile::NamedTempFile::new().unwrap();
+        let test = format!(
+            "{}::pull_without_a_configured_policy_rejects_divergence",
+            module_path!().split_once("::").unwrap().1
+        );
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", &test, "--nocapture"])
+            .env("ASH_GIT_TEST_PULL_POLICY", "1")
+            .env("GIT_CONFIG_GLOBAL", configuration.path())
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env_remove("GIT_CONFIG_PARAMETERS")
+            .env_remove("GIT_CONFIG_COUNT")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(String::from_utf8_lossy(&output.stdout).contains("1 passed"));
+        return;
+    }
+
+    let (origin, target, remote_head, local_head) = diverged_pull_repositories(false);
+    let client = GitClient::system();
+    let opened = client.open_repository(target.root()).await.unwrap();
+    let index = target.git(&["ls-files", "--stage"]);
+    let error = client
+        .pull(&opened, GitPullMode::Configured)
+        .await
+        .expect_err("Git must reject divergence without a configured pull policy");
+    assert!(matches!(error, GitError::CommandFailed { .. }));
+    assert_eq!(target.git(&["rev-parse", "HEAD"]), local_head);
+    assert_eq!(target.git(&["ls-files", "--stage"]), index);
+    assert_eq!(target.read("local.txt"), "local\n");
+    assert!(!target.path("remote.txt").exists());
+    assert_eq!(client.integration_state(&opened), None);
+    assert_eq!(origin.git(&["rev-parse", "main"]), remote_head);
+
+    client.pull(&opened, GitPullMode::Rebase).await.unwrap();
+    assert_eq!(target.git(&["rev-parse", "HEAD^"]), remote_head);
+    assert_eq!(target.read("local.txt"), "local\n");
+    assert_eq!(target.read("remote.txt"), "remote\n");
 }
 
 #[tokio::test]

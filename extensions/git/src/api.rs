@@ -85,6 +85,11 @@ impl Api {
         configuration: &Configuration,
         token: Option<&CancellationToken>,
     ) -> Result<Value, ExtensionError> {
+        let synchronizing = params
+            .as_object_mut()
+            .and_then(|params| params.remove("synchronizing"))
+            == Some(json!(true));
+        let cancellable = configuration.boolean("supportCancellation", false) && method != "push";
         let credential_account_id = params
             .as_object_mut()
             .and_then(|params| params.remove("credentialAccountId"))
@@ -185,7 +190,11 @@ impl Api {
                 let operation = match method {
                     "fetch" => json!({"kind":"fetch","mode":params["mode"]}),
                     "pull" => {
-                        json!({"kind":"pull","mode":params["mode"].as_str().unwrap_or("configured")})
+                        let mut operation = json!({"kind":"pull","mode":params["mode"].as_str().unwrap_or("configured")});
+                        if let Some(head) = params.get("expectedHead") {
+                            operation["expectedHead"] = head.clone();
+                        }
+                        operation
                     }
                     _ => json!({"kind":"push","expectedHead":params["expectedHead"]}),
                 };
@@ -199,16 +208,22 @@ impl Api {
             let value = match token {
                 Some(token)
                     if wire_method == "runTransport"
-                        && (configuration.boolean("showProgress", true)
-                            || configuration.boolean("supportCancellation", false)) =>
+                        && (configuration.boolean("showProgress", true) || cancellable) =>
                 {
                     self.client.request_backend_with_progress(
                         "git.repository",
                         wire_method,
                         wire_params,
                         external_ext_sdk::client::ProgressOptions {
-                            title: self.text("git.operationProgress", &[]),
-                            cancellable: configuration.boolean("supportCancellation", false),
+                            title: self.text(
+                                if synchronizing && cancellable {
+                                    "git.syncCancellation"
+                                } else {
+                                    "git.operationProgress"
+                                },
+                                &[],
+                            ),
+                            cancellable,
                         },
                         token,
                     )?

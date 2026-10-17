@@ -9,6 +9,7 @@
 | 工具          | 版本来源                                                                                                      |
 | ------------- | ------------------------------------------------------------------------------------------------------------- |
 | Rust          | [`rust-toolchain.toml`](../rust-toolchain.toml)                                                               |
+| Git           | [共享 Git 最低版本要求](../crates/git/README.md#git-版本要求)                                                 |
 | Node.js       | [`.nvmrc`](../.nvmrc)；pnpm 使用 [`package.json`](../package.json) 中的 `devEngines.runtime` 自动获取固定版本 |
 | pnpm          | 根 [`package.json`](../package.json) 的 `packageManager`，安装方法见[初始化](#初始化)                         |
 | Python        | [`scripts/pyproject.toml`](../scripts/pyproject.toml) 的 `requires-python`，建议 3.12                         |

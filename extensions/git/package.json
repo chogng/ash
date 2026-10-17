@@ -2380,23 +2380,11 @@
             ]
           }
         },
-        "git.ignoreLegacyWarning": {
-          "type": "boolean",
-          "default": false,
-          "title": "%git.ignoreLegacyWarning.title%",
-          "description": "%git.ignoreLegacyWarning.description%"
-        },
         "git.ignoreMissingGitWarning": {
           "type": "boolean",
           "default": false,
           "title": "%git.ignoreMissingGitWarning.title%",
           "description": "%git.ignoreMissingGitWarning.description%"
-        },
-        "git.ignoreWindowsGit27Warning": {
-          "type": "boolean",
-          "default": false,
-          "title": "%git.ignoreWindowsGit27Warning.title%",
-          "description": "%git.ignoreWindowsGit27Warning.description%"
         },
         "git.ignoreRebaseWarning": {
           "type": "boolean",

@@ -48,6 +48,11 @@ export async function attachRustGit(page: Page): Promise<() => Promise<void>> {
 			const executable = resolve('.build/cargo/ci-test', `ash-git-extension${process.platform === 'win32' ? '.exe' : ''}`);
 			const current = child = spawn(executable, [], { stdio: ['pipe', 'pipe', 'pipe'] });
 			current.stderr.on('data', value => { stderr = (stderr + String(value)).slice(-8192); });
+			current.stdin.on('error', error => {
+				if (child !== current || stopping) return;
+				for (const job of pending.values()) { clearTimeout(job.timer); job.reject(error); }
+				pending.clear();
+			});
 			current.once('exit', code => {
 				for (const job of pending.values()) { clearTimeout(job.timer); job.reject(new Error(`Rust Git exited ${code}: ${stderr}`)); }
 				pending.clear();
@@ -60,7 +65,9 @@ export async function attachRustGit(page: Page): Promise<() => Promise<void>> {
 						const value = await page.evaluate(async ({ operation, context }) => window.__rustGitClient(operation, context), frame);
 						outcome = { Ok: value };
 					} catch (error) { outcome = { Err: { code: 'cancelled', message: String(error) } }; }
-					if (!current.killed && current.stdin.writable) current.stdin.write(`${JSON.stringify({ context: frame.context, callId: frame.callId, outcome })}\n`);
+					// Shutdown cancels SDK callbacks; browser work that finishes later
+					// must not write to the retired process's pipe.
+					if (child === current && !stopping && current.exitCode === null && !current.killed && current.stdin.writable) current.stdin.write(`${JSON.stringify({ context: frame.context, callId: frame.callId, outcome })}\n`);
 				} else if (frame.requestId) {
 					const job = pending.get(frame.requestId);
 					if (!job) return;

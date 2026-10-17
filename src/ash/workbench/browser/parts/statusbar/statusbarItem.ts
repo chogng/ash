@@ -88,6 +88,7 @@ export class StatusbarEntryItem extends Disposable {
 		this.labelDomNode.tabIndex = -1;
 
 		this.updateContent(previousEntry, entry);
+		this.iconDomNode?.classList.toggle("ash-statusbar-progress", entry.showProgress === true);
 
 		if (!previousEntry || previousEntry.tooltip !== entry.tooltip) {
 			this.hover.value = entry.tooltip

@@ -1191,7 +1191,11 @@ use crate::protocol::git::GitTransportOperationDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitTransportOptionsDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitTransportOutcomeDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitTransportParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitTransportResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitUpstreamDto;
 #[cfg(any(test, feature = "export"))]
@@ -5007,7 +5011,7 @@ client_methods! {
     },
     // Reads update status caches and graph cursors and use the Git operation lock too. Admit
     // every repository operation before execution so workers never queue behind another RPC.
-    GitTransport => "git/transport" { params: GitTransportParams, response: GitOperationResult, serialization: RepositoryExclusive, cancellation: "operationId", },
+    GitTransport => "git/transport" { params: GitTransportParams, response: GitTransportResult, serialization: RepositoryExclusive, cancellation: "operationId", },
     GitTransportCancel => "git/transport/cancel" { params: GitCheckIgnoreCancelParams, response: GitCheckIgnoreCancelResult, serialization: None, },
     GitVersion => "git/version" { params: GitRepositoryParams, response: GitVersionResult, serialization: None, },
     GitPullPreflight => "git/pullPreflight" { params: GitRepositoryParams, response: GitPullPreflightResult, serialization: RepositoryExclusive, },
@@ -7082,6 +7086,8 @@ typescript_bindings! {
     GitSubmoduleStateDto,
     GitTransportParams,
     GitTransportOperationDto,
+    GitTransportResult,
+    GitTransportOutcomeDto,
     GitVersionResult,
     GitInstallationDto,
     GitPullPreflightResult,
