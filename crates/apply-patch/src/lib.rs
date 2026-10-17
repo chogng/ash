@@ -246,6 +246,15 @@ impl ApplyPatchTool {
         invocation: &ToolInvocation,
     ) -> ToolExecutionOutcome {
         let cancellation = invocation.context().cancellation();
+        let policy = invocation
+            .context()
+            .directory_authorizations()
+            .iter()
+            .find(|proof| {
+                proof.dir() == dir && proof.permission() == ash_file_access::Permission::WriteFiles
+            })
+            .map(|proof| proof.path_policy().clone())
+            .unwrap_or_default();
         let mut snapshots = Vec::new();
         let prepared = (|| -> Result<_, String> {
             let mut changes = Vec::new();
@@ -259,7 +268,7 @@ impl ApplyPatchTool {
                 match operation {
                     PatchOperation::Add { path, lines } => {
                         let absolute = dir.resolve_for_write(&path).map_err(|e| e.to_string())?;
-                        let text = TextFileFormat::for_new_file(dir, &path)
+                        let text = TextFileFormat::for_new_file(dir, &path, &policy)
                             .map_err(|e| e.to_string())?
                             .normalize(&new_file_content(&lines));
                         changes.push(TextDocumentChange::Create {

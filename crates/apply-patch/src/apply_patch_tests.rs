@@ -662,9 +662,10 @@ struct EditorDocuments {
     fail: bool,
 }
 impl TextDocumentEditor for EditorDocuments {
-    fn read(
+    fn read_with_policy(
         &self,
         _: &Path,
+        _: &ash_file_access::PathAccessPolicy,
         _: &ash_async_utils::CancellationToken,
     ) -> Result<Option<ash_tools::TextDocumentSnapshot>, TextDocumentError> {
         Ok(Some(ash_tools::TextDocumentSnapshot {
@@ -672,9 +673,10 @@ impl TextDocumentEditor for EditorDocuments {
             text: self.text.lock().unwrap().clone(),
         }))
     }
-    fn apply(
+    fn apply_with_policy(
         &self,
         changes: Vec<TextDocumentChange>,
+        _: &ash_file_access::PathAccessPolicy,
         _: &ash_async_utils::CancellationToken,
     ) -> Result<(), TextDocumentError> {
         if self.fail {

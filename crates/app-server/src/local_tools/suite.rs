@@ -301,6 +301,14 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .remove(&key);
+        // Directory-relative policies cannot be applied to an owner from another root.
+        // Reacquire the disk snapshot in the current root while retaining the original
+        // content baseline below, so changing grants cannot overwrite an intervening edit.
+        let cached = cached.filter(|read| {
+            read.editor
+                .file_directory()
+                .is_none_or(|dir| dir == &resolved.root)
+        });
         let read = match cached {
             Some(read) => Some(read),
             None => {
@@ -339,10 +347,12 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
             let content = string_arg(&call.arguments, "content")?;
             let format = match &read {
                 Some(read) => TextFileFormat::for_existing(&read.snapshot.text),
-                None => {
-                    TextFileFormat::for_new_file(resolved.authorization.dir(), &resolved.relative)
-                        .map_err(|e| CoreError::Execution(e.to_string()))?
-                }
+                None => TextFileFormat::for_new_file(
+                    resolved.authorization.dir(),
+                    &resolved.relative,
+                    resolved.authorization.path_policy(),
+                )
+                .map_err(|e| CoreError::Execution(e.to_string()))?,
             };
             (format.normalize(&content), format!("wrote {path}"))
         } else {

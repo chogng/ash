@@ -88,9 +88,10 @@ impl TextDocumentEditor for ConnectionDocuments {
         }
     }
 
-    fn read(
+    fn read_with_policy(
         &self,
         path: &Path,
+        _policy: &ash_file_access::PathAccessPolicy,
         cancellation: &CancellationToken,
     ) -> Result<Option<TextDocumentSnapshot>, TextDocumentError> {
         let result: TextDocumentReadResult = self
@@ -113,9 +114,10 @@ impl TextDocumentEditor for ConnectionDocuments {
         }
     }
 
-    fn apply(
+    fn apply_with_policy(
         &self,
         changes: Vec<TextDocumentChange>,
+        _policy: &ash_file_access::PathAccessPolicy,
         cancellation: &CancellationToken,
     ) -> Result<(), TextDocumentError> {
         if cancellation.is_cancelled() {

@@ -2,8 +2,11 @@ use crate::FileMutation;
 use crate::TextFileFormat;
 use crate::commit_file_mutations;
 use crate::file_revision;
+use crate::local::ScopedFiles;
 use ash_async_utils::CancellationToken;
 use ash_file_access::Dir;
+use ash_file_access::PathAccessPolicy;
+use ash_file_access::PathOperation;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::io::Read;
@@ -70,14 +73,39 @@ impl std::error::Error for TextDocumentError {}
 /// One task's document source. Editor implementations own models and undo; filesystem
 /// implementations own byte revisions. Successful application includes persistence.
 pub trait TextDocumentEditor: Send + Sync {
+    /// The exact root retained by a disk owner or authorized view. Logical editor
+    /// documents have no local filesystem root. Policies cannot be rebound to another root.
+    fn file_directory(&self) -> Option<&Dir> {
+        None
+    }
+    /// Uses the owner's policy, or the whole directory for a standalone disk owner.
     fn read(
         &self,
         path: &Path,
         cancellation: &CancellationToken,
-    ) -> Result<Option<TextDocumentSnapshot>, TextDocumentError>;
+    ) -> Result<Option<TextDocumentSnapshot>, TextDocumentError> {
+        self.read_with_policy(path, &PathAccessPolicy::default(), cancellation)
+    }
     fn apply(
         &self,
         changes: Vec<TextDocumentChange>,
+        cancellation: &CancellationToken,
+    ) -> Result<(), TextDocumentError> {
+        self.apply_with_policy(changes, &PathAccessPolicy::default(), cancellation)
+    }
+    /// Carries the current operation's policy to disk owners. Logical editor owners use
+    /// the caller's path checks; filesystem owners must enforce it on their final IO.
+    fn read_with_policy(
+        &self,
+        path: &Path,
+        policy: &PathAccessPolicy,
+        cancellation: &CancellationToken,
+    ) -> Result<Option<TextDocumentSnapshot>, TextDocumentError>;
+    /// Applies the current policy even when snapshots were acquired under an older grant.
+    fn apply_with_policy(
+        &self,
+        changes: Vec<TextDocumentChange>,
+        policy: &PathAccessPolicy,
         cancellation: &CancellationToken,
     ) -> Result<(), TextDocumentError>;
     /// Unsaved documents that replace disk contents during a scoped search.
@@ -114,6 +142,7 @@ impl AuthorizedTextDocuments {
         &self,
         path: &Path,
         operation: ash_file_access::PathOperation,
+        policy: &PathAccessPolicy,
     ) -> Result<PathBuf, TextDocumentError> {
         let dir = self.authorization.dir();
         let relative = path
@@ -125,9 +154,7 @@ impl AuthorizedTextDocuments {
         let resolved = canonical
             .strip_prefix(dir.canonical_path())
             .map_err(|error| TextDocumentError::Failed(error.to_string()))?;
-        if !self.authorization.path_policy().allows(relative, operation)
-            || !self.authorization.path_policy().allows(resolved, operation)
-        {
+        if !policy.allows(relative, operation) || !policy.allows(resolved, operation) {
             return Err(TextDocumentError::Failed(
                 "document path exceeds the permission profile".into(),
             ));
@@ -139,6 +166,15 @@ impl AuthorizedTextDocuments {
         &self,
         operation: impl FnOnce() -> Result<T, TextDocumentError>,
     ) -> Result<T, TextDocumentError> {
+        if self
+            .editor
+            .file_directory()
+            .is_some_and(|dir| dir != self.authorization.dir())
+        {
+            // A cached snapshot may outlive a change in the selected directory grant.
+            // Its owner must be reacquired before using policies relative to a new root.
+            return Err(TextDocumentError::Conflict);
+        }
         self.authorization
             .execute(
                 self.authorization.subject(),
@@ -151,14 +187,22 @@ impl AuthorizedTextDocuments {
 }
 
 impl TextDocumentEditor for AuthorizedTextDocuments {
-    fn read(
+    fn file_directory(&self) -> Option<&Dir> {
+        Some(self.authorization.dir())
+    }
+
+    fn read_with_policy(
         &self,
         path: &Path,
+        policy: &PathAccessPolicy,
         cancellation: &CancellationToken,
     ) -> Result<Option<TextDocumentSnapshot>, TextDocumentError> {
+        let policy = self.authorization.path_policy().intersect(policy);
         self.admitted(|| {
-            let path = self.path(path, ash_file_access::PathOperation::Read)?;
-            let snapshot = self.editor.read(&path, cancellation)?;
+            let path = self.path(path, PathOperation::Read, &policy)?;
+            #[cfg(test)]
+            tests::after_authorized_path();
+            let snapshot = self.editor.read_with_policy(&path, &policy, cancellation)?;
             if let Some(snapshot) = &snapshot {
                 self.paths
                     .lock()
@@ -169,11 +213,13 @@ impl TextDocumentEditor for AuthorizedTextDocuments {
         })
     }
 
-    fn apply(
+    fn apply_with_policy(
         &self,
         changes: Vec<TextDocumentChange>,
+        policy: &PathAccessPolicy,
         cancellation: &CancellationToken,
     ) -> Result<(), TextDocumentError> {
+        let policy = self.authorization.path_policy().intersect(policy);
         if self.authorization.permission() != ash_file_access::Permission::WriteFiles {
             return Err(TextDocumentError::Failed(
                 "document mutation requires WriteFiles".into(),
@@ -189,21 +235,22 @@ impl TextDocumentEditor for AuthorizedTextDocuments {
                 .map(|change| {
                     match &change {
                         TextDocumentChange::Create { path, .. } => {
-                            self.path(path, ash_file_access::PathOperation::Write)?;
+                            self.path(path, PathOperation::Write, &policy)?;
                         }
                         TextDocumentChange::Update { snapshot, .. }
                         | TextDocumentChange::Delete { snapshot }
                         | TextDocumentChange::Move { snapshot, .. } => {
                             self.path(
                                 paths.get(snapshot).ok_or(TextDocumentError::Conflict)?,
-                                ash_file_access::PathOperation::Write,
+                                PathOperation::Write,
+                                &policy,
                             )?;
                         }
                     }
                     match change {
                         TextDocumentChange::Create { path, text } => {
                             Ok(TextDocumentChange::Create {
-                                path: self.path(&path, ash_file_access::PathOperation::Write)?,
+                                path: self.path(&path, PathOperation::Write, &policy)?,
                                 text,
                             })
                         }
@@ -213,14 +260,17 @@ impl TextDocumentEditor for AuthorizedTextDocuments {
                             text,
                         } => Ok(TextDocumentChange::Move {
                             snapshot,
-                            target: self.path(&target, ash_file_access::PathOperation::Write)?,
+                            target: self.path(&target, PathOperation::Write, &policy)?,
                             text,
                         }),
                         other => Ok(other),
                     }
                 })
                 .collect::<Result<Vec<_>, TextDocumentError>>()?;
-            self.editor.apply(changes, cancellation)
+            #[cfg(test)]
+            tests::after_authorized_path();
+            self.editor
+                .apply_with_policy(changes, &policy, cancellation)
         })
     }
 
@@ -235,8 +285,12 @@ impl TextDocumentEditor for AuthorizedTextDocuments {
                 .open_documents(root, cancellation)?
                 .into_iter()
                 .filter(|document| {
-                    self.path(&document.path, ash_file_access::PathOperation::Read)
-                        .is_ok()
+                    self.path(
+                        &document.path,
+                        PathOperation::Read,
+                        self.authorization.path_policy(),
+                    )
+                    .is_ok()
                 })
                 .collect())
         })
@@ -279,26 +333,29 @@ impl FileTextDocuments {
         let relative = path
             .strip_prefix(self.dir.canonical_path())
             .map_err(|e| TextDocumentError::Failed(e.to_string()))?;
-        self.dir
-            .resolve_for_write(relative)
-            .map_err(|e| TextDocumentError::Failed(e.to_string()))?;
         Ok(relative.to_path_buf())
     }
 }
 
 impl TextDocumentEditor for FileTextDocuments {
-    fn read(
+    fn file_directory(&self) -> Option<&Dir> {
+        Some(&self.dir)
+    }
+
+    fn read_with_policy(
         &self,
         path: &Path,
+        policy: &PathAccessPolicy,
         cancellation: &CancellationToken,
     ) -> Result<Option<TextDocumentSnapshot>, TextDocumentError> {
         if cancellation.is_cancelled() {
             return Err(TextDocumentError::Cancelled);
         }
         let relative = self.relative(path)?;
-        let file = match self.dir.directory().handle().open(&relative) {
+        let files = ScopedFiles::with_policy(self.dir.clone(), policy, PathOperation::Read);
+        let file = match files.open_file(&relative) {
             Ok(file) => file,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(crate::FileSystemError::NotFound(_)) => return Ok(None),
             Err(error) => return Err(TextDocumentError::Failed(error.to_string())),
         };
         let mut bytes = Vec::new();
@@ -337,9 +394,10 @@ impl TextDocumentEditor for FileTextDocuments {
         }))
     }
 
-    fn apply(
+    fn apply_with_policy(
         &self,
         changes: Vec<TextDocumentChange>,
+        policy: &PathAccessPolicy,
         cancellation: &CancellationToken,
     ) -> Result<(), TextDocumentError> {
         if cancellation.is_cancelled() {
@@ -355,7 +413,7 @@ impl TextDocumentEditor for FileTextDocuments {
                 let (id, text, target) = match change {
                     TextDocumentChange::Create { path, text } => {
                         let path = self.relative(&path)?;
-                        let text = TextFileFormat::for_new_file(&self.dir, &path)
+                        let text = TextFileFormat::for_new_file(&self.dir, &path, policy)
                             .map_err(|e| TextDocumentError::Failed(e.to_string()))?
                             .normalize(&text);
                         return Ok(FileMutation::Create {
@@ -405,7 +463,7 @@ impl TextDocumentEditor for FileTextDocuments {
         if cancellation.is_cancelled() {
             return Err(TextDocumentError::Cancelled);
         }
-        commit_file_mutations(&self.dir, &mutations).map_err(|error| {
+        commit_file_mutations(&self.dir, &mutations, policy).map_err(|error| {
             if error.publication_started {
                 TextDocumentError::OutcomeUnknown(error.to_string())
             } else if matches!(error.source, crate::FileSystemError::RevisionConflict(_)) {

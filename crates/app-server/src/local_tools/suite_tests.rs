@@ -143,6 +143,72 @@ fn bound_tool_activity_keeps_the_actual_file_search_and_command_inputs() {
 }
 
 #[test]
+fn document_writes_reacquire_snapshots_when_the_write_grant_selects_a_different_root() {
+    for changed_on_disk in [false, true] {
+        let temp = tempfile::tempdir().unwrap();
+        let nested = temp.path().join("nested");
+        fs::create_dir(&nested).unwrap();
+        let path = nested.join("file");
+        fs::write(&path, "old").unwrap();
+        let suite = text_edit_suite(temp.path());
+        let session = SessionId::new("document-roots").unwrap();
+        let token = ash_async_utils::CancellationSource::new().token();
+        assert!(matches!(
+            suite
+                .execute_document_tool(
+                    &tool_call("read_file", json!({"path":path,"offset":null,"limit":null})),
+                    "document-roots",
+                    Some(&session),
+                    None,
+                    None,
+                    &token,
+                )
+                .unwrap(),
+            ToolExecutionOutput::Success(_)
+        ));
+        // Only writes select this narrower root; reads still use the original grant.
+        suite
+            .dir_grants
+            .add_dir(
+                session.clone(),
+                Grant::for_session_tree(
+                    session.clone(),
+                    Dir::open_local(&nested).unwrap(),
+                    GrantSource::ExplicitUser,
+                    Permissions::new([Permission::WriteFiles]),
+                ),
+            )
+            .unwrap();
+        if changed_on_disk {
+            fs::write(&path, "external").unwrap();
+        }
+        let result = suite
+            .execute_document_tool(
+                &tool_call("write_file", json!({"path":path,"content":"new"})),
+                "document-roots",
+                Some(&session),
+                None,
+                None,
+                &token,
+            )
+            .unwrap();
+        if changed_on_disk {
+            assert!(
+                matches!(result, ToolExecutionOutput::Failure(_)),
+                "{result:?}"
+            );
+            assert_eq!(fs::read_to_string(&path).unwrap(), "external");
+        } else {
+            assert!(
+                matches!(result, ToolExecutionOutput::Success(_)),
+                "{result:?}"
+            );
+            assert_eq!(fs::read_to_string(&path).unwrap(), "new");
+        }
+    }
+}
+
+#[test]
 fn agent_text_edits_preserve_file_format_and_allow_subsequent_writes() {
     for file_eol in ["\n", "\r\n"] {
         for model_eol in ["\n", "\r\n"] {

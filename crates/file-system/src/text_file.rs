@@ -1,7 +1,12 @@
+use crate::FileSystemError;
+use crate::local::ScopedFiles;
 use ash_file_access::Dir;
+use ash_file_access::PathAccessPolicy;
+use ash_file_access::PathOperation;
 use ec4rs::PropertiesSource;
 use ec4rs::property::EndOfLine;
 use std::io;
+use std::io::Read;
 use std::ops::Range;
 use std::path::Path;
 
@@ -38,16 +43,18 @@ impl TextFileFormat {
 
     /// Resolves EditorConfig only inside the host-selected directory. Pattern
     /// matching and inheritance use the EditorConfig parser, including `unset`.
-    pub fn for_new_file(dir: &Dir, path: &Path) -> io::Result<Self> {
+    pub fn for_new_file(dir: &Dir, path: &Path, policy: &PathAccessPolicy) -> io::Result<Self> {
+        let files = ScopedFiles::with_policy(dir.clone(), policy, PathOperation::Read);
         let mut configs = Vec::new();
         for parent in path.ancestors().skip(1) {
             let config = parent.join(".editorconfig");
-            dir.resolve_for_write(&config).map_err(io::Error::other)?;
-            let bytes = match dir.directory().handle().read(&config) {
-                Ok(bytes) => bytes,
-                Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
-                Err(error) => return Err(error),
+            let mut file = match files.open_file(&config) {
+                Ok(file) => file,
+                Err(FileSystemError::NotFound(_)) => continue,
+                Err(error) => return Err(io::Error::other(error)),
             };
+            let mut bytes = Vec::new();
+            file.read_to_end(&mut bytes)?;
             let parser =
                 ec4rs::ConfigParser::new(io::Cursor::new(bytes)).map_err(io::Error::other)?;
             let is_root = parser.is_root;

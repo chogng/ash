@@ -9,6 +9,8 @@ thread_local! {
         const { std::cell::RefCell::new(None) };
     static WRITE_RESOLUTION_HOOK: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
         const { std::cell::RefCell::new(None) };
+    static MUTATION_STAGING_HOOK: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+        const { std::cell::RefCell::new(None) };
     static WRITE_PUBLICATION_HOOK: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
         const { std::cell::RefCell::new(None) };
 }
@@ -32,6 +34,28 @@ pub(super) fn before_write_publication() {
     if let Some(hook) = hook {
         hook();
     }
+}
+
+pub(super) fn after_mutation_staging() {
+    let hook = MUTATION_STAGING_HOOK.with(|hook| hook.borrow_mut().take());
+    if let Some(hook) = hook {
+        hook();
+    }
+}
+
+#[cfg(unix)]
+pub(crate) fn on_read_resolution(hook: impl FnOnce() + 'static) {
+    READ_RESOLUTION_HOOK.with(|slot| *slot.borrow_mut() = Some(Box::new(hook)));
+}
+
+#[cfg(unix)]
+pub(crate) fn on_write_resolution(hook: impl FnOnce() + 'static) {
+    WRITE_RESOLUTION_HOOK.with(|slot| *slot.borrow_mut() = Some(Box::new(hook)));
+}
+
+#[cfg(unix)]
+pub(crate) fn on_mutation_staging(hook: impl FnOnce() + 'static) {
+    MUTATION_STAGING_HOOK.with(|slot| *slot.borrow_mut() = Some(Box::new(hook)));
 }
 
 #[cfg(unix)]
@@ -1458,6 +1482,7 @@ fn mutation_batches_serialize_with_ordinary_conditional_writes() {
                 content: b"batch".to_vec(),
                 expected_revision: first_revision,
             }],
+            &ash_file_access::PathAccessPolicy::default(),
         )
         .map_err(|error| error.source)
     });
