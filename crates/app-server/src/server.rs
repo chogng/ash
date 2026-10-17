@@ -4563,6 +4563,8 @@ pub(super) fn result<T: serde::Serialize>(value: &T) -> Result<Value, RpcError> 
 }
 
 pub(super) fn core_error(error: CoreError) -> RpcError {
+    // Keep private diagnostics actionable while the public protocol uses stable error names.
+    eprintln!("App Server core operation failed: {error}");
     match error {
         CoreError::WorkspaceCheckpointConflict => {
             RpcError::new(-32010, AppServerErrorName::ThreadHistoryConflict)
