@@ -13,11 +13,24 @@ Ash ships a design-system **size** ramp. These tokens are registered in [baseSiz
 
 ## Rows and toolbar actions
 
-- Standard single-line lists and trees: 24px (`--ash-list-rowHeight`). TS geometry and token registration share `listRowHeight` in `src/ash/base/common/uiSizes.ts`; center contents without enlarging rows.
-- Ordinary toolbar and row icon buttons: 24×24px (`--ash-toolbar-actionSize`), including editor-title and view-title toolbars. Glyph sizes follow the icon rules below.
-- Code-adjacent editor actions, such as diff gutter buttons: retain 20×20px with 16px glyphs through a local override. Preserve editor line height; do not mechanically convert these buttons to 24px.
-- No separate 22px control tier. Derive border-box inner sizes with `calc()`.
-- Multi-line content, cards, section headers and specialized layouts such as history graphs retain content-specific sizing. New density tiers require a product decision.
+The 22px default is pending implementation.
+
+For icon buttons, 22×22px / 24×24px defines the layout, hover and click area, including padding; the icon itself remains 16px or 12px.
+
+```css
+/* Single-line list/tree row height */
+/* dense/default */ height: 22px;
+/* roomy         */ height: 24px;
+
+/* dropdown options, default collapsible pane headers, breadcrumbs, status bar */
+height: 22px;
+
+/* Icon buttons: hover/click area includes padding; glyphs stay 16px or 12px */
+box-sizing: border-box;
+/* dense/default */ width: 22px; height: 22px;
+/* roomy         */ width: 24px; height: 24px;  /* e.g. modern UI activity-bar overflow, Chat tip toolbars, automation/comparison card actions */
+/* code-adjacent */ width: 20px; height: 20px;  /* 16px glyphs; preserve editor line height */
+```
 
 ## Spacing — padding, margin, gap
 
