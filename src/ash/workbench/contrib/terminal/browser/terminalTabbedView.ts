@@ -8,7 +8,9 @@ import { localize } from '../../../../nls.js';
 import { ITerminalService } from '../../../services/terminal/browser/terminal.js';
 import { SplitView, type ISplitViewView } from "../../../../base/browser/ui/splitview/splitview.js";
 import { h } from "../../../../base/browser/dom.js";
-import { Disposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { TerminalContextKeys } from '../common/terminalContextKey.js';
 
 const MIN_TERMINAL_WIDTH = 120;
 const TERMINAL_VIEW_INDEX = 0;
@@ -23,9 +25,12 @@ export class TerminalTabbedView extends Disposable {
 	readonly terminalContainer: HTMLDivElement;
 	private snapping = false;
 	private initialized = false;
+	private readonly tabsNarrow;
 
-	constructor(parentElement: HTMLElement, @ITerminalService private readonly terminalService: ITerminalService, @IInstantiationService instantiation: IInstantiationService, @IStorageService private readonly storage: IStorageService) {
+	constructor(parentElement: HTMLElement, @ITerminalService private readonly terminalService: ITerminalService, @IInstantiationService instantiation: IInstantiationService, @IStorageService private readonly storage: IStorageService, @IContextKeyService contextKeys: IContextKeyService) {
 		super();
+		this.tabsNarrow = TerminalContextKeys.tabsNarrow.bindTo(contextKeys);
+		this._register(toDisposable(() => this.tabsNarrow.reset()));
 		this.tabList = this._register(instantiation.createInstance(TerminalTabList, parentElement));
 		this.onDidFocusInstance = this.tabList.onDidFocusInstance;
 		this.terminalContainer = h(parentElement.ownerDocument, 'div');
@@ -52,10 +57,15 @@ export class TerminalTabbedView extends Disposable {
 
 	private updateVisibility(): void {
 		this.splitView.setViewVisible(TABS_VIEW_INDEX, this.terminalService.instances.filter(instance => instance.target !== TerminalLocation.Editor).length > 1);
+		this.updateTabsWidth();
 	}
 
 	private updateTabsWidth(): void {
-		if (this.snapping || !this.splitView.isViewVisible(TABS_VIEW_INDEX)) return;
+		if (this.snapping) return;
+		if (!this.splitView.isViewVisible(TABS_VIEW_INDEX)) {
+			this.tabsNarrow.set(false);
+			return;
+		}
 		const width = this.splitView.getViewSize(TABS_VIEW_INDEX);
 		const snappedWidth = width < TerminalTabsListSizes.MidpointViewWidth
 			? TerminalTabsListSizes.NarrowViewWidth
@@ -79,6 +89,7 @@ export class TerminalTabbedView extends Disposable {
 
 	private updateTabsPresentation(width: number): void {
 		this.tabList.layout(undefined, width);
+		this.tabsNarrow.set(width < TerminalTabsListSizes.MidpointViewWidth);
 	}
 }
 

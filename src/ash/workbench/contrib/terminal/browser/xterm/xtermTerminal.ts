@@ -38,6 +38,9 @@ import { TerminalWidgetManager } from '../widgets/widgetManager.js';
 import { TerminalHover } from '../widgets/terminalHoverWidget.js';
 import type { ITerminalWidget } from '../widgets/widgets.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
+import { TerminalLocation } from '../../../../../platform/terminal/common/terminal.js';
+import { editorBackground } from '../../../../../platform/theme/common/colors/editorColors.js';
+import { PANEL_BACKGROUND } from '../../../../common/theme.js';
 
 const addonImporter = new XtermAddonImporter();
 
@@ -55,7 +58,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 	private focusSource: Element | null | undefined;
 	private readonly alternateScroll = new AlternateScrollMode();
 	private readonly shellIntegrationAddon: ShellIntegrationAddon;
-	private readonly decorationAddon = this._register(new DecorationAddon(this.capabilities));
+	private readonly decorationAddon: DecorationAddon;
 	private readonly markNavigationAddon = this._register(new MarkNavigationAddon(() => this.instance.capabilities?.has(TerminalCapability.CommandDetection)
 		? this.decorationAddon.markers : this.capabilities.get(TerminalCapability.PartialCommandDetection)?.commands ?? this.decorationAddon.markers));
 	private visible = false;
@@ -87,6 +90,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 	) {
 		super();
+		this.decorationAddon = this._register(instantiation.createInstance(DecorationAddon, this.capabilities));
 		this.shellIntegrationAddon = this._register(instantiation.createInstance(ShellIntegrationAddon, this.capabilities, undefined));
 		this.element = h(container.ownerDocument, "div");
 		this.element.className = "ash-terminal-instance";
@@ -108,6 +112,9 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 					status: running ? 'running' : command.exitCode === undefined ? 'completed' : command.exitCode === 0 ? 'succeeded' : 'failed', exitCode: command.exitCode
 				}, this.instance.processId, command.marker);
 			};
+			listeners.add(capability.onCommandStarted(command => {
+				if (command.marker) this.decorationAddon.registerCommandDecoration(undefined, this.instance.processId, command.marker);
+			}));
 			listeners.add(capability.onCommandExecuted(command => decorate(command, true)));
 			listeners.add(capability.onCommandFinished(command => decorate(command, false)));
 		}));
@@ -115,6 +122,11 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 			this.element.dataset.state = state;
 		}));
 		this.element.dataset.state = instance.state;
+		if (instance.onDidChangeTarget) {
+			this._register(instance.onDidChangeTarget(() => {
+				if (this.terminal) this.terminal.options.theme = terminalTheme(this.themeService.getColorTheme(), instance.target);
+			}));
+		}
 		this._register(observeResize(this.element, () => this.fit()));
 		this._register(configuration.onConfigChanged(() => {
 			this.linkHover.clear();
@@ -150,7 +162,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 			allowProposedApi: true,
 			allowTransparency: false,
 			...this.screenOptions(),
-			theme: terminalTheme(this.themeService.getColorTheme()),
+			theme: terminalTheme(this.themeService.getColorTheme(), this.instance.target),
 			linkHandler: { activate: (_event, url) => { void this.openLink(url).catch(onUnexpectedError); } },
 		});
 		this.terminal = terminal;
@@ -184,7 +196,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		this._register(toDisposable(() => bell.dispose()));
 		this.registerAlternateScrollMode(terminal);
 		this._register(this.themeService.onDidColorThemeChange(theme => {
-			terminal.options.theme = terminalTheme(theme);
+			terminal.options.theme = terminalTheme(theme, this.instance.target);
 			if (this.activeSearch) { void this.findNext(this.activeSearch.term, { ...this.activeSearch.options, incremental: true }).catch(onUnexpectedError); }
 		}));
 		for (const write of this.pendingWrites) write(terminal);
@@ -431,9 +443,9 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 }
 
 /** Projects the workbench theme into xterm's renderer theme contract. */
-export function terminalTheme(theme: IColorTheme): ITheme {
+export function terminalTheme(theme: IColorTheme, target: TerminalLocation = TerminalLocation.Panel): ITheme {
 	return {
-		background: theme.getColorCss(terminalColors.terminalBackground),
+		background: theme.getColorCss(terminalColors.terminalBackground) ?? theme.getColorCss(target === TerminalLocation.Editor ? editorBackground : PANEL_BACKGROUND),
 		foreground: theme.getColorCss(terminalColors.terminalForeground),
 		cursor: theme.getColorCss(terminalColors.terminalCursorForeground),
 		selectionForeground: theme.getColorCss(selectionForeground),

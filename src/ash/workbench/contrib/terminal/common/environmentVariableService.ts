@@ -5,6 +5,7 @@ import type { IMergedEnvironmentVariableCollection } from '../../../../platform/
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IEnvironmentVariableService, type IEnvironmentVariableCollectionWithPersistence } from './environmentVariable.js';
 import { MergedEnvironmentVariableCollection } from '../../../../platform/terminal/common/environmentVariableCollection.js';
+import { isCancellationError } from '../../../../base/common/errors.js';
 import { deserializeEnvironmentDescriptionMap, deserializeEnvironmentVariableCollection, serializeEnvironmentDescriptionMap, serializeEnvironmentVariableCollection } from '../../../../platform/terminal/common/environmentVariableShared.js';
 
 const storageKey = 'terminal.integrated.environmentVariableCollections.v1';
@@ -67,10 +68,24 @@ export class EnvironmentVariableService extends Disposable implements IEnvironme
 
 	async refreshCollections(): Promise<void> {
 		const generation = this.generation;
-		await Promise.all([...this.providers].map(async ([extension, providers]) => {
-			const read = [...providers].at(-1)!;
-			const collection = await read();
-			if (!this.isDisposed && generation === this.generation && this.providers.get(extension) === providers && [...providers].at(-1) === read) this.set(extension, collection);
+		await Promise.all([...this.providers.keys()].map(async extension => {
+			while (!this.isDisposed && generation === this.generation) {
+				const providers = this.providers.get(extension);
+				const read = providers && [...providers].at(-1);
+				if (!read) return;
+				let collection: IEnvironmentVariableCollectionWithPersistence;
+				try { collection = await read(); }
+				catch (error) {
+					// Startup can replace an extension runtime during a launch read. Only
+					// the retired reader's cancellation permits following its replacement.
+					if (isCancellationError(error) && !this.isDisposed && generation === this.generation && [...this.providers.get(extension) ?? []].at(-1) !== read) continue;
+					throw error;
+				}
+				if (this.isDisposed || generation !== this.generation) return;
+				if ([...this.providers.get(extension) ?? []].at(-1) !== read) continue;
+				this.set(extension, collection);
+				return;
+			}
 		}));
 	}
 

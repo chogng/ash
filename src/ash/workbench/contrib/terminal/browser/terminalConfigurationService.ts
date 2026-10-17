@@ -3,6 +3,7 @@ import { Emitter } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { type ITerminalConfiguration, TERMINAL_CONFIG_SECTION } from '../common/terminal.js';
+import { EDITOR_FONT_DEFAULTS } from '../../../../editor/common/config/fontInfo.js';
 import type { ITerminalConfigurationService } from './terminal.js';
 
 /** Derives screen options from the configuration system's validated effective values. */
@@ -19,6 +20,8 @@ export class TerminalConfigurationService extends Disposable implements ITermina
 
 	get config(): Readonly<ITerminalConfiguration> {
 		const settings = this.configuration.getValue<ITerminalConfiguration>(TERMINAL_CONFIG_SECTION);
-		return Object.freeze({ ...settings, fontFamily: settings.fontFamily || this.configuration.getValue<string>('editor.fontFamily') || "Consolas, 'Courier New', monospace" });
+		const fontFamily = settings.fontFamily || this.configuration.getValue<string>('editor.fontFamily') || EDITOR_FONT_DEFAULTS.fontFamily;
+		// A user-selected face may not exist on this host. Keep terminal cells monospaced.
+		return Object.freeze({ ...settings, fontFamily: /(?:^|,)\s*monospace\s*(?:,|$)/i.test(fontFamily) ? fontFamily : `${fontFamily}, monospace` });
 	}
 }

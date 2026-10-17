@@ -207,6 +207,16 @@
       "rendering": "symbolic"
     },
     {
+      "id": "circle",
+      "file": "circle.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "circle-filled",
+      "file": "circle-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "circle-large",
       "file": "circle-large.svg",
       "rendering": "symbolic"
@@ -474,6 +484,11 @@
     {
       "id": "error",
       "file": "error.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "error-small",
+      "file": "error-small.svg",
       "rendering": "symbolic"
     },
     {

@@ -10,6 +10,8 @@ import { DecorationAddon } from '../../../browser/xterm/decorationAddon.js';
 import { MarkNavigationAddon } from '../../../browser/xterm/markNavigationAddon.js';
 import { DisposableStore } from '../../../../../../base/common/lifecycle.js';
 import { Event } from '../../../../../../base/common/event.js';
+import { TestConfigurationService } from '../../../../../services/configuration/test/common/testServices.js';
+import '../../../common/terminalConfiguration.js';
 
 ensureNoDisposablesAreLeakedInTestSuite();
 
@@ -28,7 +30,7 @@ function createScreen(lifetime: DisposableStore, viewportY: number, lines: reado
 	} as unknown as Terminal;
 	const capabilities = lifetime.add(new TerminalCapabilityStore());
 	capabilities.add(TerminalCapability.BufferMarkDetection, lifetime.add(new BufferMarkCapability(terminal)));
-	const decorations = lifetime.add(new DecorationAddon(capabilities));
+	const decorations = lifetime.add(new DecorationAddon(capabilities, lifetime.add(new TestConfigurationService())));
 	decorations.activate(terminal);
 	for (const { key } of lines) {
 		const [process, commandId = key] = key.split(':');

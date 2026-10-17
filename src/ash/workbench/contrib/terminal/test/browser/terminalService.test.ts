@@ -478,7 +478,7 @@ class TestTerminalProcessService implements ITerminalProcessService {
 		return [DEFAULT_PROFILE];
 	}
 
-	async create(params: ITerminalProcessCreateOptions) {
+	async create(params: ITerminalProcessCreateOptions): Promise<import('../../../../../platform/terminal/common/terminal.js').ITerminalProcessCreation> {
 		this.createCalls.push(params);
 		const terminalId = `terminal-${this.createCalls.length}`;
 		await this.creationGates.shift();
@@ -1879,6 +1879,36 @@ test('Terminal process failure retains its display reason and relaunch clears th
 	assert.deepEqual(instance.statusList?.statuses, []);
 });
 
+
+test('detected shell titles use executable casing while custom terminal names retain their casing', async () => {
+	const processes = new TestTerminalProcessService([]);
+	const create = processes.create.bind(processes);
+	processes.create = async (...args) => ({ ...await create(...args), profile: { profileId: 'zsh', title: 'Zsh', isDefault: true } });
+	using services = terminalServices(processes, folderWorkspaceContext());
+	const terminals = services.get(ITerminalService);
+	const first = await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+	assert.equal(first.title, 'zsh');
+	const second = await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' }, title: 'Build Shell' });
+	assert.equal(first.title, 'zsh 1');
+	assert.equal(second.title, 'Build Shell');
+	await first.rename!('My Zsh');
+	assert.equal(first.title, 'My Zsh');
+	await first.rename!('');
+	assert.equal(first.title, 'zsh 1');
+	await terminals.closeTerminal(second);
+	assert.equal(first.title, 'zsh');
+});
+
+test('detected Windows profiles use their shell executable names in terminal titles', async () => {
+	for (const [profileId, title, expected] of [['powershell', 'PowerShell', 'pwsh'], ['windows-powershell', 'Windows PowerShell', 'powershell'], ['git-bash', 'Git Bash', 'bash']]) {
+		const processes = new TestTerminalProcessService([]);
+		const create = processes.create.bind(processes);
+		processes.create = async (...args) => ({ ...await create(...args), profile: { profileId, title, isDefault: true } });
+		using services = terminalServices(processes, folderWorkspaceContext());
+		const instance = await services.get(ITerminalService).createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+		assert.equal(instance.title, expected);
+	}
+});
 
 test('terminal title and icon editing survive process replacement and reset through the original owner', async () => {
 	const processes = new TestTerminalProcessService([]);

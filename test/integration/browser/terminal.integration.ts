@@ -34,7 +34,7 @@ import { OperatingSystem } from '../../../src/ash/base/common/platform.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { bindTestColorTheme } from './themeFixture.js';
-import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
+import { createColorTheme, darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { IMenuService, MenuId } from '../../../src/ash/platform/actions/common/actions.js';
 import { IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
 import { AppServerAvailableContext } from '../../../src/ash/workbench/common/contextkeys.js';
@@ -154,6 +154,10 @@ const instance = createFixtureInstance('test-terminal');
 const widgetServices = store.add(createCodeEditorServices(store).createChild());
 widgetServices.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 const themeService = store.add(new TestThemeService(darkColorTheme));
+function setTerminalTestTheme(mode: 'dark' | 'light' | 'hcDark' | 'hcLight', overrides?: Readonly<Record<string, string>>): void {
+	const base = { dark: darkColorTheme, light: lightColorTheme, hcDark: highContrastDarkColorTheme, hcLight: highContrastLightColorTheme }[mode];
+	themeService.setColorTheme(overrides ? createColorTheme({ id: 'terminal-test', label: 'Terminal test', colorScheme: base.colorScheme, baseTheme: base, colorOverrides: overrides }) : base);
+}
 if (new URLSearchParams(location.search).has('find') || new URLSearchParams(location.search).has('browser')) { store.add(bindTestColorTheme(themeService, document.body)); }
 widgetServices.registerInstance(IThemeService, themeService);
 widgetServices.registerInstance(ITerminalLogService, new NullLoggerService());
@@ -168,8 +172,8 @@ let completion: Promise<void> | undefined;
 window.ashTerminalIntegration = {
 	configure: async (key, value) => { await widgetServices.get(IConfigurationService).updateValue(key, value); },
 	options: () => ({ fontSize: widget.raw.options.fontSize, fontFamily: widget.raw.options.fontFamily, cursorStyle: widget.raw.options.cursorStyle, cursorBlink: widget.raw.options.cursorBlink, scrollback: widget.raw.options.scrollback, lineHeight: widget.raw.options.lineHeight, letterSpacing: widget.raw.options.letterSpacing, minimumContrastRatio: widget.raw.options.minimumContrastRatio }),
-	theme: mode => {
-		themeService.setColorTheme({ dark: darkColorTheme, light: lightColorTheme, hcDark: highContrastDarkColorTheme, hcLight: highContrastLightColorTheme }[mode]);
+	theme: (mode, overrides) => {
+		setTerminalTestTheme(mode, overrides);
 		return { background: widget.raw.options.theme?.background, foreground: widget.raw.options.theme?.foreground, red: widget.raw.options.theme?.red };
 	},
 	snapshot: limit => widget.getBufferText(limit, new AbortController().signal),
@@ -178,6 +182,10 @@ window.ashTerminalIntegration = {
 	resizes,
 	fit: () => widget.fit(),
 	write: text => widget.write(text),
+	sequence: async (event, text) => {
+		if (text) await new Promise<void>(resolve => widget.write(text, resolve));
+		widget.handleShellIntegration(event);
+	},
 	start: () => {
 		void instance.xtermReadyPromise;
 		completion = widget.initialize();
@@ -194,8 +202,9 @@ declare global {
 	interface Window {
 		ashTerminalIntegration: {
 			configure(key: string, value: unknown): Promise<void>;
+			sequence(event: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalShellIntegrationEvent, text?: string): Promise<void>;
 			options(): { fontSize?: number; fontFamily?: string; cursorStyle?: string; cursorBlink?: boolean; scrollback?: number; lineHeight?: number; letterSpacing?: number; minimumContrastRatio?: number; };
-			theme(mode: 'dark' | 'light' | 'hcDark' | 'hcLight'): { background: string | undefined; foreground: string | undefined; red: string | undefined; };
+			theme(mode: 'dark' | 'light' | 'hcDark' | 'hcLight', overrides?: Readonly<Record<string, string>>): { background: string | undefined; foreground: string | undefined; red: string | undefined; };
 			snapshot(limit: number): Promise<string | undefined>;
 			readonly writes: readonly string[];
 			readonly binaryWrites: readonly number[][];
@@ -397,6 +406,7 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 		pane.layout(Math.max(0, root.clientHeight - pane.partTitleProjection.actions!.offsetHeight), 0, root.clientWidth);
 		return {
 			configure: (key, value) => services.get(IConfigurationService).updateValue(key, value),
+			theme: setTerminalTestTheme,
 			environment: enabled => enabled ? services.get(IEnvironmentVariableService).set('acme.environment', { persistent: false, map: new Map([['MODE', { variable: 'MODE', type: 1, value: 'extension' }]]) }) : services.get(IEnvironmentVariableService).delete('acme.environment'),
 			createdProfiles: () => [...createdProfiles],
 			launches: () => [...launches],
@@ -447,6 +457,7 @@ declare global {
 		}[];
 		ashTerminalPaneIntegration: {
 			configure(key: string, value: unknown): Promise<void>;
+			theme(mode: 'dark' | 'light' | 'hcDark' | 'hcLight', overrides?: Readonly<Record<string, string>>): void;
 			environment(enabled: boolean): void;
 			createdProfiles(): readonly string[];
 			launches(): readonly { profile: unknown; env: unknown; cwd: unknown; }[];
@@ -1035,7 +1046,7 @@ if (new URLSearchParams(location.search).has('input')) {
 				provider.dispose();
 				return content;
 			},
-			theme: mode => themeService.setColorTheme({ dark: darkColorTheme, light: lightColorTheme, hcDark: highContrastDarkColorTheme, hcLight: highContrastLightColorTheme }[mode]),
+			theme: setTerminalTestTheme,
 			errors: () => notifications.getNotifications().map(item => item.message),
 		};
 	}
@@ -1081,7 +1092,7 @@ declare global {
 			context(): { terminal: boolean; find: boolean; };
 			result(): { result: import('@xterm/addon-search').ISearchResultChangeEvent | undefined; selection: string; position: import('@xterm/xterm').IBufferRange | undefined; };
 			help(): Promise<string>;
-			theme(mode: 'dark' | 'light' | 'hcDark' | 'hcLight'): void;
+			theme(mode: 'dark' | 'light' | 'hcDark' | 'hcLight', overrides?: Readonly<Record<string, string>>): void;
 			errors(): readonly string[];
 		};
 		ashTerminalEditorIntegration: {

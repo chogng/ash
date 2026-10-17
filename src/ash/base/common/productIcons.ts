@@ -44,6 +44,8 @@ const iconChevronDown = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"
 const iconChevronLeft = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path stroke=\"#000\" stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M10 12.5 5.5 8 10 3.5\"/></svg>";
 const iconChevronRight = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path stroke=\"#000\" stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M6 3.5 10.5 8 6 12.5\"/></svg>";
 const iconChevronUp = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path stroke=\"#000\" stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M3.5 10 8 5.5l4.5 4.5\"/></svg>";
+const iconCircle = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"currentColor\" viewBox=\"0 0 16 16\"><path fill-rule=\"evenodd\" d=\"M8 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8m2.61-4a2.61 2.61 0 1 1-5.22 0 2.61 2.61 0 0 1 5.22 0\" clip-rule=\"evenodd\"/></svg>";
+const iconCircleFilled = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"currentColor\" viewBox=\"0 0 16 16\"><path d=\"M8 4q.55 0 1.063.145.51.14.953.402.445.261.808.629a3.94 3.94 0 0 1 1.031 1.761Q12 7.45 12 8t-.145 1.063a3.94 3.94 0 0 1-1.03 1.765 4 4 0 0 1-1.762 1.031Q8.55 12 8 12t-1.062-.14a4.06 4.06 0 0 1-1.766-1.032A4.06 4.06 0 0 1 4.14 9.062 4 4 0 0 1 4 8q0-.55.14-1.062.145-.513.407-.954.261-.444.625-.808.367-.367.808-.63a4 4 0 0 1 .957-.401A4 4 0 0 1 8 4\"/></svg>";
 const iconCircleLarge = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><circle cx=\"8\" cy=\"8\" r=\"6.5\" stroke=\"#000\"/></svg>";
 const iconCircleLargeFilled = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><circle cx=\"8\" cy=\"8\" r=\"6.5\" fill=\"#000\" stroke=\"#000\"/></svg>";
 const iconCircleSmall = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><circle cx=\"8\" cy=\"8\" r=\"1.5\" stroke=\"#000\"/></svg>";
@@ -98,6 +100,7 @@ const iconEllipsis = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"non
 const iconEnter = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path stroke=\"#000\" stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M13.5 3v4.5a2 2 0 0 1-2 2H2M5.5 6 2 9.5 5.5 13\"/></svg>";
 const iconEraser = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><g stroke=\"#000\" stroke-linecap=\"round\" clip-path=\"url(#ash-eraser-a)\"><path d=\"m3.621 7.879 4.243 4.242m0 0L6.45 13.536a1 1 0 0 1-1.414 0l-2.829-2.829a1 1 0 0 1 0-1.414l1.414-1.414 5.657-5.657a1 1 0 0 1 1.414 0l2.829 2.828a1 1 0 0 1 0 1.414zm.5 1.5h5.5\"/></g><defs><clipPath id=\"ash-eraser-a\"><path fill=\"#fff\" d=\"M0 0h16v16H0z\"/></clipPath></defs></svg>";
 const iconError = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><circle cx=\"8\" cy=\"8\" r=\"6.5\" stroke=\"#000\"/><path stroke=\"#000\" stroke-linecap=\"round\" d=\"M10.5 5.5 8 8m-2.5 2.5L8 8m0 0 2.5 2.5M8 8 5.5 5.5\"/></svg>";
+const iconErrorSmall = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"currentColor\" viewBox=\"0 0 16 16\"><path d=\"M7.354 6.646a.5.5 0 1 0-.708.708L7.293 8l-.647.646a.5.5 0 1 0 .708.708L8 8.707l.646.647a.5.5 0 1 0 .708-.708L8.707 8l.647-.646a.5.5 0 1 0-.708-.708L8 7.293z\"/><path fill-rule=\"evenodd\" d=\"M8 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8m0-7a3 3 0 1 1 0 6 3 3 0 0 1 0-6\" clip-rule=\"evenodd\"/></svg>";
 const iconExport = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path stroke=\"#000\" stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"m9.5 4 4 4-4 4m4-4H4\"/><path stroke=\"#000\" stroke-linecap=\"round\" d=\"M2 4v8.18\"/></svg>";
 const iconExportTray = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path stroke=\"#000\" stroke-linecap=\"round\" d=\"M13.5 9.875v1.667a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2V9.875\"/><path stroke=\"#000\" stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M4.333 6.167 8 2.5l3.667 3.667M8 2.5v8.708\"/></svg>";
 const iconExtensions = () => "<svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" viewBox=\"0 0 16 16\"><path stroke=\"#000\" d=\"M7.5 8.5v-5a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v5m6 0h-6m0 0v4a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-3a1 1 0 0 0-1-1h-5m0 0v6m.318-10.096 2.828-2.829a.5.5 0 0 1 .708 0l2.828 2.829a.5.5 0 0 1 0 .707l-2.828 2.828a.5.5 0 0 1-.708 0L7.818 5.111a.5.5 0 0 1 0-.707Z\"/></svg>";
@@ -313,6 +316,8 @@ export function createProductIconLibrary<T>(register: (id: string, definition: P
     chevronLeft: register("chevron-left", iconChevronLeft),
     chevronRight: register("chevron-right", iconChevronRight),
     chevronUp: register("chevron-up", iconChevronUp),
+    circle: register("circle", iconCircle),
+    circleFilled: register("circle-filled", iconCircleFilled),
     circleLarge: register("circle-large", iconCircleLarge),
     circleLargeFilled: register("circle-large-filled", iconCircleLargeFilled),
     circleSmall: register("circle-small", iconCircleSmall),
@@ -367,6 +372,7 @@ export function createProductIconLibrary<T>(register: (id: string, definition: P
     enter: register("enter", iconEnter),
     eraser: register("eraser", iconEraser),
     error: register("error", iconError),
+    errorSmall: register("error-small", iconErrorSmall),
     export: register("export", iconExport),
     exportTray: register("export-tray", iconExportTray),
     extensions: register("extensions", iconExtensions),

@@ -125,10 +125,13 @@ export function registerTerminalActions(): void {
 				},
 			});
 		}
-		override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
+		override async run(accessor: ServicesAccessor, context?: unknown, profileId?: unknown): Promise<void> {
 			const parent = resolveInstance(accessor, context);
 			if (!parent || parent.target === TerminalLocation.Editor || parent.state !== 'running' || parent.isReadOnly || parent.shellLaunchConfig?.customPtyImplementation) return;
-			await terminalView(accessor).createTerminal(parent.profile.profileId, true, parent);
+			if (profileId !== undefined && (typeof profileId !== 'string' || !accessor.get(ITerminalProfileService).availableProfiles.some(profile => profile.profileId === profileId))) {
+				throw new TypeError(localize('terminal.profile.unknown', 'Unknown terminal profile: {0}', String(profileId)));
+			}
+			await terminalView(accessor).createTerminal(typeof profileId === 'string' ? profileId : parent.profile.profileId, true, parent);
 			accessor.get(ITerminalService).activeInstance?.xterm?.focus();
 		}
 	});

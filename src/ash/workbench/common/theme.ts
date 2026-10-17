@@ -42,7 +42,7 @@ alias('activityBar.background', sideBarBackground, 'Activity Bar background.');
 color('activityBarBadge.background', accentBackground, accentBackground, '#000000', '#ffffff', 'Background color of Activity Bar notification badges.');
 color('activityBarBadge.foreground', '#ffffff', '#ffffff', foreground, foreground, 'Text color of Activity Bar notification badges.');
 alias("auxiliaryBar.background", sideBarBackground, "Auxiliary side bar background.");
-alias("panel.background", sideBarBackground, "Panel background.");
+export const PANEL_BACKGROUND = alias("panel.background", sideBarBackground, "Panel background.");
 const emptyExplorerOpenFolderBackground = registerColor("files.emptyExplorerOpenFolderBackground", {
 	dark: accentBackground, light: accentBackground,
 	hcDark: selectionBackground, hcLight: selectionBackground,

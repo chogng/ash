@@ -1,5 +1,9 @@
 .ash-terminal-instance {
-	--ash-terminal-command-gutter-width: 10px;
+	--ash-terminal-command-gutter-width: var(--ash-spacing-size200);
+	--ash-terminal-surface-background: var(
+		--ash-terminal-background,
+		var(--ash-terminal-host-background, var(--ash-panel-background))
+	);
 
 	position: relative;
 	box-sizing: border-box;
@@ -7,6 +11,8 @@
 	min-height: 0;
 	flex: 1 1 auto;
 	padding-left: var(--ash-terminal-command-gutter-width);
+	background: var(--ash-terminal-surface-background);
+	color: var(--ash-terminal-foreground);
 }
 
 .ash-terminal-instance .xterm {
@@ -15,66 +21,32 @@
 
 /* The viewport also paints the space below the last complete character row. */
 .ash-terminal-instance .xterm .xterm-viewport {
-	background-color: var(--ash-terminal-background);
+	background-color: var(--ash-terminal-surface-background);
 }
 
 .ash-terminal-command-status {
-	display: flex !important;
-	box-sizing: border-box;
+	color: var(--ash-terminalCommandDecoration-defaultBackground);
+	cursor: default;
+}
+
+.ash-terminal-command-icon {
+	display: flex;
 	align-items: center;
 	justify-content: center;
-	width: var(--ash-terminal-command-gutter-width) !important;
-	color: var(--ash-muted-foreground);
-	pointer-events: none;
-	transform: translateX(calc(-1 * var(--ash-terminal-command-gutter-width)));
+	width: 100%;
+	height: 100%;
 }
 
-.ash-terminal-command-status::before {
-	box-sizing: border-box;
-	width: 6px;
-	height: 6px;
-	border: var(--ash-strokeThickness) solid currentColor;
-	border-radius: 50%;
-	content: "";
-}
-
-.ash-terminal-command-status.running {
-	color: var(--ash-focusBorder);
-}
-
-.ash-terminal-command-status.running::before {
-	border-color: currentColor;
-	background: currentColor;
-	animation: ash-terminal-command-status-breathe 1400ms ease-in-out infinite;
-}
-
-.ash-terminal-command-status.completed::before,
-.ash-terminal-command-status.succeeded::before,
-.ash-terminal-command-status.failed::before {
-	background: currentColor;
+.ash-terminal-command-icon > .ash-icon {
+	width: 100%;
+	height: 1em;
 }
 
 .ash-terminal-command-status.succeeded {
-	color: var(--ash-success-foreground);
+	color: var(--ash-terminalCommandDecoration-successBackground);
 }
 
-.ash-terminal-command-status.failed {
-	color: var(--ash-error-foreground);
-}
-
+.ash-terminal-command-status.failed,
 .ash-terminal-command-status.canceled {
-	color: var(--ash-warning-foreground);
-}
-
-@keyframes ash-terminal-command-status-breathe {
-	50% {
-		opacity: 0.45;
-		transform: scale(0.72);
-	}
-}
-
-@media (prefers-reduced-motion: reduce) {
-	.ash-terminal-command-status.running::before {
-		animation: none;
-	}
+	color: var(--ash-terminalCommandDecoration-errorBackground);
 }

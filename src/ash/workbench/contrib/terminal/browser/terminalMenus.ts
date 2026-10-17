@@ -5,7 +5,7 @@ import { MenuId, MenusRegistry } from '../../../../platform/actions/common/actio
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { AppServerAvailableContext } from '../../../common/contextkeys.js';
 import { TerminalCommandId } from '../common/terminal.js';
-import { TerminalCreatingContext, TerminalHasActiveInstanceContext, TerminalActiveInstanceInTitleContext, TerminalActiveInstanceStateContext } from '../common/terminalContextKey.js';
+import { TerminalCreatingContext, TerminalHasActiveInstanceContext, TerminalActiveInstanceInTitleContext, TerminalActiveInstanceStateContext, TerminalViewInlineActionsContext } from '../common/terminalContextKey.js';
 
 /** Registers terminal menus once for the renderer; enablement comes from each window's context. */
 export function setupTerminalMenus(): void {
@@ -32,6 +32,7 @@ export function setupTerminalMenus(): void {
 			title: localize2('terminal.title.focusActive', "Focus Active Terminal"),
 			tooltip: localize('terminal.title.focusActive', "Focus Active Terminal"),
 		},
+		alt: { id: TerminalCommandId.Split, title: localize2('terminal.group.splitMenu', 'Split Terminal'), icon: Lxicon.splitHorizontal },
 		when: TerminalActiveInstanceInTitleContext.isEqualTo(true),
 		group: "navigation",
 		order: 0,
@@ -44,8 +45,19 @@ export function setupTerminalMenus(): void {
 			icon: newTerminalIcon,
 			precondition: ContextKeyExpr.and(AppServerAvailableContext.isEqualTo(true), TerminalCreatingContext.isEqualTo(false)),
 		},
+		alt: { id: TerminalCommandId.Split, title: localize2('terminal.group.splitMenu', 'Split Terminal'), icon: Lxicon.splitHorizontal, precondition: ContextKeyExpr.and(TerminalHasActiveInstanceContext.isEqualTo(true), TerminalCreatingContext.isEqualTo(false), TerminalActiveInstanceStateContext.isEqualTo('running')) },
 		group: "navigation",
 		order: 10,
+	});
+	MenusRegistry.appendMenuItem(MenuId.TerminalTitle, {
+		command: {
+			id: TerminalCommandId.Split,
+			title: localize2('terminal.group.splitMenu', 'Split Terminal'),
+			icon: Lxicon.splitHorizontal,
+			precondition: ContextKeyExpr.and(TerminalCreatingContext.isEqualTo(false), TerminalActiveInstanceStateContext.isEqualTo('running')),
+		},
+		when: TerminalViewInlineActionsContext.isEqualTo(true),
+		group: 'navigation', order: 20,
 	});
 	MenusRegistry.appendMenuItem(MenuId.TerminalTitle, {
 		command: {
@@ -57,8 +69,9 @@ export function setupTerminalMenus(): void {
 		when: ContextKeyExpr.and(
 			TerminalHasActiveInstanceContext.isEqualTo(true),
 			ContextKeyExpr.notEquals(TerminalActiveInstanceStateContext.key, "running"),
+			ContextKeyExpr.notEquals(TerminalActiveInstanceStateContext.key, 'reconnecting'),
 		),
-		group: "navigation",
+		group: "1_terminal",
 		order: 20,
 	});
 	MenusRegistry.appendMenuItem(MenuId.TerminalTitle, {
@@ -68,7 +81,7 @@ export function setupTerminalMenus(): void {
 			tooltip: localize('terminal.title.kill', "Kill Terminal"),
 			icon: killTerminalIcon,
 		},
-		when: TerminalHasActiveInstanceContext.isEqualTo(true),
+		when: TerminalViewInlineActionsContext.isEqualTo(true),
 		group: "navigation",
 		order: 30,
 	});
@@ -80,5 +93,9 @@ export function setupTerminalMenus(): void {
 		},
 		group: "1_terminal",
 		order: 10,
+	});
+	MenusRegistry.appendMenuItem(MenuId.TerminalTitle, {
+		command: { id: TerminalCommandId.SelectDefaultProfile, title: localize2('terminal.title.selectDefaultProfile', 'Select Default Profile') },
+		group: '2_configuration', order: 10,
 	});
 }

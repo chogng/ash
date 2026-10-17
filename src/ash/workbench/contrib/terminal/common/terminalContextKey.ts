@@ -4,8 +4,10 @@ export const TerminalCreatingContext = new RawContextKey<boolean>("terminalCreat
 export const TerminalHasActiveInstanceContext = new RawContextKey<boolean>("terminalHasActiveInstance", false);
 export const TerminalActiveInstanceInTitleContext = new RawContextKey<boolean>("terminalActiveInstanceInTitle", false);
 export const TerminalActiveInstanceStateContext = new RawContextKey<string>("terminalActiveInstanceState", "none");
+export const TerminalViewInlineActionsContext = new RawContextKey<boolean>('terminalViewInlineActions', false);
 
 export namespace TerminalContextKeys {
+	export const tabsNarrow = new RawContextKey<boolean>('terminalTabsNarrow', false);
 	export const textSelectedInFocused = new RawContextKey<boolean>('terminalTextSelectedInFocused', false);
 	export const focus = new RawContextKey<boolean>('terminalFocus', false);
 	export const findFocus = new RawContextKey<boolean>('terminalFindFocused', false);

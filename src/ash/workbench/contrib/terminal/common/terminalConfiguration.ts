@@ -68,6 +68,17 @@ for (const [name, defaultValue, choices] of [
 		ashSetting: { valueType: 'select', get title() { return title(); }, get description() { return description(); }, get options() { return choices.map(value => ({ value, label: labels[value] })); } },
 	};
 }
+for (const name of ['showActiveTerminal', 'showActions'] as const) {
+	properties[`${TERMINAL_CONFIG_SECTION}.tabs.${name}`] = {
+		type: 'string', default: 'singleTerminalOrNarrow',
+		enum: ['always', 'singleTerminal', 'singleTerminalOrNarrow', 'never'],
+		get description() {
+			return name === 'showActiveTerminal'
+				? localize('terminal.config.tabs.showActiveTerminal', 'Controls when the active terminal is shown in the terminal title toolbar.')
+				: localize('terminal.config.tabs.showActions', 'Controls when split and kill actions are shown in the terminal title toolbar.');
+		},
+	};
+}
 registerTerminalPlatformConfiguration();
 Object.assign(properties, terminalContribConfiguration);
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).updateConfigurations({

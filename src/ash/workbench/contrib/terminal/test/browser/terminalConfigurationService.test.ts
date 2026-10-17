@@ -28,6 +28,7 @@ import { WorkspaceContextService } from '../../../../services/workspaces/browser
 
 import { ITerminalService, type ITerminalProfile } from '../../../../services/terminal/browser/terminal.js';
 import { TerminalConfigurationService } from '../../browser/terminalConfigurationService.js';
+import '../../../codeEditor/common/editorConfiguration.js';
 import { TerminalProfileService } from '../../browser/terminalProfileService.js';
 import { TerminalProfileQuickpick } from '../../browser/terminalProfileQuickpick.js';
 import { TerminalService } from '../../browser/terminalService.js';
@@ -118,6 +119,18 @@ async function waitFor(check: () => boolean): Promise<void> {
 
 suite('Terminal configuration and interactive profiles', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('terminal fonts inherit the editor face and retain a monospace fallback', async () => {
+		using owner = new DisposableStore();
+		const { services, configuration } = createServices(owner);
+		const terminalConfig = owner.add(services.createInstance(TerminalConfigurationService));
+		await configuration.updateValue('editor.fontFamily', 'Missing Editor Font');
+		assert.equal(terminalConfig.config.fontFamily, 'Missing Editor Font, monospace');
+		await configuration.updateValue('terminal.integrated.fontFamily', 'Terminal Face');
+		assert.equal(terminalConfig.config.fontFamily, 'Terminal Face, monospace');
+		await configuration.updateValue('terminal.integrated.fontFamily', 'monospace');
+		assert.equal(terminalConfig.config.fontFamily, 'monospace');
+	});
 
 	test('validates configuration values before changing the active snapshot', async () => {
 		using owner = new DisposableStore();

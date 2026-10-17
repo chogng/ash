@@ -11,6 +11,7 @@ import { EnvironmentVariableService } from '../../common/environmentVariableServ
 import { deserializeEnvironmentVariableCollection, serializeEnvironmentVariableCollection } from '../../../../../platform/terminal/common/environmentVariableShared.js';
 import type { IEnvironmentVariableCollectionWithPersistence } from '../../common/environmentVariable.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
+import { CancellationError } from '../../../../../base/common/errors.js';
 
 function collection(value: string, persistent = true): IEnvironmentVariableCollectionWithPersistence {
 	return { persistent, map: new Map([['PATH', { variable: 'PATH', type: 2, value }]]) };
@@ -177,6 +178,29 @@ suite('Terminal environment collections', () => {
 		release(collection(':old'));
 		await pending;
 		assert.equal(service.collections.get('extension')?.map.get('PATH')?.value, ':new');
+	});
+
+	test('launch reads follow a provider replaced while its old runtime cancels', async () => {
+		using owner = new DisposableStore();
+		const { service } = create(owner);
+		let cancel!: (reason: unknown) => void;
+		const first = owner.add(service.registerCollectionProvider('extension', () => new Promise((_resolve, reject) => { cancel = reject; })));
+		const pending = service.refreshCollections();
+		first.dispose();
+		owner.add(service.registerCollectionProvider('extension', async () => collection(':replacement')));
+		cancel(new CancellationError());
+		await pending;
+		assert.equal(service.collections.get('extension')?.map.get('PATH')?.value, ':replacement');
+	});
+
+	test('launch reads still report a current provider cancellation or failure', async () => {
+		for (const error of [new CancellationError(), new Error('extension failed')]) {
+			using owner = new DisposableStore();
+			const { service } = create(owner);
+			owner.add(service.registerCollectionProvider('extension', async () => { throw error; }));
+			await assert.rejects(service.refreshCollections(), candidate => candidate === error);
+			assert.equal(service.collections.size, 0);
+		}
 	});
 
 	test('removing one profile keeps another live provider for the same extension', async () => {

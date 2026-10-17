@@ -163,6 +163,10 @@ export class TerminalService extends Disposable implements ITerminalService {
 }
 
 function terminalProfileTitle(profile: ITerminalProfile): string {
+	if (['zsh', 'bash', 'fish', 'sh'].includes(profile.profileId)) return profile.profileId;
+	if (profile.profileId === 'powershell') return 'pwsh';
+	if (profile.profileId === 'windows-powershell') return 'powershell';
+	if (profile.profileId === 'git-bash') return 'bash';
 	if (profile.profileId === "cmd" || profile.profileId === "command-prompt") {
 		return "cmd";
 	}

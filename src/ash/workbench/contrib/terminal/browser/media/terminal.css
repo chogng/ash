@@ -26,6 +26,8 @@
 	flex: 1 1 auto;
 	flex-direction: column;
 	overflow: hidden;
+	background: var(--ash-terminal-background, var(--ash-panel-background));
+	color: var(--ash-terminal-foreground);
 }
 
 .ash-terminal-tabs-layout {
@@ -37,8 +39,9 @@
 .ash-terminal-tabs {
 	min-width: 0;
 	min-height: 0;
-	border-left: var(--ash-strokeThickness) solid
-		color-mix(in srgb, currentColor 12%, transparent);
+	border-left: var(--ash-strokeThickness) solid var(--ash-border);
+	font-size: var(--ash-fontSize-body1);
+	color: var(--ash-foreground);
 }
 
 .ash-terminal-tabs .ash-tab {
@@ -50,17 +53,16 @@
 }
 
 .ash-terminal-tabs .ash-tab.checked {
-	background: color-mix(in srgb, currentColor 8%, transparent);
+	background: var(--ash-list-inactiveSelectionBackground);
 }
 
-.ash-terminal-tabs .ash-tab.checked::before {
-	position: absolute;
-	top: 0;
-	bottom: 0;
-	left: 0;
-	width: 1px;
-	background: currentColor;
-	content: "";
+.ash-terminal-tabs:focus-within .ash-tab.checked {
+	background: var(--ash-list-activeSelectionBackground);
+	color: var(--ash-list-activeSelectionForeground);
+}
+
+.ash-terminal-tabs .ash-tab:not(.checked):hover {
+	background: var(--ash-list-hoverBackground);
 }
 
 .ash-terminal-tabs .ash-tab-label {
@@ -74,6 +76,7 @@
 	color: inherit;
 	background: transparent;
 	text-align: left;
+	font-weight: var(--ash-fontWeight-regular);
 	cursor: pointer;
 }
 
@@ -131,11 +134,13 @@
 }
 
 .ash-terminal-editor {
+	--ash-terminal-host-background: var(--ash-editor-background);
+
 	min-width: 0;
 	min-height: 0;
 	overflow: hidden;
 	position: relative;
-	background: var(--ash-terminal-background);
+	background: var(--ash-terminal-background, var(--ash-editor-background));
 	color: var(--ash-terminal-foreground);
 }
 

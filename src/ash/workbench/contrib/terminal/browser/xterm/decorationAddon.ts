@@ -3,12 +3,17 @@ import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../
 import { TerminalCapability, type IBufferMarkCapability } from '../../../../../platform/terminal/common/capabilities/capabilities.js';
 import { TerminalCapabilityStore } from '../../../../../platform/terminal/common/capabilities/terminalCapabilityStore.js';
 import type { ITerminalCommandStatusEvent } from '../../../../services/terminal/browser/terminal.js';
-import { getTerminalCommandDecorationTooltip } from './decorationStyles.js';
+import { getTerminalCommandDecorationTooltip, updateLayout } from './decorationStyles.js';
+import { terminalDecorationIncomplete, terminalDecorationSuccess, terminalDecorationError } from '../terminalIcons.js';
+import { appendIcon } from '../../../../../base/browser/ui/lxicons/lxicon.js';
+import { localize } from '../../../../../nls.js';
+import { getHoverDelegate } from '../../../../../base/browser/ui/hover/hoverDelegate.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 
 interface ScreenCommand {
 	readonly marker: IMarker;
 	readonly decoration: IDecoration | undefined;
-	event: ITerminalCommandStatusEvent;
+	event: ITerminalCommandStatusEvent | undefined;
 }
 
 /** Owns only screen positions and UI resources, not Shell history or capabilities. */
@@ -19,7 +24,18 @@ export class DecorationAddon extends Disposable implements ITerminalAddon {
 	private marks: IBufferMarkCapability | undefined;
 	get markers(): readonly IMarker[] { return [...this.marks?.markers() ?? []]; }
 
-	constructor(private readonly capabilities: TerminalCapabilityStore) { super(); }
+	constructor(
+		private readonly capabilities: TerminalCapabilityStore,
+		@IConfigurationService private readonly configuration: IConfigurationService,
+	) {
+		super();
+		this._register(configuration.onDidChangeConfiguration(event => {
+			if (!event.affectsConfiguration('terminal.integrated.fontSize') && !event.affectsConfiguration('terminal.integrated.lineHeight')) return;
+			for (const command of this.commands.values()) {
+				if (command.decoration?.element) updateLayout(configuration, command.decoration.element);
+			}
+		}));
+	}
 
 	activate(terminal: Terminal): void {
 		this.lifetimes.clearAndDisposeAll();
@@ -27,10 +43,12 @@ export class DecorationAddon extends Disposable implements ITerminalAddon {
 		this.terminal = terminal;
 	}
 
-	registerCommandDecoration(event: ITerminalCommandStatusEvent, processId: number, suppliedMarker: IMarker): void {
+	registerCommandDecoration(event: ITerminalCommandStatusEvent | undefined, processId: number, suppliedMarker: IMarker): void {
 		const terminal = this.terminal;
 		if (!terminal || !this.marks || this.isDisposed) return;
-		const key = `${processId}:${event.commandId}:${suppliedMarker.id}`;
+		// Shell integration may assign its execution ID after the prompt appears.
+		// The screen marker stays stable across pending, execution and completion.
+		const key = `${processId}:${suppliedMarker.id}`;
 		let command = this.commands.get(key);
 		if (!command) {
 			this.marks.addMark({ id: key, marker: suppliedMarker });
@@ -47,7 +65,14 @@ export class DecorationAddon extends Disposable implements ITerminalAddon {
 			lifetime.add(toDisposable(() => markerListener.dispose()));
 			if (decoration) {
 				const item = command;
-				const renderListener = decoration.onRender(element => this.render(element, item.event));
+				const hoverTargets = new WeakSet<HTMLElement>();
+				const renderListener = decoration.onRender(element => {
+					this.render(element, item.event);
+					if (!hoverTargets.has(element)) {
+						hoverTargets.add(element);
+						lifetime.add(getHoverDelegate().setupDelayedHover(element, () => ({ content: element.getAttribute('aria-label') ?? '' })));
+					}
+				});
 				lifetime.add(toDisposable(() => renderListener.dispose()));
 				lifetime.add(toDisposable(() => decoration.dispose()));
 			}
@@ -57,14 +82,21 @@ export class DecorationAddon extends Disposable implements ITerminalAddon {
 		if (command.decoration?.element) this.render(command.decoration.element, event);
 	}
 
-	private render(element: HTMLElement, event: ITerminalCommandStatusEvent): void {
-		element.classList.remove('running', 'completed', 'succeeded', 'failed', 'canceled');
-		element.classList.add('ash-terminal-command-status', event.status);
-		element.dataset.commandStatus = event.status;
-		const label = getTerminalCommandDecorationTooltip(event);
+	private render(element: HTMLElement, event: ITerminalCommandStatusEvent | undefined): void {
+		updateLayout(this.configuration, element);
+		const status = event?.status ?? 'pending';
+		if (element.dataset.commandStatus !== status) {
+			element.classList.remove('pending', 'running', 'completed', 'succeeded', 'failed', 'canceled');
+			element.classList.add('ash-terminal-command-status', status);
+			element.dataset.commandStatus = status;
+			const icon = element.ownerDocument.createElement('span');
+			icon.className = 'ash-terminal-command-icon';
+			appendIcon(status === 'failed' || status === 'canceled' ? terminalDecorationError : status === 'succeeded' ? terminalDecorationSuccess : terminalDecorationIncomplete, icon);
+			element.replaceChildren(icon);
+		}
+		const label = event ? getTerminalCommandDecorationTooltip(event) : localize('terminal.command.pending', 'Waiting for a command');
 		element.setAttribute('role', 'img');
 		element.setAttribute('aria-label', label);
-		element.title = label;
 	}
 
 	protected override disposeCore(): void {

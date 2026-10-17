@@ -8,6 +8,8 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/
 import { DecorationAddon } from '../../../browser/xterm/decorationAddon.js';
 import { TerminalCapability } from '../../../../../../platform/terminal/common/capabilities/capabilities.js';
 import { BufferMarkCapability } from '../../../../../../platform/terminal/common/capabilities/bufferMarkCapability.js';
+import { TestConfigurationService } from '../../../../../services/configuration/test/common/testServices.js';
+import '../../../common/terminalConfiguration.js';
 
 function rendererBoundary(lifetime: DisposableStore) {
 	const created: { marker: IMarker; trimmed: Emitter<void>; render: Emitter<HTMLElement>; disposed: boolean; }[] = [];
@@ -79,7 +81,7 @@ suite('Terminal command decoration lifecycle', () => {
 		const boundary = rendererBoundary(lifetime);
 		const capabilities = lifetime.add(new TerminalCapabilityStore());
 		capabilities.add(TerminalCapability.BufferMarkDetection, lifetime.add(new BufferMarkCapability(boundary.terminal)));
-		const addon = lifetime.add(new DecorationAddon(capabilities));
+		const addon = lifetime.add(new DecorationAddon(capabilities, lifetime.add(new TestConfigurationService())));
 		addon.activate(boundary.terminal);
 		const first = boundary.terminal.registerMarker(0)!;
 		lifetime.add(toDisposable(() => first.dispose()));
@@ -99,7 +101,7 @@ suite('Terminal command decoration lifecycle', () => {
 		const boundary = rendererBoundary(lifetime);
 		const capabilities = lifetime.add(new TerminalCapabilityStore());
 		capabilities.add(TerminalCapability.BufferMarkDetection, lifetime.add(new BufferMarkCapability(boundary.terminal)));
-		const addon = lifetime.add(new DecorationAddon(capabilities));
+		const addon = lifetime.add(new DecorationAddon(capabilities, lifetime.add(new TestConfigurationService())));
 		addon.activate(boundary.terminal);
 		const first = boundary.terminal.registerMarker(0)!;
 		lifetime.add(toDisposable(() => first.dispose()));

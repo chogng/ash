@@ -22,6 +22,8 @@ export type TerminalInstanceState = "running" | "reconnecting" | "exited" | "dis
 /** The screen needs no process, membership, persistence, or launch authority. */
 export interface ITerminalScreenHost {
 	readonly capabilities?: ITerminalCapabilityStore;
+	readonly target?: TerminalLocation;
+	readonly onDidChangeTarget?: Event<TerminalLocation | undefined>;
 	readonly isReadOnly?: boolean;
 	readonly processId: number;
 	readonly state: TerminalInstanceState;

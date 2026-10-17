@@ -1,0 +1,5 @@
+circle.svg, circle-filled.svg and error-small.svg are from Microsoft Codicons
+(@vscode/codicons 0.0.46-36), https://github.com/microsoft/vscode-codicons.
+Copyright Microsoft Corporation. Licensed under Creative Commons Attribution 4.0
+International: https://creativecommons.org/licenses/by/4.0/.
+SVG markup is optimized by the Ash icon generator; glyph geometry is unchanged.

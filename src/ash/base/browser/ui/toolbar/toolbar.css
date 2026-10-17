@@ -37,6 +37,9 @@
 	display: none;
 }
 
-.ash-toolbar .ash-action-view-item.icon .ash-dropdown-menu-indicator {
+.ash-toolbar
+	.ash-action-view-item.icon
+	> .ash-button
+	> .ash-dropdown-menu-indicator {
 	display: none;
 }

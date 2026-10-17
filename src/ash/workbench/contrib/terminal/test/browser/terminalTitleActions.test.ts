@@ -33,6 +33,10 @@ import { Event } from "../../../../../base/common/event.js";
 import { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { ITerminalInstance } from "../../../../services/terminal/browser/terminal.js";
 import { AppServerAvailableContext } from '../../../../common/contextkeys.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { TestConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
+import { TerminalContextKeys } from '../../common/terminalContextKey.js';
+import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 setIconResolver(browserEnvironment.window.document, icon => getIconDefinition(icon));
@@ -98,6 +102,7 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 	shownProfileAnchor = undefined;
 	const createdProfiles: Array<string | undefined> = [];
 	let focusCount = 0;
+	let splitCount = 0;
 	let clearCount = 0;
 	using contextKeyService = new ContextKeyService();
 	const appServerAvailable = AppServerAvailableContext.bindTo(contextKeyService);
@@ -111,6 +116,8 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 		{ id: TerminalCommandId.Relaunch, handler: () => { } },
 		{ id: TerminalCommandId.Kill, handler: () => { } },
 		{ id: TerminalCommandId.Clear, handler: () => clearCount++ },
+		{ id: TerminalCommandId.Split, handler: () => splitCount++ },
+		{ id: TerminalCommandId.SelectDefaultProfile, handler: () => { } },
 	]);
 	using commandService = new CommandService(registryOwner, registry);
 	const menuService = new MenuService(commandService, contextKeyService);
@@ -118,13 +125,16 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 	registryOwner.registerInstance(IMenuService, menuService);
 	registryOwner.registerInstance(IContextMenuService, contextMenuService);
 	registryOwner.registerInstance(IContextKeyService, contextKeyService);
+	using configuration = new TestConfigurationService();
+	registryOwner.registerInstance(IConfigurationService, configuration);
+	registryOwner.registerInstance(IKeybindingService, { onDidUpdateKeybindings: Event.None, lookupKeybinding: () => undefined } as unknown as IKeybindingService);
 	using titleActions = registryOwner.createInstance(TerminalTitleActions, ownerDocument.body);
 
 	const commandPromptProfile = { profileId: "cmd", title: "Command Prompt", isDefault: true };
 	const powerShellProfile = { profileId: "pwsh", title: "PowerShell", isDefault: false };
 	const unavailableProfile = titleActions.element.querySelector<HTMLButtonElement>(".ash-dropdown-with-primary-dropdown > .ash-button");
 	assert.ok(unavailableProfile);
-	assert.equal(unavailableProfile.disabled, true);
+	assert.equal(unavailableProfile.disabled, false, 'The menu also offers New Terminal and Select Default Profile before discovery');
 	titleActions.setProfiles([commandPromptProfile, powerShellProfile]);
 	ownerDocument.body.append(titleActions.element);
 
@@ -174,7 +184,14 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 	assert.equal(activeTerminal.getAttribute("aria-label"), "Active terminal: Backend shell (Command Prompt)");
 	activeTerminal.click();
 	await Promise.resolve();
+	assert.equal(focusCount, 0, 'The title opens its instance menu instead of focusing the terminal');
+	assert.equal(activeTerminal.getAttribute('aria-expanded'), 'true');
+	assert.ok(shownProfileActions.find(action => action.id === TerminalCommandId.Rename));
+	await shownProfileActions.find(action => action.id === TerminalCommandId.Focus)!.run();
 	assert.equal(focusCount, 1);
+	activeTerminal.dispatchEvent(new browserEnvironment.window.MouseEvent('click', { bubbles: true, altKey: true }));
+	await Promise.resolve();
+	assert.equal(splitCount, 1);
 	assert.equal(toolbar.textContent?.includes("Kill Terminal"), true);
 	assert.equal(toolbar.textContent?.includes("Relaunch Terminal"), false);
 	const killTerminal = [...toolbar.querySelectorAll("[data-action-id]")].find((item) => item.getAttribute("data-action-id") === "workbench.action.terminal.kill");
@@ -191,14 +208,26 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 	assert.equal(clearCount, 1);
 	titleActions.setActiveInstance(activeInstance, "list");
 	assert.equal(toolbar.querySelector(".ash-terminal-active-action"), null);
-	assert.equal(toolbar.textContent?.includes("Kill Terminal"), true);
+	assert.equal(toolbar.textContent?.includes("Kill Terminal"), false);
+	contextKeyService.setContext(TerminalContextKeys.tabsNarrow.key, true);
+	assert.ok(toolbar.querySelector('.ash-terminal-active-action'));
+	assert.ok(toolbar.querySelector(`[data-action-id='${TerminalCommandId.Split}']`));
+	await configuration.updateValue('terminal.integrated.tabs.showActions', 'never');
+	assert.equal(toolbar.querySelector(`[data-action-id='${TerminalCommandId.Kill}']`), null);
+	await configuration.updateValue('terminal.integrated.tabs.showActiveTerminal', 'never');
+	assert.equal(toolbar.querySelector('.ash-terminal-active-action'), null);
+	await configuration.updateValue('terminal.integrated.tabs.showActiveTerminal', 'always');
+	assert.ok(toolbar.querySelector('.ash-terminal-active-action'));
+	contextKeyService.setContext(TerminalContextKeys.tabsNarrow.key, false);
+	await configuration.updateValue('terminal.integrated.tabs.showActiveTerminal', 'singleTerminalOrNarrow');
+	await configuration.updateValue('terminal.integrated.tabs.showActions', 'singleTerminalOrNarrow');
 	titleActions.setActiveInstance({
 		id: "terminal-1",
 		title: "Backend shell",
 		profile: commandPromptProfile,
 		state: "exited",
 	} as ITerminalInstance, "list");
-	assert.equal(toolbar.textContent?.includes("Relaunch Terminal"), true);
+	assert.equal(toolbar.textContent?.includes("Relaunch Terminal"), false, 'Relaunch is available in the overflow menu');
 	titleActions.setActiveInstance(activeInstance, "title");
 	assert.doesNotThrow(() => titleActions.setActiveInstance(undefined, "title"));
 	assert.equal(toolbar.querySelector(".ash-terminal-active-action"), null);
@@ -217,8 +246,8 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 	assert.ok(commandPrompt);
 	assert.ok(powerShell);
 	assert.match(commandPrompt.label, /Default/);
-	assert.equal(commandPrompt.checked, true);
-	assert.equal(powerShell.checked, false);
+	assert.equal(commandPrompt.checked, undefined);
+	assert.equal(powerShell.checked, undefined);
 	await powerShell.run();
 	await Promise.resolve();
 	assert.deepEqual(createdProfiles, [undefined, "pwsh"]);
@@ -261,6 +290,7 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 	resources.add(commands.registerMany([{ id: TerminalCommandId.New, handler: () => { created++; } }]));
 	const commandService = resources.add(new CommandService(services, commands));
 	services.registerInstance(ICommandService, commandService);
+	services.registerInstance(IKeybindingService, { onDidUpdateKeybindings: Event.None, lookupKeybinding: () => undefined } as unknown as IKeybindingService);
 	services.registerInstance(IMenuService, new MenuService(commandService, context));
 	services.registerInstance(IContextMenuService, contextMenuService);
 	services.registerInstance(IWorkspaceContextService, resources.add(new WorkspaceContextService({ id: 'terminal-title-test', folders: [] })));

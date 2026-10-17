@@ -38,8 +38,8 @@ test('terminal Find searches PTY output, restores focus and isolates each instan
 	await expect(terminal.activeInstance.locator('.xterm-helper-textarea')).toBeFocused();
 	await terminal.runCommand(`node -e "console.log(['ash','after-find'].join('-'))"`);
 	await expect(terminal.activeInstance.locator('.xterm-rows')).toContainText('ash-after-find');
-	await page.getByRole('button', { name: 'Kill Terminal', exact: true }).click();
-	await terminal.show();
+	await terminal.tabs.nth(0).focus();
+	await terminal.tabs.nth(0).press('Delete');
 	await expect(terminal.instances).toHaveCount(1);
 	await expect(input).toHaveValue('ash-find-second');
 });
@@ -62,8 +62,8 @@ test('terminal panel preserves focus, accepts input and retains instances when r
 	await page.getByRole('button', { name: 'New Terminal', exact: true }).click();
 	await expect(page.locator('.ash-terminal-instance')).toHaveCount(2);
 	await expect(terminal.locator('.xterm-helper-textarea')).toBeFocused();
-	await page.getByRole('button', { name: 'Kill Terminal', exact: true }).click();
-	await workbench.terminal.show();
+	await workbench.terminal.tabs.nth(1).focus();
+	await workbench.terminal.tabs.nth(1).press('Delete');
 	await expect(page.locator('.ash-terminal-instance')).toHaveCount(1);
 	await expect(page.locator('.xterm')).toHaveCount(1);
 	await expect(terminal.locator('.xterm-rows')).toContainText('ash-terminal-ready');
@@ -95,17 +95,68 @@ test('terminal instances keep output separate and start in the workspace', { tag
 	await expect(terminal.activeInstance.locator('.xterm-rows')).not.toContainText('ash-first-terminal');
 });
 
-test('terminal relaunches an exited shell and accepts new commands', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
+test('terminal relaunches an exited shell and accepts new commands', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench }) => {
 	const terminal = workbench.terminal;
 	await terminal.show();
 	await expect(terminal.activeInstance).toHaveAttribute('data-state', 'running');
 	await terminal.runCommand('exit 17');
 	await expect(terminal.activeInstance).toHaveAttribute('data-state', 'exited');
 	await expect(terminal.activeInstance.locator('.xterm-rows')).toContainText('[process exited with code 17]');
-	await workbench.page.getByRole('button', { name: 'Relaunch Terminal', exact: true }).click();
+	await workbench.menus.select(application, () => workbench.page.locator('.ash-terminal-title-toolbar').getByRole('button', { name: 'More Actions', exact: true }).click(), ['Relaunch Terminal']);
 	await expect(terminal.instances).toHaveCount(1);
 	await expect(terminal.activeInstance).toHaveAttribute('data-state', 'running');
 	await expect(terminal.activeInstance.locator('.xterm-helper-textarea')).toBeFocused();
 	await terminal.runCommand(`node -e "console.log(['ash','relaunched-terminal'].join('-'))"`);
 	await expect(terminal.activeInstance.locator('.xterm-rows')).toContainText('ash-relaunched-terminal');
+});
+
+test('terminal command markers use VS Code geometry and follow real shell command results', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }, testInfo) => {
+	const terminal = workbench.terminal;
+	await terminal.show();
+	const instance = terminal.activeInstance;
+	await expect(instance.locator('.ash-terminal-command-status.pending')).toBeVisible();
+	const panelBackground = await workbench.page.locator('.ash-workbench-panel').evaluate(element => getComputedStyle(element).backgroundColor);
+	for (const selector of ['.ash-terminal-content', '.ash-terminal-instance', '.xterm-viewport', '.xterm-scrollable-element']) {
+		await expect(workbench.page.locator(selector).first()).toHaveCSS('background-color', panelBackground);
+	}
+	await expect(instance).toHaveCSS('padding-left', '20px');
+	const pending = instance.locator('.ash-terminal-command-status.pending');
+	await expect(pending).toHaveCSS('margin-left', '-17px');
+	await expect(pending.locator('svg')).toHaveCSS('width', '16px');
+	expect(await pending.locator('svg').evaluate(element => (element as SVGGraphicsElement).getBBox().width)).toBe(8);
+	await terminal.runCommand(`node -e "console.log(['ash','command-success'].join('-'))"`);
+	await expect(instance.locator('.ash-terminal-command-status.succeeded')).toBeVisible();
+	await terminal.runCommand('node -e "process.exit(7)"');
+	await expect(instance.getByRole('img', { name: 'Command failed with exit code 7', exact: true })).toBeVisible();
+	await expect(instance.locator('.ash-terminal-command-status.pending')).toBeVisible();
+	await workbench.page.getByRole('button', { name: 'New Terminal', exact: true }).click();
+	await expect(terminal.tabs).toHaveCount(2);
+	await terminal.tabs.nth(0).click();
+	await workbench.page.locator('.ash-workbench-panel').screenshot({ path: testInfo.outputPath('terminal-presentation.png') });
+});
+
+test('terminal title toolbar uses shell names, preserves renamed text and splits the current shell', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench }, testInfo) => {
+	const page = workbench.page;
+	await workbench.terminal.show();
+	const toolbar = page.locator('.ash-terminal-title-toolbar');
+	await expect(toolbar.locator('.ash-dropdown-with-primary-dropdown .ash-dropdown-menu-indicator')).toBeVisible();
+	const title = toolbar.locator('.ash-terminal-active-action button');
+	await expect(title).toBeVisible();
+	const shellName = (await title.textContent())!.trim();
+	expect(shellName).toBe(shellName.toLowerCase());
+	await workbench.menus.select(application, () => title.click(), ['Rename Terminal']);
+	const input = page.getByPlaceholder('Enter a terminal name; leave empty to restore the shell name', { exact: true });
+	await expect(input).toBeFocused();
+	await input.fill('Build Shell');
+	await input.press('Enter');
+	await expect(title).toHaveText('Build Shell');
+	await expect(workbench.terminal.activeInstance.locator('.xterm-helper-textarea')).toBeFocused();
+	await page.screenshot({ path: testInfo.outputPath('terminal-title-toolbar.png') });
+	await toolbar.getByRole('button', { name: 'New Terminal', exact: true }).click({ modifiers: ['Alt'] });
+	await expect(page.locator('.ash-terminal-group-pane:visible')).toHaveCount(2);
+	await expect(title).toBeVisible();
+	await expect(toolbar.getByRole('button', { name: 'Split Terminal', exact: true })).toBeVisible();
+	await toolbar.getByRole('button', { name: 'Kill Terminal', exact: true }).click();
+	await expect(workbench.terminal.instances).toHaveCount(1);
+	await expect(title).toHaveText('Build Shell');
 });
