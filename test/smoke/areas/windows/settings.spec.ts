@@ -29,6 +29,16 @@ test('Path rule settings use editable lists and persist removal of default rules
 		await expect(dsStore).toBeFocused();
 		await dsStore.press('Tab');
 		await expect(dsStore.getByRole('button').first()).toBeFocused();
+		const editRule = dsStore.getByRole('button', { name: chinese ? '编辑规则 **/.DS_Store' : 'Edit rule **/.DS_Store', exact: true });
+		const removeRule = dsStore.getByRole('button', { name: chinese ? '移除规则 **/.DS_Store' : 'Remove rule **/.DS_Store', exact: true });
+		await expect(editRule).toHaveText('');
+		await expect(editRule.locator('[data-ash-icon-id="edit"]')).toBeVisible();
+		await expect(removeRule).toHaveText('');
+		await expect(removeRule.locator('[data-ash-icon-id="close"]')).toBeVisible();
+		await page.keyboard.press('ArrowRight');
+		await expect(removeRule).toBeFocused();
+		await page.keyboard.press('ArrowLeft');
+		await expect(editRule).toBeFocused();
 		await page.keyboard.press('Enter');
 		await expect(control.locator('.ash-pattern-editor input').first()).toBeFocused();
 		await page.keyboard.press('Escape');

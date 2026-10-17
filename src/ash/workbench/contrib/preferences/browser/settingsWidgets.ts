@@ -3,6 +3,8 @@ import { localize, localize2 } from '../../../../nls.js';
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
 import { addDisposableListener, getActiveElement, h, stopEvent } from '../../../../base/browser/dom.js';
 import { isAncestorOfActiveElement } from '../../../../base/browser/focus.js';
+import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
+import { LabelActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { AnchorAlignment, type IContextViewProvider } from '../../../../base/browser/ui/contextview/contextview.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
@@ -711,15 +713,27 @@ class ExcludeSettingWidget extends AbstractSettingWidget<IStringMapSetting, Reco
 			const actions = h(row.ownerDocument, 'span');
 			actions.className = 'ash-pattern-row-actions';
 			row.append(actions);
-			this.rowDisposables.add(new Button(actions, {
-				label: localize({ bundle: 'ash.settings', key: 'patterns.edit' }, 'Edit'),
-				ariaLabel: localize({ bundle: 'ash.settings', key: 'patterns.editLabel' }, 'Edit rule {0}', pattern),
-				size: 'small', onClick: () => this.editRule(pattern),
-			}));
-			this.rowDisposables.add(new Button(actions, {
-				label: this.descriptor.removeLabel,
-				ariaLabel: localize({ bundle: 'ash.settings', key: 'patterns.removeLabel' }, 'Remove rule {0}', pattern),
-				size: 'small', onClick: () => { void this.saveRule(pattern); },
+			this.rowDisposables.add(new ActionBar(actions, {
+				ariaLabel: label,
+				actionViewItemProvider: action => new LabelActionViewItem(action, { label: '', ariaLabel: action.label }),
+				actions: [
+					{
+						id: 'workbench.action.editListItem',
+						label: localize({ bundle: 'ash.settings', key: 'patterns.editLabel' }, 'Edit rule {0}', pattern),
+						tooltip: localize({ bundle: 'ash.settings', key: 'patterns.edit' }, 'Edit'),
+						icon: Lxicon.edit,
+						enabled: true,
+						run: () => this.editRule(pattern),
+					},
+					{
+						id: 'workbench.action.removeListItem',
+						label: localize({ bundle: 'ash.settings', key: 'patterns.removeLabel' }, 'Remove rule {0}', pattern),
+						tooltip: this.descriptor.removeLabel,
+						icon: Lxicon.close,
+						enabled: true,
+						run: () => this.saveRule(pattern),
+					},
+				],
 			}));
 			this.rowDisposables.add(addDisposableListener(row, 'keydown', event => {
 				if (event.target !== row || this.model.state.isPending) return;
