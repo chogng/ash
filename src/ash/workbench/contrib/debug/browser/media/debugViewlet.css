@@ -1,0 +1,38 @@
+.ash-debug-launch-start {
+	display: flex;
+	flex: 1 1 auto;
+	min-width: 0;
+	max-width: 100%;
+	color: var(--ash-input-foreground);
+	background: var(--ash-input-background);
+	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+	border-radius: var(--ash-cornerRadius-small);
+}
+
+.ash-debug-launch-start > .ash-button:first-child {
+	flex: 0 0 var(--ash-toolbar-actionSize);
+}
+
+.ash-debug-launch-start > .ash-button {
+	min-width: 0;
+	min-height: var(--ash-toolbar-actionSize);
+	padding: 0 var(--ash-spacing-size40);
+	border: 0;
+	color: inherit;
+}
+
+.ash-debug-launch-start > .ash-debug-configuration {
+	flex: 1;
+	justify-content: space-between;
+}
+
+.ash-debug-configuration-label {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ash-debug-configuration > .ash-icon {
+	flex: 0 0 auto;
+}

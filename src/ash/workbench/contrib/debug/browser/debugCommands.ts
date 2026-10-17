@@ -1,15 +1,105 @@
-import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { FileNotFoundError, FileSystemProviderErrorCode, toFileSystemProviderErrorCode, IFileService } from '../../../../platform/files/common/files.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IWorkspaceOpenService } from '../../../services/workspaces/browser/workspaceOpenService.js';
-import { IDebugService } from '../common/debug.js';
+import { DEBUG_VIEW_ID, IDebugService, START_DEBUG_COMMAND_ID, SELECT_AND_START_ID, DebugConfigurationProviderTriggerKind, type DebugConfiguration, type IDebugConfiguration, type IDebugCompound } from '../common/debug.js';
 import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
-import { CancellationError } from '../../../../base/common/errors.js';
+import { CancellationError, isCancellationError } from '../../../../base/common/errors.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { URI } from '../../../../base/common/uri.js';
-import { localize2 } from '../../../../nls.js';
+import { localize, localize2 } from '../../../../nls.js';
+import { IViewsService } from '../../../services/views/common/viewsService.js';
+import { AppServerAvailableContext } from '../../../common/contextkeys.js';
+import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
+import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
+
+registerAction2(class StartDebugAction extends Action2 {
+	constructor() {
+		super({
+			id: START_DEBUG_COMMAND_ID, title: localize2('debug.start', 'Start Debugging'), f1: true,
+			precondition: AppServerAvailableContext.isEqualTo(true), keybinding: { primary: Keybinding.single(logicalKey('F5')) },
+			menu: { id: MenuId.MenubarRunMenu, group: '1_debug', order: 1 }
+		});
+	}
+
+	public override async run(accessor: ServicesAccessor, startNew = false): Promise<void> {
+		if (typeof startNew !== 'boolean') throw new CancellationError();
+		const debug = accessor.get(IDebugService);
+		await accessor.get(IViewsService).focusView(DEBUG_VIEW_ID);
+		if (!startNew && debug.session?.state === 'stopped') {
+			await debug.session.continue();
+			return;
+		}
+		await debug.refresh();
+		const selected = debug.getConfigurationManager().selectedConfiguration;
+		if (!selected) throw new Error(localize('debug.noConfiguration', 'No debug configuration found in .vscode/launch.json'));
+		if ('configurations' in selected) await debug.startCompound(selected);
+		else await debug.start(selected);
+	}
+});
+
+type DebugConfigurationPick = IQuickPickItem & (
+	{ readonly kind: 'configured'; readonly configuration: IDebugConfiguration; }
+	| { readonly kind: 'compound'; readonly compound: IDebugCompound; }
+	| { readonly kind: 'dynamic'; readonly folder: URI; readonly configuration: DebugConfiguration; }
+);
+
+registerAction2(class SelectAndStartDebugAction extends Action2 {
+	constructor() { super({ id: SELECT_AND_START_ID, title: localize2({ bundle: 'ash', key: 'debug.selectAndStart' }, 'Select and Start Debugging'), f1: true, precondition: AppServerAvailableContext.isEqualTo(true) }); }
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		const debug = accessor.get(IDebugService);
+		const workspace = accessor.get(IWorkspaceContextService);
+		const quickInput = accessor.get(IQuickInputService);
+		let selected: DebugConfigurationPick | undefined;
+		try {
+			using resources = new DisposableStore();
+			const picker = resources.add(quickInput.createQuickPick<DebugConfigurationPick>());
+			const controller = new AbortController();
+			resources.add(toDisposable(() => controller.abort()));
+			picker.ariaLabel = picker.placeholder = localize({ bundle: 'ash', key: 'debug.selectConfiguration' }, 'Select a debug configuration');
+			picker.busy = true;
+			selected = await new Promise<DebugConfigurationPick | undefined>((resolve, reject) => {
+				// Hiding the picker revokes discovery, including pending extension callbacks.
+				const cancel = (): void => { controller.abort(); resolve(undefined); };
+				resources.add(picker.onDidAccept(() => {
+					const item = picker.selectedItems[0];
+					if (!item) return;
+					resolve(item); controller.abort(); picker.hide();
+				}));
+				resources.add(picker.onDidHide(cancel));
+				resources.add(picker.onDidBlur(() => { cancel(); picker.hide(); }));
+				resources.add(workspace.onDidChangeWorkspace(() => { cancel(); picker.hide(); }));
+				picker.show();
+				void (async () => {
+					const configured = await debug.refresh();
+					throwIfCancelled(controller.signal);
+					const dynamic = await Promise.all(workspace.getWorkspace().folders.map(async folder => {
+						const configurations = await debug.provideDebugConfigurations(folder.uri, controller.signal, DebugConfigurationProviderTriggerKind.Dynamic);
+						return configurations.map(configuration => ({ kind: 'dynamic' as const, label: configuration.name, description: folder.name, detail: configuration.type, folder: folder.uri, configuration }));
+					}));
+					throwIfCancelled(controller.signal);
+					picker.items = [
+						...configured.map(configuration => ({ kind: 'configured' as const, label: configuration.name, description: configuration.workspaceFolderName, detail: configuration.type, configuration })),
+						...debug.compounds.map(compound => ({ kind: 'compound' as const, label: compound.name, description: compound.workspaceFolderName, compound })),
+						...dynamic.flat(),
+					];
+					picker.busy = false;
+				})().catch(error => { controller.abort(); reject(error); picker.hide(); });
+			});
+		} catch (error) { if (isCancellationError(error)) return; throw error; }
+		if (selected?.kind === 'configured') {
+			await debug.getConfigurationManager().selectConfiguration(selected.configuration);
+			await debug.start(selected.configuration);
+		}
+		else if (selected?.kind === 'compound') {
+			await debug.getConfigurationManager().selectConfiguration(selected.compound);
+			await debug.startCompound(selected.compound);
+		}
+		else if (selected?.kind === 'dynamic') await debug.startDynamicDebugging(selected.folder, selected.configuration);
+	}
+});
 
 export const DEBUG_CONFIGURE_COMMAND_ID = 'workbench.action.debug.configure';
 
@@ -23,8 +113,10 @@ registerAction2(class ConfigureDebugAction extends Action2 {
 		const editor = accessor.get(IEditorService);
 		if (selectedFolder !== undefined && !URI.isUri(selectedFolder) || typeof preserveFocus !== 'boolean') throw new CancellationError();
 		const activeResource = editor.activeEditor?.resource;
+		const selected = accessor.get(IDebugService).getConfigurationManager().selectedConfiguration;
 		const folder = selectedFolder === undefined
-			? (activeResource ? workspace.getWorkspaceFolder(activeResource) : null) ?? workspace.getWorkspace().folders[0]
+			? workspace.getWorkspace().folders.find(folder => folder.id === selected?.dirId)
+			?? (activeResource ? workspace.getWorkspaceFolder(activeResource) : null) ?? workspace.getWorkspace().folders[0]
 			: workspace.getWorkspace().folders.find(folder => folder.uri.toString() === selectedFolder.toString());
 		if (selectedFolder && !folder) throw new CancellationError();
 		if (!folder) {

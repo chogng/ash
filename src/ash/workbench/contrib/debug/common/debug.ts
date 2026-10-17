@@ -339,8 +339,19 @@ export interface IDebugSession extends IDisposable {
 	disconnect(): Promise<void>;
 }
 
+/** Launch catalog and selection use Ash domain configurations, including compounds. */
+export interface IConfigurationManager {
+	readonly configurations: readonly IDebugConfiguration[];
+	readonly compounds: readonly IDebugCompound[];
+	readonly selectedConfiguration: IDebugConfiguration | IDebugCompound | undefined;
+	readonly onDidSelectConfiguration: Event<void>;
+	selectConfiguration(configuration: IDebugConfiguration | IDebugCompound | undefined): Promise<void>;
+	getAllConfigurations(): readonly (IDebugConfiguration | IDebugCompound)[];
+}
+
 /** Code Workbench owner for launch configurations, breakpoints, and DAP session semantics. */
 export interface IDebugService extends IDisposable {
+	getConfigurationManager(): IConfigurationManager;
 	/** Retained console output and evaluation, owned for the Debug service lifetime. */
 	readonly replModel: IReplModel;
 	readonly configurations: readonly IDebugConfiguration[];

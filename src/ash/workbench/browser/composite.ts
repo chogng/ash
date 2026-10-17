@@ -5,6 +5,7 @@ import type { IComposite, ICompositeControl } from '../common/composite.js';
 import { Component } from '../common/component.js';
 import type { IAction } from '../../base/common/actions.js';
 import type { IDimension } from '../../base/browser/dom.js';
+import type { ActionViewItem, ActionViewItemOptions } from '../../base/browser/ui/actionbar/actionViewItems.js';
 
 /** Owns focus for the complete hosted content, across all of its child controls. */
 export abstract class Composite<MementoType extends object = object> extends Component<MementoType> implements IComposite {
@@ -57,6 +58,7 @@ export abstract class Composite<MementoType extends object = object> extends Com
 	}
 
 	public getActions(): readonly IAction[] { return []; }
+	public getActionViewItem(_action: IAction, _options: ActionViewItemOptions): ActionViewItem | undefined { return undefined; }
 	public getSecondaryActions(): readonly IAction[] { return []; }
 	public getContextMenuActions(): readonly IAction[] { return []; }
 

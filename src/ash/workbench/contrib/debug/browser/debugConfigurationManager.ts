@@ -1,5 +1,46 @@
-import { normalizeDebugAdapterDescriptor, type IDebugCompound, type IDebugConfiguration, type IResolvedDebugConfiguration } from '../common/debug.js';
+import { normalizeDebugAdapterDescriptor, type IConfigurationManager, type IDebugCompound, type IDebugConfiguration, type IResolvedDebugConfiguration } from '../common/debug.js';
 import { parseJsonc } from "../../../../base/common/jsonc.js";
+import { Emitter } from '../../../../base/common/event.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
+
+/** Retains one catalog and selection for the Debug service lifetime, independently of its views. */
+export class ConfigurationManager extends Disposable implements IConfigurationManager {
+	private currentConfigurations: readonly IDebugConfiguration[] = [];
+	private currentCompounds: readonly IDebugCompound[] = [];
+	private selected: IDebugConfiguration | IDebugCompound | undefined;
+	private readonly selectionChanged = this._register(new Emitter<void>());
+	private readonly catalogChanged = this._register(new Emitter<readonly IDebugConfiguration[]>());
+	readonly onDidSelectConfiguration = this.selectionChanged.event;
+	readonly onDidChangeConfigurations = this.catalogChanged.event;
+
+	get configurations(): readonly IDebugConfiguration[] { return this.currentConfigurations; }
+	get compounds(): readonly IDebugCompound[] { return this.currentCompounds; }
+	get selectedConfiguration(): IDebugConfiguration | IDebugCompound | undefined { return this.selected; }
+
+	getAllConfigurations(): readonly (IDebugConfiguration | IDebugCompound)[] {
+		return [...this.currentConfigurations, ...this.currentCompounds];
+	}
+
+	async selectConfiguration(configuration: IDebugConfiguration | IDebugCompound | undefined): Promise<void> {
+		const selected = configuration && this.getAllConfigurations().find(candidate => candidate.id === configuration.id);
+		if (this.selected === selected) return;
+		this.selected = selected;
+		this.selectionChanged.fire();
+	}
+
+	/** Discovery publishes a complete normalized snapshot; consumers never maintain another catalog. */
+	setConfigurations(configurations: readonly IDebugConfiguration[], compounds: readonly IDebugCompound[]): void {
+		if (JSON.stringify(configurations) === JSON.stringify(this.currentConfigurations) && JSON.stringify(compounds) === JSON.stringify(this.currentCompounds)) return;
+		const previous = this.selected;
+		this.currentConfigurations = configurations;
+		this.currentCompounds = compounds;
+		const choices = this.getAllConfigurations();
+		this.selected = choices.find(candidate => candidate.id === previous?.id) ?? choices[0];
+		// Publish the reconciled selection before the catalog event can rerender a consumer.
+		if (previous !== this.selected) this.selectionChanged.fire();
+		this.catalogChanged.fire(configurations);
+	}
+}
 
 const MAX_CONFIGURATIONS = 64;
 

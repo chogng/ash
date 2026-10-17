@@ -14,6 +14,8 @@ import { IEditorService } from "../../../../services/editor/common/editorService
 import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
 import { IDebugService, type IDebugSourceContent, type IDebugVariable } from "../../common/debug.js";
 import { DebugViewTestServices, MockDebugService, MockDebugSession } from "../common/mockDebug.js";
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { START_DEBUG_COMMAND_ID, type IDebugConfiguration } from '../../common/debug.js';
 
 test("Debug view switches sessions and renders threads, recursive variables, watches, and source references", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
@@ -93,8 +95,6 @@ test("Debug controls follow session state, dispatch actions, and retain collapse
 		const action = (label: string) => view.element.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
 		const toolbar = view.element.querySelector<HTMLElement>(".ash-toolbar")!;
 		assert.equal(toolbar.hidden, true);
-		action("Start Debugging").click();
-		assert.deepEqual(debug.operations, ["start"]);
 
 		const session = debug.sessions[0] as MockDebugSession;
 		debug.activate(session);
@@ -112,13 +112,12 @@ test("Debug controls follow session state, dispatch actions, and retain collapse
 		assert.deepEqual(session.operations, ["stepOver", "pause"]);
 
 		action("Stop").click();
-		assert.deepEqual(debug.operations, ["start", "stop"]);
+		assert.deepEqual(debug.operations, ["stop"]);
 		debug.activate(undefined);
 		assert.equal(toolbar.hidden, true);
 		debug.configurations = [];
 		await debug.refresh();
-		assert.equal(action("Start Debugging").disabled, true);
-		assert.equal(view.element.querySelector<HTMLSelectElement>("select[aria-label='Debug configuration']")!.disabled, true);
+		assert.equal(view.element.querySelector('.ash-debug-configuration'), null);
 	} finally {
 		for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
 		browser.window.close();
@@ -144,7 +143,6 @@ test("Debug view initializes Chinese labels and retains its draft and collapsed 
 		await debug.refresh();
 		assert.deepEqual([...view.element.querySelectorAll(".ash-debug-section .ash-pane-view-header-title")].map(title => title.textContent), ["变量", "监视", "调用堆栈", "断点"]);
 		assert.deepEqual([input.value, watch.getAttribute("aria-expanded"), input.getAttribute("aria-label")], ["myValue", "false", "添加监视表达式"]);
-		assert.equal(view.element.querySelector("button[aria-label='启动调试']")?.textContent, "启动调试");
 		debug.activate(debug.sessions[0]);
 		await waitFor(() => view.element.querySelectorAll(".ash-debug-variable").length === 2);
 		view.element.querySelectorAll<HTMLButtonElement>(".ash-debug-variable")[1]!.dispatchEvent(new browser.window.KeyboardEvent("keydown", { key: "F2", bubbles: true }));
@@ -157,7 +155,94 @@ test("Debug view initializes Chinese labels and retains its draft and collapsed 
 	}
 });
 
+test('Debug configuration selection survives refresh and opens the selected workspace folder launch file', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>');
+	const globals = installDomGlobals(browser);
+	const opened: IResourceEditorInput[] = [];
+	const editor: IEditorService = {
+		...emptyEditorServiceState,
+		activeEditor: { resource: URI.file('/workspace/main.ts') },
+		openEditor: async input => { opened.push(input); },
+		focusActiveEditor() { },
+	};
+	try {
+		using debug = new MockDebugService();
+		const original = debug.configurations[0]!;
+		debug.configurations = [
+			{ ...original, id: 'first', name: 'Run', dirId: 'first', workspaceFolderName: 'First' },
+			{ ...original, id: 'second', name: 'Run', dirId: 'second', workspaceFolderName: 'Second' },
+		];
+		using support = new DebugViewTestServices();
+		support.workspace.updateWorkspace({
+			id: 'multi', folders: [
+				{ id: 'first', uri: URI.file('/workspace'), name: 'First', index: 0 },
+				{ id: 'second', uri: URI.file('/second'), name: 'Second', index: 1 },
+			]
+		});
+		using services = new InstantiationService(support.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, contextMenus])));
+		const { part, pane: view } = support.createContainer(services, browser.window.document.body);
+		// Wait for initial discovery before opening the menu; discovery retires stale choices.
+		await debug.refresh();
+		const dropdown = part.domNode.querySelector<HTMLButtonElement>('.ash-debug-configuration')!;
+		assert.equal(view.element.querySelector('.ash-debug-launch select'), null);
+		dropdown.click();
+		await waitFor(() => browser.window.document.querySelectorAll('[role="menuitemradio"]').length === 2);
+		const choices = browser.window.document.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]');
+		assert.deepEqual([...choices].map(choice => [choice.getAttribute('aria-label'), choice.getAttribute('aria-checked')]), [['Run — First', 'true'], ['Run — Second', 'false']]);
+		choices[1]!.click();
+		await debug.refresh();
+		assert.equal(dropdown.textContent, 'Run — Second');
+		const starts: string[] = [];
+		debug.start = async (configuration?: IDebugConfiguration) => { starts.push(configuration!.id); return debug.sessions[0]!; };
+		await services.get(ICommandService).executeCommand(START_DEBUG_COMMAND_ID);
+		assert.deepEqual(starts, ['second']);
+		part.domNode.querySelector<HTMLButtonElement>('button[aria-label="Open launch.json"]')!.click();
+		await waitFor(() => opened.length === 1);
+		assert.equal(opened[0]!.resource.toString(), URI.file('/second/.vscode/launch.json').toString());
+		part.dispose();
+		using replacementSupport = new DebugViewTestServices();
+		replacementSupport.workspace.updateWorkspace(support.workspace.getWorkspace());
+		using replacementServices = new InstantiationService(replacementSupport.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, contextMenus])));
+		const replacement = replacementSupport.createContainer(replacementServices, browser.window.document.body);
+		assert.equal(replacement.part.domNode.querySelector('.ash-debug-configuration')!.textContent, 'Run — Second');
+		assert.equal(debug.getConfigurationManager().selectedConfiguration?.id, 'second');
+		debug.configurations = [debug.configurations[0]!];
+		await debug.refresh();
+		assert.equal(replacement.part.domNode.querySelector('.ash-debug-configuration')!.textContent, 'Run — First');
+	} finally {
+		for (const name of globals) Reflect.deleteProperty(globalThis, name);
+		browser.window.close();
+	}
+});
+
 const contextMenus: IContextMenuService = { contextMenuStyle: 'custom' as const, onDidShowContextMenu: CommonEvent.None, onDidHideContextMenu: CommonEvent.None, showContextMenu() { }, hideContextMenu() { } };
+
+test('Debug title disposal cancels pending configuration creation', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>');
+	const globals = installDomGlobals(browser);
+	const opened: IResourceEditorInput[] = [];
+	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async input => { opened.push(input); }, focusActiveEditor() { } };
+	try {
+		using debug = new MockDebugService();
+		using support = new DebugViewTestServices();
+		using services = new InstantiationService(support.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, contextMenus])));
+		const { part } = support.createContainer(services, browser.window.document.body);
+		let signal: AbortSignal | undefined;
+		const templates = new DeferredPromise<readonly import('../../common/debug.js').DebugConfiguration[]>();
+		debug.provideDebugConfigurations = async (_folder, incoming) => { signal = incoming; return templates.p; };
+		part.domNode.querySelector<HTMLButtonElement>('button[aria-label="Open launch.json"]')!.click();
+		await waitFor(() => signal !== undefined);
+		part.dispose();
+		assert.equal(signal!.aborted, true);
+		await templates.complete([]);
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.deepEqual([support.writes, opened], [0, []]);
+	} finally {
+		for (const name of globals) Reflect.deleteProperty(globalThis, name);
+		browser.window.close();
+	}
+});
+
 
 test("Debug variable editing uses its parent reference, refreshes watches, cancels, and restores focus", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");

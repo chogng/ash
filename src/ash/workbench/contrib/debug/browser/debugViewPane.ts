@@ -62,7 +62,7 @@ interface VariableEdit {
 	pending: boolean;
 }
 
-type DebugOperation = "start" | "continue" | "pause" | "restart" | "stepOver" | "stepInto" | "stepOut" | "stop" | "stopAll";
+type DebugOperation = "continue" | "pause" | "restart" | "stepOver" | "stepInto" | "stepOut" | "stop" | "stopAll";
 
 type BreakpointEditorState =
 	| { readonly kind: "source"; readonly breakpoint: IDebugBreakpoint; }
@@ -78,12 +78,10 @@ export class DebugViewPane extends ViewPane {
 	private readonly welcomeButton: Button;
 	private readonly welcomeDescription: HTMLElement;
 	private readonly controls: HTMLElement;
-	private readonly configureButton: Button;
 	private readonly configurationRequest = this._register(new MutableDisposable<DisposableStore>());
 	private readonly watchToolbar: WorkbenchToolBar;
 	private mountedSections: readonly DebugSection[] = [];
 	private hasDebugged = false;
-	private readonly startButton: Button;
 	private readonly sessionToolbar: WorkbenchToolBar;
 	private readonly sections: readonly DebugSection[];
 	private readonly rowControls = this._register(new DisposableStore());
@@ -91,7 +89,6 @@ export class DebugViewPane extends ViewPane {
 	private readonly variableEditControls = this._register(new MutableDisposable<DisposableStore>());
 	private variableEdit: VariableEdit | undefined;
 	private readonly addWatchButton: Button;
-	private readonly configurationsElement: HTMLSelectElement;
 	private readonly sessionsElement: HTMLSelectElement;
 	private readonly threadsElement: HTMLSelectElement;
 	private readonly statusElement: HTMLDivElement;
@@ -138,30 +135,9 @@ export class DebugViewPane extends ViewPane {
 		const controls = h(document, "div");
 		this.controls = controls;
 		controls.className = "ash-debug-controls";
-		const launch = h(document, "div");
-		launch.className = "ash-debug-launch";
-		this.startButton = this._register(new Button(launch, {
-			...defaultButtonStyles,
-			label: localize("debug.start", "Start Debugging"),
-			icon: Lxicon.start,
-			iconOnly: true,
-			title: localize("debug.start", "Start Debugging"),
-			onClick: () => this.control("start"),
-		}));
-		this.configurationsElement = select(document, localize("debug.configuration", "Debug configuration"));
-		launch.append(this.configurationsElement);
-		this.configureButton = this._register(new Button(launch, {
-			...defaultButtonStyles,
-			label: localize("debug.configure", "Open launch.json"),
-			icon: Lxicon.settings,
-			iconOnly: true,
-			size: "small",
-			title: localize("debug.configure", "Open launch.json"),
-			onClick: () => { void this.configure().catch(error => { if (!isCancellationError(error)) { this.error = message(error); this.render(); } }); },
-		}));
 		this.sessionsElement = select(document, localize("debug.session", "Active debug session"));
 		this.sessionToolbar = this._register(new WorkbenchToolBar(controls, contextMenus, { ariaLabel: localize("debug.controls", "Debug controls") }));
-		controls.prepend(launch, this.sessionsElement);
+		controls.prepend(this.sessionsElement);
 		this.statusElement = h(document, "div");
 		this.statusElement.className = "ash-debug-status";
 		this.statusElement.setAttribute("role", "status");
@@ -293,9 +269,7 @@ export class DebugViewPane extends ViewPane {
 	}
 
 	private async configure(): Promise<void> {
-		const activeResource = this.editor.activeEditor?.resource;
-		const folder = (activeResource ? this.workspace.getWorkspaceFolder(activeResource) : null) ?? this.workspace.getWorkspace().folders[0];
-		if (!folder) {
+		if (this.workspace.getWorkspace().folders.length === 0) {
 			await this.workspaceOpen.openFolder();
 			return;
 		}
@@ -305,7 +279,7 @@ export class DebugViewPane extends ViewPane {
 		lifetime.add(this.workspace.onDidChangeWorkspace(() => controller.abort()));
 		this.configurationRequest.value = lifetime;
 		try {
-			await this.commands.executeCommand(DEBUG_CONFIGURE_COMMAND_ID, folder.uri, false, controller.signal);
+			await this.commands.executeCommand(DEBUG_CONFIGURE_COMMAND_ID, undefined, false, controller.signal);
 		} finally {
 			if (this.configurationRequest.value === lifetime) this.configurationRequest.clear();
 		}
@@ -316,7 +290,6 @@ export class DebugViewPane extends ViewPane {
 		const session = this.debug.session;
 		let action: Promise<unknown>;
 		switch (operation) {
-			case "start": action = this.startSelected(); break;
 			case "restart": action = this.debug.restart(); break;
 			case "stop": action = this.debug.stop(); break;
 			case "stopAll": action = this.debug.stopAll(); break;
@@ -331,14 +304,6 @@ export class DebugViewPane extends ViewPane {
 
 	private debugAction(operation: DebugOperation, label: string, icon: IAction["icon"], enabled = true): IAction {
 		return { id: `ash.debug.${operation}`, label, tooltip: label, icon, enabled, run: () => this.control(operation) };
-	}
-
-	private async startSelected(): Promise<void> {
-		const configuration = this.debug.configurations.find(candidate => candidate.id === this.configurationsElement.value);
-		const compound = this.debug.compounds.find(candidate => candidate.id === this.configurationsElement.value);
-		if (!configuration && !compound) throw new Error(localize("debug.noConfiguration", "No debug configuration found in .vscode/launch.json"));
-		if (configuration) await this.debug.start(configuration);
-		else await this.debug.startCompound(compound!);
 	}
 
 	private acceptSessionChange(session: IDebugSession | undefined): void {
@@ -753,28 +718,17 @@ export class DebugViewPane extends ViewPane {
 
 	private render(): void {
 		if (this.exceptionControls.isDisposed) return;
-		const selectedConfiguration = this.configurationsElement.value;
-		this.configurationsElement.setAttribute("aria-label", localize("debug.configuration", "Debug configuration"));
 		this.sessionsElement.setAttribute("aria-label", localize("debug.session", "Active debug session"));
 		this.threadsElement.setAttribute("aria-label", localize("debug.thread", "Debug thread"));
 		this.watchInput.setAttribute("aria-label", localize("debug.addWatch", "Add watch expression"));
 		this.watchInput.placeholder = localize("debug.watchPlaceholder", "Expression to watch");
 		this.addWatchButton.label = localize("debug.addWatch", "Add watch expression");
 		this.addWatchButton.setTitle(this.addWatchButton.label);
-		this.startButton.label = localize("debug.start", "Start Debugging");
-		this.startButton.setTitle(this.startButton.label);
 		for (const section of this.sections) {
 			section.setTitle(section.label());
 			section.list.setAttribute("aria-label", section.label());
 		}
-		this.configurationsElement.replaceChildren(...this.debug.configurations.map(configuration => option(this.element.ownerDocument, configuration.id, configuration.workspaceFolderName ? `${configuration.name} — ${configuration.workspaceFolderName}` : configuration.name)), ...this.debug.compounds.map(compound => option(this.element.ownerDocument, compound.id, localize("debug.compound", "{0} (compound)", `${compound.name}${compound.workspaceFolderName ? ` — ${compound.workspaceFolderName}` : ""}`))));
-		if ([...this.debug.configurations, ...this.debug.compounds].some(candidate => candidate.id === selectedConfiguration)) this.configurationsElement.value = selectedConfiguration;
 		const hasConfigurations = this.debug.configurations.length + this.debug.compounds.length > 0;
-		if (!hasConfigurations) {
-			this.configurationsElement.append(option(this.element.ownerDocument, "", localize("debug.noConfigurations", "No debug configurations")));
-		}
-		this.configurationsElement.disabled = !hasConfigurations;
-		this.startButton.enabled = hasConfigurations && this.debug.session?.state !== "starting";
 		const session = this.debug.session;
 		const active = session !== undefined && session.state !== "terminated" && session.state !== "error";
 		const stopped = session?.state === "stopped";
@@ -782,7 +736,6 @@ export class DebugViewPane extends ViewPane {
 		const hasFolder = this.workspace.getWorkspace().folders.length > 0;
 		this.controls.hidden = !showInspection;
 		this.controls.classList.toggle("empty", !showInspection);
-		this.configureButton.enabled = hasFolder;
 		this.welcomeButton.label = hasFolder ? localize("debug.createLaunch", "Create a launch.json file") : localize("debug.openFolder", "Open Folder");
 		this.welcomeButton.enabled = hasFolder || this.workspaceOpen.canOpenFolder;
 		this.welcomeDescription.textContent = hasFolder

@@ -1,6 +1,100 @@
 import { expect, test } from '@playwright/test';
 import { writeFile } from 'node:fs/promises';
 
+test('debug launch title navigates its compound controls and dismisses its popup when hidden', async ({ page }) => {
+	await page.goto('/debug.html?launch-controls');
+	const start = page.getByRole('button', { name: 'Start Debugging', exact: true });
+	const dropdown = page.locator('.ash-debug-configuration');
+	const gear = page.getByRole('button', { name: 'Open launch.json', exact: true });
+	await start.focus();
+	await start.press('ArrowRight');
+	await expect(dropdown).toBeFocused();
+	await dropdown.press('ArrowLeft');
+	await expect(start).toBeFocused();
+	await start.press('ArrowRight');
+	await dropdown.press('ArrowRight');
+	await expect(gear).toBeFocused();
+	await page.evaluate(() => window.ashDebugIntegration.starting());
+	await expect(start).toBeDisabled();
+	await gear.press('ArrowLeft');
+	await expect(dropdown).toBeFocused();
+	await dropdown.press('ArrowDown');
+	await expect(page.getByRole('searchbox')).toBeFocused();
+	await page.evaluate(() => window.ashDebugIntegration.reopenContainer());
+	await expect(dropdown).toHaveAttribute('aria-expanded', 'false');
+	await expect(page.locator('.ash-action-widget')).toHaveCount(0);
+});
+
+test('debug launch dropdown searches configurations, retains selection, starts compounds and configures the selected folder', async ({ page }) => {
+	await page.goto('/debug.html?launch-controls');
+	const dropdown = page.locator('.ash-debug-configuration');
+	await expect(page.locator('.ash-debug .ash-debug-launch-start')).toHaveCount(0);
+	await expect(page.locator('.ash-workbench-part-title .ash-debug-launch-start')).toHaveCount(1);
+	await expect(dropdown).toHaveText('Run — First');
+	await expect(page.getByRole('button', { name: 'Open launch.json', exact: true }).locator('svg')).toHaveAttribute('data-ash-icon-id', 'debug-configure');
+	await dropdown.focus();
+	await dropdown.press('ArrowDown');
+	const search = page.getByRole('searchbox', { name: 'Debug configuration', exact: true });
+	await expect(search).toBeFocused();
+	await expect(page.getByRole('menuitemradio', { name: 'Run — First', exact: true })).toHaveAttribute('aria-checked', 'true');
+	await search.fill('Run — Second');
+	await expect(page.getByRole('menuitemradio')).toHaveCount(1);
+	await search.press('ArrowDown');
+	await page.keyboard.press('Enter');
+	await expect(dropdown).toHaveText('Run — Second');
+	await expect(dropdown).toBeFocused();
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.selectedConfiguration())).toBe('second');
+	await page.evaluate(() => window.ashDebugIntegration.reopenContainer());
+	await expect(dropdown).toHaveText('Run — Second');
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.launches())).toEqual([]);
+	await page.evaluate(() => window.ashDebugIntegration.refreshConfigurations());
+	await expect(dropdown).toHaveText('Run — Second');
+	await page.getByRole('button', { name: 'Start Debugging', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.launches())).toEqual(['second']);
+	await page.evaluate(() => window.ashDebugIntegration.stop());
+	await page.evaluate(() => window.ashDebugIntegration.startCommand());
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.launches())).toEqual(['second', 'second']);
+	await page.getByRole('button', { name: 'Open launch.json', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.openedSources().at(-1))).toMatchObject({ resource: 'file:///second/.vscode/launch.json' });
+	await dropdown.click();
+	await page.getByRole('menuitemradio', { name: 'All — Second (compound)', exact: true }).click();
+	await page.getByRole('button', { name: 'Start Debugging', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.launches())).toEqual(['second', 'second', 'all']);
+	await dropdown.click();
+	await search.press('Escape');
+	await expect(dropdown).toBeFocused();
+	await expect(dropdown).toHaveAttribute('aria-expanded', 'false');
+	await dropdown.click();
+	await page.evaluate(() => window.ashDebugIntegration.dispose());
+	await expect(page.locator('.ash-action-widget')).toHaveCount(0);
+});
+
+test('debug launch dropdown uses Chinese labels and stays inside a narrow sidebar across themes', async ({ page }, testInfo) => {
+	await page.goto('/debug.html?launch-controls&locale=zh-cn');
+	const dropdown = page.locator('.ash-debug-configuration');
+	await expect(dropdown).toHaveAttribute('aria-label', '调试配置：Run — First');
+	await page.evaluate(() => window.ashDebugIntegration.resize(180));
+	for (const theme of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
+		await page.evaluate(theme => window.ashDebugIntegration.theme(theme), theme);
+		const geometry = await page.locator('.ash-workbench-part-title .ash-pane-composite-title-menu-actions').evaluate(element => {
+			const controls = element.getBoundingClientRect();
+			const dropdown = element.querySelector('.ash-debug-configuration')!.getBoundingClientRect();
+			const gear = element.querySelector('[data-action-id="workbench.action.debug.configure"] button')!.getBoundingClientRect();
+			const label = element.querySelector('.ash-debug-configuration-label')!;
+			return { fits: gear.right <= controls.right && dropdown.right <= gear.left, overflow: element.scrollWidth > element.clientWidth, ellipsis: getComputedStyle(label).textOverflow };
+		});
+		expect(geometry).toEqual({ fits: true, overflow: false, ellipsis: 'ellipsis' });
+		await dropdown.click();
+		await expect(page.getByPlaceholder('搜索配置', { exact: true })).toBeFocused();
+		await expect(page.getByRole('menuitemradio', { name: 'All — Second（复合配置）', exact: true })).toBeVisible();
+		await page.getByPlaceholder('搜索配置', { exact: true }).press('Escape');
+		await expect(dropdown).toBeFocused();
+	}
+	await page.evaluate(() => window.ashDebugIntegration.theme('light'));
+	await dropdown.click();
+	await page.screenshot({ path: testInfo.outputPath('debug-launch-dropdown.png'), clip: { x: 0, y: 0, width: 300, height: 200 } });
+});
+
 test('debug console coalesces an output flood and preserves keyboard evaluation and clearing', async ({ page }, testInfo) => {
 	await page.goto('/debug.html?console');
 	const output = page.getByRole('log', { name: 'Debug Console output', exact: true });
@@ -340,6 +434,7 @@ test('debug sections resize and collapse by keyboard and only show watch input w
 	await expect.poll(async () => (await watch.boundingBox())!.y).toBeGreaterThan(before!.y);
 	const input = page.getByRole('textbox', { name: 'Add watch expression', exact: true });
 	await expect(input).toBeHidden();
+	await watch.hover();
 	const add = page.getByRole('button', { name: 'Add watch expression', exact: true });
 	await add.click();
 	await expect(input).toBeFocused();

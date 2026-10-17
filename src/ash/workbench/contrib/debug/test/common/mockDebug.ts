@@ -1,3 +1,4 @@
+import { ConfigurationManager } from '../../browser/debugConfigurationManager.js';
 import { ReplModel } from '../../common/replModel.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
@@ -24,12 +25,40 @@ import { IWorkspaceContextService, type IAnyWorkspaceIdentifier } from '../../..
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
 import { IWorkspaceOpenService } from '../../../../services/workspaces/browser/workspaceOpenService.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
+import { BrowserContextViewService } from '../../../../../platform/contextview/browser/contextViewService.js';
+import { ActionWidgetService, IActionWidgetService } from '../../../../../platform/actionWidget/browser/actionWidget.js';
+import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { IStorageService } from '../../../../../platform/storage/common/storage.js';
+import { BrowserStorageService } from '../../../../services/storage/browser/storageService.js';
+import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
+import { TestThemeService } from '../../../../../platform/theme/test/common/testThemeService.js';
+import { lightColorTheme } from '../../../../../platform/theme/common/colorTheme.js';
+import { IMenuService } from '../../../../../platform/actions/common/actions.js';
+import { MenuService } from '../../../../../platform/actions/common/menuService.js';
+import { ViewsRegistry, IViewDescriptorService, ViewContainerLocation, WorkbenchViewContainerId } from '../../../../common/views.js';
+import { ViewDescriptorService } from '../../../../services/views/browser/viewDescriptorService.js';
+import '../../browser/debug.contribution.js';
+import { DebugViewPaneContainer } from '../../browser/debugViewlet.js';
+import type { DebugViewPane } from '../../browser/debugViewPane.js';
+import { PaneCompositePart } from '../../../../browser/parts/paneCompositePart.js';
+import { IActivityService } from '../../../../services/activity/common/activity.js';
+import { ActivityService } from '../../../../services/activity/browser/activityService.js';
+import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
+import { INotificationService } from '../../../../../platform/notification/common/notification.js';
+import { NotificationService } from '../../../../services/notification/common/notificationService.js';
+import { IViewsService } from '../../../../services/views/common/viewsService.js';
+import { ViewsService } from '../../../../services/views/browser/viewsService.js';
+import { DEBUG_VIEW_ID } from '../../common/debug.js';
+import { setIconResolver } from '../../../../../base/browser/ui/lxicons/lxicon.js';
+import { getIconDefinition } from '../../../../../platform/theme/common/iconRegistry.js';
 
 export class MockDebugService extends Disposable implements IDebugService {
 	public readonly onWillNewSession = Event.None;
 	public readonly onDidNewSession = Event.None;
 	public readonly onDidEndSession = Event.None;
-	private readonly configurationEmitter = this._register(new Emitter<readonly IDebugConfiguration[]>());
+	private readonly configurationManager = this._register(new ConfigurationManager());
 	private readonly breakpointEmitter = this._register(new Emitter<readonly DebugBreakpoint[]>());
 	private readonly watchEmitter = this._register(new Emitter<readonly string[]>());
 	private readonly exceptionEmitter = this._register(new Emitter<readonly string[]>());
@@ -38,9 +67,12 @@ export class MockDebugService extends Disposable implements IDebugService {
 	public readonly onDidFocusStackFrame = this.frameEmitter.event;
 	public focusedStackFrame: IDebugStackFrame | undefined;
 	public focusStackFrame(frame: IDebugStackFrame | undefined): void { this.focusedStackFrame = frame; this.frameEmitter.fire(frame); }
-	public configurations: readonly IDebugConfiguration[] = Object.freeze([configuration('One')]);
+	public getConfigurationManager(): ConfigurationManager { return this.configurationManager; }
+	public get configurations(): readonly IDebugConfiguration[] { return this.configurationManager.configurations; }
+	public set configurations(value: readonly IDebugConfiguration[]) { this.configurationManager.setConfigurations(value, this.compounds); }
 	public readonly operations: string[] = [];
-	public readonly compounds: readonly IDebugCompound[] = Object.freeze([]);
+	public get compounds(): readonly IDebugCompound[] { return this.configurationManager.compounds; }
+	public set compounds(value: readonly IDebugCompound[]) { this.configurationManager.setConfigurations(this.configurations, value); }
 	public breakpoints: readonly IDebugBreakpoint[] = Object.freeze([]);
 	public functionBreakpoints: readonly IFunctionBreakpoint[] = Object.freeze([]);
 	public dataBreakpoints: readonly IDataBreakpoint[] = Object.freeze([]);
@@ -52,13 +84,14 @@ export class MockDebugService extends Disposable implements IDebugService {
 	public session: IDebugSession | undefined;
 	public readonly replModel: ReplModel;
 	public getSession(id: string): IDebugSession | undefined { return this.sessions.find(session => session.id === id); }
-	public readonly onDidChangeConfigurations = this.configurationEmitter.event;
+	public readonly onDidChangeConfigurations = this.configurationManager.onDidChangeConfigurations;
 	public readonly onDidChangeBreakpoints = this.breakpointEmitter.event;
 	public readonly onDidChangeWatchExpressions = this.watchEmitter.event;
 	public readonly onDidChangeExceptionBreakpoints = this.exceptionEmitter.event;
 	public readonly onDidChangeSession = this.sessionEmitter.event;
 	constructor(source: IDebugSource = { name: 'generated.ts', sourceReference: 33 }) {
 		super();
+		this.configurations = [configuration('One')];
 		this.sessions = Object.freeze([this._register(new MockDebugSession('session-one', 'One', source)), this._register(new MockDebugSession('session-two', 'Two', source))]);
 		this.replModel = this._register(new ReplModel(this));
 	}
@@ -74,7 +107,7 @@ export class MockDebugService extends Disposable implements IDebugService {
 		registration.replace = () => { };
 		return registration;
 	}
-	public async refresh(): Promise<readonly IDebugConfiguration[]> { this.configurationEmitter.fire(this.configurations); return this.configurations; }
+	public async refresh(): Promise<readonly IDebugConfiguration[]> { return this.configurations; }
 	public async start(): Promise<IDebugSession> { this.operations.push('start'); return this.sessions[0]!; }
 	public async startDynamicDebugging(_folder: URI, _configuration: DebugConfiguration): Promise<IDebugSession> { this.operations.push('startDynamic'); return this.sessions[0]!; }
 	public async startDebugging(): Promise<IDebugSession> { return this.sessions[0]!; }
@@ -212,6 +245,42 @@ export class DebugViewTestServices extends Disposable {
 		this.workspace = this._register(new WorkspaceContextService(identifier));
 	}
 
+	/** Mounts the registered Debug constructor through the real Part title renderer. */
+	public createContainer(services: InstantiationService, parent: HTMLElement): { part: PaneCompositePart; container: DebugViewPaneContainer; pane: DebugViewPane; } {
+		setIconResolver(parent.ownerDocument, icon => getIconDefinition(icon));
+		if (!services.has(IContextKeyService)) services.registerInstance(IContextKeyService, this._register(new ContextKeyService()));
+		if (!services.has(IStorageService)) services.registerInstance(IStorageService, this._register(new BrowserStorageService({ ownerWindow: parent.ownerDocument.defaultView!, workspaceId: 'debug-view', flushInterval: 0, onError() { } })));
+		if (!services.has(IThemeService)) services.registerInstance(IThemeService, this._register(new TestThemeService(lightColorTheme)));
+		const descriptors = this._register(services.createInstance(ViewDescriptorService, { registry: ViewsRegistry }));
+		services.registerInstance(IViewDescriptorService, descriptors);
+		if (!services.has(IActivityService)) services.registerInstance(IActivityService, this._register(services.createInstance(ActivityService)));
+		if (!services.has(IMenuService)) services.registerInstance(IMenuService, services.createInstance(MenuService));
+		if (!services.has(INotificationService)) services.registerInstance(INotificationService, this._register(new NotificationService()));
+		const contextKeys = services.get(IContextKeyService);
+		const part = this._register(services.createInstance(PaneCompositePart, parent, {
+			id: 'sidebar', location: ViewContainerLocation.Sidebar, ariaLabel: 'Run and Debug', viewsAriaLabel: 'Views',
+			viewDescriptorService: descriptors, contextKeyService: contextKeys,
+			compositeBarContextMenuProvider: services.get(IContextMenuService),
+			openComposite: async (id: string) => { part.showComposite(id); return part.getComposite(id)!; },
+		}));
+		const descriptor = descriptors.getViewContainers(ViewContainerLocation.Sidebar).find(candidate => candidate.id === WorkbenchViewContainerId.Debug)!;
+		const container = services.createInstance(descriptor.ctorDescriptor!, part.domNode, {
+			viewContainer: descriptor, model: descriptors.getViewContainerModel(descriptor.id), instantiationService: services,
+			contextKeyService: contextKeys, onDidFailCreateView: (error: unknown) => { throw error; },
+		});
+		if (!(container instanceof DebugViewPaneContainer)) throw new Error('Debug container registration uses the wrong owner');
+		part.addComposite(container);
+		services.registerInstance(IViewsService, this._register(new ViewsService(descriptors, {
+			onDidPaneCompositeOpen: Event.map(part.onDidCompositeOpen, event => ({ composite: part.getComposite(event.composite.getId())!, viewContainerLocation: ViewContainerLocation.Sidebar })),
+			onDidPaneCompositeClose: Event.map(part.onDidCompositeClose, composite => ({ composite: part.getComposite(composite.getId())!, viewContainerLocation: ViewContainerLocation.Sidebar })),
+			getActivePaneComposite: () => part.getComposite(part.activeCompositeId ?? ''), getLastActivePaneCompositeId: () => part.activeCompositeId,
+			getPartId: () => 'sidebar', openPaneComposite: async (id, _location, focus) => { part.showComposite(id ?? container.id, focus); return container; },
+			hideActivePaneComposite: () => part.setVisible(false),
+		}, contextKeys)));
+		part.showComposite(container.id);
+		return { part, container, pane: container.getView(DEBUG_VIEW_ID) as DebugViewPane };
+	}
+
 	public register(services: ServiceCollection): ServiceCollection {
 		// This fixture also runs in a real browser; model resolution must not load jsdom or editor widgets.
 		const configuration = this._register(new WorkbenchConfigurationService());
@@ -229,6 +298,9 @@ export class DebugViewTestServices extends Disposable {
 		services.set(ILanguageService, languages);
 		services.set(ITextModelService, new TextModelResolverService(fileModels));
 		const providerServices = this._register(new InstantiationService(services));
+		if (!services.get(IConfigurationService)) services.set(IConfigurationService, configuration);
+		services.set(IContextViewService, this._register(new BrowserContextViewService(document.body)));
+		services.set(IActionWidgetService, this._register(providerServices.createInstance(ActionWidgetService)));
 		services.set(ICommandService, this._register(new CommandService(providerServices)));
 		this._register(providerServices.createInstance(DebugContentProvider));
 		const stat = (resource: URI): IFileStat => ({ resource, kind: FileKind.File, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined });

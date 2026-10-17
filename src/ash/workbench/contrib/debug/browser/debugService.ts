@@ -35,7 +35,7 @@ import { mergeEnvironments } from '../../terminal/common/terminalEnvironment.js'
 import { OperatingSystem } from '../../../../base/common/platform.js';
 import { getRemoteAuthority } from '../../../../platform/remote/common/remoteHosts.js';
 import { DebugSession } from "./debugSession.js";
-import { parseLaunchConfigurationDocument } from "./debugConfigurationManager.js";
+import { ConfigurationManager, parseLaunchConfigurationDocument } from "./debugConfigurationManager.js";
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IEditorGroupsService } from '../../../services/editor/common/editorGroupsService.js';
@@ -74,7 +74,7 @@ const EMPTY_STATE: PersistedDebugState = Object.freeze({ version: 2, breakpoints
 export class DebugService extends Disposable implements IDebugService {
 	readonly replModel: ReplModel;
 	private readonly debugger: Debugger;
-	private readonly configurationsEmitter = this._register(new Emitter<readonly IDebugConfiguration[]>());
+	private readonly configurationManager = this._register(new ConfigurationManager());
 	private readonly breakpointsEmitter = this._register(new Emitter<readonly DebugBreakpoint[]>());
 	private readonly watchExpressionsEmitter = this._register(new Emitter<readonly string[]>());
 	private readonly exceptionBreakpointsEmitter = this._register(new Emitter<readonly string[]>());
@@ -87,8 +87,6 @@ export class DebugService extends Disposable implements IDebugService {
 	private readonly stateMemento: Memento<Record<string, JsonValue>>;
 	private stateDirty = false;
 	private readonly sessionRecords = new Map<string, DebugSessionRecord>();
-	private currentConfigurations: readonly IDebugConfiguration[] = Object.freeze([]);
-	private currentCompounds: readonly IDebugCompound[] = Object.freeze([]);
 	private currentBreakpoints: readonly IDebugBreakpoint[] = Object.freeze([]);
 	private currentFunctionBreakpoints: readonly IFunctionBreakpoint[] = Object.freeze([]);
 	private currentDataBreakpoints: readonly IDataBreakpoint[] = Object.freeze([]);
@@ -106,7 +104,7 @@ export class DebugService extends Disposable implements IDebugService {
 	private readonly trackerFactories = new Map<string, { readonly owner: object; readonly factory: IDebugAdapterTrackerFactory; }>();
 	private readonly configurationProviders = new Map<string, { readonly owner: object; readonly source: IDebugConfigurationProvider; readonly provider: IDebugConfigurationProvider; }>();
 
-	readonly onDidChangeConfigurations: Event<readonly IDebugConfiguration[]> = this.configurationsEmitter.event;
+	readonly onDidChangeConfigurations = this.configurationManager.onDidChangeConfigurations;
 	readonly onDidChangeBreakpoints: Event<readonly DebugBreakpoint[]> = this.breakpointsEmitter.event;
 	readonly onDidChangeWatchExpressions: Event<readonly string[]> = this.watchExpressionsEmitter.event;
 	readonly onDidChangeExceptionBreakpoints: Event<readonly string[]> = this.exceptionBreakpointsEmitter.event;
@@ -171,16 +169,17 @@ export class DebugService extends Disposable implements IDebugService {
 			// launch awaits a provider. Revoke only callbacks using retired owners.
 			this.cancelRetiredDescriptors(previousFactories.filter(factory => !factories.includes(factory)));
 			previousFactories = factories;
-			this.setLaunchDocument(Object.freeze([]), Object.freeze([]));
+			this.configurationManager.setConfigurations(Object.freeze([]), Object.freeze([]));
 			void this.refresh().catch(error => this.reportError(error));
 		}));
-		this._register(workspace.onDidChangeWorkspace(() => { this.workspaceGeneration++; this.cancelPendingDescriptors(); this.refreshGeneration += 1; this.setLaunchDocument(Object.freeze([]), Object.freeze([])); void this.stopAll(); }));
+		this._register(workspace.onDidChangeWorkspace(() => { this.workspaceGeneration++; this.cancelPendingDescriptors(); this.refreshGeneration += 1; this.configurationManager.setConfigurations(Object.freeze([]), Object.freeze([])); void this.stopAll(); }));
 		this._register(toDisposable(() => { this.cancelPendingDescriptors(); this.configurationProviders.clear(); this.trackerFactories.clear(); for (const session of this.preparingSessions.values()) { session.dispose(); } this.preparingSessions.clear(); for (const record of this.sessionRecords.values()) { record.listener.dispose(); record.session.dispose(); } this.sessionRecords.clear(); }));
 		this.replModel = this._register(new ReplModel(this));
 	}
 
-	get configurations() { return this.currentConfigurations; }
-	get compounds() { return this.currentCompounds; }
+	getConfigurationManager() { return this.configurationManager; }
+	get configurations() { return this.configurationManager.configurations; }
+	get compounds() { return this.configurationManager.compounds; }
 	get breakpoints() { return this.currentBreakpoints; }
 	get functionBreakpoints() { return this.currentFunctionBreakpoints; }
 	get dataBreakpoints() { return this.currentDataBreakpoints; }
@@ -435,13 +434,13 @@ export class DebugService extends Disposable implements IDebugService {
 				})));
 			} catch (error) { if (!(error instanceof FileNotFoundError)) throw error; }
 		}));
-		if (generation === this.refreshGeneration) this.setLaunchDocument(Object.freeze(configurations), Object.freeze(compounds));
-		return this.currentConfigurations;
+		if (generation === this.refreshGeneration) this.configurationManager.setConfigurations(Object.freeze(configurations), Object.freeze(compounds));
+		return this.configurations;
 	}
 
 	async start(configuration: IDebugConfiguration, options?: IDebugSessionOptions): Promise<IDebugSession> {
 		if (!this.processes) throw new Error("This host does not provide the Code debug adapter capability");
-		const current = this.currentConfigurations.find(candidate => candidate.id === configuration.id);
+		const current = this.configurations.find(candidate => candidate.id === configuration.id);
 		if (!current) throw new Error("Debug configuration is no longer present in launch.json");
 		return this.startDebugging(current, options);
 	}
@@ -656,10 +655,10 @@ export class DebugService extends Disposable implements IDebugService {
 	}
 
 	async startCompound(compound: IDebugCompound): Promise<readonly IDebugSession[]> {
-		const current = this.currentCompounds.find(candidate => candidate.id === compound.id);
+		const current = this.compounds.find(candidate => candidate.id === compound.id);
 		if (!current) throw new Error("Debug compound is no longer present in launch.json");
 		// Resolve the entire group before a pre-launch task can have side effects.
-		const configurations = current.configurations.map(reference => resolveCompoundConfiguration(reference, this.currentConfigurations, current.dirId));
+		const configurations = current.configurations.map(reference => resolveCompoundConfiguration(reference, this.configurations, current.dirId));
 		await this.runTask(current.preLaunchTask, "compound preLaunchTask", current.dirId);
 		const started: IDebugSession[] = [];
 		try {
@@ -887,13 +886,6 @@ export class DebugService extends Disposable implements IDebugService {
 		this.exceptionBreakpointsByType = Object.freeze({ ...this.exceptionBreakpointsByType, [session.configuration.type]: Object.freeze([...new Set(filters)]) });
 		this.exceptionBreakpointsEmitter.fire(this.exceptionBreakpoints);
 		this.persistState();
-	}
-
-	private setLaunchDocument(configurations: readonly IDebugConfiguration[], compounds: readonly IDebugCompound[]): void {
-		if (JSON.stringify(configurations) === JSON.stringify(this.currentConfigurations) && JSON.stringify(compounds) === JSON.stringify(this.currentCompounds)) return;
-		this.currentConfigurations = configurations;
-		this.currentCompounds = compounds;
-		this.configurationsEmitter.fire(configurations);
 	}
 
 	private acceptBreakpointUpdates(updates: readonly { readonly id: string; readonly verified: boolean; readonly message?: string; }[]): void {

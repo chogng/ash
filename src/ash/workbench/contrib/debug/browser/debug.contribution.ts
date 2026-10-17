@@ -7,6 +7,7 @@ import { SyncDescriptor } from "../../../../platform/instantiation/common/descri
 import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../common/views.js";
 import { BREAKPOINT_EDITOR_CONTRIBUTION_ID, CONTEXT_DISASSEMBLY_VIEW_FOCUS, DEBUG_CONSOLE_VIEW_ID, DEBUG_VIEW_ID, DISASSEMBLY_VIEW_ID } from "../common/debug.js";
 import { DebugViewPane } from "./debugViewPane.js";
+import { DebugViewPaneContainer } from './debugViewlet.js';
 import { DebugConsoleViewPane } from "./debugConsoleViewPane.js";
 import { BreakpointEditorContribution } from "./breakpointEditorContribution.js";
 import { EditorContributionInstantiation, registerEditorContribution } from "../../../../editor/browser/editorExtensions.js";
@@ -71,7 +72,7 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 }
 
 export function registerDebugView(registry: WorkbenchViewRegistry = ViewsRegistry): void {
-	registry.registerStaticViewContainer({ id: WorkbenchViewContainerId.Debug, title: "Run and Debug", localizationKey: { bundle: "ash.views", key: "runAndDebug" }, location: ViewContainerLocation.Sidebar, icon: Lxicon.debugAlt, order: 3 });
+	registry.registerStaticViewContainer({ id: WorkbenchViewContainerId.Debug, title: "Run and Debug", localizationKey: { bundle: "ash.views", key: "runAndDebug" }, location: ViewContainerLocation.Sidebar, icon: Lxicon.debugAlt, order: 3, ctorDescriptor: new SyncDescriptor(DebugViewPaneContainer) });
 	registry.registerStaticViews(WorkbenchViewContainerId.Debug, [{ id: DEBUG_VIEW_ID, title: "Run and Debug", localizationKey: { bundle: "ash.views", key: "runAndDebug" }, order: 1, canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(DebugViewPane) }]);
 	registry.registerStaticViewContainer({ id: WorkbenchViewContainerId.DebugConsole, title: "Debug Console", localizationKey: { bundle: "ash.views", key: "debugConsole" }, location: ViewContainerLocation.Panel, order: 2.75 });
 	registry.registerStaticViews(WorkbenchViewContainerId.DebugConsole, [{ id: DEBUG_CONSOLE_VIEW_ID, title: "Debug Console", localizationKey: { bundle: "ash.views", key: "debugConsole" }, order: 1, canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(DebugConsoleViewPane) }]);

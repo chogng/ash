@@ -1,6 +1,30 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import { parseLaunchConfigurationDocument, parseLaunchConfigurations } from "../../browser/debugConfigurationManager.js";
+import { ConfigurationManager, parseLaunchConfigurationDocument, parseLaunchConfigurations } from "../../browser/debugConfigurationManager.js";
+
+test('configuration manager reconciles selection against refreshed catalogs and compounds', async () => {
+	using manager = new ConfigurationManager();
+	const document = parseLaunchConfigurationDocument(JSON.stringify({
+		version: '0.2.0', configurations: [
+			{ name: 'First', type: 'demo', request: 'launch' },
+			{ name: 'Second', type: 'demo', request: 'launch' },
+		], compounds: [{ name: 'Both', configurations: ['First', 'Second'] }]
+	}));
+	const selections: (string | undefined)[] = [];
+	using listener = manager.onDidSelectConfiguration(() => selections.push(manager.selectedConfiguration?.name));
+	manager.setConfigurations(document.configurations, document.compounds);
+	await manager.selectConfiguration(document.configurations[1]);
+	const refreshed = document.configurations.map(configuration => ({ ...configuration, arguments: { changed: true } }));
+	manager.setConfigurations(refreshed, document.compounds);
+	assert.equal(manager.selectedConfiguration, refreshed[1]);
+	await manager.selectConfiguration(document.compounds[0]);
+	assert.equal(manager.selectedConfiguration, document.compounds[0]);
+	manager.setConfigurations([refreshed[0]!], []);
+	assert.equal(manager.selectedConfiguration, refreshed[0]);
+	manager.setConfigurations([], []);
+	assert.equal(manager.selectedConfiguration, undefined);
+	assert.deepEqual(selections, ['First', 'Second', 'Second', 'Both', 'First', undefined]);
+});
 
 test("launch configurations parse an explicit generic DAP command", () => {
 	const configurations = parseLaunchConfigurations(`{

@@ -59,7 +59,11 @@ export abstract class CompositePart<T extends Composite> extends Part {
 	protected createCompositeToolBar(container: HTMLElement, contextMenus: IContextMenuProvider, ariaLabel: string): void {
 		this.compositeToolBarContainer = container;
 		this.compositeToolBarAriaLabel = ariaLabel;
-		this.compositeToolBar = this._register(new WorkbenchToolBar(container, contextMenus, { ariaLabel, highlightToggledItems: true }));
+		this.compositeToolBar = this._register(new WorkbenchToolBar(container, contextMenus, {
+			ariaLabel,
+			highlightToggledItems: true,
+			actionViewItemProvider: (action, options) => this.activeComposite?.getActionViewItem(action, options),
+		}));
 		this.compositeToolBar.element.classList.add('ash-pane-composite-title-menu-actions');
 		this._register(addDisposableListener(this.titleDomNode, 'contextmenu', event => {
 			const actions = this.activeComposite?.getContextMenuActions() ?? [];
