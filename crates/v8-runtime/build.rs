@@ -5,8 +5,10 @@ fn main() {
     println!("cargo:rerun-if-changed=src/bounded_allocator.cc");
     // Cargo owns source selection. Resolve headers from its locked graph so this shim and
     // the linked engine cannot silently use different V8 allocator interfaces.
+    // Metadata resolves the workspace, whose other members may have uncached sources
+    // on a fresh runner. Let Cargo fetch them rather than requiring a prewarmed cache.
     let metadata = Command::new(std::env::var_os("CARGO").expect("Cargo executable"))
-        .args(["metadata", "--locked", "--offline", "--format-version=1"])
+        .args(["metadata", "--locked", "--format-version=1"])
         // A host shim does not need sources for Android or other inactive targets.
         .args([
             "--filter-platform",
