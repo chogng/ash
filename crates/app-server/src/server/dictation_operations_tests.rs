@@ -1,4 +1,5 @@
 use super::*;
+use crate::AppServer;
 use crate::local::ProviderModelService;
 use ash_core::{InMemoryThreadStore, ThreadController};
 use ash_model_provider::EchoModel;
@@ -187,6 +188,7 @@ fn unsupported_dictation_language_is_rejected_before_microphone_acquisition() {
         serde_json::json!({"type":"cloud", "provider":"xai", "modelId":"grok-voice-transcribe-2.0"}),
     ] {
         let error = server
+            .dictation_processor()
             .dictation_start(
                 &owner,
                 &serde_json::json!({"resourceId":"speech", "backend":backend, "language":"zh"}),

@@ -164,13 +164,20 @@ fn shell_snapshot_highlights_command_operators_variables_and_comments() {
 }
 
 #[test]
-fn ecmascript_snapshots_support_javascript_typescript_and_tsx() {
+fn ecmascript_snapshots_support_javascript_jsx_typescript_and_tsx() {
     let javascript = SyntaxDocument::open(
         SyntaxLanguage::Javascript,
         DocumentRevision::new(8),
         "export function render(value) { return value + 1; }\n",
     )
     .expect("JavaScript grammar should load")
+    .snapshot();
+    let jsx = SyntaxDocument::open(
+        SyntaxLanguage::Javascriptreact,
+        DocumentRevision::new(8),
+        "export const App = () => <main>Hello</main>;\n",
+    )
+    .expect("JSX grammar should load")
     .snapshot();
     let typescript = SyntaxDocument::open(
         SyntaxLanguage::Typescript,
@@ -188,8 +195,12 @@ fn ecmascript_snapshots_support_javascript_typescript_and_tsx() {
     .snapshot();
 
     assert!(!javascript.has_errors());
+    assert!(!jsx.has_errors());
     assert!(!typescript.has_errors());
     assert!(!tsx.has_errors());
+    for (snapshot, name) in [(&javascript, "render"), (&jsx, "App"), (&tsx, "App")] {
+        assert!(snapshot.symbols().iter().any(|symbol| symbol.name == name));
+    }
     assert!(
         javascript
             .tokens()

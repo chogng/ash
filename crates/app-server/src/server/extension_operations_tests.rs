@@ -17,15 +17,18 @@ fn an_unconfigured_gallery_is_reported_without_exposing_a_resource() {
         Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
     );
     assert_eq!(
-        server.extension_gallery(&serde_json::json!({})).unwrap(),
+        server
+            .extension_processor()
+            .extension_gallery(&serde_json::json!({}))
+            .unwrap(),
         serde_json::json!({"resourceUrlTemplate": null})
     );
     let connection = server.connection();
-    let error = server.extension_gallery_resource_open(&connection, &serde_json::json!({
+    let error = server.extension_processor().extension_gallery_resource_open(&connection, &serde_json::json!({
                 "resourceUrlTemplate": "https://registry.example/api/{publisher}/{name}/universal/{version}/file/{path}", "publisher": "publisher", "name": "sample", "version": "1.0.0", "path": "package.json"
     })).unwrap_err();
     assert_eq!(error.message, AppServerErrorName::PluginsUnavailable);
-    let invalid = server.extension_gallery_resource_open(&connection, &serde_json::json!({
+    let invalid = server.extension_processor().extension_gallery_resource_open(&connection, &serde_json::json!({
                 "resourceUrlTemplate": "https://registry.example/api/{publisher}/{name}/universal/{version}/file/{path}", "publisher": "publisher", "name": "sample", "version": "1.0.0", "path": "package.json", "hostPath": "/outside"
     })).unwrap_err();
     assert_eq!(invalid.message, AppServerErrorName::InvalidParams);
@@ -59,7 +62,10 @@ fn a_changed_gallery_is_rejected_before_provider_io() {
     let template =
         "https://registry.example/api/{publisher}/{name}/universal/{version}/file/{path}";
     assert_eq!(
-        server.extension_gallery(&serde_json::json!({})).unwrap(),
+        server
+            .extension_processor()
+            .extension_gallery(&serde_json::json!({}))
+            .unwrap(),
         serde_json::json!({"resourceUrlTemplate": template})
     );
     let mut connection = server.connection();
@@ -145,6 +151,7 @@ fn extension_catalog_exposes_its_authorized_package_location_and_execution_platf
     )
     .with_extension_roots(vec![ExtensionRoot::user(root.path())]);
     let catalog = server
+        .extension_processor()
         .extension_list(&serde_json::json!({"reload":"refresh"}))
         .unwrap();
     let extension = &catalog["extensions"][0];
@@ -198,18 +205,20 @@ fn extension_catalog_serves_built_in_language_pack_resources_from_the_rust_snaps
     )
     .with_extension_roots(vec![ExtensionRoot::built_in(root.path())]);
     let catalog = server
+        .extension_processor()
         .extension_list(&serde_json::json!({"reload":"refresh"}))
         .unwrap();
     assert_eq!(catalog["extensions"][0]["id"], "ash.language-pack-zh-cn");
     assert_eq!(catalog["extensions"][0]["sourceKind"], "builtIn");
     assert_eq!(catalog["diagnostics"], serde_json::json!([]));
     let connection = server.connection();
-    let opened = server.extension_resource_open(&connection, &serde_json::json!({
+    let opened = server.extension_processor().extension_resource_open(&connection, &serde_json::json!({
         "generation": catalog["generation"], "extensionId": "ash.language-pack-zh-cn", "path": "localization/package.json",
     })).unwrap();
     // Published bytes remain frozen even if a development build updates the file in place.
     std::fs::write(package.join("localization/package.json"), "{}").unwrap();
     let chunk = server
+        .resources_processor()
         .resource_read(
             &connection,
             &serde_json::json!({
@@ -226,6 +235,7 @@ fn extension_catalog_serves_built_in_language_pack_resources_from_the_rust_snaps
     let other_connection = server.connection();
     assert!(
         server
+            .resources_processor()
             .resource_read(
                 &other_connection,
                 &serde_json::json!({

@@ -835,8 +835,9 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             highlights: ash_grammars::query("tree_sitter_javascript::HIGHLIGHT_QUERY")
                 .expect("bundled snapshot query"),
             tags: || {
-                [ash_grammars::query("tree_sitter_javascript::TAGS_QUERY")
-                    .expect("bundled snapshot query")]
+                [concat!(include_str!(
+                    "../../../extensions/javascript/queries/javascript.tags.scm"
+                ))]
                 .join("\n")
             },
             editor_highlights: concat!(
@@ -856,8 +857,9 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             highlights: ash_grammars::query("tree_sitter_javascript::HIGHLIGHT_QUERY")
                 .expect("bundled snapshot query"),
             tags: || {
-                [ash_grammars::query("tree_sitter_javascript::TAGS_QUERY")
-                    .expect("bundled snapshot query")]
+                [concat!(include_str!(
+                    "../../../extensions/javascript/queries/javascript.tags.scm"
+                ))]
                 .join("\n")
             },
             editor_highlights: concat!(
@@ -1241,12 +1243,13 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             highlights: ash_grammars::query("tree_sitter_typescript::HIGHLIGHTS_QUERY")
                 .expect("bundled snapshot query"),
             tags: || {
-                [
-                    ash_grammars::query("tree_sitter_javascript::TAGS_QUERY")
-                        .expect("bundled snapshot query"),
-                    ash_grammars::query("tree_sitter_typescript::TAGS_QUERY")
-                        .expect("bundled snapshot query"),
-                ]
+                [concat!(
+                    include_str!("../../../extensions/javascript/queries/javascript.tags.scm"),
+                    "\n",
+                    include_str!(
+                        "../../../extensions/typescript-basics/queries/typescript.tags.scm"
+                    )
+                )]
                 .join("\n")
             },
             editor_highlights: concat!(
@@ -1266,12 +1269,13 @@ fn definition(language: SyntaxLanguage) -> LanguageDefinition {
             highlights: ash_grammars::query("tree_sitter_typescript::HIGHLIGHTS_QUERY")
                 .expect("bundled snapshot query"),
             tags: || {
-                [
-                    ash_grammars::query("tree_sitter_javascript::TAGS_QUERY")
-                        .expect("bundled snapshot query"),
-                    ash_grammars::query("tree_sitter_typescript::TAGS_QUERY")
-                        .expect("bundled snapshot query"),
-                ]
+                [concat!(
+                    include_str!("../../../extensions/javascript/queries/javascript.tags.scm"),
+                    "\n",
+                    include_str!(
+                        "../../../extensions/typescript-basics/queries/typescript.tags.scm"
+                    )
+                )]
                 .join("\n")
             },
             editor_highlights: concat!(

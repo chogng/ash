@@ -1,4 +1,5 @@
 use super::*;
+use crate::AppServer;
 use ash_core::InMemoryThreadStore;
 use ash_core::ThreadController;
 use ash_file_access::Dir;
@@ -160,6 +161,7 @@ fn instruction_import_rejects_stale_sources_and_revoked_write_permission() {
     fixture(root.path());
     let (server, directory) = setup(root.path());
     let preview = server
+        .instruction_import_processor()
         .instruction_import_preview(
             &json!({"scope":"directory","source":"copilot","directory":directory,"sources":[]}),
         )
@@ -170,9 +172,15 @@ fn instruction_import_rejects_stale_sources_and_revoked_write_permission() {
         "Changed since preview",
     )
     .unwrap();
-    assert!(server.instruction_import(&params).is_err());
+    assert!(
+        server
+            .instruction_import_processor()
+            .instruction_import(&params)
+            .is_err()
+    );
     assert!(!root.path().join("ASH.md").exists());
     let preview = server
+        .instruction_import_processor()
         .instruction_import_preview(
             &json!({"scope":"directory","source":"copilot","directory":directory,"sources":[]}),
         )
@@ -192,7 +200,7 @@ fn instruction_import_rejects_stale_sources_and_revoked_write_permission() {
     drop(runtime);
     assert!(
         server
-            .instruction_import(
+            .instruction_import_processor().instruction_import(
                 &json!({"scope":"directory","source":"copilot","directory":directory,"sources":[],"digest":preview["digest"]})
             )
             .is_err()
@@ -241,6 +249,7 @@ fn instruction_import_preserves_manual_selection_and_rejects_invalid_targets() {
     .unwrap();
     let (server, directory) = setup(root.path());
     let preview = server
+        .instruction_import_processor()
         .instruction_import_preview(
             &json!({"scope":"directory","source":"copilot","directory":directory,"sources":[]}),
         )
@@ -254,12 +263,12 @@ fn instruction_import_preserves_manual_selection_and_rejects_invalid_targets() {
     );
     let selected = vec![".github/instructions/manual.instructions.md"];
     let preview = server
-        .instruction_import_preview(
+        .instruction_import_processor().instruction_import_preview(
             &json!({"scope":"directory","source":"copilot","directory":directory,"sources":selected}),
         )
         .unwrap();
     server
-        .instruction_import(
+        .instruction_import_processor().instruction_import(
             &json!({"scope":"directory","source":"copilot","directory":directory,"sources":selected,"digest":preview["digest"]}),
         )
         .unwrap();
@@ -270,7 +279,7 @@ fn instruction_import_preserves_manual_selection_and_rejects_invalid_targets() {
     );
     assert!(
         server
-            .instruction_import_preview(
+            .instruction_import_processor().instruction_import_preview(
                 &json!({"scope":"directory","source":"copilot","directory":directory,"sources":["AGENTS.md"]})
             )
             .is_err()
@@ -286,13 +295,14 @@ fn instruction_import_refuses_symlink_targets_even_within_the_project() {
     std::os::unix::fs::symlink("existing.md", root.path().join("ASH.md")).unwrap();
     let (server, directory) = setup(root.path());
     let preview = server
+        .instruction_import_processor()
         .instruction_import_preview(
             &json!({"scope":"directory","source":"copilot","directory":directory,"sources":[]}),
         )
         .unwrap();
     assert_eq!(preview["items"][0]["status"], "conflict");
     server
-        .instruction_import(&json!({"scope":"directory","source":"copilot","directory":directory,"sources":[],"digest":preview["digest"]}))
+        .instruction_import_processor().instruction_import(&json!({"scope":"directory","source":"copilot","directory":directory,"sources":[],"digest":preview["digest"]}))
         .unwrap();
     assert_eq!(
         std::fs::read_to_string(root.path().join("existing.md")).unwrap(),
@@ -321,6 +331,7 @@ fn instruction_import_does_not_publish_rules_that_exceed_catalog_capacity() {
     }
     let (server, directory) = setup(root.path());
     let preview = server
+        .instruction_import_processor()
         .instruction_import_preview(
             &json!({"scope":"directory","source":"copilot","directory":directory,"sources":[]}),
         )
@@ -333,7 +344,7 @@ fn instruction_import_does_not_publish_rules_that_exceed_catalog_capacity() {
             .all(|item| item["status"] == "unsupported")
     );
     server
-        .instruction_import(&json!({"scope":"directory","source":"copilot","directory":directory,"sources":[],"digest":preview["digest"]}))
+        .instruction_import_processor().instruction_import(&json!({"scope":"directory","source":"copilot","directory":directory,"sources":[],"digest":preview["digest"]}))
         .unwrap();
     assert!(!root.path().join("ASH.md").exists());
 }
@@ -369,13 +380,14 @@ fn instruction_import_uses_one_pipeline_for_claude_codex_and_cursor() {
         std::fs::write(file, body).unwrap();
         let (server, directory) = setup(root.path());
         let preview = server
+            .instruction_import_processor()
             .instruction_import_preview(
                 &json!({"scope":"directory","source":source,"directory":directory,"sources":[]}),
             )
             .unwrap();
         assert_eq!(preview["items"][0]["target"], target);
         assert_eq!(preview["items"][0]["status"], "ready", "{preview}");
-        let result = server.instruction_import(&json!({"scope":"directory","source":source,"directory":directory,"sources":[],"digest":preview["digest"]})).unwrap();
+        let result = server.instruction_import_processor().instruction_import(&json!({"scope":"directory","source":source,"directory":directory,"sources":[],"digest":preview["digest"]})).unwrap();
         assert_eq!(result["items"][0]["status"], "imported", "{result}");
         let catalog = ash_instructions::InstructionCatalog::discover(root.path()).snapshot();
         assert!(catalog.diagnostics().is_empty());
@@ -402,13 +414,15 @@ fn instruction_import_binds_source_identity_and_reports_colliding_rule_names() {
     std::fs::write(root.path().join("CLAUDE.md"), "Other source").unwrap();
     let (server, directory) = setup(root.path());
     let preview = server
+        .instruction_import_processor()
         .instruction_import_preview(
             &json!({"scope":"directory","source":"copilot","directory":directory,"sources":[]}),
         )
         .unwrap();
-    assert!(server.instruction_import(&json!({"scope":"directory","source":"claude","directory":directory,"sources":[],"digest":preview["digest"]})).is_err());
+    assert!(server.instruction_import_processor().instruction_import(&json!({"scope":"directory","source":"claude","directory":directory,"sources":[],"digest":preview["digest"]})).is_err());
     assert!(
         server
+            .instruction_import_processor()
             .instruction_import_preview(
                 &json!({"scope":"directory","directory":directory,"sources":[]})
             )
@@ -420,6 +434,7 @@ fn instruction_import_binds_source_identity_and_reports_colliding_rule_names() {
         std::fs::write(root.path().join(path), "Rule").unwrap();
     }
     let preview = server
+        .instruction_import_processor()
         .instruction_import_preview(
             &json!({"scope":"directory","source":"claude","directory":directory,"sources":[]}),
         )
@@ -433,7 +448,7 @@ fn instruction_import_binds_source_identity_and_reports_colliding_rule_names() {
             .count(),
         2
     );
-    server.instruction_import(&json!({"scope":"directory","source":"claude","directory":directory,"sources":[],"digest":preview["digest"]})).unwrap();
+    server.instruction_import_processor().instruction_import(&json!({"scope":"directory","source":"claude","directory":directory,"sources":[],"digest":preview["digest"]})).unwrap();
     assert!(!root.path().join("ASH.md").exists());
 }
 
@@ -605,22 +620,40 @@ fn instruction_import_user_checks_separate_target_permissions_scope_and_home_ide
     std::fs::write(source.path().join(".codex/AGENTS.override.md"), "Override").unwrap();
     let (server, directory) = setup(source.path());
     let request = json!({"scope":"user","source":"codex","directory":directory,"sources":[]});
-    assert!(server.instruction_import_preview(&request).is_err());
+    assert!(
+        server
+            .instruction_import_processor()
+            .instruction_import_preview(&request)
+            .is_err()
+    );
     let mut server = server.with_home(Arc::new(ash_home::AshHome::new(
         ash_utils_absolute_path::AbsolutePathBuf::from_absolute(target.path()).unwrap(),
     )));
-    assert!(server.instruction_import_preview(&request).is_err());
+    assert!(
+        server
+            .instruction_import_processor()
+            .instruction_import_preview(&request)
+            .is_err()
+    );
     grant_target(
         &server,
         &directory,
         target.path(),
         Permissions::new([Permission::ReadFiles, Permission::BrowseFiles]),
     );
-    let preview = server.instruction_import_preview(&request).unwrap();
+    let preview = server
+        .instruction_import_processor()
+        .instruction_import_preview(&request)
+        .unwrap();
     assert_eq!(preview["items"][0]["content"], "Override");
     assert_eq!(preview["items"].as_array().unwrap().len(), 1);
     let apply = json!({"scope":"user","source":"codex","directory":directory,"sources":[],"digest":preview["digest"]});
-    assert!(server.instruction_import(&apply).is_err());
+    assert!(
+        server
+            .instruction_import_processor()
+            .instruction_import(&apply)
+            .is_err()
+    );
     let session = serde_json::from_value(directory["sessionId"].clone()).unwrap();
     let runtime = server.env_runtime.read().unwrap();
     runtime
@@ -639,7 +672,12 @@ fn instruction_import_user_checks_separate_target_permissions_scope_and_home_ide
     drop(runtime);
     let mut wrong_scope = apply.clone();
     wrong_scope["scope"] = json!("directory");
-    assert!(server.instruction_import(&wrong_scope).is_err());
+    assert!(
+        server
+            .instruction_import_processor()
+            .instruction_import(&wrong_scope)
+            .is_err()
+    );
     grant_target(
         &server,
         &directory,
@@ -653,18 +691,33 @@ fn instruction_import_user_checks_separate_target_permissions_scope_and_home_ide
     server.home = Some(Arc::new(ash_home::AshHome::new(
         ash_utils_absolute_path::AbsolutePathBuf::from_absolute(other.path()).unwrap(),
     )));
-    assert!(server.instruction_import(&apply).is_err());
+    assert!(
+        server
+            .instruction_import_processor()
+            .instruction_import(&apply)
+            .is_err()
+    );
     assert!(!other.path().join("ASH.md").exists());
     server.home = Some(Arc::new(ash_home::AshHome::new(
         ash_utils_absolute_path::AbsolutePathBuf::from_absolute(target.path()).unwrap(),
     )));
     std::fs::write(source.path().join(".codex/AGENTS.override.md"), "Changed").unwrap();
-    assert!(server.instruction_import(&apply).is_err());
+    assert!(
+        server
+            .instruction_import_processor()
+            .instruction_import(&apply)
+            .is_err()
+    );
     assert!(!target.path().join("ASH.md").exists());
     for unsupported in ["cursor", "copilot"] {
         let mut request = request.clone();
         request["source"] = json!(unsupported);
-        assert!(server.instruction_import_preview(&request).is_err());
+        assert!(
+            server
+                .instruction_import_processor()
+                .instruction_import_preview(&request)
+                .is_err()
+        );
     }
 }
 
@@ -693,8 +746,11 @@ fn instruction_import_user_rejects_symlink_rule_directory() {
         ]),
     );
     let request = json!({"scope":"user","source":"claude","directory":directory,"sources":[]});
-    let preview = server.instruction_import_preview(&request).unwrap();
+    let preview = server
+        .instruction_import_processor()
+        .instruction_import_preview(&request)
+        .unwrap();
     assert_eq!(preview["items"][0]["status"], "conflict");
-    server.instruction_import(&json!({"scope":"user","source":"claude","directory":directory,"sources":[],"digest":preview["digest"]})).unwrap();
+    server.instruction_import_processor().instruction_import(&json!({"scope":"user","source":"claude","directory":directory,"sources":[],"digest":preview["digest"]})).unwrap();
     assert!(!actual.join("claude-global.md").exists());
 }

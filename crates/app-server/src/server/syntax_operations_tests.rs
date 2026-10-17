@@ -1,9 +1,9 @@
-use super::AppServer;
 use super::Utf16PositionIndex;
 use super::byte_offset_for_utf16;
 use super::byte_range_for_utf16;
 use super::project;
 use super::syntax_language;
+use crate::AppServer;
 use ash_app_server_protocol::protocol::syntax::SyntaxDiagnosticKindDto;
 use ash_app_server_protocol::protocol::syntax::SyntaxLanguageDto;
 use ash_app_server_protocol::protocol::syntax::SyntaxPositionDto;
@@ -141,6 +141,7 @@ fn parser_sessions_reuse_one_document_per_connection_and_release_on_close() {
     let first = server.connection();
     let second = server.connection();
     server
+        .syntax_processor
         .syntax_open(
             &first,
             &json!({
@@ -150,6 +151,7 @@ fn parser_sessions_reuse_one_document_per_connection_and_release_on_close() {
         )
         .unwrap();
     server
+        .syntax_processor
         .syntax_open(
             &second,
             &json!({
@@ -159,19 +161,23 @@ fn parser_sessions_reuse_one_document_per_connection_and_release_on_close() {
         )
         .unwrap();
     let first_result = server
+        .syntax_processor
         .syntax_analyze(&first, &json!({"documentId": "model-1", "revision": 1}))
         .unwrap();
     let second_result = server
+        .syntax_processor
         .syntax_analyze(&second, &json!({"documentId": "model-1", "revision": 1}))
         .unwrap();
     assert_eq!(first_result["symbols"][0]["name"], "café");
     assert_eq!(second_result["symbols"][0]["name"], "other");
     let document = Arc::clone(
-        &server.syntax_documents.lock().unwrap()[&(first.connection_id, "model-1".into())],
+        &server.syntax_processor.syntax_documents.lock().unwrap()
+            [&(first.connection_id, "model-1".into())],
     );
 
     assert!(
         server
+            .syntax_processor
             .syntax_update(
                 &first,
                 &json!({
@@ -182,6 +188,7 @@ fn parser_sessions_reuse_one_document_per_connection_and_release_on_close() {
             .is_err()
     );
     server
+        .syntax_processor
         .syntax_update(
             &first,
             &json!({
@@ -191,15 +198,18 @@ fn parser_sessions_reuse_one_document_per_connection_and_release_on_close() {
         )
         .unwrap();
     let changed = server
+        .syntax_processor
         .syntax_analyze(&first, &json!({"documentId": "model-1", "revision": 2}))
         .unwrap();
     assert_eq!(changed["revision"], 2);
     assert_eq!(changed["symbols"][0]["name"], "cafè_new");
     assert!(Arc::ptr_eq(
         &document,
-        &server.syntax_documents.lock().unwrap()[&(first.connection_id, "model-1".into())]
+        &server.syntax_processor.syntax_documents.lock().unwrap()
+            [&(first.connection_id, "model-1".into())]
     ));
     let selected = server
+        .syntax_processor
         .syntax_selection_ranges(
             &first,
             &json!({
@@ -215,11 +225,13 @@ fn parser_sessions_reuse_one_document_per_connection_and_release_on_close() {
     assert!(selected["ranges"].as_array().unwrap().len() > 0);
     assert!(
         server
+            .syntax_processor
             .syntax_analyze(&first, &json!({"documentId": "model-1", "revision": 1}))
             .is_err()
     );
     assert!(
         server
+            .syntax_processor
             .syntax_update(
                 &first,
                 &json!({
@@ -231,11 +243,27 @@ fn parser_sessions_reuse_one_document_per_connection_and_release_on_close() {
     );
 
     server
+        .syntax_processor
         .syntax_close(&first, &json!({"documentId": "model-1"}))
         .unwrap();
-    assert_eq!(server.syntax_documents.lock().unwrap().len(), 1);
+    assert_eq!(
+        server
+            .syntax_processor
+            .syntax_documents
+            .lock()
+            .unwrap()
+            .len(),
+        1
+    );
     server.close_connection(second);
-    assert!(server.syntax_documents.lock().unwrap().is_empty());
+    assert!(
+        server
+            .syntax_processor
+            .syntax_documents
+            .lock()
+            .unwrap()
+            .is_empty()
+    );
     server.close_connection(first);
 }
 
@@ -251,9 +279,10 @@ fn shared_syntax_queries_use_one_rust_tree_and_release_with_the_connection() {
     let second = server.connection();
     let source = ash_async_utils::CancellationSource::new();
     let token = source.token();
-    server.syntax_open_shared(&first, &json!({"documentId":"shared", "language":"javascript", "revision":1, "text":"// 😀\r\nfunction café() {\r\n  return [1];\r\n}\r\n"})).unwrap();
+    server.syntax_processor.syntax_open_shared(&first, &json!({"documentId":"shared", "language":"javascript", "revision":1, "text":"// 😀\r\nfunction café() {\r\n  return [1];\r\n}\r\n"})).unwrap();
     let query = |kind: &str, revision: u64| json!({"documentId":"shared", "operationId":"query", "revision":revision, "kind":kind, "tabSize":4, "ranges":[{"startLineIndex":0,"endLineIndex":4}], "lineIndex":null,"lines":[]});
     let highlighted = server
+        .syntax_processor
         .syntax_query(&first, &query("highlight", 1), &token)
         .unwrap();
     assert_eq!(highlighted["rows"][0]["tokens"][0]["end"], 5);
@@ -261,44 +290,64 @@ fn shared_syntax_queries_use_one_rust_tree_and_release_with_the_connection() {
     assert_eq!(highlighted["incremental"], false);
     assert!(
         server
+            .syntax_processor
             .syntax_query(&second, &query("facts", 1), &token)
             .is_err()
     );
     let facts = server
+        .syntax_processor
         .syntax_query(&first, &query("facts", 1), &token)
         .unwrap();
     assert_eq!(facts["facts"]["symbols"]["items"][0][0], "café");
     assert!(facts["facts"]["baseRevision"].is_null());
-    server.syntax_update(&first, &json!({"documentId":"shared","previousRevision":1,"revision":5,"edits":[{"startOffset":20,"endOffset":20,"text":"新"}]})).unwrap();
+    server.syntax_processor.syntax_update(&first, &json!({"documentId":"shared","previousRevision":1,"revision":5,"edits":[{"startOffset":20,"endOffset":20,"text":"新"}]})).unwrap();
     let mut updated_query = query("facts", 5);
     updated_query["factsRevision"] = json!(1);
     updated_query["factsTabSize"] = json!(4);
-    let updated = server.syntax_query(&first, &updated_query, &token).unwrap();
+    let updated = server
+        .syntax_processor
+        .syntax_query(&first, &updated_query, &token)
+        .unwrap();
     assert_eq!(updated["facts"]["symbols"]["items"][0][0], "café新");
     assert_eq!(updated["incremental"], true);
     assert_eq!(updated["revision"], 5);
     assert_eq!(updated["facts"]["baseRevision"], 1);
     assert!(
         server
+            .syntax_processor
             .syntax_query(&first, &query("facts", 2), &token)
             .is_err()
     );
     assert!(
         server
+            .syntax_processor
             .syntax_query(&first, &query("highlight", 1), &token)
             .is_err()
     );
     let mut invalid = query("highlight", 5);
     invalid["ranges"][0]["endLineIndex"] = json!(999);
-    assert!(server.syntax_query(&first, &invalid, &token).is_err());
+    assert!(
+        server
+            .syntax_processor
+            .syntax_query(&first, &invalid, &token)
+            .is_err()
+    );
     source.cancel();
     assert!(
         server
+            .syntax_processor
             .syntax_query(&first, &query("facts", 5), &token)
             .is_err()
     );
     server.close_connection(first);
-    assert!(server.syntax_documents.lock().unwrap().is_empty());
+    assert!(
+        server
+            .syntax_processor
+            .syntax_documents
+            .lock()
+            .unwrap()
+            .is_empty()
+    );
     server.close_connection(second);
 }
 
@@ -315,12 +364,13 @@ fn viewport_brackets_use_utf16_columns_after_unicode_prefixes_near_eof() {
     let line = "const label = '😀'; function café() { return [1]; }";
     let text = "// 😀\r\n".repeat(4096) + line;
     server
+        .syntax_processor
         .syntax_open_shared(
             &connection,
             &json!({"documentId":"tail", "language":"javascript", "revision":1, "text":text}),
         )
         .unwrap();
-    let result = server.syntax_query(&connection, &json!({"documentId":"tail", "operationId":"tail", "revision":1,"kind":"highlight","tabSize":4,"ranges":[{"startLineIndex":4096,"endLineIndex":4097}],"lineIndex":null,"lines":[]}), &cancellation.token()).unwrap();
+    let result = server.syntax_processor.syntax_query(&connection, &json!({"documentId":"tail", "operationId":"tail", "revision":1,"kind":"highlight","tabSize":4,"ranges":[{"startLineIndex":4096,"endLineIndex":4097}],"lineIndex":null,"lines":[]}), &cancellation.token()).unwrap();
     let pairs = result["brackets"].as_array().unwrap();
     for (opening, closing) in [('(', ')'), ('{', '}'), ('[', ']')] {
         let pair = pairs
@@ -355,9 +405,10 @@ fn shared_facts_transmit_small_patches_and_reset_missing_or_changed_bases() {
     let text = (0..1000)
         .map(|index| format!("function item{index}() {{\n  return '😀';\n}}\n"))
         .collect::<String>();
-    server.syntax_open_shared(&connection, &json!({ "documentId": "patches", "language": "javascript", "revision": 1, "text": text })).unwrap();
+    server.syntax_processor.syntax_open_shared(&connection, &json!({ "documentId": "patches", "language": "javascript", "revision": 1, "text": text })).unwrap();
     let query = |revision, base, tab_size| json!({ "documentId": "patches", "operationId": "facts", "revision": revision, "kind": "facts", "ranges": [], "tabSize": tab_size, "factsRevision": base, "factsTabSize": 4, "lineIndex": null, "lines": [] });
     let first = server
+        .syntax_processor
         .syntax_query(&connection, &query(1, None, 4), &token)
         .unwrap();
     assert_eq!(
@@ -383,13 +434,14 @@ fn shared_facts_transmit_small_patches_and_reset_missing_or_changed_bases() {
         (3, 0, "// leading 😀\n"),
         (4, 0, "// another\n"),
     ] {
-        server.syntax_update(&connection, &json!({ "documentId": "patches", "previousRevision": revision - 1, "revision": revision,
+        server.syntax_processor.syntax_update(&connection, &json!({ "documentId": "patches", "previousRevision": revision - 1, "revision": revision,
             "edits": [{ "startOffset": offset, "endOffset": offset, "text": replacement }] })).unwrap();
         let base = if revision == 3 { 1 } else { revision - 1 };
         if revision == 3 {
             current = initial.clone();
         }
         let patch = server
+            .syntax_processor
             .syntax_query(&connection, &query(revision, Some(base), 4), &token)
             .unwrap();
         assert!(
@@ -417,6 +469,7 @@ fn shared_facts_transmit_small_patches_and_reset_missing_or_changed_bases() {
         );
         current.revision = revision;
         let fresh = server
+            .syntax_processor
             .syntax_query(&connection, &query(revision, None, 4), &token)
             .unwrap();
         let fresh: ash_app_server_protocol::protocol::syntax::SyntaxQueryResult =
@@ -427,11 +480,13 @@ fn shared_facts_transmit_small_patches_and_reset_missing_or_changed_bases() {
         assert_eq!(current.diagnostics, fresh.diagnostics.items);
     }
     let tab_change = server
+        .syntax_processor
         .syntax_query(&connection, &query(4, Some(4), 2), &token)
         .unwrap();
     assert_eq!(tab_change["facts"]["baseRevision"], 4);
     // Same document revision can have different tab-size dependent folding.
     let old_tab_base = server
+        .syntax_processor
         .syntax_query(&connection, &query(4, Some(4), 4), &token)
         .unwrap();
     assert_eq!(
@@ -439,6 +494,7 @@ fn shared_facts_transmit_small_patches_and_reset_missing_or_changed_bases() {
         "an acknowledged base includes its tab size even after another query"
     );
     let missed = server
+        .syntax_processor
         .syntax_query(&connection, &query(4, Some(1), 4), &token)
         .unwrap();
     assert!(missed["facts"]["baseRevision"].is_null());
@@ -595,6 +651,7 @@ fn shared_facts_latency_probe() {
             let query = |rev, base| json!({"documentId":id,"operationId":"facts","revision":rev,"kind":"facts","tabSize":4,"factsRevision":base,"factsTabSize":4,"ranges":[],"lineIndex":null,"lines":[]});
             let start = std::time::Instant::now();
             server
+                .syntax_processor
                 .syntax_open_shared(
                     &connection,
                     &json!({"documentId":id,"language":"javascript","revision":1,"text":text}),
@@ -603,6 +660,7 @@ fn shared_facts_latency_probe() {
             let parse_ms = start.elapsed().as_secs_f64() * 1000.;
             let start = std::time::Instant::now();
             let initial = server
+                .syntax_processor
                 .syntax_query(&connection, &query(1, None), &source.token())
                 .unwrap();
             let facts_ms = start.elapsed().as_secs_f64() * 1000.;
@@ -635,10 +693,11 @@ fn shared_facts_latency_probe() {
                     (offset, offset + 1, "", "newline")
                 };
                 let start = std::time::Instant::now();
-                server.syntax_update(&connection,&json!({"documentId":id,"previousRevision":rev-1,"revision":rev,"edits":[{"startOffset":start_offset,"endOffset":end_offset,"text":replacement}]})).unwrap();
+                server.syntax_processor.syntax_update(&connection,&json!({"documentId":id,"previousRevision":rev-1,"revision":rev,"edits":[{"startOffset":start_offset,"endOffset":end_offset,"text":replacement}]})).unwrap();
                 let parse_ms = start.elapsed().as_secs_f64() * 1000.;
                 let start = std::time::Instant::now();
                 let result = server
+                    .syntax_processor
                     .syntax_query(&connection, &query(rev, Some(rev - 1)), &source.token())
                     .unwrap();
                 let facts_ms = start.elapsed().as_secs_f64() * 1000.;
@@ -736,6 +795,7 @@ fn shared_fact_patches_match_full_results_with_skipped_versions_and_unicode_boun
         ("json-errors", "json", "{\n  \"😀\": [\n}\n"),
     ] {
         server
+            .syntax_processor
             .syntax_open_shared(
                 &connection,
                 &json!({"documentId":id,"language":language,"revision":1,"text":text}),
@@ -752,6 +812,7 @@ fn shared_fact_patches_match_full_results_with_skipped_versions_and_unicode_boun
         };
         let full = decode(
             server
+                .syntax_processor
                 .syntax_query(&connection, &query(1, None), &cancellation.token())
                 .unwrap(),
         );
@@ -771,12 +832,13 @@ fn shared_fact_patches_match_full_results_with_skipped_versions_and_unicode_boun
                 2 => (0, "  "),
                 _ => (2, ""),
             };
-            server.syntax_update(&connection,&json!({"documentId":id,"previousRevision":revision-1,"revision":revision,"edits":[{"startOffset":0,"endOffset":end,"text":replacement}]})).unwrap();
+            server.syntax_processor.syntax_update(&connection,&json!({"documentId":id,"previousRevision":revision-1,"revision":revision,"edits":[{"startOffset":0,"endOffset":end,"text":replacement}]})).unwrap();
             if step % 9 == 0 {
                 continue;
             }
             let patch = decode(
                 server
+                    .syntax_processor
                     .syntax_query(
                         &connection,
                         &query(revision, Some(current.revision)),
@@ -807,6 +869,7 @@ fn shared_fact_patches_match_full_results_with_skipped_versions_and_unicode_boun
             current.revision = revision;
             let full = decode(
                 server
+                    .syntax_processor
                     .syntax_query(&connection, &query(revision, None), &cancellation.token())
                     .unwrap(),
             );
@@ -843,6 +906,7 @@ fn shared_markdown_snapshot_updates_send_only_effective_utf16_fact_edits() {
     let changed = original.replacen("é😀", "ê🦀", 1);
     let query = |revision, base| json!({"documentId":"snapshots","operationId":"facts","revision":revision,"kind":"facts","tabSize":4,"factsRevision":base,"factsTabSize":4,"ranges":[],"lineIndex":null,"lines":[]});
     server
+        .syntax_processor
         .syntax_open_shared(
             &connection,
             &json!({"documentId":"snapshots","language":"markdown","revision":1,"text":original}),
@@ -851,6 +915,7 @@ fn shared_markdown_snapshot_updates_send_only_effective_utf16_fact_edits() {
     let first: ash_app_server_protocol::protocol::syntax::SyntaxQueryResult =
         serde_json::from_value(
             server
+                .syntax_processor
                 .syntax_query(&connection, &query(1, None), &cancellation.token())
                 .unwrap(),
         )
@@ -869,7 +934,7 @@ fn shared_markdown_snapshot_updates_send_only_effective_utf16_fact_edits() {
     );
     let mut previous_text = &original;
     for (revision, text) in [(2, &original), (3, &changed), (4, &changed), (5, &original)] {
-        server.syntax_update(&connection, &json!({"documentId":"snapshots","previousRevision":revision-1,"revision":revision,"edits":[{"startOffset":0,"endOffset":previous_text.encode_utf16().count(),"text":text}]})).unwrap();
+        server.syntax_processor.syntax_update(&connection, &json!({"documentId":"snapshots","previousRevision":revision-1,"revision":revision,"edits":[{"startOffset":0,"endOffset":previous_text.encode_utf16().count(),"text":text}]})).unwrap();
         previous_text = text;
         // Skip a response to cover accumulation across an unchanged revision and
         // an actual edit, including the base retained after a discarded response.
@@ -877,6 +942,7 @@ fn shared_markdown_snapshot_updates_send_only_effective_utf16_fact_edits() {
             continue;
         }
         let response = server
+            .syntax_processor
             .syntax_query(
                 &connection,
                 &query(revision, Some(current.revision)),
@@ -917,6 +983,7 @@ fn shared_markdown_snapshot_updates_send_only_effective_utf16_fact_edits() {
         // Query a separate session so checking against a cold parse cannot alter
         // the incremental session's acknowledged base or pending changes.
         server
+            .syntax_processor
             .syntax_open_shared(
                 &connection,
                 &json!({"documentId":"cold","language":"markdown","revision":revision,"text":text}),
@@ -927,6 +994,7 @@ fn shared_markdown_snapshot_updates_send_only_effective_utf16_fact_edits() {
         let cold: ash_app_server_protocol::protocol::syntax::SyntaxQueryResult =
             serde_json::from_value(
                 server
+                    .syntax_processor
                     .syntax_query(&connection, &cold_query, &cancellation.token())
                     .unwrap(),
             )

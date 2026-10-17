@@ -21,11 +21,7 @@
     ],
     "folds": ["queries/typescript.folds.scm"],
     "snapshots": {
-      "highlights": ["tree_sitter_typescript::HIGHLIGHTS_QUERY"],
-      "tags": [
-        "tree_sitter_javascript::TAGS_QUERY",
-        "tree_sitter_typescript::TAGS_QUERY"
-      ]
+      "highlights": ["tree_sitter_typescript::HIGHLIGHTS_QUERY"]
     }
   },
   {
@@ -51,11 +47,7 @@
     ],
     "folds": ["queries/tsx.folds.scm"],
     "snapshots": {
-      "highlights": ["tree_sitter_typescript::HIGHLIGHTS_QUERY"],
-      "tags": [
-        "tree_sitter_javascript::TAGS_QUERY",
-        "tree_sitter_typescript::TAGS_QUERY"
-      ]
+      "highlights": ["tree_sitter_typescript::HIGHLIGHTS_QUERY"]
     }
   }
 ]

@@ -1,4 +1,5 @@
 use super::*;
+use crate::AppServer;
 use grep::Match as ContentSearchMatch;
 use grep::MatchRange as ContentSearchMatchRange;
 

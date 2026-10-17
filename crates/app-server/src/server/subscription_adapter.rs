@@ -93,7 +93,7 @@ fn catalog_result(
         Ok(models) => ProviderModelsListResult::Models { models },
         Err(error) => ProviderModelsListResult::Failed {
             failure: ProviderModelsListFailureDto {
-                code: super::operations::provider_models_failure_code(error),
+                code: super::models_processor::provider_models_failure_code(error),
             },
         },
     }

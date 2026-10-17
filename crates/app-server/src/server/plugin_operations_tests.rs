@@ -1,4 +1,5 @@
 use super::*;
+use crate::AppServer;
 use crate::local::ProviderModelService;
 use ash_core::InMemoryThreadStore;
 use ash_core::ThreadController;
@@ -33,6 +34,7 @@ fn declarative_extensions_are_manageable_without_becoming_effective_on_install()
     let profile = tempdir().unwrap();
     let server = plugin_server(profile.path());
     server
+        .plugin_processor()
         .plugin_authority()
         .unwrap()
         .install_local(
@@ -324,6 +326,7 @@ fn sdk_installation_rejects_missing_authority_escapes_and_stale_revisions() {
     assert_eq!(revoked["error"]["data"]["kind"], "PermissionRequired");
     assert!(
         server
+            .plugin_processor()
             .plugin_authority()
             .unwrap()
             .snapshot()
@@ -362,6 +365,7 @@ fn sdk_installation_rejects_a_package_link_outside_the_authorized_directory() {
     assert_eq!(rejected["error"]["data"]["kind"], "InvalidParams");
     assert!(
         server
+            .plugin_processor()
             .plugin_authority()
             .unwrap()
             .snapshot()

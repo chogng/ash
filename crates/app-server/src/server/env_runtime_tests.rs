@@ -193,6 +193,7 @@ fn init_does_not_import_external_instructions_into_agent_input() {
     }];
 
     server
+        .agent_processor()
         .turn_instruction_selection(&mut input, ash_protocol::CollaborationMode::Agent)
         .unwrap();
 
@@ -1648,7 +1649,12 @@ fn user_config_permissions_reactivate_an_active_restricted_dir() {
             },
         })
         .unwrap();
-    assert!(server.reconcile_active_directory_grant().is_ok());
+    assert!(
+        server
+            .environment_processor()
+            .reconcile_active_directory_grant()
+            .is_ok()
+    );
 
     assert!(server.terminal_service().is_ok());
     assert!(server.content_search_service_for(None).is_ok());
@@ -2180,7 +2186,7 @@ fn session_files_copy_within_the_selected_directory_and_reject_ambiguous_targets
             host_directory_capabilities(),
         )
         .unwrap();
-    let copied = server.fs_copy(&serde_json::json!({
+    let copied = server.fs_processor().fs_copy(&serde_json::json!({
         "sessionDirectory":selector,"source":"original.txt","target":"copied.txt"
     }));
     assert!(copied.is_ok(), "{copied:?}");
@@ -2193,7 +2199,10 @@ fn session_files_copy_within_the_selected_directory_and_reject_ambiguous_targets
         serde_json::json!({"sessionDirectory":selector,"sourceDirId":"workspace","source":"original.txt","target":"invalid.txt"}),
         serde_json::json!({"sessionDirectory":selector,"targetDirId":"workspace","source":"original.txt","target":"invalid.txt"}),
     ] {
-        assert_eq!(server.fs_copy(&params).unwrap_err().code, -32602);
+        assert_eq!(
+            server.fs_processor().fs_copy(&params).unwrap_err().code,
+            -32602
+        );
     }
     assert!(!primary.path.join("invalid.txt").exists());
     for params in [
@@ -2201,7 +2210,11 @@ fn session_files_copy_within_the_selected_directory_and_reject_ambiguous_targets
         serde_json::json!({"dirId":"workspace","sessionDirectory":selector,"path":"","moveRequested":false}),
     ] {
         assert_eq!(
-            server.fs_paste_system_files(&params).unwrap_err().code,
+            server
+                .fs_processor()
+                .fs_paste_system_files(&params)
+                .unwrap_err()
+                .code,
             -32602
         );
     }
@@ -2981,13 +2994,19 @@ fn precise_language_and_watcher_grants_are_enforced_by_the_backend() {
             Permission::UseLanguageServices,
         ]),
     );
-    server.reconcile_active_directory_grant().unwrap();
+    server
+        .environment_processor()
+        .reconcile_active_directory_grant()
+        .unwrap();
     assert!(server.language_dir_root_for(None, None).is_ok());
     grant(
         "revoke-language",
         Permissions::new([Permission::ReadFiles, Permission::ExecuteCommands]),
     );
-    server.reconcile_active_directory_grant().unwrap();
+    server
+        .environment_processor()
+        .reconcile_active_directory_grant()
+        .unwrap();
     assert!(server.language_dir_root_for(None, None).is_err());
     let runtime = server.env_runtime.read().unwrap();
     assert!(runtime.workspace.codebase.is_none());

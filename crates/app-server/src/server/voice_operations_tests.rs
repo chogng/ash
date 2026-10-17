@@ -46,7 +46,7 @@ fn voice_input_rejects_malformed_wire_controls_before_touching_media() {
         (1, json!({"type":"mute","muted":"true"})),
         (1, json!({"type":"release","id":"hold","extra":true})),
     ] {
-        assert_eq!(server.voice_operation(&host, ClientMethod::VoiceInput, &json!({"resourceId":"media","mediaEpoch":1,"inputSequence":sequence,"control":control})).unwrap_err().code, -32602);
+        assert_eq!(server.voice_processor().voice_operation(&host, ClientMethod::VoiceInput, &json!({"resourceId":"media","mediaEpoch":1,"inputSequence":sequence,"control":control})).unwrap_err().code, -32602);
     }
     assert!(!server.calls.has_active_audio());
     let mut legacy = serde_json::to_value(spec()).unwrap();
@@ -65,9 +65,13 @@ fn voice_rpc_rejects_non_product_hosts_and_closed_hosts_before_media_or_model_io
     let server = crate::tests::server();
     for mut connection in [server.connection(), server.browser_connection()] {
         crate::tests::initialize(&server, &mut connection);
-        let result = server.voice_operation(&connection, ClientMethod::VoiceOptions, &json!({}));
+        let result = server.voice_processor().voice_operation(
+            &connection,
+            ClientMethod::VoiceOptions,
+            &json!({}),
+        );
         assert_eq!(result.unwrap_err().code, -32073);
-        let result = server.voice_start(
+        let result = server.voice_processor().voice_start(
             &connection,
             &serde_json::to_value(spec()).unwrap(),
             &CancellationSource::new().token(),
@@ -78,6 +82,7 @@ fn voice_rpc_rejects_non_product_hosts_and_closed_hosts_before_media_or_model_io
     host.mark_closed();
     assert_eq!(
         server
+            .voice_processor()
             .voice_operation(
                 &host,
                 ClientMethod::VoiceRead,
@@ -99,6 +104,7 @@ fn voice_rpc_validates_wire_identities_and_original_thread_source_before_startin
         params[field] = json!("invalid\nvalue");
         assert_eq!(
             server
+                .voice_processor()
                 .voice_start(&host, &params, &CancellationSource::new().token())
                 .unwrap_err()
                 .code,
@@ -118,6 +124,7 @@ fn voice_rpc_validates_wire_identities_and_original_thread_source_before_startin
     )
     .unwrap();
     let error = server
+        .voice_processor()
         .voice_start(
             &host,
             &serde_json::to_value(params).unwrap(),
@@ -129,6 +136,7 @@ fn voice_rpc_validates_wire_identities_and_original_thread_source_before_startin
     cancelled.cancel();
     assert_eq!(
         server
+            .voice_processor()
             .voice_start(
                 &host,
                 &serde_json::to_value(spec()).unwrap(),
@@ -294,6 +302,7 @@ fn exercise_voice_core(placement: VoiceCorePlacement) {
         assert!(server.threads.read_thread(&params.thread_id).is_err());
     }
     let started = server
+        .voice_processor()
         .voice_start(
             &owner,
             &serde_json::to_value(&params).unwrap(),
@@ -305,7 +314,7 @@ fn exercise_voice_core(placement: VoiceCorePlacement) {
     std::thread::sleep(Duration::from_millis(150));
     assert_eq!(audio_count.load(std::sync::atomic::Ordering::SeqCst), 0);
     let input = |sequence, control| {
-        server.voice_operation(&owner, ClientMethod::VoiceInput, &json!({"resourceId":params.resource_id,"mediaEpoch":started["mediaEpoch"],"inputSequence":sequence,"control":control}))
+        server.voice_processor().voice_operation(&owner, ClientMethod::VoiceInput, &json!({"resourceId":params.resource_id,"mediaEpoch":started["mediaEpoch"],"inputSequence":sequence,"control":control}))
     };
     assert_eq!(
         input(1, json!({"type":"hold","id":"first"})).unwrap()["listening"],
@@ -350,7 +359,7 @@ fn exercise_voice_core(placement: VoiceCorePlacement) {
     std::thread::sleep(Duration::from_millis(150));
     assert_eq!(audio_count.load(std::sync::atomic::Ordering::SeqCst), quiet);
     let capture = || {
-        server.call_operation(&owner, ClientMethod::CallRead, &json!({"resourceId":format!("voice-{}-{}", params.resource_id, started["mediaEpoch"].as_u64().unwrap())})).unwrap()
+        server.call_processor().call_operation(&owner, ClientMethod::CallRead, &json!({"resourceId":format!("voice-{}-{}", params.resource_id, started["mediaEpoch"].as_u64().unwrap())})).unwrap()
     };
     assert_eq!(capture()["muted"], true);
     assert_eq!(
@@ -370,6 +379,7 @@ fn exercise_voice_core(placement: VoiceCorePlacement) {
     let expires = Instant::now() + Duration::from_secs(6);
     loop {
         let status = server
+            .voice_processor()
             .voice_operation(
                 &owner,
                 ClientMethod::VoiceRead,
@@ -438,6 +448,7 @@ fn exercise_voice_core(placement: VoiceCorePlacement) {
     assert!(!spoken.is_empty());
     let control = json!({"resourceId":params.resource_id,"mediaEpoch":started["mediaEpoch"],"operationId":"interrupt"});
     let next = server
+        .voice_processor()
         .voice_operation(&owner, ClientMethod::VoiceInterrupt, &control)
         .unwrap();
     assert_eq!(next["state"], "connected");
@@ -452,6 +463,7 @@ fn exercise_voice_core(placement: VoiceCorePlacement) {
     assert!(next["mediaEpoch"].as_u64().unwrap() > started["mediaEpoch"].as_u64().unwrap());
     assert_eq!(
         server
+            .voice_processor()
             .voice_operation(&owner, ClientMethod::VoiceStop, &control)
             .unwrap_err()
             .code,
@@ -460,6 +472,7 @@ fn exercise_voice_core(placement: VoiceCorePlacement) {
     let other = server.product_host_connection();
     assert!(
         server
+            .voice_processor()
             .voice_operation(
                 &other,
                 ClientMethod::VoiceRead,
@@ -468,11 +481,11 @@ fn exercise_voice_core(placement: VoiceCorePlacement) {
             .is_err()
     );
     assert_eq!(next["usageMilliseconds"], 500);
-    let stopped = server.voice_operation(&owner, ClientMethod::VoiceStop, &json!({ "resourceId":params.resource_id, "mediaEpoch":next["mediaEpoch"], "operationId":"stop" })).unwrap();
+    let stopped = server.voice_processor().voice_operation(&owner, ClientMethod::VoiceStop, &json!({ "resourceId":params.resource_id, "mediaEpoch":next["mediaEpoch"], "operationId":"stop" })).unwrap();
     assert_eq!(stopped["state"], "ended");
     assert_eq!(stopped["usageMilliseconds"], 1000);
     // The old receipt belongs to a retired epoch and must never reopen media.
-    let replay = server.voice_start(
+    let replay = server.voice_processor().voice_start(
         &owner,
         &serde_json::to_value(&params).unwrap(),
         &CancellationSource::new().token(),
@@ -481,6 +494,7 @@ fn exercise_voice_core(placement: VoiceCorePlacement) {
     let mut again = params.clone();
     again.operation_id = "fresh-start".into();
     let restarted = server
+        .voice_processor()
         .voice_start(
             &owner,
             &serde_json::to_value(again).unwrap(),
@@ -520,6 +534,7 @@ fn voice_options_exclude_a_default_connection_until_its_direct_credential_is_rea
         .with_provider_runtime(runtime);
     let owner = server.product_host_connection();
     let before = server
+        .voice_processor()
         .voice_operation(&owner, ClientMethod::VoiceOptions, &json!({}))
         .unwrap();
     assert_eq!(before["connections"], json!([]));
@@ -532,6 +547,7 @@ fn voice_options_exclude_a_default_connection_until_its_direct_credential_is_rea
         )
         .unwrap();
     let after = server
+        .voice_processor()
         .voice_operation(&owner, ClientMethod::VoiceOptions, &json!({}))
         .unwrap();
     assert_eq!(after["connections"][0]["connectionId"], "openai");
@@ -553,13 +569,15 @@ fn voice_start_cancel_retires_a_pending_directory_core_lookup_before_media_or_pr
     use std::time::Duration;
     let server = Arc::new(crate::tests::server());
     let (entered, ready) = mpsc::channel();
-    server.bind_voice_source(move |_, cancellation| {
-        entered.send(()).unwrap();
-        async move {
-            cancellation.cancelled().await;
-            Err("directory lookup cancelled".into())
-        }
-    });
+    server
+        .voice_processor()
+        .bind_voice_source(move |_, cancellation| {
+            entered.send(()).unwrap();
+            async move {
+                cancellation.cancelled().await;
+                Err("directory lookup cancelled".into())
+            }
+        });
     let mut owner = server.product_host_connection();
     crate::tests::initialize(&server, &mut owner);
     thread::scope(|scope| {

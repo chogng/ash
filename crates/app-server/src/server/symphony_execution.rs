@@ -143,7 +143,11 @@ impl AppServer {
             let workflow = store
                 .workflow(&job.workflow_id)
                 .map_err(|error| error.to_string())?;
-            match self.refresh_symphony(&workflow, &job.issue.id, cancellation) {
+            match self.symphony_tracker_processor().refresh_symphony(
+                &workflow,
+                &job.issue.id,
+                cancellation,
+            ) {
                 Ok(issue) => {
                     job = store
                         .revalidate(&job, issue)
@@ -327,11 +331,12 @@ impl AppServer {
                 _ => match invocation.workflow.approval_mode {
                     Some(mode) => mode,
                     None => self
+                        .agent_processor()
                         .default_approval_mode()
                         .map_err(|error| error.to_string())?,
                 },
             };
-            let started = self.start_turn_request(
+            let started = self.agent_processor().start_turn_request(
                 ThreadMutation {
                     ide_window_id: None,
                     connection_id: None,
@@ -429,7 +434,11 @@ impl AppServer {
                 && !job.issue.local
                 && job.desired == SymphonyControl::Run
             {
-                match self.refresh_symphony(&current_workflow, &job.issue.id, cancellation) {
+                match self.symphony_tracker_processor().refresh_symphony(
+                    &current_workflow,
+                    &job.issue.id,
+                    cancellation,
+                ) {
                     Ok(issue) => {
                         completed_job = store
                             .revalidate(&job, issue)
@@ -468,22 +477,23 @@ impl AppServer {
         } else if (job.desired != SymphonyControl::Run || stalled)
             && turn.status != TurnStatus::Cancelling
         {
-            self.interrupt_turn_request(
-                ThreadMutation {
-                    ide_window_id: None,
-                    connection_id: None,
-                    command_id: command(
-                        &format!("stop-{}", job.turn_number),
-                        &job.id,
-                        job.attempt,
-                    )?,
-                    session_id: snapshot.session_id,
-                    expected_sequence: snapshot.sequence,
-                },
-                snapshot.thread_id,
-                turn_id,
-            )
-            .map_err(|error| error.to_string())?;
+            self.agent_processor()
+                .interrupt_turn_request(
+                    ThreadMutation {
+                        ide_window_id: None,
+                        connection_id: None,
+                        command_id: command(
+                            &format!("stop-{}", job.turn_number),
+                            &job.id,
+                            job.attempt,
+                        )?,
+                        session_id: snapshot.session_id,
+                        expected_sequence: snapshot.sequence,
+                    },
+                    snapshot.thread_id,
+                    turn_id,
+                )
+                .map_err(|error| error.to_string())?;
             observed.status = SymphonyTaskStatus::Stopping;
         }
         Ok(observed)

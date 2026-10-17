@@ -47,7 +47,6 @@ pub(crate) use network_operations::http_transport_mode;
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::BTreeSet;
-use std::collections::HashMap;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Write;
@@ -60,57 +59,84 @@ use std::time::Duration;
 use std::time::Instant;
 use std::time::SystemTime;
 
+#[path = "server/request_processors/account.rs"]
 mod account_operations;
 mod agent_environment_source;
 #[cfg(test)]
 mod agent_runtime_tests;
 mod agent_selection;
+mod app_tools_adapter;
+#[path = "server/request_processors/app_tools.rs"]
 mod app_tools_operations;
+#[path = "server/request_processors/approval_environment.rs"]
 mod approval_environment_operations;
+#[path = "server/request_processors/assets.rs"]
 mod asset_operations;
 #[cfg(test)]
 mod asset_operations_tests;
+#[path = "server/request_processors/attachments.rs"]
 mod attachment_operations;
 #[cfg(test)]
 mod attachment_operations_tests;
 mod automation_execution;
+#[path = "server/request_processors/automation.rs"]
 mod automation_operations;
-mod backup_operations;
+#[path = "server/request_processors/backup.rs"]
+mod backup_processor;
 mod browser_file_access;
+#[path = "server/request_processors/browser.rs"]
+mod browser_processor;
+
 mod call_adapters;
+#[path = "server/request_processors/calls.rs"]
 mod call_operations;
 mod call_runtime;
 mod call_video;
+#[path = "server/request_processors/cloud_codebase.rs"]
 mod cloud_codebase_operations;
+#[path = "server/request_processors/codebase.rs"]
 mod codebase_operations;
+#[path = "server/request_processors/retrieval.rs"]
 mod codebase_retrieval_operations;
 mod codebase_runtime;
+#[path = "server/request_processors/collaboration.rs"]
 mod collaboration_operations;
 mod collaboration_runtime;
+#[path = "server/request_processors/configuration.rs"]
 mod config_operations;
 mod config_runtime;
+#[path = "server/request_processors/connectors.rs"]
 mod connector_operations;
 mod connector_runtime;
 #[cfg(test)]
 mod context_read_tests;
+#[path = "server/request_processors/debug.rs"]
 mod debug_operations;
+#[path = "server/request_processors/diagnostics.rs"]
 mod diagnostics_operations;
+#[path = "server/request_processors/dictation.rs"]
 mod dictation_operations;
+#[path = "server/request_processors/diff.rs"]
 mod diff_operations;
 mod dir_contributions;
 mod directory_grants_protocol;
+#[path = "server/request_processors/environment.rs"]
 mod environment_operations;
 mod environment_runtime;
 mod execution_policy;
+#[path = "server/request_processors/extension_configuration.rs"]
 mod extension_config_operations;
+#[path = "server/request_processors/extension_hosts.rs"]
 mod extension_host_operations;
 pub(crate) mod extension_host_runtime;
+#[path = "server/request_processors/extensions.rs"]
 mod extension_operations;
 mod extension_packages_extension_sources;
 pub(crate) mod extension_packages_language_runtime;
 #[cfg(test)]
 #[path = "server/extension_packages_language_runtime_tests.rs"]
 mod extension_packages_language_runtime_tests;
+#[path = "server/request_processors/extension_packages.rs"]
 mod extension_packages_operations;
 #[cfg(test)]
 #[path = "server/extension_packages_operations_tests.rs"]
@@ -118,13 +144,16 @@ mod extension_packages_operations_tests;
 mod extension_packages_projection;
 pub(crate) mod extension_packages_runtime;
 mod extension_packages_skill_sources;
+#[path = "server/request_processors/filesystem.rs"]
 mod fs_operations;
 mod fs_watcher;
+#[path = "server/request_processors/git.rs"]
 mod git_operations;
 mod git_runtime;
 mod git_turn_changes_commit;
 mod git_turn_changes_message;
 mod git_turn_changes_observer;
+#[path = "server/request_processors/git_turn_changes.rs"]
 mod git_turn_changes_operations;
 mod git_turn_changes_runtime;
 #[cfg(test)]
@@ -134,60 +163,101 @@ mod github_issue_tests;
 mod github_processor;
 mod home_context;
 mod hook_events;
+#[path = "server/request_processors/ide.rs"]
 mod ide_operations;
+mod initialize;
+#[path = "server/request_processors/instruction_import.rs"]
 mod instruction_import;
+#[path = "server/request_processors/instructions.rs"]
 mod instruction_operations;
 mod interaction_runtime;
+#[path = "server/request_processors/issues.rs"]
 mod issue_operations;
+#[path = "server/request_processors/issue_reporter.rs"]
 mod issue_reporter_operations;
+#[path = "server/request_processors/language_documents.rs"]
 mod language_document_features;
+#[path = "server/request_processors/language.rs"]
 mod language_operations;
 mod language_runtime;
+#[path = "server/request_processors/mcp.rs"]
 mod mcp_operations;
 mod memories_context;
+#[path = "server/request_processors/memories.rs"]
 mod memories_operations;
-mod memory_operations;
+#[path = "server/request_processors/memory_diagnostics.rs"]
+mod memory_diagnostics_processor;
 mod message_checkpoints;
-mod message_history_operations;
+#[path = "server/request_processors/message_history.rs"]
+mod message_history_processor;
 pub(crate) mod message_queue;
+#[path = "server/request_processors/models.rs"]
+mod models_processor;
+#[path = "server/request_processors/network.rs"]
 mod network_operations;
 pub(crate) mod notification_queue;
+#[path = "server/request_processors/agent.rs"]
 mod operations;
 mod plugin_extension_sources;
+#[path = "server/request_processors/plugins.rs"]
 mod plugin_operations;
 mod plugin_runtime;
 mod plugin_skill_sources;
 mod prepared_extension_sources;
+#[path = "server/request_processors/projects.rs"]
 mod project_operations;
 #[cfg(test)]
 #[path = "server/project_operations_tests.rs"]
 mod project_operations_tests;
 mod project_projection;
+#[path = "server/request_processors/providers.rs"]
 mod provider_operations;
+mod queue_execution;
+#[path = "server/request_processors/queue.rs"]
 mod queue_operations;
+mod request_contexts;
 pub(crate) mod request_dispatch;
 mod request_processing;
 mod request_serialization;
+#[path = "server/request_processors/resources.rs"]
+mod resources_processor;
 mod runtime_extensions;
+#[path = "server/request_processors/search.rs"]
 mod search_operations;
+#[path = "server/request_processors/secrets.rs"]
 mod secret_operations;
 mod semantic_index_job;
+#[path = "server/request_processors/sessions.rs"]
 mod session_operations;
+#[path = "server/request_processors/session_runtime.rs"]
+mod session_runtime_processor;
+
+#[path = "server/request_processors/skills.rs"]
 mod skill_operations;
 mod subscription_adapter;
 pub(crate) mod switch_mode_tool;
+#[path = "server/request_processors/symbols.rs"]
 mod symbol_index_operations;
 mod symbol_index_runtime;
 mod symphony_execution;
+#[path = "server/request_processors/symphony.rs"]
 mod symphony_operations;
+#[path = "server/request_processors/symphony_tracker.rs"]
 mod symphony_tracker;
+#[path = "server/request_processors/syntax.rs"]
 mod syntax_operations;
+#[path = "server/request_processors/task_delivery.rs"]
+mod task_delivery_processor;
+#[path = "server/request_processors/teams.rs"]
 mod team_operations;
 #[cfg(test)]
 #[path = "server/team_operations_tests.rs"]
 mod team_operations_tests;
+#[path = "server/request_processors/terminals.rs"]
 mod terminal_operations;
+#[path = "server/request_processors/testing.rs"]
 mod testing_operations;
+
 #[cfg(test)]
 mod testing_operations_tests;
 mod thread_dir_binding;
@@ -196,6 +266,7 @@ mod thread_history_files;
 mod turn_backend_router;
 pub(crate) mod update_broker;
 pub(crate) mod update_plan_tool;
+#[path = "server/request_processors/voice.rs"]
 mod voice_operations;
 #[cfg(test)]
 #[path = "server/voice_operations_tests.rs"]
@@ -221,7 +292,8 @@ pub struct AppServer {
     pub(crate) session_runtimes:
         Option<Arc<crate::session_runtime_provider::SessionRuntimeProvider>>,
     pub(crate) task_delivery: Option<Arc<task_delivery::Runtime>>,
-    backups: Option<Arc<ash_state::SqliteBackupStore>>,
+    backup_processor: backup_processor::BackupRequestProcessor,
+    diff_processor: diff_operations::DiffRequestProcessor,
     queue: Option<Arc<queue::QueueStore>>,
     queue_directory: Option<String>,
     diagnostics: diagnostics::Diagnostics,
@@ -238,8 +310,8 @@ pub struct AppServer {
     request_scheduler: RequestScheduler,
     request_cancellations: RequestCancellationRegistry,
     pub(super) resources: Arc<Mutex<ResourceStore>>,
-    pub(super) assets: Option<Arc<assets::Assets>>,
-    memory_diagnostics: ash_memory_diagnostics::MemoryDiagnostics,
+    asset_processor: asset_operations::AssetsRequestProcessor,
+    memory_diagnostics_processor: memory_diagnostics_processor::MemoryDiagnosticsRequestProcessor,
     memories: Option<Arc<memories::Memories>>,
     approval_environment: Option<Arc<guardian_environment::Environment>>,
     pub(super) attachment_uploads: Mutex<AttachmentUploadStore>,
@@ -248,17 +320,15 @@ pub struct AppServer {
     dictation: realtime_voice::DictationManager,
     dictation_models: realtime_voice::DictationModelManager,
     microphone_gate: Mutex<()>,
-    pub(super) collaboration: Mutex<collaboration_runtime::DocumentCollaborationStore>,
+    collaboration_processor: collaboration_operations::CollaborationRequestProcessor,
     pub(super) extensions: Mutex<ExtensionPackages>,
     pub(super) config: Option<Arc<ConfigStore>>,
     home: Option<Arc<ash_home::AshHome>>,
     pub(super) provider_credentials: Option<Arc<ProviderCredentialService>>,
-    secret_store: Option<Arc<dyn ash_secrets::SecretStore>>,
+    secret_processor: secret_operations::SecretRequestProcessor,
     pub(super) file_search: Arc<file_search::Service>,
     env_config: Arc<RwLock<environment_runtime::EnvRuntimeConfig>>,
-    pub(super) connectors: Option<Arc<connectors::ConnectorCredentialService>>,
-    pub(super) connector_oauth: Option<Arc<connectors::ConnectorOAuthService>>,
-    pub(super) connector_device_oauth: Option<Arc<connectors::ConnectorDeviceOAuthService>>,
+    connector_processor: connector_operations::ConnectorRequestProcessor,
     pub(super) mcp_oauth: Option<Arc<ash_mcp_extension::McpOAuthService>>,
     pub(super) plugins: Option<ash_core_plugins::PluginActivationAuthority>,
     extension_hosts: Option<extension_host_runtime::ExtensionHostRuntime>,
@@ -283,7 +353,7 @@ pub struct AppServer {
     pub(super) mcp_runtime_intents: McpRuntimeIntents,
     pub(super) mcp_status: Arc<RwLock<ash_mcp_extension::McpRuntimeStatusSnapshot>>,
     language: Arc<Mutex<language_runtime::AppServerLanguageRuntime>>,
-    syntax_documents: Mutex<HashMap<(u64, String), Arc<Mutex<syntax_operations::SyntaxSession>>>>,
+    syntax_processor: syntax_operations::SyntaxRequestProcessor,
     testing: testing::TestingService,
     approval_review_model: Option<ash_core::ApprovalReviewerFactory>,
     login: Option<Arc<ash_login::LoginService>>,
@@ -327,7 +397,6 @@ pub struct AppServer {
     _skill_watcher: Option<SkillWatcher>,
     _config_watcher: Option<config_runtime::ConfigWatcher>,
     _subscription_observer: Option<ash_subscriptions::SubscriptionObserver>,
-    _connector_watcher: Option<connector_runtime::ConnectorWatcher>,
     _plugin_watcher: Option<plugin_runtime::PluginWatcher>,
     _extension_packages_watcher: Option<extension_packages_runtime::ExtensionsChangeWatcher>,
     _editor_extension_policy_watcher: Option<extension_packages_runtime::ExtensionsChangeWatcher>,
@@ -340,8 +409,8 @@ pub struct AppServer {
     projects: Option<Arc<ash_projects::ProjectCoordinator>>,
     teams: Option<Arc<ash_teams::TeamCoordinator>>,
     team_memberships: Arc<OnceLock<Arc<ash_teams::TeamCoordinator>>>,
-    automation: Option<Arc<ash_automation::AutomationStore>>,
-    message_history: Option<Arc<dyn message_history::MessageHistoryStore>>,
+    automation_processor: automation_operations::AutomationRequestProcessor,
+    message_history_processor: message_history_processor::MessageHistoryRequestProcessor,
     symphony: Option<Arc<ash_symphony::Store>>,
     symphony_http: Option<Arc<dyn ash_http_client::HttpClient>>,
     pub(crate) updates: Arc<UpdateBroker>,
@@ -549,6 +618,445 @@ impl ConnectionNotifications {
 }
 
 impl AppServer {
+    fn task_delivery_processor(&self) -> task_delivery_processor::TaskDeliveryRequestProcessor<'_> {
+        task_delivery_processor::TaskDeliveryRequestProcessor::new(
+            &self.task_delivery,
+            &self.updates,
+        )
+    }
+
+    pub(crate) fn with_thread_pull_requests(
+        mut self,
+        store: std::sync::Arc<ash_state::SqliteThreadStore>,
+    ) -> Self {
+        self.thread_pull_requests = Some(store);
+        self
+    }
+    fn session_github_processor(&self) -> github_processor::GitHubSessionRequestProcessor<'_> {
+        github_processor::GitHubSessionRequestProcessor::new(
+            &self.threads,
+            &self.thread_pull_requests,
+            &self.updates,
+        )
+    }
+
+    fn browser_processor(&self) -> browser_processor::BrowserRequestProcessor<'_> {
+        browser_processor::BrowserRequestProcessor::new(
+            &self.browser_host,
+            &self.calls,
+            &self.local_env_host,
+        )
+    }
+    fn session_runtime_processor(
+        &self,
+    ) -> session_runtime_processor::SessionRuntimeRequestProcessor<'_> {
+        session_runtime_processor::SessionRuntimeRequestProcessor::new(
+            &self.request_cancellations,
+            &self.request_scheduler,
+        )
+    }
+    fn models_processor(&self) -> models_processor::ModelRequestProcessor<'_> {
+        models_processor::ModelRequestProcessor::new(&self.model_catalog, &self.secret_processor)
+    }
+    fn resources_processor(&self) -> resources_processor::ResourceRequestProcessor<'_> {
+        resources_processor::ResourceRequestProcessor::new(&self.resources)
+    }
+
+    fn agent_processor(&self) -> operations::AgentRequestProcessor<'_, Self> {
+        operations::AgentRequestProcessor::new(
+            self,
+            &self.config,
+            &self.env_config,
+            &self.env_runtime,
+            &self.env_runtime_gate,
+            &self.git_turn_changes,
+            &self.home,
+            &self.model_catalog,
+            &self.model_instructions,
+            &self.pty_helper,
+            &self.updates,
+        )
+    }
+    fn app_tools_processor(&self) -> app_tools_operations::AppToolsRequestProcessor<'_, Self> {
+        app_tools_operations::AppToolsRequestProcessor::new(
+            self,
+            &self.projects,
+            &self.automation_processor,
+            &self.client_host,
+            &self.env_runtime,
+        )
+    }
+    fn queue_processor(&self) -> queue_operations::QueueRequestProcessor<'_, Self> {
+        queue_operations::QueueRequestProcessor::new(
+            self,
+            &self.agent_extensions,
+            &self.analytics,
+            &self.config,
+            &self.queue,
+            &self.queue_directory,
+            &self.updates,
+        )
+    }
+
+    fn approval_environment_processor(
+        &self,
+    ) -> approval_environment_operations::ApprovalEnvironmentRequestProcessor<'_> {
+        approval_environment_operations::ApprovalEnvironmentRequestProcessor::new(
+            &self.approval_environment,
+            &self.env_runtime,
+            &self.model,
+            &self.request_cancellations,
+            &self.request_scheduler,
+            &self.threads,
+        )
+    }
+    fn attachment_processor(&self) -> attachment_operations::AttachmentRequestProcessor<'_, Self> {
+        attachment_operations::AttachmentRequestProcessor::new(
+            self,
+            &self.attachment_uploads,
+            &self.resources,
+            &self.threads,
+        )
+    }
+    fn cloud_codebase_processor(
+        &self,
+    ) -> cloud_codebase_operations::CloudCodebaseRequestProcessor<'_, Self> {
+        cloud_codebase_operations::CloudCodebaseRequestProcessor::new(self)
+    }
+    fn codebase_processor(&self) -> codebase_operations::CodebaseRequestProcessor<'_, Self> {
+        codebase_operations::CodebaseRequestProcessor::new(self, &self.config)
+    }
+    fn retrieval_processor(
+        &self,
+    ) -> codebase_retrieval_operations::CodebaseRetrievalRequestProcessor<'_, Self> {
+        codebase_retrieval_operations::CodebaseRetrievalRequestProcessor::new(self)
+    }
+    fn config_processor(&self) -> config_operations::ConfigRequestProcessor<'_, Self> {
+        config_operations::ConfigRequestProcessor::new(
+            self,
+            &self.config,
+            &self.provider_credentials,
+            &self.provider_runtime,
+            &self.semantic_model_provider,
+            &self.trace_recorder,
+        )
+    }
+    fn debug_processor(&self) -> debug_operations::DebugRequestProcessor<'_, Self> {
+        debug_operations::DebugRequestProcessor::new(self)
+    }
+    fn environment_processor(
+        &self,
+    ) -> environment_operations::EnvironmentRequestProcessor<'_, Self> {
+        environment_operations::EnvironmentRequestProcessor::new(
+            self,
+            &self.env_runtime,
+            &self.local_env_host,
+        )
+    }
+    fn extension_config_processor(
+        &self,
+    ) -> extension_config_operations::ExtensionConfigRequestProcessor<'_, Self> {
+        extension_config_operations::ExtensionConfigRequestProcessor::new(self, &self.config)
+    }
+    fn extension_host_processor(
+        &self,
+    ) -> extension_host_operations::ExtensionHostRequestProcessor<'_, Self> {
+        extension_host_operations::ExtensionHostRequestProcessor::new(self, &self.extension_hosts)
+    }
+    fn fs_processor(&self) -> fs_operations::FileSystemRequestProcessor<'_, Self> {
+        fs_operations::FileSystemRequestProcessor::new(
+            self,
+            &self.request_cancellations,
+            &self.request_scheduler,
+            &self.resources,
+        )
+    }
+    fn git_processor(&self) -> git_operations::GitRequestProcessor<'_, Self> {
+        git_operations::GitRequestProcessor::new(
+            self,
+            &self.env_runtime,
+            &self.env_runtime_gate,
+            &self.config,
+            &self.dir_services,
+            &self.git_attribution_policy,
+            &self.git_turn_changes,
+            &self.request_cancellations,
+            &self.request_scheduler,
+        )
+    }
+    fn ide_processor(&self) -> ide_operations::IdeRequestProcessor<'_, Self> {
+        ide_operations::IdeRequestProcessor::new(
+            self,
+            &self.client_host,
+            &self.ide_registry,
+            &self.queue,
+        )
+    }
+    fn instruction_import_processor(
+        &self,
+    ) -> instruction_import::InstructionImportRequestProcessor<'_, Self> {
+        instruction_import::InstructionImportRequestProcessor::new(self, &self.home)
+    }
+    fn language_processor(&self) -> language_operations::LanguageRequestProcessor<'_, Self> {
+        language_operations::LanguageRequestProcessor::new(
+            self,
+            &self.config,
+            &self.language,
+            &self.request_cancellations,
+            &self.request_scheduler,
+        )
+    }
+    fn language_document_processor(
+        &self,
+    ) -> language_document_features::LanguageDocumentRequestProcessor<'_, Self> {
+        language_document_features::LanguageDocumentRequestProcessor::new(self)
+    }
+    fn mcp_processor(&self) -> mcp_operations::McpRequestProcessor<'_, Self> {
+        mcp_operations::McpRequestProcessor::new(
+            self,
+            &self._tool_config_watcher,
+            &self.config,
+            &self.local_env_host,
+            &self.mcp_oauth,
+            &self.mcp_runtime_intents,
+            &self.mcp_status,
+            &self.request_cancellations,
+            &self.request_scheduler,
+            &self.resources,
+            &self.threads,
+        )
+    }
+    fn memories_processor(&self) -> memories_operations::MemoriesRequestProcessor<'_, Self> {
+        memories_operations::MemoriesRequestProcessor::new(
+            self,
+            &self.analytics,
+            &self.memories,
+            &self.projects,
+            &self.teams,
+            &self.updates,
+        )
+    }
+    fn network_processor(&self) -> network_operations::NetworkRequestProcessor<'_, Self> {
+        network_operations::NetworkRequestProcessor::new(
+            self,
+            &self.config,
+            &self.network_diagnostics,
+            &self.provider_runtime,
+        )
+    }
+    fn search_processor(&self) -> search_operations::SearchRequestProcessor<'_, Self> {
+        search_operations::SearchRequestProcessor::new(
+            self,
+            &self.env_runtime,
+            &self.file_search,
+            &self.request_cancellations,
+            &self.request_scheduler,
+        )
+    }
+    fn session_processor(&self) -> session_operations::SessionRequestProcessor<'_, Self> {
+        session_operations::SessionRequestProcessor::new(
+            self,
+            &self.agent_extensions,
+            &self.dir_services,
+            &self.env_runtime,
+            &self.git_turn_changes,
+            &self.message_board,
+            &self.notes,
+            &self.queue,
+            &self.trace_recorder,
+            &self.updates,
+            &self.workflows,
+        )
+    }
+    fn symbol_processor(&self) -> symbol_index_operations::SymbolIndexRequestProcessor<'_, Self> {
+        symbol_index_operations::SymbolIndexRequestProcessor::new(self)
+    }
+    fn symphony_processor(&self) -> symphony_operations::SymphonyRequestProcessor<'_, Self> {
+        symphony_operations::SymphonyRequestProcessor::new(self, &self.symphony, &self.updates)
+    }
+    fn symphony_tracker_processor(
+        &self,
+    ) -> symphony_tracker::SymphonyTrackerRequestProcessor<'_, Self> {
+        symphony_tracker::SymphonyTrackerRequestProcessor::new(self, &self.symphony_http)
+    }
+    fn terminal_processor(&self) -> terminal_operations::TerminalRequestProcessor<'_, Self> {
+        terminal_operations::TerminalRequestProcessor::new(self)
+    }
+    fn team_processor(&self) -> team_operations::TeamRequestProcessor<'_, Self> {
+        team_operations::TeamRequestProcessor::new(
+            self,
+            &self.dir_services,
+            &self.teams,
+            &self.threads,
+            &self.updates,
+        )
+    }
+
+    fn account_processor(&self) -> account_operations::AccountRequestProcessor<'_> {
+        account_operations::AccountRequestProcessor::new(
+            &self.chatgpt,
+            &self.glm_accounts,
+            &self.kimi,
+            &self.login,
+            &self.supergrok,
+            &self.updates,
+        )
+    }
+
+    fn call_processor(&self) -> call_operations::CallRequestProcessor<'_> {
+        call_operations::CallRequestProcessor::new(
+            &self.calls,
+            &self.dictation,
+            &self.home,
+            &self.microphone_gate,
+        )
+    }
+
+    fn diagnostics_processor(&self) -> diagnostics_operations::DiagnosticsRequestProcessor<'_> {
+        diagnostics_operations::DiagnosticsRequestProcessor::new(
+            &self.analytics,
+            &self.config,
+            &self.diagnostics,
+            &self.feedback,
+            &self.telemetry,
+        )
+    }
+
+    fn dictation_processor(&self) -> dictation_operations::DictationRequestProcessor<'_> {
+        dictation_operations::DictationRequestProcessor::new(
+            &self.calls,
+            &self.config,
+            &self.dictation,
+            &self.dictation_models,
+            &self.home,
+            &self.microphone_gate,
+            &self.provider_runtime,
+            &self.updates,
+        )
+    }
+
+    fn extension_processor(&self) -> extension_operations::ExtensionRequestProcessor<'_> {
+        extension_operations::ExtensionRequestProcessor::new(
+            &self.extensions,
+            &self.plugins_manager,
+            &self.resources,
+        )
+    }
+
+    fn extension_packages_processor(
+        &self,
+    ) -> extension_packages_operations::ExtensionPackagesRequestProcessor<'_> {
+        extension_packages_operations::ExtensionPackagesRequestProcessor::new(
+            &self.built_in_extension_runtimes,
+            &self.editor_extension_policy,
+            &self.extension_hosts,
+            &self.extension_packages_language_runtime,
+            &self.extensions,
+            &self.language,
+            &self.plugin_package_service,
+            &self.plugins_manager,
+            &self.skills,
+            &self.updates,
+        )
+    }
+
+    fn git_turn_changes_processor(
+        &self,
+    ) -> git_turn_changes_operations::GitTurnChangesRequestProcessor<'_> {
+        git_turn_changes_operations::GitTurnChangesRequestProcessor::new(
+            &self.git_turn_changes,
+            &self.threads,
+        )
+    }
+
+    fn instruction_processor(&self) -> instruction_operations::InstructionRequestProcessor<'_> {
+        instruction_operations::InstructionRequestProcessor::new(&self.env_runtime, &self.home)
+    }
+
+    fn issue_reporter_processor(
+        &self,
+    ) -> issue_reporter_operations::IssueReporterRequestProcessor<'_> {
+        issue_reporter_operations::IssueReporterRequestProcessor::new(
+            &self.github_processor,
+            &self.issue_reporter,
+            &self.request_cancellations,
+            &self.request_scheduler,
+        )
+    }
+
+    fn plugin_processor(&self) -> plugin_operations::PluginRequestProcessor<'_> {
+        plugin_operations::PluginRequestProcessor::new(&self.env_runtime, &self.plugins)
+    }
+
+    fn project_processor(&self) -> project_operations::ProjectRequestProcessor<'_> {
+        project_operations::ProjectRequestProcessor::new(
+            &self.env_runtime,
+            &self.projects,
+            &self.threads,
+            &self.updates,
+        )
+    }
+
+    fn provider_processor(&self) -> provider_operations::ProviderRequestProcessor<'_> {
+        provider_operations::ProviderRequestProcessor::new(
+            &self.config,
+            &self.login,
+            &self.provider_credentials,
+            &self.provider_runtime,
+            &self.updates,
+        )
+    }
+
+    fn skill_processor(&self) -> skill_operations::SkillRequestProcessor<'_> {
+        skill_operations::SkillRequestProcessor::new(&self.config, &self.resources, &self.skills)
+    }
+
+    fn testing_processor(&self) -> testing_operations::TestingRequestProcessor<'_> {
+        testing_operations::TestingRequestProcessor::new(&self.env_runtime, &self.testing)
+    }
+
+    fn voice_source(&self) -> voice_operations::VoiceSource {
+        voice_operations::VoiceSource::new(
+            self.threads.clone(),
+            self.client_host.clone(),
+            self.env_runtime.clone(),
+            self.updates.clone(),
+            self.queue.clone(),
+        )
+    }
+
+    /// Resolves the source runtime at the composition boundary; speech receives only its domain handles.
+    pub(crate) fn bind_voice_source<F, Fut>(&self, lookup: F)
+    where
+        F: Fn(ash_protocol::SessionId, CancellationToken) -> Fut + Send + Sync + 'static,
+        Fut: std::future::Future<Output = Result<Option<Arc<AppServer>>, String>> + Send + 'static,
+    {
+        self.voice_processor()
+            .bind_voice_source(move |session, cancellation| {
+                let resolved = lookup(session, cancellation);
+                async move {
+                    resolved
+                        .await
+                        .map(|server| server.map(|server| server.voice_source()))
+                }
+            });
+    }
+
+    fn voice_processor(&self) -> voice_operations::VoiceRequestProcessor<'_> {
+        voice_operations::VoiceRequestProcessor::new(
+            self.voice_source(),
+            &self.calls,
+            &self.config,
+            &self.dictation,
+            &self.home,
+            &self.microphone_gate,
+            &self.provider_runtime,
+            &self.request_cancellations,
+            &self.request_scheduler,
+            &self.voices,
+        )
+    }
+
     pub(crate) fn with_ide_registry(
         mut self,
         registry: Option<Arc<crate::ide_registry::IdeRegistry>>,
@@ -560,7 +1068,24 @@ impl AppServer {
     }
 
     pub(crate) fn with_backup_store(mut self, backups: Arc<ash_state::SqliteBackupStore>) -> Self {
-        self.backups = Some(backups);
+        self.backup_processor = backup_processor::BackupRequestProcessor::new(backups);
+        self
+    }
+
+    pub(crate) fn with_message_history_store(
+        mut self,
+        store: Arc<dyn message_history::MessageHistoryStore>,
+    ) -> Self {
+        self.message_history_processor =
+            message_history_processor::MessageHistoryRequestProcessor::new(store);
+        self
+    }
+
+    pub(crate) fn with_automation_store(
+        mut self,
+        store: Arc<ash_automation::AutomationStore>,
+    ) -> Self {
+        self.automation_processor = self.automation_processor.with_store(store);
         self
     }
 
@@ -685,6 +1210,12 @@ impl AppServer {
         );
         let diagnostics = diagnostics::Diagnostics::default();
         let telemetry = ash_otel::Telemetry::new(diagnostics.clone());
+        let request_scheduler = RequestScheduler::default();
+        let request_cancellations = RequestCancellationRegistry::default();
+        let syntax_processor = syntax_operations::SyntaxRequestProcessor::new(
+            request_scheduler.clone(),
+            request_cancellations.clone(),
+        );
         Self {
             trace_recorder: Arc::new(ash_rollout_trace::TraceRecorder::default()),
             task_delivery: None,
@@ -700,13 +1231,17 @@ impl AppServer {
             model,
             model_catalog: unavailable_model_catalog(),
             model_instructions: ash_models_manager::ModelInstructionCatalog::built_in(),
-            request_scheduler: RequestScheduler::default(),
-            request_cancellations: RequestCancellationRegistry::default(),
+            request_scheduler,
+            request_cancellations,
             session_runtimes: None,
+            memory_diagnostics_processor:
+                memory_diagnostics_processor::MemoryDiagnosticsRequestProcessor::new(Arc::clone(
+                    &resources,
+                )),
             resources,
-            assets: None,
-            backups: None,
-            memory_diagnostics: ash_memory_diagnostics::MemoryDiagnostics::default(),
+            asset_processor: asset_operations::AssetsRequestProcessor::default(),
+            backup_processor: backup_processor::BackupRequestProcessor::default(),
+            diff_processor: diff_operations::DiffRequestProcessor,
             memories: None,
             approval_environment: None,
             attachment_uploads: Mutex::new(AttachmentUploadStore::default()),
@@ -715,17 +1250,17 @@ impl AppServer {
             dictation: realtime_voice::DictationManager::default(),
             dictation_models: realtime_voice::DictationModelManager::default(),
             microphone_gate: Mutex::new(()),
-            collaboration: Mutex::new(collaboration_runtime::DocumentCollaborationStore::default()),
+            collaboration_processor: collaboration_operations::CollaborationRequestProcessor::new(
+                Arc::clone(&updates),
+            ),
             extensions: Mutex::new(ExtensionPackages::default()),
             config: None,
             home: None,
             provider_credentials: None,
-            secret_store: None,
+            secret_processor: secret_operations::SecretRequestProcessor::default(),
             file_search: Arc::new(file_search::Service),
             env_config,
-            connectors: None,
-            connector_oauth: None,
-            connector_device_oauth: None,
+            connector_processor: connector_operations::ConnectorRequestProcessor::default(),
             mcp_oauth: None,
             plugins: None,
             extension_hosts: None,
@@ -749,7 +1284,7 @@ impl AppServer {
             language: Arc::new(Mutex::new(language_runtime::AppServerLanguageRuntime::new(
                 updates.clone(),
             ))),
-            syntax_documents: Mutex::new(HashMap::new()),
+            syntax_processor,
             testing: testing::TestingService::default(),
             approval_review_model: None,
             login: None,
@@ -793,7 +1328,6 @@ impl AppServer {
             _skill_watcher: None,
             _config_watcher: None,
             _subscription_observer: None,
-            _connector_watcher: None,
             _plugin_watcher: None,
             _extension_packages_watcher: None,
             _editor_extension_policy_watcher: None,
@@ -806,8 +1340,11 @@ impl AppServer {
             projects: None,
             teams: None,
             team_memberships: Arc::new(OnceLock::new()),
-            automation: None,
-            message_history: None,
+            automation_processor: automation_operations::AutomationRequestProcessor::new(
+                Arc::clone(&updates),
+            ),
+            message_history_processor:
+                message_history_processor::MessageHistoryRequestProcessor::default(),
             symphony: None,
             symphony_http: None,
             updates,
@@ -951,7 +1488,8 @@ impl AppServer {
         let store = Arc::new(
             ash_state::SqliteAssetStore::open(database_path).map_err(|error| error.to_string())?,
         );
-        self.assets = Some(Arc::new(assets::Assets::new(store)));
+        self.asset_processor =
+            asset_operations::AssetsRequestProcessor::new(Arc::new(assets::Assets::new(store)));
         Ok(self)
     }
 
@@ -1131,8 +1669,8 @@ impl AppServer {
             return;
         }
         self.cancel_connection_logins(connection.connection_id);
-        self.memory_diagnostics
-            .close_owner(connection.connection_id);
+        self.memory_diagnostics_processor
+            .connection_closed(connection.connection_id);
         self.feedback.close(connection.connection_id);
         self.voices.close(connection.connection_id);
         self.calls.close(connection.connection_id);
@@ -1141,9 +1679,8 @@ impl AppServer {
             .cancel_connection(connection.connection_id);
         self.request_cancellations
             .cancel_connection(connection.connection_id);
-        if let Ok(mut documents) = self.syntax_documents.lock() {
-            documents.retain(|(owner, _), _| *owner != connection.connection_id);
-        }
+        self.syntax_processor
+            .connection_closed(connection.connection_id);
         if let Ok(git) = self.git_runtime_service() {
             git.close_connection(connection.connection_id);
         }
@@ -1153,9 +1690,11 @@ impl AppServer {
                 match extension_packages
                     .release_capability(ash_core_plugins::ReleaseCapabilityRequest { lease_id })
                 {
-                    Ok(outcome) => self.reconcile_released_extension_packages_capability(
-                        outcome.installation_changed,
-                    ),
+                    Ok(outcome) => self
+                        .extension_packages_processor()
+                        .reconcile_released_extension_packages_capability(
+                            outcome.installation_changed,
+                        ),
                     Err(error) => {
                         log::warn!(
                             "failed to release Extensions capability on disconnect: {error}"
@@ -1175,18 +1714,16 @@ impl AppServer {
         let lost_dynamic_tools = self.updates.unregister(connection.connection_id);
         self.cancel_lost_dynamic_tool_owners(lost_dynamic_tools);
         connection.outbound_notifications.close();
-        if let Ok(mut resources) = self.resources.lock() {
-            resources.release_owner(connection.connection_id);
-        }
+        self.resources_processor()
+            .connection_closed(connection.connection_id);
         if let Ok(mut uploads) = self.attachment_uploads.lock() {
             uploads.release_owner(connection.connection_id);
         }
         for terminals in self.configured_terminal_services() {
             terminals.close_owner(connection.connection_id);
         }
-        if let Some(assets) = &self.assets {
-            assets.close_owner(connection.connection_id);
-        }
+        self.asset_processor
+            .connection_closed(connection.connection_id);
         self.testing.close_owner(connection.connection_id);
         for debug_adapters in self.configured_debug_adapter_services() {
             debug_adapters.close_owner(connection.connection_id);
@@ -1204,17 +1741,7 @@ impl AppServer {
     }
 
     fn synchronize_browser_tool_availability(&self) -> Result<(), String> {
-        let Some(host) = &self.local_env_host else {
-            return Ok(());
-        };
-        loop {
-            let (revision, available) = self.browser_host.owner_availability();
-            host.replace_browser_host_available(available)
-                .map_err(|error| error.to_string())?;
-            if self.browser_host.owner_availability().0 == revision {
-                return Ok(());
-            }
-        }
+        self.browser_processor().synchronize_tool_availability()
     }
 
     fn cancel_lost_dynamic_tool_owners(&self, requests: Vec<ash_protocol::AgentRequestEnvelope>) {
@@ -1418,11 +1945,9 @@ impl AppServer {
         mut self,
         connectors: Arc<connectors::ConnectorCredentialService>,
     ) -> Self {
-        self._connector_watcher = Some(connector_runtime::ConnectorWatcher::start(
-            connectors.authority(),
-            Arc::clone(&self.updates),
-        ));
-        self.connectors = Some(connectors);
+        self.connector_processor = self
+            .connector_processor
+            .with_service(connectors, Arc::clone(&self.updates));
         self
     }
 
@@ -1431,7 +1956,7 @@ impl AppServer {
         mut self,
         oauth: Arc<connectors::ConnectorOAuthService>,
     ) -> Self {
-        self.connector_oauth = Some(oauth);
+        self.connector_processor = self.connector_processor.with_oauth(oauth);
         self
     }
 
@@ -1440,7 +1965,7 @@ impl AppServer {
         mut self,
         oauth: Arc<connectors::ConnectorDeviceOAuthService>,
     ) -> Self {
-        self.connector_device_oauth = Some(oauth);
+        self.connector_processor = self.connector_processor.with_device_oauth(oauth);
         self
     }
 
@@ -1619,7 +2144,8 @@ impl AppServer {
                 ),
             ));
             self.rebind_dynamic_extension_sources();
-            self.reconcile_extension_packages_consumers();
+            self.extension_packages_processor()
+                .reconcile_extension_packages_consumers();
         }
         self
     }
@@ -1887,7 +2413,7 @@ impl AppServer {
     }
 
     pub(crate) fn with_secret_store(mut self, store: Arc<dyn ash_secrets::SecretStore>) -> Self {
-        self.secret_store = Some(store);
+        self.secret_processor = secret_operations::SecretRequestProcessor::new(store);
         self
     }
 
@@ -2509,79 +3035,46 @@ impl AppServer {
         }
         match client_method(&request.method) {
             Some(ClientMethod::Initialize) => unreachable!("initialize handled before gate"),
-            Some(ClientMethod::BrowserConfigure) => {
-                let params: ash_app_server_protocol::protocol::browser::BrowserConfigureParams =
-                    decode(&request.params)?;
-                self.browser_host
-                    .configure(connection.connection_id, &params)
-                    .map_err(|_| RpcError::new(-32000, AppServerErrorName::ResourceNotOwner))?;
-                self.synchronize_browser_tool_availability()
-                    .map_err(|_| RpcError::new(-32603, AppServerErrorName::InternalError))?;
-                result(&())
-            }
-            Some(ClientMethod::BrowserNetworkAuthorize) => {
-                let params: ash_app_server_protocol::protocol::browser::BrowserNetworkAuthorizeParams = decode(&request.params)?;
-                let policy = self.calls.network_policy();
-                let allowed = !params.network_token.is_empty()
-                    && params.network_token.len() <= 256
-                    && !params.url.is_empty()
-                    && params.url.len() <= 8192
-                    && !params.method.is_empty()
-                    && params.method.len() <= 32
-                    && cancellation.check().is_ok()
-                    && policy.check_url(&params.url).is_ok()
-                    && self
-                        .browser_host
-                        .authorize_network(connection.connection_id, &params)
-                    && policy.check_url(&params.url).is_ok()
-                    && cancellation.check().is_ok();
-                result(
-                    &ash_app_server_protocol::protocol::browser::BrowserNetworkAuthorizeResult {
-                        allowed,
-                    },
-                )
-            }
+            Some(ClientMethod::BrowserConfigure) => self
+                .browser_processor()
+                .configure(connection, &request.params),
+            Some(ClientMethod::BrowserNetworkAuthorize) => self
+                .browser_processor()
+                .authorize_network(connection, &request.params, cancellation),
             Some(ClientMethod::BrowserSharingSet) => {
-                if !connection.supports_directory_grants_host() {
-                    return Err(RpcError::new(-32000, AppServerErrorName::ResourceNotOwner));
-                }
-                let params: ash_app_server_protocol::protocol::browser::BrowserSharingSetParams =
-                    decode(&request.params)?;
-                if params.target_id.is_empty()
-                    || params.target_id.len() > 256
-                    || params.thread_ids.len() > 32
-                {
-                    return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
-                }
-                self.browser_host
-                    .set_sharing(connection.connection_id, &params, cancellation)
-                    .map_err(|_| RpcError::new(-32000, AppServerErrorName::ResourceNotOwner))?;
-                result(&())
+                self.browser_processor()
+                    .set_sharing(connection, &request.params, cancellation)
             }
-            Some(ClientMethod::EnvDirsSet) => self.env_dirs_set(connection, &request.params),
-            Some(ClientMethod::SessionDirMove) => {
-                self.session_dir_move(connection, &request.params)
+            Some(ClientMethod::EnvDirsSet) => self
+                .environment_processor()
+                .env_dirs_set(connection, &request.params),
+            Some(ClientMethod::SessionDirMove) => self
+                .environment_processor()
+                .session_dir_move(connection, &request.params),
+            Some(ClientMethod::SessionDirList) => self
+                .environment_processor()
+                .session_dir_list(connection, &request.params),
+            Some(ClientMethod::SessionDirAdd) => self
+                .environment_processor()
+                .session_dir_add(connection, &request.params),
+            Some(ClientMethod::SessionDirRemove) => self
+                .environment_processor()
+                .session_dir_remove(connection, &request.params),
+            Some(ClientMethod::SessionDirectoryGrantSet) => self
+                .environment_processor()
+                .session_directory_grant_set(connection, &request.params),
+            Some(ClientMethod::DirectoryGrantsRead) => self
+                .config_processor()
+                .directory_grants_read(connection, &request.params),
+            Some(ClientMethod::DirectoryGrantsList) => {
+                self.config_processor().directory_grants_list(connection)
             }
-            Some(ClientMethod::SessionDirList) => {
-                self.session_dir_list(connection, &request.params)
-            }
-            Some(ClientMethod::SessionDirAdd) => self.session_dir_add(connection, &request.params),
-            Some(ClientMethod::SessionDirRemove) => {
-                self.session_dir_remove(connection, &request.params)
-            }
-            Some(ClientMethod::SessionDirectoryGrantSet) => {
-                self.session_directory_grant_set(connection, &request.params)
-            }
-            Some(ClientMethod::DirectoryGrantsRead) => {
-                self.directory_grants_read(connection, &request.params)
-            }
-            Some(ClientMethod::DirectoryGrantsList) => self.directory_grants_list(connection),
-            Some(ClientMethod::DirectoryGrantsSet) => {
-                self.directory_grants_set(connection, &request.params)
-            }
-            Some(ClientMethod::DirectoryGrantsForget) => {
-                self.directory_grants_forget(connection, &request.params)
-            }
+            Some(ClientMethod::DirectoryGrantsSet) => self
+                .config_processor()
+                .directory_grants_set(connection, &request.params),
+            Some(ClientMethod::DirectoryGrantsForget) => self
+                .config_processor()
+                .directory_grants_forget(connection, &request.params),
             Some(
                 method @ (ClientMethod::CallStart
                 | ClientMethod::CallRead
@@ -2593,19 +3086,21 @@ impl AppServer {
                 | ClientMethod::CallInvite
                 | ClientMethod::CallRemove
                 | ClientMethod::CallRole),
-            ) => self.call_operation(connection, method, &request.params),
-            Some(ClientMethod::DocumentCollaborationOpen) => {
-                self.document_collaboration_open(connection, &request.params)
-            }
-            Some(ClientMethod::DocumentCollaborationSubmit) => {
-                self.document_collaboration_submit(&request.params)
-            }
-            Some(ClientMethod::DocumentCollaborationPresencePublish) => {
-                self.document_collaboration_presence_publish(&request.params)
-            }
-            Some(ClientMethod::DocumentCollaborationPresenceRead) => {
-                self.document_collaboration_presence_read(&request.params)
-            }
+            ) => self
+                .call_processor()
+                .call_operation(connection, method, &request.params),
+            Some(ClientMethod::DocumentCollaborationOpen) => self
+                .collaboration_processor
+                .document_collaboration_open(connection, &request.params),
+            Some(ClientMethod::DocumentCollaborationSubmit) => self
+                .collaboration_processor
+                .document_collaboration_submit(&request.params),
+            Some(ClientMethod::DocumentCollaborationPresencePublish) => self
+                .collaboration_processor
+                .document_collaboration_presence_publish(&request.params),
+            Some(ClientMethod::DocumentCollaborationPresenceRead) => self
+                .collaboration_processor
+                .document_collaboration_presence_read(&request.params),
             Some(
                 method @ (ClientMethod::GitHubNotificationsList
                 | ClientMethod::GitHubManagedSettings
@@ -2651,18 +3146,12 @@ impl AppServer {
                 | ClientMethod::GitHubLabelCreate
                 | ClientMethod::GitHubLabelUpdate
                 | ClientMethod::GitHubAssigneesList),
-            ) => request_dispatch::runtime()
-                .map_err(|error| {
-                    RpcError::with_details(
-                        -32070,
-                        AppServerErrorName::GitHubUnavailable,
-                        error.to_string(),
-                    )
-                })?
-                .block_on(
-                    self.github_processor()?
-                        .request(method, &request.params, cancellation),
-                ),
+            ) => github_processor::GitHubRequestProcessor::request_blocking(
+                self.github_processor.as_deref(),
+                method,
+                &request.params,
+                cancellation,
+            ),
             Some(
                 method @ (ClientMethod::GitHubAccountList | ClientMethod::GitHubAccountConnect),
             ) => github_processor::account_request(
@@ -2678,315 +3167,438 @@ impl AppServer {
                 | ClientMethod::GitHubSessionIssues
                 | ClientMethod::GitHubSessionIssueAttach
                 | ClientMethod::GitHubSessionIssueDetach),
-            ) => self.session_github_references(method, &request.params),
+            ) => self
+                .session_github_processor()
+                .session_github_references(method, &request.params),
             Some(ClientMethod::GitHubCancel) => github_processor::cancel(
                 &self.request_scheduler,
                 &self.request_cancellations,
                 connection,
                 &request.params,
             ),
-            Some(ClientMethod::IssueConfigure) => self.issue_configure(&request.params),
+            Some(ClientMethod::IssueConfigure) => {
+                self.config_processor().issue_configure(&request.params)
+            }
             Some(method @ (ClientMethod::IssueList | ClientMethod::IssueRead)) => {
-                let processor = self.issue_processor.as_ref().ok_or_else(|| {
-                    issue_operations::issue_error("Issue runtime unavailable".into())
-                })?;
-                request_dispatch::runtime()
-                    .map_err(|error| issue_operations::issue_error(error.to_string()))?
-                    .block_on(processor.request(
-                        method,
-                        &request.params,
-                        self.github_client(cancellation),
-                        self.config.as_deref(),
-                    ))
+                issue_operations::IssueRequestProcessor::request_blocking(
+                    self.issue_processor.as_deref(),
+                    method,
+                    &request.params,
+                    self.github_processor.as_deref(),
+                    self.config.as_deref(),
+                    cancellation,
+                )
             }
-            Some(ClientMethod::IssueReporterRead) => self.issue_reporter_read(),
-            Some(ClientMethod::IssueReporterSearch) => {
-                self.issue_reporter_search(&request.params, cancellation)
+            Some(ClientMethod::IssueReporterRead) => {
+                self.issue_reporter_processor().issue_reporter_read()
             }
-            Some(ClientMethod::IssueReporterSearchCancel) => {
-                self.issue_reporter_search_cancel(connection, &request.params)
+            Some(ClientMethod::IssueReporterSearch) => self
+                .issue_reporter_processor()
+                .issue_reporter_search(&request.params, cancellation),
+            Some(ClientMethod::IssueReporterSearchCancel) => self
+                .issue_reporter_processor()
+                .issue_reporter_search_cancel(connection, &request.params),
+            Some(ClientMethod::IssueReporterSubmit) => self
+                .issue_reporter_processor()
+                .issue_reporter_submit(&request.params),
+            Some(ClientMethod::SessionCreate) => self
+                .session_processor()
+                .session_create(connection, &request.params),
+            Some(ClientMethod::SessionRuntimeInvoke) => {
+                session_runtime_processor::SessionRuntimeRequestProcessor::invoke(
+                    self.session_runtimes.as_ref(),
+                    &request.params,
+                    cancellation,
+                )
             }
-            Some(ClientMethod::IssueReporterSubmit) => self.issue_reporter_submit(&request.params),
-            Some(ClientMethod::SessionCreate) => self.session_create(connection, &request.params),
-            Some(ClientMethod::SessionRuntimeInvoke) => Self::invoke_session_runtime(
-                self.session_runtimes.as_ref(),
-                &request.params,
-                cancellation,
-            ),
-            Some(ClientMethod::SessionRuntimeCancel) => {
-                let params: ash_app_server_protocol::protocol::session::SessionRuntimeCancelParams =
-                    decode(&request.params)?;
-                if params.operation_id.is_empty() || params.operation_id.len() > 128 {
-                    return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
-                }
-                self.request_cancellations
-                    .cancel_operation(connection.connection_id, params.operation_id);
-                self.request_scheduler.cancel_waiting_requests();
-                result(&())
+            Some(ClientMethod::SessionRuntimeCancel) => self
+                .session_runtime_processor()
+                .cancel(connection, &request.params),
+            Some(ClientMethod::SessionRead) => {
+                self.session_processor().session_read(&request.params)
             }
-            Some(ClientMethod::SessionRead) => self.session_read(&request.params),
-            Some(ClientMethod::SessionTraceRead) => self.session_trace_read(&request.params),
-            Some(ClientMethod::SessionTraceDiagnosticsRead) => {
-                self.session_trace_diagnostics_read(&request.params)
+            Some(ClientMethod::SessionTraceRead) => {
+                self.session_processor().session_trace_read(&request.params)
             }
-            Some(ClientMethod::SessionTracePayloadRead) => {
-                self.session_trace_payload_read(&request.params)
+            Some(ClientMethod::SessionTraceDiagnosticsRead) => self
+                .session_processor()
+                .session_trace_diagnostics_read(&request.params),
+            Some(ClientMethod::SessionTracePayloadRead) => self
+                .session_processor()
+                .session_trace_payload_read(&request.params),
+            Some(ClientMethod::SessionTraceGraphRead) => self
+                .session_processor()
+                .session_trace_graph_read(&request.params),
+            Some(ClientMethod::SessionCatalogRead) => self
+                .session_processor()
+                .session_catalog_read(&request.params),
+            Some(ClientMethod::MessageCheckpoints) => {
+                self.agent_processor().message_checkpoints(&request.params)
             }
-            Some(ClientMethod::SessionTraceGraphRead) => {
-                self.session_trace_graph_read(&request.params)
+            Some(ClientMethod::ThreadHistoryState) => {
+                self.agent_processor().thread_history_state(&request.params)
             }
-            Some(ClientMethod::SessionCatalogRead) => self.session_catalog_read(&request.params),
-            Some(ClientMethod::MessageCheckpoints) => self.message_checkpoints(&request.params),
-            Some(ClientMethod::ThreadHistoryState) => self.thread_history_state(&request.params),
-            Some(ClientMethod::AgentRead) => self.agent_read(&request.params),
-            Some(ClientMethod::AgentRoleList) => self.agent_roles_list(),
-            Some(ClientMethod::AgentCapabilitiesRead) => self.agent_capabilities_read(connection),
-            Some(ClientMethod::SessionList) => self.session_list(),
-            Some(ClientMethod::SessionCatalogSubscribe) => {
-                self.session_catalog_subscribe(connection)
+            Some(ClientMethod::AgentRead) => self.session_processor().agent_read(&request.params),
+            Some(ClientMethod::AgentRoleList) => self.session_processor().agent_roles_list(),
+            Some(ClientMethod::AgentCapabilitiesRead) => {
+                self.agent_processor().agent_capabilities_read(connection)
             }
-            Some(ClientMethod::SessionCatalogUnsubscribe) => {
-                self.session_catalog_unsubscribe(connection)
+            Some(ClientMethod::SessionList) => self.session_processor().session_list(),
+            Some(ClientMethod::SessionCatalogSubscribe) => self
+                .session_processor()
+                .session_catalog_subscribe(connection),
+            Some(ClientMethod::SessionCatalogUnsubscribe) => self
+                .session_processor()
+                .session_catalog_unsubscribe(connection),
+            Some(ClientMethod::SessionSubscribe) => self
+                .session_processor()
+                .session_subscribe(connection, &request.params),
+            Some(ClientMethod::SessionRequest) => self
+                .agent_processor()
+                .session_request(connection, &request.params),
+            Some(ClientMethod::SessionUnsubscribe) => self
+                .session_processor()
+                .session_unsubscribe(connection, &request.params),
+            Some(ClientMethod::ContextRead) => self.agent_processor().context_read(&request.params),
+            Some(ClientMethod::SessionThreadRead) => {
+                self.agent_processor().session_thread_read(&request.params)
             }
-            Some(ClientMethod::SessionSubscribe) => {
-                self.session_subscribe(connection, &request.params)
+            Some(ClientMethod::ThreadGoalGet) => {
+                self.agent_processor().thread_goal_get(&request.params)
             }
-            Some(ClientMethod::SessionRequest) => self.session_request(connection, &request.params),
-            Some(ClientMethod::SessionUnsubscribe) => {
-                self.session_unsubscribe(connection, &request.params)
+            Some(ClientMethod::ThreadGoalSet) => {
+                self.agent_processor().thread_goal_set(&request.params)
             }
-            Some(ClientMethod::ContextRead) => self.context_read(&request.params),
-            Some(ClientMethod::SessionThreadRead) => self.session_thread_read(&request.params),
-            Some(ClientMethod::ThreadGoalGet) => self.thread_goal_get(&request.params),
-            Some(ClientMethod::ThreadGoalSet) => self.thread_goal_set(&request.params),
-            Some(ClientMethod::ThreadGoalClear) => self.thread_goal_clear(&request.params),
-            Some(ClientMethod::SessionThreadSubscribe) => {
-                self.session_thread_subscribe(connection, &request.params)
+            Some(ClientMethod::ThreadGoalClear) => {
+                self.agent_processor().thread_goal_clear(&request.params)
             }
-            Some(ClientMethod::SessionThreadUnsubscribe) => {
-                self.session_thread_unsubscribe(connection, &request.params)
+            Some(ClientMethod::SessionThreadSubscribe) => self
+                .agent_processor()
+                .session_thread_subscribe(connection, &request.params),
+            Some(ClientMethod::SessionThreadUnsubscribe) => self
+                .agent_processor()
+                .session_thread_unsubscribe(connection, &request.params),
+            Some(ClientMethod::TurnChangesList) => self
+                .git_turn_changes_processor()
+                .turn_changes_list(&request.params),
+            Some(ClientMethod::TurnChangesRead) => self
+                .git_turn_changes_processor()
+                .turn_changes_read(&request.params),
+            Some(ClientMethod::TurnChangesReadFile) => self
+                .git_turn_changes_processor()
+                .turn_changes_read_file(&request.params),
+            Some(ClientMethod::TurnChangesGenerateMessage) => self
+                .git_turn_changes_processor()
+                .turn_changes_generate_message(&request.params),
+            Some(ClientMethod::TurnChangesUpdateDraft) => self
+                .git_turn_changes_processor()
+                .turn_changes_update_draft(&request.params),
+            Some(ClientMethod::TurnChangesPrepareCommit) => self
+                .git_turn_changes_processor()
+                .turn_changes_prepare_commit(&request.params),
+            Some(ClientMethod::TurnChangesReadCommit) => self
+                .git_turn_changes_processor()
+                .turn_changes_read_commit(&request.params),
+            Some(ClientMethod::TurnChangesReadCommitFile) => self
+                .git_turn_changes_processor()
+                .turn_changes_read_commit_file(&request.params),
+            Some(ClientMethod::TurnChangesCommit) => self
+                .git_turn_changes_processor()
+                .turn_changes_commit(&request.params),
+            Some(ClientMethod::TurnChangesDiscardThread) => self
+                .git_turn_changes_processor()
+                .turn_changes_discard_thread(&request.params),
+            Some(ClientMethod::ProjectList) => self
+                .project_processor()
+                .project_list(connection, &request.params),
+            Some(ClientMethod::ExtensionItems) => {
+                self.queue_processor().extension_items(&request.params)
             }
-            Some(ClientMethod::TurnChangesList) => self.turn_changes_list(&request.params),
-            Some(ClientMethod::TurnChangesRead) => self.turn_changes_read(&request.params),
-            Some(ClientMethod::TurnChangesReadFile) => self.turn_changes_read_file(&request.params),
-            Some(ClientMethod::TurnChangesGenerateMessage) => {
-                self.turn_changes_generate_message(&request.params)
+            Some(ClientMethod::QueueEdit) => self.queue_processor().queue_edit(&request.params),
+            Some(ClientMethod::QueueEnqueue) => {
+                self.queue_processor().queue_enqueue(&request.params)
             }
-            Some(ClientMethod::TurnChangesUpdateDraft) => {
-                self.turn_changes_update_draft(&request.params)
-            }
-            Some(ClientMethod::TurnChangesPrepareCommit) => {
-                self.turn_changes_prepare_commit(&request.params)
-            }
-            Some(ClientMethod::TurnChangesReadCommit) => {
-                self.turn_changes_read_commit(&request.params)
-            }
-            Some(ClientMethod::TurnChangesReadCommitFile) => {
-                self.turn_changes_read_commit_file(&request.params)
-            }
-            Some(ClientMethod::TurnChangesCommit) => self.turn_changes_commit(&request.params),
-            Some(ClientMethod::TurnChangesDiscardThread) => {
-                self.turn_changes_discard_thread(&request.params)
-            }
-            Some(ClientMethod::ProjectList) => self.project_list(connection, &request.params),
-            Some(ClientMethod::ExtensionItems) => self.extension_items(&request.params),
-            Some(ClientMethod::QueueEdit) => self.queue_edit(&request.params),
-            Some(ClientMethod::QueueEnqueue) => self.queue_enqueue(&request.params),
-            Some(ClientMethod::QueueList) => self.queue_list(&request.params),
-            Some(ClientMethod::QueueCancel) => self.queue_cancel(&request.params),
+            Some(ClientMethod::QueueList) => self.queue_processor().queue_list(&request.params),
+            Some(ClientMethod::QueueCancel) => self.queue_processor().queue_cancel(&request.params),
             Some(
                 method @ (ClientMethod::TaskSnapshotInfo
                 | ClientMethod::TaskReceive
                 | ClientMethod::TaskRead),
-            ) => self.task_delivery_request(method, &request.params, cancellation),
-            Some(ClientMethod::NetworkRead) => self.network_read(),
-            Some(ClientMethod::NetworkHttpConfigure) => {
-                self.network_http_configure(&request.params)
-            }
-            Some(ClientMethod::NetworkDiagnosticsRun) => self.network_diagnostics_run(cancellation),
-            Some(ClientMethod::DiagnosticsRead) => self.diagnostics_read(),
-            Some(ClientMethod::FeedbackPrepare) => {
-                self.feedback_prepare(connection, &request.params)
-            }
-            Some(ClientMethod::FeedbackUpload) => {
-                self.feedback_upload(connection, &request.params, cancellation)
-            }
-            Some(ClientMethod::MemoryDiagnosticsStart) => {
-                self.memory_diagnostics_start(connection, &request.params)
-            }
-            Some(ClientMethod::MemoryDiagnosticsRead) => {
-                self.memory_diagnostics_read(connection, &request.params)
-            }
-            Some(ClientMethod::MemoryDiagnosticsStop) => {
-                self.memory_diagnostics_stop(connection, &request.params)
-            }
-            Some(ClientMethod::MemoryDiagnosticsSubmit) => {
-                self.memory_diagnostics_submit(connection, &request.params)
-            }
-            Some(ClientMethod::MemoryDiagnosticsExport) => {
-                self.memory_diagnostics_export(connection, &request.params)
-            }
-            Some(ClientMethod::MemoryCitationRead) => {
-                self.memory_citation_read(connection, &request.params)
-            }
-            Some(ClientMethod::MemoryPolicyRead) => {
-                self.memory_policy_read(connection, &request.params)
-            }
-            Some(ClientMethod::MemoryPolicyUpdate) => {
-                self.memory_policy_update(connection, &request.params)
-            }
-            Some(ClientMethod::MemoryScopes) => self.memory_scopes(connection, &request.params),
+            ) => self.task_delivery_processor().task_delivery_request(
+                method,
+                &request.params,
+                cancellation,
+            ),
+            Some(ClientMethod::NetworkRead) => self.network_processor().network_read(),
+            Some(ClientMethod::NetworkHttpConfigure) => self
+                .network_processor()
+                .network_http_configure(&request.params),
+            Some(ClientMethod::NetworkDiagnosticsRun) => self
+                .network_processor()
+                .network_diagnostics_run(cancellation),
+            Some(ClientMethod::DiagnosticsRead) => self.diagnostics_processor().diagnostics_read(),
+            Some(ClientMethod::FeedbackPrepare) => self
+                .diagnostics_processor()
+                .feedback_prepare(connection, &request.params),
+            Some(ClientMethod::FeedbackUpload) => self.diagnostics_processor().feedback_upload(
+                connection,
+                &request.params,
+                cancellation,
+            ),
+            Some(ClientMethod::MemoryDiagnosticsStart) => self
+                .memory_diagnostics_processor
+                .start(connection, &request.params),
+            Some(ClientMethod::MemoryDiagnosticsRead) => self
+                .memory_diagnostics_processor
+                .read(connection, &request.params),
+            Some(ClientMethod::MemoryDiagnosticsStop) => self
+                .memory_diagnostics_processor
+                .stop(connection, &request.params),
+            Some(ClientMethod::MemoryDiagnosticsSubmit) => self
+                .memory_diagnostics_processor
+                .submit(connection, &request.params),
+            Some(ClientMethod::MemoryDiagnosticsExport) => self
+                .memory_diagnostics_processor
+                .export(connection, &request.params),
+            Some(ClientMethod::MemoryCitationRead) => self
+                .memories_processor()
+                .memory_citation_read(connection, &request.params),
+            Some(ClientMethod::MemoryPolicyRead) => self
+                .memories_processor()
+                .memory_policy_read(connection, &request.params),
+            Some(ClientMethod::MemoryPolicyUpdate) => self
+                .memories_processor()
+                .memory_policy_update(connection, &request.params),
+            Some(ClientMethod::MemoryScopes) => self
+                .memories_processor()
+                .memory_scopes(connection, &request.params),
             Some(ClientMethod::MemoryUpdate) => {
-                self.memory_update(connection, &request.params, cancellation)
+                self.memories_processor()
+                    .memory_update(connection, &request.params, cancellation)
             }
             Some(ClientMethod::MemoryAdd) => {
-                self.memory_add(connection, &request.params, cancellation)
+                self.memories_processor()
+                    .memory_add(connection, &request.params, cancellation)
             }
-            Some(ClientMethod::MemoryList) => self.memory_list(connection, &request.params),
-            Some(ClientMethod::MemoryRead) => self.memory_read(connection, &request.params),
-            Some(ClientMethod::MemorySearch) => self.memory_search(connection, &request.params),
-            Some(ClientMethod::MemoryDelete) => self.memory_delete(connection, &request.params),
-            Some(ClientMethod::SymphonyRead) => self.symphony_read(),
-            Some(ClientMethod::SymphonyConfigure) => self.symphony_configure(&request.params),
-            Some(ClientMethod::SymphonySubmit) => self.symphony_submit(&request.params),
-            Some(ClientMethod::SymphonyControl) => self.symphony_control(&request.params),
-            Some(ClientMethod::SymphonyEnable) => self.symphony_enable(&request.params),
-            Some(ClientMethod::SymphonyMessages) => self.symphony_messages(&request.params),
-            Some(ClientMethod::MessageHistoryAppend) => {
-                self.message_history_append(connection, &request.params)
+            Some(ClientMethod::MemoryList) => self
+                .memories_processor()
+                .memory_list(connection, &request.params),
+            Some(ClientMethod::MemoryRead) => self
+                .memories_processor()
+                .memory_read(connection, &request.params),
+            Some(ClientMethod::MemorySearch) => self
+                .memories_processor()
+                .memory_search(connection, &request.params),
+            Some(ClientMethod::MemoryDelete) => self
+                .memories_processor()
+                .memory_delete(connection, &request.params),
+            Some(ClientMethod::SymphonyRead) => self.symphony_processor().symphony_read(),
+            Some(ClientMethod::SymphonyConfigure) => self
+                .symphony_processor()
+                .symphony_configure(&request.params),
+            Some(ClientMethod::SymphonySubmit) => {
+                self.symphony_processor().symphony_submit(&request.params)
             }
-            Some(ClientMethod::MessageHistoryRead) => {
-                self.message_history_read(connection, &request.params)
+            Some(ClientMethod::SymphonyControl) => {
+                self.symphony_processor().symphony_control(&request.params)
             }
-            Some(ClientMethod::MessageHistoryClear) => self.message_history_clear(connection),
-            Some(ClientMethod::AutomationList) => self.automation_list(),
-            Some(ClientMethod::AutomationPreview) => self.automation_preview(&request.params),
-            Some(ClientMethod::AutomationWrite) => self.automation_write(&request.params),
-            Some(ClientMethod::AutomationDelete) => self.automation_delete(&request.params),
-            Some(ClientMethod::AutomationRun) => self.automation_run(&request.params),
-            Some(ClientMethod::AutomationRunRead) => self.automation_run_read(&request.params),
-            Some(ClientMethod::AutomationRuns) => self.automation_runs(&request.params),
-            Some(ClientMethod::AutomationStop) => self.automation_stop(&request.params),
-            Some(ClientMethod::ProjectRead) => self.project_read(connection, &request.params),
-            Some(ClientMethod::ProjectCreate) => self.project_create(connection, &request.params),
-            Some(ClientMethod::ProjectDetailsUpdate) => {
-                self.project_details_update(connection, &request.params)
+            Some(ClientMethod::SymphonyEnable) => {
+                self.symphony_processor().symphony_enable(&request.params)
             }
-            Some(ClientMethod::ProjectRootAdd) => {
-                self.project_root_add(connection, &request.params)
+            Some(ClientMethod::SymphonyMessages) => {
+                self.symphony_processor().symphony_messages(&request.params)
             }
-            Some(ClientMethod::ProjectRootUpdate) => {
-                self.project_root_update(connection, &request.params)
+            Some(ClientMethod::MessageHistoryAppend) => self
+                .message_history_processor
+                .append(connection.authority, &request.params),
+            Some(ClientMethod::MessageHistoryRead) => self
+                .message_history_processor
+                .read(connection.authority, &request.params),
+            Some(ClientMethod::MessageHistoryClear) => {
+                self.message_history_processor.clear(connection.authority)
             }
-            Some(ClientMethod::ProjectRootRemove) => {
-                self.project_root_remove(connection, &request.params)
+            Some(ClientMethod::AutomationList) => self.automation_processor.automation_list(),
+            Some(ClientMethod::AutomationPreview) => self
+                .automation_processor
+                .automation_preview(&request.params),
+            Some(ClientMethod::AutomationWrite) => {
+                self.automation_processor.automation_write(&request.params)
             }
-            Some(ClientMethod::ProjectSessionLink) => {
-                self.project_session_link(connection, &request.params)
+            Some(ClientMethod::AutomationDelete) => {
+                self.automation_processor.automation_delete(&request.params)
             }
-            Some(ClientMethod::ProjectSessionUnlink) => {
-                self.project_session_unlink(connection, &request.params)
+            Some(ClientMethod::AutomationRun) => {
+                self.automation_processor.automation_run(&request.params)
             }
-            Some(ClientMethod::ProjectArchive) => self.project_archive(connection, &request.params),
-            Some(ClientMethod::ProjectRestore) => self.project_restore(connection, &request.params),
-            Some(ClientMethod::TeamList) => self.team_list(connection, &request.params),
-            Some(ClientMethod::TeamRead) => self.team_read(connection, &request.params),
-            Some(ClientMethod::TeamCommand) => self.team_command(connection, &request.params),
-            Some(ClientMethod::TeamRunStart) => self.team_run_start(connection, &request.params),
-            Some(ClientMethod::TeamRunAttach) => self.team_run_attach(connection, &request.params),
-            Some(ClientMethod::TeamRunRead) => self.team_run_read(connection, &request.params),
-            Some(ClientMethod::TeamRunList) => self.team_run_list(connection, &request.params),
-            Some(ClientMethod::TeamMessagePost) => {
-                self.team_message_post(connection, &request.params)
+            Some(ClientMethod::AutomationRunRead) => self
+                .automation_processor
+                .automation_run_read(&request.params),
+            Some(ClientMethod::AutomationRuns) => {
+                self.automation_processor.automation_runs(&request.params)
             }
-            Some(ClientMethod::TeamMessageList) => {
-                self.team_message_list(connection, &request.params)
+            Some(ClientMethod::AutomationStop) => {
+                self.automation_processor.automation_stop(&request.params)
             }
-            Some(ClientMethod::ConfigRead) => self.config_read(),
-            Some(ClientMethod::ApprovalEnvironmentRead) => {
-                self.approval_environment_read(connection, &request.params)
+            Some(ClientMethod::ProjectRead) => self
+                .project_processor()
+                .project_read(connection, &request.params),
+            Some(ClientMethod::ProjectCreate) => self
+                .project_processor()
+                .project_create(connection, &request.params),
+            Some(ClientMethod::ProjectDetailsUpdate) => self
+                .project_processor()
+                .project_details_update(connection, &request.params),
+            Some(ClientMethod::ProjectRootAdd) => self
+                .project_processor()
+                .project_root_add(connection, &request.params),
+            Some(ClientMethod::ProjectRootUpdate) => self
+                .project_processor()
+                .project_root_update(connection, &request.params),
+            Some(ClientMethod::ProjectRootRemove) => self
+                .project_processor()
+                .project_root_remove(connection, &request.params),
+            Some(ClientMethod::ProjectSessionLink) => self
+                .project_processor()
+                .project_session_link(connection, &request.params),
+            Some(ClientMethod::ProjectSessionUnlink) => self
+                .project_processor()
+                .project_session_unlink(connection, &request.params),
+            Some(ClientMethod::ProjectArchive) => self
+                .project_processor()
+                .project_archive(connection, &request.params),
+            Some(ClientMethod::ProjectRestore) => self
+                .project_processor()
+                .project_restore(connection, &request.params),
+            Some(ClientMethod::TeamList) => {
+                self.team_processor().team_list(connection, &request.params)
             }
-            Some(ClientMethod::ApprovalEnvironmentScan) => {
-                self.approval_environment_scan(connection, &request.params, cancellation)
+            Some(ClientMethod::TeamRead) => {
+                self.team_processor().team_read(connection, &request.params)
             }
-            Some(ClientMethod::ApprovalEnvironmentSave) => {
-                self.approval_environment_save(connection, &request.params)
+            Some(ClientMethod::TeamCommand) => self
+                .team_processor()
+                .team_command(connection, &request.params),
+            Some(ClientMethod::TeamRunStart) => self
+                .team_processor()
+                .team_run_start(connection, &request.params),
+            Some(ClientMethod::TeamRunAttach) => self
+                .team_processor()
+                .team_run_attach(connection, &request.params),
+            Some(ClientMethod::TeamRunRead) => self
+                .team_processor()
+                .team_run_read(connection, &request.params),
+            Some(ClientMethod::TeamRunList) => self
+                .team_processor()
+                .team_run_list(connection, &request.params),
+            Some(ClientMethod::TeamMessagePost) => self
+                .team_processor()
+                .team_message_post(connection, &request.params),
+            Some(ClientMethod::TeamMessageList) => self
+                .team_processor()
+                .team_message_list(connection, &request.params),
+            Some(ClientMethod::ConfigRead) => self.config_processor().config_read(),
+            Some(ClientMethod::ApprovalEnvironmentRead) => self
+                .approval_environment_processor()
+                .approval_environment_read(connection, &request.params),
+            Some(ClientMethod::ApprovalEnvironmentScan) => self
+                .approval_environment_processor()
+                .approval_environment_scan(connection, &request.params, cancellation),
+            Some(ClientMethod::ApprovalEnvironmentSave) => self
+                .approval_environment_processor()
+                .approval_environment_save(connection, &request.params),
+            Some(ClientMethod::ApprovalEnvironmentCancel) => self
+                .approval_environment_processor()
+                .approval_environment_cancel(connection, &request.params),
+            Some(ClientMethod::AccountRead) => self.account_processor().account_read(),
+            Some(ClientMethod::AccountRateLimitsRead) => self
+                .account_processor()
+                .account_rate_limits_read(&request.params, cancellation),
+            Some(ClientMethod::AccountLoginStart) => self
+                .account_processor()
+                .account_login_start(connection, &request.params),
+            Some(ClientMethod::AccountLoginCancel) => self
+                .account_processor()
+                .account_login_cancel(connection, &request.params),
+            Some(ClientMethod::AccountLogout) => {
+                self.account_processor().account_logout(&request.params)
             }
-            Some(ClientMethod::ApprovalEnvironmentCancel) => {
-                self.approval_environment_cancel(connection, &request.params)
-            }
-            Some(ClientMethod::AccountRead) => self.account_read(),
-            Some(ClientMethod::AccountRateLimitsRead) => {
-                self.account_rate_limits_read(&request.params, cancellation)
-            }
-            Some(ClientMethod::AccountLoginStart) => {
-                self.account_login_start(connection, &request.params)
-            }
-            Some(ClientMethod::AccountLoginCancel) => {
-                self.account_login_cancel(connection, &request.params)
-            }
-            Some(ClientMethod::AccountLogout) => self.account_logout(&request.params),
-            Some(ClientMethod::ConnectorList) => self.connector_list(),
-            Some(ClientMethod::ConnectorApiTokenConnect) => {
-                self.connector_api_token_connect(std::mem::take(&mut request.params))
-            }
-            Some(ClientMethod::ConnectorOAuthStart) => self.connector_oauth_start(&request.params),
-            Some(ClientMethod::ConnectorOAuthComplete) => {
-                self.connector_oauth_complete(std::mem::take(&mut request.params))
-            }
-            Some(ClientMethod::ConnectorOAuthCancel) => {
-                self.connector_oauth_cancel(&request.params)
-            }
-            Some(ClientMethod::ConnectorDeviceOAuthStart) => {
-                self.connector_device_oauth_start(&request.params)
-            }
-            Some(ClientMethod::ConnectorDeviceOAuthPoll) => {
-                self.connector_device_oauth_poll(&request.params)
-            }
-            Some(ClientMethod::ConnectorDeviceOAuthCancel) => {
-                self.connector_device_oauth_cancel(&request.params)
-            }
-            Some(ClientMethod::ConnectorOAuthRefresh) => {
-                self.connector_oauth_refresh(&request.params)
-            }
-            Some(ClientMethod::ConnectorOAuthRevoke) => {
-                self.connector_oauth_revoke(&request.params)
-            }
-            Some(ClientMethod::ConnectorDisconnect) => self.connector_disconnect(&request.params),
-            Some(ClientMethod::ConnectorCredentialCleanupRetry) => {
-                self.connector_credential_cleanup_retry(&request.params)
-            }
-            Some(ClientMethod::PluginList) => self.plugin_list(),
-            Some(ClientMethod::PluginInstallLocal) => self.plugin_install_local(&request.params),
-            Some(ClientMethod::ExtensionsSources) => self.extension_sources(&request.params),
+            Some(ClientMethod::ConnectorList) => self.connector_processor.connector_list(),
+            Some(ClientMethod::ConnectorApiTokenConnect) => self
+                .connector_processor
+                .connector_api_token_connect(std::mem::take(&mut request.params)),
+            Some(ClientMethod::ConnectorOAuthStart) => self
+                .connector_processor
+                .connector_oauth_start(&request.params),
+            Some(ClientMethod::ConnectorOAuthComplete) => self
+                .connector_processor
+                .connector_oauth_complete(std::mem::take(&mut request.params)),
+            Some(ClientMethod::ConnectorOAuthCancel) => self
+                .connector_processor
+                .connector_oauth_cancel(&request.params),
+            Some(ClientMethod::ConnectorDeviceOAuthStart) => self
+                .connector_processor
+                .connector_device_oauth_start(&request.params),
+            Some(ClientMethod::ConnectorDeviceOAuthPoll) => self
+                .connector_processor
+                .connector_device_oauth_poll(&request.params),
+            Some(ClientMethod::ConnectorDeviceOAuthCancel) => self
+                .connector_processor
+                .connector_device_oauth_cancel(&request.params),
+            Some(ClientMethod::ConnectorOAuthRefresh) => self
+                .connector_processor
+                .connector_oauth_refresh(&request.params),
+            Some(ClientMethod::ConnectorOAuthRevoke) => self
+                .connector_processor
+                .connector_oauth_revoke(&request.params),
+            Some(ClientMethod::ConnectorDisconnect) => self
+                .connector_processor
+                .connector_disconnect(&request.params),
+            Some(ClientMethod::ConnectorCredentialCleanupRetry) => self
+                .connector_processor
+                .connector_credential_cleanup_retry(&request.params),
+            Some(ClientMethod::PluginList) => self.plugin_processor().plugin_list(),
+            Some(ClientMethod::PluginInstallLocal) => self
+                .plugin_processor()
+                .plugin_install_local(&request.params),
+            Some(ClientMethod::ExtensionsSources) => self
+                .extension_packages_processor()
+                .extension_sources(&request.params),
             Some(ClientMethod::ExtensionsAddSource | ClientMethod::ExtensionsSetSourceEnabled) => {
                 if !connection.allows_extension_source_configuration() {
                     return Err(RpcError::new(-32000, AppServerErrorName::ResourceNotOwner));
                 }
                 if client_method(&request.method) == Some(ClientMethod::ExtensionsAddSource) {
-                    self.extension_source_add(&request.params)
+                    self.extension_packages_processor()
+                        .extension_source_add(&request.params)
                 } else {
-                    self.extension_source_set_enabled(&request.params)
+                    self.extension_packages_processor()
+                        .extension_source_set_enabled(&request.params)
                 }
             }
-            Some(ClientMethod::ExtensionsSearch) => self.extension_packages_search(&request.params),
-            Some(ClientMethod::ExtensionsSearchPage) => {
-                self.extension_packages_search_page(&request.params)
-            }
-            Some(ClientMethod::ExtensionsGet) => self.extension_packages_get(&request.params),
-            Some(ClientMethod::ExtensionsDownload) => {
-                self.extension_packages_download(&request.params)
-            }
-            Some(ClientMethod::ExtensionsInstall) => {
-                self.extension_packages_install(&request.params)
-            }
-            Some(ClientMethod::ExtensionsUpdate) => self.extension_packages_update(&request.params),
-            Some(ClientMethod::ExtensionsUninstall) => {
-                self.extension_packages_uninstall(&request.params)
-            }
-            Some(ClientMethod::ExtensionsListInstalled) => {
-                self.extension_packages_list_installed(&request.params)
-            }
+            Some(ClientMethod::ExtensionsSearch) => self
+                .extension_packages_processor()
+                .extension_packages_search(&request.params),
+            Some(ClientMethod::ExtensionsSearchPage) => self
+                .extension_packages_processor()
+                .extension_packages_search_page(&request.params),
+            Some(ClientMethod::ExtensionsGet) => self
+                .extension_packages_processor()
+                .extension_packages_get(&request.params),
+            Some(ClientMethod::ExtensionsDownload) => self
+                .extension_packages_processor()
+                .extension_packages_download(&request.params),
+            Some(ClientMethod::ExtensionsInstall) => self
+                .extension_packages_processor()
+                .extension_packages_install(&request.params),
+            Some(ClientMethod::ExtensionsUpdate) => self
+                .extension_packages_processor()
+                .extension_packages_update(&request.params),
+            Some(ClientMethod::ExtensionsUninstall) => self
+                .extension_packages_processor()
+                .extension_packages_uninstall(&request.params),
+            Some(ClientMethod::ExtensionsListInstalled) => self
+                .extension_packages_processor()
+                .extension_packages_list_installed(&request.params),
             Some(
                 ClientMethod::ExtensionsEditorExtensions
                 | ClientMethod::ExtensionsSetEditorExtensionPolicy,
@@ -2996,14 +3608,16 @@ impl AppServer {
                 }
                 if client_method(&request.method) == Some(ClientMethod::ExtensionsEditorExtensions)
                 {
-                    self.extension_packages_editor_extensions(&request.params)
+                    self.extension_packages_processor()
+                        .extension_packages_editor_extensions(&request.params)
                 } else {
-                    self.extension_packages_set_editor_extension_policy(&request.params)
+                    self.extension_packages_processor()
+                        .extension_packages_set_editor_extension_policy(&request.params)
                 }
             }
-            Some(ClientMethod::ExtensionsAcquireCapability) => {
-                self.extension_packages_acquire_capability(connection, &request.params)
-            }
+            Some(ClientMethod::ExtensionsAcquireCapability) => self
+                .extension_packages_processor()
+                .extension_packages_acquire_capability(connection, &request.params),
             Some(
                 ClientMethod::ExtensionsBuiltInProviders
                 | ClientMethod::ExtensionsSetBuiltInProviderEnablement,
@@ -3013,163 +3627,242 @@ impl AppServer {
                 }
                 if client_method(&request.method) == Some(ClientMethod::ExtensionsBuiltInProviders)
                 {
-                    self.extension_packages_built_in_providers(&request.params)
+                    self.extension_packages_processor()
+                        .extension_packages_built_in_providers(&request.params)
                 } else {
-                    self.extension_packages_set_built_in_provider_enablement(&request.params)
+                    self.extension_packages_processor()
+                        .extension_packages_set_built_in_provider_enablement(&request.params)
                 }
             }
-            Some(ClientMethod::ExtensionsReleaseCapability) => {
-                self.extension_packages_release_capability(connection, &request.params)
+            Some(ClientMethod::ExtensionsReleaseCapability) => self
+                .extension_packages_processor()
+                .extension_packages_release_capability(connection, &request.params),
+            Some(ClientMethod::ExtensionsOpenResource) => self
+                .extension_packages_processor()
+                .extension_packages_open_resource(connection, &request.params),
+            Some(ClientMethod::PluginEnable) => {
+                self.plugin_processor().plugin_enable(&request.params)
             }
-            Some(ClientMethod::ExtensionsOpenResource) => {
-                self.extension_packages_open_resource(connection, &request.params)
+            Some(ClientMethod::PluginDisable) => {
+                self.plugin_processor().plugin_disable(&request.params)
             }
-            Some(ClientMethod::PluginEnable) => self.plugin_enable(&request.params),
-            Some(ClientMethod::PluginDisable) => self.plugin_disable(&request.params),
-            Some(ClientMethod::PluginGrant) => self.plugin_grant(&request.params),
-            Some(ClientMethod::PluginRevokeGrant) => self.plugin_revoke_grant(&request.params),
-            Some(ClientMethod::PluginUninstall) => self.plugin_uninstall(&request.params),
-            Some(ClientMethod::ModelList) => self.model_list(&request.params),
-            Some(ClientMethod::ModelPreferencesUpdate) => {
-                self.model_preferences_update(&request.params)
+            Some(ClientMethod::PluginGrant) => {
+                self.plugin_processor().plugin_grant(&request.params)
             }
-            Some(ClientMethod::ProviderModelsList) => self.provider_models_list(&request.params),
-            Some(ClientMethod::ProviderProbe) => {
-                self.provider_probe(std::mem::take(&mut request.params))
+            Some(ClientMethod::PluginRevokeGrant) => {
+                self.plugin_processor().plugin_revoke_grant(&request.params)
             }
-            Some(ClientMethod::ProviderList) => self.provider_list(),
-            Some(ClientMethod::SecretsStatus) => self.secrets_status(&request.params),
-            Some(ClientMethod::SecretsAuthorize) => self.secrets_authorize(&request.params),
-            Some(ClientMethod::SecretsStorageModeSet) => {
-                self.secrets_storage_mode_set(&request.params)
+            Some(ClientMethod::PluginUninstall) => {
+                self.plugin_processor().plugin_uninstall(&request.params)
             }
-            Some(ClientMethod::ProviderApiKeySet) => {
-                self.provider_api_key_set(std::mem::take(&mut request.params))
+            Some(ClientMethod::ModelList) => self.models_processor().model_list(&request.params),
+            Some(ClientMethod::ModelPreferencesUpdate) => self
+                .models_processor()
+                .model_preferences_update(&request.params),
+            Some(ClientMethod::ProviderModelsList) => self
+                .models_processor()
+                .provider_models_list(&request.params),
+            Some(ClientMethod::ProviderProbe) => self
+                .provider_processor()
+                .provider_probe(std::mem::take(&mut request.params)),
+            Some(ClientMethod::ProviderList) => self.provider_processor().provider_list(),
+            Some(ClientMethod::SecretsStatus) => {
+                self.secret_processor.secrets_status(&request.params)
             }
-            Some(ClientMethod::ProviderApiKeyRemove) => {
-                self.provider_api_key_remove(std::mem::take(&mut request.params))
+            Some(ClientMethod::SecretsAuthorize) => {
+                self.secret_processor.secrets_authorize(&request.params)
             }
-            Some(ClientMethod::ConfigUpdate) => self.config_update(&request.params),
-            Some(ClientMethod::ExecPolicyRuleUpsert) => {
-                self.exec_policy_rule_upsert(&request.params)
+            Some(ClientMethod::SecretsStorageModeSet) => self
+                .secret_processor
+                .secrets_storage_mode_set(&request.params),
+            Some(ClientMethod::ProviderApiKeySet) => self
+                .provider_processor()
+                .provider_api_key_set(std::mem::take(&mut request.params)),
+            Some(ClientMethod::ProviderApiKeyRemove) => self
+                .provider_processor()
+                .provider_api_key_remove(std::mem::take(&mut request.params)),
+            Some(ClientMethod::ConfigUpdate) => {
+                self.config_processor().config_update(&request.params)
             }
-            Some(ClientMethod::ExecPolicyRuleRemove) => {
-                self.exec_policy_rule_remove(&request.params)
+            Some(ClientMethod::ExecPolicyRuleUpsert) => self
+                .config_processor()
+                .exec_policy_rule_upsert(&request.params),
+            Some(ClientMethod::ExecPolicyRuleRemove) => self
+                .config_processor()
+                .exec_policy_rule_remove(&request.params),
+            Some(ClientMethod::ToolSearchConfigure) => self
+                .config_processor()
+                .tool_search_configure(&request.params),
+            Some(ClientMethod::CodebaseConfigure) => {
+                self.config_processor().codebase_configure(&request.params)
             }
-            Some(ClientMethod::ToolSearchConfigure) => self.tool_search_configure(&request.params),
-            Some(ClientMethod::CodebaseConfigure) => self.codebase_configure(&request.params),
-            Some(ClientMethod::CommitMessageAuthorize) => {
-                self.commit_message_authorize(&request.params)
+            Some(ClientMethod::CommitMessageAuthorize) => self
+                .config_processor()
+                .commit_message_authorize(&request.params),
+            Some(ClientMethod::CommitMessageRevoke) => self
+                .config_processor()
+                .commit_message_revoke(&request.params),
+            Some(ClientMethod::LanguageServerConfigure) => self
+                .config_processor()
+                .language_server_configure(&request.params),
+            Some(ClientMethod::LanguageServerRemove) => self
+                .config_processor()
+                .language_server_remove(&request.params),
+            Some(ClientMethod::ProviderConfigure) => {
+                self.config_processor().provider_configure(&request.params)
             }
-            Some(ClientMethod::CommitMessageRevoke) => self.commit_message_revoke(&request.params),
-            Some(ClientMethod::LanguageServerConfigure) => {
-                self.language_server_configure(&request.params)
+            Some(ClientMethod::ProviderRemove) => {
+                self.config_processor().provider_remove(&request.params)
             }
-            Some(ClientMethod::LanguageServerRemove) => {
-                self.language_server_remove(&request.params)
+            Some(ClientMethod::McpServerUpsert) => {
+                self.config_processor().mcp_server_upsert(&request.params)
             }
-            Some(ClientMethod::ProviderConfigure) => self.provider_configure(&request.params),
-            Some(ClientMethod::ProviderRemove) => self.provider_remove(&request.params),
-            Some(ClientMethod::McpServerUpsert) => self.mcp_server_upsert(&request.params),
-            Some(ClientMethod::McpServerRemove) => self.mcp_server_remove(&request.params),
-            Some(ClientMethod::McpServerSetEnablement) => {
-                self.mcp_server_set_enablement(&request.params)
+            Some(ClientMethod::McpServerRemove) => {
+                self.config_processor().mcp_server_remove(&request.params)
             }
-            Some(ClientMethod::McpServerStatus) => self.mcp_server_status(),
-            Some(ClientMethod::McpServerConnect) => self.mcp_server_connect(&request.params),
-            Some(ClientMethod::McpServerDisconnect) => self.mcp_server_disconnect(&request.params),
-            Some(ClientMethod::McpOAuthStart) => self.mcp_oauth_start(connection, &request.params),
-            Some(ClientMethod::McpOAuthComplete) => {
-                self.mcp_oauth_complete(connection, std::mem::take(&mut request.params))
+            Some(ClientMethod::McpServerSetEnablement) => self
+                .config_processor()
+                .mcp_server_set_enablement(&request.params),
+            Some(ClientMethod::McpServerStatus) => self.mcp_processor().mcp_server_status(),
+            Some(ClientMethod::McpServerConnect) => {
+                self.mcp_processor().mcp_server_connect(&request.params)
             }
-            Some(ClientMethod::McpOAuthCancel) => {
-                self.mcp_oauth_cancel(connection, &request.params)
+            Some(ClientMethod::McpServerDisconnect) => {
+                self.mcp_processor().mcp_server_disconnect(&request.params)
             }
-            Some(ClientMethod::McpOAuthLogout) => self.mcp_oauth_logout(&request.params),
-            Some(ClientMethod::McpOAuthRefresh) => self.mcp_oauth_refresh(&request.params),
-            Some(ClientMethod::McpOAuthRevoke) => self.mcp_oauth_revoke(&request.params),
-            Some(ClientMethod::SkillSourceAdd) => self.skill_source_add(&request.params),
-            Some(ClientMethod::SkillSourceRemove) => self.skill_source_remove(&request.params),
-            Some(ClientMethod::SkillSourceSetEnablement) => {
-                self.skill_source_set_enablement(&request.params)
+            Some(ClientMethod::McpOAuthStart) => self
+                .mcp_processor()
+                .mcp_oauth_start(connection, &request.params),
+            Some(ClientMethod::McpOAuthComplete) => self
+                .mcp_processor()
+                .mcp_oauth_complete(connection, std::mem::take(&mut request.params)),
+            Some(ClientMethod::McpOAuthCancel) => self
+                .mcp_processor()
+                .mcp_oauth_cancel(connection, &request.params),
+            Some(ClientMethod::McpOAuthLogout) => {
+                self.mcp_processor().mcp_oauth_logout(&request.params)
             }
-            Some(ClientMethod::PluginRequestUpsert) => self.plugin_request_upsert(&request.params),
-            Some(ClientMethod::PluginRequestRemove) => self.plugin_request_remove(&request.params),
-            Some(ClientMethod::PluginRequestSetEnablement) => {
-                self.plugin_request_set_enablement(&request.params)
+            Some(ClientMethod::McpOAuthRefresh) => {
+                self.mcp_processor().mcp_oauth_refresh(&request.params)
             }
-            Some(ClientMethod::HookList) => self.hook_list(&request.params),
-            Some(ClientMethod::HookUpsert) => self.hook_upsert(&request.params),
-            Some(ClientMethod::HookRemove) => self.hook_remove(&request.params),
-            Some(ClientMethod::HookSetEnablement) => self.hook_set_enablement(&request.params),
-            Some(ClientMethod::InstructionImportPreview) => {
-                self.instruction_import_preview(&request.params)
+            Some(ClientMethod::McpOAuthRevoke) => {
+                self.mcp_processor().mcp_oauth_revoke(&request.params)
             }
-            Some(ClientMethod::InstructionImport) => self.instruction_import(&request.params),
-            Some(ClientMethod::InstructionList) => self.instruction_list(&request.params),
-            Some(ClientMethod::SkillList) => self.skill_list(&request.params),
-            Some(ClientMethod::SkillSetEnablement) => self.skill_set_enablement(&request.params),
-            Some(ClientMethod::SkillResourceOpen) => {
-                self.skill_resource_open(connection, &request.params)
+            Some(ClientMethod::SkillSourceAdd) => {
+                self.config_processor().skill_source_add(&request.params)
             }
-            Some(ClientMethod::ExtensionList) => self.extension_list(&request.params),
-            Some(ClientMethod::ExtensionGallery) => self.extension_gallery(&request.params),
-            Some(ClientMethod::ExtensionGalleryResourceOpen) => {
-                self.extension_gallery_resource_open(connection, &request.params)
+            Some(ClientMethod::SkillSourceRemove) => {
+                self.config_processor().skill_source_remove(&request.params)
             }
-            Some(ClientMethod::ExtensionResourceOpen) => {
-                self.extension_resource_open(connection, &request.params)
+            Some(ClientMethod::SkillSourceSetEnablement) => self
+                .config_processor()
+                .skill_source_set_enablement(&request.params),
+            Some(ClientMethod::PluginRequestUpsert) => self
+                .extension_config_processor()
+                .plugin_request_upsert(&request.params),
+            Some(ClientMethod::PluginRequestRemove) => self
+                .extension_config_processor()
+                .plugin_request_remove(&request.params),
+            Some(ClientMethod::PluginRequestSetEnablement) => self
+                .extension_config_processor()
+                .plugin_request_set_enablement(&request.params),
+            Some(ClientMethod::HookList) => {
+                self.extension_config_processor().hook_list(&request.params)
             }
-            Some(ClientMethod::ExtensionHostActivate) => {
-                self.extension_host_activate(connection, &request.params)
+            Some(ClientMethod::HookUpsert) => self
+                .extension_config_processor()
+                .hook_upsert(&request.params),
+            Some(ClientMethod::HookRemove) => self
+                .extension_config_processor()
+                .hook_remove(&request.params),
+            Some(ClientMethod::HookSetEnablement) => self
+                .extension_config_processor()
+                .hook_set_enablement(&request.params),
+            Some(ClientMethod::InstructionImportPreview) => self
+                .instruction_import_processor()
+                .instruction_import_preview(&request.params),
+            Some(ClientMethod::InstructionImport) => self
+                .instruction_import_processor()
+                .instruction_import(&request.params),
+            Some(ClientMethod::InstructionList) => self
+                .instruction_processor()
+                .instruction_list(&request.params),
+            Some(ClientMethod::SkillList) => self.skill_processor().skill_list(&request.params),
+            Some(ClientMethod::SkillSetEnablement) => {
+                self.skill_processor().skill_set_enablement(&request.params)
             }
-            Some(ClientMethod::ExtensionHostStart) => {
-                self.extension_host_start(connection, &request.params)
+            Some(ClientMethod::SkillResourceOpen) => self
+                .skill_processor()
+                .skill_resource_open(connection, &request.params),
+            Some(ClientMethod::ExtensionList) => {
+                self.extension_processor().extension_list(&request.params)
             }
-            Some(ClientMethod::ExtensionHostList) => self.extension_host_list(connection),
-            Some(ClientMethod::ExtensionHostReconcile) => {
-                self.extension_host_reconcile(connection, &request.params)
+            Some(ClientMethod::ExtensionGallery) => self
+                .extension_processor()
+                .extension_gallery(&request.params),
+            Some(ClientMethod::ExtensionGalleryResourceOpen) => self
+                .extension_processor()
+                .extension_gallery_resource_open(connection, &request.params),
+            Some(ClientMethod::ExtensionResourceOpen) => self
+                .extension_processor()
+                .extension_resource_open(connection, &request.params),
+            Some(ClientMethod::ExtensionHostActivate) => self
+                .extension_host_processor()
+                .extension_host_activate(connection, &request.params),
+            Some(ClientMethod::ExtensionHostStart) => self
+                .extension_host_processor()
+                .extension_host_start(connection, &request.params),
+            Some(ClientMethod::ExtensionHostList) => self
+                .extension_host_processor()
+                .extension_host_list(connection),
+            Some(ClientMethod::ExtensionHostReconcile) => self
+                .extension_host_processor()
+                .extension_host_reconcile(connection, &request.params),
+            Some(ClientMethod::ExtensionHostInvokeStart) => self
+                .extension_host_processor()
+                .extension_host_invoke_start(connection, &request.params),
+            Some(ClientMethod::ExtensionHostInvokeRead) => self
+                .extension_host_processor()
+                .extension_host_invoke_read(connection, &request.params),
+            Some(ClientMethod::ExtensionHostInvokeCancel) => self
+                .extension_host_processor()
+                .extension_host_invoke_cancel(connection, &request.params),
+            Some(ClientMethod::AssetCatalog) => self.asset_processor.asset_catalog(&request.params),
+            Some(ClientMethod::AssetCatalogUpdate) => {
+                self.asset_processor.asset_catalog_update(&request.params)
             }
-            Some(ClientMethod::ExtensionHostInvokeStart) => {
-                self.extension_host_invoke_start(connection, &request.params)
-            }
-            Some(ClientMethod::ExtensionHostInvokeRead) => {
-                self.extension_host_invoke_read(connection, &request.params)
-            }
-            Some(ClientMethod::ExtensionHostInvokeCancel) => {
-                self.extension_host_invoke_cancel(connection, &request.params)
-            }
-            Some(ClientMethod::AssetCatalog) => self.asset_catalog(&request.params),
-            Some(ClientMethod::AssetCatalogUpdate) => self.asset_catalog_update(&request.params),
-            Some(ClientMethod::AssetCollectionCreate) => {
-                self.asset_collection_create(&request.params)
-            }
-            Some(ClientMethod::AssetCollectionDelete) => {
-                self.asset_collection_delete(&request.params)
-            }
-            Some(ClientMethod::AssetImportStart) => {
-                self.asset_import_start(connection, &request.params)
-            }
-            Some(ClientMethod::AssetImportWrite) => {
-                self.asset_import_write(connection, &request.params)
-            }
-            Some(ClientMethod::AssetImportFinish) => {
-                self.asset_import_finish(connection, &request.params)
-            }
-            Some(ClientMethod::AssetImportCancel) => {
-                self.asset_import_cancel(connection, &request.params)
-            }
-            Some(ClientMethod::AssetVersion) => self.asset_version(&request.params),
-            Some(ClientMethod::AssetRead) => self.asset_read(&request.params),
-            Some(ClientMethod::ResourceMetadata) => {
-                self.resource_metadata(connection, &request.params)
-            }
-            Some(ClientMethod::ResourceRead) => self.resource_read(connection, &request.params),
-            Some(ClientMethod::ResourceRelease) => {
-                self.resource_release(connection, &request.params)
-            }
+            Some(ClientMethod::AssetCollectionCreate) => self
+                .asset_processor
+                .asset_collection_create(&request.params),
+            Some(ClientMethod::AssetCollectionDelete) => self
+                .asset_processor
+                .asset_collection_delete(&request.params),
+            Some(ClientMethod::AssetImportStart) => self
+                .asset_processor
+                .asset_import_start(connection, &request.params),
+            Some(ClientMethod::AssetImportWrite) => self
+                .asset_processor
+                .asset_import_write(connection, &request.params),
+            Some(ClientMethod::AssetImportFinish) => self
+                .asset_processor
+                .asset_import_finish(connection, &request.params),
+            Some(ClientMethod::AssetImportCancel) => self
+                .asset_processor
+                .asset_import_cancel(connection, &request.params),
+            Some(ClientMethod::AssetVersion) => self.asset_processor.asset_version(&request.params),
+            Some(ClientMethod::AssetRead) => self.asset_processor.asset_read(&request.params),
+            Some(ClientMethod::ResourceMetadata) => self
+                .resources_processor()
+                .resource_metadata(connection, &request.params),
+            Some(ClientMethod::ResourceRead) => self
+                .resources_processor()
+                .resource_read(connection, &request.params),
+            Some(ClientMethod::ResourceRelease) => self
+                .resources_processor()
+                .resource_release(connection, &request.params),
             Some(ClientMethod::VoiceStart) => {
-                self.voice_start(connection, &request.params, cancellation)
+                self.voice_processor()
+                    .voice_start(connection, &request.params, cancellation)
             }
             Some(
                 ClientMethod::VoiceStartCancel
@@ -3179,361 +3872,523 @@ impl AppServer {
                 | ClientMethod::VoiceInterrupt
                 | ClientMethod::VoiceRejectDelegation
                 | ClientMethod::VoiceOptions,
-            ) => self.voice_operation(
+            ) => self.voice_processor().voice_operation(
                 connection,
                 client_method(&request.method).expect("matched Voice method"),
                 &request.params,
             ),
-            Some(ClientMethod::ToolAppList) => self.tool_app_list(&request.params),
+            Some(ClientMethod::ToolAppList) => self.mcp_processor().tool_app_list(&request.params),
             Some(ClientMethod::ToolAppCall) => {
-                self.tool_app_call(connection, &request.params, cancellation)
+                self.mcp_processor()
+                    .tool_app_call(connection, &request.params, cancellation)
             }
-            Some(ClientMethod::ToolAppResourceOpen) => {
-                self.tool_app_resource_open(connection, &request.params, cancellation)
-            }
-            Some(ClientMethod::ToolAppCancel) => {
-                self.tool_resource_cancel(connection, &request.params)
-            }
+            Some(ClientMethod::ToolAppResourceOpen) => self.mcp_processor().tool_app_resource_open(
+                connection,
+                &request.params,
+                cancellation,
+            ),
+            Some(ClientMethod::ToolAppCancel) => self
+                .mcp_processor()
+                .tool_resource_cancel(connection, &request.params),
             Some(ClientMethod::ToolResourceOpen) => {
-                self.tool_resource_open(connection, &request.params, cancellation)
+                self.mcp_processor()
+                    .tool_resource_open(connection, &request.params, cancellation)
             }
-            Some(ClientMethod::ToolResourceCancel) => {
-                self.tool_resource_cancel(connection, &request.params)
+            Some(ClientMethod::ToolResourceCancel) => self
+                .mcp_processor()
+                .tool_resource_cancel(connection, &request.params),
+            Some(ClientMethod::AttachmentResourceOpen) => self
+                .attachment_processor()
+                .attachment_resource_open(connection, &request.params),
+            Some(ClientMethod::AttachmentUploadStart) => self
+                .attachment_processor()
+                .attachment_upload_start(connection, &request.params),
+            Some(ClientMethod::DictationStart) => self
+                .dictation_processor()
+                .dictation_start(connection, &request.params),
+            Some(ClientMethod::DictationAudio) => self
+                .dictation_processor()
+                .dictation_audio(connection, &request.params),
+            Some(ClientMethod::DictationOptions) => self
+                .dictation_processor()
+                .dictation_options(connection, &request.params),
+            Some(ClientMethod::DictationStop) => self
+                .dictation_processor()
+                .dictation_stop(connection, &request.params),
+            Some(ClientMethod::DictationCancel) => self
+                .dictation_processor()
+                .dictation_cancel(connection, &request.params),
+            Some(ClientMethod::DictationModelRead) => self
+                .dictation_processor()
+                .dictation_model_read(connection, &request.params),
+            Some(ClientMethod::DictationModelStart) => self
+                .dictation_processor()
+                .dictation_model_start(connection, &request.params),
+            Some(ClientMethod::DictationModelStop) => self
+                .dictation_processor()
+                .dictation_model_stop(connection, &request.params),
+            Some(ClientMethod::DictationModelList) => {
+                self.dictation_processor().dictation_model_list(connection)
             }
-            Some(ClientMethod::AttachmentResourceOpen) => {
-                self.attachment_resource_open(connection, &request.params)
+            Some(ClientMethod::DictationModelCancel) => self
+                .dictation_processor()
+                .dictation_model_cancel(connection, &request.params),
+            Some(ClientMethod::DictationModelDelete) => self
+                .dictation_processor()
+                .dictation_model_delete(connection, &request.params),
+            Some(ClientMethod::AttachmentUploadWrite) => self
+                .attachment_processor()
+                .attachment_upload_write(connection, &request.params),
+            Some(ClientMethod::AttachmentUploadFinish) => self
+                .attachment_processor()
+                .attachment_upload_finish(connection, &request.params),
+            Some(ClientMethod::AttachmentUploadCancel) => self
+                .attachment_processor()
+                .attachment_upload_cancel(connection, &request.params),
+            Some(ClientMethod::AttachmentImportRemote) => self
+                .attachment_processor()
+                .attachment_import_remote(&request.params),
+            Some(ClientMethod::FsGetMetadata) => {
+                self.fs_processor().fs_get_metadata(&request.params)
             }
-            Some(ClientMethod::AttachmentUploadStart) => {
-                self.attachment_upload_start(connection, &request.params)
+            Some(ClientMethod::FsReadPathCaseSensitivity) => self
+                .fs_processor()
+                .fs_read_path_case_sensitivity(&request.params),
+            Some(ClientMethod::FsReadDirectory) => {
+                self.fs_processor().fs_read_directory(&request.params)
             }
-            Some(ClientMethod::DictationStart) => self.dictation_start(connection, &request.params),
-            Some(ClientMethod::DictationAudio) => self.dictation_audio(connection, &request.params),
-            Some(ClientMethod::DictationOptions) => {
-                self.dictation_options(connection, &request.params)
-            }
-            Some(ClientMethod::DictationStop) => self.dictation_stop(connection, &request.params),
-            Some(ClientMethod::DictationCancel) => {
-                self.dictation_cancel(connection, &request.params)
-            }
-            Some(ClientMethod::DictationModelRead) => {
-                self.dictation_model_read(connection, &request.params)
-            }
-            Some(ClientMethod::DictationModelStart) => {
-                self.dictation_model_start(connection, &request.params)
-            }
-            Some(ClientMethod::DictationModelStop) => {
-                self.dictation_model_stop(connection, &request.params)
-            }
-            Some(ClientMethod::DictationModelList) => self.dictation_model_list(connection),
-            Some(ClientMethod::DictationModelCancel) => {
-                self.dictation_model_cancel(connection, &request.params)
-            }
-            Some(ClientMethod::DictationModelDelete) => {
-                self.dictation_model_delete(connection, &request.params)
-            }
-            Some(ClientMethod::AttachmentUploadWrite) => {
-                self.attachment_upload_write(connection, &request.params)
-            }
-            Some(ClientMethod::AttachmentUploadFinish) => {
-                self.attachment_upload_finish(connection, &request.params)
-            }
-            Some(ClientMethod::AttachmentUploadCancel) => {
-                self.attachment_upload_cancel(connection, &request.params)
-            }
-            Some(ClientMethod::AttachmentImportRemote) => {
-                self.attachment_import_remote(&request.params)
-            }
-            Some(ClientMethod::FsGetMetadata) => self.fs_get_metadata(&request.params),
-            Some(ClientMethod::FsReadPathCaseSensitivity) => {
-                self.fs_read_path_case_sensitivity(&request.params)
-            }
-            Some(ClientMethod::FsReadDirectory) => self.fs_read_directory(&request.params),
-            Some(ClientMethod::FsReadFile) => self.fs_read_file(&request.params),
-            Some(ClientMethod::BackupWorkspaces) => {
-                self.backup_workspaces(connection, &request.params)
-            }
-            Some(ClientMethod::BackupList) => self.backup_list(connection, &request.params),
-            Some(ClientMethod::BackupListPage) => {
-                self.backup_list_page(connection, &request.params)
-            }
-            Some(ClientMethod::BackupWrite) => self.backup_write(connection, &request.params),
-            Some(ClientMethod::BackupDiscard) => self.backup_discard(connection, &request.params),
-            Some(ClientMethod::FsReadBinaryFile) => {
-                self.fs_read_binary_file(connection, &request.params)
-            }
-            Some(ClientMethod::DiffCompute) => self.diff_compute(&request.params),
-            Some(ClientMethod::SyntaxOpen) => self.syntax_open(connection, &request.params),
-            Some(ClientMethod::SyntaxOpenShared) => {
-                self.syntax_open_shared(connection, &request.params)
-            }
+            Some(ClientMethod::FsReadFile) => self.fs_processor().fs_read_file(&request.params),
+            Some(ClientMethod::BackupWorkspaces) => self
+                .backup_processor
+                .workspaces(connection.authority, &request.params),
+            Some(ClientMethod::BackupList) => self
+                .backup_processor
+                .list(connection.authority, &request.params),
+            Some(ClientMethod::BackupListPage) => self
+                .backup_processor
+                .list_page(connection.authority, &request.params),
+            Some(ClientMethod::BackupWrite) => self
+                .backup_processor
+                .write(connection.authority, &request.params),
+            Some(ClientMethod::BackupDiscard) => self
+                .backup_processor
+                .discard(connection.authority, &request.params),
+            Some(ClientMethod::FsReadBinaryFile) => self
+                .fs_processor()
+                .fs_read_binary_file(connection, &request.params),
+            Some(ClientMethod::DiffCompute) => self.diff_processor.diff_compute(&request.params),
+            Some(ClientMethod::SyntaxOpen) => self
+                .syntax_processor
+                .syntax_open(connection, &request.params),
+            Some(ClientMethod::SyntaxOpenShared) => self
+                .syntax_processor
+                .syntax_open_shared(connection, &request.params),
             Some(ClientMethod::SyntaxQuery) => {
-                self.syntax_query(connection, &request.params, cancellation)
+                self.syntax_processor
+                    .syntax_query(connection, &request.params, cancellation)
             }
-            Some(ClientMethod::SyntaxCancel) => self.syntax_cancel(connection, &request.params),
-            Some(ClientMethod::SyntaxUpdate) => self.syntax_update(connection, &request.params),
-            Some(ClientMethod::SyntaxAnalyze) => self.syntax_analyze(connection, &request.params),
-            Some(ClientMethod::SyntaxSelectionRanges) => {
-                self.syntax_selection_ranges(connection, &request.params)
-            }
-            Some(ClientMethod::SyntaxClose) => self.syntax_close(connection, &request.params),
+            Some(ClientMethod::SyntaxCancel) => self
+                .syntax_processor
+                .syntax_cancel(connection, &request.params),
+            Some(ClientMethod::SyntaxUpdate) => self
+                .syntax_processor
+                .syntax_update(connection, &request.params),
+            Some(ClientMethod::SyntaxAnalyze) => self
+                .syntax_processor
+                .syntax_analyze(connection, &request.params),
+            Some(ClientMethod::SyntaxSelectionRanges) => self
+                .syntax_processor
+                .syntax_selection_ranges(connection, &request.params),
+            Some(ClientMethod::SyntaxClose) => self
+                .syntax_processor
+                .syntax_close(connection, &request.params),
             Some(ClientMethod::IdeRequest) => {
-                self.ide_request(connection, &request.params, cancellation)
+                self.ide_processor()
+                    .ide_request(connection, &request.params, cancellation)
             }
-            Some(ClientMethod::LanguageServers) => self.language_servers(&request.params),
-            Some(ClientMethod::LanguageSynchronize) => {
-                self.language_synchronize(&request.params, cancellation)
+            Some(ClientMethod::LanguageServers) => {
+                self.language_processor().language_servers(&request.params)
             }
-            Some(ClientMethod::LanguageClose) => self.language_close(&request.params, cancellation),
-            Some(ClientMethod::LanguageCancel) => self.language_cancel(connection, &request.params),
-            Some(ClientMethod::LanguageHover) => self.language_hover(&request.params, cancellation),
-            Some(ClientMethod::LanguageCompletions) => {
-                self.language_completions(&request.params, cancellation)
+            Some(ClientMethod::LanguageSynchronize) => self
+                .language_processor()
+                .language_synchronize(&request.params, cancellation),
+            Some(ClientMethod::LanguageClose) => self
+                .language_processor()
+                .language_close(&request.params, cancellation),
+            Some(ClientMethod::LanguageCancel) => self
+                .language_processor()
+                .language_cancel(connection, &request.params),
+            Some(ClientMethod::LanguageHover) => self
+                .language_processor()
+                .language_hover(&request.params, cancellation),
+            Some(ClientMethod::LanguageCompletions) => self
+                .language_processor()
+                .language_completions(&request.params, cancellation),
+            Some(ClientMethod::LanguageResolveCompletion) => self
+                .language_processor()
+                .language_resolve_completion(&request.params, cancellation),
+            Some(ClientMethod::LanguageExecuteCommand) => self
+                .language_processor()
+                .language_execute_command(&request.params, cancellation),
+            Some(ClientMethod::LanguageDocumentDiagnostics) => self
+                .language_processor()
+                .language_document_diagnostics(&request.params, cancellation),
+            Some(ClientMethod::LanguageDirectoryDiagnostics) => self
+                .language_processor()
+                .language_directory_diagnostics(&request.params, cancellation),
+            Some(ClientMethod::LanguageDocumentFormatting) => self
+                .language_processor()
+                .language_document_formatting(&request.params, cancellation),
+            Some(ClientMethod::LanguageRangeFormatting) => self
+                .language_processor()
+                .language_range_formatting(&request.params, cancellation),
+            Some(ClientMethod::LanguageSignatureHelp) => self
+                .language_processor()
+                .language_signature_help(&request.params, cancellation),
+            Some(ClientMethod::LanguageInlayHints) => self
+                .language_processor()
+                .language_inlay_hints(&request.params, cancellation),
+            Some(ClientMethod::LanguageLinkedEditingRanges) => self
+                .language_processor()
+                .language_linked_editing_ranges(&request.params, cancellation),
+            Some(ClientMethod::LanguageSemanticTokens) => self
+                .language_processor()
+                .language_semantic_tokens(&request.params, cancellation),
+            Some(ClientMethod::LanguageDocumentSymbols) => self
+                .language_document_processor()
+                .language_document_symbols(&request.params, cancellation),
+            Some(ClientMethod::LanguageCodeLenses) => self
+                .language_document_processor()
+                .language_code_lenses(&request.params, cancellation),
+            Some(ClientMethod::LanguageResolveCodeLens) => self
+                .language_document_processor()
+                .language_resolve_code_lens(&request.params, cancellation),
+            Some(ClientMethod::LanguageDocumentLinks) => self
+                .language_document_processor()
+                .language_document_links(&request.params, cancellation),
+            Some(ClientMethod::LanguageResolveDocumentLink) => self
+                .language_document_processor()
+                .language_resolve_document_link(&request.params, cancellation),
+            Some(ClientMethod::LanguageDocumentColors) => self
+                .language_document_processor()
+                .language_document_colors(&request.params, cancellation),
+            Some(ClientMethod::LanguageColorPresentations) => self
+                .language_document_processor()
+                .language_color_presentations(&request.params, cancellation),
+            Some(ClientMethod::LanguageFoldingRanges) => self
+                .language_document_processor()
+                .language_folding_ranges(&request.params, cancellation),
+            Some(ClientMethod::LanguageLocations) => self
+                .language_processor()
+                .language_locations(&request.params, cancellation),
+            Some(ClientMethod::LanguageHierarchy) => self
+                .language_processor()
+                .language_hierarchy(&request.params, cancellation),
+            Some(ClientMethod::LanguageDirectorySymbols) => self
+                .language_processor()
+                .language_directory_symbols(&request.params, cancellation),
+            Some(ClientMethod::LanguagePrepareRename) => self
+                .language_processor()
+                .language_prepare_rename(&request.params, cancellation),
+            Some(ClientMethod::LanguageRename) => self
+                .language_processor()
+                .language_rename(&request.params, cancellation),
+            Some(ClientMethod::LanguageCodeActions) => self
+                .language_processor()
+                .language_code_actions(&request.params, cancellation),
+            Some(ClientMethod::LanguageResolveCodeAction) => self
+                .language_processor()
+                .language_resolve_code_action(&request.params, cancellation),
+            Some(ClientMethod::FsWriteFile) => self
+                .fs_processor()
+                .fs_write_file(connection, &request.params),
+            Some(ClientMethod::FsWriteFileElevated) => self.fs_processor().fs_write_file_elevated(
+                connection,
+                &request.params,
+                cancellation,
+            ),
+            Some(ClientMethod::FsCancelElevatedWrite) => self
+                .fs_processor()
+                .fs_cancel_elevated_write(connection, &request.params),
+            Some(ClientMethod::FsWriteBinaryFile) => self
+                .fs_processor()
+                .fs_write_binary_file(connection, &request.params),
+            Some(ClientMethod::FsCreateFile) => self.fs_processor().fs_create_file(&request.params),
+            Some(ClientMethod::FsCreateDirectory) => {
+                self.fs_processor().fs_create_directory(&request.params)
             }
-            Some(ClientMethod::LanguageResolveCompletion) => {
-                self.language_resolve_completion(&request.params, cancellation)
+            Some(ClientMethod::FsCopy) => self.fs_processor().fs_copy(&request.params),
+            Some(ClientMethod::FsPasteSystemFiles) => {
+                self.fs_processor().fs_paste_system_files(&request.params)
             }
-            Some(ClientMethod::LanguageExecuteCommand) => {
-                self.language_execute_command(&request.params, cancellation)
+            Some(ClientMethod::FsRename) => self.fs_processor().fs_rename(&request.params),
+            Some(ClientMethod::FsDelete) => self.fs_processor().fs_delete(&request.params),
+            Some(ClientMethod::GitInit) => {
+                self.git_processor().git_init(&request.params, cancellation)
             }
-            Some(ClientMethod::LanguageDocumentDiagnostics) => {
-                self.language_document_diagnostics(&request.params, cancellation)
+            Some(ClientMethod::GitCatalog) => self.git_processor().git_catalog(&request.params),
+            Some(ClientMethod::GitCommand) => self
+                .git_processor()
+                .git_command(&request.params, cancellation),
+            Some(ClientMethod::GitIndexDiff) => {
+                self.git_processor().git_index_diff(&request.params)
             }
-            Some(ClientMethod::LanguageDirectoryDiagnostics) => {
-                self.language_directory_diagnostics(&request.params, cancellation)
+            Some(ClientMethod::GitIndexEdit) => {
+                self.git_processor().git_index_edit(&request.params)
             }
-            Some(ClientMethod::LanguageDocumentFormatting) => {
-                self.language_document_formatting(&request.params, cancellation)
-            }
-            Some(ClientMethod::LanguageRangeFormatting) => {
-                self.language_range_formatting(&request.params, cancellation)
-            }
-            Some(ClientMethod::LanguageSignatureHelp) => {
-                self.language_signature_help(&request.params, cancellation)
-            }
-            Some(ClientMethod::LanguageInlayHints) => {
-                self.language_inlay_hints(&request.params, cancellation)
-            }
-            Some(ClientMethod::LanguageLinkedEditingRanges) => {
-                self.language_linked_editing_ranges(&request.params, cancellation)
-            }
-            Some(ClientMethod::LanguageSemanticTokens) => {
-                self.language_semantic_tokens(&request.params, cancellation)
-            }
-            Some(ClientMethod::LanguageDocumentSymbols) => {
-                self.language_document_symbols(&request.params, cancellation)
-            }
-            Some(ClientMethod::LanguageCodeLenses) => {
-                self.language_code_lenses(&request.params, cancellation)
-            }
-            Some(ClientMethod::LanguageResolveCodeLens) => {
-                self.language_resolve_code_lens(&request.params, cancellation)
-            }
-            Some(ClientMethod::LanguageDocumentLinks) => {
-                self.language_document_links(&request.params, cancellation)
-            }
-            Some(ClientMethod::LanguageResolveDocumentLink) => {
-                self.language_resolve_document_link(&request.params, cancellation)
-            }
-            Some(ClientMethod::LanguageDocumentColors) => {
-                self.language_document_colors(&request.params, cancellation)
-            }
-            Some(ClientMethod::LanguageColorPresentations) => {
-                self.language_color_presentations(&request.params, cancellation)
-            }
-            Some(ClientMethod::LanguageFoldingRanges) => {
-                self.language_folding_ranges(&request.params, cancellation)
-            }
-            Some(ClientMethod::LanguageLocations) => {
-                self.language_locations(&request.params, cancellation)
-            }
-            Some(ClientMethod::LanguageHierarchy) => {
-                self.language_hierarchy(&request.params, cancellation)
-            }
-            Some(ClientMethod::LanguageDirectorySymbols) => {
-                self.language_directory_symbols(&request.params, cancellation)
-            }
-            Some(ClientMethod::LanguagePrepareRename) => {
-                self.language_prepare_rename(&request.params, cancellation)
-            }
-            Some(ClientMethod::LanguageRename) => {
-                self.language_rename(&request.params, cancellation)
-            }
-            Some(ClientMethod::LanguageCodeActions) => {
-                self.language_code_actions(&request.params, cancellation)
-            }
-            Some(ClientMethod::LanguageResolveCodeAction) => {
-                self.language_resolve_code_action(&request.params, cancellation)
-            }
-            Some(ClientMethod::FsWriteFile) => self.fs_write_file(connection, &request.params),
-            Some(ClientMethod::FsWriteFileElevated) => {
-                self.fs_write_file_elevated(connection, &request.params, cancellation)
-            }
-            Some(ClientMethod::FsCancelElevatedWrite) => {
-                self.fs_cancel_elevated_write(connection, &request.params)
-            }
-            Some(ClientMethod::FsWriteBinaryFile) => {
-                self.fs_write_binary_file(connection, &request.params)
-            }
-            Some(ClientMethod::FsCreateFile) => self.fs_create_file(&request.params),
-            Some(ClientMethod::FsCreateDirectory) => self.fs_create_directory(&request.params),
-            Some(ClientMethod::FsCopy) => self.fs_copy(&request.params),
-            Some(ClientMethod::FsPasteSystemFiles) => self.fs_paste_system_files(&request.params),
-            Some(ClientMethod::FsRename) => self.fs_rename(&request.params),
-            Some(ClientMethod::FsDelete) => self.fs_delete(&request.params),
-            Some(ClientMethod::GitInit) => self.git_init(&request.params, cancellation),
-            Some(ClientMethod::GitCatalog) => self.git_catalog(&request.params),
-            Some(ClientMethod::GitCommand) => self.git_command(&request.params, cancellation),
-            Some(ClientMethod::GitIndexDiff) => self.git_index_diff(&request.params),
-            Some(ClientMethod::GitIndexEdit) => self.git_index_edit(&request.params),
-            Some(ClientMethod::GitRepositories) => {
-                self.git_repositories(connection, &request.params)
-            }
+            Some(ClientMethod::GitRepositories) => self
+                .git_processor()
+                .git_repositories(connection, &request.params),
             Some(ClientMethod::GitClone) => {
-                self.git_clone(connection, &request.params, cancellation)
+                self.git_processor()
+                    .git_clone(connection, &request.params, cancellation)
             }
             Some(ClientMethod::GitCloneTo) => {
-                self.git_clone_to(connection, &request.params, cancellation)
+                self.git_processor()
+                    .git_clone_to(connection, &request.params, cancellation)
             }
-            Some(ClientMethod::GitCloneCancel) => {
-                self.git_clone_cancel(connection, &request.params)
+            Some(ClientMethod::GitCloneCancel) => self
+                .git_processor()
+                .git_clone_cancel(connection, &request.params),
+            Some(ClientMethod::GitStatus) => self.git_processor().git_status(&request.params),
+            Some(ClientMethod::GitTransport) => self
+                .git_processor()
+                .git_transport(&request.params, cancellation),
+            Some(ClientMethod::GitTransportCancel) => self
+                .git_processor()
+                .git_check_ignore_cancel(connection, &request.params),
+            Some(ClientMethod::GitVersion) => self.git_processor().git_version(&request.params),
+            Some(ClientMethod::GitPullPreflight) => {
+                self.git_processor().git_pull_preflight(&request.params)
             }
-            Some(ClientMethod::GitStatus) => self.git_status(&request.params),
-            Some(ClientMethod::GitTransport) => self.git_transport(&request.params, cancellation),
-            Some(ClientMethod::GitTransportCancel) => {
-                self.git_check_ignore_cancel(connection, &request.params)
+            Some(ClientMethod::GitBlame) => self.git_processor().git_blame(&request.params),
+            Some(ClientMethod::GitFileHistory) => {
+                self.git_processor().git_file_history(&request.params)
             }
-            Some(ClientMethod::GitVersion) => self.git_version(&request.params),
-            Some(ClientMethod::GitPullPreflight) => self.git_pull_preflight(&request.params),
-            Some(ClientMethod::GitBlame) => self.git_blame(&request.params),
-            Some(ClientMethod::GitFileHistory) => self.git_file_history(&request.params),
-            Some(ClientMethod::GitCheckIgnore) => {
-                self.git_check_ignore(&request.params, cancellation)
+            Some(ClientMethod::GitCheckIgnore) => self
+                .git_processor()
+                .git_check_ignore(&request.params, cancellation),
+            Some(ClientMethod::GitCheckIgnoreCancel) => self
+                .git_processor()
+                .git_check_ignore_cancel(connection, &request.params),
+            Some(ClientMethod::GitTextDiff) => self.git_processor().git_text_diff(&request.params),
+            Some(ClientMethod::GitBranchList) => {
+                self.git_processor().git_branch_list(&request.params)
             }
-            Some(ClientMethod::GitCheckIgnoreCancel) => {
-                self.git_check_ignore_cancel(connection, &request.params)
+            Some(ClientMethod::GitHistory) => self.git_processor().git_history(&request.params),
+            Some(ClientMethod::GitHistoryRefs) => {
+                self.git_processor().git_history_refs(&request.params)
             }
-            Some(ClientMethod::GitTextDiff) => self.git_text_diff(&request.params),
-            Some(ClientMethod::GitBranchList) => self.git_branch_list(&request.params),
-            Some(ClientMethod::GitHistory) => self.git_history(&request.params),
-            Some(ClientMethod::GitHistoryRefs) => self.git_history_refs(&request.params),
-            Some(ClientMethod::GitGraph) => {
-                self.git_graph(connection.connection_id, &request.params)
+            Some(ClientMethod::GitGraph) => self
+                .git_processor()
+                .git_graph(connection.connection_id, &request.params),
+            Some(ClientMethod::GitCommitChanges) => {
+                self.git_processor().git_commit_changes(&request.params)
             }
-            Some(ClientMethod::GitCommitChanges) => self.git_commit_changes(&request.params),
-            Some(ClientMethod::GitCompareChanges) => self.git_compare_changes(&request.params),
-            Some(ClientMethod::GitCommitMessage) => self.git_commit_message(&request.params),
-            Some(ClientMethod::GitCommitDetails) => self.git_commit_details(&request.params),
-            Some(ClientMethod::GitCommitFile) => self.git_commit_file(&request.params),
-            Some(ClientMethod::GitChangeFile) => self.git_change_file(&request.params),
-            Some(ClientMethod::GitConflictFile) => self.git_conflict_file(&request.params),
-            Some(ClientMethod::GitCompleteConflict) => self.git_complete_conflict(&request.params),
-            Some(ClientMethod::GitBranchSwitch) => self.git_branch_switch(&request.params),
-            Some(ClientMethod::GitBranchCreate) => self.git_branch_create(&request.params),
-            Some(ClientMethod::GitBranchDelete) => self.git_branch_delete(&request.params),
-            Some(ClientMethod::GitWorktreeCreate) => self.git_worktree_create(&request.params),
-            Some(ClientMethod::GitWorktreeDelete) => self.git_worktree_delete(&request.params),
-            Some(ClientMethod::GitWorktreeList) => self.git_worktree_list(&request.params),
-            Some(ClientMethod::GitWorktreeResolve) => self.git_worktree_resolve(&request.params),
-            Some(ClientMethod::GitStage) => self.git_stage(&request.params),
-            Some(ClientMethod::GitUnstage) => self.git_unstage(&request.params),
-            Some(ClientMethod::GitAIContribution) => self.git_ai_contribution(&request.params),
-            Some(ClientMethod::GitReviewRemoval) => self.git_review_removal(&request.params),
-            Some(ClientMethod::GitRemoveFiles) => self.git_remove_files(&request.params),
-            Some(ClientMethod::GitDiscardWorktree) => self.git_discard_worktree(&request.params),
-            Some(ClientMethod::GitCommit) => self.git_commit(&request.params),
-            Some(ClientMethod::GitFetch) => self.git_fetch(&request.params, cancellation),
-            Some(ClientMethod::GitPull) => self.git_pull(&request.params, cancellation),
-            Some(ClientMethod::GitPush) => self.git_push(&request.params, cancellation),
-            Some(ClientMethod::FileGlob) => self.file_glob(&request.params, cancellation),
-            Some(ClientMethod::FileFuzzy) => self.file_fuzzy(&request.params, cancellation),
-            Some(ClientMethod::FileFuzzyCancel) => {
-                self.file_glob_cancel(connection, &request.params)
+            Some(ClientMethod::GitCompareChanges) => {
+                self.git_processor().git_compare_changes(&request.params)
             }
-            Some(ClientMethod::FileGlobCancel) => {
-                self.file_glob_cancel(connection, &request.params)
+            Some(ClientMethod::GitCommitMessage) => {
+                self.git_processor().git_commit_message(&request.params)
             }
-            Some(ClientMethod::ContentSearchStart) => {
-                self.content_search_start(connection, &request.params)
+            Some(ClientMethod::GitCommitDetails) => {
+                self.git_processor().git_commit_details(&request.params)
             }
-            Some(ClientMethod::ContentSearchRead) => {
-                self.content_search_read(connection, &request.params)
+            Some(ClientMethod::GitCommitFile) => {
+                self.git_processor().git_commit_file(&request.params)
             }
-            Some(ClientMethod::ContentSearchCancel) => {
-                self.content_search_cancel(connection, &request.params)
+            Some(ClientMethod::GitChangeFile) => {
+                self.git_processor().git_change_file(&request.params)
             }
-            Some(ClientMethod::CodebaseStatus) => self.codebase_status(&request.params),
-            Some(ClientMethod::CodebaseSearch) => self.codebase_search(&request.params),
-            Some(ClientMethod::CodebaseSymbolsStatus) => self.symbol_index_status(&request.params),
-            Some(ClientMethod::CodebaseSymbolsSearch) => self.symbol_index_search(&request.params),
-            Some(ClientMethod::DocumentOverlaySynchronize) => {
-                self.document_overlay_synchronize(&request.params)
+            Some(ClientMethod::GitConflictFile) => {
+                self.git_processor().git_conflict_file(&request.params)
             }
-            Some(ClientMethod::DocumentOverlayClose) => {
-                self.document_overlay_close(&request.params)
+            Some(ClientMethod::GitCompleteConflict) => {
+                self.git_processor().git_complete_conflict(&request.params)
             }
-            Some(ClientMethod::CodebaseRetrieve) => self.code_retrieve(&request.params),
-            Some(ClientMethod::CodebaseRebuild) => self.codebase_rebuild(&request.params),
-            Some(ClientMethod::GrepIndexStatus) => self.grep_index_status(&request.params),
-            Some(ClientMethod::GrepIndexRebuild) => self.grep_index_rebuild(&request.params),
-            Some(ClientMethod::GrepIndexDisableAndDelete) => {
-                self.grep_index_disable_and_delete(&request.params)
+            Some(ClientMethod::GitBranchSwitch) => {
+                self.git_processor().git_branch_switch(&request.params)
             }
-            Some(ClientMethod::CloudCodebaseStatus) => self.cloud_codebase_status(&request.params),
-            Some(ClientMethod::CloudCodebasePreview) => {
-                self.cloud_codebase_preview(&request.params)
+            Some(ClientMethod::GitBranchCreate) => {
+                self.git_processor().git_branch_create(&request.params)
             }
-            Some(ClientMethod::CloudCodebaseAuthorize) => {
-                self.cloud_codebase_authorize(&request.params)
+            Some(ClientMethod::GitBranchDelete) => {
+                self.git_processor().git_branch_delete(&request.params)
             }
-            Some(ClientMethod::CloudCodebaseSync) => self.cloud_codebase_sync(&request.params),
-            Some(ClientMethod::CloudCodebaseRevoke) => self.cloud_codebase_revoke(&request.params),
-            Some(ClientMethod::TerminalProfileList) => self.terminal_profile_list(&request.params),
-            Some(ClientMethod::TerminalProfileResolve) => {
-                self.terminal_profile_resolve(&request.params)
+            Some(ClientMethod::GitWorktreeCreate) => {
+                self.git_processor().git_worktree_create(&request.params)
             }
-            Some(ClientMethod::TerminalEnvironmentRead) => {
-                self.terminal_environment_read(&request.params)
+            Some(ClientMethod::GitWorktreeDelete) => {
+                self.git_processor().git_worktree_delete(&request.params)
             }
-            Some(ClientMethod::TerminalCreate) => self.terminal_create(connection, &request.params),
-            Some(ClientMethod::TerminalCreateInSessionDirectory) => {
-                self.terminal_create_in_session_directory(connection, &request.params)
+            Some(ClientMethod::GitWorktreeList) => {
+                self.git_processor().git_worktree_list(&request.params)
             }
-            Some(ClientMethod::TerminalAttach) => self.terminal_attach(connection, &request.params),
-            Some(ClientMethod::TerminalWrite) => self.terminal_write(connection, &request.params),
-            Some(ClientMethod::TerminalWriteBinary) => {
-                self.terminal_write_binary(connection, &request.params)
+            Some(ClientMethod::GitWorktreeResolve) => {
+                self.git_processor().git_worktree_resolve(&request.params)
             }
-            Some(ClientMethod::TerminalProcessInfo) => {
-                self.terminal_process_info(connection, &request.params)
+            Some(ClientMethod::GitStage) => self.git_processor().git_stage(&request.params),
+            Some(ClientMethod::GitUnstage) => self.git_processor().git_unstage(&request.params),
+            Some(ClientMethod::GitAIContribution) => {
+                self.git_processor().git_ai_contribution(&request.params)
             }
-            Some(ClientMethod::TerminalSendSignal) => {
-                self.terminal_send_signal(connection, &request.params)
+            Some(ClientMethod::GitReviewRemoval) => {
+                self.git_processor().git_review_removal(&request.params)
             }
-            Some(ClientMethod::TerminalResize) => self.terminal_resize(connection, &request.params),
-            Some(ClientMethod::TerminalRead) => self.terminal_read(connection, &request.params),
-            Some(ClientMethod::TerminalClose) => self.terminal_close(connection, &request.params),
-            Some(ClientMethod::DebugAdapterStart) => {
-                self.debug_adapter_start(connection, &request.params)
+            Some(ClientMethod::GitRemoveFiles) => {
+                self.git_processor().git_remove_files(&request.params)
             }
-            Some(ClientMethod::TestingDiscover) => {
-                self.testing_discover(connection, &request.params)
+            Some(ClientMethod::GitDiscardWorktree) => {
+                self.git_processor().git_discard_worktree(&request.params)
             }
-            Some(ClientMethod::TestingRun) => self.testing_run(connection, &request.params),
-            Some(ClientMethod::TestingPrepareDebug) => {
-                self.testing_prepare_debug(connection, &request.params)
+            Some(ClientMethod::GitCommit) => self.git_processor().git_commit(&request.params),
+            Some(ClientMethod::GitFetch) => self
+                .git_processor()
+                .git_fetch(&request.params, cancellation),
+            Some(ClientMethod::GitPull) => {
+                self.git_processor().git_pull(&request.params, cancellation)
             }
-            Some(ClientMethod::TestingRead) => self.testing_read(connection, &request.params),
-            Some(ClientMethod::TestingCancel) => self.testing_cancel(connection, &request.params),
-            Some(ClientMethod::TestingRelease) => self.testing_release(connection, &request.params),
-            Some(ClientMethod::DebugAdapterSend) => {
-                self.debug_adapter_send(connection, &request.params)
+            Some(ClientMethod::GitPush) => {
+                self.git_processor().git_push(&request.params, cancellation)
             }
-            Some(ClientMethod::DebugAdapterRead) => {
-                self.debug_adapter_read(connection, &request.params)
+            Some(ClientMethod::FileGlob) => self
+                .search_processor()
+                .file_glob(&request.params, cancellation),
+            Some(ClientMethod::FileFuzzy) => self
+                .search_processor()
+                .file_fuzzy(&request.params, cancellation),
+            Some(ClientMethod::FileFuzzyCancel) => self
+                .search_processor()
+                .file_glob_cancel(connection, &request.params),
+            Some(ClientMethod::FileGlobCancel) => self
+                .search_processor()
+                .file_glob_cancel(connection, &request.params),
+            Some(ClientMethod::ContentSearchStart) => self
+                .search_processor()
+                .content_search_start(connection, &request.params),
+            Some(ClientMethod::ContentSearchRead) => self
+                .search_processor()
+                .content_search_read(connection, &request.params),
+            Some(ClientMethod::ContentSearchCancel) => self
+                .search_processor()
+                .content_search_cancel(connection, &request.params),
+            Some(ClientMethod::CodebaseStatus) => {
+                self.codebase_processor().codebase_status(&request.params)
             }
-            Some(ClientMethod::DebugAdapterClose) => {
-                self.debug_adapter_close(connection, &request.params)
+            Some(ClientMethod::CodebaseSearch) => {
+                self.codebase_processor().codebase_search(&request.params)
             }
+            Some(ClientMethod::CodebaseSymbolsStatus) => {
+                self.symbol_processor().symbol_index_status(&request.params)
+            }
+            Some(ClientMethod::CodebaseSymbolsSearch) => {
+                self.symbol_processor().symbol_index_search(&request.params)
+            }
+            Some(ClientMethod::DocumentOverlaySynchronize) => self
+                .symbol_processor()
+                .document_overlay_synchronize(&request.params),
+            Some(ClientMethod::DocumentOverlayClose) => self
+                .symbol_processor()
+                .document_overlay_close(&request.params),
+            Some(ClientMethod::CodebaseRetrieve) => {
+                self.retrieval_processor().code_retrieve(&request.params)
+            }
+            Some(ClientMethod::CodebaseRebuild) => {
+                self.codebase_processor().codebase_rebuild(&request.params)
+            }
+            Some(ClientMethod::GrepIndexStatus) => {
+                self.search_processor().grep_index_status(&request.params)
+            }
+            Some(ClientMethod::GrepIndexRebuild) => {
+                self.search_processor().grep_index_rebuild(&request.params)
+            }
+            Some(ClientMethod::GrepIndexDisableAndDelete) => self
+                .config_processor()
+                .grep_index_disable_and_delete(&request.params),
+            Some(ClientMethod::CloudCodebaseStatus) => self
+                .cloud_codebase_processor()
+                .cloud_codebase_status(&request.params),
+            Some(ClientMethod::CloudCodebasePreview) => self
+                .cloud_codebase_processor()
+                .cloud_codebase_preview(&request.params),
+            Some(ClientMethod::CloudCodebaseAuthorize) => self
+                .cloud_codebase_processor()
+                .cloud_codebase_authorize(&request.params),
+            Some(ClientMethod::CloudCodebaseSync) => self
+                .cloud_codebase_processor()
+                .cloud_codebase_sync(&request.params),
+            Some(ClientMethod::CloudCodebaseRevoke) => self
+                .cloud_codebase_processor()
+                .cloud_codebase_revoke(&request.params),
+            Some(ClientMethod::TerminalProfileList) => self
+                .terminal_processor()
+                .terminal_profile_list(&request.params),
+            Some(ClientMethod::TerminalProfileResolve) => self
+                .terminal_processor()
+                .terminal_profile_resolve(&request.params),
+            Some(ClientMethod::TerminalEnvironmentRead) => self
+                .terminal_processor()
+                .terminal_environment_read(&request.params),
+            Some(ClientMethod::TerminalCreate) => self
+                .terminal_processor()
+                .terminal_create(connection, &request.params),
+            Some(ClientMethod::TerminalCreateInSessionDirectory) => self
+                .terminal_processor()
+                .terminal_create_in_session_directory(connection, &request.params),
+            Some(ClientMethod::TerminalAttach) => self
+                .terminal_processor()
+                .terminal_attach(connection, &request.params),
+            Some(ClientMethod::TerminalWrite) => self
+                .terminal_processor()
+                .terminal_write(connection, &request.params),
+            Some(ClientMethod::TerminalWriteBinary) => self
+                .terminal_processor()
+                .terminal_write_binary(connection, &request.params),
+            Some(ClientMethod::TerminalProcessInfo) => self
+                .terminal_processor()
+                .terminal_process_info(connection, &request.params),
+            Some(ClientMethod::TerminalSendSignal) => self
+                .terminal_processor()
+                .terminal_send_signal(connection, &request.params),
+            Some(ClientMethod::TerminalResize) => self
+                .terminal_processor()
+                .terminal_resize(connection, &request.params),
+            Some(ClientMethod::TerminalRead) => self
+                .terminal_processor()
+                .terminal_read(connection, &request.params),
+            Some(ClientMethod::TerminalClose) => self
+                .terminal_processor()
+                .terminal_close(connection, &request.params),
+            Some(ClientMethod::DebugAdapterStart) => self
+                .debug_processor()
+                .debug_adapter_start(connection, &request.params),
+            Some(ClientMethod::TestingDiscover) => self
+                .testing_processor()
+                .testing_discover(connection, &request.params),
+            Some(ClientMethod::TestingRun) => self
+                .testing_processor()
+                .testing_run(connection, &request.params),
+            Some(ClientMethod::TestingPrepareDebug) => self
+                .testing_processor()
+                .testing_prepare_debug(connection, &request.params),
+            Some(ClientMethod::TestingRead) => self
+                .testing_processor()
+                .testing_read(connection, &request.params),
+            Some(ClientMethod::TestingCancel) => self
+                .testing_processor()
+                .testing_cancel(connection, &request.params),
+            Some(ClientMethod::TestingRelease) => self
+                .testing_processor()
+                .testing_release(connection, &request.params),
+            Some(ClientMethod::DebugAdapterSend) => self
+                .debug_processor()
+                .debug_adapter_send(connection, &request.params),
+            Some(ClientMethod::DebugAdapterRead) => self
+                .debug_processor()
+                .debug_adapter_read(connection, &request.params),
+            Some(ClientMethod::DebugAdapterClose) => self
+                .debug_processor()
+                .debug_adapter_close(connection, &request.params),
             None => Err(RpcError::new(-32601, AppServerErrorName::MethodNotFound)),
         }
     }
@@ -3616,25 +4471,6 @@ impl ThreadUpdateSink for AppServerThreadUpdates {
             }
             None => {}
         }
-    }
-}
-
-impl AppServer {
-    fn invoke_session_runtime(
-        runtimes: Option<&Arc<crate::session_runtime_provider::SessionRuntimeProvider>>,
-        params: &Value,
-        cancellation: &ash_async_utils::CancellationToken,
-    ) -> Result<Value, RpcError> {
-        let params: ash_app_server_protocol::protocol::session::SessionRuntimeParams =
-            decode(params)?;
-        let runtimes =
-            runtimes.ok_or_else(|| RpcError::new(-32601, AppServerErrorName::MethodNotFound))?;
-        let value = runtimes
-            .invoke(&params.provider_id, params.request, cancellation)
-            .map_err(|error| {
-                RpcError::with_details(-32603, AppServerErrorName::InternalError, error)
-            })?;
-        result(&value)
     }
 }
 
@@ -3790,3 +4626,93 @@ impl ash_core::AgentTurnSubmission for AppServerAgentTurnSubmission {
 #[cfg(test)]
 #[path = "server/mcp_resource_tests.rs"]
 mod mcp_resource_tests;
+
+impl AppServer {
+    pub(crate) fn with_local_approval_environment(
+        mut self,
+        database: &std::path::Path,
+    ) -> Result<Self, String> {
+        let store = std::sync::Arc::new(
+            ash_state::SqliteEnvironmentStore::open(database).map_err(|error| error.to_string())?,
+        );
+        let environment = std::sync::Arc::new(guardian_environment::Environment::new(store));
+        let owner = self
+            .local_env_host
+            .as_ref()
+            .map(|host| host.permission_policy())
+            .unwrap_or_else(|| {
+                std::sync::Arc::new(crate::execution_environments::EnvironmentPolicy::default())
+            });
+        let policy = self.shared_action_policy(owner);
+        let dirs = self.env_runtime_mut().dir_grants.clone();
+        let service =
+            std::sync::Arc::new(approval_environment_operations::ThreadReviewEnvironment {
+                environment: environment.clone(),
+                dirs,
+                threads: self.threads.clone(),
+                policy,
+            });
+        let executor = self
+            .env_runtime_mut()
+            .turn_executor
+            .clone()
+            .with_review_environment(service);
+        self.turn_backend.install_executor(executor.clone());
+        self.env_runtime_mut().turn_executor = executor;
+        self.approval_environment = Some(environment);
+        Ok(self)
+    }
+    pub(crate) fn with_network_diagnostics(
+        mut self,
+        network: ash_http_client::OutboundNetworkSnapshot,
+        http: std::sync::Arc<dyn ash_http_client::HttpClient>,
+        services: Vec<(String, String)>,
+    ) -> Self {
+        self.network_diagnostics = Some(network_operations::NetworkDiagnostics {
+            network,
+            http,
+            services,
+        });
+        self
+    }
+    pub(crate) fn with_symphony_store(
+        mut self,
+        store: std::sync::Arc<ash_symphony::Store>,
+        http: std::sync::Arc<dyn ash_http_client::HttpClient>,
+    ) -> Self {
+        self.symphony = Some(store);
+        self.symphony_http = Some(http);
+        self
+    }
+}
+
+impl AppServer {
+    pub(crate) fn terminal_session_directory(
+        dir_id: Option<&str>,
+    ) -> Result<Option<(ash_protocol::SessionId, std::path::PathBuf)>, String> {
+        terminal_operations::TerminalRequestProcessor::<Self>::terminal_session_directory(dir_id)
+    }
+    pub(crate) fn poll_symphony(
+        &self,
+        workflow: &ash_symphony::Workflow,
+        cancellation: &CancellationToken,
+    ) -> Result<Vec<ash_symphony::Issue>, String> {
+        self.symphony_tracker_processor()
+            .poll_symphony(workflow, cancellation)
+    }
+}
+
+impl AppServer {
+    pub fn queued_message_ready(&self, message: &queue::QueuedMessage) -> Result<bool, String> {
+        self.queue_processor().queued_message_ready(message)
+    }
+    pub fn queue_needs_host(&self) -> Result<bool, String> {
+        self.queue_processor().queue_needs_host()
+    }
+    pub fn deliver_queued_message(
+        &self,
+        message: &queue::QueuedMessage,
+    ) -> Result<queue::Delivery, String> {
+        self.queue_processor().deliver_queued_message(message)
+    }
+}

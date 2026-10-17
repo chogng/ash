@@ -99,17 +99,25 @@ use ash_app_server_protocol::protocol::issues::IssueReadResult;
 use ash_app_server_protocol::protocol::issues::IssueState;
 use ash_app_server_protocol::protocol::registry::ClientMethod;
 use ash_async_utils::CancellationToken;
-use core_api::AgentRuntime;
 
-impl super::AppServer {
-    pub(crate) fn with_thread_pull_requests(
-        mut self,
-        store: std::sync::Arc<ash_state::SqliteThreadStore>,
+/// Session references use the authoritative thread catalog and reference store.
+pub(super) struct GitHubSessionRequestProcessor<'a> {
+    threads: &'a ash_core::ThreadController,
+    thread_pull_requests: &'a Option<Arc<ash_state::SqliteThreadStore>>,
+    updates: &'a super::UpdateBroker,
+}
+impl<'a> GitHubSessionRequestProcessor<'a> {
+    pub(super) fn new(
+        threads: &'a ash_core::ThreadController,
+        thread_pull_requests: &'a Option<Arc<ash_state::SqliteThreadStore>>,
+        updates: &'a super::UpdateBroker,
     ) -> Self {
-        self.thread_pull_requests = Some(store);
-        self
+        Self {
+            threads,
+            thread_pull_requests,
+            updates,
+        }
     }
-
     pub(super) fn session_github_references(
         &self,
         method: ClientMethod,
@@ -150,7 +158,7 @@ impl super::AppServer {
             _ => unreachable!("only Session GitHub reference methods are dispatched here"),
         };
         if self
-            .agent_runtime()
+            .threads
             .read_session_catalog(&session_id)
             .map_err(super::core_error)?
             .is_none()
@@ -253,6 +261,27 @@ pub(super) struct GitHubRequestProcessor {
 }
 
 impl GitHubRequestProcessor {
+    pub(super) fn request_blocking(
+        processor: Option<&Self>,
+        method: ClientMethod,
+        params: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
+        super::request_dispatch::runtime()
+            .map_err(|error| {
+                RpcError::with_details(
+                    -32070,
+                    AppServerErrorName::GitHubUnavailable,
+                    error.to_string(),
+                )
+            })?
+            .block_on(
+                processor
+                    .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::AccountUnavailable))?
+                    .request(method, params, cancellation),
+            )
+    }
+
     pub(super) fn new(
         credentials: Arc<dyn github::GitHubCredentialProvider>,
         provider: Arc<dyn github::GitHubProvider>,

@@ -136,6 +136,7 @@ fn archiving_more_than_the_keep_count_preserves_non_git_edits_until_explicit_che
     }
     let ManagedDirOwner::Thread { thread_id } = binding.owner();
     server
+        .session_processor()
         .delete_worktree_session(thread_id, &CommandId::new("delete-first").unwrap())
         .unwrap();
     assert!(!binding.checkout_root().exists());

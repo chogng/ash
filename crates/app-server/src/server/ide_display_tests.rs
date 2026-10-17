@@ -73,7 +73,7 @@ fn ide_display_routes_to_the_frozen_window_while_other_app_actions_keep_the_init
     };
     std::thread::scope(|scope| {
         let call = scope.spawn(|| {
-            server.execute_app_host(
+            server.app_tools_processor().execute_app_host(
                 AppHostOperation::OpenReview {
                     original: original.to_string_lossy().into_owned(),
                     modified: modified.to_string_lossy().into_owned(),
@@ -96,6 +96,7 @@ fn ide_display_routes_to_the_frozen_window_while_other_app_actions_keep_the_init
     });
     assert!(
         server
+            .app_tools_processor()
             .execute_app_host(
                 AppHostOperation::Confetti {},
                 &context,
@@ -105,6 +106,7 @@ fn ide_display_routes_to_the_frozen_window_while_other_app_actions_keep_the_init
     );
     assert!(
         server
+            .app_tools_processor()
             .execute_app_host(
                 AppHostOperation::OpenFile {
                     path: "/other/secret.rs".into(),
@@ -122,6 +124,7 @@ fn ide_display_routes_to_the_frozen_window_while_other_app_actions_keep_the_init
         std::os::unix::fs::symlink(outside.path(), &linked).unwrap();
         assert!(
             server
+                .app_tools_processor()
                 .execute_app_host(
                     AppHostOperation::OpenFile {
                         path: linked.to_string_lossy().into_owned(),
@@ -137,6 +140,7 @@ fn ide_display_routes_to_the_frozen_window_while_other_app_actions_keep_the_init
     server.ide_registry.unregister(&editor, 1);
     assert!(
         server
+            .app_tools_processor()
             .execute_app_host(
                 AppHostOperation::OpenFile {
                     path: modified.to_string_lossy().into_owned(),

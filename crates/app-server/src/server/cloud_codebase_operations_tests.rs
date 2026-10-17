@@ -1,3 +1,4 @@
+use crate::AppServer;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -20,8 +21,6 @@ use ash_model_provider::EchoModel;
 
 use crate::local::ProviderModelService;
 use crate::server::DirGrantPolicy;
-
-use super::*;
 
 struct RecordingProvider {
     id: CloudCodebaseProviderId,

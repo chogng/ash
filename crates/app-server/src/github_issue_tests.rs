@@ -286,6 +286,7 @@ fn github_symphony_uses_the_shared_executor_without_directory_issue_services() {
     let cancellation = ash_async_utils::CancellationSource::new();
     assert!(
         server
+            .symphony_tracker_processor()
             .poll_symphony(&workflow, &cancellation.token())
             .unwrap()
             .is_empty()
@@ -296,6 +297,7 @@ fn github_symphony_uses_the_shared_executor_without_directory_issue_services() {
     }));
     http.reply(200, serde_json::json!([]));
     let issue = server
+        .symphony_tracker_processor()
         .refresh_symphony(&workflow, "team/repo#7", &cancellation.token())
         .unwrap()
         .unwrap();

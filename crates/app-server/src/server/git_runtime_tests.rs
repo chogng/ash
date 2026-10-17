@@ -2837,15 +2837,16 @@ fn pull_sync_reads_the_current_shared_preference_without_changing_plain_pull() {
     .into_iter()
     .enumerate()
     {
-        let revision = server.config_read().unwrap()["revision"].clone();
+        let revision = server.config_processor().config_read().unwrap()["revision"].clone();
         server
+            .config_processor()
             .config_update(&serde_json::json!({
                 "commandId":format!("pull-policy-{index}"), "expectedRevision":revision,
                 "git":{"autofetch":"off", "autofetchPeriod":180, "rebaseWhenSync":rebase_when_sync}
             }))
             .unwrap();
         assert_eq!(
-            server.config_read().unwrap()["git"]["rebaseWhenSync"],
+            server.config_processor().config_read().unwrap()["git"]["rebaseWhenSync"],
             rebase_when_sync
         );
         source.write(&format!("remote-{index}.txt"), "remote\n");
@@ -2856,6 +2857,7 @@ fn pull_sync_reads_the_current_shared_preference_without_changing_plain_pull() {
         target.git(&["commit", "-m", "local divergence"]);
         let old_head = target.git_output(&["rev-parse", "HEAD"]);
         let response = server
+            .git_processor()
             .git_pull(&serde_json::json!({"mode":mode}), &cancellation.token())
             .unwrap();
         assert_eq!(response["status"]["head"]["type"], "branch");

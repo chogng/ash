@@ -183,7 +183,11 @@ impl AppServer {
                 // A build must not hold the global Session/Settings lock or a UI worker.
                 Some(
                     match tokio::task::spawn_blocking(move || {
-                        Self::invoke_session_runtime(runtimes.as_ref(), &params, &token)
+                        super::session_runtime_processor::SessionRuntimeRequestProcessor::invoke(
+                            runtimes.as_ref(),
+                            &params,
+                            &token,
+                        )
                     })
                     .await
                     {

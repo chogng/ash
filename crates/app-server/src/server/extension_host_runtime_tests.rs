@@ -1159,11 +1159,13 @@ fn remote_extension_start_is_connection_owned_and_close_retires_only_its_fleet()
     let untrusted = server.connection();
     assert!(
         server
+            .extension_host_processor()
             .extension_host_start(&untrusted, &json!({"environment":{"SET":"one"}}))
             .is_err()
     );
     assert!(
         server
+            .extension_host_processor()
             .extension_host_start(&first, &json!({"environment":{"bad-name":"one"}}))
             .is_err()
     );
@@ -1173,6 +1175,7 @@ fn remote_extension_start_is_connection_owned_and_close_retires_only_its_fleet()
             .is_none()
     );
     server
+        .extension_host_processor()
         .extension_host_start(
             &first,
             &json!({"environment":{
@@ -1183,10 +1186,12 @@ fn remote_extension_start_is_connection_owned_and_close_retires_only_its_fleet()
         )
         .unwrap();
     server
+        .extension_host_processor()
         .extension_host_start(&second, &json!({"environment":{"SET":"two"}}))
         .unwrap();
     assert!(
         server
+            .extension_host_processor()
             .extension_host_start(&first, &json!({"environment":{}}))
             .is_err()
     );

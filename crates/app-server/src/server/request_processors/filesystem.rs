@@ -1,0 +1,663 @@
+use super::ConnectionState;
+use super::RpcError;
+use super::decode;
+use super::resources_processor::resource_rpc_error;
+use super::result;
+use ash_app_server_protocol::protocol::error::AppServerErrorName;
+use ash_app_server_protocol::protocol::fs::FsCancelElevatedWriteParams;
+use ash_app_server_protocol::protocol::fs::FsCopyParams;
+use ash_app_server_protocol::protocol::fs::FsCreateDirectoryParams;
+use ash_app_server_protocol::protocol::fs::FsCreateFileParams;
+use ash_app_server_protocol::protocol::fs::FsDeleteMode;
+use ash_app_server_protocol::protocol::fs::FsDeleteParams;
+use ash_app_server_protocol::protocol::fs::FsExistingTargetBehavior;
+use ash_app_server_protocol::protocol::fs::FsFileType;
+use ash_app_server_protocol::protocol::fs::FsFileWriteMode;
+use ash_app_server_protocol::protocol::fs::FsFileWriteOptions;
+use ash_app_server_protocol::protocol::fs::FsGetMetadataParams;
+use ash_app_server_protocol::protocol::fs::FsGetMetadataResult;
+use ash_app_server_protocol::protocol::fs::FsMissingTargetBehavior;
+use ash_app_server_protocol::protocol::fs::FsPasteSystemFilesParams;
+use ash_app_server_protocol::protocol::fs::FsPathCaseSensitivity;
+use ash_app_server_protocol::protocol::fs::FsPathCaseSensitivityScope;
+use ash_app_server_protocol::protocol::fs::FsReadBinaryFileParams;
+use ash_app_server_protocol::protocol::fs::FsReadBinaryFileResult;
+use ash_app_server_protocol::protocol::fs::FsReadDirectoryEntry;
+use ash_app_server_protocol::protocol::fs::FsReadDirectoryParams;
+use ash_app_server_protocol::protocol::fs::FsReadDirectoryResult;
+use ash_app_server_protocol::protocol::fs::FsReadFileParams;
+use ash_app_server_protocol::protocol::fs::FsReadFileResult;
+use ash_app_server_protocol::protocol::fs::FsReadPathCaseSensitivityParams;
+use ash_app_server_protocol::protocol::fs::FsReadPathCaseSensitivityResult;
+use ash_app_server_protocol::protocol::fs::FsRenameParams;
+use ash_app_server_protocol::protocol::fs::FsWriteBinaryFileParams;
+use ash_app_server_protocol::protocol::fs::FsWriteFileElevatedParams;
+use ash_app_server_protocol::protocol::fs::FsWriteFileParams;
+use ash_app_server_protocol::protocol::fs::FsWriteFileResult;
+use ash_app_server_protocol::protocol::resources::ResourceMetadataResult;
+use ash_async_utils::CancellationToken;
+use ash_file_access::Permission;
+use ash_file_system::ExistingTargetBehavior;
+use ash_file_system::FileDeleteMode;
+use ash_file_system::FileMetadata;
+use ash_file_system::FileSystemError;
+use ash_file_system::FileType;
+use ash_file_system::FileWriteCondition;
+use ash_file_system::FileWriteMode;
+use ash_file_system::LocalFileSystem;
+use ash_file_system::MissingTargetBehavior;
+use ash_file_system::SystemFileTransferOperation;
+use ash_file_system::TextDecodingOptions;
+use ash_file_system::TextEncodingError;
+use ash_file_system::decode_text;
+use ash_file_system::decode_text_with_options;
+use ash_file_system::encode_text;
+use ash_file_system::file_revision;
+use base64::Engine;
+use serde_json::Value;
+use std::time::Duration;
+
+const MAX_EDITOR_FILE_BYTES: usize = 50 * 1024 * 1024;
+const BINARY_PREVIEW_RESOURCE_TTL: Duration = Duration::from_secs(300);
+
+/// Coordinates the existing owners needed by the filesystem adapter.
+/// This contract deliberately exposes no server object or unrestricted service registry.
+pub(super) trait FileSystemRequestProcessorContext: Send + Sync {
+    fn file_system_service_for(
+        &self,
+        dir_id: Option<&str>,
+    ) -> Result<std::sync::Arc<dyn ash_file_system::FileSystem>, super::RpcError>;
+    fn file_system_service_for_session_directory(
+        &self,
+        selector: &ash_app_server_protocol::protocol::environment::SessionDirSelector,
+        permission: ash_file_access::Permission,
+    ) -> Result<std::sync::Arc<dyn ash_file_system::FileSystem>, super::RpcError>;
+    fn session_dir_authorization(
+        &self,
+        session_id: &ash_protocol::SessionId,
+        root: &std::path::Path,
+        permission: ash_file_access::Permission,
+    ) -> Result<ash_file_access::Authorization, super::RpcError>;
+}
+
+pub(super) struct FileSystemRequestProcessor<'ctx, C: FileSystemRequestProcessorContext + ?Sized> {
+    context: &'ctx C,
+    request_cancellations: &'ctx super::RequestCancellationRegistry,
+    request_scheduler: &'ctx super::RequestScheduler,
+    resources: &'ctx super::Arc<super::Mutex<super::ResourceStore>>,
+}
+
+impl<'ctx, C: FileSystemRequestProcessorContext + ?Sized> FileSystemRequestProcessor<'ctx, C> {
+    pub(super) fn new(
+        context: &'ctx C,
+        request_cancellations: &'ctx super::RequestCancellationRegistry,
+        request_scheduler: &'ctx super::RequestScheduler,
+        resources: &'ctx super::Arc<super::Mutex<super::ResourceStore>>,
+    ) -> Self {
+        Self {
+            context,
+            request_cancellations,
+            request_scheduler,
+            resources,
+        }
+    }
+}
+
+impl<'ctx, C: FileSystemRequestProcessorContext + ?Sized> FileSystemRequestProcessor<'ctx, C> {
+    pub(super) fn fs_read_path_case_sensitivity(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: FsReadPathCaseSensitivityParams = decode(params)?;
+        let scopes = self
+            .file_system_for_request(
+                params.dir_id.as_deref(),
+                params.session_directory.as_ref(),
+                Permission::BrowseFiles,
+            )?
+            .read_path_case_sensitivity(&params.path)
+            .map_err(file_system_error)?;
+        result(&FsReadPathCaseSensitivityResult {
+            scopes: scopes
+                .into_iter()
+                .map(|scope| FsPathCaseSensitivityScope {
+                    path: scope.path,
+                    sensitivity: match scope.sensitivity {
+                        ash_file_system::PathCaseSensitivity::Sensitive => {
+                            FsPathCaseSensitivity::Sensitive
+                        }
+                        ash_file_system::PathCaseSensitivity::Insensitive => {
+                            FsPathCaseSensitivity::Insensitive
+                        }
+                        ash_file_system::PathCaseSensitivity::Unknown => {
+                            FsPathCaseSensitivity::Unknown
+                        }
+                    },
+                })
+                .collect(),
+        })
+    }
+
+    pub(super) fn fs_get_metadata(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: FsGetMetadataParams = decode(params)?;
+        let metadata = self
+            .file_system_for_request(
+                params.dir_id.as_deref(),
+                params.session_directory.as_ref(),
+                Permission::BrowseFiles,
+            )?
+            .get_metadata(&params.path)
+            .map_err(file_system_error)?;
+        result(&metadata_result(metadata))
+    }
+
+    pub(super) fn fs_read_directory(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: FsReadDirectoryParams = decode(params)?;
+        let entries = self
+            .file_system_for_request(
+                params.dir_id.as_deref(),
+                params.session_directory.as_ref(),
+                Permission::BrowseFiles,
+            )?
+            .read_directory(&params.path)
+            .map_err(file_system_error)?
+            .into_iter()
+            .map(|entry| FsReadDirectoryEntry {
+                name: entry.name,
+                file_type: file_type(entry.file_type),
+            })
+            .collect();
+        result(&FsReadDirectoryResult { entries })
+    }
+
+    pub(super) fn fs_read_file(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: FsReadFileParams = decode(params)?;
+        if (params.encoding.is_none()
+            && (params.auto_guess_encoding.is_some() || params.candidate_guess_encodings.is_some()))
+            || (params.candidate_guess_encodings.is_some() && params.auto_guess_encoding.is_none())
+        {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let content = self
+            .file_system_for_request(
+                params.dir_id.as_deref(),
+                params.session_directory.as_ref(),
+                Permission::ReadFiles,
+            )?
+            .read_file_with_revision(&params.path, MAX_EDITOR_FILE_BYTES)
+            .map_err(file_system_error)?;
+        let (text, encoding) = if let Some(encoding) = params.encoding {
+            let decoded = if let Some(auto_guess_encoding) = params.auto_guess_encoding {
+                decode_text_with_options(
+                    &content.bytes,
+                    &TextDecodingOptions {
+                        encoding: Some(if encoding == "auto" {
+                            "utf8"
+                        } else {
+                            &encoding
+                        }),
+                        auto_guess_encoding,
+                        candidate_guess_encodings: params
+                            .candidate_guess_encodings
+                            .as_deref()
+                            .unwrap_or_default(),
+                    },
+                )
+            } else {
+                decode_text(&content.bytes, &encoding)
+            }
+            .map_err(text_encoding_error)?;
+            (decoded.text, Some(decoded.encoding))
+        } else {
+            (
+                String::from_utf8(content.bytes).map_err(|_| {
+                    file_system_error(FileSystemError::Io("file is not valid UTF-8".into()))
+                })?,
+                None,
+            )
+        };
+        result(&FsReadFileResult {
+            content: text,
+            revision: content.revision,
+            encoding,
+        })
+    }
+
+    pub(super) fn fs_read_binary_file(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: FsReadBinaryFileParams = decode(params)?;
+        let content = self
+            .file_system_for_request(
+                params.dir_id.as_deref(),
+                params.session_directory.as_ref(),
+                Permission::ReadFiles,
+            )?
+            .read_file_with_revision(&params.path, MAX_EDITOR_FILE_BYTES)
+            .map_err(file_system_error)?;
+        let metadata = self
+            .resources
+            .lock()
+            .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?
+            .create_with_limit(
+                connection.connection_id,
+                "application/octet-stream".into(),
+                content.bytes,
+                BINARY_PREVIEW_RESOURCE_TTL,
+                MAX_EDITOR_FILE_BYTES,
+            )
+            .map_err(resource_rpc_error)?;
+        result(&FsReadBinaryFileResult {
+            resource: ResourceMetadataResult {
+                resource_id: metadata.resource_id,
+                mime_type: metadata.mime_type,
+                size: metadata.size,
+                sha256: metadata.sha256,
+            },
+            revision: content.revision,
+        })
+    }
+
+    pub(super) fn fs_write_file(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: FsWriteFileParams = decode(params)?;
+        if params.options.is_some() && params.expected_revision.is_some() {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let legacy = match params.expected_revision {
+            Some(revision) => FileWriteCondition::ExpectedRevision(revision),
+            None => FileWriteCondition::Unconditional,
+        };
+        let condition = file_write_condition(params.options, connection, legacy)?;
+        let bytes = encode_text(
+            &params.content,
+            params.encoding.as_deref().unwrap_or("utf8"),
+        )
+        .map_err(text_encoding_error)?;
+        let metadata = self
+            .file_system_for_request(
+                params.dir_id.as_deref(),
+                params.session_directory.as_ref(),
+                Permission::WriteFiles,
+            )?
+            .write_file_with_condition(&params.path, &bytes, MAX_EDITOR_FILE_BYTES, &condition)
+            .map_err(file_system_error)?;
+        result(&FsWriteFileResult {
+            metadata: metadata_result(metadata),
+            revision: file_revision(&bytes),
+        })
+    }
+
+    pub(super) fn fs_write_file_elevated(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
+        // OS authorization is an explicit editor action, not an Agent or general RPC capability.
+        if !connection.allows_product_host_capabilities() {
+            return Err(RpcError::new(
+                -32073,
+                AppServerErrorName::PermissionRequired,
+            ));
+        }
+        let params: FsWriteFileElevatedParams = decode(params)?;
+        if params.operation_id.is_empty()
+            || params.operation_id.len() > 128
+            || params.data_base64.len() > MAX_EDITOR_FILE_BYTES * 4 / 3 + 4
+        {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(&params.data_base64)
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        let bytes = if let Some(encoding) = params.encoding {
+            let text = std::str::from_utf8(&bytes)
+                .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+            encode_text(text, &encoding).map_err(text_encoding_error)?
+        } else {
+            bytes
+        };
+        let files = self.file_system_for_request(
+            params.dir_id.as_deref(),
+            params.session_directory.as_ref(),
+            Permission::WriteFiles,
+        )?;
+        let files = files
+            .as_any()
+            .downcast_ref::<LocalFileSystem>()
+            .ok_or_else(|| file_system_error(FileSystemError::ElevationUnavailable))?;
+        let metadata = files
+            .write_file_elevated(
+                &params.path,
+                &bytes,
+                params.expected_revision.as_deref(),
+                cancellation,
+            )
+            .map_err(file_system_error)?;
+        result(&FsWriteFileResult {
+            metadata: metadata_result(metadata),
+            revision: file_revision(&bytes),
+        })
+    }
+
+    pub(super) fn fs_cancel_elevated_write(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        if !connection.allows_product_host_capabilities() {
+            return Err(RpcError::new(
+                -32073,
+                AppServerErrorName::PermissionRequired,
+            ));
+        }
+        let params: FsCancelElevatedWriteParams = decode(params)?;
+        if params.operation_id.is_empty() || params.operation_id.len() > 128 {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        self.request_cancellations
+            .cancel_operation(connection.connection_id, params.operation_id);
+        self.request_scheduler.cancel_waiting_requests();
+        result(&())
+    }
+
+    pub(super) fn fs_write_binary_file(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: FsWriteBinaryFileParams = decode(params)?;
+        if params.data_base64.len() > (MAX_EDITOR_FILE_BYTES * 4 / 3 + 4) {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(&params.data_base64)
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        let condition = file_write_condition(
+            params.options,
+            connection,
+            FileWriteCondition::MissingOrEmpty,
+        )?;
+        let metadata = self
+            .file_system_for_request(
+                params.dir_id.as_deref(),
+                params.session_directory.as_ref(),
+                Permission::WriteFiles,
+            )?
+            .write_file_with_condition(&params.path, &bytes, MAX_EDITOR_FILE_BYTES, &condition)
+            .map_err(file_system_error)?;
+        result(&FsWriteFileResult {
+            metadata: metadata_result(metadata),
+            revision: file_revision(&bytes),
+        })
+    }
+
+    pub(super) fn fs_create_file(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: FsCreateFileParams = decode(params)?;
+        let metadata = self
+            .file_system_for_request(
+                params.dir_id.as_deref(),
+                params.session_directory.as_ref(),
+                Permission::WriteFiles,
+            )?
+            .create_file(&params.path, existing_behavior(params.existing))
+            .map_err(file_system_error)?;
+        result(&metadata_result(metadata))
+    }
+
+    pub(super) fn fs_create_directory(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: FsCreateDirectoryParams = decode(params)?;
+        let metadata = self
+            .file_system_for_request(
+                params.dir_id.as_deref(),
+                params.session_directory.as_ref(),
+                Permission::WriteFiles,
+            )?
+            .create_directory(&params.path)
+            .map_err(file_system_error)?;
+        result(&metadata_result(metadata))
+    }
+
+    pub(super) fn fs_rename(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: FsRenameParams = decode(params)?;
+        self.file_system_for_request(
+            params.dir_id.as_deref(),
+            params.session_directory.as_ref(),
+            Permission::WriteFiles,
+        )?
+        .rename(
+            &params.source,
+            &params.target,
+            existing_behavior(params.existing),
+        )
+        .map_err(file_system_error)?;
+        result(&())
+    }
+
+    pub(super) fn fs_copy(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: FsCopyParams = decode(params)?;
+        if params.session_directory.is_none()
+            && (params.source_dir_id.is_none() || params.target_dir_id.is_none())
+        {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        if params.session_directory.is_some()
+            && (params.source_dir_id.is_some() || params.target_dir_id.is_some())
+        {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let source: std::sync::Arc<dyn ash_file_system::FileSystem> =
+            if let Some(selector) = &params.session_directory {
+                std::sync::Arc::new(
+                    ash_file_system::LocalFileSystem::from_authorizations(
+                        self.context.session_dir_authorization(
+                            &selector.session_id,
+                            &selector.path,
+                            Permission::ReadFiles,
+                        )?,
+                        [self.context.session_dir_authorization(
+                            &selector.session_id,
+                            &selector.path,
+                            Permission::BrowseFiles,
+                        )?],
+                    )
+                    .map_err(file_system_error)?,
+                )
+            } else {
+                self.file_system_for_request(
+                    params.source_dir_id.as_deref(),
+                    None,
+                    Permission::ReadFiles,
+                )?
+            };
+        let target = self.file_system_for_request(
+            params.target_dir_id.as_deref(),
+            params.session_directory.as_ref(),
+            Permission::WriteFiles,
+        )?;
+        source
+            .copy_to(&params.source, target.as_ref(), &params.target)
+            .map_err(file_system_error)?;
+        result(&())
+    }
+
+    pub(super) fn fs_paste_system_files(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: FsPasteSystemFilesParams = decode(params)?;
+        if params.dir_id.is_none() && params.session_directory.is_none() {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let files = self.file_system_for_request(
+            params.dir_id.as_deref(),
+            params.session_directory.as_ref(),
+            Permission::WriteFiles,
+        )?;
+        result(
+            &files
+                .paste_system_files(
+                    &params.path,
+                    if params.move_requested {
+                        SystemFileTransferOperation::Move
+                    } else {
+                        SystemFileTransferOperation::Copy
+                    },
+                )
+                .map_err(file_system_error)?,
+        )
+    }
+
+    pub(super) fn fs_delete(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: FsDeleteParams = decode(params)?;
+        let missing = match params.missing {
+            FsMissingTargetBehavior::Error => MissingTargetBehavior::Error,
+            FsMissingTargetBehavior::Ignore => MissingTargetBehavior::Ignore,
+        };
+        let mode = match params.mode {
+            FsDeleteMode::FileOrEmptyDirectory => FileDeleteMode::FileOrEmptyDirectory,
+            FsDeleteMode::Recursive => FileDeleteMode::Recursive,
+        };
+        self.file_system_for_request(
+            params.dir_id.as_deref(),
+            params.session_directory.as_ref(),
+            Permission::WriteFiles,
+        )?
+        .delete(&params.path, missing, mode)
+        .map_err(file_system_error)?;
+        result(&())
+    }
+
+    fn file_system_for_request(
+        &self,
+        dir_id: Option<&str>,
+        session_directory: Option<
+            &ash_app_server_protocol::protocol::environment::SessionDirSelector,
+        >,
+        permission: Permission,
+    ) -> Result<std::sync::Arc<dyn ash_file_system::FileSystem>, RpcError> {
+        match (dir_id, session_directory) {
+            (Some(_), Some(_)) => Err(RpcError::new(-32602, AppServerErrorName::InvalidParams)),
+            (_, Some(selector)) => self
+                .context
+                .file_system_service_for_session_directory(selector, permission),
+            (_, None) => {
+                let files = self.context.file_system_service_for(dir_id)?;
+                files
+                    .ensure_permission(permission)
+                    .map_err(file_system_error)?;
+                Ok(files)
+            }
+        }
+    }
+}
+
+fn existing_behavior(value: FsExistingTargetBehavior) -> ExistingTargetBehavior {
+    match value {
+        FsExistingTargetBehavior::Error => ExistingTargetBehavior::Error,
+        FsExistingTargetBehavior::Overwrite => ExistingTargetBehavior::Overwrite,
+        FsExistingTargetBehavior::Ignore => ExistingTargetBehavior::Ignore,
+    }
+}
+
+fn metadata_result(metadata: FileMetadata) -> FsGetMetadataResult {
+    FsGetMetadataResult {
+        file_type: file_type(metadata.file_type),
+        size_bytes: metadata.size_bytes,
+        readonly: metadata.readonly,
+        modified_at_millis: metadata.modified_at_millis,
+    }
+}
+
+fn file_type(file_type: FileType) -> FsFileType {
+    match file_type {
+        FileType::Directory => FsFileType::Directory,
+        FileType::File => FsFileType::File,
+        FileType::SymbolicLink => FsFileType::SymbolicLink,
+        FileType::Other => FsFileType::Other,
+    }
+}
+
+fn file_system_error(error: FileSystemError) -> RpcError {
+    match error {
+        FileSystemError::NotFound(_) => {
+            RpcError::new(-32043, AppServerErrorName::FileSystemNotFound)
+        }
+        FileSystemError::RevisionConflict(_) => {
+            RpcError::new(-32042, AppServerErrorName::FileSystemRevisionConflict)
+        }
+        FileSystemError::ReadOnly(_) => {
+            RpcError::new(-32050, AppServerErrorName::FileSystemWriteLocked)
+        }
+        FileSystemError::OsPermissionDenied(_) => {
+            RpcError::new(-32044, AppServerErrorName::FileSystemPermissionDenied)
+        }
+        FileSystemError::ElevationDenied => {
+            RpcError::new(-32045, AppServerErrorName::FileSystemElevationDenied)
+        }
+        FileSystemError::ElevationUnavailable => {
+            RpcError::new(-32046, AppServerErrorName::FileSystemElevationUnavailable)
+        }
+        FileSystemError::ElevationTimedOut => {
+            RpcError::new(-32048, AppServerErrorName::FileSystemElevationTimedOut)
+        }
+        FileSystemError::ElevationFailed => {
+            RpcError::new(-32049, AppServerErrorName::FileSystemElevationFailed)
+        }
+        FileSystemError::WriteOutcomeUnknown => {
+            RpcError::new(-32047, AppServerErrorName::FileSystemWriteOutcomeUnknown)
+        }
+        FileSystemError::Cancelled => RpcError::new(-32800, AppServerErrorName::RequestCancelled),
+        _ => RpcError::new(-32041, AppServerErrorName::FileSystemOperationFailed),
+    }
+}
+
+fn file_write_condition(
+    options: Option<FsFileWriteOptions>,
+    connection: &ConnectionState,
+    legacy: FileWriteCondition,
+) -> Result<FileWriteCondition, RpcError> {
+    Ok(match options {
+        Some(options) if options.unlock == Some(true) => {
+            if !connection.allows_file_unlock() {
+                return Err(RpcError::new(
+                    -32073,
+                    AppServerErrorName::PermissionRequired,
+                ));
+            }
+            if options.mode == FsFileWriteMode::Create {
+                return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+            }
+            FileWriteCondition::UnlockAndReplace {
+                expected_revision: options
+                    .expected_revision
+                    .ok_or_else(|| RpcError::new(-32602, AppServerErrorName::InvalidParams))?,
+            }
+        }
+        Some(options) => FileWriteCondition::Options {
+            mode: match options.mode {
+                FsFileWriteMode::Create => FileWriteMode::Create,
+                FsFileWriteMode::Replace => FileWriteMode::Replace,
+                FsFileWriteMode::CreateOrReplace => FileWriteMode::CreateOrReplace,
+            },
+            expected_revision: options.expected_revision,
+        },
+        None => legacy,
+    })
+}
+
+fn text_encoding_error(error: TextEncodingError) -> RpcError {
+    match error {
+        TextEncodingError::Unsupported => RpcError::new(-32602, AppServerErrorName::InvalidParams),
+        TextEncodingError::InvalidText => {
+            RpcError::new(-32000, AppServerErrorName::FileSystemInvalidText)
+        }
+        TextEncodingError::Unmappable => {
+            RpcError::new(-32000, AppServerErrorName::FileSystemEncodingUnmappable)
+        }
+    }
+}
+
+#[cfg(test)]
+#[path = "../fs_operations_tests.rs"]
+mod tests;

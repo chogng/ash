@@ -1,4 +1,4 @@
-use super::AppServer;
+use crate::AppServer;
 use ash_async_utils::CancellationSource;
 use ash_async_utils::CancellationToken;
 use ash_core::InMemoryThreadStore;

@@ -3001,45 +3001,6 @@ impl AppServer {
         Ok(authorization.dir().clone())
     }
 
-    pub(super) fn git_init(
-        &self,
-        value: &serde_json::Value,
-        cancellation: &ash_async_utils::CancellationToken,
-    ) -> Result<serde_json::Value, RpcError> {
-        let params: ash_app_server_protocol::protocol::git::GitInitParams = super::decode(value)?;
-        let _gate = self
-            .env_runtime_gate
-            .lock()
-            .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?;
-        let authorization = {
-            let runtime = self
-                .env_runtime
-                .read()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let grant = match params.dir_id.as_deref() {
-                Some(id) => runtime.dirs.get(id),
-                None => runtime.selected_grant.as_ref(),
-            }
-            .ok_or_else(|| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
-            let authorization = grant
-                .authorize(Permission::MutateRepository)
-                .map_err(|_| RpcError::new(-32043, AppServerErrorName::PermissionRequired))?;
-            authorization
-        };
-        authorization
-            .ensure_active()
-            .map_err(|_| RpcError::new(-32043, AppServerErrorName::PermissionRequired))?;
-        let git = self.git_runtime_service()?;
-        git.initialize(
-            authorization.dir().canonical_path(),
-            &params.initial_branch,
-            cancellation,
-        )
-        .map_err(super::git_operations::git_error)?;
-        git.reconcile().map_err(super::git_operations::git_error)?;
-        super::result(&git.repositories())
-    }
-
     pub(super) fn git_runtime_service(&self) -> Result<Arc<GitRuntime>, RpcError> {
         self.env_runtime
             .read()
@@ -3220,7 +3181,10 @@ impl AppServer {
         session_id: &SessionId,
         authorization: &Authorization,
     ) -> Result<Arc<exec_server::terminal::TerminalService>, RpcError> {
-        let source = self.session_view(session_id)?.execution_target;
+        let source = self
+            .agent_processor()
+            .session_view(session_id)?
+            .execution_target;
         let mut runtime = self
             .env_runtime
             .write()

@@ -20,7 +20,7 @@ impl AppServer {
     /// Called after archiving has committed the Session's terminal events and before deleting
     /// its Threads. Finish durable runs first so concurrent observations cannot revive them.
     pub(super) fn stop_session_automations(&self, session_id: &SessionId) -> Result<(), RpcError> {
-        let Some(store) = self.automation.as_deref() else {
+        let Some(store) = self.automation_processor.store() else {
             return Ok(());
         };
         let now = ash_automation::now().map_err(automation_error)?;
@@ -150,7 +150,7 @@ impl AppServer {
         self.bind_session_runtime(&snapshot.session_id)
             .map_err(|error| error.to_string())?;
         let snapshot = if accepted.is_none() {
-            let start = self.start_turn_request(
+            let start = self.agent_processor().start_turn_request(
                 ThreadMutation {
                     ide_window_id: None,
                     connection_id: None,
@@ -223,18 +223,19 @@ impl AppServer {
         } else if run.status == AutomationRunStatus::Stopping
             && turn.status != TurnStatus::Cancelling
         {
-            self.interrupt_turn_request(
-                ThreadMutation {
-                    ide_window_id: None,
-                    connection_id: None,
-                    command_id: command_id("stop", &run.id)?,
-                    session_id: snapshot.session_id,
-                    expected_sequence: snapshot.sequence,
-                },
-                snapshot.thread_id,
-                turn_id,
-            )
-            .map_err(|error| format!("Agent stop failed: {:?}", error.message))?;
+            self.agent_processor()
+                .interrupt_turn_request(
+                    ThreadMutation {
+                        ide_window_id: None,
+                        connection_id: None,
+                        command_id: command_id("stop", &run.id)?,
+                        session_id: snapshot.session_id,
+                        expected_sequence: snapshot.sequence,
+                    },
+                    snapshot.thread_id,
+                    turn_id,
+                )
+                .map_err(|error| format!("Agent stop failed: {:?}", error.message))?;
             observed.status = AutomationRunStatus::Stopping;
         }
         Ok(observed)

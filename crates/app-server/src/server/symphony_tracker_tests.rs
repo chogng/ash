@@ -52,6 +52,7 @@ fn linear_pagination_normalizes_blockers_and_zero_priority_without_exposing_cred
     let store = Arc::new(ash_symphony::Store::open(&root.path().join("state.db")).unwrap());
     let server = crate::tests::server().with_symphony_store(store, transport.clone());
     let issues = server
+        .symphony_tracker_processor()
         .fetch_symphony_linear(
             &plan(&root),
             "project",
@@ -84,6 +85,7 @@ fn partial_linear_result_never_returns_a_successful_snapshot() {
     let store = Arc::new(ash_symphony::Store::open(&root.path().join("state.db")).unwrap());
     let server = crate::tests::server().with_symphony_store(store, transport);
     let error = server
+        .symphony_tracker_processor()
         .fetch_symphony_linear(
             &plan(&root),
             "project",
@@ -126,6 +128,7 @@ fn linear_id_refresh_and_viewer_routing_keep_unassigned_issues_visible_but_ineli
     workflow.tracker_assignee = Some("me".into());
     let ids = vec!["one".into(), "two".into()];
     let issues = server
+        .symphony_tracker_processor()
         .fetch_symphony_linear(
             &workflow,
             "project",

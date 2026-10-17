@@ -873,7 +873,9 @@ fn fork_session_binds_extensions_and_delivers_approval_after_subscription() {
             },
         )
         .unwrap();
-    server.offer_pending_interactions(&threads.read_thread(&thread_id).unwrap().into());
+    server
+        .agent_processor()
+        .offer_pending_interactions(&threads.read_thread(&thread_id).unwrap().into());
     assert!(
         !server
             .drain_notifications(&mut connection)
@@ -1115,7 +1117,10 @@ fn catalog_only_connections_observe_branch_management_and_full_reads_share_its_f
         )
         .unwrap()
         .turn_id;
-    server.notify_thread_updates(&thread_id, before).unwrap();
+    server
+        .agent_processor()
+        .notify_thread_updates(&thread_id, before)
+        .unwrap();
     let notifications = connection.outbound_notifications.drain();
     assert!(
         notifications
@@ -1223,7 +1228,10 @@ fn thread_subscription_rejects_future_cursors_without_retaining_subscription() {
             assert_eq!(rejected["error"]["message"], "InvalidParams");
 
             let archived = server.threads().archive_thread(&thread_identity).unwrap();
-            server.notify_thread_updates(&thread_identity, 1).unwrap();
+            server
+                .agent_processor()
+                .notify_thread_updates(&thread_identity, 1)
+                .unwrap();
             assert!(server.drain_notifications(&mut observer).is_empty());
 
             let accepted = crate::tests::call(
@@ -1242,6 +1250,7 @@ fn thread_subscription_rejects_future_cursors_without_retaining_subscription() {
                 .restore_session(&ash_protocol::SessionId::new(session_id).unwrap())
                 .unwrap();
             server
+                .agent_processor()
                 .notify_thread_updates(&thread_identity, archived.sequence)
                 .unwrap();
             let updates = server.drain_notifications(&mut observer);
@@ -1300,7 +1309,10 @@ fn thread_subscription_failed_resubscribe_preserves_pending_durable_update() {
         );
         assert_eq!(rejected["error"]["message"], "InvalidParams");
 
-        server.notify_thread_updates(&thread_identity, 1).unwrap();
+        server
+            .agent_processor()
+            .notify_thread_updates(&thread_identity, 1)
+            .unwrap();
         let updates = server.drain_notifications(&mut observer);
         assert!(
             updates.iter().any(|notification| {
@@ -1335,7 +1347,10 @@ fn thread_subscription_invalid_history_does_not_retain_new_subscription() {
     assert_eq!(rejected["error"]["message"], "InvalidParams");
 
     server.threads().archive_thread(&thread_identity).unwrap();
-    server.notify_thread_updates(&thread_identity, 1).unwrap();
+    server
+        .agent_processor()
+        .notify_thread_updates(&thread_identity, 1)
+        .unwrap();
     assert!(server.drain_notifications(&mut observer).is_empty());
 }
 
