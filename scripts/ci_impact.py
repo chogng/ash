@@ -27,7 +27,7 @@ GLOBAL_INPUTS = {
     Path("build/prepare.py"),
     Path("build/remote.py"),
     Path("build/sign.py"),
-    Path("remote/package.json"),
+    Path("remote-server/package.json"),
     Path("build/lib/ripgrep.py"),
     Path("third_party/ripgrep/runtime-lock.json"),
     Path(".github/workflows/rust-warnings.yml"),
@@ -86,6 +86,7 @@ def tui_affected(changed_files: list[str], metadata: dict, root: Path) -> bool:
             return True
         if not path.parts or path.parts[0] not in {
             "cli",
+            "remote-server",
             "crates",
             "third_party",
         }:

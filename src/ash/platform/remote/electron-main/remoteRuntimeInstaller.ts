@@ -43,7 +43,7 @@ export interface RemoteRuntimeInstallRequestOptions {
 }
 
 /**
- * Invokes the packaged `ash-remote-server remote install` command from Electron Main.
+ * Invokes the packaged local `ash-remote install` command from Electron Main.
  *
  * The artifact and all integrity facts are bound by the trusted product host. Renderer supplies
  * neither paths nor SSH options, and the Remote host never downloads release content itself.

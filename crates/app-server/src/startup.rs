@@ -22,6 +22,25 @@ const DIR_GRANT_SOURCE: &str = "ASH_DIR_GRANT_SOURCE";
 pub fn run(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
     let arguments = arguments.into_iter().collect::<Vec<_>>();
     match arguments.as_slice() {
+        [command, receiver] if command == "history-export" => {
+            let receiver = ash_protocol::ContentDigest::new(receiver.clone())
+                .map_err(|error| error.to_string())?;
+            let profile = ash_utils_home_dir::find_ash_home().map_err(|error| error.to_string())?;
+            let store = ash_state::SqliteThreadStore::open(profile.join("state.sqlite3"))
+                .map_err(|error| error.to_string())?;
+            // Freeze before stopping the managed host so no new Agent writer can race export.
+            // A failed export deliberately leaves the source frozen for a same-receiver retry.
+            store
+                .freeze_history(&receiver)
+                .map_err(|error| error.to_string())?;
+            stop_history_host()?;
+            let attachments =
+                attachment_store::FileAttachmentStore::open(profile.join("attachments"))
+                    .map_err(|error| error.to_string())?;
+            return store
+                .export_history(&receiver, &attachments, std::io::stdout().lock())
+                .map_err(|error| error.to_string());
+        }
         [command] if command == "history-identity" => {
             let profile = ash_utils_home_dir::find_ash_home().map_err(|error| error.to_string())?;
             let store = ash_state::SqliteThreadStore::open(profile.join("state.sqlite3"))
@@ -83,10 +102,17 @@ pub fn run(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
         return launch_web(&arguments[1..]);
     }
     let (command, product_services) = parse_arguments(&arguments)?;
-    let options = StartupOptions::from_environment(
-        product_services.or_else(discovered_product_services_path),
-    )?;
+    // Remote connectors already resolve their product manifest. Do not discover a different
+    // package's services when an explicit backend executable was selected by the host.
+    let product_services = match &command {
+        Command::RemoteStdio => product_services,
+        Command::Stdio | Command::WebSocket(_) => {
+            product_services.or_else(discovered_product_services_path)
+        }
+    };
+    let options = StartupOptions::from_environment(product_services)?;
     match command {
+        Command::RemoteStdio => serve_remote_stdio(&options),
         Command::Stdio => {
             let server = open_server(&options)?.into_shared();
             let _queue = server.start_queue()?;
@@ -94,6 +120,27 @@ pub fn run(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
         }
         Command::WebSocket(websocket) => serve_websocket(open_server(&options)?, websocket),
     }
+}
+
+fn serve_remote_stdio(host: &StartupOptions) -> Result<(), String> {
+    // Preserve the connector's process-scoped diagnostic mode: no shared profile lifecycle,
+    // queue startup or additional local product discovery belongs to this entrypoint.
+    let mut options = AppServerOptions::new(host.profile_root())
+        .with_host_grok_auth()
+        .with_host_zcode_credentials();
+    if let Some(root) = host.dir_root() {
+        options = options.with_dir_root(root);
+    }
+    if let Some(path) = host.product_services() {
+        options = options.with_product_services(
+            LocalProductServicesConfig::load(path, host.profile_root())
+                .map_err(|error| error.to_string())?,
+        );
+    }
+    open_app_server(options)
+        .map_err(|error| error.to_string())?
+        .serve_remote_jsonl(BufReader::new(std::io::stdin()), std::io::stdout())
+        .map_err(|error| error.to_string())
 }
 
 fn stop_history_host() -> Result<PathBuf, String> {
@@ -158,6 +205,7 @@ fn launch_web(arguments: &[String]) -> Result<(), String> {
 
 fn parse_arguments(arguments: &[String]) -> Result<(Command, Option<PathBuf>), String> {
     let (command, remaining) = match arguments {
+        [mode, remaining @ ..] if mode == "--remote-stdio" => (Command::RemoteStdio, remaining),
         [listen, address, remaining @ ..] if listen == "--listen" && address == "stdio://" => {
             (Command::Stdio, remaining)
         }
@@ -185,6 +233,7 @@ fn usage() -> &'static str {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum Command {
+    RemoteStdio,
     Stdio,
     WebSocket(WebSocketOptions),
 }

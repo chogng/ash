@@ -16,8 +16,10 @@ async fn selected_model_package_is_loaded_from_its_own_directory() {
     }
     let selected = ModelPackage::resolve(
         root.path(),
+        &test_network(),
+        root.path(),
         "custom-online",
-        network(),
+        test_network(),
         &async_utils::CancellationSource::new().token(),
         Arc::new(|_| {}),
     )
@@ -34,8 +36,10 @@ async fn invalid_model_ids_cannot_select_paths_outside_the_model_root() {
     assert_eq!(
         ModelPackage::resolve(
             root.path(),
+            &test_network(),
+            root.path(),
             "../outside",
-            network(),
+            test_network(),
             &async_utils::CancellationSource::new().token(),
             Arc::new(|_| {}),
         )
@@ -46,7 +50,7 @@ async fn invalid_model_ids_cannot_select_paths_outside_the_model_root() {
     );
 }
 
-fn network() -> OutboundNetworkSnapshot {
+fn test_network() -> OutboundNetworkSnapshot {
     OutboundNetworkSnapshot::new(http_client::HttpClientConfig::new()).unwrap()
 }
 
@@ -104,6 +108,8 @@ async fn cancelled_import_and_existing_destination_preserve_installed_models() {
     assert!(
         ModelPackage::import(
             root.path(),
+            &test_network(),
+            root.path(),
             "installed",
             source.path(),
             &cancellation.token(),
@@ -154,6 +160,8 @@ fn paraformer_streaming_model_transcribes_real_audio() {
         .unwrap()
         .block_on(ModelPackage::import(
             imported.path(),
+            &test_network(),
+            imported.path(),
             "verified-import",
             Path::new(&directory),
             &async_utils::CancellationSource::new().token(),
@@ -162,22 +170,18 @@ fn paraformer_streaming_model_transcribes_real_audio() {
         .expect("import and validate real package");
     let package = ModelPackage::read(&imported.path().join("verified-import")).unwrap();
     let recognizer = package
-        .recognizer(LocalSpeechMode::Dictation)
+        .recognizer(imported.path(), &test_network(), LocalSpeechMode::Dictation)
         .expect("load Paraformer");
     let wave = sherpa_onnx::Wave::read(&wav).expect("read recorded audio");
     assert_eq!(wave.sample_rate(), 16000);
-    let stream = recognizer.create_stream();
     for chunk in wave.samples().chunks(3200) {
-        stream.accept_waveform(16000, chunk);
-        while recognizer.is_ready(&stream) {
-            recognizer.decode(&stream);
-        }
+        let samples = chunk
+            .iter()
+            .map(|sample| (sample.clamp(-1.0, 1.0) * 32767.0).round() as i16)
+            .collect::<Vec<_>>();
+        recognizer.accept_audio(&samples).unwrap();
     }
-    stream.input_finished();
-    while recognizer.is_ready(&stream) {
-        recognizer.decode(&stream);
-    }
-    let text = recognizer.get_result(&stream).unwrap().text;
+    let text = recognizer.finish().unwrap().text;
     eprintln!("Recognized fixed test phrase: {text}");
     assert!(text.contains("了解这个项目的进度"));
 }
@@ -207,6 +211,8 @@ async fn default_model_preparation_publishes_a_loadable_package() {
     .unwrap();
     let package = ModelPackage::resolve(
         Path::new(&root),
+        &test_network(),
+        Path::new(&root),
         DEFAULT_MODEL_ID,
         network,
         &async_utils::CancellationSource::new().token(),
@@ -217,7 +223,15 @@ async fn default_model_preparation_publishes_a_loadable_package() {
     assert!(
         crate::DictationModelManager::is_available(Path::new(&root), DEFAULT_MODEL_ID).unwrap()
     );
-    assert!(package.recognizer(LocalSpeechMode::Dictation).is_ok());
+    assert!(
+        package
+            .recognizer(
+                Path::new(&root),
+                &test_network(),
+                LocalSpeechMode::Dictation
+            )
+            .is_ok()
+    );
     assert!(
         !Path::new(&root)
             .join(format!(".{DEFAULT_MODEL_ID}.installing"))

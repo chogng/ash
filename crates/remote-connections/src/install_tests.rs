@@ -11,6 +11,7 @@ use std::process::Stdio;
 
 use flate2::Compression;
 use flate2::write::GzEncoder;
+use serde_json::Value;
 use serde_json::json;
 use sha2::Digest;
 use sha2::Sha256;
@@ -364,6 +365,25 @@ enum PackageVariant {
     Canonical,
     HostProvidedNode,
     LinkedEntrypoint,
+    MetadataBytes(usize),
+}
+
+#[test]
+fn installer_accepts_full_release_manifests_but_bounds_metadata_memory() {
+    for (size, accepted) in [(300 * 1024, true), (1024 * 1024 + 1, false)] {
+        let root = tempfile::tempdir().unwrap();
+        let artifact = package_artifact(root.path(), PackageVariant::MetadataBytes(size));
+        let result = artifact.open_verified();
+        assert_eq!(result.is_ok(), accepted, "{size} bytes: {result:?}");
+        if !accepted {
+            assert!(
+                result
+                    .unwrap_err()
+                    .to_string()
+                    .contains("bounded regular file")
+            );
+        }
+    }
 }
 
 fn package_artifact(root: &Path, variant: PackageVariant) -> RemoteRuntimeArtifact {
@@ -375,7 +395,7 @@ fn package_artifact(root: &Path, variant: PackageVariant) -> RemoteRuntimeArtifa
         PackageVariant::HostProvidedNode => "hostProvidedNode",
         _ => "packagedNode",
     };
-    let metadata = serde_json::to_vec_pretty(&json!({
+    let mut metadata = json!({
         "layoutVersion": 2,
         "version": VERSION,
         "target": TARGET.target_triple(),
@@ -384,8 +404,11 @@ fn package_artifact(root: &Path, variant: PackageVariant) -> RemoteRuntimeArtifa
         "resourcesDir": "ash-resources",
         "javascriptRuntime": { "kind": javascript_runtime },
         "components": {},
-    }))
-    .unwrap();
+    });
+    if let PackageVariant::MetadataBytes(size) = variant {
+        metadata["fixtureFileManifest"] = Value::String("x".repeat(size));
+    }
+    let metadata = serde_json::to_vec_pretty(&metadata).unwrap();
     let mut unpacked_size = append_file(&mut builder, "ash-package.json", &metadata, 0o644);
     match variant {
         PackageVariant::LinkedEntrypoint => {

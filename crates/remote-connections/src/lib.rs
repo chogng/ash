@@ -80,9 +80,5 @@ mod tunnel_tests;
 #[path = "install_tests.rs"]
 mod install_tests;
 
-#[cfg(test)]
-#[path = "runtime_updater_tests.rs"]
-mod runtime_updater_tests;
-
 mod command;
 pub use command::run_command;

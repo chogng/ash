@@ -98,7 +98,7 @@ export class DesktopMain extends Disposable {
 			const api = this._register(await createElectronRendererApi([
 				client => { documentClient = client; return {}; },
 				...this.rendererCapabilities,
-				client => registerLocalTranscriptionService(transcriptionServices, client),
+				(_client, _appServer, localClient) => registerLocalTranscriptionService(transcriptionServices, localClient),
 			], { browser: true, textDocuments: true }, permissionDialog, mainProcessService, async (localApi, factories, authority, attempt) => {
 				if (!resolverScope.value) {
 					const scope = new DisposableStore();

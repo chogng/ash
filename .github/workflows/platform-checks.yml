@@ -9,12 +9,26 @@ on:
         description: "Run only macOS sandbox acceptance"
         type: boolean
         default: false
+      remote_only:
+        description: "Publish only the standalone Linux Remote Server release"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
+  remote-release:
+    if: github.event_name == 'release' || inputs.remote_only
+    permissions:
+      contents: write
+    uses: ./.github/workflows/remote-server.yml
+    with:
+      platforms: ${{ inputs.remote_only && 'linux' || 'all' }}
+    secrets: inherit
+
   sandbox-macos:
+    if: ${{ !inputs.remote_only }}
     name: macOS sandbox (${{ matrix.target }})
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
@@ -84,6 +98,7 @@ jobs:
           gh release upload "$RELEASE_TAG" "${packages[@]}" --repo "$GITHUB_REPOSITORY"
 
   build-windows:
+    needs: remote-release
     if: github.event_name == 'release'
     permissions:
       contents: read
@@ -93,7 +108,8 @@ jobs:
       ASH_UPDATE_SIGNING_KEY: ${{ secrets.ASH_UPDATE_SIGNING_KEY }}
 
   check:
-    if: github.event_name != 'workflow_dispatch' || !inputs.sandbox_only
+    needs: remote-release
+    if: ${{ !cancelled() && !inputs.remote_only && (github.event_name != 'workflow_dispatch' || !inputs.sandbox_only) && (github.event_name != 'release' || needs.remote-release.result == 'success') }}
     name: ${{ matrix.target }} (${{ matrix.runner }})
     permissions:
       contents: read
@@ -371,12 +387,20 @@ jobs:
         shell: bash
         run: pnpm install --frozen-lockfile
 
+      - name: Download matching Remote release binding
+        if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'macOS'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: remote-server-release-binding
+          path: .build/remote-release
+
       - name: Package and verify macOS Desktop
         if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'macOS'
         shell: bash
         env:
           ASH_MACOS_SIGNING_IDENTITY: ${{ vars.ASH_MACOS_SIGNING_IDENTITY }}
           ASH_UPDATE_PUBLIC_KEY: ${{ vars.ASH_UPDATE_PUBLIC_KEY }}
+          ASH_REMOTE_RELEASE_BINDING: ${{ github.workspace }}/.build/remote-release/remote-release.json
         run: pnpm run package:desktop:darwin
 
       - name: Notarize and stage macOS Desktop
@@ -413,12 +437,18 @@ jobs:
         shell: bash
         run: |
           desktop=()
+          capabilities=(--package-dir ".build/releases/runtime-${{ matrix.target }}" --package-dir ".build/releases/ash-code-${{ matrix.target }}")
           if [[ "${{ runner.os }}" == "macOS" ]]; then
             arch="$(node -p 'process.arch')"
+            capabilities+=(--package-dir "dist/Ash-darwin-${arch}/Ash.app/Contents/Resources")
             desktop=(--desktop "dist/Ash-darwin-${arch}/Ash.app/Contents/Resources" --archive "ash-desktop=.build/releases/Ash-darwin-${arch}.zip")
           elif [[ "${{ matrix.target }}" == "x86_64-pc-windows-msvc" ]]; then
+            capabilities+=(--package-dir "dist/Ash-win32-x64/resources")
             desktop=(--desktop "dist/Ash-win32-x64/resources" --archive "ash-desktop=dist/AshSetup-${GITHUB_REF_NAME#v}-win32-x64.exe")
           fi
+          ${{ matrix.python }} -B build/release/capabilities.py stage \
+            "${capabilities[@]}" --archives-dir .build/releases \
+            --output ".build/release-artifacts/${{ matrix.target }}"
           ${{ matrix.python }} -B build/release/symbols.py archive \
             --package "ash-code=.build/releases/ash-code-${{ matrix.target }}" \
             --package "ash-app-server=.build/releases/runtime-${{ matrix.target }}" \

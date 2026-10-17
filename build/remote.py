@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the Remote distribution declared by remote/package.json."""
+"""Build the Remote distribution declared by remote-server/package.json."""
 
 import json
 import sys
@@ -16,7 +16,7 @@ from build.lib.targets import TARGETS, default_target  # noqa: E402
 def main(arguments: Optional[Sequence[str]] = None) -> int:
     args = parse_arguments(arguments)
     configuration = json.loads(
-        (ROOT / "remote/package.json").read_text(encoding="utf-8")
+        (ROOT / "remote-server/package.json").read_text(encoding="utf-8")
     )["ash"]
     targets = configuration["targets"]
     if (
@@ -39,6 +39,8 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
         raise ValueError(f"Remote package target is not supported: {args.target}")
     if args.javascript_runtime != configuration["javascriptRuntime"]:
         raise ValueError("Remote packages must include the packaged Node runtime")
+    if args.media_distribution != "optional":
+        raise ValueError("Remote packages require optional media")
     return build_package(args)
 
 

@@ -8,27 +8,48 @@ publish.workspace = true
 [lib]
 name = "livekit_client"
 
+[[test]]
+name = "room"
+required-features = ["host"]
+
+[[bin]]
+name = "ash-livekit-client"
+required-features = ["host"]
+
+[features]
+host = ["dep:external-ext-sdk", "dep:process-hardening", "dep:ash-package-store", "dep:image", "dep:livekit-net", "dep:async-trait", "dep:ash-http-client", "dep:ash-websocket-client", "dep:livekit-signaling", "dep:livekit-protocol", "dep:webrtc", "dep:rtc", "dep:opus-rs", "dep:oxideav-vp8", "dep:rand", "dep:bytes", "dep:ash-screen-capture"]
+
 [dependencies]
-livekit-net.workspace = true
-async-trait.workspace = true
-ash-http-client = { path = "../http-client" }
-ash-websocket-client = { path = "../websocket-client" }
-livekit-signaling.workspace = true
-livekit-protocol.workspace = true
-webrtc.workspace = true
-rtc.workspace = true
-opus-rs.workspace = true
-oxideav-vp8.workspace = true
-serde_json.workspace = true
-rand.workspace = true
-bytes.workspace = true
+external-ext-sdk = { package = "ash-external-ext-sdk", path = "../../sdk/rust", optional = true }
+process-hardening = { workspace = true, optional = true }
+ash-package-store = { workspace = true, optional = true }
+image = { workspace = true, optional = true }
+ash-external-ext.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+base64.workspace = true
 rubato = { workspace = true, features = ["fft_resampler"] }
+livekit-net = { workspace = true, optional = true }
+async-trait = { workspace = true, optional = true }
+ash-http-client = { path = "../http-client", optional = true }
+ash-websocket-client = { path = "../websocket-client", optional = true }
+livekit-signaling = { workspace = true, optional = true }
+livekit-protocol = { workspace = true, optional = true }
+webrtc = { workspace = true, optional = true }
+rtc = { workspace = true, optional = true }
+opus-rs = { workspace = true, optional = true }
+oxideav-vp8 = { workspace = true, optional = true }
+serde_json.workspace = true
+rand = { workspace = true, optional = true }
+bytes = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
-thiserror = { workspace = true }
 url = { workspace = true }
-ash-screen-capture = { path = "../screen-capture" }
+ash-screen-capture = { path = "../screen-capture", optional = true }
 
 [dev-dependencies]
+realtime-voice = { package = "ash-realtime-voice", path = "../realtime-voice" }
+ash-http-client.workspace = true
+call = { package = "ash-call", path = "../call", features = ["runtime"] }
 futures.workspace = true
 rustls.workspace = true
 tokio-rustls.workspace = true
@@ -39,3 +60,15 @@ tempfile = { workspace = true }
 
 [lints]
 workspace = true
+
+[[test]]
+name = "rooms"
+required-features = ["host"]
+
+[[test]]
+name = "hosting"
+required-features = ["host"]
+
+[[test]]
+name = "process"
+required-features = ["host"]

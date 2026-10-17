@@ -88,6 +88,10 @@ def build_package_directory(
     voice_host_binary: Optional[Path] = None,
     collaboration_server_binary: Optional[Path] = None,
     livekit: Optional[Dict[str, str]] = None,
+    livekit_client_binary: Optional[Path] = None,
+    recognizer_binary: Optional[Path] = None,
+    livekit_package: Optional[dict] = None,
+    media_package: Optional[dict] = None,
     remote_runtime_bundle: Optional[Path] = None,
     remote_runtime_release: Optional[Dict[str, str]] = None,
     symbols_dir: Optional[Path] = None,
@@ -130,12 +134,14 @@ def build_package_directory(
         raise RuntimeError(
             "Inbound tunnel host executable is required in product packages"
         )
-    if (
-        voice_host_binary is None
-        or collaboration_server_binary is None
-        or livekit is None
-    ):
+    if collaboration_server_binary is None:
         raise RuntimeError("Call helper executables are required in product packages")
+    if (livekit_client_binary is not None) != (recognizer_binary is not None) or (
+        livekit_client_binary is not None and voice_host_binary is None
+    ):
+        raise RuntimeError(
+            "Local media requires its room, recognition and audio executables"
+        )
     if (
         update_public_key is not None
         and re.fullmatch(r"[a-fA-F0-9]{64}", update_public_key) is None
@@ -165,10 +171,15 @@ def build_package_directory(
             "githubAuthentication": str(github_authentication_binary),
             "githubExtension": str(github_extension_binary),
             "remoteSshExtension": str(remote_ssh_extension_binary),
-            "voiceHost": str(voice_host_binary),
             "collaborationServer": str(collaboration_server_binary),
-            "livekit": livekit["executable"],
         }
+        if voice_host_binary is not None:
+            executables["voiceHost"] = str(voice_host_binary)
+        if livekit is not None:
+            executables["livekit"] = livekit["executable"]
+        if livekit_client_binary is not None:
+            executables["livekitClient"] = str(livekit_client_binary)
+            executables["recognizer"] = str(recognizer_binary)
         if js_extension_host_binary is not None:
             executables["jsExtensionHost"] = str(js_extension_host_binary)
         if dev_container_provider_binary is not None:
@@ -200,6 +211,8 @@ def build_package_directory(
             runtime["archiveSha256"] = ripgrep.archive_sha256
         inputs = {
             "staging": str(staging),
+            "livekitPackage": livekit_package,
+            "mediaPackage": media_package,
             "target": spec.target,
             "platform": "win32" if spec.is_windows else spec.operating_system.value,
             "executables": executables,
@@ -302,6 +315,12 @@ def assemble_package(staging: Path, inputs: dict) -> None:
         resources / "product-services",
         "product services",
     )
+    for kind in ("livekit", "media"):
+        if inputs.get(f"{kind}Package") is not None:
+            (resources / "capabilities").mkdir(exist_ok=True)
+            write_json(
+                resources / f"capabilities/{kind}.json", inputs[f"{kind}Package"]
+            )
     remote_bundle = inputs.get("remoteRuntimeBundle")
     if remote_bundle:
         copy_regular_tree(
@@ -535,6 +554,11 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
     components = metadata.get("components")
     if not isinstance(components, dict):
         raise RuntimeError("Invalid package component metadata")
+    if (
+        metadata.get("javascriptRuntime", {}).get("kind") == "packagedNode"
+        and "remoteServer" not in components
+    ):
+        raise RuntimeError("Standalone packages require the Remote server connector")
     binary_layout = package_binary_layout(components)
     for component, relative in LAYOUT["optionalBinaries"].items():
         artifact = package / relative.format(exe=spec.executable_suffix)
@@ -739,52 +763,72 @@ def system_signing_artifacts(package: Path, spec: TargetSpec) -> Dict[str, Path]
     components = metadata.get("components")
     if not isinstance(components, dict):
         raise RuntimeError("Invalid package component metadata")
-    artifacts = {
-        "appServerDaemon": package / "bin" / spec.app_server_daemon_name,
-        "codeModeHost": package / "bin" / spec.code_mode_host_name,
-        "gitExtension": package
-        / "bin"
-        / ("ash-git-extension" + spec.executable_suffix),
-        "markdownMath": package
-        / "bin"
-        / ("ash-markdown-math" + spec.executable_suffix),
-        "markdownExtension": package
-        / "bin"
-        / ("ash-markdown-language-features" + spec.executable_suffix),
-        "githubAuthentication": package
-        / "bin"
-        / ("ash-github-authentication" + spec.executable_suffix),
-        "githubExtension": package
-        / "bin"
-        / ("ash-github-extension" + spec.executable_suffix),
-        "remoteSshExtension": package
-        / "bin"
-        / ("ash-remote-ssh-extension" + spec.executable_suffix),
-        "voiceHost": package / "bin" / ("ash-voice-host" + spec.executable_suffix),
-        "collaborationServer": package
-        / "bin"
-        / ("ash-collab-server" + spec.executable_suffix),
-        "livekit": package / "bin" / ("livekit-server" + spec.executable_suffix),
-        "ripgrep": package / "ash-path" / spec.ripgrep_name,
-        "tgrep": package / "ash-resources/tgrep" / ("tgrep" + spec.executable_suffix),
-        "appServer": package / "bin" / spec.server_name,
-        "remote": package / "bin" / spec.remote_name,
-        "remoteHost": package / "bin" / ("ash-remote-host" + spec.executable_suffix),
-        "remoteServer": package / "bin" / spec.remote_server_name,
-        "execServer": package / "bin" / spec.exec_server_name,
-    }
-    for component, relative in LAYOUT["optionalBinaries"].items():
-        if component in components:
-            artifacts[component] = package / relative.format(exe=spec.executable_suffix)
-    if spec.is_windows:
-        artifacts["windowsSandbox"] = package / "bin/ash-windows-sandbox.exe"
-        artifacts["windowsSandboxService"] = (
-            package / "bin/ash-windows-sandbox-service.exe"
+    capability_kind = metadata.get("javascriptRuntime", {}).get("kind")
+    if capability_kind in ("media", "livekit"):
+        expected_components = (
+            {"livekitClient", "recognizer", "voiceHost"}
+            if capability_kind == "media"
+            else {"livekit"}
         )
-    if "cli" in components:
-        artifacts["cli"] = package / "bin" / spec.cli_name
-    if metadata.get("javascriptRuntime") == {"kind": "packagedNode"}:
-        artifacts["node"] = package / "ash-resources" / "node" / "bin" / spec.node_name
+        if set(components) != expected_components:
+            raise RuntimeError("Incomplete media package components")
+        artifacts = {
+            name: package
+            / LAYOUT["optionalBinaries"][name].format(exe=spec.executable_suffix)
+            for name in expected_components
+        }
+    else:
+        artifacts = {
+            "appServerDaemon": package / "bin" / spec.app_server_daemon_name,
+            "codeModeHost": package / "bin" / spec.code_mode_host_name,
+            "gitExtension": package
+            / "bin"
+            / ("ash-git-extension" + spec.executable_suffix),
+            "markdownMath": package
+            / "bin"
+            / ("ash-markdown-math" + spec.executable_suffix),
+            "markdownExtension": package
+            / "bin"
+            / ("ash-markdown-language-features" + spec.executable_suffix),
+            "githubAuthentication": package
+            / "bin"
+            / ("ash-github-authentication" + spec.executable_suffix),
+            "githubExtension": package
+            / "bin"
+            / ("ash-github-extension" + spec.executable_suffix),
+            "remoteSshExtension": package
+            / "bin"
+            / ("ash-remote-ssh-extension" + spec.executable_suffix),
+            "collaborationServer": package
+            / "bin"
+            / ("ash-collab-server" + spec.executable_suffix),
+            "ripgrep": package / "ash-path" / spec.ripgrep_name,
+            "tgrep": package
+            / "ash-resources/tgrep"
+            / ("tgrep" + spec.executable_suffix),
+            "appServer": package / "bin" / spec.server_name,
+            "remote": package / "bin" / spec.remote_name,
+            "remoteHost": package
+            / "bin"
+            / ("ash-remote-host" + spec.executable_suffix),
+            "execServer": package / "bin" / spec.exec_server_name,
+        }
+        for component, relative in LAYOUT["optionalBinaries"].items():
+            if component in components:
+                artifacts[component] = package / relative.format(
+                    exe=spec.executable_suffix
+                )
+        if spec.is_windows:
+            artifacts["windowsSandbox"] = package / "bin/ash-windows-sandbox.exe"
+            artifacts["windowsSandboxService"] = (
+                package / "bin/ash-windows-sandbox-service.exe"
+            )
+        if "cli" in components:
+            artifacts["cli"] = package / "bin" / spec.cli_name
+        if metadata.get("javascriptRuntime") == {"kind": "packagedNode"}:
+            artifacts["node"] = (
+                package / "ash-resources" / "node" / "bin" / spec.node_name
+            )
     for path in artifacts.values():
         if path.is_symlink() or not path.is_file():
             raise RuntimeError("Missing package signing artifact: {}".format(path))
@@ -841,6 +885,8 @@ def record_system_signing(
             "devContainerProvider",
             "lldbExtension",
             "voiceHost",
+            "livekitClient",
+            "recognizer",
             "collaborationServer",
             "livekit",
             "node",
@@ -871,7 +917,14 @@ def record_system_signing(
     metadata["files"] = files
     metadata["buildId"] = package_build_id(identity, files)
     write_json(metadata_path, metadata)
-    validate_package_directory(package, spec)
+    if metadata.get("javascriptRuntime", {}).get("kind") in ("media", "livekit"):
+        from build.lib.media_package import validate_capability_package
+
+        validate_capability_package(
+            package, spec, metadata["javascriptRuntime"]["kind"]
+        )
+    else:
+        validate_package_directory(package, spec)
 
 
 def require_verified_system_signing(package: Path, spec: TargetSpec) -> None:

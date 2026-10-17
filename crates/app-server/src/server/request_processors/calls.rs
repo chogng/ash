@@ -47,7 +47,7 @@ impl<'a> CallRequestProcessor<'a> {
         method: ClientMethod,
         params: &Value,
     ) -> Result<Value, RpcError> {
-        if !connection.allows_product_host_capabilities() {
+        if !connection.allows_local_media() {
             return Err(RpcError::new(
                 -32073,
                 AppServerErrorName::PermissionRequired,
@@ -64,7 +64,7 @@ impl<'a> CallRequestProcessor<'a> {
         match method {
             ClientMethod::CallScreenSources | ClientMethod::CallScreenFrames => {
                 let params: CallResourceParams = decode(params)?;
-                let (status, screens) = {
+                let (status, screens, media) = {
                     let sessions = self
                         .calls
                         .sessions
@@ -78,7 +78,7 @@ impl<'a> CallRequestProcessor<'a> {
                         .lock()
                         .map_err(|_| failure("Call state unavailable".into()))?
                         .clone();
-                    (status, session.screens.clone())
+                    (status, session.screens.clone(), session.media.clone())
                 };
                 if status.connection != call::CallConnection::Connected {
                     return Err(failure("Call is not connected".into()));
@@ -91,27 +91,23 @@ impl<'a> CallRequestProcessor<'a> {
                     }
                     use ash_app_server_protocol::protocol::call::CallScreenSource;
                     use ash_app_server_protocol::protocol::call::CallScreenSources;
-                    let mut sources: Vec<_> = screen_capture::enumerate_displays()
+                    let sources = livekit_client::screen_sources(&media)
                         .map_err(|error| failure(error.to_string()))?
                         .into_iter()
-                        .map(|info| CallScreenSource {
-                            target: call::ScreenTarget::Display(info.id),
-                            title: info.title,
-                            width: info.width,
-                            height: info.height,
+                        .map(|source| CallScreenSource {
+                            target: match source.target {
+                                livekit_client::ScreenTarget::Display(id) => {
+                                    call::ScreenTarget::Display(id)
+                                }
+                                livekit_client::ScreenTarget::Window(id) => {
+                                    call::ScreenTarget::Window(id)
+                                }
+                            },
+                            title: source.title,
+                            width: source.width,
+                            height: source.height,
                         })
                         .collect();
-                    sources.extend(
-                        screen_capture::enumerate_windows()
-                            .map_err(|error| failure(error.to_string()))?
-                            .into_iter()
-                            .map(|info| CallScreenSource {
-                                target: call::ScreenTarget::Window(info.id),
-                                title: info.title,
-                                width: info.width,
-                                height: info.height,
-                            }),
-                    );
                     result(&CallScreenSources { sources })
                 } else {
                     let (tracks, frames) = screens

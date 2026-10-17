@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import test from 'node:test';
 
-test('browser packaging excludes Rust-only extensions and rejects missing JS manifests', async () => {
+test('browser packaging excludes independent capabilities and rejects missing JS manifests', async () => {
 	const directory = await mkdtemp(join(tmpdir(), 'ash-browser-extensions-'));
 	try {
 		await mkdir(join(directory, 'build/builtin'), { recursive: true });
@@ -22,6 +22,8 @@ test('browser packaging excludes Rust-only extensions and rejects missing JS man
 		await writeFile(join(directory, 'extensions/theme-defaults/package.json'), JSON.stringify({ publisher: 'test', name: 'theme-defaults', version: '1.0.0' }));
 		await mkdir(join(directory, 'extensions/capability'));
 		await writeFile(join(directory, 'extensions/capability/Cargo.toml'), '[package]\nname = "capability"\nversion = "1.0.0"\n');
+		await mkdir(join(directory, 'livekit-server'));
+		await writeFile(join(directory, 'livekit-server/runtime.json'), JSON.stringify({ schemaVersion: 1, id: 'ash.livekit', entrypoint: 'bin/livekit-server' }));
 		await mkdir(join(directory, 'extensions/git/src'), { recursive: true });
 		await writeFile(join(directory, 'extensions/git/package.json'), JSON.stringify({ publisher: 'test', name: 'git', version: '1.0.0', ashRuntime: { kind: 'rust', entrypoint: 'test-capability' } }));
 		await writeFile(join(directory, 'extensions/git/src/main.rs'), 'fn main() {}');

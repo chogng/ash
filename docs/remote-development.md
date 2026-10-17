@@ -39,7 +39,7 @@ Main 仍负责 runtime 准备与窗口生命周期，业务协议帧透明转发
 留在本地，远端执行连接只处理文件与进程。配置入口见
 [`ash-exec-server`](../crates/exec-server/README.md#启动与连接)。这项能力尚未替换 Desktop Remote
 默认入口。历史迁移操作及调用顺序见
-[`ash-remote-server`](../crates/remote-server/README.md#history-ownership-transfer)；Desktop 尚未自动
+[`ash-remote-server`](../remote-server/README.md#history-ownership-transfer)；Desktop 尚未自动
 调用迁移，已有用户历史未被修改。迁移完成的远端 profile 重启后只开启执行服务，不恢复旧 Agent、
 Queue 或 Automation，也不接受旧 Agent 写入入口。
 
@@ -383,10 +383,13 @@ SSH launcher 使用 `BatchMode=yes`，不会在后台窗口等待密码输入。
 
 目标运行基础是 Rust + V8：远端和 TUI 的 Code Mode 不依赖 Node 或本机 Electron，后端扩展按[运行时职责与兼容契约](editor-extensions.md#运行时职责与兼容契约)迁移。以下 packaged-node 清单与校验是当前实现；移除随包 Node 仍需同步扩展/LSP 调用方、artifact metadata、安装校验、升级兼容和测试，不能仅修改打包配置就宣称迁移完成。
 
-远端分发要求由根目录 [`remote/package.json`](../remote/package.json) 声明。
+远端分发要求由根目录 [`remote-server/package.json`](../remote-server/package.json) 声明。
 `just remote-package --target <target> --package-dir <directory>` 通过
 [`build/remote.py`](../build/remote.py) 读取支持平台和随包 Node 要求，再复用
-[`共享包构建`](../build/README.md)；该入口组装完整目录，正式发布 catalog 的自动化仍未完成。
+[`共享包构建`](../build/README.md)。独立发布由
+[`remote-server.yml`](../.github/workflows/remote-server.yml) 完成；发布命令和客户端绑定见
+[`Remote 分发`](../remote-server/README.md#independent-release-and-first-connection)。Desktop 发布等待同协议的
+独立 Release，只打入 URL 与摘要，不打入远端连接器或完整远端包；本机 App Server 保留。
 
 Remote runtime artifact 必须是 canonical layout version 2 的 rootless `tar.gz`，并使用
 `javascriptRuntime.kind=packagedNode`。它包含 `bin/ash-app-server`、`bin/ash-remote-server`、`bin/ash-app-server-daemon`、`ash-path/rg`、Node、Skills、Extensions、
@@ -394,7 +397,8 @@ product services 与平台 sandbox 资源；安装器不会用裸二进制伪装
 daemon 不运行独立 updater，也不能绕过内容寻址 artifact 与 active/previous profile 的条件交换。
 
 网络发布先要求产品已认证无凭据 HTTPS `catalog.json` URL 和 64 位小写 SHA-256。共享 updater 拒绝
-重定向、query/fragment、私网解析和代理环境，将 catalog 限制为 1 MiB、archive 限制为 1 GiB、声明
+任意重定向、入口 URL 的 query/fragment、私网解析和代理环境；仅允许 GitHub Release 到其 HTTPS
+资产 CDN 的一次跳转。catalog 限制为 1 MiB，archive 限制为 1 GiB，声明
 展开大小限制为 4 GiB；缓存路径由 catalog 摘要寻址，命中也重新检查整个 archive。新文件只有在
 长度、摘要、entry、package metadata 和展开大小全部通过后才从同目录临时文件原子发布。
 

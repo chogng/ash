@@ -341,6 +341,8 @@ class PrepareTests(unittest.TestCase):
                 "ash-dev-container-provider",
                 "ash-debug-lldb",
                 "ash-voice-host",
+                "ash-livekit-client",
+                "ash-realtime-voice",
                 "ash-collab-server",
                 "ash-windows-sandbox",
                 "ash-windows-sandbox-service",
@@ -359,7 +361,19 @@ class PrepareTests(unittest.TestCase):
             runtime.executable.write_text("rg")
             args = prepare.parse_arguments([])
             spec = TARGETS["x86_64-pc-windows-msvc"]
+
+            def capability(output, *_):
+                output.mkdir(parents=True)
+                (output / "ash-package.json").write_text(
+                    json.dumps({"buildId": "livekit-test"})
+                )
+                return output
+
             with (
+                patch(
+                    "build.lib.media_package.assemble_capability_package",
+                    side_effect=capability,
+                ),
                 patch.object(prepare, "default_target", return_value=spec.target),
                 patch.object(
                     prepare, "development_source_digest", return_value="source"
@@ -390,3 +404,18 @@ class PrepareTests(unittest.TestCase):
             self.assertEqual(1, build.call_count)
             self.assertEqual(set(binaries), set(build.call_args.args[2]))
             self.assertEqual(binaries["ash-package-store"], publish.call_args.args[1])
+            # Desktop development keeps media available without a first-use installation.
+            with (
+                patch.object(prepare, "build_package_directory") as assemble,
+                patch.object(prepare, "read_workspace_version", return_value="0.1.0"),
+            ):
+                publish.call_args.args[2](root / "staging")
+            self.assertEqual(
+                binaries["ash-livekit-client"],
+                assemble.call_args.kwargs["livekit_client_binary"],
+            )
+            self.assertEqual(
+                binaries["ash-voice-host"],
+                assemble.call_args.kwargs["voice_host_binary"],
+            )
+            self.assertIsNone(assemble.call_args.kwargs["media_package"])

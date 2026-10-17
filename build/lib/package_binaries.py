@@ -19,6 +19,8 @@ from build.protocol.generate import generate_protocol
 
 
 _BINARIES = {
+    "ash-livekit-client": ("ash-livekit-client", "--livekit-client-bin"),
+    "ash-realtime-voice": ("ash-realtime-voice", "--recognizer-bin"),
     "ash-debug-lldb": ("ash-debug-lldb", "--lldb-extension-bin"),
     "ash-dev-container-provider": (
         "ash-dev-container-provider",
@@ -93,6 +95,38 @@ def build_binaries(
     if not missing:
         return outputs
 
+    # Cargo unifies features within one invocation. Keep local device/inference
+    # implementations out of the App Server and Remote executable graphs.
+    local_hosts = {"ash-livekit-client", "ash-realtime-voice", "ash-voice-host"}
+    if len(missing) > 1 and local_hosts.intersection(missing):
+        core = {name: None for name in missing if name not in local_hosts}
+        if core:
+            outputs.update(
+                build_binaries(
+                    repository_root,
+                    spec,
+                    core,
+                    cargo=cargo,
+                    cargo_profile=cargo_profile,
+                    host_build=host_build,
+                    protocol_prepared=protocol_prepared,
+                )
+            )
+        for name in missing:
+            if name in local_hosts:
+                outputs.update(
+                    build_binaries(
+                        repository_root,
+                        spec,
+                        {name: None},
+                        cargo=cargo,
+                        cargo_profile=cargo_profile,
+                        host_build=host_build,
+                        protocol_prepared=protocol_prepared,
+                    )
+                )
+        return outputs
+
     command = [
         cargo,
         "build",
@@ -115,6 +149,9 @@ def build_binaries(
         command.extend(["--package", _BINARIES[name][0], "--bin", name])
     if "ash-voice-host" in missing:
         command.extend(["--features", "ash-voice-host/host"])
+    for name in ("ash-livekit-client", "ash-realtime-voice"):
+        if name in missing:
+            command.extend(["--features", f"{name}/host"])
     packages = cargo_command_packages(cargo, command[1:], repository_root)
     # Watchers prepare protocol changes before this call and serialize subsequent
     # saves. Direct builds still own preparation when no caller has done it.

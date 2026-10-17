@@ -1109,6 +1109,10 @@ fn extension_activation_accepts_authenticated_editor_transports_without_promotin
         (server.connection(), "ResourceNotOwner"),
         (server.browser_connection(), "ExtensionHostUnavailable"),
         (server.product_host_connection(), "ExtensionHostUnavailable"),
+        (
+            server.open_connection(ConnectionAuthority::RemoteHost),
+            "ExtensionHostUnavailable",
+        ),
     ] {
         initialize(&server, &mut connection);
         let response = call(
@@ -1123,7 +1127,10 @@ fn extension_activation_accepts_authenticated_editor_transports_without_promotin
         assert_eq!(response["error"]["message"], expected);
         assert_eq!(
             connection.allows_product_host_capabilities(),
-            connection.authority == ConnectionAuthority::ProductHost
+            matches!(
+                connection.authority,
+                ConnectionAuthority::ProductHost | ConnectionAuthority::RemoteHost
+            )
         );
     }
 }

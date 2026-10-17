@@ -14,6 +14,6 @@ filegroup(
         "//build/lib:assembly_sources",
         "//build/lib:python_sources",
         "//build/lib:signing_sources",
-        "//remote:package.json",
+        "//remote-server:package.json",
     ],
 )

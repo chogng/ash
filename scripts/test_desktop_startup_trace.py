@@ -43,8 +43,8 @@ def report(duration=100, error=False, version=2):
                                         ("ash.desktop.contributions-ready", 19),
                                         ("ash.desktop.open-start", 20),
                                         ("ash.rendererApi.start", 21),
-                                        ("ash.rendererApi.acquire-start", 22),
-                                        ("ash.rendererApi.acquired", 23),
+                                        ("ash.appServer.acquire-start", 22),
+                                        ("ash.appServer.acquired", 23),
                                         *(
                                             (
                                                 ("ash.rendererApi.initialized", 24),

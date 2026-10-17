@@ -1127,9 +1127,10 @@ export class AshApplication extends Disposable {
 		resources: DisposableStore,
 		existing?: AppServerConnectionRelay,
 		role: 'workbench' | 'agents' = 'workbench',
+		connectionKind: 'workspace' | 'local' = 'workspace',
 	): AppServerConnectionRelay {
 		if (this.appServerStartupMode === "disabled") {
-			return existing ?? new AppServerConnectionRelay({ enabled: false });
+			return existing ?? new AppServerConnectionRelay({ enabled: false }, connectionKind);
 		}
 		const remote = role === 'workbench' && getWorkspaceRemoteAuthority(workspace)?.startsWith('ssh+') === true;
 		const connection = createAppServerDaemonLauncher({
@@ -1146,7 +1147,7 @@ export class AshApplication extends Disposable {
 		const supervisor = existing ?? new AppServerConnectionRelay({
 			enabled: true,
 			processLauncher,
-		});
+		}, connectionKind);
 		if (existing) existing.replaceProcessLauncher(processLauncher);
 		if (generationFile) {
 			if (!this.developmentAppServerReloader.value) this.developmentAppServerReloader.value = new DevelopmentAppServerReloader({ generationFile });
@@ -1274,6 +1275,13 @@ export class AshApplication extends Disposable {
 		}, resources);
 		const window = windowHost.win;
 		this.trackAppServerConnection(window, supervisor, resources);
+		// SSH keeps its existing workspace carrier. Devices use a separate connection to
+		// the same local profile daemon already used by local and Agents windows.
+		const localSupervisor = getWorkspaceRemoteAuthority(workspaceContext.getWorkspace())?.startsWith('ssh+')
+			? resources.add(this.createAppServerConnectionRelay(workspaceContext.getWorkspace(), resources, undefined, 'agents', 'local'))
+			: undefined;
+		if (localSupervisor) this.trackAppServerConnection(window, localSupervisor, resources);
+
 		const remoteConnections = this.createRemoteConnections(workspaces);
 		const windowStateTracking = windowsStateHandler.trackWindow(window);
 		const record: WorkbenchWindowRecord = {
@@ -1387,7 +1395,7 @@ export class AshApplication extends Disposable {
 					throw new Error('Reusing a window must preserve its Remote authority');
 				}
 				const resolvedWorkspace = await workspaces.resolveWorkspace(workspace);
-				const root = isSingleFolderWorkspaceIdentifier(workspace) ? workspace.uri.fsPath : undefined;
+				const root = isSingleFolderWorkspaceIdentifier(workspace) && workspace.uri.scheme === 'file' ? workspace.uri.fsPath : undefined;
 				const grant = root ? await this.resolveDirGrant(workspaceHost, root) : { type: 'config' as const };
 				if (!grant || !await this.lifecycleMainService.unload(window)) {
 					return;
@@ -1432,7 +1440,11 @@ export class AshApplication extends Disposable {
 		const ipcRoutes = [
 			...this.mainProcessIpcRoutes(window),
 			...workspaceHost.routes(),
-			...supervisor.routes(window.webContents, () => ({ workspaceId: workspaceContext.getWorkspace().id, workspaceRoot: workspaceContext.getResolvedWorkspace().folders[0]?.uri.fsPath ?? this.profileRoot })),
+			...supervisor.routes(window.webContents, () => {
+				const folder = workspaceContext.getResolvedWorkspace().folders[0]?.uri;
+				return { workspaceId: workspaceContext.getWorkspace().id, workspaceRoot: folder ? folder.scheme === 'file' ? folder.fsPath : folder.path : this.profileRoot };
+			}),
+			...(localSupervisor?.routes(window.webContents, () => ({ workspaceId: 'local-profile', workspaceRoot: this.profileRoot })) ?? []),
 			...windowDisposables.add(new OAuthCallbackHost()).routes(),
 			...rendererSystemHostRoutes(window, path => this.directoryPermissionPrompt(path), this.auxiliaryWindowsMainService),
 			...windowDisposables.add(new ScreenshotMainService(window, {
@@ -1757,6 +1769,11 @@ export class AshApplication extends Disposable {
 					}
 					session.supervisor = sessionsRelay;
 					session.runtimeResources.value = runtimeResources;
+					const localSessionsRelay = getWorkspaceRemoteAuthority(session.workspaceContext.getWorkspace())?.startsWith('ssh+')
+						? windowDisposables.add(this.createAppServerConnectionRelay(session.workspaceContext.getWorkspace(), runtimeResources, undefined, 'agents', 'local'))
+						: undefined;
+					if (localSessionsRelay) this.trackAppServerConnection(window, localSessionsRelay, windowDisposables);
+
 					const remotePortForwardingService = new SshPortForwardingService({
 						getWorkspace: () => session.workspaceContext.getWorkspace(),
 						sshExecutable: process.env.ASH_SSH_PATH ?? "ssh",
@@ -1792,6 +1809,7 @@ export class AshApplication extends Disposable {
 					const ipcRoutes = [
 						...this.mainProcessIpcRoutes(window),
 						...sessionsRelay.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })),
+						...(localSessionsRelay?.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })) ?? []),
 						...rendererSystemHostRoutes(window, path => this.directoryPermissionPrompt(path), this.auxiliaryWindowsMainService),
 						...windowDisposables.add(new ScreenshotMainService(window, {
 							entry: this.resolveRendererEntry('screenshot'), webPreferences: this.createSandboxWebPreferences(),

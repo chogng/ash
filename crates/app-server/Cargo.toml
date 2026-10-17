@@ -24,7 +24,6 @@ rfd = { workspace = true }
 attachment-store = { workspace = true }
 call = { package = "ash-call", path = "../call", features = ["runtime"] }
 livekit-client = { package = "ash-livekit-client", path = "../livekit-client" }
-ash-screen-capture = { workspace = true }
 image = { workspace = true, features = ["jpeg"] }
 voice-agent = { package = "ash-voice-agent", path = "../voice-agent" }
 voice-host = { package = "ash-voice-host", path = "../voice-host" }
@@ -57,7 +56,7 @@ ash-app-server-daemon = { workspace = true }
 ash-remote-profile-store = { workspace = true }
 ash-remote = { workspace = true }
 arg0 = { workspace = true }
-ash-package-store = { workspace = true }
+ash-package-store = { workspace = true, features = ["installation"] }
 process-hardening = { workspace = true }
 memories = { workspace = true }
 guardian-environment = { workspace = true }

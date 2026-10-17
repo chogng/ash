@@ -13,7 +13,8 @@ If need, read the local refers: `../mxc`, `../tgrep`, `../vscode`, `../codex`, `
 | `crates/app-server` | Listening entrypoints, service registries, queue execution and automation |
 | `crates/app-server-daemon` | Daemon lifecycle; manages a separate `ash-app-server --managed` process |
 | `crates/remote-connections` | Local Remote management |
-| `crates/remote-server` | Remote runtime |
+| `remote-server/` | Remote runtime and independent distribution |
+| `livekit-server/` | Optional local call hosting distribution |
 | `crates/arg0` | Shared internal helper dispatch |
 
 - Electron and Browser hosts must not execute, package, import or depend on the `cli/` product host, `ash-tui`, or the `ash app-server` product command.

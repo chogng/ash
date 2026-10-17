@@ -90,6 +90,10 @@ fn local_agent_uses_ssh_after_approval_and_keeps_history_local() {
     );
     let thread = created["result"]["value"]["threadId"].as_str().unwrap();
     let thread_id = ash_protocol::ThreadId::new(thread).unwrap();
+    rpc(
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":6,"method":"session/thread/subscribe","params":{"sessionId":session,"threadId":thread,"afterSequence":1}}),
+    );
     let started = rpc(
         &mut connection,
         serde_json::json!({"jsonrpc":"2.0","id":4,"method":"session/request","params":{"commandId":"start-local-turn","sessionId":session,"request":{"type":"startTurn","expectedSequence":1,"threadId":thread,"input":[{"type":"text","text":"write the remote file"}]}}}),
@@ -107,6 +111,26 @@ fn local_agent_uses_ssh_after_approval_and_keeps_history_local() {
         );
         std::thread::sleep(Duration::from_millis(10));
     };
+    // The persisted pending state precedes delivery to its interaction owner.
+    // Respond only after this client receives the request, as the real UI does.
+    loop {
+        let delivered = server
+            .drain_notifications(&mut connection)
+            .iter()
+            .any(|line| {
+                let value: serde_json::Value = serde_json::from_str(line).unwrap();
+                value["method"] == "agent/request"
+                    && value["params"]["interaction"]["requestId"] == request_id
+            });
+        if delivered {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "approval was not delivered to its owner"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
     assert!(!host.files.join("agent-result").exists());
     rpc(
         &mut connection,

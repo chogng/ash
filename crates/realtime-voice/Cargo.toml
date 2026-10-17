@@ -8,12 +8,20 @@ publish.workspace = true
 [lib]
 name = "realtime_voice"
 
+[[bin]]
+name = "ash-realtime-voice"
+required-features = ["host"]
+
 [features]
+host = ["dep:sherpa-onnx", "dep:process-hardening", "dep:external-ext-sdk"]
 default = []
 # Product hosts opt into remote transcription; local microphone clients do not need model invocation.
 cloud = ["dep:model-provider", "dep:model-provider-info", "dep:protocol", "dep:websocket-client"]
 
 [dependencies]
+external-ext-sdk = { package = "ash-external-ext-sdk", path = "../../sdk/rust", optional = true }
+process-hardening = { workspace = true, optional = true }
+sherpa-onnx = { workspace = true, optional = true }
 model-provider = { package = "ash-model-provider", path = "../model-provider", optional = true }
 model-provider-info = { workspace = true, optional = true }
 async-utils = { package = "ash-async-utils", path = "../async-utils" }
@@ -23,11 +31,18 @@ voice-host = { package = "ash-voice-host", path = "../voice-host" }
 http-client = { package = "ash-http-client", path = "../http-client" }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
-sherpa-onnx = { workspace = true }
+ash-external-ext.workspace = true
+ash-package-store = { workspace = true, features = ["installation"] }
+serde.workspace = true
 tokio = { workspace = true, features = ["fs", "io-util", "macros", "rt", "sync"] }
 
 [dev-dependencies]
+sherpa-onnx.workspace = true
 tempfile = { workspace = true }
 
 [lints]
 workspace = true
+
+[[test]]
+name = "process"
+required-features = ["host"]

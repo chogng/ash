@@ -145,3 +145,20 @@ fn ssh_scope_rejects_ambiguous_or_unvalidated_authority() {
             .is_err()
     );
 }
+
+#[test]
+fn remote_role_roundtrips_without_becoming_local_workbench() {
+    let options = crate::ConnectionOptions::new(
+        std::path::PathBuf::from("/profile"),
+        Some(std::path::PathBuf::from("/workspace")),
+        crate::GrantSource::HostConfiguration,
+        None,
+    )
+    .with_role(crate::ConnectionRole::Remote);
+    let prelude = super::ConnectionPrelude::from_options(&options);
+    prelude.validate().unwrap();
+    let decoded: super::ConnectionPrelude =
+        serde_json::from_slice(&serde_json::to_vec(&prelude).unwrap()).unwrap();
+    decoded.validate().unwrap();
+    assert_eq!(decoded.role, crate::ConnectionRole::Remote);
+}

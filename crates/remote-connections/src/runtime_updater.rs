@@ -16,6 +16,7 @@ use ash_http_client::HttpClientError;
 use ash_http_client::HttpHeader;
 use ash_http_client::HttpMethod;
 use ash_http_client::HttpRequest;
+use ash_http_client::HttpResponse;
 use ash_http_client::NetworkTargetPolicy;
 use ash_http_client::ProxyPolicy;
 use ash_http_client::RedirectPolicy;
@@ -45,6 +46,10 @@ const CATALOG_FILE: &str = "catalog.json";
 const DOWNLOAD_PROGRESS_INTERVAL_BYTES: u64 = 256 * 1024;
 const MAX_ERROR_RESPONSE_BYTES: usize = 1024 * 1024;
 
+#[cfg(test)]
+#[path = "runtime_updater_tests.rs"]
+mod tests;
+
 /// One network catalog whose exact bytes were authenticated by a signed product release.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RemoteRuntimeCatalogRelease {
@@ -53,7 +58,7 @@ pub struct RemoteRuntimeCatalogRelease {
 }
 
 impl RemoteRuntimeCatalogRelease {
-    /// Creates a release binding without accepting credentials, redirects, query, or fragments.
+    /// Creates a release binding without accepting credentials, query, or fragments.
     pub fn new(
         catalog_url: impl AsRef<str>,
         expected_sha256: impl AsRef<str>,
@@ -235,8 +240,9 @@ impl RemoteRuntimeCatalogUpdater {
             artifact.integrity().sha256(),
             &mut report_progress,
         );
-        let request = get_request(archive_url.as_str(), "application/gzip")?;
-        let response = client.execute_streaming(&request, &mut sink)?;
+        let response = release_download(&archive_url, |url| {
+            Ok(client.execute_streaming(&get_request(url, "application/gzip")?, &mut sink)?)
+        })?;
         if response.status() != 200 {
             return Err(RemoteRuntimeUpdateError::HttpStatus {
                 resource: "artifact",
@@ -265,8 +271,9 @@ impl RemoteRuntimeCatalogUpdater {
         client: &dyn HttpClient,
         catalog_path: &Path,
     ) -> Result<(), RemoteRuntimeUpdateError> {
-        let request = get_request(self.release.catalog_url.as_str(), "application/json")?;
-        let response = client.execute(&request)?;
+        let response = release_download(&self.release.catalog_url, |url| {
+            Ok(client.execute(&get_request(url, "application/json")?)?)
+        })?;
         if response.status() != 200 {
             return Err(RemoteRuntimeUpdateError::HttpStatus {
                 resource: "catalog",
@@ -384,6 +391,52 @@ fn public_download_config() -> Result<HttpClientConfig, RemoteRuntimeUpdateError
             Timeout::After(Duration::from_secs(60)),
             Timeout::After(Duration::from_secs(10 * 60)),
         )))
+}
+
+// GitHub release assets use one short-lived, signed CDN URL. Keep the transport's
+// automatic redirects disabled so every hop is checked before its DNS/socket work.
+// Other release hosts retain the existing no-redirect contract.
+fn release_download(
+    initial: &Url,
+    mut send: impl FnMut(&str) -> Result<HttpResponse, RemoteRuntimeUpdateError>,
+) -> Result<HttpResponse, RemoteRuntimeUpdateError> {
+    let response = send(initial.as_str())?;
+    if !matches!(response.status(), 301 | 302 | 303 | 307 | 308) {
+        return Ok(response);
+    }
+    let segments: Vec<_> = initial.path().split('/').collect();
+    let github_release = initial.host_str() == Some("github.com")
+        && initial.port_or_known_default() == Some(443)
+        && segments.len() == 7
+        && segments[3] == "releases"
+        && segments[4] == "download"
+        && segments.iter().skip(1).all(|part| !part.is_empty());
+    let location = response
+        .headers()
+        .iter()
+        .find(|header| header.name().eq_ignore_ascii_case("location"))
+        .and_then(|header| Url::parse(header.value()).ok());
+    let Some(next) = location.filter(|url| {
+        github_release
+            && url.scheme() == "https"
+            && url.host_str() == Some("release-assets.githubusercontent.com")
+            && url.port_or_known_default() == Some(443)
+            && url.username().is_empty()
+            && url.password().is_none()
+            && url.fragment().is_none()
+            && url.as_str().len() <= 16 * 1024
+    }) else {
+        return Err(RemoteRuntimeUpdateError::InvalidRelease(
+            "Remote release redirect is not the GitHub asset CDN".into(),
+        ));
+    };
+    let response = send(next.as_str())?;
+    if matches!(response.status(), 301 | 302 | 303 | 307 | 308) {
+        return Err(RemoteRuntimeUpdateError::InvalidRelease(
+            "Remote release exceeded its single CDN redirect".into(),
+        ));
+    }
+    Ok(response)
 }
 
 fn get_request(url: &str, accept: &str) -> Result<HttpRequest, RemoteRuntimeUpdateError> {

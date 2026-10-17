@@ -4,3 +4,5 @@ ash_rust_crate(
     name = "remote-server",
     crate_name = "ash_remote_server",
 )
+
+exports_files(["package.json"], visibility = ["//visibility:public"])

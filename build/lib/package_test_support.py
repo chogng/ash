@@ -68,7 +68,25 @@ def create_package_sources(root: Path) -> Path:
     """Own package resources and a prepared protocol without workspace cache state."""
     root.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(REPOSITORY_ROOT / "Cargo.toml", root / "Cargo.toml")
-    for name in ("extensions", "crates/skills/assets", "resources/product-services"):
+    for source in (
+        "livekit-server/runtime.json",
+        "crates/livekit-client/src/protocol.rs",
+        "crates/realtime-voice/src/recognizer.rs",
+    ):
+        protocol = root / source
+        protocol.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(REPOSITORY_ROOT / source, protocol)
+    livekit_lock = root / "third_party/livekit/runtime-lock.json"
+    livekit_lock.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(
+        REPOSITORY_ROOT / "third_party/livekit/runtime-lock.json", livekit_lock
+    )
+    for name in (
+        "extensions",
+        "crates/skills/assets",
+        "resources/product-services",
+        "build/resources",
+    ):
         shutil.copytree(
             REPOSITORY_ROOT / name,
             root / name,
@@ -150,6 +168,7 @@ def create_runtime_package(
     first_party_binary: Path | None = None,
     symbols_dir: Path | None = None,
     include_js_host: bool = False,
+    media_distribution: str = "legacy",
 ) -> Path:
     spec = target_spec(target)
     inputs = root / "runtime-inputs"
@@ -222,9 +241,19 @@ def create_runtime_package(
         if spec.is_windows
         else None,
         remote_host_binary=executable("ash-remote-host"),
-        voice_host_binary=executable("ash-voice-host"),
+        voice_host_binary=executable("ash-voice-host")
+        if media_distribution != "optional"
+        else None,
+        recognizer_binary=executable("ash-realtime-voice")
+        if media_distribution == "bundled"
+        else None,
+        livekit_client_binary=executable("ash-livekit-client")
+        if media_distribution == "bundled"
+        else None,
         collaboration_server_binary=executable("ash-collab-server"),
-        livekit={"executable": str(executable("livekit-server"))},
+        livekit={"executable": str(executable("livekit-server"))}
+        if media_distribution == "legacy"
+        else None,
         symbols_dir=symbols_dir,
     )
     return runtime

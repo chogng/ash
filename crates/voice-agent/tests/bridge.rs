@@ -96,6 +96,7 @@ async fn bridge(ending: Ending) {
         .issue_join("bridge-test", "assistant", permissions)
         .unwrap();
     let mut alice = MediaRoom::connect(
+        &provider_executable(),
         &alice_ticket.server_url,
         alice_ticket.token(),
         AudioPublication::Microphone,
@@ -103,17 +104,35 @@ async fn bridge(ending: Ending) {
     .await
     .unwrap();
     let room = MediaRoom::connect(
+        &provider_executable(),
         &agent_ticket.server_url,
         agent_ticket.token(),
         AudioPublication::Agent,
     )
     .await
     .unwrap();
-    timeout(Duration::from_secs(5), async {
+    timeout(Duration::from_secs(15), async {
         loop {
             if matches!(alice.next_event().await, Some(MediaEvent::TrackAdded { participant_id, .. }) if participant_id == "assistant") { break; }
         }
     }).await.unwrap();
+    // Track publication precedes the subscriber's ICE/DTLS readiness. Verify
+    // Alice can decode the agent track before the fixture emits its one short reply.
+    // Leave the agent room's membership events for VoiceAgent to consume.
+    timeout(Duration::from_secs(15), async {
+        let mut clock = tokio::time::interval(Duration::from_millis(10));
+        loop {
+            clock.tick().await;
+            room.send_audio(&[0; 480]).await.unwrap();
+            if matches!(timeout(Duration::from_millis(2), alice.next_audio()).await,
+                Ok(Some(frame)) if frame.participant_id == "assistant")
+            {
+                break;
+            }
+        }
+    })
+    .await
+    .unwrap();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let provider = ProviderId::new("fixture-voice").unwrap();
     let mut config = ModelProviderConfig::new(provider.clone());
@@ -440,4 +459,10 @@ async fn bridge(ending: Ending) {
             Some(AgentEvent::Closed { seconds: 3.0, .. })
         ));
     }
+}
+
+fn provider_executable() -> std::path::PathBuf {
+    std::env::var_os("ASH_LIVEKIT_CLIENT_PATH")
+        .map(std::path::PathBuf::from)
+        .expect("exact packaged provider executable")
 }

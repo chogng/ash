@@ -15,9 +15,6 @@ name = "ash_remote_server"
 path = "src/lib.rs"
 
 [dependencies]
-ash-state = { workspace = true }
-ash-protocol = { workspace = true }
-attachment-store = { workspace = true }
 exec-server-protocol = { workspace = true }
 ash-utils-home-dir = { workspace = true }
 ash-install-context = { workspace = true }
@@ -26,10 +23,12 @@ ash-package-store = { workspace = true }
 arg0 = { workspace = true }
 process-hardening = { workspace = true }
 build-identity = { workspace = true }
-ash-app-server = { workspace = true }
 ash-app-server-daemon = { workspace = true }
 
 [dev-dependencies]
+ash-app-server = { workspace = true }
+ash-state = { workspace = true }
+ash-protocol = { workspace = true }
 ash-core = { workspace = true }
 ash-thread-store = { workspace = true }
 core-api = { workspace = true }

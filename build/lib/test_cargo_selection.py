@@ -14,6 +14,22 @@ from build.lib.cargo_selection import (  # noqa: E402
 
 
 class CargoSelectionTests(unittest.TestCase):
+    @patch("build.lib.cargo_selection.subprocess.run")
+    def test_product_build_excludes_development_edges_but_test_targets_include_them(
+        self, run
+    ) -> None:
+        run.return_value = subprocess.CompletedProcess([], 0, "app v1\n")
+        for command, edges in [
+            (["build", "-p", "app"], "normal,build"),
+            (["check", "-p", "app"], "normal,build"),
+            (["check", "-p", "app", "--all-targets"], "normal,build,dev"),
+            (["build", "-p", "app", "--example", "probe"], "normal,build,dev"),
+            (["test", "-p", "app", "--", "--exact"], "normal,build,dev"),
+        ]:
+            with self.subTest(command=command):
+                cargo_command_packages("cargo", command, Path("/repository"))
+                self.assertEqual(run.call_args.args[0][3], edges)
+
     def test_forwards_only_dependency_selection_arguments(self) -> None:
         self.assertEqual(
             [

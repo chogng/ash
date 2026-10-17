@@ -43,6 +43,13 @@ def accept(bundle: Path, standalone: Path, report_path: Path) -> dict:
     expected = metadata["javascriptRuntime"]
     assert expected["kind"] == "hostProvidedNode" and expected["electronVersion"]
     assert "node" not in metadata["components"]
+    assert "remoteServer" not in metadata["components"]
+    assert not (resources / "bin" / spec.remote_server_name).exists()
+    assert not (resources / "ash-remote-runtimes").exists()
+    assert metadata["remoteRuntimeCatalog"]["url"].startswith("https://")
+    assert {"livekitClient", "recognizer", "voiceHost"}.issubset(metadata["components"])
+    assert "livekit" not in metadata["components"]
+    assert not (resources / "ash-resources/capabilities/media.json").exists()
     assert not (resources / "ash-resources/node").exists()
     assert not (resources / "ash-resources/licenses/node").exists()
     validate_package_directory(standalone, spec)
@@ -56,6 +63,8 @@ def accept(bundle: Path, standalone: Path, report_path: Path) -> dict:
         "electronVersion": expected["electronVersion"],
         "packageBuildId": metadata["buildId"],
         "backendBuildProfile": metadata["buildProfile"],
+        "mediaBundled": True,
+        "hostingServerOptional": True,
     }
     # Windows AF_UNIX has a 108-byte address limit, including the profile/run suffix.
     with tempfile.TemporaryDirectory(prefix="ash-") as temporary:

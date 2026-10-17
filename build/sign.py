@@ -29,9 +29,15 @@ def sign_package(package: Path, target: str, runner=None, *, verify_only=False) 
     spec = target_spec(target)
     if spec.is_linux:
         raise RuntimeError("Linux packages do not use embedded system signatures")
-    if not verify_only:
-        validate_package_directory(package, spec)
     metadata = json.loads((package / "ash-package.json").read_text(encoding="utf-8"))
+    if not verify_only:
+        kind = metadata.get("javascriptRuntime", {}).get("kind")
+        if kind in ("media", "livekit"):
+            from build.lib.media_package import validate_capability_package
+
+            validate_capability_package(package, spec, kind)
+        else:
+            validate_package_directory(package, spec)
     if metadata.get("target") != target or not isinstance(metadata.get("files"), dict):
         raise RuntimeError("Ash package metadata does not match the signing target")
     signed = {}

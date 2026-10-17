@@ -33,6 +33,7 @@ use crate::SequencedExtensionHostOutputEvent;
 
 mod client;
 mod invocation;
+mod product;
 
 use client::BackgroundClientWorker;
 pub use client::ExtensionBackgroundClientHandler;

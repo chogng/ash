@@ -2,7 +2,7 @@
 
 `ash-realtime-voice` 管理听写会话。App Server 校验发起连接的权限和麦克风占用，把转写通知送回该连接；`voice-host` 进程采集 16 kHz 或 24 kHz PCM 音频。本地及 API 听写可提供临时文本，订阅听写停止录音后上传并返回最终文字。
 
-默认 feature 只包含本地识别。App Server 显式启用 `cloud`，引入云端转写所需的模型供应商和 WebSocket 依赖。
+默认 feature 提供本地识别协调与识别客户端；Sherpa ONNX 的加载、流和推理由本 crate 的 `ash-realtime-voice` 程序（`host` feature）拥有，首次需要识别时启动，基础后端不链接推理库。可选包的安装与选择见 [Remote distribution](../../remote-server/README.md)。App Server 显式启用 `cloud`，引入云端转写所需的模型供应商和 WebSocket 依赖。
 
 Electron 的转写服务、对应型号、麦克风和语言在 Voice input 设置中管理；API 凭据仍由 Models 中的连接配置唯一持有。每个云端 API 服务目前只支持当前实现指定的单一型号，不提供任意模型 ID 输入。
 
@@ -42,7 +42,7 @@ Ash Code TUI 的 `/voice` 通过 App Server 把识别文字填入当前草稿，
 
 云端听写明确选择供应商。OpenAI 使用 `gpt-live-transcribe`、24 kHz PCM 和 Realtime 转写协议；xAI 使用 `grok-voice-transcribe-2.0`、16 kHz PCM 和 STT WebSocket 协议。两者分别使用对应供应商的直接 API 凭据，与当前文字模型接入和订阅凭据无关。停止时提交音频并等待最终文本；App Server 的停止响应也携带最终文本，使响应和通知交错到达时不会丢失输入。Electron 桌面的 `dictation.backend` 和 Rust 桌面的 `[gui].dictationBackend` 选择 `local` 或 `cloud`；云端供应商分别由 `dictation.cloudProvider` 和 `[gui].dictationCloudProvider` 选择 `openAi` 或 `xai`，默认 OpenAI。云端语音对话另由 `voice-agent`、`model-provider` 和 GPT-Live 负责，目前没有通过本 crate 启动。
 
-识别器目前在 App Server 的会话工作线程中运行，麦克风采集位于独立的 `voice-host` 进程。一个 App Server 进程同时只允许一条听写会话；App Server 还阻止听写与通话同时占用麦克风。连接关闭会停止其听写会话。
+识别器运行在本机独立的 `ash-realtime-voice` 进程中，App Server 的会话工作线程持有识别客户端，麦克风采集位于独立的 `voice-host` 进程。一个 App Server 进程同时只允许一条听写会话；App Server 还阻止听写与通话同时占用麦克风。连接关闭会停止其听写会话。
 
 代码入口按职责分开：`src/lib.rs` 管会话归属、启停和最终文本；`src/local.rs` 管本地流式识别；`src/cloud.rs` 管 OpenAI 云端转写；`src/xai.rs` 管 xAI 云端转写；`src/subscription.rs` 管订阅录音与停止后上传；`src/models.rs` 管进程所属的模型操作、共享快照及取消；`src/model_package.rs` 管模型安装、文件校验与识别器加载。准备状态按检查、每文件真实下载字节数、加载和最终结果报告，模型准备本身不获取麦克风。
 

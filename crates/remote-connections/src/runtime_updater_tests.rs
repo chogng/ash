@@ -7,6 +7,7 @@ use std::sync::Mutex;
 use ash_http_client::HttpBodySink;
 use ash_http_client::HttpClient;
 use ash_http_client::HttpClientError;
+use ash_http_client::HttpHeader;
 use ash_http_client::HttpRequest;
 use ash_http_client::HttpResponse;
 use ash_remote::RemoteArchitecture;
@@ -33,6 +34,166 @@ const ARTIFACT_URL: &str =
     "https://downloads.example/releases/0.1.0/artifacts/ash-x86_64-unknown-linux-gnu.tar.gz";
 const TARGET: RemotePlatform =
     RemotePlatform::linux(RemoteArchitecture::X86_64, RemoteLinuxLibc::Gnu);
+
+#[test]
+fn github_release_follows_only_one_https_asset_cdn_hop() {
+    let initial =
+        url::Url::parse("https://github.com/chogng/ash/releases/download/remote-test/catalog.json")
+            .unwrap();
+    let cdn = "https://release-assets.githubusercontent.com/asset?signature=fixture";
+    let mut requests = Vec::new();
+    let response = super::release_download(&initial, |url| {
+        requests.push(url.to_owned());
+        Ok(if url == initial.as_str() {
+            HttpResponse::new(302, vec![HttpHeader::new("Location", cdn)], Vec::new())
+        } else {
+            HttpResponse::new(200, Vec::new(), b"catalog".to_vec())
+        })
+    })
+    .unwrap();
+    assert_eq!(requests, vec![initial.as_str(), cdn]);
+    assert_eq!(response.body(), b"catalog");
+
+    for destination in [
+        "https://127.0.0.1/asset",
+        "https://release-assets.githubusercontent.com.evil.test/asset",
+        "http://release-assets.githubusercontent.com/asset",
+        "https://secret@release-assets.githubusercontent.com/asset",
+        "https://release-assets.githubusercontent.com:444/asset",
+    ] {
+        let mut calls = 0;
+        assert!(
+            super::release_download(&initial, |_| {
+                calls += 1;
+                Ok(HttpResponse::new(
+                    302,
+                    vec![HttpHeader::new("Location", destination)],
+                    Vec::new(),
+                ))
+            })
+            .is_err()
+        );
+        assert_eq!(
+            calls, 1,
+            "the denied destination must never reach DNS/transport"
+        );
+    }
+    let mut calls = 0;
+    assert!(
+        super::release_download(&initial, |_| {
+            calls += 1;
+            Ok(HttpResponse::new(
+                302,
+                vec![HttpHeader::new("Location", cdn)],
+                Vec::new(),
+            ))
+        })
+        .is_err()
+    );
+    assert_eq!(calls, 2);
+    let other = url::Url::parse(CATALOG_URL).unwrap();
+    let mut calls = 0;
+    assert!(
+        super::release_download(&other, |_| {
+            calls += 1;
+            Ok(HttpResponse::new(
+                302,
+                vec![HttpHeader::new("Location", cdn)],
+                Vec::new(),
+            ))
+        })
+        .is_err()
+    );
+    assert_eq!(calls, 1);
+}
+
+#[test]
+#[ignore = "requires an isolated HTTPS release, trusted fixture CA and OpenSSH host"]
+fn https_release_download_installs_and_reuses_a_real_ssh_runtime() {
+    use crate::RemoteRuntimeInstallDisposition;
+    use crate::RemoteRuntimeInstallRoot;
+    use crate::SshRemoteRuntimeInstaller;
+    use ash_http_client::CertificateBundle;
+    use ash_http_client::HttpClientConfig;
+    use ash_http_client::ProxyPolicy;
+    use ash_http_client::TlsPolicy;
+    use ash_http_client::UreqHttpClient;
+    use ash_remote::SshHost;
+
+    let input = |name| std::env::var(name).unwrap_or_else(|_| panic!("missing {name}"));
+    let root = std::path::PathBuf::from(input("ASH_TEST_REMOTE_ROOT"));
+    let release = RemoteRuntimeCatalogRelease::new(
+        input("ASH_TEST_REMOTE_CATALOG_URL"),
+        input("ASH_TEST_REMOTE_CATALOG_SHA256"),
+    )
+    .unwrap();
+    let platform = RemotePlatform::from_target_triple(&input("ASH_TEST_REMOTE_TARGET")).unwrap();
+    let client = UreqHttpClient::with_config(
+        HttpClientConfig::new()
+            .with_proxy_policy(ProxyPolicy::Direct)
+            .with_streaming_response_body_limit(
+                ash_http_client::ResponseBodyLimit::new(
+                    std::num::NonZeroUsize::new(1024 * 1024 * 1024).unwrap(),
+                )
+                .unwrap(),
+            )
+            .with_tls_policy(TlsPolicy::CustomOnly(
+                CertificateBundle::from_der(vec![fs::read(input("ASH_TEST_REMOTE_CA")).unwrap()])
+                    .unwrap(),
+            )),
+    )
+    .unwrap();
+    let updater = RemoteRuntimeCatalogUpdater::new(
+        release,
+        RemoteRuntimeDownloadCache::new(root.join("download-cache")).unwrap(),
+    );
+    let mut progress = Vec::new();
+    let artifact = updater
+        .fetch_for_with_client(platform, &client, |event| progress.push(event))
+        .unwrap();
+    assert!(progress.contains(&RemoteRuntimeDownloadProgress::Complete {
+        disposition: RemoteRuntimeDownloadDisposition::Downloaded,
+    }));
+    progress.clear();
+    assert_eq!(
+        updater
+            .fetch_for_with_client(platform, &client, |event| progress.push(event))
+            .unwrap(),
+        artifact
+    );
+    assert!(!progress.contains(&RemoteRuntimeDownloadProgress::DownloadingCatalog));
+    assert!(!progress.iter().any(|event| matches!(
+        event,
+        RemoteRuntimeDownloadProgress::DownloadingArtifact { .. }
+    )));
+    let installer =
+        SshRemoteRuntimeInstaller::new(SshHost::parse(input("ASH_TEST_REMOTE_HOST")).unwrap())
+            .with_ssh_executable(input("ASH_TEST_REMOTE_SSH"))
+            .with_install_root(
+                RemoteRuntimeInstallRoot::parse(root.join("installed").to_str().unwrap()).unwrap(),
+            );
+    assert_eq!(installer.probe_platform().unwrap(), platform);
+    let installed = installer.install(&artifact).unwrap();
+    assert_eq!(
+        installed.disposition(),
+        RemoteRuntimeInstallDisposition::Installed
+    );
+    let reused = installer.install(&artifact).unwrap();
+    assert_eq!(
+        reused.disposition(),
+        RemoteRuntimeInstallDisposition::Reused
+    );
+    assert_eq!(installed.runtime(), reused.runtime());
+    fs::write(
+        root.join("installed-runtime.json"),
+        serde_json::to_vec_pretty(&json!({
+            "runtime": installed.runtime().executable(), "sha256": installed.archive_sha256(),
+            "httpsDownload": true, "downloadCacheReused": true, "sshInstallReused": true,
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+}
 
 #[test]
 fn release_and_cache_reject_ambiguous_or_untrusted_locations() {

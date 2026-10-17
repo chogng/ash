@@ -146,8 +146,37 @@ class SourceRunnerTests(unittest.TestCase):
             check=False,
         )
 
-    def test_build_binaries_uses_one_cargo_invocation(self) -> None:
-        binaries = ["ash", "ash-app-server", "ash-voice-host"]
+    def test_local_media_programs_build_separately_from_core(self) -> None:
+        build_all = build.build_binaries
+        names = [
+            "ash",
+            "ash-app-server",
+            "ash-livekit-client",
+            "ash-realtime-voice",
+            "ash-voice-host",
+        ]
+        groups = []
+
+        def compile_group(group, environment):
+            groups.append(group)
+            return 0, {name: Path("/built") / name for name in group}
+
+        with patch.object(build, "build_binaries", side_effect=compile_group):
+            status, outputs = build_all(names, {})
+        self.assertEqual(status, 0)
+        self.assertEqual(set(outputs), set(names))
+        self.assertEqual(
+            groups,
+            [
+                ["ash", "ash-app-server"],
+                ["ash-livekit-client"],
+                ["ash-realtime-voice"],
+                ["ash-voice-host"],
+            ],
+        )
+
+    def test_build_core_binaries_uses_one_cargo_invocation(self) -> None:
+        binaries = ["ash", "ash-app-server"]
         with (
             tempfile.TemporaryDirectory() as temporary,
             patch.object(
@@ -201,7 +230,7 @@ class SourceRunnerTests(unittest.TestCase):
 
             self.assertEqual(
                 build.build_binaries(binaries, {"CARGO_BUILD_JOBS": "4"}),
-                (0, {"ash": first, "ash-app-server": second, "ash-voice-host": third}),
+                (0, {"ash": first, "ash-app-server": second}),
             )
 
         subprocess_popen.assert_called_once_with(
@@ -226,12 +255,6 @@ class SourceRunnerTests(unittest.TestCase):
                 "ash-app-server",
                 "--bin",
                 "ash-app-server",
-                "--package",
-                "ash-voice-host",
-                "--bin",
-                "ash-voice-host",
-                "--features",
-                "ash-voice-host/host",
             ],
             cwd=build.REPOSITORY_ROOT,
             env={
@@ -387,6 +410,8 @@ class SourceRunnerTests(unittest.TestCase):
             "ash-app-server-daemon": root / "ash-app-server-daemon.exe",
             "ash-code-mode-host": root / "ash-code-mode-host.exe",
             "ash-voice-host": root / "ash-voice-host.exe",
+            "ash-livekit-client": root / "ash-livekit-client.exe",
+            "ash-realtime-voice": root / "ash-realtime-voice.exe",
             "tgrep": root / "tgrep.exe",
         }
 

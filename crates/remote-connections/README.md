@@ -48,7 +48,9 @@ macOS/Linux package target。当前 POSIX 实现拒绝 Windows OpenSSH 远端。
 
 `RemoteRuntimeCatalogRelease` 表达由签名产品发布认证的精确 `HTTPS catalog.json URL + SHA-256`，
 不是接受任意 URL 的下载许可。`RemoteRuntimeCatalogUpdater` 通过共享 `ash-http-client` 直连公共
-Internet，拒绝重定向、URL 凭据、query、fragment 和私网解析；catalog 限制为 1 MiB，artifact
+Internet，拒绝任意重定向、入口 URL 凭据、query、fragment 和私网解析；GitHub Release 仅允许一次
+跳转到 `release-assets.githubusercontent.com` 的 HTTPS 签名 URL，下一跳仍须通过公共 IP 校验。
+catalog 限制为 1 MiB，artifact
 压缩大小限制为 1 GiB、声明展开大小限制为 4 GiB。它把目录和 artifact 写入
 `<cache>/remote-runtime-catalogs/<catalog-sha256>/`，缓存命中仍重新验证完整 archive。新下载先进入
 同目录临时文件，完成精确长度、SHA-256、tar entry、package metadata 和展开大小检查后才原子发布。

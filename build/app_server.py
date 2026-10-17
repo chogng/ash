@@ -15,7 +15,6 @@ from build.lib.targets import TARGETS, default_target
 from build.lib.bubblewrap import resolve_bubblewrap
 from build.lib.package_binaries import build_binaries
 from build.lib.package import build_package_directory, load_protocol_metadata
-from build.lib.livekit import resolve_livekit
 from build.lib.node import resolve_node
 from build.lib.ripgrep import resolve_ripgrep
 from build.lib.tgrep import resolve_tgrep
@@ -50,6 +49,41 @@ def parse_arguments(arguments: Optional[Sequence[str]] = None) -> argparse.Names
         "--exec-server-bin", type=Path, help="Prebuilt execution service executable."
     )
     parser.add_argument("--windows-sandbox-service-bin", type=Path)
+    parser.add_argument(
+        "--media-distribution",
+        choices=("optional", "bundled"),
+        default="optional",
+        help="Desktop bundles media; remote and standalone backends install it on demand.",
+    )
+    parser.add_argument(
+        "--recognizer-bin", type=Path, help="Prebuilt local recognizer."
+    )
+    parser.add_argument(
+        "--livekit-client-bin", type=Path, help="Prebuilt local LiveKit client."
+    )
+    parser.add_argument(
+        "--capability-archive-dir",
+        type=Path,
+        help="Persistent output for independent capability release archives.",
+    )
+    parser.add_argument(
+        "--livekit-package-dir",
+        type=Path,
+        help="Separate on-demand local call server package output.",
+    )
+    parser.add_argument(
+        "--livekit-package-url",
+        help="HTTPS release URL for the standalone LiveKit package archive.",
+    )
+    parser.add_argument(
+        "--media-package-dir",
+        type=Path,
+        help="Separate on-demand media package output.",
+    )
+    parser.add_argument(
+        "--media-package-url",
+        help="HTTPS release URL for the standalone media package archive.",
+    )
     parser.add_argument(
         "--windows-sandbox-bin",
         type=Path,
@@ -231,13 +265,22 @@ def _prepare_builtin_extensions() -> None:
 
 
 def build_package(args: argparse.Namespace) -> int:
+    media_distribution = args.media_distribution
+    if media_distribution == "bundled" and (
+        args.media_package_dir is not None or args.media_package_url is not None
+    ):
+        raise ValueError("Bundled media cannot also declare an on-demand media package")
     target = args.target or default_target()
     spec = TARGETS[target]
+    if media_distribution == "bundled":
+        from build.lib.sherpa import SUPPORTED_TARGETS
+
+        if target not in SUPPORTED_TARGETS:
+            raise ValueError(f"Bundled media is not supported for {target}")
     generate_protocol(root=REPOSITORY_ROOT, cargo=args.cargo)
     _prepare_builtin_extensions()
     protocol_metadata = load_protocol_metadata(REPOSITORY_ROOT)
     inputs = {
-        "ash-voice-host": None,
         "ash-collab-server": None,
         "ash-app-server": args.server_bin,
         "ash-app-server-daemon": args.app_server_daemon_bin,
@@ -255,6 +298,12 @@ def build_package(args: argparse.Namespace) -> int:
         "ash-remote-server": args.remote_server_bin,
         "ash-exec-server": args.exec_server_bin,
     }
+    if media_distribution == "bundled":
+        inputs["ash-realtime-voice"] = args.recognizer_bin
+        inputs["ash-voice-host"] = None
+        inputs["ash-livekit-client"] = args.livekit_client_bin
+    elif media_distribution != "optional":
+        raise ValueError("Unknown media distribution")
     if args.external_js_ext_bin is not None:
         inputs["ash-external-js-ext"] = args.external_js_ext_bin
     if spec.is_windows:
@@ -309,7 +358,51 @@ def build_package(args: argparse.Namespace) -> int:
         cargo=args.cargo,
         cargo_profile=args.cargo_profile,
     )
-    livekit = {"executable": str(resolve_livekit(spec.target))}
+    from build.lib.media_package import build_livekit_package
+
+    output = args.package_dir.expanduser().resolve()
+    livekit_package = build_livekit_package(
+        args.livekit_package_dir or output.with_name(output.name + "-livekit"),
+        REPOSITORY_ROOT,
+        spec,
+        args.cargo_profile,
+        args.livekit_package_url,
+        archive_dir=args.capability_archive_dir,
+    )
+    from build.lib.media_package import capability_release
+
+    media_package = None
+    if media_distribution == "optional":
+        from build.lib.media_package import build_media_package
+        from build.lib.sherpa import SUPPORTED_TARGETS
+
+        if spec.target in SUPPORTED_TARGETS:
+            media_root = build_media_package(
+                args.media_package_dir or output.with_name(output.name + "-media"),
+                REPOSITORY_ROOT,
+                spec,
+                cargo=args.cargo,
+                cargo_profile=args.cargo_profile,
+                livekit_client=args.livekit_client_bin,
+                recognizer=args.recognizer_bin,
+                symbols_dir=args.symbols_dir,
+            )
+            media_package = capability_release(
+                media_root,
+                spec,
+                args.cargo_profile,
+                "media",
+                args.media_package_url,
+                archive_dir=args.capability_archive_dir,
+            )
+        elif (
+            args.media_package_dir is not None
+            or args.livekit_client_bin is not None
+            or args.recognizer_bin is not None
+        ):
+            raise ValueError(
+                f"Optional media package is not supported for {spec.target}"
+            )
     version = read_workspace_version(REPOSITORY_ROOT / "Cargo.toml")
     output = args.package_dir.expanduser().resolve()
     build_package_directory(
@@ -328,7 +421,8 @@ def build_package(args: argparse.Namespace) -> int:
         tgrep,
         node,
         bubblewrap,
-        livekit=livekit,
+        livekit_package=livekit_package,
+        media_package=media_package,
         git_extension_binary=binaries["ash-git-extension"],
         markdown_math_binary=binaries["ash-markdown-math"],
         markdown_extension_binary=binaries["ash-markdown-language-features"],
@@ -338,7 +432,15 @@ def build_package(args: argparse.Namespace) -> int:
         dev_container_provider_binary=binaries["ash-dev-container-provider"],
         lldb_extension_binary=binaries["ash-debug-lldb"],
         remote_host_binary=binaries["ash-remote-host"],
-        voice_host_binary=binaries["ash-voice-host"],
+        voice_host_binary=binaries.get("ash-voice-host")
+        if media_distribution == "bundled"
+        else None,
+        livekit_client_binary=binaries.get("ash-livekit-client")
+        if media_distribution == "bundled"
+        else None,
+        recognizer_binary=binaries.get("ash-realtime-voice")
+        if media_distribution == "bundled"
+        else None,
         collaboration_server_binary=binaries["ash-collab-server"],
         protocol_metadata=protocol_metadata,
         update_public_key=args.update_public_key,

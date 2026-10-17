@@ -25,7 +25,7 @@ class CiImpactTests(unittest.TestCase):
             package("ash-cli", "ash-cli", "shared"),
             package("ash-app-server", "crates/app-server", "shared"),
             package("ash-app-server-daemon", "crates/app-server-daemon"),
-            package("ash-remote-server", "crates/remote-server"),
+            package("ash-remote-server", "remote-server"),
             package("shared", "crates/shared", "leaf"),
             package("leaf", "crates/leaf"),
             package("unrelated", "crates/unrelated"),
@@ -38,6 +38,7 @@ class CiImpactTests(unittest.TestCase):
     def test_product_and_transitive_dependency_changes_run_tui(self) -> None:
         for path in (
             "crates/tui/src/lib.rs",
+            "remote-server/src/lib.rs",
             "crates/leaf/src/lib.rs",
             "crates/app-server/src/lib.rs",
             "crates/tui/src/view.snap",
@@ -64,7 +65,7 @@ class CiImpactTests(unittest.TestCase):
             "build/prepare.py",
             "build/remote.py",
             "build/sign.py",
-            "remote/package.json",
+            "remote-server/package.json",
             "third_party/ripgrep/runtime-lock.json",
             "crates/deleted/src/lib.rs",
             "build/code/run.py",

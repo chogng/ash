@@ -3980,7 +3980,10 @@ impl ModelService for AppServerSteeringModel {
 #[test]
 fn completed_turn_replays_without_invoking_the_model_twice() {
     let model = Arc::new(CountingModel::default());
-    let server = server_with_model(model.clone());
+    let home = tempfile::tempdir().unwrap();
+    let server = server_with_model(model.clone()).with_home(Arc::new(ash_home::AshHome::new(
+        ash_utils_absolute_path::AbsolutePathBuf::from_absolute(home.path()).unwrap(),
+    )));
     let mut connection = server.connection();
     initialize(&server, &mut connection);
     let session = create_session(&server, &mut connection, 2, "session");
@@ -4013,6 +4016,10 @@ fn completed_turn_replays_without_invoking_the_model_twice() {
     );
     wait_for_latest_turn(&server, thread_id, TurnStatus::Completed);
     assert_eq!(model.calls.load(Ordering::Relaxed), 1);
+    assert!(
+        !home.path().join("capabilities").exists(),
+        "ordinary Agent turns must not install optional media or hosting packages"
+    );
     // Committed state becomes visible before its asynchronous notification is published.
     let deadline = Instant::now() + Duration::from_secs(2);
     loop {
@@ -6354,6 +6361,35 @@ fn only_product_host_jsonl_transport_accepts_host_capabilities() {
     let host_response: serde_json::Value =
         serde_json::from_slice(host_output.trim_ascii_end()).unwrap();
     assert!(host_response["result"].is_object());
+}
+
+#[test]
+fn remote_host_keeps_editor_authority_but_rejects_local_media() {
+    let server = server();
+    let input = concat!(
+        "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"clientInfo\":{\"name\":\"remote-test\",\"version\":\"1\"},\"capabilities\":{\"directoryGrantsHost\":{\"version\":1}}}}\n",
+        "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"session/list\",\"params\":{}}\n",
+        "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"call/start\",\"params\":{\"resourceId\":\"call\",\"operationId\":\"start\",\"deviceId\":\"device\",\"deployment\":{\"type\":\"local\"}}}\n",
+        "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"dictation/options\",\"params\":{\"backend\":{\"type\":\"local\",\"modelId\":\"fixture\"}}}\n",
+        "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"voice/stop\",\"params\":{\"resourceId\":\"voice\"}}\n"
+    );
+    let mut output = Vec::new();
+    server
+        .serve_remote_jsonl(Cursor::new(input.as_bytes()), &mut output)
+        .unwrap();
+    let replies: Vec<serde_json::Value> = String::from_utf8(output)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    for id in 1..=5 {
+        let reply = replies.iter().find(|reply| reply["id"] == id).unwrap();
+        if id <= 2 {
+            assert!(reply.get("result").is_some(), "{reply}");
+        } else {
+            assert_eq!(reply["error"]["code"], -32073, "{reply}");
+        }
+    }
 }
 
 #[test]

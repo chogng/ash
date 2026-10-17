@@ -9,6 +9,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import uuid
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -349,6 +350,8 @@ def development_binary_inputs(spec: TargetSpec) -> dict[str, None]:
             "ash-dev-container-provider",
             "ash-debug-lldb",
             "ash-voice-host",
+            "ash-livekit-client",
+            "ash-realtime-voice",
             "ash-collab-server",
         ]
     )
@@ -387,7 +390,67 @@ def prepare_development_package(args: argparse.Namespace, *, root: Path = ROOT) 
         cargo_profile=PROFILE,
         host_build=True,
     )
-    livekit = {"executable": str(resolve_livekit(target, root=root))}
+    from build.lib.media_package import assemble_capability_package
+
+    livekit_binary = resolve_livekit(target, root=root)
+    livekit_root = root / ".build/livekit-capability"
+    # Content-address the development companion so a running generation is never replaced.
+    livekit_root = (
+        livekit_root / hashlib.sha256(livekit_binary.read_bytes()).hexdigest()
+    )
+    if not livekit_root.exists():
+        assemble_capability_package(
+            livekit_root,
+            root,
+            spec,
+            {"livekit-server": livekit_binary},
+            PROFILE,
+            "livekit",
+        )
+    livekit_identity = json.loads((livekit_root / "ash-package.json").read_text())
+    livekit_package = {
+        "schemaVersion": 1,
+        "target": target,
+        "buildId": livekit_identity["buildId"],
+        "source": {"kind": "directory", "path": str(livekit_root)},
+    }
+    media_package = None
+    if args.javascript_runtime == "packaged-node":
+        media_binaries = {
+            name: binaries[name]
+            for name in ("ash-livekit-client", "ash-realtime-voice", "ash-voice-host")
+        }
+        media_store = root / ".build/media-capability"
+        media_store.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(
+            prefix=".assemble-", dir=media_store
+        ) as temporary:
+            staged_media = assemble_capability_package(
+                Path(temporary) / "package",
+                root,
+                spec,
+                media_binaries,
+                PROFILE,
+                "media",
+            )
+            media_identity = json.loads((staged_media / "ash-package.json").read_text())
+            media_root = media_store / media_identity["buildId"].removeprefix("sha256:")
+            if not media_root.exists():
+                try:
+                    staged_media.rename(media_root)
+                except OSError:
+                    # A concurrent preparation may have published the same immutable generation.
+                    if not media_root.is_dir():
+                        raise
+                    from build.lib.media_package import validate_media_package
+
+                    validate_media_package(media_root, spec)
+        media_package = {
+            "schemaVersion": 1,
+            "target": target,
+            "buildId": media_identity["buildId"],
+            "source": {"kind": "directory", "path": str(media_root)},
+        }
     ripgrep = resolve_ripgrep(
         spec,
         root / "third_party/ripgrep/runtime-lock.json",
@@ -437,7 +500,7 @@ def prepare_development_package(args: argparse.Namespace, *, root: Path = ROOT) 
         root / "resources/product-services",
         *(root / license["source"] for license in LAYOUT["licenses"]),
         *binaries.values(),
-        Path(livekit["executable"]),
+        livekit_binary,
         ripgrep.executable,
         tgrep.executable,
     ]
@@ -502,9 +565,18 @@ def prepare_development_package(args: argparse.Namespace, *, root: Path = ROOT) 
             dev_container_provider_binary=binaries["ash-dev-container-provider"],
             lldb_extension_binary=binaries["ash-debug-lldb"],
             remote_host_binary=binaries["ash-remote-host"],
-            voice_host_binary=binaries["ash-voice-host"],
+            voice_host_binary=binaries["ash-voice-host"]
+            if args.javascript_runtime == "host-provided-node"
+            else None,
+            livekit_client_binary=binaries["ash-livekit-client"]
+            if args.javascript_runtime == "host-provided-node"
+            else None,
+            recognizer_binary=binaries["ash-realtime-voice"]
+            if args.javascript_runtime == "host-provided-node"
+            else None,
             collaboration_server_binary=binaries["ash-collab-server"],
-            livekit=livekit,
+            livekit_package=livekit_package,
+            media_package=media_package,
             remote_runtime_bundle=args.remote_runtime_bundle,
             remote_runtime_release=remote_release,
         )

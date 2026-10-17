@@ -2,7 +2,7 @@ use ash_secrets::SecretValue;
 use livekit_api::MediaPermissions;
 use livekit_api::MediaService;
 use livekit_client::AudioPublication;
-use livekit_client::MediaRoom;
+use livekit_client::backend::MediaRoom;
 use std::net::TcpListener;
 use std::net::TcpStream;
 use std::net::UdpSocket;

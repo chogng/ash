@@ -32,6 +32,31 @@ fn app_server_accepts_listening_and_rejects_daemon_management() {
 }
 
 #[test]
+fn remote_diagnostic_mode_accepts_only_its_selected_product_manifest() {
+    assert_eq!(
+        parse_arguments(&[
+            "--remote-stdio".into(),
+            "--product-services".into(),
+            "/selected/package/services.json".into(),
+        ])
+        .unwrap(),
+        (
+            Command::RemoteStdio,
+            Some("/selected/package/services.json".into())
+        )
+    );
+    assert!(parse_arguments(&["--remote-stdio".into(), "--product-services".into()]).is_err());
+    assert!(
+        parse_arguments(&[
+            "--remote-stdio".into(),
+            "--listen".into(),
+            "ws://127.0.0.1:0".into(),
+        ])
+        .is_err()
+    );
+}
+
+#[test]
 fn websocket_command_requires_loopback_token_auth_and_startup_record() {
     assert_eq!(
         parse_arguments(&[

@@ -14,7 +14,7 @@ ash-remote-server connect
 
 An execution connection uses `ash-remote-server execution-connect ENVIRONMENT` with the same
 absolute `ASH_WORKSPACE_ROOT`. The host-authenticated channel carries the versioned
-[`exec-server-protocol`](../exec-server-protocol/README.md), rather than Agent RPC. Its profile
+[`exec-server-protocol`](../crates/exec-server-protocol/README.md), rather than Agent RPC. Its profile
 host retains file authority and command resources across connector exits; active commands keep
 the managed host alive. The environment ID cannot be rebound to another canonical directory.
 This endpoint does not create Agent history. After history ownership transfers, the managed
@@ -23,16 +23,20 @@ runtime, and it refuses Agent RPC connections. Before transfer it retains its ex
 services. Desktop's default Remote Agent routing has not yet switched to the local Agent.
 
 The direct `app-server --listen stdio://` command remains available for diagnostics and
-compatibility, but it is process-scoped and cannot preserve a PTY after its stdio process exits.
-It cannot reopen an Agent writer for a transferred profile.
+compatibility. The connector hands stdio to the selected independent `ash-app-server` executable
+without linking the backend. This mode retains its process-scoped lifecycle without starting
+the shared profile host or queue, and cannot preserve a PTY after its stdio process exits.
+It cannot reopen an Agent writer for a transferred profile. On POSIX hosts the connector replaces
+itself with the backend so SSH signals and the backend exit status pass through unchanged.
 
 ## History ownership transfer
 
 The product host can use these internal operations with its selected profile and exact runtime:
 
 1. Local `ash-app-server history-identity` returns the persistent receiver identity.
-2. Remote `ash-remote-server history-export RECEIVER` durably freezes history, stops the profile
-   backend, and writes a bounded binary archive to stdout. Export failure leaves the source frozen;
+2. Remote `ash-remote-server history-export RECEIVER` delegates to the selected backend's
+   `history-export RECEIVER` command, which durably freezes history, stops the profile backend,
+   and writes a bounded binary archive to stdout. Export failure leaves the source frozen;
    the same receiver can retry. The source copy remains readable and cannot transfer to a different receiver.
 3. Local `ash-app-server history-import HOST` stops the local backend, reads the archive from
    stdin, and writes a JSON import receipt only after the complete SQLite transaction commits.
@@ -50,7 +54,7 @@ These operations are implemented and tested across real connector/backend proces
 substitute. Desktop connection acquisition does not yet invoke them automatically, and existing
 user profiles are not migrated just by running or building the product.
 
-`ASH_WORKSPACE_ROOT` must be absolute. [`ash-utils-home-dir`](../utils/home-dir/README.md) resolves `ASH_HOME`
+`ASH_WORKSPACE_ROOT` must be absolute. [`ash-utils-home-dir`](../crates/utils/home-dir/README.md) resolves `ASH_HOME`
 on the remote machine, defaulting to that user's `~/.ash`. An invalid override fails startup.
 The retired `ASH_PROFILE_ROOT` variable must be renamed. If a former platform-specific
 `remote-server` data directory exists, startup requires an explicit `ASH_HOME` selection before
@@ -60,6 +64,8 @@ The canonical runtime package includes this binary. The connection layer selects
 immutable path and invokes `connect`. The connector selects the package's sibling independent
 `ash-app-server` executable, or the absolute executable selected by `ASH_APP_SERVER_PATH`.
 It no longer starts itself as a daemon.
+The connector's production dependencies contain neither App Server nor the history store;
+backend dependencies are used only by its integration tests.
 
 ## Execution path
 
@@ -79,7 +85,7 @@ Empty connections and different directories share that process. The endpoint is 
 the selected runtime's backend content identity controls generation replacement. Selecting a
 different executable replaces the profile process and interrupts its connections and terminals.
 Rebuilding an executable at the same path is detected by its content identity.
-[`ash-app-server-daemon`](../app-server-daemon/README.md) owns guarded startup, process identity,
+[`ash-app-server-daemon`](../crates/app-server-daemon/README.md) owns guarded startup, process identity,
 package leases, endpoint security, and health checks. The daemon remains alive while clients,
 PTYs, execution commands, queue work, or automation require it, and otherwise exits after a bounded idle period
 (`ASH_LOCAL_APP_SERVER_IDLE_TIMEOUT_MILLIS` in targeted tests).

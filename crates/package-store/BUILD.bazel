@@ -3,6 +3,7 @@ load("//:defs.bzl", "ash_rust_binary", "ash_rust_crate")
 ash_rust_crate(
     name = "package-store",
     crate_name = "ash_package_store",
+    crate_features = ["installation"],
 )
 
 ash_rust_binary(

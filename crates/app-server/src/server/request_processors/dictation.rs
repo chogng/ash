@@ -73,6 +73,13 @@ impl<'a> DictationRequestProcessor<'a> {
 }
 
 impl<'a> DictationRequestProcessor<'a> {
+    fn profile_root(&self) -> Result<std::path::PathBuf, RpcError> {
+        self.home
+            .as_ref()
+            .map(|home| home.root().to_owned())
+            .ok_or_else(|| dictation_error("Ash home is unavailable".into()))
+    }
+
     pub(super) fn dictation_options(
         &self,
         connection: &ConnectionState,
@@ -83,9 +90,15 @@ impl<'a> DictationRequestProcessor<'a> {
         let input_devices = if params.audio_input.is_some() {
             Vec::new()
         } else {
-            let audio_host =
-                super::call_runtime::executable("ASH_VOICE_HOST_PATH", "ash-voice-host")
-                    .map_err(dictation_error)?;
+            let audio_host = self
+                .calls
+                .audio_executable(
+                    self.home
+                        .as_ref()
+                        .ok_or_else(|| dictation_error("Ash home is unavailable".into()))?
+                        .root(),
+                )
+                .map_err(dictation_error)?;
             self.dictation
                 .input_devices(&audio_host)
                 .map_err(dictation_error)?
@@ -111,7 +124,7 @@ impl<'a> DictationRequestProcessor<'a> {
         connection: &ConnectionState,
         params: &Value,
     ) -> Result<Value, RpcError> {
-        if !connection.allows_product_host_capabilities() {
+        if !connection.allows_local_media() {
             return Err(RpcError::new(
                 -32073,
                 AppServerErrorName::PermissionRequired,
@@ -141,7 +154,13 @@ impl<'a> DictationRequestProcessor<'a> {
         let audio_host = if params.audio_input.is_some() {
             std::path::PathBuf::new()
         } else {
-            super::call_runtime::executable("ASH_VOICE_HOST_PATH", "ash-voice-host")
+            self.calls
+                .audio_executable(
+                    self.home
+                        .as_ref()
+                        .ok_or_else(|| dictation_error("Ash home is unavailable".into()))?
+                        .root(),
+                )
                 .map_err(dictation_error)?
         };
         let request = match params.backend {
@@ -161,6 +180,8 @@ impl<'a> DictationRequestProcessor<'a> {
             }
             DictationBackend::Local { model_id } => {
                 DictationRequest::Local(LocalDictationRequest {
+                    home: self.profile_root()?,
+                    media_network: self.calls.download_network().map_err(dictation_error)?,
                     model_id,
                     model_root: self.dictation_model_root()?,
                     audio_host,
@@ -433,6 +454,8 @@ impl<'a> DictationRequestProcessor<'a> {
                 connection.connection_id,
                 params.resource_id,
                 realtime_voice::ModelRequest {
+                    home: self.profile_root()?,
+                    media_network: self.calls.download_network().map_err(dictation_error)?,
                     model_root: self.dictation_model_root()?,
                     model_id: params.model_id,
                     operation,
@@ -520,7 +543,7 @@ fn languages(backend: &DictationBackend) -> &'static [&'static str] {
 }
 
 fn require_product_host(connection: &ConnectionState) -> Result<(), RpcError> {
-    if !connection.allows_product_host_capabilities() {
+    if !connection.allows_local_media() {
         return Err(RpcError::new(
             -32073,
             AppServerErrorName::PermissionRequired,

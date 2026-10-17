@@ -14,6 +14,7 @@ test('Desktop trace checks emitted marks without rewriting startup source', () =
 	const files = [
 		'src/ash/code/electron-browser/workbench/workbench.ts',
 		'src/ash/workbench/electron-browser/rendererApi.ts',
+		'src/ash/platform/agentHost/electron-browser/localAgentHostService.ts',
 		'src/ash/workbench/electron-browser/desktop.main.ts',
 		'src/ash/workbench/browser/workbench.ts',
 	];
@@ -49,7 +50,7 @@ test('Desktop trace marks each restored region and waits for asynchronous view c
 	const restored = context.restoreActiveViewContainers!();
 	assert.deepEqual({ opened, marks }, {
 		opened: ['view-0', 'view-1', 'view-2'],
-		marks: ['ash.workbench.shell-ready', 'ash.workbench.sidebar-restore-start', 'ash.workbench.panel-restore-start', 'ash.workbench.auxiliary-restore-start'],
+		marks: ['ash.workbench.sidebar-restore-start', 'ash.workbench.panel-restore-start', 'ash.workbench.auxiliary-restore-start'],
 	});
 	finish();
 	await restored;

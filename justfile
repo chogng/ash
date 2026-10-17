@@ -189,7 +189,7 @@ app-server-package *args:
 
 alias runtime-package := app-server-package
 
-# Build the complete Remote package declared by remote/package.json.
+# Build the complete Remote package declared by remote-server/package.json.
 remote-package *args:
     {{ python }} -B build/remote.py {{ recipe_args }}
 

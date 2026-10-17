@@ -74,17 +74,21 @@ jobs:
           cargo clean --package v8 --profile ci-test
       - name: Build self-contained backend for Web and headless hosts
         run: pnpm run prepare:backend:web
-      - name: Select the independently usable runtime package
+      - name: Build Desktop backend with bundled media
+        run: pnpm run prepare:backend
+      - name: Select headless and Desktop runtime packages
         shell: bash
         run: |
-          node --input-type=module -e "import {appendFileSync} from 'node:fs'; import {developmentAshPackagePath} from './build/desktop/runtimeStore.ts'; appendFileSync(process.env.GITHUB_ENV, 'ASH_ACCEPTANCE_RUNTIME_PACKAGE=' + developmentAshPackagePath(process.cwd(), 'packaged-node') + '\n');"
+          node --input-type=module -e "import {appendFileSync} from 'node:fs'; import {developmentAshPackagePath} from './build/desktop/runtimeStore.ts'; appendFileSync(process.env.GITHUB_ENV, 'ASH_ACCEPTANCE_RUNTIME_PACKAGE=' + developmentAshPackagePath(process.cwd(), 'packaged-node') + '\nASH_ACCEPTANCE_DESKTOP_BACKEND_PACKAGE=' + developmentAshPackagePath(process.cwd(), 'host-provided-node') + '\n');"
       - name: Build delivered Desktop bundle without standalone Node
         shell: bash
         run: |
+          python -c 'import json, os, pathlib; source = json.loads((pathlib.Path(os.environ["ASH_ACCEPTANCE_DESKTOP_BACKEND_PACKAGE"]) / "ash-package.json").read_text()); output = pathlib.Path(".build/remote-acceptance-binding.json"); output.write_text(json.dumps({"schemaVersion": 1, "version": source["version"], "protocol": source["protocol"], "catalog": {"url": "https://github.com/chogng/ash/releases/download/acceptance-fixture/catalog.json", "sha256": "a" * 64}}))'
+          export ASH_REMOTE_RELEASE_BINDING="$GITHUB_WORKSPACE/.build/remote-acceptance-binding.json"
           if [[ "$RUNNER_OS" == "Windows" ]]; then
-            pnpm run package:win32:bundle --backend-package "$ASH_ACCEPTANCE_RUNTIME_PACKAGE" --output .build/desktop-runtime-ci
+            pnpm run package:win32:bundle --backend-package "$ASH_ACCEPTANCE_DESKTOP_BACKEND_PACKAGE" --output .build/desktop-runtime-ci
           else
-            pnpm run package:darwin:bundle --unsigned --backend-package "$ASH_ACCEPTANCE_RUNTIME_PACKAGE" --output .build/desktop-runtime-ci
+            pnpm run package:darwin:bundle --unsigned --backend-package "$ASH_ACCEPTANCE_DESKTOP_BACKEND_PACKAGE" --output .build/desktop-runtime-ci
           fi
           node --input-type=module -e "import {appendFileSync,readFileSync} from 'node:fs'; import {resolve,join} from 'node:path'; const mac=process.platform==='darwin'; const bundle=resolve('.build/desktop-runtime-ci', mac ? 'Ash-darwin-'+process.arch+'/Ash.app' : 'Ash-win32-x64'); const electron=mac ? join(bundle,'Contents/MacOS/Ash') : join(bundle,'Ash.exe'); const version=JSON.parse(readFileSync('node_modules/electron/package.json','utf8')).version; appendFileSync(process.env.GITHUB_ENV, 'ASH_PACKAGED_BUNDLE='+bundle+'\nASH_TEST_ELECTRON_PATH='+electron+'\nASH_TEST_ELECTRON_VERSION='+version+'\n');"
       - name: Save verified desktop addon artifacts

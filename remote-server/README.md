@@ -1,0 +1,88 @@
+# Remote distribution
+
+`package.json` owns the supported SSH target platforms and the requirement to
+bundle Node. Build the remote editing and Agent package from the repository root:
+
+```sh
+just remote-package --target aarch64-apple-darwin --package-dir dist/ash-remote
+```
+
+[`build/remote.py`](../build/remote.py) reads this declaration before compiling or
+downloading anything. Unsupported targets and host-provided Node are rejected.
+The entrypoint reuses the App Server package builder and
+[`build/lib/package-layout.json`](../build/lib/package-layout.json), so Remote receives the same
+base package and integrity checks as other hosts. Service implementations
+remain in `remote-server`, `crates/app-server`, and their shared domains.
+
+This is a product package declaration, not an additional npm workspace. Node and
+tool versions remain owned by their existing `third_party` locks; Cargo
+dependencies remain in the root workspace. No second dependency lock is needed.
+
+The installer consumes a rootless `tar.gz` containing this package. The build
+entrypoint assembles the directory. Installation, compatibility checks, activation and rollback are
+described in [`docs/remote-development.md`](../docs/remote-development.md).
+
+## Independent release and first connection
+
+Source stays in this repository: [`runtime.md`](runtime.md) documents the connector;
+`crates/app-server` owns the backend, and this directory declares the distribution.
+The client and Server share a protocol; they do not need separate source repositories.
+
+`.github/workflows/remote-server.yml` builds and verifies each platform before
+publishing an immutable `remote-<commit>-<run>-<attempt>` GitHub release. It exercises
+connections, files, terminals and an Agent turn, signs/notarizes macOS executables,
+and publishes rootless `ash-remote-<target>.tar.gz` archives with separate symbols.
+The default release matrix covers macOS ARM64/x64 and Linux glibc ARM64/x64. Musl
+remains a source-build target requiring an explicit compatible Node executable.
+Manual dispatch may select `platforms=linux` without Apple signing credentials.
+The existing Platform checks workflow also exposes `remote_only=true`, which runs
+only this Linux release and its published-asset acceptance checks.
+
+`build/release/remote.py archive` creates a release archive; `catalog` verifies all
+archives and requires the complete selected platform set at one protocol/version.
+It emits `catalog.json` and `remote-release.json`, which binds the catalog's immutable
+HTTPS URL and digest to that protocol/version. Desktop release jobs wait for this
+independent release and pass the binding through `ASH_REMOTE_RELEASE_BINDING` or
+`--remote-release FILE`. Packaging rejects a protocol/version mismatch, omits the
+remote connector and remote archives, and retains the local App Server and SSH client.
+The binding is covered by the containing Desktop signature.
+
+When a connection has no compatible installed runtime, the client probes the server
+platform, downloads and verifies the selected archive locally, uploads it through
+SSH and commits an immutable remote installation. A successful initialize/schema
+handshake activates its exact path; later connections reuse it. The remote machine
+does not need Internet access. Cancellation clears staging; a failed download,
+upload or handshake never activates a partial runtime.
+
+Downloads allow only GitHub's single HTTPS hop to `release-assets.githubusercontent.com`;
+other redirects remain rejected. Every hop retains public-Internet-only DNS checks,
+and final catalog/archive bytes must match the product-bound digests and sizes.
+
+For local verification, `archive --unsigned` skips production signing only and is
+never used by release CI. `build/remote_smoke.py --package-dir PATH --report FILE`
+exercises both connector entrypoints. Optional `--ssh PATH --host ALIAS` uses an
+isolated loopback OpenSSH host whose test paths share the local filesystem.
+`build/release/verify_remote.py --package-dir PATH --binding-file FILE --report FILE`
+uses Desktop's actual bootstrap, provisioner and profile store against a real isolated
+SSH server. An initially missing runtime triggers the public HTTPS download; a second
+connection reuses the activated path without provisioning. Editing, terminal and
+Agent smoke checks then run from that installed published package.
+
+For signed macOS publication, set repository variable `ASH_MACOS_SIGNING_IDENTITY`
+to the Developer ID Application identity and configure these repository Actions secrets:
+`ASH_MACOS_CERTIFICATE_P12` (base64 certificate and private key),
+`ASH_MACOS_CERTIFICATE_PASSWORD`, `ASH_MACOS_NOTARY_KEY_P8` (base64 team API key),
+`ASH_MACOS_NOTARY_KEY_ID`, and `ASH_MACOS_NOTARY_ISSUER`. Secrets never enter source
+or release archives. Linux-only publication does not require these Apple credentials.
+
+Remote packages retain editing, Agent execution, Node and Code Mode. Audio devices, speech
+inference, RTC/screen capture and the local SFU ship as two separate on-demand packages maintained
+from the existing local `livekit-client`, `realtime-voice` and `voice-host` crates, with LiveKit Server declared under `livekit-server`. The base contains only
+version-bound download descriptors; normal remote startup and ordinary Agent turns install neither.
+
+See [media and local hosting delivery](../docs/media-delivery.md) for independent build commands,
+release staging, first-use installation, offline overrides and verification. `--media-package-dir`
+and `--livekit-package-dir` override the sibling package directories; `--capability-archive-dir`
+keeps their downloadable archives outside a temporary product staging directory.
+
+Desktop remote windows keep calls, dictation and screen capture on the local connection. The remote runtime handles files, terminals and Agent work and rejects device-media requests.

@@ -16,6 +16,8 @@ use voice_host::Processing;
 use voice_host::SampleRate;
 
 pub(super) struct Room {
+    provider: std::path::PathBuf,
+    _provider_lease: Option<ash_package_store::PackageLease>,
     room: Option<MediaRoom>,
     mixer: AudioMixer,
     closing: Option<Operation<'static, ()>>,
@@ -27,8 +29,12 @@ impl Room {
         room: MediaRoom,
         screens: Arc<Mutex<super::call_video::Screens>>,
         network_policy: OutboundNetworkPolicy,
+        provider: std::path::PathBuf,
+        provider_lease: Option<ash_package_store::PackageLease>,
     ) -> Self {
         Self {
+            provider,
+            _provider_lease: provider_lease,
             room: Some(room),
             mixer: AudioMixer::default(),
             closing: None,
@@ -46,12 +52,11 @@ impl call::Media for Room {
     fn share_screen(&mut self, target: call::ScreenTarget) -> Operation<'_, ()> {
         Box::pin(async move {
             let source = match target {
-                call::ScreenTarget::Display(id) => screen_capture::create_display_source(&id),
-                call::ScreenTarget::Window(id) => screen_capture::create_window_source(&id),
-            }
-            .map_err(|error| error.to_string())?;
+                call::ScreenTarget::Display(id) => livekit_client::ScreenTarget::Display(id),
+                call::ScreenTarget::Window(id) => livekit_client::ScreenTarget::Window(id),
+            };
             self.room()?
-                .start_screen_share(source.as_ref(), 15)
+                .start_screen_share(source, 15)
                 .await
                 .map_err(|error| error.to_string())
         })
@@ -182,6 +187,7 @@ impl call::Media for Room {
             call::Media::close(self).await?;
             self.room = Some(
                 MediaRoom::connect(
+                    &self.provider,
                     &grant.server_url,
                     &grant.participant_token,
                     if grant.microphone {

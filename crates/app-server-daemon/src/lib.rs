@@ -39,6 +39,8 @@ pub enum GrantSource {
 pub enum ConnectionRole {
     #[default]
     Workbench,
+    /// Remote workspace host: editor and Agent authority without local device media.
+    Remote,
     Agents,
     /// Authenticated execution protocol; no Agent requests are accepted on this connection.
     Execution {
