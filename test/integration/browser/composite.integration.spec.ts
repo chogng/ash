@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { expectVisibleFocusOutline } from './focusOutline.js';
 import type { } from './composite.integration.js';
 
 for (const locale of ['en', 'zh-CN']) {
@@ -255,6 +256,7 @@ test('activity badges keep compact icons readable, center label counts and retai
 		expect(labelGeometry).toEqual({ height: 16, gap: 2, center: 0, font: '10px', padding: '3px 5px', radius: '10px', weight: '400', lineHeight: '10px' });
 		await tab.focus();
 		await expect(tab).toHaveCSS('outline-style', 'solid');
+		await expectVisibleFocusOutline(tab);
 		await page.screenshot({ path: testInfo.outputPath(`${theme}-badges.png`) });
 	}
 	for (const [count, text] of [[999, '999'], [1000, '1K'], [1234, '1K+']] as const) {
@@ -290,6 +292,7 @@ test('activity badges keep compact icons readable, center label counts and retai
 			};
 		});
 		expect(placement).toEqual({ iconWidth: compact ? 16 : 24, iconHeight: compact ? 16 : 24, rightOfIconCenter: true, belowIconCenter: true });
+		await expectVisibleFocusOutline(tab);
 		await page.screenshot({ path: testInfo.outputPath(`vertical-${compact ? 'compact' : 'default'}-badges.png`) });
 	}
 	await page.evaluate(() => window.ashCompositeIntegration.toggleBadge());
@@ -301,6 +304,24 @@ test('activity badges keep compact icons readable, center label counts and retai
 	await expect(page.locator('#badge-icon [data-action-id="second"]')).toBeFocused();
 	await page.evaluate(() => window.ashCompositeIntegration.setBadge(0));
 	await expect(badge).toHaveCount(0);
+});
+
+test('modern activity badges preserve focus above the icon stacking context', async ({ page }, testInfo) => {
+	await page.goto('/composite.html?badges&modernBadges');
+	await page.waitForFunction(() => !!window.ashCompositeIntegration);
+	await page.evaluate(() => {
+		window.ashCompositeIntegration.setBadgeOrientation('vertical');
+		window.ashCompositeIntegration.setBadge(50);
+	});
+	const tab = page.locator('#badge-icon [data-action-id="first"]');
+	for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
+		await page.evaluate(theme => window.ashCompositeIntegration.setEditorTheme(theme), theme);
+		await tab.focus();
+		await tab.hover();
+		await expectVisibleFocusOutline(tab);
+		await tab.click({ trial: true });
+		await testInfo.attach(`modern-activity-focus-${theme}`, { body: await tab.screenshot(), contentType: 'image/png' });
+	}
 });
 
 test('standard editor tabs fill the title row and switch styles without losing keyboard focus', async ({ page }) => {

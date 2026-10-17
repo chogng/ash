@@ -113,6 +113,20 @@
 	outline-offset: -1px;
 }
 
+.ash-scm-graph-commit.selected > .ash-scm-graph-row::after,
+.ash-scm-graph-commit:focus-visible > .ash-scm-graph-row::after,
+.ash-scm-graph-change:focus-visible::after {
+	/* Keep focus and contrast outlines above the reference/action overlay and its fade. */
+	content: "";
+	position: absolute;
+	inset: 0;
+	z-index: 2;
+	border-radius: inherit;
+	outline: inherit;
+	outline-offset: inherit;
+	pointer-events: none;
+}
+
 .ash-scm-graph-row:hover {
 	background: linear-gradient(
 		to right,
@@ -374,6 +388,7 @@
 }
 
 .ash-scm-graph-change {
+	position: relative;
 	display: flex;
 	width: calc(100% - var(--scm-graph-content-x, 22px));
 	height: 22px;

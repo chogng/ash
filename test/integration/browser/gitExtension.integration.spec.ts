@@ -1,5 +1,6 @@
 import { attachRustGit } from './rustGitProcessFixture.js';
 import { expect, test, type Page } from '@playwright/test';
+import { expectVisibleFocusOutline } from './focusOutline.js';
 
 let stopRust: (() => Promise<void>) | undefined;
 test.beforeEach(async ({ page }) => { stopRust = await attachRustGit(page); });
@@ -251,6 +252,15 @@ test('SCM commit form stays borderless with and without resource groups across t
 			await expect(actions).toBeVisible();
 			const heading = tree.locator('.ash-scm-section-heading');
 			await heading.hover();
+			await tree.focus();
+			await page.keyboard.press('Home');
+			await expectVisibleFocusOutline(tree.locator('.ash-tree-row.focused'));
+			await page.keyboard.press('ArrowDown');
+			await resource.hover();
+			await expectVisibleFocusOutline(tree.locator('.ash-tree-row.focused'));
+			await actions.getByRole('button').first().click({ trial: true });
+			await actions.getByRole('button').first().focus();
+			await expect(actions).toBeVisible();
 			const groupGeometry = await heading.evaluate(element => {
 				const label = element.querySelector('.ash-scm-section-label')!.getBoundingClientRect();
 				const toolbar = element.querySelector('.ash-scm-section-actions')!.getBoundingClientRect();

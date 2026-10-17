@@ -9,6 +9,7 @@ import { createSocket } from 'node:dgram';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
+import { expectVisibleFocusOutline } from './focusOutline.js';
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript';
 const preload = transpileModule(readFileSync(new URL('../../../src/ash/platform/browserView/electron-browser/preload-browserView.ts', import.meta.url), 'utf8'), {
 	compilerOptions: { target: ScriptTarget.ES2022, module: ModuleKind.None },
@@ -175,6 +176,28 @@ for (const locale of ['en', 'zh-CN']) {
 		expect(offsets).toEqual([0, 20, 40]);
 	});
 }
+
+test('ChatGPT floating conversation actions preserve keyboard focus outlines across themes and directions', async ({ page }, testInfo) => {
+	await mockChatGPTRequests(page);
+	for (const theme of ['light', 'dark', 'hcDark', 'hcLight']) {
+		await page.goto(`/chatgptNavigation.html?locale=zh-CN&theme=${theme}`);
+		const row = page.locator('.ash-chatgpt-navigation-row[data-conversation="fixture-chat"]');
+		const title = row.locator('.ash-chatgpt-conversation');
+		await expect(title).toBeVisible();
+		for (const direction of ['ltr', 'rtl']) {
+			await page.locator('#navigation').evaluate((element, dir) => { element.setAttribute('dir', dir); }, direction);
+			await page.keyboard.press('Tab');
+			await title.focus();
+			await title.hover();
+			await expect(row.getByRole('toolbar')).toHaveCSS('opacity', '1');
+			await testInfo.attach(`conversation-focused-${theme}-${direction}`, { body: await row.screenshot(), contentType: 'image/png' });
+			await expectVisibleFocusOutline(title);
+			await row.getByRole('toolbar').getByRole('button').first().click({ trial: true });
+			await page.keyboard.press('Tab');
+			await expect(row.getByRole('toolbar').getByRole('button').first()).toBeFocused();
+		}
+	}
+});
 
 for (const theme of ['light', 'dark', 'hcDark', 'hcLight']) {
 	test(`ChatGPT conversations use the shared scrollbar with fixed controls (${theme})`, async ({ page }, testInfo) => {

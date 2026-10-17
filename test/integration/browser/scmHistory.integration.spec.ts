@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { expectVisibleFocusOutline } from './focusOutline.js';
 
 test.beforeEach(async ({ page }) => {
 	const errors: string[] = [];
@@ -37,6 +38,21 @@ test('history rows retain identity and reserve title width when the pane resizes
 	await test.info().attach('scm-history-row-overlay', { body: await commit.screenshot(), contentType: 'image/png' });
 	await retainedCommit?.dispose();
 	await retainedActions?.dispose();
+});
+
+test('floating history actions preserve the complete keyboard focus outline across themes', async ({ page }) => {
+	const commit = page.getByRole('treeitem', { name: /History metadata:/u });
+	for (let theme = 0; theme < 4; theme++) {
+		await page.evaluate(index => window.ashSCMHistoryIntegration.setTheme(index), theme);
+		await page.keyboard.press('Tab');
+		await commit.focus();
+		const row = commit.locator('.ash-scm-graph-row');
+		await row.hover({ position: { x: 80, y: 10 } });
+		await expect(commit.locator('.ash-scm-graph-actions')).toBeVisible();
+		await expectVisibleFocusOutline(row);
+		await commit.locator('.ash-scm-graph-actions button').first().click({ trial: true });
+		await test.info().attach(`history-focus-${theme}`, { body: await row.screenshot(), contentType: 'image/png' });
+	}
 });
 
 test('commit details preserve whitespace, metadata, scrolling and long-title geometry', async ({ page }) => {

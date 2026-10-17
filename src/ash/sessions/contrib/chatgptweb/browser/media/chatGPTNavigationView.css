@@ -116,6 +116,21 @@
 	background: var(--ash-list-hoverBackground, ButtonFace);
 }
 
+.ash-chatgpt-navigation-row:has(
+		> .ash-chatgpt-conversation:focus-visible
+	)::after {
+	/* The action background and fade cover the title, but must not cover its focus ring. */
+	content: "";
+	position: absolute;
+	inset: 0;
+	z-index: 2;
+	border-radius: inherit;
+	outline: var(--ash-strokeThickness, 1px) solid
+		var(--ash-focusBorder, Highlight);
+	outline-offset: -1px;
+	pointer-events: none;
+}
+
 .ash-chatgpt-navigation .ash-chatgpt-conversation {
 	width: 100%;
 	flex-shrink: 0;

@@ -203,6 +203,10 @@ if (new URLSearchParams(location.search).has('badges') || new URLSearchParams(lo
 }
 if (new URLSearchParams(location.search).has('badges')) {
 	await import('../../../src/ash/workbench/browser/parts/activitybar/media/activitybarpart.css');
+	if (new URLSearchParams(location.search).has('modernBadges')) {
+		await import('../../../src/ash/workbench/contrib/modernUI/browser/media/activityBar.css');
+		document.body.classList.add('ash-workbench', 'modern-ui');
+	}
 }
 const uriIdentityServices = resources.add(new TestUriIdentityServices());
 const locale = new URLSearchParams(location.search).get('locale');
@@ -468,6 +472,7 @@ if (new URLSearchParams(location.search).has('badges')) {
 	for (const presentation of ['icon', 'label'] as const) {
 		const host = h(document, 'div');
 		host.id = `badge-${presentation}`;
+		if (presentation === 'icon' && new URLSearchParams(location.search).has('modernBadges')) host.classList.add('ash-workbench-activitybar');
 		host.style.cssText = 'width:240px;height:100px';
 		document.body.append(host);
 		resources.add(toDisposable(() => host.remove()));

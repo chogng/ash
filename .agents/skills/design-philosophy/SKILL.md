@@ -260,6 +260,8 @@ Chrome that used to carry a permanent fill now reads transparent at rest and onl
 
 For temporary auxiliary actions in lists, tree rows and compact cards, prefer an action bar overlaid at the trailing edge: keep content in place at full width without permanently reserving room for hidden buttons. Use the current row state's theme background to cover the text beneath the bar, with a short fade on the content-facing edge that follows text direction. Keep actions visible on hover, keyboard focus or while their menu is open; the fade must not intercept pointer events, and touch users need equivalent actions through the row menu. Cover only auxiliary text that remains fully accessible; keep critical status, errors and pending decisions visible, and verify light, dark and high-contrast themes.
 
+For all auxiliary floating layers, keep the host's focus indicator complete and visible: backgrounds and fades must not cover any part of its outline. Inset the overlay within the focus stroke or paint the indicator above the overlay background while preserving action hit targets; do not suppress the indicator to hide an overlap. Check the combined hover-and-keyboard-focus state, including focus moving into the actions, in light, dark and high-contrast themes.
+
 <a id="words-casing"></a>
 ### Words & casing
 

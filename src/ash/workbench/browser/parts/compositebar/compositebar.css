@@ -116,6 +116,24 @@
 	padding: 0;
 }
 
+.ash-composite-bar-focus-ring {
+	display: none;
+}
+
+.ash-composite-bar-icon
+	.ash-composite-bar-item:focus-visible
+	> .ash-composite-bar-focus-ring {
+	/* Keep the ring above corner badges; item pseudo-elements own selection and drag feedback. */
+	display: block;
+	position: absolute;
+	inset: 0;
+	z-index: 3;
+	border-radius: inherit;
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+	pointer-events: none;
+}
+
 .ash-composite-bar-label .ash-composite-bar-action {
 	width: auto;
 	font-weight: var(--ash-fontWeight-regular);

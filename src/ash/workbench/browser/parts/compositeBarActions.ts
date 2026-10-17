@@ -140,6 +140,11 @@ export class CompositeActionViewItem extends ActionViewItem {
 			icon: options.icon,
 		}));
 		container.append(action);
+		// A separate layer keeps focus above badges even when the icon has its own stacking context.
+		const focusRing = h(container.ownerDocument, 'span');
+		focusRing.className = 'ash-composite-bar-focus-ring';
+		focusRing.setAttribute('aria-hidden', 'true');
+		container.append(focusRing);
 		if (options.badge && options.badgeEnabled && options.badge.count > 0) {
 			const count = options.badge.count;
 			const countFormat = count >= 1000 ? `${Math.trunc(count / 1000)}K${count % 1000 === 0 ? '' : '+'}` : undefined;
