@@ -134,6 +134,12 @@ pub(crate) struct ForkImportSnapshot {
 }
 
 impl ThreadSnapshot {
+    /// Exact file boundary selected by undo/redo, until a new Turn resumes execution.
+    /// A visible Turn can be only a prefix of its original capture at this boundary.
+    pub fn restored_workspace(&self) -> Option<&ash_protocol::WorkspaceCheckpoint> {
+        self.history_workspace.as_ref()
+    }
+
     /// Returns the policy frozen by admission, including for resumed and delegated execution.
     pub fn context_policy(&self, turn_id: &TurnId) -> ash_protocol::ContextCompactionPolicy {
         self.commands

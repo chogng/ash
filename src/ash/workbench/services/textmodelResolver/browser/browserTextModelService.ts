@@ -27,6 +27,7 @@ import { assertEncoding } from '../../textfile/common/encoding.js';
 import { localize } from '../../../../nls.js';
 
 interface TextModelEntry {
+	readonly isSnapshot: boolean;
 	readonly identityLifetime: IDisposable;
 	readonly resource: URI;
 	readonly model: TextModel;
@@ -228,6 +229,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		const dirtyEmitter = new Emitter<void>();
 		const externalChangeEmitter = new Emitter<void>();
 		const entry: TextModelEntry = {
+			isSnapshot: input.initialText !== undefined && input.readOnly === true,
 			identityLifetime: this.uriIdentity.retainUri(resource),
 			resource,
 			model,
@@ -502,8 +504,9 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 	}
 
 	private async refreshEntry(entry: TextModelEntry): Promise<void> {
+		// Snapshot models belong to their content provider, not the filesystem watcher.
 		// Background reads must not advance the persisted baseline of local edits.
-		if (entry.disposed || entry.dirty || entry.resource.scheme === Schemas.untitled) return;
+		if (entry.disposed || entry.dirty || entry.isSnapshot || entry.resource.scheme === Schemas.untitled) return;
 		// A save can acknowledge a new revision without changing the text model version.
 		const observedSaveQueue = entry.saveQueue;
 		await observedSaveQueue;

@@ -32,6 +32,8 @@ export interface ITextModelSaveCompletionParticipant {
 export interface TextModelInput {
 	readonly resource: URI;
 	readonly initialText?: string;
+	/** Read-only initial content is a supplied snapshot, not a live file baseline. */
+	readonly readOnly?: boolean;
 	readonly encoding?: string;
 	readonly languageId?: string;
 	readonly contentType?: string;

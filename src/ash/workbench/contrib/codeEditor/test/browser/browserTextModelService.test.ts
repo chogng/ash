@@ -536,6 +536,18 @@ test('file invalidations and focus checks skip dirty models without advancing th
 	assert.deepEqual([reference.hasExternalChange, conflicts, textFiles.savedTexts, textFiles.resolveCount], [true, [true], [], 1]);
 });
 
+test('read-only supplied snapshots stay unchanged across filesystem invalidations and focus refresh', async () => {
+	const resource = URI.parse('ash-thread-change:/conversation/checkpoint/file.txt#after');
+	const textFiles = new TestTextFileService('live file');
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(textFiles), {});
+	using reference = await models.acquire({ resource, initialText: 'checkpoint text', readOnly: true }, new AbortController().signal);
+	textFiles.setText('new branch content');
+	textFiles.fireExternalChange();
+	textFiles.fireExternalChange(resource);
+	await models.refresh(resource);
+	assert.deepEqual([reference.model.getText(), reference.isDirty, textFiles.resolveCount], ['checkpoint text', false, 1]);
+});
+
 test('failed background file checks preserve clean and dirty editor states', async () => {
 	const resource = URI.file('/project/unavailable.ts');
 	using changes = new Emitter<IFileChangeEvent>();
