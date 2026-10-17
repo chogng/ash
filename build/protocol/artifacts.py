@@ -9,6 +9,8 @@ import re
 import shutil
 from pathlib import Path, PurePosixPath
 
+from build.lib.targets import default_target
+
 PACKAGE_PROTOCOL = "ash-resources/protocol"
 SOURCE_MANIFEST = "protocol-sources.json"
 REQUIRED_ARTIFACTS = {
@@ -203,8 +205,11 @@ def protocol_packages(root: Path, explicit: Path | None):
         yield explicit.expanduser().resolve()
     # Use only the currently selected publication in each existing development
     # store. An older compatible package must not replace a newer selected backend.
-    store_root = root / ".build/runtime/dev/store-v1"
-    for manifests in sorted(store_root.glob("*/*/*/manifests")):
+    # WSL metadata reads can block on Windows publications in a shared checkout.
+    # Discover this host's stores automatically; explicit selection still permits
+    # portable contracts from another host after the same content validation.
+    store_root = root / ".build/runtime/dev/store-v1" / default_target()
+    for manifests in sorted(store_root.glob("*/*/manifests")):
         names = sorted(
             path
             for path in manifests.glob("*.json")

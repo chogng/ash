@@ -19,6 +19,34 @@ from build.lib.file_lock import exclusive_lock, shared_lock
 
 
 class CargoCacheTests(unittest.TestCase):
+    def setUp(self):
+        environment = patch.dict(os.environ, {"CARGO_TARGET_DIR": ""})
+        environment.start()
+        self.addCleanup(environment.stop)
+
+    def test_selected_target_cache_is_maintained_and_leased_without_touching_default(
+        self,
+    ):
+        with tempfile.TemporaryDirectory() as temporary:
+            repository = Path(temporary)
+            target = repository / "linux-cargo"
+            default = self.session(repository / ".build/cargo", "ci-test", "windows", 1)
+            idle = self.session(target, "debug", "old", 1)
+            with (
+                patch.dict(os.environ, {"CARGO_TARGET_DIR": str(target)}),
+                patch("build.lib.cargo_cache.MAX_INCREMENTAL_BYTES", 0),
+                patch("build.lib.cargo_cache.MAX_ARTIFACT_BYTES", 0),
+            ):
+                with leased_cache(repository, profile="ci-test"):
+                    self.assertFalse(idle.exists())
+                    self.assertTrue(default.exists())
+                    active = self.session(target, "ci-test", "active", 1)
+                    self.assertEqual(trim_artifact_cache(target, 0, idle_seconds=0), 0)
+                    self.assertTrue(active.exists())
+            self.assertEqual(trim_artifact_cache(target, 0, idle_seconds=0), 8)
+            self.assertFalse(active.exists())
+            self.assertTrue(default.exists())
+
     def test_warm_build_entry_does_not_repeat_cache_scans(self):
         with tempfile.TemporaryDirectory() as temporary:
             repository = Path(temporary)

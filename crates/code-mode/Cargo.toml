@@ -12,6 +12,7 @@ name = "ash_code_mode"
 path = "src/lib.rs"
 
 [dependencies]
+ash-utils-process = { workspace = true }
 serde_json = { workspace = true }
 ash-code-mode-protocol = { workspace = true }
 

@@ -64,3 +64,57 @@ class BinaryIsolationTests(unittest.TestCase):
                 self.assertEqual(command.count("--bin"), 1)
                 self.assertIn(name + "/host", command)
                 self.assertNotIn("ash-app-server", command)
+
+    @patch.dict("build.lib.package_binaries.os.environ", {}, clear=True)
+    def test_size_optimization_is_limited_to_windows_x64_release_packages(self):
+        root = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        cases = (
+            ("x86_64-pc-windows-msvc", "release", True),
+            ("x86_64-pc-windows-msvc", "dev-small", False),
+            ("aarch64-pc-windows-msvc", "release", False),
+            ("x86_64-unknown-linux-gnu", "release", False),
+            ("aarch64-apple-darwin", "release", False),
+        )
+        for target, profile, optimized in cases:
+            with self.subTest(target=target, profile=profile):
+                spec = TARGETS[target]
+                executable = root / ("ash-app-server" + spec.executable_suffix)
+                executable.touch()
+                executable.chmod(0o755)
+                artifact = {
+                    "reason": "compiler-artifact",
+                    "target": {"kind": ["bin"], "name": "ash-app-server"},
+                    "executable": str(executable),
+                }
+                with (
+                    patch.object(
+                        package_binaries, "cargo_command_packages", return_value=set()
+                    ),
+                    patch.object(
+                        package_binaries, "cargo_environment", return_value={}
+                    ),
+                    patch.object(package_binaries, "leased_cache"),
+                    patch.object(
+                        package_binaries.subprocess,
+                        "run",
+                        return_value=subprocess.CompletedProcess(
+                            [], 0, json.dumps(artifact)
+                        ),
+                    ) as run,
+                ):
+                    result = package_binaries.build_binaries(
+                        root,
+                        spec,
+                        {"ash-app-server": None},
+                        cargo="cargo",
+                        cargo_profile=profile,
+                    )
+                self.assertEqual(result, {"ash-app-server": executable})
+                command = run.call_args.args[0]
+                if optimized:
+                    self.assertEqual(
+                        command[command.index("--config") + 1],
+                        "profile.release.codegen-units=1",
+                    )
+                else:
+                    self.assertNotIn("--config", command)

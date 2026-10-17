@@ -249,9 +249,14 @@ fn windows_reinstallation_migrates_only_its_owned_legacy_command() {
     let options = options(root, source.clone());
     fs::create_dir_all(&options.bin_dir).unwrap();
     let command = options.bin_dir.join("ash.cmd");
-    fs::write(&command, legacy_windows_launcher(&options.install_root)).unwrap();
-    install(root, source, "1.2.3").unwrap();
-    assert_eq!(fs::read(&command).unwrap(), WINDOWS_LAUNCHER.as_bytes());
+    for previous in [
+        legacy_windows_launcher(&options.install_root).into_bytes(),
+        WINDOWS_LAUNCHER_WITH_IMPLICIT_EXIT_CODE.as_bytes().to_vec(),
+    ] {
+        fs::write(&command, previous).unwrap();
+        install(root, source.clone(), "1.2.3").unwrap();
+        assert_eq!(fs::read(&command).unwrap(), WINDOWS_LAUNCHER.as_bytes());
+    }
     let binding = options.bin_dir.join("ash-launcher.json");
     let original = fs::read(&binding).unwrap();
     fs::write(

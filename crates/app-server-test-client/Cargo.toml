@@ -10,6 +10,7 @@ name = "app_server_test_client"
 doctest = false
 
 [dependencies]
+ash-utils-process = { workspace = true }
 anyhow = { workspace = true }
 app-server-protocol = { package = "ash-app-server-protocol", path = "../app-server-protocol" }
 app-server-transport = { package = "ash-app-server-transport", path = "../app-server-transport" }

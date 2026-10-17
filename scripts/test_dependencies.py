@@ -262,11 +262,11 @@ class DependencyTests(unittest.TestCase):
             (server / name).write_text("use core_api::AgentRuntime;\n")
         errors = dependencies.agent_handler_errors(self.root)
         for name in ("agent", "sessions", "queue"):
+            path = (
+                Path("crates/app-server/src/server/request_processors") / f"{name}.rs"
+            )
             self.assertTrue(
-                any(
-                    f"request_processors/{name}.rs: missing Agent handler" in error
-                    for error in errors
-                )
+                any(f"{path}: missing Agent handler" in error for error in errors)
             )
 
     def test_missing_agent_handler_requires_updating_the_boundary_rule(self):

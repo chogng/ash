@@ -179,14 +179,14 @@ fn fixture() -> Result<()> {
 }
 
 fn client() -> Command {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_ash-app-server-test-client"));
+    let mut command = Command::from(ash_utils_process::background_command(env!(
+        "CARGO_BIN_EXE_ash-app-server-test-client"
+    )));
     command
         .env_remove("ASH_APP_SERVER_BIN")
         .env_remove("ASH_APP_SERVER_URL")
         .env_remove("ASH_APP_SERVER_TOKEN")
         .kill_on_drop(true);
-    #[cfg(windows)]
-    command.creation_flags(0x0800_0000);
     command
 }
 

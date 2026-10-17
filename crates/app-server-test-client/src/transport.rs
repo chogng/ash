@@ -75,7 +75,7 @@ impl Connection {
                 return Ok(Self::WebSocket(Box::new(socket)));
             }
         };
-        let mut command = Command::new(server_bin);
+        let mut command = Command::from(ash_utils_process::background_command(server_bin));
         command
             .args(["--listen", "stdio://"])
             .stdin(Stdio::piped())
@@ -90,8 +90,6 @@ impl Connection {
         if let Some(workspace) = workspace {
             command.env("ASH_WORKSPACE_ROOT", workspace);
         }
-        #[cfg(windows)]
-        command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
         let mut child = command.spawn().context("launch ash-app-server")?;
         let stdin = child.stdin.take().context("capture App Server stdin")?;
         let stdout = BufReader::new(child.stdout.take().context("capture App Server stdout")?);

@@ -19,6 +19,16 @@ fail explicitly. There is no source-compilation fallback.
 - Direct Cargo users must first run `python -m build.lib.grammars --target <triple>`
   and set `ASH_GRAMMARS_LIB_DIR` to the resulting `lib` directory.
 
+For Linux validation in WSL, use Linux Rust and Just against the current checkout
+and keep Cargo outputs on the Linux filesystem. Cache maintenance and execution
+leases follow the same `CARGO_TARGET_DIR` as Cargo:
+
+```bash
+export CARGO_TARGET_DIR="$HOME/.cache/ash/cargo"
+python3 -B -m build.lib.grammars --target x86_64-unknown-linux-gnu
+just verify ash-syntax
+```
+
 Ash's language packages own editor IDs, aliases and query customizations. Parser
 sources, compiler settings and grammar versions belong to the producer repository.
 The `@vscode/tree-sitter-wasm` dependency supplies the browser parser runtime only;

@@ -328,10 +328,14 @@ class ProtocolPreparationTests(unittest.TestCase):
 
     def test_only_current_development_publications_are_candidates(self):
         from build.protocol.generate import generate_protocol
+        from build.lib.targets import default_target
 
         package = self.package_contract()
         store = (
-            self.root / ".build/runtime/dev/store-v1/test/host-provided-node/dev-small"
+            self.root
+            / ".build/runtime/dev/store-v1"
+            / default_target()
+            / "host-provided-node/dev-small"
         )
         selected = store / "packages/0.1.0" / ("a" * 64)
         shutil.copytree(package, selected)
@@ -361,6 +365,49 @@ class ProtocolPreparationTests(unittest.TestCase):
         self.clear_contract()
         generate_protocol(root=self.root)
         self.exporter.assert_called_once()
+
+    def test_foreign_host_publications_are_only_inspected_when_explicitly_selected(
+        self,
+    ):
+        from build.protocol.generate import generate_protocol
+
+        package = self.package_contract()
+        store = self.root / (
+            ".build/runtime/dev/store-v1/x86_64-pc-windows-msvc/"
+            "host-provided-node/dev-small"
+        )
+        selected = store / "packages/0.1.0" / ("a" * 64)
+        shutil.copytree(package, selected)
+        manifests = store / "manifests"
+        manifests.mkdir()
+        (manifests / "00000000000000000001.json").write_text(
+            json.dumps(
+                {
+                    "formatVersion": 1,
+                    "sequence": 1,
+                    "directory": "packages/0.1.0/" + "a" * 64,
+                }
+            )
+        )
+        self.clear_contract()
+        self.exporter.reset_mock()
+        with (
+            patch(
+                "build.protocol.artifacts.default_target",
+                return_value="x86_64-unknown-linux-gnu",
+            ),
+            patch(
+                "build.protocol.generate.matching_package_contract",
+                side_effect=AssertionError("foreign publication must not be inspected"),
+            ),
+        ):
+            generate_protocol(root=self.root)
+        self.exporter.assert_called_once()
+
+        self.clear_contract()
+        self.exporter.reset_mock()
+        generate_protocol(root=self.root, package_root=selected)
+        self.exporter.assert_not_called()
 
     def test_packaging_rejects_sources_or_metadata_that_do_not_match_the_contract(self):
         from build.protocol.artifacts import copy_prepared_contract

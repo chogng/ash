@@ -1045,28 +1045,25 @@ fn managed_installer_reinstalls_and_launches_from_unicode_paths() {
         }
         previous = Some(selected);
     }
-    let launch = || {
+    let launch = |argument: &str| {
         #[cfg(unix)]
         let mut command = Command::new(launchers.join("ash"));
         #[cfg(windows)]
         let mut command = {
             use std::os::windows::process::CommandExt;
-            let mut command = Command::new("cmd.exe");
+            let mut command = ash_utils_process::background_command("cmd.exe");
             // No console: the launcher must not rely on chcp or an OEM encoding.
-            command
-                .creation_flags(0x08000000)
-                .args(["/D", "/S", "/C"])
-                .raw_arg(format!(
-                    "\"\"{}\" --version\"",
-                    launchers.join("ash.cmd").display()
-                ));
+            command.args(["/D", "/S", "/C"]).raw_arg(format!(
+                "\"\"{}\" {argument}\"",
+                launchers.join("ash.cmd").display(),
+            ));
             command
         };
         #[cfg(unix)]
-        command.arg("--version");
+        command.arg(argument);
         command.output()
     };
-    let output = launch().unwrap();
+    let output = launch("--version").unwrap();
     assert!(
         output.status.success(),
         "{}",
@@ -1074,8 +1071,14 @@ fn managed_installer_reinstalls_and_launches_from_unicode_paths() {
     );
     let expected = Command::new(&cli).arg("--version").output().unwrap();
     assert_eq!(output.stdout, expected.stdout);
+    let usage_error = launch("--invalid-managed-launcher-test-argument").unwrap();
+    assert_eq!(usage_error.status.code(), Some(2), "{usage_error:?}");
     // The stable Windows adapter must execute the selected CLI, rather than run
     // the product code from its original immutable hard link.
     std::fs::remove_file(previous.unwrap().join("bin").join(binary_name)).unwrap();
-    assert!(launch().map_or(true, |output| !output.status.success()));
+    if let Ok(output) = launch("--version") {
+        assert!(!output.status.success(), "{output:?}");
+        #[cfg(windows)]
+        assert_eq!(output.status.code(), Some(1), "{output:?}");
+    }
 }

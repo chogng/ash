@@ -586,6 +586,7 @@ dependencies = [
  "ash-remote",
  "ash-uds",
  "ash-utils-home-dir",
+ "ash-utils-process",
  "dunce",
  "libc",
  "rustix 1.1.4",
@@ -646,6 +647,7 @@ dependencies = [
  "anyhow",
  "ash-app-server-protocol",
  "ash-app-server-transport",
+ "ash-utils-process",
  "clap",
  "futures",
  "libtest-mimic",
@@ -913,6 +915,7 @@ dependencies = [
  "ash-utils-cli",
  "ash-utils-home-dir",
  "ash-utils-path",
+ "ash-utils-process",
  "chrono",
  "clap",
  "ed25519-dalek",
@@ -965,6 +968,7 @@ name = "ash-code-mode"
 version = "0.1.0"
 dependencies = [
  "ash-code-mode-protocol",
+ "ash-utils-process",
  "serde_json",
 ]
 
@@ -3310,6 +3314,13 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+]
+
+[[package]]
+name = "ash-utils-process"
+version = "0.1.0"
+dependencies = [
+ "tokio",
 ]
 
 [[package]]

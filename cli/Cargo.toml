@@ -46,6 +46,7 @@ arg0 = { workspace = true }
 ash-tui = { workspace = true }
 
 [dev-dependencies]
+ash-utils-process = { workspace = true }
 ash-app-server-daemon = { workspace = true }
 github-extension = { package = "ash-github-extension", path = "../extensions/github" }
 flate2 = { workspace = true }

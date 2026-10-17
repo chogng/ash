@@ -15,7 +15,6 @@ use std::io::BufReader;
 use std::io::BufWriter;
 use std::path::PathBuf;
 use std::process::Child;
-use std::process::Command;
 use std::process::Stdio;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -52,16 +51,11 @@ struct State {
 
 impl Connection {
     pub(super) fn spawn(program: PathBuf) -> Result<Self, RuntimeError> {
-        let mut command = Command::new(&program);
+        let mut command = ash_utils_process::background_command(&program);
         command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit());
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
-        }
         let mut child = command.spawn().map_err(|error| {
             RuntimeError::Initialization(format!(
                 "failed to start Code Mode Host {}: {error}",

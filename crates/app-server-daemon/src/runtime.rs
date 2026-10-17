@@ -239,7 +239,7 @@ fn probe(executable: &Path) -> Result<Versions, String> {
             .write(true)
             .open(&path)
             .map_err(|error| error.to_string())?;
-        let mut command = Command::new(executable);
+        let mut command = ash_utils_process::background_command(executable);
         command.env_clear().env("ELECTRON_RUN_AS_NODE", "1")
             .args(["--input-type=commonjs", "--eval", "process.stdout.write(JSON.stringify({electron:process.versions.electron,node:process.versions.node}))"])
             .stdin(Stdio::null()).stdout(output.try_clone().map_err(|error| error.to_string())?).stderr(Stdio::null());
@@ -255,11 +255,6 @@ fn probe(executable: &Path) -> Result<Versions, String> {
             if let Some(value) = std::env::var_os(name) {
                 command.env(name, value);
             }
-        }
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            command.creation_flags(windows_sys::Win32::System::Threading::CREATE_NO_WINDOW);
         }
         let mut child = ProbeChild(command.spawn().map_err(|error| error.to_string())?);
         let deadline = Instant::now() + Duration::from_secs(5);

@@ -157,7 +157,13 @@ fn kept_launcher(launcher: &Path) {
 // adapter reads the UTF-8 binding, then forwards OS arguments without a shell or
 // console-code-page changes. The adapter's v1 layout is stable across CLI updates.
 #[cfg(windows)]
-const WINDOWS_LAUNCHER: &str =
+const WINDOWS_LAUNCHER: &str = "@echo off\r\nsetlocal DisableDelayedExpansion\r\n\"%~dp0ash-launcher.exe\" %*\r\nexit /b %errorlevel%\r\n";
+
+// Recognize the previously published wrapper so reinstalling repairs its exit
+// status propagation. Without an explicit code, cmd /C can report success even
+// when the adapter or selected CLI failed.
+#[cfg(windows)]
+const WINDOWS_LAUNCHER_WITH_IMPLICIT_EXIT_CODE: &str =
     "@echo off\r\nsetlocal DisableDelayedExpansion\r\n\"%~dp0ash-launcher.exe\" %*\r\nexit /b\r\n";
 
 #[cfg(windows)]
@@ -174,6 +180,7 @@ fn prepare_windows_launcher(root: &Path, bin: &Path, installed: &Path) -> Result
     match fs::read(&command) {
         Ok(previous)
             if previous == WINDOWS_LAUNCHER.as_bytes()
+                || previous == WINDOWS_LAUNCHER_WITH_IMPLICIT_EXIT_CODE.as_bytes()
                 || previous == legacy_windows_launcher(root).as_bytes() => {}
         Ok(_) => {
             kept_launcher(&command);

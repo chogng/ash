@@ -60,7 +60,7 @@ class RemotePackageTests(unittest.TestCase):
                     )
             prepare.assert_not_called()
 
-    def test_unsupported_target_and_missing_node_reject_before_building(self) -> None:
+    def test_media_and_host_provided_node_reject_before_building(self) -> None:
         with patch.object(remote, "build_package") as build:
             for options in (
                 ["--target", "aarch64-apple-darwin", "--media-distribution", "bundled"],

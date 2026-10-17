@@ -10,6 +10,7 @@ import time
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
 
+from build.lib.cargo import resolve_cargo_target_directory
 from build.lib.file_lock import exclusive_lock, shared_lock
 
 MAX_INCREMENTAL_BYTES = 32 * 1024**3
@@ -198,7 +199,9 @@ def leased_cache(
     repository: Path, *, profile: str = "debug", target_triple: str | None = None
 ):
     """Apply periodic budgets, then protect compilation and execution with a lease."""
-    target = repository / ".build/cargo"
+    # Maintenance and leases must follow Cargo's selected output directory,
+    # including host-specific caches used by WSL against a Windows checkout.
+    target = resolve_cargo_target_directory(repository)
     maintain_cache(target)
     directory = target / target_triple / profile if target_triple else target / profile
     directory.mkdir(parents=True, exist_ok=True)
