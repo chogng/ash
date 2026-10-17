@@ -823,7 +823,6 @@ impl AppServer {
             &self.request_cancellations,
             &self.request_scheduler,
             &self.resources,
-            &self.threads,
         )
     }
     fn memories_processor(&self) -> memories_operations::MemoriesRequestProcessor<'_, Self> {
@@ -887,7 +886,6 @@ impl AppServer {
             self,
             &self.dir_services,
             &self.teams,
-            &self.threads,
             &self.updates,
         )
     }

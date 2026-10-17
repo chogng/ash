@@ -19,7 +19,7 @@ use serde_json::Value;
 /// Coordinates the existing owners needed by the queue adapter.
 /// This contract deliberately exposes no server object or unrestricted service registry.
 pub(super) trait QueueRequestProcessorContext: Send + Sync {
-    fn agent_runtime(&self) -> ash_core::Runtime<'_>;
+    fn agent_runtime(&self) -> impl core_api::AgentRuntime + '_;
     fn bind_session_runtime(
         &self,
         session_id: &ash_protocol::SessionId,

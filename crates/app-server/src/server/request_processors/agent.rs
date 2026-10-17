@@ -131,15 +131,15 @@ impl RewritePhase {
 /// Coordinates the existing owners needed by the agent adapter.
 /// This contract deliberately exposes no server object or unrestricted service registry.
 pub(super) trait AgentRequestProcessorContext: Send + Sync {
-    fn admit_bound_turn_with_ide(
+    fn submit_bound_turn_with_ide(
         &self,
         thread: &ash_protocol::ThreadId,
-        request: ash_core::StartTurnRequest,
+        request: core_api::SubmitTurnRequest,
         connection: Option<u64>,
         document_mode: crate::client_host::TextDocumentMode,
         expected_ide: Option<&str>,
-    ) -> Result<ash_core::StartTurnResult, core_api::CoreError>;
-    fn agent_runtime(&self) -> ash_core::Runtime<'_>;
+    ) -> Result<core_api::TurnReceipt, core_api::CoreError>;
+    fn agent_runtime(&self) -> impl core_api::AgentRuntime + '_;
     fn archive_session_request(
         &self,
         mutation: super::operations::SessionMutation,
@@ -1736,16 +1736,13 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
             }
         } else {
             self.context
-                .agent_runtime()
-                .submit_turn_with_admission(&thread_id, request, |thread, request| {
-                    self.context.admit_bound_turn_with_ide(
-                        thread,
-                        request,
-                        mutation.connection_id,
-                        document_mode,
-                        mutation.ide_window_id.as_deref(),
-                    )
-                })
+                .submit_bound_turn_with_ide(
+                    &thread_id,
+                    request,
+                    mutation.connection_id,
+                    document_mode,
+                    mutation.ide_window_id.as_deref(),
+                )
                 .map_err(core_error)?
         };
         if is_workflow {

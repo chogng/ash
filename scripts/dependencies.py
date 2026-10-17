@@ -21,9 +21,12 @@ from build.lib.cargo import read_source_layout  # noqa: E402
 SHEAR_VERSION = "1.13.4"
 SECTIONS = ("dependencies", "build-dependencies", "dev-dependencies")
 AGENT_HANDLERS = (
-    "operations.rs",
-    "session_operations.rs",
-    "queue_operations.rs",
+    "request_processors/agent.rs",
+    "request_processors/sessions.rs",
+    "request_processors/queue.rs",
+    "request_processors/mcp.rs",
+    "request_processors/teams.rs",
+    "request_processors/symphony.rs",
     "automation_execution.rs",
     "agent_selection.rs",
     "interaction_runtime.rs",

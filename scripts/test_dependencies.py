@@ -233,20 +233,41 @@ class DependencyTests(unittest.TestCase):
         server.mkdir(parents=True)
         server.with_suffix(".rs").write_text("use ash_core::ThreadController;\n")
         for name in dependencies.AGENT_HANDLERS:
-            (server / name).write_text("use core_api::AgentRuntime;\n")
+            path = server / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("use core_api::AgentRuntime;\n")
         self.assertEqual(dependencies.agent_handler_errors(self.root), [])
-        for source in (
-            "use ash_core as runtime;",
-            "self\n    .threads.read_thread(id)",
-            "self.turn_backend.start(id)",
-            "self.multi_agent.cancel_descendants(id)",
-            "self.turn_executor_snapshot()",
-        ):
-            with self.subTest(source=source):
-                (server / "operations.rs").write_text(source)
-                errors = dependencies.agent_handler_errors(self.root)
-                self.assertEqual(len(errors), 1)
-                self.assertIn("must use core-api", errors[0])
+        for name in dependencies.AGENT_HANDLERS:
+            for source in (
+                "use ash_core as runtime;",
+                "fn agent_runtime(&self) -> ash_core::Runtime<'_>;",
+                "self\n    .threads.read_thread(id)",
+                "self.turn_backend.start(id)",
+                "self.multi_agent.cancel_descendants(id)",
+                "self.turn_executor_snapshot()",
+            ):
+                with self.subTest(handler=name, source=source):
+                    path = server / name
+                    path.write_text(source)
+                    errors = dependencies.agent_handler_errors(self.root)
+                    self.assertEqual(len(errors), 1)
+                    self.assertIn(str(path.relative_to(self.root)), errors[0])
+                    self.assertIn("must use core-api", errors[0])
+                    path.write_text("use core_api::AgentRuntime;\n")
+
+    def test_old_agent_handler_paths_do_not_replace_the_current_processors(self):
+        server = self.root / "crates/app-server/src/server"
+        server.mkdir(parents=True)
+        for name in ("operations.rs", "session_operations.rs", "queue_operations.rs"):
+            (server / name).write_text("use core_api::AgentRuntime;\n")
+        errors = dependencies.agent_handler_errors(self.root)
+        for name in ("agent", "sessions", "queue"):
+            self.assertTrue(
+                any(
+                    f"request_processors/{name}.rs: missing Agent handler" in error
+                    for error in errors
+                )
+            )
 
     def test_missing_agent_handler_requires_updating_the_boundary_rule(self):
         errors = dependencies.agent_handler_errors(self.root)

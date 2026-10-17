@@ -36,13 +36,38 @@ const MCP_OAUTH_DISCONNECT_POLL_INTERVAL: Duration = Duration::from_millis(5);
 /// Coordinates the existing owners needed by the mcp adapter.
 /// This contract deliberately exposes no server object or unrestricted service registry.
 pub(super) trait McpRequestProcessorContext: Send + Sync {
-    fn agent_runtime(&self) -> ash_core::Runtime<'_>;
+    fn agent_runtime(&self) -> impl core_api::AgentRuntime + '_;
     fn read_session_thread(
         &self,
         session_id: &ash_protocol::SessionId,
         thread_id: &ash_protocol::ThreadId,
     ) -> Result<ash_protocol::Thread, super::RpcError>;
-    fn turn_executor_snapshot(&self) -> ash_core::TurnExecutor;
+    fn list_app_tools(
+        &self,
+        origin: &ash_protocol::ToolCall,
+        binding: &ash_protocol::ToolCallBinding,
+    ) -> Result<Vec<Value>, core_api::CoreError>;
+    fn resolve_app_tool_call(
+        &self,
+        origin: &ash_protocol::ToolCall,
+        binding: &ash_protocol::ToolCallBinding,
+        name: &str,
+        arguments: Value,
+        id: ash_protocol::ToolCallId,
+    ) -> Result<(ash_protocol::ToolCall, ash_protocol::ToolCallBinding), core_api::CoreError>;
+    fn read_tool_resource(
+        &self,
+        call: &ash_protocol::ToolCall,
+        binding: &ash_protocol::ToolCallBinding,
+        uri: &str,
+        cancellation: &ash_async_utils::CancellationToken,
+    ) -> Result<ash_protocol::ToolOutputArtifact, core_api::CoreError>;
+    fn completed_tool_result(
+        &self,
+        thread_id: &ash_protocol::ThreadId,
+        turn_id: &ash_protocol::TurnId,
+        call_id: &ash_protocol::ToolCallId,
+    ) -> Result<Option<ash_protocol::ThreadItem>, core_api::CoreError>;
 }
 
 pub(super) struct McpRequestProcessor<'ctx, C: McpRequestProcessorContext + ?Sized> {
@@ -56,7 +81,6 @@ pub(super) struct McpRequestProcessor<'ctx, C: McpRequestProcessorContext + ?Siz
     request_cancellations: &'ctx super::RequestCancellationRegistry,
     request_scheduler: &'ctx super::RequestScheduler,
     resources: &'ctx super::Arc<super::Mutex<super::ResourceStore>>,
-    threads: &'ctx super::Arc<super::ThreadController>,
 }
 
 impl<'ctx, C: McpRequestProcessorContext + ?Sized> McpRequestProcessor<'ctx, C> {
@@ -71,7 +95,6 @@ impl<'ctx, C: McpRequestProcessorContext + ?Sized> McpRequestProcessor<'ctx, C> 
         request_cancellations: &'ctx super::RequestCancellationRegistry,
         request_scheduler: &'ctx super::RequestScheduler,
         resources: &'ctx super::Arc<super::Mutex<super::ResourceStore>>,
-        threads: &'ctx super::Arc<super::ThreadController>,
     ) -> Self {
         Self {
             context,
@@ -84,7 +107,6 @@ impl<'ctx, C: McpRequestProcessorContext + ?Sized> McpRequestProcessor<'ctx, C> 
             request_cancellations,
             request_scheduler,
             resources,
-            threads,
         }
     }
 }
@@ -155,7 +177,6 @@ impl<'ctx, C: McpRequestProcessorContext + ?Sized> McpRequestProcessor<'ctx, C> 
         )?;
         let tools = self
             .context
-            .turn_executor_snapshot()
             .list_app_tools(&origin, &binding)
             .map_err(super::core_error)?;
         result(&ash_app_server_protocol::protocol::mcp::ToolAppListResult { tools })
@@ -195,7 +216,6 @@ impl<'ctx, C: McpRequestProcessorContext + ?Sized> McpRequestProcessor<'ctx, C> 
         .map_err(|_| invalid_params())?;
         let (call, binding) = self
             .context
-            .turn_executor_snapshot()
             .resolve_app_tool_call(
                 &origin,
                 &binding,
@@ -226,7 +246,7 @@ impl<'ctx, C: McpRequestProcessorContext + ?Sized> McpRequestProcessor<'ctx, C> 
             .map_err(super::core_error)?;
         loop {
             if let Some(item) = self
-                .threads
+                .context
                 .completed_tool_result(&params.thread_id, &receipt.turn_id, &id)
                 .map_err(super::core_error)?
             {
@@ -387,7 +407,6 @@ impl<'ctx, C: McpRequestProcessorContext + ?Sized> McpRequestProcessor<'ctx, C> 
             .ok_or_else(invalid_params)?;
         let resource = self
             .context
-            .turn_executor_snapshot()
             .read_tool_resource(&call, binding, uri, cancellation)
             .map_err(super::core_error)?;
         let app_csp = resource.app_csp;

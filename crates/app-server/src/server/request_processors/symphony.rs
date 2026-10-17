@@ -20,7 +20,7 @@ use std::path::Path;
 /// Coordinates the existing owners needed by the symphony adapter.
 /// This contract deliberately exposes no server object or unrestricted service registry.
 pub(super) trait SymphonyRequestProcessorContext: Send + Sync {
-    fn agent_runtime(&self) -> ash_core::Runtime<'_>;
+    fn agent_runtime(&self) -> impl core_api::AgentRuntime + '_;
 }
 
 pub(super) struct SymphonyRequestProcessor<'ctx, C: SymphonyRequestProcessorContext + ?Sized> {

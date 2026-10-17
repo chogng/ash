@@ -16,7 +16,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// Coordinates the existing owners needed by the teams adapter.
 /// This contract deliberately exposes no server object or unrestricted service registry.
 pub(super) trait TeamRequestProcessorContext: Send + Sync {
-    fn agent_runtime(&self) -> ash_core::Runtime<'_>;
+    fn agent_runtime(&self) -> impl core_api::AgentRuntime + '_;
     fn bind_session_runtime(
         &self,
         session_id: &ash_protocol::SessionId,
@@ -44,7 +44,6 @@ pub(super) struct TeamRequestProcessor<'ctx, C: TeamRequestProcessorContext + ?S
     context: &'ctx C,
     dir_services: &'ctx Option<super::Arc<super::thread_dirs::ThreadDirs>>,
     teams: &'ctx Option<super::Arc<ash_teams::TeamCoordinator>>,
-    threads: &'ctx super::Arc<super::ThreadController>,
     updates: &'ctx super::Arc<super::UpdateBroker>,
 }
 
@@ -53,14 +52,12 @@ impl<'ctx, C: TeamRequestProcessorContext + ?Sized> TeamRequestProcessor<'ctx, C
         context: &'ctx C,
         dir_services: &'ctx Option<super::Arc<super::thread_dirs::ThreadDirs>>,
         teams: &'ctx Option<super::Arc<ash_teams::TeamCoordinator>>,
-        threads: &'ctx super::Arc<super::ThreadController>,
         updates: &'ctx super::Arc<super::UpdateBroker>,
     ) -> Self {
         Self {
             context,
             dir_services,
             teams,
-            threads,
             updates,
         }
     }
@@ -282,7 +279,8 @@ impl<'ctx, C: TeamRequestProcessorContext + ?Sized> TeamRequestProcessor<'ctx, C
         run: &TeamRun,
     ) -> Result<(), RpcError> {
         let thread = self
-            .threads
+            .context
+            .agent_runtime()
             .read_thread(&run.coordinator_thread_id)
             .map_err(core_error)?;
         // The run is committed before its first Turn; replay resumes this step after a crash.

@@ -379,7 +379,7 @@ impl super::language_document_features::LanguageDocumentRequestProcessorContext 
 }
 
 impl super::mcp_operations::McpRequestProcessorContext for AppServer {
-    fn agent_runtime(&self) -> ash_core::Runtime<'_> {
+    fn agent_runtime(&self) -> impl core_api::AgentRuntime + '_ {
         AppServer::agent_runtime(self)
     }
     fn read_session_thread(
@@ -390,8 +390,43 @@ impl super::mcp_operations::McpRequestProcessorContext for AppServer {
         self.agent_processor()
             .read_session_thread(session_id, thread_id)
     }
-    fn turn_executor_snapshot(&self) -> ash_core::TurnExecutor {
-        AppServer::turn_executor_snapshot(self)
+    fn list_app_tools(
+        &self,
+        origin: &ash_protocol::ToolCall,
+        binding: &ash_protocol::ToolCallBinding,
+    ) -> Result<Vec<serde_json::Value>, core_api::CoreError> {
+        self.turn_executor_snapshot()
+            .list_app_tools(origin, binding)
+    }
+    fn resolve_app_tool_call(
+        &self,
+        origin: &ash_protocol::ToolCall,
+        binding: &ash_protocol::ToolCallBinding,
+        name: &str,
+        arguments: serde_json::Value,
+        id: ash_protocol::ToolCallId,
+    ) -> Result<(ash_protocol::ToolCall, ash_protocol::ToolCallBinding), core_api::CoreError> {
+        self.turn_executor_snapshot()
+            .resolve_app_tool_call(origin, binding, name, arguments, id)
+    }
+    fn read_tool_resource(
+        &self,
+        call: &ash_protocol::ToolCall,
+        binding: &ash_protocol::ToolCallBinding,
+        uri: &str,
+        cancellation: &ash_async_utils::CancellationToken,
+    ) -> Result<ash_protocol::ToolOutputArtifact, core_api::CoreError> {
+        self.turn_executor_snapshot()
+            .read_tool_resource(call, binding, uri, cancellation)
+    }
+    fn completed_tool_result(
+        &self,
+        thread_id: &ash_protocol::ThreadId,
+        turn_id: &ash_protocol::TurnId,
+        call_id: &ash_protocol::ToolCallId,
+    ) -> Result<Option<ash_protocol::ThreadItem>, core_api::CoreError> {
+        self.threads
+            .completed_tool_result(thread_id, turn_id, call_id)
     }
 }
 
@@ -453,7 +488,7 @@ impl super::search_operations::SearchRequestProcessorContext for AppServer {
 }
 
 impl super::session_operations::SessionRequestProcessorContext for AppServer {
-    fn agent_runtime(&self) -> ash_core::Runtime<'_> {
+    fn agent_runtime(&self) -> impl core_api::AgentRuntime + '_ {
         AppServer::agent_runtime(self)
     }
     fn bind_session_runtime(
@@ -566,7 +601,7 @@ impl super::symbol_index_operations::SymbolIndexRequestProcessorContext for AppS
 }
 
 impl super::symphony_operations::SymphonyRequestProcessorContext for AppServer {
-    fn agent_runtime(&self) -> ash_core::Runtime<'_> {
+    fn agent_runtime(&self) -> impl core_api::AgentRuntime + '_ {
         AppServer::agent_runtime(self)
     }
 }
@@ -605,7 +640,7 @@ impl super::terminal_operations::TerminalRequestProcessorContext for AppServer {
 }
 
 impl super::team_operations::TeamRequestProcessorContext for AppServer {
-    fn agent_runtime(&self) -> ash_core::Runtime<'_> {
+    fn agent_runtime(&self) -> impl core_api::AgentRuntime + '_ {
         AppServer::agent_runtime(self)
     }
     fn bind_session_runtime(
@@ -649,24 +684,32 @@ impl super::team_operations::TeamRequestProcessorContext for AppServer {
 }
 
 impl super::operations::AgentRequestProcessorContext for AppServer {
-    fn admit_bound_turn_with_ide(
+    fn submit_bound_turn_with_ide(
         &self,
         thread: &ash_protocol::ThreadId,
-        request: ash_core::StartTurnRequest,
+        request: core_api::SubmitTurnRequest,
         connection: Option<u64>,
         document_mode: crate::client_host::TextDocumentMode,
         expected_ide: Option<&str>,
-    ) -> Result<ash_core::StartTurnResult, core_api::CoreError> {
-        AppServer::admit_bound_turn_with_ide(
-            self,
+    ) -> Result<core_api::TurnReceipt, core_api::CoreError> {
+        // Core prepares the admission and dispatches only after the host releases its
+        // document binding lock. The processor sees only the complete operation.
+        AppServer::agent_runtime(self).submit_turn_with_admission(
             thread,
             request,
-            connection,
-            document_mode,
-            expected_ide,
+            |thread, request| {
+                AppServer::admit_bound_turn_with_ide(
+                    self,
+                    thread,
+                    request,
+                    connection,
+                    document_mode,
+                    expected_ide,
+                )
+            },
         )
     }
-    fn agent_runtime(&self) -> ash_core::Runtime<'_> {
+    fn agent_runtime(&self) -> impl core_api::AgentRuntime + '_ {
         AppServer::agent_runtime(self)
     }
     fn archive_session_request(
@@ -816,7 +859,7 @@ impl super::app_tools_operations::AppToolsRequestProcessorContext for AppServer 
 }
 
 impl super::queue_operations::QueueRequestProcessorContext for AppServer {
-    fn agent_runtime(&self) -> ash_core::Runtime<'_> {
+    fn agent_runtime(&self) -> impl core_api::AgentRuntime + '_ {
         AppServer::agent_runtime(self)
     }
     fn bind_session_runtime(
