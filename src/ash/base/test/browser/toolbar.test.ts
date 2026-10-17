@@ -62,6 +62,41 @@ test("ToolBar exposes component-owned foreground presentations", () => {
 	dom.window.close();
 });
 
+test("ToolBar cancels only its open menu and waits for the provider to finish closing", () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	try {
+		const contextMenuProvider = new TestContextMenuProvider();
+		using toolbar = new ToolBar(dom.window.document.body, { contextMenuProvider });
+		toolbar.setActions([], [action("secondary")]);
+		const trigger = toolbar.element.querySelector("button")!;
+		trigger.click();
+		const first = contextMenuProvider.lastOptions!;
+		assert.equal(first.cancellationToken?.isCancellationRequested, false);
+
+		trigger.click();
+		assert.equal(first.cancellationToken?.isCancellationRequested, true);
+		assert.equal(trigger.getAttribute("aria-expanded"), "true");
+		trigger.click();
+		assert.equal(contextMenuProvider.lastOptions, first);
+		first.onHide?.(true);
+		assert.equal(trigger.getAttribute("aria-expanded"), "false");
+		assert.equal(trigger.classList.contains("active"), false);
+
+		trigger.click();
+		const second = contextMenuProvider.lastOptions!;
+		assert.notEqual(second, first);
+		assert.equal(second.cancellationToken?.isCancellationRequested, false);
+		// A delayed notification from the previous presentation cannot collapse its successor.
+		first.onHide?.(true);
+		assert.equal(trigger.getAttribute("aria-expanded"), "true");
+		toolbar.dispose();
+		assert.equal(second.cancellationToken?.isCancellationRequested, true);
+		second.onHide?.(true);
+	} finally {
+		dom.window.close();
+	}
+});
+
 test("ToolBar highlights checked actions only when requested", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const toolbar = new ToolBar(dom.window.document.body, {

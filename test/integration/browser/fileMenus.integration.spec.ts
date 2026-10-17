@@ -2,6 +2,40 @@ import { expect, test } from '@playwright/test';
 
 test.afterEach(async ({ page }) => { await page.evaluate(() => window.ashFileMenusIntegration?.dispose()); });
 
+test('Explorer keeps file scrolling inside its pane and uses themed scrolling for overflowing pane headers', async ({ page }, testInfo) => {
+	await page.goto('/fileMenus.html?paneLayout');
+	await page.waitForFunction(() => !!window.ashFileMenusIntegration);
+	const host = page.locator('#explorer');
+	const panes = host.locator('.ash-pane-view-container');
+	const tree = host.getByRole('tree');
+	await expect(tree.getByRole('treeitem').first()).toBeVisible();
+	const timeline = host.getByRole('button', { name: 'Timeline', exact: true });
+	const before = await timeline.boundingBox();
+	await tree.hover();
+	await page.mouse.wheel(0, 500);
+	const treeViewport = host.locator('.ash-list-scrollable > .ash-scrollbar-viewport');
+	await expect.poll(() => treeViewport.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+	expect(await timeline.boundingBox()).toEqual(before);
+	await expect(panes).toHaveCSS('overflow-y', 'hidden');
+	await expect(panes.locator(':scope > .ash-scrollbar-track-vertical')).toBeHidden();
+	await host.screenshot({ path: testInfo.outputPath('explorer-contained-scrollbar.png') });
+
+	await page.evaluate(() => window.ashFileMenusIntegration.layoutPanes(80));
+	const track = panes.locator(':scope > .ash-scrollbar-track-vertical');
+	await panes.hover();
+	await expect(track).toBeVisible();
+	await expect(track).toHaveAttribute('aria-disabled', 'false');
+	await track.focus();
+	await track.press('End');
+	await expect(timeline).toBeInViewport({ ratio: 1 });
+	await timeline.focus();
+	await expect(timeline).toBeFocused();
+	await host.screenshot({ path: testInfo.outputPath('overflowing-pane-scrollbar.png') });
+	await page.evaluate(() => window.ashFileMenusIntegration.layoutPanes(500));
+	await expect(track).toBeHidden();
+	await expect(timeline).toBeInViewport({ ratio: 1 });
+});
+
 for (const locale of ['en', 'zh-CN']) {
 	test(`Explorer keeps top-level folders lazy and truncates compact paths once (${locale})`, async ({ page }, testInfo) => {
 		const errors: string[] = [];
@@ -100,12 +134,19 @@ test('Explorer default shortcuts copy paths and open to the side through the com
 	await page.locator('.ash-tree-row').filter({ hasText: 'main.ts' }).click({ button: 'right' });
 	await page.keyboard.press('Escape');
 	const bindings = await page.evaluate(() => window.ashFileMenusIntegration.bindings());
-	for (const command of ['copyFilePath', 'copyRelativeFilePath', 'explorer.openToSide']) {
+	const pressCommand = async (command: string) => {
+		const keys: Record<string, string> = { cmd: 'Meta', ctrl: 'Control', shift: 'Shift', alt: 'Alt', enter: 'Enter' };
 		for (const chord of bindings[command]!.split(' ')) {
-			await page.keyboard.press(chord.replaceAll('cmd', 'Meta').replaceAll('ctrl', 'Control').replaceAll('shift', 'Shift').replaceAll('alt', 'Alt').replaceAll('enter', 'Enter'));
+			const shortcut = chord.split('+').map(key => keys[key] ?? (key.length === 1 ? `Key${key.toUpperCase()}` : key)).join('+');
+			await page.keyboard.press(shortcut);
 		}
-	}
-	await expect.poll(() => page.evaluate(() => window.ashFileMenusIntegration.clipboard())).toEqual(['/workspace/main.ts', 'main.ts']);
+	};
+	const expectedPath = await page.evaluate(() => navigator.userAgent.includes('Windows') ? '\\workspace\\main.ts' : '/workspace/main.ts');
+	await pressCommand('copyFilePath');
+	await expect.poll(() => page.evaluate(() => window.ashFileMenusIntegration.clipboard())).toEqual([expectedPath]);
+	await pressCommand('copyRelativeFilePath');
+	await expect.poll(() => page.evaluate(() => window.ashFileMenusIntegration.clipboard())).toEqual([expectedPath, 'main.ts']);
+	await pressCommand('explorer.openToSide');
 	await expect.poll(() => page.evaluate(() => window.ashFileMenusIntegration.opened())).toEqual([{ resource: 'file:///workspace/main.ts', target: 'sideGroup' }]);
 });
 

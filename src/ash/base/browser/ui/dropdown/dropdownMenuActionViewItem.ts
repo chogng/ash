@@ -4,7 +4,9 @@ import type {
 } from "../../contextmenu.js";
 import { addDisposableListener, stopEvent, h } from "../../dom.js";
 import type { IAction } from "../../../common/actions.js";
+import { CancellationTokenSource } from "../../../common/cancellation.js";
 import { Emitter } from "../../../common/event.js";
+import { MutableDisposable } from "../../../common/lifecycle.js";
 import { Lxicon } from "../../../common/lxicons.js";
 import { ActionViewItem, type ActionViewItemOptions } from "../actionbar/actionViewItems.js";
 import { Button } from "../button/button.js";
@@ -27,6 +29,7 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 	readonly onDidChangeVisibility = this._onDidChangeVisibility.event;
 	private button: Button | undefined;
 	private visible = false;
+	private readonly menuCancellation = this._register(new MutableDisposable<CancellationTokenSource>());
 
 	constructor(
 		action: IAction,
@@ -50,7 +53,13 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 			ariaLabel: this.action.label,
 			title: this.action.tooltip,
 			enabled: this.action.enabled,
-			onClick: () => this.show(),
+			onClick: () => {
+				if (this.visible) {
+					this.menuCancellation.value?.cancel();
+				} else {
+					this.show();
+				}
+			},
 		});
 		this.button = button;
 		container.classList.add("ash-dropdown-menu-action-view-item");
@@ -77,24 +86,40 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 
 	show(): void {
 		const button = this.button;
-		if (!button?.enabled || this.visible) return;
+		if (this.isDisposed || !button?.enabled || this.visible) return;
 		const actions = typeof this.actions === "function"
 			? this.actions()
 			: this.actions;
 		if (actions.length === 0) return;
 
+		const cancellation = new CancellationTokenSource();
+		this.menuCancellation.value = cancellation;
 		this.setVisible(true);
 		const options: IContextMenuDelegate = {
 			getAnchor: () => button.domNode,
 			getActions: () => actions,
 			...this.getAnchorOptions?.(button.domNode),
-			onHide: () => this.setVisible(false),
+			cancellationToken: cancellation.token,
+			onHide: () => {
+				if (this.menuCancellation.value !== cancellation) return;
+				this.menuCancellation.clear();
+				this.setVisible(false);
+			},
 		};
 		try {
 			this.contextMenuProvider.showContextMenu(options);
 		} catch (error) {
-			this.setVisible(false);
+			options.onHide?.(true);
 			throw error;
+		}
+	}
+
+	protected override disposeCore(): void {
+		// Close this item's presentation while its trigger and visibility listeners still exist.
+		try {
+			this.menuCancellation.value?.cancel();
+		} finally {
+			super.disposeCore();
 		}
 	}
 

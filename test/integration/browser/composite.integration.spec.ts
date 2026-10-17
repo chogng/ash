@@ -865,10 +865,26 @@ for (const locale of ['en', 'zh-CN']) {
 		};
 		await page.evaluate(() => window.ashEditorTitleIntegration.open('first', true));
 		await openMenu();
+		const trigger = host.locator('.ash-editor-group').first().locator('.ash-editor-title-actions [aria-haspopup="menu"]');
+		await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+		await trigger.click();
+		await expect(menu).toHaveCount(0);
+		await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+		await expect(trigger).toBeFocused();
+		await openMenu();
 		await expect(menu.locator('[role^=menuitem] .ash-button-label')).toHaveText(names);
 		await expect(menu.getByRole('menuitem', { name: names[1], exact: true }).locator('.ash-menu-keybinding kbd')).toHaveText([`${primaryLabel}K`, 'W']);
 		await expect(menu.getByRole('menuitem', { name: names[2], exact: true }).locator('.ash-menu-keybinding kbd')).toHaveText([`${primaryLabel}K`, 'U']);
 		await page.keyboard.press('Escape');
+		await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+		await expect(trigger).toBeFocused();
+		for (const key of ['Enter', 'Space']) {
+			await trigger.press(key);
+			await expect(menu).toBeVisible();
+			await trigger.press(key);
+			await expect(menu).toHaveCount(0);
+			await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+		}
 		await page.evaluate(() => window.ashEditorTitleIntegration.split());
 		await page.evaluate(() => window.ashEditorTitleIntegration.open('second'));
 		await openMenu(0);
@@ -987,7 +1003,8 @@ for (const locale of ['en', 'zh-CN']) {
 		await input.fill('utils.ts');
 		await copy.press('Enter');
 		await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.copiedProblems.length)).toBe(2);
-		expect(await page.evaluate(() => window.ashCompositeIntegration.copiedProblems[1])).toContain('/project/src/utils.ts');
+		const expectedPath = await page.evaluate(() => navigator.userAgent.includes('Windows') ? '\\project\\src\\utils.ts' : '/project/src/utils.ts');
+		expect(await page.evaluate(() => window.ashCompositeIntegration.copiedProblems[1])).toContain(expectedPath);
 		await page.evaluate(() => window.ashCompositeIntegration.resize(1000, 240));
 		await page.evaluate(() => window.ashCompositeIntegration.setEditorTheme('ash-light'));
 		await input.fill('');

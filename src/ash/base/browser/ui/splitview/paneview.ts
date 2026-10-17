@@ -7,6 +7,7 @@ import { RunOnceScheduler } from "../../../common/async.js";
 import { isReducedMotion, UI_ANIMATION_DURATION } from "../animations/animations.js";
 import { Lxicon } from "../../../common/lxicons.js";
 import { SplitView, type ISplitViewView } from "./splitview.js";
+import { ScrollableElement } from "../scrollbar/scrollableElement.js";
 import "./paneview.css";
 import { localize } from "../../../../nls.js";
 
@@ -249,6 +250,7 @@ export class Pane extends Disposable implements ISplitViewView {
 /** A collection of independent panes backed by the shared constrained SplitView. */
 export class PaneView extends Disposable {
 	readonly element: HTMLElement;
+	private readonly scrollable: ScrollableElement;
 	private readonly splitView: SplitView;
 	private readonly panes: Pane[] = [];
 	private readonly animationReset = this._register(new RunOnceScheduler(() => {
@@ -261,11 +263,11 @@ export class PaneView extends Disposable {
 
 	constructor(container: HTMLElement) {
 		super();
-		this.element = h(container.ownerDocument, "div");
-		this.element.className = "ash-pane-view-container";
-		container.append(this.element);
-		this._register(toDisposable(() => this.element.remove()));
-		this.splitView = this._register(new SplitView(this.element, "vertical", {
+		// Minimum pane sizes may exceed the host; keep that overflow in the shared themed viewport.
+		this.scrollable = this._register(new ScrollableElement(container, { direction: "vertical", tabIndex: -1 }));
+		this.element = this.scrollable.element;
+		this.element.classList.add("ash-pane-view-container");
+		this.splitView = this._register(new SplitView(this.scrollable.contentElement, "vertical", {
 			styles: { separatorBorder: "var(--ash-border)" },
 		}));
 		this.onDidSashChange = this.splitView.onDidChangeViewSizes;
@@ -351,17 +353,20 @@ export class PaneView extends Disposable {
 
 	layout(height: number, width: number): void {
 		this.height = height;
+		this.element.style.height = `${height}px`;
 		this.didLayout = true;
 		this.animationReset.cancel();
 		this.splitView.element.classList.remove("animated");
 		this.updateContentHeight();
 		// SplitView fits the viewport; its constraints already retain overflowing minimum sizes.
 		this.splitView.layout(height, width);
+		this.scrollable.layout();
 		this.updateSashLabels();
 	}
 
 	private updateContentHeight(): void {
 		this.splitView.element.style.height = `${Math.max(this.height, this.splitView.minimumSize)}px`;
+		this.scrollable.layout();
 	}
 
 	private updateSashLabels(): void {

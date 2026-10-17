@@ -1,4 +1,5 @@
 import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
+import { Pane, PaneView } from '../../../src/ash/base/browser/ui/splitview/paneview.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { getKeybindingLabelParts, KeybindingLabelStyle, getKeybindingLabel } from '../../../src/ash/base/common/keybindingLabels.js';
 import { IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
@@ -13,6 +14,7 @@ import { INotificationService } from '../../../src/ash/platform/notification/com
 import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
 import { WorkbenchKeybindingService } from '../../../src/ash/workbench/services/keybinding/browser/keybindingService.js';
 import { BrowserKeyboardLayoutService } from '../../../src/ash/workbench/services/keybinding/browser/keyboardLayoutService.js';
+import { createUSKeyboardMapping } from '../../../src/ash/workbench/services/keybinding/common/keyboardMapping.js';
 import { IUserDataProfileService } from '../../../src/ash/workbench/services/userDataProfile/common/userDataProfile.js';
 import { UserDataProfileService } from '../../../src/ash/workbench/services/userDataProfile/browser/userDataProfileService.js';
 import { createTestEditorServices, createTestFileService } from '../../../src/ash/workbench/test/common/testEditorServices.js';
@@ -55,6 +57,7 @@ const services = lifetime.add(componentServices.createChild());
 const root = URI.file('/workspace');
 const resource = URI.file('/workspace/main.ts');
 const compactFolders = new URLSearchParams(location.search).has('compactFolders');
+const paneLayout = new URLSearchParams(location.search).has('paneLayout');
 if (compactFolders) await configuration.updateValue('explorer.compactFolders', true);
 const profiles = new UserDataProfileService();
 const provider: IFileSystemProvider = new MemoryFileService([[resource, 'const value = 1;'], [profiles.currentProfile.keybindingsResource, '[]']]);
@@ -69,6 +72,10 @@ const compactDirectories: Record<string, readonly [string, FileKind][]> = {
 };
 provider.readDirectory = async folder => {
 	directoryReads.push(folder.path);
+	if (paneLayout) return folder.path === root.path ? Array.from({ length: 100 }, (_, index) => {
+		const name = `file-${String(index).padStart(3, '0')}.ts`;
+		return { resource: URI.joinPath(root, name), name, kind: FileKind.File };
+	}) : [];
 	if (compactFolders) return (compactDirectories[folder.path] ?? []).map(([name, kind]) => ({ resource: URI.joinPath(folder, name), name, kind }));
 	return folder.path === root.path ? [{ resource, name: 'main.ts', kind: FileKind.File }] : [];
 };
@@ -80,7 +87,11 @@ services.registerInstance(ICommandService, commands);
 services.registerInstance(IDialogService, lifetime.add(new DialogService()));
 services.registerInstance(INotificationService, lifetime.add(new NotificationService()));
 services.registerInstance(IUserDataProfileService, profiles);
-const keyboardLayout = lifetime.add(new BrowserKeyboardLayoutService({ navigator }));
+// Playwright emits US key events; host layout discovery must not reset a shortcut between its chords.
+const keyboardLayout = lifetime.add(new BrowserKeyboardLayoutService({
+	navigator,
+	layout: { layout: { id: 'fixture-us', label: 'Fixture US', source: 'user', isUSStandard: true }, mapping: createUSKeyboardMapping() },
+}));
 const keybindings = lifetime.add(services.createInstance(WorkbenchKeybindingService, {
 	ownerDocument: document, commandService: commands, contextKeyService: contexts, keyboardLayoutService: keyboardLayout,
 }));
@@ -111,6 +122,18 @@ const explorer = lifetime.add(services.createInstance(ExplorerView, document.get
 document.getElementById('explorer')!.append(explorer.element);
 explorer.setVisible(true);
 explorer.layout(500, 0, 420);
+let panes: PaneView | undefined;
+if (paneLayout) {
+	const host = document.getElementById('explorer')!;
+	host.style.display = 'flex';
+	host.style.flexDirection = 'column';
+	panes = lifetime.add(new PaneView(host));
+	panes.addPane(explorer, 444);
+	for (const title of ['Outline', 'Timeline']) {
+		panes.addPane(lifetime.add(new Pane(host, { id: title, title, collapsed: true })), 28);
+	}
+	panes.layout(500, 420);
+}
 const editorButton = document.getElementById('editor-menu')!;
 const editorContext = lifetime.add(contexts.createScoped(editorButton));
 editorContext.setContext(ResourceSchemeContext.key, 'file');
@@ -122,6 +145,10 @@ editorButton.addEventListener('contextmenu', openEditorMenu);
 lifetime.add(toDisposable(() => editorButton.removeEventListener('contextmenu', openEditorMenu)));
 
 const integration = {
+	layoutPanes: (height: number) => {
+		document.getElementById('explorer')!.style.height = `${height}px`;
+		panes!.layout(height, 420);
+	},
 	directoryReads: () => [...directoryReads],
 	setCompactFolders: (enabled: boolean) => configuration.updateValue('explorer.compactFolders', enabled),
 	clipboard: () => [...clipboard], opened: () => [...opened],

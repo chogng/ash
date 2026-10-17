@@ -139,7 +139,7 @@ test("PaneView keeps minimum heights scrollable and supports header keyboard nav
 	view.addPane(first, 100);
 	view.addPane(second, 100);
 	view.layout(60, 280);
-	assert.equal((view.element.firstElementChild as HTMLElement).style.height, "296px");
+	assert.equal(view.element.querySelector<HTMLElement>(".ash-split-view")!.style.height, "296px");
 	const firstHeader = first.element.querySelector<HTMLButtonElement>(".ash-pane-view-header-button")!;
 	const secondHeader = second.element.querySelector<HTMLButtonElement>(".ash-pane-view-header-button")!;
 	firstHeader.focus();
@@ -150,7 +150,7 @@ test("PaneView keeps minimum heights scrollable and supports header keyboard nav
 	secondHeader.dispatchEvent(new browserEnvironment.window.KeyboardEvent("keydown", { key: "Home", bubbles: true }));
 	assert.equal(document.activeElement, firstHeader);
 	first.setCollapsed(true);
-	assert.equal((view.element.firstElementChild as HTMLElement).style.height, "60px");
+	assert.equal(view.element.querySelector<HTMLElement>(".ash-split-view")!.style.height, "60px");
 	first.setCollapsed(false);
 	assert.deepEqual([view.getPaneSize(first), view.getPaneSize(second)], [148, 28]);
 });
@@ -165,16 +165,16 @@ test('PaneView retains changing content constraints through overflow, collapse a
 	view.layout(400, 280);
 	first.minimumBodySize = 300;
 	assert.deepEqual([view.getPaneSize(first), view.getPaneSize(second)], [328, 108]);
-	assert.equal((view.element.firstElementChild as HTMLElement).style.height, '436px');
+	assert.equal(view.element.querySelector<HTMLElement>('.ash-split-view')!.style.height, '436px');
 	first.setCollapsed(true);
 	assert.equal(view.getPaneSize(first), 28);
 	first.minimumBodySize = 350;
 	assert.equal(view.getPaneSize(first), 28);
 	first.setCollapsed(false);
 	assert.equal(view.getPaneSize(first), 378);
-	assert.equal((view.element.firstElementChild as HTMLElement).style.height, '486px');
+	assert.equal(view.element.querySelector<HTMLElement>('.ash-split-view')!.style.height, '486px');
 	first.minimumBodySize = 120;
-	assert.equal((view.element.firstElementChild as HTMLElement).style.height, '400px');
+	assert.equal(view.element.querySelector<HTMLElement>('.ash-split-view')!.style.height, '400px');
 	assert.equal(view.getPaneSize(first) + view.getPaneSize(second), 400);
 	view.removePane(first);
 	first.minimumBodySize = 360;

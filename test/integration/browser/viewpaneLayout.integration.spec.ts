@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import type { } from './composite.integration.js';
 
 for (const locale of ['en', 'zh-CN']) {
 	test(`Symphony form scrolls and submits from the keyboard in a short pane (${locale})`, async ({ page }, testInfo) => {
@@ -104,17 +105,24 @@ test('SCM Agent Review keeps its empty message and action inside the minimum bod
 	expect(await body.evaluate(element => element.scrollHeight - element.clientHeight)).toBeLessThanOrEqual(1);
 });
 
-for (const [locale, theme] of [['en', ''], ['zh-CN', ''], ['zh-CN', 'dark'], ['zh-CN', 'hc'], ['zh-CN', 'hcLight']]) {
-	test(`Problems keeps compact filters and keyboard menu access (${locale}, ${theme || 'light'})`, async ({ page }, testInfo) => {
+for (const [locale, theme] of [['en', 'ash-light'], ['zh-CN', 'ash-light'], ['zh-CN', 'ash-dark'], ['zh-CN', 'ash-high-contrast-dark'], ['zh-CN', 'ash-high-contrast-light']]) {
+	test(`Problems keeps compact filters and keyboard menu access (${locale}, ${theme})`, async ({ page }, testInfo) => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));
-		await page.goto(`/viewpaneLayout.html?view=problems&locale=${locale}&${theme}`);
-		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
-		const pane = page.locator('[data-view-id="fixture.problems"]');
-		const input = pane.getByRole('textbox');
-		const filter = pane.getByRole('button', { name: locale === 'en' ? 'Filter' : '筛选', exact: true });
+		await page.goto(`/composite.html?problems&locale=${locale}`);
+		await page.waitForFunction(() => !!window.ashCompositeIntegration);
+		await page.evaluate(async theme => {
+			window.ashCompositeIntegration.setEditorTheme(theme);
+			await window.ashCompositeIntegration.open('ash.panel.problems');
+			window.ashCompositeIntegration.resize(480, 180);
+		}, theme);
+		const panel = page.locator('.ash-workbench-panel');
+		const title = panel.locator('.ash-panel-title-control');
+		const pane = panel.locator('[data-view-id="ash.problems"]');
+		const input = title.getByRole('textbox');
+		const filter = title.getByRole('button', { name: locale === 'en' ? 'Filter' : '筛选', exact: true });
 		await expect(input).toHaveAttribute('placeholder', locale === 'en' ? 'Filter problems' : '筛选问题');
-		const bounds = await pane.locator('.ash-problems-controls').evaluate(element => {
+		const bounds = await title.locator('.ash-problems-controls').evaluate(element => {
 			const input = element.querySelector('input')!.getBoundingClientRect();
 			const menu = element.querySelector('button')!.getBoundingClientRect();
 			return { overflow: element.scrollWidth - element.clientWidth, sameRow: Math.abs(input.top - menu.top) < 4, inputWidth: input.width, embedded: element.querySelector('.ash-problems-filter')!.contains(element.querySelector('button')) };
@@ -123,20 +131,22 @@ for (const [locale, theme] of [['en', ''], ['zh-CN', ''], ['zh-CN', 'dark'], ['z
 		expect(bounds.sameRow).toBe(true);
 		expect(bounds.embedded).toBe(true);
 		expect(bounds.inputWidth).toBeGreaterThan(80);
-		const collapse = pane.getByRole('button', { name: locale === 'en' ? 'Collapse All' : '全部折叠', exact: true });
+		const collapse = title.getByRole('button', { name: locale === 'en' ? 'Collapse All' : '全部折叠', exact: true });
 		await collapse.press('Enter');
-		const heading = pane.locator('.ash-problems-file-heading');
+		const heading = pane.locator('.ash-problems-file-heading').first();
 		await expect(heading).toHaveAttribute('aria-expanded', 'false');
-		await expect(pane.locator('.ash-problems-file-items')).toBeHidden();
+		for (const items of await pane.locator('.ash-problems-file-items').all()) {
+			await expect(items).toBeHidden();
+		}
 		await heading.press('Enter');
 		await expect(heading).toHaveAttribute('aria-expanded', 'true');
 		await collapse.focus();
 		await page.keyboard.press('ArrowRight');
-		const copy = pane.getByRole('button', { name: locale === 'en' ? 'Copy Problems' : '复制问题', exact: true });
+		const copy = title.getByRole('button', { name: locale === 'en' ? 'Copy Problems' : '复制问题', exact: true });
 		await expect(copy).toBeFocused();
 		await copy.press('Enter');
-		await expect.poll(() => page.evaluate(() => window.viewpaneLayoutIntegration.copiedProblems.length)).toBe(1);
-		expect(await page.evaluate(() => window.viewpaneLayoutIntegration.copiedProblems[0])).toContain('Fixture problem');
+		await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.copiedProblems.length)).toBe(1);
+		expect(await page.evaluate(() => window.ashCompositeIntegration.copiedProblems[0])).toContain("Type 'string' is not assignable to type 'number'.");
 		await input.focus();
 		await page.keyboard.press('Tab');
 		await expect(filter).toBeFocused();
@@ -144,12 +154,12 @@ for (const [locale, theme] of [['en', ''], ['zh-CN', ''], ['zh-CN', 'dark'], ['z
 		const errorOption = page.getByRole('menuitemcheckbox', { name: locale === 'en' ? 'Errors' : '错误', exact: true });
 		await expect(errorOption).toHaveAttribute('aria-checked', 'true');
 		await errorOption.press('Enter');
-		await expect(pane.locator('.ash-problems-item')).toHaveCount(0);
+		await expect(pane.locator('.ash-problems-item')).toHaveCount(1);
 		await expect(filter).toBeFocused();
 		const clear = pane.getByRole('button', { name: locale === 'en' ? 'Clear Filters' : '清除筛选', exact: true });
 		await clear.press('Enter');
 		await expect(input).toBeFocused();
-		await expect(pane.locator('.ash-problems-item')).toHaveCount(1);
+		await expect(pane.locator('.ash-problems-item')).toHaveCount(2);
 		await filter.press('ArrowDown');
 		await expect(errorOption).toHaveAttribute('aria-checked', 'true');
 		await page.keyboard.press('Escape');
@@ -157,7 +167,7 @@ for (const [locale, theme] of [['en', ''], ['zh-CN', ''], ['zh-CN', 'dark'], ['z
 		await input.fill('no match');
 		await expect(pane.getByRole('status')).toContainText(locale === 'en' ? 'No problems match' : '没有匹配');
 		await clear.press('Enter');
-		await testInfo.attach('problems-compact', { body: await page.locator('#root').screenshot(), contentType: 'image/png' });
+		await testInfo.attach('problems-compact', { body: await panel.screenshot(), contentType: 'image/png' });
 		expect(errors).toEqual([]);
 	});
 }
