@@ -105,3 +105,200 @@ fn initial_directory_opens_before_recovered_tool_continuations_resume() {
         recovered.close_connection(connection);
     }
 }
+
+#[test]
+fn unavailable_keyring_allows_local_model_turns_and_queue_restart() {
+    struct LocalModel(std::sync::atomic::AtomicUsize);
+    impl OperationClient for LocalModel {
+        fn execute(&self, request: &ClientRequest) -> Result<ClientResponse, ClientError> {
+            panic!("unexpected non-streaming request: {}", request.url());
+        }
+
+        fn execute_streaming(
+            &self,
+            request: &ClientRequest,
+            sink: &mut dyn ash_client::OperationStreamSink,
+        ) -> Result<ClientResponse, ClientError> {
+            assert_eq!(request.url(), "http://localhost:11434/v1/chat/completions");
+            assert!(
+                !request
+                    .headers()
+                    .iter()
+                    .any(|header| { header.name().eq_ignore_ascii_case("authorization") })
+            );
+            self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            sink.emit(b"data: {\"id\":\"local\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"local-model-ok\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"local\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n")?;
+            Ok(ClientResponse::new(200, vec![], vec![]))
+        }
+    }
+    let profile = tempfile::tempdir().unwrap();
+    let directory = tempfile::tempdir().unwrap();
+    let client = Arc::new(LocalModel(std::sync::atomic::AtomicUsize::new(0)));
+    let profile_runtime = || {
+        let mut runtime = LocalProfileRuntime::open(profile.path()).unwrap();
+        // Use the production encrypted store with a deterministic unavailable keyring.
+        runtime.secrets = Arc::new(
+            ash_secrets::ProfileSecretStore::open(
+                profile.path().join("secrets"),
+                Arc::new(ash_secrets::UnavailableSecretStore),
+            )
+            .unwrap(),
+        );
+        runtime
+    };
+    let runtime = profile_runtime();
+    let mut provider = ModelProviderConfig::new(ProviderId::new("ollama").unwrap());
+    provider.model_context.insert(
+        ModelId::new("local-fixture").unwrap(),
+        ModelContextConfig {
+            context_window: Some(32_000),
+            long_context: None,
+            auto_compact_token_limit: None,
+        },
+    );
+    let configured = runtime
+        .config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("local-model-config").unwrap(),
+            expected_revision: ConfigRevision::INITIAL,
+            command: UserConfigCommand::ConfigureConnection {
+                connection: provider.connection.clone(),
+                config: provider,
+            },
+        })
+        .unwrap();
+    runtime
+        .config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("local-model-default").unwrap(),
+            expected_revision: configured.revision,
+            command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                model: Patch::Value(ModelRef::new(
+                    ProviderId::new("ollama").unwrap(),
+                    ModelId::new("local-fixture").unwrap(),
+                )),
+                ..Default::default()
+            }),
+        })
+        .unwrap();
+    let open = |runtime| {
+        open_app_server(
+            AppServerOptions::new(profile.path())
+                .with_profile_runtime(Arc::new(runtime))
+                .with_codex_home(profile.path().join("codex"))
+                .with_dir_root(directory.path())
+                .with_model_operation_client(client.clone())
+                .without_built_in_skills(),
+        )
+        .unwrap()
+    };
+    let server = open(runtime);
+    let mut connection = server.connection();
+    let next_id = std::cell::Cell::new(1);
+    let rpc = |method: &str, params: serde_json::Value, connection: &mut ConnectionState| {
+        let id = next_id.get();
+        next_id.set(id + 1);
+        let response = local_call(
+            &server,
+            connection,
+            serde_json::json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}),
+        );
+        assert!(response.get("error").is_none(), "{method}: {response}");
+        response["result"].clone()
+    };
+    rpc(
+        "initialize",
+        serde_json::json!({"clientInfo":{"name":"keyring-recovery-test","version":"1"},"capabilities":{}}),
+        &mut connection,
+    );
+    assert_eq!(
+        rpc("secrets/status", serde_json::json!({}), &mut connection),
+        serde_json::json!({"status":"unavailable","mode":"encrypted"})
+    );
+    let created = rpc(
+        "session/create",
+        serde_json::json!({"commandId":"local-model-session","title":"Local model","executionTarget":null}),
+        &mut connection,
+    );
+    let session = created["session"]["sessionId"].as_str().unwrap();
+    let thread = created["session"]["threads"][0]["threadId"]
+        .as_str()
+        .unwrap();
+    let initial = rpc(
+        "session/thread/read",
+        serde_json::json!({"sessionId":session,"threadId":thread}),
+        &mut connection,
+    );
+    rpc(
+        "session/request",
+        serde_json::json!({"commandId":"local-model-turn","sessionId":session,"request":{
+            "type":"startTurn","threadId":thread,"expectedSequence":initial["thread"]["sequence"],
+            "input":[{"type":"text","text":"first local turn"}]
+        }}),
+        &mut connection,
+    );
+    let thread_id = ash_protocol::ThreadId::new(thread).unwrap();
+    let wait = |server: &crate::AppServer, count: usize| {
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            let snapshot = server.threads().read_thread(&thread_id).unwrap();
+            if snapshot.turns.len() == count
+                && snapshot.turns[count - 1].status == TurnStatus::Completed
+            {
+                return;
+            }
+            assert!(
+                !snapshot
+                    .turns
+                    .iter()
+                    .any(|turn| turn.status == TurnStatus::Failed)
+                    && std::time::Instant::now() < deadline,
+                "local model did not complete: {snapshot:?}"
+            );
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    };
+    wait(&server, 1);
+    let message: queue::QueuedMessage = serde_json::from_value(rpc(
+        "queue/enqueue",
+        serde_json::json!({"commandId":"local-model-queued","sessionId":session,"threadId":thread,
+            "mode":"agent","input":[{"type":"text","text":"second local turn"}],
+            "toolMode":"direct","approvalMode":ash_protocol::ApprovalMode::default()}),
+        &mut connection,
+    ))
+    .unwrap();
+    assert!(message.request.model.is_none());
+    server.close_connection(connection);
+    drop(server);
+
+    let restarted = Arc::new(open(profile_runtime()));
+    let queue = restarted.start_queue().unwrap().unwrap();
+    wait(&restarted, 2);
+    assert_eq!(client.0.load(std::sync::atomic::Ordering::Relaxed), 2);
+    assert_eq!(
+        restarted.threads().read_thread(&thread_id).unwrap().turns[1].model,
+        Some(ModelRef::new(
+            ProviderId::new("ollama").unwrap(),
+            ModelId::new("local-fixture").unwrap()
+        ))
+    );
+    let mut connection = restarted.connection();
+    let initialized = local_call(
+        &restarted,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{
+            "clientInfo":{"name":"keyring-recovery-test","version":"1"},"capabilities":{}}}),
+    );
+    assert!(initialized.get("error").is_none(), "{initialized}");
+    let status = local_call(
+        &restarted,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"secrets/status","params":{}}),
+    );
+    assert_eq!(
+        status["result"],
+        serde_json::json!({"status":"unavailable","mode":"encrypted"})
+    );
+    restarted.close_connection(connection);
+    drop(queue);
+}

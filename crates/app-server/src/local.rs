@@ -1634,14 +1634,11 @@ pub fn open_app_server_with_codebase_providers(
     });
     let mut runtime_config = resolve_local_config(&user_config, dir_config.as_deref())
         .map_err(|error| OpenAppServerError(error.0))?;
-    match model_provider.preferred_connections(&runtime_config.connections) {
-        Ok(connections) => runtime_config.providers.extend(connections),
-        // Initial host configuration can be installed without usable credentials. Invocation
-        // still resolves readiness normally; keeping the server alive exposes secrets/status
-        // so a locked, denied or damaged keyring can be recovered from the settings UI.
-        Err(ash_model_provider::ModelProviderError::Credential(_)) => {}
-        Err(error) => return Err(OpenAppServerError(error.to_string())),
-    }
+    runtime_config.providers.extend(
+        model_provider
+            .preferred_connections(&runtime_config.connections)
+            .map_err(open_error)?,
+    );
     let approval_review_model: ash_core::ApprovalReviewerFactory = Arc::new(|model| {
         let Some((identity, runtime)) = model.approval_review_model()? else {
             return Ok(ash_extension_api::ApprovalReviewer::Unavailable);

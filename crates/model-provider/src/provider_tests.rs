@@ -8,6 +8,170 @@ use serde_json::json;
 use std::collections::BTreeMap;
 
 #[test]
+fn unavailable_keyring_does_not_block_credential_free_connections() {
+    let root = tempfile::tempdir().unwrap();
+    let secrets = Arc::new(ash_secrets::UnavailableSecretStore);
+    let client = Arc::new(AshClient::new(Arc::new(UreqHttpClient::new().unwrap())));
+    let kimi = KimiOAuth::with_client(secrets.clone(), client.clone());
+    let xai = supergrok::SuperGrokOAuth::with_client(
+        secrets.clone(),
+        client.clone(),
+        root.path().join("xai.lock"),
+    );
+    let runtime = ModelProviderRuntime::with_client_and_secrets(
+        ProviderConfigRegistry::builtin(),
+        client,
+        secrets,
+    )
+    .with_kimi_oauth(kimi)
+    .with_supergrok_oauth(xai);
+
+    let custom: ModelProviderConfig = serde_json::from_value(json!({
+        "connection":"custom-optional", "provider":"custom-optional",
+        "baseUrl":"https://optional.example.test/v1",
+        "custom":{"name":"Optional key", "protocol":"responses", "model":"fixture", "contextWindow":272000}
+    })).unwrap();
+    let selected = runtime
+        .preferred_connections(&BTreeMap::from([(
+            custom.connection.clone(),
+            custom.clone(),
+        )]))
+        .unwrap();
+    assert_eq!(
+        selected[&ProviderId::new("ollama").unwrap()]
+            .connection
+            .as_str(),
+        "ollama"
+    );
+    assert!(!selected.contains_key(&ProviderId::new("openai").unwrap()));
+    assert!(!selected.contains_key(&ProviderId::new("kimi").unwrap()));
+    assert!(!selected.contains_key(&ProviderId::new("xai").unwrap()));
+    assert!(!selected.contains_key(&custom.provider));
+    assert!(matches!(
+        runtime.build_model(
+            &custom,
+            &ModelRef::new(custom.provider.clone(), ModelId::new("fixture").unwrap()),
+        ),
+        Err(ModelProviderError::Credential(_))
+    ));
+    // Discovery may skip an unreadable account; selecting it still reports the error.
+    for (connection, provider, model) in [
+        ("openai", "openai", "gpt-5.6"),
+        ("kimi-subscription", "kimi", "kimi-k2.6"),
+        ("xai-subscription", "xai", "grok-4.5"),
+    ] {
+        let config = ModelProviderConfig::for_connection(
+            ash_protocol::ModelConnectionId::new(connection).unwrap(),
+        );
+        let model = ModelRef::new(
+            ProviderId::new(provider).unwrap(),
+            ModelId::new(model).unwrap(),
+        );
+        assert!(matches!(
+            runtime
+                .build_model(&config, &model)
+                .and_then(|model| model.invoke(&ModelRequest::text("hello"))),
+            Err(ModelProviderError::Credential(_))
+        ));
+    }
+}
+
+#[test]
+fn unreadable_subscription_does_not_block_its_ready_api_connection() {
+    let root = tempfile::tempdir().unwrap();
+    let secrets = Arc::new(MemorySecretStore::default());
+    let client = Arc::new(AshClient::new(Arc::new(UreqHttpClient::new().unwrap())));
+    let runtime = ModelProviderRuntime::with_client_and_secrets(
+        ProviderConfigRegistry::builtin(),
+        client.clone(),
+        secrets.clone(),
+    )
+    .with_kimi_oauth(KimiOAuth::with_client(secrets.clone(), client.clone()))
+    .with_supergrok_oauth(supergrok::SuperGrokOAuth::with_client(
+        secrets.clone(),
+        client,
+        root.path().join("xai.lock"),
+    ));
+    let credentials =
+        ProviderCredentialService::new(ProviderConfigRegistry::builtin(), secrets.clone());
+    for provider in ["kimi", "xai"] {
+        credentials
+            .set_api_key(
+                &ash_protocol::ModelConnectionId::new(provider).unwrap(),
+                b"api-key".to_vec(),
+            )
+            .unwrap();
+        secrets
+            .store(
+                &SecretKey::new(format!("provider/{provider}/current/oauth")).unwrap(),
+                &SecretValue::new(b"invalid credential".to_vec()),
+            )
+            .unwrap();
+    }
+    let selected = runtime.preferred_connections(&BTreeMap::new()).unwrap();
+    for provider in ["kimi", "xai"] {
+        assert_eq!(
+            selected[&ProviderId::new(provider).unwrap()]
+                .connection
+                .as_str(),
+            provider
+        );
+    }
+}
+
+#[test]
+fn unreadable_api_key_does_not_block_another_ready_connection() {
+    struct PartlyUnavailable(MemorySecretStore);
+    impl SecretStore for PartlyUnavailable {
+        fn load(
+            &self,
+            key: &SecretKey,
+        ) -> Result<Option<SecretValue>, ash_secrets::SecretStoreError> {
+            if key
+                == &crate::provider_api_key_secret_key(
+                    &ash_protocol::ModelConnectionId::new("openai").unwrap(),
+                )
+            {
+                return Err(ash_secrets::SecretStoreError::new(
+                    ash_secrets::SecretStoreErrorKind::BackendFailure,
+                    "unreadable fixture credential",
+                ));
+            }
+            self.0.load(key)
+        }
+
+        fn store(
+            &self,
+            key: &SecretKey,
+            value: &SecretValue,
+        ) -> Result<(), ash_secrets::SecretStoreError> {
+            self.0.store(key, value)
+        }
+
+        fn delete(
+            &self,
+            key: &SecretKey,
+        ) -> Result<ash_secrets::DeleteSecretOutcome, ash_secrets::SecretStoreError> {
+            self.0.delete(key)
+        }
+    }
+    let secrets = Arc::new(PartlyUnavailable(MemorySecretStore::default()));
+    let credentials =
+        ProviderCredentialService::new(ProviderConfigRegistry::builtin(), secrets.clone());
+    credentials
+        .set_api_key(
+            &ash_protocol::ModelConnectionId::new("anthropic").unwrap(),
+            b"api-key".to_vec(),
+        )
+        .unwrap();
+    let runtime = ModelProviderRuntime::with_secrets(ProviderConfigRegistry::builtin(), secrets);
+    let selected = runtime.preferred_connections(&BTreeMap::new()).unwrap();
+    assert!(selected.contains_key(&ProviderId::new("anthropic").unwrap()));
+    assert!(!selected.contains_key(&ProviderId::new("openai").unwrap()));
+    assert!(credentials.catalog().is_err());
+}
+
+#[test]
 fn glm_connection_priority_follows_ready_credentials() {
     let secrets = Arc::new(MemorySecretStore::default());
     let client = Arc::new(AshClient::new(Arc::new(UreqHttpClient::new().unwrap())));

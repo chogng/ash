@@ -345,7 +345,13 @@ fn persistent_queue_recovers_after_backend_restart_without_duplicate_turns() {
                 .with_dir_root(directory.path())
                 .with_agent_model_service(Arc::new(crate::local::ProviderModelService::new(
                     Arc::new(super::EchoModel),
-                ))),
+                )))
+                // Exercise failed credential reads without creating OS keyring entries.
+                .with_plugin_activation(
+                    &ash_core_plugins::PluginActivationSnapshot::empty(1).unwrap(),
+                    Arc::new(ash_secrets::UnavailableSecretStore),
+                )
+                .unwrap(),
         )
         .unwrap()
     };

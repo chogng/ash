@@ -1003,21 +1003,13 @@ impl ModelProviderRuntime {
     /// Chooses one ready connection per model vendor before an invocation is bound.
     /// Credential changes affect later bindings; a running invocation keeps its own connection.
     /// Readiness proves local credentials only; upstream plan eligibility is checked by the call.
+    /// Unreadable credentials make only their connection unready. Binding that connection
+    /// directly still reports its credential error instead of changing authentication or storage.
     pub fn preferred_connections(
         &self,
         configs: &BTreeMap<ash_protocol::ModelConnectionId, ModelProviderConfig>,
     ) -> Result<BTreeMap<ProviderId, ModelProviderConfig>, ModelProviderError> {
         let runtime = self.with_configs(configs.values())?;
-        let api_keys = runtime
-            .credentials
-            .as_ref()
-            .map(ProviderCredentialService::catalog)
-            .transpose()
-            .map_err(|error| ModelProviderError::Credential(error.to_string()))?
-            .unwrap_or_default()
-            .into_iter()
-            .map(|status| (status.connection, status.api_key_configured))
-            .collect::<BTreeMap<_, _>>();
         let mut selected: BTreeMap<ProviderId, (u8, ModelProviderConfig)> = BTreeMap::new();
         for connection in runtime.configs.connections() {
             if connection.id.as_str() == "openai-compatible"
@@ -1035,9 +1027,7 @@ impl ModelProviderRuntime {
                     None => false,
                 },
                 "kimi-subscription" => match &runtime.kimi_oauth {
-                    Some(auth) => auth
-                        .subscription_ready()
-                        .map_err(|error| ModelProviderError::Credential(error.to_string()))?,
+                    Some(auth) => auth.subscription_ready().is_ok_and(|ready| ready),
                     None => false,
                 },
                 "kimi-desktop" => runtime
@@ -1046,13 +1036,9 @@ impl ModelProviderRuntime {
                     .is_some_and(|desktop| desktop.is_ready()),
                 "kimi-cli" => runtime.kimi_cli.as_ref().is_some_and(|cli| cli.is_ready()),
                 "xai-subscription" => match &runtime.supergrok_oauth {
-                    Some(auth) => auth
-                        .subscription_ready()
-                        .map_err(|error| ModelProviderError::Credential(error.to_string()))?,
+                    Some(auth) => auth.subscription_ready().is_ok_and(|ready| ready),
                     None => false,
                 },
-                // One broken account is an unavailable connection, not a failure of the
-                // directory runtime. Binding that connection directly still reports its error.
                 "bigmodel-coding-plan"
                 | "zai-coding-plan"
                 | "bigmodel-start-plan"
@@ -1060,11 +1046,21 @@ impl ModelProviderRuntime {
                     .glm_accounts
                     .get(connection.id.as_str())
                     .is_some_and(|auth| auth.account_id().is_ok_and(|id| id.is_some())),
-                _ => {
-                    connection.transport.api_key_policy
-                        != model_provider_info::ApiKeyPolicy::Required
-                        || api_keys.get(&connection.id) == Some(&true)
-                }
+                _ => match connection.transport.api_key_policy {
+                    model_provider_info::ApiKeyPolicy::Unsupported => true,
+                    model_provider_info::ApiKeyPolicy::Optional => {
+                        runtime.credentials.as_ref().is_none_or(|credentials| {
+                            credentials.api_key_configured(&connection.id).is_ok()
+                        })
+                    }
+                    model_provider_info::ApiKeyPolicy::Required => {
+                        runtime.credentials.as_ref().is_some_and(|credentials| {
+                            credentials
+                                .api_key_configured(&connection.id)
+                                .is_ok_and(|configured| configured)
+                        })
+                    }
+                },
             };
             if !ready {
                 continue;

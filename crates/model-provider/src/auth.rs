@@ -88,10 +88,9 @@ impl ProviderCredentialService {
                 let definition = &connection.transport;
                 let api_key_configured = match definition.api_key_policy {
                     ApiKeyPolicy::Unsupported => false,
-                    ApiKeyPolicy::Optional | ApiKeyPolicy::Required => self
-                        .secrets
-                        .load(&provider_api_key_secret_key(&connection.id))?
-                        .is_some(),
+                    ApiKeyPolicy::Optional | ApiKeyPolicy::Required => {
+                        self.api_key_configured(&connection.id)?
+                    }
                 };
                 Ok(ProviderCredentialStatus {
                     provider: connection.provider,
@@ -103,6 +102,16 @@ impl ProviderCredentialService {
                 })
             })
             .collect()
+    }
+
+    pub(crate) fn api_key_configured(
+        &self,
+        connection: &ModelConnectionId,
+    ) -> Result<bool, ProviderCredentialError> {
+        Ok(self
+            .secrets
+            .load(&provider_api_key_secret_key(connection))?
+            .is_some())
     }
 
     pub fn set_api_key(

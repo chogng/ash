@@ -50,6 +50,8 @@ config resolver。本 crate 仍只拥有模型 API 选择、credential materiali
 
 App Server 在接受每轮执行时，用同一目录快照计算预算并绑定有效模型资料。配置和目录更新影响后续执行，不原地修改已经运行的 `RegisteredModelInvoker`；账号就绪状态在每次调用前重新检查。
 
+`preferred_connections` 逐个检查连接就绪状态；某个 API key 或订阅凭据无法读取时，只将该连接视为未就绪，其他可用连接和 Ollama 等无需密钥的模型继续参与选择。直接绑定故障连接仍返回鉴权错误；连接发现不会切换密钥存储方式，也不会移除已保存的连接配置。
+
 ## 模型请求配置
 
 `ModelRuntimeRequest::with_info` 接收调用方已解析的有效模型资料，模型身份必须与选择一致；未传入时由 runtime 解析静态目录。绑定后调用与计数均使用捕获的 `Model`，不会重新用静态条目覆盖动态资料。
