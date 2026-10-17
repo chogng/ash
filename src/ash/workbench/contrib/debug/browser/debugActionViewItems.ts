@@ -106,7 +106,11 @@ export class StartDebugActionViewItem extends ActionViewItem {
 	}
 
 	private configurationLabel(configuration: IDebugConfiguration | IDebugCompound): string {
-		const label = configuration.workspaceFolderName ? `${configuration.name} — ${configuration.workspaceFolderName}` : configuration.name;
+		// Folder names only help when otherwise identical choices belong to different folders.
+		const needsFolder = configuration.workspaceFolderName && this.debug.getConfigurationManager().getAllConfigurations().some(
+			candidate => candidate.name === configuration.name && candidate.dirId !== configuration.dirId
+		);
+		const label = needsFolder ? `${configuration.name} — ${configuration.workspaceFolderName}` : configuration.name;
 		return 'configurations' in configuration ? localize('debug.compound', '{0} (compound)', label) : label;
 	}
 

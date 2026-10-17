@@ -1,5 +1,79 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { writeFile } from 'node:fs/promises';
+
+async function clickDebugHeaderAction(page: Page, section: 'stack' | 'breakpoints', name: string): Promise<void> {
+	const header = page.locator(`[data-pane-view-id="ash-debug-${section}"] > .ash-pane-view-header`);
+	await header.hover();
+	await header.getByRole('button', { name, exact: true }).click();
+}
+
+test('disassembly launch waits for header intent and opens through keyboard focus and pointer hover', async ({ page }) => {
+	await page.goto('/debug.html');
+	const stack = page.locator('[data-pane-view-id="ash-debug-stack"]');
+	const open = stack.locator('[data-action-id="debug.action.openDisassemblyView"] button');
+	await expect(open).toBeAttached();
+	await expect(open).toBeEnabled();
+	await expect(open).toHaveCSS('visibility', 'hidden');
+	await expect(page.getByRole('button', { name: 'Open Disassembly View', exact: true })).toHaveCount(0);
+	expect(await page.evaluate(() => window.ashDebugIntegration.disassemblyRequests())).toEqual([]);
+	await stack.getByRole('button', { name: 'Call Stack', exact: true }).focus();
+	await expect(open).toBeVisible();
+	await open.focus();
+	await open.press('Enter');
+	await expect(page.locator('.ash-disassembly [data-instruction-address="0x1000"]')).toBeVisible();
+	await page.reload();
+	await expect(open).toHaveCSS('visibility', 'hidden');
+	await clickDebugHeaderAction(page, 'stack', 'Open Disassembly View');
+	await expect(page.locator('.ash-disassembly [data-instruction-address="0x1000"]')).toBeVisible();
+});
+
+test('debug breakpoints pane follows content and fills space only when its peers are collapsed', async ({ page }, testInfo) => {
+	await page.goto('/debug.html?launch-controls');
+	const section = page.locator('[data-pane-view-id="ash-debug-breakpoints"]');
+	const body = section.locator(':scope > .ash-pane-view-content');
+	const header = section.getByRole('button', { name: 'Breakpoints', exact: true });
+	const contentHeight = () => body.evaluate(element => Math.ceil([...element.children].reduce((height, child) => height + child.getBoundingClientRect().height, 0)));
+	const bodyHeight = () => body.evaluate(element => element.getBoundingClientRect().height);
+	await expect(page.locator('.ash-debug-exceptions > li')).toHaveCount(2);
+	await expect.poll(bodyHeight).toBe(await contentHeight());
+	await page.evaluate(() => window.ashDebugIntegration.stop());
+	await expect(body).toHaveCSS('height', '0px');
+	await expect(header).toHaveAttribute('aria-expanded', 'true');
+	await page.screenshot({ path: testInfo.outputPath('debug-breakpoints-empty.png'), clip: { x: 0, y: 0, width: 280, height: 640 } });
+
+	await page.evaluate(() => window.ashDebugIntegration.setBreakpointCount(3));
+	await expect(page.locator('.ash-debug-breakpoints > li')).toHaveCount(3);
+	await expect.poll(bodyHeight).toBe(await contentHeight());
+	const populatedHeight = await bodyHeight();
+	await page.evaluate(() => window.ashDebugIntegration.setBreakpointCount(1));
+	await expect.poll(bodyHeight).toBeLessThan(populatedHeight);
+	await expect.poll(bodyHeight).toBe(await contentHeight());
+	await page.evaluate(() => window.ashDebugIntegration.setBreakpointCount(0));
+	await expect(body).toHaveCSS('height', '0px');
+
+	const peerHeaders = ['Variables', 'Watch', 'Call Stack'].map(name => page.getByRole('button', { name, exact: true }));
+	for (const peer of peerHeaders) {
+		await peer.focus();
+		await peer.press('ArrowLeft');
+	}
+	await expect.poll(bodyHeight).toBeGreaterThan(300);
+	await expect(page.locator('.ash-debug-section.closing')).toHaveCount(0);
+	await expect.poll(() => section.evaluate(element => Math.round(element.getBoundingClientRect().bottom - element.closest('.ash-pane-view-container')!.getBoundingClientRect().bottom))).toBe(0);
+	await page.screenshot({ path: testInfo.outputPath('debug-breakpoints-fill.png'), clip: { x: 0, y: 0, width: 280, height: 640 } });
+	await peerHeaders[0]!.press('ArrowRight');
+	await expect(body).toHaveCSS('height', '0px');
+	await expect(header).toHaveAttribute('aria-expanded', 'true');
+
+	await page.evaluate(() => window.ashDebugIntegration.setBreakpointCount(12));
+	await expect.poll(bodyHeight).toBeGreaterThanOrEqual(9 * 22);
+	await expect.poll(async () => await bodyHeight() <= await contentHeight()).toBe(true);
+	await header.focus();
+	await header.press('ArrowLeft');
+	await page.evaluate(() => window.ashDebugIntegration.setBreakpointCount(0));
+	await header.press('ArrowRight');
+	await expect(body).toHaveCSS('height', '0px');
+	await expect(header).toBeFocused();
+});
 
 test('debug launch title navigates its compound controls and dismisses its popup when hidden', async ({ page }) => {
 	await page.goto('/debug.html?launch-controls');
@@ -57,7 +131,7 @@ test('debug launch dropdown searches configurations, retains selection, starts c
 	await page.getByRole('button', { name: 'Open launch.json', exact: true }).click();
 	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.openedSources().at(-1))).toMatchObject({ resource: 'file:///second/.vscode/launch.json' });
 	await dropdown.click();
-	await page.getByRole('menuitemradio', { name: 'All — Second (compound)', exact: true }).click();
+	await page.getByRole('menuitemradio', { name: 'All (compound)', exact: true }).click();
 	await page.getByRole('button', { name: 'Start Debugging', exact: true }).click();
 	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.launches())).toEqual(['second', 'second', 'all']);
 	await dropdown.click();
@@ -86,7 +160,7 @@ test('debug launch dropdown uses Chinese labels and stays inside a narrow sideba
 		expect(geometry).toEqual({ fits: true, overflow: false, ellipsis: 'ellipsis' });
 		await dropdown.click();
 		await expect(page.getByPlaceholder('搜索配置', { exact: true })).toBeFocused();
-		await expect(page.getByRole('menuitemradio', { name: 'All — Second（复合配置）', exact: true })).toBeVisible();
+		await expect(page.getByRole('menuitemradio', { name: 'All（复合配置）', exact: true })).toBeVisible();
 		await page.getByPlaceholder('搜索配置', { exact: true }).press('Escape');
 		await expect(dropdown).toBeFocused();
 	}
@@ -138,7 +212,7 @@ test('debug console coalesces an output flood and preserves keyboard evaluation 
 
 test('disassembly navigates instruction pages, follows frame focus, toggles breakpoints and steps by instruction', async ({ page }) => {
 	await page.goto('/debug.html');
-	await page.getByRole('button', { name: 'Open Disassembly View', exact: true }).click();
+	await clickDebugHeaderAction(page, 'stack', 'Open Disassembly View');
 	const view = page.locator('.ash-disassembly');
 	const grid = view.getByRole('grid', { name: 'Disassembly', exact: true });
 	await expect(view.locator('[data-instruction-address="0x1000"]')).toHaveAttribute('aria-current', 'step');
@@ -148,7 +222,7 @@ test('disassembly navigates instruction pages, follows frame focus, toggles brea
 	await expect(view.getByRole('button', { name: 'Toggle instruction breakpoint at 0x1000', exact: true })).toHaveAttribute('aria-pressed', 'true');
 	await grid.press('F9');
 	await expect(view.getByRole('button', { name: 'Toggle instruction breakpoint at 0x1000', exact: true })).toHaveAttribute('aria-pressed', 'false');
-	await page.getByRole('button', { name: 'Add Instruction Breakpoint', exact: true }).click();
+	await clickDebugHeaderAction(page, 'stack', 'Add Instruction Breakpoint');
 	const byteOffset = page.getByRole('textbox', { name: 'Instruction byte offset', exact: true });
 	await byteOffset.fill('4');
 	await byteOffset.press('Enter');
@@ -180,7 +254,7 @@ test('disassembly navigates instruction pages, follows frame focus, toggles brea
 
 test('disassembly discards held replies after another frame and after resume', async ({ page }) => {
 	await page.goto('/debug.html');
-	await page.getByRole('button', { name: 'Open Disassembly View', exact: true }).click();
+	await clickDebugHeaderAction(page, 'stack', 'Open Disassembly View');
 	const view = page.locator('.ash-disassembly');
 	await expect(view.locator('[data-instruction-address="0x1000"]')).toBeVisible();
 	await page.evaluate(() => window.ashDebugIntegration.holdDisassembly());
@@ -202,7 +276,7 @@ test('disassembly discards held replies after another frame and after resume', a
 
 test('disassembly opens adapter-owned source as a read-only editor', async ({ page }) => {
 	await page.goto('/debug.html?virtual');
-	await page.getByRole('button', { name: 'Open Disassembly View', exact: true }).click();
+	await clickDebugHeaderAction(page, 'stack', 'Open Disassembly View');
 	const grid = page.locator('.ash-disassembly').getByRole('grid');
 	await expect(page.locator('.ash-disassembly [data-instruction-address="0x1000"]')).toBeVisible();
 	await grid.focus();
@@ -212,7 +286,7 @@ test('disassembly opens adapter-owned source as a read-only editor', async ({ pa
 
 test('a frame without an instruction reference can inspect an explicit address', async ({ page }) => {
 	await page.goto('/debug.html?no-address');
-	await page.getByRole('button', { name: 'Open Disassembly View', exact: true }).click();
+	await clickDebugHeaderAction(page, 'stack', 'Open Disassembly View');
 	const view = page.locator('.ash-disassembly');
 	await expect(view.getByRole('status')).toHaveText('This stack frame has no instruction address. Enter an address to inspect.');
 	const address = view.getByRole('textbox', { name: 'Instruction address', exact: true });
@@ -229,7 +303,7 @@ test('disposing disassembly retires its pending adapter reply and DOM listeners'
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
 	await page.goto('/debug.html');
-	await page.getByRole('button', { name: 'Open Disassembly View', exact: true }).click();
+	await clickDebugHeaderAction(page, 'stack', 'Open Disassembly View');
 	const view = page.locator('.ash-disassembly');
 	await expect(view.locator('[data-instruction-address="0x1000"]')).toBeVisible();
 	await page.evaluate(() => window.ashDebugIntegration.holdDisassembly());
@@ -243,7 +317,7 @@ test('disposing disassembly retires its pending adapter reply and DOM listeners'
 
 test('disassembly controls and headings use the selected language', async ({ page }) => {
 	await page.goto('/debug.html?locale=zh-cn');
-	await page.getByRole('button', { name: '打开反汇编视图', exact: true }).click();
+	await clickDebugHeaderAction(page, 'stack', '打开反汇编视图');
 	const view = page.locator('.ash-disassembly');
 	await expect(view.getByRole('grid', { name: '反汇编', exact: true })).toBeVisible();
 	await expect(view.getByRole('columnheader')).toHaveText(['断点', '地址', '机器码', '指令']);
@@ -254,7 +328,7 @@ test('disassembly controls and headings use the selected language', async ({ pag
 
 test('all breakpoint families expose localized creation and access labels', async ({ page }) => {
 	await page.goto('/debug.html?locale=zh-cn');
-	await page.getByRole('button', { name: '添加函数断点', exact: true }).click();
+	await clickDebugHeaderAction(page, 'breakpoints', '添加函数断点');
 	const name = page.getByRole('textbox', { name: '函数名称', exact: true });
 	await name.fill('worker');
 	await name.press('Enter');
@@ -264,7 +338,7 @@ test('all breakpoint families expose localized creation and access labels', asyn
 	await expect(access.locator('option')).toHaveText(['读取', '写入', '读取和写入']);
 	await page.getByRole('button', { name: '保存断点', exact: true }).click();
 	await expect(page.locator('[data-breakpoint-kind="data"]')).toContainText('数据：parent（写入）');
-	await page.getByRole('button', { name: '添加指令断点', exact: true }).click();
+	await clickDebugHeaderAction(page, 'stack', '添加指令断点');
 	const offset = page.getByRole('textbox', { name: '指令字节偏移', exact: true });
 	await offset.fill('-4');
 	await offset.press('Enter');
@@ -273,7 +347,7 @@ test('all breakpoint families expose localized creation and access labels', asyn
 
 test('function breakpoints add and edit by keyboard and participate in bulk controls', async ({ page }) => {
 	await page.goto('/debug.html');
-	await page.getByRole('button', { name: 'Add Function Breakpoint', exact: true }).click();
+	await clickDebugHeaderAction(page, 'breakpoints', 'Add Function Breakpoint');
 	const name = page.getByRole('textbox', { name: 'Function name', exact: true });
 	await expect(name).toBeFocused();
 	await name.press('Enter');
@@ -330,7 +404,7 @@ test('a data breakpoint query cannot open a stale draft after execution resumes'
 
 test('instruction breakpoints use the selected instruction reference, validate byte offsets and retire their draft on resume', async ({ page }) => {
 	await page.goto('/debug.html');
-	await page.getByRole('button', { name: 'Add Instruction Breakpoint', exact: true }).click();
+	await clickDebugHeaderAction(page, 'stack', 'Add Instruction Breakpoint');
 	const address = page.getByRole('textbox', { name: 'Instruction address', exact: true });
 	await expect(address).toBeFocused();
 	await expect(address).toHaveValue('0x1000');
@@ -347,7 +421,7 @@ test('instruction breakpoints use the selected instruction reference, validate b
 	await address.fill('0x2000');
 	await address.press('Escape');
 	await expect(row).toContainText('0x1000');
-	await page.getByRole('button', { name: 'Add Instruction Breakpoint', exact: true }).click();
+	await clickDebugHeaderAction(page, 'stack', 'Add Instruction Breakpoint');
 	await page.evaluate(() => window.ashDebugIntegration.resume());
 	await expect(address).toHaveCount(0);
 	await expect(page.getByRole('button', { name: 'Add Instruction Breakpoint', exact: true })).toBeDisabled();

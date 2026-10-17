@@ -155,6 +155,29 @@ test("PaneView keeps minimum heights scrollable and supports header keyboard nav
 	assert.deepEqual([view.getPaneSize(first), view.getPaneSize(second)], [148, 28]);
 });
 
+test('PaneView updates maximum body sizes through empty, constrained and filling states', () => {
+	const document = browserEnvironment.window.document;
+	using view = new PaneView(document.body);
+	using first = new Pane(document.body, { id: 'first', title: 'First' });
+	using second = new Pane(document.body, { id: 'second', title: 'Second', minimumBodySize: 0 });
+	view.addPane(first, 250);
+	view.addPane(second, 150);
+	view.layout(400, 280);
+	second.maximumBodySize = 0;
+	assert.deepEqual([view.getPaneSize(first), view.getPaneSize(second)], [372, 28]);
+	second.maximumBodySize = 66;
+	second.minimumBodySize = 66;
+	assert.deepEqual([view.getPaneSize(first), view.getPaneSize(second)], [306, 94]);
+	first.setCollapsed(true);
+	second.maximumBodySize = Number.POSITIVE_INFINITY;
+	assert.deepEqual([view.getPaneSize(first), view.getPaneSize(second)], [28, 372]);
+	first.setCollapsed(false);
+	second.maximumBodySize = 66;
+	assert.deepEqual([view.getPaneSize(first), view.getPaneSize(second)], [306, 94]);
+	assert.throws(() => { second.maximumBodySize = 65; }, RangeError);
+	assert.throws(() => { second.maximumBodySize = Number.NaN; }, RangeError);
+});
+
 test('PaneView retains changing content constraints through overflow, collapse and detachment', () => {
 	const document = browserEnvironment.window.document;
 	using view = new PaneView(document.body);

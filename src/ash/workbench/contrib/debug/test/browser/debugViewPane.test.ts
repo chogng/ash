@@ -208,7 +208,19 @@ test('Debug configuration selection survives refresh and opens the selected work
 		assert.equal(debug.getConfigurationManager().selectedConfiguration?.id, 'second');
 		debug.configurations = [debug.configurations[0]!];
 		await debug.refresh();
-		assert.equal(replacement.part.domNode.querySelector('.ash-debug-configuration')!.textContent, 'Run — First');
+		const replacementDropdown = replacement.part.domNode.querySelector<HTMLButtonElement>('.ash-debug-configuration')!;
+		assert.equal(replacementDropdown.textContent, 'Run');
+		assert.equal(replacementDropdown.title, 'Run');
+		assert.equal(replacementDropdown.getAttribute('aria-label'), 'Debug configuration: Run');
+		debug.configurations = [
+			{ ...original, id: 'ash', name: 'Ash', dirId: 'first', workspaceFolderName: 'ash' },
+			{ ...original, id: 'agents', name: 'Ash Agents', dirId: 'first', workspaceFolderName: 'ash' },
+		];
+		await debug.refresh();
+		assert.equal(replacementDropdown.textContent, 'Ash');
+		replacementDropdown.click();
+		await waitFor(() => browser.window.document.querySelectorAll('[role="menuitemradio"]').length === 2);
+		assert.deepEqual([...browser.window.document.querySelectorAll('[role="menuitemradio"]')].map(choice => choice.getAttribute('aria-label')), ['Ash', 'Ash Agents']);
 	} finally {
 		for (const name of globals) Reflect.deleteProperty(globalThis, name);
 		browser.window.close();

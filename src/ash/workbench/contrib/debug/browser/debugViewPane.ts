@@ -12,7 +12,8 @@ import { Button } from "../../../../base/browser/ui/button/button.js";
 import { Checkbox } from "../../../../base/browser/ui/toggle/toggle.js";
 import { InputBox } from "../../../../base/browser/ui/inputbox/inputbox.js";
 import { Pane, PaneView } from "../../../../base/browser/ui/splitview/paneview.js";
-import { observeElementSize } from "../../../../base/browser/observer.js";
+import { observeElementSize, observeResize } from "../../../../base/browser/observer.js";
+import { listRowHeight } from '../../../../base/common/uiSizes.js';
 import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { IWorkspaceOpenService } from "../../../services/workspaces/browser/workspaceOpenService.js";
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
@@ -242,6 +243,11 @@ export class DebugViewPane extends ViewPane {
 		this._register(observeElementSize(this.paneView.element, size => {
 			if (size.height > 0 && size.width > 0) this.paneView.layout(size.height, size.width);
 		}));
+		this._register(observeResize([this.breakpointsElement, this.exceptionsElement], () => this.updateBreakpointSize()));
+		for (const section of this.sections) {
+			this._register(section.onDidChangeExpansionState(() => this.updateBreakpointSize()));
+		}
+		this._register(this.welcome.onDidChangeExpansionState(() => this.updateBreakpointSize()));
 		this._register(workspace.onDidChangeWorkspace(() => this.render()));
 		this._register(addDisposableListener(this.sessionsElement, "change", () => this.selectSession()));
 		this._register(addDisposableListener(this.threadsElement, "change", () => { void this.selectThread(); }));
@@ -640,6 +646,7 @@ export class DebugViewPane extends ViewPane {
 			this.breakpointEdit = undefined;
 			form.remove();
 			this.breakpointEditControls.clear();
+			this.updateBreakpointSize();
 			if (breakpoint) this.breakpointItems.get(breakpoint.id)?.focusEdit();
 			else this.breakpointToolbar.focus();
 		};
@@ -692,6 +699,8 @@ export class DebugViewPane extends ViewPane {
 		this.breakpointEdit = { id: breakpoint?.id, form, sessionId };
 		this.sections[3]!.setCollapsed(false);
 		this.breakpointsElement.before(form);
+		controls.add(observeElementSize(form, () => this.updateBreakpointSize()));
+		this.updateBreakpointSize();
 		const first = inputs.values().next().value!;
 		if (access) access.focus();
 		else { first.focus(); first.select(); }
@@ -842,6 +851,21 @@ export class DebugViewPane extends ViewPane {
 			return item.domNode;
 		}));
 		if (focusedBreakpointControl?.isConnected) focusedBreakpointControl.focus();
+		this.updateBreakpointSize();
+	}
+
+	private updateBreakpointSize(): void {
+		const breakpoints = this.sections[3]!;
+		if (!breakpoints.body.isConnected || breakpoints.isCollapsed()) return;
+		// Measure intrinsic children rather than the allocated body, so removing rows can shrink it.
+		const contentHeight = Math.ceil([...breakpoints.body.children].reduce((height, child) => height + child.getBoundingClientRect().height, 0));
+		const minimum = Math.min(contentHeight, 9 * listRowHeight);
+		const fillSpace = this.mountedSections.every(section => section === breakpoints || section.isCollapsed());
+		const maximum = fillSpace ? Number.POSITIVE_INFINITY : contentHeight;
+		// Keep the constraints valid while moving between empty, populated and filling states.
+		if (minimum > breakpoints.maximumBodySize) breakpoints.maximumBodySize = maximum;
+		breakpoints.minimumBodySize = minimum;
+		breakpoints.maximumBodySize = maximum;
 	}
 
 	private scopeRow(scope: IDebugScope): DebugVariableRow { return Object.freeze({ key: ++this.variableKey, name: scope.name, variablesReference: scope.variablesReference, depth: 0, expanded: true }); }

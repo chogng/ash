@@ -94,6 +94,11 @@
 	list-style: none;
 }
 
+.ash-debug-breakpoints:empty,
+.ash-debug-exceptions:empty {
+	padding: 0;
+}
+
 .ash-debug-list > li {
 	display: flex;
 	align-items: center;

@@ -147,6 +147,10 @@ window.ashDebugIntegration = {
 	assignments: () => session.assignments,
 	breakpoints: () => debug.breakpoints.map(({ lineNumber, enabled, condition, hitCondition, logMessage }) => ({ lineNumber, enabled, condition, hitCondition, logMessage })),
 	additionalBreakpoints: () => [...debug.functionBreakpoints, ...debug.dataBreakpoints, ...debug.instructionBreakpoints],
+	setBreakpointCount: count => {
+		debug.removeAllBreakpoints();
+		for (let index = 0; index < count; index++) debug.toggleBreakpoint(resource, index + 1);
+	},
 	dataInfoRequests: () => session.dataInfoRequests,
 	denyDataBreakpoint: () => { session.dataBreakpointInfo = async () => ({ dataId: null, description: 'The variable has no stable memory location.', canPersist: false, accessTypes: [] }); },
 	holdDataInfo: () => {
@@ -191,6 +195,7 @@ declare global {
 			assignments(): readonly unknown[];
 			breakpoints(): readonly unknown[];
 			additionalBreakpoints(): readonly unknown[];
+			setBreakpointCount(count: number): void;
 			dataInfoRequests(): readonly unknown[];
 			denyDataBreakpoint(): void;
 			holdDataInfo(): void;
