@@ -474,7 +474,7 @@ export abstract class Workbench extends Disposable {
 		const workspace = this._register(services.createInstance(SessionsWorkspaceContextService, options.workspace));
 		services.registerInstance(IWorkspaceContextService, workspace);
 		services.registerInstance(IMarkerService, this._register(new MarkerService()));
-		const files = this._register(services.createInstance(SessionFileService, options.api));
+		const files = this._register(services.createInstance(SessionFileService, options.api, () => options.workspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } }))));
 		this._register(fileService.registerProvider(Schemas.file, options.browserFileSystemProvider ?? files));
 		this._register(fileService.registerProvider(Schemas.ashRemote, files));
 		const systemPolicies = hostServices.has(IPolicyService) ? hostServices.get(IPolicyService) : new NullPolicyService();

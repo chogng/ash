@@ -25,7 +25,7 @@ suite('App Server directory path identity', () => {
 		const host = createDisconnectedRendererApi();
 		const requests: unknown[] = [];
 		using provider = new AppServerFileSystemProvider({
-			workspaceContextService: workspace, resourceApi: host.resource, api: {
+			directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })), resourceApi: host.resource, api: {
 				...host.fs, readPathCaseSensitivity: async params => {
 					requests.push(params);
 					return { scopes: [{ path: '.', sensitivity: 'sensitive' }, { path: params.path.split('/')[0], sensitivity: 'insensitive' }] };
@@ -62,7 +62,7 @@ suite('App Server directory path identity', () => {
 		const remote = createSshRemoteWorkspaceUri('server', '/remote');
 		using workspace = new WorkspaceContextService({ id: 'multi', folders: [{ id: 'local', uri: local, name: 'local', index: 0 }, { id: 'remote', uri: remote, name: 'remote', index: 1 }] });
 		const host = createDisconnectedRendererApi();
-		using provider = new AppServerFileSystemProvider({ workspaceContextService: workspace, resourceApi: host.resource, api: { ...host.fs, readPathCaseSensitivity: async params => ({ scopes: [{ path: '.', sensitivity: params.dirId === 'local' ? 'insensitive' : 'unknown' }] }) } });
+		using provider = new AppServerFileSystemProvider({ directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })), resourceApi: host.resource, api: { ...host.fs, readPathCaseSensitivity: async params => ({ scopes: [{ path: '.', sensitivity: params.dirId === 'local' ? 'insensitive' : 'unknown' }] }) } });
 		using files = new FileService();
 		using localRegistration = files.registerProvider(local.scheme, provider);
 		using remoteRegistration = files.registerProvider(remote.scheme, provider);
@@ -73,14 +73,14 @@ suite('App Server directory path identity', () => {
 		assert.deepEqual([identity.extUri.isEqual(local.joinPathSegment('File'), local.joinPathSegment('FILE')), identity.extUri.isEqual(remote.joinPathSegment('File'), remote.joinPathSegment('FILE'))], [true, false]);
 	});
 
-	test('reconnection, workspace replacement and disposal discard late casing responses', async () => {
+	test('reconnection, environment replacement and disposal discard late casing responses', async () => {
 		const root = URI.file('/workspace');
 		using workspace = new WorkspaceContextService({ id: 'project', uri: root });
 		using connection = new Emitter<void>();
 		let generation = 1;
 		let response = new DeferredPromise<FsReadPathCaseSensitivityResult>();
 		const host = createDisconnectedRendererApi();
-		using provider = new AppServerFileSystemProvider({ workspaceContextService: workspace, resourceApi: host.resource, api: { ...host.fs, get connectionGeneration() { return generation; }, onDidChangeConnection: connection.event, readPathCaseSensitivity: () => response.p } });
+		using provider = new AppServerFileSystemProvider({ directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })), resourceApi: host.resource, api: { ...host.fs, get connectionGeneration() { return generation; }, onDidChangeConnection: connection.event, readPathCaseSensitivity: () => response.p } });
 		using files = new FileService();
 		using registration = files.registerProvider('file', provider);
 		using services = new TestUriIdentityServices(files);
@@ -99,6 +99,8 @@ suite('App Server directory path identity', () => {
 		await prepared;
 		assert.equal(identity.extUri.isEqual(resource, root.joinPathSegment('FILE')), true);
 		workspace.updateWorkspace({ id: 'replacement', uri: root });
+		generation++;
+		connection.fire();
 		assert.equal(identity.extUri.isEqual(resource, root.joinPathSegment('FILE')), false);
 		response = new DeferredPromise();
 		const disposed = assert.rejects(Promise.resolve(identity.resolveCanonicalUri(resource)), { name: 'CancellationError' });
@@ -114,7 +116,7 @@ suite('App Server directory path identity', () => {
 		const response = new DeferredPromise<FsReadPathCaseSensitivityResult>();
 		let count = 0;
 		const host = createDisconnectedRendererApi();
-		using provider = new AppServerFileSystemProvider({ workspaceContextService: workspace, resourceApi: host.resource, onDidChange: changes.event, api: { ...host.fs, readPathCaseSensitivity: async () => ++count === 1 ? response.p : { scopes: [{ path: '.', sensitivity: 'sensitive' }] } } });
+		using provider = new AppServerFileSystemProvider({ directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })), resourceApi: host.resource, onDidChange: changes.event, api: { ...host.fs, readPathCaseSensitivity: async () => ++count === 1 ? response.p : { scopes: [{ path: '.', sensitivity: 'sensitive' }] } } });
 		using files = new FileService();
 		using registration = files.registerProvider('file', provider);
 		using services = new TestUriIdentityServices(files);
@@ -140,7 +142,7 @@ suite('App Server directory path identity', () => {
 		const host = createDisconnectedRendererApi();
 		const reads: string[] = [];
 		using provider = new AppServerFileSystemProvider({
-			workspaceContextService: workspace,
+			directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 			api: {
 				...host.fs, readPathCaseSensitivity: async () => ({ scopes: [{ path: '.', sensitivity: 'insensitive' }] }),
 				readFile: async params => { reads.push(params.path); return { content: 'disk', encoding: 'utf8', revision: 'revision' }; },
@@ -160,7 +162,7 @@ suite('App Server directory path identity', () => {
 		assert.deepEqual([models.getModels().length, second.model.getText(), second.isDirty], [1, 'unsaved', true]);
 		assert.ok(reads.every(path => path === 'File'));
 	});
-	test('file changes retire an earlier acquisition before it can reuse an edited alias', async () => {
+	test('file changes refresh an in-flight acquisition without cancelling it or reusing an edited alias', async () => {
 		const root = URI.file('/workspace');
 		using workspace = new WorkspaceContextService({ id: 'project', uri: root });
 		using changes = new Emitter<FsChanged>();
@@ -169,7 +171,7 @@ suite('App Server directory path identity', () => {
 		const host = createDisconnectedRendererApi();
 		const reads: string[] = [];
 		using provider = new AppServerFileSystemProvider({
-			workspaceContextService: workspace,
+			directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 			onDidChange: changes.event,
 			api: {
 				...host.fs,
@@ -189,12 +191,11 @@ suite('App Server directory path identity', () => {
 		const alias = root.joinPathSegment('FILE');
 		using first = await models.acquire({ resource: firstResource }, signal);
 		first.model.setValue('unsaved');
-		const rejected = assert.rejects(models.acquire({ resource: alias }, signal), { name: 'CancellationError' });
+		const acquiring = models.acquire({ resource: alias }, signal);
 		changes.fire({ type: 'rescanRequired', dirId: 'project' });
 		await services.get(IUriIdentityService).resolveCanonicalUri(firstResource);
 		void oldResponse.complete({ scopes: [{ path: '.', sensitivity: 'insensitive' }] });
-		await rejected;
-		using second = await models.acquire({ resource: alias }, signal);
+		using second = await acquiring;
 		assert.deepEqual([first.model === second.model, first.model.getText(), second.model.getText(), reads], [false, 'unsaved', 'disk', ['File', 'FILE']]);
 	});
 
@@ -205,7 +206,7 @@ suite('App Server directory path identity', () => {
 		let missing = false;
 		const host = createDisconnectedRendererApi();
 		using provider = new AppServerFileSystemProvider({
-			workspaceContextService: workspace, resourceApi: host.resource, onDidChange: changes.event,
+			directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })), resourceApi: host.resource, onDidChange: changes.event,
 			api: {
 				...host.fs, readPathCaseSensitivity: async params => ({
 					scopes: [
@@ -238,7 +239,7 @@ suite('App Server directory path identity', () => {
 		using workspace = new WorkspaceContextService({ id: 'project', uri: root });
 		const host = createDisconnectedRendererApi();
 		using provider = new AppServerFileSystemProvider({
-			workspaceContextService: workspace, resourceApi: host.resource,
+			directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })), resourceApi: host.resource,
 			api: { ...host.fs, readPathCaseSensitivity: async params => ({ scopes: [{ path: '.', sensitivity: 'sensitive' }, { path: params.path.split('/')[0], sensitivity: 'insensitive' }] }) },
 		});
 		using files = new FileService();
@@ -262,7 +263,7 @@ suite('App Server directory path identity', () => {
 		const host = createDisconnectedRendererApi();
 		const reads: string[] = [];
 		using provider = new AppServerFileSystemProvider({
-			workspaceContextService: workspace,
+			directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 			api: {
 				...host.fs,
 				readPathCaseSensitivity: async params => ({ scopes: [{ path: '.', sensitivity: 'sensitive' }, { path: params.path.split('/')[0], sensitivity: 'insensitive' }] }),
@@ -299,7 +300,7 @@ suite('App Server directory path identity', () => {
 		const host = createDisconnectedRendererApi();
 		let queries = 0;
 		using provider = new AppServerFileSystemProvider({
-			workspaceContextService: workspace, resourceApi: host.resource, onDidChange: changes.event,
+			directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })), resourceApi: host.resource, onDidChange: changes.event,
 			api: { ...host.fs, readPathCaseSensitivity: () => { queries++; return response.p; } },
 		});
 		using files = new FileService();
@@ -320,8 +321,8 @@ suite('App Server directory path identity', () => {
 		using workspace = new WorkspaceContextService({ id: 'project', uri: root });
 		const response = new DeferredPromise<FsReadPathCaseSensitivityResult>();
 		const host = createDisconnectedRendererApi();
-		using predecessor = new AppServerFileSystemProvider({ workspaceContextService: workspace, resourceApi: host.resource, api: { ...host.fs, readPathCaseSensitivity: () => response.p } });
-		using replacement = new AppServerFileSystemProvider({ workspaceContextService: workspace, resourceApi: host.resource, api: { ...host.fs, readPathCaseSensitivity: async () => ({ scopes: [{ path: '.', sensitivity: 'sensitive' }] }) } });
+		using predecessor = new AppServerFileSystemProvider({ directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })), resourceApi: host.resource, api: { ...host.fs, readPathCaseSensitivity: () => response.p } });
+		using replacement = new AppServerFileSystemProvider({ directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })), resourceApi: host.resource, api: { ...host.fs, readPathCaseSensitivity: async () => ({ scopes: [{ path: '.', sensitivity: 'sensitive' }] }) } });
 		using files = new FileService();
 		using previousRegistration = files.registerProvider('file', predecessor);
 		using services = new TestUriIdentityServices(files);
@@ -341,7 +342,7 @@ suite('App Server directory path identity', () => {
 		using workspace = new WorkspaceContextService({ id: 'project', uri: root });
 		const host = createDisconnectedRendererApi();
 		using provider = new AppServerFileSystemProvider({
-			workspaceContextService: workspace, resourceApi: host.resource,
+			directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })), resourceApi: host.resource,
 			api: {
 				...host.fs, readPathCaseSensitivity: async () => ({
 					scopes: [
@@ -356,7 +357,7 @@ suite('App Server directory path identity', () => {
 		using services = new TestUriIdentityServices(files);
 		const identity = services.get(IUriIdentityService);
 		const resource = root.joinPathSegment('File');
-		await assert.rejects(Promise.resolve(identity.resolveCanonicalUri(resource)), /outside the workspace/);
+		await assert.rejects(Promise.resolve(identity.resolveCanonicalUri(resource)), /outside the authorized directory/);
 		assert.equal(identity.extUri.isEqual(resource, root.joinPathSegment('FILE')), false);
 	});
 

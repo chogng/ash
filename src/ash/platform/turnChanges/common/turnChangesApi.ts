@@ -8,6 +8,8 @@ import type {
 	TurnChangesDiscardThreadParams,
 	TurnChangesListParams,
 	TurnChangesListResult,
+	TurnChangesSummaryResult,
+	TurnChangesSummaryFileParams,
 	TurnChangesMutationParams,
 	TurnChangesMutationResult,
 	TurnChangesReadFileParams,
@@ -20,6 +22,8 @@ import type {
 /** Transport-neutral access to the App Server Turn change ledger. */
 export interface ITurnChangesApi {
 	list(params: TurnChangesListParams): Promise<TurnChangesListResult>;
+	summary(params: TurnChangesListParams): Promise<TurnChangesSummaryResult>;
+	summaryFile(params: TurnChangesSummaryFileParams): Promise<TurnChangesReadFileResult>;
 	read(params: TurnChangesReadParams): Promise<TurnChangesReadResult>;
 	readFile(params: TurnChangesReadFileParams): Promise<TurnChangesReadFileResult>;
 	generateMessage(params: TurnChangesMutationParams): Promise<TurnChangesMutationResult>;

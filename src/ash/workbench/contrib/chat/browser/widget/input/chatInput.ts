@@ -5,6 +5,11 @@ import type { ModelRef } from "../../../../../services/chat/common/chatService.j
 import type { ModelReasoningEffort } from "../../../../../services/chat/common/modelCatalog.js";
 import type { ChatContextAttachment } from "../../../../../services/chat/common/chatContextService.js";
 
+import type { ICommandService } from '../../../../../../platform/commands/common/commands.js';
+
+/** Line totals can be partial when the Git provider cannot read some workspace files. */
+export type ChatChangesStatistics = TurnChangeSetSummary['statistics'] & { readonly partial?: boolean; };
+
 export type ChatInputPhase = "loading" | "ready" | "submitting" | "error";
 
 export interface ChatInputCommandInvocation {
@@ -30,7 +35,10 @@ export interface ChatInputState {
 	readonly canInterrupt: boolean;
 	readonly approvalMode: ApprovalMode;
 	readonly contextUsage?: ChatContextUsage;
-	readonly changes?: TurnChangeSetSummary['statistics'];
+	readonly changes?: ChatChangesStatistics;
+	readonly changesRevision?: string;
+	readonly changesScope?: 'workspace' | 'conversation';
+	readonly changesError?: string;
 	readonly models: readonly ModelCatalogEntry[];
 	readonly modelsError?: string;
 	readonly slashCommands: readonly SlashCommandDefinition[];
@@ -52,7 +60,8 @@ export interface ChatInputDelegate {
 	executeCommand(invocation: ChatInputCommandInvocation): Promise<void>;
 	executeServerCommand(invocation: ChatInputServerCommandInvocation, submissionSignal?: AbortSignal): Promise<void>;
 	interrupt(): Promise<void>;
-	openChanges?(): Promise<void>;
+	openChanges?(revision?: string): Promise<void>;
+	readWorkspaceChanges?(): Promise<ChatChangesStatistics | undefined>;
 	selectModel(model: ModelRef): Promise<void>;
 	selectReasoningEffort(effort: ModelReasoningEffort | undefined): Promise<void>;
 	selectAutomaticModel(): Promise<void>;
@@ -64,13 +73,20 @@ export interface ChatInputDelegate {
 	resolveInteraction(response: AgentResponse): Promise<void>;
 }
 
-/** Matches the non-discarded Turn ledger shown by Changes. */
-export function getChatInputChanges(changeSets: readonly TurnChangeSetSummary[]): TurnChangeSetSummary['statistics'] | undefined {
-	const visible = changeSets.filter(changeSet => changeSet.captureState !== 'discarded');
-	const statistics = visible.reduce((total, changeSet) => ({
-		files: total.files + changeSet.statistics.files,
-		additions: total.additions + changeSet.statistics.additions,
-		deletions: total.deletions + changeSet.statistics.deletions,
-	}), { files: 0, additions: 0, deletions: 0 });
-	return statistics.files > 0 ? statistics : undefined;
+/** Validates the optional Git extension's command result at its process boundary. */
+export async function readWorkspaceChanges(commands: ICommandService): Promise<ChatChangesStatistics | undefined> {
+	let result: unknown;
+	try {
+		result = await commands.executeCommand('git.getChangesSummary');
+	} catch (error) {
+		if (error instanceof Error && error.message === 'Unknown command: git.getChangesSummary') return undefined;
+		throw error;
+	}
+	if (!result || typeof result !== 'object') throw new TypeError('Invalid workspace changes summary');
+	const value = result as Record<string, unknown>;
+	for (const key of ['files', 'additions', 'deletions']) {
+		if (typeof value[key] !== 'number' || !Number.isSafeInteger(value[key]) || value[key] < 0) throw new TypeError('Invalid workspace change statistics');
+	}
+	if (value.partial !== undefined && typeof value.partial !== 'boolean') throw new TypeError('Invalid workspace change coverage');
+	return { files: value.files as number, additions: value.additions as number, deletions: value.deletions as number, partial: value.partial === true };
 }

@@ -34,6 +34,7 @@ struct Client {
     editor_document: Mutex<Option<String>>,
     revision: AtomicU64,
     binary_comparison: AtomicBool,
+    conflict_comparison: AtomicBool,
     cancel_protected_commit: AtomicBool,
     configuration: Mutex<Value>,
     shared_configuration: Mutex<Value>,
@@ -57,7 +58,7 @@ impl Client {
     }
     fn status(&self) -> Value {
         if self.binary_comparison.load(Ordering::Acquire) {
-            return json!({"repositoryId":"root","streamInstanceId":"11111111-1111-4111-8111-111111111111","revision":self.revision.load(Ordering::Relaxed),"historyRevision":1,"path":"","head":{"type":"branch","name":"main","objectId":self.git(&["rev-parse","HEAD"]),"upstream":null},"changes":[{"path":"image.bin","indexStatus":"modified","worktreeStatus":"modified","conflicted":false,"submodule":{"isSubmodule":false,"commitChanged":false,"trackedChanges":false,"untrackedChanges":false}}]});
+            return json!({"repositoryId":"root","streamInstanceId":"11111111-1111-4111-8111-111111111111","revision":self.revision.load(Ordering::Relaxed),"historyRevision":1,"path":"","head":{"type":"branch","name":"main","objectId":self.git(&["rev-parse","HEAD"]),"upstream":null},"changes":[{"path":"image.bin","indexStatus":"modified","worktreeStatus":"modified","conflicted":self.conflict_comparison.load(Ordering::Acquire),"submodule":{"isSubmodule":false,"commitChanged":false,"trackedChanges":false,"untrackedChanges":false}}]});
         }
         let head = self.git(&["rev-parse", "HEAD"]);
         let staged = !self.git(&["diff", "--cached", "--name-only"]).is_empty();
@@ -175,9 +176,45 @@ impl Client {
                     "historyRefs" => {
                         json!({"status":self.status(),"references":[{"kind":"localBranch","name":"main","objectId":"abc","current":true},{"kind":"remoteBranch","name":"origin/main","objectId":"abc","current":false},{"kind":"tag","name":"v1","objectId":"abc","current":false}],"branches":[],"remotes":[],"graphRevision":1})
                     }
+                    "textDiff" => {
+                        assert!(self.binary_comparison.load(Ordering::Acquire));
+                        json!({"status":self.status(),"diffs":[],"statistics":{"files":0,"additions":0,"deletions":0}})
+                    }
+                    "conflictFile" => {
+                        assert!(self.conflict_comparison.load(Ordering::Acquire));
+                        json!({"current":{"kind":"binary","data":"AAEA"},"result":{"kind":"binary","data":"AAIA"}})
+                    }
                     "changeFile" => {
-                        assert_eq!(params["path"], "image.bin");
-                        json!({"original":{"kind":"binary","data":"AAEA"},"modified":{"kind":"binary","data":"AAIA"}})
+                        if self.binary_comparison.load(Ordering::Acquire) {
+                            assert_eq!(params["path"], "image.bin");
+                            json!({"original":{"kind":"binary","data":"AAEA"},"modified":{"kind":"binary","data":"AAIA"}})
+                        } else {
+                            assert_eq!(params["path"], "file.txt");
+                            let staged = params["comparison"] == "staged";
+                            let status = self.status();
+                            let changed = &status["changes"][0][if staged {
+                                "indexStatus"
+                            } else {
+                                "worktreeStatus"
+                            }];
+                            if changed == "unmodified" || changed.is_null() {
+                                json!({"backendError":{"name":"GitOperationFailed","message":"No change in this comparison"}})
+                            } else {
+                                let original = self.git(&[
+                                    "show",
+                                    if staged { "HEAD:file.txt" } else { ":file.txt" },
+                                ]);
+                                let modified = if staged {
+                                    self.git(&["show", ":file.txt"])
+                                } else {
+                                    std::fs::read_to_string(self.root.join("file.txt"))
+                                        .unwrap()
+                                        .trim()
+                                        .to_string()
+                                };
+                                json!({"original":{"kind":"text","text":original},"modified":{"kind":"text","text":modified}})
+                            }
+                        }
                     }
                     "stage" => {
                         self.revision.fetch_add(1, Ordering::Relaxed);
@@ -261,6 +298,7 @@ fn rust_git_registers_scm_and_commits_through_public_client_without_a_js_host() 
             editor_document: Mutex::new(None),
             revision: AtomicU64::new(1),
             binary_comparison: AtomicBool::new(false),
+            conflict_comparison: AtomicBool::new(false),
             cancel_protected_commit: AtomicBool::new(true),
             configuration: Mutex::new(
                 json!({"useEditorAsCommitInput":false,"enableSmartCommit":false,"suggestSmartCommit":false,"postCommitCommand":"none","autofetch":true,"autofetchPeriod":120}),
@@ -476,6 +514,7 @@ fn rust_git_registers_scm_and_commits_through_public_client_without_a_js_host() 
             std::thread::sleep(Duration::from_millis(10));
         }
         verify_history_references(&supervisor, &client);
+        verify_workspace_comparisons(&supervisor, &client);
         verify_binary_comparisons(&supervisor, &client);
         verify_terminal_helpers(&supervisor, &client, directory.path());
         supervisor.shutdown().unwrap();
@@ -687,9 +726,80 @@ fn verify_history_references(supervisor: &host::ExtensionHostSupervisor, client:
     assert_eq!(filtered[0]["id"], "refs/tags/v1");
 }
 
+fn verify_workspace_comparisons(supervisor: &host::ExtensionHostSupervisor, client: &Client) {
+    let original = client.git(&["show", "HEAD:file.txt"]);
+    for (stage, modify_again, expected) in [
+        (false, false, "workspace only"),
+        (true, false, "workspace only"),
+        (true, true, "working after index"),
+    ] {
+        client.git(&["reset", "--hard", "HEAD"]);
+        std::fs::write(client.root.join("file.txt"), "workspace only\n").unwrap();
+        if stage {
+            client.git(&["add", "file.txt"]);
+        }
+        if modify_again {
+            std::fs::write(client.root.join("file.txt"), "working after index\n").unwrap();
+        }
+        client.revision.fetch_add(1, Ordering::Relaxed);
+        execute(
+            supervisor,
+            client,
+            invocation(
+                "git.openWorkspaceChanges",
+                "execute",
+                json!({"arguments":[]}),
+            ),
+        );
+        let requests = client.editor_requests.lock().unwrap();
+        let input = &requests
+            .iter()
+            .rev()
+            .find(|request| request["method"] == "open")
+            .unwrap()["input"];
+        assert_eq!(input["items"].as_array().unwrap().len(), 1);
+        assert_eq!(input["items"][0]["original"]["initialText"], original);
+        assert_eq!(input["items"][0]["modified"]["initialText"], expected);
+    }
+    client.git(&["reset", "--hard", "HEAD"]);
+}
+
 fn verify_binary_comparisons(supervisor: &host::ExtensionHostSupervisor, client: &Client) {
     client.binary_comparison.store(true, Ordering::Release);
     client.revision.fetch_add(1, Ordering::Relaxed);
+    let summary = execute(
+        supervisor,
+        client,
+        invocation("git.getChangesSummary", "execute", json!({"arguments":[]})),
+    );
+    assert_eq!(
+        summary,
+        json!({"files":1,"additions":0,"deletions":0,"partial":true})
+    );
+    execute(
+        supervisor,
+        client,
+        invocation(
+            "git.openWorkspaceChanges",
+            "execute",
+            json!({"arguments":[]}),
+        ),
+    );
+    {
+        let requests = client.editor_requests.lock().unwrap();
+        let input = &requests
+            .iter()
+            .rev()
+            .find(|request| request["method"] == "open")
+            .unwrap()["input"];
+        assert_eq!(input["resource"], "ash-scm-workspace:/changes");
+        assert_eq!(input["items"][0]["id"], "root:image.bin");
+        assert_eq!(input["items"][0]["binary"], true);
+        assert_eq!(
+            input["items"][0]["modified"]["initialBytes"],
+            json!([0, 2, 0])
+        );
+    }
     for scope in ["staged", "unstaged", "uncommitted"] {
         let comparison = execute(
             supervisor,
@@ -772,6 +882,38 @@ fn verify_binary_comparisons(supervisor: &host::ExtensionHostSupervisor, client:
         ),
     );
     assert!(baseline.is_null());
+    client.conflict_comparison.store(true, Ordering::Release);
+    client.revision.fetch_add(1, Ordering::Relaxed);
+    execute(
+        supervisor,
+        client,
+        invocation(
+            "git.openWorkspaceChanges",
+            "execute",
+            json!({"arguments":[]}),
+        ),
+    );
+    {
+        let requests = client.editor_requests.lock().unwrap();
+        let input = &requests
+            .iter()
+            .rev()
+            .find(|request| request["method"] == "open")
+            .unwrap()["input"];
+        assert_eq!(input["items"].as_array().unwrap().len(), 1);
+        let item = &input["items"][0];
+        assert_eq!(item["binary"], true);
+        assert_eq!(item["original"]["initialBytes"], json!([0, 1, 0]));
+        assert_eq!(item["modified"]["initialBytes"], json!([0, 2, 0]));
+        assert_ne!(item["original"]["resource"], item["modified"]["resource"]);
+        assert!(
+            item["modified"]["resource"]
+                .as_str()
+                .unwrap()
+                .starts_with("git-conflict:/image.bin?repository=root&stream=")
+        );
+    }
+    client.conflict_comparison.store(false, Ordering::Release);
     client.binary_comparison.store(false, Ordering::Release);
     client.revision.fetch_add(1, Ordering::Relaxed);
     execute(

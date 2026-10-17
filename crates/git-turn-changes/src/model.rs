@@ -142,6 +142,7 @@ pub struct TurnChangeSet {
     pub target_branch: Option<String>,
     pub base_object_id: Option<String>,
     pub before_tree: String,
+    /// Latest pinned live snapshot while open; immutable once the capture is sealed.
     pub after_tree: Option<String>,
     pub capture_state: CaptureState,
     pub message_state: MessageState,
@@ -339,11 +340,19 @@ impl TurnChangeSet {
         self.bump_revision()
     }
 
-    pub fn refresh_open_files(&mut self, files: Vec<ChangeFile>) -> Result<(), TurnChangeError> {
+    pub fn refresh_open_files(
+        &mut self,
+        after_tree: String,
+        files: Vec<ChangeFile>,
+    ) -> Result<(), TurnChangeError> {
         self.require_capture(CaptureState::Open)?;
-        if self.files == files {
+        if after_tree.is_empty() {
+            return Err(TurnChangeError::InvalidSnapshot);
+        }
+        if self.files == files && self.after_tree.as_ref() == Some(&after_tree) {
             return Ok(());
         }
+        self.after_tree = Some(after_tree);
         self.files = files;
         self.bump_revision()
     }

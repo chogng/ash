@@ -36,7 +36,7 @@ function fixture(write: (request: FsWriteFileElevatedParams, signal?: AbortSigna
 	const configuration = new WorkbenchConfigurationService();
 	const policy = new FilesConfigurationService(configuration, workspace);
 	const provider = new AppServerFileSystemProvider({
-		workspaceContextService: workspace,
+		directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 		resourceApi: { connectionGeneration: 1, metadata: async () => { throw new Error('Unexpected resource metadata'); }, read: async () => { throw new Error('Unexpected resource read'); }, release: async () => undefined },
 		api: { ...createDisconnectedFileApi(() => { throw new Error('Unexpected ordinary file operation'); }), readFile: async () => ({ content: 'old\r\n', revision: 'original-revision', encoding: 'utf8bom' }), writeFileElevated: write, ...(ordinary ? { writeFile: ordinary } : {}) },
 	});

@@ -247,6 +247,12 @@ impl super::extension_host_operations::ExtensionHostRequestProcessorContext for 
 }
 
 impl super::fs_operations::FileSystemRequestProcessorContext for AppServer {
+    fn resolve_file_path(
+        &self,
+        path: &std::path::Path,
+    ) -> Result<ash_app_server_protocol::protocol::fs::FsResolvePathResult, super::RpcError> {
+        AppServer::resolve_file_path(self, path)
+    }
     fn file_system_service_for(
         &self,
         dir_id: Option<&str>,

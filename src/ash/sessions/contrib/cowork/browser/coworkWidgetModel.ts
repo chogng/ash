@@ -8,14 +8,14 @@ import { ILanguageModelsConfigurationService } from '../common/languageModelsCon
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { canceled, isCancellationError } from "../../../../base/common/errors.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import type { AgentResponse, ChatAgent, ChatMode, ChatSubmissionOptions, IChatService, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, Thread, ThreadGoal, ThreadTranscriptEntry, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope, Turn, TurnChangeDetails, TurnChangeSetSummary, TurnInteraction } from "../../../../workbench/services/chat/common/chatService.js";
+import type { AgentResponse, ChatAgent, ChatMode, ChatSubmissionOptions, IChatService, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, Thread, ThreadGoal, ThreadTranscriptEntry, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope, Turn, TurnChangeDetails, ThreadChangesSummary, TurnChangeSetSummary, TurnInteraction } from "../../../../workbench/services/chat/common/chatService.js";
 import { localize } from "../../../../nls.js";
 import type { SkillReference } from "../../../../platform/agentHost/common/appServerApi.js";
 import type { ResolvedChatContext } from "../../../../workbench/services/chat/common/chatContextService.js";
 import type { IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from "../../../services/sessions/common/session.js";
 import type { ISessionsManagementService } from "../../../services/sessions/common/sessionsManagement.js";
 import { chatTranscriptListItems, type IChatListItem } from "../../../../workbench/contrib/chat/browser/widget/chatListItems.js";
-import { getChatInputChanges, type ChatInputState } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
+import type { ChatInputState } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { modelRefIdentity, type ModelReasoningEffort } from '../../../../workbench/services/chat/common/modelCatalog.js';
 import type { ApprovalMode } from '../../../../workbench/services/chat/common/chatService.js';
 import { observableValue } from '../../../../base/common/observable.js';
@@ -80,6 +80,9 @@ export class CoworkWidgetModel extends Disposable {
 	private _changeSets: readonly TurnChangeSetSummary[] = [];
 	private readonly changeDetails = new Map<string, TurnChangeDetails>();
 	private changesGeneration = 0;
+	private threadChanges: ThreadChangesSummary | undefined;
+	private threadChangesError: string | undefined;
+	private summaryRequest = 0;
 
 	readonly onDidChange: Event<void> = this._onDidChange.event;
 	readonly onDidChangeComposer: Event<void> = this._onDidChangeComposer.event;
@@ -111,6 +114,7 @@ export class CoworkWidgetModel extends Disposable {
 		this._register(chatService.onDidUpdateTurnChanges((update) => {
 			if (update.sessionId !== this.sessionId || update.threadId !== this.threadId) return;
 			this.acceptChangeSets(update.changeSets);
+			void this.refreshChanges();
 		}));
 		this._register(toDisposable(() => {
 			this.generation++;
@@ -137,7 +141,10 @@ export class CoworkWidgetModel extends Disposable {
 			phase: this._state,
 			error: this._error,
 			canInterrupt: this.canInterrupt,
-			changes: getChatInputChanges(this._changeSets),
+			changes: this.threadChanges?.statistics,
+			changesRevision: this.threadChanges?.revision,
+			changesScope: this.selection.kind === 'session' ? 'conversation' : 'workspace',
+			changesError: this.threadChangesError,
 			approvalMode: this.selectedApprovalModes.get().get(this.composerIdentity) ?? this._thread?.turns.at(-1)?.approvalMode ?? this.defaultApprovalMode.get(),
 			models: this._models,
 			modelsError: this.modelsError,
@@ -713,6 +720,9 @@ export class CoworkWidgetModel extends Disposable {
 		this.transcriptEntries = [];
 		this.transcriptRevision = 0;
 		this._changeSets = [];
+		this.threadChanges = undefined;
+		this.threadChangesError = undefined;
+		this.summaryRequest++;
 		this.queuedMessages = 0;
 		this.queueGeneration++;
 		this.changeDetails.clear();
@@ -755,6 +765,16 @@ export class CoworkWidgetModel extends Disposable {
 			this._thread = { ...this._thread, sequence: update.durableSequence };
 			return;
 		}
+		if (update.update.event.type === 'threadHistoryMoved') {
+			// Retire the old checkpoint synchronously, before the replacement snapshot arrives.
+			this.summaryRequest++;
+			this.threadChanges = undefined;
+			this.threadChangesError = undefined;
+			this.changesGeneration++;
+			this._changeSets = [];
+			void this.loadTurnChanges(this.generation);
+			this._onDidChange.fire();
+		}
 		this.acceptCommittedEvent(update);
 		this.scheduleRefresh();
 	}
@@ -779,6 +799,24 @@ export class CoworkWidgetModel extends Disposable {
 		} catch (error) {
 			if (!this.isDisposed && generation === this.queueGeneration) this.setError(error);
 		}
+	}
+
+	async refreshChanges(): Promise<void> {
+		const owner = this.activeSession;
+		if (!owner) return;
+		const generation = this.generation;
+		const request = ++this.summaryRequest;
+		try {
+			const summary = await this.chatService.readThreadChanges(owner.session.sessionId, owner.threadId);
+			if (this.isDisposed || generation !== this.generation || request !== this.summaryRequest || summary.sequence < this.durableSequence) return;
+			this.threadChanges = summary;
+			this.threadChangesError = undefined;
+		} catch {
+			if (this.isDisposed || generation !== this.generation || request !== this.summaryRequest) return;
+			this.threadChanges = undefined;
+			this.threadChangesError = localize('chat.changes.loadFailed', 'Changes are unavailable. Open Changes to retry.');
+		}
+		this._onDidChange.fire();
 	}
 
 	private async loadTurnChanges(threadGeneration: number): Promise<void> {
@@ -912,6 +950,7 @@ export class CoworkWidgetModel extends Disposable {
 			this._thread = result.thread;
 			this.durableSequence = Math.max(this.durableSequence, result.thread.sequence);
 			this.snapshotRequest = Math.max(this.snapshotRequest, request);
+			void this.refreshChanges();
 		}
 		const transcript = result.transcript.revision >= this.transcriptRevision;
 		if (transcript) {

@@ -12,6 +12,70 @@ use serde_json::Value;
 use serde_json::json;
 
 impl GitRuntime {
+    pub(crate) fn show_workspace_changes(
+        &self,
+        repositories: &[Repository],
+        token: &CancellationToken,
+    ) -> Result<Value, ExtensionError> {
+        let mut items = Vec::new();
+        for repository in repositories {
+            let input = self.multi_diff_input(repository, "uncommitted", token)?;
+            for mut item in input["items"].as_array().cloned().unwrap_or_default() {
+                item["id"] = json!(format!(
+                    "{}:{}",
+                    repository.descriptor.id,
+                    item["id"].as_str().unwrap_or_default()
+                ));
+                if repositories.len() > 1 {
+                    item["label"] = json!(format!(
+                        "{}: {}",
+                        repository.descriptor.label,
+                        item["label"].as_str().unwrap_or_default()
+                    ));
+                }
+                items.push(item);
+            }
+            // Unmerged paths are excluded from the ordinary SCM multi-diff. Include their
+            // current-side and working-file snapshots here so the total file count stays honest.
+            let status = self.api.status(repository, Some(token))?;
+            for change in status.changes.iter().filter(|change| change.conflicted) {
+                let file = self.api.repository_request(
+                    repository,
+                    "conflictFile",
+                    json!({"path":change.path}),
+                    token,
+                )?;
+                let resource = file_uri(&repository.root_uri, &change.path)?;
+                let mut snapshot = url::Url::parse("git-conflict:/").expect("constant URI");
+                snapshot.set_path(&change.path);
+                snapshot
+                    .query_pairs_mut()
+                    .append_pair("repository", &repository.descriptor.id)
+                    .append_pair("stream", &status.stream_instance_id)
+                    .append_pair("revision", &status.revision.to_string());
+                let mut current = snapshot.clone();
+                current.query_pairs_mut().append_pair("side", "current");
+                snapshot.query_pairs_mut().append_pair("side", "result");
+                let original = content_input(&file["current"], current.to_string(), &change.path);
+                let modified = content_input(&file["result"], snapshot.to_string(), &change.path);
+                let label = if repositories.len() > 1 {
+                    format!("{}: {}", repository.descriptor.label, change.path)
+                } else {
+                    change.path.clone()
+                };
+                items.push(json!({"id":format!("{}:{}",repository.descriptor.id,change.path),"label":label,"original":original,"modified":modified,"binary":file["current"]["kind"]=="binary" || file["result"]["kind"]=="binary","goToFile":{"resource":resource,"label":change.path},"actions":[]}));
+            }
+        }
+        let label = self.api.text("git.workspaceChanges", &[]);
+        self.api.editor(
+            json!({"method":"open","input":{
+            "kind":"multiDiff","resource":"ash-scm-workspace:/changes","label":label,
+            "readOnly":true,"items":items,"source":{"kind":"snapshot","label":label}
+        },"options":{"pinned":true}}),
+            Some(token),
+        )
+    }
+
     pub(crate) fn open_change(
         &self,
         repository: &Repository,
@@ -134,23 +198,26 @@ impl GitRuntime {
                 && (scope != "staged" || change.index_status != "unmodified")
                 && (scope != "unstaged" || change.worktree_status != "unmodified")
         }) {
+            let staged = change.index_status != "unmodified";
+            let unstaged = change.worktree_status != "unmodified";
             let (mut original, modified) = self.change_inputs(
                 repository,
                 &status,
                 change,
-                if scope == "staged" {
+                if scope == "staged" || scope == "uncommitted" && !unstaged {
                     "staged"
                 } else {
                     "unstaged"
                 },
                 token,
             )?;
-            if scope == "uncommitted" {
+            // An unchanged comparison is absent from the backend's change list. If only
+            // one side changed, its other endpoint already equals HEAD or the working file.
+            if scope == "uncommitted" && staged && unstaged {
                 original = self
                     .change_inputs(repository, &status, change, "staged", token)?
                     .0;
             }
-            let staged = change.index_status != "unmodified";
             let key = if staged {
                 "git.unstageChanges"
             } else {

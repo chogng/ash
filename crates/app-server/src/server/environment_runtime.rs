@@ -33,6 +33,8 @@ use crate::tool_search_models::ToolSearchEmbeddingStatus;
 use crate::tool_search_models::resolve_tool_search;
 use agent::MultiAgentToolService;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
+use ash_app_server_protocol::protocol::fs::FsDirectoryTarget;
+use ash_app_server_protocol::protocol::fs::FsResolvePathResult;
 use ash_cloud_codebase::CloudCodebaseController;
 use ash_cloud_codebase::CloudCodebaseStorage;
 use ash_codebase::CodebaseSemanticService;
@@ -2924,6 +2926,117 @@ impl AppServer {
             .cloud_codebase
             .clone()
             .ok_or_else(|| RpcError::new(-32093, AppServerErrorName::CloudCodebaseUnavailable))
+    }
+
+    /// Directory discovery is independent of the visible Workspace. Returned selectors carry no
+    /// authority: the ordinary filesystem endpoints check current permissions on every use.
+    pub(crate) fn resolve_file_path(
+        &self,
+        path: &std::path::Path,
+    ) -> Result<FsResolvePathResult, RpcError> {
+        use std::path::Component;
+        if !path.is_absolute()
+            || path
+                .components()
+                .any(|part| matches!(part, Component::ParentDir))
+        {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let catalog = self
+            .threads
+            .list_thread_catalog()
+            .map_err(super::core_error)?;
+        let runtime = self
+            .env_runtime
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut candidates = Vec::new();
+        let mut add = |dir: &Dir, target: FsDirectoryTarget| {
+            // Match aliases of the granted root without resolving the leaf: creating a missing
+            // file must work, and each operation's existing path policy still checks symlinks.
+            let root = [dir.requested_path(), dir.canonical_path()]
+                .into_iter()
+                .find(|root| path.starts_with(root));
+            if let Some(root) = root {
+                candidates.push(FsResolvePathResult {
+                    root: root.to_path_buf(),
+                    target,
+                });
+            }
+        };
+        for (id, dir) in &runtime.dirs {
+            if dir.grant.authorize(Permission::BrowseFiles).is_ok() {
+                add(
+                    dir.grant.dir(),
+                    FsDirectoryTarget::Environment { dir_id: id.clone() },
+                );
+            }
+        }
+        // Thread catalog reads do not replay conversations. Managed worktree bindings and extra
+        // Session grants remain owned by DirGrants, including archived conversations.
+        let mut sessions = std::collections::HashSet::new();
+        for entry in catalog {
+            let session_id = entry.session_id;
+            if let Ok(Some(scope)) = runtime
+                .dir_grants
+                .thread_scope(&entry.thread.thread_id, Permission::BrowseFiles)
+            {
+                let dir = scope.primary().dir();
+                add(
+                    dir,
+                    FsDirectoryTarget::Session {
+                        session_directory:
+                            ash_app_server_protocol::protocol::environment::SessionDirSelector {
+                                session_id: session_id.clone(),
+                                path: dir.canonical_path().to_path_buf(),
+                            },
+                    },
+                );
+            }
+            if sessions.insert(session_id.clone()) {
+                for grant in runtime.dir_grants.list(&session_id) {
+                    if let Ok(Some(_)) = runtime.dir_grants.authorize(
+                        &session_id,
+                        grant.dir().canonical_path(),
+                        Permission::BrowseFiles,
+                    ) {
+                        add(grant.dir(), FsDirectoryTarget::Session { session_directory: ash_app_server_protocol::protocol::environment::SessionDirSelector { session_id: session_id.clone(), path: grant.dir().canonical_path().to_path_buf() } });
+                    }
+                }
+            }
+        }
+        // The most specific route is stable regardless of the selected conversation. At equal
+        // roots prefer the environment route, then the stable Session identity.
+        candidates.sort_by(|a, b| {
+            b.root
+                .components()
+                .count()
+                .cmp(&a.root.components().count())
+                .then_with(|| match (&a.target, &b.target) {
+                    (
+                        FsDirectoryTarget::Environment { dir_id: a },
+                        FsDirectoryTarget::Environment { dir_id: b },
+                    ) => a.cmp(b),
+                    (FsDirectoryTarget::Environment { .. }, FsDirectoryTarget::Session { .. }) => {
+                        std::cmp::Ordering::Less
+                    }
+                    (FsDirectoryTarget::Session { .. }, FsDirectoryTarget::Environment { .. }) => {
+                        std::cmp::Ordering::Greater
+                    }
+                    (
+                        FsDirectoryTarget::Session {
+                            session_directory: a,
+                        },
+                        FsDirectoryTarget::Session {
+                            session_directory: b,
+                        },
+                    ) => a.session_id.as_str().cmp(b.session_id.as_str()),
+                })
+        });
+        candidates
+            .into_iter()
+            .next()
+            .ok_or_else(|| RpcError::new(-32043, AppServerErrorName::PermissionRequired))
     }
 
     pub(super) fn file_system_service_for(

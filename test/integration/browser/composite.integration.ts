@@ -633,7 +633,7 @@ window.ashCompositeIntegration = {
 		const workspace = resources.add(new WorkspaceContextService({ id: 'composite', uri: URI.file('/composite') }));
 		const unavailable = (): never => { throw new Error('Unexpected file operation in editor identity fixture'); };
 		const provider = resources.add(new AppServerFileSystemProvider({
-			workspaceContextService: workspace,
+			directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 			api: {
 				...createDisconnectedFileApi(unavailable), readPathCaseSensitivity: async params => {
 					if (params.dirId !== 'composite') throw new Error('Wrong directory owner');

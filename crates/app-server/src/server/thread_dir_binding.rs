@@ -569,6 +569,9 @@ fn checkpoint_trees(
                 .iter()
                 .find(|record| record.repository_id == repository.repository_id())?;
             let tree = if after {
+                // Live summaries also retain an after tree; historical forks still require
+                // the final capture after execution and its hooks have settled.
+                record.terminal_state?;
                 record.after_tree.clone()?
             } else {
                 record.before_tree.clone()

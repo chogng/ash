@@ -200,6 +200,15 @@ export interface TurnChangeDetails {
 	readonly draftMessage?: string;
 }
 
+/** Net file changes from this conversation's baseline to its current history checkpoint. */
+export interface ThreadChangesSummary {
+	readonly sequence: number;
+	readonly revision: string;
+	readonly statistics: TurnChangeSetSummary['statistics'];
+	readonly repositories: readonly { readonly repositoryId: string; readonly files: readonly TurnChangeFile[]; }[];
+	readonly warnings: readonly string[];
+}
+
 export interface TurnChangeFileContents {
 	readonly path: string;
 	readonly binary: boolean;
@@ -280,6 +289,8 @@ export interface IChatService {
 	interruptTurn(options: InterruptTurnOptions): Promise<void>;
 	resolveInteraction(options: ResolveInteractionOptions): Promise<void>;
 	listTurnChanges(sessionId: SessionId, threadId: ThreadId): Promise<readonly TurnChangeSetSummary[]>;
+	readThreadChanges(sessionId: SessionId, threadId: ThreadId): Promise<ThreadChangesSummary>;
+	readThreadChangeFile(sessionId: SessionId, threadId: ThreadId, revision: string, repositoryId: string, path: string): Promise<TurnChangeFileContents>;
 	readTurnChange(sessionId: SessionId, threadId: ThreadId, changeSetId: string): Promise<TurnChangeDetails>;
 	readTurnChangeFile(sessionId: SessionId, threadId: ThreadId, changeSetId: string, path: string): Promise<TurnChangeFileContents>;
 	generateTurnChangeMessage(sessionId: SessionId, threadId: ThreadId, changeSetId: string, expectedRevision: number): Promise<readonly TurnChangeSetSummary[]>;

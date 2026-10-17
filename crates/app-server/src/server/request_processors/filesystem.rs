@@ -30,6 +30,8 @@ use ash_app_server_protocol::protocol::fs::FsReadFileResult;
 use ash_app_server_protocol::protocol::fs::FsReadPathCaseSensitivityParams;
 use ash_app_server_protocol::protocol::fs::FsReadPathCaseSensitivityResult;
 use ash_app_server_protocol::protocol::fs::FsRenameParams;
+use ash_app_server_protocol::protocol::fs::FsResolvePathParams;
+use ash_app_server_protocol::protocol::fs::FsResolvePathResult;
 use ash_app_server_protocol::protocol::fs::FsWriteBinaryFileParams;
 use ash_app_server_protocol::protocol::fs::FsWriteFileElevatedParams;
 use ash_app_server_protocol::protocol::fs::FsWriteFileParams;
@@ -63,6 +65,7 @@ const BINARY_PREVIEW_RESOURCE_TTL: Duration = Duration::from_secs(300);
 /// Coordinates the existing owners needed by the filesystem adapter.
 /// This contract deliberately exposes no server object or unrestricted service registry.
 pub(super) trait FileSystemRequestProcessorContext: Send + Sync {
+    fn resolve_file_path(&self, path: &std::path::Path) -> Result<FsResolvePathResult, RpcError>;
     fn file_system_service_for(
         &self,
         dir_id: Option<&str>,
@@ -104,6 +107,11 @@ impl<'ctx, C: FileSystemRequestProcessorContext + ?Sized> FileSystemRequestProce
 }
 
 impl<'ctx, C: FileSystemRequestProcessorContext + ?Sized> FileSystemRequestProcessor<'ctx, C> {
+    pub(super) fn fs_resolve_path(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: FsResolvePathParams = decode(params)?;
+        result(&self.context.resolve_file_path(&params.path)?)
+    }
+
     pub(super) fn fs_read_path_case_sensitivity(&self, params: &Value) -> Result<Value, RpcError> {
         let params: FsReadPathCaseSensitivityParams = decode(params)?;
         let scopes = self

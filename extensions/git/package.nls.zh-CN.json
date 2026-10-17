@@ -743,5 +743,8 @@
   "git.tagConflict.always": "始终替换本地标签",
   "git.status.syncIdle": "同步更改",
   "git.status.pullTooltip": "从 {1} 拉取 {0} 个提交",
-  "git.status.pushTooltip": "向 {1} 推送 {0} 个提交"
+  "git.status.pushTooltip": "向 {1} 推送 {0} 个提交",
+  "command.git.getChangesSummary": "获取工作区变更摘要",
+  "command.git.openWorkspaceChanges": "打开工作区变更",
+  "git.workspaceChanges": "工作区变更"
 }

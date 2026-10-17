@@ -1165,6 +1165,17 @@ fn selected_execution_target(
     ) {
         return Ok(None);
     }
+    if method == Some("fs/resolvePath") {
+        if let Some(path) = request
+            .get("params")
+            .and_then(|params| params.get("path"))
+            .and_then(Value::as_str)
+        {
+            return registry.file_execution_target(Path::new(path));
+        }
+        // Malformed requests still reach the typed filesystem boundary for InvalidParams.
+        return Ok(None);
+    }
     let terminal_directory = if method
         .is_some_and(|method| method.starts_with("terminal/") || method.starts_with("fs/"))
     {

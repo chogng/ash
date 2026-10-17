@@ -1167,7 +1167,7 @@ for (const locale of ['en', 'zh-CN']) {
 				await page.evaluate(() => window.ashChatInputIntegration.setChanges({ files: 3, additions: 677, deletions: 31 }));
 				await expect(changes).toBeVisible();
 				await expect(changes).toHaveText(locale === 'en' ? '3 files+677−31' : '3 个文件+677−31');
-				await expect(changes).toHaveAccessibleName(locale === 'en' ? 'Open Changes: 3 files, 677 lines added, 31 lines removed' : '打开变更：3 个文件，新增 677 行，删除 31 行');
+				await expect(changes).toHaveAccessibleName(locale === 'en' ? 'Open Conversation Changes: 3 files, 677 lines added, 31 lines removed' : '打开会话变更：3 个文件，新增 677 行，删除 31 行');
 				for (const width of [240, 450]) {
 					await page.locator('main').evaluate((element, width) => { element.style.width = `${width}px`; }, width);
 					const button = (await changes.boundingBox())!;
@@ -1498,4 +1498,29 @@ for (const locale of ['en', 'zh-CN']) {
 			await expect(page.getByRole('status', { name: 'Decision' })).toHaveText(JSON.stringify({ duration: 'turn', directories: [], networkHosts: [] }));
 		});
 	}
+}
+
+for (const surface of ['code', 'cowork']) {
+	test(`Chat changes scope fences workspace responses and hidden polling in ${surface}`, async ({ page }) => {
+		await page.clock.install();
+		await page.goto(`/chatInput.html?surface=${surface}`);
+		await page.evaluate(() => { window.ashChatInputIntegration.showModels(); window.ashChatInputIntegration.setChangesScope('workspace'); });
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.workspaceChangesReads())).toBe(1);
+		await page.evaluate(() => { window.ashChatInputIntegration.setChangesScope('conversation'); window.ashChatInputIntegration.releaseWorkspaceChanges({ files: 99, additions: 99, deletions: 99 }); });
+		const changes = page.locator('.ash-chat-changes-pill');
+		await expect(changes).toBeHidden();
+		await page.evaluate(() => window.ashChatInputIntegration.setChangesScope('workspace'));
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.workspaceChangesReads())).toBe(2);
+		await page.evaluate(() => window.ashChatInputIntegration.releaseWorkspaceChanges({ files: 2, additions: 3, deletions: 1 }));
+		await expect(changes).toHaveAccessibleName('Open Workspace Changes: 2 files, 3 lines added, 1 lines removed');
+		await page.evaluate(() => window.ashChatInputIntegration.setVisible(false));
+		await page.clock.runFor(15000);
+		expect(await page.evaluate(() => window.ashChatInputIntegration.workspaceChangesReads())).toBe(2);
+		await page.evaluate(() => { window.ashChatInputIntegration.setVisible(true); window.ashChatInputIntegration.setChangesScope('conversation'); window.ashChatInputIntegration.setChanges({ files: 0, additions: 0, deletions: 0 }); });
+		await expect(changes).toBeHidden();
+		await page.evaluate(() => window.ashChatInputIntegration.setChangesError('Changes are unavailable. Open Changes to retry.'));
+		await expect(changes).toHaveText('Changes unavailable');
+		await changes.click();
+		await expect(page.getByLabel('Opened sources')).toHaveText('[{"changes":true}]');
+	});
 }

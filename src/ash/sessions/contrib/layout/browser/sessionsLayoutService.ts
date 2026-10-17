@@ -122,18 +122,23 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		this._register(storage.onWillSaveState(() => this.saveVisibility()));
 		this._register(lifecycle.onWillShutdown(event => event.join(this.navigationQueue.then(() => this.saveVisibility()), 'Sessions entry layout')));
 		this._register(lifecycle.onDidShutdown(() => this.dispose()));
-		this._register(editor.onDidChangeEditors(event => {
+		const revealActiveEditor = (explicit = false): void => {
 			if (this.customViews.activeCustomView.get()) { return; }
-			// A modal borrows the current entry. Opening or closing it does not navigate its underlying document groups.
-			if (event.kind !== 'activeGroupChanged' && !(event.kind === 'groupChanged' && event.groupId === editor.activeGroup.id && event.event.kind === 'activeEditorChanged')) { return; }
 			if (editor.isModalEditorVisible || this.isChangingContent || this.controller.isRestoringEditors || !editors.activeEditor) { return; }
 			if (editor.activeGroup.id === this.pageGroupId && !editor.isGroupVisible(this.pageGroupId)) { return; }
 			const entry = this.editorEntries.get(extUri.getComparisonKey(editors.activeEditor.resource)) ?? documentEntry;
 			if (entry.id !== this.activeEntry.get()?.id) {
-				void this.openEntry(entry).catch(error => { if (!this.isDisposed) { notifications.error(String(error)); } });
+				void this.openEntry(entry).then(() => {
+					if (explicit && !this.isDisposed && this.isDocumentContent) return this.runOperation(() => this.controller.showEditor());
+				}).catch(error => { if (!this.isDisposed) { notifications.error(String(error)); } });
 			} else if (entry.content === 'documents') {
-				void this.runOperation(() => this.controller.updateDetails(true)).catch(error => { if (!this.isDisposed) { notifications.error(String(error)); } });
+				void this.runOperation(() => explicit ? this.controller.showEditor() : this.controller.updateDetails(true)).catch(error => { if (!this.isDisposed) { notifications.error(String(error)); } });
 			}
+		};
+		this._register((editor as SessionsEditorPart).onDidRevealActiveEditor(() => revealActiveEditor(true)));
+		this._register(editor.onDidChangeEditors(event => {
+			// A modal borrows the current entry. Opening or closing it does not navigate its underlying document groups.
+			if (event.kind === 'activeGroupChanged' || (event.kind === 'groupChanged' && event.groupId === editor.activeGroup.id && event.event.kind === 'activeEditorChanged')) revealActiveEditor();
 		}));
 		this._register(toDisposable(() => { for (const key of this.activityKeys.values()) { key.reset(); } }));
 		this._register(autorun(reader => {

@@ -57,6 +57,18 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 
 	ensureNoDisposablesAreLeakedInTestSuite();
 
+	test('reopening an already active document leaves the conversation entry even without an editor change', async () => {
+		using fixture = new EntryFixture();
+		await fixture.service.openEntry(chatEntry);
+		fixture.activeInput = { resource: URI.parse('untitled:/channel-notes/restored') };
+		fixture.revealActiveEditor.fire();
+		await fixture.service.runOperation(async () => { });
+		await fixture.service.runOperation(async () => { });
+		assert.equal(fixture.service.isDocumentContent, true);
+		assert.equal(fixture.visible.get('editor'), true);
+		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), documentEntry.restoreCommand);
+	});
+
 	test('disposal during conversation preparation stops queued entries and Part mutations', async () => {
 		using fixture = new EntryFixture();
 		const gate = new DeferredPromise<void>();
@@ -198,6 +210,7 @@ class EntryFixture extends Disposable {
 	private readonly workspace = this._register(new WorkspaceContextService({ id: 'sessions', folders: [] }));
 	public readonly editorChanged = this._register(new Emitter<EditorPartChangeEvent>());
 	public readonly activeEditorChanged = this._register(new Emitter<void>());
+	public readonly revealActiveEditor = this._register(new Emitter<void>());
 	public readonly visible = new Map<string, boolean>([['sessions', true], ['editor', false], ['auxiliarybar', false], ['sidebar', true], ['panel', false]]);
 	public readonly partChanges: string[] = [];
 	public readonly groupChanges: string[] = [];
@@ -230,6 +243,7 @@ class EntryFixture extends Disposable {
 		this.services.registerInstance(IEditorPart, {
 			pageGroupId: pageGroup.id, groups: [documentGroup, pageGroup], activeGroup: documentGroup,
 			onDidChangeEditors: this.editorChanged.event,
+			onDidRevealActiveEditor: this.revealActiveEditor.event,
 			get isModalEditorVisible() { return fixture.modalVisible; },
 			setGroupVisible: (id: string, visible: boolean) => this.groupChanges.push(id + ':' + visible),
 			activateGroup: (id: string) => this.groupChanges.push('activate:' + id),

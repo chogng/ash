@@ -1612,7 +1612,7 @@ for (const target of ['activeGroup', 'sideGroup'] as const) {
 			using workspace = new WorkspaceContextService({ id: 'project', uri: URI.file('/project') });
 			const host = createDisconnectedRendererApi();
 			using provider = new AppServerFileSystemProvider({
-				workspaceContextService: workspace, resourceApi: host.resource, api: {
+				directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })), resourceApi: host.resource, api: {
 					...host.fs, readPathCaseSensitivity: async params => {
 						if (params.path === 'new.ts') { void entered.complete(); return gate.p; }
 						return { scopes: [{ path: '.', sensitivity: 'unknown' }] };
@@ -3283,7 +3283,7 @@ test('slow directory identity cannot replace a newer editor or ordinary content'
 		const replacement = new DeferredPromise<FsReadPathCaseSensitivityResult>();
 		delayed.set('old.ts', old);
 		delayed.set('replacement.ts', replacement);
-		using provider = new AppServerFileSystemProvider({ workspaceContextService: workspace, resourceApi: host.resource, api: { ...host.fs, readPathCaseSensitivity: async params => delayed.get(params.path)?.p ?? { scopes: [{ path: '.', sensitivity: 'unknown' }] } } });
+		using provider = new AppServerFileSystemProvider({ directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })), resourceApi: host.resource, api: { ...host.fs, readPathCaseSensitivity: async params => delayed.get(params.path)?.p ?? { scopes: [{ path: '.', sensitivity: 'unknown' }] } } });
 		using files = new FileService();
 		using registration = files.registerProvider('file', provider);
 		using parent = new TestUriIdentityServices(files);

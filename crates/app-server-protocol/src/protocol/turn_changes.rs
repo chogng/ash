@@ -165,6 +165,36 @@ pub struct TurnChangesListResult {
     pub change_sets: Vec<TurnChangeSetSummary>,
 }
 
+/// Net changes at the current history cursor, relative to this Thread's directory baseline.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnChangesSummaryResult {
+    #[ts(type = "number")]
+    pub sequence: u64,
+    pub revision: String,
+    pub statistics: TurnChangeFileStatisticsDto,
+    pub repositories: Vec<TurnChangesRepositorySummary>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnChangesRepositorySummary {
+    pub repository_id: String,
+    pub files: Vec<TurnChangeFileDto>,
+}
+
+/// Resolves only a file in the requested summary revision; stale revisions fail explicitly.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnChangesSummaryFileParams {
+    pub session_id: SessionId,
+    pub thread_id: ThreadId,
+    pub revision: String,
+    pub repository_id: String,
+    pub path: String,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct TurnChangesReadParams {

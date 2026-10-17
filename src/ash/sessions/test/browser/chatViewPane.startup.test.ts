@@ -8,6 +8,7 @@ import { CommandService } from '../../../workbench/services/commands/common/comm
 import { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
+import { IKeybindingService } from '../../../platform/keybinding/common/keybinding.js';
 import { IPromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import { PromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.js';
 import { IAppServerHookApi, IAppServerSkillApi } from '../../../platform/agentHost/common/appServerApi.js';
@@ -70,6 +71,17 @@ test("opens a local Chat conversation before the backend session request settles
 	using contextViewService = new BrowserContextViewService(document.body);
 	using services = createTestEditorServices();
 	services.registerSingleton(ICommandService, () => services.createInstance(CommandService));
+	services.registerInstance(IKeybindingService, {
+		inChordMode: false,
+		onDidUpdateKeybindings: Event.None,
+		getKeybindings: () => [],
+		enableKeybindingHoldMode: () => undefined,
+		registerSchemaContribution: () => toDisposable(() => { }),
+		resolveKeybinding: () => { throw new Error('Shortcut dispatch is outside this startup fixture'); },
+		resolveUserBinding: () => undefined,
+		lookupKeybindings: () => [],
+		lookupKeybinding: () => undefined,
+	});
 	using notifications = new NotificationService();
 	services.registerInstance(INotificationService, notifications);
 	services.registerInstance(IEditorService, { ...emptyEditorServiceState, focusActiveEditor() { }, openEditor: async () => { } });
@@ -251,6 +263,8 @@ function unavailableChatService(): IChatService & ILanguageModelsService {
 		interruptTurn: () => pending as Promise<void>,
 		resolveInteraction: () => pending as Promise<void>,
 		listTurnChanges: () => pending,
+		readThreadChanges: () => pending,
+		readThreadChangeFile: () => pending,
 		readTurnChange: () => pending,
 		readTurnChangeFile: () => pending,
 		generateTurnChangeMessage: () => pending,

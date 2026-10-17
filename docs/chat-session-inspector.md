@@ -128,6 +128,14 @@ Git Turn 开始前必须成功捕获 baseline。失败时该 Turn 不获得写�
 
 普通 Thread 目录绑定围绕一个来源根建立，可以包含该根中的多个嵌套 Git 仓库；Session 另外获得的独立目录不会自动进入该 Thread 的 Turn ChangeSet。每个子 Agent Thread 使用自己的受管目录绑定和 ChangeSet，不建立额外的工作尝试身份。
 
+## Chat 变更入口
+
+Chat 输入框上方的文件数与增删行数由后端返回。在 New Chat 中通过可选 Git 扩展读取整个工作区（多个仓库合并）；进入已创建的对话后，只读取当前 Thread 的净变更。会话零变更时隐藏入口，不回退到工作区统计。
+
+`turnChanges/summary` 比较目录绑定的初始 baseline 与当前有效检查点，返回跨仓库的文件、统计和 revision。撤销/重做优先使用历史游标保存的精确 workspace checkpoint，不能用被保留 Turn 的完整 after tree 代替。同一文件反复修改只计算最终差异；改回起点后消失。回退后继续执行会沿新的历史路径更新汇总，旧路径的 Turn 证据继续保留但不参与汇总。提交不会清除会话历史变更。
+
+打开入口时，`turnChanges/summaryFile` 使用相同 revision 读取 immutable blob。加载期间发生历史移动或切换对话会丢弃旧结果；捕获不可用显示重试，不显示为零。每轮 ChangeSet 的审阅和提交仍在 Changes 中进行。工作区无法按文本比较的文件保留文件计数，行数以星号和辅助说明标明覆盖范围。
+
 ## ChangeSet 状态
 
 每个 Turn、每个捕获目标形成一个 ChangeSet。三个状态轴互不折叠：
@@ -196,6 +204,8 @@ Conventional Commit subject，可按需带 body。
 
 ## 主要接口
 
+- `turnChanges/summary`
+- `turnChanges/summaryFile`
 - `turnChanges/list`
 - `turnChanges/read`
 - `turnChanges/readFile`

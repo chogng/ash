@@ -67,6 +67,20 @@ fn move_history(
     assert_eq!(result["value"]["threadId"], thread);
 }
 
+fn conversation_changes(
+    server: &AppServer,
+    connection: &mut ConnectionState,
+    session: &str,
+    thread: &str,
+) -> Value {
+    call(
+        server,
+        connection,
+        "turnChanges/summary",
+        serde_json::json!({"sessionId":session,"threadId":thread}),
+    )
+}
+
 #[test]
 fn git_and_directory_history_restore_files_and_keep_the_same_thread_after_restart() {
     for git in [true, false] {
@@ -97,6 +111,10 @@ fn git_and_directory_history_restore_files_and_keep_the_same_thread_after_restar
                     String::from_utf8_lossy(&output.stderr)
                 );
             }
+        }
+        if git {
+            // Existing source edits belong to the initial directory baseline, never this chat.
+            std::fs::write(source.path().join("preexisting"), "source work\n").unwrap();
         }
         let options = || {
             AppServerOptions::new(profile.path())
@@ -134,6 +152,12 @@ fn git_and_directory_history_restore_files_and_keep_the_same_thread_after_restar
             serde_json::json!({"sessionId":session_id,"threadId":thread_id}),
         );
         let directory = PathBuf::from(read["directory"]["root"].as_str().unwrap());
+        if git {
+            assert_eq!(
+                std::fs::read_to_string(directory.join("preexisting")).unwrap(),
+                "source work\n"
+            );
+        }
         call(
             &server,
             &mut connection,
@@ -162,6 +186,40 @@ fn git_and_directory_history_restore_files_and_keep_the_same_thread_after_restar
                 .iter()
                 .all(|point| point["workspace"]["type"] == if git { "git" } else { "directory" })
         );
+        let original_summary =
+            conversation_changes(&server, &mut connection, &session_id, &thread_id);
+        assert_eq!(
+            original_summary["statistics"]["files"],
+            if git { 1 } else { 0 }
+        );
+        assert!(
+            rpc(
+                &server,
+                &mut connection,
+                "turnChanges/summary",
+                serde_json::json!({"sessionId":"wrong-owner","threadId":thread_id})
+            )
+            .get("error")
+            .is_some()
+        );
+        let file_params = serde_json::json!({"sessionId":session_id,"threadId":thread_id,"revision":original_summary["revision"],"repositoryId":original_summary["repositories"][0]["repositoryId"],"path":"note"});
+        if git {
+            let file = call(
+                &server,
+                &mut connection,
+                "turnChanges/summaryFile",
+                file_params.clone(),
+            );
+            assert_eq!(file["before"], "initial\n");
+            assert_eq!(file["after"].as_str().unwrap().trim(), "changed");
+            let mut outside = file_params.clone();
+            outside["path"] = serde_json::json!("../note");
+            assert!(
+                rpc(&server, &mut connection, "turnChanges/summaryFile", outside)
+                    .get("error")
+                    .is_some()
+            );
+        }
         move_history(
             &server,
             &mut connection,
@@ -170,6 +228,25 @@ fn git_and_directory_history_restore_files_and_keep_the_same_thread_after_restar
             "undo",
             "undo",
         );
+        let undone_summary =
+            conversation_changes(&server, &mut connection, &session_id, &thread_id);
+        assert_eq!(
+            undone_summary["statistics"],
+            serde_json::json!({"files":0,"additions":0,"deletions":0})
+        );
+        assert_ne!(undone_summary["revision"], original_summary["revision"]);
+        if git {
+            assert!(
+                rpc(
+                    &server,
+                    &mut connection,
+                    "turnChanges/summaryFile",
+                    file_params
+                )
+                .get("error")
+                .is_some()
+            );
+        }
         assert_eq!(
             std::fs::read_to_string(directory.join("note"))
                 .unwrap()
@@ -213,6 +290,11 @@ fn git_and_directory_history_restore_files_and_keep_the_same_thread_after_restar
                 .trim(),
             "changed"
         );
+        let changed_content = std::fs::read(directory.join("note")).unwrap();
+        let redone_summary =
+            conversation_changes(&server, &mut connection, &session_id, &thread_id);
+        assert_eq!(redone_summary["statistics"], original_summary["statistics"]);
+        assert_ne!(redone_summary["revision"], original_summary["revision"]);
         let runtime = server.git_turn_changes.as_ref().unwrap();
         let thread = ThreadId::new(thread_id.clone()).unwrap();
         let state = history(&server, &mut connection, &session_id, &thread_id);
@@ -356,6 +438,81 @@ fn git_and_directory_history_restore_files_and_keep_the_same_thread_after_restar
             );
             server.close_connection(connection);
         } else {
+            // Continue from an earlier checkpoint. The old future must not contribute, and
+            // a subsequent reversal must net to zero instead of summing both new Turns.
+            std::fs::write(directory.join("note"), &changed_content).unwrap();
+            move_history(
+                &server,
+                &mut connection,
+                &session_id,
+                &thread_id,
+                "branch-undo",
+                "undo",
+            );
+            for (command_id, command, expected_files) in [
+                (
+                    "continue",
+                    if cfg!(windows) {
+                        "echo continued>note && echo branch>branch.txt"
+                    } else {
+                        "printf 'continued\\n' > note; printf 'branch\\n' > branch.txt"
+                    },
+                    2,
+                ),
+                (
+                    "reverse",
+                    if cfg!(windows) {
+                        "git restore -- note && del branch.txt"
+                    } else {
+                        "printf 'initial\\n' > note; rm branch.txt"
+                    },
+                    0,
+                ),
+            ] {
+                let state = history(&server, &mut connection, &session_id, &thread_id);
+                call(
+                    &server,
+                    &mut connection,
+                    "session/request",
+                    serde_json::json!({"commandId":command_id,"sessionId":session_id,"request":{"type":"startShellTurn","threadId":thread_id,"expectedSequence":state["sequence"],"approvalMode":"bypassPermissions","command":command,"workingDirectory":"."}}),
+                );
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+                loop {
+                    let read = call(
+                        &server,
+                        &mut connection,
+                        "session/thread/read",
+                        serde_json::json!({"sessionId":session_id,"threadId":thread_id}),
+                    );
+                    if read["thread"]["turns"]
+                        .as_array()
+                        .unwrap()
+                        .last()
+                        .is_some_and(|turn| turn["status"] == "completed")
+                    {
+                        break;
+                    }
+                    assert!(std::time::Instant::now() < deadline);
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+                let summary =
+                    conversation_changes(&server, &mut connection, &session_id, &thread_id);
+                assert_eq!(summary["statistics"]["files"], expected_files, "{summary}");
+                assert_eq!(
+                    history(&server, &mut connection, &session_id, &thread_id)["canRedo"],
+                    false
+                );
+                if expected_files > 0 {
+                    let file = call(
+                        &server,
+                        &mut connection,
+                        "turnChanges/summaryFile",
+                        serde_json::json!({"sessionId":session_id,"threadId":thread_id,"revision":summary["revision"],"repositoryId":summary["repositories"][0]["repositoryId"],"path":"note"}),
+                    );
+                    assert_eq!(file["before"], "initial\n");
+                    assert_eq!(file["after"].as_str().unwrap().trim(), "continued");
+                }
+            }
             server.close_connection(connection);
         }
         assert_eq!(

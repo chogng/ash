@@ -2,7 +2,6 @@ import { IRendererHostService } from '../../../platform/renderer/common/renderer
 import { quickInputServiceTestControls } from '../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { CommandsRegistry, ICommandService } from '../../../platform/commands/common/commands.js';
 import { OPEN_CHAT_CHANGES_COMMAND_ID } from '../../../workbench/contrib/chat/common/chat.js';
-import { getChatInputChanges } from '../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -13,7 +12,8 @@ import { IAgentSessionService, IAgentTurnService } from '../../../platform/agent
 import { IAgentModelsService } from '../../../platform/agentHost/common/agentModels.js';
 import { createDisconnectedRendererApi } from '../../../workbench/browser/rendererApi.js';
 import { IAppServerApi, IServerEventApi } from '../../../platform/agentHost/common/appServerApi.js';
-import { Event } from '../../../base/common/event.js';
+import { Emitter, Event } from '../../../base/common/event.js';
+import { DeferredPromise } from '../../../base/common/async.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../workbench/common/contributions.js';
 import type { MultiDiffEditorInput } from '../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
@@ -25,7 +25,7 @@ import { IViewsService } from '../../../workbench/services/views/common/viewsSer
 import { IEditorService } from '../../../workbench/services/editor/common/editorService.js';
 import { EditorInputSerializers } from '../../../workbench/services/editor/common/editorInputSerializer.js';
 import { WorkspaceContextService } from '../../../workbench/services/workspaces/browser/workspaceContextService.js';
-import { createTurnMultiDiffEditorInput } from '../../browser/turnMultiDiffSource.js';
+import { createThreadMultiDiffEditorInput, createTurnMultiDiffEditorInput } from '../../browser/turnMultiDiffSource.js';
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
@@ -113,6 +113,8 @@ test('Sessions contributes Turn changes and commit actions to the shared multi-d
 	const opened: MultiDiffEditorInput[] = [];
 	const chat = {
 		listTurnChanges: async () => summaries,
+		readThreadChanges: async () => ({ sequence: 2, revision: 'checkpoint', statistics: { files: 1, additions: 1, deletions: 1 }, repositories: [{ repositoryId: 'repo', files: [{ path: 'src/file.ts', kind: 'modified', binary: false, additions: 1, deletions: 1 }] }], warnings: [] }),
+		readThreadChangeFile: async () => ({ path: 'src/file.ts', binary: false, truncated: false, before: 'before', after: 'after' }),
 		readTurnChange: async (_sessionId: string, _threadId: string, changeSetId: string) => ({
 			summary: summaries.find(summary => summary.changeSetId === changeSetId)!,
 			files: [{ path: 'src/file.ts', kind: 'modified', binary: false, additions: 1, deletions: 1 }],
@@ -140,6 +142,7 @@ test('Sessions contributes Turn changes and commit actions to the shared multi-d
 	services.registerInstance(IChatService, chat);
 	const session = { sessionId: 'session', chats: [{ threadId: 'thread' }] };
 	services.registerInstance(ISessionsManagementService, {
+		onDidChange: Event.None,
 		active: { session, threadId: 'thread' },
 		sessions: [session],
 		initialize: async () => { },
@@ -163,13 +166,12 @@ test('Sessions contributes Turn changes and commit actions to the shared multi-d
 		before: 'before', after: 'after',
 		source: { kind: 'external', providerId: 'sessions.turn', label: 'Changes Through Current Turn', repositoryId: 'repo', branchName: 'main' },
 	});
-	assert.deepEqual(getChatInputChanges([...summaries, { ...summaries[0]!, changeSetId: 'discarded', captureState: 'discarded', statistics: { files: 20, additions: 100, deletions: 100 } }]), { files: 2, additions: 2, deletions: 2 });
-	assert.equal(getChatInputChanges([{ ...summaries[0]!, captureState: 'discarded' }]), undefined);
 	const openChanges = CommandsRegistry.getCommand(OPEN_CHAT_CHANGES_COMMAND_ID)!;
 	await openChanges(services, 'session', 'thread');
 	const changesInput = opened.pop()!;
-	assert.equal(changesInput.label, 'Changes');
-	assert.equal(changesInput.resource.toString(), input.resource.toString());
+	assert.equal(changesInput.label, 'Conversation Changes');
+	assert.equal(changesInput.items[0]?.original.initialText, 'before');
+	await assert.rejects(() => createThreadMultiDiffEditorInput(chat, 'session', 'thread', 'stale'), /conversation changed/);
 	assert.equal(changesInput.items[0]?.modified.initialText, 'after');
 	await assert.rejects(async () => openChanges(services, 'session', 'unknown-thread'), /no longer available/);
 	await assert.rejects(async () => openChanges(services, undefined, 'thread'), /require a conversation/);
@@ -177,7 +179,8 @@ test('Sessions contributes Turn changes and commit actions to the shared multi-d
 	using managedChanges = CommandsRegistry.register('workbench.agentSessions.action.viewChanges', () => { managedChangesOpened++; });
 	services.registerInstance(ICommandService, { executeCommand: async (id: string) => CommandsRegistry.getCommand(id)!(services) } as unknown as ICommandService);
 	await openChanges(services, 'session', 'thread');
-	assert.equal(managedChangesOpened, 1);
+	assert.equal(managedChangesOpened, 0);
+	opened.pop();
 	assert.equal(opened.length, 1);
 
 	const restored = EditorInputSerializers.deserialize(EditorInputSerializers.serialize(input)) as MultiDiffEditorInput;
@@ -196,4 +199,74 @@ test('Sessions contributes Turn changes and commit actions to the shared multi-d
 	assert.deepEqual(commits, ['prepared']);
 	const direct = await createTurnMultiDiffEditorInput(chat, { session: { sessionId: 'session' }, threadId: 'thread' } as never, 'currentTurn');
 	assert.equal(direct.items[0]?.original.initialText, 'middle');
+});
+
+test('Conversation review keeps identical paths in different repositories and rejects a moving checkpoint', async () => {
+	let revision = 'before';
+	let moveWhileReading = false;
+	const chat = {
+		readThreadChanges: async () => ({ sequence: 1, revision, statistics: { files: 2, additions: 2, deletions: 2 }, repositories: ['first', 'second'].map(repositoryId => ({ repositoryId, files: [{ path: 'same.txt', kind: 'modified', binary: false, additions: 1, deletions: 1 }] })), warnings: [] }),
+		readThreadChangeFile: async (_session: string, _thread: string, _revision: string, repositoryId: string) => { if (moveWhileReading) revision = 'after'; return { path: 'same.txt', binary: false, truncated: false, before: 'base', after: repositoryId }; },
+	} as unknown as IChatService;
+	const input = await createThreadMultiDiffEditorInput(chat, 'session', 'thread');
+	assert.deepEqual(input.items.map(item => item.label), ['first: same.txt', 'second: same.txt']);
+	assert.notEqual(input.items[0]!.modified.resource.toString(), input.items[1]!.modified.resource.toString());
+	moveWhileReading = true;
+	await assert.rejects(() => createThreadMultiDiffEditorInput(chat, 'session', 'thread'), /conversation changed/);
+});
+
+test('Chat opens the current checkpoint when composer counts arrive before its final revision', async () => {
+	let revision = 'sealed';
+	let summaryReads = 0;
+	let moveWhileReading = false;
+	const chat = {
+		readThreadChanges: async () => {
+			summaryReads++;
+			return { sequence: 2, revision, statistics: { files: 1, additions: 7, deletions: 0 }, repositories: [{ repositoryId: 'repo', files: [{ path: 'b-only.txt', kind: 'added', binary: false, additions: 7, deletions: 0 }] }], warnings: [] };
+		},
+		readThreadChangeFile: async (_session: string, _thread: string, requestedRevision: string) => {
+			assert.equal(requestedRevision, 'sealed');
+			if (moveWhileReading) revision = 'undone';
+			return { path: 'b-only.txt', binary: false, truncated: false, after: 'B only\n'.repeat(7) };
+		},
+	} as unknown as IChatService;
+	const session = { sessionId: 'session', chats: [{ threadId: 'B' }] };
+	using services = new InstantiationService();
+	services.registerInstance(ISessionsManagementService, { onDidChange: Event.None, active: { session, threadId: 'B' }, sessions: [session] } as unknown as ISessionsManagementService);
+	services.registerInstance(IChatService, chat);
+	const opened: MultiDiffEditorInput[] = [];
+	services.registerInstance(IEditorService, { openEditor: async (input: MultiDiffEditorInput) => { opened.push(input); } } as unknown as IEditorService);
+	const open = CommandsRegistry.getCommand(OPEN_CHAT_CHANGES_COMMAND_ID)!;
+	await open(services, 'session', 'B', 'capturing');
+	assert.equal(summaryReads, 3);
+	assert.equal(opened.length, 1);
+	assert.equal(opened[0].items[0].label, 'b-only.txt');
+	assert.equal(opened[0].items[0].modified.initialText, 'B only\n'.repeat(7));
+	moveWhileReading = true;
+	await assert.rejects(async () => open(services, 'session', 'B', 'capturing'), /conversation changed/);
+	assert.equal(opened.length, 1, 'a checkpoint that changes during file loading must not open');
+});
+
+test('Conversation review cannot open after an A-B-A selection change', async () => {
+	using changed = new Emitter<void>();
+	const pending = new DeferredPromise<{ path: string; binary: boolean; truncated: boolean; before: string; after: string; }>();
+	const reading = new DeferredPromise<void>();
+	const session = { sessionId: 'session', chats: [{ threadId: 'A' }, { threadId: 'B' }] };
+	const sessions = { onDidChange: changed.event, active: { session, threadId: 'A' }, sessions: [session] };
+	const chat = {
+		readThreadChanges: async () => ({ sequence: 1, revision: 'checkpoint', statistics: { files: 1, additions: 1, deletions: 1 }, repositories: [{ repositoryId: 'repo', files: [{ path: 'file', kind: 'modified', binary: false, additions: 1, deletions: 1 }] }], warnings: [] }),
+		readThreadChangeFile: () => { void reading.complete(); return pending.p; },
+	} as unknown as IChatService;
+	using services = new InstantiationService();
+	services.registerInstance(ISessionsManagementService, sessions as unknown as ISessionsManagementService);
+	services.registerInstance(IChatService, chat);
+	let opened = false;
+	services.registerInstance(IEditorService, { openEditor: async () => { opened = true; } } as unknown as IEditorService);
+	const opening = CommandsRegistry.getCommand(OPEN_CHAT_CHANGES_COMMAND_ID)!(services, 'session', 'A');
+	await reading.p;
+	sessions.active = { session, threadId: 'B' }; changed.fire();
+	sessions.active = { session, threadId: 'A' }; changed.fire();
+	await pending.complete({ path: 'file', binary: false, truncated: false, before: 'before', after: 'after' });
+	await opening;
+	assert.equal(opened, false);
 });

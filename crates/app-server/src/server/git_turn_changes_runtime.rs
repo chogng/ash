@@ -303,7 +303,18 @@ impl GitTurnChangesRuntime {
                 .ledger
                 .refresh_turn(session_id.clone(), thread_id.clone(), turn_id)
                 .map_err(|error| error.to_string())?;
-            self.publish(&refreshed);
+            let changed = refreshed
+                .into_iter()
+                .filter(|updated| {
+                    records
+                        .iter()
+                        .find(|record| record.change_set_id == updated.change_set_id)
+                        .is_none_or(|record| record.revision != updated.revision)
+                })
+                .collect::<Vec<_>>();
+            if !changed.is_empty() {
+                self.publish(&changed);
+            }
         }
         let visible = self
             .threads
@@ -335,6 +346,127 @@ impl GitTurnChangesRuntime {
                         CommitState::Queued | CommitState::Committing
                     )
             }))
+    }
+
+    /// Selects endpoints from the canonical history cursor, not the last recorded Turn.
+    /// Undo can retain only part of a Turn whose sealed capture is still available for history.
+    pub(super) fn checkpoint_summary(
+        &self,
+        session_id: &SessionId,
+        thread_id: &ThreadId,
+    ) -> Result<(git_turn_changes::CheckpointChanges, Vec<String>), String> {
+        if self.history_restoration_pending(thread_id)? {
+            return Err("Thread file restoration is still pending".into());
+        }
+        let thread = self
+            .threads
+            .read_thread(thread_id)
+            .map_err(|error| error.to_string())?;
+        if &thread.session_id != session_id {
+            return Err("Thread change ledger ownership does not match Session".into());
+        }
+        let binding = self
+            .binding(thread_id)
+            .ok_or("Thread directory is unavailable")?;
+        if binding.kind() != ManagedDirKind::Git {
+            return self
+                .dirs
+                .runtime
+                .block_on(git_turn_changes::summarize_checkpoints(
+                    thread.sequence,
+                    Vec::new(),
+                ))
+                .map(|summary| (summary, Vec::new()))
+                .map_err(|error| error.to_string());
+        }
+        let records = self.list(session_id, thread_id)?;
+        let warnings = records
+            .iter()
+            .filter(|record| record.capture_state != CaptureState::Discarded)
+            .flat_map(|record| record.warnings.clone())
+            .collect();
+        let result = self.dirs.runtime.block_on(async {
+            let git = ash_git::GitClient::system();
+            let mut comparisons = Vec::new();
+            for repository in binding.repositories() {
+                let latest = thread.turns.iter().rev().find_map(|turn| {
+                    records.iter().find(|record| {
+                        record.turn_id == turn.turn_id
+                            && record.repository_id == repository.repository_id()
+                    })
+                });
+                let restored = match thread.restored_workspace() {
+                    Some(ash_protocol::WorkspaceCheckpoint::Git { repositories, .. }) => Some(
+                        repositories
+                            .iter()
+                            .find(|point| point.repository_id == repository.repository_id())
+                            .ok_or("Checkpoint repository coverage changed")?,
+                    ),
+                    Some(ash_protocol::WorkspaceCheckpoint::Unavailable { .. }) => {
+                        return Err("Thread checkpoint is unavailable".to_string());
+                    }
+                    Some(ash_protocol::WorkspaceCheckpoint::Directory { .. }) => {
+                        return Err("Thread checkpoint kind changed".to_string());
+                    }
+                    Some(ash_protocol::WorkspaceCheckpoint::NoFiles) | None => None,
+                };
+                let after = if matches!(
+                    thread.restored_workspace(),
+                    Some(ash_protocol::WorkspaceCheckpoint::NoFiles)
+                ) || latest
+                    .is_some_and(|record| record.capture_state == CaptureState::Discarded)
+                {
+                    repository.baseline_tree()
+                } else if let Some(point) = restored {
+                    &point.tree_id
+                } else if let Some(record) = latest {
+                    if record.capture_state == CaptureState::Incomplete
+                        && record.terminal_state.is_none()
+                    {
+                        return Err("Turn checkpoint capture is incomplete".to_string());
+                    }
+                    record
+                        .after_tree
+                        .as_deref()
+                        .ok_or("Turn checkpoint capture is pending")?
+                } else {
+                    repository.baseline_tree()
+                };
+                let git_directory = if let Some(record) = latest {
+                    record.git_common_dir.clone()
+                } else if let Some(point) = restored {
+                    std::path::PathBuf::from(&point.git_directory)
+                } else {
+                    git.open_repository(repository.source_repository_root())
+                        .await
+                        .map_err(|error| error.to_string())?
+                        .common_dir()
+                        .to_path_buf()
+                };
+                comparisons.push(git_turn_changes::CheckpointComparison {
+                    repository_id: repository.repository_id().to_string(),
+                    git_directory,
+                    before: ash_git::GitTreeId::new(repository.baseline_tree().to_string())
+                        .map_err(|error| error.to_string())?,
+                    after: ash_git::GitTreeId::new(after.to_string())
+                        .map_err(|error| error.to_string())?,
+                });
+            }
+            git_turn_changes::summarize_checkpoints(thread.sequence, comparisons)
+                .await
+                .map_err(|error| error.to_string())
+        })?;
+        if self.history_restoration_pending(thread_id)?
+            || self
+                .threads
+                .read_thread(thread_id)
+                .map_err(|error| error.to_string())?
+                .sequence
+                != thread.sequence
+        {
+            return Err("Thread history changed while reading changes".into());
+        }
+        Ok((result, warnings))
     }
 
     pub(super) fn retry_message(

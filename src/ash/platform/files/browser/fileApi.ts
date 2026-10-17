@@ -1,3 +1,4 @@
+import { URI } from '../../../base/common/uri.js';
 import { throwIfCancelled } from '../../../base/common/cancellation.js';
 import { Event } from '../../../base/common/event.js';
 import { CancellationError } from '../../../base/common/errors.js';
@@ -11,6 +12,7 @@ import type { IFileApi } from "../common/fileApi.js";
 export function createDisconnectedFileApi(unavailable: UnavailableOperation): IFileApi {
 	return {
 		connectionGeneration: 0,
+		resolvePath: () => unavailable('fs.resolvePath'),
 		onDidChangeConnection: Event.None,
 		readPathCaseSensitivity: () => unavailable('fs.readPathCaseSensitivity'),
 		writeFileElevated: () => unavailable("fs.writeFileElevated"),
@@ -31,6 +33,13 @@ export function createDisconnectedFileApi(unavailable: UnavailableOperation): IF
 
 export function createAppServerFileApi(connection: AppServerProtocolClient): IFileApi {
 	return {
+		async resolvePath(resource) {
+			const result = await appServerRequest(connection, 'fs/resolvePath', { path: resource.scheme === 'file' ? resource.fsPath : resource.path });
+			return {
+				uri: resource.with({ path: URI.file(result.root).path, query: null, fragment: null }),
+				target: result.target.type === 'environment' ? result.target : { type: 'session', ...result.target.sessionDirectory },
+			};
+		},
 		get connectionGeneration() { return connection.generation; },
 		onDidChangeConnection: listener => connection.onStateChange(() => listener()),
 		readPathCaseSensitivity: params => appServerRequest(connection, 'fs/readPathCaseSensitivity', params),

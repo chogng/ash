@@ -46,7 +46,7 @@ function fixture(kind: 'Code' | 'Cowork', subscribe?: (threadId: string) => Prom
 	const turnApi = { start: async (input: SessionOperationInput<'startTurn'>) => { starts.push(input); return { turnId: 'started', sequence: 2 }; }, enqueue: async (input: Parameters<IAgentTurnService['enqueue']>[0]) => { queues.push(input); return { status: 'pending' as const }; }, listQueued: async () => ({ messages: [] }), steer: async (input: SessionOperationInput<'steerTurn'>) => { steers.push(input); return { turnId: input.turnId, sequence: 2 }; }, consultAdvisor: async (input: SessionOperationInput<'consultAdvisor'>) => { consults.push(input); return { turnId: 'consultation', sequence: 2 }; }, compact: async (input: SessionOperationInput<'compactContext'>) => { compacts.push(input); return { turnId: 'compacted', sequence: 2 }; }, interrupt: async () => ({ sequence: 2 }), resolveInteraction: async () => ({ sequence: 2 }) } as IAgentTurnService;
 	const execution: IAgentExecutionSettingsService = { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } };
 	const appServer = { get connectionGeneration() { return generation; }, getConnectionState: async () => 'ready', onConnectionState: connection.event, getSlashCommands: async () => [] } as IAppServerApi;
-	const changeApi = { list: async () => ({ changeSets: [] }) } as unknown as ITurnChangesApi;
+	const changeApi = { list: async () => ({ changeSets: [] }), summary: async () => ({ sequence: 1, revision: 'initial', statistics: { files: 0, additions: 0, deletions: 0 }, repositories: [], warnings: [] }) } as unknown as ITurnChangesApi;
 	const events = { subscribe: () => ({ dispose() { } }) } as IServerEventApi;
 	const chat = resources.add(new ChatService(modelApi, threadApi, turnApi, changeApi, appServer, events, execution, resources.add(new TestConfigurationService())));
 	const prompts = { onDidChangeSkills: Event.None, findAgentSkills: async () => [] } as unknown as IPromptsService;
@@ -282,4 +282,43 @@ for (const kind of ['Code', 'Cowork'] as const) {
 			assert.equal(f.model.threadId, 'A'); assert.equal(f.model.state, 'ready'); assert.equal(f.model.error, undefined);
 		});
 	}
+}
+
+for (const kind of ['Code', 'Cowork'] as const) {
+	test(`${kind} checkpoint summary retires immediately on undo and rejects delayed results`, async () => {
+		const f = fixture(kind); using resources = f.resources; await f.model.initialize();
+		await waitFor(() => f.model.inputState.changesRevision === 'initial');
+		const reads: DeferredPromise<Awaited<ReturnType<ChatService['readThreadChanges']>>>[] = [];
+		f.chat.readThreadChanges = () => { const read = new DeferredPromise<Awaited<ReturnType<ChatService['readThreadChanges']>>>(); reads.push(read); return read.p; };
+		let sequence = 2;
+		f.threadApi.read = async ({ threadId }) => snapshot(threadId, sequence);
+		f.updates.fire({ sessionId: 'session', threadId: 'A', durableSequence: 2, update: { type: 'committed', event: { type: 'turnCompleted', turnId: 'turn-A' } } });
+		await waitFor(() => reads.length === 1);
+		sequence = 3;
+		f.updates.fire({ sessionId: 'session', threadId: 'A', durableSequence: 3, update: { type: 'committed', event: { type: 'threadHistoryMoved' } } });
+		assert.equal(f.model.inputState.changes, undefined);
+		await waitFor(() => reads.length === 2);
+		await reads[1]!.complete({ sequence: 3, revision: 'undone', statistics: { files: 0, additions: 0, deletions: 0 }, repositories: [], warnings: [] });
+		await waitFor(() => f.model.inputState.changesRevision === 'undone');
+		await reads[0]!.complete({ sequence: 2, revision: 'old', statistics: { files: 30, additions: 100, deletions: 1 }, repositories: [], warnings: [] });
+		await turnTask();
+		assert.deepEqual(f.model.inputState.changes, { files: 0, additions: 0, deletions: 0 });
+		assert.equal(f.model.inputState.changesScope, 'conversation');
+		assert.equal(f.model.inputState.changesRevision, 'undone');
+	});
+	test(`${kind} summary cannot cross A-B-A navigation and failures do not show zero`, async () => {
+		const f = fixture(kind); using resources = f.resources; await f.model.initialize();
+		const pending = new DeferredPromise<Awaited<ReturnType<ChatService['readThreadChanges']>>>();
+		f.chat.readThreadChanges = () => pending.p;
+		await f.model.selectThread({ session: f.session, threadId: 'B' });
+		f.chat.readThreadChanges = async () => { throw new Error('Capture unavailable'); };
+		await f.model.selectThread({ session: f.session, threadId: 'A' });
+		await waitFor(() => !!f.model.inputState.changesError);
+		await pending.complete({ sequence: 1, revision: 'old-B', statistics: { files: 2, additions: 2, deletions: 2 }, repositories: [], warnings: [] });
+		await turnTask();
+		assert.equal(f.model.inputState.changes, undefined);
+		assert.equal(f.model.inputState.changesRevision, undefined);
+		assert.ok(f.model.inputState.changesError);
+		assert.equal(f.model.error, undefined);
+	});
 }

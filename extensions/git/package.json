@@ -99,6 +99,9 @@
           "commitFile": {
             "route": "git/commitFile"
           },
+          "textDiff": {
+            "route": "git/textDiff"
+          },
           "changeFile": {
             "route": "git/changeFile"
           },
@@ -337,6 +340,14 @@
       {
         "command": "git.getRepositoryContexts",
         "title": "%command.git.getRepositoryContexts%"
+      },
+      {
+        "command": "git.getChangesSummary",
+        "title": "%command.git.getChangesSummary%"
+      },
+      {
+        "command": "git.openWorkspaceChanges",
+        "title": "%command.git.openWorkspaceChanges%"
       },
       {
         "command": "git.graph.checkout",
@@ -1230,6 +1241,10 @@
         }
       ],
       "commandPalette": [
+        {
+          "command": "git.getChangesSummary",
+          "when": "false"
+        },
         {
           "command": "git.graph.checkout",
           "when": "false"

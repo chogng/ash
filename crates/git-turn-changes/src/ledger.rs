@@ -616,8 +616,16 @@ impl LedgerWorker {
             }
             let after_tree = self.capture_snapshot(&record.worktree_root).await?;
             let files = self.changes_between(&record, &after_tree).await?;
+            let repository = self.git.open_repository(&record.worktree_root).await?;
+            self.git
+                .pin_private_ref(
+                    &repository,
+                    &after_reference(&record.change_set_id)?,
+                    &GitTreeId::new(after_tree.clone())?,
+                )
+                .await?;
             let expected_revision = record.revision;
-            record.refresh_open_files(files)?;
+            record.refresh_open_files(after_tree, files)?;
             if record.revision != expected_revision {
                 self.store.compare_and_swap(expected_revision, &record)?;
             }

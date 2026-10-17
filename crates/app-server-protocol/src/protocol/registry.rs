@@ -953,6 +953,8 @@ use crate::protocol::fs::FsDeleteMode;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::fs::FsDeleteParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::fs::FsDirectoryTarget;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::fs::FsExistingTargetBehavior;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::fs::FsFileType;
@@ -992,6 +994,10 @@ use crate::protocol::fs::FsReadPathCaseSensitivityParams;
 use crate::protocol::fs::FsReadPathCaseSensitivityResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::fs::FsRenameParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::fs::FsResolvePathParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::fs::FsResolvePathResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::fs::FsWriteBinaryFileParams;
 #[cfg(any(test, feature = "export"))]
@@ -2338,6 +2344,12 @@ use crate::protocol::turn_changes::TurnChangesReadFileResult;
 use crate::protocol::turn_changes::TurnChangesReadParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::turn_changes::TurnChangesReadResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::turn_changes::TurnChangesRepositorySummary;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::turn_changes::TurnChangesSummaryFileParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::turn_changes::TurnChangesSummaryResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::turn_changes::TurnChangesUpdateDraftParams;
 #[cfg(any(test, feature = "export"))]
@@ -3770,6 +3782,16 @@ client_methods! {
         response: TurnChangesListResult,
         serialization: SessionSharedRead,
     },
+    TurnChangesSummary => "turnChanges/summary" {
+        params: TurnChangesListParams,
+        response: TurnChangesSummaryResult,
+        serialization: SessionSharedRead,
+    },
+    TurnChangesSummaryFile => "turnChanges/summaryFile" {
+        params: TurnChangesSummaryFileParams,
+        response: TurnChangesReadFileResult,
+        serialization: SessionSharedRead,
+    },
     TurnChangesRead => "turnChanges/read" {
         params: TurnChangesReadParams,
         response: TurnChangesReadResult,
@@ -4609,6 +4631,11 @@ client_methods! {
         params: DictationResourceParams,
         response: (),
         serialization: ConnectionExclusive("dictationModel"),
+    },
+    FsResolvePath => "fs/resolvePath" {
+        params: FsResolvePathParams,
+        response: FsResolvePathResult,
+        serialization: GlobalSharedRead,
     },
     FsGetMetadata => "fs/getMetadata" {
         params: FsGetMetadataParams,
@@ -6679,6 +6706,9 @@ typescript_bindings! {
     TurnChangeSetSummary,
     TurnChangesListParams,
     TurnChangesListResult,
+    TurnChangesSummaryResult,
+    TurnChangesRepositorySummary,
+    TurnChangesSummaryFileParams,
     TurnChangesReadParams,
     TurnChangesReadResult,
     TurnChangesReadFileParams,
@@ -6913,6 +6943,9 @@ typescript_bindings! {
     FsGetMetadataResult,
     FsPathCaseSensitivity,
     FsPathCaseSensitivityScope,
+    FsResolvePathParams,
+    FsResolvePathResult,
+    FsDirectoryTarget,
     FsReadPathCaseSensitivityParams,
     FsReadPathCaseSensitivityResult,
     FsReadDirectoryParams,

@@ -3326,6 +3326,12 @@ impl AppServer {
             Some(ClientMethod::TurnChangesList) => self
                 .git_turn_changes_processor()
                 .turn_changes_list(&request.params),
+            Some(ClientMethod::TurnChangesSummary) => self
+                .git_turn_changes_processor()
+                .turn_changes_summary(&request.params),
+            Some(ClientMethod::TurnChangesSummaryFile) => self
+                .git_turn_changes_processor()
+                .turn_changes_summary_file(&request.params),
             Some(ClientMethod::TurnChangesRead) => self
                 .git_turn_changes_processor()
                 .turn_changes_read(&request.params),
@@ -3995,6 +4001,9 @@ impl AppServer {
                 .attachment_import_remote(&request.params),
             Some(ClientMethod::FsGetMetadata) => {
                 self.fs_processor().fs_get_metadata(&request.params)
+            }
+            Some(ClientMethod::FsResolvePath) => {
+                self.fs_processor().fs_resolve_path(&request.params)
             }
             Some(ClientMethod::FsReadPathCaseSensitivity) => self
                 .fs_processor()

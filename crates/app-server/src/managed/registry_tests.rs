@@ -317,6 +317,144 @@ impl Drop for Gateway {
 
 #[cfg(unix)]
 #[test]
+fn gateway_resolves_managed_files_across_conversations_without_granting_other_paths() {
+    use serde_json::json;
+
+    let profile = tempfile::tempdir().unwrap();
+    let source = tempfile::tempdir().unwrap();
+    let second_source = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    fs::write(source.path().join("README.txt"), "baseline\n").unwrap();
+    for args in [
+        vec!["init", "-q"],
+        vec!["add", "README.txt"],
+        vec![
+            "-c",
+            "user.name=Ash Test",
+            "-c",
+            "user.email=test@ash.invalid",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "-qm",
+            "baseline",
+        ],
+    ] {
+        let output = std::process::Command::new("git")
+            .arg("-C")
+            .arg(source.path())
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    let cloned = std::process::Command::new("git")
+        .args(["clone", "-q"])
+        .arg(source.path())
+        .arg(second_source.path())
+        .output()
+        .unwrap();
+    assert!(
+        cloned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&cloned.stderr)
+    );
+    let registry = Arc::new(
+        ProfileAppServerRegistry::open(ConnectionOptions::new(
+            profile.path(),
+            None,
+            GrantSource::HostConfiguration,
+            None,
+        ))
+        .unwrap(),
+    );
+    let mut gateway = Gateway::start(registry);
+    let mut id = 1;
+    let mut rpc = |method: &str, params: serde_json::Value| {
+        id += 1;
+        gateway.client.send(id, method, params);
+        loop {
+            let response = gateway.client.read();
+            if response["id"] == id {
+                break response;
+            }
+        }
+    };
+    let mut directories = Vec::new();
+    for (name, source_root) in [
+        ("file-route-a", source.path()),
+        ("file-route-b", second_source.path()),
+    ] {
+        let created = rpc(
+            "session/create",
+            json!({
+                "commandId": name, "title": name,
+                "executionTarget": { "type": "local", "root": source_root },
+            }),
+        );
+        assert!(created.get("error").is_none(), "{created}");
+        let session = &created["result"]["session"];
+        let read = rpc(
+            "session/thread/read",
+            json!({
+                "sessionId": session["sessionId"], "threadId": session["threads"][0]["threadId"],
+            }),
+        );
+        let root = PathBuf::from(read["result"]["directory"]["root"].as_str().unwrap());
+        assert_ne!(root, dunce::canonicalize(source_root).unwrap());
+        directories.push((session["sessionId"].clone(), root));
+    }
+    assert_ne!(directories[0].1, directories[1].1);
+    let content = (1..=120)
+        .map(|line| format!("line {line}\n"))
+        .collect::<String>();
+    // Return to A after B's runtime was selected. The request carries only a resource path.
+    for (session_id, root) in directories.iter().rev() {
+        let resolved = rpc(
+            "fs/resolvePath",
+            json!({ "path": root.join("hundred.txt") }),
+        );
+        assert!(resolved.get("error").is_none(), "{resolved}");
+        assert_eq!(
+            resolved["result"]["target"],
+            json!({
+                "type": "session", "sessionDirectory": { "sessionId": session_id, "path": root },
+            })
+        );
+        let selector = &resolved["result"]["target"]["sessionDirectory"];
+        let written = rpc(
+            "fs/writeFile",
+            json!({
+                "sessionDirectory": selector, "path": "hundred.txt", "content": content,
+                "options": { "mode": "create" },
+            }),
+        );
+        assert!(written.get("error").is_none(), "{written}");
+        assert_eq!(
+            fs::read_to_string(root.join("hundred.txt")).unwrap(),
+            content
+        );
+    }
+    let denied = rpc(
+        "fs/resolvePath",
+        json!({ "path": outside.path().join("unknown.txt") }),
+    );
+    assert_eq!(denied["error"]["data"]["kind"], "PermissionRequired");
+    let traversal = rpc(
+        "fs/resolvePath",
+        json!({ "path": directories[0].1.join("../unknown.txt") }),
+    );
+    assert_eq!(traversal["error"]["code"], -32602);
+    assert!(!source.path().join("hundred.txt").exists());
+    assert!(!outside.path().join("unknown.txt").exists());
+}
+
+#[cfg(unix)]
+#[test]
 fn gateway_directory_startup_leaves_profile_and_other_routes_available() {
     let profile = tempfile::tempdir().unwrap();
     let first = tempfile::tempdir().unwrap();

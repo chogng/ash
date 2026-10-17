@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { setNlsMessages, resetNlsResolver } from '../../../../nls.js';
+import type { IFileSystemDirectory } from '../../common/fileApi.js';
 import { toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { type IFileWriteOptions, type IWatchOptions, FileSystemProviderCapabilities } from '../../common/files.js';
 import { FileService } from '../../../../platform/files/common/fileService.js';
@@ -31,7 +34,7 @@ test("AppServerFileSystemProvider passes the paste destination and move request 
 	using workspace = new WorkspaceContextService({ id: 'project', uri: URI.file('/project') });
 	const requests: unknown[] = [];
 	using service = new AppServerFileSystemProvider({
-		workspaceContextService: workspace,
+		directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 		resourceApi: unavailableResourceApi(),
 		api: {
 			...unavailableFileApi(),
@@ -92,7 +95,7 @@ test('AppServer file operations and notifications preserve POSIX basenames on di
 	using changes = new Emitter<FsChanged>();
 	const requests: unknown[] = [];
 	using provider = new AppServerFileSystemProvider({
-		workspaceContextService: workspace,
+		directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 		resourceApi: unavailableResourceApi(),
 		onDidChange: changes.event,
 		api: {
@@ -124,7 +127,7 @@ test("AppServerFileSystemProvider maps wire entries back to resource URIs", asyn
 	using workspaceContextService: IWorkspaceContextService =
 		new WorkspaceContextService({ id: "workspace", uri: root });
 	const service = new AppServerFileSystemProvider({
-		workspaceContextService,
+		directories: () => workspaceContextService.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 		api: {
 			...unavailableFileApi(),
 			getMetadata: async ({ path }) => {
@@ -233,7 +236,7 @@ test('workspace stream cancellation releases a snapshot allocated after the call
 	const allocated = new DeferredPromise<{ resource: { resourceId: string; mimeType: string; size: number; sha256: string; }; revision: string; }>();
 	const released: string[] = [];
 	using provider = new AppServerFileSystemProvider({
-		workspaceContextService: workspace,
+		directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 		api: { ...unavailableFileApi(), readBinaryFile: () => allocated.p },
 		resourceApi: {
 			connectionGeneration: 0,
@@ -256,7 +259,7 @@ test('workspace stream cancellation stops requesting chunks and releases its sna
 	const requested: number[] = [];
 	const released: string[] = [];
 	using provider = new AppServerFileSystemProvider({
-		workspaceContextService: workspace,
+		directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 		api: { ...unavailableFileApi(), readBinaryFile: async () => ({ resource: { resourceId: 'chunks', mimeType: 'application/pdf', size: 600000, sha256: 'sha256:chunks' }, revision: 'revision' }) },
 		resourceApi: {
 			connectionGeneration: 0,
@@ -279,7 +282,7 @@ test("AppServerFileSystemProvider maps App Server revision conflicts to the file
 	const resource = URI.parse("file:///C:/project/src/main.ts");
 	using workspaceContextService: IWorkspaceContextService = new WorkspaceContextService({ id: "workspace", uri: URI.parse("file:///C:/project") });
 	const service = new AppServerFileSystemProvider({
-		workspaceContextService,
+		directories: () => workspaceContextService.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 		resourceApi: unavailableResourceApi(),
 		api: {
 			...unavailableFileApi(),
@@ -308,7 +311,7 @@ test('AppServerFileSystemProvider reports missing entries through the file contr
 	let error: Error = new AppServerRemoteError(-32000, 'Missing entry', { kind: 'FileSystemNotFound' });
 	const missing = async (): Promise<never> => { throw error; };
 	using service = new AppServerFileSystemProvider({
-		workspaceContextService: workspace,
+		directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 		resourceApi: unavailableResourceApi(),
 		api: { ...unavailableFileApi(), getMetadata: missing, readDirectory: missing, readFile: missing, readBinaryFile: missing },
 	});
@@ -330,7 +333,7 @@ test("AppServerFileSystemProvider reads connection-owned binary resources in bou
 	const releasedResources: string[] = [];
 	using workspaceContextService: IWorkspaceContextService = new WorkspaceContextService({ id: "workspace", uri: root });
 	const service = new AppServerFileSystemProvider({
-		workspaceContextService,
+		directories: () => workspaceContextService.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 		api: {
 			...unavailableFileApi(),
 			getMetadata: async () => { throw new Error("not used"); },
@@ -379,7 +382,7 @@ test("AppServerFileSystemProvider maps App Server invalidations to workspace res
 	using workspaceContextService: IWorkspaceContextService = new WorkspaceContextService({ id: "workspace", uri: root });
 	using changes = new Emitter<FsChanged>();
 	using service = new AppServerFileSystemProvider({
-		workspaceContextService,
+		directories: () => workspaceContextService.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 		resourceApi: unavailableResourceApi(),
 		api: unavailableFileApi(),
 		onDidChange: changes.event,
@@ -406,7 +409,7 @@ test("AppServerFileSystemProvider routes nested multi-root resources by Workspac
 	const copies: unknown[] = [];
 	const pastes: unknown[] = [];
 	const service = new AppServerFileSystemProvider({
-		workspaceContextService,
+		directories: () => workspaceContextService.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 		resourceApi: { ...unavailableResourceApi(), release: async () => { } },
 		api: {
 			...unavailableFileApi(),
@@ -430,14 +433,15 @@ test("AppServerFileSystemProvider routes nested multi-root resources by Workspac
 	assert.deepEqual(copies, [{ sourceDirId: 'parent', source: 'README.md', targetDirId: 'nested', target: 'README.md' }]);
 	assert.equal(await service.pasteSystemFiles(URI.parse('file:///C:/project/packages/nested'), true), true);
 	assert.deepEqual(pastes, [{ dirId: 'nested', path: '.', moveRequested: true }]);
-	assert.throws(() => service.pasteSystemFiles(URI.parse('file:///C:/outside'), false), /current workspace folder/);
-	assert.throws(() => service.rename(URI.parse("file:///C:/project/README.md"), URI.parse("file:///C:/project/packages/nested/README.md"), "error"), /across workspace folders/i);
+	await assert.rejects(service.pasteSystemFiles(URI.parse('file:///C:/outside'), false), /no authorized directory/);
+	await assert.rejects(service.rename(URI.parse("file:///C:/project/README.md"), URI.parse("file:///C:/project/packages/nested/README.md"), "error"), /across authorized directories/i);
 });
 
 function unavailableFileApi() {
 	return {
 		connectionGeneration: 0,
 		onDidChangeConnection: Event.None,
+		resolvePath: async () => { throw new Error('Resource has no authorized directory'); },
 		readPathCaseSensitivity: async () => { throw new Error('unavailable'); },
 		getMetadata: async () => { throw new Error("unavailable"); },
 		readDirectory: async () => { throw new Error("unavailable"); },
@@ -511,7 +515,7 @@ test('AppServerFileSystemProvider releases a byte resource when reading its cont
 	const failure = new Error('Resource read failed');
 	const released: string[] = [];
 	using provider = new AppServerFileSystemProvider({
-		workspaceContextService: workspace,
+		directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 		api: { ...unavailableFileApi(), readBinaryFile: async () => ({ resource: { resourceId: 'failed-read', mimeType: 'application/octet-stream', size: 1, sha256: 'sha256:failed' }, revision: 'raw-revision' }) },
 		resourceApi: { ...unavailableResourceApi(), read: async () => { throw failure; }, release: async request => { released.push(request.resourceId); } },
 	});
@@ -862,7 +866,7 @@ test('file text codec requests preserve logical text and backend encoding metada
 	const resource = URI.file('/project/encoding.txt');
 	const requests: unknown[] = [];
 	using provider = new AppServerFileSystemProvider({
-		workspaceContextService: workspace, resourceApi: unavailableResourceApi(),
+		directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })), resourceApi: unavailableResourceApi(),
 		api: {
 			...unavailableFileApi(),
 			readFile: async params => { requests.push(params); return { content: '中文', encoding: 'gbk', revision: 'bytes-revision' }; },
@@ -882,7 +886,7 @@ test('file text codec errors retain their domain category and conflicts protect 
 	using workspace = new WorkspaceContextService({ id: 'project', uri: URI.file('/project') });
 	const resource = URI.file('/project/encoding.txt');
 	using provider = new AppServerFileSystemProvider({
-		workspaceContextService: workspace, resourceApi: unavailableResourceApi(),
+		directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })), resourceApi: unavailableResourceApi(),
 		api: {
 			...unavailableFileApi(),
 			readFile: async () => { throw new AppServerRemoteError(-32000, 'Invalid text', { kind: 'FileSystemInvalidText' }); },
@@ -891,4 +895,106 @@ test('file text codec errors retain their domain category and conflicts protect 
 	});
 	await assert.rejects(provider.readTextFile(resource, 'auto'), error => toFileSystemProviderErrorCode(error as Error) === FileSystemProviderErrorCode.FileNotText);
 	await assert.rejects(provider.writeTextFile(resource, '中文', 'gbk', { create: false, overwrite: true, expectedRevision: 'stale' }), FileRevisionConflictError);
+});
+
+test('shared resource routing keeps conversation files independent of Workspace selection and rechecks backend access', async () => {
+	using workspace = new WorkspaceContextService({ id: 'source', uri: URI.file('/source') });
+	const calls: unknown[] = [];
+	let writable = true;
+	let resolutions = 0;
+	using changes = new Emitter<FsChanged>();
+	using provider = new AppServerFileSystemProvider({
+		directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
+		resourceApi: unavailableResourceApi(),
+		onDidChange: changes.event,
+		api: {
+			...unavailableFileApi(),
+			async resolvePath(resource) {
+				resolutions++;
+				const name = resource.path.split('/')[2];
+				if (!['a', 'b'].includes(name)) { throw new Error('PermissionRequired'); }
+				return { uri: URI.file(`/managed/${name}`), target: { type: 'session', sessionId: name, path: `/managed/${name}` } };
+			},
+			async readPathCaseSensitivity(params) { calls.push(params); return { scopes: [{ path: '.', sensitivity: 'sensitive' }] }; },
+			async createFile(params) { calls.push(params); return { fileType: 'file', sizeBytes: 0, readonly: false, modifiedAtMillis: null }; },
+			async writeFile(params) {
+				calls.push(params);
+				if (!writable) { throw new Error('PermissionRequired'); }
+				return { metadata: { fileType: 'file', sizeBytes: params.content.length, readonly: false, modifiedAtMillis: null }, revision: 'saved' };
+			},
+		},
+	});
+	using files = new FileService();
+	using registration = files.registerProvider('file', provider);
+	const a = URI.file('/managed/a/hundred.txt');
+	const b = URI.file('/managed/b/other.txt');
+	assert.equal(workspace.getWorkspaceFolder(a), null);
+	await files.resolvePathIdentity(a);
+	await files.createFile(a, 'error');
+	await files.createFile(b, 'error');
+	workspace.updateWorkspace({ id: 'other-project', uri: URI.file('/elsewhere') });
+	await provider.writeTextFile(a, 'retained dirty buffer\n', 'utf8', { create: true, overwrite: true, expectedRevision: 'before' });
+	assert.deepEqual(calls.map(call => (call as { sessionDirectory: unknown; }).sessionDirectory), [
+		{ sessionId: 'a', path: '/managed/a' }, { sessionId: 'a', path: '/managed/a' },
+		{ sessionId: 'b', path: '/managed/b' }, { sessionId: 'a', path: '/managed/a' },
+	]);
+	assert.equal(resolutions, 2);
+	writable = false;
+	await assert.rejects(provider.writeTextFile(a, 'unsaved', 'utf8', { create: true, overwrite: true }), /PermissionRequired/);
+	await assert.rejects(files.createFile(URI.file('/ungranted/file'), 'error'), /PermissionRequired/);
+	const invalidations: unknown[] = [];
+	using listener = files.onDidChangeFiles(event => invalidations.push(event.resources));
+	changes.fire({ type: 'pathsChanged', dirId: 'managed-dir-id', paths: ['hundred.txt'] });
+	assert.deepEqual(invalidations, [undefined], 'Unknown watcher roots invalidate open models without guessing a selected directory');
+});
+
+test('resource discovery rejects stale connections and disposal before dispatching a write', async () => {
+	using changed = new Emitter<void>();
+	let generation = 1;
+	let resolve!: (root: IFileSystemDirectory) => void;
+	let writes = 0;
+	using provider = new AppServerFileSystemProvider({
+		resourceApi: unavailableResourceApi(),
+		api: {
+			...unavailableFileApi(),
+			get connectionGeneration() { return generation; },
+			onDidChangeConnection: changed.event,
+			resolvePath: () => new Promise(result => { resolve = result; }),
+			async createFile() { writes++; return { fileType: 'file', sizeBytes: 0, readonly: false, modifiedAtMillis: null }; },
+		},
+	});
+	const root: IFileSystemDirectory = { uri: URI.file('/managed/a'), target: { type: 'session', sessionId: 'a', path: '/managed/a' } };
+	const resource = URI.joinPath(root.uri, 'new.txt');
+	const old = assert.rejects(provider.createFile(resource, 'error'), { name: 'CancellationError' });
+	generation++;
+	changed.fire();
+	resolve(root);
+	await old;
+	const disposed = assert.rejects(provider.createFile(resource, 'error'), { name: 'CancellationError' });
+	provider.dispose();
+	resolve(root);
+	await disposed;
+	assert.equal(writes, 0);
+});
+
+test('resource discovery preserves host authority and reports invalid routes in Chinese', async () => {
+	const translations = JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8'));
+	setNlsMessages('zh-CN', translations);
+	try {
+		let discoveries = 0;
+		using provider = new AppServerFileSystemProvider({
+			resourceApi: unavailableResourceApi(),
+			api: {
+				...unavailableFileApi(),
+				async resolvePath() {
+					discoveries++;
+					return { uri: URI.file('/wrong-root'), target: { type: 'environment', dirId: 'wrong-root' } };
+				},
+			},
+		});
+		await assert.rejects(provider.createFile(URI.parse('ash-remote://another-host/managed/new.txt'), 'error'), /找不到此资源所属主机的文件系统路由/);
+		assert.equal(discoveries, 0, 'A foreign host must never be resolved on this connection');
+		await assert.rejects(provider.createFile(URI.file('/managed/new.txt'), 'error'), /文件系统返回的目录不包含所请求的资源/);
+		assert.equal(discoveries, 1);
+	} finally { resetNlsResolver(); }
 });

@@ -112,7 +112,7 @@ import { HoverService, IHoverService } from '../../../src/ash/platform/hover/bro
 import { setHoverDelegate } from '../../../src/ash/base/browser/ui/hover/hoverDelegate.js';
 
 declare global {
-	interface Window { ashChatInputIntegration: { changeTools(): void; setActiveFile(path?: string): void; setActiveDiff(original: string, modified: string, text?: string): void; setChanges(changes: ChatInputState['changes']): void; setVisible(visible: boolean): void; inputAccessibility(): string | undefined; contextAccessibility(): { help: string | undefined; content: string | undefined; }; setFooterPhase(phase: ChatInputState['phase'], error?: string): void; setContextUsage(available: boolean, capacity?: number, estimatedTokens?: number): void; setFooterStatus(visible: boolean): void; removeFooterStatus(): void; historyState(): unknown; holdNextHistoryRead(): void; releaseHistorySearch(query: string): void; addHistoryContext(): void; setHistorySkill(digest: string): void; refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; setDescription(description: string | null): void; setModelsAvailable(available: boolean): void; modelState(): unknown; setImageCapability(capability: 'text' | 'image' | 'unknown'): void; restoreCapturedDraft(): Promise<string | undefined>; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; releaseSymbolSearch(query: string): void; releaseInstructions(): void; changeContextSources(): void; disposeContextTerminal(): void; }; }
+	interface Window { ashChatInputIntegration: { changeTools(): void; setActiveFile(path?: string): void; setActiveDiff(original: string, modified: string, text?: string): void; setChanges(changes: ChatInputState['changes']): void; setChangesScope(scope: 'workspace' | 'conversation'): void; releaseWorkspaceChanges(changes: ChatInputState['changes']): void; workspaceChangesReads(): number; setChangesError(error: string): void; setVisible(visible: boolean): void; inputAccessibility(): string | undefined; contextAccessibility(): { help: string | undefined; content: string | undefined; }; setFooterPhase(phase: ChatInputState['phase'], error?: string): void; setContextUsage(available: boolean, capacity?: number, estimatedTokens?: number): void; setFooterStatus(visible: boolean): void; removeFooterStatus(): void; historyState(): unknown; holdNextHistoryRead(): void; releaseHistorySearch(query: string): void; addHistoryContext(): void; setHistorySkill(digest: string): void; refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; setDescription(description: string | null): void; setModelsAvailable(available: boolean): void; modelState(): unknown; setImageCapability(capability: 'text' | 'image' | 'unknown'): void; restoreCapturedDraft(): Promise<string | undefined>; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; releaseSymbolSearch(query: string): void; releaseInstructions(): void; changeContextSources(): void; disposeContextTerminal(): void; }; }
 }
 
 const locale = new URLSearchParams(location.search).get('locale');
@@ -516,6 +516,8 @@ if (new URLSearchParams(location.search).has('contextHover')) {
 	resources.add(setHoverDelegate(hover));
 }
 
+let workspaceChangesReads = 0;
+let releaseWorkspaceChanges: ((changes: ChatInputState['changes']) => void) | undefined;
 const delegate: ChatInputDelegate = {
 	send: async (_text, _mode, _skills, contexts) => {
 		historySubmissions.push({ text: _text, skills: _skills });
@@ -523,6 +525,7 @@ const delegate: ChatInputDelegate = {
 		if (new URLSearchParams(location.search).has('sendFailure')) { throw new Error('Send failed'); }
 	}, executeCommand: async invocation => { recordDestination({ command: invocation.commandId }); }, executeServerCommand: async () => { }, interrupt: async () => { },
 	openChanges: async () => { recordDestination({ changes: true }); },
+	readWorkspaceChanges: async () => { workspaceChangesReads++; return new Promise(resolve => { releaseWorkspaceChanges = resolve; }); },
 	selectModel: async model => {
 		selectedModel = model;
 		automatic = false;
@@ -659,6 +662,10 @@ window.ashChatInputIntegration = {
 	},
 	setActiveFile: path => { activeEditor = path ? { resource: URI.parse(path) } : undefined; activeEditorChanged.fire(); },
 	setChanges: changes => { state = { ...state, changes, interaction: undefined }; part.render(state); },
+	setChangesScope: changesScope => { state = { ...state, changesScope, changes: undefined }; part.render(state); },
+	releaseWorkspaceChanges: changes => releaseWorkspaceChanges?.(changes),
+	workspaceChangesReads: () => workspaceChangesReads,
+	setChangesError: changesError => { state = { ...state, changes: undefined, changesError }; part.render(state); },
 	setVisible: visible => part.setVisible(visible),
 	inputAccessibility: () => {
 		for (const entry of AccessibleViewRegistry.getImplementations()) {

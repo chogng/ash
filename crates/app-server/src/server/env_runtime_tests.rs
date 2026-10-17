@@ -4011,3 +4011,150 @@ fn env_dirs_set_retains_existing_aliases_without_switching_pending_primary() {
         TurnStatus::WaitingForApproval
     );
 }
+
+#[test]
+fn filesystem_resource_routes_are_independent_of_selection_and_never_grant_access() {
+    let first = TestDir::new("route-first", "original.txt");
+    let second = TestDir::new("route-second", "original.txt");
+    let read_only = TestDir::new("route-read-only", "original.txt");
+    let outside = TestDir::new("route-outside", "original.txt");
+    let server = server();
+    let start = |name: &str| {
+        server
+            .threads
+            .start_thread(
+                &ash_core::NoThreadWorktreeBinder,
+                StartThreadRequest {
+                    command_id: CommandId::new(name).unwrap(),
+                    title: name.into(),
+                    execution_target: None,
+                    branch_name: None,
+                    agent_id: None,
+                    agent: None,
+                },
+            )
+            .unwrap()
+    };
+    let a = start("route-a");
+    let b = start("route-b");
+    let mut connection = server.product_host_connection();
+    let request_id = AtomicUsize::new(1);
+    let rpc = |connection: &mut ConnectionState,
+               method: &str,
+               params: serde_json::Value|
+     -> serde_json::Value {
+        serde_json::from_str(
+            &server.handle_json(
+                connection,
+                &serde_json::json!({
+                    "jsonrpc":"2.0", "id":request_id.fetch_add(1, Ordering::SeqCst), "method":method, "params":params,
+                })
+                .to_string(),
+            ),
+        )
+        .unwrap()
+    };
+    let initialized = rpc(
+        &mut connection,
+        "initialize",
+        serde_json::json!({"clientInfo":{"name":"resource-route-test","version":"1"}}),
+    );
+    assert!(initialized.get("error").is_none(), "{initialized}");
+    let access = server.env_runtime.read().unwrap().dir_grants.clone();
+    access.bind_thread_dir(a.thread_id.clone(), first.root());
+    access.bind_thread_dir(b.thread_id.clone(), second.root());
+    access
+        .add_dir(
+            a.session_id.clone(),
+            Grant::for_session_tree(
+                a.session_id.clone(),
+                read_only.root(),
+                GrantSource::ExplicitUser,
+                Permissions::new([Permission::BrowseFiles, Permission::ReadFiles]),
+            ),
+        )
+        .unwrap();
+    let resolve = |connection: &mut ConnectionState, path: &Path| {
+        rpc(
+            connection,
+            "fs/resolvePath",
+            serde_json::json!({"path":path}),
+        )
+    };
+    let a_route = resolve(&mut connection, &first.path.join("missing/child.txt"));
+    assert!(a_route.get("error").is_none(), "{a_route}");
+    assert_eq!(a_route["result"]["root"], serde_json::json!(first.path));
+    assert_eq!(
+        a_route["result"]["target"],
+        serde_json::json!({"type":"session","sessionDirectory":{"sessionId":a.session_id,"path":first.path}})
+    );
+    let b_route = resolve(&mut connection, &second.path.join("original.txt"));
+    assert_eq!(
+        b_route["result"]["target"]["sessionDirectory"]["sessionId"],
+        serde_json::json!(b.session_id)
+    );
+    // Resolve B first, then write through A's retained selector. No active Workspace is involved.
+    let written = rpc(
+        &mut connection,
+        "fs/writeFile",
+        serde_json::json!({
+            "sessionDirectory":a_route["result"]["target"]["sessionDirectory"], "path":"created.txt",
+            "content":"retained editor\n", "options":{"mode":"create"},
+        }),
+    );
+    assert!(written.get("error").is_none(), "{written}");
+    assert_eq!(
+        std::fs::read_to_string(first.path.join("created.txt")).unwrap(),
+        "retained editor\n"
+    );
+    assert!(!second.path.join("created.txt").exists());
+    let read_route = resolve(&mut connection, &read_only.path.join("original.txt"));
+    assert!(read_route.get("error").is_none(), "{read_route}");
+    let denied = rpc(
+        &mut connection,
+        "fs/writeFile",
+        serde_json::json!({
+            "sessionDirectory":read_route["result"]["target"]["sessionDirectory"], "path":"forbidden.txt",
+            "content":"no", "options":{"mode":"create"},
+        }),
+    );
+    assert!(
+        denied.get("error").is_some(),
+        "Discovery must not confer write permission: {denied}"
+    );
+    assert!(!read_only.path.join("forbidden.txt").exists());
+    assert!(
+        resolve(&mut connection, &outside.path.join("original.txt"))
+            .get("error")
+            .is_some()
+    );
+    assert!(
+        resolve(&mut connection, Path::new("relative/file"))
+            .get("error")
+            .is_some()
+    );
+    assert!(
+        resolve(&mut connection, &first.path.join("../escape"))
+            .get("error")
+            .is_some()
+    );
+    access.unbind_thread_dir(&a.thread_id);
+    assert!(
+        resolve(&mut connection, &first.path.join("original.txt"))
+            .get("error")
+            .is_some()
+    );
+    let revoked = rpc(
+        &mut connection,
+        "fs/writeFile",
+        serde_json::json!({
+            "sessionDirectory":a_route["result"]["target"]["sessionDirectory"], "path":"after-revoke.txt",
+            "content":"no", "options":{"mode":"create"},
+        }),
+    );
+    assert!(
+        revoked.get("error").is_some(),
+        "A retained route must reauthorize: {revoked}"
+    );
+    assert!(!first.path.join("after-revoke.txt").exists());
+}

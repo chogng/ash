@@ -7,6 +7,7 @@ use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::turn_changes::ChangeSetId as ChangeSetIdDto;
 use ash_app_server_protocol::protocol::turn_changes::TurnChangeFileDto;
 use ash_app_server_protocol::protocol::turn_changes::TurnChangeFileKindDto;
+use ash_app_server_protocol::protocol::turn_changes::TurnChangeFileStatisticsDto;
 use ash_app_server_protocol::protocol::turn_changes::TurnChangesCommitParams;
 use ash_app_server_protocol::protocol::turn_changes::TurnChangesDiscardThreadParams;
 use ash_app_server_protocol::protocol::turn_changes::TurnChangesListParams;
@@ -21,6 +22,9 @@ use ash_app_server_protocol::protocol::turn_changes::TurnChangesReadFileParams;
 use ash_app_server_protocol::protocol::turn_changes::TurnChangesReadFileResult;
 use ash_app_server_protocol::protocol::turn_changes::TurnChangesReadParams;
 use ash_app_server_protocol::protocol::turn_changes::TurnChangesReadResult;
+use ash_app_server_protocol::protocol::turn_changes::TurnChangesRepositorySummary;
+use ash_app_server_protocol::protocol::turn_changes::TurnChangesSummaryFileParams;
+use ash_app_server_protocol::protocol::turn_changes::TurnChangesSummaryResult;
 use ash_app_server_protocol::protocol::turn_changes::TurnChangesUpdateDraftParams;
 use ash_core::TurnStatus;
 use ash_state::TurnChangeCommandOutcome;
@@ -62,6 +66,85 @@ impl<'a> GitTurnChangesRequestProcessor<'a> {
 }
 
 impl<'a> GitTurnChangesRequestProcessor<'a> {
+    pub(super) fn turn_changes_summary(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: TurnChangesListParams = decode(params)?;
+        let runtime = self.git_turn_changes_runtime()?;
+        let (summary, warnings) = runtime
+            .checkpoint_summary(&params.session_id, &params.thread_id)
+            .map_err(operation_error)?;
+        let mut statistics = TurnChangeFileStatisticsDto {
+            files: 0,
+            additions: 0,
+            deletions: 0,
+        };
+        let repositories = summary
+            .repositories
+            .iter()
+            .map(|repository| {
+                for file in &repository.files {
+                    statistics.files += 1;
+                    statistics.additions += file.additions;
+                    statistics.deletions += file.deletions;
+                }
+                TurnChangesRepositorySummary {
+                    repository_id: repository.comparison.repository_id.clone(),
+                    files: repository.files.iter().map(file_dto).collect(),
+                }
+            })
+            .collect();
+        result(&TurnChangesSummaryResult {
+            sequence: summary.sequence,
+            revision: summary.revision,
+            statistics,
+            repositories,
+            warnings,
+        })
+    }
+
+    pub(super) fn turn_changes_summary_file(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: TurnChangesSummaryFileParams = decode(params)?;
+        let runtime = self.git_turn_changes_runtime()?;
+        let (summary, _) = runtime
+            .checkpoint_summary(&params.session_id, &params.thread_id)
+            .map_err(operation_error)?;
+        if summary.revision != params.revision {
+            return Err(revision_error());
+        }
+        let repository = summary
+            .repositories
+            .iter()
+            .find(|repository| repository.comparison.repository_id == params.repository_id)
+            .ok_or_else(|| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        let file = repository
+            .files
+            .iter()
+            .find(|file| file.path == Path::new(&params.path))
+            .ok_or_else(|| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        runtime.dirs.runtime.block_on(async {
+            let git = ash_git::GitClient::system();
+            let (before, before_truncated, before_binary) = read_repository_blob(
+                &git,
+                &repository.comparison.git_directory,
+                file.before_object_id.as_deref(),
+            )
+            .await?;
+            let (after, after_truncated, after_binary) = read_repository_blob(
+                &git,
+                &repository.comparison.git_directory,
+                file.after_object_id.as_deref(),
+            )
+            .await?;
+            let binary = file.binary || before_binary || after_binary;
+            result(&TurnChangesReadFileResult {
+                path: params.path,
+                binary,
+                truncated: before_truncated || after_truncated,
+                before: (!binary).then_some(before).flatten(),
+                after: (!binary).then_some(after).flatten(),
+            })
+        })
+    }
+
     pub(super) fn turn_changes_list(&self, params: &Value) -> Result<Value, RpcError> {
         let params: TurnChangesListParams = decode(params)?;
         let runtime = self.git_turn_changes_runtime()?;

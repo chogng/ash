@@ -17,6 +17,7 @@ import type { ModelRef, SessionId, ThreadId } from "../common/chatService.js";
 import type { AdvisorConfig, ChatSubmissionOptions, ChatInteractionOfferChange, ConfigureAdvisorOptions, ConsultAdvisorOptions, CompactContextOptions, IChatService, InterruptTurnOptions, ResolveInteractionOptions, SlashCommandDefinition, StartTurnOptions, SteerTurnOptions, Thread, ThreadGoalUpdate, ThreadItem, ThreadSubscription, ThreadTranscriptEntry, ThreadTranscriptSnapshot, ThreadTranscriptUpdateEnvelope, ThreadUpdate, ThreadUpdateEnvelope, TurnChangeDetails, TurnChangeSetSummary, TurnCommitSelection, TurnCommitPreview, TurnChangesUpdate } from "../common/chatService.js";
 import type { ResolvedChatContext } from '../common/chatContextService.js';
 import type { ChatCheckpoint, RestoreChatCheckpointOptions } from '../common/chatService.js';
+import type { ThreadChangesSummary, TurnChangeFileContents } from '../common/chatService.js';
 
 interface SharedThreadSubscription {
 	readonly generation: number;
@@ -351,6 +352,19 @@ export class ChatService extends Disposable implements IChatService {
 	async listTurnChanges(sessionId: SessionId, threadId: ThreadId): Promise<readonly TurnChangeSetSummary[]> {
 		const result = await this.turnChangesApi.list({ sessionId, threadId });
 		return result.changeSets.map(toTurnChangeSummary);
+	}
+
+	async readThreadChanges(sessionId: SessionId, threadId: ThreadId): Promise<ThreadChangesSummary> {
+		const result = await this.turnChangesApi.summary({ sessionId, threadId });
+		return {
+			sequence: result.sequence, revision: result.revision, statistics: { ...result.statistics },
+			repositories: result.repositories.map(repository => ({ repositoryId: repository.repositoryId, files: repository.files.map(file => ({ ...file })) })),
+			warnings: [...result.warnings],
+		};
+	}
+
+	async readThreadChangeFile(sessionId: SessionId, threadId: ThreadId, revision: string, repositoryId: string, path: string): Promise<TurnChangeFileContents> {
+		return { ...await this.turnChangesApi.summaryFile({ sessionId, threadId, revision, repositoryId, path }) };
 	}
 
 	async readTurnChange(sessionId: SessionId, threadId: ThreadId, changeSetId: string): Promise<TurnChangeDetails> {

@@ -37,19 +37,21 @@ import {
 	type IFileWriteResult,
 	type IWatchOptions,
 } from "../../files/common/files.js";
-import { workspaceRelativePath, workspaceResourceFromPath, type IWorkspaceContextService, type IWorkspaceFolder } from "../../workspace/common/workspace.js";
-import type { IFileApi } from '../../files/common/fileApi.js';
+import { workspaceRelativePath, workspaceResourceFromPath } from "../../workspace/common/workspace.js";
+import { extUri } from '../../../base/common/resources.js';
+import type { IFileApi, IFileSystemDirectory } from '../../files/common/fileApi.js';
 import type { ISystemFileTransferService } from '../../files/common/systemFileTransferService.js';
 
 export interface AppServerFileSystemProviderOptions {
 	readonly api: IFileApi;
 	readonly resourceApi: IResourceApi;
-	readonly workspaceContextService: IWorkspaceContextService;
+	/** Environment roots known by the host, independent of the visible Explorer selection. */
+	readonly directories?: () => readonly IFileSystemDirectory[];
 	readonly onDidChange?: Event<FsChanged>;
 }
 
 interface PathIdentityState {
-	readonly folder: IWorkspaceFolder;
+	readonly folder: IFileSystemDirectory;
 	readonly rules: Map<string, FsPathCaseSensitivity>;
 	readonly requests: Map<string, Promise<void>>;
 	readonly retained: Map<string, { readonly resource: URI; users: number; }>;
@@ -59,7 +61,7 @@ interface PathIdentityState {
 const MAX_TRANSIENT_PATH_RULES = 4096;
 
 /**
- * Maps workspace resource URIs to the App Server's root-relative filesystem protocol.
+ * Routes resource URIs to backend-authorized directories independently of the visible Workspace.
  */
 export class AppServerFileSystemProvider extends Disposable implements IFileSystemProviderWithFileReadStreamCapability, IFileSystemProviderWithPathIdentity, ISystemFileTransferService {
 	// Unknown rules preserve spelling; confirmed rules are applied per directory below.
@@ -71,7 +73,9 @@ export class AppServerFileSystemProvider extends Disposable implements IFileSyst
 	private readonly pathIdentities = new Map<string, PathIdentityState>();
 	private readonly api: IFileApi;
 	private readonly resourceApi: IResourceApi;
-	private readonly workspaceContextService: IWorkspaceContextService;
+	private readonly directories: () => readonly IFileSystemDirectory[];
+	private readonly resolvedDirectories = new Map<string, IFileSystemDirectory>();
+	private readonly directoryRequests = new Map<string, Promise<IFileSystemDirectory>>();
 	private readonly fileChanges = this._register(new Emitter<IFileChangeEvent>());
 	private readonly reads = this._register(new DisposableMap<object, DisposableStore>());
 
@@ -81,21 +85,24 @@ export class AppServerFileSystemProvider extends Disposable implements IFileSyst
 		super();
 		this.api = options.api;
 		this.resourceApi = options.resourceApi;
-		this.workspaceContextService = options.workspaceContextService;
-		this._register(this.api.onDidChangeConnection(() => this.clearPathIdentity()));
-		this._register(this.workspaceContextService.onDidChangeWorkspace(() => this.clearPathIdentity()));
-		this._register(toDisposable(() => { this.resetPathIdentities(); this.pathIdentities.clear(); }));
+		this.directories = options.directories ?? (() => []);
+		this._register(this.api.onDidChangeConnection(() => {
+			this.resolvedDirectories.clear();
+			this.directoryRequests.clear();
+			this.clearPathIdentity();
+		}));
+		this._register(toDisposable(() => { this.resetPathIdentities(); this.pathIdentities.clear(); this.resolvedDirectories.clear(); this.directoryRequests.clear(); }));
 		if (options.onDidChange) this._register(options.onDidChange(change => this.acceptFileChange(change)));
 	}
 
 	public getPathIdentity(resource: URI): IFilePathIdentity {
-		const folder = this.workspaceContextService.getWorkspaceFolder(resource);
+		const folder = this.knownDirectory(resource);
 		return folder ? this.pathIdentity(resource, this.pathIdentityState(folder)) : { comparisonResource: resource };
 	}
 
 	public retainPathIdentity(resource: URI): IDisposable {
 		this.assertNotDisposed();
-		const folder = this.workspaceContextService.getWorkspaceFolder(resource);
+		const folder = this.knownDirectory(resource);
 		if (!folder) {
 			return Disposable.None;
 		}
@@ -119,19 +126,22 @@ export class AppServerFileSystemProvider extends Disposable implements IFileSyst
 
 	public async resolvePathIdentity(resource: URI): Promise<void> {
 		this.assertNotDisposed();
-		const target = this.fileTarget(resource);
-		const state = this.pathIdentityState(this.workspaceContextService.getWorkspaceFolder(resource)!);
+		const generation = this.api.connectionGeneration;
+		const directory = this.knownDirectory(resource) ?? await this.resolveDirectory(resource);
+		if (this.isDisposed || generation !== this.api.connectionGeneration) { throw canceled(); }
+		const target = this.directoryTarget(directory, resource);
+		const state = this.pathIdentityState(directory);
 		const existing = state.requests.get(target.path);
 		if (existing) {
 			return existing;
 		}
 		const epoch = state.epoch;
-		const generation = this.api.connectionGeneration;
 		const pending = (async (): Promise<void> => {
 			const result = await this.api.readPathCaseSensitivity(target);
-			if (this.isDisposed || epoch !== state.epoch || generation !== this.api.connectionGeneration) {
-				throw canceled();
-			}
+			if (this.isDisposed || generation !== this.api.connectionGeneration) { throw canceled(); }
+			// A watcher invalidation retires these facts, not the caller's file operation.
+			// Join a fresh observation before choosing an existing editor model.
+			if (epoch !== state.epoch) { return this.resolvePathIdentity(resource); }
 			const components = target.path === '.' ? [] : target.path.split('/');
 			// Validate the complete observation before changing shared comparison facts.
 			const observed = result.scopes.map((scope, index) => {
@@ -139,12 +149,12 @@ export class AppServerFileSystemProvider extends Disposable implements IFileSyst
 				const path = directory ? workspaceRelativePath(state.folder.uri, directory) : undefined;
 				const expected = index === 0 ? '.' : components.slice(0, index).join('/');
 				if (!directory || path !== expected || index > components.length) {
-					throw new Error('Filesystem casing scope is outside the workspace');
+					throw new Error(localize('files.invalidDirectoryScope', 'Filesystem casing scope is outside the authorized directory'));
 				}
 				return { scope, directory, path };
 			});
 			if (observed.length === 0) {
-				throw new Error('Filesystem casing scope is outside the workspace');
+				throw new Error(localize('files.invalidDirectoryScope', 'Filesystem casing scope is outside the authorized directory'));
 			}
 			let changed = false;
 			let invalidated = false;
@@ -173,7 +183,7 @@ export class AppServerFileSystemProvider extends Disposable implements IFileSyst
 			if (coveredLength < components.length) {
 				const unconfirmed = workspaceResourceFromPath(state.folder.uri, components.slice(0, coveredLength + 1).join('/'));
 				if (!unconfirmed) {
-					throw new Error('Filesystem casing scope is outside the workspace');
+					throw new Error(localize('files.invalidDirectoryScope', 'Filesystem casing scope is outside the authorized directory'));
 				}
 				const prefix = this.relativeComparisonPath(unconfirmed, state);
 				for (const path of state.rules.keys()) {
@@ -208,8 +218,8 @@ export class AppServerFileSystemProvider extends Disposable implements IFileSyst
 		}
 	}
 
-	private pathIdentityState(folder: IWorkspaceFolder): PathIdentityState {
-		const key = JSON.stringify([folder.id, folder.uri.toString()]);
+	private pathIdentityState(folder: IFileSystemDirectory): PathIdentityState {
+		const key = JSON.stringify([folder.target, folder.uri.toString()]);
 		let state = this.pathIdentities.get(key);
 		if (!state) {
 			state = { folder, rules: new Map(), requests: new Map(), retained: new Map(), epoch: 0 };
@@ -281,25 +291,18 @@ export class AppServerFileSystemProvider extends Disposable implements IFileSyst
 
 	private clearPathIdentity(): void {
 		this.resetPathIdentities();
-		const folders = new Set(this.workspaceContextService.getWorkspace().folders.map(folder => JSON.stringify([folder.id, folder.uri.toString()])));
-		for (const key of this.pathIdentities.keys()) {
-			if (!folders.has(key)) {
-				this.pathIdentities.delete(key);
-			}
-		}
 		this.identityChanges.fire();
 	}
 
 	public watch(resource: URI, _options: IWatchOptions): IDisposable {
 		this.assertNotDisposed();
-		this.fileTarget(resource);
-		// Rust owns continuous watches for every authorized workspace root, including Agent consumers.
+		// Rust owns continuous watches for authorized environment and Session roots, including Agent consumers.
 		return Disposable.None;
 	}
 
 	async stat(resource: URI): Promise<IFileStat> {
 		let result;
-		try { result = await this.api.getMetadata(this.fileTarget(resource)); }
+		try { result = await this.api.getMetadata(await this.fileTarget(resource)); }
 		catch (error) { if (isFileNotFound(error)) throw new FileNotFoundError(resource); throw error; }
 		return {
 			resource,
@@ -312,7 +315,7 @@ export class AppServerFileSystemProvider extends Disposable implements IFileSyst
 
 	async readDirectory(resource: URI): Promise<readonly IFileEntry[]> {
 		let result: FsReadDirectoryResult;
-		try { result = await this.api.readDirectory(this.fileTarget(resource)); }
+		try { result = await this.api.readDirectory(await this.fileTarget(resource)); }
 		catch (error) { if (isFileNotFound(error)) throw new FileNotFoundError(resource); throw error; }
 		return result.entries.map((entry) => ({
 			resource: resource.joinPathSegment(entry.name),
@@ -323,7 +326,7 @@ export class AppServerFileSystemProvider extends Disposable implements IFileSyst
 
 	async readFile(resource: URI): Promise<IFileBytes> {
 		let result: FsReadBinaryFileResult;
-		try { result = await this.api.readBinaryFile(this.fileTarget(resource)); }
+		try { result = await this.api.readBinaryFile(await this.fileTarget(resource)); }
 		catch (error) { if (isFileNotFound(error)) throw new FileNotFoundError(resource); throw error; }
 		try {
 			const bytes = await this.readResourceBytes(result.resource);
@@ -336,7 +339,7 @@ export class AppServerFileSystemProvider extends Disposable implements IFileSyst
 	async readTextFile(resource: URI, encoding: string, options?: IFileReadOptions): Promise<IFileContent> {
 		try {
 			const { candidateGuessEncodings, ...decoding } = options ?? {};
-			const result = await this.api.readFile({ ...this.fileTarget(resource), encoding, ...decoding, ...(candidateGuessEncodings === undefined ? {} : { candidateGuessEncodings: candidateGuessEncodings.slice() }) });
+			const result = await this.api.readFile({ ...await this.fileTarget(resource), encoding, ...decoding, ...(candidateGuessEncodings === undefined ? {} : { candidateGuessEncodings: candidateGuessEncodings.slice() }) });
 			return { resource, content: result.content, revision: result.revision, ...(result.encoding === undefined ? {} : { encoding: result.encoding }) };
 		} catch (error) {
 			if (isFileNotFound(error)) throw new FileNotFoundError(resource);
@@ -347,7 +350,6 @@ export class AppServerFileSystemProvider extends Disposable implements IFileSyst
 
 	public readFileStream(resource: URI, options: IFileReadStreamOptions, token: CancellationToken): ReadableStreamEvents<Uint8Array> {
 		this.assertNotDisposed();
-		const target = this.fileTarget(resource);
 		const stream = newWriteableStream<Uint8Array>(null, { highWaterMark: 1 });
 		const lifetime = new DisposableStore();
 		this.reads.set(lifetime, lifetime);
@@ -360,6 +362,9 @@ export class AppServerFileSystemProvider extends Disposable implements IFileSyst
 			try {
 				if (cancellation.token.isCancellationRequested) { throw canceled(); }
 				// The allocation request has no backend cancel method; retain its late response so it can be released.
+				const known = this.knownDirectory(resource);
+				const target = known ? this.directoryTarget(known, resource) : await this.fileTarget(resource);
+				if (cancellation.token.isCancellationRequested) { throw canceled(); }
 				snapshot = await this.api.readBinaryFile(target);
 				for await (const chunk of this.resourceChunks(snapshot.resource, options, cancellation.token)) {
 					await raceCancellationError(Promise.resolve(stream.write(chunk)), cancellation.token);
@@ -398,11 +403,11 @@ export class AppServerFileSystemProvider extends Disposable implements IFileSyst
 		}
 		try {
 			const result = options.writeElevated
-				? await this.api.writeFileElevated({ ...this.fileTarget(resource), operationId: generateUuid(), dataBase64: encodeBinaryFile(typeof content === 'string' ? new TextEncoder().encode(content) : content), ...(encoding === undefined ? {} : { encoding }), ...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }) }, signal)
+				? await this.api.writeFileElevated({ ...await this.fileTarget(resource), operationId: generateUuid(), dataBase64: encodeBinaryFile(typeof content === 'string' ? new TextEncoder().encode(content) : content), ...(encoding === undefined ? {} : { encoding }), ...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }) }, signal)
 				: typeof content === 'string'
-					? await this.api.writeFile({ ...this.fileTarget(resource), content, ...(encoding === undefined ? {} : { encoding }), options: { mode, ...(options.unlock ? { unlock: true } : {}), ...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }) } })
+					? await this.api.writeFile({ ...await this.fileTarget(resource), content, ...(encoding === undefined ? {} : { encoding }), options: { mode, ...(options.unlock ? { unlock: true } : {}), ...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }) } })
 					: await this.api.writeBinaryFile({
-						...this.fileTarget(resource),
+						...await this.fileTarget(resource),
 						dataBase64: encodeBinaryFile(content),
 						options: { mode, ...(options.unlock ? { unlock: true } : {}), ...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }) },
 					});
@@ -438,47 +443,89 @@ export class AppServerFileSystemProvider extends Disposable implements IFileSyst
 	}
 
 	async createFile(resource: URI, existing: FileExistingTargetBehavior): Promise<IFileStat> {
-		const result = await this.api.createFile({ ...this.fileTarget(resource), existing });
+		const result = await this.api.createFile({ ...await this.fileTarget(resource), existing });
 		return { resource, kind: fileKind(result.fileType), sizeBytes: result.sizeBytes, readonly: result.readonly, modifiedAtMillis: result.modifiedAtMillis ?? undefined };
 	}
 
 	async createDirectory(resource: URI): Promise<IFileStat> {
-		const result = await this.api.createDirectory(this.fileTarget(resource));
+		const result = await this.api.createDirectory(await this.fileTarget(resource));
 		return { resource, kind: fileKind(result.fileType), sizeBytes: result.sizeBytes, readonly: result.readonly, modifiedAtMillis: result.modifiedAtMillis ?? undefined };
 	}
 
-	copy(source: URI, target: URI): Promise<void> {
-		const from = this.fileTarget(source);
-		const to = this.fileTarget(target);
+	async copy(source: URI, target: URI): Promise<void> {
+		const from = await this.fileTarget(source);
+		const to = await this.fileTarget(target);
+		if (from.sessionDirectory || to.sessionDirectory) {
+			if (JSON.stringify(from.sessionDirectory) !== JSON.stringify(to.sessionDirectory)) {
+				throw new Error('Copying between Session directories is not supported.');
+			}
+			return this.api.copy({ sessionDirectory: from.sessionDirectory, source: from.path, target: to.path });
+		}
 		return this.api.copy({ sourceDirId: from.dirId, source: from.path, targetDirId: to.dirId, target: to.path });
 	}
 
-	pasteSystemFiles(directory: URI, moveRequested: boolean): Promise<boolean> {
-		return this.api.pasteSystemFiles({ ...this.fileTarget(directory), moveRequested });
+	async pasteSystemFiles(directory: URI, moveRequested: boolean): Promise<boolean> {
+		return this.api.pasteSystemFiles({ ...await this.fileTarget(directory), moveRequested });
 	}
 
-	rename(source: URI, target: URI, existing: FileExistingTargetBehavior): Promise<void> {
-		const sourceTarget = this.fileTarget(source);
-		const targetTarget = this.fileTarget(target);
-		if (sourceTarget.dirId !== targetTarget.dirId) {
-			throw new Error("Renaming across workspace folders is not supported");
+	async rename(source: URI, target: URI, existing: FileExistingTargetBehavior): Promise<void> {
+		const sourceDirectory = await this.resolveDirectory(source);
+		const targetDirectory = await this.resolveDirectory(target);
+		if (JSON.stringify(sourceDirectory.target) !== JSON.stringify(targetDirectory.target)) {
+			throw new Error(localize('files.crossDirectoryRename', 'Renaming across authorized directories is not supported'));
 		}
-		return this.api.rename({
-			dirId: sourceTarget.dirId,
-			source: sourceTarget.path,
-			target: targetTarget.path,
-			existing,
+		const { path, ...selector } = this.directoryTarget(sourceDirectory, source);
+		return this.api.rename({ ...selector, source: path, target: workspaceRelativePath(targetDirectory.uri, target), existing });
+	}
+
+	async delete(resource: URI, missing: FileMissingTargetBehavior, mode: FileDeleteMode): Promise<void> {
+		return this.api.delete({ ...await this.fileTarget(resource), missing, mode });
+	}
+
+	private knownDirectory(resource: URI): IFileSystemDirectory | undefined {
+		return [...this.directories(), ...this.resolvedDirectories.values()]
+			.filter(directory => extUri.isEqualOrParent(resource.with({ query: null, fragment: null }), directory.uri))
+			.sort((a, b) => b.uri.path.length - a.uri.path.length)[0];
+	}
+
+	private async resolveDirectory(resource: URI): Promise<IFileSystemDirectory> {
+		this.assertNotDisposed();
+		const known = this.knownDirectory(resource);
+		if (known) { return known; }
+		// A remote URI must belong to this provider's host authority, not merely have a
+		// path that also exists on the connected server. Local file URIs use this host.
+		if ((resource.scheme !== 'file' || resource.authority) && !this.directories().some(directory => directory.uri.scheme === resource.scheme && directory.uri.authority === resource.authority)) {
+			throw new Error(localize('files.resourceAuthorityUnavailable', 'No filesystem route for the resource authority'));
+		}
+		const key = resource.with({ query: null, fragment: null }).toString();
+		const existing = this.directoryRequests.get(key);
+		if (existing) { return existing; }
+		const generation = this.api.connectionGeneration;
+		const pending = this.api.resolvePath(resource).then(directory => {
+			if (this.isDisposed || generation !== this.api.connectionGeneration) { throw canceled(); }
+			// A server response cannot alias another scheme/authority or escape its requested URI.
+			if (!extUri.isEqualOrParent(resource.with({ query: null, fragment: null }), directory.uri)) {
+				throw new Error(localize('files.invalidResourceDirectory', 'Filesystem directory does not contain the requested resource'));
+			}
+			this.resolvedDirectories.set(directory.uri.toString(), directory);
+			return directory;
+		}).finally(() => {
+			if (this.directoryRequests.get(key) === pending) { this.directoryRequests.delete(key); }
 		});
+		this.directoryRequests.set(key, pending);
+		return pending;
 	}
 
-	delete(resource: URI, missing: FileMissingTargetBehavior, mode: FileDeleteMode): Promise<void> {
-		return this.api.delete({ ...this.fileTarget(resource), missing, mode });
+	private async fileTarget(resource: URI) {
+		return this.directoryTarget(await this.resolveDirectory(resource), resource);
 	}
 
-	private fileTarget(resource: URI): { readonly dirId: string; readonly path: string; } {
-		const folder = this.workspaceContextService.getWorkspaceFolder(resource);
-		if (!folder) throw new Error("Resource must belong to a current workspace folder");
-		return { dirId: folder.id, path: workspaceRelativePath(folder.uri, resource) };
+	private directoryTarget(directory: IFileSystemDirectory, resource: URI): { dirId?: string; sessionDirectory?: { sessionId: string; path: string; }; path: string; } {
+		const target = directory.target;
+		return {
+			...(target.type === 'environment' ? { dirId: target.dirId } : { sessionDirectory: { sessionId: target.sessionId, path: target.path } }),
+			path: workspaceRelativePath(directory.uri, resource),
+		};
 	}
 
 	private async readResourceBytes(resource: ResourceMetadataResult): Promise<Uint8Array> {
@@ -520,9 +567,11 @@ export class AppServerFileSystemProvider extends Disposable implements IFileSyst
 
 	private acceptFileChange(change: FsChanged): void {
 		// File events retire earlier observations without discarding facts held by open documents.
-		const knownRoot = this.workspaceContextService.getWorkspace().folders.some(folder => folder.id === change.dirId);
+		const folders = [...this.directories(), ...this.resolvedDirectories.values()];
+		const matches = (folder: IFileSystemDirectory): boolean => folder.target.type === 'environment' && folder.target.dirId === change.dirId;
+		const knownRoot = folders.some(matches);
 		for (const state of this.pathIdentities.values()) {
-			if (!knownRoot || state.folder.id === change.dirId) {
+			if (!knownRoot || matches(state.folder)) {
 				state.epoch++;
 				state.requests.clear();
 			}
@@ -531,9 +580,8 @@ export class AppServerFileSystemProvider extends Disposable implements IFileSyst
 			this.fileChanges.fire(Object.freeze({ resources: undefined }));
 			return;
 		}
-		const folders = this.workspaceContextService.getWorkspace().folders;
 		const folder = change.dirId
-			? folders.find(folder => folder.id === change.dirId)
+			? folders.find(matches)
 			: folders.length === 1 ? folders[0] : undefined;
 		if (!folder) {
 			this.fileChanges.fire(Object.freeze({ resources: undefined }));

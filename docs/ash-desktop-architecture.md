@@ -400,7 +400,15 @@ Renderer 通过受信 IPC route 和 `workspace.getWorkspace()` 读取该身份�
 `parseWorkspaceIdentifier()` 校验和恢复 URI。`WorkspaceContextService` 根据该标识构造当前
 `IWorkspace`，并从 `configuration` 或单根 `folders` 推导 `WorkbenchState`。Workbench
 contribution 不得通过该服务直接访问文件系统。单根 Folder 启动时，Electron Main 将该根
-配置给 App Server；Renderer 的 `AppServerFileSystemProvider` 只把 workspace URI 映射成根相对路径，
+配置给 App Server。Workbench 与 Agents 共用 `AppServerFileSystemProvider`，将资源 URI
+映射为已授权目录及根相对路径；未命中宿主环境目录的资源通过 `fs/resolvePath` 查询后端的
+Environment / Session 目录归属。路由不依赖当前 Workspace 或选中对话，打开的文件不会因切换
+对话而改写目标目录。解析结果不是授权凭据，每次读写仍由既有 filesystem endpoint 检查当前
+目录权限、路径策略与 revision；连接重建丢弃旧路由和迟到响应。`getWorkspaceFolder()` 只描述
+当前项目范围，不保存历史对话目录来支持文件访问。文件监听使路径大小写观察失效时，正在进行的
+解析重新查询当前规则，不把普通文件变化当作取消操作；断线和 provider 释放仍取消旧请求。
+只读 `initialText` 是内容提供方的快照，Diff 模型不会因磁盘通知或窗口重新聚焦而重读工作文件。
+
 目录枚举、metadata、有界原子写入、filesystem invalidation 与最终边界授权由 Rust / App Server
 完成。文件 provider 的 `readFile()` 返回原始字节和不透明 revision；公共 `FileService` 按 scheme
 路由读写，并为文本调用执行保留 BOM 的严格 UTF-8 解码和编码。provider 的 `writeFile()` 接收

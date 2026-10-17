@@ -4,6 +4,7 @@ mod commit;
 mod ledger;
 mod model;
 mod store;
+mod summary;
 mod watcher;
 
 pub use model::CaptureState;
@@ -18,6 +19,9 @@ pub use model::TurnChangeSet;
 pub use model::TurnChangeSetDraft;
 pub use store::TurnChangeStore;
 pub use store::TurnChangeStoreError;
+pub use summary::CheckpointChanges;
+pub use summary::CheckpointComparison;
+pub use summary::summarize_checkpoints;
 
 #[cfg(test)]
 #[path = "turn_changes_tests.rs"]

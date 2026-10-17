@@ -169,6 +169,41 @@ impl ProfileAppServerRegistry {
             .map_err(|_| "Directory startup worker closed".to_string())?
     }
 
+    /// Find an already-authorized local runtime without interpreting the visible Workspace.
+    /// Discovery does not open arbitrary paths or grant access; the routed endpoint authorizes
+    /// again, including after a grant is revoked between discovery and the file operation.
+    pub(crate) fn file_execution_target(
+        &self,
+        path: &Path,
+    ) -> Result<Option<ash_protocol::SessionExecutionTarget>, String> {
+        let servers = self
+            .servers
+            .lock()
+            .map_err(|_| "local App Server dir registry lock poisoned".to_string())?
+            .iter()
+            .filter_map(|(key, runtime)| {
+                runtime
+                    .server
+                    .get()
+                    .map(|server| (key.dir_root.clone(), Arc::clone(server)))
+            })
+            .collect::<Vec<_>>();
+        // Prefer the narrowest authorized directory, just as fs/resolvePath does within one
+        // runtime. Keep registry order for equal roots so selection cannot change the route.
+        let mut selected = None;
+        for (root, server) in servers {
+            if let Ok(directory) = server.resolve_file_path(path) {
+                let depth = directory.root.components().count();
+                if selected.as_ref().is_none_or(|(best, _)| depth > *best) {
+                    selected = Some((depth, root));
+                }
+            }
+        }
+        Ok(selected
+            .and_then(|(_, root)| root)
+            .map(|root| ash_protocol::SessionExecutionTarget::Local { root }))
+    }
+
     pub(crate) fn local_session(
         &self,
         session_id: &SessionId,

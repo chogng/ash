@@ -681,7 +681,7 @@ export class Workbench extends Disposable {
 		const workspaceFileService = new AppServerFileSystemProvider({
 			api: api.fs,
 			resourceApi: api.resource,
-			workspaceContextService: workspaceContext,
+			directories: () => workspaceContext.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 			onDidChange: listener => {
 				const subscription = api.events.subscribe(event => {
 					if (event.method === "fs/changed") listener(event.params);

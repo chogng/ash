@@ -68,6 +68,42 @@ impl GitRuntime {
                 }
                 return Ok(json!(values));
             }
+            "git.getChangesSummary" | "git.openWorkspaceChanges" => {
+                self.refresh(Some(token))?;
+                let repositories: Vec<_> = self.lock().repositories.values().cloned().collect();
+                if command == "git.openWorkspaceChanges" {
+                    return self.show_workspace_changes(&repositories, token);
+                }
+                let mut files = 0_u64;
+                let mut additions = 0_u64;
+                let mut deletions = 0_u64;
+                let mut partial = false;
+                for repository in repositories {
+                    let diff =
+                        self.api
+                            .repository_request(&repository, "textDiff", json!({}), token)?;
+                    // Non-text paths still count as files; line statistics apply to readable text.
+                    let changed = diff["status"]["changes"]
+                        .as_array()
+                        .ok_or_else(|| invalid("Git changes unavailable"))?
+                        .len();
+                    files += changed as u64;
+                    partial |= diff["diffs"]
+                        .as_array()
+                        .ok_or_else(|| invalid("Git text changes unavailable"))?
+                        .len()
+                        < changed;
+                    additions += diff["statistics"]["additions"]
+                        .as_u64()
+                        .ok_or_else(|| invalid("Git statistics unavailable"))?;
+                    deletions += diff["statistics"]["deletions"]
+                        .as_u64()
+                        .ok_or_else(|| invalid("Git statistics unavailable"))?;
+                }
+                return Ok(
+                    json!({"files":files,"additions":additions,"deletions":deletions,"partial":partial}),
+                );
+            }
             "git.showOutput" => {
                 return self.api.editor(
                     json!({"method":"output","channelId":"git","action":"show"}),

@@ -287,6 +287,10 @@ fn ledger_seals_rename_mode_and_line_statistics_from_immutable_trees() {
         .refresh_turn(session_id.clone(), thread_id.clone(), turn_id.clone())
         .unwrap();
     assert_eq!(open[0].capture_state, CaptureState::Open);
+    assert!(
+        open[0].after_tree.is_some(),
+        "live summaries need an immutable endpoint"
+    );
     assert_eq!(open[0].files.len(), 1);
     assert_eq!(open[0].files[0].kind, ChangeFileKind::Renamed);
     let sealed = ledger
@@ -537,4 +541,74 @@ fn relocated_object_store_does_not_change_sealed_evidence() {
     )
     .unwrap();
     assert_eq!(store.load(&record.change_set_id).unwrap(), relocated);
+}
+
+#[tokio::test]
+async fn checkpoint_summary_nets_renames_reversals_and_isolates_repository_paths() {
+    let directory = tempfile::tempdir().unwrap();
+    run_git(
+        directory.path(),
+        &["init", "--quiet", "--initial-branch=main"],
+    );
+    std::fs::write(directory.path().join("note"), "baseline\n").unwrap();
+    run_git(directory.path(), &["add", "."]);
+    let before = run_git(directory.path(), &["write-tree"]);
+    std::fs::write(directory.path().join("note"), "middle\n").unwrap();
+    run_git(directory.path(), &["add", "."]);
+    let middle = run_git(directory.path(), &["write-tree"]);
+    std::fs::write(directory.path().join("note"), "baseline\n").unwrap();
+    std::fs::rename(
+        directory.path().join("note"),
+        directory.path().join("renamed"),
+    )
+    .unwrap();
+    std::fs::write(directory.path().join("binary"), [0, 1, 2]).unwrap();
+    run_git(directory.path(), &["add", "-A"]);
+    run_git(directory.path(), &["update-index", "--chmod=+x", "renamed"]);
+    let after = run_git(directory.path(), &["write-tree"]);
+    let comparison = |id: &str, tree: &str| crate::CheckpointComparison {
+        repository_id: id.into(),
+        git_directory: directory.path().join(".git"),
+        before: ash_git::GitTreeId::new(before.clone()).unwrap(),
+        after: ash_git::GitTreeId::new(tree.to_string()).unwrap(),
+    };
+    let summary =
+        crate::summarize_checkpoints(3, vec![comparison("b", &after), comparison("a", &after)])
+            .await
+            .unwrap();
+    assert_eq!(summary.repositories.len(), 2);
+    for repository in &summary.repositories {
+        assert_eq!(repository.files.len(), 2);
+        assert!(repository.files.iter().any(|file| file.binary));
+        let rename = repository
+            .files
+            .iter()
+            .find(|file| file.kind == ChangeFileKind::Renamed)
+            .unwrap();
+        assert_eq!(rename.previous_path, Some(PathBuf::from("note")));
+        assert_eq!((rename.additions, rename.deletions), (0, 0));
+        assert_eq!(rename.before_mode.as_deref(), Some("100644"));
+        assert_eq!(rename.after_mode.as_deref(), Some("100755"));
+    }
+    let restored = crate::summarize_checkpoints(4, vec![comparison("a", &middle)])
+        .await
+        .unwrap();
+    assert_eq!(
+        restored.repositories[0].files[0].path,
+        PathBuf::from("note")
+    );
+    assert_eq!(restored.repositories[0].files.len(), 1);
+    let reversed = crate::summarize_checkpoints(5, vec![comparison("a", &before)])
+        .await
+        .unwrap();
+    assert!(reversed.repositories[0].files.is_empty());
+    let aba = crate::summarize_checkpoints(6, vec![comparison("a", &before)])
+        .await
+        .unwrap();
+    assert_ne!(reversed.revision, aba.revision);
+    let ordered =
+        crate::summarize_checkpoints(3, vec![comparison("a", &after), comparison("b", &after)])
+            .await
+            .unwrap();
+    assert_eq!(summary.revision, ordered.revision);
 }

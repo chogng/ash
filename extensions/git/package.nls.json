@@ -690,5 +690,8 @@
   "git.tagConflict.always": "Always Replace Local Tags",
   "git.status.syncIdle": "Synchronize Changes",
   "git.status.pullTooltip": "Pull {0} commits from {1}",
-  "git.status.pushTooltip": "Push {0} commits to {1}"
+  "git.status.pushTooltip": "Push {0} commits to {1}",
+  "command.git.getChangesSummary": "Get Workspace Change Summary",
+  "command.git.openWorkspaceChanges": "Open Workspace Changes",
+  "git.workspaceChanges": "Workspace Changes"
 }

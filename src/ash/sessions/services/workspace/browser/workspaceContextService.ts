@@ -1,43 +1,26 @@
-import { URI } from '../../../../base/common/uri.js';
 import { extUriBiasedIgnorePathCase, basename } from '../../../../base/common/resources.js';
 import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
 import { buildAgentHostSessionWorkspace } from '../../../common/agentHostSessionWorkspace.js';
 import type { IWorkspace, IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
 import { WorkspaceContextService } from '../../../../workbench/services/workspaces/browser/workspaceContextService.js';
 import { ISessionsService } from '../../sessions/browser/sessionsService.js';
-import { ISessionsManagementService } from '../../sessions/common/sessionsManagement.js';
 import type { ISession } from '../../sessions/common/session.js';
 
-/** Explorer follows the selection; open editors retain access to their Session's directory. */
+/** Explorer follows the selection; filesystem routing is owned by the shared file provider. */
 export class SessionsWorkspaceContextService extends WorkspaceContextService {
-	private readonly retainedFolders = new Map<string, IWorkspaceFolder>();
 	constructor(
 		private readonly hostWorkspace: () => IWorkspace,
 		@ISessionsService private readonly sessions: ISessionsService,
-		@ISessionsManagementService private readonly management: ISessionsManagementService,
 	) {
 		super(hostWorkspace());
 		this._register(sessions.onDidChange(() => this.updateSelection()));
 		this.updateSelection();
 	}
 
-	public override getWorkspaceFolder(resource: URI): IWorkspaceFolder | null {
-		const selected = super.getWorkspaceFolder(resource);
-		if (selected) { return selected; }
-		// A dirty editor can outlive the visible Session. Never retarget its writes on page switching.
-		const folders = [...this.retainedFolders.values(), ...this.management.sessions.flatMap(session => {
-			return [sessionFolder(session), ...session.chats.map(chat => sessionFolder(session, chat.threadId))].filter((folder): folder is IWorkspaceFolder => !!folder);
-		})].sort((a, b) => b.uri.path.length - a.uri.path.length);
-		const session = folders.find(folder => extUriBiasedIgnorePathCase.isEqualOrParent(resource, folder.uri));
-		if (session) { return session; }
-		return this.hostWorkspace().folders.find(folder => extUriBiasedIgnorePathCase.isEqualOrParent(resource, folder.uri)) ?? null;
-	}
-
 	private updateSelection(): void {
 		const selected = this.sessions.activeSelection;
 		if (selected?.kind === 'session') {
 			const folder = sessionFolder(selected.active.session, selected.active.threadId);
-			if (folder) { this.retainedFolders.set(folder.uri.toString(), folder); }
 			this.updateWorkspace({ id: selected.active.session.sessionId, folders: folder ? [folder] : [] });
 			return;
 		}

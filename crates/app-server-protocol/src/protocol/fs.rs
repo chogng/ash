@@ -6,6 +6,37 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::path::PathBuf;
 
+/// Resolve an absolute resource on this server to an existing authorized directory.
+/// This discovers a route, not a grant: every subsequent filesystem operation reauthorizes it.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FsResolvePathParams {
+    pub path: PathBuf,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "type"
+)]
+pub enum FsDirectoryTarget {
+    Environment {
+        dir_id: String,
+    },
+    Session {
+        session_directory: SessionDirSelector,
+    },
+}
+
+/// The root uses the requested path's spelling so clients retain their resource URI identity.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FsResolvePathResult {
+    pub root: PathBuf,
+    pub target: FsDirectoryTarget,
+}
+
 /// Stable filesystem entry kind exposed to clients.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]

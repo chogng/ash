@@ -1,7 +1,15 @@
 import type { FsCopyParams, FsCreateDirectoryParams, FsCreateFileParams, FsDeleteParams, FsGetMetadataParams, FsGetMetadataResult, FsPasteSystemFilesParams, FsReadBinaryFileParams, FsReadBinaryFileResult, FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult, FsRenameParams, FsWriteBinaryFileParams, FsWriteFileElevatedParams, FsWriteFileParams, FsWriteFileResult, FsReadPathCaseSensitivityParams, FsReadPathCaseSensitivityResult } from "../../../../../.build/protocol/typescript/index.js";
+import type { URI } from '../../../base/common/uri.js';
 import type { Event } from '../../../base/common/event.js';
 
+export interface IFileSystemDirectory {
+	readonly uri: URI;
+	readonly target: { readonly type: 'environment'; readonly dirId: string; } | { readonly type: 'session'; readonly sessionId: string; readonly path: string; };
+}
+
 export interface IFileApi {
+	/** Discover an existing backend-authorized root; this does not grant access. */
+	resolvePath(resource: URI): Promise<IFileSystemDirectory>;
 	readonly connectionGeneration: number;
 	readonly onDidChangeConnection: Event<void>;
 	readPathCaseSensitivity(params: FsReadPathCaseSensitivityParams): Promise<FsReadPathCaseSensitivityResult>;

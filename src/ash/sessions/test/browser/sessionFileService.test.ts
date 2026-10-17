@@ -8,6 +8,7 @@ import { JSDOM } from 'jsdom';
 import { DeferredPromise } from '../../../base/common/async.js';
 import { Emitter, Event } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
+import type { IFileSystemDirectory } from '../../../platform/files/common/fileApi.js';
 import { URI } from '../../../base/common/uri.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
@@ -49,6 +50,10 @@ test('Session files preserve their original directory through selection, directo
 				fuzzy: async (directory, query, signal) => { calls.push({ target: directory.target, query, aborted: signal?.aborted }); return { matches: [], totalMatches: 0 }; },
 			}, fs: {
 				...host.fs,
+				resolvePath: async resource => {
+					const root = resource.path.startsWith('/C:/managed/') ? 'C:/managed/restored' : resource.path.includes('/second/') ? 'C:/sessions/second' : 'C:/sessions/first';
+					return { uri: URI.file(root), target: { type: 'session', sessionId: root.endsWith('second') ? 'second' : 'first', path: root } };
+				},
 				readPathCaseSensitivity: async params => { calls.push(params); return { scopes: [{ path: '.', sensitivity: 'insensitive' }] }; },
 				readBinaryFile: async params => { calls.push(params); return { resource: { resourceId: 'file', mimeType: 'text/plain', size: 8, sha256: 'sha256:file' }, revision: 'rev-1' }; },
 				writeFileElevated: async () => { throw new Error('Unexpected elevated write'); },
@@ -62,7 +67,7 @@ test('Session files preserve their original directory through selection, directo
 				release: async () => { },
 			},
 		};
-		using files = services.createInstance(SessionFileService, fileHost);
+		using files = services.createInstance(SessionFileService, fileHost, () => []);
 		const restoredRoot = 'C:/managed/restored';
 		provider.items[0] = {
 			...provider.items[0]!,
@@ -77,8 +82,9 @@ test('Session files preserve their original directory through selection, directo
 		const first = URI.file('C:/sessions/first/main.ts');
 		await files.resolvePathIdentity(first);
 		await files.readFile(first);
-		sessions.openSession('second', 'second-thread');
+		await sessions.openThread('second', 'second-thread');
 		assert.equal(workspace.getWorkspace().folders[0]!.uri.toString(), URI.file('C:/sessions/second').toString());
+		assert.equal(workspace.getWorkspaceFolder(first), null, 'Workspace membership must not keep historical file routes');
 		await files.writeFile(first, new TextEncoder().encode('updated'), { create: true, overwrite: true, expectedRevision: 'rev-1' });
 		provider.items = [session('first', 'C:/sessions/moved'), provider.items[1]!];
 		await sessions.openThread('first', 'first-thread');
@@ -158,7 +164,7 @@ test('Workbench file and content search retain Session directory authorization a
 			async read(params) { calls.push(params); return { searchId: params.searchId, matches: [], nextMatch: 0, completed: true, limitHit: false, error: null }; },
 			async cancel(params) { calls.push(params); },
 		},
-	} satisfies IRendererHost);
+	} satisfies IRendererHost, () => []);
 	const search = new SearchService(files, workspace, editing.models, files);
 	const result = await search.fileSearch(new QueryBuilder().file([uri], { filePattern: 'main', sortByScore: true, maxResults: 1 }));
 	assert.deepEqual(result.results.map(file => file.resource.toString()), [URI.joinPath(uri, 'main.ts').toString()]);
@@ -172,14 +178,13 @@ test('Workbench file and content search retain Session directory authorization a
 });
 
 
-test('restored file identity waits for the real Session directory instead of reading the source workspace', async () => {
+test('restored file identity waits for backend routing independently of Session catalog hydration', async () => {
 	const browser = new JSDOM('<!doctype html>', { url: 'https://sessions.test' });
 	try {
 		using services = new InstantiationService();
 		using provider = new MemoryProvider();
 		provider.items = [session('first', '/source')];
-		const directory = new DeferredPromise<ISession>();
-		provider.subscribe = async () => directory.p;
+		const directory = new DeferredPromise<IFileSystemDirectory>();
 		using management = new SessionsManagementService(provider);
 		using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'directory-restore', flushInterval: 0 });
 		services.registerInstance(ISessionsManagementService, management);
@@ -192,15 +197,15 @@ test('restored file identity waits for the real Session directory instead of rea
 		services.registerInstance(IWorkspaceContextService, workspace);
 		const calls: unknown[] = [];
 		const host = createDisconnectedRendererApi();
-		const fileHost: IRendererHost = { ...host, fs: { ...host.fs, readPathCaseSensitivity: async params => { calls.push(params); return { scopes: [{ path: '.', sensitivity: 'sensitive' }] }; } } };
-		using files = services.createInstance(SessionFileService, fileHost);
+		const fileHost: IRendererHost = { ...host, fs: { ...host.fs, resolvePath: async resource => { if (resource.path.startsWith('/outside/')) { throw new Error('PermissionRequired'); } return directory.p; }, readPathCaseSensitivity: async params => { calls.push(params); return { scopes: [{ path: '.', sensitivity: 'sensitive' }] }; } } };
+		using files = services.createInstance(SessionFileService, fileHost, () => []);
 		await sessions.initialize();
 		const resource = URI.file('/managed/first/main.ts');
 		const opening = files.resolvePathIdentity(resource).then(() => 'resolved', error => String(error));
 		assert.deepEqual(calls, []);
-		await directory.complete({ ...provider.items[0]!, chats: [{ ...provider.items[0]!.chats[0]!, workspace: { authorityId: 'local', root: '/managed/first' } }], agentTree: [] });
+		await directory.complete({ uri: URI.file('/managed/first'), target: { type: 'session', sessionId: 'first', path: '/managed/first' } });
 		assert.equal(await opening, 'resolved');
 		assert.deepEqual(calls, [{ sessionDirectory: { sessionId: 'first', path: '/managed/first' }, path: 'main.ts' }]);
-		await assert.rejects(files.resolvePathIdentity(URI.file('/outside/main.ts')), /Resource must belong to a current workspace folder/);
+		await assert.rejects(files.resolvePathIdentity(URI.file('/outside/main.ts')), /PermissionRequired/);
 	} finally { browser.window.close(); }
 });

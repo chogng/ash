@@ -1,3 +1,4 @@
+import { readWorkspaceChanges } from '../../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { AgentsVoiceWidget } from '../../../../../workbench/contrib/agentsVoice/browser/agentsVoiceWidget.js';
 import { generateUuid } from '../../../../../base/common/uuid.js';
 import { VoiceSessionController, pickVoiceConversation } from '../../../../../workbench/contrib/chat/browser/voiceClient/voiceSessionController.js';
@@ -51,6 +52,7 @@ export interface ICoworkWidgetModel extends IDisposable {
 	send(text: string, mode: ChatMode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[], submissionOptions?: ChatSubmissionOptions): Promise<void>;
 	executeServerCommand(name: string, argumentsText: string, submissionSignal?: AbortSignal): Promise<void>;
 	interrupt(): Promise<void>;
+	refreshChanges(): Promise<void>;
 	selectModel(model: ModelRef): Promise<void>;
 	selectReasoningEffort(effort: ModelReasoningEffort | undefined): Promise<void>;
 	selectAutomaticModel(): Promise<void>;
@@ -162,7 +164,11 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 				? commandService.executeCommand(OPEN_CHAT_SETTINGS_COMMAND_ID)
 				: this.model.executeServerCommand(invocation.name, invocation.argumentsText, submissionSignal),
 			interrupt: () => this.model.interrupt(),
-			openChanges: () => commandService.executeCommand(OPEN_CHAT_CHANGES_COMMAND_ID, this.model.sessionId, this.model.threadId),
+			openChanges: async revision => {
+				try { await commandService.executeCommand(OPEN_CHAT_CHANGES_COMMAND_ID, this.model.sessionId, this.model.threadId, revision); }
+				finally { void this.model.refreshChanges(); }
+			},
+			readWorkspaceChanges: () => readWorkspaceChanges(commandService),
 			selectModel: (model) => this.model.selectModel(model),
 			selectReasoningEffort: effort => this.model.selectReasoningEffort(effort),
 			selectAutomaticModel: () => this.model.selectAutomaticModel(),

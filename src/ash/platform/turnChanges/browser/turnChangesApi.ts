@@ -6,6 +6,8 @@ import type { ITurnChangesApi } from "../common/turnChangesApi.js";
 export function createDisconnectedTurnChangesApi(unavailable: UnavailableOperation): ITurnChangesApi {
 	return {
 		list: () => unavailable("turnChanges.list"),
+		summary: () => unavailable('turnChanges.summary'),
+		summaryFile: () => unavailable('turnChanges.summaryFile'),
 		read: () => unavailable("turnChanges.read"),
 		readFile: () => unavailable("turnChanges.readFile"),
 		generateMessage: () => unavailable("turnChanges.generateMessage"),
@@ -21,6 +23,8 @@ export function createDisconnectedTurnChangesApi(unavailable: UnavailableOperati
 export function createAppServerTurnChangesApi(connection: AppServerProtocolClient): ITurnChangesApi {
 	return {
 		list: (params) => appServerRequest(connection, "turnChanges/list", params),
+		summary: params => appServerRequest(connection, 'turnChanges/summary', params),
+		summaryFile: params => appServerRequest(connection, 'turnChanges/summaryFile', params),
 		read: (params) => appServerRequest(connection, "turnChanges/read", params),
 		readFile: (params) => appServerRequest(connection, "turnChanges/readFile", params),
 		generateMessage: (params) => appServerRequest(connection, "turnChanges/generateMessage", params),
