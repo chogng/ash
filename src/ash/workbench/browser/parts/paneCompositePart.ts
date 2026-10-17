@@ -145,7 +145,7 @@ export class PaneCompositePart extends CompositePart<PaneComposite> {
 				{ highlightToggledItems: true, toolbarOptions: { primaryGroup: options.titleActions.primaryGroup } },
 			));
 			actions.element.classList.add("ash-pane-composite-title-menu-actions");
-			if (options.location === ViewContainerLocation.Panel) {
+			if (options.location === ViewContainerLocation.Panel || options.location === ViewContainerLocation.AuxiliaryBar) {
 				const separator = h(ownerDocument, "div");
 				this._register(new SeparatorActionViewItem(new Separator())).render(separator);
 				separator.classList.add("ash-pane-composite-title-separator");

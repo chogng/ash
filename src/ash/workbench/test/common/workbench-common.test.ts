@@ -72,6 +72,7 @@ test("workbench context keys describe the current workspace", () => {
 		'activeEditorGroupIndex',
 		'activeEditorGroupLast',
 		'agentSidebarVisible',
+		'auxiliaryBarMaximized',
 		'auxiliaryBarVisible',
 		'browserLocalFolderSupport',
 		'dirtyWorkingCopies',

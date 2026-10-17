@@ -3,7 +3,7 @@ import type { IContextKey } from "../../platform/contextkey/common/contextkey.js
 import type { IContextKeyService } from "../../platform/contextkey/browser/contextKeyService.js";
 import { IsLinuxContext, IsMacContext, IsNativeContext, IsWebContext, IsWindowsContext } from '../../platform/contextkey/common/contextkeys.js';
 import { type IWorkspaceContextService, workbenchStateToString } from '../../platform/workspace/common/workspace.js';
-import { ActiveEditorGroupEmptyContext, ActiveEditorGroupIndexContext, ActiveEditorGroupLastContext, AgentSidebarVisibleContext, AuxiliaryBarVisibleContext, BrowserLocalFolderSupportContext, DirtyWorkingCopiesContext, EditorAreaVisibleContext, EditorsVisibleContext, MultipleEditorGroupsContext, OpenFolderWorkspaceSupportContext, PanelMaximizedContext, PanelVisibleContext, SideBarVisibleContext, WorkbenchStateContext, WorkspaceFolderCountContext } from '../common/contextkeys.js';
+import { ActiveEditorGroupEmptyContext, ActiveEditorGroupIndexContext, ActiveEditorGroupLastContext, AgentSidebarVisibleContext, AuxiliaryBarMaximizedContext, AuxiliaryBarVisibleContext, BrowserLocalFolderSupportContext, DirtyWorkingCopiesContext, EditorAreaVisibleContext, EditorsVisibleContext, MultipleEditorGroupsContext, OpenFolderWorkspaceSupportContext, PanelMaximizedContext, PanelVisibleContext, SideBarVisibleContext, WorkbenchStateContext, WorkspaceFolderCountContext } from '../common/contextkeys.js';
 import type { IEditorGroupsService } from '../services/editor/common/editorGroupsService.js';
 import type { IEditorService } from '../services/editor/common/editorService.js';
 import type { IWorkbenchLayoutService, WorkbenchPartId } from '../services/layout/browser/layoutService.js';
@@ -72,7 +72,7 @@ export class WorkbenchContextKeysHandler extends Disposable {
 	}
 
 	private bindLayoutKeys(contextKeyService: IContextKeyService, layoutService: IWorkbenchLayoutService): void {
-		const { visibilityKeys, panelMaximized } = bufferContextKeyChanges(contextKeyService, () => ({
+		const { visibilityKeys, panelMaximized, auxiliaryBarMaximized } = bufferContextKeyChanges(contextKeyService, () => ({
 			visibilityKeys: new Map<WorkbenchPartId, IContextKey<boolean>>([
 				['sidebar', SideBarVisibleContext.bindTo(contextKeyService)],
 				['auxiliarybar', AuxiliaryBarVisibleContext.bindTo(contextKeyService)],
@@ -81,19 +81,23 @@ export class WorkbenchContextKeysHandler extends Disposable {
 				['editor', EditorAreaVisibleContext.bindTo(contextKeyService)],
 			]),
 			panelMaximized: PanelMaximizedContext.bindTo(contextKeyService),
+			auxiliaryBarMaximized: AuxiliaryBarMaximizedContext.bindTo(contextKeyService),
 		}));
 		const updateAll = (): void => contextKeyService.bufferChangeEvents(() => {
 			for (const [partId, key] of visibilityKeys) key.set(layoutService.isPartVisible(partId));
 			panelMaximized.set(layoutService.isPanelMaximized());
+			auxiliaryBarMaximized.set(layoutService.isAuxiliaryBarMaximized());
 		});
 		updateAll();
 		this._register(layoutService.onDidChangePartVisibility(event => {
 			contextKeyService.bufferChangeEvents(() => {
 				visibilityKeys.get(event.partId)?.set(event.visible);
 				panelMaximized.set(layoutService.isPanelMaximized());
+				auxiliaryBarMaximized.set(layoutService.isAuxiliaryBarMaximized());
 			});
 		}));
-		this._register(toDisposable(() => resetContextKeys(contextKeyService, [...visibilityKeys.values(), panelMaximized])));
+		this._register(layoutService.onDidChangeAuxiliaryBarMaximized(updateAll));
+		this._register(toDisposable(() => resetContextKeys(contextKeyService, [...visibilityKeys.values(), panelMaximized, auxiliaryBarMaximized])));
 	}
 }
 

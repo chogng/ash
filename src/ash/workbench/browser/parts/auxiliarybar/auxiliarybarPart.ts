@@ -1,21 +1,16 @@
 import { IActivityService } from '../../../services/activity/common/activity.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
-import "./auxiliarybarpart.css";
+import "./media/auxiliaryBarPart.css";
 import { IStorageService } from "../../../../platform/storage/common/storage.js";
-import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
+import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { ViewContainerLocation } from "../../../common/views.js";
-import type { ILocalizationService } from "../../../services/localization/common/localizationService.js";
-import type { IViewDescriptorService } from "../../../common/views.js";
+import { ILocalizationService } from "../../../services/localization/common/localizationService.js";
+import { IViewDescriptorService } from "../../../common/views.js";
 import { PaneCompositePart } from "../paneCompositePart.js";
-import type { ICompositeBarOptions } from '../compositeBar.js';
-
-/** Construction inputs for the fixed Auxiliary Bar Pane Composite host. */
-export interface AuxiliarybarPartOptions {
-	readonly openComposite: ICompositeBarOptions['openComposite'];
-	readonly viewDescriptorService: IViewDescriptorService;
-	readonly contextKeyService?: IContextKeyService;
-	readonly localizationService?: ILocalizationService;
-}
+import { IMenuService, MenuId } from '../../../../platform/actions/common/actions.js';
+import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { IViewsService } from '../../../services/views/common/viewsService.js';
 
 /**
  * Secondary Pane Composite region.
@@ -23,7 +18,7 @@ export interface AuxiliarybarPartOptions {
  * Its fixed Chat container still owns session navigation, while this Part
  * owns the retained Composite lifecycle shared by all pane-like regions.
  */
-export class AuxiliarybarPart extends PaneCompositePart {
+export class AuxiliaryBarPart extends PaneCompositePart {
 
 	override get minimumWidth(): number {
 		// The content minimum excludes this Part's one-pixel left border; Grid adds frame insets.
@@ -37,16 +32,21 @@ export class AuxiliarybarPart extends PaneCompositePart {
 
 	constructor(
 		container: HTMLElement,
-		options: AuxiliarybarPartOptions,
+		@IViewDescriptorService viewDescriptorService: IViewDescriptorService,
+		@IContextKeyService contextKeyService: IContextKeyService,
+		@ILocalizationService localizationService: ILocalizationService,
+		@IMenuService menuService: IMenuService,
+		@IContextMenuService contextMenuService: IContextMenuService,
+		@IInstantiationService instantiationService: IInstantiationService,
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
 		@IActivityService activityService: IActivityService,
 	) {
 		super(container, {
-			openComposite: options.openComposite,
-			viewDescriptorService: options.viewDescriptorService,
-			contextKeyService: options.contextKeyService,
-			localizationService: options.localizationService,
+			openComposite: (id, preserveFocus) => instantiationService.invokeFunction(accessor => accessor.get(IViewsService).openViewContainer(id, !preserveFocus)),
+			viewDescriptorService,
+			contextKeyService,
+			localizationService,
 			id: "auxiliarybar",
 			location: ViewContainerLocation.AuxiliaryBar,
 			ariaLabel: "Auxiliary sidebar",
@@ -54,6 +54,8 @@ export class AuxiliarybarPart extends PaneCompositePart {
 			viewsAriaLabel: "Auxiliary sidebar views",
 			viewsAriaLabelKey: { bundle: "ash.regions", key: "auxiliarySidebarViews" },
 			compositeBarVisible: false,
+			compositeBarContextMenuProvider: contextMenuService,
+			titleActions: { menuService, contextMenuProvider: contextMenuService, menuId: MenuId.AuxiliaryBarTitle },
 		}, themeService, storageService, activityService);
 		this.contentDomNode.classList.add("ash-auxiliarybar-content");
 	}

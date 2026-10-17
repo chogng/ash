@@ -45,6 +45,7 @@ import "./parts/editor/editor.contribution.js";
 import "./parts/titlebar/menubar.contribution.js";
 import "./parts/titlebar/titlebarActions.js";
 import './parts/panel/panelActions.js';
+import './parts/auxiliarybar/auxiliaryBarActions.js';
 import './actions/navigationActions.js';
 import "./parts/notifications/notificationsCommands.js";
 

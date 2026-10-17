@@ -204,7 +204,7 @@ import { SystemOutputService } from "../services/output/browser/systemOutputServ
 import { IContentSearchService, IContentSearchConfigurationService } from "../../platform/search/common/search.js";
 import { BrowserContentSearchService, FileContentSearchService } from "../../platform/search/browser/searchService.js";
 import type { Part } from "./part.js";
-import { AuxiliarybarPart } from "./parts/auxiliarybar/auxiliarybarPart.js";
+import { AuxiliaryBarPart } from "./parts/auxiliarybar/auxiliaryBarPart.js";
 import { EditorContextKeyController } from './parts/editor/editorContextKeys.js';
 import { EditorPart, IEditorPart, type IEditorPartOptions } from "./parts/editor/editorPart.js";
 import { BreadcrumbsFilePicker, BreadcrumbsSymbolPicker } from "./parts/editor/breadcrumbsPicker.js";
@@ -1152,12 +1152,7 @@ export class Workbench extends Disposable {
 		}
 		const panel = this._register(services.createInstance(PanelPart, workbenchRoot));
 		this.editor = editorParts;
-		const auxiliarybar = this._register(services.createInstance(AuxiliarybarPart, workbenchRoot, {
-			openComposite: (id: string, preserveFocus?: boolean) => services.invokeFunction(accessor => accessor.get(IViewsService).openViewContainer(id, !preserveFocus)),
-			viewDescriptorService: viewDescriptors,
-			contextKeyService: contextKeys,
-			localizationService,
-		}));
+		const auxiliarybar = this._register(services.createInstance(AuxiliaryBarPart, workbenchRoot));
 		const statusbar = this._register(services.createInstance(StatusbarPart, workbenchRoot, statusbarService));
 		const parts = new Map<WorkbenchPartId, Part>([
 			["titlebar", titlebar],

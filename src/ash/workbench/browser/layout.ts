@@ -110,11 +110,15 @@ export class WorkbenchLayout
 	private sideBarLocation: SideBarLocation;
 	// Maximization is transient; persistence and Grid rebuilds retain the user's restored Panel height.
 	private panelHeightBeforeMaximize: number | undefined;
+	// The ordinary layout remains the persistence source while maximization temporarily hides its Parts.
+	private auxiliaryBarRestoreState: { readonly layout: WorkbenchLayoutState; readonly editorVisible: boolean; } | undefined;
+	private readonly auxiliaryBarMaximizedEmitter = this._register(new Emitter<void>());
 	private readonly auxiliaryContainers = this._register(new DisposableMap<Window, DisposableStore>());
 	private readonly auxiliaryWindows = new Map<Window, IAuxiliaryWindow>();
 	private focusedContainer: HTMLElement | undefined;
 
 	readonly onDidChangePartVisibility = this._onDidChangePartVisibility.event;
+	readonly onDidChangeAuxiliaryBarMaximized = this.auxiliaryBarMaximizedEmitter.event;
 	readonly domNode: HTMLDivElement;
 
 	public hasFocus(partId: WorkbenchPartId): boolean {
@@ -279,6 +283,8 @@ export class WorkbenchLayout
 	}
 
 	private rebuildGrid(): void {
+		const auxiliaryBarMaximized = this.isAuxiliaryBarMaximized();
+		if (auxiliaryBarMaximized) this.setAuxiliaryBarMaximized(false);
 		const state = this.state;
 		const editorVisible = this.isPartVisible('editor');
 		const dimension = new Dimension(this.grid.width || getClientArea(this.domNode).width, this.grid.height || getClientArea(this.domNode).height);
@@ -297,6 +303,7 @@ export class WorkbenchLayout
 			this.publishPartVisibility();
 		});
 		this.layout(dimension);
+		if (auxiliaryBarMaximized) this.setAuxiliaryBarMaximized(true);
 	}
 
 	/** Overlays can read offsets before Parts exist; the mounted Grid then owns titlebar geometry. */
@@ -318,6 +325,7 @@ export class WorkbenchLayout
 	}
 
 	get state(): WorkbenchLayoutState {
+		if (this.auxiliaryBarRestoreState) return this.auxiliaryBarRestoreState.layout;
 		const sidebar = this.getPartSize("sidebar");
 		const auxiliarybar = this.getPartSize("auxiliarybar");
 		const agentSidebar = this.getPartSize("agentSidebar");
@@ -361,7 +369,41 @@ export class WorkbenchLayout
 	}
 
 	isPanelMaximized(): boolean {
-		return this.isPartVisible('panel') && !this.isPartVisible('editor');
+		return !this.isAuxiliaryBarMaximized() && this.isPartVisible('panel') && !this.isPartVisible('editor');
+	}
+
+	public isAuxiliaryBarMaximized(): boolean {
+		return this.auxiliaryBarRestoreState !== undefined;
+	}
+
+	public toggleMaximizedAuxiliaryBar(): void {
+		this.setAuxiliaryBarMaximized(!this.isAuxiliaryBarMaximized());
+	}
+
+	public setAuxiliaryBarMaximized(maximized: boolean): boolean {
+		if (maximized === this.isAuxiliaryBarMaximized()) return false;
+		if (maximized) {
+			const layout = this.state;
+			const editorVisible = this.isPartVisible('editor');
+			this.updatePartsVisibility(['auxiliarybar'], true);
+			this.auxiliaryBarRestoreState = { layout, editorVisible };
+			// Bypass Panel close/reopen policy: this is a temporary layout, not a user closing the Panel.
+			this.updatePartsVisibility(['sidebar', 'agentSidebar', 'panel', 'editor'], false);
+		} else {
+			const restore = this.auxiliaryBarRestoreState!;
+			this.auxiliaryBarRestoreState = undefined;
+			for (const partId of ['editor', 'panel', 'sidebar', 'agentSidebar'] as const) {
+				this.updatePartsVisibility([partId], partId === 'editor' ? restore.editorVisible : restore.layout[partId].visible);
+			}
+			for (const partId of ['sidebar', 'agentSidebar', 'auxiliarybar'] as const) {
+				this.resizePart(partId, this.getPartSize(partId).with(restore.layout[partId].width));
+			}
+			if (restore.editorVisible) {
+				this.resizePart('panel', new Dimension(this.getPartSize('panel').width, restore.layout.panel.height));
+			}
+		}
+		this.auxiliaryBarMaximizedEmitter.fire();
+		return true;
 	}
 
 	toggleMaximizedPanel(): void {
@@ -378,6 +420,9 @@ export class WorkbenchLayout
 	}
 
 	showParts(partIds: readonly WorkbenchPartId[]): void {
+		if (partIds.some(partId => partId === 'editor' || partId === 'panel' || partId === 'sidebar' || partId === 'agentSidebar')) {
+			this.setAuxiliaryBarMaximized(false);
+		}
 		const reopenMaximizedPanel = partIds.includes('panel') && !partIds.includes('editor') &&
 			!this.isPartVisible('panel') && this.stateModel.panelWasLastMaximized;
 		const panelHeight = partIds.includes('editor') ? this.panelHeightBeforeMaximize : undefined;
@@ -396,6 +441,7 @@ export class WorkbenchLayout
 	}
 
 	hideParts(partIds: readonly WorkbenchPartId[]): void {
+		if (partIds.includes('auxiliarybar')) this.setAuxiliaryBarMaximized(false);
 		if (partIds.includes('panel') && this.isPartVisible('panel')) {
 			// Capture the closing state before restoring the editor and the ordinary Panel height.
 			this.stateModel.panelWasLastMaximized = this.isPanelMaximized();
@@ -424,6 +470,7 @@ export class WorkbenchLayout
 	}
 
 	private applyState(state: WorkbenchLayoutState): void {
+		this.setAuxiliaryBarMaximized(false);
 		if (this.isPanelMaximized()) {
 			this.toggleMaximizedPanel();
 		}

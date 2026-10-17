@@ -80,8 +80,8 @@ const { IContextKeyService } = await import('../../../platform/contextkey/browse
 const { IViewDescriptorService } = await import('../../../workbench/common/views.js');
 const { ILocalizationService: PanelLocalizationService } = await import('../../../workbench/services/localization/common/localizationService.js');
 const { CompositeBar } = await import("../../../workbench/browser/parts/compositeBar.js");
-const { AuxiliarybarPart } = await import(
-	"../../../workbench/browser/parts/auxiliarybar/auxiliarybarPart.js"
+const { AuxiliaryBarPart } = await import(
+	"../../../workbench/browser/parts/auxiliarybar/auxiliaryBarPart.js"
 );
 const { PaneComposite } = await import(
 	"../../../workbench/browser/parts/views/paneComposite.js"
@@ -100,11 +100,11 @@ const {
 	WorkbenchViewRegistry,
 } = await import("../../../workbench/common/views.js");
 const {
-	ToggleAuxiliaryBarCommandId,
 	ToggleSideBarCommandId,
 } = await import(
 	"../../../workbench/browser/parts/titlebar/titlebarActions.js"
 );
+const { ToggleAuxiliaryBarAction } = await import('../../../workbench/browser/parts/auxiliarybar/auxiliaryBarActions.js');
 const { TogglePanelAction } = await import("../../../workbench/browser/parts/panel/panelActions.js");
 const { CommandService } = await import(
 	"../../../workbench/services/commands/common/commandService.js"
@@ -619,6 +619,67 @@ test('maximized Panel survives configuration changes and restores its saved heig
 	assert.equal(harness.layout.isPartVisible('editor'), true);
 	disposables.dispose();
 	dom.window.close();
+});
+
+test('Auxiliary Bar commands restore dimensions, hidden Parts and Panel maximization across layout changes', async () => {
+	const { IPaneCompositePartService } = await import('../../../workbench/services/panecomposite/browser/panecomposite.js');
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		const harness = createLayoutHarness(dom.window.document, { defaultLayout: { parts: { panel: true, agentSidebar: true } } });
+		using resources = harness.disposables;
+		const context = resources.add(new ContextKeyService());
+		resources.add(createTestWorkbenchContextKeysHandler(context, { layoutService: harness.layout }));
+		harness.services.registerInstance(IPaneCompositePartService, {
+			onDidPaneCompositeOpen: BaseEvent.None, onDidPaneCompositeClose: BaseEvent.None,
+			getActivePaneComposite: () => undefined, getLastActivePaneCompositeId: () => undefined,
+			openPaneComposite: async () => undefined, hideActivePaneComposite() { }, getPartId: () => 'auxiliarybar',
+		});
+		const commands = resources.add(new CommandService(harness.services));
+		harness.layout.layout(new Dimension(1600, 900));
+		harness.layout.resizePart('auxiliarybar', new Dimension(320, 800));
+		harness.layout.resizePart('panel', new Dimension(800, 180));
+		const ordinary = harness.layout.state;
+		for (const panelMaximized of [false, true]) {
+			if (panelMaximized) harness.layout.toggleMaximizedPanel();
+			await commands.executeCommand('workbench.action.toggleMaximizedAuxiliaryBar');
+			assert.equal(harness.layout.setAuxiliaryBarMaximized(true), false);
+			assert.equal(context.getValue('auxiliaryBarMaximized'), true);
+			assert.equal(context.getValue('panelMaximized'), false);
+			for (const partId of ['editor', 'panel', 'sidebar', 'agentSidebar'] as const) {
+				assert.equal(harness.layout.isPartVisible(partId), false, partId);
+			}
+			assert.deepEqual(harness.layout.state, ordinary);
+			await harness.configuration.updateValue(WorkbenchConfiguration.sideBarLocation, panelMaximized ? 'left' : 'right');
+			assert.equal(harness.layout.isAuxiliaryBarMaximized(), true);
+			assert.equal(harness.layout.isPartVisible('sidebar'), false);
+			await commands.executeCommand('workbench.action.toggleMaximizedAuxiliaryBar');
+			assert.equal(context.getValue('auxiliaryBarMaximized'), false);
+			assert.equal(harness.layout.isPanelMaximized(), panelMaximized);
+			if (panelMaximized) harness.layout.toggleMaximizedPanel();
+			assert.deepEqual(harness.layout.state, ordinary);
+		}
+		harness.layout.hidePart('sidebar');
+		harness.layout.hidePart('panel');
+		const hiddenWidth = harness.layout.getPartSize('auxiliarybar').width;
+		await commands.executeCommand('workbench.action.toggleMaximizedAuxiliaryBar');
+		await commands.executeCommand('workbench.action.closeAuxiliaryBar');
+		assert.equal(harness.layout.isAuxiliaryBarMaximized(), false);
+		assert.equal(harness.layout.isPartVisible('editor'), true);
+		assert.equal(harness.layout.isPartVisible('sidebar'), false);
+		assert.equal(harness.layout.isPartVisible('panel'), false);
+		await commands.executeCommand(ToggleAuxiliaryBarAction.ID);
+		assert.equal(harness.layout.getPartSize('auxiliarybar').width, hiddenWidth);
+		harness.layout.toggleMaximizedAuxiliaryBar();
+		harness.layout.showPart('panel');
+		assert.equal(harness.layout.isAuxiliaryBarMaximized(), false);
+		assert.equal(harness.layout.isPartVisible('editor'), true);
+		harness.layout.toggleMaximizedAuxiliaryBar();
+		harness.layout.restoreWorkspaceState();
+		assert.equal(harness.layout.isAuxiliaryBarMaximized(), false);
+		assert.equal(harness.layout.isPartVisible('editor'), true);
+	} finally {
+		dom.window.close();
+	}
 });
 
 test('Panel reopening remembers its closing state across layout recreation and keeps workspace state separate', async () => {
@@ -1847,13 +1908,14 @@ test("Auxiliary Bar retains its fixed View as a standard Pane Composite", () => 
 		paneHeaders: "hidden",
 		paneLayout: "fill",
 	});
-	const auxiliarybar = disposables.add(
-		registerContainerServices(componentServices).createInstance(AuxiliarybarPart, dom.window.document.body, {
-			openComposite: async () => null,
-			viewDescriptorService: viewDescriptors,
-			contextKeyService: contextKeys,
-		}),
-	);
+	const auxiliaryServices = disposables.add(registerContainerServices(componentServices).createChild());
+	auxiliaryServices.registerInstance(IViewDescriptorService, viewDescriptors);
+	auxiliaryServices.registerInstance(IContextKeyService, contextKeys);
+	auxiliaryServices.registerInstance(PanelLocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, _key, fallback) => fallback });
+	const commands = disposables.add(new CommandService(auxiliaryServices));
+	auxiliaryServices.registerInstance(IMenuService, new MenuService(commands, contextKeys));
+	auxiliaryServices.registerInstance(IContextMenuService, { contextMenuStyle: 'custom', showContextMenu() { }, hideContextMenu() { }, onDidShowContextMenu: BaseEvent.None, onDidHideContextMenu: BaseEvent.None });
+	const auxiliarybar = disposables.add(auxiliaryServices.createInstance(AuxiliaryBarPart, dom.window.document.body));
 	auxiliarybar.addComposite(composite);
 	auxiliarybar.showComposite(descriptor.id);
 	const content = auxiliarybar.domNode.querySelector(
@@ -2013,9 +2075,9 @@ test("titlebar layout commands toggle shell regions", async () => {
 	assert.equal(harness.layout.isPartVisible("sidebar"), true);
 
 	assert.equal(harness.layout.isPartVisible("auxiliarybar"), true);
-	await commands.executeCommand(ToggleAuxiliaryBarCommandId);
+	await commands.executeCommand(ToggleAuxiliaryBarAction.ID);
 	assert.equal(harness.layout.isPartVisible("auxiliarybar"), false);
-	await commands.executeCommand(ToggleAuxiliaryBarCommandId);
+	await commands.executeCommand(ToggleAuxiliaryBarAction.ID);
 	assert.equal(harness.layout.isPartVisible("auxiliarybar"), true);
 
 	assert.equal(harness.layout.isPartVisible("panel"), true);

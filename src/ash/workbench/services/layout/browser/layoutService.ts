@@ -19,12 +19,17 @@ export interface IWorkbenchLayoutService extends ILayoutService {
 	layout(dimension?: IDimension): void;
 	setLayoutStyle(style: WorkbenchLayoutStyle): void;
 	readonly onDidChangePartVisibility: Event<WorkbenchPartVisibilityChangeEvent>;
+	readonly onDidChangeAuxiliaryBarMaximized: Event<void>;
 	isPartVisible(partId: WorkbenchPartId): boolean;
 	hasFocus(partId: WorkbenchPartId): boolean;
 	getVisibleNeighborPart(partId: WorkbenchPartId, direction: Direction): WorkbenchPartId | undefined;
 	isPanelMaximized(): boolean;
 	/** Shows and maximizes the Panel, or restores the Editor and the previous Panel height. */
 	toggleMaximizedPanel(): void;
+	isAuxiliaryBarMaximized(): boolean;
+	toggleMaximizedAuxiliaryBar(): void;
+	/** Temporarily gives the Auxiliary Bar the content area, restoring the previous layout on exit. */
+	setAuxiliaryBarMaximized(maximized: boolean): boolean;
 	showPart(partId: WorkbenchPartId): void;
 	showParts(partIds: readonly WorkbenchPartId[]): void;
 	hidePart(partId: WorkbenchPartId): void;

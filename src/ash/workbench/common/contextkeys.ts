@@ -39,6 +39,9 @@ export const ActiveViewletContext = new RawContextKey<string>('activeViewlet', '
 /** Whether the auxiliary side bar is currently visible. */
 export const AuxiliaryBarVisibleContext = new RawContextKey<boolean>('auxiliaryBarVisible', true);
 
+/** Whether the auxiliary side bar temporarily occupies the Workbench content area. */
+export const AuxiliaryBarMaximizedContext = new RawContextKey<boolean>('auxiliaryBarMaximized', false);
+
 /** Identifier of the active auxiliary bar container. */
 export const ActiveAuxiliaryContext = new RawContextKey<string>('activeAuxiliary', '');
 

@@ -216,6 +216,7 @@ test('editor help reads the editor state and its focus hint respects verbosity a
 	assert.match(text.value, /Copy Path, Copy Relative Path, and Reveal in Explorer View/u);
 	assert.match(text.value, /Move into New Window[\s\S]*Copy into New Window[\s\S]*Command Palette/u);
 	assert.match(text.value, /Focus into Panel[\s\S]*Hide Panel[\s\S]*Restore Editor Area/u);
+	assert.match(text.value, /Maximize Secondary Side Bar[\s\S]*Hide Secondary Side Bar[\s\S]*conversation and draft/u);
 	fixture.browser.window.document.querySelector('dialog')!.close();
 	await Promise.resolve();
 	assert.equal(restored, 1);

@@ -30,6 +30,10 @@ class TestWorkbenchLayoutService extends BrowserLayoutService implements IWorkbe
 	isPartVisible(): boolean { return false; }
 	hasFocus(): boolean { return false; }
 	getVisibleNeighborPart(): undefined { return undefined; }
+	readonly onDidChangeAuxiliaryBarMaximized = Event.None;
+	isAuxiliaryBarMaximized(): boolean { return false; }
+	toggleMaximizedAuxiliaryBar(): void { }
+	setAuxiliaryBarMaximized(): boolean { return false; }
 	isPanelMaximized(): boolean { return false; }
 	toggleMaximizedPanel(): void { }
 	showPart(): void { }

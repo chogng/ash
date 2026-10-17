@@ -1,0 +1,24 @@
+.ash-workbench-auxiliarybar {
+	border: 0;
+	border-left: var(--ash-strokeThickness) solid var(--ash-border);
+	border-radius: 0;
+	background: var(--ash-auxiliaryBar-background);
+}
+
+.ash-workbench-auxiliarybar > .ash-auxiliarybar-content {
+	overflow: hidden;
+}
+
+.ash-workbench-auxiliarybar .ash-pane-composite-title-part-actions {
+	display: flex;
+	align-items: center;
+}
+
+.ash-workbench-auxiliarybar .ash-pane-composite-title-separator {
+	margin: 0 var(--ash-spacing-size60);
+	background: var(--ash-muted-foreground);
+}
+
+.ash-workbench-auxiliarybar .ash-pane-composite-title-separator[hidden] {
+	display: none;
+}

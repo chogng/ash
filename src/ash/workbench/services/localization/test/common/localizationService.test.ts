@@ -61,6 +61,7 @@ suite('Workbench localization', () => {
 			commandActionLabel(localize2({ bundle: 'ash.actions', key: 'focusPanel' }, 'Focus into Panel')),
 		], ['切换面板显示', '将焦点移入面板']);
 		assert.match(localize('accessibility.editorPanel', ''), /将焦点移入面板[\s\S]*恢复编辑器区域/u);
+		assert.match(localize('accessibility.editorAuxiliaryBar', ''), /最大化辅助侧栏[\s\S]*保留会话和草稿/u);
 	});
 
 	test('Code session layout errors and navigation help use the selected Chinese catalog', () => {
