@@ -32,6 +32,19 @@ pub struct CallResourceParams {
 }
 
 pub use call::CallControl;
+pub use call::CallDocument;
+pub use call::CallDocumentChange;
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CallDocumentParams {
+    pub resource_id: String,
+    pub operation_id: String,
+    #[ts(type = "number")]
+    pub revision: u64,
+    pub change: CallDocumentChange,
+}
+
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CallControlParams {

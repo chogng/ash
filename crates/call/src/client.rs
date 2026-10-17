@@ -1,3 +1,4 @@
+use crate::CallDocumentChange;
 use crate::CallError;
 use crate::CallMember;
 use crate::CallRole;
@@ -103,6 +104,18 @@ impl CallClient {
         role: CallRole,
     ) -> Result<CallSnapshot, CallError> {
         self.member_request("invite", json!({"operationId":operation, "revision":revision, "memberCredential":credential.expose(), "role":role}))
+    }
+
+    pub fn update_document(
+        &self,
+        operation: &str,
+        revision: u64,
+        change: &CallDocumentChange,
+    ) -> Result<CallSnapshot, CallError> {
+        self.member_request(
+            "documents",
+            json!({"operationId":operation, "revision":revision, "change":change}),
+        )
     }
 
     pub fn remove(

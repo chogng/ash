@@ -22,22 +22,23 @@ Loopback development endpoints may use `ws://` and `http://`. These addresses co
 
 Call requests use the existing origin policy and `Cache-Control: no-store`. Creation requires the deployment bearer; other operations require a call member credential. The caller generates and retains each 256-bit hexadecimal member credential before submitting it, so an interrupted request can be retried without issuing a second credential. Persisted credentials are hashed.
 
-| Method/path             | JSON request                                          |
-| ----------------------- | ----------------------------------------------------- |
-| `POST /v1/calls/create` | `operationId`, `ownerCredential`                      |
-| `GET /v1/calls/read`    | No body                                               |
-| `POST /v1/calls/invite` | `operationId`, `revision`, `memberCredential`, `role` |
-| `POST /v1/calls/role`   | `operationId`, `revision`, `memberId`, `role`         |
-| `POST /v1/calls/remove` | `operationId`, `revision`, `memberId`                 |
-| `POST /v1/calls/end`    | `operationId`, `revision`                             |
-| `POST /v1/calls/join`   | `deviceId`                                            |
-| `POST /v1/calls/device` | `operationId`, `revision`, `deviceId`                 |
+| Method/path                | JSON request                                                                                              |
+| -------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `POST /v1/calls/create`    | `operationId`, `ownerCredential`                                                                          |
+| `GET /v1/calls/read`       | No body                                                                                                   |
+| `POST /v1/calls/documents` | `operationId`, `revision`, `change` (`share` with `document`, or `unshare` with `serverUrl` and `roomId`) |
+| `POST /v1/calls/invite`    | `operationId`, `revision`, `memberCredential`, `role`                                                     |
+| `POST /v1/calls/role`      | `operationId`, `revision`, `memberId`, `role`                                                             |
+| `POST /v1/calls/remove`    | `operationId`, `revision`, `memberId`                                                                     |
+| `POST /v1/calls/end`       | `operationId`, `revision`                                                                                 |
+| `POST /v1/calls/join`      | `deviceId`                                                                                                |
+| `POST /v1/calls/device`    | `operationId`, `revision`, `deviceId`                                                                     |
 
 Mutations and reads return the current call snapshot. Join returns `call`, `member`, `microphone`, `participantId`, `serverUrl`, `participantToken` and `expiresAt` (Unix seconds). Only the member's selected device receives microphone permission; its first speaking-device join selects it atomically. The member can explicitly select another device, which replaces the media room. The member credential authorizes the call API; `participantToken` authorizes only the specified LiveKit room. Creation/invitation retries must reuse the same credential and operation ID; changing parameters under the same operation ID is a conflict. Roles are `owner`, `speaker`, `listener`, `agent`; invitation cannot create another owner, and role changes only switch human speakers/listeners.
 
 Errors contain `error.code` and `error.message`: `invalidInput` (400), `accessDenied` (403), `revisionConflict`/`mediaNotReady` (409), `storageFailure` (500), or `mediaUnavailable` (503). Missing bearer authentication returns 401 through the shared HTTP boundary.
 
-Permission changes replace the media room before new tickets are issued. Pending operations survive restart. The current call coordinator serializes operations within one host process; multi-host media-operation ownership is not implemented. Call notifications, local server process management and product UI are also not implemented. See the [full design and acceptance status](../docs/design/collaboration-media.md).
+Permission changes replace the media room before new tickets are issued. Pending operations survive restart. The current call coordinator serializes operations within one host process; multi-host media-operation ownership is not implemented. The App Server composes call notifications and local service process management, and the Workbench provides the call UI; this host provides their control APIs. Call snapshots now include owner-managed document references; document authorization remains independent. AI task execution remains unimplemented. See the [full design and acceptance status](../docs/design/collaboration-media.md).
 
 ## Running one host
 
@@ -78,6 +79,29 @@ return a canonical replay or current ephemeral selection set.
 Multiple processes can share one SQLite database. A local submission wakes
 same-host polls immediately; other hosts recheck persisted state every 250 ms,
 so ordered writes and presence do not wait for the 25-second long-poll timeout.
+
+## Linking documents to calls
+
+The Calls view lets the call owner link the active document after remote document
+collaboration has started. `POST /v1/calls/documents` updates the durable call
+snapshot and wakes the existing call watch. A document reference contains
+`serverUrl`, `roomId`, `schemaId`, `contentType`, and `title`; it contains neither
+credentials nor document contents. Service origins must use HTTPS, with HTTP
+allowed only for loopback development. References are metadata and never cause
+server-side requests to their target hosts.
+
+Opening a reference creates a separate untitled editor and asks for that document
+host's invitation token. Joining the call alone grants no document access.
+Unlinking removes the reference, while existing document connections and grants
+continue independently. Calls retain at most 32 document references.
+
+For Mac/Windows development, one machine can run this host and LiveKit while both
+clients run the full development app (`pnpm dev`). Tailscale can provide private
+connectivity; SSH is optional remote administration. Keep an existing Tailscale
+Serve configuration intact and use separate available HTTPS ports for this host
+and LiveKit signaling. LiveKit must advertise an address reachable through the
+tailnet, and its configured media UDP/TCP ports must also be reachable. A signaling
+proxy or SSH TCP tunnel by itself does not establish WebRTC media reachability.
 
 ## Current security boundary
 

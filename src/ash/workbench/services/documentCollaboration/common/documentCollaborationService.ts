@@ -10,6 +10,8 @@ export interface DocumentCollaborationOpenInput {
 	readonly schemaId: string;
 	readonly schema: DocumentSchema;
 	readonly document: DocumentNode;
+	/** An explicit document host selected from the call's shared references. */
+	readonly serverUrl?: string;
 }
 
 /** Role assigned to a member invited into a collaboration room. */
@@ -33,6 +35,8 @@ export interface DocumentCollaborationMember {
 
 /** A room connection with Workbench-owned membership operations. */
 export interface DocumentCollaborationRoom extends DocumentCollaborationConnection {
+	/** In-process rooms cannot be shared with clients on another host. */
+	readonly serverUrl?: string;
 	readonly principalId: string | undefined;
 	readonly canManageMembers: boolean;
 	createInvite(displayName: string, role: DocumentCollaborationRoomRole, signal: AbortSignal): Promise<DocumentCollaborationInvite>;

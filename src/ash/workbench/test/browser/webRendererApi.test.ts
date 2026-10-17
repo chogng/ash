@@ -1201,7 +1201,7 @@ test('Call service is assembled from the negotiated contract and ignores stale o
 		const params = transport.requests.at(-1)?.params as { resourceId: string; };
 		const status = {
 			resourceId: params.resourceId, sequence: 1, connection: 'connected' as const,
-			call: { id: 'call', revision: 1, mediaEpoch: 1, mediaRoom: 'room', mediaState: { state: 'ready' as const }, members: [{ id: 'owner', role: 'owner' as const }] },
+			call: { id: 'call', revision: 1, mediaEpoch: 1, mediaRoom: 'room', mediaState: { state: 'ready' as const }, members: [{ id: 'owner', role: 'owner' as const }], documents: [] },
 			memberId: 'owner', participants: [], muted: true, deafened: false, microphoneAllowed: true, screenSharing: false, error: null,
 		};
 		transport.respondAt(-1, status);

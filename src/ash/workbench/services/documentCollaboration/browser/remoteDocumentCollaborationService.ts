@@ -196,6 +196,7 @@ class RemoteDocumentCollaborationConnection extends Disposable implements Docume
 	readonly onDidReceivePresence = this.presenceEmitter.event;
 	readonly onDidFail = this.failureEmitter.event;
 	readonly roomId: string;
+	get serverUrl(): string { return this.target.endpoint.origin; }
 
 	constructor(private readonly service: RemoteDocumentCollaborationService, readonly target: RemoteTarget, readonly schema: DocumentCollaborationRoom["schema"], readonly clientId: string, readonly principalId: string | undefined, readonly initialSnapshot: DocumentCollaborationSnapshot, readonly canEdit: boolean, readonly canManageMembers: boolean) {
 		super();

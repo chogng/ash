@@ -1,8 +1,14 @@
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
-import { ICallService, type ScreenFrame, type ScreenSource } from '../../../../platform/call/common/callService.js';
+import { ICallService, type CallDocument, type ScreenFrame, type ScreenSource } from '../../../../platform/call/common/callService.js';
 import { Disposable, DisposableMap, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
+import { IEditorService } from '../../../services/editor/common/editorService.js';
+import { DocumentTypes, isDocumentCollaborationEditor } from '../../../services/documentEditor/common/documentTypes.js';
+import { URI } from '../../../../base/common/uri.js';
+import { generateUuid } from '../../../../base/common/uuid.js';
+import { localize } from '../../../../nls.js';
+import { isCancellationError } from '../../../../base/common/errors.js';
 
 export class CallViewPane extends ViewPane {
 	private readonly statusDomNode: HTMLDivElement;
@@ -17,11 +23,13 @@ export class CallViewPane extends ViewPane {
 	private readonly screensDomNode: HTMLDivElement;
 	private readonly screenStatusDomNode: HTMLDivElement;
 	private readonly screens = this._register(new DisposableMap<string, SharedScreen>());
+	private readonly documentsDomNode: HTMLUListElement;
+	private readonly documents = this._register(new DisposableMap<string, CallDocumentItem>());
 	private sources: readonly ScreenSource[] = [];
 	private readonly buttons = new Map<string, HTMLButtonElement>();
 	private working = false;
 
-	constructor(container: HTMLElement, options: IViewPaneOptions, @ICallService private readonly calls: ICallService, @IConfigurationService private readonly configuration: IConfigurationService) {
+	constructor(container: HTMLElement, options: IViewPaneOptions, @ICallService private readonly calls: ICallService, @IConfigurationService private readonly configuration: IConfigurationService, @IEditorService private readonly editors: IEditorService) {
 		super(container, options);
 		const document = container.ownerDocument;
 		this.contentElement.classList.add('ash-call');
@@ -56,6 +64,7 @@ export class CallViewPane extends ViewPane {
 		const actions = h(document, 'div');
 		actions.className = 'call-actions';
 		actions.append(
+			this.button(localize({ bundle: 'ash.workbench', key: 'call.document.link' }, 'Link current document'), 'link-document', () => this.linkCurrentDocument()),
 			this.button('Share screen', 'share', async () => {
 				this.sources = await this.calls.screenSources();
 				if (this.isDisposed || this.calls.state?.connection !== 'connected') { return; }
@@ -115,7 +124,9 @@ export class CallViewPane extends ViewPane {
 		this.invitationDomNode.setAttribute('aria-label', 'Invitation server address and key');
 		this.participantsDomNode = h(document, 'ul');
 		this.participantsDomNode.setAttribute('aria-label', 'People in this call');
-		this.contentElement.append(this.statusDomNode, this.formDomNode, actions, this.sourcePickerDomNode, this.screenStatusDomNode, this.screensDomNode, this.invitationDomNode, this.participantsDomNode);
+		this.documentsDomNode = h(document, 'ul');
+		this.documentsDomNode.setAttribute('aria-label', localize({ bundle: 'ash.workbench', key: 'call.document.list' }, 'Documents shared in this call'));
+		this.contentElement.append(this.statusDomNode, this.formDomNode, actions, this.documentsDomNode, this.sourcePickerDomNode, this.screenStatusDomNode, this.screensDomNode, this.invitationDomNode, this.participantsDomNode);
 		this._register(calls.onDidChange(() => this.render()));
 		this._register(calls.onDidChangeScreens(() => this.renderScreens()));
 		this.render();
@@ -178,7 +189,8 @@ export class CallViewPane extends ViewPane {
 		this.statusDomNode.textContent = state?.error ?? (state ? `${state.connection} · ${state.muted ? 'Microphone off' : 'Microphone on'}` : 'Start a call. Your microphone stays off until you unmute.');
 		for (const [id, button] of this.buttons) {
 			button.disabled = this.working || (id === 'start' ? active : !active);
-			if (id === 'invite' || id === 'end') { button.hidden = !state?.canManage; }
+			if (id === 'invite' || id === 'end' || id === 'link-document') { button.hidden = !state?.canManage; }
+			if (id === 'link-document') { button.disabled ||= state?.connection !== 'connected'; }
 			if (id === 'mute') {
 				button.textContent = state?.muted !== false ? 'Unmute microphone' : 'Mute microphone';
 				button.disabled ||= !state?.microphoneAllowed;
@@ -191,6 +203,7 @@ export class CallViewPane extends ViewPane {
 		}
 		if (!active || state?.connection !== 'connected' || !state.screenAllowed) { this.sourcePickerDomNode.hidden = true; }
 		this.renderScreens();
+		this.renderDocuments();
 		if (!active) { this.invitationDomNode.value = ''; this.invitationDomNode.hidden = true; }
 		const people = state?.participants ?? [];
 		const document = this.contentElement.ownerDocument;
@@ -199,6 +212,67 @@ export class CallViewPane extends ViewPane {
 			item.textContent = `Participant ${index + 1}${person.muted ? ' · microphone off' : ''}`;
 			return item;
 		}));
+	}
+
+	private async linkCurrentDocument(): Promise<void> {
+		const active = this.editors.activeEditor;
+		const pane = this.editors.visibleEditorPanes.find(pane => pane.workingCopy?.resource.toString() === active?.resource.toString());
+		const document = isDocumentCollaborationEditor(pane) ? pane.getCollaborationDocument() : undefined;
+		if (!document) {
+			throw new Error(localize({ bundle: 'ash.workbench', key: 'call.document.startFirst' }, 'Start remote collaboration in the active document editor before linking it to this call.'));
+		}
+		await this.calls.shareDocument({ ...document, title: active?.label || document.title });
+	}
+
+	private async openDocument(document: CallDocument): Promise<void> {
+		const resource = URI.from({ scheme: 'untitled', path: `/call-document/${generateUuid()}` });
+		if (!DocumentTypes.find({ resource, contentType: document.contentType })) {
+			throw new Error(localize({ bundle: 'ash.workbench', key: 'call.document.unavailable' }, 'Enable an editor for this document format before opening it.'));
+		}
+		await this.editors.openEditor({ resource, contentType: document.contentType, label: document.title });
+		if (this.isDisposed) return;
+		const pane = this.editors.visibleEditorPanes.find(pane => pane.workingCopy?.resource.toString() === resource.toString());
+		if (!isDocumentCollaborationEditor(pane)) {
+			throw new Error(localize({ bundle: 'ash.workbench', key: 'call.document.unavailable' }, 'Enable an editor for this document format before opening it.'));
+		}
+		await pane.joinCollaborationDocument(document);
+	}
+
+	private renderDocuments(): void {
+		const state = this.calls.state;
+		const active = state?.connection === 'connected';
+		const documents = state && !['ended', 'failed'].includes(state.connection) ? state.documents : [];
+		const keys = new Set(documents.map(document => JSON.stringify([document.serverUrl, document.roomId])));
+		for (const [key] of this.documents) {
+			if (!keys.has(key)) this.documents.deleteAndDispose(key);
+		}
+		for (const document of documents) {
+			const key = JSON.stringify([document.serverUrl, document.roomId]);
+			let item = this.documents.get(key);
+			if (!item) {
+				item = new CallDocumentItem(this.documentsDomNode, async (document, remove) => {
+					if (this.working) return;
+					this.working = true;
+					this.render();
+					let failure: string | undefined;
+					try {
+						if (remove) await this.calls.unshareDocument(document);
+						else await this.openDocument(document);
+					} catch (error) {
+						if (!isCancellationError(error)) failure = error instanceof Error ? error.message : localize({ bundle: 'ash.workbench', key: 'call.document.failed' }, 'Could not open the shared document.');
+					} finally {
+						this.working = false;
+						if (!this.isDisposed) {
+							this.render();
+							if (failure) this.statusDomNode.textContent = failure;
+							if (remove) this.buttons.get('link-document')?.focus();
+						}
+					}
+				});
+				this.documents.set(key, item);
+			}
+			item.update(document, !!state?.canManage, !active || this.working);
+		}
 	}
 
 	private renderScreens(): void {
@@ -216,6 +290,39 @@ export class CallViewPane extends ViewPane {
 		}
 		const status = this.calls.screenError ?? (this.calls.state?.screenSharing ? 'You are sharing your screen.' : frames.length ? `${frames.length} shared screen${frames.length === 1 ? '' : 's'}.` : '');
 		if (this.screenStatusDomNode.textContent !== status) { this.screenStatusDomNode.textContent = status; }
+	}
+}
+
+class CallDocumentItem extends Disposable {
+	private document: CallDocument | undefined;
+	private readonly label: HTMLSpanElement;
+	private readonly open: HTMLButtonElement;
+	private readonly remove: HTMLButtonElement;
+
+	constructor(container: HTMLElement, run: (document: CallDocument, remove: boolean) => Promise<void>) {
+		super();
+		const item = h(container.ownerDocument, 'li');
+		item.className = 'call-document';
+		this.label = h(container.ownerDocument, 'span');
+		this.open = h(container.ownerDocument, 'button');
+		this.remove = h(container.ownerDocument, 'button');
+		this.open.type = this.remove.type = 'button';
+		this.open.textContent = localize({ bundle: 'ash.workbench', key: 'call.document.open' }, 'Open document');
+		this.remove.textContent = localize({ bundle: 'ash.workbench', key: 'call.document.remove' }, 'Unlink document');
+		this._register(addDisposableListener(this.open, 'click', () => { if (this.document) void run(this.document, false); }));
+		this._register(addDisposableListener(this.remove, 'click', () => { if (this.document) void run(this.document, true); }));
+		item.append(this.label, this.open, this.remove);
+		container.append(item);
+		this._register(toDisposable(() => item.remove()));
+	}
+
+	update(document: CallDocument, canManage: boolean, disabled: boolean): void {
+		this.document = document;
+		this.label.textContent = document.title;
+		this.open.setAttribute('aria-label', localize({ bundle: 'ash.workbench', key: 'call.document.openNamed' }, 'Open {0}', document.title));
+		this.remove.setAttribute('aria-label', localize({ bundle: 'ash.workbench', key: 'call.document.removeNamed' }, 'Unlink {0}', document.title));
+		this.remove.hidden = !canManage;
+		this.open.disabled = this.remove.disabled = disabled;
 	}
 }
 

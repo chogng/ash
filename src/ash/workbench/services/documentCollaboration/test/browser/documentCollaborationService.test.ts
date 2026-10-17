@@ -57,3 +57,19 @@ function createOpenInput(): DocumentCollaborationOpenInput {
 		document: schema.createDocument([schema.createNode("paragraph", { id: "paragraph-1", content: [schema.createText("Hello", { id: "text-1" })] })], "document-1"),
 	};
 }
+
+test('a call document uses its selected host and still requires a separate document credential', async () => {
+	using dialogs = new DialogService();
+	const prompts: string[] = [];
+	using subscription = dialogs.model.onWillShowDialog(item => {
+		prompts.push(item.request.message);
+		item.close({ button: DialogResult.Primary, values: ['too-short'] });
+	});
+	using services = new InstantiationService();
+	services.registerInstance(IDialogService, dialogs);
+	using service = services.createInstance(DocumentCollaborationService, undefined);
+	await assert.rejects(service.open({ ...createOpenInput(), roomId: 'document-call', serverUrl: 'https://documents.example' }, new AbortController().signal), /bearer token must contain at least 32/);
+	assert.equal(prompts.length, 1);
+	assert.match(prompts[0]!, /https:\/\/documents\.example/);
+	assert.match(prompts[0]!, /does not grant access/);
+});

@@ -9,7 +9,7 @@ publish.workspace = true
 name = "call"
 
 [features]
-runtime = ["dep:serde", "dep:ash-http-client", "dep:url", "dep:tempfile", "dep:tokio"]
+runtime = ["dep:serde", "dep:ash-http-client", "dep:tempfile", "dep:tokio"]
 
 [dependencies]
 contract = { package = "ash-call-contract", path = "../call-contract" }
@@ -21,7 +21,7 @@ sha2 = { workspace = true }
 thiserror = { workspace = true }
 ash-secrets = { workspace = true }
 ash-http-client = { optional = true, workspace = true }
-url = { optional = true, workspace = true }
+url = { workspace = true }
 tempfile = { optional = true, workspace = true }
 tokio = { optional = true, workspace = true, features = ["rt-multi-thread", "macros", "sync", "time"] }
 

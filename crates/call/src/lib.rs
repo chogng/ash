@@ -9,6 +9,8 @@ mod runtime;
 mod store;
 pub use contract::CallConnection;
 pub use contract::CallControl;
+pub use contract::CallDocument;
+pub use contract::CallDocumentChange;
 pub use contract::CallParticipant;
 pub use contract::CallStatus;
 pub use contract::ScreenTarget;

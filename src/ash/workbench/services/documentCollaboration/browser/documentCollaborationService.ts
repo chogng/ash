@@ -20,21 +20,24 @@ export class DocumentCollaborationService extends Disposable implements IDocumen
 
 	async open(input: DocumentCollaborationOpenInput, signal: AbortSignal): Promise<DocumentCollaborationRoom> {
 		throwIfCancelled(signal, "Opening a document collaboration room was cancelled");
-		const endpointDialog = await this.dialogs.input({
-			title: localize('collaboration.dialog.endpointTitle', 'Collaboration server'),
-			message: localize('collaboration.dialog.endpointMessage', "Enter a remote collaboration server URL, or leave it blank to use this Workbench's App Server."),
-			inputs: [{ value: '' }],
-		});
-		if (!endpointDialog.confirmed) throw new CancellationError("Choosing a document collaboration service was cancelled");
-		const endpoint = endpointDialog.values?.[0];
-		assertDefined(endpoint, new Error('The collaboration endpoint dialog returned no value'));
+		let endpoint = input.serverUrl;
+		if (endpoint === undefined) {
+			const endpointDialog = await this.dialogs.input({
+				title: localize('collaboration.dialog.endpointTitle', 'Collaboration server'),
+				message: localize('collaboration.dialog.endpointMessage', "Enter a remote collaboration server URL, or leave it blank to use this Workbench's App Server."),
+				inputs: [{ value: '' }],
+			});
+			if (!endpointDialog.confirmed) throw new CancellationError("Choosing a document collaboration service was cancelled");
+			endpoint = endpointDialog.values?.[0];
+			assertDefined(endpoint, new Error('The collaboration endpoint dialog returned no value'));
+		}
 		if (!endpoint.trim()) {
 			if (!this.appServer) throw new Error("This Workbench has no App Server collaboration service");
 			return this.appServer.open(input, signal);
 		}
 		const tokenDialog = await this.dialogs.input({
 			title: localize('collaboration.dialog.tokenTitle', 'Collaboration token'),
-			message: localize('collaboration.dialog.tokenMessage', 'Enter the remote collaboration server bearer token.'),
+			message: localize('collaboration.dialog.tokenForServer', 'Enter a document invitation token for {0}. Joining a call does not grant access to this document.', endpoint),
 			inputs: [{ type: 'password', value: '' }],
 		});
 		if (!tokenDialog.confirmed) throw new CancellationError("Choosing a document collaboration service was cancelled");

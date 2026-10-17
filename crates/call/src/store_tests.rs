@@ -193,3 +193,157 @@ fn retries_do_not_duplicate_members_and_conflicting_operations_fail() {
         .unwrap();
     assert_ne!(stored, owner.expose());
 }
+
+fn shared_document() -> crate::CallDocument {
+    crate::CallDocument {
+        server_url: "https://documents.example".into(),
+        room_id: "document-example".into(),
+        schema_id: "stanza-academic-v1".into(),
+        content_type: "application/vnd.ash.academic-document+json".into(),
+        title: "Research notes".into(),
+    }
+}
+
+#[test]
+fn shared_documents_are_durable_owner_managed_references_without_media_rotation() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("calls.sqlite");
+    let store = CallStore::open(&path).unwrap();
+    let owner = MemberCredential::generate();
+    let guest = MemberCredential::generate();
+    let created = store.create(&owner, "create").unwrap();
+    let ready = store
+        .media_completed(&created.id, created.revision)
+        .unwrap();
+    let invited = store
+        .invite(&owner, "invite", ready.revision, &guest, CallRole::Listener)
+        .unwrap();
+    let share = crate::CallDocumentChange::Share {
+        document: shared_document(),
+    };
+    assert!(matches!(
+        store.update_document(&guest, "share", invited.revision, &share),
+        Err(CallError::Denied)
+    ));
+    let linked = store
+        .update_document(&owner, "share", invited.revision, &share)
+        .unwrap();
+    assert_eq!(linked.documents, vec![shared_document()]);
+    assert_eq!(linked.media_epoch, invited.media_epoch);
+    assert_eq!(linked.media_room, invited.media_room);
+    assert_eq!(linked.members, invited.members);
+    assert_eq!(
+        store
+            .update_document(&owner, "share", invited.revision, &share)
+            .unwrap(),
+        linked
+    );
+    let mut changed = shared_document();
+    changed.title = "Changed".into();
+    assert!(matches!(
+        store.update_document(
+            &owner,
+            "share",
+            invited.revision,
+            &crate::CallDocumentChange::Share { document: changed }
+        ),
+        Err(CallError::Conflict)
+    ));
+    assert!(matches!(
+        store.update_document(&owner, "stale", invited.revision, &share),
+        Err(CallError::Conflict)
+    ));
+    drop(store);
+    let reopened = CallStore::open(&path).unwrap();
+    assert_eq!(reopened.read(&guest).unwrap().documents, linked.documents);
+    let removed = reopened
+        .update_document(
+            &owner,
+            "unshare",
+            linked.revision,
+            &crate::CallDocumentChange::Unshare {
+                server_url: shared_document().server_url,
+                room_id: shared_document().room_id,
+            },
+        )
+        .unwrap();
+    assert!(removed.documents.is_empty());
+    let closing = reopened.end(&owner, "end", removed.revision).unwrap();
+    assert!(matches!(
+        reopened.update_document(&owner, "closed", closing.revision, &share),
+        Err(CallError::NotReady)
+    ));
+}
+
+#[test]
+fn document_references_reject_unsafe_origins_and_unbounded_metadata() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = CallStore::open(&directory.path().join("calls.sqlite")).unwrap();
+    let owner = MemberCredential::generate();
+    let created = store.create(&owner, "create").unwrap();
+    let ready = store
+        .media_completed(&created.id, created.revision)
+        .unwrap();
+    for endpoint in [
+        "http://documents.example",
+        "https://secret@documents.example",
+        "https://documents.example/?token=secret",
+        "file:///tmp/doc",
+        "https://documents.example/subpath",
+        "https://documents.example/",
+    ] {
+        let mut document = shared_document();
+        document.server_url = endpoint.into();
+        assert!(
+            matches!(
+                store.update_document(
+                    &owner,
+                    "invalid",
+                    ready.revision,
+                    &crate::CallDocumentChange::Share { document }
+                ),
+                Err(CallError::Invalid)
+            ),
+            "{endpoint}"
+        );
+    }
+    let mut document = shared_document();
+    document.title = "x".repeat(257);
+    assert!(matches!(
+        store.update_document(
+            &owner,
+            "invalid",
+            ready.revision,
+            &crate::CallDocumentChange::Share { document }
+        ),
+        Err(CallError::Invalid)
+    ));
+    assert!(store.read(&owner).unwrap().documents.is_empty());
+}
+
+#[test]
+fn existing_stored_calls_open_with_no_shared_documents() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("calls.sqlite");
+    let owner = MemberCredential::generate();
+    let store = CallStore::open(&path).unwrap();
+    let call = store.create(&owner, "create").unwrap();
+    let mut old = serde_json::to_value(&call).unwrap();
+    old.as_object_mut().unwrap().remove("documents");
+    Connection::open(&path)
+        .unwrap()
+        .execute(
+            "UPDATE media_calls SET snapshot=?1 WHERE id=?2",
+            (old.to_string(), &call.id),
+        )
+        .unwrap();
+    drop(store);
+    assert!(
+        CallStore::open(&path)
+            .unwrap()
+            .read(&owner)
+            .unwrap()
+            .documents
+            .is_empty()
+    );
+}

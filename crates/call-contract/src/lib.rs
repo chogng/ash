@@ -44,6 +44,29 @@ pub struct CallMember {
     pub role: CallRole,
 }
 
+/// A shared document reference. Its room independently authorizes document access.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CallDocument {
+    pub server_url: String,
+    pub room_id: String,
+    pub schema_id: String,
+    pub content_type: String,
+    pub title: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum CallDocumentChange {
+    Share { document: CallDocument },
+    Unshare { server_url: String, room_id: String },
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct CallSnapshot {
@@ -55,6 +78,9 @@ pub struct CallSnapshot {
     pub media_room: String,
     pub media_state: MediaState,
     pub members: Vec<CallMember>,
+    /// References contain no document contents or credentials. Older stored calls have none.
+    #[serde(default)]
+    pub documents: Vec<CallDocument>,
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize, TS)]

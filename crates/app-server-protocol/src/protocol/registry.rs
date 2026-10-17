@@ -373,6 +373,12 @@ use crate::protocol::call::CallControlParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::call::CallDeployment;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::call::CallDocument;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::call::CallDocumentChange;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::call::CallDocumentParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::call::CallEndParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::call::CallInvitation;
@@ -3592,6 +3598,11 @@ client_methods! {
         response: CallStatus,
         serialization: ConnectionExclusive("call"),
     },
+    CallDocument => "call/document" {
+        params: CallDocumentParams,
+        response: CallStatus,
+        serialization: ConnectionExclusive("call"),
+    },
     CallInvite => "call/invite" {
         params: CallInviteParams,
         response: CallInvitation,
@@ -6113,6 +6124,9 @@ typescript_bindings! {
     CallResourceParams,
     CallControlParams,
     CallInviteParams,
+    CallDocumentParams,
+    CallDocument,
+    CallDocumentChange,
     CallEndParams,
     CallInvitation,
     CallMemberParams,

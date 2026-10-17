@@ -26,6 +26,8 @@ import { DOCUMENT_EDITOR_ID } from "./documentEditorInput.js";
 import { h } from "../../../../base/browser/dom.js";
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import type { CallDocument } from '../../../../platform/call/common/callService.js';
+import { localize } from '../../../../nls.js';
 
 /** Workbench-only services that complement one document editor. */
 export interface EditorPaneOptions extends RichTextEditorOptions {
@@ -182,7 +184,30 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 		return this.requireEditor().getOutline();
 	}
 
-	private async startCollaboration(roomId: string | undefined): Promise<CollaborationStartResult> {
+	getCollaborationDocument(): CallDocument | undefined {
+		if (!this.room?.serverUrl || !this.roomRequest || this.roomRequest.signal.aborted) return undefined;
+		const resource = this.requireWorkingCopy().resource;
+		return {
+			serverUrl: this.room.serverUrl, roomId: this.room.roomId,
+			schemaId: this.options.collaborationSchemaId ?? 'stanza-document-v1',
+			contentType: this.options.contentType,
+			title: resource.path.split('/').pop() || localize('call.document.untitled', 'Untitled document'),
+		};
+	}
+
+	async joinCollaborationDocument(document: CallDocument): Promise<void> {
+		if (document.schemaId !== (this.options.collaborationSchemaId ?? 'stanza-document-v1') || document.contentType !== this.options.contentType) {
+			throw new Error(localize('call.document.incompatible', 'This editor cannot open the shared document format.'));
+		}
+		const reference = this.requireWorkingCopy();
+		if (reference.resource.scheme !== 'untitled' || reference.isDirty) {
+			throw new Error(localize('call.document.newCopyRequired', 'Open shared documents in a new untitled editor to preserve local changes.'));
+		}
+		const opened = await this.startCollaboration(document.roomId, document.serverUrl);
+		this.collaboration?.setState('connected', opened);
+	}
+
+	private async startCollaboration(roomId: string | undefined, serverUrl?: string): Promise<CollaborationStartResult> {
 		const service = this.collaborationService;
 		if (!service) throw new Error('Document collaboration is unavailable in this renderer');
 		const reference = this.requireWorkingCopy();
@@ -194,6 +219,7 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 		this.roomRequest = request;
 		const room = await service.open({
 			roomId,
+			...(serverUrl === undefined ? {} : { serverUrl }),
 			clientId: `stanza-${generateUuid()}`,
 			schemaId: this.options.collaborationSchemaId ?? 'stanza-document-v1',
 			schema: reference.model.schema,
@@ -202,6 +228,12 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 		if (request.signal.aborted || this.isDisposed || this.modelReference.value !== reference) {
 			room.dispose();
 			throw new CancellationError('Opening a document collaboration room was cancelled');
+		}
+		// A remote open can outlive the dialog. Preserve typing that arrived while it was pending.
+		if (serverUrl !== undefined && reference.isDirty) {
+			request.abort();
+			room.dispose();
+			throw new Error(localize('call.document.newCopyRequired', 'Open shared documents in a new untitled editor to preserve local changes.'));
 		}
 		try {
 			const controller = this.requireEditor().setCollaborationConnection(room);

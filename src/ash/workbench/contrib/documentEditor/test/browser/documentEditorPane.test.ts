@@ -1890,3 +1890,59 @@ function structuredText(text: string): string {
 	const schema = createDefaultDocumentSchema();
 	return text && !text.trimStart().startsWith('{') ? serializeDocument(documentFromPlainText(schema, text), schema) : text;
 }
+
+test('call document joins use a separate untitled working copy and preserve the remote room identity', async () => {
+	const environment = new JSDOM('<!doctype html><body></body>');
+	const document = { serverUrl: 'https://documents.example', roomId: 'document-shared', schemaId: 'stanza-document-v1', contentType: 'application/vnd.ash.document+json', title: 'Shared notes' };
+	let opens = 0;
+	let pendingOpen: Promise<void> | undefined;
+	let selectedServer: string | undefined;
+	using pane = new EditorPane(environment.window.document, new MemoryTextFiles('Local text'), {
+		createDocumentCollaborationService: () => ({
+			dispose() { }, [Symbol.dispose]() { },
+			async open(input) {
+				opens++;
+				selectedServer = input.serverUrl;
+				await pendingOpen;
+				const remote = input.schema.createDocument([input.schema.createNode('paragraph', { id: 'remote-paragraph', content: [input.schema.createText('Remote text', { id: 'remote-text' })] })], 'remote-document');
+				return {
+					serverUrl: input.serverUrl, roomId: document.roomId, clientId: input.clientId,
+					principalId: 'viewer', canEdit: false, canManageMembers: false,
+					schema: input.schema, initialSnapshot: { roomId: document.roomId, version: 0, document: remote }, currentPresence: [],
+					onDidReceiveUpdate: Event.None, onDidReceiveSnapshot: Event.None, onDidReceivePresence: Event.None, onDidFail: Event.None,
+					submit: async () => { throw new Error('A viewer must not submit'); }, updatePresence: async () => { },
+					createInvite: async () => { throw new Error('A viewer must not invite'); }, listMembers: async () => [],
+					rotateMemberAccessToken: async () => { throw new Error('A viewer must not rotate credentials'); }, revokeMember: async () => { },
+					dispose() { }, [Symbol.dispose]() { },
+				};
+			},
+		}),
+	});
+	try {
+		pane.create(environment.window.document.body);
+		await pane.setInput({ resource: URI.file('/important.ashdoc') }, new AbortController().signal);
+		const original = pane.getDocument();
+		await assert.rejects(pane.joinCollaborationDocument(document), /new untitled editor/);
+		assert.equal(opens, 0);
+		assert.equal(pane.getDocument(), original);
+		await pane.setInput({ resource: URI.parse('untitled:/shared-notes') }, new AbortController().signal);
+		await assert.rejects(pane.joinCollaborationDocument({ ...document, schemaId: 'different-schema' }), /format/);
+		assert.equal(opens, 0);
+		await pane.joinCollaborationDocument(document);
+		assert.equal(selectedServer, document.serverUrl);
+		assert.equal(pane.getDocument().content[0]?.content[0]?.text, 'Remote text');
+		assert.deepEqual(pane.getCollaborationDocument(), { ...document, title: 'shared-notes' });
+		await pane.setInput({ resource: URI.parse('untitled:/pending-shared-notes') }, new AbortController().signal);
+		let finishOpen!: () => void;
+		pendingOpen = new Promise<void>(resolve => { finishOpen = resolve; });
+		const joining = pane.joinCollaborationDocument(document);
+		const input = environment.window.document.querySelector<HTMLTextAreaElement>('textarea.stanza-document-text-input')!;
+		input.value = 'Keep typing while the room opens';
+		input.dispatchEvent(new environment.window.Event('input', { bubbles: true }));
+		finishOpen();
+		await assert.rejects(joining, /new untitled editor/);
+		assert.equal(pane.getDocument().content[0]?.content[0]?.text, 'Keep typing while the room opens');
+		pane.clearInput();
+		assert.equal(pane.getCollaborationDocument(), undefined);
+	} finally { pane.dispose(); environment.window.close(); }
+});

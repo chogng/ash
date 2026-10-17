@@ -208,3 +208,37 @@ test("Academic TextModel editor has the accessibility contract", async ({ page }
 	const contrast = await getAxeResults(page, undefined, { runOnly: { type: "rule", values: ["color-contrast"] } });
 	expect(contrast.violations).toEqual([]);
 });
+
+
+for (const [locale, link] of [['en', 'Link current document'], ['zh-CN', '关联当前文档']] as const) {
+	test(`call documents preserve dirty copies and support keyboard actions in ${locale}`, async ({ page }, testInfo) => {
+		await page.goto(`/academic.html?callDocuments&locale=${locale}`);
+		await page.waitForFunction(() => !!window.ashAcademicIntegration);
+		const toolbar = page.locator('#document-editor .stanza-document-collaboration-toolbar');
+		await toolbar.locator('[data-action-id="startCollaboration"] button').click();
+		const join = page.getByRole('dialog', { name: 'Collaborate', exact: true });
+		await join.getByRole('textbox').fill('editor-browser-room');
+		await join.getByRole('button', { name: locale === 'en' ? 'OK' : '确定', exact: true }).click();
+		await expect(toolbar.locator('.stanza-document-collaboration-status')).toContainText('editor-browser-room');
+		const original = page.locator('#document-editor textarea.stanza-document-text-input').first();
+		await original.fill('Unsaved local research');
+		const calls = page.locator('#call-view');
+		await calls.getByRole('button', { name: link, exact: true }).focus();
+		await page.keyboard.press('Enter');
+		await expect(calls.locator('.call-document')).toHaveCount(1);
+		const opener = calls.getByRole('button', { name: 'Open Paper', exact: true }).or(calls.getByRole('button', { name: '打开 Paper', exact: true }));
+		await opener.focus();
+		await page.keyboard.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getCallDocumentState().joinedResource)).toBe('untitled');
+		await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getCallDocumentState().joinedTexts[0])).toBe('Unsaved local research');
+		await expect(original).toHaveValue('Unsaved local research');
+		expect(await page.evaluate(() => window.ashAcademicIntegration.getCallDocumentState().originalDirty)).toBe(true);
+		await page.screenshot({ path: testInfo.outputPath('call-documents.png'), fullPage: true });
+		const remove = calls.getByRole('button', { name: 'Unlink Paper', exact: true }).or(calls.getByRole('button', { name: '取消关联 Paper', exact: true }));
+		await remove.focus();
+		await page.keyboard.press('Enter');
+		await expect(calls.locator('.call-document')).toHaveCount(0);
+		await expect(calls.getByRole('button', { name: link, exact: true })).toBeFocused();
+		await expect(page.locator('#call-document-editor textarea.stanza-document-text-input').first()).toHaveValue('Unsaved local research');
+	});
+}

@@ -2,6 +2,19 @@ import type { URI } from '../../../../base/common/uri.js';
 import { toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { ITextModelResourceService, TextModelBlockInput, TextModelWorkingCopyReference } from '../../textmodelResolver/common/textModelResourceService.js';
+import type { IEditorPane } from '../../../common/editor.js';
+import type { CallDocument } from '../../../../platform/call/common/callService.js';
+
+/** Public document-pane operations used by the Calls contribution. Models remain editor-owned. */
+export interface IDocumentCollaborationEditor extends IEditorPane {
+	getCollaborationDocument(): CallDocument | undefined;
+	joinCollaborationDocument(document: CallDocument): Promise<void>;
+}
+
+export function isDocumentCollaborationEditor(pane: IEditorPane | undefined): pane is IDocumentCollaborationEditor {
+	const candidate = pane as Partial<IDocumentCollaborationEditor> | undefined;
+	return typeof candidate?.getCollaborationDocument === 'function' && typeof candidate.joinCollaborationDocument === 'function';
+}
 
 export interface DocumentType {
 	readonly id: string;

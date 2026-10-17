@@ -231,3 +231,136 @@ fn startup_keeps_pending_rooms_unjoinable_until_media_recovers() {
     );
     drop(recovery);
 }
+
+#[test]
+fn document_links_notify_call_members_without_granting_document_access() {
+    let media = MediaServer::start();
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("rooms.sqlite3");
+    let calls = CallRuntime::open(&path, media.service.clone()).unwrap();
+    let owner = MemberCredential::generate();
+    let guest = MemberCredential::generate();
+    let call = calls.store.create(&owner, "create").unwrap();
+    let call = calls.reconcile(call).ok().unwrap();
+    let call = calls
+        .store
+        .invite(&owner, "invite", call.revision, &guest, CallRole::Listener)
+        .unwrap();
+    let options = crate::CollaborationServerOptions::new(
+        "127.0.0.1:0".parse().unwrap(),
+        path.clone(),
+        "0123456789abcdef0123456789abcdef",
+    );
+    let mut host = HttpRuntime::new(
+        SqliteDocumentCollaborationRooms::open_at(&path).unwrap(),
+        options,
+    );
+    host.calls = Some(calls);
+    let host = Arc::new(host);
+    let document_owner = ash_collab::DocumentCollaborationPrincipal {
+        id: "document-owner".into(),
+        display_name: "Owner".into(),
+    };
+    let room = host.rooms.open_as(&document_owner, ash_collab::DocumentCollaborationOpenParams {
+        room_id: None, client_id: "owner-client".into(), schema_id: "stanza-document-v1".into(),
+        document: r#"{"format":"ash.document","version":1,"document":{"id":"document","type":"doc","attrs":{},"marks":[],"content":[]}}"#.into(),
+    }).unwrap();
+    let invitation = host
+        .rooms
+        .create_invite(
+            &room.snapshot.room_id,
+            &document_owner,
+            "Document viewer",
+            ash_collab::DocumentCollaborationRoomRole::Viewer,
+        )
+        .unwrap();
+    let document = json!({"serverUrl":"https://documents.example","roomId":room.snapshot.room_id,"schemaId":"stanza-document-v1","contentType":"application/test-document","title":"Shared notes"});
+    let body = json!({"operationId":"share","revision":call.revision,"change":{"type":"share","document":document}});
+    let media_requests = media.requests.lock().unwrap().len();
+    let generation = host.updates.current();
+    let denied = http_call(&host, "POST", "/v1/calls/documents", guest.expose(), &body);
+    assert_eq!(denied.0, 403);
+    let accepted = http_call(&host, "POST", "/v1/calls/documents", owner.expose(), &body);
+    assert_eq!(accepted.0, 200);
+    assert_eq!(accepted.1["documents"], json!([document]));
+    assert!(host.updates.current() > generation);
+    assert_eq!(media.requests.lock().unwrap().len(), media_requests);
+    let watched = http_call(
+        &host,
+        "GET",
+        &format!("/v1/calls/watch?afterRevision={}", call.revision),
+        guest.expose(),
+        &Value::Null,
+    );
+    assert_eq!(watched.0, 200);
+    assert_eq!(watched.1["documents"], accepted.1["documents"]);
+    let doc_open = json!({"roomId":room.snapshot.room_id,"clientId":"guest","schemaId":"stanza-document-v1","document":"{}"});
+    assert_eq!(
+        http_call(
+            &host,
+            "POST",
+            "/v1/document-collaboration/rooms/open",
+            guest.expose(),
+            &doc_open
+        )
+        .0,
+        401
+    );
+    assert_eq!(
+        http_call(
+            &host,
+            "POST",
+            "/v1/document-collaboration/rooms/open",
+            &invitation.access_token,
+            &doc_open
+        )
+        .0,
+        200
+    );
+    let mut invalid = body.clone();
+    invalid["change"]["document"]["accessToken"] = json!("a-secret-must-not-enter-call-snapshots");
+    assert_eq!(
+        http_call(
+            &host,
+            "POST",
+            "/v1/calls/documents",
+            owner.expose(),
+            &invalid
+        )
+        .0,
+        400
+    );
+}
+
+fn http_call(
+    host: &Arc<HttpRuntime>,
+    method: &str,
+    path: &str,
+    token: &str,
+    body: &Value,
+) -> (u16, Value) {
+    use std::io::Read;
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let host = host.clone();
+    let worker = thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        super::super::handle_connection(stream, &host).unwrap();
+    });
+    let mut stream = TcpStream::connect(address).unwrap();
+    stream
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .unwrap();
+    let body = if body.is_null() {
+        String::new()
+    } else {
+        body.to_string()
+    };
+    write!(stream, "{method} {path} HTTP/1.1\r\nHost: {address}\r\nAuthorization: Bearer {token}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
+    let mut response = String::new();
+    stream.read_to_string(&mut response).unwrap();
+    worker.join().unwrap();
+    let (headers, body) = response.split_once("\r\n\r\n").unwrap();
+    let status = headers.split_whitespace().nth(1).unwrap().parse().unwrap();
+    (status, serde_json::from_str(body).unwrap_or(Value::Null))
+}

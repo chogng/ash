@@ -3081,6 +3081,7 @@ impl AppServer {
                 | ClientMethod::CallControl
                 | ClientMethod::CallLeave
                 | ClientMethod::CallEnd
+                | ClientMethod::CallDocument
                 | ClientMethod::CallInvite
                 | ClientMethod::CallRemove
                 | ClientMethod::CallRole),

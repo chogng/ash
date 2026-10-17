@@ -3,6 +3,7 @@ use super::RpcError;
 use super::decode;
 use super::result;
 use ash_app_server_protocol::protocol::call::CallControlParams;
+use ash_app_server_protocol::protocol::call::CallDocumentParams;
 use ash_app_server_protocol::protocol::call::CallEndParams;
 use ash_app_server_protocol::protocol::call::CallInvitation;
 use ash_app_server_protocol::protocol::call::CallInviteParams;
@@ -216,6 +217,29 @@ impl<'a> CallRequestProcessor<'a> {
                 } else {
                     result(&snapshot)
                 }
+            }
+            ClientMethod::CallDocument => {
+                let params: CallDocumentParams = decode(params)?;
+                let (client, mut status) = {
+                    let sessions = self
+                        .calls
+                        .sessions
+                        .lock()
+                        .map_err(|_| failure("Call state unavailable".into()))?;
+                    let session = sessions
+                        .get(&(owner, params.resource_id.clone()))
+                        .ok_or_else(|| failure("Call not found".into()))?;
+                    let status = session
+                        .state
+                        .lock()
+                        .map_err(|_| failure("Call state unavailable".into()))?
+                        .clone();
+                    (session.client.clone(), status)
+                };
+                status.call = client
+                    .update_document(&params.operation_id, params.revision, &params.change)
+                    .map_err(|error| failure(error.to_string()))?;
+                result(&status)
             }
             ClientMethod::CallInvite => {
                 let params: CallInviteParams = decode(params)?;

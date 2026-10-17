@@ -71,3 +71,15 @@
 	white-space: nowrap;
 	text-overflow: ellipsis;
 }
+
+.ash-call .call-document {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 8px;
+}
+.ash-call .call-document span {
+	flex: 1;
+	min-width: 0;
+}

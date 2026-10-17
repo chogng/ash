@@ -1,3 +1,4 @@
+use crate::CallDocumentChange;
 use crate::CallError;
 use crate::CallMember;
 use crate::CallRole;
@@ -69,6 +70,7 @@ impl CallStore {
             media_room: crate::identifier(),
             media_state: MediaState::Preparing,
             members: vec![member.clone()],
+            documents: Vec::new(),
         };
         save(&tx, &call)?;
         tx.execute(
@@ -127,6 +129,66 @@ impl CallStore {
             )
             .map_err(storage)?;
             call.members.push(member);
+            Ok(())
+        })
+    }
+
+    /// Changes only the room's shared-resource list; document access remains independent.
+    pub fn update_document(
+        &self,
+        credential: &MemberCredential,
+        operation: &str,
+        revision: u64,
+        change: &CallDocumentChange,
+    ) -> Result<CallSnapshot, CallError> {
+        let (server_url, room_id) = match change {
+            CallDocumentChange::Share { document } => {
+                for (value, maximum) in [
+                    (document.title.as_str(), 256),
+                    (document.schema_id.as_str(), 128),
+                    (document.content_type.as_str(), 256),
+                ] {
+                    if value.trim().is_empty()
+                        || value.len() > maximum
+                        || value.chars().any(char::is_control)
+                    {
+                        return Err(CallError::Invalid);
+                    }
+                }
+                (&document.server_url, &document.room_id)
+            }
+            CallDocumentChange::Unshare {
+                server_url,
+                room_id,
+            } => (server_url, room_id),
+        };
+        crate::validate_id(room_id)?;
+        validate_document_server(server_url)?;
+        let request = json!(["document", revision, change]).to_string();
+        self.modify(credential, operation, revision, &request, |_, call, _| {
+            if call.media_state != MediaState::Ready {
+                return Err(CallError::NotReady);
+            }
+            let index = call.documents.iter().position(|document| {
+                document.server_url == *server_url && document.room_id == *room_id
+            });
+            match change {
+                CallDocumentChange::Share { document } => {
+                    if let Some(index) = index {
+                        call.documents[index] = document.clone();
+                    } else {
+                        if call.documents.len() >= 32 {
+                            return Err(CallError::Conflict);
+                        }
+                        call.documents.push(document.clone());
+                    }
+                }
+                CallDocumentChange::Unshare { .. } => {
+                    if let Some(index) = index {
+                        call.documents.remove(index);
+                    }
+                }
+            }
             Ok(())
         })
     }
@@ -403,6 +465,32 @@ impl CallStore {
         tx.commit().map_err(storage)?;
         Ok(call)
     }
+}
+
+fn validate_document_server(value: &str) -> Result<(), CallError> {
+    if value.len() > 2048 {
+        return Err(CallError::Invalid);
+    }
+    let parsed = url::Url::parse(value).map_err(|_| CallError::Invalid)?;
+    let loopback = match parsed.host() {
+        Some(url::Host::Domain("localhost")) => true,
+        Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
+        Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
+        _ => false,
+    };
+    if parsed.host().is_none()
+        || !matches!(parsed.scheme(), "http" | "https")
+        || (parsed.scheme() == "http" && !loopback)
+        || !parsed.username().is_empty()
+        || parsed.password().is_some()
+        || parsed.query().is_some()
+        || parsed.fragment().is_some()
+        || parsed.path() != "/"
+        || parsed.origin().ascii_serialization() != value
+    {
+        return Err(CallError::Invalid);
+    }
+    Ok(())
 }
 
 fn identity(connection: &Connection, actor: &str) -> Result<(String, String), CallError> {

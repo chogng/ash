@@ -4,7 +4,7 @@ import { Disposable } from '../../../base/common/lifecycle.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { APP_SERVER_METHODS, type CallStatus, type CallControl } from '../../../../../.build/protocol/typescript/index.js';
-import type { CallDeployment, CallInvitation, CallState, ICallService, ScreenFrame, ScreenSource, ScreenTarget } from '../common/callService.js';
+import type { CallDeployment, CallDocument, CallInvitation, CallState, ICallService, ScreenFrame, ScreenSource, ScreenTarget } from '../common/callService.js';
 
 export class AppServerCallService extends Disposable implements ICallService {
 	private readonly changed = this._register(new Emitter<void>());
@@ -64,6 +64,18 @@ export class AppServerCallService extends Disposable implements ICallService {
 	public async invite(): Promise<CallInvitation> {
 		return this.client.request(APP_SERVER_METHODS['call/invite'], { resourceId: this.requireResource(), operationId: generateUuid(), revision: this.revision, role: 'speaker' });
 	}
+	public async shareDocument(document: CallDocument): Promise<void> {
+		this.accept(await this.client.request(APP_SERVER_METHODS['call/document'], {
+			resourceId: this.requireResource(), operationId: generateUuid(), revision: this.revision,
+			change: { type: 'share', document: { ...document } },
+		}));
+	}
+	public async unshareDocument(document: CallDocument): Promise<void> {
+		this.accept(await this.client.request(APP_SERVER_METHODS['call/document'], {
+			resourceId: this.requireResource(), operationId: generateUuid(), revision: this.revision,
+			change: { type: 'unshare', serverUrl: document.serverUrl, roomId: document.roomId },
+		}));
+	}
 	public async leave(): Promise<void> {
 		this.accept(await this.client.request(APP_SERVER_METHODS['call/leave'], { resourceId: this.requireResource() }));
 	}
@@ -89,6 +101,10 @@ export class AppServerCallService extends Disposable implements ICallService {
 			microphoneAllowed: status.microphoneAllowed, canManage: role === 'owner',
 			screenSharing: status.screenSharing, screenAllowed: role === 'owner' || role === 'speaker',
 			participants: status.participants.map(({ id, muted }) => ({ id, muted })), error: status.error,
+			documents: status.call.documents.map(document => ({
+				serverUrl: document.serverUrl, roomId: document.roomId, schemaId: document.schemaId,
+				contentType: document.contentType, title: document.title,
+			})),
 		};
 		this.changed.fire();
 		if (status.connection === 'connected' && !this.readingScreens && !this.screenPoll.isScheduled()) { this.screenPoll.schedule(); }

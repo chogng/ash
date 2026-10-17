@@ -18,7 +18,7 @@ Ash 的多人通话、屏幕共享和 GPT Voice 统一使用 LiveKit 房间。GP
 | 自建服务接入                              | HTTP 宿主接受部署者的 LiveKit 地址和密钥                                                                                                                |
 | 设备发言权                                | 同一成员只向选中设备签发麦克风权限；切换设备更换房间，双 SQLite 宿主竞争测试通过                                                                        |
 | 成员通知                                  | HTTP 按修订号等待，App Server 向所属窗口发送 `call/changed`                                                                                             |
-| 文档房间关联                              | 尚未实现                                                                                                                                                |
+| 文档房间关联                              | 已接入通话快照中的文档引用、所有者关联/移除、独立凭证和新未命名工作副本打开；项目共享仍待实现                                                           |
 | App Server 与 UI                          | 通话资源归连接所有；面板提供创建、加入、静音、收听、邀请和离开                                                                                          |
 | Core 任务执行                             | AI 委托尚未接入生产任务链                                                                                                                               |
 | 本地媒体服务与产品打包                    | 固定版本服务器与助手随包分发；本地通话持有服务进程，最后一个通话释放时回收                                                                              |
@@ -64,7 +64,7 @@ LiveKit 的 SFU（选择性转发服务器）负责将参与者发布的音视�
 | [model-provider](../../model-provider/README.md) | 模型选择、凭据和模型会话装配             | 增加 GPT-Live 会话能力                                                                       |
 | App Server 与 Core                               | 产品请求装配、Thread、Turn 和工具执行    | 接收 AI 语音委托，复用权限和任务状态                                                         |
 
-当前 `collaboration` 的 room 是文档房间，并不代表一组人的完整协作会话。原 `realtime-webrtc` 不是 LiveKit 客户端；删除前已核对没有其他生产 crate 依赖它。
+当前 `collab` 的 room 是文档房间，并不代表一组人的完整协作会话。原 `realtime-webrtc` 不是 LiveKit 客户端；删除前已核对没有其他生产 crate 依赖它。
 
 现有 Realtime 模型会话与 GPT-Live 是不同 API 契约。实现时新增对应协议能力，不能只替换模型名称并沿用旧事件含义。
 
@@ -72,15 +72,15 @@ LiveKit 的 SFU（选择性转发服务器）负责将参与者发布的音视�
 
 共 **7 个直接相关 crate：新增 4 个，保留并调整 3 个**。已有 App Server、Core、模型与凭据 crate 继续复用，不计入新增能力的拆分数量。
 
-| Crate                  | 状态 | 唯一职责                                             | 主要依赖边界                         |
-| ---------------------- | ---- | ---------------------------------------------------- | ------------------------------------ |
-| `call`                 | 新增 | 协作通话身份、成员权限、房间生命周期、客户端通话协调 | 不引入 UI、WebRTC 或设备驱动         |
-| `livekit-client`       | 新增 | LiveKit 信令、WebRTC 连接、轨道、媒体帧、连接状态    | 隔离媒体协议与编解码依赖             |
-| `livekit-api`          | 新增 | 房间管理、票据签发、参与者权限、服务事件校验         | 复用官方服务端 SDK；不引入媒体客户端 |
-| `voice-agent`          | 新增 | AI 参与者、多人输入、模型会话、语音与开发任务衔接    | 依赖媒体客户端和模型能力；不打开设备 |
-| `voice-host`           | 保留 | 本机采集、播放、设备切换、回声与降噪                 | 隔离 CPAL、重采样与音频处理依赖      |
-| `collaboration`        | 保留 | 文档操作、版本、回放、presence 与文档权限            | 不承担通话媒体与模型调用             |
-| `collaboration-server` | 扩展 | 用户自建协作服务入口，装配文档和通话领域             | 不承担客户端设备或开发工具执行       |
+| Crate            | 状态 | 唯一职责                                             | 主要依赖边界                         |
+| ---------------- | ---- | ---------------------------------------------------- | ------------------------------------ |
+| `call`           | 新增 | 协作通话身份、成员权限、房间生命周期、客户端通话协调 | 不引入 UI、WebRTC 或设备驱动         |
+| `livekit-client` | 新增 | LiveKit 信令、WebRTC 连接、轨道、媒体帧、连接状态    | 隔离媒体协议与编解码依赖             |
+| `livekit-api`    | 新增 | 房间管理、票据签发、参与者权限、服务事件校验         | 复用官方服务端 SDK；不引入媒体客户端 |
+| `voice-agent`    | 新增 | AI 参与者、多人输入、模型会话、语音与开发任务衔接    | 依赖媒体客户端和模型能力；不打开设备 |
+| `voice-host`     | 保留 | 本机采集、播放、设备切换、回声与降噪                 | 隔离 CPAL、重采样与音频处理依赖      |
+| `collab`         | 保留 | 文档操作、版本、回放、presence 与文档权限            | 不承担通话媒体与模型调用             |
+| `collab-server`  | 扩展 | 用户自建协作服务入口，装配文档和通话领域             | 不承担客户端设备或开发工具执行       |
 
 ### 装配与依赖约束
 
@@ -99,7 +99,7 @@ LiveKit 的 SFU（选择性转发服务器）负责将参与者发布的音视�
 flowchart LR
     UI[通话与协作界面] --> Local[用户机器的 App Server]
     Local --> Call[call 通话协调]
-    Call --> Authority[collaboration-server / call 权限]
+    Call --> Authority[collab-server / call 权限]
     Authority --> API[livekit-api]
     API --> SFU[LiveKit Server]
     Device[麦克风与扬声器] <--> Host[voice-host]
@@ -111,7 +111,7 @@ flowchart LR
     SFU <-->|AI 音频轨道| Agent[voice-agent / livekit-client]
     Agent <-->|模型音频与事件| Provider[model-provider / GPT-Live]
     Agent <-->|任务委托与结果| Execution[执行主机 App Server / Core]
-    Authority --> Doc[collaboration 文档房间]
+    Authority --> Doc[collab 文档房间]
 ```
 
 - 用户端只向房间发布一份麦克风轨道；AI 输出也作为一条房间轨道供其他成员订阅。
@@ -123,15 +123,15 @@ flowchart LR
 
 ### 身份与状态
 
-| 身份                          | 含义与负责人                                      |
-| ----------------------------- | ------------------------------------------------- |
-| `callId`                      | 一次可跨文档协作的通话，由 `call` 管理            |
-| `documentRoomId`              | 一个文档的同步与授权范围，由 `collaboration` 管理 |
-| `mediaEpoch` / LiveKit room   | 当前媒体房间代次，由通话权限服务分配              |
-| `memberId`                    | 已认证的人类或 AI 成员身份                        |
-| `participantId`               | 某成员的一次设备连接；映射由服务端建立            |
-| `agentId` / `executionHostId` | AI 实例与明确选定的执行主机                       |
-| `threadId` / `turnId`         | Core 中的开发任务及其运行轮次                     |
+| 身份                          | 含义与负责人                               |
+| ----------------------------- | ------------------------------------------ |
+| `callId`                      | 一次可跨文档协作的通话，由 `call` 管理     |
+| `documentRoomId`              | 一个文档的同步与授权范围，由 `collab` 管理 |
+| `mediaEpoch` / LiveKit room   | 当前媒体房间代次，由通话权限服务分配       |
+| `memberId`                    | 已认证的人类或 AI 成员身份                 |
+| `participantId`               | 某成员的一次设备连接；映射由服务端建立     |
+| `agentId` / `executionHostId` | AI 实例与明确选定的执行主机                |
+| `threadId` / `turnId`         | Core 中的开发任务及其运行轮次              |
 
 - 一个通话可以关联多个文档；加入通话不会自动取得这些文档的编辑权限。
 - 一个成员可有多个设备连接；默认只允许一个连接发布麦克风，切换时撤销旧连接的发布权。
@@ -269,7 +269,7 @@ GPT-Live 当前支持文本和音频，不支持图像或视频输入。人类�
 以下顺序用于交付同一个最终架构，不形成两套长期运行路径。
 
 1. **确定媒体与构建依赖。** 固定 LiveKit 信令、`webrtc-rs` 和服务端版本，验证三平台构建、媒体帧 API 及打包依赖。
-2. **实现通话与服务端能力。** 新建 `call`、`livekit-api`，扩展 `collaboration-server` 的成员、入房与媒体代次管理。
+2. **实现通话与服务端能力。** 新建 `call`、`livekit-api`，扩展 `collab-server` 的成员、入房与媒体代次管理。
 3. **实现媒体客户端。** 新建 `livekit-client`，接通 `voice-host`、多人轨道、屏幕共享和真实服务测试。
 4. **实现 AI 参与者。** 新建 `voice-agent`，补 GPT-Live 协议与模型能力，接入明确归属的开发任务链。
 5. **接入产品。** 完成生成协议、通话 UI、本地服务管理、自建服务器配置与安装包资源。

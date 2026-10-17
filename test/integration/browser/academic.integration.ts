@@ -58,7 +58,17 @@ import { DocumentTypes } from '../../../src/ash/workbench/services/documentEdito
 import { toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import '../../../src/ash/workbench/contrib/academic/browser/academicEditor.contribution.js';
 
+import { CallViewPane } from '../../../src/ash/workbench/contrib/call/browser/callViewPane.js';
+import '../../../src/ash/workbench/contrib/call/browser/media/call.css';
+import type { ICallService, CallDocument, CallState } from '../../../src/ash/platform/call/common/callService.js';
+import type { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
+import type { IEditorPane, IResourceEditorInput } from '../../../src/ash/workbench/common/editor.js';
+import { emptyEditorServiceState } from '../../../src/ash/workbench/test/common/testEditorService.js';
+import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
+import { InMemoryConfigurationService } from '../../../src/ash/platform/configuration/common/inMemoryConfigurationService.js';
+
 interface AcademicIntegrationHarness {
+	getCallDocumentState(): { documents: readonly CallDocument[]; originalDirty: boolean; joinedResource: string | undefined; joinedTexts: readonly string[]; };
 	readonly apiDocumentType: string;
 	getBundleIds(): readonly string[];
 	getCodeBlockText(): string | undefined;
@@ -81,9 +91,14 @@ declare global {
 	}
 }
 
+const collaborationDocuments = new Map<string, DocumentNode>();
+
 class BrowserDocumentCollaborationService extends Disposable implements IDocumentCollaborationService {
 	async open(input: DocumentCollaborationOpenInput, _signal: AbortSignal): Promise<DocumentCollaborationRoom> {
-		return new BrowserDocumentCollaborationConnection(input.schema, input.clientId, input.document, input.roomId ?? "editor-browser-room", true);
+		const roomId = input.roomId ?? 'editor-browser-room';
+		const document = collaborationDocuments.get(roomId) ?? input.document;
+		collaborationDocuments.set(roomId, document);
+		return new BrowserDocumentCollaborationConnection(input.schema, input.clientId, document, roomId, true);
 	}
 }
 
@@ -96,6 +111,7 @@ class BrowserDocumentCollaborationConnection extends Disposable implements Docum
 
 	readonly initialSnapshot;
 	readonly canEdit = true;
+	readonly serverUrl = 'https://documents.example';
 	readonly principalId: string | undefined;
 	readonly onDidReceiveUpdate: Event<DocumentCollaborationRemoteEnvelope> = this.updates.event;
 	readonly onDidReceiveSnapshot: Event<DocumentCollaborationSnapshot> = this.snapshots.event;
@@ -111,6 +127,7 @@ class BrowserDocumentCollaborationConnection extends Disposable implements Docum
 
 	async submit(envelope: DocumentCollaborationEnvelope, _document: DocumentNode, _signal: AbortSignal): Promise<DocumentCollaborationSubmitOutcome> {
 		this.version += 1;
+		collaborationDocuments.set(this.roomId, _document);
 		return {
 			kind: "accepted",
 			update: {
@@ -210,7 +227,53 @@ structuredPane.layout({ width: 900, height: 300 });
 await codeBlockPane.setInput({ resource: codeBlockResource, label: "snippet.ts" }, new AbortController().signal);
 await structuredPane.setInput({ resource: structuredResource, label: "paper" }, new AbortController().signal);
 
+let callDocuments: readonly CallDocument[] = [];
+let joinedDocumentPane: DocumentEditorPane | undefined;
+if (new URLSearchParams(location.search).has('callDocuments')) {
+	services.registerInstance(IConfigurationService, disposables.add(new InMemoryConfigurationService()));
+	const changes = disposables.add(new Emitter<void>());
+	const activeState = (): CallState => ({ connection: 'connected', muted: true, deafened: false, microphoneAllowed: true, canManage: true, screenSharing: false, screenAllowed: true, participants: [], documents: callDocuments, error: null });
+	const calls: ICallService = {
+		onDidChange: changes.event, onDidChangeScreens: Event.None, screens: [], screenError: undefined,
+		get state() { return activeState(); },
+		start: async () => { }, mute: async () => { }, deafen: async () => { }, selectDevice: async () => { },
+		screenSources: async () => [], shareScreen: async () => { }, stopScreenShare: async () => { },
+		invite: async () => ({ url: '', credential: '' }), leave: async () => { }, end: async () => { },
+		shareDocument: async document => { callDocuments = [document]; changes.fire(); },
+		unshareDocument: async () => { callDocuments = []; changes.fire(); },
+	};
+	let activeInput: IResourceEditorInput = { resource: structuredResource, label: 'Paper' };
+	const panes: IEditorPane[] = [structuredPane];
+	const editors: IEditorService = {
+		...emptyEditorServiceState,
+		get activeEditor() { return activeInput; },
+		get visibleEditorPanes() { return panes; },
+		openEditor: async input => {
+			const container = document.createElement('section');
+			container.id = 'call-document-editor';
+			document.body.append(container);
+			disposables.add(toDisposable(() => container.remove()));
+			joinedDocumentPane = disposables.add(services.createInstance(DocumentEditorPane, { contentType: input.contentType!, createDocumentCollaborationService: () => new BrowserDocumentCollaborationService() }));
+			joinedDocumentPane.create(container);
+			joinedDocumentPane.layout({ width: 900, height: 300 });
+			await joinedDocumentPane.setInput(input, new AbortController().signal);
+			panes.push(joinedDocumentPane);
+			activeInput = input;
+		},
+		focusActiveEditor: () => joinedDocumentPane?.focus(),
+	};
+	const types = disposables.add(DocumentTypes.registerTypes());
+	types.replace([{ id: 'call-document', contentType: 'application/vnd.ash.document+json', extensions: ['.ashdoc'] }]);
+	const container = document.createElement('section');
+	container.id = 'call-view';
+	document.body.append(container);
+	const callPane = disposables.add(new CallViewPane(container, { id: 'call-fixture', title: 'Calls' }, calls, services.get(IConfigurationService), editors));
+	callPane.setVisible(true);
+	callPane.layout(400, 0, 900);
+}
+
 window.ashAcademicIntegration = {
+	getCallDocumentState: () => ({ documents: callDocuments, originalDirty: structuredPane.isDirty, joinedResource: joinedDocumentPane?.workingCopy?.resource.scheme, joinedTexts: joinedDocumentPane?.getDocument().content.map(block => block.content.find(child => child.text !== undefined)?.text ?? '') ?? [] }),
 	apiDocumentType: apiModel.document.type,
 	getBundleIds: () => EditorExtensionsRegistry.getEditorContributions().map(contribution => contribution.id),
 	getCodeBlockText: () => codeBlockPane.getDocument().content[0]?.content[0]?.text,

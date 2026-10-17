@@ -190,6 +190,14 @@ struct Role {
     role: CallRole,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Document {
+    operation_id: String,
+    revision: u64,
+    change: call::CallDocumentChange,
+}
+
 enum Failure {
     Domain(CallError),
     Media,
@@ -305,6 +313,15 @@ fn dispatch(
                 params.revision,
                 &MemberCredential::parse(params.member_credential)?,
                 params.role,
+            )?
+        }
+        ("POST", "/v1/calls/documents") => {
+            let params: Document = decode(request)?;
+            runtime.store.update_document(
+                &credential,
+                &params.operation_id,
+                params.revision,
+                &params.change,
             )?
         }
         ("POST", "/v1/calls/remove") => {
