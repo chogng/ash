@@ -13,54 +13,68 @@ pub(crate) struct ExtensionsChangeWatcher {
 }
 
 impl ExtensionsChangeWatcher {
-    pub(super) fn start_editor_policy(
-        policy: &ash_core_plugins::EditorExtensionPolicy,
+    pub(super) fn start_language_runtime(
+        policy: Option<&ash_core_plugins::EditorExtensionPolicy>,
         runtime: super::extension_packages_language_runtime::ExtensionsLanguageRuntime,
         language: Arc<std::sync::Mutex<super::language_runtime::AppServerLanguageRuntime>>,
     ) -> Option<Self> {
-        let changes = policy.subscribe();
-        let mut provider_ids = runtime
-            .providers()
-            .ok()
-            .map(|providers| providers.ids().map(str::to_owned).collect::<Vec<_>>());
+        let changes = match runtime.subscribe() {
+            Ok(changes) => changes,
+            Err(error) => {
+                log::error!("failed to subscribe to language-server package changes: {error}");
+                return None;
+            }
+        };
+        let policy_changes = policy.map(ash_core_plugins::EditorExtensionPolicy::subscribe);
         let (shutdown, shutdown_receiver) = mpsc::channel();
         let thread = match std::thread::Builder::new()
-            .name("ash-editor-policy-changes".into())
+            .name("ash-language-extension-changes".into())
             .spawn(move || {
                 loop {
                     if shutdown_receiver.try_recv().is_ok() {
                         break;
                     }
-                    match changes.recv_timeout(Duration::from_millis(100)) {
-                        Ok(_) => {
-                            while changes.try_recv().is_ok() {}
-                            match runtime.providers() {
-                                Ok(providers) => {
-                                    let ids =
-                                        providers.ids().map(str::to_owned).collect::<Vec<_>>();
-                                    if let Ok(mut language) = language.lock() {
-                                        if provider_ids.as_ref() != Some(&ids) {
-                                            language.set_server_providers(providers);
-                                            provider_ids = Some(ids);
-                                        }
-                                        // Other directory hosts share this profile policy. Retire
-                                        // extension-owned LSPs on revocation even without a request.
-                                        language.invalidate_extensions();
-                                    }
+                    let mut changed = match changes.recv_timeout(Duration::from_millis(100)) {
+                        Ok(_) => true,
+                        Err(mpsc::RecvTimeoutError::Timeout) => false,
+                        Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                    };
+                    while changes.try_recv().is_ok() {
+                        changed = true;
+                    }
+                    if let Some(policy) = &policy_changes {
+                        while policy.try_recv().is_ok() {
+                            changed = true;
+                        }
+                    }
+                    if changed {
+                        match runtime.providers() {
+                            Ok(providers) => {
+                                if let Ok(mut language) = language.lock() {
+                                    // IDs can survive a package update. Replace exact sources,
+                                    // and retire idle peer sessions before releasing their leases.
+                                    language.set_server_providers(providers);
+                                    language.invalidate_extensions();
                                 }
-                                Err(error) => log::error!(
+                            }
+                            Err(error) => {
+                                log::error!(
                                     "failed to reconcile editor policy language servers: {error}"
-                                ),
+                                );
+                                if let Ok(mut language) = language.lock() {
+                                    language.set_server_providers(
+                                        ash_lsp_server_provider::LspServerProviders::new(),
+                                    );
+                                    language.invalidate_extensions();
+                                }
                             }
                         }
-                        Err(mpsc::RecvTimeoutError::Timeout) => {}
-                        Err(mpsc::RecvTimeoutError::Disconnected) => break,
                     }
                 }
             }) {
             Ok(thread) => thread,
             Err(error) => {
-                log::error!("failed to start editor policy change watcher: {error}");
+                log::error!("failed to start language-server package watcher: {error}");
                 return None;
             }
         };

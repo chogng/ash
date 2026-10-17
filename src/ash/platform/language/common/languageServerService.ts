@@ -1,8 +1,14 @@
+import type { JsonValue } from "../../../base/common/jsonValue.js";
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
 export interface LanguageServerConfiguration {
 	readonly mode: 'enabled' | 'disabled';
 	readonly executable?: string;
+	readonly languageIds?: readonly string[];
+	readonly args?: readonly string[];
+	readonly environment?: Readonly<Record<string, string>>;
+	readonly initializationOptions?: JsonValue;
+	readonly settings?: Readonly<Record<string, JsonValue>>;
 }
 
 export interface LanguageServerSnapshot {

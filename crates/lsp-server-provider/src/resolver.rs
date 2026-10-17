@@ -337,3 +337,19 @@ fn has_executable_permission(_metadata: &fs::Metadata) -> bool {
 #[cfg(test)]
 #[path = "resolver_tests.rs"]
 mod tests;
+
+/// Resolves an explicitly configured stdio executable through the same file gate as built-ins.
+pub fn resolve_executable(
+    id: &str,
+    languages: &[String],
+    executable: &Path,
+    dir_root: &Path,
+) -> Result<LanguageServerDefinition, crate::LanguageServerProviderError> {
+    let executable =
+        crate::provider::canonical_executable(executable, "configured language server")?;
+    Ok(LanguageServerDefinition::new(
+        id,
+        languages.iter().cloned(),
+        LanguageServerCommand::new(executable).with_current_dir(dir_root),
+    )?)
+}

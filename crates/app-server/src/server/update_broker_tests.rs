@@ -240,14 +240,17 @@ fn broker_fans_out_language_server_lifecycle_without_a_subscription() {
     let queue = NotificationQueue::default();
     broker.register(1, false, &queue);
 
-    broker.publish_language_server_state(LanguageServerStateNotification {
-        dir_id: None,
-        server: "rust-analyzer".into(),
-        state: LanguageServerStateDto::BackingOff {
-            attempt: 2,
-            retry_after_millis: 1_500,
+    broker.publish_language_server_state(
+        None,
+        LanguageServerStateNotification {
+            dir_id: None,
+            server: "rust-analyzer".into(),
+            state: LanguageServerStateDto::BackingOff {
+                attempt: 2,
+                retry_after_millis: 1_500,
+            },
         },
-    });
+    );
 
     let notifications = queue.drain();
     assert_eq!(notifications.len(), 1);
@@ -1087,4 +1090,35 @@ fn login_completion_routing_keeps_directory_local_ids_separate() {
     assert!(second_queue.drain().is_empty());
     assert!(second.owns_login("login-1", 2));
     assert_eq!(second.take_connection_logins(2), ["login-1"]);
+}
+
+#[test]
+fn language_diagnostics_and_capabilities_are_delivered_only_to_the_owning_connection() {
+    let broker = UpdateBroker::default();
+    let first = NotificationQueue::default();
+    let second = NotificationQueue::default();
+    broker.register(101, false, &first);
+    broker.register(202, false, &second);
+    broker.publish_language_diagnostics(
+        Some(101),
+        ash_app_server_protocol::protocol::language::LanguageDiagnosticsNotification {
+            dir_id: None,
+            path: "same.rs".into(),
+            revision: 1,
+            diagnostics: Vec::new(),
+        },
+    );
+    broker.publish_language_server_capabilities(
+        Some(101),
+        ash_app_server_protocol::protocol::language::LanguageServerCapabilitiesNotification {
+            dir_id: None,
+            server: "custom".into(),
+            language_ids: vec!["rust".into()],
+            completion_trigger_characters: vec!["=".into()],
+            signature_help_trigger_characters: Vec::new(),
+            signature_help_retrigger_characters: Vec::new(),
+        },
+    );
+    assert_eq!(first.drain().len(), 2);
+    assert!(second.drain().is_empty());
 }

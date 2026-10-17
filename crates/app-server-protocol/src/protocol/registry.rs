@@ -1743,11 +1743,14 @@ use crate::protocol::language::LanguageResolveCompletionParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::language::LanguageResolveDocumentLinkParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::language::LanguageSaveParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::language::LanguageSemanticTokenDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::language::LanguageSemanticTokensParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::language::LanguageSemanticTokensResult;
+use crate::protocol::language::LanguageServerCapabilitiesNotification;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::language::LanguageServerDescriptorDto;
 use crate::protocol::language::LanguageServerMessageNotification;
@@ -4761,6 +4764,11 @@ client_methods! {
         response: (),
         serialization: GlobalSharedRead,
     },
+    LanguageSave => "language/save" {
+        params: LanguageSaveParams,
+        response: (),
+        serialization: GlobalSharedRead,
+    },
     LanguageClose => "language/close" {
         params: LanguageCloseParams,
         response: (),
@@ -5777,6 +5785,9 @@ server_notifications! {
     },
     LanguageDirectoryDiagnostics => "language/diagnostics" {
         params: LanguageDiagnosticsNotification,
+    },
+    LanguageServerCapabilities => "language/serverCapabilities" {
+        params: LanguageServerCapabilitiesNotification,
     },
     LanguageServerMessage => "language/serverMessage" {
         params: LanguageServerMessageNotification,
@@ -7054,6 +7065,8 @@ typescript_bindings! {
     LanguageServerDescriptorDto,
     LanguageSynchronizeParams,
     LanguageCloseParams,
+    LanguageSaveParams,
+    LanguageServerCapabilitiesNotification,
     LanguageOperationParams<()>,
     LanguageCancelParams,
     LanguageCancelStatusDto,

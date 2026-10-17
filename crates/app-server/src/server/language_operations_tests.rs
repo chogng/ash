@@ -11,6 +11,23 @@ use super::completion_item_to_dto;
 use super::completion_trigger;
 
 #[test]
+fn language_save_rejects_oversized_utf8_content_before_resolving_a_directory() {
+    let server = crate::tests::server();
+    let mut connection = server.connection();
+    crate::tests::initialize(&server, &mut connection);
+    let response = crate::tests::call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0", "id":2, "method":"language/save",
+            "params":{"path":"demo.txt","text":"é".repeat(super::MAX_LANGUAGE_TARGET_BYTES / 2 + 1)}
+        }),
+    );
+    assert_eq!(response["error"]["code"], -32602, "{response}");
+    server.close_connection(connection);
+}
+
+#[test]
 fn completion_item_projection_preserves_utf16_and_snippet_semantics() {
     let item = LanguageCompletionItem {
         label: "println!".into(),

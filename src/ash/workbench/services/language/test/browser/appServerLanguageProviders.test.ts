@@ -124,7 +124,10 @@ test("App Server hover and completion providers keep revision, resource, and ins
 	using languages = new LanguageFeaturesService();
 	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:/project") });
 	const api = new FakeLanguageApi();
-	using providers = createProviders(languages, api, workspace);
+	const events = new FakeServerEvents();
+	using providers = createProviders(languages, api, workspace, { events });
+	await tick();
+	events.fire({ method: 'language/serverCapabilities', params: { server: 'fixture', languageIds: ['rust'], completionTriggerCharacters: ['.'], signatureHelpTriggerCharacters: ['('], signatureHelpRetriggerCharacters: [','] } });
 	await tick();
 	const resource = URI.file("C:/project/main.rs");
 	using model = new TextModel("pri", { languageId: "rust", resource });
@@ -291,6 +294,27 @@ class FakeServerEvents implements IServerEventApi {
 	fire(event: ServerNotification): void { this.listener?.(event); }
 }
 
+test('Desktop providers discover custom routes and retire disabled routes after a profile change', async () => {
+	using languages = new LanguageFeaturesService();
+	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/project') });
+	using trust = new FakeWorkspaceTrustService(['executeCommands', 'useLanguageServices']);
+	const api = new FakeLanguageApi();
+	api.availableServers = [];
+	const events = new FakeServerEvents();
+	using providers = createProviders(languages, api, workspace, { workspaceTrust: trust, events });
+	using model = new TextModel('value', { languageId: 'python', resource: URI.file('/project/main.py') });
+	await tick();
+	assert.equal(languages.hoverProvider.ordered(model).length, 0);
+	api.availableServers = [{ id: 'custom-python', languageIds: ['python'] }];
+	events.fire({ method: 'config/changed', params: { revision: 1, generation: 1 } });
+	await tick();
+	assert.equal(languages.hoverProvider.ordered(model).length, 1);
+	api.availableServers = [];
+	events.fire({ method: 'config/changed', params: { revision: 2, generation: 2 } });
+	await tick();
+	assert.equal(languages.hoverProvider.ordered(model).length, 0);
+});
+
 class FakeWorkspaceTrustService extends Disposable implements IWorkspaceTrustManagementService {
 	private readonly change = this._register(new Emitter<void>());
 	readonly onDidChangeTrust = this.change.event;
@@ -303,6 +327,8 @@ class FakeWorkspaceTrustService extends Disposable implements IWorkspaceTrustMan
 async function tick(): Promise<void> { await new Promise(resolve => setTimeout(resolve, 0)); }
 
 class FakeLanguageApi implements ILanguageApi {
+	async save(_params: Parameters<ILanguageApi['save']>[0]): Promise<void> { }
+
 	availableServers = [
 		{ id: "typescript", languageIds: ["typescript", "typescriptreact", "javascript", "javascriptreact"] },
 		{ id: "rust", languageIds: ["rust"] },
@@ -450,4 +476,32 @@ test('Workspace language providers leave committed Git snapshots to editor provi
 	await definition(languages, working, working.uri, new Position(1, 1));
 	assert.equal(api.locationRequests.length, 1);
 	assert.equal(api.locationRequests[0]!.document.path, 'main.rs');
+});
+
+test('negotiated triggers replace registrations and dynamic removal drops obsolete characters', async () => {
+	using languages = new LanguageFeaturesService();
+	using workspace = new WorkspaceContextService({ id: 'triggers', uri: URI.file('/project') });
+	const events = new FakeServerEvents();
+	using providers = createProviders(languages, new FakeLanguageApi(), workspace, { events });
+	await tick();
+	const notify = (completionTriggerCharacters: string[], signatureHelpTriggerCharacters: string[], signatureHelpRetriggerCharacters: string[]) => events.fire({
+		method: 'language/serverCapabilities', params: { server: 'fixture', languageIds: ['rust'], completionTriggerCharacters, signatureHelpTriggerCharacters, signatureHelpRetriggerCharacters },
+	});
+	notify(['\\', '='], ['['], [']']);
+	await tick();
+	assert.deepEqual(languages.completionProvider.getProvider('ash.appServer.completions')!.triggerCharacters, ['\\', '=']);
+	using model = new TextModel('value', { languageId: 'rust', resource: URI.file('/project/main.rs') });
+	const signature = languages.signatureHelpProvider.ordered(model)[0]!;
+	assert.deepEqual(signature.signatureHelpTriggerCharacters, ['[']);
+	assert.deepEqual(signature.signatureHelpRetriggerCharacters, [']']);
+	events.fire({ method: 'config/changed', params: { revision: 2, generation: 2 } });
+	await tick();
+	assert.deepEqual(languages.completionProvider.getProvider('ash.appServer.completions')!.triggerCharacters, ['\\', '=']);
+	notify(['='], [], []);
+	await tick();
+	assert.deepEqual(languages.completionProvider.getProvider('ash.appServer.completions')!.triggerCharacters, ['=']);
+	assert.deepEqual(languages.signatureHelpProvider.ordered(model)[0]!.signatureHelpTriggerCharacters, []);
+	events.fire({ method: 'language/serverState', params: { server: 'fixture', state: { type: 'backingOff', attempt: 1, retryAfterMillis: 10 } } });
+	await tick();
+	assert.deepEqual(languages.completionProvider.getProvider('ash.appServer.completions')!.triggerCharacters, []);
 });

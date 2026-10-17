@@ -88,7 +88,7 @@ UTF-8。
 Transport 使用 LSP stdio 的 `Content-Length` framing。Header 最多 16 KiB，单条 JSON message
 最多 4 MiB；缺少或重复 `Content-Length`、非 JSON-RPC 2.0 envelope、非整数 client response ID
 和同时缺少 result/error 的 response 都会关闭当前 driver。服务端 request 目前支持
-`workspace/configuration`、`client/registerCapability`、`client/unregisterCapability` 和
+`workspace/configuration`、`workspace/workspaceFolders`、`client/registerCapability`、`client/unregisterCapability` 和
 `window/workDoneProgress/create`；其他 request 返回 JSON-RPC `Method not found` 并产生
 `UnsupportedServerRequest` 事件。
 
@@ -146,3 +146,7 @@ Desktop position conversion；增加 server request 时必须先定义宿主 aut
 - 当前限制：replacement host event gate 由调用方持有，router 不控制外部 callback queue；
 - Potential：更多 transport health facts 可以继续由本 crate 上报，但重启预算、安装路径和用户策略
   必须继续由产品协调层或 catalog 拥有。
+
+保存通过 `save_document(uri, saved_text)` 接收实际写盘文本；需要 includeText 的服务器获得该文本，
+当前未保存 snapshot 和 revision 保持不变。`workspace/workspaceFolders` 返回本 session 初始化时的
+workspace folder 快照，与 capability 声明保持一致。

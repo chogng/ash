@@ -88,6 +88,22 @@ pub struct LanguageSynchronizeParams {
     pub document: LanguageDocumentDto,
 }
 
+/// Reports the exact content committed by a successful save. It may differ from a newer dirty
+/// editor snapshot; didSave must not overwrite that open document's current text or revision.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LanguageSaveParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub dir_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub session_directory: Option<SessionDirSelector>,
+    pub path: PathBuf,
+    #[schemars(length(max = 10_485_760))]
+    pub text: String,
+}
+
 /// Releases one directory document from the language-server session.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -525,6 +541,9 @@ pub struct LanguageSignatureHelpParams {
     pub position: LanguagePositionDto,
     pub trigger_kind: LanguageSignatureHelpTriggerKindDto,
     pub trigger_character: Option<String>,
+    #[serde(default)]
+    #[ts(as = "Option<bool>", optional)]
+    pub is_retrigger: bool,
 }
 
 /// One parameter in a callable signature.
@@ -985,4 +1004,18 @@ pub struct LanguageResolveCodeActionParams {
     pub document: LanguageDocumentDto,
     #[ts(type = "unknown")]
     pub provider_data: Value,
+}
+
+/// Trigger metadata negotiated by this connection's exact server incarnation.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LanguageServerCapabilitiesNotification {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub dir_id: Option<String>,
+    pub server: String,
+    pub language_ids: Vec<String>,
+    pub completion_trigger_characters: Vec<String>,
+    pub signature_help_trigger_characters: Vec<String>,
+    pub signature_help_retrigger_characters: Vec<String>,
 }

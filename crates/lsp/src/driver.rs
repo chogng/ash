@@ -48,6 +48,7 @@ pub(crate) fn spawn_driver<R, W>(
     host: Arc<dyn LanguageServerHost>,
     intentional_stop: Arc<AtomicBool>,
     dynamic_capabilities: DynamicCapabilityRegistry,
+    workspace_folders: Option<Vec<lsp_types::WorkspaceFolder>>,
 ) -> DriverHandle
 where
     R: AsyncBufRead + Send + Unpin + 'static,
@@ -60,6 +61,7 @@ where
         host,
         intentional_stop,
         dynamic_capabilities,
+        workspace_folders,
         command_rx,
     ));
     DriverHandle {
@@ -74,6 +76,7 @@ async fn run_driver<R, W>(
     host: Arc<dyn LanguageServerHost>,
     intentional_stop: Arc<AtomicBool>,
     dynamic_capabilities: DynamicCapabilityRegistry,
+    workspace_folders: Option<Vec<lsp_types::WorkspaceFolder>>,
     mut commands: mpsc::Receiver<DriverCommand>,
 ) where
     R: AsyncBufRead + Send + Unpin + 'static,
@@ -124,7 +127,7 @@ async fn run_driver<R, W>(
             message = incoming_rx.recv() => {
                 match message {
                     Some(Ok(message)) => {
-                        if handle_incoming(message, &mut writer, &host, &dynamic_capabilities, &mut pending).await.is_err() {
+                        if handle_incoming(message, &mut writer, &host, &dynamic_capabilities, &workspace_folders, &mut pending).await.is_err() {
                             break Some("language server transport stopped while handling a server message".into());
                         }
                     }
@@ -225,6 +228,7 @@ async fn handle_incoming<W>(
     writer: &mut W,
     host: &Arc<dyn LanguageServerHost>,
     dynamic_capabilities: &DynamicCapabilityRegistry,
+    workspace_folders: &Option<Vec<lsp_types::WorkspaceFolder>>,
     pending: &mut HashMap<i64, PendingRequest>,
 ) -> Result<(), ()>
 where
@@ -246,9 +250,15 @@ where
             host.on_event(notification_event(method, params));
         }
         IncomingMessage::Request { id, method, params } => {
-            let bytes =
-                server_request_response(&id, &method, params, host.as_ref(), dynamic_capabilities)
-                    .map_err(|_| ())?;
+            let bytes = server_request_response(
+                &id,
+                &method,
+                params,
+                host.as_ref(),
+                dynamic_capabilities,
+                workspace_folders,
+            )
+            .map_err(|_| ())?;
             write_frame(writer, &bytes, DEFAULT_MAX_MESSAGE_BYTES)
                 .await
                 .map_err(|_| ())?;
@@ -263,9 +273,15 @@ fn server_request_response(
     params: Value,
     host: &dyn LanguageServerHost,
     dynamic_capabilities: &DynamicCapabilityRegistry,
+    workspace_folders: &Option<Vec<lsp_types::WorkspaceFolder>>,
 ) -> Result<Vec<u8>, LanguageServerError> {
     match method {
         "workspace/configuration" => configuration_response(id, params, host),
+        "workspace/workspaceFolders" => result_bytes(
+            id,
+            &serde_json::to_value(workspace_folders)
+                .map_err(|error| LanguageServerError::InvalidMessage(error.to_string()))?,
+        ),
         "client/registerCapability" => {
             let params = match serde_json::from_value::<RegistrationParams>(params) {
                 Ok(params) => params,

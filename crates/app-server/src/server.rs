@@ -404,7 +404,7 @@ pub struct AppServer {
     _subscription_observer: Option<ash_subscriptions::SubscriptionObserver>,
     _plugin_watcher: Option<plugin_runtime::PluginWatcher>,
     _extension_packages_watcher: Option<extension_packages_runtime::ExtensionsChangeWatcher>,
-    _editor_extension_policy_watcher: Option<extension_packages_runtime::ExtensionsChangeWatcher>,
+    _language_extension_watcher: Option<extension_packages_runtime::ExtensionsChangeWatcher>,
     _tool_config_watcher: Option<crate::local::ToolConfigWatcher>,
     _interaction_deadline_watcher: interaction_runtime::InteractionDeadlineWatcher,
     git_turn_changes: Option<Arc<git_turn_changes_runtime::GitTurnChangesRuntime>>,
@@ -818,9 +818,13 @@ impl AppServer {
     ) -> instruction_import::InstructionImportRequestProcessor<'_, Self> {
         instruction_import::InstructionImportRequestProcessor::new(self, &self.home)
     }
-    fn language_processor(&self) -> language_operations::LanguageRequestProcessor<'_, Self> {
+    fn language_processor(
+        &self,
+        connection_id: u64,
+    ) -> language_operations::LanguageRequestProcessor<'_, Self> {
         language_operations::LanguageRequestProcessor::new(
             self,
+            connection_id,
             &self.config,
             &self.language,
             &self.extensions,
@@ -831,8 +835,9 @@ impl AppServer {
     }
     fn language_document_processor(
         &self,
+        connection_id: u64,
     ) -> language_document_features::LanguageDocumentRequestProcessor<'_, Self> {
-        language_document_features::LanguageDocumentRequestProcessor::new(self)
+        language_document_features::LanguageDocumentRequestProcessor::new(self, connection_id)
     }
     fn mcp_processor(&self) -> mcp_operations::McpRequestProcessor<'_, Self> {
         mcp_operations::McpRequestProcessor::new(
@@ -1352,7 +1357,7 @@ impl AppServer {
             _subscription_observer: None,
             _plugin_watcher: None,
             _extension_packages_watcher: None,
-            _editor_extension_policy_watcher: None,
+            _language_extension_watcher: None,
             _tool_config_watcher: None,
             _interaction_deadline_watcher: interaction_deadline_watcher,
             git_turn_changes: None,
@@ -1599,7 +1604,7 @@ impl AppServer {
             .map_err(|_| "new App Server language runtime mutex is poisoned".to_string())?
             .set_server_providers(providers);
         self.extension_packages_language_runtime = Some(runtime);
-        self.rebind_editor_extension_policy_watcher();
+        self.rebind_language_extension_watcher();
         Ok(self)
     }
 
@@ -1713,6 +1718,9 @@ impl AppServer {
             .cancel_connection(connection.connection_id);
         self.syntax_processor
             .connection_closed(connection.connection_id);
+        if let Ok(mut language) = self.language.lock() {
+            language.close_connection(connection.connection_id);
+        }
         if let Ok(git) = self.git_runtime_service() {
             git.close_connection(connection.connection_id);
         }
@@ -1831,6 +1839,10 @@ impl AppServer {
             Arc::clone(&self.agent_extensions),
             self.local_hook_runtime(),
         ));
+        self._config_watcher
+            .as_ref()
+            .expect("config watcher exists")
+            .bind_language(Arc::clone(&config), &self.language);
         self.config = Some(config);
         if let Some(login) = &self.login {
             login
@@ -2167,7 +2179,7 @@ impl AppServer {
             runtime.set_editor_extension_policy(Arc::clone(&policy));
         }
         self.editor_extension_policy = Some(policy);
-        self.rebind_editor_extension_policy_watcher();
+        self.rebind_language_extension_watcher();
         if let Some(manager) = &self.plugins_manager {
             self.extension_packages_extension_sources = Some(Arc::new(
                 extension_packages_extension_sources::ExtensionsExtensionSourceProvider::new(
@@ -2182,18 +2194,16 @@ impl AppServer {
         self
     }
 
-    fn rebind_editor_extension_policy_watcher(&mut self) {
-        self._editor_extension_policy_watcher =
-            self.editor_extension_policy.as_ref().and_then(|policy| {
-                self.extension_packages_language_runtime
-                    .as_ref()
-                    .and_then(|runtime| {
-                        extension_packages_runtime::ExtensionsChangeWatcher::start_editor_policy(
-                            policy,
-                            runtime.clone(),
-                            Arc::clone(&self.language),
-                        )
-                    })
+    fn rebind_language_extension_watcher(&mut self) {
+        self._language_extension_watcher = self
+            .extension_packages_language_runtime
+            .as_ref()
+            .and_then(|runtime| {
+                extension_packages_runtime::ExtensionsChangeWatcher::start_language_runtime(
+                    self.editor_extension_policy.as_deref(),
+                    runtime.clone(),
+                    Arc::clone(&self.language),
+                )
             });
     }
 
@@ -4092,98 +4102,101 @@ impl AppServer {
                 self.ide_processor()
                     .ide_request(connection, &request.params, cancellation)
             }
-            Some(ClientMethod::LanguageServers) => {
-                self.language_processor().language_servers(&request.params)
-            }
+            Some(ClientMethod::LanguageServers) => self
+                .language_processor(connection.connection_id)
+                .language_servers(&request.params),
             Some(ClientMethod::LanguageSynchronize) => self
-                .language_processor()
+                .language_processor(connection.connection_id)
                 .language_synchronize(&request.params, cancellation),
             Some(ClientMethod::LanguageClose) => self
-                .language_processor()
+                .language_processor(connection.connection_id)
                 .language_close(&request.params, cancellation),
+            Some(ClientMethod::LanguageSave) => self
+                .language_processor(connection.connection_id)
+                .language_save(&request.params),
             Some(ClientMethod::LanguageCancel) => self
-                .language_processor()
+                .language_processor(connection.connection_id)
                 .language_cancel(connection, &request.params),
             Some(ClientMethod::LanguageHover) => self
-                .language_processor()
+                .language_processor(connection.connection_id)
                 .language_hover(&request.params, cancellation),
             Some(ClientMethod::LanguageCompletions) => self
-                .language_processor()
+                .language_processor(connection.connection_id)
                 .language_completions(&request.params, cancellation),
             Some(ClientMethod::LanguageResolveCompletion) => self
-                .language_processor()
+                .language_processor(connection.connection_id)
                 .language_resolve_completion(&request.params, cancellation),
             Some(ClientMethod::LanguageExecuteCommand) => self
-                .language_processor()
+                .language_processor(connection.connection_id)
                 .language_execute_command(&request.params, cancellation),
             Some(ClientMethod::LanguageDocumentDiagnostics) => self
-                .language_processor()
+                .language_processor(connection.connection_id)
                 .language_document_diagnostics(&request.params, cancellation),
             Some(ClientMethod::LanguageDirectoryDiagnostics) => self
-                .language_processor()
+                .language_processor(connection.connection_id)
                 .language_directory_diagnostics(&request.params, cancellation),
             Some(ClientMethod::LanguageDocumentFormatting) => self
-                .language_processor()
+                .language_processor(connection.connection_id)
                 .language_document_formatting(&request.params, cancellation),
             Some(ClientMethod::LanguageRangeFormatting) => self
-                .language_processor()
+                .language_processor(connection.connection_id)
                 .language_range_formatting(&request.params, cancellation),
             Some(ClientMethod::LanguageSignatureHelp) => self
-                .language_processor()
+                .language_processor(connection.connection_id)
                 .language_signature_help(&request.params, cancellation),
             Some(ClientMethod::LanguageInlayHints) => self
-                .language_processor()
+                .language_processor(connection.connection_id)
                 .language_inlay_hints(&request.params, cancellation),
             Some(ClientMethod::LanguageLinkedEditingRanges) => self
-                .language_processor()
+                .language_processor(connection.connection_id)
                 .language_linked_editing_ranges(&request.params, cancellation),
             Some(ClientMethod::LanguageSemanticTokens) => self
-                .language_processor()
+                .language_processor(connection.connection_id)
                 .language_semantic_tokens(&request.params, cancellation),
             Some(ClientMethod::LanguageDocumentSymbols) => self
-                .language_document_processor()
+                .language_document_processor(connection.connection_id)
                 .language_document_symbols(&request.params, cancellation),
             Some(ClientMethod::LanguageCodeLenses) => self
-                .language_document_processor()
+                .language_document_processor(connection.connection_id)
                 .language_code_lenses(&request.params, cancellation),
             Some(ClientMethod::LanguageResolveCodeLens) => self
-                .language_document_processor()
+                .language_document_processor(connection.connection_id)
                 .language_resolve_code_lens(&request.params, cancellation),
             Some(ClientMethod::LanguageDocumentLinks) => self
-                .language_document_processor()
+                .language_document_processor(connection.connection_id)
                 .language_document_links(&request.params, cancellation),
             Some(ClientMethod::LanguageResolveDocumentLink) => self
-                .language_document_processor()
+                .language_document_processor(connection.connection_id)
                 .language_resolve_document_link(&request.params, cancellation),
             Some(ClientMethod::LanguageDocumentColors) => self
-                .language_document_processor()
+                .language_document_processor(connection.connection_id)
                 .language_document_colors(&request.params, cancellation),
             Some(ClientMethod::LanguageColorPresentations) => self
-                .language_document_processor()
+                .language_document_processor(connection.connection_id)
                 .language_color_presentations(&request.params, cancellation),
             Some(ClientMethod::LanguageFoldingRanges) => self
-                .language_document_processor()
+                .language_document_processor(connection.connection_id)
                 .language_folding_ranges(&request.params, cancellation),
             Some(ClientMethod::LanguageLocations) => self
-                .language_processor()
+                .language_processor(connection.connection_id)
                 .language_locations(&request.params, cancellation),
             Some(ClientMethod::LanguageHierarchy) => self
-                .language_processor()
+                .language_processor(connection.connection_id)
                 .language_hierarchy(&request.params, cancellation),
             Some(ClientMethod::LanguageDirectorySymbols) => self
-                .language_processor()
+                .language_processor(connection.connection_id)
                 .language_directory_symbols(&request.params, cancellation),
             Some(ClientMethod::LanguagePrepareRename) => self
-                .language_processor()
+                .language_processor(connection.connection_id)
                 .language_prepare_rename(&request.params, cancellation),
             Some(ClientMethod::LanguageRename) => self
-                .language_processor()
+                .language_processor(connection.connection_id)
                 .language_rename(&request.params, cancellation),
             Some(ClientMethod::LanguageCodeActions) => self
-                .language_processor()
+                .language_processor(connection.connection_id)
                 .language_code_actions(&request.params, cancellation),
             Some(ClientMethod::LanguageResolveCodeAction) => self
-                .language_processor()
+                .language_processor(connection.connection_id)
                 .language_resolve_code_action(&request.params, cancellation),
             Some(ClientMethod::FsWriteFile) => self
                 .fs_processor()

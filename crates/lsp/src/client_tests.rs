@@ -670,3 +670,51 @@ where
         .await
         .expect("write frame");
 }
+
+#[tokio::test]
+async fn workspace_folders_request_matches_the_folders_advertised_at_initialization() {
+    let (client, server) = tokio::io::duplex(16 * 1024);
+    let (reader, writer) = tokio::io::split(client);
+    let (server_reader, mut server_writer) = tokio::io::split(server);
+    let folders = vec![lsp_types::WorkspaceFolder {
+        uri: "file:///workspace".parse().unwrap(),
+        name: "workspace".into(),
+    }];
+    let expected = serde_json::to_value(&folders).unwrap();
+    let (ready, received) = oneshot::channel();
+    let task = tokio::spawn(async move {
+        let mut reader = BufReader::new(server_reader);
+        let initialize = read_json(&mut reader).await;
+        assert_eq!(initialize["params"]["workspaceFolders"], expected);
+        respond(
+            &mut server_writer,
+            initialize["id"].clone(),
+            json!({"capabilities":{}}),
+        )
+        .await;
+        assert_eq!(read_json(&mut reader).await["method"], "initialized");
+        write_json(
+            &mut server_writer,
+            json!({"jsonrpc":"2.0","id":"folders","method":"workspace/workspaceFolders"}),
+        )
+        .await;
+        assert_eq!(
+            read_json(&mut reader).await,
+            json!({"jsonrpc":"2.0","id":"folders","result":expected})
+        );
+        ready.send(()).unwrap();
+        let shutdown = read_json(&mut reader).await;
+        respond(&mut server_writer, shutdown["id"].clone(), Value::Null).await;
+        assert_eq!(read_json(&mut reader).await["method"], "exit");
+    });
+    let client = LanguageServerClient::connect(
+        BufReader::new(reader),
+        writer,
+        LanguageServerOptions::new("test", "1").with_workspace_folders(folders),
+    )
+    .await
+    .unwrap();
+    received.await.unwrap();
+    client.shutdown().await.unwrap();
+    task.await.unwrap();
+}

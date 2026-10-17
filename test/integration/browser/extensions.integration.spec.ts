@@ -1020,3 +1020,27 @@ for (const labels of [
 		]);
 	});
 }
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`custom LSP configuration supports keyboard editing and localized validation in ${locale}`, async ({ page }) => {
+		await page.goto(`/extensions.html?locale=${locale}`);
+		const lsp = page.locator('.ash-language-server-settings');
+		const advanced = lsp.getByLabel(locale === 'en' ? 'Advanced configuration (JSON)' : '高级配置（JSON）', { exact: true });
+		await expect(advanced).toBeVisible();
+		await advanced.focus();
+		await page.keyboard.press('ControlOrMeta+A');
+		await page.keyboard.insertText('{"languageIds":["python"],"args":["--stdio"],"environment":{"EXAMPLE":"enabled"},"initializationOptions":{"feature":true},"settings":{"python":{"strict":true}}}');
+		const save = lsp.getByRole('button', { name: locale === 'en' ? 'Save server configuration' : '保存服务器配置', exact: true });
+		await page.keyboard.press('Tab');
+		await expect(save).toBeFocused();
+		await page.keyboard.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'configure').length)).toBe(1);
+		const request = await page.evaluate(() => window.ashExtensionsIntegration.requests.find((entry: any) => entry[0] === 'configure'));
+		expect(request).toEqual(['configure', expect.any(String), expect.objectContaining({ languageIds: ['python'], args: ['--stdio'], environment: { EXAMPLE: 'enabled' }, initializationOptions: { feature: true }, settings: { python: { strict: true } } }), expect.any(Number)]);
+		await advanced.fill('{"args":42}');
+		await save.click();
+		await expect(advanced).toBeFocused();
+		await expect(lsp.getByRole('status')).toContainText(locale === 'en' ? 'Enter valid JSON' : '请输入有效的 JSON');
+		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'configure').length)).toBe(1);
+	});
+}

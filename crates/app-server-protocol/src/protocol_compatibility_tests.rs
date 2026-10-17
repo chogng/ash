@@ -13,6 +13,49 @@ use crate::protocol::initialize::ServerCapabilities;
 use crate::protocol::initialize::ensure_protocol_compatible;
 
 #[test]
+fn language_server_configuration_preserves_generic_json_and_legacy_defaults() {
+    use crate::protocol::config::LanguageServerConfigDto;
+    let legacy = serde_json::json!({"mode":"enabled"});
+    let decoded: LanguageServerConfigDto = serde_json::from_value(legacy.clone()).unwrap();
+    assert!(decoded.language_ids.is_empty());
+    assert_eq!(serde_json::to_value(decoded).unwrap(), legacy);
+    let configured = serde_json::json!({
+        "mode":"enabled", "executable":"/usr/bin/demo-lsp", "languageIds":["demo"],
+        "args":["--stdio", "with spaces"], "environment":{"DEMO":"enabled"},
+        "initializationOptions":{"nested":[null, true, "text"]},
+        "settings":{"demo":{"strict":true,"optional":null}}
+    });
+    let decoded: LanguageServerConfigDto = serde_json::from_value(configured.clone()).unwrap();
+    assert_eq!(serde_json::to_value(decoded).unwrap(), configured);
+}
+
+#[test]
+fn language_save_requires_exact_content_and_signature_retrigger_defaults_to_false() {
+    use crate::protocol::language::LanguageSaveParams;
+    use crate::protocol::language::LanguageSignatureHelpParams;
+    let saved = serde_json::json!({"path":"demo.txt","text":"saved\ncontent"});
+    let decoded: LanguageSaveParams = serde_json::from_value(saved.clone()).unwrap();
+    assert_eq!(serde_json::to_value(decoded).unwrap(), saved);
+    for invalid in [
+        serde_json::json!({"path":"demo.txt"}),
+        serde_json::json!({"path":"demo.txt","text":42}),
+        serde_json::json!({"path":"demo.txt","text":"saved","revision":3}),
+    ] {
+        assert!(serde_json::from_value::<LanguageSaveParams>(invalid).is_err());
+    }
+    let mut signature = serde_json::json!({
+        "document":{"path":"demo.txt","languageId":"demo","revision":1,"text":"["},
+        "position":{"lineIndex":0,"columnIndex":1}, "triggerKind":"triggerCharacter", "triggerCharacter":"["
+    });
+    let decoded: LanguageSignatureHelpParams = serde_json::from_value(signature.clone()).unwrap();
+    assert!(!decoded.is_retrigger);
+    signature["isRetrigger"] = serde_json::json!(true);
+    let decoded: LanguageSignatureHelpParams = serde_json::from_value(signature.clone()).unwrap();
+    assert!(decoded.is_retrigger);
+    assert_eq!(serde_json::to_value(decoded).unwrap(), signature);
+}
+
+#[test]
 fn repository_discovery_can_request_watched_status_without_changing_legacy_responses() {
     use crate::protocol::git::GitDiscoveryParams;
     use crate::protocol::git::GitRepositoriesResult;

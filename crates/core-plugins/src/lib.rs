@@ -32,6 +32,7 @@ pub use editor_extension_policy::EditorExtensionPolicyError;
 pub use editor_extension_policy::EditorExtensionPolicySnapshot;
 pub use manager::ExtensionPackageManager;
 pub use manager::LocalCapabilitySource;
+pub use manager::LocalCapabilitySourceSnapshot;
 pub use open_vsx::OpenVsxClient;
 pub use open_vsx::OpenVsxConfig;
 pub use plugin_activation::PluginActivationSnapshot;

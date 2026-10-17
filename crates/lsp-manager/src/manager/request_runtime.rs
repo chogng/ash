@@ -224,6 +224,7 @@ pub(super) enum PendingLanguageRequest {
         revision: LanguageDocumentRevision,
         position: LanguageDocumentPosition,
         trigger: LanguageSignatureHelpTrigger,
+        is_retrigger: bool,
     },
     InlayHints {
         id: LanguageRequestId,
@@ -1460,11 +1461,12 @@ async fn execute_request(
             path,
             revision,
             trigger,
+            is_retrigger,
             ..
         } => {
             let response = client
                 .request::<SignatureHelpRequest>(SignatureHelpParams {
-                    context: Some(signature_help_context(trigger)),
+                    context: Some(signature_help_context(trigger, is_retrigger)),
                     text_document_position_params: text_document_position(uri, position)?,
                     work_done_progress_params: WorkDoneProgressParams::default(),
                 })
@@ -1695,7 +1697,10 @@ async fn execute_request(
     }
 }
 
-fn signature_help_context(trigger: LanguageSignatureHelpTrigger) -> SignatureHelpContext {
+fn signature_help_context(
+    trigger: LanguageSignatureHelpTrigger,
+    is_retrigger: bool,
+) -> SignatureHelpContext {
     let (trigger_kind, trigger_character) = match trigger {
         LanguageSignatureHelpTrigger::Invoked => (SignatureHelpTriggerKind::INVOKED, None),
         LanguageSignatureHelpTrigger::TriggerCharacter(character) => {
@@ -1708,7 +1713,7 @@ fn signature_help_context(trigger: LanguageSignatureHelpTrigger) -> SignatureHel
     SignatureHelpContext {
         trigger_kind,
         trigger_character,
-        is_retrigger: false,
+        is_retrigger,
         active_signature_help: None,
     }
 }
@@ -2124,9 +2129,66 @@ pub(super) fn capability_snapshot(
         .into_iter()
         .filter_map(|(feature, kind)| supports_request(client, kind).then_some(feature))
         .collect();
+    let dynamic = client.dynamic_capabilities();
+    let strings = |method: &str, property: &str, initial: Vec<String>| {
+        let mut result = initial;
+        for registration in dynamic
+            .registrations
+            .iter()
+            .filter(|entry| entry.method == method)
+        {
+            if let Some(values) = registration
+                .register_options
+                .as_ref()
+                .and_then(|options| options.get(property))
+                .and_then(serde_json::Value::as_array)
+            {
+                result.extend(
+                    values
+                        .iter()
+                        .filter_map(serde_json::Value::as_str)
+                        .map(str::to_owned),
+                );
+            }
+        }
+        result.retain(|value| {
+            !value.is_empty() && value.chars().count() == 1 && !value.chars().any(char::is_control)
+        });
+        result.sort();
+        result.dedup();
+        result
+    };
+    let capabilities = &client.initialization().capabilities;
     LanguageServerCapabilities {
         incarnation,
-        dynamic_revision: client.dynamic_capabilities().revision,
+        dynamic_revision: dynamic.revision,
+        completion_trigger_characters: strings(
+            "textDocument/completion",
+            "triggerCharacters",
+            capabilities
+                .completion_provider
+                .as_ref()
+                .and_then(|options| options.trigger_characters.clone())
+                .unwrap_or_default(),
+        ),
+        signature_help_trigger_characters: strings(
+            "textDocument/signatureHelp",
+            "triggerCharacters",
+            capabilities
+                .signature_help_provider
+                .as_ref()
+                .and_then(|options| options.trigger_characters.clone())
+                .unwrap_or_default(),
+        ),
+        signature_help_retrigger_characters: strings(
+            "textDocument/signatureHelp",
+            "retriggerCharacters",
+            capabilities
+                .signature_help_provider
+                .as_ref()
+                .and_then(|options| options.retrigger_characters.clone())
+                .unwrap_or_default(),
+        ),
         features,
     }
 }

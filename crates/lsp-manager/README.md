@@ -153,3 +153,12 @@ server 选定的位置编码。
 - 尚未安装：references/navigation session cache；先由现有指标证明重复成本，再设计 incarnation/revision
   完整绑定的 key 与失效规则；
 - Potential：远程 directory authority 出现后再评估是否把 execution 放到 App Server。
+
+## 配置与保存
+
+宿主把规范化的 profile 参数、初始化选项和 settings 放进 `LanguageServerDefinition`。
+`ProtocolEventBridge` 按请求顺序解析 settings 的 section，缺失 section 返回 null。
+每个目录 session 在 initialize 中发布自己的 workspace folder。静态与动态 capability 的触发字符
+随 incarnation 的 capability snapshot 发布，客户端按实际声明注册补全和签名帮助。
+`save_document(path, saved_text)` 在同一 supervisor 队列发送 didSave，不覆盖更新的 dirty snapshot。
+连接隔离和断连回收归 App Server 的运行期 owner；manager 本身不解释客户端连接身份。

@@ -2400,6 +2400,7 @@ fn language_server_preferences_are_typed_persisted_and_revision_safe() {
                 config: LanguageServerConfig {
                     mode: LanguageServerModeConfig::Enabled,
                     executable: Some(executable.clone()),
+                    ..Default::default()
                 },
             },
         })
@@ -2412,6 +2413,7 @@ fn language_server_preferences_are_typed_persisted_and_revision_safe() {
         Some(&LanguageServerConfig {
             mode: LanguageServerModeConfig::Enabled,
             executable: Some(executable),
+            ..Default::default()
         })
     );
     assert!(persisted_config_document(&path).contains("rust-analyzer"));
@@ -2424,6 +2426,7 @@ fn language_server_preferences_are_typed_persisted_and_revision_safe() {
             config: LanguageServerConfig {
                 mode: LanguageServerModeConfig::Enabled,
                 executable: Some("relative/rust-analyzer".into()),
+                ..Default::default()
             },
         },
     });
@@ -3235,5 +3238,56 @@ fn directory_receipts_upgrade_once_and_replay_with_only_current_command_tags() {
     assert!(persisted.contains("setDirectoryGrant"));
     assert!(!persisted.contains("setDirPermissions"));
     drop(store);
+    remove_config_files(&path);
+}
+
+#[test]
+fn custom_language_server_configuration_round_trips_and_rejects_invalid_boundaries() {
+    let path = config_path("custom-language-server");
+    let config: LanguageServerConfig = serde_json::from_value(serde_json::json!({
+        "mode":"enabled", "executable":std::env::temp_dir().join("custom-lsp"),
+        "languageIds":["python"], "args":["--stdio","path with spaces"],
+        "environment":{"LSP_OPTION":"enabled"}, "initializationOptions":r#"{"feature":true,"nullable":null,"mixed":[1,"two",null]}"#,
+        "settings":r#"{"python":{"analysis":{"typeCheckingMode":"strict","nullable":null}}}"#
+    }))
+    .unwrap();
+    let id = LanguageServerId::new("custom-python").unwrap();
+    let store = ConfigStore::open(&path).unwrap();
+    store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("custom-server").unwrap(),
+            expected_revision: ConfigRevision::INITIAL,
+            command: UserConfigCommand::ConfigureLanguageServer {
+                server_id: id.clone(),
+                config: config.clone(),
+            },
+        })
+        .unwrap();
+    drop(store);
+    let reopened = ConfigStore::open(&path).unwrap();
+    assert_eq!(
+        reopened
+            .read_snapshot()
+            .unwrap()
+            .values
+            .language_servers
+            .servers[&id],
+        config
+    );
+    for field in ["args", "languageIds", "environment"] {
+        let mut invalid = serde_json::to_value(&config).unwrap();
+        invalid[field] = match field {
+            "args" => serde_json::json!(["bad\0arg"]),
+            "languageIds" => serde_json::json!(["python", "python"]),
+            _ => serde_json::json!({"BAD=NAME":"value"}),
+        };
+        let invalid: LanguageServerConfig = serde_json::from_value(invalid).unwrap();
+        assert!(invalid.validate().is_err(), "{field}");
+    }
+    assert!(
+        serde_json::from_value::<LanguageServerConfig>(serde_json::json!({"args":"--stdio"}))
+            .is_err()
+    );
+    drop(reopened);
     remove_config_files(&path);
 }

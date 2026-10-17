@@ -1,3 +1,4 @@
+import { ITextFileService } from "../../textfile/common/textfiles.js";
 import { VSBuffer } from "../../../../base/common/buffer.js";
 import { Emitter } from "../../../../base/common/event.js";
 import { Disposable, combinedDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
@@ -67,11 +68,19 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		@IServerEventApi events: IServerEventApi,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@IWorkspaceTrustManagementService private readonly workspaceTrust: IWorkspaceTrustManagementService,
+		@ITextFileService textFiles: ITextFileService,
 	) {
 		super();
+		this._register(textFiles.onDidSave(event => {
+			const entry = this.entries.get(event.resource.toString());
+			if (!entry || !this.languageAllowed || entry.references === 0) return;
+			if (entry.timer !== undefined) clearTimeout(entry.timer);
+			entry.timer = undefined;
+			this.enqueueSynchronization(entry, event.content);
+		}));
 		const subscription = events.subscribe(event => {
 			if (event.method === "language/diagnostics") this.acceptDiagnostics(event.params);
-			if (event.method === "extensions/changed" || (!checkWorkspaceTrust && event.method === "config/changed")) this.queuePermissionRefresh();
+			if (event.method === "extensions/changed" || event.method === "config/changed") this.queuePermissionRefresh();
 		});
 		this._register(toDisposable(() => subscription.dispose()));
 		if (checkWorkspaceTrust) this._register(workspaceTrust.onDidChangeTrust(() => this.queuePermissionRefresh()));
@@ -194,7 +203,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		}, SYNCHRONIZE_DELAY_MS);
 	}
 
-	private enqueueSynchronization(entry: LanguageDocumentEntry): void {
+	private enqueueSynchronization(entry: LanguageDocumentEntry, savedText?: string): void {
 		if (!this.languageAllowed) return;
 		const generation = this.permissionRefreshGeneration;
 		const snapshot = entry.model.createVersionedSnapshot();
@@ -203,17 +212,21 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		entry.queue = entry.queue.catch(() => undefined).then(async () => {
 			if (!this.languageAllowed || generation !== this.permissionRefreshGeneration || entry.references === 0 || this.entries.get(entry.resource.toString()) !== entry) return;
 			const document = { ...(entry.wireWorkspaceFolderId ? { dirId: entry.wireWorkspaceFolderId } : {}), path: entry.path, languageId: entry.languageId, revision: snapshot.version, text };
+			const languageSynchronized = this.support.supports(entry.dirId, entry.languageId);
 			let codeIntelligenceSynchronized = false;
 			await Promise.all([
-				this.support.supports(entry.dirId, entry.languageId) ? this.api.synchronize({ document }) : undefined,
+				languageSynchronized ? this.api.synchronize({ document }) : undefined,
 				this.canSynchronizeCodeIntelligence(entry)
 					? this.codeIntelligenceDocuments?.synchronize(document).then(() => { codeIntelligenceSynchronized = true; }).catch(reportCodeIntelligenceSynchronizationError)
 					: undefined,
 			]);
-			if (!this.languageAllowed || generation !== this.permissionRefreshGeneration || entry.references === 0 || this.entries.get(entry.resource.toString()) !== entry) return;
-			entry.languageSynchronized = this.support.supports(entry.dirId, entry.languageId);
+			entry.languageSynchronized = languageSynchronized;
 			entry.codeIntelligenceSynchronized ||= codeIntelligenceSynchronized;
+			if (!this.languageAllowed || generation !== this.permissionRefreshGeneration || entry.references === 0 || this.entries.get(entry.resource.toString()) !== entry) return;
 			if (!entry.languageSynchronized) return;
+			if (savedText !== undefined) {
+				await this.api.save({ ...(entry.wireWorkspaceFolderId ? { dirId: entry.wireWorkspaceFolderId } : {}), path: entry.path, text: savedText });
+			}
 			try {
 				const report = await this.api.documentDiagnostics({ document });
 				if (generation !== this.permissionRefreshGeneration) return;

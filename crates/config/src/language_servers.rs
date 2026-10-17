@@ -69,6 +69,31 @@ pub struct LanguageServerConfig {
     pub mode: LanguageServerModeConfig,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub executable: Option<PathBuf>,
+    /// Empty uses the integration's declared route; custom servers must supply a route.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub language_ids: Vec<String>,
+    /// Appended to the integration's launch arguments; no shell expansion is performed.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub args: Vec<String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub environment: BTreeMap<String, String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "serialize_initialization_options",
+        deserialize_with = "deserialize_initialization_options"
+    )]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+    pub initialization_options: Option<serde_json::Value>,
+    /// Complete workspace/configuration settings object, keyed by section.
+    #[serde(
+        default,
+        skip_serializing_if = "BTreeMap::is_empty",
+        serialize_with = "serialize_settings",
+        deserialize_with = "deserialize_settings"
+    )]
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
+    pub settings: BTreeMap<String, serde_json::Value>,
 }
 
 impl LanguageServerConfig {
@@ -78,6 +103,36 @@ impl LanguageServerConfig {
         {
             return Err(ConfigError(
                 "language server executable override must be an absolute path".into(),
+            ));
+        }
+        let mut languages = std::collections::BTreeSet::new();
+        if self.language_ids.len() > 64
+            || self.language_ids.iter().any(|id| {
+                id.is_empty()
+                    || id.len() > 128
+                    || !languages.insert(id)
+                    || !id
+                        .bytes()
+                        .all(|byte| byte.is_ascii_alphanumeric() || b"_+.-".contains(&byte))
+            })
+            || self.args.len() > 128
+            || self
+                .args
+                .iter()
+                .any(|arg| arg.len() > 16_384 || arg.contains('\0'))
+            || self.environment.len() > 128
+            || self.environment.iter().any(|(name, value)| {
+                name.is_empty()
+                    || name.len() > 256
+                    || name.contains(['=', '\0'])
+                    || value.len() > 16_384
+                    || value.contains('\0')
+            })
+            || serde_json::to_vec(&(&self.initialization_options, &self.settings))
+                .map_or(true, |bytes| bytes.len() > 256 * 1024)
+        {
+            return Err(ConfigError(
+                "invalid or oversized language server configuration".into(),
             ));
         }
         Ok(())
@@ -100,4 +155,35 @@ impl LanguageServersConfig {
         }
         Ok(())
     }
+}
+
+// TOML cannot represent JSON null or heterogeneous JSON arrays losslessly. The profile stores
+// these protocol-owned payloads as JSON strings; the Config domain and RPC retain parsed values.
+fn serialize_initialization_options<S: serde::Serializer>(
+    value: &Option<serde_json::Value>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    let text = serde_json::to_string(value).map_err(serde::ser::Error::custom)?;
+    serializer.serialize_str(&text)
+}
+fn deserialize_initialization_options<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<serde_json::Value>, D::Error> {
+    let text = String::deserialize(deserializer)?;
+    serde_json::from_str(&text)
+        .map(Some)
+        .map_err(serde::de::Error::custom)
+}
+fn serialize_settings<S: serde::Serializer>(
+    value: &BTreeMap<String, serde_json::Value>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    let text = serde_json::to_string(value).map_err(serde::ser::Error::custom)?;
+    serializer.serialize_str(&text)
+}
+fn deserialize_settings<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<BTreeMap<String, serde_json::Value>, D::Error> {
+    let text = String::deserialize(deserializer)?;
+    serde_json::from_str(&text).map_err(serde::de::Error::custom)
 }

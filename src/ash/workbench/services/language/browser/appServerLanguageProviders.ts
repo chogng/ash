@@ -25,6 +25,13 @@ interface LanguageWorkspaceRoot {
 	readonly wireId?: string;
 }
 
+interface ServerTriggers {
+	readonly server: string;
+	readonly completion: readonly string[];
+	readonly signature: readonly string[];
+	readonly retrigger: readonly string[];
+}
+
 /** Registers App Server-backed cross-resource providers for Code languages. */
 export class AppServerLanguageProviders extends Disposable {
 	private readonly registrations = this._register(new MutableDisposable<DisposableStore>());
@@ -32,6 +39,7 @@ export class AppServerLanguageProviders extends Disposable {
 	private refreshGeneration = 0;
 	private refreshQueue = Promise.resolve();
 	private alive = true;
+	private readonly triggers = new Map<string, ServerTriggers>();
 
 	constructor(
 		private readonly api: ILanguageApi,
@@ -43,11 +51,29 @@ export class AppServerLanguageProviders extends Disposable {
 	) {
 		super();
 		const subscription = events.subscribe(event => {
-			if (event.method === "extensions/changed" || (!options.checkWorkspaceTrust && event.method === "config/changed")) this.queueRefresh();
+			if (event.method === 'language/serverCapabilities') {
+				const folderId = event.params.dirId ?? this.workspace.getWorkspace().folders[0]?.id;
+				if (folderId) for (const languageId of event.params.languageIds) {
+					this.triggers.set(`${folderId}:${languageId}`, { server: event.params.server, completion: event.params.completionTriggerCharacters, signature: event.params.signatureHelpTriggerCharacters, retrigger: event.params.signatureHelpRetriggerCharacters });
+				}
+				this.queueRefresh();
+			}
+			if (event.method === 'language/serverState' && event.params.state.type !== 'ready') {
+				const folderId = event.params.dirId ?? this.workspace.getWorkspace().folders[0]?.id;
+				let removed = false;
+				for (const [key, value] of this.triggers) {
+					if (key.startsWith(`${folderId}:`) && value.server === event.params.server) { this.triggers.delete(key); removed = true; }
+				}
+				if (removed) this.queueRefresh();
+			}
+			// State transitions retire metadata only for sessions that actually stopped. A profile
+			// update may concern another feature and leave these negotiated capabilities intact.
+			if (event.method === 'extensions/changed') this.triggers.clear();
+			if (event.method === "extensions/changed" || event.method === "config/changed") this.queueRefresh();
 		});
 		this._register(toDisposable(() => subscription.dispose()));
 		if (options.checkWorkspaceTrust) this._register(workspaceTrust.onDidChangeTrust(() => this.queueRefresh()));
-		this._register(workspace.onDidChangeWorkspace(() => this.queueRefresh()));
+		this._register(workspace.onDidChangeWorkspace(() => { this.triggers.clear(); this.queueRefresh(); }));
 		this._register(toDisposable(() => { this.alive = false; }));
 		this.queueRefresh();
 	}
@@ -56,7 +82,7 @@ export class AppServerLanguageProviders extends Disposable {
 		const languageIds = support.languageIds;
 		// Directory-backed services cannot analyze immutable snapshots from another URI scheme.
 		const selector = this.workspace.getWorkspace().folders.flatMap(folder => languageIds.map(language => ({ language, scheme: folder.uri.scheme })));
-		const adapter = new AppServerLanguageProvider(this.api, this.workspace, languageIds);
+		const adapter = new AppServerLanguageProvider(this.api, this.workspace, languageIds, new Map(this.triggers));
 		const registrations = new DisposableStore();
 		registrations.add(this.languageFeatures.hoverProvider.register(selector, adapter));
 		registrations.add(this.languageFeatures.completionProvider.register(adapter));
@@ -119,11 +145,17 @@ export interface AppServerLanguageProvidersOptions {
 }
 
 class AppServerLanguageProvider implements languages.LanguageCompletionProvider, languages.LanguageHoverProvider, languages.LanguageDeclarationProvider, languages.LanguageDefinitionProvider, languages.LanguageImplementationProvider, languages.LanguageTypeDefinitionProvider, languages.LanguageReferenceProvider, languages.LanguageCallHierarchyProvider, languages.LanguageTypeHierarchyProvider, languages.LanguageRenameProvider, languages.LanguageCodeActionProvider, languages.DocumentFormattingEditProvider, languages.DocumentRangeFormattingEditProvider, languages.LanguageParameterHintsProvider, languages.LanguageInlayHintsProvider, languages.LinkedEditingRangeProvider, languages.LanguageSemanticTokensProvider, languages.LanguageDocumentSymbolProvider, languages.CodeLensProvider, languages.LanguageLinkProvider, languages.LanguageColorProvider, languages.LanguageFoldingRangeProvider {
-	readonly signatureHelpTriggerCharacters = Object.freeze(['(', ',']);
+	readonly signatureHelpTriggerCharacters: readonly string[];
+	readonly signatureHelpRetriggerCharacters: readonly string[];
 	readonly id = "ash.appServer.completions";
-	readonly triggerCharacters = Object.freeze([".", ":", "<", "\"", "'", "/", "@", "#"]);
+	readonly triggerCharacters: readonly string[];
 
-	constructor(private readonly api: ILanguageApi, private readonly workspace: IWorkspaceContextService, readonly languageIds: readonly string[]) { }
+	constructor(private readonly api: ILanguageApi, private readonly workspace: IWorkspaceContextService, readonly languageIds: readonly string[], private readonly triggers: ReadonlyMap<string, ServerTriggers>) {
+		const all = [...triggers.values()];
+		this.triggerCharacters = Object.freeze([...new Set(all.flatMap(value => value.completion))]);
+		this.signatureHelpTriggerCharacters = Object.freeze([...new Set(all.flatMap(value => value.signature))]);
+		this.signatureHelpRetriggerCharacters = Object.freeze([...new Set(all.flatMap(value => value.retrigger))]);
+	}
 
 	async provideHover(request: languages.LanguageHoverRequest, signal: AbortSignal) {
 		const root = workspaceRootForResource(this.workspace, request.resource);
@@ -136,6 +168,7 @@ class AppServerLanguageProvider implements languages.LanguageCompletionProvider,
 
 	async provideCompletions(request: languages.LanguageCompletionProviderRequest, signal: AbortSignal) {
 		const root = workspaceRootForResource(this.workspace, request.resource);
+		if (request.context.kind === languages.LanguageCompletionTriggerKind.TriggerCharacter && !this.triggers.get(`${root.id}:${request.languageId}`)?.completion.includes(request.context.triggerCharacter)) return undefined;
 		const document = languageCompletionDocument(root, request);
 		if (!document) return undefined;
 		const result = await this.api.completions({
@@ -235,12 +268,15 @@ class AppServerLanguageProvider implements languages.LanguageCompletionProvider,
 	}
 	async provideParameterHints(request: languages.LanguageParameterHintsRequest, signal: AbortSignal) {
 		const root = workspaceRootForResource(this.workspace, request.resource);
+		const triggers = this.triggers.get(`${root.id}:${request.languageId}`);
+		if (request.context.kind === 'triggerCharacter' && !triggers?.signature.includes(request.context.triggerCharacter) && !(request.context.isRetrigger && triggers?.retrigger.includes(request.context.triggerCharacter))) return undefined;
 		const document = languageParameterHintsDocument(root, request);
 		if (!document) return undefined;
 		const result = await this.api.signatureHelp({
 			document,
 			position: dtoPosition(request.position),
 			triggerKind: request.context.kind,
+			isRetrigger: request.context.isRetrigger ?? false,
 			triggerCharacter: request.context.kind === "triggerCharacter" ? request.context.triggerCharacter : null,
 		}, { signal });
 		if (result.revision !== request.snapshot.version || result.signatures.length === 0) return undefined;

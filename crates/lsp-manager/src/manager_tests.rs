@@ -657,3 +657,33 @@ fn lsp_positions_convert_to_utf8_byte_ranges_without_splitting_scalars() {
         byte_offset_for_position(text, Position::new(0, 3), &PositionEncodingKind::UTF16).is_none()
     );
 }
+
+#[test]
+fn profile_settings_answer_ordered_scoped_configuration_sections() {
+    let (commands, _) = tokio::sync::mpsc::unbounded_channel();
+    let bridge = ProtocolEventBridge {
+        server: LanguageServerName::new("settings-test").unwrap(),
+        generation: 1,
+        server_epoch: 1,
+        commands,
+        settings: std::collections::BTreeMap::from([(
+            "python".into(),
+            serde_json::json!({"analysis":{"strict":true}}),
+        )]),
+    };
+    let items = [Some("python.analysis"), Some("missing"), None].map(|section| {
+        ash_lsp::lsp_types::ConfigurationItem {
+            scope_uri: None,
+            section: section.map(str::to_owned),
+        }
+    });
+    let values = bridge.workspace_configuration(&items);
+    assert_eq!(
+        values.into_iter().map(|value| value.0).collect::<Vec<_>>(),
+        vec![
+            serde_json::json!({"strict":true}),
+            serde_json::Value::Null,
+            serde_json::json!({"python":{"analysis":{"strict":true}}})
+        ]
+    );
+}

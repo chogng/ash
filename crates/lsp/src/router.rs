@@ -153,7 +153,11 @@ impl LanguageServerDocumentRouter {
         })
     }
 
-    pub async fn save_document(&self, uri: &Uri) -> Result<(), LanguageServerRouterError> {
+    pub async fn save_document(
+        &self,
+        uri: &Uri,
+        saved_text: &str,
+    ) -> Result<(), LanguageServerRouterError> {
         let document = self
             .documents
             .get(uri)
@@ -163,7 +167,7 @@ impl LanguageServerDocumentRouter {
             .get(&document.server_name)
             .expect("open document always names a registered server");
         let save = match server.client.initialization().document_sync.save {
-            DocumentSaveSync::IncludeText => DocumentSave::WithText(&document.text),
+            DocumentSaveSync::IncludeText => DocumentSave::WithText(saved_text),
             DocumentSaveSync::WithoutText => DocumentSave::WithoutText,
             DocumentSaveSync::None => {
                 return Err(LanguageServerRouterError::Runtime(

@@ -1349,11 +1349,13 @@ impl UpdateBroker {
 
     pub(super) fn publish_language_diagnostics(
         &self,
+        connection_id: Option<u64>,
         diagnostics: LanguageDiagnosticsNotification,
     ) {
         self.publish_language_notification(
             ServerNotificationMethod::LanguageDirectoryDiagnostics,
             &diagnostics,
+            connection_id,
         );
     }
 
@@ -1372,41 +1374,68 @@ impl UpdateBroker {
 
     pub(super) fn publish_language_server_message(
         &self,
+        connection_id: Option<u64>,
         message: LanguageServerMessageNotification,
     ) {
         self.publish_language_notification(
             ServerNotificationMethod::LanguageServerMessage,
             &message,
+            connection_id,
         );
     }
 
     pub(super) fn publish_language_server_progress(
         &self,
+        connection_id: Option<u64>,
         progress: LanguageServerProgressNotification,
     ) {
         self.publish_language_notification(
             ServerNotificationMethod::LanguageServerProgress,
             &progress,
+            connection_id,
         );
     }
 
-    pub(super) fn publish_language_server_state(&self, state: LanguageServerStateNotification) {
-        self.publish_language_notification(ServerNotificationMethod::LanguageServerState, &state);
+    pub(super) fn publish_language_server_state(
+        &self,
+        connection_id: Option<u64>,
+        state: LanguageServerStateNotification,
+    ) {
+        self.publish_language_notification(
+            ServerNotificationMethod::LanguageServerState,
+            &state,
+            connection_id,
+        );
+    }
+
+    pub(super) fn publish_language_server_capabilities(
+        &self,
+        connection_id: Option<u64>,
+        capabilities: ash_app_server_protocol::protocol::language::LanguageServerCapabilitiesNotification,
+    ) {
+        self.publish_language_notification(
+            ServerNotificationMethod::LanguageServerCapabilities,
+            &capabilities,
+            connection_id,
+        );
     }
 
     fn publish_language_notification<T: Serialize>(
         &self,
         method: ServerNotificationMethod,
         params: &T,
+        connection_id: Option<u64>,
     ) {
         let Ok(mut state) = self.state.lock() else {
             return;
         };
-        state.subscribers.retain(|_, subscriber| {
+        state.subscribers.retain(|id, subscriber| {
             let Some(queue) = subscriber.queue.upgrade() else {
                 return false;
             };
-            if subscriber.scope_id != self.scope_id {
+            if subscriber.scope_id != self.scope_id
+                || connection_id.is_some_and(|owner| owner != *id)
+            {
                 return true;
             }
             queue.push(notification(method, params));

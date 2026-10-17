@@ -651,6 +651,11 @@ impl<'a> ExtensionPackagesRequestProcessor<'a> {
                 }
                 Err(error) => {
                     log::error!("failed to reconcile Extensions language servers: {error}");
+                    if let Ok(mut language) = self.language.lock() {
+                        language.set_server_providers(
+                            ash_lsp_server_provider::LspServerProviders::new(),
+                        );
+                    }
                 }
             }
         }

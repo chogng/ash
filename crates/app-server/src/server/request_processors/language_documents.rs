@@ -1,5 +1,5 @@
+use super::language_runtime::LanguageRuntimeGuard;
 use std::path::PathBuf;
-use std::sync::MutexGuard;
 
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::language::LanguageCodeLensDto;
@@ -41,7 +41,7 @@ use super::language_operations::byte_range_to_utf16;
 use super::language_operations::decode_language_operation;
 use super::language_operations::language_error;
 use super::language_operations::utf8_byte_range;
-use super::language_runtime::AppServerLanguageRuntime;
+
 use super::result;
 
 /// Coordinates the existing owners needed by the language documents adapter.
@@ -56,14 +56,12 @@ pub(super) trait LanguageDocumentRequestProcessorContext: Send + Sync {
     ) -> Result<ash_file_access::Dir, super::RpcError>;
     fn prepare_document_runtime(
         &self,
+        connection_id: u64,
         dir: &ash_file_access::Dir,
         source_path: &std::path::Path,
         document: &ash_app_server_protocol::protocol::language::LanguageDocumentDto,
         cancellation: &ash_async_utils::CancellationToken,
-    ) -> Result<
-        std::sync::MutexGuard<'_, super::language_runtime::AppServerLanguageRuntime>,
-        super::RpcError,
-    >;
+    ) -> Result<LanguageRuntimeGuard<'_>, super::RpcError>;
 }
 
 pub(super) struct LanguageDocumentRequestProcessor<
@@ -71,13 +69,17 @@ pub(super) struct LanguageDocumentRequestProcessor<
     C: LanguageDocumentRequestProcessorContext + ?Sized,
 > {
     context: &'ctx C,
+    connection_id: u64,
 }
 
 impl<'ctx, C: LanguageDocumentRequestProcessorContext + ?Sized>
     LanguageDocumentRequestProcessor<'ctx, C>
 {
-    pub(super) fn new(context: &'ctx C) -> Self {
-        Self { context }
+    pub(super) fn new(context: &'ctx C, connection_id: u64) -> Self {
+        Self {
+            context,
+            connection_id,
+        }
     }
 }
 
@@ -377,7 +379,7 @@ impl<'ctx, C: LanguageDocumentRequestProcessorContext + ?Sized>
         (
             PathBuf,
             LanguageDocumentRevision,
-            MutexGuard<'ctx, AppServerLanguageRuntime>,
+            LanguageRuntimeGuard<'ctx>,
         ),
         RpcError,
     > {
@@ -389,9 +391,13 @@ impl<'ctx, C: LanguageDocumentRequestProcessorContext + ?Sized>
             .resolve_existing(&document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let revision = LanguageDocumentRevision::new(document.revision);
-        let runtime =
-            self.context
-                .prepare_document_runtime(&dir, &source_path, document, cancellation)?;
+        let runtime = self.context.prepare_document_runtime(
+            self.connection_id,
+            &dir,
+            &source_path,
+            document,
+            cancellation,
+        )?;
         Ok((source_path, revision, runtime))
     }
 }

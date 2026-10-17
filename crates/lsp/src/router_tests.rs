@@ -120,9 +120,12 @@ async fn router_binds_revisions_and_replays_documents_on_replacement() {
     assert_eq!(rebound.server_incarnation().value(), 2);
     assert_eq!(rebound.server_version().value(), 1);
 
-    router.save_document(&uri).await.expect("save document");
+    router
+        .save_document(&uri, "saved content")
+        .await
+        .expect("save document");
     let save = next_method(&mut replacement_events, "textDocument/didSave").await;
-    assert_eq!(save["params"]["text"], "fn main() { println!(\"final\"); }");
+    assert_eq!(save["params"]["text"], "saved content");
     router.close_document(&uri).await.expect("close document");
     assert_eq!(
         next_method(&mut replacement_events, "textDocument/didClose").await["method"],

@@ -376,6 +376,7 @@ impl Panel {
                     LanguageServerModeDto::Disabled
                 },
                 executable: None,
+                ..Default::default()
             })
     }
 

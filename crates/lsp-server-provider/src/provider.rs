@@ -156,6 +156,8 @@ impl fmt::Debug for LspServerProviders {
 pub enum LanguageServerProviderError {
     #[error("the Ash package does not contain a managed Node runtime")]
     ManagedNodeUnavailable,
+    #[error("language-server package is unavailable: {0}")]
+    PackageUnavailable(String),
     #[error("invalid {kind} at {path}: {reason}")]
     InvalidFile {
         kind: &'static str,

@@ -157,6 +157,7 @@ pub(super) trait LanguageRequestProcessorContext: Send + Sync {
 
 pub(super) struct LanguageRequestProcessor<'ctx, C: LanguageRequestProcessorContext + ?Sized> {
     context: &'ctx C,
+    connection_id: u64,
     config: &'ctx Option<super::Arc<super::ConfigStore>>,
     language: &'ctx super::Arc<super::Mutex<super::language_runtime::AppServerLanguageRuntime>>,
     extensions: &'ctx super::Mutex<super::ExtensionPackages>,
@@ -168,6 +169,7 @@ pub(super) struct LanguageRequestProcessor<'ctx, C: LanguageRequestProcessorCont
 impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor<'ctx, C> {
     pub(super) fn new(
         context: &'ctx C,
+        connection_id: u64,
         config: &'ctx Option<super::Arc<super::ConfigStore>>,
         language: &'ctx super::Arc<super::Mutex<super::language_runtime::AppServerLanguageRuntime>>,
         extensions: &'ctx super::Mutex<super::ExtensionPackages>,
@@ -177,6 +179,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
     ) -> Self {
         Self {
             context,
+            connection_id,
             config,
             language,
             extensions,
@@ -188,12 +191,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
 }
 
 impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor<'ctx, C> {
-    fn runtime(
-        &self,
-    ) -> Result<
-        std::sync::MutexGuard<'ctx, super::language_runtime::AppServerLanguageRuntime>,
-        RpcError,
-    > {
+    fn runtime(&self) -> Result<super::language_runtime::LanguageRuntimeGuard<'ctx>, RpcError> {
         let snapshot = self
             .extensions
             .lock()
@@ -203,13 +201,23 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
             .language
             .lock()
             .map_err(|_| language_error(AppServerErrorName::ServerOverloaded))?;
+        let configuration = self
+            .config
+            .as_ref()
+            .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?
+            .read_snapshot()
+            .map_err(|_| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
+        runtime.reconcile_configuration(&configuration.values.language_servers);
         runtime
             .reconcile_extensions(&snapshot, self.editor_extension_policy.as_deref())
             .map_err(|error| {
                 log::error!("language extension discovery failed: {error}");
                 language_error(AppServerErrorName::LanguageServiceUnavailable)
             })?;
-        Ok(runtime)
+        Ok(super::language_runtime::LanguageRuntimeGuard::new(
+            runtime,
+            self.connection_id,
+        ))
     }
 
     pub(super) fn language_cancel(
@@ -284,6 +292,24 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
         result(&())
     }
 
+    pub(super) fn language_save(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: ash_app_server_protocol::protocol::language::LanguageSaveParams =
+            decode(params)?;
+        if params.text.len() > MAX_LANGUAGE_TARGET_BYTES {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let dir = self
+            .context
+            .language_dir_root_for(params.dir_id.as_deref(), params.session_directory.as_ref())?;
+        let path = dir
+            .resolve_existing(&params.path)
+            .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        self.runtime()?
+            .save_document(dir.canonical_path(), &path, params.text)
+            .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        result(&())
+    }
+
     pub(super) fn language_close(
         &self,
         params: &Value,
@@ -296,9 +322,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
         let source_path = dir
             .resolve_for_write(&params.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
-        self.language
-            .lock()
-            .map_err(|_| language_error(AppServerErrorName::ServerOverloaded))?
+        self.runtime()?
             .close_document(dir.canonical_path(), &source_path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         result(&())
@@ -461,7 +485,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
             std::path::PathBuf,
             LanguageDocumentRevision,
             LanguageDocumentPosition,
-            std::sync::MutexGuard<'ctx, super::language_runtime::AppServerLanguageRuntime>,
+            super::language_runtime::LanguageRuntimeGuard<'ctx>,
         ),
         RpcError,
     > {
@@ -485,10 +509,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
         source_path: &Path,
         document: &ash_app_server_protocol::protocol::language::LanguageDocumentDto,
         cancellation: &CancellationToken,
-    ) -> Result<
-        std::sync::MutexGuard<'ctx, super::language_runtime::AppServerLanguageRuntime>,
-        RpcError,
-    > {
+    ) -> Result<super::language_runtime::LanguageRuntimeGuard<'ctx>, RpcError> {
         if cancellation.is_cancelled() {
             return Err(language_error(AppServerErrorName::RequestCancelled));
         }
@@ -771,7 +792,13 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
             .manager()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let request_id = service
-            .request_signature_help(&source_path, revision, position, trigger)
+            .request_signature_help(
+                &source_path,
+                revision,
+                position,
+                trigger,
+                params.is_retrigger,
+            )
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let event = runtime
             .wait_for_request(request_id, cancellation)

@@ -126,6 +126,7 @@ impl LanguageServerClient {
             Arc::clone(&options.host),
             Arc::clone(&intentional_stop),
             dynamic_capabilities.clone(),
+            options.workspace_folders.clone(),
         );
         let raw = RawClient::new(commands);
         #[allow(deprecated)]

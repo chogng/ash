@@ -66,3 +66,5 @@ pub type LanguageServerCatalogState = LspServerAvailability;
 #[cfg(test)]
 #[path = "provider_tests.rs"]
 mod provider_tests;
+
+pub use resolver::resolve_executable;

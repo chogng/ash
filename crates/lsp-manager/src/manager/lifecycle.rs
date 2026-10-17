@@ -28,6 +28,7 @@ impl Supervisor {
         server.epoch = server.epoch.saturating_add(1).max(1);
         server.phase = ManagedServerPhase::Starting;
         let server_epoch = server.epoch;
+        let settings = server.definition.settings().clone();
         let (route, command, initialization_options) =
             server.definition.clone().into_launch_parts();
         self.emit_server_state(name, LanguageServerState::Starting);
@@ -36,11 +37,23 @@ impl Supervisor {
             generation: self.generation,
             server_epoch,
             commands: self.commands.clone(),
+            settings,
         });
         let mut options = LanguageServerOptions::new("ash-lsp-manager", env!("CARGO_PKG_VERSION"))
             .with_host(bridge);
         if let Ok(root_uri) = file_uri(&self.configuration.dir_root) {
-            options = options.with_root_uri(root_uri);
+            options = options
+                .with_root_uri(root_uri.clone())
+                .with_workspace_folders(vec![ash_lsp::lsp_types::WorkspaceFolder {
+                    uri: root_uri,
+                    name: self
+                        .configuration
+                        .dir_root
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .into_owned(),
+                }]);
         }
         if let Some(initialization_options) = initialization_options {
             options = options.with_initialization_options(initialization_options);

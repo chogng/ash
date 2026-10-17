@@ -80,6 +80,45 @@ flowchart LR
 - Ash Code 的 `/lsp [language-id]` 提供可用服务器、显式配置和会话目录页签；可编辑程序路径、启用状态和恢复默认值。
   查找入口将精确语言 ID 与 executable 能力筛选交给同一 Extensions。可用列表不启动服务器，也不代表进程正在运行。
 
+## 通用配置与运行期资源
+
+语言服务器配置仍由 App Server profile 的 `ConfigStore` 唯一持久化。Settings 的高级 JSON 字段和
+`languageServer/configure` 使用同一 typed contract、revision 和冲突检查；目录选择只改变可用性检查，
+不会另存一份 workspace 配置。自定义服务器需要绝对 executable 和非空 `languageIds`；已安装的
+integration 可以沿用声明的语言映射。`args` 原样追加到 integration 的启动参数（托管 Node 的脚本入口
+保留），不经过 shell 展开；`environment` 显式覆盖该命令的环境，原有清空环境策略保留。
+`initializationOptions` 进入 initialize，`settings` 按 `workspace/configuration` 的 section 顺序和嵌套路径返回。
+配置变更先退休旧会话；后续文档请求按新配置创建会话，失败不会继续使用旧命令。
+
+Settings 高级 JSON 示例：
+
+```json
+{
+  "languageIds": ["python"],
+  "args": ["--stdio"],
+  "environment": {"LSP_LOG_LEVEL": "info"},
+  "initializationOptions": {"feature": true},
+  "settings": {"python": {"analysis": {"typeCheckingMode": "strict"}}}
+}
+```
+
+用户 `config.toml` 中 `initializationOptions` 和 `settings` 保存为 JSON 字符串，确保嵌套 `null`
+和混合数组能够无损持久化；领域值和 RPC 始终使用解析后的 JSON。旧配置缺少这些字段时使用空默认值。
+
+每个客户端连接在各目录拥有独立的 LSP 会话和文档 revision；同目录的多个窗口不能共享未保存
+文档状态。关闭文档只作用于发起连接，断连回收该连接的进程、请求和包租约。diagnostics、运行状态
+和协商出的补全／签名帮助触发字符只发给所属连接。动态 capability 注册或注销后更新编辑器 provider，
+不使用固定字符表推测服务器能力。`workspace/workspaceFolders` 返回 initialize 中的目录快照。
+
+成功保存由前端 `ITextFileService.onDidSave` 触发：先在文档队列中同步当前 editor snapshot，再发送
+实际写盘文本。保存期间的新编辑保持 dirty；`didSave` 的文本不会替换当前 LSP 文档或提升其 revision。
+失败或取消的保存不产生成功保存事件。
+
+包发现不启动服务器。每个解析后的 packaged definition 持有 Manager lease，manager 在启动、重启和
+关闭期间保留该 definition；最后一个运行期 owner 释放后才能完成 deferred uninstall。构建 provider
+目录时逐包隔离验证失败，损坏包不会隐藏其他健康服务器；停用和卸载必须替换旧目录，不能在刷新失败时
+保留已撤销的 executable。全局存储不可用时退休旧 packaged provider。
+
 ## 1. 一次操作
 
 1. Desktop 通过 `config/read` 获得持久化 server preference；Settings UI 通过 revision-safe typed

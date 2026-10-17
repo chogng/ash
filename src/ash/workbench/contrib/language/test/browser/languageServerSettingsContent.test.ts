@@ -218,3 +218,34 @@ test('A save finishing after Settings is hidden does not move keyboard focus bac
 	await settle();
 	assert.equal(browserEnvironment.window.document.activeElement, outside);
 });
+
+test('custom language server JSON configuration round-trips and malformed drafts stay editable', async () => {
+	using fixture = new SettingsFixture();
+	fixture.content.setVisible(true);
+	await settle();
+	fixture.edit('Server ID', 'custom-python');
+	fixture.edit('Executable path (optional)', '/tools/server');
+	const advanced = fixture.root.querySelector<HTMLTextAreaElement>('textarea[aria-label="Advanced configuration (JSON)"]')!;
+	assert.ok(advanced);
+	advanced.value = '{"languageIds":["python"],"args":["--stdio"],"environment":{"EXAMPLE":"value"},"initializationOptions":{"features":true},"settings":{"python":{"analysis":{"typeCheckingMode":"strict"}}}}';
+	advanced.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
+	fixture.button('Save server configuration').click();
+	await settle();
+	assert.equal(fixture.writes.length, 1);
+	const saved = fixture.snapshot.configurations['custom-python']!;
+	assert.deepEqual(saved.languageIds, ['python']);
+	assert.deepEqual(saved.args, ['--stdio']);
+	assert.deepEqual(saved.settings, { python: { analysis: { typeCheckingMode: 'strict' } } });
+	assert.deepEqual(JSON.parse(advanced.value).initializationOptions, { features: true });
+	advanced.value = '{"args":42}';
+	fixture.button('Save server configuration').click();
+	await settle();
+	assert.equal(fixture.writes.length, 1);
+	assert.equal(fixture.button('Save server configuration').disabled, false);
+	assert.equal(advanced.value, '{"args":42}');
+});
+
+test('advanced language configuration is labeled in Chinese', () => {
+	using fixture = new SettingsFixture('zh-CN');
+	assert.ok(fixture.root.querySelector('textarea[aria-label="高级配置（JSON）"]'));
+});

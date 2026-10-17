@@ -632,8 +632,15 @@ impl LspManager {
         self.send(SupervisorCommand::Synchronize(document))
     }
 
-    pub fn save_document(&self, path: impl Into<PathBuf>) -> Result<(), LspManagerError> {
-        self.send(SupervisorCommand::Save(path.into()))
+    pub fn save_document(
+        &self,
+        path: impl Into<PathBuf>,
+        text: String,
+    ) -> Result<(), LspManagerError> {
+        self.send(SupervisorCommand::Save {
+            path: path.into(),
+            text,
+        })
     }
 
     pub fn close_document(&self, path: impl Into<PathBuf>) -> Result<(), LspManagerError> {
@@ -987,6 +994,7 @@ impl LspManager {
         revision: LanguageDocumentRevision,
         position: LanguageDocumentPosition,
         trigger: LanguageSignatureHelpTrigger,
+        is_retrigger: bool,
     ) -> Result<LanguageRequestId, LspManagerError> {
         self.queue_request(PendingLanguageRequest::SignatureHelp {
             id: self.next_request_id(),
@@ -994,6 +1002,7 @@ impl LspManager {
             revision,
             position,
             trigger,
+            is_retrigger,
         })
     }
 
@@ -1198,7 +1207,10 @@ impl Drop for LspManager {
 
 enum SupervisorCommand {
     Synchronize(LspDocumentSnapshot),
-    Save(PathBuf),
+    Save {
+        path: PathBuf,
+        text: String,
+    },
     Close(PathBuf),
     SetEnablement(LspManagerEnablement),
     ProtocolEvent {
@@ -1354,7 +1366,7 @@ impl Supervisor {
         while let Some(command) = commands.recv().await {
             match command {
                 SupervisorCommand::Synchronize(document) => self.synchronize(document).await,
-                SupervisorCommand::Save(path) => self.save(&path).await,
+                SupervisorCommand::Save { path, text } => self.save(&path, &text).await,
                 SupervisorCommand::Close(path) => self.close(&path).await,
                 SupervisorCommand::SetEnablement(enablement) => {
                     self.set_enablement(enablement).await;
@@ -1564,7 +1576,7 @@ impl Supervisor {
         }
     }
 
-    async fn save(&mut self, requested: &Path) {
+    async fn save(&mut self, requested: &Path, text: &str) {
         let path = self.absolute_path(requested);
         let Some(document) = self.documents.get(&path) else {
             return;
@@ -1572,7 +1584,7 @@ impl Supervisor {
         if !document.routed {
             return;
         }
-        if let Err(error) = self.router.save_document(&document.uri).await {
+        if let Err(error) = self.router.save_document(&document.uri, text).await {
             self.emit_document_failure(path, LspDocumentOperation::Save, error.to_string());
         }
     }
@@ -1825,9 +1837,34 @@ struct ProtocolEventBridge {
     generation: u64,
     server_epoch: u64,
     commands: mpsc::UnboundedSender<SupervisorCommand>,
+    settings: BTreeMap<String, serde_json::Value>,
 }
 
 impl LanguageServerHost for ProtocolEventBridge {
+    fn workspace_configuration(
+        &self,
+        items: &[ash_lsp::lsp_types::ConfigurationItem],
+    ) -> Vec<ash_lsp::WorkspaceConfiguration> {
+        let root = serde_json::to_value(&self.settings).expect("settings are JSON values");
+        items
+            .iter()
+            .map(|item| {
+                let value = item
+                    .section
+                    .as_deref()
+                    .filter(|section| !section.is_empty())
+                    .map_or(Some(&root), |section| {
+                        section
+                            .split('.')
+                            .try_fold(&root, |value, key| value.get(key))
+                    })
+                    .cloned()
+                    .unwrap_or(serde_json::Value::Null);
+                ash_lsp::WorkspaceConfiguration(value)
+            })
+            .collect()
+    }
+
     fn on_event(&self, event: LanguageServerEvent) {
         let _ = self.commands.send(SupervisorCommand::ProtocolEvent {
             server: self.server.clone(),

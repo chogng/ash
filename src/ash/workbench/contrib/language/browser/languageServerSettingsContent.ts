@@ -1,3 +1,5 @@
+import { validateJsonValue, type JsonValue } from '../../../../base/common/jsonValue.js';
+import type { LanguageServerConfiguration } from '../../../../platform/language/common/languageServerService.js';
 import {
 	defaultButtonStyles,
 	defaultCheckboxStyles,
@@ -62,6 +64,7 @@ export class LanguageServerSettingsContent extends Disposable implements Setting
 	private readonly server: InputBox;
 	private readonly enabled: Checkbox;
 	private readonly executable: InputBox;
+	private readonly advanced: InputBox<true>;
 	private readonly save: Button;
 	private readonly reset: Button;
 	private readonly refreshButton: Button;
@@ -120,6 +123,10 @@ export class LanguageServerSettingsContent extends Disposable implements Setting
 			inputBoxStyles: defaultInputBoxStyles,
 			presentation: 'field',
 		}));
+		this.advanced = this._register(new InputBox(this.field('advanced'), {
+			inputBoxStyles: defaultInputBoxStyles, presentation: 'field', flexibleHeight: true,
+			placeholder: '{ "languageIds": ["python"], "args": [], "environment": {}, "initializationOptions": {}, "settings": {} }',
+		}));
 		const actions = h(document, 'div');
 		actions.className = 'ash-language-server-settings-actions';
 		this.save = this.button(actions, () => this.mutate('save'));
@@ -159,7 +166,7 @@ export class LanguageServerSettingsContent extends Disposable implements Setting
 				const active = document.activeElement;
 				if (!this.visible || !isHTMLElement(active) || !this.domNode.contains(active)) { return undefined; }
 				return new AccessibleContentProvider(AccessibleViewProviderId.LanguageServers, { type: AccessibleViewType.Help },
-					() => this.label('helpText', 'Language Servers\nUse Tab and Shift+Tab to reach the workspace folder, language, Extensions, server selection, enable switch, executable path, Save, Use Default, Refresh, and Help. Use arrow keys in server and folder lists. Configuration applies to the App Server profile; the folder only controls availability checks. Leave the executable path empty to use the installed package or PATH. Rust support is enabled by default and downloads a managed rust-analyzer when no usable local server is available. An explicit path takes priority; disabling the server prevents installation. Use Default removes the override. After a conflict or an installation change, Refresh before saving. Find opens Extensions for the exact language and executable capability. Logs and startup failures are in Output; click a language server status entry to open its log.'),
+					() => this.label('helpText', 'Language Servers\nUse Tab and Shift+Tab to reach the workspace folder, language, Extensions, server selection, enable switch, executable path, Save, Use Default, Refresh, and Help. Use arrow keys in server and folder lists. Configuration applies to the App Server profile; the folder only controls availability checks. Leave the executable path empty to use the installed package or PATH. Rust support is enabled by default and downloads a managed rust-analyzer when no usable local server is available. An explicit path takes priority; disabling the server prevents installation. Advanced configuration accepts languageIds, args, environment, initializationOptions, and settings as JSON. A custom server requires an executable path and languageIds. Arguments are appended to the server launch command without shell expansion. Settings are returned to the server through workspace/configuration. Use Default removes the override. After a conflict or an installation change, Refresh before saving. Find opens Extensions for the exact language and executable capability. Logs and startup failures are in Output; click a language server status entry to open its log.'),
 					() => active.focus(), AccessibilityVerbositySettingId.LanguageServers);
 			},
 		}));
@@ -242,6 +249,8 @@ export class LanguageServerSettingsContent extends Disposable implements Setting
 		const config = this.snapshot?.configurations[id];
 		this.enabled.checked = config ? config.mode === 'enabled' : !!this.snapshot?.servers.some(server => server.id === id);
 		this.executable.value = config?.executable ?? '';
+		const { mode: _mode, executable: _executable, ...advanced } = config ?? {};
+		this.advanced.value = Object.keys(advanced).length ? JSON.stringify(advanced, undefined, 2) : '{}';
 		this.updateActions();
 	}
 
@@ -249,12 +258,21 @@ export class LanguageServerSettingsContent extends Disposable implements Setting
 		const snapshot = this.snapshot;
 		if (!snapshot || this.working || this.loading) { return; }
 		const id = this.server.value.trim();
+		let advanced: Omit<LanguageServerConfiguration, 'mode' | 'executable'> = {};
+		if (action === 'save') {
+			try { advanced = parseAdvancedConfiguration(this.advanced.value); }
+			catch {
+				this.setStatus('invalidAdvanced', 'Enter valid JSON with languageIds, args, environment, initializationOptions, or settings. Language IDs and arguments are arrays of strings; environment values are strings; settings is an object.');
+				this.advanced.focus();
+				return;
+			}
+		}
 		const generation = this.generation;
 		this.working = true;
 		this.updateActions();
 		try {
 			if (action === 'reset') { await this.servers.removeConfiguration(id, snapshot.revision); }
-			else { await this.servers.configure(id, { mode: this.enabled.checked ? 'enabled' : 'disabled', executable: this.executable.value.trim() || undefined }, snapshot.revision); }
+			else { await this.servers.configure(id, { ...advanced, mode: this.enabled.checked ? 'enabled' : 'disabled', executable: this.executable.value.trim() || undefined }, snapshot.revision); }
 		} catch (error) {
 			if (this.isDisposed || generation !== this.generation) { return; }
 			// A failed write may mean a revision conflict; only an explicit read permits another write.
@@ -284,7 +302,7 @@ export class LanguageServerSettingsContent extends Disposable implements Setting
 
 	private updateActions(): void {
 		const enabled = !this.working && !this.loading;
-		for (const control of [this.directory, this.language, this.list, this.server, this.enabled, this.executable, this.find, this.refreshButton]) { control.enabled = enabled; }
+		for (const control of [this.directory, this.language, this.list, this.server, this.enabled, this.executable, this.advanced, this.find, this.refreshButton]) { control.enabled = enabled; }
 		this.save.enabled = enabled && !!this.snapshot && !!this.server.value.trim();
 		this.reset.enabled = enabled && !!this.snapshot?.configurations[this.server.value.trim()];
 		this.domNode.setAttribute('aria-busy', String(this.working || this.loading));
@@ -294,7 +312,7 @@ export class LanguageServerSettingsContent extends Disposable implements Setting
 		const hint = this.accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.LanguageServers);
 		this.domNode.setAttribute('aria-label', `${this.label('title', 'Language Servers')}${hint ? ` ${hint}` : ''}`);
 		this.note.textContent = this.label('note', 'Rust support is built in. Ash uses an available rust-analyzer or downloads a managed version when needed. You can disable it or set an executable path. Logs and startup failures are shown in Output.');
-		const fields: readonly [string, string][] = [['directory', 'Workspace folder'], ['language', 'Language ID'], ['list', 'Language servers'], ['server', 'Server ID'], ['enabled', 'Enable server'], ['executable', 'Executable path (optional)']];
+		const fields: readonly [string, string][] = [['directory', 'Workspace folder'], ['language', 'Language ID'], ['list', 'Language servers'], ['server', 'Server ID'], ['enabled', 'Enable server'], ['executable', 'Executable path (optional)'], ['advanced', 'Advanced configuration (JSON)']];
 		for (const [key, text] of fields) { this.labels.get(key)!.textContent = this.label(key, text); }
 		this.directory.setAriaLabel(this.label('directory', 'Workspace folder'));
 		this.list.setAriaLabel(this.label('list', 'Language servers'));
@@ -302,6 +320,7 @@ export class LanguageServerSettingsContent extends Disposable implements Setting
 		this.server.inputElement.setAttribute('aria-label', this.label('server', 'Server ID'));
 		this.enabled.input.setAttribute('aria-label', this.label('enabled', 'Enable server'));
 		this.executable.inputElement.setAttribute('aria-label', this.label('executable', 'Executable path (optional)'));
+		this.advanced.inputElement.setAttribute('aria-label', this.label('advanced', 'Advanced configuration (JSON)'));
 		this.save.label = this.label('save', 'Save server configuration');
 		this.reset.label = this.label('reset', 'Use default configuration');
 		this.refreshButton.label = this.label('refresh', 'Refresh');
@@ -341,3 +360,30 @@ export class LanguageServerSettingsContent extends Disposable implements Setting
 }
 
 let nextLanguageServerSettingsId = 0;
+
+function parseAdvancedConfiguration(text: string): Omit<LanguageServerConfiguration, 'mode' | 'executable'> {
+	const value = validateJsonValue(JSON.parse(text || '{}'));
+	const object = (value: JsonValue): value is { readonly [key: string]: JsonValue; } => value !== null && typeof value === 'object' && !Array.isArray(value);
+	if (!object(value) || Object.keys(value).some(key => !['languageIds', 'args', 'environment', 'initializationOptions', 'settings'].includes(key))) throw new TypeError('configuration');
+	const strings = (value: JsonValue | undefined): readonly string[] | undefined => {
+		if (value === undefined) return undefined;
+		if (!Array.isArray(value) || !value.every((entry): entry is string => typeof entry === 'string')) throw new TypeError('string array');
+		return value;
+	};
+	const environment: Record<string, string> = {};
+	if (value.environment !== undefined) {
+		if (!object(value.environment)) throw new TypeError('environment');
+		for (const [key, entry] of Object.entries(value.environment)) {
+			if (typeof entry !== 'string') throw new TypeError('environment value');
+			environment[key] = entry;
+		}
+	}
+	if (value.settings !== undefined && !object(value.settings)) throw new TypeError('settings');
+	return {
+		...(value.languageIds === undefined ? {} : { languageIds: strings(value.languageIds) }),
+		...(value.args === undefined ? {} : { args: strings(value.args) }),
+		...(value.environment === undefined ? {} : { environment }),
+		...(value.initializationOptions === undefined ? {} : { initializationOptions: value.initializationOptions }),
+		...(value.settings === undefined ? {} : { settings: value.settings as Readonly<Record<string, JsonValue>> }),
+	};
+}

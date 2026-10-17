@@ -1089,15 +1089,45 @@
       "additionalProperties": false,
       "description": "Runtime-free language-server preference stored by the User Config authority.",
       "properties": {
+        "args": {
+          "description": "Appended to the integration's launch arguments; no shell expansion is performed.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "environment": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
         "executable": {
           "type": [
             "string",
             "null"
           ]
         },
+        "initializationOptions": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "languageIds": {
+          "description": "Empty uses the integration's declared route; custom servers must supply a route.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "mode": {
           "$ref": "#/$defs/LanguageServerModeConfig",
           "default": "enabled"
+        },
+        "settings": {
+          "description": "Complete workspace/configuration settings object, keyed by section.",
+          "type": "string"
         }
       },
       "type": "object"

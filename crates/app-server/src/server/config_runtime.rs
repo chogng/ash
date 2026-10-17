@@ -11,11 +11,18 @@ use std::sync::RwLock;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
+#[derive(Clone)]
+struct LanguageConfigurationTarget {
+    config: Arc<ConfigStore>,
+    runtime: std::sync::Weak<std::sync::Mutex<super::language_runtime::AppServerLanguageRuntime>>,
+}
+
 pub(super) struct ConfigWatcher {
     shutdown: Option<std::sync::mpsc::Sender<()>>,
     thread: Option<JoinHandle<()>>,
     extensions: Arc<RwLock<Arc<ash_extension_api::ExtensionRegistry>>>,
     hooks: Arc<RwLock<Option<Arc<DeclarativeHookRuntime>>>>,
+    language: Arc<RwLock<Option<LanguageConfigurationTarget>>>,
 }
 
 impl ConfigWatcher {
@@ -30,6 +37,8 @@ impl ConfigWatcher {
         let current_extensions = Arc::clone(&extensions);
         let hooks = Arc::new(RwLock::new(hooks));
         let current_hooks = Arc::clone(&hooks);
+        let language = Arc::new(RwLock::new(None::<LanguageConfigurationTarget>));
+        let current_language = Arc::clone(&language);
         let (shutdown, shutdown_receiver) = std::sync::mpsc::channel();
         let thread = std::thread::Builder::new()
             .name("ash-config-notifications".into())
@@ -40,6 +49,16 @@ impl ConfigWatcher {
                     }
                     match changes.recv_timeout(Duration::from_millis(100)) {
                         Ok(change) => {
+                            if let Some(target) = current_language
+                                .read()
+                                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                                .clone()
+                                && let Some(owner) = target.runtime.upgrade()
+                                && let Ok(snapshot) = target.config.read_snapshot()
+                                && let Ok(mut runtime) = owner.lock()
+                            {
+                                runtime.reconcile_configuration(&snapshot.values.language_servers);
+                            }
                             let extensions = current_extensions
                                 .read()
                                 .expect("extension registry lock poisoned")
@@ -76,7 +95,23 @@ impl ConfigWatcher {
             thread,
             extensions,
             hooks,
+            language,
         }
+    }
+
+    pub(super) fn bind_language(
+        &self,
+        config: Arc<ConfigStore>,
+        language: &Arc<std::sync::Mutex<super::language_runtime::AppServerLanguageRuntime>>,
+    ) {
+        *self
+            .language
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+            Some(LanguageConfigurationTarget {
+                config,
+                runtime: Arc::downgrade(language),
+            });
     }
 
     pub(super) fn bind_hooks(&self, hooks: Arc<DeclarativeHookRuntime>) {

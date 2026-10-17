@@ -107,6 +107,13 @@ pub struct LocalCapabilitySource {
     host_path: PathBuf,
 }
 
+/// Independently verified sources. A damaged package cannot hide healthy installations or
+/// prevent a consumer from retiring a source that has been removed or disabled.
+pub struct LocalCapabilitySourceSnapshot {
+    pub sources: Vec<LocalCapabilitySource>,
+    pub failures: Vec<(PackageRef, ExtensionsClientError)>,
+}
+
 impl LocalCapabilitySource {
     /// Describes an exact Skill without exposing package naming conventions to its consumer.
     pub fn skill_root(&self) -> Option<ash_utils_plugins::PluginSkillRoot> {
@@ -367,6 +374,19 @@ impl ExtensionPackageManager {
         &self,
         kind: CapabilityKind,
     ) -> Result<Vec<LocalCapabilitySource>, ExtensionsClientError> {
+        let snapshot = self.local_capability_source_snapshot(kind)?;
+        if let Some((_, error)) = snapshot.failures.into_iter().next() {
+            return Err(error);
+        }
+        Ok(snapshot.sources)
+    }
+
+    /// Verifies each installation independently for consumers that must reconcile revocations
+    /// even when another package is unavailable. Storage failures still fail the whole snapshot.
+    pub fn local_capability_source_snapshot(
+        &self,
+        kind: CapabilityKind,
+    ) -> Result<LocalCapabilitySourceSnapshot, ExtensionsClientError> {
         let durable = self
             .runtime
             .lock()
@@ -374,6 +394,7 @@ impl ExtensionPackageManager {
             .durable
             .clone();
         let mut sources = Vec::new();
+        let mut failures = Vec::new();
         for installation in durable
             .installations
             .values()
@@ -384,19 +405,25 @@ impl ExtensionPackageManager {
                 .iter()
                 .filter(|capability| capability.descriptor.kind == kind)
             {
-                sources.push(LocalCapabilitySource {
-                    package: installation.package.clone(),
-                    capability: capability.descriptor.reference.clone(),
-                    kind,
-                    id: capability.descriptor.id.clone(),
-                    runtime: capability.runtime.clone(),
-                    language_ids: capability.language_ids.clone(),
-                    package_root: self.store.verified_package_root(&installation.package)?,
-                    relative_path: capability.path.clone(),
-                    host_path: self
-                        .store
-                        .verified_package_path(&installation.package, &capability.path)?,
-                });
+                let source = (|| {
+                    Ok(LocalCapabilitySource {
+                        package: installation.package.clone(),
+                        capability: capability.descriptor.reference.clone(),
+                        kind,
+                        id: capability.descriptor.id.clone(),
+                        runtime: capability.runtime.clone(),
+                        language_ids: capability.language_ids.clone(),
+                        package_root: self.store.verified_package_root(&installation.package)?,
+                        relative_path: capability.path.clone(),
+                        host_path: self
+                            .store
+                            .verified_package_path(&installation.package, &capability.path)?,
+                    })
+                })();
+                match source {
+                    Ok(source) => sources.push(source),
+                    Err(error) => failures.push((installation.package.clone(), error)),
+                }
             }
         }
         sources.sort_by(|left, right| {
@@ -413,7 +440,7 @@ impl ExtensionPackageManager {
                     &right.capability.id,
                 ))
         });
-        Ok(sources)
+        Ok(LocalCapabilitySourceSnapshot { sources, failures })
     }
 
     fn install_downloaded(

@@ -1,3 +1,5 @@
+import { ITextFileService } from '../../../textfile/common/textfiles.js';
+import type { ITextFileSaveEvent } from '../../../textfile/common/textFileService.js';
 import assert from "node:assert/strict";
 import { suite, test } from "mocha";
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
@@ -19,9 +21,10 @@ import { WorkspaceContextService } from "../../../workspaces/browser/workspaceCo
 import { type CodeIntelligenceDocumentSnapshot, type ICodeIntelligenceDocumentService } from "../../../codeIntelligence/common/codeIntelligenceDocumentService.js";
 import { AppServerLanguageDiagnosticsService } from "../../browser/appServerLanguageDiagnosticsService.js";
 
-function createDiagnosticsService(api: ILanguageApi, events: IServerEventApi, workspace: WorkspaceContextService, documents?: ICodeIntelligenceDocumentService, trust?: IWorkspaceTrustManagementService): AppServerLanguageDiagnosticsService {
+function createDiagnosticsService(api: ILanguageApi, events: IServerEventApi, workspace: WorkspaceContextService, documents?: ICodeIntelligenceDocumentService, trust?: IWorkspaceTrustManagementService, saves: Event<ITextFileSaveEvent> = Event.None): AppServerLanguageDiagnosticsService {
 	using services = new InstantiationService();
 	services.registerInstance(IServerEventApi, events);
+	services.registerInstance(ITextFileService, { onDidSave: saves, onDidChangeFiles: Event.None, resolve: async () => { throw new Error('unexpected resolve'); }, save: async () => { throw new Error('unexpected save'); } });
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IWorkspaceTrustManagementService, trust ?? {
 		onDidChangeTrust: Event.None,
@@ -228,6 +231,8 @@ class FakeCodeIntelligenceDocuments implements ICodeIntelligenceDocumentService 
 }
 
 class FakeLanguageApi implements ILanguageApi {
+	async save(_params: Parameters<ILanguageApi['save']>[0]): Promise<void> { }
+
 	availableServers = [
 		{ id: "typescript", languageIds: ["typescript", "typescriptreact", "javascript", "javascriptreact"] },
 		{ id: "rust", languageIds: ["rust"] },
@@ -398,6 +403,31 @@ test("installing a language server synchronizes an already open document and uni
 	assert.equal(api.synchronized.length, 1);
 });
 
+for (const desktop of [false, true]) test(`profile configuration changes replay open documents and retire disabled diagnostics, desktop=${desktop}`, async () => {
+	const api = new FakeLanguageApi();
+	api.availableServers = [];
+	const events = new FakeServerEvents();
+	using trust = new FakeWorkspaceTrustService(['executeCommands', 'useLanguageServices']);
+	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/project') });
+	using service = createDiagnosticsService(api, events, workspace, undefined, desktop ? trust : undefined);
+	using model = new TextModel('value = 1', { languageId: 'python' });
+	const resource = URI.file('/project/main.py');
+	using acquisition = service.acquire(resource, 'python', model);
+	await tick();
+	assert.equal(api.synchronized.length, 0);
+	api.availableServers = [{ id: 'custom-python', languageIds: ['python'] }];
+	events.fire({ method: 'config/changed', params: { revision: 1, generation: 1 } });
+	await tick();
+	assert.equal(api.synchronized.length, 1);
+	events.fire({ method: 'language/diagnostics', params: { path: 'main.py', revision: 1, diagnostics: [{ range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 1 } }, severity: 'error', message: 'current server', code: null, source: 'custom-python' }] } });
+	assert.equal(service.getDiagnostics(resource)?.diagnostics.length, 1);
+	api.availableServers = [];
+	events.fire({ method: 'config/changed', params: { revision: 2, generation: 2 } });
+	await tick();
+	assert.deepEqual(service.getAllDiagnostics(), []);
+	assert.equal(api.synchronized.length, 1);
+});
+
 
 test("uninstall discards pending workspace diagnostic reports and late server notifications", async () => {
 	const api = new FakeLanguageApi();
@@ -419,4 +449,28 @@ test("uninstall discards pending workspace diagnostic reports and late server no
 	using acquisition = service.acquire(URI.file("/project/main.py"), "python", model);
 	events.fire({ method: "language/diagnostics", params: { path: "main.py", revision: 1, diagnostics: [diagnostic] } });
 	assert.deepEqual(service.getAllDiagnostics(), []);
+});
+
+test('successful saves synchronize the current dirty snapshot before reporting exact saved content', async () => {
+	using saves = new Emitter<ITextFileSaveEvent>();
+	const api = new FakeLanguageApi();
+	const operations: unknown[] = [];
+	const synchronize = api.synchronize.bind(api);
+	api.synchronize = async params => { operations.push(['synchronize', params.document.text]); await synchronize(params); };
+	api.save = async params => { operations.push(['save', params.text]); };
+	using workspace = new WorkspaceContextService({ id: 'save', uri: URI.file('/project') });
+	using service = createDiagnosticsService(api, new FakeServerEvents(), workspace, undefined, undefined, saves.event);
+	using model = new TextModel('saved');
+	const resource = URI.file('/project/main.rs');
+	using acquisition = service.acquire(resource, 'rust', model);
+	await tick();
+	operations.length = 0;
+	model.applyEdits([{ range: new Range(1, 1, 1, 6), text: 'new dirty text' }]);
+	saves.fire({ resource, content: 'saved', revision: 'disk-revision' });
+	await tick();
+	assert.deepEqual(operations, [['synchronize', 'new dirty text'], ['save', 'saved']]);
+	service.dispose();
+	saves.fire({ resource, content: 'saved', revision: 'disk-revision' });
+	await tick();
+	assert.equal(operations.length, 2);
 });

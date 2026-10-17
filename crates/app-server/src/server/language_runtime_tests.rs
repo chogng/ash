@@ -59,6 +59,7 @@ fn installed_server_catalog_respects_configuration_without_starting_a_process() 
         LanguageServerConfig {
             mode: LanguageServerModeConfig::Enabled,
             executable: Some(fixture.node.clone()),
+            ..Default::default()
         },
     );
     let definitions = runtime
@@ -127,6 +128,7 @@ fn extension_advertisement_is_lazy_and_respects_language_and_extension_disableme
         LanguageServerConfig {
             mode: LanguageServerModeConfig::Disabled,
             executable: None,
+            ..Default::default()
         },
     );
     assert_eq!(runtime.acquisitions(&configuration).count(), 0);
@@ -160,6 +162,7 @@ fn extension_advertisement_is_lazy_and_respects_language_and_extension_disableme
         LanguageServerConfig {
             mode: LanguageServerModeConfig::Enabled,
             executable: None,
+            ..Default::default()
         },
     );
     // Removing the extension never resurrects the old hard-coded provider, even with an override.
@@ -230,7 +233,11 @@ fn configuration(
     LanguageServersConfig {
         servers: [(
             LanguageServerId::new(CSS_LANGUAGE_SERVER_ID).unwrap(),
-            LanguageServerConfig { mode, executable },
+            LanguageServerConfig {
+                mode,
+                executable,
+                ..Default::default()
+            },
         )]
         .into_iter()
         .collect(),
@@ -273,5 +280,230 @@ fn write_executable(path: &Path) {
     {
         use std::os::unix::fs::PermissionsExt;
         fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+}
+
+#[test]
+fn configured_server_uses_the_complete_launch_contract_without_starting_during_discovery() {
+    let fixture = ProviderFixture::new();
+    let mut configuration = LanguageServersConfig::default();
+    let config = LanguageServerConfig {
+        executable: Some(fixture.node.clone()),
+        language_ids: vec!["demo".into()],
+        args: vec!["--stdio".into(), "argument with spaces".into()],
+        environment: std::collections::BTreeMap::from([("LSP_TEST".into(), "yes".into())]),
+        initialization_options: Some(serde_json::json!({"feature":true})),
+        settings: std::collections::BTreeMap::from([(
+            "demo".into(),
+            serde_json::json!({"enabled":true}),
+        )]),
+        ..Default::default()
+    };
+    configuration
+        .servers
+        .insert(LanguageServerId::new("custom-lsp").unwrap(), config.clone());
+    let runtime = AppServerLanguageRuntime::new(Arc::new(UpdateBroker::default()));
+    let definition = runtime
+        .definitions(fixture.dir.path(), &configuration)
+        .unwrap()
+        .pop()
+        .unwrap();
+    assert_eq!(definition.settings(), &config.settings);
+    let (route, command, options) = definition.into_launch_parts();
+    assert_eq!(route.language_ids().collect::<Vec<_>>(), ["demo"]);
+    assert_eq!(
+        command.arguments(),
+        [
+            std::ffi::OsString::from("--stdio"),
+            "argument with spaces".into()
+        ]
+    );
+    assert_eq!(
+        command.environment()[std::ffi::OsStr::new("LSP_TEST")],
+        "yes"
+    );
+    assert_eq!(options, config.initialization_options);
+    assert!(runtime.manager().is_none());
+}
+
+#[cfg(unix)]
+#[test]
+fn connection_sessions_keep_independent_revisions_saved_text_and_process_lifetimes() {
+    let root = tempfile::tempdir().unwrap();
+    let script = root.path().join("server.sh");
+    fs::write(&script, r#"
+log="$LSP_LOG/$$"
+printf '{"environment":"%s","argument":"%s"}\n' "$LSP_OPTION" "$1" >> "$log"
+text= saved=
+cr=$(printf '\r')
+while :; do
+  length=
+  while IFS= read -r line; do
+    line=${line%"$cr"}
+    [ -z "$line" ] && break
+    case "$line" in Content-Length:*) length=${line#Content-Length: };; esac
+  done
+  [ -n "$length" ] || exit 0
+  message=$(dd bs=1 count="$length" 2>/dev/null)
+  printf '%s\n' "$message" >> "$log"
+  id=$(printf '%s' "$message" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
+  case "$message" in
+    *'"method":"exit"'*) exit 0;;
+    *'"method":"textDocument/didOpen"'*|*'"method":"textDocument/didChange"'*)
+      text=$(printf '%s' "$message" | sed -n 's/.*"text":"\([^"]*\)".*/\1/p');;
+    *'"method":"textDocument/didSave"'*)
+      saved=$(printf '%s' "$message" | sed -n 's/.*"text":"\([^"]*\)".*/\1/p');;
+  esac
+  [ -n "$id" ] || continue
+  result=null
+  case "$message" in
+    *'"method":"initialize"'*) result='{"capabilities":{"textDocumentSync":{"openClose":true,"change":1,"save":{"includeText":true}},"hoverProvider":true,"completionProvider":{"triggerCharacters":["="]},"signatureHelpProvider":{"triggerCharacters":["["],"retriggerCharacters":["]"]}}}';;
+    *'"method":"textDocument/hover"'*) result="{\"contents\":\"$text|$saved|$$\"}";;
+  esac
+  response="{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":$result}"
+  printf 'Content-Length: %s\r\n\r\n%s' "${#response}" "$response"
+done
+"#).unwrap();
+    let logs = root.path().join("logs");
+    fs::create_dir(&logs).unwrap();
+    let path = root.path().join("same.demo");
+    fs::write(&path, "disk").unwrap();
+    let configuration = LanguageServersConfig {
+        servers: std::collections::BTreeMap::from([(
+            LanguageServerId::new("fixture").unwrap(),
+            LanguageServerConfig {
+                executable: Some("/bin/sh".into()),
+                language_ids: vec!["demo".into()],
+                args: vec![
+                    script.to_string_lossy().into_owned(),
+                    "--custom-flag".into(),
+                ],
+                environment: std::collections::BTreeMap::from([
+                    ("LSP_LOG".into(), logs.to_string_lossy().into_owned()),
+                    ("LSP_OPTION".into(), "applied".into()),
+                ]),
+                initialization_options: Some(serde_json::json!({"custom":true})),
+                ..Default::default()
+            },
+        )]),
+    };
+    let store =
+        Arc::new(ash_config::ConfigStore::open(root.path().join("config.sqlite3")).unwrap());
+    let grant = ash_file_access::Grant::for_environment(
+        ash_file_access::Dir::open_local(root.path()).unwrap(),
+        ash_file_access::GrantSource::ExplicitUser,
+        ash_file_access::Permissions::new([
+            ash_file_access::Permission::UseLanguageServices,
+            ash_file_access::Permission::ExecuteCommands,
+            ash_file_access::Permission::ReadFiles,
+        ]),
+    );
+    let mut server = crate::tests::server()
+        .with_config_store(store)
+        .with_file_system(Arc::new(ash_file_system::LocalFileSystem::new(
+            grant.clone(),
+        )));
+    server.env_runtime_mut().selected_grant = Some(grant);
+    let mut first = server.connection();
+    let mut second = server.connection();
+    crate::tests::initialize(&server, &mut first);
+    crate::tests::initialize(&server, &mut second);
+    let sequence = std::sync::atomic::AtomicU64::new(2);
+    let request =
+        |connection: &mut crate::ConnectionState, method: &str, params: serde_json::Value| {
+            let id = sequence.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let response = crate::tests::call(
+                &server,
+                connection,
+                serde_json::json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}),
+            );
+            assert!(response.get("result").is_some(), "{response}");
+            response["result"].clone()
+        };
+    let config = configuration.servers.values().next().unwrap();
+    request(
+        &mut first,
+        "languageServer/configure",
+        serde_json::json!({
+            "commandId":"configure-fixture","expectedRevision":0,"serverId":"fixture",
+            "config":{"mode":"enabled","executable":config.executable,"languageIds":config.language_ids,"args":config.args,"environment":config.environment,"initializationOptions":config.initialization_options,"settings":{"demo":{"strict":true}}}
+        }),
+    );
+    let hover = |connection: &mut crate::ConnectionState, revision, text: &str| {
+        let operation = sequence.load(std::sync::atomic::Ordering::Relaxed);
+        let result = request(
+            connection,
+            "language/hover",
+            serde_json::json!({"operationId":format!("hover-{operation}"),"request":{
+                "document":{"path":"same.demo","languageId":"demo","revision":revision,"text":text},
+                "position":{"lineIndex":0,"columnIndex":0}
+            }}),
+        );
+        result["contents"].as_str().unwrap().to_owned()
+    };
+    assert!(hover(&mut first, 9, "alpha").starts_with("alpha||"));
+    let second_result = hover(&mut second, 1, "beta");
+    assert!(second_result.starts_with("beta||"), "{second_result}");
+    assert!(hover(&mut first, 10, "dirty").starts_with("dirty||"));
+    request(
+        &mut first,
+        "language/save",
+        serde_json::json!({"path":"same.demo","text":"alpha"}),
+    );
+    assert!(hover(&mut first, 10, "dirty").starts_with("dirty|alpha|"));
+    let notifications = server.drain_notifications(&mut first);
+    let capabilities: serde_json::Value = notifications
+        .iter()
+        .map(|raw| serde_json::from_str::<serde_json::Value>(raw).unwrap())
+        .find(|value| value["method"] == "language/serverCapabilities")
+        .unwrap();
+    assert_eq!(
+        capabilities["params"]["completionTriggerCharacters"],
+        serde_json::json!(["="])
+    );
+    request(
+        &mut first,
+        "language/close",
+        serde_json::json!({"path":"same.demo"}),
+    );
+    assert_eq!(hover(&mut second, 1, "beta"), second_result);
+    server.close_connection(first);
+    assert_eq!(hover(&mut second, 1, "beta"), second_result);
+    request(
+        &mut second,
+        "languageServer/configure",
+        serde_json::json!({"commandId":"disable-fixture","expectedRevision":1,"serverId":"fixture","config":{"mode":"disabled"}}),
+    );
+    assert!(
+        server.language.lock().unwrap().connections.is_empty(),
+        "configuration must retire sessions before returning"
+    );
+    server.close_connection(second);
+    for entry in fs::read_dir(logs).unwrap() {
+        let messages: Vec<serde_json::Value> = fs::read_to_string(entry.unwrap().path())
+            .unwrap()
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect();
+        assert_eq!(
+            messages[0],
+            serde_json::json!({"environment":"applied","argument":"--custom-flag"})
+        );
+        let initialize = messages
+            .iter()
+            .find(|message| message["method"] == "initialize")
+            .unwrap();
+        assert_eq!(
+            initialize["params"]["initializationOptions"],
+            serde_json::json!({"custom":true})
+        );
+        assert_eq!(
+            initialize["params"]["workspaceFolders"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(messages.last().unwrap()["method"], "exit");
     }
 }

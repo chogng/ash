@@ -71,6 +71,7 @@ impl LspRequestMetricsSink for AppServerLanguageMetrics {
 }
 
 struct AppServerLanguageEventSink {
+    routes: BTreeMap<String, Vec<String>>,
     sender: mpsc::Sender<LspManagerEvent>,
     diagnostics: Arc<LanguageDiagnosticPublisher>,
 }
@@ -92,6 +93,7 @@ impl LspManagerEventSink for AppServerLanguageEventSink {
         }) = &event
         {
             self.diagnostics.updates.publish_language_server_message(
+                self.diagnostics.connection_id,
                 LanguageServerMessageNotification {
                     dir_id: self.diagnostics.dir_id.clone(),
                     server: server.clone(),
@@ -128,6 +130,7 @@ impl LspManagerEventSink for AppServerLanguageEventSink {
             &event
         {
             self.diagnostics.updates.publish_language_server_progress(
+                self.diagnostics.connection_id,
                 LanguageServerProgressNotification {
                     dir_id: self.diagnostics.dir_id.clone(),
                     server: progress.server.clone(),
@@ -146,10 +149,27 @@ impl LspManagerEventSink for AppServerLanguageEventSink {
         }) = &event
         {
             self.diagnostics.updates.publish_language_server_state(
+                self.diagnostics.connection_id,
                 LanguageServerStateNotification {
                     dir_id: self.diagnostics.dir_id.clone(),
                     server: server.clone(),
                     state: language_server_state_to_dto(state),
+                },
+            );
+        }
+        if let LspManagerEvent::Notification(LspManagerNotification::CapabilitiesChanged {
+            server,
+            capabilities,
+        }) = &event
+        {
+            self.diagnostics.updates.publish_language_server_capabilities(
+                self.diagnostics.connection_id,
+                ash_app_server_protocol::protocol::language::LanguageServerCapabilitiesNotification {
+                    dir_id: self.diagnostics.dir_id.clone(), server: server.clone(),
+                    language_ids: self.routes.get(server).cloned().unwrap_or_default(),
+                    completion_trigger_characters: capabilities.completion_trigger_characters.clone(),
+                    signature_help_trigger_characters: capabilities.signature_help_trigger_characters.clone(),
+                    signature_help_retrigger_characters: capabilities.signature_help_retrigger_characters.clone(),
                 },
             );
         }
@@ -194,6 +214,7 @@ struct LanguageDiagnosticPublisher {
     documents: Arc<Mutex<BTreeMap<PathBuf, AppServerLanguageDocumentSnapshot>>>,
     updates: Arc<UpdateBroker>,
     dir_id: Option<String>,
+    connection_id: Option<u64>,
 }
 
 impl LanguageDiagnosticPublisher {
@@ -214,13 +235,15 @@ impl LanguageDiagnosticPublisher {
             .cloned()
             .filter_map(|diagnostic| diagnostic_to_dto(&snapshot.text, diagnostic))
             .collect();
-        self.updates
-            .publish_language_diagnostics(LanguageDiagnosticsNotification {
+        self.updates.publish_language_diagnostics(
+            self.connection_id,
+            LanguageDiagnosticsNotification {
                 dir_id: self.dir_id.clone(),
                 path: snapshot.relative_path,
                 revision: snapshot.revision.value(),
                 diagnostics,
-            });
+            },
+        );
     }
 }
 
@@ -246,6 +269,44 @@ impl Default for AppServerLanguageDirState {
     }
 }
 
+/// A connection borrows its own LSP session while the shared owner serializes catalog changes.
+/// Editor revisions are local to a client, so they must never share a document-version table.
+pub(super) struct LanguageRuntimeGuard<'a> {
+    runtime: std::sync::MutexGuard<'a, AppServerLanguageRuntime>,
+    connection_id: u64,
+}
+
+impl<'a> LanguageRuntimeGuard<'a> {
+    pub(super) fn new(
+        mut runtime: std::sync::MutexGuard<'a, AppServerLanguageRuntime>,
+        connection_id: u64,
+    ) -> Self {
+        if !runtime.connections.contains_key(&connection_id) {
+            let mut child = runtime.child_runtime();
+            child.connection_id = Some(connection_id);
+            runtime.connections.insert(connection_id, Box::new(child));
+        }
+        Self {
+            runtime,
+            connection_id,
+        }
+    }
+}
+impl std::ops::Deref for LanguageRuntimeGuard<'_> {
+    type Target = AppServerLanguageRuntime;
+    fn deref(&self) -> &Self::Target {
+        &self.runtime.connections[&self.connection_id]
+    }
+}
+impl std::ops::DerefMut for LanguageRuntimeGuard<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.runtime
+            .connections
+            .get_mut(&self.connection_id)
+            .expect("connection session exists")
+    }
+}
+
 pub(super) struct AppServerLanguageRuntime {
     pub(super) manager: Option<LspManager>,
     receiver: Option<mpsc::Receiver<LspManagerEvent>>,
@@ -257,6 +318,10 @@ pub(super) struct AppServerLanguageRuntime {
     home: Option<PathBuf>,
     network_policy: ash_http_client::OutboundNetworkPolicy,
     extension_generation: Option<(u64, u64)>,
+    connections: BTreeMap<u64, Box<AppServerLanguageRuntime>>,
+    connection_id: Option<u64>,
+    // Last applied immutable Config snapshot, used only to invalidate runtime resources.
+    applied_configuration: Option<LanguageServersConfig>,
     acquisitions: BTreeMap<String, LanguageServerAcquisition>,
     acquired: BTreeMap<String, ManagedLanguageServer>,
 }
@@ -274,9 +339,34 @@ impl AppServerLanguageRuntime {
             home: None,
             network_policy: ash_http_client::OutboundNetworkPolicy::default(),
             extension_generation: None,
+            connections: BTreeMap::new(),
+            connection_id: None,
+            applied_configuration: None,
             acquisitions: BTreeMap::new(),
             acquired: BTreeMap::new(),
         }
+    }
+
+    fn child_runtime(&self) -> Self {
+        let mut runtime = Self::new(Arc::clone(&self.updates));
+        runtime.providers = self.providers.clone();
+        runtime.acquisitions = self.acquisitions.clone();
+        runtime.extension_generation = self.extension_generation;
+        runtime.home = self.home.clone();
+        runtime.network_policy = self.network_policy.clone();
+        runtime.connection_id = self.connection_id;
+        runtime
+    }
+
+    pub(super) fn reconcile_configuration(&mut self, configuration: &LanguageServersConfig) {
+        if self.applied_configuration.as_ref() != Some(configuration) {
+            self.shutdown();
+            self.applied_configuration = Some(configuration.clone());
+        }
+    }
+
+    pub(super) fn close_connection(&mut self, connection_id: u64) {
+        self.connections.remove(&connection_id);
     }
 
     pub(super) fn set_server_providers(&mut self, providers: LspServerProviders) {
@@ -364,6 +454,10 @@ impl AppServerLanguageRuntime {
     pub(super) fn server_running(&self, id: &str) -> bool {
         self.acquired.contains_key(id)
             || self
+                .connections
+                .values()
+                .any(|runtime| runtime.server_running(id))
+            || self
                 .env_runtimes
                 .values()
                 .any(|runtime| runtime.server_running(id))
@@ -379,6 +473,9 @@ impl AppServerLanguageRuntime {
     }
 
     pub(super) fn retain_dir_roots(&mut self, roots: &std::collections::BTreeSet<PathBuf>) {
+        for runtime in self.connections.values_mut() {
+            runtime.retain_dir_roots(roots);
+        }
         self.env_runtimes.retain(|root, _| roots.contains(root));
         if self
             .dir_state
@@ -407,18 +504,15 @@ impl AppServerLanguageRuntime {
     ) -> Result<&LspManager, String> {
         if self.dir_state.root.is_some() && self.dir_state.root.as_deref() != Some(dir_root) {
             self.active_dir_root = Some(dir_root.to_path_buf());
+            if !self.env_runtimes.contains_key(dir_root) {
+                let runtime = self.child_runtime();
+                self.env_runtimes
+                    .insert(dir_root.to_path_buf(), Box::new(runtime));
+            }
             let runtime = self
                 .env_runtimes
-                .entry(dir_root.to_path_buf())
-                .or_insert_with(|| {
-                    let mut runtime = AppServerLanguageRuntime::new(Arc::clone(&self.updates));
-                    runtime.providers = self.providers.clone();
-                    runtime.acquisitions = self.acquisitions.clone();
-                    runtime.extension_generation = self.extension_generation;
-                    runtime.home = self.home.clone();
-                    runtime.network_policy = self.network_policy.clone();
-                    Box::new(runtime)
-                });
+                .get_mut(dir_root)
+                .expect("directory session exists");
             return runtime.ensure(
                 dir_root,
                 dir_id,
@@ -560,6 +654,26 @@ impl AppServerLanguageRuntime {
             .map_err(|error| error.to_string())
     }
 
+    pub(super) fn save_document(
+        &mut self,
+        root: &Path,
+        path: &Path,
+        text: String,
+    ) -> Result<(), String> {
+        if self.dir_state.root.as_deref() != Some(root) {
+            return self
+                .env_runtimes
+                .get_mut(root)
+                .ok_or_else(|| "language directory runtime is unavailable".to_owned())?
+                .save_document(root, path, text);
+        }
+        self.manager
+            .as_ref()
+            .ok_or_else(|| "language service is unavailable".to_owned())?
+            .save_document(path, text)
+            .map_err(|error| error.to_string())
+    }
+
     pub(super) fn close_document(&mut self, dir_root: &Path, path: &Path) -> Result<(), String> {
         if self.dir_state.root.as_deref() != Some(dir_root) {
             return self
@@ -614,7 +728,32 @@ impl AppServerLanguageRuntime {
             configuration,
             dir_root,
         )?);
-        Ok(definitions)
+        for (id, config) in &configuration.servers {
+            if config.mode == LanguageServerModeConfig::Disabled
+                || config.language_ids.is_empty()
+                || definitions
+                    .iter()
+                    .any(|definition| definition.name().as_str() == id.as_str())
+                || self.acquisitions.contains_key(id.as_str())
+            {
+                continue;
+            }
+            if let Some(executable) = &config.executable {
+                definitions.push(
+                    ash_lsp_server_provider::resolve_executable(
+                        id.as_str(),
+                        &config.language_ids,
+                        executable,
+                        dir_root,
+                    )
+                    .map_err(|error| error.to_string())?,
+                );
+            }
+        }
+        definitions
+            .into_iter()
+            .map(|definition| configure_definition(definition, configuration))
+            .collect()
     }
 
     fn restart(
@@ -645,11 +784,12 @@ impl AppServerLanguageRuntime {
         }
         self.acquired = acquired;
         let mut definitions = self.definitions(dir_root, configuration)?;
-        definitions.extend(
-            self.acquired
-                .values()
-                .map(|server| server.definition().clone()),
-        );
+        for server in self.acquired.values() {
+            definitions.push(configure_definition(
+                server.definition().clone(),
+                configuration,
+            )?);
+        }
         self.dir_state.language_servers = definitions
             .iter()
             .flat_map(|definition| {
@@ -662,16 +802,27 @@ impl AppServerLanguageRuntime {
         if definitions.is_empty() {
             return Err("no configured language-server executable is available".into());
         }
+        let routes = definitions
+            .iter()
+            .map(|definition| {
+                (
+                    definition.name().as_str().to_owned(),
+                    definition.language_ids().map(str::to_owned).collect(),
+                )
+            })
+            .collect();
         let (sender, receiver) = mpsc::channel();
         let manager = LspManager::start_with_events_and_metrics(
             LspManagerConfiguration::enabled(dir_root, definitions)
                 .with_generation(config_generation),
             Arc::new(AppServerLanguageEventSink {
+                routes,
                 sender,
                 diagnostics: Arc::new(LanguageDiagnosticPublisher {
                     documents: Arc::clone(&self.dir_state.documents),
                     updates: Arc::clone(&self.updates),
                     dir_id: self.dir_state.dir_id.clone(),
+                    connection_id: self.connection_id,
                 }),
             }),
             Arc::new(AppServerLanguageMetrics),
@@ -716,8 +867,9 @@ impl AppServerLanguageRuntime {
             let home = self.home.as_deref().ok_or_else(|| {
                 ManagedLanguageServerError::Installation("Ash home is unavailable".into())
             })?;
-            self.updates
-                .publish_language_server_progress(LanguageServerProgressNotification {
+            self.updates.publish_language_server_progress(
+                self.connection_id,
+                LanguageServerProgressNotification {
                     dir_id: self.dir_state.dir_id.clone(),
                     server: server.id.clone(),
                     token: "ash.language-server.install".into(),
@@ -725,7 +877,8 @@ impl AppServerLanguageRuntime {
                     message: None,
                     percentage: None,
                     done: false,
-                });
+                },
+            );
             let install = || {
                 use ash_http_client::HttpClientConfig;
                 use ash_http_client::OutboundNetworkSnapshot;
@@ -752,8 +905,9 @@ impl AppServerLanguageRuntime {
                 server.install(home, &http)
             };
             let result = install();
-            self.updates
-                .publish_language_server_progress(LanguageServerProgressNotification {
+            self.updates.publish_language_server_progress(
+                self.connection_id,
+                LanguageServerProgressNotification {
                     dir_id: self.dir_state.dir_id.clone(),
                     server: server.id.clone(),
                     token: "ash.language-server.install".into(),
@@ -761,18 +915,21 @@ impl AppServerLanguageRuntime {
                     message: None,
                     percentage: None,
                     done: true,
-                });
+                },
+            );
             result
         });
         if let Err(error) = &result {
-            self.updates
-                .publish_language_server_state(LanguageServerStateNotification {
+            self.updates.publish_language_server_state(
+                self.connection_id,
+                LanguageServerStateNotification {
                     dir_id: self.dir_state.dir_id.clone(),
                     server: server.id.clone(),
                     state: LanguageServerStateDto::Failed {
                         message: error.to_string(),
                     },
-                });
+                },
+            );
         }
         result.map_err(|error| error.to_string())
     }
@@ -828,6 +985,7 @@ impl AppServerLanguageRuntime {
     }
 
     fn shutdown(&mut self) {
+        self.connections.clear();
         self.env_runtimes.clear();
         self.active_dir_root = None;
         self.shutdown_selected();
@@ -911,3 +1069,27 @@ fn preference(configuration: &LanguageServersConfig, server_id: &str) -> Languag
 #[cfg(test)]
 #[path = "language_runtime_tests.rs"]
 mod tests;
+
+fn configure_definition(
+    mut definition: ash_lsp_manager::LanguageServerDefinition,
+    configuration: &LanguageServersConfig,
+) -> Result<ash_lsp_manager::LanguageServerDefinition, String> {
+    if let Some(config) = configuration
+        .servers
+        .iter()
+        .find_map(|(id, config)| (id.as_str() == definition.name().as_str()).then_some(config))
+    {
+        if !config.language_ids.is_empty() {
+            definition = definition
+                .with_language_ids(&config.language_ids)
+                .map_err(|error| error.to_string())?;
+        }
+        definition = definition
+            .with_launch_options(&config.args, &config.environment)
+            .with_settings(config.settings.clone());
+        if let Some(options) = &config.initialization_options {
+            definition = definition.with_initialization_options(options.clone());
+        }
+    }
+    Ok(definition)
+}

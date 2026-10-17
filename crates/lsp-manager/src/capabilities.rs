@@ -34,4 +34,7 @@ pub struct LanguageServerCapabilities {
     pub incarnation: u64,
     pub dynamic_revision: u64,
     pub features: Vec<LanguageServerFeature>,
+    pub completion_trigger_characters: Vec<String>,
+    pub signature_help_trigger_characters: Vec<String>,
+    pub signature_help_retrigger_characters: Vec<String>,
 }

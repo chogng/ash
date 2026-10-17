@@ -140,6 +140,7 @@ pub(super) trait ConfigRequestProcessorContext: Send + Sync {
     fn reconcile_active_directory_grant(&self) -> Result<(), super::RpcError>;
     fn reconcile_codebase_runtime(&self)
     -> Result<(), super::environment_runtime::EnvRuntimeError>;
+    fn reconcile_language_configuration(&self, configuration: &ash_config::LanguageServersConfig);
     fn tool_search_embedding_status(&self) -> crate::tool_search_models::ToolSearchEmbeddingStatus;
 }
 
@@ -668,6 +669,13 @@ impl<'ctx, C: ConfigRequestProcessorContext + ?Sized> ConfigRequestProcessor<'ct
                 command: UserConfigCommand::ConfigureLanguageServer { server_id, config },
             })
             .map_err(config_operation_error)?;
+        self.context.reconcile_language_configuration(
+            &store
+                .read_snapshot()
+                .map_err(config_error)?
+                .values
+                .language_servers,
+        );
         result(&config_command_result(outcome))
     }
 
@@ -686,6 +694,13 @@ impl<'ctx, C: ConfigRequestProcessorContext + ?Sized> ConfigRequestProcessor<'ct
                 command: UserConfigCommand::RemoveLanguageServerConfiguration { server_id },
             })
             .map_err(config_operation_error)?;
+        self.context.reconcile_language_configuration(
+            &store
+                .read_snapshot()
+                .map_err(config_error)?
+                .values
+                .language_servers,
+        );
         result(&config_command_result(outcome))
     }
 
@@ -1276,6 +1291,11 @@ fn semantic_automatic_context_from_dto(
 
 fn language_server_config_dto(config: LanguageServerConfig) -> LanguageServerConfigDto {
     LanguageServerConfigDto {
+        language_ids: config.language_ids,
+        args: config.args,
+        environment: config.environment,
+        initialization_options: config.initialization_options,
+        settings: config.settings,
         mode: match config.mode {
             LanguageServerModeConfig::Disabled => LanguageServerModeDto::Disabled,
             LanguageServerModeConfig::Enabled => LanguageServerModeDto::Enabled,
@@ -1288,6 +1308,11 @@ fn language_server_config_dto(config: LanguageServerConfig) -> LanguageServerCon
 
 fn language_server_config_from_dto(config: LanguageServerConfigDto) -> LanguageServerConfig {
     LanguageServerConfig {
+        language_ids: config.language_ids,
+        args: config.args,
+        environment: config.environment,
+        initialization_options: config.initialization_options,
+        settings: config.settings,
         mode: match config.mode {
             LanguageServerModeDto::Disabled => LanguageServerModeConfig::Disabled,
             LanguageServerModeDto::Enabled => LanguageServerModeConfig::Enabled,

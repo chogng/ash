@@ -15,6 +15,7 @@ use ash_core_plugins::ExtensionSource;
 use ash_core_plugins::ExtensionsClientError;
 use ash_core_plugins::GetPackageRequest;
 use ash_core_plugins::InstallPackageRequest;
+use ash_core_plugins::ListInstalledRequest;
 use ash_core_plugins::OpenResourceRequest;
 use ash_core_plugins::PackageDetails;
 use ash_core_plugins::PackageRef;
@@ -22,6 +23,8 @@ use ash_core_plugins::PackageSource;
 use ash_core_plugins::PackageSummary;
 use ash_core_plugins::SearchPackagesRequest;
 use ash_core_plugins::SearchPackagesResult;
+use ash_core_plugins::UninstallMode;
+use ash_core_plugins::UninstallPackageRequest;
 use ash_external_ext::packages::DynamicExtensionSourceProvider;
 use ash_external_ext::packages::ExtensionPackages;
 use ash_external_ext::packages::ExtensionPackagesReload;
@@ -229,9 +232,12 @@ fn installed_language_package_projects_assets_and_packaged_server() {
     peer.lock()
         .unwrap()
         .set_server_providers(runtime.providers().unwrap());
-    let _watcher =
-        ExtensionsChangeWatcher::start_editor_policy(&policy, runtime.clone(), peer.clone())
-            .unwrap();
+    let _watcher = ExtensionsChangeWatcher::start_language_runtime(
+        Some(&policy),
+        runtime.clone(),
+        peer.clone(),
+    )
+    .unwrap();
     let peer_servers = || {
         peer.lock()
             .unwrap()
@@ -552,6 +558,16 @@ impl ExtensionSource for LanguageRegistry {
     ) -> Result<Box<dyn ExtensionPackagePayload>, ExtensionsClientError> {
         match request.package_id.as_str() {
             "example.demo-language" => Ok(Box::new(LanguagePayload::new())),
+            "example.broken-language" => {
+                let mut payload = LanguagePayload::new();
+                payload.package.id = "example.broken-language".into();
+                payload.entrypoint = b"// independent package contents\n";
+                payload.package.digest = package_digest(&[
+                    ("language/package.json", LANGUAGE_MANIFEST),
+                    ("server/demo.js", payload.entrypoint),
+                ]);
+                Ok(Box::new(payload))
+            }
             "example.demo-theme" => Ok(Box::new(ThemePayload::new())),
             "publisher.sample" => Ok(Box::new(VsixPayload)),
             _ => Err(ExtensionsClientError::storage()),
@@ -664,11 +680,13 @@ impl ExtensionPackagePayload for ThemePayload {
 struct LanguagePayload {
     package: PackageRef,
     capabilities: Vec<ExtensionPackageCapability>,
+    entrypoint: &'static [u8],
 }
 
 impl LanguagePayload {
     fn new() -> Self {
         Self {
+            entrypoint: SERVER_ENTRYPOINT,
             package: PackageRef {
                 id: "example.demo-language".into(),
                 version: "1.0.0".into(),
@@ -711,7 +729,7 @@ impl ExtensionPackagePayload for LanguagePayload {
     }
 
     fn expected_size_bytes(&self) -> u64 {
-        (LANGUAGE_MANIFEST.len() + SERVER_ENTRYPOINT.len()) as u64
+        (LANGUAGE_MANIFEST.len() + self.entrypoint.len()) as u64
     }
 
     fn copy_to(&self, destination: &Path) -> Result<(), ExtensionsClientError> {
@@ -720,7 +738,7 @@ impl ExtensionPackagePayload for LanguagePayload {
         fs::create_dir(destination.join("server")).map_err(|_| ExtensionsClientError::storage())?;
         fs::write(destination.join("language/package.json"), LANGUAGE_MANIFEST)
             .map_err(|_| ExtensionsClientError::storage())?;
-        fs::write(destination.join("server/demo.js"), SERVER_ENTRYPOINT)
+        fs::write(destination.join("server/demo.js"), self.entrypoint)
             .map_err(|_| ExtensionsClientError::storage())
     }
 }
@@ -794,4 +812,230 @@ fn language_acquisition_only_admits_built_in_packages_and_rejects_conflicting_ow
     assert!(
         language_server_contributions(&builtin.list(ExtensionPackagesReload::Refresh)).is_err()
     );
+}
+
+#[test]
+fn language_definition_lease_defers_removal_until_the_last_runtime_owner_releases_it() {
+    let root = tempfile::tempdir().unwrap();
+    let node = root.path().join("node");
+    fs::write(&node, b"runtime").unwrap();
+    make_executable(&node);
+    let manager = Arc::new(
+        ExtensionPackageManager::open(
+            root.path().join("manager"),
+            providers(Arc::new(LanguageRegistry)),
+        )
+        .unwrap(),
+    );
+    let installed = manager
+        .install(InstallPackageRequest {
+            package_id: "example.demo-language@test".into(),
+            version: None,
+        })
+        .unwrap();
+    let runtime = ExtensionsLanguageRuntime::new(
+        manager.clone(),
+        Some(ManagedNodeRuntime::from_path(node).unwrap()),
+        LspServerProviders::new(),
+    );
+    let providers = runtime.providers().unwrap();
+    let definition = providers
+        .definition(
+            "demo-language-server",
+            root.path(),
+            LspServerLaunch::Packaged,
+        )
+        .unwrap()
+        .unwrap();
+    let retained = definition.clone();
+    assert!(
+        manager
+            .uninstall(UninstallPackageRequest {
+                installation_id: installed.installation_id.clone(),
+                mode: UninstallMode::IfUnused
+            })
+            .is_err()
+    );
+    manager
+        .uninstall(UninstallPackageRequest {
+            installation_id: installed.installation_id.clone(),
+            mode: UninstallMode::WhenUnused,
+        })
+        .unwrap();
+    assert!(runtime.providers().unwrap().is_empty());
+    assert_eq!(
+        manager.list_installed(ListInstalledRequest {}).unwrap()[0].state,
+        ash_core_plugins::InstallationState::PendingRemoval
+    );
+    drop(definition);
+    assert_eq!(
+        manager
+            .list_installed(ListInstalledRequest {})
+            .unwrap()
+            .len(),
+        1
+    );
+    drop(retained);
+    assert!(
+        manager
+            .list_installed(ListInstalledRequest {})
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[test]
+fn language_package_changes_retire_idle_peer_runtime_and_complete_deferred_uninstall() {
+    let root = tempfile::tempdir().unwrap();
+    let node = root.path().join("node");
+    fs::write(&node, b"runtime").unwrap();
+    make_executable(&node);
+    let manager = Arc::new(
+        ExtensionPackageManager::open(
+            root.path().join("manager"),
+            providers(Arc::new(LanguageRegistry)),
+        )
+        .unwrap(),
+    );
+    let installed = manager
+        .install(InstallPackageRequest {
+            package_id: "example.demo-language@test".into(),
+            version: None,
+        })
+        .unwrap();
+    let runtime = ExtensionsLanguageRuntime::new(
+        manager.clone(),
+        Some(ManagedNodeRuntime::from_path(node).unwrap()),
+        LspServerProviders::new(),
+    );
+    let providers = runtime.providers().unwrap();
+    let definition = providers
+        .definition(
+            "demo-language-server",
+            root.path(),
+            LspServerLaunch::Packaged,
+        )
+        .unwrap()
+        .unwrap();
+    let peer = Arc::new(std::sync::Mutex::new(
+        super::language_runtime::AppServerLanguageRuntime::new(Arc::new(UpdateBroker::default())),
+    ));
+    peer.lock().unwrap().set_server_providers(providers);
+    // A manager retains configured definitions before any document starts its process.
+    peer.lock().unwrap().manager = Some(
+        ash_lsp_manager::LspManager::start_with_events(
+            ash_lsp_manager::LspManagerConfiguration::enabled(root.path(), vec![definition]),
+            Arc::new(ash_lsp_manager::NoopLspManagerEventSink),
+        )
+        .unwrap(),
+    );
+    let _watcher =
+        ExtensionsChangeWatcher::start_language_runtime(None, runtime, peer.clone()).unwrap();
+    assert!(
+        manager
+            .uninstall(UninstallPackageRequest {
+                installation_id: installed.installation_id.clone(),
+                mode: UninstallMode::IfUnused,
+            })
+            .is_err()
+    );
+    manager
+        .uninstall(UninstallPackageRequest {
+            installation_id: installed.installation_id,
+            mode: UninstallMode::WhenUnused,
+        })
+        .unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while !manager
+        .list_installed(ListInstalledRequest {})
+        .unwrap()
+        .is_empty()
+        && std::time::Instant::now() < deadline
+    {
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert!(
+        manager
+            .list_installed(ListInstalledRequest {})
+            .unwrap()
+            .is_empty(),
+        "an idle peer must release its lease without a renderer request"
+    );
+    assert!(peer.lock().unwrap().manager.is_none());
+    assert!(
+        peer.lock()
+            .unwrap()
+            .definitions(root.path(), &ash_config::LanguageServersConfig::default())
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[test]
+fn damaged_executable_package_does_not_hide_a_healthy_server_or_prevent_its_disablement() {
+    let root = tempfile::tempdir().unwrap();
+    let node = root.path().join("node");
+    fs::write(&node, b"runtime").unwrap();
+    make_executable(&node);
+    let manager = Arc::new(
+        ExtensionPackageManager::open(
+            root.path().join("manager"),
+            providers(Arc::new(LanguageRegistry)),
+        )
+        .unwrap(),
+    );
+    let healthy = manager
+        .install(InstallPackageRequest {
+            package_id: "example.demo-language@test".into(),
+            version: None,
+        })
+        .unwrap();
+    let broken = manager
+        .install(InstallPackageRequest {
+            package_id: "example.broken-language@test".into(),
+            version: None,
+        })
+        .unwrap();
+    let sources = manager
+        .local_capability_sources(CapabilityKind::Executable)
+        .unwrap();
+    let damaged = sources
+        .iter()
+        .find(|source| source.package() == &broken.package)
+        .unwrap();
+    fs::write(damaged.host_path(), "corrupt executable").unwrap();
+    let snapshot = manager
+        .local_capability_source_snapshot(CapabilityKind::Executable)
+        .unwrap();
+    assert_eq!(snapshot.sources.len(), 1);
+    assert_eq!(snapshot.failures.len(), 1);
+    let policy = Arc::new(
+        ash_core_plugins::EditorExtensionPolicy::open(root.path().join("policy.json")).unwrap(),
+    );
+    let mut runtime = ExtensionsLanguageRuntime::new(
+        manager,
+        Some(ManagedNodeRuntime::from_path(node).unwrap()),
+        LspServerProviders::new(),
+    );
+    runtime.set_editor_extension_policy(policy.clone());
+    assert!(
+        runtime
+            .providers()
+            .unwrap()
+            .contains("demo-language-server")
+    );
+    let executable = healthy
+        .capabilities
+        .iter()
+        .find(|capability| capability.kind == CapabilityKind::Executable)
+        .unwrap();
+    policy
+        .set(
+            &healthy.package,
+            &executable.reference,
+            ash_core_plugins::EditorExtensionPolicyAction::Disable,
+            policy.generation(),
+        )
+        .unwrap();
+    assert!(runtime.providers().unwrap().is_empty());
 }

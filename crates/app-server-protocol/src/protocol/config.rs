@@ -530,6 +530,35 @@ pub struct LanguageServerConfigDto {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub executable: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[ts(as = "Option<_>", optional)]
+    pub language_ids: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[ts(as = "Option<_>", optional)]
+    pub args: Vec<String>,
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    #[ts(as = "Option<_>", optional)]
+    pub environment: std::collections::BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub initialization_options: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    #[ts(as = "Option<_>", optional)]
+    pub settings: std::collections::BTreeMap<String, serde_json::Value>,
+}
+
+impl Default for LanguageServerConfigDto {
+    fn default() -> Self {
+        Self {
+            mode: LanguageServerModeDto::Enabled,
+            executable: None,
+            language_ids: Vec::new(),
+            args: Vec::new(),
+            environment: Default::default(),
+            initialization_options: None,
+            settings: Default::default(),
+        }
+    }
 }
 
 /// Coarse action category available to deterministic execution-policy selectors.

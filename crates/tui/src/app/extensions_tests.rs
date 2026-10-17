@@ -530,7 +530,19 @@ fn extension_packages_failed_search_keeps_offline_management_accessible_and_dism
 #[test]
 fn lsp_panel_preserves_revision_and_program_and_keeps_draft_after_conflict() {
     let mut app = App::new();
-    app.update(lsp::Event(lsp_page()));
+    let mut page = lsp_page();
+    let configured = page.configured.get_mut("web-lsp").unwrap();
+    configured.language_ids = vec!["typescript".into()];
+    configured.args = vec!["--stdio".into()];
+    configured
+        .environment
+        .insert("LSP_LOG".into(), "info".into());
+    configured.initialization_options = Some(json!({"feature":true}));
+    configured
+        .settings
+        .insert("typescript".into(), json!({"strict":true}));
+    let mut expected = configured.clone();
+    app.update(lsp::Event(page));
     crate::tui_assert_snapshot!(app = &app; "lsp_available_servers", screen(&app));
     focus(&mut app, "web-lsp");
     app.handle_key(key(KeyCode::Enter));
@@ -551,6 +563,11 @@ fn lsp_panel_preserves_revision_and_program_and_keeps_draft_after_conflict() {
         ash_app_server_protocol::protocol::config::LanguageServerModeDto::Disabled
     );
     assert_eq!(config.executable.as_deref(), Some("/tools/web-lsp"));
+    expected.mode = ash_app_server_protocol::protocol::config::LanguageServerModeDto::Disabled;
+    assert_eq!(
+        config, expected,
+        "toggling enablement must preserve generic settings"
+    );
     focus(&mut app, "path");
     app.handle_key(key(KeyCode::Enter));
     app.handle_paste("/tools/new web-lsp".into());
@@ -564,6 +581,14 @@ fn lsp_panel_preserves_revision_and_program_and_keeps_draft_after_conflict() {
     app.update_for_panel(generation, crate::thread::Event::FailureReported(error));
     assert_eq!(app.list_selection().unwrap().query(), "/tools/new web-lsp");
     assert_eq!(requests.lock().unwrap()[0]["params"]["expectedRevision"], 7);
+    let changed: ash_app_server_protocol::protocol::config::LanguageServerConfigDto =
+        serde_json::from_value(requests.lock().unwrap()[0]["params"]["config"].clone()).unwrap();
+    expected.mode = ash_app_server_protocol::protocol::config::LanguageServerModeDto::Enabled;
+    expected.executable = Some("/tools/new web-lsp".into());
+    assert_eq!(
+        changed, expected,
+        "editing a path must preserve generic settings"
+    );
     crate::tui_assert_snapshot!(app = &app; "lsp_config_conflict_keeps_input", screen(&app));
 }
 

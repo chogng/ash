@@ -101,6 +101,11 @@ impl super::config_operations::ConfigRequestProcessorContext for AppServer {
     ) -> Result<(), super::environment_runtime::EnvRuntimeError> {
         AppServer::reconcile_codebase_runtime(self)
     }
+    fn reconcile_language_configuration(&self, configuration: &ash_config::LanguageServersConfig) {
+        if let Ok(mut runtime) = self.language.lock() {
+            runtime.reconcile_configuration(configuration);
+        }
+    }
     fn tool_search_embedding_status(&self) -> crate::tool_search_models::ToolSearchEmbeddingStatus {
         AppServer::tool_search_embedding_status(self)
     }
@@ -371,15 +376,13 @@ impl super::language_document_features::LanguageDocumentRequestProcessorContext 
     }
     fn prepare_document_runtime(
         &self,
+        connection_id: u64,
         dir: &ash_file_access::Dir,
         source_path: &std::path::Path,
         document: &ash_app_server_protocol::protocol::language::LanguageDocumentDto,
         cancellation: &ash_async_utils::CancellationToken,
-    ) -> Result<
-        std::sync::MutexGuard<'_, super::language_runtime::AppServerLanguageRuntime>,
-        super::RpcError,
-    > {
-        self.language_processor()
+    ) -> Result<super::language_runtime::LanguageRuntimeGuard<'_>, super::RpcError> {
+        self.language_processor(connection_id)
             .prepare_document_runtime(dir, source_path, document, cancellation)
     }
 }
