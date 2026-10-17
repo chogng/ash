@@ -100,7 +100,7 @@ export class ChatListWidget extends DomWidget {
 	private readonly _onDidChangeContent = this._register(new Emitter<void>());
 	private readonly advisorExpansion = new Map<string, boolean>();
 	private readonly contextExpansion = new Map<string, boolean>();
-	private visible = false;
+	private visible = true;
 	private shouldFollow = true;
 	private readingPosition: ReadingAnchor | undefined;
 	private layingOut = false;
@@ -252,7 +252,11 @@ export class ChatListWidget extends DomWidget {
 			this.pendingReadingPosition = { top: this.scrollable.state.top, anchor: this.shouldFollow ? undefined : this.readingPosition };
 		}
 		this.visible = visible;
-		for (const [, row] of this.renderedItems) { row.media.value?.setVisible(visible); row.toolPart?.setVisible(visible); }
+		for (const [, row] of this.renderedItems) {
+			row.media.value?.setVisible(visible);
+			row.toolPart?.setVisible(visible);
+			row.markdownPart?.setVisible(visible);
+		}
 		if (visible) {
 			if (this.pendingReadingPosition) {
 				this.layingOut = true;
@@ -531,6 +535,7 @@ export class ChatListWidget extends DomWidget {
 		if (item.type === "agentMessage" || item.type === "reasoning" || item.type === "plan" || item.type === "advisor") {
 			const markdown = disposables.add(this.instantiationService.createInstance(ChatMarkdownContentPart, {
 				ownerDocument: this.element.ownerDocument,
+				visible: this.visible,
 				markdown: { value: item.text, supportThemeIcons: true, supportAlertSyntax: true },
 				markedOptions: { breaks: true },
 				fillInIncompleteTokens: item.transient,

@@ -18,6 +18,7 @@ interface RenderedBlock {
 interface ChatMarkdownContentPartOptions extends MarkdownRenderOptions {
 	readonly ownerDocument: Document;
 	readonly markdown?: string | IMarkdownString;
+	readonly visible?: boolean;
 }
 
 /** Owns one stable response root, sanitized render lifetime and the response's existing code models. */
@@ -30,9 +31,11 @@ export class ChatMarkdownContentPart extends Disposable {
 	private readonly codeBlocks = this._register(new DisposableMap<number, CodeBlockPart>());
 	private readonly images = new Map<string, Promise<Blob>>();
 	private blocks: readonly RenderedBlock[] = [];
+	private visible: boolean;
 
 	constructor(private readonly options: ChatMarkdownContentPartOptions, @IInstantiationService private readonly instantiation: IInstantiationService) {
 		super();
+		this.visible = options.visible ?? true;
 		this.markdownRenderer = this._register(instantiation.createInstance(ChatContentMarkdownRenderer));
 		this.domNode = h(options.ownerDocument, 'div');
 		this.domNode.className = 'ash-chat-markdown-part';
@@ -47,6 +50,11 @@ export class ChatMarkdownContentPart extends Disposable {
 		if (this.isDisposed) return false;
 		this.render(newMarkdown, fillInIncompleteTokens);
 		return true;
+	}
+
+	public setVisible(visible: boolean): void {
+		this.visible = visible;
+		for (const [, block] of this.codeBlocks) block.setVisible(visible);
 	}
 
 	private render(markdown: IMarkdownString, fillInIncompleteTokens: boolean): void {
@@ -102,6 +110,7 @@ export class ChatMarkdownContentPart extends Disposable {
 			for (const [index, data] of code.entries()) {
 				let part = this.codeBlocks.get(index);
 				if (!part) part = this.codeBlocks.set(index, this.instantiation.createInstance(CodeBlockPart, document));
+				part.setVisible(this.visible);
 				part.render({ text: data.text, languageId: data.languageId, codeBlockIndex: index, element: markdown, chatSessionResource: undefined, renderOptions: { maxHeightInLines: 20 } }, this.domNode.clientWidth);
 				const parent = data.placeholder.parentElement;
 				if (parent?.tagName === 'PRE') parent.replaceWith(part.element);

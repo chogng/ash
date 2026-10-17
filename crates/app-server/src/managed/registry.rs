@@ -32,6 +32,8 @@ use ash_remote::SshTarget;
 use ash_remote_profile_store::RemoteConnectionProfileStore;
 
 const MAX_PRODUCT_SERVICES_IDENTITY_BYTES: u64 = 1024 * 1024;
+const IDLE_DIRECTORY_CACHE_CAPACITY: usize = 4;
+static DIRECTORY_ACCESS_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 struct DirRuntimeKey {
@@ -45,6 +47,7 @@ struct DirRuntime {
     server: OnceLock<Arc<AppServer>>,
     opening: Mutex<DirectoryOpening>,
     changed: Condvar,
+    last_used: AtomicU64,
 }
 
 #[derive(Default)]
@@ -441,6 +444,11 @@ fn resolve_directory(
             .entry(key)
             .or_default(),
     );
+    runtime.last_used.store(
+        DIRECTORY_ACCESS_SEQUENCE.fetch_add(1, Ordering::Relaxed),
+        Ordering::Relaxed,
+    );
+    prune_idle_directories(servers)?;
     let options = ConnectionOptions::new(
         host.profile_root(),
         dir_root,
@@ -448,6 +456,63 @@ fn resolve_directory(
         product_services.map(Path::to_path_buf),
     );
     Ok((runtime, options))
+}
+
+/// Keep a small warm set without making every visited project live for the profile's lifetime.
+/// Connections and directory admissions hold strong references; detached terminals and Agent
+/// work also protect their services. Expensive idle checks and service destruction stay outside
+/// the registry lock so another window can continue opening its directory.
+fn prune_idle_directories(
+    servers: &Mutex<BTreeMap<DirRuntimeKey, Arc<DirRuntime>>>,
+) -> Result<(), String> {
+    let candidates = servers
+        .lock()
+        .map_err(|_| "local App Server dir registry lock poisoned".to_string())?
+        .iter()
+        .filter(|(_, runtime)| {
+            Arc::strong_count(runtime) == 1
+                && runtime
+                    .server
+                    .get()
+                    .is_some_and(|server| Arc::strong_count(server) == 1)
+        })
+        .map(|(key, runtime)| (key.clone(), Arc::clone(runtime)))
+        .collect::<Vec<_>>();
+    if candidates.len() <= IDLE_DIRECTORY_CACHE_CAPACITY {
+        return Ok(());
+    }
+    let mut idle = candidates
+        .into_iter()
+        .filter(|(_, runtime)| {
+            let server = runtime.server.get().expect("ready directory candidate");
+            server.active_terminal_count() == 0 && matches!(server.queue_needs_host(), Ok(false))
+        })
+        .collect::<Vec<_>>();
+    idle.sort_by_key(|(_, runtime)| runtime.last_used.load(Ordering::Relaxed));
+    let excess = idle.len().saturating_sub(IDLE_DIRECTORY_CACHE_CAPACITY);
+    let mut retired = Vec::new();
+    {
+        let mut entries = servers
+            .lock()
+            .map_err(|_| "local App Server dir registry lock poisoned".to_string())?;
+        for (key, runtime) in idle.iter().take(excess) {
+            // Recheck admission after the idle query: a new connection may have acquired
+            // either reference while the registry lock was released.
+            if Arc::strong_count(runtime) == 2
+                && runtime
+                    .server
+                    .get()
+                    .is_some_and(|server| Arc::strong_count(server) == 1)
+                && entries
+                    .get(key)
+                    .is_some_and(|entry| Arc::ptr_eq(entry, runtime))
+            {
+                retired.extend(entries.remove(key));
+            }
+        }
+    }
+    drop(retired);
+    Ok(())
 }
 
 fn finish_directory(

@@ -898,6 +898,15 @@ pub(crate) struct EnvToolPorts {
     semantic_model_provider: Option<Arc<dyn SemanticModelProvider>>,
 }
 
+impl Drop for EnvToolPorts {
+    fn drop(&mut self) {
+        // Agent tools retain their Hook policy, whose reloadable view points back to
+        // this catalogue. Retire the host-owned generation to break that cycle when
+        // the directory closes. Prepared calls still own their bound generation.
+        self.reloadable.replace(None);
+    }
+}
+
 impl EnvToolPorts {
     pub(crate) fn capabilities_snapshot(
         &self,

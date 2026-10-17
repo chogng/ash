@@ -21,6 +21,12 @@ import { AccessibleViewRegistry } from '../../../../../platform/accessibility/br
 import { AccessibleViewType } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { PromptLanguageFeaturesProvider } from '../../browser/promptSyntax/promptFileContributions.js';
 import { IModelService } from '../../../../../editor/common/services/model.js';
+import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
+import { AccessibilitySupport, IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
+import { getWindows } from '../../../../../base/browser/window.js';
+import { PixelRatio } from '../../../../../base/browser/pixelRatio.js';
+import { FontMeasurements } from '../../../../../editor/browser/config/fontMeasurements.js';
+import { BareFontInfo } from '../../../../../editor/common/config/fontInfo.js';
 import { ILanguageService } from '../../../../../editor/common/languages/language.js';
 import { IMarkerService, MarkerSeverity } from '../../../../../platform/markers/common/markers.js';
 import { URI } from '../../../../../base/common/uri.js';
@@ -29,7 +35,7 @@ import { browserEnvironment } from '../../../../../editor/test/browser/testEdito
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
-import { suite, test } from 'mocha';
+import { suite, suiteSetup, test } from 'mocha';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { createCodeEditorServices, registerCodeEditorServices } from '../../../../../editor/test/browser/testCodeEditor.js';
 import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
@@ -83,6 +89,57 @@ test('Workbench and Cowork tips use injected Markdown opening and preserve dismi
 	assert.deepEqual(opened, ['https://example.com/tip', 'https://example.com/tip']);
 	workbench.current!.domNode.querySelector<HTMLButtonElement>('button')!.click();
 	assert.deepEqual({ children: container.childElementCount, focused }, { children: 0, focused: ['workbench'] });
+});
+
+suite('Chat hidden response resources', () => {
+	suiteSetup(() => {
+		// These facilities belong to the shared test window, beyond a single widget's lifetime.
+		getWindows();
+		const window = browserEnvironment.window as unknown as Window;
+		PixelRatio.getInstance(window);
+		FontMeasurements.readFontInfo(window, BareFontInfo._create('monospace', 'normal', 14, 'normal', 'normal', 20, 0, 1, true));
+	});
+	ensureNoDisposablesAreLeakedInTestSuite();
+	test('hidden response code blocks release documents and restore selection with current content', () => {
+		using resources = new DisposableStore();
+		const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+		services.registerInstance(IAccessibilityService, {
+			onDidChangeScreenReaderOptimized: Event.None,
+			onDidChangeReducedMotion: Event.None,
+			onDidChangeReducedTransparency: Event.None,
+			onDidChangeLinkUnderlines: Event.None,
+			alwaysUnderlineAccessKeys: async () => false,
+			isScreenReaderOptimized: () => false,
+			isMotionReduced: () => false,
+			isTransparencyReduced: () => false,
+			getAccessibilitySupport: () => AccessibilitySupport.Disabled,
+			setAccessibilitySupport: () => { },
+			alert: () => { },
+			status: () => { },
+		});
+		using widget = services.createInstance(ChatListWidget, document.createElement('main'), {});
+		const items = (value: number) => [{ id: 'reply', type: 'agentMessage' as const, text: `\`\`\`ts\nconst value = ${value};\n\`\`\``, transient: false }];
+		widget.render(items(1));
+		const block = widget.element.querySelector('.ash-chat-code-block');
+		const editor = services.get(ICodeEditorService).listCodeEditors().find(candidate => candidate.getModel()?.getValue() === 'const value = 1;')!;
+		assert.ok(editor);
+		const original = editor.getModel()!;
+		editor.setSelection({ startLineNumber: 1, startColumn: 7, endLineNumber: 1, endColumn: 12 });
+		const selection = editor.getSelections();
+		widget.setVisible(false);
+		assert.equal(editor.getModel(), null);
+		assert.equal(original.isDisposed(), true);
+		widget.render(items(2));
+		assert.equal(editor.getModel(), null, 'Hidden streaming updates must not recreate editor documents');
+		assert.equal(widget.element.querySelector('.ash-chat-code-block'), block);
+		widget.setVisible(true);
+		assert.equal(editor.getModel()?.getValue(), 'const value = 2;');
+		assert.notEqual(editor.getModel(), original);
+		assert.deepEqual(editor.getSelections(), selection);
+		widget.setVisible(false);
+		widget.setVisible(true);
+		assert.deepEqual(editor.getSelections(), selection);
+	});
 });
 
 test('code blocks inherit editor typography, retain their nodes on updates, and reset independently of message input', async () => {

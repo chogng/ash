@@ -4,6 +4,100 @@ use std::thread;
 use std::time::Duration;
 
 #[test]
+fn idle_directory_cache_releases_old_services_but_preserves_live_admissions() {
+    let servers = Mutex::new(BTreeMap::new());
+    let mut released = Vec::new();
+    let mut connected = None;
+    let mut admitted = None;
+    for index in 0..8 {
+        let server = Arc::new(crate::server::request_dispatch::tests::server());
+        released.push(Arc::downgrade(&server));
+        let runtime = Arc::new(DirRuntime::default());
+        runtime.last_used.store(index, Ordering::Relaxed);
+        runtime.server.get_or_init(|| Arc::clone(&server));
+        if index == 0 {
+            connected = Some(server);
+        } else if index == 1 {
+            admitted = Some(Arc::clone(&runtime));
+        }
+        servers.lock().unwrap().insert(
+            DirRuntimeKey {
+                dir_root: Some(PathBuf::from(format!("project-{index}"))),
+                dir_grant_source: GrantSource::HostConfiguration,
+                product_services_identity: None,
+            },
+            runtime,
+        );
+    }
+    prune_idle_directories(&servers).unwrap();
+    assert_eq!(servers.lock().unwrap().len(), 6);
+    assert!(released[0].upgrade().is_some());
+    assert!(released[1].upgrade().is_some());
+    assert!(released[2].upgrade().is_none());
+    assert!(released[3].upgrade().is_none());
+    assert!(
+        released[4..]
+            .iter()
+            .all(|server| server.upgrade().is_some())
+    );
+
+    drop(connected);
+    drop(admitted);
+    prune_idle_directories(&servers).unwrap();
+    assert_eq!(servers.lock().unwrap().len(), IDLE_DIRECTORY_CACHE_CAPACITY);
+    assert!(
+        released[..4]
+            .iter()
+            .all(|server| server.upgrade().is_none())
+    );
+    assert!(
+        released[4..]
+            .iter()
+            .all(|server| server.upgrade().is_some())
+    );
+}
+
+#[test]
+fn evicted_directory_releases_its_agent_tool_graph() {
+    let profile = tempfile::tempdir().unwrap();
+    let roots = (0..7)
+        .map(|_| tempfile::tempdir().unwrap())
+        .collect::<Vec<_>>();
+    let registry = ProfileAppServerRegistry::open(ConnectionOptions::new(
+        profile.path(),
+        None,
+        GrantSource::HostConfiguration,
+        None,
+    ))
+    .unwrap();
+    let first = registry
+        .server_for(ConnectionOptions::new(
+            profile.path(),
+            Some(roots[0].path().to_path_buf()),
+            GrantSource::HostConfiguration,
+            None,
+        ))
+        .unwrap();
+    let server = Arc::downgrade(&first);
+    let agent_tools = Arc::downgrade(&first.multi_agent);
+    drop(first);
+    for root in &roots[1..] {
+        drop(
+            registry
+                .server_for(ConnectionOptions::new(
+                    profile.path(),
+                    Some(root.path().to_path_buf()),
+                    GrantSource::HostConfiguration,
+                    None,
+                ))
+                .unwrap(),
+        );
+    }
+    assert!(server.upgrade().is_none());
+    assert!(agent_tools.upgrade().is_none());
+}
+
+#[test]
 fn omitted_product_services_reuses_the_profile_configuration_and_directory_runtime() {
     let root = tempfile::tempdir().unwrap();
     let product_services = root.path().join("product-services.json");

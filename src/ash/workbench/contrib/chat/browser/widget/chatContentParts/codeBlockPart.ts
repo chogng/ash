@@ -49,6 +49,8 @@ export class CodeBlockPart extends Disposable {
 	private readonly pendingActions = new Set<Button>();
 	private data: ICodeBlockData | undefined;
 	private readonly relayout: RunOnceScheduler;
+	private visible = true;
+	private viewState: ReturnType<CodeEditorWidget['saveViewState']> | undefined;
 
 	constructor(
 		document: Document,
@@ -143,6 +145,7 @@ export class CodeBlockPart extends Disposable {
 		this.data = data;
 		this.language.textContent = data.languageId;
 		this.toolbar.setAttribute('aria-label', localize('chat.code.numberedActions', 'Code block {0} actions', data.codeBlockIndex + 1));
+		if (!this.visible) return;
 		const languageId = this.languages.isRegisteredLanguageId(data.languageId) ? data.languageId
 			: this.languages.getLanguageIdByLanguageName(data.languageId) ?? 'plaintext';
 		const model = this.documentModel.value;
@@ -161,6 +164,22 @@ export class CodeBlockPart extends Disposable {
 		}
 		this.updateOptions();
 		this.layout(width);
+	}
+
+	/** Hidden transcripts retain source and selection, without a second live editor document. */
+	public setVisible(visible: boolean): void {
+		if (this.visible === visible) return;
+		this.visible = visible;
+		if (!visible) {
+			this.viewState = this.editor.saveViewState() ?? undefined;
+			this.relayout.cancel();
+			this.editor.setModel(null);
+			this.documentModel.clear();
+		} else if (this.data) {
+			this.render(this.data, this.editorContainer.clientWidth);
+			this.editor.restoreViewState(this.viewState ?? null);
+			this.viewState = undefined;
+		}
 	}
 
 	public layout(width = this.editorContainer.clientWidth): void {
