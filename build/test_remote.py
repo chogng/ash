@@ -20,10 +20,42 @@ from build.lib.targets import TARGETS
 
 
 class RemotePackageTests(unittest.TestCase):
+    def test_remote_rejects_local_media_inputs_before_preparation(self) -> None:
+        with patch.object(app_server, "generate_protocol") as prepare:
+            for flag in (
+                "--media-package-dir",
+                "--media-package-url",
+                "--livekit-package-dir",
+                "--livekit-package-url",
+                "--recognizer-bin",
+                "--livekit-client-bin",
+            ):
+                with (
+                    self.subTest(flag=flag),
+                    self.assertRaisesRegex(ValueError, "Media-free packages"),
+                ):
+                    remote.main(
+                        [
+                            "--target",
+                            "aarch64-apple-darwin",
+                            "--package-dir",
+                            "unused",
+                            flag,
+                            "unused",
+                        ]
+                    )
+            prepare.assert_not_called()
+
     def test_unsupported_target_and_missing_node_reject_before_building(self) -> None:
         with patch.object(remote, "build_package") as build:
             for options in (
                 ["--target", "aarch64-apple-darwin", "--media-distribution", "bundled"],
+                [
+                    "--target",
+                    "aarch64-apple-darwin",
+                    "--media-distribution",
+                    "optional",
+                ],
                 ["--target", "x86_64-pc-windows-msvc"],
                 [
                     "--target",
@@ -63,6 +95,12 @@ class RemotePackageTests(unittest.TestCase):
     def test_remote_entrypoint_assembles_verified_node_and_backend_resources(
         self,
     ) -> None:
+        self.verify_package(remote_only=True)
+
+    def test_local_standalone_keeps_independent_media_delivery(self) -> None:
+        self.verify_package(remote_only=False)
+
+    def verify_package(self, *, remote_only: bool) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             sources = create_package_sources(root / "sources")
@@ -132,12 +170,12 @@ class RemotePackageTests(unittest.TestCase):
                     side_effect=lambda _root, _spec, inputs, **_: {
                         key: binaries[key] for key in inputs
                     },
-                ),
+                ) as media_build,
                 patch.object(
                     media_package,
                     "resolve_livekit",
                     return_value=executable("livekit-server"),
-                ),
+                ) as hosting_build,
                 patch.object(app_server, "resolve_ripgrep", return_value=tool("rg")),
                 patch.object(app_server, "resolve_tgrep", return_value=tool("tgrep")),
                 patch.object(
@@ -154,15 +192,14 @@ class RemotePackageTests(unittest.TestCase):
                     ),
                 ),
                 patch.object(app_server, "resolve_bubblewrap", return_value=None),
-                patch.object(
-                    app_server,
-                    "resolve_livekit",
-                    return_value=executable("livekit-server"),
-                ),
             ):
+                entrypoint = remote.main if remote_only else app_server.main
                 self.assertEqual(
-                    0, remote.main(["--target", target, "--package-dir", str(output)])
+                    0, entrypoint(["--target", target, "--package-dir", str(output)])
                 )
+                if remote_only:
+                    media_build.assert_not_called()
+                    hosting_build.assert_not_called()
             validate_package_directory(output, TARGETS[target])
             metadata = json.loads((output / "ash-package.json").read_text())
             self.assertEqual({"kind": "packagedNode"}, metadata["javascriptRuntime"])
@@ -177,6 +214,12 @@ class RemotePackageTests(unittest.TestCase):
             self.assertFalse((output / "bin/ash-voice-host").exists())
             self.assertFalse((output / "bin/livekit-server").exists())
             self.assertFalse((output / "bin/ash-livekit-client").exists())
+            if remote_only:
+                self.assertFalse((output / "bin/ash-realtime-voice").exists())
+                self.assertFalse((output / "ash-resources/capabilities").exists())
+                self.assertFalse(output.with_name(output.name + "-media").exists())
+                self.assertFalse(output.with_name(output.name + "-livekit").exists())
+                return
             optional = output.with_name(output.name + "-media")
             for name in ("ash-voice-host", "ash-livekit-client", "ash-realtime-voice"):
                 self.assertTrue((optional / "bin" / name).is_file())

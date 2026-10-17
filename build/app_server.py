@@ -31,7 +31,11 @@ DEFAULT_NODE_LOCK = REPOSITORY_ROOT / "third_party" / "node" / "runtime-lock.jso
 DEFAULT_NODE_CACHE = REPOSITORY_ROOT / "third_party" / ".cache" / "node"
 
 
-def parse_arguments(arguments: Optional[Sequence[str]] = None) -> argparse.Namespace:
+def parse_arguments(
+    arguments: Optional[Sequence[str]] = None,
+    *,
+    default_media_distribution: str = "optional",
+) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Build the canonical Ash package directory with pinned, "
@@ -51,9 +55,9 @@ def parse_arguments(arguments: Optional[Sequence[str]] = None) -> argparse.Names
     parser.add_argument("--windows-sandbox-service-bin", type=Path)
     parser.add_argument(
         "--media-distribution",
-        choices=("optional", "bundled"),
-        default="optional",
-        help="Desktop bundles media; remote and standalone backends install it on demand.",
+        choices=("none", "optional", "bundled"),
+        default=default_media_distribution,
+        help="Remote omits media; local hosts install it on demand or bundle it.",
     )
     parser.add_argument(
         "--recognizer-bin", type=Path, help="Prebuilt local recognizer."
@@ -266,6 +270,18 @@ def _prepare_builtin_extensions() -> None:
 
 def build_package(args: argparse.Namespace) -> int:
     media_distribution = args.media_distribution
+    if media_distribution == "none" and any(
+        value is not None
+        for value in (
+            args.media_package_dir,
+            args.media_package_url,
+            args.livekit_package_dir,
+            args.livekit_package_url,
+            args.recognizer_bin,
+            args.livekit_client_bin,
+        )
+    ):
+        raise ValueError("Media-free packages cannot select local media artifacts")
     if media_distribution == "bundled" and (
         args.media_package_dir is not None or args.media_package_url is not None
     ):
@@ -302,7 +318,7 @@ def build_package(args: argparse.Namespace) -> int:
         inputs["ash-realtime-voice"] = args.recognizer_bin
         inputs["ash-voice-host"] = None
         inputs["ash-livekit-client"] = args.livekit_client_bin
-    elif media_distribution != "optional":
+    elif media_distribution not in ("none", "optional"):
         raise ValueError("Unknown media distribution")
     if args.external_js_ext_bin is not None:
         inputs["ash-external-js-ext"] = args.external_js_ext_bin
@@ -358,22 +374,24 @@ def build_package(args: argparse.Namespace) -> int:
         cargo=args.cargo,
         cargo_profile=args.cargo_profile,
     )
-    from build.lib.media_package import build_livekit_package
-
     output = args.package_dir.expanduser().resolve()
-    livekit_package = build_livekit_package(
-        args.livekit_package_dir or output.with_name(output.name + "-livekit"),
-        REPOSITORY_ROOT,
-        spec,
-        args.cargo_profile,
-        args.livekit_package_url,
-        archive_dir=args.capability_archive_dir,
-    )
-    from build.lib.media_package import capability_release
+    livekit_package = None
+    if media_distribution != "none":
+        from build.lib.media_package import build_livekit_package
+
+        livekit_package = build_livekit_package(
+            args.livekit_package_dir or output.with_name(output.name + "-livekit"),
+            REPOSITORY_ROOT,
+            spec,
+            args.cargo_profile,
+            args.livekit_package_url,
+            archive_dir=args.capability_archive_dir,
+        )
 
     media_package = None
     if media_distribution == "optional":
         from build.lib.media_package import build_media_package
+        from build.lib.media_package import capability_release
         from build.lib.sherpa import SUPPORTED_TARGETS
 
         if spec.target in SUPPORTED_TARGETS:

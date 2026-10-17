@@ -82,21 +82,16 @@ jobs:
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
         with:
           workspaces: ". -> .build/cargo"
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
-        if: runner.os == 'macOS'
-        with:
-          go-version: "1.26"
-          cache: false
       - name: Install Linux build and symbol tools
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends build-essential pkg-config llvm lldb libssl-dev libcap-dev libdbus-1-dev libgtk-3-dev libwayland-dev libxkbcommon-dev libasound2-dev
+          sudo apt-get install --yes --no-install-recommends build-essential pkg-config llvm lldb libcap-dev libwayland-dev
       - name: Prepare packaging dependencies
         run: |
           pnpm install --frozen-lockfile
       - name: Build standalone Remote package
-        run: python3 -B build/remote.py --target "${{ matrix.target }}" --package-dir .build/remote-release/runtime --capability-archive-dir .build/remote-release/attachments
+        run: python3 -B build/remote.py --target "${{ matrix.target }}" --package-dir .build/remote-release/runtime
       - name: Verify connection, editing, terminal and Agent without media installation
         run: python3 -B build/remote_smoke.py --package-dir .build/remote-release/runtime --report .build/remote-release/smoke.json
       - name: Import macOS release certificate
@@ -184,12 +179,13 @@ jobs:
           sudo mkdir -p /run/sshd
       - name: Assemble complete catalog and matching client binding
         run: |
+          mapfile -t target_args < <(python3 -c 'import json, os; print("\n".join(arg for target in json.loads(os.environ["REMOTE_TARGETS"]) for arg in ("--target", target)))')
           python3 -B build/release/remote.py catalog \
             --archives-dir .build/remote-release/assets \
             --output .build/remote-release/assets/catalog.json \
             --binding-file .build/remote-release/remote-release.json \
             --repository "$GITHUB_REPOSITORY" --release-tag "$REMOTE_TAG" \
-            $(python3 -c 'import json, os; print(" ".join("--target " + target for target in json.loads(os.environ["REMOTE_TARGETS"])))')
+            "${target_args[@]}"
       - name: Publish independent Remote release without replacing existing assets
         run: |
           gh release create "$REMOTE_TAG" .build/remote-release/assets/* .build/remote-release/remote-release.json \

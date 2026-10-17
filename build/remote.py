@@ -14,7 +14,7 @@ from build.lib.targets import TARGETS, default_target  # noqa: E402
 
 
 def main(arguments: Optional[Sequence[str]] = None) -> int:
-    args = parse_arguments(arguments)
+    args = parse_arguments(arguments, default_media_distribution="none")
     configuration = json.loads(
         (ROOT / "remote-server/package.json").read_text(encoding="utf-8")
     )["ash"]
@@ -39,8 +39,8 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
         raise ValueError(f"Remote package target is not supported: {args.target}")
     if args.javascript_runtime != configuration["javascriptRuntime"]:
         raise ValueError("Remote packages must include the packaged Node runtime")
-    if args.media_distribution != "optional":
-        raise ValueError("Remote packages require optional media")
+    if args.media_distribution != "none":
+        raise ValueError("Remote packages do not build or install local media")
     return build_package(args)
 
 
