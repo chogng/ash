@@ -951,24 +951,31 @@ fn read_x11_clipboard_format(format: &str) -> Result<Option<Vec<u8>>, FileSystem
     }
 }
 
-/// Opens a policy-checked, canonical relative path without resolving any new symlinks.
-/// Each ancestor is pinned before opening its child, including the final file. Replacing
-/// a checked component with a symlink therefore fails instead of reaching a denied subtree.
+/// Pins each component of a policy-checked, canonical relative directory path.
+/// Opening a whole path with no-follow would still follow symlinks in its ancestors.
+fn open_resolved_directory(root: &Directory, path: &Path) -> std::io::Result<Directory> {
+    let mut directory = root.try_clone()?;
+    for component in path.components() {
+        directory = directory.open_dir_nofollow(component.as_os_str())?;
+    }
+    Ok(directory)
+}
+
+fn open_write_parent(root: &Directory, target: &Path) -> std::io::Result<Directory> {
+    let parent = target
+        .parent()
+        .ok_or_else(|| std::io::Error::other("write target has no parent"))?;
+    #[cfg(test)]
+    tests::after_write_resolution();
+    open_resolved_directory(root, parent)
+}
+
+/// Opens a policy-checked file without following any newly substituted symlinks.
 fn open_resolved_file(root: &Directory, path: &Path) -> std::io::Result<cap_std::fs::File> {
     #[cfg(test)]
     tests::after_read_resolution();
-    let mut parent: Option<Directory> = None;
-    if let Some(ancestors) = path.parent() {
-        for component in ancestors.components() {
-            parent = Some(
-                parent
-                    .as_ref()
-                    .unwrap_or(root)
-                    .open_dir_nofollow(component.as_os_str())?,
-            );
-        }
-    }
-    parent.as_ref().unwrap_or(root).open_with(
+    let parent = open_resolved_directory(root, path.parent().unwrap_or(Path::new("")))?;
+    parent.open_with(
         path.file_name().unwrap_or(OsStr::new(".")),
         OpenOptions::new().read(true).follow(FollowSymlinks::No),
     )
@@ -1315,7 +1322,9 @@ impl ScopedFiles {
             return Err(FileSystemError::WriteLimitExceeded { maximum_bytes });
         }
         let resolved = self.resolve_for_write(path)?;
-        let existing_metadata = match self.handle().metadata(&resolved) {
+        let parent = open_write_parent(self.handle(), &resolved).map_err(io_error)?;
+        let target = resolved.file_name().unwrap_or(OsStr::new("."));
+        let existing_metadata = match parent.symlink_metadata(target) {
             Ok(metadata) => {
                 if !metadata.is_file() {
                     return Err(FileSystemError::NotFile(path.to_path_buf()));
@@ -1328,29 +1337,17 @@ impl ScopedFiles {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
             Err(error) => return Err(io_error(error)),
         };
-        let parent = resolved
-            .parent()
-            .ok_or_else(|| FileSystemError::InvalidPath(path.to_path_buf()))?;
-        let parent = if parent.as_os_str().is_empty() {
-            Path::new(".")
-        } else {
-            parent
-        };
-        let parent_metadata = self.handle().metadata(parent).map_err(io_error)?;
-        if !parent_metadata.is_dir() {
-            return Err(FileSystemError::NotDirectory(
-                path.parent().unwrap_or(Path::new("")).to_path_buf(),
-            ));
-        }
-        atomic_write(
-            self.handle(),
-            &resolved,
+        // Keep checks, staging, publication and returned metadata on this exact directory.
+        // Reopening the resolved path would allow an external writer to redirect the save.
+        PreparedWrite::in_parent(
+            parent.try_clone().map_err(io_error)?,
+            target,
             content,
             existing_metadata
                 .as_ref()
                 .map(cap_std::fs::Metadata::permissions),
-            publication,
         )
+        .and_then(|write| write.publish(publication))
         .map_err(|error| match (publication, error.kind()) {
             (WritePublication::Create, std::io::ErrorKind::AlreadyExists) => {
                 FileSystemError::AlreadyExists(path.to_path_buf())
@@ -1360,7 +1357,7 @@ impl ScopedFiles {
             }
             _ => io_error(error),
         })?;
-        metadata(self.handle(), &resolved)
+        metadata(&parent, Path::new(target))
     }
 }
 
@@ -1745,18 +1742,19 @@ impl<'a> PreparedWrite<'a> {
         content: &'a [u8],
         permissions: Option<cap_std::fs::Permissions>,
     ) -> std::io::Result<Self> {
-        let parent = target
-            .parent()
-            .ok_or_else(|| std::io::Error::other("write target has no parent"))?;
-        let parent = root.open_dir(if parent.as_os_str().is_empty() {
-            Path::new(".")
-        } else {
-            parent
-        })?;
+        let parent = open_write_parent(root, target)?;
         let target = target
             .file_name()
-            .ok_or_else(|| std::io::Error::other("write target has no file name"))?
-            .to_os_string();
+            .ok_or_else(|| std::io::Error::other("write target has no file name"))?;
+        Self::in_parent(parent, target, content, permissions)
+    }
+
+    fn in_parent(
+        parent: Directory,
+        target: &OsStr,
+        content: &'a [u8],
+        permissions: Option<cap_std::fs::Permissions>,
+    ) -> std::io::Result<Self> {
         static SEQUENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let (temporary, mut file) = loop {
             let name = format!(
@@ -1797,7 +1795,7 @@ impl<'a> PreparedWrite<'a> {
         }
         Ok(Self {
             parent,
-            target,
+            target: target.to_os_string(),
             temporary,
             content,
             remove_temporary_on_drop: true,
@@ -1805,6 +1803,8 @@ impl<'a> PreparedWrite<'a> {
     }
 
     fn publish(mut self, publication: WritePublication) -> std::io::Result<()> {
+        #[cfg(test)]
+        tests::before_write_publication();
         match publication {
             WritePublication::Replace => {
                 self.parent
@@ -1824,9 +1824,10 @@ impl<'a> PreparedWrite<'a> {
                 {
                     Ok(()) => {}
                     Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-                        let mut existing = self
-                            .parent
-                            .open_with(&self.target, OpenOptions::new().append(true))?;
+                        let mut existing = self.parent.open_with(
+                            &self.target,
+                            OpenOptions::new().append(true).follow(FollowSymlinks::No),
+                        )?;
                         if existing.metadata()?.len() != 0
                             || FileInformation::from_file(&existing.try_clone()?.into_std())?
                                 .has_multiple_links()
@@ -2121,16 +2122,6 @@ fn pin_windows_directories(
         return Err(FileSystemError::InvalidPath(path.into()));
     }
     Ok(directories)
-}
-
-fn atomic_write(
-    root: &Directory,
-    target: &Path,
-    content: &[u8],
-    permissions: Option<cap_std::fs::Permissions>,
-    publication: WritePublication,
-) -> std::io::Result<()> {
-    PreparedWrite::new(root, target, content, permissions)?.publish(publication)
 }
 
 fn metadata(dir: &Directory, path: &Path) -> Result<FileMetadata, FileSystemError> {

@@ -7,6 +7,10 @@ static NEXT_DIR: AtomicU64 = AtomicU64::new(1);
 thread_local! {
     static READ_RESOLUTION_HOOK: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
         const { std::cell::RefCell::new(None) };
+    static WRITE_RESOLUTION_HOOK: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+        const { std::cell::RefCell::new(None) };
+    static WRITE_PUBLICATION_HOOK: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+        const { std::cell::RefCell::new(None) };
 }
 
 pub(super) fn after_read_resolution() {
@@ -14,6 +18,237 @@ pub(super) fn after_read_resolution() {
     if let Some(hook) = hook {
         hook();
     }
+}
+
+pub(super) fn after_write_resolution() {
+    let hook = WRITE_RESOLUTION_HOOK.with(|hook| hook.borrow_mut().take());
+    if let Some(hook) = hook {
+        hook();
+    }
+}
+
+pub(super) fn before_write_publication() {
+    let hook = WRITE_PUBLICATION_HOOK.with(|hook| hook.borrow_mut().take());
+    if let Some(hook) = hook {
+        hook();
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn concurrent_symlink_replacement_cannot_write_a_restricted_subtree() {
+    #[derive(Clone, Copy, Debug)]
+    enum WriteOperation {
+        Write,
+        Create,
+        MissingOrEmpty,
+    }
+    for access in [
+        ash_file_access::PathAccess::Denied,
+        ash_file_access::PathAccess::ReadOnly,
+    ] {
+        for (replaced, target) in [
+            ("visible", "restricted"),
+            ("visible/nested", "../restricted/nested"),
+        ] {
+            for exists in [false, true] {
+                for operation in [
+                    WriteOperation::Write,
+                    WriteOperation::Create,
+                    WriteOperation::MissingOrEmpty,
+                ] {
+                    let directory = TestDir::new();
+                    fs::create_dir_all(directory.path.join("visible/nested")).unwrap();
+                    fs::create_dir_all(directory.path.join("restricted/nested")).unwrap();
+                    let path = Path::new("visible/nested/file");
+                    let protected = directory.path.join("restricted/nested/file");
+                    if exists {
+                        // An empty target also exercises MissingOrEmpty's append publication.
+                        fs::write(directory.path.join(path), b"").unwrap();
+                        fs::write(&protected, b"").unwrap();
+                    }
+                    let grant = Grant::for_environment(
+                        Dir::open_local(&directory.path).unwrap(),
+                        ash_file_access::GrantSource::ExplicitUser,
+                        ash_file_access::Permissions::new([Permission::WriteFiles]),
+                    )
+                    .with_path_policy(
+                        ash_file_access::PathAccessPolicy::new(
+                            ash_file_access::PathAccess::ReadWrite,
+                            vec![ash_file_access::PathAccessRule {
+                                pattern: "restricted".into(),
+                                access,
+                            }],
+                        )
+                        .unwrap(),
+                    );
+                    let files = LocalFileSystem::new(grant);
+                    assert!(
+                        files
+                            .write_file(Path::new("restricted/nested/file"), b"new", 100)
+                            .is_err()
+                    );
+                    let (resolved_tx, resolved_rx) = std::sync::mpsc::sync_channel(0);
+                    let (replaced_tx, replaced_rx) = std::sync::mpsc::sync_channel(0);
+                    WRITE_RESOLUTION_HOOK.with(|hook| {
+                        *hook.borrow_mut() = Some(Box::new(move || {
+                            resolved_tx.send(()).unwrap();
+                            replaced_rx
+                                .recv_timeout(std::time::Duration::from_secs(10))
+                                .unwrap();
+                        }));
+                    });
+                    let result = std::thread::scope(|scope| {
+                        let root = &directory.path;
+                        scope.spawn(move || {
+                            resolved_rx
+                                .recv_timeout(std::time::Duration::from_secs(10))
+                                .unwrap();
+                            fs::rename(root.join(replaced), root.join("old")).unwrap();
+                            std::os::unix::fs::symlink(target, root.join(replaced)).unwrap();
+                            replaced_tx.send(()).unwrap();
+                        });
+                        // Release the external writer after policy checks, before reopening
+                        // the parent. This interleaving must never reach the restricted tree.
+                        match operation {
+                            WriteOperation::Write => files.write_file(path, b"new", 100),
+                            WriteOperation::Create => {
+                                files.create_file(path, ExistingTargetBehavior::Overwrite)
+                            }
+                            WriteOperation::MissingOrEmpty => files.write_file_with_condition(
+                                path,
+                                b"new",
+                                100,
+                                &FileWriteCondition::MissingOrEmpty,
+                            ),
+                        }
+                    });
+                    assert!(
+                        result.is_err(),
+                        "{operation:?}, {access:?}, exists={exists} followed replaced {replaced}"
+                    );
+                    if exists {
+                        assert_eq!(fs::read(&protected).unwrap(), b"");
+                    } else {
+                        assert!(!protected.exists());
+                    }
+                    assert_eq!(
+                        fs::read_dir(directory.path.join("restricted/nested"))
+                            .unwrap()
+                            .count(),
+                        usize::from(exists)
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn writes_and_returned_metadata_use_the_pinned_parent_after_replacement() {
+    for condition in [
+        FileWriteCondition::Unconditional,
+        FileWriteCondition::MissingOrEmpty,
+    ] {
+        let directory = TestDir::new();
+        fs::create_dir_all(directory.path.join("visible/nested")).unwrap();
+        fs::create_dir_all(directory.path.join("restricted/nested")).unwrap();
+        fs::write(directory.path.join("visible/nested/file"), b"").unwrap();
+        fs::write(directory.path.join("restricted/nested/file"), b"protected").unwrap();
+        let root = directory.path.clone();
+        WRITE_PUBLICATION_HOOK.with(|hook| {
+            *hook.borrow_mut() = Some(Box::new(move || {
+                // Staging already pinned the original parent. Replace an ancestor before
+                // publication; both the write and its metadata must still use that handle.
+                fs::rename(root.join("visible"), root.join("old")).unwrap();
+                std::os::unix::fs::symlink("restricted", root.join("visible")).unwrap();
+            }));
+        });
+        let metadata = directory
+            .file_system()
+            .write_file_with_condition(Path::new("visible/nested/file"), b"new", 100, &condition)
+            .unwrap();
+        assert_eq!(metadata.size_bytes, 3);
+        assert_eq!(
+            fs::read(directory.path.join("old/nested/file")).unwrap(),
+            b"new"
+        );
+        assert_eq!(
+            fs::read(directory.path.join("restricted/nested/file")).unwrap(),
+            b"protected"
+        );
+        assert_eq!(
+            fs::read_dir(directory.path.join("old/nested"))
+                .unwrap()
+                .count(),
+            1
+        );
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn missing_or_empty_publication_rejects_a_replaced_leaf_symlink() {
+    for exists in [false, true] {
+        let directory = TestDir::new();
+        fs::write(directory.path.join("protected"), b"").unwrap();
+        if exists {
+            fs::write(directory.path.join("file"), b"").unwrap();
+        }
+        let root = directory.path.clone();
+        WRITE_PUBLICATION_HOOK.with(|hook| {
+            *hook.borrow_mut() = Some(Box::new(move || {
+                if exists {
+                    fs::remove_file(root.join("file")).unwrap();
+                }
+                std::os::unix::fs::symlink("protected", root.join("file")).unwrap();
+            }));
+        });
+        assert!(
+            directory
+                .file_system()
+                .write_file_with_condition(
+                    Path::new("file"),
+                    b"new",
+                    100,
+                    &FileWriteCondition::MissingOrEmpty,
+                )
+                .is_err()
+        );
+        assert_eq!(fs::read(directory.path.join("protected")).unwrap(), b"");
+        assert_eq!(fs::read_dir(&directory.path).unwrap().count(), 2);
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn policy_checked_writes_keep_allowed_directory_and_leaf_symlinks() {
+    let directory = TestDir::new();
+    fs::create_dir(directory.path.join("target")).unwrap();
+    fs::write(directory.path.join("target/file"), b"old").unwrap();
+    std::os::unix::fs::symlink("target", directory.path.join("alias")).unwrap();
+    std::os::unix::fs::symlink("target/file", directory.path.join("leaf")).unwrap();
+    let files = directory.file_system();
+    files
+        .write_file(Path::new("alias/new"), b"created", 100)
+        .unwrap();
+    files
+        .write_file(Path::new("leaf"), b"updated", 100)
+        .unwrap();
+    assert_eq!(
+        fs::read(directory.path.join("target/new")).unwrap(),
+        b"created"
+    );
+    assert_eq!(
+        fs::read(directory.path.join("target/file")).unwrap(),
+        b"updated"
+    );
+    assert!(
+        fs::symlink_metadata(directory.path.join("leaf"))
+            .unwrap()
+            .is_symlink()
+    );
 }
 
 #[cfg(unix)]
