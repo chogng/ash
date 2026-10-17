@@ -5,6 +5,7 @@ Product entrypoints compose the shared package tools for development and release
 - `prepare.py` resolves development inputs and publishes packages; `build/desktop/runtimeStore.ts` reads published selections for Electron and Web.
 - `desktop/develop.py` combines prepared resources with incremental Desktop binaries and selects a development runtime through `lib/development_store.py`; Code uses the same leased generation storage for its executables.
 - `protocol/generate.py` prepares the shared Rust-owned contract; `protocol/artifacts.py` validates portable source fingerprints and packaged artifacts for preparation and assembly.
+- `lib/cargo_inputs.py` prepares grammar, V8 and speech link inputs from the selected dependency graph for the Cargo command, Code builds and product packaging. Resource-specific modules retain download, validation and caller-override rules.
 - `app_server.py` resolves release binaries and resources.
 - `remote.py` reads [`remote/package.json`](../remote/package.json), restricts the
   Remote distribution to its declared POSIX targets, and requires bundled Node.
@@ -20,6 +21,13 @@ assembly, validation and immutable generation storage. `prepare.py` prepares
 the shared development package; `desktop/` owns incremental Desktop selection.
 Task entrypoints use the existing pnpm and Just commands, with Vite
 and Cargo retaining compilation. Gulp is not required for these tasks.
+
+`pnpm prepare:desktop` prepares Electron, addons and generated frontend inputs.
+The Electron launcher prepares and selects the backend before starting a window;
+connected Web startup prepares its backend through `startWeb`. Their pnpm startup
+hooks prepare frontend inputs only. Explicit `prepare:backend` and
+`prepare:backend:web` commands remain available for package preparation, CI and
+consumers that deliberately reuse a prepared backend.
 
 Frontend CI checks Renderer sources and smoke automation types once per platform
 before building Desktop and both Web modes on Linux, Windows and macOS.

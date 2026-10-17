@@ -1,4 +1,4 @@
-"""Run Cargo with Ash's checksum-verified Code Mode V8 inputs."""
+"""Run Cargo with Ash's checksum-verified external build inputs."""
 
 from __future__ import annotations
 
@@ -20,13 +20,11 @@ from build.lib.cargo import (  # noqa: E402
 )
 from build.lib.cargo_cache import leased_cache, profile_from_arguments  # noqa: E402
 from build.protocol.generate import generate_protocol  # noqa: E402
-from build.lib.sherpa import resolve_sherpa_cargo_env  # noqa: E402
-from build.lib.grammars import resolve_grammars_cargo_env  # noqa: E402
+from build.lib.cargo_inputs import cargo_environment  # noqa: E402
 from build.lib.targets import TARGETS, default_target  # noqa: E402
 from build.lib.v8 import (  # noqa: E402
     DEFAULT_CACHE,
     DEFAULT_LOCK,
-    resolve_v8_cargo_env,
 )
 
 
@@ -267,8 +265,6 @@ def main(arguments: list[str] | None = None) -> int:
     ):
         environment["CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO"] = "packed"
     packages = cargo_command_packages(args.cargo, cargo_arguments, REPOSITORY_ROOT)
-    if "ash-grammars" in packages:
-        environment.update(resolve_grammars_cargo_env(target))
     if "ash-app-server-protocol" in packages:
         # Prepare outside Cargo's build lock; the exporter bootstraps without metadata.
         generate_protocol(root=REPOSITORY_ROOT, cargo=args.cargo)
@@ -282,19 +278,13 @@ def main(arguments: list[str] | None = None) -> int:
         and "ASH_CODE_MODE_HOST_BIN" not in environment
         and "ash-code-mode" in packages
     )
-    if needs_code_mode_host or "v8" in packages:
-        environment.update(
-            resolve_v8_cargo_env(
-                TARGETS[target],
-                environ=environment,
-                lock_path=args.v8_lock.expanduser().resolve(),
-                cache_root=args.v8_cache_root.expanduser().resolve(),
-            )
-        )
-    if "sherpa-onnx-sys" in packages:
-        environment.update(
-            resolve_sherpa_cargo_env(TARGETS[target], environ=environment)
-        )
+    environment = cargo_environment(
+        TARGETS[target],
+        packages | {"v8"} if needs_code_mode_host else packages,
+        environ=environment,
+        v8_lock_path=args.v8_lock.expanduser().resolve(),
+        v8_cache_root=args.v8_cache_root.expanduser().resolve(),
+    )
     if (
         cargo_arguments[0] in {"test", "run"}
         and "ASH_TGREP_PATH" not in environment

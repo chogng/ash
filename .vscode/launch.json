@@ -56,7 +56,7 @@
 				"ASH_WEB_APP_SERVER": "1",
 				"NO_COLOR": "1"
 			},
-			"preLaunchTask": "Prepare Ash Web Backend",
+			"preLaunchTask": "Prepare Ash Web",
 			"console": "internalConsole",
 			"outputCapture": "std",
 			"presentation": {
@@ -80,7 +80,7 @@
 				"ASH_WEB_APP_SERVER": "1",
 				"NO_COLOR": "1"
 			},
-			"preLaunchTask": "Prepare Ash Web Backend",
+			"preLaunchTask": "Prepare Ash Web",
 			"console": "internalConsole",
 			"outputCapture": "std",
 			"serverReadyAction": {
@@ -111,7 +111,7 @@
 				"ASH_WEB_APP_SERVER": "1",
 				"NO_COLOR": "1"
 			},
-			"preLaunchTask": "Prepare Ash Web Backend",
+			"preLaunchTask": "Prepare Ash Web",
 			"console": "internalConsole",
 			"outputCapture": "std",
 			"serverReadyAction": {
@@ -143,7 +143,7 @@
 				"ASH_DEV_AGENTS_WINDOW": "1",
 				"NO_COLOR": "1"
 			},
-			"preLaunchTask": "Prepare Ash Web Backend",
+			"preLaunchTask": "Prepare Ash Web",
 			"console": "internalConsole",
 			"outputCapture": "std",
 			"serverReadyAction": {
@@ -175,7 +175,7 @@
 				"ASH_DEV_AGENTS_WINDOW": "1",
 				"NO_COLOR": "1"
 			},
-			"preLaunchTask": "Prepare Ash Web Backend",
+			"preLaunchTask": "Prepare Ash Web",
 			"console": "internalConsole",
 			"outputCapture": "std",
 			"serverReadyAction": {

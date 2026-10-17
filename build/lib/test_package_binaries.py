@@ -10,7 +10,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from build.lib.targets import TARGETS
-from build.lib.package_binaries import build_binaries, cargo_environment
+from build.lib.package_binaries import build_binaries
+from build.lib.cargo_inputs import cargo_environment
 
 
 class CargoBuildTests(unittest.TestCase):
@@ -38,14 +39,14 @@ class CargoBuildTests(unittest.TestCase):
         return path
 
     @patch.dict(
-        "build.lib.package_binaries.os.environ", {"CARGO_BUILD_JOBS": "4"}, clear=True
+        "build.lib.cargo_inputs.os.environ", {"CARGO_BUILD_JOBS": "4"}, clear=True
     )
     @patch(
-        "build.lib.package_binaries.resolve_v8_cargo_env",
+        "build.lib.cargo_inputs.resolve_v8_cargo_env",
         return_value={"RUSTY_V8_ARCHIVE": "/locked/v8"},
     )
     @patch(
-        "build.lib.package_binaries.resolve_sherpa_cargo_env",
+        "build.lib.cargo_inputs.resolve_sherpa_cargo_env",
         return_value={"SHERPA_ONNX_LIB_DIR": "/locked/speech"},
     )
     def test_shared_runtime_prepares_locked_speech_inputs(self, speech, v8) -> None:
@@ -124,9 +125,7 @@ class CargoBuildTests(unittest.TestCase):
                 "build.lib.package_binaries.subprocess.run",
                 return_value=subprocess.CompletedProcess([], 0, messages),
             ) as run,
-            patch(
-                "build.lib.package_binaries.resolve_v8_cargo_env", return_value={}
-            ) as v8,
+            patch("build.lib.cargo_inputs.resolve_v8_cargo_env", return_value={}) as v8,
             patch(
                 "build.lib.package_binaries.leased_cache", return_value=nullcontext()
             ) as cache,
@@ -169,11 +168,11 @@ class CargoBuildTests(unittest.TestCase):
                         ),
                     ) as run,
                     patch(
-                        "build.lib.package_binaries.resolve_v8_cargo_env",
+                        "build.lib.cargo_inputs.resolve_v8_cargo_env",
                         return_value={"RUSTY_V8_ARCHIVE": "v8"},
                     ) as v8,
                     patch(
-                        "build.lib.package_binaries.resolve_sherpa_cargo_env",
+                        "build.lib.cargo_inputs.resolve_sherpa_cargo_env",
                         return_value={"SHERPA_ONNX_LIB_DIR": "speech"},
                     ) as speech,
                 ):
@@ -310,8 +309,8 @@ class CargoBuildTests(unittest.TestCase):
                     ["cargo"], 0, json.dumps(artifact)
                 ),
             ),
-            patch("build.lib.package_binaries.resolve_v8_cargo_env") as v8,
-            patch("build.lib.package_binaries.resolve_sherpa_cargo_env") as speech,
+            patch("build.lib.cargo_inputs.resolve_v8_cargo_env") as v8,
+            patch("build.lib.cargo_inputs.resolve_sherpa_cargo_env") as speech,
         ):
             result = build_binaries(
                 self.root,
@@ -356,8 +355,8 @@ class CargoBuildTests(unittest.TestCase):
                 "build.lib.package_binaries.subprocess.run",
                 return_value=subprocess.CompletedProcess(["cargo"], 0, artifacts),
             ) as run,
-            patch("build.lib.package_binaries.resolve_v8_cargo_env") as v8,
-            patch("build.lib.package_binaries.resolve_sherpa_cargo_env") as speech,
+            patch("build.lib.cargo_inputs.resolve_v8_cargo_env") as v8,
+            patch("build.lib.cargo_inputs.resolve_sherpa_cargo_env") as speech,
         ):
             result = build_binaries(
                 self.root,

@@ -1,4 +1,4 @@
-"""Inspect the selected Cargo dependency graph before configuring V8."""
+"""Inspect the selected Cargo dependency graph before preparing build inputs."""
 
 from __future__ import annotations
 

@@ -153,10 +153,9 @@ class SourceRunnerTests(unittest.TestCase):
             patch.object(
                 build, "default_target", return_value="x86_64-pc-windows-msvc"
             ),
-            patch.object(build, "resolve_v8_cargo_env", return_value={}),
-            patch.object(
-                build,
-                "resolve_sherpa_cargo_env",
+            patch("build.lib.cargo_inputs.resolve_v8_cargo_env", return_value={}),
+            patch(
+                "build.lib.cargo_inputs.resolve_sherpa_cargo_env",
                 return_value={"SHERPA_ONNX_LIB_DIR": "/locked/speech"},
             ),
             patch.object(build.subprocess, "Popen") as subprocess_popen,
@@ -248,10 +247,9 @@ class SourceRunnerTests(unittest.TestCase):
     def test_build_binaries_returns_cargo_failure_after_live_diagnostic(self) -> None:
         with (
             patch.object(build, "default_target", return_value="aarch64-apple-darwin"),
-            patch.object(build, "resolve_v8_cargo_env", return_value={}),
-            patch.object(
-                build,
-                "resolve_sherpa_cargo_env",
+            patch("build.lib.cargo_inputs.resolve_v8_cargo_env", return_value={}),
+            patch(
+                "build.lib.cargo_inputs.resolve_sherpa_cargo_env",
                 return_value={"SHERPA_ONNX_LIB_DIR": "/locked/speech"},
             ),
             patch.object(build.subprocess, "Popen") as subprocess_popen,
@@ -278,10 +276,9 @@ class SourceRunnerTests(unittest.TestCase):
         self.packages.return_value = {"sherpa-onnx-sys"}
         with (
             patch.object(build, "default_target", return_value="aarch64-apple-darwin"),
-            patch.object(build, "resolve_v8_cargo_env") as v8,
-            patch.object(
-                build,
-                "resolve_sherpa_cargo_env",
+            patch("build.lib.cargo_inputs.resolve_v8_cargo_env") as v8,
+            patch(
+                "build.lib.cargo_inputs.resolve_sherpa_cargo_env",
                 return_value={"SHERPA_ONNX_LIB_DIR": "speech"},
             ) as speech,
             patch.object(build.subprocess, "Popen") as popen,

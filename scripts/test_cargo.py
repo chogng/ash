@@ -61,10 +61,11 @@ class CodeModeHostTests(unittest.TestCase):
 
     @patch.dict("scripts.cargo.os.environ", {}, clear=True)
     @patch(
-        "scripts.cargo.resolve_v8_cargo_env", return_value={"RUSTY_V8_ARCHIVE": "v8"}
+        "build.lib.cargo_inputs.resolve_v8_cargo_env",
+        return_value={"RUSTY_V8_ARCHIVE": "v8"},
     )
     @patch(
-        "scripts.cargo.resolve_sherpa_cargo_env",
+        "build.lib.cargo_inputs.resolve_sherpa_cargo_env",
         return_value={"SHERPA_ONNX_LIB_DIR": "speech"},
     )
     @patch("scripts.cargo.subprocess.run")
@@ -156,7 +157,7 @@ class CodeModeHostTests(unittest.TestCase):
     @patch.dict("scripts.cargo.os.environ", {}, clear=True)
     @patch("scripts.cargo.subprocess.run")
     @patch(
-        "scripts.cargo.resolve_sherpa_cargo_env",
+        "build.lib.cargo_inputs.resolve_sherpa_cargo_env",
         return_value={"SHERPA_ONNX_LIB_DIR": "/locked/libs"},
     )
     @patch("scripts.cargo.cargo_command_packages")
@@ -180,7 +181,7 @@ class CodeModeHostTests(unittest.TestCase):
     @patch("scripts.cargo.subprocess.run")
     @patch("scripts.cargo.prepare_test_executable", return_value="/runtime/app-server")
     @patch(
-        "scripts.cargo.resolve_v8_cargo_env",
+        "build.lib.cargo_inputs.resolve_v8_cargo_env",
         return_value={"RUSTY_V8_ARCHIVE": "locked"},
     )
     @patch("scripts.cargo.cargo_command_packages")
@@ -204,7 +205,7 @@ class CodeModeHostTests(unittest.TestCase):
 
     @patch("scripts.cargo.subprocess.run")
     @patch("scripts.cargo.prepare_test_executable")
-    @patch("scripts.cargo.resolve_v8_cargo_env", return_value={})
+    @patch("build.lib.cargo_inputs.resolve_v8_cargo_env", return_value={})
     @patch("scripts.cargo.cargo_command_packages")
     def test_remote_compile_only_and_explicit_backend_do_not_prepare(
         self, packages, resolve_v8, prepare, run
@@ -322,7 +323,7 @@ class CodeModeHostTests(unittest.TestCase):
     @patch("scripts.cargo.subprocess.run")
     @patch("scripts.cargo.prepare_test_executable", return_value="/runtime/host")
     @patch(
-        "scripts.cargo.resolve_v8_cargo_env",
+        "build.lib.cargo_inputs.resolve_v8_cargo_env",
         return_value={"RUSTY_V8_ARCHIVE": "locked"},
     )
     @patch("scripts.cargo.cargo_command_packages")
@@ -346,7 +347,7 @@ class CodeModeHostTests(unittest.TestCase):
 
     @patch("scripts.cargo.subprocess.run")
     @patch("scripts.cargo.prepare_test_executable")
-    @patch("scripts.cargo.resolve_v8_cargo_env")
+    @patch("build.lib.cargo_inputs.resolve_v8_cargo_env")
     @patch("scripts.cargo.cargo_command_packages", return_value=set())
     def test_compile_only_and_explicit_host_do_not_prepare_a_host(
         self, packages, resolve_v8, prepare, run

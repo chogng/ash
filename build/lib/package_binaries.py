@@ -12,10 +12,8 @@ from build.lib.cargo import cargo_rendered_diagnostic
 from build.lib.cargo import parse_cargo_message
 from build.lib.cargo import resolve_cargo_target_directory
 from build.lib.cargo_cache import leased_cache
-from build.lib.sherpa import resolve_sherpa_cargo_env
-from build.lib.grammars import resolve_grammars_cargo_env
+from build.lib.cargo_inputs import cargo_environment
 from build.lib.targets import TargetSpec
-from build.lib.v8 import resolve_v8_cargo_env
 from build.lib.cargo_selection import cargo_command_packages
 from build.protocol.generate import generate_protocol
 
@@ -66,17 +64,6 @@ _BINARIES = {
         "--windows-sandbox-service-bin",
     ),
 }
-
-
-def cargo_environment(spec: TargetSpec, packages: set[str]) -> dict[str, str]:
-    environment = os.environ.copy()
-    if "ash-grammars" in packages:
-        environment.update(resolve_grammars_cargo_env(spec.target))
-    if "v8" in packages:
-        environment.update(resolve_v8_cargo_env(spec, environ=environment))
-    if "sherpa-onnx-sys" in packages:
-        environment.update(resolve_sherpa_cargo_env(spec, environ=environment))
-    return environment
 
 
 def build_binaries(
