@@ -26,12 +26,14 @@ use ash_lsp_manager::LspManagerRequestResult;
 use ash_lsp_manager::LspRequestMetricsSink;
 use ash_lsp_server_provider::BASH_LANGUAGE_SERVER_ID;
 use ash_lsp_server_provider::JSON_LANGUAGE_SERVER_ID;
+use ash_lsp_server_provider::LanguageServerAcquisition;
 use ash_lsp_server_provider::LanguageServerExecutionPolicy;
 use ash_lsp_server_provider::LanguageServerPreference;
 use ash_lsp_server_provider::LspServerLaunch;
 use ash_lsp_server_provider::LspServerProviders;
 use ash_lsp_server_provider::LspServerResolver;
-use ash_lsp_server_provider::RUST_ANALYZER_SERVER_ID;
+use ash_lsp_server_provider::ManagedLanguageServer;
+use ash_lsp_server_provider::ManagedLanguageServerError;
 use ash_lsp_server_provider::TYPESCRIPT_LANGUAGE_SERVER_ID;
 
 use ash_app_server_protocol::protocol::language::LanguageDiagnosticsNotification;
@@ -183,6 +185,7 @@ fn language_server_state_to_dto(state: &LanguageServerState) -> LanguageServerSt
 #[derive(Clone)]
 struct AppServerLanguageDocumentSnapshot {
     relative_path: PathBuf,
+    language_id: String,
     revision: ash_lsp_manager::LanguageDocumentRevision,
     text: String,
 }
@@ -251,6 +254,11 @@ pub(super) struct AppServerLanguageRuntime {
     providers: LspServerProviders,
     env_runtimes: BTreeMap<PathBuf, Box<AppServerLanguageRuntime>>,
     active_dir_root: Option<PathBuf>,
+    home: Option<PathBuf>,
+    network_policy: ash_http_client::OutboundNetworkPolicy,
+    extension_generation: Option<(u64, u64)>,
+    acquisitions: BTreeMap<String, LanguageServerAcquisition>,
+    acquired: BTreeMap<String, ManagedLanguageServer>,
 }
 
 impl AppServerLanguageRuntime {
@@ -263,12 +271,107 @@ impl AppServerLanguageRuntime {
             providers: LspServerProviders::new(),
             env_runtimes: BTreeMap::new(),
             active_dir_root: None,
+            home: None,
+            network_policy: ash_http_client::OutboundNetworkPolicy::default(),
+            extension_generation: None,
+            acquisitions: BTreeMap::new(),
+            acquired: BTreeMap::new(),
         }
     }
 
     pub(super) fn set_server_providers(&mut self, providers: LspServerProviders) {
         self.shutdown();
         self.providers = providers;
+    }
+
+    pub(super) fn set_home(&mut self, home: &Path) {
+        self.home = Some(home.to_path_buf());
+    }
+
+    pub(super) fn set_network_policy(&mut self, policy: ash_http_client::OutboundNetworkPolicy) {
+        self.network_policy = policy;
+    }
+
+    /// Reconcile the existing frozen extension catalog before language operations. Revocation
+    /// retires processes and leases before any request can reuse the previous contribution.
+    pub(super) fn reconcile_extensions(
+        &mut self,
+        snapshot: &ash_external_ext::packages::ExtensionPackagesSnapshot,
+        policy: Option<&ash_core_plugins::EditorExtensionPolicy>,
+    ) -> Result<(), String> {
+        let generation = (
+            snapshot.generation,
+            policy.map_or(0, |policy| policy.generation()),
+        );
+        if self.extension_generation == Some(generation) {
+            return Ok(());
+        }
+        let contributions =
+            super::extension_packages_language_runtime::language_server_contributions(snapshot)?;
+        let acquisitions = contributions
+            .into_iter()
+            .filter(|(id, _)| policy.is_none_or(|policy| policy.is_extension_enabled(id)))
+            .flat_map(|(_, servers)| {
+                servers
+                    .into_iter()
+                    .map(|server| (server.id.clone(), server))
+            })
+            .collect();
+        self.shutdown();
+        self.acquisitions = acquisitions;
+        self.extension_generation = Some(generation);
+        Ok(())
+    }
+
+    pub(super) fn acquisitions<'a>(
+        &'a self,
+        configuration: &'a LanguageServersConfig,
+    ) -> impl Iterator<Item = &'a LanguageServerAcquisition> {
+        self.acquisitions.values().filter(move |server| {
+            !self.providers.contains(&server.id)
+                && configuration
+                    .servers
+                    .iter()
+                    .find(|(id, _)| id.as_str() == server.id)
+                    .is_none_or(|(_, config)| config.mode == LanguageServerModeConfig::Enabled)
+        })
+    }
+
+    /// Background pulls may activate a declared workspace kind, but not install servers in
+    /// unrelated folders merely because the client enumerates every available language.
+    pub(super) fn allows_workspace_diagnostics(
+        &self,
+        root: &Path,
+        language: &str,
+        configuration: &LanguageServersConfig,
+    ) -> bool {
+        let active = if self.dir_state.root.as_deref() == Some(root) {
+            Some(self)
+        } else {
+            self.env_runtimes.get(root).map(Box::as_ref)
+        };
+        self.acquisitions(configuration)
+            .filter(|server| server.languages.iter().any(|id| id == language))
+            .all(|server| {
+                active.is_some_and(|runtime| runtime.acquired.contains_key(&server.id))
+                    || server
+                        .workspace_files
+                        .iter()
+                        .any(|file| root.join(file).is_file())
+            })
+    }
+
+    pub(super) fn server_running(&self, id: &str) -> bool {
+        self.acquired.contains_key(id)
+            || self
+                .env_runtimes
+                .values()
+                .any(|runtime| runtime.server_running(id))
+    }
+
+    pub(super) fn invalidate_extensions(&mut self) {
+        self.shutdown();
+        self.extension_generation = None;
     }
 
     pub(super) fn reset_dirs(&mut self) {
@@ -310,6 +413,10 @@ impl AppServerLanguageRuntime {
                 .or_insert_with(|| {
                     let mut runtime = AppServerLanguageRuntime::new(Arc::clone(&self.updates));
                     runtime.providers = self.providers.clone();
+                    runtime.acquisitions = self.acquisitions.clone();
+                    runtime.extension_generation = self.extension_generation;
+                    runtime.home = self.home.clone();
+                    runtime.network_policy = self.network_policy.clone();
                     Box::new(runtime)
                 });
             return runtime.ensure(
@@ -324,8 +431,12 @@ impl AppServerLanguageRuntime {
         self.dir_state.dir_id = dir_id.map(str::to_owned);
         if self.dir_state.root.as_deref() != Some(dir_root)
             || self.dir_state.config_generation != Some(config_generation)
+            || self.acquisitions(configuration).any(|server| {
+                server.languages.iter().any(|id| id == language_id)
+                    && !self.acquired.contains_key(&server.id)
+            })
         {
-            self.restart(dir_root, config_generation, configuration)?;
+            self.restart(dir_root, config_generation, configuration, language_id)?;
         }
         self.wait_until_ready(language_id)?;
         self.manager
@@ -437,6 +548,7 @@ impl AppServerLanguageRuntime {
                 document.path().to_path_buf(),
                 AppServerLanguageDocumentSnapshot {
                     relative_path: relative_path.to_path_buf(),
+                    language_id: document.language_id().to_owned(),
                     revision: document.revision(),
                     text: document.text().to_owned(),
                 },
@@ -484,7 +596,8 @@ impl AppServerLanguageRuntime {
                 preference(configuration, id)
             }
         };
-        let resolver = LspServerResolver::new(builtin(RUST_ANALYZER_SERVER_ID))
+        // Extension-owned servers are advertised without executing their acquisition recipes.
+        let resolver = LspServerResolver::disabled()
             .with_json_language_server(builtin(JSON_LANGUAGE_SERVER_ID))
             .with_bash_language_server(builtin(BASH_LANGUAGE_SERVER_ID))
             .with_typescript_language_server(builtin(TYPESCRIPT_LANGUAGE_SERVER_ID));
@@ -509,9 +622,34 @@ impl AppServerLanguageRuntime {
         dir_root: &Path,
         config_generation: u64,
         configuration: &LanguageServersConfig,
+        language_id: &str,
     ) -> Result<(), String> {
+        let documents = self
+            .dir_state
+            .documents
+            .lock()
+            .map_err(|_| String::from("language document snapshots are unavailable"))?
+            .clone();
+        let previous: std::collections::BTreeSet<_> = self.acquired.keys().cloned().collect();
+        // Retire the previous commands before resolving new intent. A failed explicit override
+        // must not leave the old server running as an accidental fallback.
         self.shutdown_selected();
-        let definitions = self.definitions(dir_root, configuration)?;
+        let mut acquired = BTreeMap::new();
+        for server in self.acquisitions(configuration).filter(|server| {
+            server.languages.iter().any(|id| id == language_id) || previous.contains(&server.id)
+        }) {
+            acquired.insert(
+                server.id.clone(),
+                self.resolve_server(server, dir_root, configuration)?,
+            );
+        }
+        self.acquired = acquired;
+        let mut definitions = self.definitions(dir_root, configuration)?;
+        definitions.extend(
+            self.acquired
+                .values()
+                .map(|server| server.definition().clone()),
+        );
         self.dir_state.language_servers = definitions
             .iter()
             .flat_map(|definition| {
@@ -543,7 +681,100 @@ impl AppServerLanguageRuntime {
         self.receiver = Some(receiver);
         self.dir_state.root = Some(dir_root.to_path_buf());
         self.dir_state.config_generation = Some(config_generation);
+        // Activating another extension server must preserve already-open LSP documents.
+        for (path, snapshot) in documents {
+            if self
+                .dir_state
+                .language_servers
+                .contains_key(&snapshot.language_id)
+            {
+                let document = LspDocumentSnapshot::new(
+                    path,
+                    snapshot.language_id,
+                    snapshot.revision,
+                    snapshot.text,
+                )
+                .map_err(|error| error.to_string())?;
+                self.synchronize_selected_document(&snapshot.relative_path, document)?;
+            }
+        }
         Ok(())
+    }
+
+    fn resolve_server(
+        &self,
+        server: &LanguageServerAcquisition,
+        dir_root: &Path,
+        configuration: &LanguageServersConfig,
+    ) -> Result<ManagedLanguageServer, String> {
+        let explicit = configuration
+            .servers
+            .iter()
+            .find_map(|(id, config)| (id.as_str() == server.id).then_some(config))
+            .and_then(|config| config.executable.as_deref());
+        let result = server.resolve(dir_root, explicit, &InstallContext::current(), || {
+            let home = self.home.as_deref().ok_or_else(|| {
+                ManagedLanguageServerError::Installation("Ash home is unavailable".into())
+            })?;
+            self.updates
+                .publish_language_server_progress(LanguageServerProgressNotification {
+                    dir_id: self.dir_state.dir_id.clone(),
+                    server: server.id.clone(),
+                    token: "ash.language-server.install".into(),
+                    title: Some(server.id.clone()),
+                    message: None,
+                    percentage: None,
+                    done: false,
+                });
+            let install = || {
+                use ash_http_client::HttpClientConfig;
+                use ash_http_client::OutboundNetworkSnapshot;
+                use ash_http_client::RedirectPolicy;
+                use ash_http_client::ReqwestHttpClient;
+                use ash_http_client::ResponseBodyLimit;
+                let config = HttpClientConfig::default()
+                    .with_response_body_limit(
+                        ResponseBodyLimit::new(
+                            std::num::NonZeroUsize::new(128 * 1024 * 1024).unwrap(),
+                        )
+                        .unwrap(),
+                    )
+                    .with_redirect_policy(RedirectPolicy::Follow {
+                        max_hops: std::num::NonZeroU8::new(5).unwrap(),
+                    });
+                let network =
+                    OutboundNetworkSnapshot::with_policy(config, self.network_policy.clone())
+                        .map_err(|error| {
+                            ManagedLanguageServerError::Installation(error.to_string())
+                        })?;
+                let http = ReqwestHttpClient::with_network(network)
+                    .map_err(|error| ManagedLanguageServerError::Installation(error.to_string()))?;
+                server.install(home, &http)
+            };
+            let result = install();
+            self.updates
+                .publish_language_server_progress(LanguageServerProgressNotification {
+                    dir_id: self.dir_state.dir_id.clone(),
+                    server: server.id.clone(),
+                    token: "ash.language-server.install".into(),
+                    title: None,
+                    message: None,
+                    percentage: None,
+                    done: true,
+                });
+            result
+        });
+        if let Err(error) = &result {
+            self.updates
+                .publish_language_server_state(LanguageServerStateNotification {
+                    dir_id: self.dir_state.dir_id.clone(),
+                    server: server.id.clone(),
+                    state: LanguageServerStateDto::Failed {
+                        message: error.to_string(),
+                    },
+                });
+        }
+        result.map_err(|error| error.to_string())
     }
 
     fn wait_until_ready(&mut self, language_id: &str) -> Result<(), String> {
@@ -609,6 +840,7 @@ impl AppServerLanguageRuntime {
         if let Some(manager) = self.manager.take() {
             let _ = manager.shutdown();
         }
+        self.acquired.clear();
         self.receiver = None;
         self.dir_state.root = None;
         self.dir_state.config_generation = None;

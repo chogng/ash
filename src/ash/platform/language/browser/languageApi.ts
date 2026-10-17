@@ -1,4 +1,4 @@
-import type { AppServerMethod, LanguageOperationParams, MethodParams, MethodResult } from "../../../../../.build/protocol/typescript/index.js";
+import { APP_SERVER_METHODS, type AppServerMethod, type LanguageOperationParams, type MethodParams, type MethodResult } from "../../../../../.build/protocol/typescript/index.js";
 import type { AppServerProtocolClient } from "../../agentHost/browser/appServerProtocolClient.js";
 import { appServerRequest, voidResult } from "../../agentHost/browser/appServerRequest.js";
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
@@ -11,7 +11,7 @@ export function createDisconnectedLanguageApi(unavailable: UnavailableOperation)
 export function createAppServerLanguageApi(connection: AppServerProtocolClient): ILanguageApi {
 	return {
 		servers: params => appServerRequest(connection, "language/servers", params),
-		synchronize: params => voidResult(appServerRequest(connection, "language/synchronize", params)),
+		synchronize: params => voidResult(languageServerRequest(connection, "language/synchronize", params)),
 		close: params => voidResult(appServerRequest(connection, "language/close", params)),
 		hover: (params, options) => languageRequest(connection, "language/hover", params, options, languageOperationParams),
 		completions: (params, options) => languageRequest(connection, "language/completions", params, options, languageOperationParams),
@@ -52,9 +52,15 @@ function languageRequest<M extends AppServerMethod, P>(
 ): Promise<MethodResult<M>> {
 	return runCancellableLanguageRequest(
 		options,
-		operationId => appServerRequest(connection, method, wrap(operationId, request)),
+		operationId => languageServerRequest(connection, method, wrap(operationId, request)),
 		operationId => appServerRequest(connection, "language/cancel", { operationId }),
 	);
+}
+
+function languageServerRequest<M extends AppServerMethod>(connection: AppServerProtocolClient, method: M, params: MethodParams<M>): Promise<MethodResult<M>> {
+	// A cold language request may acquire the pinned server before initialization. The backend
+	// bounds download and startup separately; preserve cancellation while allowing that first use.
+	return connection.request(APP_SERVER_METHODS[method], params, { timeoutMs: 120_000 });
 }
 
 function languageOperationParams<P>(operationId: string, request: P): LanguageOperationParams<P> {

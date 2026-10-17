@@ -159,7 +159,7 @@ export class LanguageServerSettingsContent extends Disposable implements Setting
 				const active = document.activeElement;
 				if (!this.visible || !isHTMLElement(active) || !this.domNode.contains(active)) { return undefined; }
 				return new AccessibleContentProvider(AccessibleViewProviderId.LanguageServers, { type: AccessibleViewType.Help },
-					() => this.label('helpText', 'Language Servers\nUse Tab and Shift+Tab to reach the workspace folder, language, Extensions, server selection, enable switch, executable path, Save, Use Default, Refresh, and Help. Use arrow keys in server and folder lists. Configuration applies to the App Server profile; the folder only controls availability checks. Leave the executable path empty to use the installed package or PATH. Use Default removes the override. After a conflict or an installation change, Refresh before saving. Find opens Extensions for the exact language and executable capability. Logs and startup failures are in Output; click a language server status entry to open its log.'),
+					() => this.label('helpText', 'Language Servers\nUse Tab and Shift+Tab to reach the workspace folder, language, Extensions, server selection, enable switch, executable path, Save, Use Default, Refresh, and Help. Use arrow keys in server and folder lists. Configuration applies to the App Server profile; the folder only controls availability checks. Leave the executable path empty to use the installed package or PATH. Rust support is enabled by default and downloads a managed rust-analyzer when no usable local server is available. An explicit path takes priority; disabling the server prevents installation. Use Default removes the override. After a conflict or an installation change, Refresh before saving. Find opens Extensions for the exact language and executable capability. Logs and startup failures are in Output; click a language server status entry to open its log.'),
 					() => active.focus(), AccessibilityVerbositySettingId.LanguageServers);
 			},
 		}));
@@ -293,7 +293,7 @@ export class LanguageServerSettingsContent extends Disposable implements Setting
 	private updateLabels(): void {
 		const hint = this.accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.LanguageServers);
 		this.domNode.setAttribute('aria-label', `${this.label('title', 'Language Servers')}${hint ? ` ${hint}` : ''}`);
-		this.note.textContent = this.label('note', 'Enable servers and set executable paths for the App Server profile. The workspace folder controls availability checks. Logs and startup failures are shown in Output.');
+		this.note.textContent = this.label('note', 'Rust support is built in. Ash uses an available rust-analyzer or downloads a managed version when needed. You can disable it or set an executable path. Logs and startup failures are shown in Output.');
 		const fields: readonly [string, string][] = [['directory', 'Workspace folder'], ['language', 'Language ID'], ['list', 'Language servers'], ['server', 'Server ID'], ['enabled', 'Enable server'], ['executable', 'Executable path (optional)']];
 		for (const [key, text] of fields) { this.labels.get(key)!.textContent = this.label(key, text); }
 		this.directory.setAriaLabel(this.label('directory', 'Workspace folder'));

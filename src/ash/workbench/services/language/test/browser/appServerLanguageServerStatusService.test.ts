@@ -8,6 +8,28 @@ import { DialogService } from "../../../dialogs/common/dialogService.js";
 import { StatusbarAlignment, StatusbarService } from "../../../statusbar/browser/statusbar.js";
 import { AppServerLanguageServerStatusService } from "../../browser/appServerLanguageServerStatusService.js";
 import { type ServerNotification } from "../../../../../../../.build/protocol/typescript/index.js";
+import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
+import { productLanguagePackCatalogs } from '../../../localization/common/localizationCatalogs.js';
+import { setARIAContainer } from '../../../../../base/browser/ui/aria/aria.js';
+import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
+
+test('managed Rust installation status is localized and clears when acquisition finishes', () => {
+	setARIAContainer(browserEnvironment.window.document.body);
+	const events = new FakeServerEvents();
+	using dialogs = new DialogService();
+	using resources = new DisposableStore();
+	const output = workbenchInstantiationService(resources).get(IOutputService);
+	using statusbar = new StatusbarService();
+	using service = new AppServerLanguageServerStatusService(events, dialogs, output, statusbar);
+	setNlsMessages('zh-CN', productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
+	try {
+		events.fire({ method: 'language/serverProgress', params: { server: 'rust-analyzer', token: 'ash.language-server.install', title: 'rust-analyzer', message: null, percentage: null, done: false } });
+		assert.equal(statusbar.getEntries(StatusbarAlignment.Right)[0]?.entry.text, '正在安装 rust-analyzer…');
+		assert.match(output.activeChannel?.getText() ?? '', /正在安装 rust-analyzer/);
+		events.fire({ method: 'language/serverProgress', params: { server: 'rust-analyzer', token: 'ash.language-server.install', title: null, message: null, percentage: null, done: true } });
+		assert.deepEqual(statusbar.getEntries(StatusbarAlignment.Right), []);
+	} finally { resetNlsResolver(); }
+});
 
 test("language-server status service publishes channels and only projects active work-done progress", () => {
 	const events = new FakeServerEvents();

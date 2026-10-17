@@ -286,7 +286,7 @@ export async function changeExtensionEnablement(input: ExtensionsInput, enableme
 		const descriptor = (await packages.list('cached', { includeDisabled: true })).extensions.find(value => value.id === input.summary.id);
 		if (!descriptor) { throw new Error(localize({ bundle: 'ash.extensions', key: 'extensionMissing' }, 'This extension is no longer installed. Refresh Extensions.')); }
 		const manifest = JSON.parse(descriptor.manifestJson);
-		if (manifest.ashRuntime?.kind === 'rust' && !manifest.browser) {
+		if ((manifest.ashRuntime?.kind === 'rust' && !manifest.browser) || !!manifest.ashLanguageServers) {
 			const catalog = await management.listBuiltInProviders();
 			const provider = catalog.providers.find(value => value.id === descriptor.id);
 			if (!provider) { throw new Error(localize({ bundle: 'ash.extensions', key: 'backendUnavailable' }, 'This provider is unavailable on the connected backend.')); }

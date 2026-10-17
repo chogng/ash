@@ -823,6 +823,8 @@ impl AppServer {
             self,
             &self.config,
             &self.language,
+            &self.extensions,
+            &self.editor_extension_policy,
             &self.request_cancellations,
             &self.request_scheduler,
         )
@@ -1410,6 +1412,10 @@ impl AppServer {
     }
 
     pub(crate) fn with_home(mut self, home: Arc<ash_home::AshHome>) -> Self {
+        self.language
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .set_home(home.root());
         let executor = self
             .env_runtime
             .read()
@@ -2568,13 +2574,17 @@ impl AppServer {
         self
     }
 
-    pub(crate) fn with_call_network_policy(
+    pub(crate) fn with_capability_network_policy(
         mut self,
         policy: ash_http_client::OutboundNetworkPolicy,
     ) -> Self {
         self.channels.set_network_policy(policy.clone());
         Arc::get_mut(&mut self.calls)
             .expect("Call policy is installed before runtime dispatch")
+            .set_network_policy(policy.clone());
+        self.language
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .set_network_policy(policy);
         self
     }

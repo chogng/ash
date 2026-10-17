@@ -114,7 +114,18 @@ impl<'a> ExtensionPackagesRequestProcessor<'a> {
                 .iter()
                 .any(|(id, _)| id == &params.id)
         });
-        if runtime.is_none() && editor_runtime.is_none() {
+        let snapshot = self
+            .extensions
+            .lock()
+            .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?
+            .list(ExtensionPackagesReload::Cached);
+        let language_extensions =
+            super::extension_packages_language_runtime::language_server_contributions(&snapshot)
+                .map_err(|_| RpcError::new(-32042, AppServerErrorName::PluginOperationFailed))?;
+        if runtime.is_none()
+            && editor_runtime.is_none()
+            && !language_extensions.contains_key(&params.id)
+        {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
         }
         let policy = self
@@ -149,6 +160,11 @@ impl<'a> ExtensionPackagesRequestProcessor<'a> {
                 .reconcile(super::extension_host_runtime::ExtensionHostReconcileMode::Refresh)
                 .map_err(|_| RpcError::new(-32042, AppServerErrorName::PluginOperationFailed))?;
         }
+        self.language
+            .lock()
+            .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?
+            .reconcile_extensions(&snapshot, Some(policy))
+            .map_err(|_| RpcError::new(-32042, AppServerErrorName::PluginOperationFailed))?;
         self.updates.publish_extension_packages_changed();
         result(&self.built_in_providers_snapshot()?)
     }
@@ -165,6 +181,18 @@ impl<'a> ExtensionPackagesRequestProcessor<'a> {
             .editor_extension_policy
             .as_ref()
             .ok_or_else(|| RpcError::new(-32040, AppServerErrorName::PluginsUnavailable))?;
+        let snapshot = self
+            .extensions
+            .lock()
+            .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?
+            .list(ExtensionPackagesReload::Cached);
+        let language_extensions =
+            super::extension_packages_language_runtime::language_server_contributions(&snapshot)
+                .map_err(|_| RpcError::new(-32042, AppServerErrorName::PluginOperationFailed))?;
+        let language = self
+            .language
+            .lock()
+            .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?;
         Ok(ExtensionsBuiltInProvidersResult {
             revision: policy.generation(),
             providers: self
@@ -185,6 +213,15 @@ impl<'a> ExtensionPackagesRequestProcessor<'a> {
                             running,
                         }),
                 )
+                .chain(language_extensions.into_iter().map(|(id, servers)| {
+                    ExtensionsBuiltInProviderDto {
+                        enabled: policy.is_extension_enabled(&id),
+                        running: servers
+                            .iter()
+                            .any(|server| language.server_running(&server.id)),
+                        id,
+                    }
+                }))
                 .collect(),
         })
     }

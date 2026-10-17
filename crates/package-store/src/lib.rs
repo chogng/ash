@@ -23,4 +23,12 @@ pub use installation::install_capability;
 pub use installation::validate_capability_package;
 
 #[cfg(feature = "installation")]
+pub use installation::ExecutableArchive;
+#[cfg(feature = "installation")]
+pub use installation::ExecutableRelease;
+#[cfg(feature = "installation")]
+pub use installation::InstalledExecutable;
+#[cfg(feature = "installation")]
+pub use installation::install_executable;
+#[cfg(feature = "installation")]
 pub use installation::resolve_capability_executable;

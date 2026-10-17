@@ -1,5 +1,6 @@
 import { Event } from '../../../base/common/event.js';
 import { LRUCache } from '../../../base/common/map.js';
+import type { IExtensionManagementService } from '../../extensionManagement/common/extensionManagementService.js';
 import type { IGlobalExtensionEnablementService } from '../../extensionManagement/common/extensionManagement.js';
 import type { ExtensionCatalog, ExtensionResourceRequest, IExtensionApi } from '../common/extensionApi.js';
 import { normalizeExtensionCatalog, MAX_EXTENSION_RESOURCE_BYTES } from '../common/extensionApi.js';
@@ -25,14 +26,18 @@ export function createDisconnectedExtensionApi(unavailable: UnavailableOperation
 }
 
 /** Both executable and declarative consumers read the same profile enablement. */
-export function withEnabledBuiltInExtensions(packages: IExtensionApi, enablement: IGlobalExtensionEnablementService): IExtensionApi {
+export function withEnabledBuiltInExtensions(packages: IExtensionApi, enablement: IGlobalExtensionEnablementService, management?: IExtensionManagementService): IExtensionApi {
 	return {
-		onDidChange: Event.any(packages.onDidChange ?? Event.None, Event.map(enablement.onDidChangeEnablement, () => undefined)),
+		onDidChange: Event.any(packages.onDidChange ?? Event.None, Event.map(enablement.onDidChangeEnablement, () => undefined), management?.onDidChangeInstalled ?? Event.None),
 		list: async (reload, options) => {
 			const catalog = await packages.list(reload);
 			if (options?.includeDisabled) { return catalog; }
 			const disabled = new Set(enablement.getDisabledExtensions().map(extension => extension.id));
-			return { ...catalog, extensions: catalog.extensions.filter(extension => extension.sourceKind !== 'builtIn' || !disabled.has(extension.id.toLowerCase())) };
+			const languageExtensions = new Set(catalog.extensions.filter(extension => extension.sourceKind === 'builtIn' && JSON.parse(extension.manifestJson).ashLanguageServers).map(extension => extension.id));
+			// The backend owns these extensions' enablement for both syntax and executable
+			// contributions. Do not mirror it in the declarative-only profile setting.
+			const providers = languageExtensions.size ? await management?.listBuiltInProviders().catch(() => undefined) : undefined;
+			return { ...catalog, extensions: catalog.extensions.filter(extension => languageExtensions.has(extension.id) ? providers?.providers.some(provider => provider.id === extension.id && provider.enabled) : extension.sourceKind !== 'builtIn' || !disabled.has(extension.id.toLowerCase())) };
 		},
 		resources: packages.resources,
 	};

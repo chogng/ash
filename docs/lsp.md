@@ -16,9 +16,9 @@
 Ash 通过独立的 server provider、LSP manager 和 LSP 运行时连接现有语言服务器，而不是把语言分析逻辑
 写进编辑器。Desktop 已接入文档生命周期和事件循环；App Server Config authority 持久化
 内置服务器的 Disabled/Enabled 与可选绝对 executable path。Settings 中每个 server
-都有独立的 Enable switch，默认关闭。未配置的 PATH server 默认 Disabled，不会自动拉起；用户显式开启后才从进程
+都有独立的 Enable switch。Rust 由默认随产品提供的 [`extensions/rust`](../extensions/rust/package.json) 声明语言与服务器获取策略，核心只解释通用 `ashLanguageServers` 契约。Rust 扩展默认启用，在实际 Rust 请求时探测本地 rust-analyzer，缺失时按需下载固定、校验过的官方版本；停用扩展或服务器后不探测或安装，扩展缺失不回退到核心 Rust 实现。其他未配置的 PATH server 默认 Disabled；用户显式开启后才从进程
 启动时冻结的 PATH 解析。Extensions package 的安装确认同时写入 activation receipt，因此其 packaged
-route 默认启用；显式 Config `Disabled` 仍可关闭。缺失或不可执行时保持无语言服务器。
+route 默认启用；显式 Config `Disabled` 仍可关闭。显式路径失效会报告错误，不自动替换。语言列表查询不探测进程或下载；没有 Cargo.toml 的目录不会因后台 workspace diagnostics 自动安装 Rust。
 
 | 使用场景                                              | 当前结果                                                                                                                               | 谁负责下一步                                |
 | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
@@ -162,12 +162,12 @@ App Server 拥有 Desktop 的 Environment-bound 目录访问与 LSP IPC boundary
 - full/incremental document synchronization、save policy 和单调 version；
 - generic typed requests、deadline cancellation、shutdown/exit；
 - 唯一 language route、EditorHost revision binding、显式 server replacement 和全文 replay；
-- 独立 `ash-lsp-server-provider`、Rust built-in identity、frozen PATH resolution 和 policy gate；
+- 独立 `ash-lsp-server-provider`、扩展声明的通用可用性探测与获取、frozen PATH resolution 和 policy gate；
 - `LspServerProviders`、`ManagedNodeRuntime` 和 verified CSS package provider；
 - Desktop 通过 allowlisted `ASH_ELECTRON_RUN_AS_NODE_PATH` 复用 exact Electron executable，且只在
   language-server child 的 clean environment 中设置 `ELECTRON_RUN_AS_NODE=1`；
 - standalone/headless package 保留锁定 Node.js runtime 与 license 作为非 Electron 回退；
-- App Server 将 activation-confirmed provider definition 与显式启用的 built-in resolver definition 合并后交给同一 manager；
+- App Server 将 activation-confirmed provider、启用的扩展声明与显式启用的 built-in resolver 合并后交给同一 manager；
 - 独立 `ash-lsp-manager` supervisor、显式 enablement、resolved definition 校验、generation gate；
 - Desktop 文档 open/change/save/close、workspace replacement 与 event-loop adapter；
 - `ash-config` mode/path schema、App Server typed mutation/config notification，以及三个内置 server 的
@@ -184,7 +184,7 @@ App Server 拥有 Desktop 的 Environment-bound 目录访问与 LSP IPC boundary
 - Semantic Tokens、Document Symbols、CodeLens、Document Links、Document Colors、Folding 的 revision-bound facade 与 Desktop Editor provider；
 - document/workspace pull diagnostics 的 capability gate、report projection、App Server route 与 Desktop Problems 数据接入；
 - 多 definition target 使用现有 Peek 列表选择，单目标直接导航；
-- Rust、JSON/JSONC、Shell、JavaScript/TypeScript 的内置 resolver definitions；
+- `extensions/rust` 内置扩展声明 Rust server、工作区标记与固定上游资源，复用包存储安装及 profile enablement；JSON/JSONC、Shell、JavaScript/TypeScript 保留内置 resolver definitions；
 - 通用 Extensions Manager 的 TUF verified download、整包 digest 复核、immutable install/update/uninstall；
 - Extensions Language asset 投影到共享 Extension catalog，Executable 按 signed language route 和
   `node`/`direct` runtime 组合 provider；

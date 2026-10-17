@@ -9,10 +9,191 @@ use ash_product_update::PackageFormat;
 use ash_product_update::VerifiedPackage;
 use fs2::FileExt;
 use serde::Deserialize;
+use serde::Serialize;
+use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;
 
 const MAX_ARCHIVE_BYTES: u64 = 128 * 1024 * 1024;
+
+/// Upstream single-executable archive format; ZIP entries are never extracted as paths.
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ExecutableArchive {
+    Gzip,
+    Zip,
+}
+
+/// An exact upstream release pinned by the product, never supplied by an untrusted server.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExecutableRelease {
+    pub version: String,
+    pub target: String,
+    pub url: String,
+    pub sha256: String,
+    pub size: u64,
+    pub format: ExecutableArchive,
+}
+
+/// The lease must outlive all child processes using this immutable executable.
+pub struct InstalledExecutable {
+    pub path: PathBuf,
+    pub lease: crate::PackageLease,
+}
+
+/// Installs a pinned upstream executable through the capability store. Failed downloads do not
+/// change selection; concurrent processes share the lock and reuse the validated generation.
+pub fn install_executable(
+    home: &Path,
+    kind: &str,
+    binary: &str,
+    release: &ExecutableRelease,
+    http: &dyn HttpClient,
+) -> Result<InstalledExecutable, CapabilityInstallError> {
+    let valid_name = |name: &str| {
+        !name.is_empty()
+            && name
+                .bytes()
+                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+    };
+    let url = url::Url::parse(&release.url).map_err(|_| CapabilityInstallError::Invalid)?;
+    if !valid_name(kind)
+        || !valid_name(binary)
+        || url.scheme() != "https"
+        || url.host_str().is_none()
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+        || release.size == 0
+        || release.size > MAX_ARCHIVE_BYTES
+        || release.sha256.len() != 64
+        || !release
+            .sha256
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    {
+        return Err(CapabilityInstallError::Invalid);
+    }
+    let root = home.join("capabilities").join(kind);
+    let store = PackageStore::open(&root).map_err(|_| CapabilityInstallError::Unavailable)?;
+    let _lock = install_lock(&root)?;
+    let binding = serde_json::to_value(release).map_err(|_| CapabilityInstallError::Invalid)?;
+    let name = format!("{binary}{}", std::env::consts::EXE_SUFFIX);
+    let installed = |root: PathBuf| -> Result<InstalledExecutable, CapabilityInstallError> {
+        validate_capability_package(&root, kind)?;
+        let lease =
+            crate::PackageLease::acquire(&root).map_err(|_| CapabilityInstallError::Unavailable)?;
+        let path = root
+            .join("bin")
+            .join(&name)
+            .canonicalize()
+            .map_err(|_| CapabilityInstallError::Invalid)?;
+        Ok(InstalledExecutable { path, lease })
+    };
+    if let Some(selected) = store
+        .current()
+        .map_err(|_| CapabilityInstallError::Unavailable)?
+        && selected.installation.as_ref() == Some(&binding)
+    {
+        return installed(selected.package_root);
+    }
+    let request = HttpRequest::new(HttpMethod::Get, &release.url, Vec::new(), Vec::new())
+        .map_err(|_| CapabilityInstallError::Invalid)?;
+    let response = http
+        .execute(&request)
+        .map_err(|_| CapabilityInstallError::Connection)?;
+    if response.status() != 200 || response.body().len() as u64 != release.size {
+        return Err(CapabilityInstallError::Connection);
+    }
+    use sha2::Digest;
+    if format!("{:x}", sha2::Sha256::digest(response.body())) != release.sha256 {
+        return Err(CapabilityInstallError::Invalid);
+    }
+    let temporary = tempfile::Builder::new()
+        .prefix("capability-install-")
+        .tempdir_in(&root)
+        .map_err(|_| CapabilityInstallError::Unavailable)?;
+    let staging = temporary.path().join("package");
+    std::fs::create_dir_all(staging.join("bin"))
+        .map_err(|_| CapabilityInstallError::Unavailable)?;
+    let executable = staging.join("bin").join(&name);
+    let mut output =
+        std::fs::File::create(&executable).map_err(|_| CapabilityInstallError::Unavailable)?;
+    // Bound decompression independently from download size. ZIP must contain exactly the
+    // expected executable: directories, links, traversal and unrelated files are rejected.
+    let mut reader: Box<dyn Read + '_> = match release.format {
+        ExecutableArchive::Gzip => Box::new(flate2::read::GzDecoder::new(response.body())),
+        ExecutableArchive::Zip => {
+            let mut zip = zip::ZipArchive::new(std::io::Cursor::new(response.body()))
+                .map_err(|_| CapabilityInstallError::Invalid)?;
+            if zip.len() != 1 {
+                return Err(CapabilityInstallError::Invalid);
+            }
+            let mut entry = zip
+                .by_index(0)
+                .map_err(|_| CapabilityInstallError::Invalid)?;
+            if entry.name().map_err(|_| CapabilityInstallError::Invalid)? != name
+                || entry.is_dir()
+                || entry.is_symlink()
+                || entry.size() > MAX_ARCHIVE_BYTES
+            {
+                return Err(CapabilityInstallError::Invalid);
+            }
+            let mut bytes = Vec::new();
+            (&mut entry)
+                .take(MAX_ARCHIVE_BYTES + 1)
+                .read_to_end(&mut bytes)
+                .map_err(|_| CapabilityInstallError::Invalid)?;
+            Box::new(std::io::Cursor::new(bytes))
+        }
+    };
+    let size = std::io::copy(
+        &mut reader.by_ref().take(MAX_ARCHIVE_BYTES + 1),
+        &mut output,
+    )
+    .map_err(|_| CapabilityInstallError::Invalid)?;
+    if size == 0 || size > MAX_ARCHIVE_BYTES {
+        return Err(CapabilityInstallError::Invalid);
+    }
+    output
+        .sync_all()
+        .map_err(|_| CapabilityInstallError::Unavailable)?;
+    drop(output);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755))
+            .map_err(|_| CapabilityInstallError::Unavailable)?;
+    }
+    crate::store::write_executable_metadata(
+        &staging,
+        kind,
+        &release.version,
+        &release.target,
+        &release.sha256,
+    )
+    .map_err(|_| CapabilityInstallError::Invalid)?;
+    validate_capability_package(&staging, kind)?;
+    let selected = store
+        .publish_with_installation(&staging, binding)
+        .map_err(|_| CapabilityInstallError::Unavailable)?;
+    installed(selected.package_root)
+}
+
+fn install_lock(root: &Path) -> Result<std::fs::File, CapabilityInstallError> {
+    let lock = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(root.join("install.lock"))
+        .map_err(|_| CapabilityInstallError::Unavailable)?;
+    lock.lock_exclusive()
+        .map_err(|_| CapabilityInstallError::Unavailable)?;
+    Ok(lock)
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum CapabilityInstallError {
@@ -180,15 +361,7 @@ fn install(
     let store = PackageStore::open(&root).map_err(|_| CapabilityInstallError::Unavailable)?;
     // Serialize the download as well as publication across windows and processes. A failed
     // attempt leaves the previous selected generation intact and temporary bytes are removed.
-    let lock = std::fs::OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .read(true)
-        .write(true)
-        .open(&root.join("install.lock"))
-        .map_err(|_| CapabilityInstallError::Unavailable)?;
-    lock.lock_exclusive()
-        .map_err(|_| CapabilityInstallError::Unavailable)?;
+    let _lock = install_lock(&root)?;
     if let Some(selected) = store
         .current()
         .map_err(|_| CapabilityInstallError::Unavailable)?

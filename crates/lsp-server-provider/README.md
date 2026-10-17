@@ -8,8 +8,7 @@
 
 `ash-lsp-server-provider` 拥有内置 server identity、用户启用意图、execution policy gate、
 冻结候选的校验与 canonicalization，以及已验证 package 到 resolved definition 的 provider
-绑定。它不启动进程、不读取 editor 文档、不执行 LSP、不下载 server，也不决定
-directory capability。
+绑定。`LanguageServerAcquisition` 根据可信内置扩展声明在实际需求时执行有界可用性探测，并通过 package-store 获取固定版本；它不拥有 Rust 专属策略、不读取 editor 文档、不执行 LSP，也不决定 directory capability。通用 resolver 与 installed provider 仍只生成 launch definition。
 
 ## 所有权与公共接口
 
@@ -26,10 +25,9 @@ directory capability。
 | `CssLanguageServerProvider`                                                 | 用共享 Node-compatible runtime 运行 verified CSS package 入口，route `css`/`less`/`scss`                                                          | 复制 LSP client/supervisor 或解释 Extensions metadata |
 | `NodePackageLanguageServerProvider` / `DirectPackageLanguageServerProvider` | 把 Manager-verified entrypoint 和 signed language route 绑定为 packaged provider                                                                  | 下载、安装、解析远端 catalog 或持有 live process      |
 
-当前内置项包括 `rust-analyzer → rust`、`vscode-json-language-server --stdio → json/jsonc` 和
-`bash-language-server start → shellscript`。CSS 是独立 provider，不进入 PATH built-in 列表。Desktop/App Server 从
-Config snapshot 映射各自的持久化 preference；
-PATH built-in 未配置时使用 `Disabled`，需要显式选择 `Enabled` 才会生成 definition；
+resolver 保留 JSON/JSONC、Shell 和 TypeScript 的冻结 PATH 入口；Rust 路由只来自内置 Rust 扩展，核心已移除旧 Rust resolver 入口。CSS 是独立 provider。产品从
+Config snapshot 映射持久化 preference；
+Rust 扩展声明默认启用；其余 PATH built-in 未配置时使用 `Disabled`，需要显式选择 `Enabled` 才会生成 definition；
 activation-backed provider 的用户安装确认已经构成启用意图，未配置时生成 packaged definition，显式
 `Disabled` 才关闭。允许执行且冻结
 PATH 中存在可执行文件时生成 definition；否则保持无 server。显式 override 是 authoritative，失效时不会回退 PATH。
@@ -102,3 +100,11 @@ environment、host override 和 duplicate provider gate。
 - ✅ Extensions Language target 的通用 TUF 下载/解压 adapter、Settings 安装 UI，以及从 verified
   Language/Executable capability 自动构建 `node`/`direct` provider collection；
 - 尚未完成：组织策略或更细的 per-server executable grant。
+
+## 内置扩展的服务器获取
+
+`extensions/rust/package.json` 的版本化 `ashLanguageServers` 声明拥有 Rust 的服务器 ID、语言路由、探测参数、环境变量、工作区标志和六个平台的固定发布资产。它与语言和语法贡献一起经过现有不可变扩展目录装载；Rust 配置不编译进核心 crate。核心只接纳 BuiltIn 来源的获取声明，用户/市场包不能通过添加同名字段取得进程或网络授权。
+
+语言列表无进程或网络副作用。文档请求，或匹配扩展 `workspaceFiles` 的目录诊断请求，才执行通用 `LanguageServerAcquisition`。显式路径不可运行时报错，不回退；自动模式依次探测冻结 PATH，在工作区目录执行声明中的参数，保留工具链代理调用名。所有候选失败后，按扩展固定的 URL、大小和 SHA-256，通过 `ash-package-store` 安装。安装锁、原子选择、完整文件校验和运行期 lease 沿用包管理机制。
+
+Extensions 的整包停用与 LSP 设置的 server Disabled 都阻止探测和下载；扩展移除或停用没有核心 Rust fallback。LSP manager 继续拥有协议和进程监管。Rust 工具链（cargo/rustc）由用户管理。此声明路径不建立另一套可执行扩展 RPC；需要任意运行逻辑的扩展继续使用已有 Host RPC/SDK。

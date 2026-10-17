@@ -10,3 +10,9 @@ filegroup(
     srcs = glob(["*/queries/*.scm"]),
     visibility = ["//crates/syntax:__pkg__"],
 )
+
+# Contract tests consume the same declaration that ships in the Rust extension.
+exports_files(
+    ["rust/package.json"],
+    visibility = ["//crates/app-server:__pkg__", "//crates/lsp-server-provider:__pkg__"],
+)

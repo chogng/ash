@@ -12,7 +12,7 @@ use ash_lsp_server_provider::LanguageServerMode;
 use ash_lsp_server_provider::LspServerProviders;
 use ash_lsp_server_provider::ManagedNodeRuntime;
 use ash_lsp_server_provider::NodePackageLanguageServerProvider;
-use ash_lsp_server_provider::RUST_ANALYZER_SERVER_ID;
+const RUST_ANALYZER_SERVER_ID: &str = "rust-analyzer";
 use ash_lsp_server_provider::TYPESCRIPT_LANGUAGE_SERVER_ID;
 use tempfile::TempDir;
 
@@ -78,10 +78,108 @@ fn installed_server_catalog_respects_configuration_without_starting_a_process() 
 }
 
 #[test]
-fn unconfigured_builtin_language_server_is_disabled() {
+fn unconfigured_servers_have_no_core_rust_fallback() {
     assert_eq!(
         preference(&LanguageServersConfig::default(), RUST_ANALYZER_SERVER_ID).mode(),
         LanguageServerMode::Disabled
+    );
+    let runtime = AppServerLanguageRuntime::new(Arc::new(UpdateBroker::default()));
+    assert_eq!(
+        runtime
+            .acquisitions(&LanguageServersConfig::default())
+            .count(),
+        0
+    );
+}
+
+#[test]
+fn extension_advertisement_is_lazy_and_respects_language_and_extension_disablement() {
+    use ash_external_ext::packages::ExtensionPackages;
+    use ash_external_ext::packages::ExtensionPackagesReload;
+    use ash_external_ext::packages::ExtensionRoot;
+    let root = tempfile::tempdir().unwrap();
+    let package = root.path().join("rust");
+    fs::create_dir(&package).unwrap();
+    fs::write(
+        package.join("package.json"),
+        include_str!("../../../../extensions/rust/package.json"),
+    )
+    .unwrap();
+    let mut catalog = ExtensionPackages::new(vec![ExtensionRoot::built_in(root.path())]);
+    let snapshot = catalog.list(ExtensionPackagesReload::Cached);
+    let mut runtime = AppServerLanguageRuntime::new(Arc::new(UpdateBroker::default()));
+    runtime.set_home(root.path());
+    runtime.reconcile_extensions(&snapshot, None).unwrap();
+    let mut configuration = LanguageServersConfig::default();
+    assert_eq!(runtime.acquisitions(&configuration).count(), 1);
+    assert!(
+        runtime
+            .definitions(root.path(), &configuration)
+            .unwrap()
+            .is_empty()
+    );
+    assert!(!root.path().join("capabilities").exists());
+    assert!(!runtime.allows_workspace_diagnostics(root.path(), "rust", &configuration));
+    fs::write(root.path().join("Cargo.toml"), "").unwrap();
+    assert!(runtime.allows_workspace_diagnostics(root.path(), "rust", &configuration));
+    configuration.servers.insert(
+        LanguageServerId::new(RUST_ANALYZER_SERVER_ID).unwrap(),
+        LanguageServerConfig {
+            mode: LanguageServerModeConfig::Disabled,
+            executable: None,
+        },
+    );
+    assert_eq!(runtime.acquisitions(&configuration).count(), 0);
+    let policy =
+        ash_core_plugins::EditorExtensionPolicy::open(root.path().join("policy.json")).unwrap();
+    configuration.servers.clear();
+    policy
+        .set_built_in_enablement(
+            "vscode.rust",
+            ash_core_plugins::EditorExtensionPolicyAction::Disable,
+            policy.generation(),
+        )
+        .unwrap();
+    runtime
+        .reconcile_extensions(&snapshot, Some(&policy))
+        .unwrap();
+    assert_eq!(runtime.acquisitions(&configuration).count(), 0);
+    policy
+        .set_built_in_enablement(
+            "vscode.rust",
+            ash_core_plugins::EditorExtensionPolicyAction::Enable,
+            policy.generation(),
+        )
+        .unwrap();
+    runtime
+        .reconcile_extensions(&snapshot, Some(&policy))
+        .unwrap();
+    assert_eq!(runtime.acquisitions(&configuration).count(), 1);
+    configuration.servers.insert(
+        LanguageServerId::new(RUST_ANALYZER_SERVER_ID).unwrap(),
+        LanguageServerConfig {
+            mode: LanguageServerModeConfig::Enabled,
+            executable: None,
+        },
+    );
+    // Removing the extension never resurrects the old hard-coded provider, even with an override.
+    fs::remove_dir_all(package).unwrap();
+    runtime
+        .reconcile_extensions(&catalog.list(ExtensionPackagesReload::Refresh), None)
+        .unwrap();
+    configuration.servers.values_mut().next().unwrap().mode = LanguageServerModeConfig::Enabled;
+    configuration
+        .servers
+        .values_mut()
+        .next()
+        .unwrap()
+        .executable = Some(root.path().join("rust-analyzer"));
+    assert_eq!(runtime.acquisitions(&configuration).count(), 0);
+    assert!(
+        runtime
+            .definitions(root.path(), &configuration)
+            .unwrap()
+            .is_empty()
     );
 }
 

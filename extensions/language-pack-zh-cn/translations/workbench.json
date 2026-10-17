@@ -1761,6 +1761,7 @@
     "prompt.skill.allowedTools": "可选。以空格分隔的工具名称。工具执行仍遵循当前权限与工具目录。",
     "prompt.skill.field": "Skill 字段",
     "terminal.profile.duplicate": "终端配置已注册：{0}",
+    "languageServer.installing": "正在安装 {0}…",
     "terminal.profile.providerUnavailable": "终端配置提供程序不可用：{0}",
     "terminal.profile.invalidProviderResult": "终端配置提供程序的响应无效。",
     "terminal.profile.lateReleaseFailed": "无法释放扩展终端配置迟到的结果。",

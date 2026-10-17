@@ -1841,7 +1841,7 @@ pub fn open_app_server_with_codebase_providers(
         ),
     ))
     .with_approval_review_model(Some(approval_review_model))
-    .with_call_network_policy(network_policy.clone())
+    .with_capability_network_policy(network_policy.clone())
     .with_config_store(Arc::clone(&config))
     .with_backup_store(Arc::new(
         ash_state::SqliteBackupStore::open(&database_path).map_err(open_error)?,

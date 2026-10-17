@@ -96,3 +96,39 @@ impl ExtensionsLanguageRuntime {
         Ok(providers)
     }
 }
+
+/// Read only product-owned declarations from the same frozen catalog served to the workbench.
+/// Installing a user/registry package never grants permission to probe or download executables.
+pub(super) fn language_server_contributions(
+    snapshot: &ash_external_ext::packages::ExtensionPackagesSnapshot,
+) -> Result<
+    std::collections::BTreeMap<String, Vec<ash_lsp_server_provider::LanguageServerAcquisition>>,
+    String,
+> {
+    use ash_external_ext::packages::ExtensionSourceKind;
+    use ash_lsp_server_provider::LanguageServerAcquisition;
+    let mut contributions = std::collections::BTreeMap::new();
+    let mut ids = std::collections::BTreeSet::new();
+    for extension in &snapshot.extensions {
+        if extension.source_kind != ExtensionSourceKind::BuiltIn {
+            continue;
+        }
+        let manifest: serde_json::Value =
+            serde_json::from_str(&extension.manifest_json).map_err(|error| error.to_string())?;
+        let Some(value) = manifest.get("ashLanguageServers") else {
+            continue;
+        };
+        let servers = LanguageServerAcquisition::from_contribution(value.clone())
+            .map_err(|error| format!("{}: {error}", extension.id))?;
+        for server in &servers {
+            if !ids.insert(server.id.clone()) {
+                return Err(format!(
+                    "duplicate language-server contribution: {}",
+                    server.id
+                ));
+            }
+        }
+        contributions.insert(extension.id.clone(), servers);
+    }
+    Ok(contributions)
+}

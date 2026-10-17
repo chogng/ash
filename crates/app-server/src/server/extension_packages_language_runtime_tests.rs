@@ -760,3 +760,38 @@ fn providers(provider: Arc<dyn ExtensionSource>) -> ash_core_plugins::ExtensionS
     )])
     .unwrap()
 }
+
+#[test]
+fn language_acquisition_only_admits_built_in_packages_and_rejects_conflicting_owners() {
+    use super::extension_packages_language_runtime::language_server_contributions;
+    use ash_external_ext::packages::ExtensionRoot;
+    let root = tempfile::tempdir().unwrap();
+    let package = root.path().join("rust");
+    fs::create_dir(&package).unwrap();
+    let manifest = include_str!("../../../../extensions/rust/package.json");
+    fs::write(package.join("package.json"), manifest).unwrap();
+    let mut user = ExtensionPackages::new(vec![ExtensionRoot::user(root.path())]);
+    assert!(
+        language_server_contributions(&user.list(ExtensionPackagesReload::Cached))
+            .unwrap()
+            .is_empty()
+    );
+    let mut builtin = ExtensionPackages::new(vec![ExtensionRoot::built_in(root.path())]);
+    let snapshot = builtin.list(ExtensionPackagesReload::Cached);
+    assert_eq!(
+        language_server_contributions(&snapshot).unwrap()["vscode.rust"][0].id,
+        "rust-analyzer"
+    );
+    let conflict = root.path().join("other");
+    fs::create_dir(&conflict).unwrap();
+    let mut value: serde_json::Value = serde_json::from_str(manifest).unwrap();
+    value["name"] = serde_json::json!("other");
+    fs::write(
+        conflict.join("package.json"),
+        serde_json::to_vec(&value).unwrap(),
+    )
+    .unwrap();
+    assert!(
+        language_server_contributions(&builtin.list(ExtensionPackagesReload::Refresh)).is_err()
+    );
+}

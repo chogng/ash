@@ -1,8 +1,10 @@
 //! Discovery and validation of trusted language-server launch definitions.
 //!
 //! This crate owns built-in server identities, user intent, executable candidate resolution, and
-//! availability reporting. It never starts a process, reads an editor document, or runs LSP.
+//! availability reporting. Trusted extension contributions can probe availability and acquire a pinned
+//! package on demand; process supervision and editor documents remain with the LSP runtime.
 
+mod acquisition;
 mod css;
 mod definition;
 mod direct_package;
@@ -12,8 +14,6 @@ mod node_runtime;
 mod provider;
 mod resolver;
 
-/// Stable built-in identity for the Rust language server.
-pub const RUST_ANALYZER_SERVER_ID: &str = "rust-analyzer";
 /// Stable built-in identity for the VS Code JSON/JSONC language server.
 pub const JSON_LANGUAGE_SERVER_ID: &str = "vscode-json-language-server";
 /// Stable built-in identity for the Bash and shell-script language server.
@@ -23,6 +23,9 @@ pub const TYPESCRIPT_LANGUAGE_SERVER_ID: &str = "typescript-language-server";
 /// Stable provider identity for the Extensions CSS/SCSS/Less language server.
 pub const CSS_LANGUAGE_SERVER_ID: &str = "css-language-server";
 
+pub use acquisition::LanguageServerAcquisition;
+pub use acquisition::ManagedLanguageServer;
+pub use acquisition::ManagedLanguageServerError;
 pub use css::CssLanguageServerProvider;
 pub use definition::LanguageServerDefinition;
 pub use direct_package::DirectPackageLanguageServerProvider;

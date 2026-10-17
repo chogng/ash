@@ -468,6 +468,34 @@ fn package_build_id(mut identity: Value, files: &BTreeMap<String, String>) -> io
     Ok(format!("{SHA256_PREFIX}{:x}", digest.finalize()))
 }
 
+/// Wrap verified upstream bytes in the same immutable manifest used by product packages.
+#[cfg(feature = "installation")]
+pub(crate) fn write_executable_metadata(
+    root: &Path,
+    kind: &str,
+    version: &str,
+    target: &str,
+    source_digest: &str,
+) -> io::Result<()> {
+    let files = regular_files(root)?
+        .into_iter()
+        .map(|(name, file)| file_sha256(&file).map(|digest| (name, digest)))
+        .collect::<io::Result<BTreeMap<_, _>>>()?;
+    let mut metadata = serde_json::json!({
+        "layoutVersion": 2, "version": version, "target": target,
+        "buildProfile": "upstream", "javascriptRuntime": { "kind": kind },
+        // This identifies our single-executable package envelope, not the executable's RPC API.
+        "protocol": { "major": 1, "schemaHash": format!("sha256:{:x}", Sha256::digest(b"ash-single-executable-v1")) },
+        "upstreamSha256": source_digest
+    });
+    metadata["buildId"] = Value::String(package_build_id(metadata.clone(), &files)?);
+    metadata["files"] = serde_json::to_value(files).map_err(invalid)?;
+    write_synced_file(
+        &root.join(METADATA_FILE),
+        &serde_json::to_vec(&metadata).map_err(invalid)?,
+    )
+}
+
 fn update_field(digest: &mut Sha256, value: &str) {
     digest.update(value.as_bytes());
     digest.update(b"\0");

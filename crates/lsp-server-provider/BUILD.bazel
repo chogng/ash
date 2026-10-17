@@ -3,4 +3,5 @@ load("//:defs.bzl", "ash_rust_crate")
 ash_rust_crate(
     name = "lsp-server-provider",
     crate_name = "ash_lsp_server_provider",
+    data = ["//extensions:rust/package.json"],
 )

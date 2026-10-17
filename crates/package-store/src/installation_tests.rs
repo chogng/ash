@@ -11,6 +11,118 @@ struct Download {
     bytes: Vec<u8>,
     calls: AtomicUsize,
 }
+
+fn executable_release(bytes: &[u8], format: ExecutableArchive) -> ExecutableRelease {
+    ExecutableRelease {
+        version: "2026-10-12".into(),
+        target: target().into(),
+        url: "https://example.test/livekit.tar.gz".into(),
+        sha256: format!("{:x}", sha2::Sha256::digest(bytes)),
+        size: bytes.len() as u64,
+        format,
+    }
+}
+
+#[test]
+fn executable_download_is_verified_atomic_and_reused_across_concurrent_callers() {
+    use std::io::Write;
+    let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+    encoder.write_all(b"verified executable").unwrap();
+    let bytes = encoder.finish().unwrap();
+    let release = executable_release(&bytes, ExecutableArchive::Gzip);
+    let http = Download {
+        bytes,
+        calls: AtomicUsize::new(0),
+    };
+    let home = tempfile::tempdir().unwrap();
+    std::thread::scope(|scope| {
+        let handles: Vec<_> = (0..3)
+            .map(|_| {
+                scope.spawn(|| {
+                    install_executable(
+                        home.path(),
+                        "rust-analyzer",
+                        "rust-analyzer",
+                        &release,
+                        &http,
+                    )
+                    .unwrap()
+                })
+            })
+            .collect();
+        for handle in handles {
+            let installed = handle.join().unwrap();
+            assert_eq!(
+                std::fs::read(installed.path).unwrap(),
+                b"verified executable"
+            );
+        }
+    });
+    assert_eq!(http.calls.load(Ordering::SeqCst), 1);
+    let store = PackageStore::open(home.path().join("capabilities/rust-analyzer")).unwrap();
+    let previous = store.current().unwrap().unwrap().package_root;
+    let mut corrupt = release.clone();
+    corrupt.sha256 = "a".repeat(64);
+    assert!(matches!(
+        install_executable(
+            home.path(),
+            "rust-analyzer",
+            "rust-analyzer",
+            &corrupt,
+            &http
+        ),
+        Err(CapabilityInstallError::Invalid)
+    ));
+    assert_eq!(store.current().unwrap().unwrap().package_root, previous);
+    // Mutating a cached executable must fail validation, even when the release binding matches.
+    std::fs::write(
+        previous
+            .join("bin")
+            .join(format!("rust-analyzer{}", std::env::consts::EXE_SUFFIX)),
+        b"tampered",
+    )
+    .unwrap();
+    assert!(
+        install_executable(
+            home.path(),
+            "rust-analyzer",
+            "rust-analyzer",
+            &release,
+            &http
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn executable_zip_accepts_only_the_expected_regular_entry() {
+    use std::io::Write;
+    let home = tempfile::tempdir().unwrap();
+    for name in [
+        format!("rust-analyzer{}", std::env::consts::EXE_SUFFIX),
+        "../escape".into(),
+    ] {
+        let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        zip.start_file(&name, zip::write::SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(b"verified executable").unwrap();
+        let bytes = zip.finish().unwrap().into_inner();
+        let release = executable_release(&bytes, ExecutableArchive::Zip);
+        let http = Download {
+            bytes,
+            calls: AtomicUsize::new(0),
+        };
+        let result = install_executable(
+            home.path(),
+            "rust-analyzer",
+            "rust-analyzer",
+            &release,
+            &http,
+        );
+        assert_eq!(result.is_ok(), !name.contains(".."));
+    }
+    assert!(!home.path().join("escape").exists());
+}
 impl HttpClient for Download {
     fn execute(&self, request: &HttpRequest) -> Result<HttpResponse, HttpClientError> {
         assert_eq!(request.url(), "https://example.test/livekit.tar.gz");

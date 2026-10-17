@@ -11,6 +11,9 @@ name = "ash_lsp_server_provider"
 path = "src/lib.rs"
 
 [dependencies]
+ash-http-client = { workspace = true }
+ash-package-store = { workspace = true, features = ["installation"] }
+serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }

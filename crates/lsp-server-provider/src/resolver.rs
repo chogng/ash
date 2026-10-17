@@ -6,7 +6,7 @@ use ash_lsp::LanguageServerCommand;
 
 use crate::{
     BASH_LANGUAGE_SERVER_ID, JSON_LANGUAGE_SERVER_ID, LanguageServerDefinition,
-    LspServerResolverError, RUST_ANALYZER_SERVER_ID, TYPESCRIPT_LANGUAGE_SERVER_ID,
+    LspServerResolverError, TYPESCRIPT_LANGUAGE_SERVER_ID,
 };
 
 /// Supplies frozen executable candidates without granting authority to start them.
@@ -134,7 +134,6 @@ impl LspServerResolution {
 /// Built-in language-server resolver and its user-selected preferences.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct LspServerResolver {
-    rust_analyzer: LanguageServerPreference,
     json_language_server: LanguageServerPreference,
     bash_language_server: LanguageServerPreference,
     typescript_language_server: LanguageServerPreference,
@@ -144,17 +143,9 @@ impl LspServerResolver {
     /// Creates a resolver that cannot resolve a server until persisted configuration enables one.
     pub fn disabled() -> Self {
         Self {
-            rust_analyzer: LanguageServerPreference::disabled(),
             json_language_server: LanguageServerPreference::disabled(),
             bash_language_server: LanguageServerPreference::disabled(),
             typescript_language_server: LanguageServerPreference::disabled(),
-        }
-    }
-
-    pub fn new(rust_analyzer: LanguageServerPreference) -> Self {
-        Self {
-            rust_analyzer,
-            ..Self::default()
         }
     }
 
@@ -180,14 +171,6 @@ impl LspServerResolver {
         dir_root: &Path,
     ) -> Result<LspServerResolution, LspServerResolverError> {
         let mut definitions = Vec::new();
-        let rust_state = self.resolve_builtin(
-            BuiltinServer::rust_analyzer(),
-            &self.rust_analyzer,
-            executable_candidates,
-            execution_policy,
-            dir_root,
-            &mut definitions,
-        )?;
         let json_state = self.resolve_builtin(
             BuiltinServer::json(),
             &self.json_language_server,
@@ -215,11 +198,6 @@ impl LspServerResolver {
         Ok(LspServerResolution {
             definitions,
             entries: vec![
-                LspServerResolutionEntry {
-                    name: RUST_ANALYZER_SERVER_ID,
-                    mode: self.rust_analyzer.mode,
-                    state: rust_state,
-                },
                 LspServerResolutionEntry {
                     name: TYPESCRIPT_LANGUAGE_SERVER_ID,
                     mode: self.typescript_language_server.mode,
@@ -290,15 +268,6 @@ struct BuiltinServer {
 }
 
 impl BuiltinServer {
-    const fn rust_analyzer() -> Self {
-        Self {
-            identity: RUST_ANALYZER_SERVER_ID,
-            executable: RUST_ANALYZER_SERVER_ID,
-            language_ids: &["rust"],
-            arguments: &[],
-        }
-    }
-
     const fn json() -> Self {
         Self {
             identity: JSON_LANGUAGE_SERVER_ID,

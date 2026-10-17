@@ -185,6 +185,8 @@ test('Language server Settings searches server metadata, localizes Chinese, and 
 	const implementation = AccessibleViewRegistry.getImplementations().find(entry => entry.name.startsWith('language-server-settings-') && entry.type === AccessibleViewType.Help)!;
 	const provider = fixture.services.invokeFunction(accessor => implementation.getProvider(accessor))!;
 	assert.match(provider.provideContent(), /语言服务器[\s\S]*输出/);
+	assert.match(provider.provideContent(), /Rust 支持默认启用[\s\S]*停用服务器后不会安装/);
+	assert.match(fixture.content.domNode.textContent ?? '', /Rust 语言支持已内置/);
 	fixture.button('帮助').focus();
 	provider.dispose();
 	assert.equal(browserEnvironment.window.document.activeElement, field);

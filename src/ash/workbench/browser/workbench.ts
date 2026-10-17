@@ -567,7 +567,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IExtensionManagementService, extensionManagementService);
 		const enablement = this._register(services.createInstance(GlobalExtensionEnablementService));
 		services.registerInstance(IGlobalExtensionEnablementService, enablement);
-		const enabledExtensions = withEnabledBuiltInExtensions(api.extensions, enablement);
+		const enabledExtensions = withEnabledBuiltInExtensions(api.extensions, enablement, extensionManagementService);
 		services.registerInstance(IWorkbenchEnvironmentService, environmentService);
 		const embedderTerminals = services.get(IEmbedderTerminalService);
 		this.window = {

@@ -159,6 +159,8 @@ pub(super) struct LanguageRequestProcessor<'ctx, C: LanguageRequestProcessorCont
     context: &'ctx C,
     config: &'ctx Option<super::Arc<super::ConfigStore>>,
     language: &'ctx super::Arc<super::Mutex<super::language_runtime::AppServerLanguageRuntime>>,
+    extensions: &'ctx super::Mutex<super::ExtensionPackages>,
+    editor_extension_policy: &'ctx Option<super::Arc<ash_core_plugins::EditorExtensionPolicy>>,
     request_cancellations: &'ctx super::RequestCancellationRegistry,
     request_scheduler: &'ctx super::RequestScheduler,
 }
@@ -168,6 +170,8 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
         context: &'ctx C,
         config: &'ctx Option<super::Arc<super::ConfigStore>>,
         language: &'ctx super::Arc<super::Mutex<super::language_runtime::AppServerLanguageRuntime>>,
+        extensions: &'ctx super::Mutex<super::ExtensionPackages>,
+        editor_extension_policy: &'ctx Option<super::Arc<ash_core_plugins::EditorExtensionPolicy>>,
         request_cancellations: &'ctx super::RequestCancellationRegistry,
         request_scheduler: &'ctx super::RequestScheduler,
     ) -> Self {
@@ -175,6 +179,8 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
             context,
             config,
             language,
+            extensions,
+            editor_extension_policy,
             request_cancellations,
             request_scheduler,
         }
@@ -182,6 +188,30 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
 }
 
 impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor<'ctx, C> {
+    fn runtime(
+        &self,
+    ) -> Result<
+        std::sync::MutexGuard<'ctx, super::language_runtime::AppServerLanguageRuntime>,
+        RpcError,
+    > {
+        let snapshot = self
+            .extensions
+            .lock()
+            .map_err(|_| language_error(AppServerErrorName::ServerOverloaded))?
+            .list(ash_external_ext::packages::ExtensionPackagesReload::Cached);
+        let mut runtime = self
+            .language
+            .lock()
+            .map_err(|_| language_error(AppServerErrorName::ServerOverloaded))?;
+        runtime
+            .reconcile_extensions(&snapshot, self.editor_extension_policy.as_deref())
+            .map_err(|error| {
+                log::error!("language extension discovery failed: {error}");
+                language_error(AppServerErrorName::LanguageServiceUnavailable)
+            })?;
+        Ok(runtime)
+    }
+
     pub(super) fn language_cancel(
         &self,
         connection: &super::ConnectionState,
@@ -214,22 +244,26 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?
             .read_snapshot()
             .map_err(|_| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
-        let runtime = self
-            .language
-            .lock()
-            .map_err(|_| language_error(AppServerErrorName::ServerOverloaded))?;
+        let runtime = self.runtime()?;
         let definitions = runtime
             .definitions(dir.canonical_path(), &snapshot.values.language_servers)
             .map_err(|_| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
-        result(&LanguageServersResult {
-            servers: definitions
-                .iter()
-                .map(|definition| LanguageServerDescriptorDto {
-                    id: definition.name().as_str().to_owned(),
-                    language_ids: definition.language_ids().map(str::to_owned).collect(),
-                })
-                .collect(),
-        })
+        let mut servers: Vec<_> = definitions
+            .iter()
+            .map(|definition| LanguageServerDescriptorDto {
+                id: definition.name().as_str().to_owned(),
+                language_ids: definition.language_ids().map(str::to_owned).collect(),
+            })
+            .collect();
+        servers.extend(
+            runtime
+                .acquisitions(&snapshot.values.language_servers)
+                .map(|server| LanguageServerDescriptorDto {
+                    id: server.id.clone(),
+                    language_ids: server.languages.clone(),
+                }),
+        );
+        result(&LanguageServersResult { servers })
     }
 
     pub(super) fn language_synchronize(
@@ -334,10 +368,17 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
             .read_snapshot()
             .map_err(|_| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let language_id = ash_language::canonical_language_id(&params.language_id);
-        let mut runtime = self
-            .language
-            .lock()
-            .map_err(|_| language_error(AppServerErrorName::ServerOverloaded))?;
+        let mut runtime = self.runtime()?;
+        if !runtime.allows_workspace_diagnostics(
+            dir.canonical_path(),
+            language_id,
+            &snapshot.values.language_servers,
+        ) {
+            return result(&LanguageDirectoryDiagnosticsResult {
+                supported: false,
+                snapshots: Vec::new(),
+            });
+        }
         let service = runtime
             .ensure(
                 dir.canonical_path(),
@@ -465,10 +506,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
             &document.text,
         )
         .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
-        let mut runtime = self
-            .language
-            .lock()
-            .map_err(|_| language_error(AppServerErrorName::ServerOverloaded))?;
+        let mut runtime = self.runtime()?;
         runtime
             .synchronize_document(
                 dir.canonical_path(),
@@ -956,10 +994,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
             &params.document.text,
         )
         .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
-        let mut runtime = self
-            .language
-            .lock()
-            .map_err(|_| language_error(AppServerErrorName::ServerOverloaded))?;
+        let mut runtime = self.runtime()?;
         runtime
             .synchronize_document(
                 dir.canonical_path(),
@@ -1073,10 +1108,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
             .item
             .map(|item| hierarchy_item_from_dto(&dir, item))
             .transpose()?;
-        let mut runtime = self
-            .language
-            .lock()
-            .map_err(|_| language_error(AppServerErrorName::ServerOverloaded))?;
+        let mut runtime = self.runtime()?;
         runtime
             .synchronize_document(
                 dir.canonical_path(),
@@ -1157,10 +1189,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
             .read_snapshot()
             .map_err(|_| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let language_id = ash_language::canonical_language_id(&params.language_id);
-        let mut runtime = self
-            .language
-            .lock()
-            .map_err(|_| language_error(AppServerErrorName::ServerOverloaded))?;
+        let mut runtime = self.runtime()?;
         let service = runtime
             .ensure(
                 dir.canonical_path(),

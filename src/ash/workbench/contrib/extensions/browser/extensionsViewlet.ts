@@ -218,7 +218,7 @@ class ExtensionsContent extends Disposable {
 				builtInItems.push(...catalog.extensions.filter(extension => extension.sourceKind === 'builtIn' && (!this.options.capabilityKind || this.options.capabilityKind === 'editorExtension' || this.options.capabilityKind === 'localization' && JSON.parse(extension.manifestJson).contributes?.localizations?.length)).map(extension => {
 					const manifest = JSON.parse(extension.manifestJson);
 					const provider = providers?.providers.find(value => value.id === extension.id);
-					const isProvider = manifest.ashRuntime?.kind === 'rust' && !manifest.browser;
+					const isProvider = (manifest.ashRuntime?.kind === 'rust' && !manifest.browser) || !!manifest.ashLanguageServers;
 					return {
 						source: ExtensionsInputSource.BuiltIn, enabled: isProvider ? provider?.enabled : !disabled.has(extension.id.toLowerCase()), canChangeEnablement: isProvider ? !!provider : !manifest.contributes?.localizations?.length,
 						summary: { id: extension.id, version: extension.version, packageType: 'editorExtension', displayName: manifest.displayName?.startsWith('%') ? extension.id : manifest.displayName ?? extension.displayName, description: typeof manifest.description === 'string' && !manifest.description.startsWith('%') ? manifest.description : '' }

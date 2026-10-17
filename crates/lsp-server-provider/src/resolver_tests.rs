@@ -23,12 +23,7 @@ impl LanguageServerExecutableCandidates for FixedCandidates {
 #[test]
 fn json_and_shell_builtins_resolve_with_canonical_routes_and_launch_arguments() {
     let directory = tempfile::tempdir().expect("directory");
-    let executables = [
-        RUST_ANALYZER_SERVER_ID,
-        JSON_LANGUAGE_SERVER_ID,
-        BASH_LANGUAGE_SERVER_ID,
-    ]
-    .map(|name| {
+    let executables = [JSON_LANGUAGE_SERVER_ID, BASH_LANGUAGE_SERVER_ID].map(|name| {
         let path = directory.path().join(platform_executable_name(name));
         fs::write(&path, b"test server").expect("executable");
         make_executable(&path);
@@ -43,7 +38,7 @@ fn json_and_shell_builtins_resolve_with_canonical_routes_and_launch_arguments() 
         )
         .expect("resolution");
 
-    assert_eq!(resolution.definitions().len(), 3);
+    assert_eq!(resolution.definitions().len(), 2);
     let routes = resolution
         .definitions()
         .iter()
@@ -57,7 +52,6 @@ fn json_and_shell_builtins_resolve_with_canonical_routes_and_launch_arguments() 
     assert_eq!(
         routes,
         vec![
-            (RUST_ANALYZER_SERVER_ID, vec!["rust"]),
             (JSON_LANGUAGE_SERVER_ID, vec!["json", "jsonc"]),
             (BASH_LANGUAGE_SERVER_ID, vec!["shellscript"]),
         ]
@@ -65,7 +59,7 @@ fn json_and_shell_builtins_resolve_with_canonical_routes_and_launch_arguments() 
 }
 
 #[test]
-fn enabled_rust_analyzer_resolves_from_the_frozen_host_path() {
+fn enabled_server_resolves_from_the_frozen_host_path() {
     let directory = tempfile::tempdir().expect("directory");
     let executable = directory.path().join(executable_name());
     fs::write(&executable, b"test server").expect("executable");
@@ -90,19 +84,19 @@ fn enabled_rust_analyzer_resolves_from_the_frozen_host_path() {
 
 #[cfg(unix)]
 #[test]
-fn rustup_proxy_keeps_the_rust_analyzer_launch_name_after_validation() {
+fn proxy_keeps_the_language_server_launch_name_after_validation() {
     use std::os::unix::fs::symlink;
 
     let directory = tempfile::tempdir().expect("directory");
-    let rustup = directory.path().join("rustup");
-    fs::write(&rustup, b"test rustup proxy").expect("rustup executable");
-    make_executable(&rustup);
-    let rust_analyzer = directory.path().join("rust-analyzer");
-    symlink(&rustup, &rust_analyzer).expect("rust-analyzer proxy");
+    let proxy = directory.path().join("toolchain-proxy");
+    fs::write(&proxy, b"test toolchain proxy").expect("proxy executable");
+    make_executable(&proxy);
+    let invoked = directory.path().join(TYPESCRIPT_LANGUAGE_SERVER_ID);
+    symlink(&proxy, &invoked).expect("server proxy");
 
     let resolution = LspServerResolver::default()
         .resolve(
-            &FixedCandidates(vec![rust_analyzer.clone()]),
+            &FixedCandidates(vec![invoked.clone()]),
             LanguageServerExecutionPolicy::Allowed,
             directory.path(),
         )
@@ -111,13 +105,13 @@ fn rustup_proxy_keeps_the_rust_analyzer_launch_name_after_validation() {
 
     assert_eq!(
         command.program(),
-        fs::canonicalize(&rustup).unwrap().as_os_str()
+        fs::canonicalize(&proxy).unwrap().as_os_str()
     );
-    assert_eq!(command.argv0(), Some(rust_analyzer.as_os_str()));
+    assert_eq!(command.argv0(), Some(invoked.as_os_str()));
     assert!(matches!(
         resolution.entries()[0].state(),
         LspServerAvailability::Resolved { executable }
-            if executable == &fs::canonicalize(&rustup).unwrap()
+            if executable == &fs::canonicalize(&proxy).unwrap()
     ));
 }
 
@@ -170,7 +164,7 @@ fn invalid_explicit_executable_is_authoritative_and_does_not_fall_back() {
     fs::write(&discovered, b"test server").expect("executable");
     make_executable(&discovered);
     let candidates = FixedCandidates(vec![discovered]);
-    let resolver = LspServerResolver::new(
+    let resolver = LspServerResolver::disabled().with_typescript_language_server(
         LanguageServerPreference::enabled()
             .with_explicit_executable(directory.path().join("missing")),
     );
@@ -192,9 +186,9 @@ fn invalid_explicit_executable_is_authoritative_and_does_not_fall_back() {
 
 fn executable_name() -> &'static str {
     if cfg!(windows) {
-        "rust-analyzer.exe"
+        "typescript-language-server.exe"
     } else {
-        "rust-analyzer"
+        "typescript-language-server"
     }
 }
 

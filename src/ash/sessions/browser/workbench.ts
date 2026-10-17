@@ -378,7 +378,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(ILocalGitService, options.api.localGit);
 		const enablement = this._register(services.createInstance(GlobalExtensionEnablementService));
 		services.registerInstance(IGlobalExtensionEnablementService, enablement);
-		const enabledExtensions = withEnabledBuiltInExtensions(options.api.extensions, enablement);
+		const enabledExtensions = withEnabledBuiltInExtensions(options.api.extensions, enablement, extensionManagementService);
 		const commandService = this._register(new CommandService(services));
 		services.registerInstance(ICommandService, commandService);
 		const serviceContributionReady: Promise<void>[] = [];

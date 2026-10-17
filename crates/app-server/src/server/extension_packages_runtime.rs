@@ -38,11 +38,14 @@ impl ExtensionsChangeWatcher {
                                 Ok(providers) => {
                                     let ids =
                                         providers.ids().map(str::to_owned).collect::<Vec<_>>();
-                                    if provider_ids.as_ref() != Some(&ids) {
-                                        if let Ok(mut language) = language.lock() {
+                                    if let Ok(mut language) = language.lock() {
+                                        if provider_ids.as_ref() != Some(&ids) {
                                             language.set_server_providers(providers);
                                             provider_ids = Some(ids);
                                         }
+                                        // Other directory hosts share this profile policy. Retire
+                                        // extension-owned LSPs on revocation even without a request.
+                                        language.invalidate_extensions();
                                     }
                                 }
                                 Err(error) => log::error!(

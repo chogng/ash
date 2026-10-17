@@ -1,4 +1,6 @@
 import { Disposable, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import { status } from "../../../../base/browser/ui/aria/aria.js";
+import { localize } from "../../../../nls.js";
 import { DialogSeverity, type IDialogService } from "../../../../platform/dialogs/common/dialogs.js";
 import { type IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
 import { type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
@@ -65,7 +67,9 @@ export class AppServerLanguageServerStatusService extends Disposable {
 		if (update.done) {
 			this.progress.delete(key);
 		} else {
-			const title = update.title?.trim() || current?.title || "Language server operation";
+			const installing = update.token === "ash.language-server.install";
+			const title = installing ? localize('languageServer.installing', "Installing {0}…", update.server) : update.title?.trim() || current?.title || "Language server operation";
+			if (installing && !current) { status(title); this.ensureChannel(server).appendLine({ severity: "information", category: "installation", text: title }); }
 			this.progress.set(key, Object.freeze({ server, token: update.token, title, ...(update.message?.trim() ? { message: update.message.trim() } : current?.message ? { message: current.message } : {}), ...(update.percentage === null ? current?.percentage === undefined ? {} : { percentage: current.percentage } : { percentage: update.percentage }) }));
 		}
 		this.updateStatus();

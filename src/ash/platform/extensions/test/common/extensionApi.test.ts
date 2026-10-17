@@ -1,3 +1,4 @@
+import type { IExtensionManagementService } from '../../../extensionManagement/common/extensionManagementService.js';
 import { DeferredPromise } from '../../../../base/common/async.js';
 import type { AppServerProtocolClient } from '../../../agentHost/browser/appServerProtocolClient.js';
 import type { IResourceApi } from '../../../agentHost/common/appServerApi.js';
@@ -199,4 +200,26 @@ test('small frozen resources share reads without sharing mutable bytes or retire
 	catalog = await api.list('refresh');
 	await complete();
 	await oldRead;
+});
+
+
+test('language extension syntax follows backend enablement, including revocation and offline failure', async () => {
+	const base = packageSnapshot(1, 'vscode.rust', 'builtIn');
+	const catalog = { ...base, extensions: [{ ...base.extensions[0]!, manifestJson: JSON.stringify({ ashLanguageServers: { version: 1, servers: [] } }) }] };
+	let enabled = true;
+	let offline = false;
+	const management = {
+		onDidChangeInstalled: Event.None,
+		listBuiltInProviders: async () => { if (offline) throw new Error('offline'); return { revision: 1, providers: [{ id: 'vscode.rust', enabled, running: false }] }; },
+	} as unknown as IExtensionManagementService;
+	const api = withEnabledBuiltInExtensions(packageApi(() => catalog, async () => new Uint8Array()), {
+		onDidChangeEnablement: Event.None, getDisabledExtensions: () => [{ id: 'vscode.rust' }],
+		enableExtension: async () => { throw new Error('must not duplicate backend policy'); }, disableExtension: async () => { throw new Error('must not duplicate backend policy'); },
+	}, management);
+	assert.equal((await api.list('cached')).extensions.length, 1);
+	enabled = false;
+	assert.equal((await api.list('cached')).extensions.length, 0);
+	assert.equal((await api.list('cached', { includeDisabled: true })).extensions.length, 1);
+	enabled = true; offline = true;
+	assert.equal((await api.list('cached')).extensions.length, 0);
 });

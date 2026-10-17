@@ -15,9 +15,11 @@ name = "ash_package_store"
 path = "src/lib.rs"
 
 [features]
-installation = ["dep:ash-http-client", "dep:ash-install-context", "dep:ash-product-update", "dep:tempfile", "dep:thiserror", "dep:url"]
+installation = ["dep:ash-http-client", "dep:ash-install-context", "dep:ash-product-update", "dep:flate2", "dep:zip", "dep:tempfile", "dep:thiserror", "dep:url"]
 
 [dependencies]
+flate2 = { workspace = true, optional = true }
+zip = { workspace = true, optional = true }
 ash-http-client = { workspace = true, optional = true }
 ash-install-context = { workspace = true, optional = true }
 ash-product-update = { workspace = true, optional = true, features = ["archives"] }

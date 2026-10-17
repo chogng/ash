@@ -443,13 +443,13 @@ export class ExtensionsEditor extends EditorPane {
 			if (!extension) { throw new Error(localize({ bundle: 'ash.extensions', key: 'extensionMissing' }, 'This extension is no longer installed. Refresh Extensions.')); }
 			const manifest = JSON.parse(extension.manifestJson);
 			void this.loadPackageDocument(input, signal, version);
-			if (manifest.ashRuntime?.kind === 'rust' && !manifest.browser) {
+			if ((manifest.ashRuntime?.kind === 'rust' && !manifest.browser) || !!manifest.ashLanguageServers) {
 				const catalog = await this.extensions.listBuiltInProviders();
 				if (signal.aborted || this.isDisposed || version !== this.loadVersion) { return; }
 				const provider = catalog.providers.find(value => value.id === extension.id);
 				if (!provider) { this.status.textContent = localize({ bundle: 'ash.extensions', key: 'backendUnavailable' }, 'This provider is unavailable on the connected backend.'); return; }
 				this.status.textContent = provider.enabled ? provider.running ? localize({ bundle: 'ash.extensions', key: 'providerRunning' }, 'Enabled · running') : localize({ bundle: 'ash.extensions', key: 'providerStopped' }, 'Enabled · starts on demand') : localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled');
-				this.capabilities.textContent = (manifest.ashRuntime.capabilities ?? []).join('\n');
+				this.capabilities.textContent = (manifest.ashRuntime?.capabilities ?? manifest.ashLanguageServers?.servers?.map((server: { id: string; }) => server.id) ?? []).join('\n');
 				button(extensionEnablementLabel(provider.enabled), toggle);
 				return;
 			}
