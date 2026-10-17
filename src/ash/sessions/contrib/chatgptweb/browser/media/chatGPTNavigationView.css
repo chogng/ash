@@ -158,6 +158,7 @@
 	);
 	opacity: 0;
 	pointer-events: none;
+	transition: opacity var(--ash-animation-durationFast) ease-out;
 }
 
 .ash-chatgpt-conversation-actions::before {
@@ -165,20 +166,43 @@
 	position: absolute;
 	inset-block: 0;
 	inset-inline-end: 100%;
-	width: var(--ash-spacing-size160, 16px);
+	width: var(--ash-spacing-size320, 32px);
 	background: inherit;
-	mask-image: linear-gradient(to right, transparent, currentColor);
+	mask-image: linear-gradient(
+		to right,
+		transparent,
+		rgb(0 0 0 / 16%) 25%,
+		rgb(0 0 0 / 50%) 50%,
+		rgb(0 0 0 / 84%) 75%,
+		black
+	);
 	pointer-events: none;
 }
 
 .ash-chatgpt-conversation-actions:dir(rtl)::before {
-	mask-image: linear-gradient(to left, transparent, currentColor);
+	transform: scaleX(-1);
 }
 
 .ash-chatgpt-navigation-row:is(:hover, :focus-within, .menu-open)
 	> .ash-chatgpt-conversation-actions {
 	opacity: 1;
 	pointer-events: auto;
+}
+
+.ash-chatgpt-navigation-row:is(:focus-within, .menu-open)
+	> .ash-chatgpt-conversation-actions {
+	transition: none;
+}
+
+.hc-black .ash-chatgpt-conversation-actions::before,
+.hc-light .ash-chatgpt-conversation-actions::before {
+	display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.ash-chatgpt-conversation-actions {
+		transition: none;
+	}
 }
 
 .ash-chatgpt-conversation-actions .ash-action-label {

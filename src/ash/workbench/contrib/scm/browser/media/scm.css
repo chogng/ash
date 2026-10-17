@@ -300,7 +300,7 @@
 	position: absolute;
 	z-index: 1;
 	top: 0;
-	right: var(--ash-spacing-size80);
+	inset-inline-end: var(--ash-spacing-size80);
 	bottom: 0;
 	display: flex;
 	align-items: center;
@@ -341,7 +341,13 @@
 .ash-scm-graph-actions {
 	display: none;
 	align-items: center;
-	padding-left: var(--ash-spacing-size40);
+	padding-inline-start: var(--ash-spacing-size40);
+	opacity: 0;
+	pointer-events: none;
+	/* Keep the action in layout through fade-out, then return the space to references. */
+	transition:
+		opacity var(--ash-animation-durationFast) ease-out,
+		display var(--ash-animation-durationFast) allow-discrete;
 }
 
 .ash-scm-graph-row:hover > .ash-scm-graph-overlay > .ash-scm-graph-actions,
@@ -351,6 +357,11 @@
 	> .ash-scm-graph-overlay
 	> .ash-scm-graph-actions {
 	display: flex;
+	opacity: 1;
+	pointer-events: auto;
+	@starting-style {
+		opacity: 0;
+	}
 }
 
 .ash-scm-graph-changes {
@@ -396,7 +407,7 @@
 	position: absolute;
 	z-index: 1;
 	top: 0;
-	right: var(--ash-toolbar-actionSize);
+	inset-inline-end: var(--ash-toolbar-actionSize);
 	padding: 0;
 	background: var(--ash-sideBar-background);
 }
@@ -419,6 +430,11 @@
 .ash-scm-graph-change-row:hover > .ash-scm-graph-actions,
 .ash-scm-graph-change-row:focus-within > .ash-scm-graph-actions {
 	display: flex;
+	opacity: 1;
+	pointer-events: auto;
+	@starting-style {
+		opacity: 0;
+	}
 }
 
 .ash-scm-graph-change {
@@ -733,7 +749,11 @@
 .ash-scm-section-actions,
 .ash-scm-change-actions {
 	visibility: hidden;
+	opacity: 0;
 	pointer-events: none;
+	transition:
+		opacity var(--ash-animation-durationFast) ease-out,
+		visibility var(--ash-animation-durationFast);
 }
 
 .ash-scm-section-actions {
@@ -754,11 +774,11 @@
 	position: absolute;
 	z-index: 1;
 	top: 0;
-	right: var(--ash-toolbar-actionSize);
+	inset-inline-end: var(--ash-toolbar-actionSize);
 	bottom: 0;
 	display: flex;
 	align-items: center;
-	padding-left: var(--ash-spacing-size40);
+	padding-inline-start: var(--ash-spacing-size40);
 	background: var(--ash-sideBar-background);
 	pointer-events: none;
 }
@@ -828,6 +848,7 @@
 .ash-scm-change:hover > .ash-scm-change-actions,
 .ash-scm-change:focus-within > .ash-scm-change-actions {
 	visibility: visible;
+	opacity: 1;
 	pointer-events: auto;
 }
 
@@ -839,14 +860,22 @@
 	position: absolute;
 	inset-block: 0;
 	inset-inline-end: 100%;
-	width: var(--ash-spacing-size160);
+	width: var(--ash-spacing-size320);
 	background: inherit;
-	mask-image: linear-gradient(to right, transparent, currentColor);
+	mask-image: linear-gradient(
+		to right,
+		transparent,
+		rgb(0 0 0 / 16%) 25%,
+		rgb(0 0 0 / 50%) 50%,
+		rgb(0 0 0 / 84%) 75%,
+		black
+	);
 	pointer-events: none;
 }
 
 .ash-scm-graph-overlay::before {
 	opacity: 0;
+	transition: opacity var(--ash-animation-durationFast) ease-out;
 }
 
 .ash-scm-graph-row:hover > .ash-scm-graph-overlay::before,
@@ -861,7 +890,48 @@
 .ash-scm-change-actions:dir(rtl)::before,
 .ash-scm-graph-overlay:dir(rtl)::before,
 .ash-scm-graph-change-row > .ash-scm-graph-actions:dir(rtl)::before {
-	mask-image: linear-gradient(to left, transparent, currentColor);
+	transform: scaleX(-1);
+}
+
+.ash-scm-changes
+	.ash-tree-row.focused
+	:is(.ash-scm-section-actions, .ash-scm-change-actions),
+.ash-scm-section-heading:focus-within > .ash-scm-section-actions,
+.ash-scm-change:focus-within > .ash-scm-change-actions,
+.ash-scm-graph-commit:focus-within
+	> .ash-scm-graph-row
+	> .ash-scm-graph-overlay
+	> .ash-scm-graph-actions,
+.ash-scm-graph-change-row:focus-within > .ash-scm-graph-actions,
+:is(
+	.ash-scm-section-actions,
+	.ash-scm-change-actions,
+	.ash-scm-graph-actions
+):has(button[aria-expanded="true"]),
+.ash-scm-graph-commit:focus-within
+	> .ash-scm-graph-row
+	> .ash-scm-graph-overlay::before,
+.ash-scm-graph-overlay:has(button[aria-expanded="true"])::before {
+	transition: none;
+}
+
+:is(.hc-black, .hc-light)
+	:is(
+		.ash-scm-section-actions,
+		.ash-scm-change-actions,
+		.ash-scm-graph-overlay,
+		.ash-scm-graph-change-row > .ash-scm-graph-actions
+	)::before {
+	display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.ash-scm-section-actions,
+	.ash-scm-change-actions,
+	.ash-scm-graph-actions,
+	.ash-scm-graph-overlay::before {
+		transition: none;
+	}
 }
 
 .ash-scm-change {

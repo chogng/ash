@@ -216,6 +216,10 @@ button.ash-getting-started-recent-content:focus-visible {
 	pointer-events: none;
 	background: var(--ash-editor-background);
 	border-radius: var(--ash-cornerRadius-small);
+	/* The content-facing edge joins the fade without rounded gaps. */
+	border-start-start-radius: 0;
+	border-end-start-radius: 0;
+	transition: opacity var(--ash-animation-durationFast) ease-out;
 }
 
 .ash-getting-started-recent-item:hover .ash-getting-started-recent-actions,
@@ -229,20 +233,27 @@ button.ash-getting-started-recent-content:focus-visible {
 		var(--ash-editor-background);
 }
 
-/* Cover only the path; the row keeps its full-width layout and focus outline. */
+/* Ease into the opaque action surface without moving the path or covering the focus stroke. */
 .ash-getting-started-recent-actions::before {
 	content: "";
 	position: absolute;
 	inset-block: 0;
 	inset-inline-end: 100%;
-	width: var(--ash-spacing-size160);
+	width: var(--ash-spacing-size320);
 	background: inherit;
-	mask-image: linear-gradient(to right, transparent, black);
+	mask-image: linear-gradient(
+		to right,
+		transparent,
+		rgb(0 0 0 / 16%) 25%,
+		rgb(0 0 0 / 50%) 50%,
+		rgb(0 0 0 / 84%) 75%,
+		black
+	);
 	pointer-events: none;
 }
 
 .ash-getting-started-recent-actions:dir(rtl)::before {
-	mask-image: linear-gradient(to left, transparent, black);
+	transform: scaleX(-1);
 }
 
 .ash-getting-started-recent-item:hover .ash-getting-started-recent-actions,
@@ -250,6 +261,17 @@ button.ash-getting-started-recent-content:focus-visible {
 	.ash-getting-started-recent-actions {
 	opacity: 1;
 	pointer-events: auto;
+}
+
+.ash-getting-started-recent-item:focus-within
+	.ash-getting-started-recent-actions {
+	/* Keyboard actions and their focus indicators must be visible immediately. */
+	transition: none;
+}
+
+.hc-black .ash-getting-started-recent-actions::before,
+.hc-light .ash-getting-started-recent-actions::before {
+	display: none;
 }
 
 .ash-getting-started-recent-actions .ash-action-label {
@@ -292,7 +314,8 @@ button.ash-getting-started-recent-content:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
-	.ash-getting-started-card {
+	.ash-getting-started-card,
+	.ash-getting-started-recent-actions {
 		transition: none;
 	}
 }

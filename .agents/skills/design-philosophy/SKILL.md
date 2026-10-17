@@ -258,9 +258,23 @@ Chrome that used to carry a permanent fill now reads transparent at rest and onl
 <a id="hover-overlays"></a>
 #### Hover overlays with an edge fade
 
-For temporary auxiliary actions in lists, tree rows and compact cards, prefer an action bar overlaid at the trailing edge: keep content in place at full width without permanently reserving room for hidden buttons. Use the current row state's theme background to cover the text beneath the bar, with a short fade on the content-facing edge that follows text direction. Keep actions visible on hover, keyboard focus or while their menu is open; the fade must not intercept pointer events, and touch users need equivalent actions through the row menu. Cover only auxiliary text that remains fully accessible; keep critical status, errors and pending decisions visible, and verify light, dark and high-contrast themes.
+The row owner implements these parameters in co-located CSS; shared ActionBar owns button interaction.
 
-For all auxiliary floating layers, keep the host's focus indicator complete and visible: backgrounds and fades must not cover any part of its outline. Inset the overlay within the focus stroke or paint the indicator above the overlay background while preserving action hit targets; do not suppress the indicator to hide an overlap. Check the combined hover-and-keyboard-focus state, including focus moving into the actions, in light, dark and high-contrast themes.
+| Parameter | Value |
+| --- | --- |
+| Placement | Trailing overlay; full-width content stays fixed; no space reserved for hidden actions |
+| Fade width | `--ash-spacing-size320` (32px) |
+| Fade opacity | Position `0 / 25 / 50 / 75 / 100%` → alpha `0 / 16 / 50 / 84 / 100%` |
+| Background | Current row-state color over the opaque host surface; fade inherits it |
+| Joined edge | 0 radius; no gap between fade and action background |
+| Pointer transition | `opacity var(--ash-animation-durationFast) ease-out` (120ms) |
+| Visibility | Hover, keyboard focus, or open action menu; keyboard reveal is immediate |
+| Hit testing | Fade and hidden actions: `pointer-events: none` |
+| RTL | Mirror placement and fade direction |
+| Focus outline | Inset overlay by the stroke width, or paint the complete outline above it |
+| Accessibility | Reduced motion: no transition; high contrast: solid background, no fade; touch: visible actions or row menu |
+
+Only cover auxiliary text with full-text hover/accessibility access; never cover errors, status or pending decisions. Verify light/dark/high-contrast themes and combined hover + keyboard focus, including focus inside actions.
 
 <a id="words-casing"></a>
 ### Words & casing
