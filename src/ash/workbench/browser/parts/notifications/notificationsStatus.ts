@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
@@ -16,7 +17,12 @@ export class NotificationsStatus extends Disposable {
 		if (statusbar) {
 			this.bell = this._register(statusbar.addEntry(this.entry(), { id: 'ash.status.notifications', alignment: StatusbarAlignment.Right, priority: 500 }));
 		} else {
-			this.toggleButton = this._register(new Button(root, { label: localize('notifications.title', 'Notifications'), presentation: 'secondary', onClick: toggle }));
+			this.toggleButton = this._register(new Button(root, {
+				...defaultButtonStyles,
+				label: localize('notifications.title', 'Notifications'),
+				presentation: 'secondary',
+				onClick: toggle,
+			}));
 			this.toggleButton.domNode.classList.add('ash-notifications-toggle');
 		}
 		this._register(model.onDidAdd(() => this.render()));

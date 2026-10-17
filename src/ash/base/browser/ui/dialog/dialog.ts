@@ -7,11 +7,21 @@ import {
 	trapTabFocus,
 } from "../../focus.js";
 import { setAriaAttribute } from "../aria/aria.js";
-import { Button, type ButtonPresentation } from "../button/button.js";
+import { Button, type ButtonPresentation, type IButtonStyles } from "../button/button.js";
 
 let nextDialogId = 1;
 
+/** Host-provided CSS colors, resolved through the containing theme root. */
+export interface IDialogStyles {
+	readonly dialogForeground: string | undefined;
+	readonly dialogBackground: string | undefined;
+	readonly dialogBorder: string | undefined;
+	readonly dialogShadow: string | undefined;
+}
+
 export interface DialogOptions {
+	readonly buttonStyles?: IButtonStyles;
+	readonly dialogStyles?: IDialogStyles;
 	readonly title: string;
 	readonly content: Element | string;
 	readonly buttons?: readonly DialogButton[];
@@ -37,6 +47,17 @@ export class Dialog extends Disposable {
 		const element = h(ownerDocument, "dialog");
 		this.element = element;
 		element.className = "ash-dialog";
+		if (options.dialogStyles) {
+			const colors = {
+				'--ash-dialog-style-dialog-foreground': options.dialogStyles.dialogForeground,
+				'--ash-dialog-style-dialog-background': options.dialogStyles.dialogBackground,
+				'--ash-dialog-style-dialog-border': options.dialogStyles.dialogBorder,
+				'--ash-dialog-style-dialog-shadow': options.dialogStyles.dialogShadow,
+			};
+			for (const [property, value] of Object.entries(colors)) {
+				if (value !== undefined) element.style.setProperty(property, value);
+			}
+		}
 		element.tabIndex = -1;
 		const heading = h(ownerDocument, "h2");
 		heading.className = "ash-dialog-title";
@@ -55,6 +76,7 @@ export class Dialog extends Disposable {
 			actions.className = "ash-dialog-actions";
 			for (const option of options.buttons) {
 				this._register(new Button(actions, {
+					...options.buttonStyles,
 					label: option.label,
 					presentation: option.presentation,
 					onClick: () => this.close(option.value),

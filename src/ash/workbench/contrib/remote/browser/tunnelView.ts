@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { localize } from '../../../../nls.js';
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { ActionBar } from "../../../../base/browser/ui/actionbar/actionbar.js";
@@ -53,6 +54,7 @@ export class TunnelPanel extends ViewPane {
 		this.portInput.placeholder = "3000";
 		this.portInput.required = true;
 		this.titleActions = this._register(new ActionBar(this.headerActionsElement, {
+			actionViewItemOptions: { buttonStyles: defaultButtonStyles },
 			ariaLabel: localize({ bundle: 'ash.workbench', key: 'ports.actions' }, "Ports actions"),
 		}));
 		this.titleActions.element.classList.add("ash-toolbar");

@@ -32,6 +32,13 @@ export interface IColorThemeOptions {
 // Retain authored values so layered overrides re-resolve aliases instead of freezing resolved defaults.
 const themeColorOverrides = new WeakMap<IColorTheme, Readonly<Record<string, ColorValue>>>();
 
+/** Reads authored values, including colors whose extension contributions have not loaded yet. */
+export function getColorThemeOverrides(theme: IColorTheme): Readonly<Record<string, ColorValue>> {
+	const overrides = themeColorOverrides.get(theme);
+	if (!overrides) throw new TypeError('Color theme must be created by the color theme factory');
+	return overrides;
+}
+
 /** Keeps color resolution current without giving each theme its own registry listener. */
 export function createColorTheme(options: IColorThemeOptions): IColorTheme {
 	if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(options.id)) throw new TypeError(`Invalid color theme ID '${options.id}'`);

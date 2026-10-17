@@ -16,7 +16,15 @@ import { HistoryNavigator, type IHistory } from '../../../common/history.js';
 import { IME } from "../../../common/ime.js";
 import { Disposable, MutableDisposable, toDisposable } from "../../../common/lifecycle.js";
 
+/** Host-provided CSS colors, resolved through the containing theme root. */
+export interface IInputBoxStyles {
+	readonly inputBackground: string | undefined;
+	readonly inputForeground: string | undefined;
+	readonly inputBorder: string | undefined;
+}
+
 export interface InputBoxOptions<Flexible extends boolean = false> {
+	readonly inputBoxStyles?: IInputBoxStyles;
 	readonly flexibleHeight?: Flexible;
 	readonly flexibleMaxHeight?: number;
 	readonly placeholder?: string;
@@ -62,6 +70,16 @@ export class InputBox<Flexible extends boolean = false> extends Disposable {
 		const ownerDocument = container.ownerDocument;
 		this.element = h(ownerDocument, "div");
 		this.element.className = "ash-input-box";
+		if (options.inputBoxStyles) {
+			const colors = {
+				'--ash-input-style-input-background': options.inputBoxStyles.inputBackground,
+				'--ash-input-style-input-foreground': options.inputBoxStyles.inputForeground,
+				'--ash-input-style-input-border': options.inputBoxStyles.inputBorder,
+			};
+			for (const [property, value] of Object.entries(colors)) {
+				if (value !== undefined) this.element.style.setProperty(property, value);
+			}
+		}
 		if (options.presentation === "field" || options.presentation === "compact") this.element.classList.add("ash-input-box-field");
 		if (options.presentation === "compact") this.element.classList.add("ash-input-box-compact");
 		this._register(toDisposable(() => this.element.remove()));

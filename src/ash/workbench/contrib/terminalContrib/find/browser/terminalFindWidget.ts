@@ -1,3 +1,4 @@
+import { defaultButtonStyles, defaultInputBoxStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import type { ISearchOptions } from '@xterm/addon-search';
 import { addDisposableListener, h, stopEvent } from '../../../../../base/browser/dom.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
@@ -73,6 +74,7 @@ export class TerminalFindWidget extends Disposable {
 		queryRow.className = 'ash-terminal-find-query';
 		this.domNode.append(queryRow);
 		this.input = this._register(new InputBox(queryRow, {
+			inputBoxStyles: defaultInputBoxStyles,
 			ariaLabel: localize('terminal.find.input', 'Find'),
 			placeholder: localize('terminal.find.input', 'Find'),
 			presentation: 'compact',
@@ -86,24 +88,28 @@ export class TerminalFindWidget extends Disposable {
 		controls.className = 'ash-terminal-find-controls';
 		this.domNode.append(controls);
 		this.matchCase = this._register(new Button(controls, {
+			...defaultButtonStyles,
 			label: localize('terminal.find.case', 'Match case'),
 			size: 'small',
 			checked: false,
 			onClick: () => this.changeState({ matchCase: !this.state.matchCase }),
 		}));
 		this.wholeWord = this._register(new Button(controls, {
+			...defaultButtonStyles,
 			label: localize('terminal.find.word', 'Whole word'),
 			size: 'small',
 			checked: false,
 			onClick: () => this.changeState({ wholeWord: !this.state.wholeWord }),
 		}));
 		this.regex = this._register(new Button(controls, {
+			...defaultButtonStyles,
 			label: localize('terminal.find.regex', 'Regular expression'),
 			size: 'small',
 			checked: false,
 			onClick: () => this.changeState({ isRegex: !this.state.isRegex }),
 		}));
 		this.previous = this._register(new Button(controls, {
+			...defaultButtonStyles,
 			label: localize('terminal.find.previous', 'Previous match'),
 			icon: Lxicon.chevronUp,
 			iconOnly: true,
@@ -111,6 +117,7 @@ export class TerminalFindWidget extends Disposable {
 			onClick: () => this.find(true),
 		}));
 		this.next = this._register(new Button(controls, {
+			...defaultButtonStyles,
 			label: localize('terminal.find.next', 'Next match'),
 			icon: Lxicon.chevronDown,
 			iconOnly: true,
@@ -118,6 +125,7 @@ export class TerminalFindWidget extends Disposable {
 			onClick: () => this.find(false),
 		}));
 		this._register(new Button(controls, {
+			...defaultButtonStyles,
 			label: localize('terminal.find.close', 'Close find'),
 			icon: Lxicon.close,
 			iconOnly: true,

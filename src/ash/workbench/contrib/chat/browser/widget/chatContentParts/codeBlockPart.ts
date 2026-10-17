@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, h, stopEvent } from '../../../../../../base/browser/dom.js';
 import { status } from '../../../../../../base/browser/ui/aria/aria.js';
 import { Button } from '../../../../../../base/browser/ui/button/button.js';
@@ -75,7 +76,11 @@ export class CodeBlockPart extends Disposable {
 			['workbench.action.chat.insertCodeBlock', localize('chat.code.insert', 'Insert at cursor'), undefined],
 			['workbench.action.chat.insertIntoNewFile', localize('chat.code.newFile', 'Open in new file'), undefined],
 		] as const) {
-			const button = this._register(new Button(this.toolbar, { label, size: 'small' }));
+			const button = this._register(new Button(this.toolbar, {
+				...defaultButtonStyles,
+				label,
+				size: 'small',
+			}));
 			this.buttons.push(button);
 			this._register(button.onDidClick(() => {
 				const data = this.data;

@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
 import './media/chatContextUsageDetails.css';
 import { h } from '../../../../../../base/browser/dom.js';
 import { Button } from '../../../../../../base/browser/ui/button/button.js';
@@ -27,7 +28,11 @@ export class ChatContextUsageDetails extends Disposable {
 		const title = h(document, 'h3');
 		title.textContent = localize('chat.input.contextUsage', 'Context usage');
 		const close = this._register(new Button(header, {
-			label: '', icon: Lxicon.close, iconOnly: true, size: 'small',
+			...defaultButtonStyles,
+			label: '',
+			icon: Lxicon.close,
+			iconOnly: true,
+			size: 'small',
 			ariaLabel: localize('chat.input.contextClose', 'Close context usage details'),
 			onClick: onClose,
 		}));

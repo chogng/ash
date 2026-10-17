@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, h } from '../../../../../../base/browser/dom.js';
 import { status } from '../../../../../../base/browser/ui/aria/aria.js';
 import { Button } from '../../../../../../base/browser/ui/button/button.js';
@@ -92,7 +93,11 @@ export class ComponentPropertiesWidget extends Disposable {
 		}
 	}
 	private button(key: string, label: string, run: () => void): void {
-		const button = this.controls.add(new Button(this.fields, { label, onClick: () => { if (!this.documentController.isBusy) { run(); } } }));
+		const button = this.controls.add(new Button(this.fields, {
+			...defaultButtonStyles,
+			label,
+			onClick: () => { if (!this.documentController.isBusy) { run(); } },
+		}));
 		button.domNode.dataset.componentControl = key;
 		button.enabled = !this.documentController.isBusy;
 	}

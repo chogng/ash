@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { h } from '../../../../base/browser/dom.js';
 import { getHoverDelegate } from '../../../../base/browser/ui/hover/hoverDelegate.js';
@@ -131,7 +132,12 @@ export class TestingViewPane extends ViewPane {
 	}
 
 	private makeButton(container: HTMLElement, label: string, action: () => Promise<unknown>): Button {
-		return this._register(new Button(container, { label, size: 'small', onClick: () => this.invoke(action) }));
+		return this._register(new Button(container, {
+			...defaultButtonStyles,
+			label,
+			size: 'small',
+			onClick: () => this.invoke(action),
+		}));
 	}
 
 	private invoke(action: () => Promise<unknown>): void {
@@ -219,13 +225,20 @@ export class TestingViewPane extends ViewPane {
 		for (const profile of this.testing.profiles) {
 			const row = h(this.element.ownerDocument, 'div');
 			row.className = 'ash-testing-script';
-			this.scriptDisposables.add(new Button(row, { label: localize('testing.runScript', 'Run Script'), size: 'small', title: profile.detail, onClick: () => this.invoke(() => this.testing.run(profile)) }));
+			this.scriptDisposables.add(new Button(row, {
+				...defaultButtonStyles,
+				label: localize('testing.runScript', 'Run Script'),
+				size: 'small',
+				title: profile.detail,
+				onClick: () => this.invoke(() => this.testing.run(profile)),
+			}));
 			const label = h(this.element.ownerDocument, 'span');
 			label.textContent = profile.label;
 			row.append(label); this.scriptsDomNode.append(row);
 		}
 		for (const run of this.testing.runs.slice(-10).reverse()) {
 			this.scriptDisposables.add(new Button(this.scriptsDomNode, {
+				...defaultButtonStyles,
 				label: `${run.profile.label} — ${run.status === 'completed' ? localize('testing.scriptCompleted', 'Completed') : testStateLabel(run.status === 'canceled' ? 'cancelled' : run.status)}`,
 				size: 'small',
 				onClick: () => {

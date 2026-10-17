@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { MutableDisposable, toDisposable, DisposableStore } from "../../../../../base/common/lifecycle.js";
 import { addDisposableListener, h, isHTMLElement } from "../../../../../base/browser/dom.js";
 import { type ResourceEdit } from "../../../../../editor/browser/services/bulkEditService.js";
@@ -161,7 +162,11 @@ export class BulkEditPane extends ViewPane {
 
 	private createButton(document: Document, label: string, className: string): Button {
 		const host = h(document, 'span');
-		const button = this._register(new Button(host, { label, presentation: className === 'ash-bulk-edit-apply' ? 'primary' : 'quiet' }));
+		const button = this._register(new Button(host, {
+			...defaultButtonStyles,
+			label,
+			presentation: className === 'ash-bulk-edit-apply' ? 'primary' : 'quiet',
+		}));
 		button.domNode.classList.add(className);
 		return button;
 	}
@@ -312,7 +317,11 @@ export class BulkEditPane extends ViewPane {
 			item.append(replacements);
 		}
 		if (!entry.error && entry.before !== undefined && entry.after !== undefined) {
-			const open = this.rowResources.add(new Button(item, { label: localize('bulkEdit.openDiff', 'Open changes'), size: 'small' }));
+			const open = this.rowResources.add(new Button(item, {
+				...defaultButtonStyles,
+				label: localize('bulkEdit.openDiff', 'Open changes'),
+				size: 'small',
+			}));
 			open.domNode.classList.add('ash-bulk-edit-open-diff');
 			this.rowResources.add(open.onDidClick(() => {
 				void this.openPreview(entry.index).catch(error => { this.statusElement.textContent = getErrorMessage(error); });

@@ -1,3 +1,4 @@
+import { defaultButtonStyles, defaultSelectBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import './media/searchSettingsContent.css';
 import { h, isHTMLElement } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -76,8 +77,14 @@ export class SearchSettingsContent extends Disposable implements SettingsContent
 		copy.append(this.titleDomNode, this.descriptionDomNode, this.statusDomNode);
 		const controls = h(document, 'div');
 		controls.className = 'ash-search-settings-controls';
-		this.engine = this._register(new SelectBox(controls, { options: [{ value: 'tgrep', label: localize({ bundle: 'ash.settings', key: 'search.default' }, 'tgrep (default)') }, { value: 'ripgrep', label: 'ripgrep' }], ariaLabel: localize({ bundle: 'ash.settings', key: 'search.engine' }, 'Indexed search engine'), presentation: 'field', contextViewProvider: contextView }));
-		this.refreshButton = this._register(new Button(controls, { label: localize({ bundle: 'ash.settings', key: 'search.refresh' }, 'Refresh'), presentation: 'secondary' }));
+		this.engine = this._register(new SelectBox(controls, {
+			options: [{ value: 'tgrep', label: localize({ bundle: 'ash.settings', key: 'search.default' }, 'tgrep (default)') }, { value: 'ripgrep', label: 'ripgrep' }], ariaLabel: localize({ bundle: 'ash.settings', key: 'search.engine' }, 'Indexed search engine'), presentation: 'field', contextViewProvider: contextView
+		}, defaultSelectBoxStyles));
+		this.refreshButton = this._register(new Button(controls, {
+			...defaultButtonStyles,
+			label: localize({ bundle: 'ash.settings', key: 'search.refresh' }, 'Refresh'),
+			presentation: 'secondary',
+		}));
 		this.rowDomNode.append(copy, controls);
 		this._register(this.engine.onDidSelect(({ value }) => { void this.configure(value as ContentSearchEngine); }));
 		this._register(this.refreshButton.onDidClick(() => { void this.refresh(); }));

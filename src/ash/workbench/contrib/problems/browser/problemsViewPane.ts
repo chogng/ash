@@ -1,3 +1,4 @@
+import { defaultButtonStyles, defaultInputBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { ActionBar } from "../../../../base/browser/ui/actionbar/actionbar.js";
 import { Button } from "../../../../base/browser/ui/button/button.js";
@@ -68,12 +69,14 @@ export class ProblemsViewPane extends ViewPane {
 		controls.className = "ash-problems-controls";
 		this._register(toDisposable(() => controls.remove()));
 		this.filterInput = this._register(new InputBox(controls, {
+			inputBoxStyles: defaultInputBoxStyles,
 			presentation: "compact",
 			placeholder: localize('problems.filter', 'Filter problems'),
 			ariaLabel: localize('problems.filterLabel', 'Filter problems by message or file'),
 		}));
 		this.filterInput.element.classList.add("ash-problems-filter");
 		const filterActions = this._register(new ActionBar(this.filterInput.element, {
+			actionViewItemOptions: { buttonStyles: defaultButtonStyles },
 			ariaLabel: localize('problems.actions', 'Problems actions'),
 			actions: [{
 				id: "ash.problems.filter",
@@ -89,6 +92,7 @@ export class ProblemsViewPane extends ViewPane {
 		}));
 		filterActions.element.classList.add("ash-toolbar");
 		this.titleActions = this._register(new ActionBar(controls, {
+			actionViewItemOptions: { buttonStyles: defaultButtonStyles },
 			ariaLabel: localize('problems.actions', 'Problems actions'),
 		}));
 		this.titleActions.element.classList.add("ash-toolbar");
@@ -104,6 +108,7 @@ export class ProblemsViewPane extends ViewPane {
 		statusRow.className = "ash-problems-status-row";
 		statusRow.append(this.statusElement);
 		this.clearFiltersButton = this._register(new Button(statusRow, {
+			...defaultButtonStyles,
 			label: localize('problems.clearFilters', 'Clear Filters'),
 			size: "small",
 			onClick: () => this.clearFilters(),

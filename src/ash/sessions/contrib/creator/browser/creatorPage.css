@@ -68,7 +68,7 @@
 	min-height: 36px;
 	justify-content: flex-start;
 }
-[data-color-scheme^="high-contrast-"] .ash-creator-mode-card {
+:is(.hc-black, .hc-light) .ash-creator-mode-card {
 	border-color: var(--ash-contrastBorder);
 }
 .ash-creator-workspaces {

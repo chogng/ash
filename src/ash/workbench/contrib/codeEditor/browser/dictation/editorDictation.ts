@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { Event } from '../../../../../base/common/event.js';
 import { Selection } from '../../../../../editor/common/core/selection.js';
 import { localize2, localize } from '../../../../../nls.js';
@@ -64,8 +65,15 @@ export class EditorDictation extends Disposable {
 			'editor',
 		));
 		this._register(instantiation.createInstance(DictationAccessibilityHelp, this.session, editor.getContainerDomNode(), controls));
-		const stop = this._register(new Button(controls, { label: localize({ bundle: 'ash', key: 'dictation.stop' }, 'Stop dictation') }));
-		const cancel = this._register(new Button(controls, { label: localize({ bundle: 'ash', key: 'dictation.cancel' }, 'Cancel dictation'), presentation: 'quiet' }));
+		const stop = this._register(new Button(controls, {
+			...defaultButtonStyles,
+			label: localize({ bundle: 'ash', key: 'dictation.stop' }, 'Stop dictation'),
+		}));
+		const cancel = this._register(new Button(controls, {
+			...defaultButtonStyles,
+			label: localize({ bundle: 'ash', key: 'dictation.cancel' }, 'Cancel dictation'),
+			presentation: 'quiet',
+		}));
 		this._register(stop.onDidClick(() => { void this.session.stop().catch(error => notifications.error(String(error))); }));
 		this._register(cancel.onDidClick(() => { void this.session.cancel().catch(error => notifications.error(String(error))); }));
 		this._register(this.session.onDidEnd(error => { if (error) notifications.error(error); controls.hidden = !this.session.isActive; stop.enabled = !this.session.isStarting && speech.state !== ChatSpeechToTextState.Transcribing; }));

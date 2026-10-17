@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -151,22 +152,64 @@ export class AgentsVoiceWidget extends Disposable {
 		const title = h(document, 'h2');
 		title.textContent = localize('agentsVoice.title', 'Voice conversation');
 		header.append(title);
-		if (options.showClose !== false) this._register(new Button(header, { label: localize('agentsVoice.close', 'Close window'), onClick: callbacks.closeWindow }));
+		if (options.showClose !== false) this._register(new Button(header, {
+			...defaultButtonStyles,
+			label: localize('agentsVoice.close', 'Close window'),
+			onClick: callbacks.closeWindow,
+		}));
 		header.hidden = options.inputBoxLayout === true;
 		this.status = h(document, 'div');
 		this.status.className = 'ash-agents-voice-status';
 		this.status.setAttribute('role', 'status');
 		const controls = h(document, 'div');
 		controls.className = 'ash-agents-voice-controls';
-		this.openChat = this._register(new Button(controls, { label: localize('agentsVoice.openChat', 'Open Chat'), onClick: callbacks.openSession }));
+		this.openChat = this._register(new Button(controls, {
+			...defaultButtonStyles,
+			label: localize('agentsVoice.openChat', 'Open Chat'),
+			onClick: callbacks.openSession,
+		}));
 		this.openChat.domNode.hidden = options.inputBoxLayout === true;
-		if (callbacks.connect) this._register(new Button(controls, { label: localize('agentsVoice.start', 'Start voice'), onClick: callbacks.connect }));
-		this.mute = this._register(new Button(controls, { label: localize('agentsVoice.mute', 'Mute microphone'), enabled: false, onClick: callbacks.toggleMute }));
-		this.mode = this._register(new Button(controls, { label: localize('agentsVoice.usePtt', 'Use push to talk'), enabled: false, checked: false, onClick: callbacks.toggleInputMode }));
-		this.ptt = this._register(new Button(controls, { label: localize('agentsVoice.hold', 'Hold to speak'), enabled: false, checked: false }));
-		this.interrupt = this._register(new Button(controls, { label: localize('agentsVoice.interrupt', 'Interrupt reply'), enabled: false, onClick: callbacks.stopPlayback }));
-		this.disconnect = this._register(new Button(controls, { label: localize('agentsVoice.disconnect', 'Disconnect'), enabled: false, onClick: callbacks.disconnect }));
-		if (!options.inputBoxLayout) this._register(new Button(controls, { label: localize('agentsVoice.sessions', 'Conversations'), onClick: callbacks.showSessionsPicker }));
+		if (callbacks.connect) this._register(new Button(controls, {
+			...defaultButtonStyles,
+			label: localize('agentsVoice.start', 'Start voice'),
+			onClick: callbacks.connect,
+		}));
+		this.mute = this._register(new Button(controls, {
+			...defaultButtonStyles,
+			label: localize('agentsVoice.mute', 'Mute microphone'),
+			enabled: false,
+			onClick: callbacks.toggleMute,
+		}));
+		this.mode = this._register(new Button(controls, {
+			...defaultButtonStyles,
+			label: localize('agentsVoice.usePtt', 'Use push to talk'),
+			enabled: false,
+			checked: false,
+			onClick: callbacks.toggleInputMode,
+		}));
+		this.ptt = this._register(new Button(controls, {
+			...defaultButtonStyles,
+			label: localize('agentsVoice.hold', 'Hold to speak'),
+			enabled: false,
+			checked: false,
+		}));
+		this.interrupt = this._register(new Button(controls, {
+			...defaultButtonStyles,
+			label: localize('agentsVoice.interrupt', 'Interrupt reply'),
+			enabled: false,
+			onClick: callbacks.stopPlayback,
+		}));
+		this.disconnect = this._register(new Button(controls, {
+			...defaultButtonStyles,
+			label: localize('agentsVoice.disconnect', 'Disconnect'),
+			enabled: false,
+			onClick: callbacks.disconnect,
+		}));
+		if (!options.inputBoxLayout) this._register(new Button(controls, {
+			...defaultButtonStyles,
+			label: localize('agentsVoice.sessions', 'Conversations'),
+			onClick: callbacks.showSessionsPicker,
+		}));
 		this.transcript = h(document, 'div');
 		this.transcript.className = 'ash-agents-voice-transcript';
 		this.transcript.tabIndex = 0;

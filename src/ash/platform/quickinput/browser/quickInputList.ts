@@ -1,3 +1,4 @@
+import { defaultKeybindingLabelStyles, defaultListStyles } from '../../theme/browser/defaultStyles.js';
 import { List } from "../../../base/browser/ui/list/listWidget.js";
 import { KeybindingLabel } from "../../../base/browser/ui/keybindinglabel/keybindinglabel.js";
 import { setRole } from "../../../base/browser/ui/aria/aria.js";
@@ -77,6 +78,7 @@ export class QuickInputList<TItem extends IQuickPickItem>
 		container.append(this.element);
 
 		this.list = this._register(new List<TItem>(this.element, {
+			styles: defaultListStyles,
 			ariaLabel: localize('quickInput.results', 'Quick Pick results'),
 			domFocusable: true,
 			scrolling: 'managed',
@@ -283,7 +285,11 @@ export class QuickInputList<TItem extends IQuickPickItem>
 			content.append(check);
 		}
 		if (item.keybinding) {
-			const keybinding = new KeybindingLabel(content, { keybinding: item.keybinding, presentation: 'keycap' });
+			const keybinding = new KeybindingLabel(content, {
+				...defaultKeybindingLabelStyles,
+				keybinding: item.keybinding,
+				presentation: 'keycap',
+			});
 			keybinding.element.classList.add("ash-quick-pick-row-keybinding");
 			this.keybindingLabels.set(row, keybinding);
 		}

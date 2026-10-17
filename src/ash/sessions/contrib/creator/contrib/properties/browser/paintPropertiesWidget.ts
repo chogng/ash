@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
 import { designBlendLabel as blendLabel } from '../../../browser/designPaintLabels.js';
 import { addDisposableListener, h } from '../../../../../../base/browser/dom.js';
 import { Button } from '../../../../../../base/browser/ui/button/button.js';
@@ -72,12 +73,15 @@ export class PaintPropertiesWidget extends Disposable {
 		};
 		const action = (label: string, run: () => void, enabled: () => boolean, pressed?: () => boolean, visible = () => this.canFill) => {
 			const button = this._register(new Button(this.domNode, {
-				label, ariaLabel: label, onClick: () => {
+				...defaultButtonStyles,
+				label,
+				ariaLabel: label,
+				onClick: () => {
 					if (this.editable && enabled()) {
 						run();
 						this.refresh();
 					}
-				}
+				},
 			}));
 			this.updates.push(() => {
 				button.domNode.hidden = !visible();

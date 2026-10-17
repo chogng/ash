@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import './implicitContextAttachment.css';
 import { h } from '../../../../../base/browser/dom.js';
@@ -38,7 +39,11 @@ export class ImplicitContextAttachmentWidget extends Disposable {
 		container.append(this.domNode);
 		this._register(toDisposable(() => { this.controller.abort(); this.domNode.remove(); }));
 		this.button = this._register(new Button(this.domNode, {
-			label: '', icon: Lxicon.addSmall, size: 'small', presentation: 'quiet',
+			...defaultButtonStyles,
+			label: '',
+			icon: Lxicon.addSmall,
+			size: 'small',
+			presentation: 'quiet',
 		}));
 		this._register(this.button.onDidClick(() => { void this.attach(); }));
 		this._register(editors.onDidActiveEditorChange(() => this.render()));

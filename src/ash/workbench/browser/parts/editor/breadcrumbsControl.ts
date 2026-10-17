@@ -11,6 +11,7 @@ import type { BreadcrumbsPathMode } from "./breadcrumbs.js";
 import { ScrollbarVisibility } from '../../../../base/common/scrollable.js';
 import type { EditorTitleScrollbarSizing, EditorTitleScrollbarVisibility } from '../../../services/editor/common/editorConfiguration.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { defaultBreadcrumbsWidgetStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 
 /** Renders the active editor's resource path in one group title. */
 export class EditorBreadcrumbsControl extends Disposable {
@@ -35,13 +36,9 @@ export class EditorBreadcrumbsControl extends Disposable {
 		this.domNode.setAttribute("aria-label", localize('breadcrumbs.editorLabel', "Editor breadcrumbs"));
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
-		this.widget = this._register(new BreadcrumbsWidget(this.domNode, 3, undefined, Lxicon.chevronRight, {
-			breadcrumbsBackground: undefined,
-			breadcrumbsForeground: undefined,
-			breadcrumbsHoverForeground: undefined,
-			breadcrumbsFocusForeground: undefined,
-			breadcrumbsFocusAndSelectionForeground: undefined,
-		}));
+		this.widget = this._register(new BreadcrumbsWidget(
+			this.domNode, 3, undefined, Lxicon.chevronRight, defaultBreadcrumbsWidgetStyles,
+		));
 		this.editorTypeButton = h(container.ownerDocument, 'button');
 		this.editorTypeButton.type = 'button';
 		this.editorTypeButton.className = 'ash-breadcrumbs-editor-type';

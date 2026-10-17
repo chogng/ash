@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../platform/theme/browser/defaultStyles.js';
 import { h, type IDimension } from '../../../base/browser/dom.js';
 import { Button } from '../../../base/browser/ui/button/button.js';
 import { ScrollableElement } from '../../../base/browser/ui/scrollbar/scrollableElement.js';
@@ -70,12 +71,13 @@ export class CustomViewGridPart extends Part implements ICustomViewGridPartServi
 				actions.replaceChildren();
 				for (const [, group] of menu.getActions()) for (const action of group) {
 					const button = buttons.value.add(new Button(actions, {
+						...defaultButtonStyles,
 						label: action.label,
 						icon: action.icon,
 						enabled: action.enabled,
 						onClick: () => {
 							void Promise.resolve(action.run()).catch(error => this.notifications.error(String(error)));
-						}
+						},
 					}));
 					button.domNode.dataset.actionId = action.id;
 				}

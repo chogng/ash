@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../platform/theme/browser/defaultStyles.js';
 import "./compositebar/compositebar.css";
 import { IActivityService, NumberBadge } from "../../services/activity/common/activity.js";
 import type { IContextMenuProvider } from "../../../base/browser/contextmenu.js";
@@ -104,6 +105,7 @@ export class CompositeBar extends Disposable {
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		this.actionBar = this._register(new ActionBar(this.domNode, {
+			actionViewItemOptions: { buttonStyles: defaultButtonStyles },
 			ariaLabel: options.ariaLabel,
 			ariaRole: "tablist",
 			orientation: options.orientation,

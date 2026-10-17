@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { Schemas } from '../../../../base/common/network.js';
 import { listRowHeight } from '../../../../base/common/uiSizes.js';
 import { ISearchService } from '../../../services/search/common/search.js';
@@ -132,6 +133,7 @@ export class SearchView extends ViewPane {
 		const detailsRow = h(document, "div");
 		detailsRow.className = "ash-search-details-row";
 		this.detailsButton = this._register(new Button(detailsRow, {
+			...defaultButtonStyles,
 			label: localize("search.detailsLabel", "Search Details"),
 			ariaLabel: localize("search.details", "Toggle Search Details"),
 			title: localize("search.details", "Toggle Search Details"),

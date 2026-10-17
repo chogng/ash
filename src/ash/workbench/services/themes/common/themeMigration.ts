@@ -87,10 +87,16 @@ function validateJsonColorValue(value: unknown, path: string, depth: number): Co
 	const source = validateJsonColorValue(transform.value, `${path}.value`, depth + 1);
 	switch (transform.op) {
 		case "transparent":
+			requireExactKeys(transform, ["factor", "op", "value"], path);
+			return Object.freeze({ op: 'transparent', value: source, factor: factor(transform.factor, `${path}.factor`) });
 		case "lighten":
 		case "darken":
 			requireExactKeys(transform, ["factor", "op", "value"], path);
-			return Object.freeze({ op: transform.op, value: source, factor: factor(transform.factor, `${path}.factor`) });
+			// Version-1 resources used RGBA mixing for brightness; preserve their saved appearance during migration.
+			return Object.freeze({
+				op: 'mix', value: source, other: transform.op === 'lighten' ? '#ffffff' : '#000000',
+				factor: factor(transform.factor, `${path}.factor`),
+			});
 		case "mix":
 			requireExactKeys(transform, ["factor", "op", "other", "value"], path);
 			return Object.freeze({ op: "mix", value: source, other: validateJsonColorValue(transform.other, `${path}.other`, depth + 1), factor: factor(transform.factor, `${path}.factor`) });

@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import type { ChatSubmissionOptions } from '../../../../services/chat/common/chatService.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
@@ -134,7 +135,11 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		this.historyMessage = h(ownerDocument, 'span');
 		this.historyMessage.setAttribute('role', 'status');
 		this.historyStatusElement.append(this.historyMessage);
-		this.historyAction = this._register(new Button(this.historyStatusElement, { label: '', size: 'small' }));
+		this.historyAction = this._register(new Button(this.historyStatusElement, {
+			...defaultButtonStyles,
+			label: '',
+			size: 'small',
+		}));
 		this._register(this.historyAction.onDidClick(() => void this.recoverHistory()));
 		const historyAccessibilityId = createUuid();
 		for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {

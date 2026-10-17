@@ -1,3 +1,4 @@
+import { defaultButtonStyles, defaultInputBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
@@ -89,9 +90,18 @@ export class DisassemblyView extends EditorPane implements IEditorPane {
 		this.toolbar = this._register(new WorkbenchToolBar(header, this.contextMenus, { ariaLabel: localize('debug.disassemblyControls', 'Disassembly controls') }));
 		const form = h(document, 'form');
 		form.className = 'ash-disassembly-address';
-		this.address = this._register(new InputBox(form, { ariaLabel: localize('debug.instructionAddress', 'Instruction address'), placeholder: localize('debug.instructionAddress', 'Instruction address'), presentation: 'compact' }));
+		this.address = this._register(new InputBox(form, {
+			inputBoxStyles: defaultInputBoxStyles,
+			ariaLabel: localize('debug.instructionAddress', 'Instruction address'),
+			placeholder: localize('debug.instructionAddress', 'Instruction address'),
+			presentation: 'compact',
+		}));
 		this._register(this.address.onDidChange(() => this.address.showValidation('')));
-		this.go = this._register(new Button(form, { label: localize('debug.disassemblyGo', 'Go to address'), type: 'submit' }));
+		this.go = this._register(new Button(form, {
+			...defaultButtonStyles,
+			label: localize('debug.disassemblyGo', 'Go to address'),
+			type: 'submit',
+		}));
 		header.append(form);
 		this._register(addDisposableListener(form, 'submit', event => {
 			event.preventDefault();
@@ -108,7 +118,16 @@ export class DisassemblyView extends EditorPane implements IEditorPane {
 		const breakpointRenderer: ITableRenderer<IDisassembledInstruction, BreakpointCell> = {
 			templateId: 'breakpoint',
 			renderTemplate: cell => {
-				const template: BreakpointCell = { instruction: undefined, button: new Button(cell, { icon: Lxicon.circleSmallFilled, iconOnly: true, size: 'small', label: localize('debug.toggleBreakpoint', 'Toggle Breakpoint'), onClick: () => { if (template.instruction) { this.toggleInstructionBreakpoint(template.instruction); } } }) };
+				const template: BreakpointCell = {
+					instruction: undefined, button: new Button(cell, {
+						...defaultButtonStyles,
+						icon: Lxicon.circleSmallFilled,
+						iconOnly: true,
+						size: 'small',
+						label: localize('debug.toggleBreakpoint', 'Toggle Breakpoint'),
+						onClick: () => { if (template.instruction) { this.toggleInstructionBreakpoint(template.instruction); } },
+					})
+				};
 				return template;
 			},
 			renderElement: (instruction, _index, template) => {

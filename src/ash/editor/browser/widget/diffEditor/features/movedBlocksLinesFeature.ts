@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { h, svg } from '../../../../../base/browser/dom.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
@@ -40,7 +41,12 @@ export class MovedBlocksLinesFeature extends Disposable {
 		this.comparisonDomNode.append(this.comparisonLabel);
 		container.append(this.comparisonDomNode);
 		this._register(toDisposable(() => this.comparisonDomNode.remove()));
-		this.closeButton = this._register(new Button(this.comparisonDomNode, { label: '', size: 'small', onClick: () => this.compare(undefined) }));
+		this.closeButton = this._register(new Button(this.comparisonDomNode, {
+			...defaultButtonStyles,
+			label: '',
+			size: 'small',
+			onClick: () => this.compare(undefined),
+		}));
 		this.originalDecorations = original.createDecorationsCollection();
 		this.modifiedDecorations = modified.createDecorationsCollection();
 		this._register(toDisposable(() => { this.originalDecorations.clear(); this.modifiedDecorations.clear(); }));
@@ -100,9 +106,14 @@ export class MovedBlocksLinesFeature extends Disposable {
 			this.domNode.append(host);
 			this.controls.add(toDisposable(() => host.remove()));
 			this.controls.add(new Button(host, {
-				label, icon: Lxicon.arrowRight, iconOnly: true, size: 'small', onClick: () => {
+				...defaultButtonStyles,
+				label,
+				icon: Lxicon.arrowRight,
+				iconOnly: true,
+				size: 'small',
+				onClick: () => {
 					this.compare(move === this.selectedMove ? undefined : move);
-				}
+				},
 			}));
 			this.links.push({ move, path, button: host });
 		}

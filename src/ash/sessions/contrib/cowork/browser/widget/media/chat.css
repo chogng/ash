@@ -163,7 +163,7 @@
 			color-mix(in srgb, var(--ash-chat-input-shadow) 18%, transparent);
 }
 
-.ash-workbench[data-color-scheme^="high-contrast-"]
+.ash-workbench:is(.hc-black, .hc-light)
 	.ash-cowork-input-part.floating-card
 	> .ash-cowork-input-container {
 	box-shadow: none;

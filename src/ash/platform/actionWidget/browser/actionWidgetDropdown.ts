@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../theme/browser/defaultStyles.js';
 import { addDisposableListener, stopEvent } from '../../../base/browser/dom.js';
 import { EventType, Gesture } from '../../../base/browser/touch.js';
 import { Button } from '../../../base/browser/ui/button/button.js';
@@ -41,6 +42,7 @@ export class ActionWidgetDropdown extends Disposable {
 		super();
 		if (!options.actions && !options.actionProvider) { throw new TypeError('An action dropdown requires actions or an action provider'); }
 		const button = this._register(new Button(container, {
+			...defaultButtonStyles,
 			label: options.label,
 			ariaLabel: options.ariaLabel,
 			icon: options.labelRenderer ? undefined : Lxicon.chevronDown,

@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
@@ -107,6 +108,7 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 		container.setAttribute("aria-label", "PDF reader");
 
 		const toolbar = this._register(new ToolBar(container, {
+			buttonStyles: defaultButtonStyles,
 			ariaLabel: "PDF annotation actions",
 			contextMenuProvider: noSecondaryContextMenuProvider,
 			highlightToggledItems: true,

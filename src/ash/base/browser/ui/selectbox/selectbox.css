@@ -21,8 +21,14 @@
 	box-sizing: border-box;
 	padding: 4px;
 	outline: none;
-	color: var(--ash-input-foreground);
-	background: var(--ash-input-background);
+	color: var(
+		--ash-select-style-select-foreground,
+		var(--ash-input-foreground)
+	);
+	background: var(
+		--ash-select-style-select-list-background,
+		var(--ash-input-background)
+	);
 	overflow: auto;
 }
 
@@ -43,7 +49,8 @@
 }
 
 .ash-select-box-option:focus-visible {
-	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline: var(--ash-strokeThickness) solid
+		var(--ash-select-style-focus-border, var(--ash-focusBorder));
 	outline-offset: -1px;
 }
 
@@ -90,20 +97,31 @@
 	box-sizing: border-box;
 	gap: var(--ash-spacing-size40);
 	padding: 0 6px;
-	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-select-style-select-border, var(--ash-input-border));
 	border-radius: var(--ash-cornerRadius-medium);
-	color: var(--ash-input-foreground);
-	background: var(--ash-input-background);
+	color: var(
+		--ash-select-style-select-foreground,
+		var(--ash-input-foreground)
+	);
+	background: var(
+		--ash-select-style-select-background,
+		var(--ash-input-background)
+	);
 	font: inherit;
 }
 
 .ash-select-box-field > .ash-select-box-button:hover,
 .ash-select-box-field.ash-dropdown-open > .ash-select-box-button {
-	background: var(--ash-input-background);
+	background: var(
+		--ash-select-style-select-background,
+		var(--ash-input-background)
+	);
 }
 
 .ash-select-box-field > .ash-select-box-button:focus-visible {
-	border-color: var(--ash-focusBorder);
-	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	border-color: var(--ash-select-style-focus-border, var(--ash-focusBorder));
+	outline: var(--ash-strokeThickness) solid
+		var(--ash-select-style-focus-border, var(--ash-focusBorder));
 	outline-offset: var(--ash-strokeThickness);
 }

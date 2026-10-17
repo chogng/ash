@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { Event } from '../../../../../base/common/event.js';
 import '../../../terminal/browser/media/terminalVoice.css';
 import { h, addDisposableListener } from '../../../../../base/browser/dom.js';
@@ -61,8 +62,15 @@ export class TerminalVoiceSession extends Disposable {
 			'terminal',
 		));
 		this._register(instantiation.createInstance(DictationAccessibilityHelp, this.session, container, controls));
-		const stop = this._register(new Button(controls, { label: localize({ bundle: 'ash', key: 'dictation.stop' }, 'Stop dictation') }));
-		const cancel = this._register(new Button(controls, { label: localize({ bundle: 'ash', key: 'dictation.cancel' }, 'Cancel dictation'), presentation: 'quiet' }));
+		const stop = this._register(new Button(controls, {
+			...defaultButtonStyles,
+			label: localize({ bundle: 'ash', key: 'dictation.stop' }, 'Stop dictation'),
+		}));
+		const cancel = this._register(new Button(controls, {
+			...defaultButtonStyles,
+			label: localize({ bundle: 'ash', key: 'dictation.cancel' }, 'Cancel dictation'),
+			presentation: 'quiet',
+		}));
 		this._register(stop.onDidClick(() => { void this.stop().catch(error => notifications.error(String(error))); }));
 		this._register(cancel.onDidClick(() => this.hide()));
 		this._register(this.session.onDidEnd(error => { if (error) { notifications.error(error); } }));

@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
 import { designPathEndpoints } from '../../../common/model/designVectorStroke.js';
 import { Color } from '../../../../../../base/common/color.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
@@ -44,7 +45,10 @@ export class VectorPropertiesWidget extends Disposable {
 		const content = h(document, 'div', { className: 'ash-design-property-fields' }); this.domNode.append(content);
 		this.appearance = this._register(new VectorAppearanceWidget(controller, commands, selection, document, refresh, focusCanvas));
 		for (const action of this.getActions()) {
-			const button = this._register(new Button(content, { label: action.label })); this.buttons.set(action.id, button);
+			const button = this._register(new Button(content, {
+				...defaultButtonStyles,
+				label: action.label,
+			})); this.buttons.set(action.id, button);
 			this._register(button.onDidClick(() => { const current = this.getActions().find(item => item.id === action.id); if (current?.enabled) { void current.run(); } }));
 		}
 		const simplifyLabel = localize('sessions.design.vectorSimplification', 'Simplification');
@@ -61,7 +65,10 @@ export class VectorPropertiesWidget extends Disposable {
 			if (this.simplification) { simplifyInput.value = String(this.simplification.amount); simplifyInput.setAttribute('aria-valuetext', localize('sessions.design.vectorSimplificationValue', '{0} percent', this.simplification.amount)); simplifyCount.textContent = localize('sessions.design.vectorSimplificationCount', '{0} → {1} points', toDesignVectorNetwork(this.simplification.source).vertices.length, toDesignVectorNetwork(this.simplification.result).vertices.length); }
 		});
 		const fontFile = h(document, 'input', { properties: { type: 'file', accept: '.ttf,.otf,.ttc', hidden: true }, attributes: { 'aria-label': localize('sessions.design.outlineFontFile', 'Font file for outlines') } }); content.append(fontFile);
-		const fontButton = this._register(new Button(content, { label: localize('sessions.design.outlineLoadFont', 'Load font for outlines') }));
+		const fontButton = this._register(new Button(content, {
+			...defaultButtonStyles,
+			label: localize('sessions.design.outlineLoadFont', 'Load font for outlines'),
+		}));
 		this._register(fontButton.onDidClick(() => fontFile.click()));
 		this._register(addDisposableListener(fontFile, 'change', async () => {
 			const file = fontFile.files?.[0]; if (!file) { return; }
@@ -87,7 +94,11 @@ export class VectorPropertiesWidget extends Disposable {
 		const stroke = this._register(createDesignColorPicker(instantiation, document, { color: localize('sessions.design.vectorStroke', 'Stroke color'), value: localize('sessions.design.vectorStroke', 'Stroke color'), opacity: localize('sessions.design.strokeOpacity', 'Stroke opacity (%)') }));
 		stroke.domNode.classList.add('ash-design-property-wide'); this.fields.append(stroke.domNode);
 		this._register(stroke.onDidCommitColor(color => { if (this.path && this.editable) { this.commands.updateShape({ ...this.path, stroke: Color.Format.CSS.formatHexA(color, true) }); } }));
-		const resetStroke = this._register(new Button(this.fields, { label: localize('sessions.design.strokeReset', 'Use fill color for stroke'), onClick: () => { if (this.path && this.editable) { this.commands.updateShape({ ...this.path, stroke: undefined }); } } }));
+		const resetStroke = this._register(new Button(this.fields, {
+			...defaultButtonStyles,
+			label: localize('sessions.design.strokeReset', 'Use fill color for stroke'),
+			onClick: () => { if (this.path && this.editable) { this.commands.updateShape({ ...this.path, stroke: undefined }); } },
+		}));
 		this.updates.push(() => {
 			stroke.enabled = this.editable; stroke.setColor(Color.Format.CSS.parseHex(this.path?.stroke ?? this.path?.fill ?? '#000000')!, this.path?.id);
 			resetStroke.enabled = this.editable && this.path?.stroke !== undefined;
@@ -145,12 +156,14 @@ export class VectorPropertiesWidget extends Disposable {
 			this.commands.vector.update(withDesignVectorNetwork(path, { ...network, regionFills: { ...network.regionFills, [region.key]: Color.Format.CSS.formatHexA(color, true) } }));
 		}));
 		const resetRegion = this._register(new Button(networkFields, {
-			label: localize('sessions.design.regionReset', 'Use path color for region'), onClick: () => {
+			...defaultButtonStyles,
+			label: localize('sessions.design.regionReset', 'Use path color for region'),
+			onClick: () => {
 				const path = this.path, network = path?.network; if (!path || !network || !this.editable) { return; }
 				const region = designNetworkRegions(network)[this.regionIndex]; if (!region) { return; }
 				const regionFills = { ...network.regionFills }; delete regionFills[region.key];
 				this.commands.vector.update(withDesignVectorNetwork(path, { ...network, regionFills }));
-			}
+			},
 		}));
 		this.updates.unshift(() => {
 			const network = this.path?.network; networkFields.hidden = !network;

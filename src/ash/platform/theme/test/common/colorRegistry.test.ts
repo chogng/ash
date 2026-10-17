@@ -1,10 +1,22 @@
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
 import { ColorRegistry } from "../../common/colorRegistry.js";
-import { colorCssVariable, transparent } from "../../common/colorUtils.js";
+import { colorCssVariable, darken, lighten, transparent } from "../../common/colorUtils.js";
 import { ColorScheme } from "../../common/theme.js";
 
 const metadata = { description: "Test token.", owner: "test" };
+
+test('brightness transforms preserve hue and alpha when resolving theme defaults', () => {
+	using registry = new ColorRegistry();
+	const base = '#20406080';
+	for (const [id, value] of [['test.lighter', lighten(base, 0.5)], ['test.darker', darken(base, 0.5)]] as const) {
+		registry.registerColor(id, { dark: value, light: value, hcDark: value, hcLight: value }, metadata);
+	}
+	assert.deepEqual(registry.resolve(ColorScheme.Dark).map(({ id, value }) => [id, value?.toString()]), [
+		['test.lighter', 'rgba(48, 96, 144, 0.5)'],
+		['test.darker', 'rgba(16, 32, 48, 0.5)'],
+	]);
+});
 
 test('color CSS names preserve identifier casing and replace every dot', () => {
 	const identifiers = ['focusBorder', 'focus.border', 'editorCursor.foreground', 'editorSuggestWidget.selectedForeground', 'extensionWidget.button.hoverBackground'];

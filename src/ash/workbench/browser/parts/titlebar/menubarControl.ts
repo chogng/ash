@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import "./menubarControl.css";
 import { addDisposableListener } from "../../../../base/browser/dom.js";
 import { ButtonActionViewItem } from "../../../../base/browser/ui/actionbar/actionViewItems.js";
@@ -24,7 +25,7 @@ interface MenubarOptions {
 
 class ApplicationMenuActionViewItem extends ButtonActionViewItem {
 	constructor(action: IAction, private readonly handleKeyDown: (event: KeyboardEvent) => void) {
-		super(action);
+		super(action, { buttonStyles: defaultButtonStyles });
 	}
 
 	public override render(container: HTMLElement): void {

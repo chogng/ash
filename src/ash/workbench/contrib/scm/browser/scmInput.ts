@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { h } from '../../../../base/browser/dom.js';
 import { DEFAULT_FONT_FAMILY } from '../../../../base/browser/fonts.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -59,6 +60,7 @@ export class SCMInputWidget extends Disposable {
 		this.inputContext = context;
 		this.inputMenu = this._register(menuService.createMenu(MenuId.SCMInputBox, context));
 		this.actionButton = this._register(new Button(this.domNode, {
+			...defaultButtonStyles,
 			label: localize('scm.input.generate', 'Generate commit message'),
 			icon: Lxicon.sparkle,
 			iconOnly: true,

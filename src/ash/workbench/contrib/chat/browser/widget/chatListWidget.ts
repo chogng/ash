@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
 import { ICommandService, CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/common/contextkey.js';
@@ -388,7 +389,14 @@ export class ChatListWidget extends DomWidget {
 	private renderCopyAction(row: RenderedItem, lifetime: DisposableStore): void {
 		const actions = h(row.element.ownerDocument, 'div');
 		actions.className = 'ash-chat-message-actions';
-		const button = lifetime.add(new Button(actions, { label: localize('chat.message.copy', 'Copy message'), icon: Lxicon.copy, presentation: 'quiet', size: 'small', enabled: row.item.text.length > 0 }));
+		const button = lifetime.add(new Button(actions, {
+			...defaultButtonStyles,
+			label: localize('chat.message.copy', 'Copy message'),
+			icon: Lxicon.copy,
+			presentation: 'quiet',
+			size: 'small',
+			enabled: row.item.text.length > 0,
+		}));
 		row.copyButton = button;
 		const feedback = h(row.element.ownerDocument, 'span');
 		feedback.className = 'ash-chat-message-copy-status';
@@ -418,7 +426,12 @@ export class ChatListWidget extends DomWidget {
 	}
 
 	private renderReadAloudAction(row: RenderedItem, actions: HTMLElement, lifetime: DisposableStore): void {
-		const button = lifetime.add(new Button(actions, { label: localize('chat.message.readAloud', 'Read aloud'), presentation: 'quiet', size: 'small' }));
+		const button = lifetime.add(new Button(actions, {
+			...defaultButtonStyles,
+			label: localize('chat.message.readAloud', 'Read aloud'),
+			presentation: 'quiet',
+			size: 'small',
+		}));
 		const feedback = h(actions.ownerDocument, 'span');
 		feedback.className = 'ash-chat-message-read-status';
 		feedback.setAttribute('role', 'status');

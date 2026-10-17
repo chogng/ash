@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
 import { Event } from '../../../../../../base/common/event.js';
 import { MenuItemAction } from '../../../../../../platform/actions/common/actions.js';
 import { IChatSpeechToTextService, ChatSpeechToTextState } from '../../../../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
@@ -582,7 +583,7 @@ class ChatInputButtonViewItem extends ButtonActionViewItem {
 	private readonly presentation: ChatInputToolbarPresentation;
 
 	constructor(action: ChatInputAction) {
-		super(action);
+		super(action, { buttonStyles: defaultButtonStyles });
 		this.presentation = action.presentation;
 	}
 

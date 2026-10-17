@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import "./media/editorplaceholder.css";
@@ -110,6 +111,7 @@ export class ErrorPlaceholderEditor extends EditorPane implements IEditorPane {
 		this.firstButton = undefined;
 		for (const action of actions) {
 			const button: Button = this.buttons.add(new Button(this.actionsDomNode, {
+				...defaultButtonStyles,
 				label: action.label,
 				enabled: action.enabled,
 				presentation: this.firstButton ? "secondary" : "primary",
@@ -118,6 +120,7 @@ export class ErrorPlaceholderEditor extends EditorPane implements IEditorPane {
 			if (!this.firstButton && action.enabled) this.firstButton = button;
 		}
 		this.buttons.add(new Button(this.actionsDomNode, {
+			...defaultButtonStyles,
 			label: localize("workbench.editorOpenClose", "Close Editor"),
 			presentation: "secondary",
 			onClick: () => { void this.runAction({ id: "workbench.editor.close", label: "", tooltip: "", enabled: true, run: this.onClose }); },

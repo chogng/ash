@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import './media/changesActions.css';
 import { h } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -38,9 +39,21 @@ export class SessionSyncChangesActionViewItem extends Disposable {
 		const element = h(container.ownerDocument, 'div', { className: 'ash-sessions-changes-actions' });
 		container.append(element);
 		this._register(toDisposable(() => element.remove()));
-		this.sync = this._register(new Button(element, { label: localize('sessions.changes.sync', 'Sync changes'), onClick: () => { void this.run('sync'); } }));
-		this.publish = this._register(new Button(element, { label: localize('sessions.changes.publish', 'Publish branch'), onClick: () => { void this.run('git.publish'); } }));
-		this.workingTree = this._register(new Button(element, { label: localize('sessions.changes.workingTree', 'Review working tree'), onClick: () => { void this.run('git.openChangesSource'); } }));
+		this.sync = this._register(new Button(element, {
+			...defaultButtonStyles,
+			label: localize('sessions.changes.sync', 'Sync changes'),
+			onClick: () => { void this.run('sync'); },
+		}));
+		this.publish = this._register(new Button(element, {
+			...defaultButtonStyles,
+			label: localize('sessions.changes.publish', 'Publish branch'),
+			onClick: () => { void this.run('git.publish'); },
+		}));
+		this.workingTree = this._register(new Button(element, {
+			...defaultButtonStyles,
+			label: localize('sessions.changes.workingTree', 'Review working tree'),
+			onClick: () => { void this.run('git.openChangesSource'); },
+		}));
 		this.status = h(container.ownerDocument, 'p', { className: 'ash-sessions-changes-repository-status' });
 		this.status.setAttribute('role', 'status');
 		this.status.hidden = true;

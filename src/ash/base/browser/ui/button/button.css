@@ -7,7 +7,10 @@
 	padding: 4px 10px;
 	border: var(--ash-strokeThickness) solid transparent;
 	border-radius: var(--ash-cornerRadius-small);
-	color: var(--ash-button-foreground);
+	color: var(
+		--ash-button-style-secondary-foreground,
+		var(--ash-button-foreground)
+	);
 	background: transparent;
 	font: inherit;
 	cursor: pointer;
@@ -53,12 +56,21 @@
 }
 
 .ash-button-primary {
-	color: var(--ash-button-primaryForeground);
-	background: var(--ash-button-primaryBackground);
+	color: var(
+		--ash-button-style-foreground,
+		var(--ash-button-primaryForeground)
+	);
+	background: var(
+		--ash-button-style-background,
+		var(--ash-button-primaryBackground)
+	);
 }
 
 .ash-button-primary:not(:disabled):hover {
-	background: var(--ash-button-primaryHoverBackground);
+	background: var(
+		--ash-button-style-hover-background,
+		var(--ash-button-primaryHoverBackground)
+	);
 }
 
 .ash-button-primary:not(:disabled):active {
@@ -66,13 +78,25 @@
 }
 
 .ash-button-secondary {
-	border-color: var(--ash-widget-border);
-	color: var(--ash-button-foreground);
-	background: var(--ash-button-secondaryBackground);
+	border-color: var(
+		--ash-button-style-secondary-border,
+		var(--ash-widget-border)
+	);
+	color: var(
+		--ash-button-style-secondary-foreground,
+		var(--ash-button-foreground)
+	);
+	background: var(
+		--ash-button-style-secondary-background,
+		var(--ash-button-secondaryBackground)
+	);
 }
 
 .ash-button-secondary:not(:disabled):hover {
-	background: var(--ash-button-hoverBackground);
+	background: var(
+		--ash-button-style-secondary-hover-background,
+		var(--ash-button-hoverBackground)
+	);
 }
 
 .ash-button-secondary:not(:disabled):active {

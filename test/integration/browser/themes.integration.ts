@@ -1,3 +1,4 @@
+import { List } from '../../../src/ash/base/browser/ui/list/listWidget.js';
 import { createDisconnectedSyntaxApi } from '../../../src/ash/platform/syntax/browser/syntaxApi.js';
 import { parseUserColorTheme } from '../../../src/ash/workbench/services/themes/common/colorThemeData.js';
 import { TreeSitterLibraryService, createTreeSitterSyntaxTokenBackend } from '../../../src/ash/workbench/services/treeSitter/browser/treeSitterLibraryService.js';
@@ -37,6 +38,7 @@ import '../../../src/ash/base/browser/ui/scrollbar/scrollbar.css';
 import '../../../src/ash/base/browser/ui/tree/tree.css';
 import '../../../src/ash/base/browser/ui/list/list.css';
 import '../../../src/ash/editor/browser/widget/richTextEditor/richTextEditorWidget.css';
+import '../../../src/ash/editor/contrib/hover/browser/hover.css';
 import '../../../src/ash/platform/actionWidget/browser/actionWidget.css';
 import '../../../src/ash/sessions/browser/parts/titlebar/media/titlebarpart.css';
 import '../../../src/ash/workbench/browser/parts/editor/media/modalEditorPart.css';
@@ -63,9 +65,22 @@ import { registerColor } from '../../../src/ash/platform/theme/common/colorUtils
 import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
 import { highContrastDarkColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { registerIcon } from '../../../src/ash/platform/theme/common/iconRegistry.js';
+import { Button } from '../../../src/ash/base/browser/ui/button/button.js';
+import { InputBox } from '../../../src/ash/base/browser/ui/inputbox/inputbox.js';
+import { Switch, Checkbox } from '../../../src/ash/base/browser/ui/toggle/toggle.js';
+import { SelectBox } from '../../../src/ash/base/browser/ui/selectbox/selectbox.js';
+import { CountBadge } from '../../../src/ash/base/browser/ui/countBadge/countBadge.js';
+import { ProgressBar } from '../../../src/ash/base/browser/ui/progressbar/progressbar.js';
+import { Menu } from '../../../src/ash/base/browser/ui/menu/menu.js';
+import { Dialog } from '../../../src/ash/base/browser/ui/dialog/dialog.js';
+import { ObjectTree } from '../../../src/ash/base/browser/ui/tree/objectTree.js';
+import { SubmenuAction } from '../../../src/ash/base/common/actions.js';
+import { defaultButtonStyles, getButtonStyles, defaultCheckboxStyles, defaultCountBadgeStyles, defaultProgressBarStyles, defaultListStyles, defaultFindWidgetStyles, defaultKeybindingLabelStyles, defaultInputBoxStyles, defaultToggleStyles, defaultSelectBoxStyles, defaultMenuStyles, defaultDialogStyles } from '../../../src/ash/platform/theme/browser/defaultStyles.js';
 
 declare global {
 	interface Window {
+		mountDefaultStyleProbes(): void;
+		openStyledDialog(): void;
 		changeIconModelLanguage(id: string): void;
 		releaseIconModels(): void;
 		disposeIconLabels(): void;
@@ -137,6 +152,99 @@ services.registerInstance(ILanguageService, languages);
 services.registerInstance(IHostColorSchemeService, resources.add(new BrowserHostColorSchemeService(window)));
 const themes = resources.add(services.createInstance(WorkbenchThemeService, document.querySelector<HTMLElement>('#root')!));
 themes.initialize();
+window.mountDefaultStyleProbes = () => {
+	const host = document.createElement('section');
+	host.id = 'default-style-probes';
+	host.style.width = '360px';
+	document.querySelector('#root')!.append(host);
+	resources.add(new InputBox(host, {
+		presentation: 'field', ariaLabel: 'Styled input',
+		inputBoxStyles: { ...defaultInputBoxStyles, inputBackground: 'var(--ash-selection-background)' },
+	}));
+	resources.add(new Switch(host, {
+		label: 'Styled switch', checked: true,
+		...defaultToggleStyles, inputActiveOptionBackground: 'var(--ash-error-foreground)',
+	}));
+	resources.add(new Checkbox(host, { label: 'Styled checkbox', checked: true, ...defaultCheckboxStyles }));
+	resources.add(new SelectBox(host, {
+		presentation: 'field', ariaLabel: 'Styled select',
+		options: [{ label: 'One', value: 'one' }, { label: 'Two', value: 'two' }],
+	}, { ...defaultSelectBoxStyles, selectBackground: 'var(--ash-selection-background)', selectListBackground: 'var(--ash-error-foreground)' }));
+	resources.add(new CountBadge(host, { count: 7 }, defaultCountBadgeStyles));
+	resources.add(new ProgressBar(host, defaultProgressBarStyles)).value = 0.5;
+	resources.add(new Menu(host, {
+		buttonStyles: defaultButtonStyles,
+		keybindingLabelStyles: defaultKeybindingLabelStyles,
+		actions: [new SubmenuAction('styled.more', 'Styled submenu', [{
+			id: 'styled.leaf', label: 'Styled leaf', tooltip: '', enabled: true, run() { },
+		}])],
+	}, { ...defaultMenuStyles, backgroundColor: 'var(--ash-error-foreground)' }));
+	const list = resources.add(new List<string>(host, {
+		ariaLabel: 'Styled list', domFocusable: true,
+		styles: {
+			...defaultListStyles,
+			listActiveSelectionBackground: 'var(--ash-error-foreground)',
+			listInactiveSelectionBackground: 'var(--ash-selection-background)',
+			listHoverBackground: 'var(--ash-selection-background)',
+		},
+		getId: value => value,
+		renderItem: value => {
+			const label = document.createElement('span');
+			label.textContent = value;
+			return label;
+		},
+	}));
+	list.splice(0, 0, ['Selected list row', 'Hovered list row']);
+	list.setSelection([0]);
+	const treeHost = document.createElement('div');
+	treeHost.id = 'styled-tree';
+	treeHost.style.height = '160px';
+	host.append(treeHost);
+	const tree = resources.add(new ObjectTree<string>(treeHost, {
+		modelOptions: { identityProvider: { getId: value => value } },
+		styles: { ...defaultListStyles, listFocusOutline: 'var(--ash-error-foreground)' },
+		findWidgetStyles: {
+			...defaultFindWidgetStyles,
+			inputBoxStyles: { ...defaultInputBoxStyles, inputBackground: 'var(--ash-error-foreground)' },
+		},
+		keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: value => value },
+		renderElement: value => {
+			const label = document.createElement('span');
+			label.textContent = value;
+			return label;
+		},
+	}));
+	tree.setChildren([{ element: 'Styled tree item' }]);
+	tree.setFocus('Styled tree item');
+	tree.openFind();
+	window.openStyledDialog = () => {
+		const dialog = resources.add(new Dialog(host, {
+			title: 'Styled dialog', content: 'Style inheritance probe',
+			dialogStyles: { ...defaultDialogStyles, dialogBackground: 'var(--ash-selection-background)' },
+			buttonStyles: getButtonStyles({ buttonBackground: 'error.foreground' }),
+			buttons: [{ label: 'Styled done', value: 'done', presentation: 'primary' }],
+		}));
+		void dialog.show().finally(() => dialog.dispose());
+	};
+};
+const styledButtons = document.createElement('div');
+styledButtons.id = 'default-style-buttons';
+document.querySelector('#root')!.append(styledButtons);
+resources.add(new Button(styledButtons, {
+	label: 'Default theme styles', presentation: 'primary', ...defaultButtonStyles,
+}));
+resources.add(new Button(styledButtons, {
+	label: 'Override theme styles', presentation: 'primary',
+	...getButtonStyles({
+		buttonBackground: 'error.foreground',
+		buttonForeground: 'editor.background',
+		buttonHoverBackground: 'focusBorder',
+	}),
+}));
+resources.add(new Button(styledButtons, {
+	label: 'Swapped theme styles', presentation: 'primary',
+	...getButtonStyles({ buttonForeground: 'button.primaryBackground', buttonBackground: 'button.primaryForeground' }),
+}));
 appendIcon(Lxicon.add, document.querySelector<HTMLElement>('#product-icon')!);
 appendIcon(registerIcon('browser-test-semantic-product', Lxicon.chevronRight, 'Browser test semantic product icon'), document.querySelector<HTMLElement>('#semantic-product-icon')!);
 const iconSelectBox = resources.add(new IconSelectBox({ icons: [Lxicon.add, Lxicon.chevronRight, Lxicon.check], showIconInfo: true }));

@@ -1,3 +1,4 @@
+import { defaultButtonStyles, defaultSelectBoxStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { ILocalTranscriptionModelService } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { ISpeechService } from '../../../speech/common/speechService.js';
 import { IVoiceCodeTranscriptionBackendService } from '../../../../../platform/renderer/common/dictation.js';
@@ -137,17 +138,32 @@ class DictationOnboardingBanner extends Disposable {
 		const description = this.description = h(document, 'p');
 		description.textContent = localize({ bundle: 'ash', key: 'dictation.introductionDescription' }, 'Choose a microphone and try speaking. Test text stays here. Your system may ask for microphone permission. Local models run on this device; cloud dictation sends audio to your API provider.');
 		this.domNode.append(title, description);
-		this.microphone = this._register(new SelectBox(this.domNode, { options: [], ariaLabel: localize({ bundle: 'ash', key: 'dictation.microphone' }, 'Microphone') }));
-		this.language = this._register(new SelectBox(this.domNode, { options: [], ariaLabel: localize({ bundle: 'ash', key: 'dictation.language' }, 'Transcription language') }));
+		this.microphone = this._register(new SelectBox(this.domNode, {
+			options: [], ariaLabel: localize({ bundle: 'ash', key: 'dictation.microphone' }, 'Microphone')
+		}, defaultSelectBoxStyles));
+		this.language = this._register(new SelectBox(this.domNode, {
+			options: [], ariaLabel: localize({ bundle: 'ash', key: 'dictation.language' }, 'Transcription language')
+		}, defaultSelectBoxStyles));
 		this.transcript = h(document, 'p');
 		this.transcript.setAttribute('role', 'status');
 		this.domNode.append(this.transcript);
 		const actions = h(document, 'div');
 		actions.className = 'ash-dictation-onboarding-actions';
 		this.domNode.append(actions);
-		this.test = this._register(new Button(actions, { label: localize({ bundle: 'ash', key: 'dictation.test' }, 'Test microphone') }));
-		const settings = this._register(new Button(actions, { label: localize({ bundle: 'ash', key: 'dictation.prepareSettings' }, 'Model and API settings'), presentation: 'secondary' }));
-		const done = this._register(new Button(actions, { label: localize({ bundle: 'ash', key: 'dictation.done' }, 'Done'), presentation: 'quiet' }));
+		this.test = this._register(new Button(actions, {
+			...defaultButtonStyles,
+			label: localize({ bundle: 'ash', key: 'dictation.test' }, 'Test microphone'),
+		}));
+		const settings = this._register(new Button(actions, {
+			...defaultButtonStyles,
+			label: localize({ bundle: 'ash', key: 'dictation.prepareSettings' }, 'Model and API settings'),
+			presentation: 'secondary',
+		}));
+		const done = this._register(new Button(actions, {
+			...defaultButtonStyles,
+			label: localize({ bundle: 'ash', key: 'dictation.done' }, 'Done'),
+			presentation: 'quiet',
+		}));
 		this._register(done.onDidClick(close));
 		this._register(settings.onDidClick(() => { void preferences.openSettings({ section: 'dictation' }); }));
 		this._register(this.test.onDidClick(() => { void this.toggleTrial(); }));

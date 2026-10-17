@@ -1,3 +1,4 @@
+import { defaultCountBadgeStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import type { ContextMenuAnchor } from '../../../../base/browser/contextmenu.js';
 import { IconLabel } from '../../../../base/browser/ui/iconlabel/iconlabel.js';
@@ -73,7 +74,9 @@ export class SearchResultsRenderer extends Disposable {
 				ariaLabel: description ? `${label}, ${description}` : label,
 			}));
 			if (element.kind === 'file') {
-				const badge = resources.add(new CountBadge(content, { count: element.matches.length, size: 'small' }));
+				const badge = resources.add(new CountBadge(content, {
+					count: element.matches.length, size: 'small'
+				}, defaultCountBadgeStyles));
 				badge.domNode.classList.add('ash-search-file-count');
 			}
 		}

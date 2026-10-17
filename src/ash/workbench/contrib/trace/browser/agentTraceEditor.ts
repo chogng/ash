@@ -1,3 +1,11 @@
+import {
+	defaultButtonStyles,
+	defaultCountBadgeStyles,
+	defaultInputBoxStyles,
+	defaultListStyles,
+	defaultProgressBarStyles,
+	defaultFindWidgetStyles,
+} from '../../../../platform/theme/browser/defaultStyles.js';
 import { ITraceService } from '../../../services/trace/common/traceService.js';
 // Sessions loads a smaller editor bundle; saved bodies still need the shared Find contribution.
 import { CommonFindController } from '../../../../editor/contrib/find/browser/findController.js';
@@ -184,29 +192,45 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 		header.append(title, this.statusDomNode, actions);
 		this.locationDomNode = h(document, 'p', { className: 'ash-agent-trace-location' });
 		this.locationDomNode.setAttribute('aria-live', 'polite');
-		this.progress = this._register(new ProgressBar(this.domNode));
+		this.progress = this._register(new ProgressBar(this.domNode, defaultProgressBarStyles));
 		this.progress.element.hidden = true;
 		this.bodyDomNode = h(document, 'div', { className: 'ash-agent-trace-body' });
 		this.navigationDomNode = h(document, 'div', { className: 'ash-agent-trace-navigation' });
 		const structure = h(document, 'div', { className: 'ash-agent-trace-structure' });
 		const structureTitle = h(document, 'h2');
 		structureTitle.textContent = localize('agentTrace.structure', 'Execution structure');
-		this.count = this._register(new CountBadge(structure, { size: 'small', titleFormat: localize('agentTrace.count', '{0} matching events') }));
+		this.count = this._register(new CountBadge(structure, {
+			size: 'small', titleFormat: localize('agentTrace.count', '{0} matching events')
+		}, defaultCountBadgeStyles));
 		structure.prepend(structureTitle);
 		const search = h(document, 'div', { className: 'ash-agent-trace-search' });
-		this.filter = this._register(new InputBox(search, { presentation: 'compact', ariaLabel: localize('agentTrace.filter', 'Filter execution events'), placeholder: localize('agentTrace.filter', 'Filter execution events') }));
+		this.filter = this._register(new InputBox(search, {
+			inputBoxStyles: defaultInputBoxStyles,
+			presentation: 'compact',
+			ariaLabel: localize('agentTrace.filter', 'Filter execution events'),
+			placeholder: localize('agentTrace.filter', 'Filter execution events'),
+		}));
 		this.errorsButton = this._register(new Button(search, {
-			presentation: 'secondary', label: localize('agentTrace.errors', 'Errors only'), onClick: () => {
+			...defaultButtonStyles,
+			presentation: 'secondary',
+			label: localize('agentTrace.errors', 'Errors only'),
+			onClick: () => {
 				this.errorsOnly = !this.errorsOnly; this.errorsButton.checked = this.errorsOnly; this.render();
-			}
+			},
 		}));
 		this.errorsButton.checked = false;
 		this._register(this.filter.onDidChange(() => this.render()));
 		this.summaryDomNode = h(document, 'p', { className: 'ash-agent-trace-summary' });
 		this.treeDomNode = h(document, 'div', { className: 'ash-agent-trace-tree' });
 		this.tree = this._register(new ObjectTree<TraceEntry>(this.treeDomNode, {
-			ariaLabel: localize('agentTrace.timeline', 'Execution timeline'), scrolling: 'managed', getHeight: () => 24,
-			indent: 12, indentGuides: 'always', expandOnlyOnTwistieClick: true,
+			styles: defaultListStyles,
+			findWidgetStyles: defaultFindWidgetStyles,
+			ariaLabel: localize('agentTrace.timeline', 'Execution timeline'),
+			scrolling: 'managed',
+			getHeight: () => 24,
+			indent: 12,
+			indentGuides: 'always',
+			expandOnlyOnTwistieClick: true,
 			modelOptions: { identityProvider: { getId: entry => entry.id }, filter: { filter: entry => entry.kind === 'event' ? this.viewModel.matched.has(entry.id) : TreeVisibility.Recurse } },
 			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: entry => entry.label },
 			renderElement: entry => {
@@ -254,8 +278,13 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 		this.bodyEditorHost = h(document, 'div', { className: 'ash-agent-trace-code' });
 		this.relationsDomNode = h(document, 'div', { className: 'ash-agent-trace-relations' });
 		this.relationList = this._register(new List<TraceRelation>(this.relationsDomNode, {
-			ariaLabel: localize('agentTrace.relations', 'View relationships'), scrolling: 'managed', keyboardNavigation: true, getHeight: () => 32,
-			getId: item => item.id, renderItem: item => {
+			styles: defaultListStyles,
+			ariaLabel: localize('agentTrace.relations', 'View relationships'),
+			scrolling: 'managed',
+			keyboardNavigation: true,
+			getHeight: () => 32,
+			getId: item => item.id,
+			renderItem: item => {
 				const label = h(document, 'span', { className: 'ash-agent-trace-relation' });
 				label.textContent = item.label;
 				if (item.target) { label.dataset.key = item.target.key; }
@@ -626,7 +655,12 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 		for (let index = 0; index < sections.length; index++) {
 			const section = sections[index];
 			const role = isRecord(section) && typeof section.role === 'string' ? section.role : localize('agentTrace.bodySection', 'Saved body');
-			this.inspectorResources.add(new Button(this.detailsDomNode, { presentation: 'secondary', label: `${role}${messages ? ` ${index + 1}` : ''}`, onClick: () => { this.bodySectionIdentity = this.detailIdentity; this.bodyEditorHost.hidden = false; this.showCode(isRecord(section) && section.content !== undefined ? section.content : section); } }));
+			this.inspectorResources.add(new Button(this.detailsDomNode, {
+				...defaultButtonStyles,
+				presentation: 'secondary',
+				label: `${role}${messages ? ` ${index + 1}` : ''}`,
+				onClick: () => { this.bodySectionIdentity = this.detailIdentity; this.bodyEditorHost.hidden = false; this.showCode(isRecord(section) && section.content !== undefined ? section.content : section); },
+			}));
 		}
 	}
 

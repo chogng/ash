@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
 import { ToolBar } from "../../../../base/browser/ui/toolbar/toolbar.js";
 import type { IAction } from "../../../../base/common/actions.js";
@@ -32,6 +33,7 @@ export class FormattingContribution extends Disposable implements DocumentFormat
 		this._register(toDisposable(() => element.remove()));
 
 		const inlineActions = this._register(new ToolBar(element, {
+			buttonStyles: defaultButtonStyles,
 			contextMenuProvider: emptyFormattingContextMenuProvider,
 			ariaLabel: "Text formatting",
 			highlightToggledItems: true,
@@ -78,6 +80,7 @@ export class FormattingContribution extends Disposable implements DocumentFormat
 		typographyControls.append(fontFamily.element, fontSize.element);
 
 		const documentActions = this._register(new ToolBar(element, {
+			buttonStyles: defaultButtonStyles,
 			contextMenuProvider: emptyFormattingContextMenuProvider,
 			ariaLabel: "Document structure",
 			highlightToggledItems: true,

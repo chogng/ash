@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { ActionBar } from "../../../../base/browser/ui/actionbar/actionbar.js";
 import type { IAction } from "../../../../base/common/actions.js";
@@ -20,7 +21,7 @@ export class DebugConsoleViewPane extends ViewPane {
 		super(container, options);
 		this.consoleService = debugService.replModel;
 		this.contentElement.classList.add("ash-debug-console");
-		this.titleActions = this._register(new ActionBar(this.headerActionsElement, { ariaLabel: "Debug Console actions" }));
+		this.titleActions = this._register(new ActionBar(this.headerActionsElement, { actionViewItemOptions: { buttonStyles: defaultButtonStyles }, ariaLabel: "Debug Console actions" }));
 		this.titleActions.element.classList.add("ash-toolbar");
 		this.sessionSelect = h(container.ownerDocument, "select");
 		this.sessionSelect.className = "ash-debug-console-session";

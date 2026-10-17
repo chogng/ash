@@ -13,10 +13,19 @@
 	align-items: center;
 	justify-content: center;
 	border: var(--ash-strokeThickness) solid
-		var(--ash-contrastBorder, transparent);
+		var(
+			--ash-keybinding-style-keybinding-label-border,
+			var(--ash-contrastBorder, transparent)
+		);
 	border-radius: var(--ash-cornerRadius-small);
-	color: var(--ash-keybindingLabel-foreground);
-	background: var(--ash-keybindingLabel-background);
+	color: var(
+		--ash-keybinding-style-keybinding-label-foreground,
+		var(--ash-keybindingLabel-foreground)
+	);
+	background: var(
+		--ash-keybinding-style-keybinding-label-background,
+		var(--ash-keybindingLabel-background)
+	);
 	font: inherit;
 	font-size: var(--ash-fontSize-label1);
 	text-align: center;

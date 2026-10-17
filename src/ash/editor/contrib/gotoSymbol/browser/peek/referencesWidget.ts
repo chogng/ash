@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import './referencesWidget.css';
 import { h, addDisposableListener, stopEvent } from '../../../../../base/browser/dom.js';
 import { Emitter } from '../../../../../base/common/event.js';
@@ -143,6 +144,7 @@ class ReferencesTree extends Disposable {
 			this.domNode.append(section);
 			for (const reference of this.source.getChildren(group) as OneReference[]) {
 				const button = this.rows.add(new Button(section, {
+					...defaultButtonStyles,
 					label: `${basename(reference.uri)}:${reference.range.startLineNumber}:${reference.range.startColumn}`,
 					ariaLabel: reference.ariaMessage,
 					presentation: 'quiet',

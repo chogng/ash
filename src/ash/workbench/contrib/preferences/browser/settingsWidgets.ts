@@ -1,3 +1,9 @@
+import {
+	defaultButtonStyles,
+	defaultInputBoxStyles,
+	defaultSelectBoxStyles,
+	defaultToggleStyles,
+} from '../../../../platform/theme/browser/defaultStyles.js';
 import './media/settingsWidgets.css';
 import { localize, localize2 } from '../../../../nls.js';
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
@@ -51,6 +57,7 @@ export class SettingsSearchWidget extends Disposable {
 		this.domNode.setAttribute('role', 'search');
 		const searchLabel = this.searchLabel();
 		this.inputBox = this._register(new InputBox(this.domNode, {
+			inputBoxStyles: defaultInputBoxStyles,
 			type: 'search',
 			placeholder: searchLabel,
 			ariaLabel: searchLabel,
@@ -133,6 +140,7 @@ class SettingActions extends Disposable {
 		this.actionsDomNode = h(container.ownerDocument, 'span');
 		this.actionsDomNode.className = 'ash-setting-item-actions';
 		this.trigger = this._register(new Button(this.actionsDomNode, {
+			...defaultButtonStyles,
 			label: '',
 			icon: Lxicon.gear,
 			onClick: () => this.show(),
@@ -352,7 +360,12 @@ class BooleanSettingWidget extends AbstractSettingWidget<IBooleanSetting, boolea
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super(container, descriptor, descriptor.binding ?? configurationSettingBinding(configurationService, descriptor.configuration), options, configurationService, contextViewProvider, instantiationService, 'toggle');
-		this.toggle = this._register(new Switch(this.domNode, { ariaLabel: descriptor.title, content: this.copyDomNode, contentPlacement: 'before-control' }));
+		this.toggle = this._register(new Switch(this.domNode, {
+			...defaultToggleStyles,
+			ariaLabel: descriptor.title,
+			content: this.copyDomNode,
+			contentPlacement: 'before-control',
+		}));
 		this.toggle.element.classList.add(`ash-${this.presentation}-toggle-control`);
 		this.toggle.input.dataset.configurationKey = descriptor.configuration.key;
 		this.bindState(state => {
@@ -380,6 +393,7 @@ class NumberSettingWidget extends AbstractSettingWidget<INumberSetting, number> 
 		this.domNode.append(this.copyDomNode);
 		if (this.presentation === 'editor') {
 			this.inputBox = this._register(new InputBox(this.domNode, {
+				inputBoxStyles: defaultInputBoxStyles,
 				type: 'number',
 				ariaLabel: descriptor.title,
 				presentation: 'compact',
@@ -437,7 +451,7 @@ class SelectSettingWidget extends AbstractSettingWidget<ISelectSetting, string |
 			ariaLabel: descriptor.title,
 			presentation: 'field',
 			contextViewProvider: contextViewProvider,
-		}));
+		}, defaultSelectBoxStyles));
 		this.select.element.classList.add(this.presentation === 'general' ? 'ash-general-setting-control' : 'ash-editor-setting-select');
 		this.select.element.dataset.configurationKey = descriptor.id;
 		this.domNode.append(this.copyDomNode, this.select.element);
@@ -668,7 +682,10 @@ class ExcludeSettingWidget extends AbstractSettingWidget<IStringMapSetting, Reco
 		const actions = h(container.ownerDocument, 'div');
 		actions.className = 'ash-pattern-actions';
 		this.addButton = this._register(new Button(actions, {
-			label: descriptor.addLabel, size: 'small', onClick: () => this.editRule(),
+			...defaultButtonStyles,
+			label: descriptor.addLabel,
+			size: 'small',
+			onClick: () => this.editRule(),
 		}));
 		this.domNode.append(this.copyDomNode, this.rows, actions);
 		this.bindState(state => {
@@ -714,6 +731,7 @@ class ExcludeSettingWidget extends AbstractSettingWidget<IStringMapSetting, Reco
 			actions.className = 'ash-pattern-row-actions';
 			row.append(actions);
 			this.rowDisposables.add(new ActionBar(actions, {
+				actionViewItemOptions: { buttonStyles: defaultButtonStyles },
 				ariaLabel: label,
 				actionViewItemProvider: action => new LabelActionViewItem(action, { label: '', ariaLabel: action.label }),
 				actions: [
@@ -795,8 +813,18 @@ class ExcludeSettingWidget extends AbstractSettingWidget<IStringMapSetting, Reco
 		};
 		const actions = h(document, 'div');
 		actions.className = 'ash-pattern-actions';
-		this.rowDisposables.add(new Button(actions, { label: localize({ bundle: 'ash.settings', key: 'patterns.save' }, 'Save'), size: 'small', onClick: save }));
-		this.rowDisposables.add(new Button(actions, { label: localize({ bundle: 'ash.settings', key: 'patterns.cancel' }, 'Cancel'), size: 'small', onClick: cancel }));
+		this.rowDisposables.add(new Button(actions, {
+			...defaultButtonStyles,
+			label: localize({ bundle: 'ash.settings', key: 'patterns.save' }, 'Save'),
+			size: 'small',
+			onClick: save,
+		}));
+		this.rowDisposables.add(new Button(actions, {
+			...defaultButtonStyles,
+			label: localize({ bundle: 'ash.settings', key: 'patterns.cancel' }, 'Cancel'),
+			size: 'small',
+			onClick: cancel,
+		}));
 		editor.append(actions);
 		this.rowDisposables.add(addDisposableListener(editor, 'keydown', event => {
 			if (event.key === 'Escape') { stopEvent(event); cancel(); }
@@ -862,6 +890,7 @@ class StringMapSettingWidget extends AbstractSettingWidget<IStringMapSetting, Re
 		const actions = h(this.domNode.ownerDocument, 'div');
 		actions.className = 'ash-string-map-actions';
 		this.addButton = this._register(new Button(actions, {
+			...defaultButtonStyles,
 			label: descriptor.addLabel,
 			ariaLabel: descriptor.addLabel,
 			onClick: () => {
@@ -872,6 +901,7 @@ class StringMapSettingWidget extends AbstractSettingWidget<IStringMapSetting, Re
 		// Nested values retain a JSON fallback; flat maps and path rules have complete UI controls.
 		if (descriptor.structuredValues && !descriptor.binding && options.onOpenSettings) {
 			this._register(new Button(actions, {
+				...defaultButtonStyles,
 				label: localize({ bundle: 'ash.settings', key: 'json.edit' }, 'Edit in settings.json'),
 				onClick: () => {
 					void options.onOpenSettings!(this.descriptor.configuration.key).catch(error => options.onStatus(settingErrorMessage(error, localize({ bundle: 'ash.settings', key: 'json.openFailed' }, 'Unable to open settings.json.')), true));
@@ -947,6 +977,7 @@ class StringMapSettingWidget extends AbstractSettingWidget<IStringMapSetting, Re
 		rowDisposables.add(addDisposableListener(keyInput, 'change', () => this.acceptRows()));
 		rowDisposables.add(addDisposableListener(valueInput, 'change', () => this.acceptRows()));
 		rowDisposables.add(new Button(row, {
+			...defaultButtonStyles,
 			label: this.descriptor.removeLabel,
 			ariaLabel: this.descriptor.removeLabel,
 			size: 'small',
@@ -1023,6 +1054,7 @@ class ComplexSettingWidget extends AbstractSettingWidget<IComplexSetting, unknow
 		super(container, descriptor, configurationSettingBinding(configurationService, descriptor.configuration), options, configurationService, contextViewProvider, instantiationService);
 		this.domNode.dataset.configurationKey = descriptor.id;
 		const button = this._register(new Button(this.domNode, {
+			...defaultButtonStyles,
 			label: localize({ bundle: 'ash.settings', key: 'json.edit' }, 'Edit in settings.json'),
 			onClick: () => {
 				void options.onOpenSettings?.(descriptor.id).catch(error => options.onStatus(settingErrorMessage(error, localize({ bundle: 'ash.settings', key: 'json.openFailed' }, 'Unable to open settings.json.')), true));

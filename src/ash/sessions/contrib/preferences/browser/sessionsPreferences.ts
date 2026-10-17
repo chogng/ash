@@ -1,3 +1,8 @@
+import {
+	defaultButtonStyles,
+	defaultDialogStyles,
+	defaultInputBoxStyles,
+} from '../../../../platform/theme/browser/defaultStyles.js';
 import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
 import { ExecutionSettingsModel } from './executionSettingsModel.js';
 import { GitHubSettingsModel } from '../../../../workbench/contrib/github/browser/githubSettingsModel.js';
@@ -192,6 +197,7 @@ export class SessionsPreferences extends Disposable {
 		pageScrollable.element.classList.add('ash-sessions-settings-page-scrollable');
 		pageScrollable.append(pageContent);
 		const searchInput = resources.add(new InputBox(search, {
+			inputBoxStyles: defaultInputBoxStyles,
 			type: 'search',
 			presentation: 'field',
 			placeholder: localize('sessions.settings.search', 'Search settings'),
@@ -200,6 +206,8 @@ export class SessionsPreferences extends Disposable {
 		}));
 		if (query !== undefined) searchInput.value = query;
 		const dialog = resources.add(new Dialog(this.container, {
+			buttonStyles: defaultButtonStyles,
+			dialogStyles: defaultDialogStyles,
 			title: localize('sessions.settings.title', 'Sessions Settings'),
 			content,
 		}));
@@ -244,8 +252,12 @@ export class SessionsPreferences extends Disposable {
 		};
 		const openJsonLabel = localize({ bundle: 'ash.settings', key: 'editor.openJSON' }, 'Open Settings (JSON)');
 		const openJson = resources.add(new Button(search, {
-			label: openJsonLabel, title: openJsonLabel,
-			icon: Lxicon.code, iconOnly: true, size: 'small',
+			...defaultButtonStyles,
+			label: openJsonLabel,
+			title: openJsonLabel,
+			icon: Lxicon.code,
+			iconOnly: true,
+			size: 'small',
 			onClick: () => { void openUserSettings(undefined, searchInput.value); },
 		}));
 		openJson.domNode.classList.add('ash-settings-open-json');
@@ -350,6 +362,7 @@ export class SessionsPreferences extends Disposable {
 			for (const category of section.categories) {
 				const index = buttons.length;
 				const button = resources.add(new Button(group, {
+					...defaultButtonStyles,
 					label: category.title,
 					icon: category.icon,
 					presentation: 'quiet',

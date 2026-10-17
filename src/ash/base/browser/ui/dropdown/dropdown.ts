@@ -77,8 +77,9 @@ export class Dropdown extends Disposable {
 		button.append(label, indicator);
 		element.append(button);
 
-		this.contextView = options.contextViewProvider ??
-			this._register(new ContextView(ownerDocument.body));
+		// Keep fallback popups in their theme scope and inside a modal dialog's focus boundary.
+		const popupContainer = container.closest<HTMLElement>('dialog, [data-color-scheme]') ?? ownerDocument.body;
+		this.contextView = options.contextViewProvider ?? this._register(new ContextView(popupContainer));
 		this._register(toDisposable(() => this.hide()));
 		this._register(addDisposableListener(button, "click", () => this.toggle()));
 		this._register(addDisposableListener(button, "keydown", (event) => {

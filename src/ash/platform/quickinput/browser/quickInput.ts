@@ -1,3 +1,4 @@
+import { defaultInputBoxStyles } from '../../theme/browser/defaultStyles.js';
 import { addDisposableListener, stopEvent, h, isHTMLElement } from "../../../base/browser/dom.js";
 import { TabList } from '../../../base/browser/ui/tablist/tabList.js';
 import { getViewport } from '../../../base/browser/geometry.js';
@@ -139,6 +140,7 @@ export class QuickPick<TItem extends IQuickPickItem>
 		this.list = this._register(new QuickInputList<TItem>(this.element));
 		this.list.element.id = `${this.list.listId}-panel`;
 		this.inputBox = this._register(new InputBox(this.element, {
+			inputBoxStyles: defaultInputBoxStyles,
 			type: "search",
 			ariaLabel: localize('quickInput.title', 'Quick Pick'),
 			role: "combobox",

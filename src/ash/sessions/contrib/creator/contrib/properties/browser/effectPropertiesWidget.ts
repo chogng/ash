@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
 import { designEffectTypeLabel } from '../../../browser/designEffectLabels.js';
 import { addDisposableListener, h } from '../../../../../../base/browser/dom.js';
 import { Button } from '../../../../../../base/browser/ui/button/button.js';
@@ -273,6 +274,7 @@ export class EffectPropertiesWidget extends Disposable {
 		enabled: () => boolean,
 		visible = () => true): Button {
 		const button = this._register(new Button(this.domNode, {
+			...defaultButtonStyles,
 			label,
 			ariaLabel: label,
 			onClick: () => {
@@ -280,7 +282,7 @@ export class EffectPropertiesWidget extends Disposable {
 					run();
 					this.refresh();
 				}
-			}
+			},
 		}));
 		this.updates.push(() => {
 			button.enabled = this.editable && enabled();

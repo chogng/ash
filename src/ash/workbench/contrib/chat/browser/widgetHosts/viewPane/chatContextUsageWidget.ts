@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
 import './media/chatContextUsageWidget.css';
 import { addDisposableListener, h, isNode, svg } from '../../../../../../base/browser/dom.js';
 import { Button } from '../../../../../../base/browser/ui/button/button.js';
@@ -26,8 +27,12 @@ export class ChatContextUsageWidget extends Disposable {
 	constructor(document: Document, @IContextViewService private readonly contextViews: IContextViewService) {
 		super();
 		this.button = this._register(new Button(h(document, 'div'), {
-			label: '', iconOnly: true, ariaLabel: localize('chat.input.contextUsage', 'Context usage'),
-			enabled: false, onClick: () => this.details.value ? this.hideDetails() : this.showDetails(),
+			...defaultButtonStyles,
+			label: '',
+			iconOnly: true,
+			ariaLabel: localize('chat.input.contextUsage', 'Context usage'),
+			enabled: false,
+			onClick: () => this.details.value ? this.hideDetails() : this.showDetails(),
 		}));
 		this.domNode = this.button.domNode;
 		this.domNode.classList.add('ash-chat-context-usage-button');

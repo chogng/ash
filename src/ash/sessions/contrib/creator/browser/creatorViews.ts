@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
@@ -24,6 +25,7 @@ export class CreatorWorkspaceView extends ViewPane {
 		const hint = accessibleViews.getOpenAriaHint(AccessibilityVerbositySettingId.Creator);
 		if (hint) { this.contentElement.setAttribute('aria-description', hint); }
 		const button = this._register(new Button(this.contentElement, {
+			...defaultButtonStyles,
 			label: contribution.title,
 			icon: contribution.icon,
 			onClick: () => { void commands.executeCommand('sessions.creator.openMode', contribution.id); },

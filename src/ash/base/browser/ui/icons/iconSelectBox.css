@@ -69,6 +69,6 @@
 	padding: 8px;
 }
 
-[data-color-scheme^="high-contrast"] .ash-icon-select-item.focused {
+:is(.hc-black, .hc-light) .ash-icon-select-item.focused {
 	border-color: var(--ash-contrastBorder);
 }

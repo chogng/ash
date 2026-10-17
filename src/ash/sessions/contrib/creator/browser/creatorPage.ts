@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../../workbench/common/editor.js';
 import './creatorPage.css';
@@ -51,7 +52,11 @@ export class CreatorNavigationView extends ViewPane {
 		this._register(contextKeys.createScoped(this.contentElement)).createKey('sessionsCreatorNavigationFocused', true);
 		const hint = accessibleViews.getOpenAriaHint(AccessibilityVerbositySettingId.Creator);
 		if (hint) this.contentElement.setAttribute('aria-description', hint);
-		this._register(new Button(this.contentElement, { label: localize('sessions.creator.home', 'Creator home'), onClick: () => { void commands.executeCommand('sessions.show.creator'); } }));
+		this._register(new Button(this.contentElement, {
+			...defaultButtonStyles,
+			label: localize('sessions.creator.home', 'Creator home'),
+			onClick: () => { void commands.executeCommand('sessions.show.creator'); },
+		}));
 	}
 	public static getFocused(element: HTMLElement): CreatorNavigationView | undefined {
 		const root = element.closest('.ash-creator-navigation');
@@ -83,7 +88,11 @@ export class CreatorPage extends Disposable {
 		pages.set(this.domNode, this);
 		this._register(contextKeys.createScoped(this.domNode)).createKey('sessionsCreatorFocused', true);
 		const header = this.headerDomNode = h(ownerDocument, 'header', { className: 'ash-creator-header' });
-		this.back = this._register(new Button(header, { label: localize('sessions.creator.home', 'Creator home'), onClick: () => { void commands.executeCommand('sessions.show.creator'); } }));
+		this.back = this._register(new Button(header, {
+			...defaultButtonStyles,
+			label: localize('sessions.creator.home', 'Creator home'),
+			onClick: () => { void commands.executeCommand('sessions.show.creator'); },
+		}));
 		this.back.hidden = true;
 		this.titleDomNode = h(ownerDocument, 'h1', { className: 'ash-creator-title' }, localize('sessions.creator.title', 'Creator'));
 		header.append(this.titleDomNode);
@@ -94,7 +103,12 @@ export class CreatorPage extends Disposable {
 		const modes = h(ownerDocument, 'div', { className: 'ash-creator-modes' });
 		for (const contribution of CreatorModes.values()) {
 			const card = h(ownerDocument, 'article', { className: 'ash-creator-mode-card' });
-			const button = this._register(new Button(card, { label: contribution.title, icon: contribution.icon, onClick: () => { void commands.executeCommand('sessions.creator.openMode', contribution.id); } }));
+			const button = this._register(new Button(card, {
+				...defaultButtonStyles,
+				label: contribution.title,
+				icon: contribution.icon,
+				onClick: () => { void commands.executeCommand('sessions.creator.openMode', contribution.id); },
+			}));
 			button.domNode.dataset.creatorMode = contribution.id;
 			const description = h(ownerDocument, 'p', { className: 'ash-creator-mode-description', attributes: { id: `creator-${contribution.id}-description` } }, contribution.description);
 			button.domNode.setAttribute('aria-describedby', description.id);

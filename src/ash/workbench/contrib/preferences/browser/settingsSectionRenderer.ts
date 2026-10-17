@@ -1,3 +1,9 @@
+import {
+	defaultButtonStyles,
+	defaultInputBoxStyles,
+	defaultSelectBoxStyles,
+	defaultToggleStyles,
+} from '../../../../platform/theme/browser/defaultStyles.js';
 import './media/settingsSection.css';
 import { h, isHTMLElement } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -100,25 +106,40 @@ export class SettingsSectionRenderer extends Disposable implements SettingsConte
 					const label = h(this.domNode.ownerDocument, 'label');
 					label.textContent = field.label;
 					this.domNode.append(label);
-					const input = this._register(new InputBox(this.domNode, { ariaLabel: field.label, placeholder: field.placeholder, presentation: 'field' }));
+					const input = this._register(new InputBox(this.domNode, {
+						inputBoxStyles: defaultInputBoxStyles,
+						ariaLabel: field.label,
+						placeholder: field.placeholder,
+						presentation: 'field',
+					}));
 					input.inputElement.id = `settingsField-${generateUuid()}`;
 					label.htmlFor = input.inputElement.id;
 					// InputBox also emits when the renderer restores a saved value. Only a
 					// value different from the model is a user edit, otherwise a read dirties the draft.
 					this._register(input.onDidChange(value => { const current = this.fields.get(field.id); if (current?.kind === 'text' && current.value !== value) { current.setValue(value); } })); control = input;
 				} else if (field.kind === 'boolean') {
-					const toggle = this._register(new Switch(this.domNode, { label: field.label, ariaLabel: field.label }));
+					const toggle = this._register(new Switch(this.domNode, {
+						...defaultToggleStyles,
+						label: field.label,
+						ariaLabel: field.label,
+					}));
 					this._register(toggle.onDidChange(value => { const current = this.fields.get(field.id); if (current?.kind === 'boolean') { current.setValue(value); } }));
 					control = toggle;
 				} else if (field.kind === 'select') {
 					const label = h(this.domNode.ownerDocument, 'p');
 					label.textContent = field.label;
 					this.domNode.append(label);
-					const select = this._register(new SelectBox(this.domNode, { options: field.options, ariaLabel: field.label, contextViewProvider: this.contextView }));
+					const select = this._register(new SelectBox(this.domNode, {
+						options: field.options, ariaLabel: field.label, contextViewProvider: this.contextView
+					}, defaultSelectBoxStyles));
 					this._register(select.onDidSelect(({ value }) => { const current = this.fields.get(field.id); if (current?.kind === 'select') { current.setValue(value); } })); control = select;
 				} else {
 					if (!this.actionsDomNode.isConnected) { this.domNode.append(this.actionsDomNode); }
-					const button = this._register(new Button(this.actionsDomNode, { label: field.label, presentation: 'secondary' }));
+					const button = this._register(new Button(this.actionsDomNode, {
+						...defaultButtonStyles,
+						label: field.label,
+						presentation: 'secondary',
+					}));
 					this._register(button.onDidClick(() => { const current = this.fields.get(field.id); if (current?.kind === 'action' && current.enabled) { void current.run(); } })); control = button;
 				}
 				this.controls.set(field.id, control);

@@ -12,7 +12,7 @@ interface IPreviousProperty {
 /**
  * Keeps a browser theme root synchronized with its window-scoped color theme.
  *
- * Disposing the binding restores every inline property and attribute that was
+ * Disposing the binding restores every inline property, theme class and attribute that was
  * present before the theme was applied.
  */
 export function bindColorTheme(
@@ -34,8 +34,17 @@ export function bindColorTheme(
 
 	const previousThemeId = target.getAttribute("data-color-theme");
 	const previousColorScheme = target.getAttribute("data-color-scheme");
+	const previousClasses = new Map(
+		['hc-black', 'hc-light', 'ash-high-contrast'].map(name => [name, target.classList.contains(name)]),
+	);
 
 	const apply = (theme: IColorTheme): void => {
+		const highContrastDark = theme.colorScheme === ColorScheme.HighContrastDark;
+		const highContrastLight = theme.colorScheme === ColorScheme.HighContrastLight;
+		// Classes and attributes describe the same active theme; neither is independent state.
+		target.classList.toggle('hc-black', highContrastDark);
+		target.classList.toggle('hc-light', highContrastLight);
+		target.classList.toggle('ash-high-contrast', highContrastDark || highContrastLight);
 		const nextProperties = new Set(theme.colorEntries.map(entry => colorCssVariable(entry.id)));
 		for (const property of colorProperties) { if (!nextProperties.has(property)) { target.style.setProperty(property, "initial"); } }
 		colorProperties = nextProperties;
@@ -81,6 +90,9 @@ export function bindColorTheme(
 		}
 		restoreAttribute(target, "data-color-theme", previousThemeId);
 		restoreAttribute(target, "data-color-scheme", previousColorScheme);
+		for (const [name, present] of previousClasses) {
+			target.classList.toggle(name, present);
+		}
 	});
 
 	return combinedDisposable(restoration, listener);

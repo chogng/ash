@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { h } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -20,6 +21,7 @@ export class VoiceModeOnboardingBanner extends Disposable {
 		description.textContent = localize('agentsVoice.introduction.description', 'Start a voice conversation from Chat and choose a provider, model and voice. Audio goes to that provider. Spoken requests use the same Chat mode and approval controls. Your unsent message stays in the composer.');
 		this.element.append(heading, description);
 		this._register(new Button(this.element, {
+			...defaultButtonStyles,
 			label: localize('agentsVoice.introduction.dismiss', 'Got it'),
 			onClick: () => {
 				storage.store(AgentsVoiceStorageKeys.IntroBannerShown, true, StorageScope.PROFILE, StorageTarget.USER);

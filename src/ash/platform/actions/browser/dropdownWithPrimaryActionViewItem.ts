@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../theme/browser/defaultStyles.js';
 import '../../../base/browser/ui/dropdown/dropdown.css';
 import type { IContextMenuProvider } from "../../../base/browser/contextmenu.js";
 import { addDisposableListener, stopEvent, h } from "../../../base/browser/dom.js";
@@ -38,10 +39,14 @@ export class DropdownWithPrimaryActionViewItem extends ActionViewItem {
 		contextMenuProvider: IContextMenuProvider,
 		options: IDropdownWithPrimaryActionViewItemOptions = {},
 	) {
-		super(primaryAction, options);
+		const viewItemOptions = {
+			buttonStyles: defaultButtonStyles,
+			...options
+		};
+		super(primaryAction, viewItemOptions);
 		this.contextMenuProvider = contextMenuProvider;
-		this.viewItemOptions = options;
-		this.primaryItem = this._register(new ButtonActionViewItem(primaryAction, options));
+		this.viewItemOptions = viewItemOptions;
+		this.primaryItem = this._register(new ButtonActionViewItem(primaryAction, viewItemOptions));
 		this.setDropdownItem(dropdownAction, dropdownActions);
 	}
 

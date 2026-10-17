@@ -1,3 +1,4 @@
+import { defaultButtonStyles, defaultInputBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { DEFAULT_LOCAL_TRANSCRIPTION_MODEL } from '../../../../platform/localTranscription/common/localTranscription.js';
 import './media/localTranscriptionModelControls.css';
 import { h } from '../../../../base/browser/dom.js';
@@ -58,10 +59,26 @@ export class LocalTranscriptionModelControls extends Disposable {
 				const actions = h(document, 'div');
 				actions.className = 'ash-local-transcription-model-actions';
 				cell.append(actions);
-				const use = resources.add(new Button(actions, { label: localize('dictation.model.use', 'Use model'), presentation: 'secondary' }));
-				const install = resources.add(new Button(actions, { label: localize('dictation.model.install', 'Install'), presentation: 'secondary' }));
-				const cancel = resources.add(new Button(actions, { label: localize('dictation.model.cancel', 'Cancel'), presentation: 'secondary' }));
-				const uninstall = resources.add(new Button(actions, { label: localize('dictation.model.uninstall', 'Uninstall'), presentation: 'secondary' }));
+				const use = resources.add(new Button(actions, {
+					...defaultButtonStyles,
+					label: localize('dictation.model.use', 'Use model'),
+					presentation: 'secondary',
+				}));
+				const install = resources.add(new Button(actions, {
+					...defaultButtonStyles,
+					label: localize('dictation.model.install', 'Install'),
+					presentation: 'secondary',
+				}));
+				const cancel = resources.add(new Button(actions, {
+					...defaultButtonStyles,
+					label: localize('dictation.model.cancel', 'Cancel'),
+					presentation: 'secondary',
+				}));
+				const uninstall = resources.add(new Button(actions, {
+					...defaultButtonStyles,
+					label: localize('dictation.model.uninstall', 'Uninstall'),
+					presentation: 'secondary',
+				}));
 				const template: CellTemplate = { resources, use, install, cancel, uninstall, model: undefined };
 				resources.add(use.onDidClick(() => { void this.perform(template.model!.model, () => this.configurationService.updateValue(DictationConfiguration.model, template.model!.model)); }));
 				resources.add(install.onDidClick(() => { void this.perform(template.model!.model, () => this.localTranscription.prepareModel(template.model!.model, () => { }).completed); }));
@@ -123,6 +140,7 @@ export class LocalTranscriptionModelControls extends Disposable {
 		const sourceContainer = h(document, 'div');
 		sourceContainer.className = 'ash-local-transcription-model-source';
 		this.modelSource = this._register(new InputBox(sourceContainer, {
+			inputBoxStyles: defaultInputBoxStyles,
 			presentation: 'field',
 			ariaLabel: localize('dictation.model.source', 'Prepared Paraformer model directory'),
 			placeholder: localize('dictation.model.sourcePlaceholder', 'Absolute directory containing dictation-model.json'),
@@ -131,7 +149,12 @@ export class LocalTranscriptionModelControls extends Disposable {
 		sourceLabel.htmlFor = this.modelSource.inputElement.id;
 		const actions = h(document, 'div');
 		actions.className = 'ash-local-transcription-model-actions';
-		this.importModelButton = this._register(new Button(actions, { label: localize('dictation.model.import', 'Import model'), presentation: 'secondary', enabled: false }));
+		this.importModelButton = this._register(new Button(actions, {
+			...defaultButtonStyles,
+			label: localize('dictation.model.import', 'Import model'),
+			presentation: 'secondary',
+			enabled: false,
+		}));
 		imports.append(sourceLabel, sourceContainer, actions);
 		this.domNode.append(imports);
 		this.status = this._register(new LocalTranscriptionModelStatus(this.domNode));

@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import './media/changesView.css';
 import './media/changesViewActions.css';
 import { h, addDisposableListener } from '../../../../base/browser/dom.js';
@@ -87,6 +88,7 @@ export class ChangesViewPane extends ViewPane {
 		this.statusDomNode.setAttribute('role', 'status');
 		this.contentElement.append(this.statusDomNode);
 		this.review = this._register(new Button(this.contentElement, {
+			...defaultButtonStyles,
 			label: localize('sessions.changes.review', 'Review all changes'),
 			onClick: () => {
 				const epoch = this.ownerEpoch;
@@ -94,6 +96,7 @@ export class ChangesViewPane extends ViewPane {
 			},
 		}));
 		this.preview = this._register(new Button(this.contentElement, {
+			...defaultButtonStyles,
 			label: localize('sessions.changes.previewSelected', 'Preview selected changes'),
 			onClick: () => {
 				const epoch = this.ownerEpoch;
@@ -103,11 +106,13 @@ export class ChangesViewPane extends ViewPane {
 		this.preview.enabled = false;
 		this.review.enabled = false;
 		this.retry = this._register(new Button(this.contentElement, {
+			...defaultButtonStyles,
 			label: localize('sessions.changes.retry', 'Retry loading changes'),
 			onClick: () => { void this.refresh(); },
 		}));
 		this.retry.domNode.hidden = true;
 		this.createPullRequest = this._register(new Button(this.contentElement, {
+			...defaultButtonStyles,
 			label: localize('sessions.changes.createPR', 'Create pull request'),
 			onClick: () => {
 				const view = this.instantiation.createInstance(CreatePullRequestContextView);
@@ -140,10 +145,14 @@ export class ChangesViewPane extends ViewPane {
 		}
 		controls.append(this.changesetPicker, this.modePicker);
 		this.markReviewed = this._register(new Button(controls, {
-			label: localize('sessions.changes.markReviewed', 'Mark reviewed'), onClick: () => this.setReviewState(true),
+			...defaultButtonStyles,
+			label: localize('sessions.changes.markReviewed', 'Mark reviewed'),
+			onClick: () => this.setReviewState(true),
 		}));
 		this.markUnread = this._register(new Button(controls, {
-			label: localize('sessions.changes.markUnread', 'Mark unreviewed'), onClick: () => this.setReviewState(false),
+			...defaultButtonStyles,
+			label: localize('sessions.changes.markUnread', 'Mark unreviewed'),
+			onClick: () => this.setReviewState(false),
 		}));
 		this._register(addDisposableListener(this.changesetPicker, 'change', () => {
 			this.saveTreeState();

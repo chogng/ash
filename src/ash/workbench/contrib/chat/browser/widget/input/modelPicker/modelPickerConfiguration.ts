@@ -1,3 +1,8 @@
+import {
+	defaultMenuStyles,
+	defaultButtonStyles,
+	defaultKeybindingLabelStyles,
+} from '../../../../../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, h } from '../../../../../../../base/browser/dom.js';
 import { status } from '../../../../../../../base/browser/ui/aria/aria.js';
 import { ActionViewItem } from '../../../../../../../base/browser/ui/actionbar/actionViewItems.js';
@@ -148,12 +153,14 @@ export class ModelPickerConfiguration extends Disposable {
 			}
 		}
 		const menu = new Menu(this.contextView.element, {
+			buttonStyles: defaultButtonStyles,
+			keybindingLabelStyles: defaultKeybindingLabelStyles,
 			actions,
 			contextViewContainer: this.contextViewService.container,
 			layer: 20,
 			getCheckedActionsRepresentation: () => 'radio',
 			actionViewItemProvider: action => headings.has(action) ? new ModelConfigurationHeading(action) : undefined,
-		});
+		}, defaultMenuStyles);
 		menu.element.classList.add('ash-chat-model-configuration-menu');
 		menu.element.setAttribute('aria-label', localize('chat.modelPicker.configuration', 'Model options'));
 		for (const option of options) {

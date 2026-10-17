@@ -1,3 +1,5 @@
+import type { IFindWidgetStyles } from './abstractTree.js';
+import type { IListStyles } from '../list/listWidget.js';
 import type { Event } from "../../../common/event.js";
 import { Disposable } from "../../../common/lifecycle.js";
 import type { ListScrolling } from "../list/list.js";
@@ -6,6 +8,8 @@ import type { ObjectTreeElement, ObjectTreeIdentityProvider, ObjectTreeNode } fr
 import type { TreeDataSource, TreeDragAndDrop, TreeFilter, TreeFindMatchType, TreeFindMode, TreeIndentGuides, TreeKeyboardNavigationLabelProvider, TreeSorter, TreeTwistieState } from "./tree.js";
 
 export interface DataTreeOptions<T> {
+	readonly styles?: IListStyles;
+	readonly findWidgetStyles?: IFindWidgetStyles;
 	readonly ariaLabel?: string;
 	readonly scrolling?: ListScrolling;
 	readonly smoothScrolling?: boolean;
@@ -48,6 +52,8 @@ export class DataTree<TInput, T> extends Disposable {
 	constructor(container: HTMLElement, private readonly dataSource: TreeDataSource<TInput, T>, private readonly options: DataTreeOptions<T>) {
 		super();
 		this.tree = this._register(new ObjectTree<T>(container, {
+			styles: options.styles,
+			findWidgetStyles: options.findWidgetStyles,
 			ariaLabel: options.ariaLabel,
 			scrolling: options.scrolling,
 			smoothScrolling: options.smoothScrolling,

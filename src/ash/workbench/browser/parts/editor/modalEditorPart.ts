@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IUriIdentityService } from '../../../../platform/uriIdentity/common/uriIdentity.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -80,6 +81,7 @@ export class ModalEditorPart extends Disposable {
 		this.titleDomNode.id = `ash-modal-editor-title-${nextModalEditorId++}`;
 		this.domNode.setAttribute('aria-labelledby', this.titleDomNode.id);
 		this.closeButton = this._register(new Button(headerDomNode, {
+			...defaultButtonStyles,
 			label: 'Close editor',
 			icon: Lxicon.close,
 			onClick: () => this.requestClose(),

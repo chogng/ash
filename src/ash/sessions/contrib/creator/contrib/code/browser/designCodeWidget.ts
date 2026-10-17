@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
 import './designCodeWidget.css';
 import { h } from '../../../../../../base/browser/dom.js';
 import { Button } from '../../../../../../base/browser/ui/button/button.js';
@@ -19,7 +20,11 @@ export class DesignCodeWidget extends Disposable {
 		this.domNode = h(ownerDocument, 'section', { className: 'ash-design-code-widget', attributes: { 'aria-label': localize('sessions.design.generatedCode', 'Generated code') } });
 		const header = h(ownerDocument, 'div', { className: 'ash-design-code-header' });
 		header.append(h(ownerDocument, 'span', {}, localize('sessions.design.codeHint', 'Runnable HTML/CSS/SVG with object IDs, keyframes and editable design JSON for agents.')));
-		this.exportButton = this._register(new Button(header, { label: localize('sessions.design.exportCode', 'Export code'), onClick: exportCode }));
+		this.exportButton = this._register(new Button(header, {
+			...defaultButtonStyles,
+			label: localize('sessions.design.exportCode', 'Export code'),
+			onClick: exportCode,
+		}));
 		this.source = h(ownerDocument, 'textarea', { properties: { readOnly: true, spellcheck: false }, attributes: { 'aria-label': localize('sessions.design.generatedCode', 'Generated code') } });
 		this.domNode.append(header, this.source);
 	}

@@ -1,3 +1,8 @@
+import {
+	defaultButtonStyles,
+	defaultInputBoxStyles,
+	defaultSelectBoxStyles,
+} from '../../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { getHoverDelegate } from '../../../../base/browser/ui/hover/hoverDelegate.js';
@@ -35,31 +40,59 @@ export class SymphonyTasksView extends ViewPane {
 		this._register(contextKeys.createScoped(container)).createKey('sessionsSymphonyFocused', true);
 		const document = container.ownerDocument;
 		container.append(h(document, 'p', {}, localize('symphony.workflowPath', 'Workflow file')));
-		this.source = this._register(new InputBox(container, { ariaLabel: localize('symphony.workflowPath', 'Workflow file'), placeholder: localize('symphony.workflowPlaceholder', '/project/WORKFLOW.md') }));
+		this.source = this._register(new InputBox(container, {
+			inputBoxStyles: defaultInputBoxStyles,
+			ariaLabel: localize('symphony.workflowPath', 'Workflow file'),
+			placeholder: localize('symphony.workflowPlaceholder', '/project/WORKFLOW.md'),
+		}));
 		const actions = h(document, 'div', { className: 'ash-symphony-actions' });
 		container.append(actions);
 		const configure = (): void => { if (symphony.available && this.source.value.trim()) { void symphony.configure(this.source.value.trim()); } };
-		const load = this._register(new Button(actions, { label: localize('symphony.loadWorkflow', 'Load workflow'), onClick: configure }));
+		const load = this._register(new Button(actions, {
+			...defaultButtonStyles,
+			label: localize('symphony.loadWorkflow', 'Load workflow'),
+			onClick: configure,
+		}));
 		const choose = this._register(new Button(actions, {
-			label: localize('symphony.chooseFile', 'Choose file'), presentation: 'secondary', onClick: () => {
+			...defaultButtonStyles,
+			label: localize('symphony.chooseFile', 'Choose file'),
+			presentation: 'secondary',
+			onClick: () => {
 				void dialogs.showOpenDialog({ title: localize('symphony.chooseFile', 'Choose file'), canSelectFolders: false, canSelectFiles: true, canSelectMany: false, filters: [{ name: 'Markdown', extensions: ['md'] }] }).then(resources => {
 					if (!this.isDisposed && resources?.[0]) { this.source.value = resources[0].fsPath; configure(); }
 				}).catch(error => { status(String(error)); });
-			}
+			},
 		}));
 		this._register(addDisposableListener(this.source.inputElement, 'keydown', event => { if (event.key === 'Enter') { event.preventDefault(); configure(); } }));
-		const picker = this._register(new SelectBox(container, { options: [], ariaLabel: localize('symphony.workflow', 'Workflow'), presentation: 'field' }));
+		const picker = this._register(new SelectBox(container, {
+			options: [], ariaLabel: localize('symphony.workflow', 'Workflow'), presentation: 'field'
+		}, defaultSelectBoxStyles));
 		const enable = this._register(new Button(container, {
-			label: localize('symphony.disableWorkflow', 'Pause dispatch'), presentation: 'secondary', onClick: () => {
+			...defaultButtonStyles,
+			label: localize('symphony.disableWorkflow', 'Pause dispatch'),
+			presentation: 'secondary',
+			onClick: () => {
 				const workflow = symphony.state.get().workflows.find(workflow => workflow.id === picker.value);
 				if (workflow) { void symphony.enable(workflow.id, !workflow.enabled); }
-			}
+			},
 		}));
 		container.append(h(document, 'p', { className: 'ash-symphony-muted' }, localize('symphony.dispatchHint', 'Pausing dispatch keeps current conversations running.')));
-		const title = this._register(new InputBox(container, { ariaLabel: localize('symphony.taskTitle', 'Task title'), placeholder: localize('symphony.taskTitle', 'Task title') }));
-		const prompt = this._register(new InputBox<true>(container, { flexibleHeight: true, ariaLabel: localize('symphony.instructions', 'Instructions'), placeholder: localize('symphony.instructions', 'Instructions') }));
+		const title = this._register(new InputBox(container, {
+			inputBoxStyles: defaultInputBoxStyles,
+			ariaLabel: localize('symphony.taskTitle', 'Task title'),
+			placeholder: localize('symphony.taskTitle', 'Task title'),
+		}));
+		const prompt = this._register(new InputBox<true>(container, {
+			inputBoxStyles: defaultInputBoxStyles,
+			flexibleHeight: true,
+			ariaLabel: localize('symphony.instructions', 'Instructions'),
+			placeholder: localize('symphony.instructions', 'Instructions'),
+		}));
 		const create = this._register(new Button(container, {
-			label: localize('symphony.createTask', 'Create task'), presentation: 'primary', onClick: () => {
+			...defaultButtonStyles,
+			label: localize('symphony.createTask', 'Create task'),
+			presentation: 'primary',
+			onClick: () => {
 				const submittedTitle = title.value;
 				const submittedPrompt = prompt.value;
 				if (picker.value && submittedTitle.trim()) {
@@ -68,7 +101,7 @@ export class SymphonyTasksView extends ViewPane {
 						if (!symphony.state.get().error && title.value === submittedTitle && prompt.value === submittedPrompt) { title.value = ''; prompt.value = ''; }
 					});
 				}
-			}
+			},
 		}));
 		const error = h(document, 'p', { className: 'ash-symphony-error', attributes: { role: 'status' } });
 		const workflowError = h(document, 'p', { className: 'ash-symphony-error', attributes: { role: 'status' } });
@@ -157,9 +190,24 @@ export class SymphonyMonitorEditor extends EditorPane {
 		const note = h(document, 'p', { className: 'ash-symphony-muted' }, localize('symphony.cumulative', 'Totals include every run, resume and retry in this conversation. Runtime excludes paused time.'));
 		const actions = h(document, 'div', { className: 'ash-symphony-actions' });
 		this.domNode.append(heading, metadata, note, actions);
-		const pause = this._register(new Button(actions, { label: localize('symphony.pause', 'Pause'), presentation: 'secondary', onClick: () => { const id = this.symphony.state.get().selected; if (id) { void this.symphony.control(id, 'pause'); } } }));
-		const resume = this._register(new Button(actions, { label: localize('symphony.resume', 'Resume'), presentation: 'secondary', onClick: () => { const id = this.symphony.state.get().selected; if (id) { void this.symphony.control(id, 'run'); } } }));
-		const complete = this._register(new Button(actions, { label: localize('symphony.complete', 'Complete'), presentation: 'secondary', onClick: () => { const id = this.symphony.state.get().selected; if (id) { void this.symphony.control(id, 'complete'); } } }));
+		const pause = this._register(new Button(actions, {
+			...defaultButtonStyles,
+			label: localize('symphony.pause', 'Pause'),
+			presentation: 'secondary',
+			onClick: () => { const id = this.symphony.state.get().selected; if (id) { void this.symphony.control(id, 'pause'); } },
+		}));
+		const resume = this._register(new Button(actions, {
+			...defaultButtonStyles,
+			label: localize('symphony.resume', 'Resume'),
+			presentation: 'secondary',
+			onClick: () => { const id = this.symphony.state.get().selected; if (id) { void this.symphony.control(id, 'run'); } },
+		}));
+		const complete = this._register(new Button(actions, {
+			...defaultButtonStyles,
+			label: localize('symphony.complete', 'Complete'),
+			presentation: 'secondary',
+			onClick: () => { const id = this.symphony.state.get().selected; if (id) { void this.symphony.control(id, 'complete'); } },
+		}));
 		const error = h(document, 'p', { className: 'ash-symphony-error', attributes: { role: 'status' } });
 		const blocked = h(document, 'p', { attributes: { role: 'status' } });
 		const messages = h(document, 'div', { className: 'ash-symphony-messages', attributes: { role: 'region', 'aria-label': localize('symphony.messages', 'Messages') }, properties: { tabIndex: 0 } });

@@ -10,6 +10,7 @@ import { IContextMenuService } from '../../../../platform/contextview/browser/co
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { localize, type ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import type { WindowTitle } from './windowTitle.js';
+import { getButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 
 export class CommandCenterControl extends Disposable {
 	public readonly domNode: HTMLElement;
@@ -38,6 +39,7 @@ export class CommandCenterControl extends Disposable {
 		const label = () => localize(localizationService, { bundle: 'ash.regions', key: 'searchCommands' }, 'Search commands');
 		this.button = this._register(new Button(this.domNode, {
 			label: label(),
+			...getButtonStyles({ buttonSecondaryForeground: 'commandCenter.foreground' }),
 			ariaLabel: label(),
 			icon: Lxicon.search,
 			onClick: () => {

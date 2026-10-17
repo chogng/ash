@@ -1,3 +1,9 @@
+import {
+	defaultButtonStyles,
+	defaultInputBoxStyles,
+	defaultListStyles,
+	defaultSelectBoxStyles,
+} from '../../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { mainWindow } from '../../../../base/browser/window.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -90,13 +96,22 @@ abstract class ExtensionsListViewPane extends ViewPane {
 		body.className = 'ash-extensions extension-capability-pane';
 		this.contentElement.append(body);
 		const search = h(mainWindow.document, 'div'); search.className = 'extensions-search'; body.append(search);
-		this.query = this._register(new InputBox(search, { type: 'search', presentation: 'compact', placeholder: options.title, ariaLabel: localize({ bundle: 'ash.extensions', key: 'searchPane' }, 'Search {0}', options.title) }));
+		this.query = this._register(new InputBox(search, {
+			inputBoxStyles: defaultInputBoxStyles,
+			type: 'search',
+			presentation: 'compact',
+			placeholder: options.title,
+			ariaLabel: localize({ bundle: 'ash.extensions', key: 'searchPane' }, 'Search {0}', options.title),
+		}));
 		this.status = h(mainWindow.document, 'div'); this.status.className = 'extensions-status'; this.status.setAttribute('role', 'status'); body.append(this.status);
 		this.statusHover = this._register(getHoverDelegate().setupHover({ target: this.status, content: '' }));
 		const listContainer = h(mainWindow.document, 'div'); listContainer.className = 'extensions-list'; body.append(listContainer);
 		this.trackBodyMinimum(listContainer, 64);
 		this.list = this._register(new List(listContainer, {
-			ariaLabel: options.title, domFocusable: true, keyboardNavigation: true,
+			styles: defaultListStyles,
+			ariaLabel: options.title,
+			domFocusable: true,
+			keyboardNavigation: true,
 			getId: item => item.target.kind === 'recommendation' ? item.target.id : item.target.kind === 'marketplace' ? getCustomizationMarketplaceResourceKey(item.target.resource) : JSON.stringify(item.target),
 			accessibilityProvider: { getAriaLabel: item => `${item.name}, ${item.description}, ${item.metadata}` },
 			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: item => item.name },
@@ -122,7 +137,14 @@ abstract class ExtensionsListViewPane extends ViewPane {
 			if (event.key === 'ArrowDown') { event.preventDefault(); this.list.domFocus(); }
 			else if (event.key === 'Enter' && this.discovery) { event.preventDefault(); this.searchScheduler.cancel(); this.invalidate(); }
 		}));
-		this._register(new Button(this.headerActionsElement, { label: localize({ bundle: 'ash.extensions', key: 'refresh' }, 'Refresh'), icon: Lxicon.refresh, iconOnly: true, size: 'small', onClick: () => this.reload() }));
+		this._register(new Button(this.headerActionsElement, {
+			...defaultButtonStyles,
+			label: localize({ bundle: 'ash.extensions', key: 'refresh' }, 'Refresh'),
+			icon: Lxicon.refresh,
+			iconOnly: true,
+			size: 'small',
+			onClick: () => this.reload(),
+		}));
 		this._register(this.onDidChangeBodyVisibility(visible => { if (visible) { void this.refresh(); } else { ++this.generation; this.searchScheduler.cancel(); this.loadLifetime.clear(); } }));
 		const scope = this._register(contextKeys.createScoped(this.element)); scope.createKey('extensionsCapabilitiesFocused', true);
 		for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
@@ -150,7 +172,10 @@ abstract class ExtensionsListViewPane extends ViewPane {
 	protected enableDiscovery(label: string): void {
 		this.discoveryLabel = label;
 		this.discoveryButton = this._register(new Button(this.headerActionsElement, {
-			label, size: 'small', onClick: () => {
+			...defaultButtonStyles,
+			label,
+			size: 'small',
+			onClick: () => {
 				this.setDiscovery(!this.discovery);
 				this.invalidate();
 			},
@@ -162,11 +187,13 @@ abstract class ExtensionsListViewPane extends ViewPane {
 		this.sourcePicker = this._register(new SelectBox(this.sourceControls, {
 			ariaLabel: localize({ bundle: 'ash.extensions', key: 'marketplaceSelectSource' }, 'Marketplace source'),
 			options: [{ value: '', label: localize({ bundle: 'ash.extensions', key: 'marketplaceAllSources' }, 'All sources') }],
-		}));
+		}, defaultSelectBoxStyles));
 		this._register(this.sourcePicker.onDidSelect(({ value }) => { this.selectedSource = value || undefined; this.invalidate(); }));
 		this.more = this._register(new Button(this.body, {
+			...defaultButtonStyles,
 			label: localize({ bundle: 'ash.extensions', key: 'marketplaceLoadMore' }, 'Load more'),
-			size: 'small', onClick: () => { void this.refresh(true); },
+			size: 'small',
+			onClick: () => { void this.refresh(true); },
 		}));
 		this.more.domNode.classList.add('extensions-marketplace-more');
 		this.more.domNode.hidden = true;
@@ -351,7 +378,9 @@ export class McpServersViewPane extends ExtensionsListViewPane {
 		this._register(extensions.onDidChangeInstalled(() => this.invalidate()));
 		this._register(mcpManagement.onDidChange(() => this.invalidate()));
 		const add = this._register(new Button(this.headerActionsElement, {
-			label: localize({ bundle: 'ash.extensions', key: 'mcpAddServer' }, 'Add MCP server'), size: 'small',
+			...defaultButtonStyles,
+			label: localize({ bundle: 'ash.extensions', key: 'mcpAddServer' }, 'Add MCP server'),
+			size: 'small',
 			enabled: mcpManagement.isAvailable,
 		}));
 		let adding = false;

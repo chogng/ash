@@ -5,7 +5,16 @@ import { Disposable, toDisposable } from "../../../common/lifecycle.js";
 import { setAriaAttribute } from "../aria/aria.js";
 import { h } from "../../dom.js";
 
-export interface KeybindingLabelOptions {
+/** Host-provided CSS colors, resolved through the containing theme root. */
+export interface IKeybindingLabelStyles {
+	readonly keybindingLabelBackground: string | undefined;
+	readonly keybindingLabelForeground: string | undefined;
+	readonly keybindingLabelBorder: string | undefined;
+	readonly keybindingLabelBottomBorder: string | undefined;
+	readonly keybindingLabelShadow: string | undefined;
+}
+
+export interface KeybindingLabelOptions extends Partial<IKeybindingLabelStyles> {
 	readonly keybinding: ResolvedKeybinding;
 	readonly presentation?: KeybindingLabelPresentation;
 }
@@ -25,6 +34,16 @@ export class KeybindingLabel extends Disposable {
 		this.element = h(ownerDocument, "span");
 		this._register(toDisposable(() => this.element.remove()));
 		this.element.className = `ash-keybinding-label ash-keybinding-label-${options.presentation ?? "plain"}`;
+		{
+			const colors = {
+				'--ash-keybinding-style-keybinding-label-background': options.keybindingLabelBackground,
+				'--ash-keybinding-style-keybinding-label-foreground': options.keybindingLabelForeground,
+				'--ash-keybinding-style-keybinding-label-border': options.keybindingLabelBorder,
+			};
+			for (const [property, value] of Object.entries(colors)) {
+				if (value !== undefined) this.element.style.setProperty(property, value);
+			}
+		}
 		container.append(this.element);
 		this.render();
 	}
@@ -50,6 +69,12 @@ export class KeybindingLabel extends Disposable {
 				chord.append(...part.keys.map(key => {
 					const token = h(ownerDocument, "kbd");
 					token.textContent = key;
+					if (this.options.keybindingLabelBottomBorder) {
+						token.style.borderBottomColor = this.options.keybindingLabelBottomBorder;
+					}
+					if (this.options.keybindingLabelShadow) {
+						token.style.boxShadow = `0 1px 0 ${this.options.keybindingLabelShadow}`;
+					}
 					return token;
 				}));
 				return chord;

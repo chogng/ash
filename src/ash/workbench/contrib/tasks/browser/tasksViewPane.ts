@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { localize } from '../../../../nls.js';
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { isCancellationError } from '../../../../base/common/errors.js';
@@ -22,7 +23,7 @@ export class TasksViewPane extends ViewPane {
 	constructor(container: HTMLElement, options: IViewPaneOptions, @ITaskService private readonly taskService: ITaskService, @IViewsService private readonly viewsService: IViewsService, @ITerminalService private readonly terminalService: ITerminalService) {
 		super(container, options);
 		this.contentElement.classList.add("ash-tasks");
-		this.titleActions = this._register(new ActionBar(this.headerActionsElement, { ariaLabel: "Tasks actions" }));
+		this.titleActions = this._register(new ActionBar(this.headerActionsElement, { actionViewItemOptions: { buttonStyles: defaultButtonStyles }, ariaLabel: "Tasks actions" }));
 		this.titleActions.element.classList.add("ash-toolbar");
 		this.statusElement = h(container.ownerDocument, "div");
 		this.statusElement.className = "ash-tasks-status";

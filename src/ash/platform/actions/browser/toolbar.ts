@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../theme/browser/defaultStyles.js';
 import type { ActionBarOrientation, ActionViewItemProvider } from "../../../base/browser/ui/actionbar/actionbar.js";
 import type { AnchorPosition } from "../../../base/browser/ui/contextview/contextview.js";
 import { ToolBar, type MoreActionsPlacement, type ToolBarPresentation } from "../../../base/browser/ui/toolbar/toolbar.js";
@@ -31,6 +32,7 @@ export class WorkbenchToolBar extends ToolBar {
 		options: IWorkbenchToolBarOptions = {},
 	) {
 		super(container, {
+			buttonStyles: defaultButtonStyles,
 			contextMenuProvider,
 			ariaLabel: options.ariaLabel,
 			orientation: options.orientation,

@@ -41,6 +41,11 @@ import { TextResourceEditor } from '../../../browser/parts/editor/textResourceEd
 import type { IResourceEditorInput, ISaveOptions } from '../../../common/editor.js';
 import { IUserThemeService } from '../../../common/userThemes.js';
 import { parseColorThemeDocument, serializeUserColorThemeDraft, userThemeId } from '../../../services/themes/common/colorThemeData.js';
+import {
+	defaultButtonStyles,
+	defaultInputBoxStyles,
+	defaultDialogStyles,
+} from '../../../../platform/theme/browser/defaultStyles.js';
 import { IWorkbenchThemeService } from '../../../services/themes/common/workbenchThemeService.js';
 import { IFileTextModelService } from '../../../services/textmodelResolver/common/textModelResourceService.js';
 import { parseJsonc } from '../../../../base/common/jsonc.js';
@@ -202,7 +207,13 @@ export class ThemeEditor extends EditorPane {
 		panel.className = 'ash-theme-editor-colors';
 		const searchHost = h(doc, 'div', { className: 'ash-theme-editor-search' });
 		panel.append(searchHost);
-		this.search = this._register(new InputBox(searchHost, { presentation: 'compact', type: 'search', placeholder: localize('themeEditor.search', 'Search colors'), ariaLabel: localize('themeEditor.search', 'Search colors') }));
+		this.search = this._register(new InputBox(searchHost, {
+			inputBoxStyles: defaultInputBoxStyles,
+			presentation: 'compact',
+			type: 'search',
+			placeholder: localize('themeEditor.search', 'Search colors'),
+			ariaLabel: localize('themeEditor.search', 'Search colors'),
+		}));
 		this._register(this.search.onDidChange(() => this.renderRows()));
 		const scrollHost = h(doc, 'div');
 		scrollHost.className = 'ash-theme-editor-scroll';
@@ -453,17 +464,36 @@ export class ThemeEditor extends EditorPane {
 		const lifetime = new DisposableStore();
 		this.nameDialog.value = lifetime;
 		const content = h(this.root.ownerDocument, 'div');
-		const name = lifetime.add(new InputBox(content, { ariaLabel: localize('themeEditor.name', 'Theme name'), placeholder: localize('themeEditor.name', 'Theme name') }));
+		const name = lifetime.add(new InputBox(content, {
+			inputBoxStyles: defaultInputBoxStyles,
+			ariaLabel: localize('themeEditor.name', 'Theme name'),
+			placeholder: localize('themeEditor.name', 'Theme name'),
+		}));
 		const label = this.compiled?.label ?? localize('themeEditor.title', 'Theme Editor');
 		name.value = this.input?.resource.scheme === 'untitled' ? label : localize('themeEditor.copyName', '{0} Copy', label);
 		const hint = h(content.ownerDocument, 'p');
 		hint.textContent = localize('themeEditor.invalidName', 'Enter a theme name of 1 to 256 characters.');
 		content.append(hint);
 		const actions = h(content.ownerDocument, 'div'); actions.className = 'ash-theme-editor-name-actions'; content.append(actions);
-		const dialog = lifetime.add(new Dialog(this.root, { title: localize('themeEditor.saveAs', 'Save as…'), content }));
+		const dialog = lifetime.add(new Dialog(this.root, {
+			buttonStyles: defaultButtonStyles,
+			dialogStyles: defaultDialogStyles,
+			title: localize('themeEditor.saveAs', 'Save as…'),
+			content,
+		}));
 		const accept = (): void => { if (name.value.trim().length > 0 && name.value.trim().length <= 256) dialog.close('save'); };
-		const save = lifetime.add(new Button(actions, { label: localize('themeEditor.save', 'Save'), presentation: 'primary', onClick: accept }));
-		lifetime.add(new Button(actions, { label: localize('themeEditor.cancel', 'Cancel'), presentation: 'quiet', onClick: () => dialog.close() }));
+		const save = lifetime.add(new Button(actions, {
+			label: localize('themeEditor.save', 'Save'),
+			...defaultButtonStyles,
+			presentation: 'primary',
+			onClick: accept,
+		}));
+		lifetime.add(new Button(actions, {
+			...defaultButtonStyles,
+			label: localize('themeEditor.cancel', 'Cancel'),
+			presentation: 'quiet',
+			onClick: () => dialog.close(),
+		}));
 		lifetime.add(name.onDidChange(value => { save.enabled = value.trim().length > 0 && value.trim().length <= 256; }));
 		lifetime.add(name.onKeyDown(event => { if (event.key === 'Enter') { stopEvent(event); accept(); } }));
 		try { return await dialog.show() === 'save' ? name.value.trim() : undefined; }
@@ -760,7 +790,17 @@ class ThemeColorRow extends Disposable {
 		this._register(this.picker.onDidCommitColor(color => edit(Color.Format.CSS.formatHexA(color, true))));
 		this.element.append(this.picker.domNode);
 		this.source = h(doc, 'p'); this.source.className = 'ash-theme-color-source'; this.element.append(this.source);
-		this.reset = this._register(new Button(this.element, { label: localize('themeEditor.reset', 'Reset'), icon: Lxicon.discard, iconOnly: true, size: 'small', presentation: 'quiet', ariaLabel: localize('themeEditor.resetColor', 'Remove the override for {0}', id), title: localize('themeEditor.resetColor', 'Remove the override for {0}', id), onClick: () => edit(undefined) }));
+		this.reset = this._register(new Button(this.element, {
+			...defaultButtonStyles,
+			label: localize('themeEditor.reset', 'Reset'),
+			icon: Lxicon.discard,
+			iconOnly: true,
+			size: 'small',
+			presentation: 'quiet',
+			ariaLabel: localize('themeEditor.resetColor', 'Remove the override for {0}', id),
+			title: localize('themeEditor.resetColor', 'Remove the override for {0}', id),
+			onClick: () => edit(undefined),
+		}));
 		this.reset.domNode.classList.add('ash-theme-color-reset');
 		this._register(toDisposable(() => this.element.remove()));
 	}

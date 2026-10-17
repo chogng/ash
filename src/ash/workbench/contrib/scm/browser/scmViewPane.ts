@@ -1,3 +1,4 @@
+import { defaultButtonStyles, defaultCountBadgeStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { ButtonActionViewItem, type ActionViewItemOptions } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -97,6 +98,7 @@ export class ScmViewPane extends ViewPane {
 		commitForm.className = 'ash-scm-commit-form';
 		this.commitInput = this._register(instantiationService.createInstance(SCMInputWidget, commitForm));
 		const commitButton = this._register(new Button(commitForm, {
+			...defaultButtonStyles,
 			label: 'Commit',
 			icon: Lxicon.check,
 			contentAlignment: 'labelCentered',
@@ -404,7 +406,9 @@ export class ScmViewPane extends ViewPane {
 			this.showGroupMenu(group, heading, event as MouseEvent);
 		}));
 		this.renderActionToolbar(heading, group.actions, `${group.label} actions`, resources).classList.add('ash-scm-section-actions');
-		const count = resources.add(new CountBadge(heading, { titleFormat: localize('scm.resourceCount', '{0} changes') }));
+		const count = resources.add(new CountBadge(heading, {
+			titleFormat: localize('scm.resourceCount', '{0} changes')
+		}, defaultCountBadgeStyles));
 		count.domNode.classList.add('ash-scm-section-count');
 		count.setCount(group.resources.length);
 		return heading;

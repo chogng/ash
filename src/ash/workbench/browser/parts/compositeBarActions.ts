@@ -1,3 +1,4 @@
+import { defaultButtonStyles, defaultCountBadgeStyles } from '../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, h } from "../../../base/browser/dom.js";
 import type { IContextMenuProvider } from "../../../base/browser/contextmenu.js";
 import { ActionViewItem, type ActionViewItemOptions } from "../../../base/browser/ui/actionbar/actionViewItems.js";
@@ -101,6 +102,7 @@ export class CompositeActionViewItem extends ActionViewItem {
 		if (this.options.presentation === 'navigation') {
 			container.classList.add('ash-composite-bar-navigation-item');
 			this.button = this._register(new Button(container, {
+				...defaultButtonStyles,
 				label: this.action.label,
 				icon: this.action.icon,
 				iconOnly: true,
@@ -148,7 +150,9 @@ export class CompositeActionViewItem extends ActionViewItem {
 		if (options.badge && options.badgeEnabled && options.badge.count > 0) {
 			const count = options.badge.count;
 			const countFormat = count >= 1000 ? `${Math.trunc(count / 1000)}K${count % 1000 === 0 ? '' : '+'}` : undefined;
-			const badge = this._register(new CountBadge(container, { count, countFormat, size: 'small' }));
+			const badge = this._register(new CountBadge(container, {
+				count, countFormat, size: 'small'
+			}, defaultCountBadgeStyles));
 			badge.domNode.classList.add('ash-composite-bar-badge');
 			badge.domNode.classList.toggle('long-count', (countFormat ?? String(count)).length >= 3);
 			badge.domNode.setAttribute('aria-hidden', 'true');

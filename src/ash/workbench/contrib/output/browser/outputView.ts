@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { CodeEditorWidget } from '../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
 import { TextModel } from '../../../../editor/common/model/textModel.js';
 import { Range } from '../../../../editor/common/core/range.js';
@@ -81,7 +82,7 @@ export class OutputViewPane extends ViewPane {
 		this.titleControls.className = "ash-output-title-actions";
 		this.headerActionsElement.append(this.titleControls);
 		this._register(toDisposable(() => this.titleControls.remove()));
-		this.titleActions = this._register(new ActionBar(this.titleControls, { ariaLabel: localize('output.actions', 'Output actions'), highlightToggledItems: true, actionViewItemProvider: (action, actionOptions) => this.createActionViewItem(action, actionOptions) }));
+		this.titleActions = this._register(new ActionBar(this.titleControls, { actionViewItemOptions: { buttonStyles: defaultButtonStyles }, ariaLabel: localize('output.actions', 'Output actions'), highlightToggledItems: true, actionViewItemProvider: (action, actionOptions) => this.createActionViewItem(action, actionOptions) }));
 		this.titleActions.element.classList.add("ash-toolbar");
 		this.filterBar = h(container.ownerDocument, "div");
 		this.filterBar.className = "ash-output-filter-bar";
@@ -95,7 +96,7 @@ export class OutputViewPane extends ViewPane {
 		this.filterInput.setAttribute("aria-label", localize('output.filter', 'Filter Output'));
 		this.filterInput.value = this.filters.text;
 		this.filterWidget.append(this.filterInput);
-		this.filterToolbar = this._register(new ActionBar(this.filterWidget, { ariaLabel: localize('output.filter', 'Filter Output'), highlightToggledItems: true, actionViewItemProvider: (action, actionOptions) => this.createActionViewItem(action, actionOptions) }));
+		this.filterToolbar = this._register(new ActionBar(this.filterWidget, { actionViewItemOptions: { buttonStyles: defaultButtonStyles }, ariaLabel: localize('output.filter', 'Filter Output'), highlightToggledItems: true, actionViewItemProvider: (action, actionOptions) => this.createActionViewItem(action, actionOptions) }));
 		this.filterToolbar.element.classList.add("ash-toolbar");
 		this.titleControls.prepend(this.filterWidget);
 		this.content = h(container.ownerDocument, "div");

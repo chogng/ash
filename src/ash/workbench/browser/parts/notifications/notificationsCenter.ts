@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import "./media/notificationsCenter.css";
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { Button } from "../../../../base/browser/ui/button/button.js";
@@ -63,9 +64,20 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 		this.panel.hidden = true;
 		const header = h(document, "div"); header.className = "ash-notifications-center-header";
 		const title = h(document, "h2"); title.textContent = localize('notifications.title', 'Notifications');
-		this.clearButton = this._register(new Button(header, { label: localize('notifications.clearAll', 'Clear All'), presentation: "secondary", onClick: () => this.clearAll() }));
+		this.clearButton = this._register(new Button(header, {
+			...defaultButtonStyles,
+			label: localize('notifications.clearAll', 'Clear All'),
+			presentation: "secondary",
+			onClick: () => this.clearAll(),
+		}));
 		this.clearButton.domNode.classList.add("ash-notifications-clear");
-		const hide = this._register(new Button(header, { label: localize('notifications.hideCenter', 'Hide Notification Center'), icon: Lxicon.close, iconOnly: true, onClick: () => this.hide() }));
+		const hide = this._register(new Button(header, {
+			...defaultButtonStyles,
+			label: localize('notifications.hideCenter', 'Hide Notification Center'),
+			icon: Lxicon.close,
+			iconOnly: true,
+			onClick: () => this.hide(),
+		}));
 		hide.domNode.classList.add("ash-notifications-hide");
 		header.prepend(title);
 		this.panel.append(header);

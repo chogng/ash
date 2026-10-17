@@ -5,11 +5,12 @@ import { Emitter } from '../../../common/event.js';
 import { Disposable, toDisposable } from '../../../common/lifecycle.js';
 import type { ThemeIcon } from '../../../common/themables.js';
 import { setAriaAttribute } from '../aria/aria.js';
-import { InputBox } from '../inputbox/inputbox.js';
+import { InputBox, type IInputBoxStyles } from '../inputbox/inputbox.js';
 import { appendIcon } from '../lxicons/lxicon.js';
 import { ScrollableElement } from '../scrollbar/scrollableElement.js';
 
 export interface IIconSelectBoxOptions {
+	readonly inputBoxStyles?: IInputBoxStyles;
 	readonly icons: readonly ThemeIcon[];
 	readonly showIconInfo?: boolean;
 }
@@ -48,6 +49,7 @@ export class IconSelectBox extends Disposable {
 		inputContainer.className = 'ash-icon-select-input';
 		this.domNode.append(inputContainer);
 		this.inputBox = this._register(new InputBox(inputContainer, {
+			inputBoxStyles: options.inputBoxStyles,
 			placeholder: localize('iconSelect.placeholder', 'Search icons'),
 			ariaLabel: localize('iconSelect.search', 'Search icons'),
 			role: 'combobox',

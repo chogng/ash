@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import "./media/collaborationContribution.css";
 import { ToolBar } from "../../../../base/browser/ui/toolbar/toolbar.js";
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
@@ -57,6 +58,7 @@ export class CollaborationContribution extends Disposable {
 		container.append(element);
 		this._register(toDisposable(() => element.remove()));
 		this.toolbar = this._register(new ToolBar(element, {
+			buttonStyles: defaultButtonStyles,
 			contextMenuProvider: emptyCollaborationContextMenuProvider,
 			ariaLabel: "Document collaboration",
 			highlightToggledItems: true,

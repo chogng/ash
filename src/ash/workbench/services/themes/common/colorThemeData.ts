@@ -2,7 +2,7 @@ import { Color } from '../../../../base/common/color.js';
 import { parseJsonDocument } from '../../../../base/common/json.js';
 import { parseJsonc } from '../../../../base/common/jsonc.js';
 import { validateJsonSchema } from '../../../../base/common/jsonSchema.js';
-import { createColorTheme } from '../../../../platform/theme/common/colorTheme.js';
+import { createColorTheme, getColorThemeOverrides } from '../../../../platform/theme/common/colorTheme.js';
 import type { IColorTheme, ISemanticTokenThemeRule } from '../../../../platform/theme/common/themeService.js';
 import { ColorScheme } from '../../../../platform/theme/common/theme.js';
 import { colorThemeSchema, colorThemeSchemaId } from './colorThemeSchema.js';
@@ -148,11 +148,21 @@ export function parseSemanticTokenRules(colors: ColorThemeDocument['semanticToke
 
 /** Keep registry defaults implicit so copies still follow their design tokens. Explicit overrides export as resolved hex colors. */
 export function serializeUserColorThemeDraft(theme: IColorTheme, label: string): string {
+	const colors: Record<string, string> = {};
+	for (const [id, authored] of Object.entries(getColorThemeOverrides(theme))) {
+		const resolved = theme.getColor(id);
+		if (resolved) {
+			colors[id] = Color.Format.CSS.formatHexA(resolved, true);
+		} else if (typeof authored === 'string' && authored.startsWith('#')) {
+			// Theme documents already validate literal colors. Keep them even while their extension is unavailable.
+			colors[id] = authored;
+		}
+	}
 	const document: ColorThemeDocument = {
 		$schema: colorThemeSchemaId,
 		name: label,
 		type: theme.colorScheme,
-		colors: Object.fromEntries(theme.colorEntries.flatMap(({ id, value }) => theme.defines(id) && value ? [[id, Color.Format.CSS.formatHexA(value, true)]] : [])),
+		colors,
 		...(theme.semanticHighlighting === undefined ? {} : { semanticHighlighting: theme.semanticHighlighting }),
 		...(theme.semanticTokenRules?.length ? { semanticTokenColors: Object.fromEntries(theme.semanticTokenRules.map(rule => [rule.selector, { foreground: rule.foreground, fontStyle: rule.fontStyle, bold: rule.bold, italic: rule.italic, underline: rule.underline, strikethrough: rule.strikethrough }])) } : {}),
 	};

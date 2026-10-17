@@ -1,3 +1,4 @@
+import { defaultButtonStyles, defaultInputBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import './media/createPullRequest.css';
 import { h, addDisposableListener } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -76,13 +77,29 @@ export class CreatePullRequestWidget extends Disposable {
 		heading.textContent = localize('sessions.changes.createPR', 'Create pull request');
 		this.domNode.append(heading);
 		const title = localize('sessions.changes.prTitle', 'Title');
-		this.titleInput = this._register(new InputBox(this.domNode, { ariaLabel: title, placeholder: title, presentation: 'field' }));
+		this.titleInput = this._register(new InputBox(this.domNode, {
+			inputBoxStyles: defaultInputBoxStyles,
+			ariaLabel: title,
+			placeholder: title,
+			presentation: 'field',
+		}));
 		this._register(this.titleInput.onDidChange(() => { this.titleEdited = true; }));
 		const base = localize('sessions.changes.prBase', 'Target branch');
-		this.baseInput = this._register(new InputBox(this.domNode, { ariaLabel: base, placeholder: base, presentation: 'field' }));
+		this.baseInput = this._register(new InputBox(this.domNode, {
+			inputBoxStyles: defaultInputBoxStyles,
+			ariaLabel: base,
+			placeholder: base,
+			presentation: 'field',
+		}));
 		this._register(this.baseInput.onDidChange(() => { this.baseEdited = true; }));
 		const description = localize('sessions.changes.prDescription', 'Description');
-		this.descriptionInput = this._register(new InputBox(this.domNode, { ariaLabel: description, placeholder: description, presentation: 'field', flexibleHeight: true }));
+		this.descriptionInput = this._register(new InputBox(this.domNode, {
+			inputBoxStyles: defaultInputBoxStyles,
+			ariaLabel: description,
+			placeholder: description,
+			presentation: 'field',
+			flexibleHeight: true,
+		}));
 		this._register(this.descriptionInput.onDidChange(() => { this.descriptionEdited = true; }));
 		const draftLabel = h(ownerDocument, 'label');
 		this.draft = h(ownerDocument, 'input');
@@ -113,8 +130,18 @@ export class CreatePullRequestWidget extends Disposable {
 		this.domNode.append(this.message);
 		const actions = h(ownerDocument, 'div', { className: 'ash-sessions-create-pr-actions' });
 		this.domNode.append(actions);
-		this.cancel = this._register(new Button(actions, { label: localize('sessions.changes.prCancel', 'Cancel'), onClick: options.onCancel }));
-		this.submit = this._register(new Button(actions, { label: localize('sessions.changes.createPR', 'Create pull request'), type: 'submit', enabled: false, presentation: 'primary' }));
+		this.cancel = this._register(new Button(actions, {
+			...defaultButtonStyles,
+			label: localize('sessions.changes.prCancel', 'Cancel'),
+			onClick: options.onCancel,
+		}));
+		this.submit = this._register(new Button(actions, {
+			...defaultButtonStyles,
+			label: localize('sessions.changes.createPR', 'Create pull request'),
+			type: 'submit',
+			enabled: false,
+			presentation: 'primary',
+		}));
 		const updateSubmitLabel = (): void => { this.submit.label = this.primaryAction.value === 'sendToChat' ? localize('sessions.changes.prSend', 'Send to agent') : localize('sessions.changes.createPR', 'Create pull request'); };
 		updateSubmitLabel();
 		this._register(addDisposableListener(this.primaryAction, 'change', updateSubmitLabel));

@@ -48,11 +48,15 @@
 .ash-quick-pick-input input {
 	height: 26px;
 	padding: 0 var(--ash-spacing-size80);
-	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-input-style-input-border, var(--ash-input-border));
 	border-radius: var(--ash-cornerRadius-small);
 	outline: none;
-	color: var(--ash-input-foreground);
-	background: var(--ash-input-background);
+	color: var(--ash-input-style-input-foreground, var(--ash-input-foreground));
+	background: var(
+		--ash-input-style-input-background,
+		var(--ash-input-background)
+	);
 }
 
 .ash-quick-pick-input input:focus {
@@ -147,13 +151,22 @@
 }
 
 .ash-quick-pick-list .ash-list-row.is-active {
-	color: var(--ash-list-activeSelectionForeground);
-	background: var(--ash-list-activeSelectionBackground);
+	color: var(
+		--ash-list-style-list-active-selection-foreground,
+		var(--ash-list-activeSelectionForeground)
+	);
+	background: var(
+		--ash-list-style-list-active-selection-background,
+		var(--ash-list-activeSelectionBackground)
+	);
 }
 
 .ash-quick-pick-list:not(.ash-quick-pick-list-menu)
 	.ash-list-row:hover:not(.is-active) {
-	background: var(--ash-list-hoverBackground);
+	background: var(
+		--ash-list-style-list-hover-background,
+		var(--ash-list-hoverBackground)
+	);
 }
 
 .ash-quick-pick-list .ash-list-row.is-active .ash-quick-pick-separator {

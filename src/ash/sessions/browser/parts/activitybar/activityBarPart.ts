@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import './media/activityBarPart.css';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
@@ -67,6 +68,7 @@ export class ActivityBarPart extends Part {
 		bottom.className = 'ash-sessions-activity-bottom';
 
 		this.navigation = this._register(new ActionBar(top, {
+			actionViewItemOptions: { buttonStyles: defaultButtonStyles },
 			ariaLabel: localize('sessions.activity.navigation', 'Navigation'),
 			orientation: 'vertical',
 			actionViewItemProvider: action => new CompositeActionViewItem(action, {
@@ -121,6 +123,7 @@ export class ActivityBarPart extends Part {
 		this.accountAction = { id: 'sessions.activity.accounts', label: accountLabel, tooltip: accountLabel, icon: Lxicon.account, enabled: true, run() { } };
 		this.showAccountMenu = anchor => delegate.showAccountMenu(anchor);
 		this.accounts = this._register(new ActionBar(bottom, {
+			actionViewItemOptions: { buttonStyles: defaultButtonStyles },
 			ariaLabel: accountLabel,
 			orientation: 'vertical',
 			actionViewItemProvider: (action, options) => this.createAccountActionViewItem(action, options, 'activitybar'),
@@ -267,7 +270,13 @@ class AccountActionViewItem extends ActionViewItem {
 	) { super(action, options); }
 
 	public override render(container: HTMLElement): void {
-		this.button = this._register(new Button(container, { label: this.action.label, icon: this.action.icon, iconOnly: true, onClick: () => this.showMenu(this.button.domNode) }));
+		this.button = this._register(new Button(container, {
+			...defaultButtonStyles,
+			label: this.action.label,
+			icon: this.action.icon,
+			iconOnly: true,
+			onClick: () => this.showMenu(this.button.domNode),
+		}));
 		if (this.presentation === 'activitybar') { this.button.domNode.classList.add('ash-sessions-activity-item'); }
 		this.button.domNode.setAttribute('aria-haspopup', 'menu');
 		this.button.domNode.setAttribute('aria-expanded', 'false');

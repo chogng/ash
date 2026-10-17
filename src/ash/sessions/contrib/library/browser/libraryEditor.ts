@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../../workbench/common/editor.js';
@@ -117,17 +118,47 @@ export class LibraryEditorPane extends EditorPane implements IEditorPane {
 		const tools = h(document, 'div', { className: 'ash-library-tools' });
 		this.searchDomNode = h(document, 'input', { className: 'ash-library-search', properties: { type: 'search', placeholder: localize('library.search', 'Search library') }, attributes: { 'aria-label': localize('library.search', 'Search library') } });
 		tools.append(this.searchDomNode);
-		this.importButton = this.ui.add(new Button(tools, { label: localize('library.import', 'Import'), icon: Lxicon.add, presentation: 'primary', onClick: () => this.fileDomNode.click() }));
+		this.importButton = this.ui.add(new Button(tools, {
+			...defaultButtonStyles,
+			label: localize('library.import', 'Import'),
+			icon: Lxicon.add,
+			presentation: 'primary',
+			onClick: () => this.fileDomNode.click(),
+		}));
 		this.fileDomNode = h(document, 'input', { properties: { type: 'file', accept: 'image/png,image/jpeg,image/webp', multiple: true, hidden: true } });
 		tools.append(this.fileDomNode);
 		const options = h(document, 'div', { className: 'ash-library-options' });
 		const sort = h(document, 'select', { attributes: { 'aria-label': localize('library.sort', 'Sort by') } });
 		sort.append(h(document, 'option', { properties: { value: 'recent' } }, localize('library.recent', 'Recently added')), h(document, 'option', { properties: { value: 'name' } }, localize('library.name', 'Name')));
 		options.append(sort);
-		this.deleteCollectionButton = this.ui.add(new Button(options, { label: localize('library.deleteCollection', 'Delete collection'), icon: Lxicon.trash, enabled: false, onClick: () => { void this.library.runMutation(() => this.assets.deleteCollection(this.library.state.get().category)); } }));
-		this.refreshButton = this.ui.add(new Button(options, { label: localize('library.refresh', 'Refresh'), icon: Lxicon.refresh, iconOnly: true, onClick: () => { void this.library.reload(); } }));
-		this.gridButton = this.ui.add(new Button(options, { label: localize('library.grid', 'Grid view'), icon: Lxicon.layout, iconOnly: true, onClick: () => this.library.setViewMode('grid') }));
-		this.listButton = this.ui.add(new Button(options, { label: localize('library.list', 'List view'), icon: Lxicon.listUnordered, iconOnly: true, onClick: () => this.library.setViewMode('list') }));
+		this.deleteCollectionButton = this.ui.add(new Button(options, {
+			...defaultButtonStyles,
+			label: localize('library.deleteCollection', 'Delete collection'),
+			icon: Lxicon.trash,
+			enabled: false,
+			onClick: () => { void this.library.runMutation(() => this.assets.deleteCollection(this.library.state.get().category)); },
+		}));
+		this.refreshButton = this.ui.add(new Button(options, {
+			...defaultButtonStyles,
+			label: localize('library.refresh', 'Refresh'),
+			icon: Lxicon.refresh,
+			iconOnly: true,
+			onClick: () => { void this.library.reload(); },
+		}));
+		this.gridButton = this.ui.add(new Button(options, {
+			...defaultButtonStyles,
+			label: localize('library.grid', 'Grid view'),
+			icon: Lxicon.layout,
+			iconOnly: true,
+			onClick: () => this.library.setViewMode('grid'),
+		}));
+		this.listButton = this.ui.add(new Button(options, {
+			...defaultButtonStyles,
+			label: localize('library.list', 'List view'),
+			icon: Lxicon.listUnordered,
+			iconOnly: true,
+			onClick: () => this.library.setViewMode('list'),
+		}));
 		this.messageDomNode = h(document, 'div', { className: 'ash-library-message', attributes: { role: 'status', 'aria-live': 'polite' } });
 		const body = h(document, 'div', { className: 'ash-library-body' });
 		this.resultsDomNode = h(document, 'div', { className: 'ash-library-results', attributes: { role: 'list', 'aria-label': localize('library.items', 'Library items') } });

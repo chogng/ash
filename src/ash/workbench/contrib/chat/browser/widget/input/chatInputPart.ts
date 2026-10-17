@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
 import { Event } from '../../../../../../base/common/event.js';
 import { MenuItemAction } from '../../../../../../platform/actions/common/actions.js';
 import { ScreenshotContextValuePick } from '../../actions/chatContext.js';
@@ -1008,7 +1009,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			presentation: 'inherit-foreground',
 			toolbarOptions: { primaryGroup: () => true },
 			actionViewItemProvider: action => {
-				if (action.id === this.attachAction.id) return new ChatAttachContextActionViewItem(action);
+				if (action.id === this.attachAction.id) return new ChatAttachContextActionViewItem(action, { buttonStyles: defaultButtonStyles });
 				if (action !== permissions) return undefined;
 				this.permissionWidget = this.instantiationService.createInstance(PermissionPickerActionItem, action, this.footerChanged.event, {
 					getActions: () => approvalModeDefinitions.map(definition => ({
@@ -1096,7 +1097,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 
 	private createToolbarViewItem(action: IAction, contextViewService: IContextViewService): ActionViewItem | undefined {
-		if (action.id === this.attachAction.id) return new ChatAttachContextActionViewItem(action);
+		if (action.id === this.attachAction.id) return new ChatAttachContextActionViewItem(action, { buttonStyles: defaultButtonStyles });
 		if (action instanceof MenuItemAction && action.id === this.dictationSession.action.id) { return this.instantiationService.createInstance(DictationActionViewItem, action, undefined, this.dictationSession.activeState); }
 		if (!(action instanceof ChatInputAction)) return undefined;
 		if (action.presentation === 'model') {
@@ -1409,7 +1410,7 @@ class ChatInputButtonViewItem extends ButtonActionViewItem {
 	private readonly presentation: ChatInputToolbarPresentation;
 
 	constructor(action: ChatInputAction) {
-		super(action);
+		super(action, { buttonStyles: defaultButtonStyles });
 		this.presentation = action.presentation;
 	}
 

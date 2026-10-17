@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
 import './media/chatChangesPill.css';
 import { h } from '../../../../../../base/browser/dom.js';
 import { Button } from '../../../../../../base/browser/ui/button/button.js';
@@ -20,7 +21,10 @@ export class ChatChangesPill extends Disposable {
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		this.button = this._register(new Button(this.domNode, {
-			label: '', icon: Lxicon.diff, onClick: openChanges,
+			...defaultButtonStyles,
+			label: '',
+			icon: Lxicon.diff,
+			onClick: openChanges,
 		}));
 		this.button.domNode.classList.add('ash-chat-changes-pill');
 		this.additions = h(container.ownerDocument, 'span', { className: 'ash-chat-changes-added' });

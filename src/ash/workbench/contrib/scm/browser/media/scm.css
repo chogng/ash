@@ -81,11 +81,17 @@
 }
 
 .ash-scm-graph-commit.selected {
-	--scm-graph-row-background: var(--ash-list-inactiveSelectionBackground);
+	--scm-graph-row-background: var(
+		--ash-list-style-list-inactive-selection-background,
+		var(--ash-list-inactiveSelectionBackground)
+	);
 }
 
 .ash-scm-graph:focus-within .ash-scm-graph-commit.selected {
-	--scm-graph-row-background: var(--ash-list-activeSelectionBackground);
+	--scm-graph-row-background: var(
+		--ash-list-style-list-active-selection-background,
+		var(--ash-list-activeSelectionBackground)
+	);
 }
 
 .ash-scm-graph-commit.selected > .ash-scm-graph-row {
@@ -95,7 +101,10 @@
 .ash-scm-graph:focus-within
 	.ash-scm-graph-commit.selected
 	> .ash-scm-graph-row {
-	color: var(--ash-list-activeSelectionForeground);
+	color: var(
+		--ash-list-style-list-active-selection-foreground,
+		var(--ash-list-activeSelectionForeground)
+	);
 }
 
 .ash-scm-graph-commit.selected:not(:focus-visible) > .ash-scm-graph-row {
@@ -131,7 +140,11 @@
 	background: linear-gradient(
 		to right,
 		transparent var(--scm-graph-content-x, 22px),
-		var(--ash-list-hoverBackground) var(--scm-graph-content-x, 22px)
+		var(
+				--ash-list-style-list-hover-background,
+				var(--ash-list-hoverBackground)
+			)
+			var(--scm-graph-content-x, 22px)
 	);
 }
 
@@ -304,8 +317,14 @@
 	> .ash-scm-graph-overlay {
 	background:
 		linear-gradient(
-			var(--ash-list-hoverBackground),
-			var(--ash-list-hoverBackground)
+			var(
+				--ash-list-style-list-hover-background,
+				var(--ash-list-hoverBackground)
+			),
+			var(
+				--ash-list-style-list-hover-background,
+				var(--ash-list-hoverBackground)
+			)
 		),
 		var(--scm-graph-row-background);
 }
@@ -376,8 +395,14 @@
 .ash-scm-graph-change-row:is(:hover, :focus-within) > .ash-scm-graph-actions {
 	background:
 		linear-gradient(
-			var(--ash-list-hoverBackground),
-			var(--ash-list-hoverBackground)
+			var(
+				--ash-list-style-list-hover-background,
+				var(--ash-list-hoverBackground)
+			),
+			var(
+				--ash-list-style-list-hover-background,
+				var(--ash-list-hoverBackground)
+			)
 		),
 		var(--ash-sideBar-background);
 }
@@ -411,7 +436,10 @@
 }
 
 .ash-scm-graph-change-row:is(:hover, :focus-within) > .ash-scm-graph-change {
-	background: var(--ash-list-hoverBackground);
+	background: var(
+		--ash-list-style-list-hover-background,
+		var(--ash-list-hoverBackground)
+	);
 }
 
 .ash-scm-graph-change:focus-visible {
@@ -731,8 +759,14 @@
 	:is(.ash-scm-section-actions, .ash-scm-change-actions) {
 	background:
 		linear-gradient(
-			var(--ash-list-hoverBackground),
-			var(--ash-list-hoverBackground)
+			var(
+				--ash-list-style-list-hover-background,
+				var(--ash-list-hoverBackground)
+			),
+			var(
+				--ash-list-style-list-hover-background,
+				var(--ash-list-hoverBackground)
+			)
 		),
 		var(--ash-sideBar-background);
 }
@@ -742,8 +776,14 @@
 	:is(.ash-scm-section-actions, .ash-scm-change-actions) {
 	background:
 		linear-gradient(
-			var(--ash-list-inactiveSelectionBackground),
-			var(--ash-list-inactiveSelectionBackground)
+			var(
+				--ash-list-style-list-inactive-selection-background,
+				var(--ash-list-inactiveSelectionBackground)
+			),
+			var(
+				--ash-list-style-list-inactive-selection-background,
+				var(--ash-list-inactiveSelectionBackground)
+			)
 		),
 		var(--ash-sideBar-background);
 }
@@ -754,8 +794,14 @@
 	:is(.ash-scm-section-actions, .ash-scm-change-actions) {
 	background:
 		linear-gradient(
-			var(--ash-list-activeSelectionBackground),
-			var(--ash-list-activeSelectionBackground)
+			var(
+				--ash-list-style-list-active-selection-background,
+				var(--ash-list-activeSelectionBackground)
+			),
+			var(
+				--ash-list-style-list-active-selection-background,
+				var(--ash-list-activeSelectionBackground)
+			)
 		),
 		var(--ash-sideBar-background);
 }

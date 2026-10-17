@@ -1,3 +1,4 @@
+import { defaultButtonStyles, defaultSelectBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import './media/networkSettingsContent.css';
 import { h, isHTMLElement } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -72,16 +73,30 @@ export class NetworkSettingsContent extends Disposable implements SettingsConten
 		const document = container.ownerDocument;
 		this.protocolControls = h(document, 'div');
 		this.protocolControls.className = 'ash-network-settings';
-		this.protocol = this._register(new SelectBox(this.protocolControls, { options: [], ariaLabel: localize('network.http.title', 'HTTP compatibility mode') }));
+		this.protocol = this._register(new SelectBox(this.protocolControls, {
+			options: [], ariaLabel: localize('network.http.title', 'HTTP compatibility mode')
+		}, defaultSelectBoxStyles));
 		this.protocol.enabled = false;
 		this._register(this.protocol.onDidSelect(({ value }) => { void this.configure(value as HttpCompatibilityMode); }));
 		this.domains = h(document, 'div');
 		this.domains.className = 'ash-network-settings';
 		const actions = h(document, 'div');
 		actions.className = 'ash-network-settings-actions';
-		this.copy = this._register(new Button(actions, { label: localize('network.copy', 'Copy domains'), presentation: 'secondary' }));
-		this.show = this._register(new Button(actions, { label: localize('network.show', 'Show'), presentation: 'secondary' }));
-		this.refreshButton = this._register(new Button(actions, { label: localize('network.refresh', 'Refresh'), presentation: 'secondary' }));
+		this.copy = this._register(new Button(actions, {
+			...defaultButtonStyles,
+			label: localize('network.copy', 'Copy domains'),
+			presentation: 'secondary',
+		}));
+		this.show = this._register(new Button(actions, {
+			...defaultButtonStyles,
+			label: localize('network.show', 'Show'),
+			presentation: 'secondary',
+		}));
+		this.refreshButton = this._register(new Button(actions, {
+			...defaultButtonStyles,
+			label: localize('network.refresh', 'Refresh'),
+			presentation: 'secondary',
+		}));
 		this.domainList = h(document, 'div');
 		this.domainList.className = 'ash-network-settings-details';
 		this.domainList.id = `ash-network-domains-${generateUuid()}`;
@@ -97,7 +112,11 @@ export class NetworkSettingsContent extends Disposable implements SettingsConten
 		this._register(this.refreshButton.onDidClick(() => { void this.refresh(); }));
 		this.diagnostics = h(document, 'div');
 		this.diagnostics.className = 'ash-network-settings';
-		this.runButton = this._register(new Button(this.diagnostics, { label: localize('network.run', 'Run diagnostic'), presentation: 'secondary' }));
+		this.runButton = this._register(new Button(this.diagnostics, {
+			...defaultButtonStyles,
+			label: localize('network.run', 'Run diagnostic'),
+			presentation: 'secondary',
+		}));
 		this._register(this.runButton.onDidClick(() => { void this.run(); }));
 		this.status = h(document, 'p');
 		this.status.setAttribute('role', 'status');

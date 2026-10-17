@@ -49,7 +49,9 @@
 	width: 16px;
 	height: 16px;
 	margin: 0;
-	accent-color: var(--ash-accent-background);
+	accent-color: var(--ash-checkbox-foreground, var(--ash-accent-background));
+	background-color: var(--ash-checkbox-background, transparent);
+	border-color: var(--ash-checkbox-border, var(--ash-input-border));
 }
 
 .ash-switch {
@@ -101,13 +103,19 @@
 }
 
 .ash-switch.checked > .ash-switch-track {
-	border-color: var(--ash-accent-background);
-	background: var(--ash-accent-background);
+	border-color: var(--ash-toggle-active-border, var(--ash-accent-background));
+	background: var(
+		--ash-toggle-active-background,
+		var(--ash-accent-background)
+	);
 }
 
 .ash-switch.checked > .ash-switch-track::after {
 	transform: translateX(16px);
-	background: var(--ash-button-primaryForeground);
+	background: var(
+		--ash-toggle-active-foreground,
+		var(--ash-button-primaryForeground)
+	);
 }
 
 [data-color-scheme="hcDark"] .ash-switch.checked > .ash-switch-track,

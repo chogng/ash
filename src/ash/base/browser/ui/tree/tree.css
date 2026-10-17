@@ -7,7 +7,8 @@
 }
 
 .ash-tree:focus-visible:not(.has-focused-item) {
-	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline: var(--ash-strokeThickness) solid
+		var(--ash-list-style-list-focus-outline, var(--ash-focusBorder));
 	outline-offset: -1px;
 }
 
@@ -31,7 +32,11 @@
 	left: 0;
 	flex-direction: column;
 	background: inherit;
-	box-shadow: 0 1px 0 var(--ash-tree-indentGuidesStroke);
+	box-shadow: 0 1px 0
+		var(
+			--ash-list-style-tree-indent-guides-stroke,
+			var(--ash-tree-indentGuidesStroke)
+		);
 }
 
 .ash-tree-sticky-container.empty {
@@ -86,16 +91,25 @@
 
 .ash-tree-indent-guides-always .ash-tree-indent-guide,
 .ash-tree-indent-guides-onHover:hover .ash-tree-indent-guide {
-	border-left-color: var(--ash-tree-inactiveIndentGuidesStroke);
+	border-left-color: var(
+		--ash-list-style-tree-inactive-indent-guides-stroke,
+		var(--ash-tree-inactiveIndentGuidesStroke)
+	);
 }
 
 .ash-tree-indent-guides-always .ash-tree-indent-guide.active,
 .ash-tree-indent-guides-onHover .ash-tree-indent-guide.active {
-	border-left-color: var(--ash-tree-indentGuidesStroke);
+	border-left-color: var(
+		--ash-list-style-tree-indent-guides-stroke,
+		var(--ash-tree-indentGuidesStroke)
+	);
 }
 
 .ash-tree-row:hover {
-	background: var(--ash-list-hoverBackground);
+	background: var(
+		--ash-list-style-list-hover-background,
+		var(--ash-list-hoverBackground)
+	);
 }
 
 .ash-tree-row.focused {
@@ -103,21 +117,37 @@
 }
 
 .ash-tree-selection-subtle .ash-tree-row.selected {
-	background: var(--ash-list-hoverBackground);
+	background: var(
+		--ash-list-style-list-hover-background,
+		var(--ash-list-hoverBackground)
+	);
 }
 
 .ash-tree-selection-active .ash-tree-row.selected {
-	background: var(--ash-list-inactiveSelectionBackground);
+	background: var(
+		--ash-list-style-list-inactive-selection-background,
+		var(--ash-list-inactiveSelectionBackground)
+	);
 }
 
 .ash-tree-selection-active:focus .ash-tree-row.selected {
-	--ash-description-foreground: var(--ash-list-activeSelectionForeground);
-	color: var(--ash-list-activeSelectionForeground);
-	background: var(--ash-list-activeSelectionBackground);
+	--ash-description-foreground: var(
+		--ash-list-style-list-active-selection-foreground,
+		var(--ash-list-activeSelectionForeground)
+	);
+	color: var(
+		--ash-list-style-list-active-selection-foreground,
+		var(--ash-list-activeSelectionForeground)
+	);
+	background: var(
+		--ash-list-style-list-active-selection-background,
+		var(--ash-list-activeSelectionBackground)
+	);
 }
 
 .ash-tree:focus-visible .ash-tree-row.focused {
-	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline: var(--ash-strokeThickness) solid
+		var(--ash-list-style-list-focus-outline, var(--ash-focusBorder));
 	outline-offset: -1px;
 }
 

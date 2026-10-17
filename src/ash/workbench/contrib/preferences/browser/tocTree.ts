@@ -1,3 +1,4 @@
+import { defaultFindWidgetStyles, defaultListStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { h } from '../../../../base/browser/dom.js';
 import { ObjectTree, type ObjectTreeCollapseStateChangeEvent, type ObjectTreeFindResult } from '../../../../base/browser/ui/tree/objectTree.js';
 import type { ObjectTreeElement } from '../../../../base/browser/ui/tree/objectTreeModel.js';
@@ -90,6 +91,8 @@ export class TOCTree extends Disposable {
 		super();
 		const document = container.ownerDocument;
 		this.tree = this._register(new ObjectTree(container, {
+			styles: defaultListStyles,
+			findWidgetStyles: defaultFindWidgetStyles,
 			ariaLabel: options.ariaLabel,
 			scrolling: 'external',
 			expandOnlyOnTwistieClick: false,

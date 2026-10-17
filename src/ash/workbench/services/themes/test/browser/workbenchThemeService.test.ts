@@ -23,6 +23,8 @@ import { WorkbenchThemesRegistry } from '../../../../common/theme.js';
 import { loadUserThemes, WorkbenchThemeService } from '../../browser/workbenchThemeService.js';
 import { createExtensionWorkbenchColorTheme, parseExtensionTheme } from '../../../extensions/common/extensionTheme.js';
 import { loadColorThemeDocument, loadUserColorTheme, parseUserColorTheme, resolveColorThemeDocument, serializeUserColorThemeDraft } from '../../common/colorThemeData.js';
+import { Colors } from '../../../../../platform/theme/common/colorRegistry.js';
+import { migrateUserTheme } from '../../common/themeMigration.js';
 import { colorThemeSchemaId, registerColorThemeSchemas } from '../../common/colorThemeSchema.js';
 import { Extensions as JSONExtensions, type IJSONContributionRegistry } from '../../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
 import { DiskFileSystemProvider } from '../../../../../platform/files/node/diskFileSystemProvider.js';
@@ -283,6 +285,30 @@ test('theme exports contain standard fields and resolved colors', () => {
 	assert.ok(jsonRegistry.getSchemaContributions().schemas[colorThemeSchemaId]?.properties?.colors?.properties?.['editor.background']);
 });
 
+test('theme copies retain unregistered extension colors until their contributions load', () => {
+	const original = parseUserColorTheme(JSON.stringify({
+		name: 'Extension colors',
+		colors: { 'copyExtension.accent': '#12345680', 'editor.background': '#102030' },
+	}));
+	const source = serializeUserColorThemeDraft(original, 'Extension copy');
+	assert.deepEqual(JSON.parse(source).colors, {
+		'copyExtension.accent': '#12345680', 'editor.background': '#102030',
+	});
+	const restored = parseUserColorTheme(source);
+	assert.equal(restored.defines('copyExtension.accent'), true);
+	const owner = Symbol('theme copy extension');
+	try {
+		Colors.replaceColors(owner, [{
+			id: 'copyExtension.accent', description: 'Theme copy test.', owner: 'test',
+			defaults: { dark: '#000000', light: '#ffffff', hcDark: '#ffffff', hcLight: '#000000' },
+		}]);
+		assert.equal(restored.getColorCss('copyExtension.accent'), '#12345680');
+		assert.equal(JSON.parse(serializeUserColorThemeDraft(restored, restored.label)).colors['copyExtension.accent'], '#12345680');
+	} finally {
+		Colors.replaceColors(owner, []);
+	}
+});
+
 test('theme copies retain default design token relationships and explicit overrides', () => {
 	const original = parseUserColorTheme(JSON.stringify({
 		name: 'Linked colors', type: 'dark',
@@ -424,6 +450,20 @@ test('invalid external edits retain the last valid selected theme', async () => 
 		assert.equal(WorkbenchThemesRegistry.getColorTheme('custom')?.getColorCss('editor.background'), '#445566');
 		assert.deepEqual(service.issues, []);
 	} finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test('legacy brightness migration preserves the original RGBA mixing appearance', () => {
+	const migrated = migrateUserTheme(JSON.stringify({
+		version: 1, id: 'legacy-brightness', label: 'Legacy brightness', colorScheme: 'dark',
+		colors: {
+			foreground: { op: 'lighten', value: '#20406080', factor: 0.5 },
+			'description.foreground': { op: 'darken', value: '#20406080', factor: 0.5 },
+		},
+	}));
+	assert.ok(migrated);
+	assert.deepEqual(JSON.parse(migrated.content).colors, {
+		foreground: '#90a0b0c0', 'description.foreground': '#102030c0',
+	});
 });
 
 test('theme file owner migrates aliases and transforms once before registration', async () => {

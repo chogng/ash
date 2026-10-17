@@ -1,3 +1,6 @@
+import type { IInputBoxStyles } from '../inputbox/inputbox.js';
+import type { IButtonStyles } from '../button/button.js';
+import type { IListStyles } from '../list/listWidget.js';
 import { InputBox } from '../inputbox/inputbox.js';
 import { Button } from '../button/button.js';
 import { localize } from '../../../../nls.js';
@@ -12,7 +15,19 @@ import { Lxicon } from "../../../common/lxicons.js";
 import { rot } from "../../../common/numbers.js";
 import type { AbstractTreeNode, TreeAcceptEvent, TreeActivateEvent, TreeCollapseRequestEvent, TreeDragAndDrop, TreeDragOverReaction, TreeFindMatchType, TreeFindMode, TreeFindResult, TreeFocusChangeEvent, TreeIndentGuides, TreeKeyboardNavigationLabelProvider, TreePointerEvent, TreePointerTarget, TreeSelectionChangeEvent, TreeSelectionPresentation, TreeTwistieState, TreeVisibleSplice } from "./tree.js";
 
+/** Styles supplied by the host for the tree-owned find surface and its child controls. */
+export interface IFindWidgetStyles {
+	readonly listFilterWidgetBackground: string | undefined;
+	readonly listFilterWidgetOutline: string | undefined;
+	readonly listFilterWidgetNoMatchesOutline: string | undefined;
+	readonly listFilterWidgetShadow: string | undefined;
+	readonly inputBoxStyles: IInputBoxStyles;
+	readonly buttonStyles: IButtonStyles;
+}
+
 export interface AbstractTreeOptions<T, TNode extends AbstractTreeNode<T>> {
+	readonly styles?: IListStyles;
+	readonly findWidgetStyles?: IFindWidgetStyles;
 	readonly ariaLabel?: string;
 	readonly scrolling?: ListScrolling;
 	readonly smoothScrolling?: boolean;
@@ -85,6 +100,7 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 		validateIndent(options.indent);
 		this.findController = options.keyboardNavigationLabelProvider ? new TreeFindController({ labelProvider: options.keyboardNavigationLabelProvider, mode: options.findMode ?? "highlight", matchType: options.findMatchType ?? "fuzzy" }) : undefined;
 		this.list = this._register(new List<TNode>(container, {
+			styles: options.styles,
 			ariaLabel: options.ariaLabel,
 			role: "tree",
 			scrolling: options.scrolling,
@@ -208,10 +224,14 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 		if (!this.findWidget) {
 			const element = h(this.element.ownerDocument, 'div');
 			element.className = 'ash-tree-find-widget';
+			const styles = this.options.findWidgetStyles;
+			if (styles?.listFilterWidgetBackground) element.style.backgroundColor = styles.listFilterWidgetBackground;
+			if (styles?.listFilterWidgetOutline) element.style.borderColor = styles.listFilterWidgetOutline;
+			if (styles?.listFilterWidgetShadow) element.style.boxShadow = `0 2px 8px ${styles.listFilterWidgetShadow}`;
 			this.element.append(element);
 			this._register(toDisposable(() => element.remove()));
 			const label = localize('tree.find', 'Find in Tree');
-			const input = this._register(new InputBox(element, { type: 'search', presentation: 'compact', ariaLabel: label, placeholder: label }));
+			const input = this._register(new InputBox(element, { inputBoxStyles: this.options.findWidgetStyles?.inputBoxStyles, type: 'search', presentation: 'compact', ariaLabel: label, placeholder: label }));
 			this.findWidget = { element, input };
 			this._register(this.list.onDidScroll(() => { element.style.transform = `translateY(${this.list.scrollTop}px)`; }));
 			this._register(input.onDidChange(value => this.setFindPattern(value)));
@@ -220,7 +240,7 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 				if (event.key === 'Escape') { event.preventDefault(); this.closeFind(); }
 				else if (event.key === 'Enter') { event.preventDefault(); if (event.shiftKey) this.findPrevious(); else this.findNext(); }
 			}));
-			this._register(new Button(element, { label: localize('tree.closeFind', 'Close Find'), icon: Lxicon.close, iconOnly: true, size: 'small', onClick: () => this.closeFind() }));
+			this._register(new Button(element, { ...this.options.findWidgetStyles?.buttonStyles, label: localize('tree.closeFind', 'Close Find'), icon: Lxicon.close, iconOnly: true, size: 'small', onClick: () => this.closeFind() }));
 		}
 		this.findWidget.element.hidden = false;
 		this.findWidget.element.style.transform = `translateY(${this.list.scrollTop}px)`;
@@ -486,6 +506,12 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 
 	private emitFindResult(): void {
 		if (!this.findController) return;
+		if (this.findWidget && this.options.findWidgetStyles) {
+			const noMatches = !!this.findController.query && this.findController.matchedNodes.length === 0;
+			const color = noMatches ? this.options.findWidgetStyles.listFilterWidgetNoMatchesOutline
+				: this.options.findWidgetStyles.listFilterWidgetOutline;
+			this.findWidget.element.style.borderColor = color ?? '';
+		}
 		this._onDidChangeFind.fire({ pattern: this.findController.query, matches: this.findController.matchedNodes, activeMatch: this.findController.activeMatch });
 	}
 

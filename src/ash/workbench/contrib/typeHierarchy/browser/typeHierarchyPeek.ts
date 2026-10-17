@@ -1,3 +1,8 @@
+import {
+	defaultButtonStyles,
+	defaultFindWidgetStyles,
+	defaultListStyles,
+} from '../../../../platform/theme/browser/defaultStyles.js';
 import './media/typeHierarchy.css';
 import { h } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -39,13 +44,19 @@ export class TypeHierarchyTreePeekWidget extends PeekViewWidget {
 		];
 		this.buttons = directions.map(([direction, label]) => {
 			const button = this._register(new Button(toolbar, {
-				label, checked: direction === this.currentDirection, presentation: 'quiet', size: 'small',
+				...defaultButtonStyles,
+				label,
+				checked: direction === this.currentDirection,
+				presentation: 'quiet',
+				size: 'small',
 				onClick: () => { void this.expandDirection(direction).catch(onError); },
 			}));
 			button.domNode.classList.add('stanza-editor-language-hierarchy-expand');
 			return button;
 		});
 		this.tree = this._register(new AsyncDataTree<TypeHierarchyModel, Type>(treeContainer, new DataSource(() => this.direction), {
+			styles: defaultListStyles,
+			findWidgetStyles: defaultFindWidgetStyles,
 			ariaLabel: localize('typeHierarchy.title', 'Type Hierarchy'),
 			onDidRemoveRow: row => {
 				for (const [node, button] of this.rows) {
@@ -58,8 +69,11 @@ export class TypeHierarchyTreePeekWidget extends PeekViewWidget {
 			renderElement: node => {
 				this.rows.deleteAndDispose(node);
 				const button = new Button(treeContainer, {
+					...defaultButtonStyles,
 					label: node.item.detail ? node.item.name + ' — ' + node.item.detail : node.item.name,
-					title: node.item.resource.path, presentation: 'quiet', size: 'small',
+					title: node.item.resource.path,
+					presentation: 'quiet',
+					size: 'small',
 					onClick: () => this.selected.fire(node.item),
 				});
 				this.rows.set(node, button);

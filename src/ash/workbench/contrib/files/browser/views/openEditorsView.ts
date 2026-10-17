@@ -1,3 +1,4 @@
+import { defaultFindWidgetStyles, defaultListStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import './media/openeditors.css';
 import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
 import { appendIcon } from '../../../../../base/browser/ui/lxicons/lxicon.js';
@@ -47,6 +48,8 @@ export class OpenEditorsView extends ViewPane {
 		this.emptyDomNode.setAttribute('role', 'status');
 		this.emptyDomNode.tabIndex = 0;
 		this.tree = this._register(new ObjectTree<OpenEditorsRow>(this.contentElement, {
+			styles: defaultListStyles,
+			findWidgetStyles: defaultFindWidgetStyles,
 			ariaLabel: localize('files.openEditors.title', 'Open Editors'),
 			modelOptions: {
 				defaultCollapseState: 'expanded',

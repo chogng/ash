@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { getWindow, h, type IDimension } from '../../../../../base/browser/dom.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
 import { observeElementSize } from '../../../../../base/browser/observer.js';
@@ -93,35 +94,43 @@ export class MergeEditor extends Disposable {
 		navigation.className = 'ash-merge-navigation';
 		navigation.setAttribute('aria-label', localize({ bundle: 'ash', key: 'mergeEditor.conflictNavigation' }, 'Merge conflicts'));
 		this.previousButton = this._register(new Button(navigation, {
+			...defaultButtonStyles,
 			label: localize({ bundle: 'ash', key: 'mergeEditor.previousConflict' }, 'Previous Conflict'),
 			onClick: () => this.navigate(-1, false),
 		}));
 		this.nextButton = this._register(new Button(navigation, {
+			...defaultButtonStyles,
 			label: localize({ bundle: 'ash', key: 'mergeEditor.nextConflict' }, 'Next Conflict'),
 			onClick: () => this.navigate(1, false),
 		}));
 		this.previousUnresolvedButton = this._register(new Button(navigation, {
+			...defaultButtonStyles,
 			label: localize({ bundle: 'ash', key: 'mergeEditor.previousUnresolvedConflict' }, 'Previous Unresolved'),
 			onClick: () => this.navigate(-1, true),
 		}));
 		this.nextUnresolvedButton = this._register(new Button(navigation, {
+			...defaultButtonStyles,
 			label: localize({ bundle: 'ash', key: 'mergeEditor.nextUnresolvedConflict' }, 'Next Unresolved'),
 			onClick: () => this.navigate(1, true),
 		}));
 		this.acceptRemainingCurrentButton = this._register(new Button(navigation, {
+			...defaultButtonStyles,
 			label: localize({ bundle: 'ash', key: 'mergeEditor.acceptRemainingCurrent' }, 'Accept Remaining Current'),
 			onClick: () => this.acceptRemaining('current'),
 		}));
 		this.acceptRemainingIncomingButton = this._register(new Button(navigation, {
+			...defaultButtonStyles,
 			label: localize({ bundle: 'ash', key: 'mergeEditor.acceptRemainingIncoming' }, 'Accept Remaining Incoming'),
 			onClick: () => this.acceptRemaining('incoming'),
 		}));
 		this.baseToggleButton = this._register(new Button(navigation, {
+			...defaultButtonStyles,
 			label: localize({ bundle: 'ash', key: 'mergeEditor.showBase' }, 'Show Base'),
 			checked: false,
 			onClick: () => { this.showBase = !this.showBase; this.updateLayout(); },
 		}));
 		this.layoutToggleButton = this._register(new Button(navigation, {
+			...defaultButtonStyles,
 			label: localize({ bundle: 'ash', key: 'mergeEditor.useColumns' }, 'Use Columns'),
 			checked: false,
 			onClick: () => { this.columnLayout = !this.columnLayout; this.updateLayout(); },
@@ -324,6 +333,7 @@ export class MergeEditor extends Disposable {
 			row.className = 'ash-merge-hunk';
 			if (hunk.index === this.activeHunk) row.classList.add('active');
 			const select = this.hunkButtons.add(new Button(row, {
+				...defaultButtonStyles,
 				label: localize({ bundle: 'ash', key: 'mergeEditor.block' }, 'Conflict {0}', hunk.index + 1),
 				onClick: () => { this.activeHunk = hunk.index; this.revealHunk(hunk); },
 			}));
@@ -433,7 +443,11 @@ export class MergeEditor extends Disposable {
 		node.setAttribute('aria-label', `${localize({ bundle: 'ash', key: 'mergeEditor.block' }, 'Conflict {0}', hunk.index + 1)} — ${sideLabel(side)}`);
 		let focusButton: Button | undefined;
 		const addAction = (choice: MergeEditorChoice, label: string): void => {
-			const button = this.zoneButtons.add(new Button(node, { label, onClick: () => this.acceptHunk(hunk.index, choice) }));
+			const button = this.zoneButtons.add(new Button(node, {
+				...defaultButtonStyles,
+				label,
+				onClick: () => this.acceptHunk(hunk.index, choice),
+			}));
 			this.hunkActionButtons.push(button);
 			if (this.pendingActionFocus?.index === hunk.index && this.pendingActionFocus.action === choice) focusButton = button;
 		};
@@ -455,6 +469,7 @@ export class MergeEditor extends Disposable {
 					const markHandled = !hunk.handled;
 					const action = markHandled ? 'markHandled' : 'markUnhandled';
 					const button = this.zoneButtons.add(new Button(node, {
+						...defaultButtonStyles,
 						label: markHandled
 							? localize({ bundle: 'ash', key: 'mergeEditor.markHandled' }, 'Mark Handled')
 							: localize({ bundle: 'ash', key: 'mergeEditor.markUnhandled' }, 'Mark Unhandled'),

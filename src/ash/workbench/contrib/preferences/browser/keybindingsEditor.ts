@@ -1,3 +1,8 @@
+import {
+	defaultButtonStyles,
+	defaultInputBoxStyles,
+	defaultKeybindingLabelStyles,
+} from '../../../../platform/theme/browser/defaultStyles.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput } from '../../../common/editor.js';
@@ -98,6 +103,7 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 		const toolbar = h(ownerDocument, 'div');
 		toolbar.className = 'ash-keybindings-toolbar';
 		this.searchInput = this._register(new InputBox(toolbar, {
+			inputBoxStyles: defaultInputBoxStyles,
 			type: 'search',
 			placeholder: 'Search keybindings',
 			ariaLabel: 'Search keybindings',
@@ -200,6 +206,7 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 		const keyField = h(ownerDocument, 'label');
 		keyField.textContent = 'Keybinding';
 		this.keyInput = this._register(new InputBox(keyField, {
+			inputBoxStyles: defaultInputBoxStyles,
 			placeholder: 'Press the desired key combination',
 			ariaLabel: 'Record keybinding',
 			presentation: 'field',
@@ -215,6 +222,7 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 		const whenField = h(ownerDocument, 'label');
 		whenField.textContent = 'When';
 		this.whenInput = this._register(new InputBox(whenField, {
+			inputBoxStyles: defaultInputBoxStyles,
 			placeholder: 'Optional context expression',
 			ariaLabel: 'Keybinding when condition',
 			presentation: 'field',
@@ -225,12 +233,14 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 		const actions = h(ownerDocument, 'div');
 		actions.className = 'ash-keybindings-recorder-actions';
 		this.saveButton = this._register(new Button(actions, {
+			...defaultButtonStyles,
 			label: 'Save',
 			presentation: 'primary',
 			onClick: () => void this.saveEditingItem(),
 		}));
 		this.saveButton.toggleClassName('ash-keybindings-save', true);
 		this.cancelButton = this._register(new Button(actions, {
+			...defaultButtonStyles,
 			label: 'Cancel',
 			presentation: 'secondary',
 			onClick: () => { if (!this.saving) this.closeRecorder(); },
@@ -444,6 +454,7 @@ class KeyboardShortcutRow extends Disposable {
 		actions.className = 'ash-keybindings-row-actions';
 		actions.setAttribute('role', 'cell');
 		this.edit = this._register(new Button(actions, {
+			...defaultButtonStyles,
 			label: item.source === 'user' ? 'Edit' : 'Add',
 			title: item.source === 'user' ? 'Edit keybinding' : 'Add keybinding',
 			presentation: 'secondary',
@@ -453,6 +464,7 @@ class KeyboardShortcutRow extends Disposable {
 		this.edit.toggleClassName('ash-keybindings-row-action', true);
 		if (item.source === 'user') {
 			this.remove = this._register(new Button(actions, {
+				...defaultButtonStyles,
 				label: 'Remove',
 				title: 'Remove keybinding',
 				presentation: 'danger',
@@ -479,7 +491,11 @@ class KeyboardShortcutRow extends Disposable {
 			this.keybindingLabel.value.keybinding = keybinding;
 		} else {
 			this.key.textContent = '';
-			this.keybindingLabel.value = new KeybindingLabel(this.key, { keybinding, presentation: 'keycap' });
+			this.keybindingLabel.value = new KeybindingLabel(this.key, {
+				...defaultKeybindingLabelStyles,
+				keybinding,
+				presentation: 'keycap',
+			});
 		}
 		this.when.textContent = item.when || '—';
 		this.source.textContent = item.sourceLabel;

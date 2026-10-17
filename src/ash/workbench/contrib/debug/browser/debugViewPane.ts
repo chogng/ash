@@ -1,3 +1,8 @@
+import {
+	defaultButtonStyles,
+	defaultCheckboxStyles,
+	defaultInputBoxStyles,
+} from '../../../../platform/theme/browser/defaultStyles.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { DEBUG_CONFIGURE_COMMAND_ID } from './debugCommands.js';
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
@@ -136,6 +141,7 @@ export class DebugViewPane extends ViewPane {
 		const launch = h(document, "div");
 		launch.className = "ash-debug-launch";
 		this.startButton = this._register(new Button(launch, {
+			...defaultButtonStyles,
 			label: localize("debug.start", "Start Debugging"),
 			icon: Lxicon.start,
 			iconOnly: true,
@@ -145,6 +151,7 @@ export class DebugViewPane extends ViewPane {
 		this.configurationsElement = select(document, localize("debug.configuration", "Debug configuration"));
 		launch.append(this.configurationsElement);
 		this.configureButton = this._register(new Button(launch, {
+			...defaultButtonStyles,
 			label: localize("debug.configure", "Open launch.json"),
 			icon: Lxicon.settings,
 			iconOnly: true,
@@ -172,6 +179,7 @@ export class DebugViewPane extends ViewPane {
 		this.welcome.list.remove();
 		this.welcome.body.classList.add("ash-debug-welcome-content");
 		this.welcomeButton = this._register(new Button(this.welcome.body, {
+			...defaultButtonStyles,
 			label: localize("debug.createLaunch", "Create a launch.json file"),
 			presentation: "primary",
 			onClick: () => { void this.configure().catch(error => { if (!isCancellationError(error)) { this.error = message(error); this.render(); } }); },
@@ -207,6 +215,7 @@ export class DebugViewPane extends ViewPane {
 		this.watchInput.type = "text";
 		this.watchForm.append(this.watchInput);
 		this.addWatchButton = this._register(new Button(this.watchForm, {
+			...defaultButtonStyles,
 			label: localize("debug.addWatch", "Add watch expression"),
 			icon: Lxicon.add,
 			iconOnly: true,
@@ -506,6 +515,7 @@ export class DebugViewPane extends ViewPane {
 		const form = h(this.element.ownerDocument, "form");
 		form.className = "ash-debug-variable-edit";
 		const input = controls.add(new InputBox(form, {
+			inputBoxStyles: defaultInputBoxStyles,
 			ariaLabel: localize("debug.editVariable", "Value of {0}", row.name),
 			presentation: "compact",
 		}));
@@ -628,7 +638,11 @@ export class DebugViewPane extends ViewPane {
 			const label = h(this.element.ownerDocument, "label");
 			label.textContent = title;
 			form.append(label);
-			const input = controls.add(new InputBox(label, { ariaLabel: title, presentation: "compact" }));
+			const input = controls.add(new InputBox(label, {
+				inputBoxStyles: defaultInputBoxStyles,
+				ariaLabel: title,
+				presentation: "compact",
+			}));
 			input.value = value;
 			const capabilities = this.debug.session?.capabilities;
 			const supported = key === "condition" ? capabilities?.supportsConditionalBreakpoints
@@ -664,8 +678,17 @@ export class DebugViewPane extends ViewPane {
 			if (breakpoint) this.breakpointItems.get(breakpoint.id)?.focusEdit();
 			else this.breakpointToolbar.focus();
 		};
-		controls.add(new Button(form, { label: localize("debug.saveBreakpoint", "Save breakpoint"), type: "submit", presentation: "primary" }));
-		controls.add(new Button(form, { label: localize("debug.cancelBreakpoint", "Cancel breakpoint edit"), onClick: close }));
+		controls.add(new Button(form, {
+			...defaultButtonStyles,
+			label: localize("debug.saveBreakpoint", "Save breakpoint"),
+			type: "submit",
+			presentation: "primary",
+		}));
+		controls.add(new Button(form, {
+			...defaultButtonStyles,
+			label: localize("debug.cancelBreakpoint", "Cancel breakpoint edit"),
+			onClick: close,
+		}));
 		controls.add(addDisposableListener(form, "keydown", event => {
 			if (event.key === "Escape" && !event.isComposing) {
 				event.preventDefault();
@@ -922,6 +945,7 @@ class DebugVariableItem extends Disposable {
 		this.action.className = "ash-debug-variable";
 		this.hover = this._register(getHoverDelegate().setupHover({ target: this.action, content: "" }));
 		this.dataBreakpoint = this._register(new Button(this.domNode, {
+			...defaultButtonStyles,
 			label: localize("debug.breakOnData", "Break on data access"),
 			icon: Lxicon.add,
 			iconOnly: true,
@@ -970,6 +994,7 @@ function watchItem(owner: DisposableStore, document: Document, expression: strin
 	owner.add(getHoverDelegate().setupHover({ target: value, content: value.textContent }));
 	item.append(value);
 	const remove = owner.add(new Button(item, {
+		...defaultButtonStyles,
 		label: localize("debug.removeWatch", "Remove watch expression"),
 		icon: Lxicon.close,
 		iconOnly: true,
@@ -980,7 +1005,13 @@ function watchItem(owner: DisposableStore, document: Document, expression: strin
 	remove.dataset.watchIndex = String(index);
 	return item;
 }
-function exceptionItem(owner: DisposableStore, document: Document, filter: string, label: string, description: string | undefined, checked: boolean): HTMLLIElement { const item = h(document, "li"); const control = owner.add(new Checkbox(item, { label, checked })); control.element.classList.add("ash-debug-exception-toggle"); control.input.dataset.exceptionFilter = filter; if (description) control.element.title = description; return item; }
+function exceptionItem(owner: DisposableStore, document: Document, filter: string, label: string, description: string | undefined, checked: boolean): HTMLLIElement {
+	const item = h(document, "li"); const control = owner.add(new Checkbox(item, {
+		...defaultCheckboxStyles,
+		label,
+		checked,
+	})); control.element.classList.add("ash-debug-exception-toggle"); control.input.dataset.exceptionFilter = filter; if (description) control.element.title = description; return item;
+}
 class DebugBreakpointItem extends Disposable {
 	public readonly domNode: HTMLLIElement;
 	private readonly checkbox: Checkbox;
@@ -992,6 +1023,7 @@ class DebugBreakpointItem extends Disposable {
 		super();
 		this.domNode = h(document, "li");
 		this.checkbox = this._register(new Checkbox(this.domNode, {
+			...defaultCheckboxStyles,
 			onChange: enabled => debug.updateBreakpoint(this.breakpoint.id, { enabled }),
 		}));
 		this.action = h(document, "button");
@@ -1006,6 +1038,7 @@ class DebugBreakpointItem extends Disposable {
 			}
 		}));
 		this.edit = this._register(new Button(this.domNode, {
+			...defaultButtonStyles,
 			label: localize("debug.editBreakpoint", "Edit breakpoint"),
 			icon: Lxicon.settings,
 			iconOnly: true,
@@ -1014,6 +1047,7 @@ class DebugBreakpointItem extends Disposable {
 			onClick: () => edit(this.breakpoint),
 		}));
 		this._register(new Button(this.domNode, {
+			...defaultButtonStyles,
 			label: localize("debug.removeBreakpoint", "Remove breakpoint"),
 			icon: Lxicon.close,
 			iconOnly: true,

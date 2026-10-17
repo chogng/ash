@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../platform/theme/browser/defaultStyles.js';
 import type { IDelayedHoverOptions } from "../../../base/browser/ui/hover/hover.js";
 import { HoverPosition } from "../../../base/browser/ui/hover/hoverWidget.js";
 import { getActivityHoverPosition, type IActivityHoverOptions } from "./compositeBarActions.js";
@@ -57,6 +58,7 @@ export class GlobalCompositeBar extends Disposable {
 		this._register(toDisposable(() => this.domNode.remove()));
 		this.manageMenu = this._register(this.menuService.createMenu(MenuId.GlobalActivity));
 		this.actionBar = this._register(new ActionBar(this.domNode, {
+			actionViewItemOptions: { buttonStyles: defaultButtonStyles },
 			ariaLabel: this.label('workbench.activityBarGlobalActions', 'Activity Bar global actions'),
 			orientation: 'vertical',
 			actionViewItemProvider: (action, options) => this.createActionViewItem(action, options, {

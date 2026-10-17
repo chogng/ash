@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { ExtensionSettingBinding } from './extensionSettingBinding.js';
 import { GitHubSettingsModel } from '../../github/browser/githubSettingsModel.js';
 import { TraceSettingsModel } from '../../trace/browser/traceSettingsModel.js';
@@ -139,8 +140,12 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		}));
 		const openJsonLabel = localize({ bundle: 'ash.settings', key: 'editor.openJSON' }, 'Open Settings (JSON)');
 		const openJson = this._register(new Button(this.searchWidget.domNode, {
-			label: openJsonLabel, title: openJsonLabel,
-			icon: Lxicon.code, iconOnly: true, size: 'small',
+			...defaultButtonStyles,
+			label: openJsonLabel,
+			title: openJsonLabel,
+			icon: Lxicon.code,
+			iconOnly: true,
+			size: 'small',
 			onClick: () => {
 				void this.preferencesService.openUserSettings({ jsonEditor: true, query: this.searchWidget?.value }).catch(error => this.settingsModel.reportStatus(String(error), true));
 			},

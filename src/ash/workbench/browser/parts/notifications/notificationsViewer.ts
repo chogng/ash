@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import './media/notificationsList.css';
 import './media/notificationsActions.css';
 import { h } from '../../../../base/browser/dom.js';
@@ -69,6 +70,7 @@ export class NotificationTemplateRenderer extends Disposable {
 			for (const [index, action] of item.actions.primary.entries()) {
 				const notificationAction: IAction = { id: action.id, label: action.label, tooltip: '', enabled: true, run: () => action.run() };
 				const button = this._register(new Button(actions, {
+					...defaultButtonStyles,
 					label: action.label,
 					title: action.label,
 					presentation: index === 0 ? 'primary' : 'secondary',
@@ -104,7 +106,7 @@ export class NotificationTemplateRenderer extends Disposable {
 /** Keeps notification identity on the control owned by the action view item. */
 class NotificationCloseActionViewItem extends ButtonActionViewItem {
 	constructor(action: IAction, private readonly id: number, private readonly presentation: 'toast' | 'center') {
-		super(action);
+		super(action, { buttonStyles: defaultButtonStyles });
 	}
 
 	public override render(container: HTMLElement): void {

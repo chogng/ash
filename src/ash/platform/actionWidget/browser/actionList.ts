@@ -1,3 +1,10 @@
+import {
+	defaultButtonStyles,
+	defaultDialogStyles,
+	defaultInputBoxStyles,
+	defaultMenuStyles,
+	defaultKeybindingLabelStyles,
+} from '../../theme/browser/defaultStyles.js';
 import { addDisposableListener, getActiveElement, getWindow, h, isHTMLElement, stopEvent } from '../../../base/browser/dom.js';
 import { ActionViewItem } from '../../../base/browser/ui/actionbar/actionViewItems.js';
 import { Button } from '../../../base/browser/ui/button/button.js';
@@ -132,6 +139,7 @@ export class ActionList<T> extends Disposable {
 			filterHost.hidden = options.filterVisible === false;
 			this.domNode.append(filterHost);
 			this.filter = this._register(new InputBox(filterHost, {
+				inputBoxStyles: defaultInputBoxStyles,
 				type: 'search',
 				presentation: 'compact',
 				ariaLabel: options.ariaLabel ?? localize('actionWidget.filter', 'Filter actions'),
@@ -179,6 +187,7 @@ export class ActionList<T> extends Disposable {
 			previewHost.className = 'ash-action-widget-preview';
 			this.domNode.append(previewHost);
 			this.preview = this._register(new Button(previewHost, {
+				...defaultButtonStyles,
 				label: localize('actionWidget.preview', 'Preview'),
 				enabled: false,
 				onClick: () => {
@@ -218,6 +227,8 @@ export class ActionList<T> extends Disposable {
 				const lifetime = new DisposableStore();
 				const provider = lifetime.add(createHelpProvider(getActiveElement(this.domNode.ownerDocument)));
 				const dialog = lifetime.add(new Dialog(container, {
+					buttonStyles: defaultButtonStyles,
+					dialogStyles: defaultDialogStyles,
 					title: localize('actionWidget.helpTitle', 'Action menu accessibility help'),
 					content: provider.provideContent(),
 				}));
@@ -272,13 +283,15 @@ export class ActionList<T> extends Disposable {
 		this.menuResources.clear();
 		this.visibleItems = visible;
 		const menu = this.menu = this.menuResources.add(new Menu(this.itemsDomNode, {
+			buttonStyles: defaultButtonStyles,
+			keybindingLabelStyles: defaultKeybindingLabelStyles,
 			actions,
 			className: 'ash-action-widget-menu',
 			getCheckedActionsRepresentation: () => 'radio',
 			getKeybinding: action => entries.get(action.id)?.keybinding,
 			getAriaDescription: action => [entries.get(action.id)?.detail, entries.get(action.id)?.badge].filter(Boolean).join(' · '),
 			actionViewItemProvider: action => entries.get(action.id)?.kind === ActionListItemKind.Header ? new ActionListHeader(action) : undefined,
-		}));
+		}, defaultMenuStyles));
 		menu.element.setAttribute('aria-label', localize('actionWidget.label', 'Actions'));
 		const hint = this.domNode.getAttribute('aria-description');
 		if (hint) {

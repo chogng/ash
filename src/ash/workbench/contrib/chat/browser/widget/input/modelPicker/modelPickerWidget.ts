@@ -1,3 +1,9 @@
+import {
+	defaultButtonStyles,
+	defaultMenuStyles,
+	defaultToggleStyles,
+	defaultKeybindingLabelStyles,
+} from '../../../../../../../platform/theme/browser/defaultStyles.js';
 import './media/modelPicker.css';
 import { Button } from '../../../../../../../base/browser/ui/button/button.js';
 import { Menu } from '../../../../../../../base/browser/ui/menu/menu.js';
@@ -162,6 +168,7 @@ export class ModelPickerWidget extends Disposable {
 			guidance.textContent = localize('chat.modelPicker.noModelsPlaceholder', 'Set up models in Settings');
 			header.append(message, guidance);
 			const settingsButton = session.add(new Button(header, {
+				...defaultButtonStyles,
 				label: localize('chat.modelPicker.openSettings', 'Open Settings'),
 				presentation: 'primary',
 			}));
@@ -172,12 +179,15 @@ export class ModelPickerWidget extends Disposable {
 		} else {
 			header.className = 'ash-chat-model-picker-auto';
 			autoSwitch = session.add(new Switch(header, {
+				...defaultToggleStyles,
 				label: localize('chat.modelPicker.auto', 'Auto'),
 				ariaLabel: localize('chat.modelPicker.auto', 'Auto'),
 				checked: this.delegate.isAutomaticModel(),
 				contentPlacement: 'before-control',
 			}));
 			session.add(new Menu(footer, {
+				buttonStyles: defaultButtonStyles,
+				keybindingLabelStyles: defaultKeybindingLabelStyles,
 				actions: [{
 					id: 'ash.chat.input.addModels',
 					label: localize('chat.modelPicker.addModels', 'Add Models'),
@@ -188,7 +198,7 @@ export class ModelPickerWidget extends Disposable {
 						return this.delegate.openSettings();
 					},
 				}],
-			}));
+			}, defaultMenuStyles));
 		}
 		let selecting = false;
 		let active: { entry: ModelCatalogEntry; row: HTMLElement; } | undefined;

@@ -435,3 +435,29 @@ test("Menu preserves submenu focus and closes after focus leaves or the parent s
 		mock.timers.reset();
 	}
 });
+
+test("Menu restores its borrowed popup shell styles on disposal", async () => {
+	const dom = new JSDOM("<!doctype html><body><div class='ash-context-view'></div></body>");
+	const { Menu } = await import("../../browser/ui/menu/menu.js");
+	const shell = dom.window.document.querySelector<HTMLElement>('.ash-context-view')!;
+	const border = '--ash-menu-style-border-color';
+	const background = '--ash-menu-style-background-color';
+	shell.style.setProperty(border, '#123456', 'important');
+	const menu = new Menu(shell, { actions: [] }, {
+		foregroundColor: '#ffffff', backgroundColor: '#111111',
+		selectionForegroundColor: '#ffffff', selectionBackgroundColor: '#222222',
+		borderColor: '#333333', separatorColor: '#444444', shadowColor: '#555555',
+	});
+	try {
+		assert.equal(shell.style.getPropertyValue(border), '#333333');
+		assert.equal(shell.style.getPropertyValue(background), '#111111');
+		menu.dispose();
+		assert.equal(shell.style.getPropertyValue(border), '#123456');
+		assert.equal(shell.style.getPropertyPriority(border), 'important');
+		assert.equal(shell.style.getPropertyValue(background), '');
+		assert.equal(shell.childElementCount, 0);
+	} finally {
+		menu.dispose();
+		dom.window.close();
+	}
+});

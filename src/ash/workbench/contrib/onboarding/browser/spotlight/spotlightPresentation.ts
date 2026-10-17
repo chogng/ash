@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, getWindow } from '../../../../../base/browser/dom.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
 import type { CancellationToken } from '../../../../../base/common/cancellation.js';
@@ -67,11 +68,13 @@ export class SpotlightPresentation {
 			this.container.append(root);
 			resources.add(toDisposable(() => root.remove()));
 			const dismiss = resources.add(new Button(actions, {
+				...defaultButtonStyles,
 				label: localize('onboarding.dismiss', 'Dismiss'),
 				presentation: 'secondary',
 				onClick: () => finish('dismissed'),
 			}));
 			const next = resources.add(new Button(actions, {
+				...defaultButtonStyles,
 				label: index === total - 1 ? localize('onboarding.done', 'Done') : localize('onboarding.next', 'Next'),
 				presentation: 'primary',
 				onClick: () => finish('completed'),

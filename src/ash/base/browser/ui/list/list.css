@@ -7,6 +7,20 @@
 	cursor: default;
 }
 
+/* Trees own their selection treatments; plain lists consume the host's row colors here. */
+.ash-list:not(.ash-tree) > .ash-list-row:hover:not(.selected) {
+	background: var(--ash-list-style-list-hover-background);
+}
+
+.ash-list:not(.ash-tree) > .ash-list-row.selected {
+	background: var(--ash-list-style-list-inactive-selection-background);
+}
+
+.ash-list:not(.ash-tree):focus > .ash-list-row.selected {
+	color: var(--ash-list-style-list-active-selection-foreground);
+	background: var(--ash-list-style-list-active-selection-background);
+}
+
 /* Keep the scrollbar above selected rows and sticky tree rows. */
 .ash-list-scrollable > .ash-scrollbar-track-vertical {
 	z-index: 14;

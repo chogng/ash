@@ -1,4 +1,9 @@
 import {
+	defaultMenuStyles,
+	defaultButtonStyles,
+	defaultKeybindingLabelStyles,
+} from '../../theme/browser/defaultStyles.js';
+import {
 	type ContextMenuAnchor,
 	type IContextMenuDelegate,
 } from "../../../base/browser/contextmenu.js";
@@ -103,6 +108,8 @@ export class ContextMenuHandler extends Disposable {
 		const anchor = toContextViewAnchor(delegate.getAnchor());
 		if (didHide) { return false; }
 		const menu = new Menu(this.contextViewService.container, {
+			buttonStyles: defaultButtonStyles,
+			keybindingLabelStyles: defaultKeybindingLabelStyles,
 			actions,
 			openSubmenusImmediatelyOnHover: delegate.openSubmenusImmediatelyOnHover,
 			contextViewContainer: this.contextViewService.container,
@@ -115,7 +122,7 @@ export class ContextMenuHandler extends Disposable {
 			getKeybinding: delegate.getKeyBinding ?? ((action) =>
 				this.keybindingService.lookupKeybinding(action.id)),
 			onDidRequestClose: () => request.hide(),
-		});
+		}, defaultMenuStyles);
 		if (didHide) { menu.dispose(); return false; }
 		disposables.add(menu);
 		// Replacement callbacks can cancel this request or open a successor before it mounts.

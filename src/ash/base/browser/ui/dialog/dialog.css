@@ -3,11 +3,16 @@
 	max-width: none;
 	padding: 0;
 	overflow: hidden;
-	border: var(--ash-strokeThickness) solid var(--ash-dialog-border);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-dialog-style-dialog-border, var(--ash-dialog-border));
 	border-radius: var(--ash-cornerRadius-medium);
-	color: var(--ash-foreground);
-	background: var(--ash-dialog-background);
-	box-shadow: 0 12px 36px var(--ash-dialog-shadow);
+	color: var(--ash-dialog-style-dialog-foreground, var(--ash-foreground));
+	background: var(
+		--ash-dialog-style-dialog-background,
+		var(--ash-dialog-background)
+	);
+	box-shadow: 0 12px 36px
+		var(--ash-dialog-style-dialog-shadow, var(--ash-dialog-shadow));
 	font: inherit;
 }
 
@@ -18,7 +23,7 @@
 .ash-dialog-title {
 	margin: 0;
 	padding: 16px 20px 8px;
-	color: var(--ash-foreground);
+	color: var(--ash-dialog-style-dialog-foreground, var(--ash-foreground));
 	font-size: var(--ash-fontSize-heading2);
 	font-weight: var(--ash-fontWeight-semiBold);
 }
@@ -40,7 +45,7 @@
 }
 
 .ash-dialog-message {
-	color: var(--ash-foreground);
+	color: var(--ash-dialog-style-dialog-foreground, var(--ash-foreground));
 	font-size: 13px;
 }
 

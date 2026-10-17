@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, h, stopEvent } from '../../../../base/browser/dom.js';
 import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
 import { observeResize } from '../../../../base/browser/observer.js';
@@ -36,18 +37,32 @@ export class ColorPickerWidget extends Disposable implements IContentWidget {
 			attributes: { 'aria-label': localize('colorPicker.documentFormat', 'Document color format') },
 		});
 		const heading = h(ownerDocument, 'div', { className: 'stanza-editor-color-picker-header' }, this.presentationSelect);
-		this._register(new Button(heading, { label: localize('colorPicker.close', 'Close'), size: 'small', onClick: onCancel }));
+		this._register(new Button(heading, {
+			...defaultButtonStyles,
+			label: localize('colorPicker.close', 'Close'),
+			size: 'small',
+			onClick: onCancel,
+		}));
 		const actions = h(ownerDocument, 'div', { className: 'stanza-editor-color-picker-actions' });
 		this._register(new Button(actions, {
-			label: localize('colorPicker.restore', 'Restore original color'), size: 'small', onClick: () => {
+			...defaultButtonStyles,
+			label: localize('colorPicker.restore', 'Restore original color'),
+			size: 'small',
+			onClick: () => {
 				if (this.model) {
 					this.model.color = this.model.originalColor;
 					this.onColorChange(this.model.color);
 					this.model.flushColor();
 				}
-			}
+			},
 		}));
-		this.applyButton = this._register(new Button(actions, { label: localize('apply', 'Apply'), presentation: 'primary', size: 'small', onClick: onApply }));
+		this.applyButton = this._register(new Button(actions, {
+			...defaultButtonStyles,
+			label: localize('apply', 'Apply'),
+			presentation: 'primary',
+			size: 'small',
+			onClick: onApply,
+		}));
 		this.applyButton.domNode.classList.add('stanza-editor-color-picker-apply');
 		this.domNode = h(ownerDocument, 'div', {
 			className: 'stanza-editor-color-picker',

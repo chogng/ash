@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, getActiveElement, getWindow, scheduleAtNextAnimationFrame } from '../../../../base/browser/dom.js';
 import { observeResize } from '../../../../base/browser/observer.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
@@ -278,6 +279,7 @@ export class ChatGPTNavigationView extends ViewPane {
 				this.focusConversation(conversation.id);
 			}, conversation.pinned ? Lxicon.pinned : Lxicon.unpin);
 		const bar = this.rows.add(new ActionBar(row, {
+			actionViewItemOptions: { buttonStyles: defaultButtonStyles },
 			actions: [more, { ...pin, checked: conversation.pinned === true }],
 			ariaLabel: localize('sessions.chatgpt.conversationActions', 'Actions for {0}', conversation.title),
 			actionViewItemProvider: action => new LabelActionViewItem(action, { label: '', ariaLabel: action.label }),

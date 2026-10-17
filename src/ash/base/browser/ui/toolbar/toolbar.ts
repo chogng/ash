@@ -1,3 +1,4 @@
+import type { IButtonStyles } from '../button/button.js';
 import './toolbar.css';
 import { localize } from "../../../../nls.js";
 import type { IContextMenuProvider } from "../../contextmenu.js";
@@ -11,6 +12,7 @@ import type { AnchorPosition } from "../contextview/contextview.js";
 import { DropdownMenuActionViewItem } from "../dropdown/dropdownMenuActionViewItem.js";
 
 export interface ToolBarOptions {
+	readonly buttonStyles?: IButtonStyles;
 	readonly contextMenuProvider: IContextMenuProvider;
 	readonly ariaLabel?: string;
 	readonly orientation?: ActionBarOrientation;
@@ -47,7 +49,7 @@ export class ToolBar extends Disposable {
 	constructor(container: HTMLElement, options: ToolBarOptions) {
 		super();
 		this.moreActionsPlacement = options.moreActionsPlacement;
-		const actionViewItemOptions: ActionViewItemOptions = { hoverAnchorPosition: options.hoverAnchorPosition };
+		const actionViewItemOptions: ActionViewItemOptions = { buttonStyles: options.buttonStyles, hoverAnchorPosition: options.hoverAnchorPosition };
 		this.actionBar = this._register(new ActionBar(container, {
 			ariaLabel: options.ariaLabel,
 			orientation: options.orientation,

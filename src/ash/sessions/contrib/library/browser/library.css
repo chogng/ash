@@ -296,7 +296,7 @@
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
-[data-color-scheme^="high-contrast-"] .ash-library-item,
-[data-color-scheme^="high-contrast-"] .ash-library-details {
+:is(.hc-black, .hc-light) .ash-library-item,
+:is(.hc-black, .hc-light) .ash-library-details {
 	border-color: var(--ash-contrastBorder);
 }

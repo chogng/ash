@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
 import { IMarkdownRendererService } from '../../../../platform/markdown/browser/markdownRenderer.js';
 import { Range } from '../../../../editor/common/core/range.js';
@@ -226,7 +227,12 @@ export class ExtensionsEditor extends EditorPane {
 		this.contentHeading.textContent = localize({ bundle: 'ash.extensions', key: 'capabilities' }, 'Capabilities');
 		this.status.textContent = localize({ bundle: 'ash.extensions', key: 'loading' }, 'Loading Extensions…');
 		const button = (label: string, action: () => Promise<void>, enabled = true, presentation: 'primary' | 'secondary' = 'secondary', allowWhileWorking = false) => {
-			const control = this.actionResources.add(new Button(this.actions, { label, presentation, enabled }));
+			const control = this.actionResources.add(new Button(this.actions, {
+				...defaultButtonStyles,
+				label,
+				presentation,
+				enabled,
+			}));
 			this.actionResources.add(control.onDidClick(() => {
 				if (this.working) { if (allowWhileWorking) { void action(); } return; }
 				this.working = true;

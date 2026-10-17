@@ -10,7 +10,7 @@ export interface IPagedRenderer<TElement, TTemplateData> extends IListRenderer<T
 	renderPlaceholder(index: number, templateData: TTemplateData): void;
 }
 
-export interface IPagedListOptions<T> extends Pick<ListOptions<T>, 'ariaLabel' | 'role' | 'accessibilityProvider' | 'multipleSelectionSupport' | 'mouseSupport'> {
+export interface IPagedListOptions<T> extends Pick<ListOptions<T>, 'ariaLabel' | 'role' | 'accessibilityProvider' | 'multipleSelectionSupport' | 'mouseSupport' | 'styles'> {
 	readonly keyboardSupport?: boolean;
 }
 
@@ -37,6 +37,7 @@ export class PagedList<T> extends Disposable {
 		const accessibilityProvider = options.accessibilityProvider;
 		const resolvedRole = options.role === 'tree' ? 'treeitem' : 'option';
 		this.widget = this._register(new List<number>(container, {
+			styles: options.styles,
 			ariaLabel: options.ariaLabel ?? user,
 			role: options.role,
 			multipleSelectionSupport: options.multipleSelectionSupport,

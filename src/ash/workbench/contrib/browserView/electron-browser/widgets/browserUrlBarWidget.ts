@@ -1,3 +1,4 @@
+import { defaultInputBoxStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { InputBox } from '../../../../../base/browser/ui/inputbox/inputbox.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../nls.js';
@@ -26,7 +27,12 @@ export class BrowserUrlBarWidget extends Disposable {
 		@IQuickInputService private readonly quickInput: IQuickInputService,
 	) {
 		super();
-		this.input = this._register(new InputBox(parent, { presentation: 'compact', enabled: false, ariaLabel: localize({ bundle: 'ash.workbench', key: 'browser.address' }, 'Browser address') }));
+		this.input = this._register(new InputBox(parent, {
+			inputBoxStyles: defaultInputBoxStyles,
+			presentation: 'compact',
+			enabled: false,
+			ariaLabel: localize({ bundle: 'ash.workbench', key: 'browser.address' }, 'Browser address'),
+		}));
 		this.element = this.input.element;
 		this.element.classList.add('ash-browser-address');
 		this.inputElement = this.input.inputElement;

@@ -119,6 +119,6 @@
 	outline-offset: 2px;
 }
 
-[data-color-scheme^="high-contrast"] .ash-bulk-edit-entry {
+:is(.hc-black, .hc-light) .ash-bulk-edit-entry {
 	border-color: var(--ash-contrastBorder);
 }

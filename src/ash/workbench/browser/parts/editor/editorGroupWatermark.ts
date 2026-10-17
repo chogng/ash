@@ -1,3 +1,4 @@
+import { defaultKeybindingLabelStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import "./media/editorGroupWatermark.css";
 import { KeybindingLabel } from "../../../../base/browser/ui/keybindinglabel/keybindinglabel.js";
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
@@ -159,7 +160,11 @@ export class EditorGroupWatermark extends Disposable {
 			} else if (shortcut.label.value) {
 				shortcut.label.value.keybinding = keybinding;
 			} else {
-				shortcut.label.value = new KeybindingLabel(shortcut.row, { keybinding, presentation: 'keycap' });
+				shortcut.label.value = new KeybindingLabel(shortcut.row, {
+					...defaultKeybindingLabelStyles,
+					keybinding,
+					presentation: 'keycap',
+				});
 			}
 			if (keybinding) {
 				shortcut.row.setAttribute('aria-description', getKeybindingLabel(keybinding, KeybindingLabelStyle.Aria));

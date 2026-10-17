@@ -1,32 +1,47 @@
-.ash-sessions-window .ash-custom-view-page[data-custom-view-id='sessions.customView.automations'] {
+.ash-sessions-window
+	.ash-custom-view-page[data-custom-view-id="sessions.customView.automations"] {
 	padding-block: var(--ash-spacing-size320);
 }
-.ash-sessions-window .ash-custom-view-page[data-custom-view-id='sessions.customView.automations'] .ash-custom-view-header {
+.ash-sessions-window
+	.ash-custom-view-page[data-custom-view-id="sessions.customView.automations"]
+	.ash-custom-view-header {
 	flex-direction: row;
 	align-items: center;
 	flex-wrap: wrap;
 	gap: var(--ash-spacing-size80) var(--ash-spacing-size160);
 	margin-bottom: var(--ash-spacing-size320);
 }
-.ash-sessions-window .ash-custom-view-page[data-custom-view-id='sessions.customView.automations'] .ash-custom-view-header h1 {
+.ash-sessions-window
+	.ash-custom-view-page[data-custom-view-id="sessions.customView.automations"]
+	.ash-custom-view-header
+	h1 {
 	flex: 1 1 180px;
 	font-size: var(--ash-fontSize-heading2);
 }
-.ash-sessions-window .ash-custom-view-page[data-custom-view-id='sessions.customView.automations'] .ash-custom-view-header > p {
+.ash-sessions-window
+	.ash-custom-view-page[data-custom-view-id="sessions.customView.automations"]
+	.ash-custom-view-header
+	> p {
 	order: 3;
 	flex-basis: 100%;
 	line-height: 1.5;
 }
-.ash-sessions-window .ash-custom-view-page[data-custom-view-id='sessions.customView.automations'] .ash-custom-view-actions {
+.ash-sessions-window
+	.ash-custom-view-page[data-custom-view-id="sessions.customView.automations"]
+	.ash-custom-view-actions {
 	gap: var(--ash-spacing-size80);
 }
-.ash-sessions-window .ash-custom-view-page[data-custom-view-id='sessions.customView.automations'] [data-action-id='sessionsView.newAutomation'] {
+.ash-sessions-window
+	.ash-custom-view-page[data-custom-view-id="sessions.customView.automations"]
+	[data-action-id="sessionsView.newAutomation"] {
 	background: var(--ash-button-primaryBackground);
 	color: var(--ash-button-primaryForeground);
 	border-radius: var(--ash-cornerRadius-large);
 	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
 }
-.ash-sessions-window .ash-custom-view-page[data-custom-view-id='sessions.customView.automations'] [data-action-id='sessionsView.newAutomation']:enabled:hover {
+.ash-sessions-window
+	.ash-custom-view-page[data-custom-view-id="sessions.customView.automations"]
+	[data-action-id="sessionsView.newAutomation"]:enabled:hover {
 	background: var(--ash-button-primaryHoverBackground);
 }
 .ash-sessions-window .ash-automations {
@@ -69,7 +84,8 @@
 	padding: var(--ash-spacing-size120) var(--ash-spacing-size160);
 	color: var(--ash-description-foreground);
 	background: var(--ash-list-hoverBackground);
-	border: var(--ash-strokeThickness) solid var(--ash-contrastBorder, transparent);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, transparent);
 	border-radius: var(--ash-cornerRadius-large);
 }
 .ash-sessions-window .ash-automation-controls {
@@ -88,7 +104,7 @@
 	color: var(--ash-description-foreground);
 	border-radius: var(--ash-cornerRadius-large);
 }
-.ash-sessions-window .ash-automation-filters .ash-button[aria-pressed='true'] {
+.ash-sessions-window .ash-automation-filters .ash-button[aria-pressed="true"] {
 	color: var(--ash-foreground);
 	background: var(--ash-list-inactiveSelectionBackground);
 	border-color: var(--ash-contrastBorder, transparent);
@@ -232,7 +248,9 @@
 	font-size: var(--ash-fontSize-body2);
 	color: var(--ash-description-foreground);
 }
-.ash-sessions-window .ash-automation-card[data-enabled='false'] .ash-automation-state {
+.ash-sessions-window
+	.ash-automation-card[data-enabled="false"]
+	.ash-automation-state {
 	background: transparent;
 	border-color: var(--ash-border);
 }
@@ -287,23 +305,32 @@
 	flex: 1 1 240px;
 	min-width: 0;
 }
-.ash-sessions-window .ash-automation-run[data-status='needsInput'] .ash-automation-state {
+.ash-sessions-window
+	.ash-automation-run[data-status="needsInput"]
+	.ash-automation-state {
 	border-color: var(--ash-warning-foreground);
 }
-.ash-sessions-window .ash-automation-run[data-status='failed'] .ash-automation-state {
+.ash-sessions-window
+	.ash-automation-run[data-status="failed"]
+	.ash-automation-state {
 	border-color: var(--ash-error-foreground);
 }
-.ash-sessions-window .ash-automation-run[data-status='needsInput'] .ash-automation-state,
-.ash-sessions-window .ash-automation-run[data-status='failed'] .ash-automation-state {
+.ash-sessions-window
+	.ash-automation-run[data-status="needsInput"]
+	.ash-automation-state,
+.ash-sessions-window
+	.ash-automation-run[data-status="failed"]
+	.ash-automation-state {
 	font-weight: var(--ash-fontWeight-semiBold);
 	color: var(--ash-foreground);
 }
 .ash-sessions-window .ash-automation-card,
 .ash-sessions-window .ash-automation-run,
 .ash-sessions-window .ash-automation-empty {
-	outline: var(--ash-strokeThickness) solid var(--ash-contrastBorder, transparent);
+	outline: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, transparent);
 }
-.ash-sessions-window[data-color-scheme^='high-contrast'] .ash-automation-card {
+.ash-sessions-window:is(.hc-black, .hc-light) .ash-automation-card {
 	box-shadow: none;
 }
 .ash-sessions-window .ash-automations [hidden] {
@@ -313,7 +340,10 @@
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
-.ash-sessions-window .ash-automations .ash-automation-search input:focus-visible {
+.ash-sessions-window
+	.ash-automations
+	.ash-automation-search
+	input:focus-visible {
 	outline: none;
 }
 .ash-sessions-window .ash-automation-overview,
@@ -382,8 +412,10 @@
 	align-items: center;
 	gap: var(--ash-spacing-size80) var(--ash-spacing-size160);
 	padding: var(--ash-spacing-size120) var(--ash-spacing-size160);
-	border: var(--ash-strokeThickness) solid var(--ash-contrastBorder, var(--ash-border));
-	border-inline-start: var(--ash-spacing-size20) solid var(--ash-warning-foreground);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-border));
+	border-inline-start: var(--ash-spacing-size20) solid
+		var(--ash-warning-foreground);
 	border-radius: var(--ash-cornerRadius-large);
 }
 .ash-sessions-window .ash-automation-attention .ash-button,

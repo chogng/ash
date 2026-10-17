@@ -1,3 +1,8 @@
+import {
+	defaultButtonStyles,
+	defaultInputBoxStyles,
+	defaultSelectBoxStyles,
+} from '../../../../../platform/theme/browser/defaultStyles.js';
 import { h, type IDimension } from '../../../../../base/browser/dom.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
 import { InputBox } from '../../../../../base/browser/ui/inputbox/inputbox.js';
@@ -98,15 +103,26 @@ export class AICustomizationManagementEditor extends EditorPane {
 		this.note = h(document, 'p');
 		const toolbar = h(document, 'div');
 		toolbar.className = 'ash-hooks-toolbar';
-		this.scope = this._register(new SelectBox(toolbar, { options: [], presentation: 'field', contextViewProvider: this.contextView }));
+		this.scope = this._register(new SelectBox(toolbar, {
+			options: [], presentation: 'field', contextViewProvider: this.contextView
+		}, defaultSelectBoxStyles));
 		this.edit = this.button(toolbar, 'edit-scope');
 		this.ask = this.button(toolbar, 'ask-scope');
 		this.refreshButton = this.button(toolbar, 'refresh');
 		const title = h(document, 'h2');
 		title.textContent = localize('hooks.managementTitle', 'Agent Customizations: Hooks');
-		this.search = this._register(new InputBox(this.domNode, { type: 'search', ariaLabel: this.label('search', 'Search events, Hooks, commands, or paths'), presentation: 'field' }));
+		this.search = this._register(new InputBox(this.domNode, {
+			inputBoxStyles: defaultInputBoxStyles,
+			type: 'search',
+			ariaLabel: this.label('search', 'Search events, Hooks, commands, or paths'),
+			presentation: 'field',
+		}));
 		this._register(this.search.onDidChange(() => this.filter()));
-		const configure = this._register(new Button(toolbar, { label: localize('hooks.configureButton', 'Configure Hooks…'), presentation: 'secondary' }));
+		const configure = this._register(new Button(toolbar, {
+			...defaultButtonStyles,
+			label: localize('hooks.configureButton', 'Configure Hooks…'),
+			presentation: 'secondary',
+		}));
 		this._register(configure.onDidClick(() => { void this.instantiation.invokeFunction(showConfigureHooksQuickPick); }));
 		this.domNode.prepend(title, this.note, toolbar, this.status);
 		for (const event of HookEvents) this.createEventRow(event);
@@ -310,7 +326,11 @@ export class AICustomizationManagementEditor extends EditorPane {
 	}
 
 	private button(container: HTMLElement, action: string, hookId?: string, resources: DisposableStore = this._store): Button {
-		const button = resources.add(new Button(container, { label: '', presentation: 'secondary' }));
+		const button = resources.add(new Button(container, {
+			...defaultButtonStyles,
+			label: '',
+			presentation: 'secondary',
+		}));
 		button.domNode.dataset.hookAction = action;
 		if (hookId) button.domNode.dataset.hookId = hookId;
 		resources.add(button.onDidClick(() => { void this.performAction(button.domNode); }));

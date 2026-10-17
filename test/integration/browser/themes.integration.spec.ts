@@ -1,6 +1,139 @@
 import { test } from './rustSyntaxProcessFixture.js';
 import { expect } from '@playwright/test';
 
+test('host styles reach nested inputs, select popups, submenus, tree find and dialog buttons', async ({ page }) => {
+	await page.goto('/themes.html');
+	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+	await page.evaluate(() => window.mountDefaultStyleProbes());
+	const input = page.getByRole('textbox', { name: 'Styled input', exact: true });
+	const find = page.getByRole('searchbox', { name: 'Find in Tree', exact: true });
+	const select = page.getByRole('combobox', { name: 'Styled select', exact: true });
+	const retainedInput = await input.elementHandle();
+	for (const id of ['ash-dark', 'ash-light', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
+		await page.evaluate(id => window.selectColorTheme(id), id);
+		const colors = await page.locator('#root').evaluate(root => {
+			const probe = document.createElement('span');
+			root.append(probe);
+			try {
+				return Object.fromEntries([
+					'error-foreground', 'selection-background', 'accent-background',
+					'foreground', 'badge-background', 'widget-border',
+				].map(id => {
+					probe.style.color = `var(--ash-${id})`;
+					return [id, getComputedStyle(probe).color];
+				}));
+			} finally { probe.remove(); }
+		});
+		await expect(input.locator('..')).toHaveCSS('background-color', colors['selection-background']!);
+		await expect(find.locator('..')).toHaveCSS('background-color', colors['error-foreground']!);
+		await find.fill('missing');
+		await expect(page.locator('#styled-tree .ash-tree-find-widget')).toHaveCSS('border-top-color', colors['error-foreground']!);
+		await find.fill('');
+		await expect(page.locator('#styled-tree .ash-tree-find-widget')).toHaveCSS('border-top-color', colors['widget-border']!);
+		await page.locator('#styled-tree .ash-tree').focus();
+		await expect(page.locator('#styled-tree .ash-tree-row.focused')).toHaveCSS('outline-color', colors['error-foreground']!);
+		await expect(page.locator('#default-style-probes .ash-count-badge')).toHaveCSS('background-color', colors['badge-background']!);
+		await expect(page.locator('#default-style-probes progress')).toHaveCSS('accent-color', colors['accent-background']!);
+		await expect(page.getByRole('checkbox', { name: 'Styled checkbox' })).toHaveCSS('accent-color', colors['accent-background']!);
+		await expect(page.locator('#default-style-probes .ash-switch-track')).toHaveCSS(
+			'background-color', colors[id.includes('high-contrast') ? 'foreground' : 'error-foreground']!,
+		);
+		const list = page.getByRole('listbox', { name: 'Styled list', exact: true });
+		await list.focus();
+		await expect(list.locator('.ash-list-row.selected')).toHaveCSS('background-color', colors['error-foreground']!);
+		await input.focus();
+		await expect(list.locator('.ash-list-row.selected')).toHaveCSS('background-color', colors['selection-background']!);
+		await list.locator('.ash-list-row').nth(1).hover();
+		await expect(list.locator('.ash-list-row').nth(1)).toHaveCSS('background-color', colors['selection-background']!);
+		await expect(select).toHaveCSS('background-color', colors['selection-background']!);
+		await select.click();
+		await expect(page.locator('.ash-select-box-list')).toHaveCSS('background-color', colors['error-foreground']!);
+		await page.keyboard.press('Escape');
+		const submenu = page.getByRole('menuitem', { name: 'Styled submenu', exact: true });
+		await submenu.focus();
+		await submenu.press('ArrowRight');
+		const leaf = page.getByRole('menuitem', { name: 'Styled leaf', exact: true });
+		await expect(leaf).toBeVisible();
+		await expect.poll(() => leaf.evaluate(element => getComputedStyle(element.closest('.ash-menu')!).backgroundColor))
+			.toBe(colors['error-foreground']);
+		await leaf.press('Escape');
+		await page.evaluate(() => window.openStyledDialog());
+		const dialog = page.getByRole('dialog', { name: 'Styled dialog', exact: true });
+		await expect(dialog).toHaveCSS('background-color', colors['selection-background']!);
+		await expect(dialog.getByRole('button', { name: 'Styled done' })).toHaveCSS('background-color', colors['error-foreground']!);
+		await page.keyboard.press('Escape');
+		await expect(dialog).toBeHidden();
+	}
+	expect(await retainedInput!.evaluate(element => element === document.querySelector('#default-style-probes input'))).toBe(true);
+	await test.info().attach('nested-default-styles', { body: await page.screenshot(), contentType: 'image/png' });
+});
+
+test('default widget styles and overrides follow the containing theme without replacing their controls', async ({ page }) => {
+	await page.goto('/themes.html');
+	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+	const defaultButton = page.getByRole('button', { name: 'Default theme styles', exact: true });
+	const overrideButton = page.getByRole('button', { name: 'Override theme styles', exact: true });
+	const swappedButton = page.getByRole('button', { name: 'Swapped theme styles', exact: true });
+	const retained = await overrideButton.elementHandle();
+	for (const id of ['ash-dark', 'ash-light', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
+		await page.evaluate(id => window.selectColorTheme(id), id);
+		await page.mouse.move(0, 0);
+		const colors = await page.locator('#root').evaluate(root => {
+			const probe = document.createElement('span');
+			root.append(probe);
+			const resolve = (variable: string): string => {
+				probe.style.color = `var(${variable})`;
+				return getComputedStyle(probe).color;
+			};
+			try {
+				return {
+					background: resolve('--ash-button-primaryBackground'), foreground: resolve('--ash-button-primaryForeground'),
+					customBackground: resolve('--ash-error-foreground'), customForeground: resolve('--ash-editor-background'),
+					hover: resolve('--ash-focusBorder'),
+				};
+			} finally { probe.remove(); }
+		});
+		await expect(defaultButton).toHaveCSS('background-color', colors.background);
+		await expect(defaultButton).toHaveCSS('color', colors.foreground);
+		await expect(overrideButton).toHaveCSS('background-color', colors.customBackground);
+		await expect(overrideButton).toHaveCSS('color', colors.customForeground);
+		await expect(swappedButton).toHaveCSS('background-color', colors.foreground);
+		await expect(swappedButton).toHaveCSS('color', colors.background);
+		await overrideButton.hover();
+		await expect(overrideButton).toHaveCSS('background-color', colors.hover);
+		await test.info().attach(`default-styles-${id}`, {
+			body: await page.screenshot(), contentType: 'image/png',
+		});
+	}
+	expect(await retained!.evaluate(element => element === document.querySelector('#default-style-buttons button:nth-child(2)'))).toBe(true);
+});
+
+test('high contrast classes activate focused icon borders and are cleared and restored with the binding', async ({ page }) => {
+	await page.goto('/themes.html');
+	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+	const root = page.locator('#root');
+	const search = page.getByRole('combobox', { name: 'Search icons' });
+	await search.focus();
+	await search.press('ArrowRight');
+	const focused = page.locator('.ash-icon-select-item.focused');
+	await expect(focused).toHaveCount(1);
+	for (const [id, themeClass, border] of [
+		['ash-high-contrast-dark', 'hc-black', 'rgb(255, 255, 255)'],
+		['ash-high-contrast-light', 'hc-light', 'rgb(0, 0, 0)'],
+	] as const) {
+		await page.evaluate(id => window.selectColorTheme(id), id);
+		await expect(root).toHaveClass(new RegExp(`\\b${themeClass}\\b`));
+		await expect(root).toHaveClass(/\bash-high-contrast\b/);
+		await expect(focused).toHaveCSS('border-top-color', border);
+		await expect(focused).toHaveCSS('border-top-style', 'solid');
+	}
+	await page.evaluate(() => window.selectColorTheme('ash-light'));
+	await expect(root).not.toHaveClass(/\b(?:hc-black|hc-light|ash-high-contrast)\b/);
+	await page.evaluate(() => window.selectColorTheme('ash-high-contrast-dark'));
+	await page.evaluate(() => window.disposeThemeRoot());
+	await expect(root).not.toHaveClass(/\b(?:hc-black|hc-light|ash-high-contrast)\b/);
+});
+
 test('size tokens preserve camelCase and resolve in every color theme', async ({ page }) => {
 	await page.goto('/themes.html');
 	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
@@ -126,9 +259,10 @@ test('high contrast themes remove decorative shadows while preserving state mark
 	const hoverView = page.locator('.ash-context-view-hover');
 	const dropRow = page.locator('.ash-list-row.ash-dnd-drop-before');
 	const pdfPage = page.locator('.ash-pdf-page');
+	const editorHover = page.locator('.stanza-editor-hover');
 	await root.evaluate(element => {
 		element.classList.add('ash-workbench');
-		for (const className of ['ash-notification', 'ash-context-view-default', 'ash-context-view-hover', 'ash-list-row ash-dnd-drop-before', 'ash-pdf-page']) {
+		for (const className of ['ash-notification', 'ash-context-view-default', 'ash-context-view-hover', 'ash-list-row ash-dnd-drop-before', 'ash-pdf-page', 'stanza-editor-hover']) {
 			const item = document.createElement('div');
 			item.className = className;
 			item.textContent = className;
@@ -144,6 +278,8 @@ test('high contrast themes remove decorative shadows while preserving state mark
 	for (const [id, border] of [['ash-high-contrast-dark', 'rgb(255, 255, 255)'], ['ash-high-contrast-light', 'rgb(0, 0, 0)']] as const) {
 		await page.evaluate(id => window.selectColorTheme(id), id);
 		await expect(root).toHaveAttribute('data-color-theme', id);
+		await expect(editorHover).toHaveCSS('box-shadow', 'none');
+		await expect(editorHover).toHaveCSS('border-top-color', border);
 		expect(await notification.evaluate(element => ({
 			shadow: getComputedStyle(element).boxShadow,
 			border: getComputedStyle(element).borderColor,

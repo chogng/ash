@@ -1,3 +1,4 @@
+import { defaultInputBoxStyles } from '../../theme/browser/defaultStyles.js';
 import { stopEvent } from '../../../base/browser/dom.js';
 import { InputBox } from '../../../base/browser/ui/inputbox/inputbox.js';
 import { Emitter, type Event } from '../../../base/common/event.js';
@@ -17,6 +18,7 @@ export class QuickInputBox extends Disposable {
 	constructor(container: HTMLElement, private readonly options: IInputOptions) {
 		super();
 		this.inputBox = this._register(new InputBox(container, {
+			inputBoxStyles: defaultInputBoxStyles,
 			type: options.password ? 'password' : 'text',
 			placeholder: options.placeHolder,
 			ariaLabel: options.title ?? options.placeHolder ?? localize('quickInput.inputTitle', 'Quick Input'),

@@ -1,3 +1,4 @@
+import { defaultInputBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import './renameWidget.css';
 import { h, addDisposableListener, getActiveElement, stopEvent } from '../../../../base/browser/dom.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
@@ -32,7 +33,10 @@ export class RenameWidget extends Disposable {
 		this.domNode = h(viewport.domNode.domNode.ownerDocument, 'div');
 		this.domNode.className = 'stanza-editor-rename';
 		this.domNode.hidden = true;
-		this.input = this._register(new InputBox(this.domNode, { ariaLabel: localize('rename.newName', 'New symbol name') }));
+		this.input = this._register(new InputBox(this.domNode, {
+			inputBoxStyles: defaultInputBoxStyles,
+			ariaLabel: localize('rename.newName', 'New symbol name'),
+		}));
 		this.input.inputElement.classList.add('stanza-editor-rename-input');
 		this.status = h(this.domNode.ownerDocument, 'span');
 		this.status.className = 'stanza-editor-rename-status';

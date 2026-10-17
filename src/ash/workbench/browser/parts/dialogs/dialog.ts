@@ -1,3 +1,9 @@
+import {
+	defaultCheckboxStyles,
+	defaultDialogStyles,
+	defaultInputBoxStyles,
+	defaultButtonStyles,
+} from '../../../../platform/theme/browser/defaultStyles.js';
 import { Dialog, type DialogButton } from "../../../../base/browser/ui/dialog/dialog.js";
 import { InputBox } from "../../../../base/browser/ui/inputbox/inputbox.js";
 import { Checkbox } from "../../../../base/browser/ui/toggle/toggle.js";
@@ -46,6 +52,8 @@ export class BrowserDialogHandler implements IDialogHandler {
 				buttons.push({ label: request.cancelButton ?? localize('dialog.cancel', 'Cancel'), value: DialogResult.Cancel });
 			}
 			const dialog = disposables.add(new Dialog(this.container, {
+				buttonStyles: defaultButtonStyles,
+				dialogStyles: defaultDialogStyles,
 				title: request.title ?? defaultTitle(request),
 				content: content.element,
 				buttons,
@@ -130,6 +138,7 @@ function createDialogContent(
 		inputContainer.className = "ash-dialog-inputs";
 		for (const [index, options] of request.inputs.entries()) {
 			const input = disposables.add(new InputBox(inputContainer, {
+				inputBoxStyles: defaultInputBoxStyles,
 				type: options.type,
 				placeholder: options.placeholder,
 				presentation: "field",
@@ -143,6 +152,7 @@ function createDialogContent(
 	let checkbox: Checkbox | undefined;
 	if (request.checkbox) {
 		checkbox = disposables.add(new Checkbox(element, {
+			...defaultCheckboxStyles,
 			label: request.checkbox.label,
 			checked: request.checkbox.checked,
 		}));

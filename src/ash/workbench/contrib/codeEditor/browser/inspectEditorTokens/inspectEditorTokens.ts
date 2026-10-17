@@ -1,3 +1,4 @@
+import { defaultDialogStyles, defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { localize2, localize } from '../../../../../nls.js';
 import './inspectEditorTokens.css';
 import { h } from '../../../../../base/browser/dom.js';
@@ -74,8 +75,12 @@ class InspectEditorTokens extends Action2 {
 		const hint = accessibleViews.getOpenAriaHint(AccessibilityVerbositySettingId.InspectEditorTokens);
 		if (hint) content.setAttribute('aria-description', hint);
 		const dialog = lifetime.add(new Dialog(root, {
-			title: localize('inspectEditorTokens.title', 'Editor Tokens'), content,
-			buttons: [{ label: localize('inspectEditorTokens.close', 'Close'), value: 'close' }], cancelValue: 'close',
+			buttonStyles: defaultButtonStyles,
+			dialogStyles: defaultDialogStyles,
+			title: localize('inspectEditorTokens.title', 'Editor Tokens'),
+			content,
+			buttons: [{ label: localize('inspectEditorTokens.close', 'Close'), value: 'close' }],
+			cancelValue: 'close',
 		}));
 		const context = lifetime.add(contextKeys.createScoped(dialog.element));
 		context.createKey('inspectEditorTokensVisible', true);

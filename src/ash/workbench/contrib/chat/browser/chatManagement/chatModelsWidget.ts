@@ -1,3 +1,9 @@
+import {
+	defaultButtonStyles,
+	defaultInputBoxStyles,
+	defaultSelectBoxStyles,
+	defaultToggleStyles,
+} from '../../../../../platform/theme/browser/defaultStyles.js';
 import './media/chatModelsWidget.css';
 import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
@@ -27,7 +33,9 @@ export class ProviderApiKeyInput extends Disposable {
 	constructor(container: HTMLElement, private readonly connection: string, name: string, configured: boolean, private readonly beforeSave: () => Promise<void>, @ILanguageModelsService private readonly chat: ILanguageModelsService, @INotificationService private readonly notifications: INotificationService) {
 		super();
 		this.input = this._register(new InputBox(container, {
-			type: 'password', presentation: 'field',
+			inputBoxStyles: defaultInputBoxStyles,
+			type: 'password',
+			presentation: 'field',
 			placeholder: localize('chat.providerKeys.inputPlaceholder', 'Paste an API key'),
 			ariaLabel: localize('chat.providerKeys.inputTitle', 'API key for {0}', name),
 		}));
@@ -132,7 +140,7 @@ export class ChatModelsWidget extends Disposable {
 				{ value: 'chatCompletions', label: 'OpenAI Chat Completions' },
 				{ value: 'anthropicMessages', label: 'Anthropic Messages' },
 			],
-		}));
+		}, defaultSelectBoxStyles));
 		this._register(this.format.onDidSelect(() => this.saveInBackground()));
 		const toolbar = h(document, 'div');
 		toolbar.className = 'ash-chat-models-toolbar';
@@ -141,9 +149,23 @@ export class ChatModelsWidget extends Disposable {
 		const actions = h(document, 'div');
 		actions.className = 'ash-chat-models-actions';
 		toolbar.append(title, actions);
-		this.refresh = this._register(new Button(actions, { label: localize('models.provider.refresh', 'Refresh models'), icon: Lxicon.refresh, iconOnly: true, presentation: 'quiet' }));
-		this.add = this._register(new Button(actions, { label: localize('models.provider.addModel', 'Add model'), presentation: 'quiet' }));
-		this.test = this._register(new Button(actions, { label: localize('models.provider.testModels', 'Test models'), presentation: 'secondary' }));
+		this.refresh = this._register(new Button(actions, {
+			...defaultButtonStyles,
+			label: localize('models.provider.refresh', 'Refresh models'),
+			icon: Lxicon.refresh,
+			iconOnly: true,
+			presentation: 'quiet',
+		}));
+		this.add = this._register(new Button(actions, {
+			...defaultButtonStyles,
+			label: localize('models.provider.addModel', 'Add model'),
+			presentation: 'quiet',
+		}));
+		this.test = this._register(new Button(actions, {
+			...defaultButtonStyles,
+			label: localize('models.provider.testModels', 'Test models'),
+			presentation: 'secondary',
+		}));
 		const table = h(document, 'table');
 		table.className = 'ash-chat-models-table';
 		table.setAttribute('aria-label', localize('models.provider.models', 'Provider models'));
@@ -164,14 +186,43 @@ export class ChatModelsWidget extends Disposable {
 		this.editor = h(document, 'div');
 		this.editor.className = 'ash-chat-models-editor';
 		this.editor.hidden = true;
-		this.modelId = this._register(new InputBox(this.editor, { presentation: 'field', ariaLabel: localize('models.provider.modelId', 'Model ID'), placeholder: localize('models.provider.modelId', 'Model ID') }));
-		this.upstreamModel = this._register(new InputBox(this.editor, { presentation: 'field', ariaLabel: localize('models.provider.upstreamModel', 'Upstream Model ID (optional)'), placeholder: localize('models.provider.upstreamModel', 'Upstream Model ID (optional)') }));
-		this.contextWindow = this._register(new InputBox(this.editor, { type: 'number', presentation: 'field', ariaLabel: localize('models.provider.contextWindow', 'Context window (tokens)'), placeholder: localize('models.provider.contextWindow', 'Context window (tokens)') }));
-		this.largeContext = this._register(new Switch(this.editor, { checked: false, label: localize('models.provider.context', '1M context'), ariaLabel: localize('models.provider.context', '1M context') }));
+		this.modelId = this._register(new InputBox(this.editor, {
+			inputBoxStyles: defaultInputBoxStyles,
+			presentation: 'field',
+			ariaLabel: localize('models.provider.modelId', 'Model ID'),
+			placeholder: localize('models.provider.modelId', 'Model ID'),
+		}));
+		this.upstreamModel = this._register(new InputBox(this.editor, {
+			inputBoxStyles: defaultInputBoxStyles,
+			presentation: 'field',
+			ariaLabel: localize('models.provider.upstreamModel', 'Upstream Model ID (optional)'),
+			placeholder: localize('models.provider.upstreamModel', 'Upstream Model ID (optional)'),
+		}));
+		this.contextWindow = this._register(new InputBox(this.editor, {
+			inputBoxStyles: defaultInputBoxStyles,
+			type: 'number',
+			presentation: 'field',
+			ariaLabel: localize('models.provider.contextWindow', 'Context window (tokens)'),
+			placeholder: localize('models.provider.contextWindow', 'Context window (tokens)'),
+		}));
+		this.largeContext = this._register(new Switch(this.editor, {
+			...defaultToggleStyles,
+			checked: false,
+			label: localize('models.provider.context', '1M context'),
+			ariaLabel: localize('models.provider.context', '1M context'),
+		}));
 		const editorActions = h(document, 'div');
 		editorActions.className = 'ash-chat-models-actions';
-		this.saveModel = this._register(new Button(editorActions, { label: localize('models.provider.saveModel', 'Save model'), presentation: 'secondary' }));
-		this.cancel = this._register(new Button(editorActions, { label: localize('models.provider.cancel', 'Cancel'), presentation: 'quiet' }));
+		this.saveModel = this._register(new Button(editorActions, {
+			...defaultButtonStyles,
+			label: localize('models.provider.saveModel', 'Save model'),
+			presentation: 'secondary',
+		}));
+		this.cancel = this._register(new Button(editorActions, {
+			...defaultButtonStyles,
+			label: localize('models.provider.cancel', 'Cancel'),
+			presentation: 'quiet',
+		}));
 		this.editor.append(editorActions);
 		this.feedback = h(document, 'p');
 		this.feedback.className = 'ash-chat-models-note';
@@ -239,7 +290,11 @@ export class ChatModelsWidget extends Disposable {
 	}
 
 	private textField(label: string, value: string): InputBox {
-		const input = this._register(new InputBox(this.field(label), { presentation: 'field', ariaLabel: label }));
+		const input = this._register(new InputBox(this.field(label), {
+			inputBoxStyles: defaultInputBoxStyles,
+			presentation: 'field',
+			ariaLabel: label,
+		}));
 		input.value = value;
 		this._register(input.onDidChange(() => this.viewModel.invalidateTests()));
 		this._register(input.onDidBlur(() => this.saveInBackground()));
@@ -322,18 +377,34 @@ export class ChatModelsWidget extends Disposable {
 		const status = h(document, 'td');
 		status.className = 'ash-chat-models-test-status';
 		const actions = h(document, 'td');
-		const edit = this.tableResources.add(new Button(actions, { label: localize('models.provider.editModel', 'Edit context for {0}', model.id), icon: Lxicon.edit, iconOnly: true, presentation: 'quiet' }));
+		const edit = this.tableResources.add(new Button(actions, {
+			...defaultButtonStyles,
+			label: localize('models.provider.editModel', 'Edit context for {0}', model.id),
+			icon: Lxicon.edit,
+			iconOnly: true,
+			presentation: 'quiet',
+		}));
 		this.tableResources.add(edit.onDidClick(() => this.openEditor(model)));
 		let remove: Button | undefined;
 		if (model.manual) {
-			remove = this.tableResources.add(new Button(actions, { label: localize('models.provider.removeModel', 'Delete model {0}', model.id), icon: Lxicon.trash, iconOnly: true, presentation: 'quiet' }));
+			remove = this.tableResources.add(new Button(actions, {
+				...defaultButtonStyles,
+				label: localize('models.provider.removeModel', 'Delete model {0}', model.id),
+				icon: Lxicon.trash,
+				iconOnly: true,
+				presentation: 'quiet',
+			}));
 			this.tableResources.add(remove.onDidClick(() => {
 				this.add.focus();
 				void this.viewModel.removeModel(model.id).catch(error => this.viewModel.report(error));
 			}));
 		}
 		const enabled = h(document, 'td');
-		const toggle = this.tableResources.add(new Switch(enabled, { checked: this.viewModel.isEnabled(model.id), ariaLabel: localize('models.provider.enableModel', 'Enable {0}', model.id) }));
+		const toggle = this.tableResources.add(new Switch(enabled, {
+			...defaultToggleStyles,
+			checked: this.viewModel.isEnabled(model.id),
+			ariaLabel: localize('models.provider.enableModel', 'Enable {0}', model.id),
+		}));
 		this.tableResources.add(toggle.onDidChange(() => { void this.viewModel.setEnabled(model.id, toggle.checked); }));
 		row.append(identity, status, actions, enabled);
 		this.modelBody.append(row);

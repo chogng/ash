@@ -1,3 +1,4 @@
+import { defaultCountBadgeStyles, defaultListStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { CountBadge } from '../../../../base/browser/ui/countBadge/countBadge.js';
@@ -43,6 +44,7 @@ export class SCMRepositoriesViewPane extends ViewPane {
 		super(container, { ...options, minimumBodySize: 44 });
 		this.contentElement.classList.add('ash-scm-repositories');
 		this.list = this._register(new List<ISCMRepository>(this.contentElement, {
+			styles: defaultListStyles,
 			ariaLabel: localize('scm.repositories.label', 'Source control repositories'),
 			domFocusable: true,
 			keyboardNavigation: true,
@@ -129,7 +131,9 @@ export class SCMRepositoriesViewPane extends ViewPane {
 		path.className = 'ash-scm-repository-path';
 		const resources = new DisposableStore();
 		this.rowResources.set(domNode, resources);
-		const badge = resources.add(new CountBadge(domNode, { count: 0, titleFormat: localize('scm.repositories.changes', '{0} changed files') }));
+		const badge = resources.add(new CountBadge(domNode, {
+			count: 0, titleFormat: localize('scm.repositories.changes', '{0} changed files')
+		}, defaultCountBadgeStyles));
 		domNode.append(name, branch, badge.domNode, path);
 		this.rows.set(repository.id, { domNode, name, branch, path, badge });
 		resources.add(toDisposable(() => this.rows.delete(repository.id)));

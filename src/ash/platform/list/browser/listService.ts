@@ -1,3 +1,4 @@
+import { defaultListStyles, defaultFindWidgetStyles } from '../../theme/browser/defaultStyles.js';
 import { AsyncDataTree, CompressibleAsyncDataTree, type CompressibleAsyncDataTreeOptions, type AsyncDataTreeOptions } from "../../../base/browser/ui/tree/asyncDataTree.js";
 import { ObjectTree, type ObjectTreeAcceptEvent, type ObjectTreeOptions, type ObjectTreePointerEvent, type ObjectTreeSelectionChangeEvent } from "../../../base/browser/ui/tree/objectTree.js";
 import type { AsyncTreeDataSource, TreeIndentGuides } from "../../../base/browser/ui/tree/tree.js";
@@ -38,6 +39,8 @@ export class WorkbenchObjectTree<T> extends ObjectTree<T> {
 		const { configurationService, openOnSingleClick, ...treeOptions } = options;
 		super(container, {
 			...treeOptions,
+			styles: treeOptions.styles ?? defaultListStyles,
+			findWidgetStyles: treeOptions.findWidgetStyles ?? defaultFindWidgetStyles,
 			smoothScrolling: treeOptions.smoothScrolling ?? configurationService.getValue<boolean>(ListConfiguration.smoothScrolling),
 			indent: treeOptions.indent ?? configurationService.getValue<number>(ListConfiguration.treeIndent),
 			indentGuides: treeOptions.indentGuides ?? configurationService.getValue<TreeIndentGuides>(ListConfiguration.treeRenderIndentGuides),
@@ -64,6 +67,8 @@ export class WorkbenchAsyncDataTree<TInput, T> extends AsyncDataTree<TInput, T> 
 		const { configurationService, openOnSingleClick, ...treeOptions } = options;
 		super(container, dataSource, {
 			...treeOptions,
+			styles: treeOptions.styles ?? defaultListStyles,
+			findWidgetStyles: treeOptions.findWidgetStyles ?? defaultFindWidgetStyles,
 			smoothScrolling: treeOptions.smoothScrolling ?? configurationService.getValue<boolean>(ListConfiguration.smoothScrolling),
 			indent: treeOptions.indent ?? configurationService.getValue<number>(ListConfiguration.treeIndent),
 			indentGuides: treeOptions.indentGuides ?? configurationService.getValue<TreeIndentGuides>(ListConfiguration.treeRenderIndentGuides),
@@ -88,6 +93,8 @@ export class WorkbenchCompressibleAsyncDataTree<TInput, T> extends CompressibleA
 		const { configurationService, openOnSingleClick, ...treeOptions } = options;
 		super(container, dataSource, {
 			...treeOptions,
+			styles: treeOptions.styles ?? defaultListStyles,
+			findWidgetStyles: treeOptions.findWidgetStyles ?? defaultFindWidgetStyles,
 			smoothScrolling: treeOptions.smoothScrolling ?? configurationService.getValue<boolean>(ListConfiguration.smoothScrolling),
 			indent: treeOptions.indent ?? configurationService.getValue<number>(ListConfiguration.treeIndent),
 			indentGuides: treeOptions.indentGuides ?? configurationService.getValue<TreeIndentGuides>(ListConfiguration.treeRenderIndentGuides),

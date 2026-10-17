@@ -1,3 +1,4 @@
+import { defaultButtonStyles, defaultInputBoxStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
 import { SyncDescriptor } from '../../../../../platform/instantiation/common/descriptors.js';
@@ -105,12 +106,22 @@ export class AutomationsCardsWidget extends Disposable {
 			{ value: 'enabled', label: localize('automations.enabled', 'Enabled') },
 			{ value: 'paused', label: localize('automations.paused', 'Paused') },
 		] as const).map(item => {
-			const button = this._register(new Button(filters, { label: item.label, checked: item.value === 'all', onClick: () => this.filter.set(item.value, undefined) }));
+			const button = this._register(new Button(filters, {
+				...defaultButtonStyles,
+				label: item.label,
+				checked: item.value === 'all',
+				onClick: () => this.filter.set(item.value, undefined),
+			}));
 			return { value: item.value, button };
 		});
 		const search = h(document, 'div', { className: 'ash-automation-search' });
 		appendIcon(Lxicon.search, search);
-		this.search = this._register(new InputBox(search, { type: 'search', ariaLabel: localize('automations.search', 'Search automations'), placeholder: localize('automations.search', 'Search automations') }));
+		this.search = this._register(new InputBox(search, {
+			inputBoxStyles: defaultInputBoxStyles,
+			type: 'search',
+			ariaLabel: localize('automations.search', 'Search automations'),
+			placeholder: localize('automations.search', 'Search automations'),
+		}));
 		this._register(this.search.onDidChange(value => this.query.set(value, undefined)));
 		controls.append(filters, search);
 		this.plans = h(document, 'div', { className: 'ash-automation-cards' });
@@ -124,11 +135,13 @@ export class AutomationsCardsWidget extends Disposable {
 		const noMatches = h(document, 'div', { className: 'ash-automation-no-matches' });
 		noMatches.append(h(document, 'p', { attributes: { role: 'status' } }, localize('automations.noMatches', 'No automations match your filters.')));
 		this._register(new Button(noMatches, {
-			label: localize('automations.clearFilters', 'Clear filters'), onClick: () => {
+			...defaultButtonStyles,
+			label: localize('automations.clearFilters', 'Clear filters'),
+			onClick: () => {
 				this.search.value = '';
 				transaction(tx => { this.query.set('', tx); this.filter.set('all', tx); });
 				this.search.focus();
-			}
+			},
 		}));
 		plansSection.append(plansHeader, controls, empty, this.plans, noMatches);
 		const historySection = h(document, 'section', { className: 'ash-automation-history-section', attributes: { 'aria-label': localize('automations.history', 'Run history') } });
@@ -230,7 +243,9 @@ export class AutomationsCardsWidget extends Disposable {
 			grid.append(item);
 			const schedule: IAutomationSchedule = { type: 'weekly', timezone, weekdays: template.weekdays, hour: template.hour, minute: 0 };
 			const button = this._register(new Button(item, {
-				label: template.name, icon: template.icon,
+				...defaultButtonStyles,
+				label: template.name,
+				icon: template.icon,
 				onClick: () => { void this.perform('template', () => this.dialogs.showAutomationDialog({ initialValues: { name: template.name, prompt: template.prompt, schedule } })); },
 			}));
 			item.append(h(container.ownerDocument, 'p', {}, this.scheduleLabel(schedule)));
@@ -256,9 +271,10 @@ export class AutomationsCardsWidget extends Disposable {
 				header.append(heading, state);
 				element.append(header);
 				const title = lifetime.add(new Button(heading, {
+					...defaultButtonStyles,
 					label: plan.name,
 					presentation: 'quiet',
-					onClick: () => this.openDetails({ kind: 'plan', id: plan.id })
+					onClick: () => this.openDetails({ kind: 'plan', id: plan.id }),
 				}));
 				const prompt = h(this.element.ownerDocument, 'p', { className: 'ash-automation-prompt' });
 				const schedule = h(this.element.ownerDocument, 'p', { className: 'ash-automation-schedule' });
@@ -270,28 +286,31 @@ export class AutomationsCardsWidget extends Disposable {
 				const actions = h(this.element.ownerDocument, 'div', { className: 'ash-automation-card-actions' });
 				element.append(actions);
 				const run = lifetime.add(new Button(actions, {
+					...defaultButtonStyles,
 					label: localize('automations.runNow', 'Run now'),
 					icon: Lxicon.start,
 					presentation: 'secondary',
 					onClick: () => {
 						const current = this.automations.getAutomation(plan.id);
 						if (current) void this.perform(plan.id, () => this.runner.runOnce(current).whenDispatched);
-					}
+					},
 				}));
 				const pause = lifetime.add(new Button(actions, {
+					...defaultButtonStyles,
 					label: '',
 					onClick: () => {
 						const current = this.automations.getAutomation(plan.id);
 						if (current) void this.perform(plan.id, () => this.automations.updateAutomation(plan.id, { enabled: !current.enabled }));
-					}
+					},
 				}));
 				const remove = lifetime.add(new Button(actions, {
+					...defaultButtonStyles,
 					label: localize('automations.delete', 'Delete'),
 					icon: Lxicon.trash,
 					iconOnly: true,
 					title: localize('automations.delete', 'Delete'),
 					presentation: 'quiet',
-					onClick: () => { void this.perform(plan.id, () => this.automations.deleteAutomation(plan.id)); }
+					onClick: () => { void this.perform(plan.id, () => this.automations.deleteAutomation(plan.id)); },
 				}));
 				lifetime.add(toDisposable(() => element.remove()));
 				this.plans.append(element);
@@ -331,7 +350,9 @@ export class AutomationsCardsWidget extends Disposable {
 				const header = h(this.element.ownerDocument, 'div', { className: 'ash-automation-run-header' });
 				const title = h(this.element.ownerDocument, 'h3');
 				const details = lifetime.add(new Button(title, {
-					label: '', onClick: () => this.openDetails({ kind: 'run', id: run.id })
+					...defaultButtonStyles,
+					label: '',
+					onClick: () => this.openDetails({ kind: 'run', id: run.id }),
 				}));
 				const state = h(this.element.ownerDocument, 'span', { className: 'ash-automation-state' });
 				const time = h(this.element.ownerDocument, 'time');
@@ -342,18 +363,20 @@ export class AutomationsCardsWidget extends Disposable {
 				const actions = h(this.element.ownerDocument, 'div', { className: 'ash-automation-card-actions' });
 				element.append(actions);
 				const open = lifetime.add(new Button(actions, {
+					...defaultButtonStyles,
 					label: localize('automations.openConversation', 'Open conversation'),
 					onClick: () => {
 						const current = this.automations.runs.get().find(item => item.id === run.id);
 						if (current?.sessionId && current.threadId) void this.perform(run.id, () => this.navigation.openConversation(current.sessionId!, current.threadId!));
-					}
+					},
 				}));
 				const stop = lifetime.add(new Button(actions, {
+					...defaultButtonStyles,
 					label: localize('automations.stopRun', 'Stop run'),
 					onClick: () => {
 						const current = this.automations.runs.get().find(item => item.id === run.id);
 						if (current) void this.perform(run.id, () => this.automations.stopRun(current));
-					}
+					},
 				}));
 				lifetime.add(toDisposable(() => element.remove()));
 				this.history.append(element);
@@ -391,7 +414,11 @@ export class AutomationsCardsWidget extends Disposable {
 		for (const run of items) {
 			let button = this.attentionItems.get(run.id);
 			if (!button) {
-				button = new Button(this.attention, { label: '', onClick: () => this.openDetails({ kind: 'run', id: run.id }) });
+				button = new Button(this.attention, {
+					...defaultButtonStyles,
+					label: '',
+					onClick: () => this.openDetails({ kind: 'run', id: run.id }),
+				});
 				this.attentionItems.set(run.id, button);
 			}
 			button.label = localize('automations.attentionItem', '{0} · {1}', run.definition.name, automationRunStatusLabel(run.status));
@@ -414,6 +441,7 @@ export class AutomationsCardsWidget extends Disposable {
 		this.detailLifetime.value = lifetime;
 		const document = this.element.ownerDocument;
 		lifetime.add(new Button(this.details, {
+			...defaultButtonStyles,
 			label: selected.kind === 'run' && selected.planId ? localize('automations.backToTask', 'Back to automation') : localize('automations.backToList', 'Back to automations'),
 			onClick: () => {
 				if (selected.kind === 'run' && selected.planId) this.openDetails({ kind: 'plan', id: selected.planId });
@@ -422,7 +450,7 @@ export class AutomationsCardsWidget extends Disposable {
 					if (this.returnFocus?.isConnected) this.returnFocus.focus();
 					if (!this.returnFocus || getActiveElement(document) !== this.returnFocus) this.focus();
 				}
-			}
+			},
 		}));
 		const header = h(document, 'div', { className: 'ash-automation-section-heading' });
 		const heading = h(document, 'h2', { properties: { tabIndex: -1 } });
@@ -447,20 +475,25 @@ export class AutomationsCardsWidget extends Disposable {
 			const next = fact(localize('automations.nextRunHeading', 'Next run'));
 			const host = fact(localize('automations.provider', 'Run on'));
 			const edit = lifetime.add(new Button(actions, {
-				label: localize('automations.edit', 'Edit automation'), presentation: 'secondary',
+				...defaultButtonStyles,
+				label: localize('automations.edit', 'Edit automation'),
+				presentation: 'secondary',
 				onClick: () => {
 					const plan = this.automations.getAutomation(selected.id);
 					if (plan) void this.perform('edit:' + plan.id, () => this.dialogs.showAutomationDialog({ existing: plan }));
-				}
+				},
 			}));
 			const run = lifetime.add(new Button(actions, {
-				label: localize('automations.runNow', 'Run now'), icon: Lxicon.start,
+				...defaultButtonStyles,
+				label: localize('automations.runNow', 'Run now'),
+				icon: Lxicon.start,
 				onClick: () => {
 					const plan = this.automations.getAutomation(selected.id);
 					if (plan) void this.perform(plan.id, () => this.runner.runOnce(plan).whenDispatched);
-				}
+				},
 			}));
 			const duplicate = lifetime.add(new Button(actions, {
+				...defaultButtonStyles,
 				label: localize('automations.duplicate', 'Duplicate'),
 				onClick: () => {
 					const plan = this.automations.getAutomation(selected.id);
@@ -469,13 +502,15 @@ export class AutomationsCardsWidget extends Disposable {
 							name: localize('automations.copyName', '{0} copy', plan.name), prompt: plan.prompt, target: plan.target, schedule: plan.schedule, enabled: false
 						}
 					}));
-				}
+				},
 			}));
 			const pause = lifetime.add(new Button(actions, {
-				label: '', onClick: () => {
+				...defaultButtonStyles,
+				label: '',
+				onClick: () => {
 					const plan = this.automations.getAutomation(selected.id);
 					if (plan) void this.perform(plan.id, () => this.automations.updateAutomation(plan.id, { enabled: !plan.enabled }));
-				}
+				},
 			}));
 			this.details.append(h(document, 'p', { className: 'ash-automation-section-description' }, localize('automations.executionRules', 'Closing this window keeps enabled schedules on their host. The device must be awake and the host running. Missed recurring runs and overlapping runs are skipped; a missed one-time task runs after recovery.')));
 			this.details.append(h(document, 'h3', {}, localize('automations.history', 'Run history')));
@@ -511,7 +546,11 @@ export class AutomationsCardsWidget extends Disposable {
 				for (const item of runs) {
 					let button = links.get(item.id);
 					if (!button) {
-						button = new Button(history, { label: '', onClick: () => this.openDetails({ kind: 'run', id: item.id, planId: selected.id }) });
+						button = new Button(history, {
+							...defaultButtonStyles,
+							label: '',
+							onClick: () => this.openDetails({ kind: 'run', id: item.id, planId: selected.id }),
+						});
 						links.set(item.id, button);
 					}
 					button.label = localize('automations.runLink', '{0} · {1} · Version {2}', new Date(item.scheduledAt).toLocaleString(getNLSLanguage()), automationRunStatusLabel(item.status), item.revision);
@@ -550,27 +589,31 @@ export class AutomationsCardsWidget extends Disposable {
 				}
 			};
 			const refresh = lifetime.add(new Button(actions, {
+				...defaultButtonStyles,
 				label: localize('automations.refreshResult', 'Refresh result'),
-				onClick: () => { const run = this.automations.runs.get().find(run => run.id === selected.id); if (run) void load(run); }
+				onClick: () => { const run = this.automations.runs.get().find(run => run.id === selected.id); if (run) void load(run); },
 			}));
 			const open = lifetime.add(new Button(actions, {
+				...defaultButtonStyles,
 				label: localize('automations.openConversation', 'Open conversation'),
 				onClick: () => {
 					const run = this.automations.runs.get().find(run => run.id === selected.id);
 					if (run?.sessionId && run.threadId) void this.perform(run.id, () => this.navigation.openConversation(run.sessionId!, run.threadId!));
-				}
+				},
 			}));
 			const stop = lifetime.add(new Button(actions, {
+				...defaultButtonStyles,
 				label: localize('automations.stopRun', 'Stop run'),
-				onClick: () => { const run = this.automations.runs.get().find(run => run.id === selected.id); if (run) void this.perform(run.id, () => this.automations.stopRun(run)); }
+				onClick: () => { const run = this.automations.runs.get().find(run => run.id === selected.id); if (run) void this.perform(run.id, () => this.automations.stopRun(run)); },
 			}));
 			const retry = lifetime.add(new Button(actions, {
+				...defaultButtonStyles,
 				label: localize('automations.runCurrentVersion', 'Run current version'),
 				onClick: () => {
 					const run = this.automations.runs.get().find(run => run.id === selected.id);
 					const plan = run && this.automations.getAutomation(run.automationId);
 					if (plan) void this.perform(plan.id, () => this.runner.runOnce(plan).whenDispatched);
-				}
+				},
 			}));
 			lifetime.add(autorun(reader => {
 				const run = this.automations.runs.read(reader).find(run => run.id === selected.id);

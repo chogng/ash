@@ -572,7 +572,8 @@ test('built-in themes open their clean source and only Save as creates a user th
 	await dialog.getByRole('textbox', { name: 'Theme name' }).fill('Custom Dark');
 	await dialog.getByRole('textbox', { name: 'Theme name' }).press('Enter');
 	await expect(dialog).not.toBeVisible();
-	expect(await page.evaluate(() => window.themeEditorTest.persisted('custom-dark.json'))).not.toContain('"include":');
+	const exported = await page.evaluate(() => window.themeEditorTest.persisted('custom-dark.json'));
+	expect(JSON.parse(exported!)).not.toHaveProperty('include');
 	await popup.getByRole('searchbox', { name: 'Search colors' }).fill('editor.background');
 	await editColor(popup.getByRole('textbox', { name: 'Hex color for editor.background', exact: true }), '#667788');
 	await popup.getByRole('button', { name: 'Save and Apply', exact: true }).click();
@@ -647,7 +648,12 @@ test('extension publisher metadata remains editable and exports through Save as'
 	const [popup] = await Promise.all([page.waitForEvent('popup'), page.locator('#open').click()]);
 	const preview = popup.frameLocator('.ash-theme-editor-preview').locator('#app');
 	await expect(popup.frameLocator('.ash-theme-editor-preview').locator('body')).toHaveAttribute('data-ready', 'true');
-	await page.evaluate(() => window.themeEditorTest.setSource(window.themeEditorTest.source().replace('{', '{ "author": "Publisher", "maintainers": ["Publisher"],')));
+	await page.evaluate(() => {
+		const source = window.themeEditorTest.source()
+			.replace('{', '{ "author": "Publisher", "maintainers": ["Publisher"],')
+			.replace(/"colors"\s*:\s*\{/, '$& "unavailableExtension.accent": "#12345680",');
+		window.themeEditorTest.setSource(source);
+	});
 	await popup.getByRole('searchbox', { name: 'Search colors' }).fill('editor.background');
 	const hex = popup.getByRole('textbox', { name: 'Hex color for editor.background', exact: true });
 	await expect(hex).toBeEnabled();
@@ -661,8 +667,10 @@ test('extension publisher metadata remains editable and exports through Save as'
 	await saveEditableTheme(popup);
 	const exported = await page.evaluate(() => window.themeEditorTest.persisted('editable-theme.json'));
 	expect(exported).toContain('#abcdef');
-	expect(exported).not.toContain('"author"');
-	expect(exported).not.toContain('"include"');
+	const document = JSON.parse(exported!);
+	expect(document.colors['unavailableExtension.accent']).toBe('#12345680');
+	expect(document).not.toHaveProperty('author');
+	expect(document).not.toHaveProperty('include');
 	await expect(popup.locator('.ash-theme-editor-message')).not.toHaveClass(/error/);
 });
 

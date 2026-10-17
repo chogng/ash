@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { CancellationError } from '../../../../base/common/errors.js';
 import { ActionBar } from "../../../../base/browser/ui/actionbar/actionbar.js";
@@ -47,7 +48,7 @@ export class RemotePortsViewPane extends ViewPane {
 		this.portInput.step = "1";
 		this.portInput.placeholder = "3000";
 		this.portInput.required = true;
-		this.titleActions = this._register(new ActionBar(this.headerActionsElement, { ariaLabel: "Ports actions" }));
+		this.titleActions = this._register(new ActionBar(this.headerActionsElement, { actionViewItemOptions: { buttonStyles: defaultButtonStyles }, ariaLabel: "Ports actions" }));
 		this.titleActions.element.classList.add("ash-toolbar");
 		this.forwardButton = h(container.ownerDocument, "button");
 		this.forwardButton.className = "ash-remote-ports-forward";

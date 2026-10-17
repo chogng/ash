@@ -3,7 +3,19 @@ import { Emitter, type Event } from "../../../common/event.js";
 import { Disposable, toDisposable } from "../../../common/lifecycle.js";
 import { addDisposableListener, h, text as createText } from "../../dom.js";
 
-export interface ToggleOptions {
+export interface IToggleStyles {
+	readonly inputActiveOptionBorder: string | undefined;
+	readonly inputActiveOptionForeground: string | undefined;
+	readonly inputActiveOptionBackground: string | undefined;
+}
+
+export interface ICheckboxStyles {
+	readonly checkboxBackground: string | undefined;
+	readonly checkboxBorder: string | undefined;
+	readonly checkboxForeground: string | undefined;
+}
+
+export interface ToggleOptions extends Partial<IToggleStyles & ICheckboxStyles> {
 	readonly checked?: boolean;
 	readonly disabled?: boolean;
 	readonly ariaLabel?: string;
@@ -30,6 +42,19 @@ export class Toggle extends Disposable {
 		this.element = element;
 		this._register(toDisposable(() => element.remove()));
 		element.className = "ash-toggle";
+		{
+			const colors = {
+				'--ash-toggle-active-border': options.inputActiveOptionBorder,
+				'--ash-toggle-active-foreground': options.inputActiveOptionForeground,
+				'--ash-toggle-active-background': options.inputActiveOptionBackground,
+				'--ash-checkbox-background': options.checkboxBackground,
+				'--ash-checkbox-border': options.checkboxBorder,
+				'--ash-checkbox-foreground': options.checkboxForeground,
+			};
+			for (const [property, value] of Object.entries(colors)) {
+				if (value !== undefined) element.style.setProperty(property, value);
+			}
+		}
 
 		const input = h(ownerDocument, "input");
 		this.input = input;

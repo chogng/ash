@@ -32,7 +32,7 @@
 	border-bottom-right-radius: var(--ash-cornerRadius-xLarge);
 }
 
-.ash-sessions-window.modern-ui[data-color-scheme^="high-contrast-"]
+.ash-sessions-window.modern-ui:is(.hc-black, .hc-light)
 	.ash-sessions-content-card {
 	border-color: var(--ash-contrastBorder);
 	box-shadow: none;

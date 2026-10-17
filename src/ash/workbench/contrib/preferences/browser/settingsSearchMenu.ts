@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Separator, type IAction } from '../../../../base/common/actions.js';
@@ -20,6 +21,7 @@ export class SettingsSearchMenu extends Disposable {
 	constructor(container: HTMLElement, private readonly options: SettingsSearchMenuOptions) {
 		super();
 		this.button = this._register(new Button(container, {
+			...defaultButtonStyles,
 			label: '',
 			icon: Lxicon.filter,
 			ariaLabel: localize({ bundle: 'ash.settings', key: 'search.filter' }, 'Filter Settings'),

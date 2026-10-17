@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
 import { prototypePath, prototypeScrollRange, prototypeScrollTargets } from '../../../common/model/prototypeScroll.js';
 import './prototype.css';
 import { addDisposableListener, h, svg } from '../../../../../../base/browser/dom.js';
@@ -232,7 +233,11 @@ export class DesignPrototypeWidget extends Disposable implements IDesignPrototyp
 		return flattenDesignShapes(doc.shapes).flatMap(shape => [shape.flowStart ? localize('sessions.design.prototype.flowDescription', 'Flow: {0}', shape.flowStart) : '', ...(shape.interactions ?? []).map(item => localize('sessions.design.prototype.connectionDescription', '{0}: {1}, {2}, {3}', shape.name || localize('sessions.design.prototype.hotspot', 'Hotspot'), triggerLabels()[item.trigger], flattenPrototypeActions(item.actions).map(action => actionLabels()[action.action]).join(' → '), flattenPrototypeActions(item.actions).map(action => action.value ? formatPrototypeExpression(action.value, variables) : action.branches ? action.branches.map(branch => branch.condition ? formatPrototypeExpression(branch.condition, variables) : localize('sessions.design.prototype.else', 'Else')).join(', ') : prototypeFrames(doc.shapes).find(frame => frame.id === action.destination)?.name || transitionLabels()[action.transition.type]).join(', ')))]).filter(Boolean).join('\n');
 	}
 	private button(key: string, label: string, run: () => void, enabled = true): void {
-		const button = this.controls.add(new Button(this.parent ?? this.fields, { label, onClick: () => { if (!this.context.documentController.isBusy) { run(); } } })); button.enabled = enabled && !this.context.documentController.isBusy; button.domNode.dataset.prototypeControl = key;
+		const button = this.controls.add(new Button(this.parent ?? this.fields, {
+			...defaultButtonStyles,
+			label,
+			onClick: () => { if (!this.context.documentController.isBusy) { run(); } },
+		})); button.enabled = enabled && !this.context.documentController.isBusy; button.domNode.dataset.prototypeControl = key;
 	}
 	private control<T extends HTMLInputElement | HTMLSelectElement>(key: string, label: string, input: T, run: () => void): T {
 		input.dataset.prototypeControl = key; input.setAttribute('aria-label', label); input.disabled = this.context.documentController.isBusy;

@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import { h, type IDimension } from '../../../../base/browser/dom.js';
@@ -90,6 +91,7 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 		const actions = h(document, 'div');
 		actions.className = 'ash-scm-merge-actions';
 		this.finishButton = this._register(new Button(actions, {
+			...defaultButtonStyles,
 			label: localize({ bundle: 'ash', key: 'mergeEditor.completeMerge' }, 'Complete Merge'),
 			presentation: 'primary',
 			onClick: () => void this.completeMerge(),
@@ -264,12 +266,14 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 		const actions = h(this.domNode.ownerDocument, 'div');
 		actions.className = 'ash-scm-merge-file-choices';
 		this.fileChoiceButtons.push(this.fileChoiceStore.add(new Button(actions, {
+			...defaultButtonStyles,
 			label: file.current.kind === 'missing'
 				? localize({ bundle: 'ash', key: 'mergeEditor.keepCurrentDeletion' }, 'Keep Current Deletion')
 				: localize({ bundle: 'ash', key: 'mergeEditor.useCurrentFile' }, 'Use Current File'),
 			onClick: () => void this.chooseFile({ kind: 'current' }),
 		})));
 		this.fileChoiceButtons.push(this.fileChoiceStore.add(new Button(actions, {
+			...defaultButtonStyles,
 			label: file.incoming.kind === 'missing'
 				? localize({ bundle: 'ash', key: 'mergeEditor.keepIncomingDeletion' }, 'Keep Incoming Deletion')
 				: localize({ bundle: 'ash', key: 'mergeEditor.useIncomingFile' }, 'Use Incoming File'),

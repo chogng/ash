@@ -1,3 +1,9 @@
+import {
+	defaultButtonStyles,
+	defaultCheckboxStyles,
+	defaultInputBoxStyles,
+	defaultSelectBoxStyles,
+} from '../../../../platform/theme/browser/defaultStyles.js';
 import type { IResourceEditorInput } from '../../../common/editor.js';
 import './media/languageServerSettingsContent.css';
 import { h, isHTMLElement } from '../../../../base/browser/dom.js';
@@ -91,14 +97,29 @@ export class LanguageServerSettingsContent extends Disposable implements Setting
 		this.status.setAttribute('role', 'status');
 		this.status.setAttribute('aria-live', 'polite');
 		this.domNode.append(this.note);
-		this.directory = this._register(new SelectBox(this.field('directory'), { options: [], presentation: 'field', contextViewProvider: contextView }));
-		this.language = this._register(new InputBox(this.field('language'), { presentation: 'field' }));
+		this.directory = this._register(new SelectBox(this.field('directory'), {
+			options: [], presentation: 'field', contextViewProvider: contextView
+		}, defaultSelectBoxStyles));
+		this.language = this._register(new InputBox(this.field('language'), {
+			inputBoxStyles: defaultInputBoxStyles,
+			presentation: 'field',
+		}));
 		this.find = this.button(this.domNode, () => this.findServers());
-		this.list = this._register(new SelectBox(this.field('list'), { options: [], presentation: 'field', contextViewProvider: contextView }));
-		this.server = this._register(new InputBox(this.field('server'), { presentation: 'field' }));
+		this.list = this._register(new SelectBox(this.field('list'), {
+			options: [], presentation: 'field', contextViewProvider: contextView
+		}, defaultSelectBoxStyles));
+		this.server = this._register(new InputBox(this.field('server'), {
+			inputBoxStyles: defaultInputBoxStyles,
+			presentation: 'field',
+		}));
 		const enabledField = this.field('enabled');
-		this.enabled = this._register(new Checkbox(enabledField, {}));
-		this.executable = this._register(new InputBox(this.field('executable'), { presentation: 'field' }));
+		this.enabled = this._register(new Checkbox(enabledField, {
+			...defaultCheckboxStyles,
+		}));
+		this.executable = this._register(new InputBox(this.field('executable'), {
+			inputBoxStyles: defaultInputBoxStyles,
+			presentation: 'field',
+		}));
 		const actions = h(document, 'div');
 		actions.className = 'ash-language-server-settings-actions';
 		this.save = this.button(actions, () => this.mutate('save'));
@@ -309,7 +330,11 @@ export class LanguageServerSettingsContent extends Disposable implements Setting
 	}
 
 	private button(container: HTMLElement, run: () => Promise<void>): Button {
-		const button = this._register(new Button(container, { label: '', presentation: 'secondary' }));
+		const button = this._register(new Button(container, {
+			...defaultButtonStyles,
+			label: '',
+			presentation: 'secondary',
+		}));
 		this._register(button.onDidClick(() => { void run(); }));
 		return button;
 	}

@@ -1,3 +1,4 @@
+import { defaultDialogStyles, defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import './media/accessibleView.css';
 import { h, getActiveDocument, getActiveElement } from '../../../../base/browser/dom.js';
 import { Dialog } from '../../../../base/browser/ui/dialog/dialog.js';
@@ -96,6 +97,8 @@ export class AccessibleViewService extends Disposable implements IAccessibleView
 				: localize('accessibility.viewTitle', 'Accessible View');
 			content.setAttribute('aria-label', title);
 			const dialog = lifetime.add(new Dialog(root, {
+				buttonStyles: defaultButtonStyles,
+				dialogStyles: defaultDialogStyles,
 				title,
 				content,
 				buttons: [{ label: localize('accessibility.close', 'Close'), value: 'close' }],
@@ -185,6 +188,8 @@ export class AccessibleViewService extends Disposable implements IAccessibleView
 			updateContent();
 			lifetime.add(this.keybindings.onDidUpdateKeybindings(updateContent));
 			const dialog = lifetime.add(new Dialog(root, {
+				buttonStyles: defaultButtonStyles,
+				dialogStyles: defaultDialogStyles,
 				title,
 				content,
 				buttons: [{ label: localize('accessibility.close', 'Close'), value: 'close' }],

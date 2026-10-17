@@ -1,3 +1,5 @@
+import type { IFindWidgetStyles } from './abstractTree.js';
+import type { IListStyles } from '../list/listWidget.js';
 import { Emitter, type Event } from "../../../common/event.js";
 import { Disposable } from "../../../common/lifecycle.js";
 import type { ListScrolling } from "../list/list.js";
@@ -7,6 +9,8 @@ import { ObjectTreeModel, type ObjectTreeElement, type ObjectTreeModelOptions, t
 import { flattenTreeNodes, mapTreeDragData, type TreeDragAndDrop, type TreeFindMatchType, type TreeFindMode, type TreeFindResult, type TreeIndentGuides, type TreeKeyboardNavigationLabelProvider, type TreePointerTarget, type TreeSelectionPresentation, type TreeTwistieState, type TreeVisibleSplice } from "./tree.js";
 
 export interface ObjectTreeOptions<TNode> {
+	readonly styles?: IListStyles;
+	readonly findWidgetStyles?: IFindWidgetStyles;
 	readonly ariaLabel?: string;
 	readonly scrolling?: ListScrolling;
 	readonly smoothScrolling?: boolean;
@@ -113,6 +117,8 @@ export class ObjectTree<TNode> extends Disposable {
 		this.onWillRender = options.onWillRender;
 		this.model = this._register(new ObjectTreeModel(options.modelOptions));
 		this.tree = this._register(new AbstractTree(container, {
+			styles: options.styles,
+			findWidgetStyles: options.findWidgetStyles,
 			ariaLabel: options.ariaLabel,
 			scrolling: options.scrolling,
 			smoothScrolling: options.smoothScrolling,
@@ -282,6 +288,8 @@ export interface CompressibleKeyboardNavigationLabelProvider<T> {
 }
 
 export interface CompressibleObjectTreeOptions<T> {
+	readonly styles?: IListStyles;
+	readonly findWidgetStyles?: IFindWidgetStyles;
 	readonly onWillRender?: () => void;
 	readonly reuseRows?: boolean;
 	readonly onDidRemoveRow?: (row: HTMLDivElement) => void;
@@ -362,6 +370,8 @@ export class CompressibleObjectTree<T> extends Disposable {
 		const expandOnlyOnTwistieClick = options.expandOnlyOnTwistieClick;
 		this.model = this._register(new CompressibleObjectTreeModel(options.modelOptions));
 		this.tree = this._register(new AbstractTree(container, {
+			styles: options.styles,
+			findWidgetStyles: options.findWidgetStyles,
 			ariaLabel: options.ariaLabel,
 			multipleSelectionSupport: options.multipleSelectionSupport,
 			scrolling: options.scrolling,

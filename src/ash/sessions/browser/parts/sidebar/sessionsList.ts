@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import type { ISessionGroupsService } from '../../../services/sessions/browser/sessionGroupsService.js';
 import "./media/sessionsControls.css";
 import "./media/sessionsList.css";
@@ -93,7 +94,9 @@ export class SessionsList extends DomWidget {
 				let button = this.navigationButtons.get(action.id);
 				if (!button) {
 					button = this.navigationButtons.set(action.id, new Button(this.navigation, {
-						label: action.label, presentation: 'quiet',
+						...defaultButtonStyles,
+						label: action.label,
+						presentation: 'quiet',
 						onClick: () => { void Promise.resolve().then(() => this.navigationActions.get(action.id)?.run()).catch(error => notifications.error(String(error))); },
 					}));
 				}

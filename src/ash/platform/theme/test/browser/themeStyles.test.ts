@@ -15,6 +15,27 @@ import { menuSelectionBackground, menuSelectionForeground } from "../../common/c
 import { TestThemeService } from "../common/testThemeService.js";
 import { registerColor } from "../../common/colorUtils.js";
 
+test('theme classes follow both high contrast schemes and restore the host state on disposal', () => {
+	using service = new TestThemeService(darkColorTheme);
+	const target = new FakeThemeTarget();
+	target.classList.toggle('host-class', true);
+	target.classList.toggle('hc-light', true);
+	const binding = bindColorTheme(service, target as unknown as HTMLElement);
+	const state = (): boolean[] => ['hc-black', 'hc-light', 'ash-high-contrast', 'host-class']
+		.map(name => target.classList.contains(name));
+	assert.deepEqual(state(), [false, false, false, true]);
+	service.setColorTheme(highContrastDarkColorTheme);
+	assert.deepEqual(state(), [true, false, true, true]);
+	service.setColorTheme(highContrastLightColorTheme);
+	assert.deepEqual(state(), [false, true, true, true]);
+	service.setColorTheme(lightColorTheme);
+	assert.deepEqual(state(), [false, false, false, true]);
+	binding.dispose();
+	assert.deepEqual(state(), [false, true, false, true]);
+	service.setColorTheme(highContrastDarkColorTheme);
+	assert.deepEqual(state(), [false, true, false, true]);
+});
+
 test("floating elevation is shared in light and dark themes and removed in high contrast", () => {
 	using service = new TestThemeService(lightColorTheme);
 	const target = new FakeThemeTarget();
@@ -165,6 +186,14 @@ class FakeStyle {
 
 class FakeThemeTarget {
 	readonly style = new FakeStyle();
+	private readonly classes = new Set<string>();
+	readonly classList = {
+		contains: (name: string): boolean => this.classes.has(name),
+		toggle: (name: string, present: boolean): void => {
+			if (present) this.classes.add(name);
+			else this.classes.delete(name);
+		},
+	};
 	private readonly attributes = new Map<string, string>();
 
 	getAttribute(name: string): string | null {

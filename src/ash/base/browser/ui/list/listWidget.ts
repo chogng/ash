@@ -10,7 +10,20 @@ import { setAriaAttribute } from "../aria/aria.js";
 import type { IKeyboardNavigationLabelProvider, ListAccessibilityProvider, ListDragAndDrop, ListScrolling } from "./list.js";
 import { ListView } from "./listView.js";
 
+/** Host-provided CSS colors, resolved through the containing theme root. */
+export interface IListStyles {
+	readonly listBackground: string | undefined;
+	readonly listActiveSelectionBackground: string | undefined;
+	readonly listActiveSelectionForeground: string | undefined;
+	readonly listInactiveSelectionBackground: string | undefined;
+	readonly listHoverBackground: string | undefined;
+	readonly listFocusOutline: string | undefined;
+	readonly treeIndentGuidesStroke: string | undefined;
+	readonly treeInactiveIndentGuidesStroke: string | undefined;
+}
+
 export interface ListOptions<T> {
+	readonly styles?: IListStyles;
 	readonly ariaLabel?: string;
 	readonly role?: "listbox" | "tree";
 	readonly scrolling?: ListScrolling;
@@ -112,6 +125,22 @@ export class List<T> extends Disposable {
 		}));
 		this.element = this.view.element;
 		this.domNode = this.view.domNode;
+		if (options.styles) {
+			const colors = {
+				'--ash-list-style-list-active-selection-background': options.styles.listActiveSelectionBackground,
+				'--ash-list-style-list-active-selection-foreground': options.styles.listActiveSelectionForeground,
+				'--ash-list-style-list-inactive-selection-background': options.styles.listInactiveSelectionBackground,
+				'--ash-list-style-list-hover-background': options.styles.listHoverBackground,
+				'--ash-list-style-list-focus-outline': options.styles.listFocusOutline,
+				'--ash-list-style-tree-indent-guides-stroke': options.styles.treeIndentGuidesStroke,
+				'--ash-list-style-tree-inactive-indent-guides-stroke': options.styles.treeInactiveIndentGuidesStroke,
+			};
+			for (const [property, value] of Object.entries(colors)) {
+				if (value !== undefined) this.element.style.setProperty(property, value);
+			}
+		}
+		if (options.styles?.listBackground) this.element.style.backgroundColor = options.styles.listBackground;
+		if (options.styles?.listFocusOutline) this.element.style.outlineColor = options.styles.listFocusOutline;
 		if (options.multipleSelectionSupport) this.element.setAttribute("aria-multiselectable", "true");
 		this.onDidScroll = this.view.onDidScroll;
 		this.onDidRenderRows = this.view.onDidRenderRows;

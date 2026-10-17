@@ -1,3 +1,9 @@
+import {
+	defaultMenuStyles,
+	defaultToggleStyles,
+	defaultButtonStyles,
+	defaultKeybindingLabelStyles,
+} from '../../../../platform/theme/browser/defaultStyles.js';
 import { ILanguageModelsService } from '../common/languageModels.js';
 import './media/advisorSettingsContent.css';
 import { h, isHTMLElement } from '../../../../base/browser/dom.js';
@@ -87,7 +93,10 @@ export class AdvisorSettingsContent extends Disposable implements SettingsConten
 		enabledRow.className = 'ash-advisor-settings-row';
 		this.enabledLabel = h(document, 'span');
 		enabledRow.append(this.enabledLabel);
-		this.enabled = this._register(new Switch(enabledRow, { disabled: true }));
+		this.enabled = this._register(new Switch(enabledRow, {
+			...defaultToggleStyles,
+			disabled: true,
+		}));
 		this.domNode.append(enabledRow);
 		this.status = h(document, 'p');
 		this.status.className = 'ash-advisor-settings-status';
@@ -252,11 +261,13 @@ export class AdvisorSettingsContent extends Disposable implements SettingsConten
 		const actions = [disable, ...(modelActions.length ? [new Separator(), ...modelActions] : [])];
 		this.selectedMenuIndex = actions.findIndex(action => action.checked);
 		this.menu = this.menuDisposables.add(new Menu(h(this.domNode.ownerDocument, 'div'), {
+			buttonStyles: defaultButtonStyles,
+			keybindingLabelStyles: defaultKeybindingLabelStyles,
 			actions,
 			getCheckedActionsRepresentation: () => 'radio',
 			onDidSelect: () => this.advisor.hide(),
 			onDidRequestClose: () => this.advisor.hide(),
-		}));
+		}, defaultMenuStyles));
 		return this.menu.element;
 	}
 }

@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
 import { EffectPropertiesWidget } from './effectPropertiesWidget.js';
 import { PaintPropertiesWidget } from './paintPropertiesWidget.js';
 import { designPaints, withDesignPaintColor } from '../../../common/model/designPaint.js';
@@ -109,7 +110,11 @@ export class DesignPropertiesWidget extends Disposable {
 		this.arrangementProperties = this.createSection(localize('sessions.design.arrange', 'Arrange'));
 		(this.arrangementProperties.parentElement as HTMLDetailsElement).open = false;
 		const arrangeButton = (label: string, run: () => void, enabled: () => boolean): void => {
-			const button = this._register(new Button(this.arrangementProperties, { label, onClick: run }));
+			const button = this._register(new Button(this.arrangementProperties, {
+				...defaultButtonStyles,
+				label,
+				onClick: run,
+			}));
 			this.arrangementButtons.push({ button, enabled });
 		};
 		const canReorder = (): boolean => [...this.selection.ids].some(id => !this.commands.components.isInstanceChild(id));
@@ -345,7 +350,11 @@ export class DesignPropertiesWidget extends Disposable {
 		const guide = h(ownerDocument, 'section', { className: 'ash-design-property-section', attributes: { 'aria-label': localize('sessions.design.layoutGuide', 'Layout guide') } }, h(ownerDocument, 'h3', {}, localize('sessions.design.layoutGuide', 'Layout guide')), h(ownerDocument, 'div', { className: 'ash-design-guide-row' }, localize('sessions.design.gridSize', 'Grid · {0} px', 12)));
 		this.exportFormatInput = h(ownerDocument, 'select', { attributes: { 'aria-label': localize('sessions.design.exportFormat', 'Export format') } }, h(ownerDocument, 'option', { properties: { value: 'svg' } }, 'SVG'), h(ownerDocument, 'option', { properties: { value: 'html' } }, 'HTML'));
 		const exportRow = h(ownerDocument, 'div', { className: 'ash-design-export-row' }, this.exportFormatInput);
-		this.exportButton = this._register(new Button(exportRow, { label: localize('sessions.design.exportDesign', 'Export design'), onClick: () => { void this.exportDesign(this.exportFormatInput.value as 'svg' | 'html'); } }));
+		this.exportButton = this._register(new Button(exportRow, {
+			...defaultButtonStyles,
+			label: localize('sessions.design.exportDesign', 'Export design'),
+			onClick: () => { void this.exportDesign(this.exportFormatInput.value as 'svg' | 'html'); },
+		}));
 		this.domNode.append(guide, h(ownerDocument, 'section', { className: 'ash-design-property-section', attributes: { 'aria-label': localize('sessions.design.exportSection', 'Export') } }, h(ownerDocument, 'h3', {}, localize('sessions.design.exportSection', 'Export')), exportRow));
 	}
 

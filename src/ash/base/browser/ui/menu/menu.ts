@@ -1,3 +1,5 @@
+import type { IButtonStyles } from '../button/button.js';
+import type { IKeybindingLabelStyles } from '../keybindinglabel/keybindinglabel.js';
 import { type IAction, type IActionRunner, Separator, SubmenuAction } from "../../../common/actions.js";
 import { RunOnceScheduler } from "../../../common/async.js";
 import { addDisposableListener, isNode, h } from "../../dom.js";
@@ -5,12 +7,14 @@ import { FocusNavigationBoundary, FocusNavigationDirection, focusFirst, focusLas
 import type { ResolvedKeybinding } from "../../../common/keybindings.js";
 import { Disposable, toDisposable } from "../../../common/lifecycle.js";
 import { Lxicon } from "../../../common/lxicons.js";
-import { ActionViewItem, ButtonActionViewItem, SeparatorActionViewItem } from "../actionbar/actionViewItems.js";
+import { ActionViewItem, ButtonActionViewItem, SeparatorActionViewItem, type ActionViewItemOptions } from "../actionbar/actionViewItems.js";
 import { AnchorAxisAlignment, AnchorPosition, ContextView, ContextViewFocusRestore, ContextViewHideReason } from "../contextview/contextview.js";
 import { appendIcon } from "../lxicons/lxicon.js";
 import { KeybindingLabel } from "../keybindinglabel/keybindinglabel.js";
 
-export interface MenuActionViewItemOptions {
+export interface MenuActionViewItemOptions extends ActionViewItemOptions {
+	readonly menuStyles?: IMenuStyles;
+	readonly keybindingLabelStyles?: IKeybindingLabelStyles;
 	readonly ariaDescription?: string;
 	readonly onDidSelect?: () => void;
 	readonly submenuLayer?: number;
@@ -59,9 +63,9 @@ class MenuActionViewItem extends MenuButtonActionViewItem {
 
 	constructor(
 		action: IAction,
-		options: MenuActionViewItemOptions = {},
+		private readonly options: MenuActionViewItemOptions = {},
 	) {
-		super(action);
+		super(action, options);
 		this.ariaDescription = options.ariaDescription;
 		this.onDidSelect = options.onDidSelect;
 		this.keybinding = options.keybinding;
@@ -99,6 +103,7 @@ class MenuActionViewItem extends MenuButtonActionViewItem {
 		}
 		if (!this.keybinding) return;
 		const label = this._register(new KeybindingLabel(this.button.domNode, {
+			...this.options.keybindingLabelStyles,
 			keybinding: this.keybinding,
 		}));
 		label.element.classList.add("ash-menu-keybinding");
@@ -143,9 +148,9 @@ class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 
 	constructor(
 		action: SubmenuAction,
-		options: MenuActionViewItemOptions = {},
+		private readonly options: MenuActionViewItemOptions = {},
 	) {
-		super(action);
+		super(action, options);
 		this.submenuAction = action;
 		this.onDidSelect = options.onDidSelect;
 		this.submenuLayer = options.submenuLayer ?? 20;
@@ -168,9 +173,11 @@ class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 			throw new Error("Context view container belongs to another document");
 		}
 		this.contextView = this._register(new ContextView(
-			this.contextViewContainer ?? ownerDocument.body,
+			this.contextViewContainer ?? container.closest<HTMLElement>('dialog, [data-color-scheme]') ?? ownerDocument.body,
 		));
 		this.menu = this._register(new Menu(this.contextView.element, {
+			buttonStyles: this.options.buttonStyles,
+			keybindingLabelStyles: this.options.keybindingLabelStyles,
 			actions: this.submenuAction.actions,
 			contextViewContainer: this.contextViewContainer,
 			layer: this.submenuLayer,
@@ -185,7 +192,7 @@ class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 				this.close();
 				this.button.focus();
 			},
-		}));
+		}, this.options.menuStyles));
 		this._register(this.contextView.onDidHide((reason) => {
 			this.showScheduler.cancel();
 			this.hideScheduler.cancel();
@@ -294,7 +301,20 @@ function createMenuActionViewItem(
 	return new MenuActionViewItem(action, options);
 }
 
+/** Host-provided CSS colors, resolved through the containing theme root. */
+export interface IMenuStyles {
+	readonly foregroundColor: string | undefined;
+	readonly backgroundColor: string | undefined;
+	readonly selectionForegroundColor: string | undefined;
+	readonly selectionBackgroundColor: string | undefined;
+	readonly borderColor: string | undefined;
+	readonly separatorColor: string | undefined;
+	readonly shadowColor: string | undefined;
+}
+
 export interface MenuOptions {
+	readonly buttonStyles?: IButtonStyles;
+	readonly keybindingLabelStyles?: IKeybindingLabelStyles;
 	readonly getAriaDescription?: (action: IAction) => string | undefined;
 	readonly actions: readonly IAction[];
 	/** Applies only to submenu actions in this menu, not nested menus they create. */
@@ -332,7 +352,7 @@ export class Menu extends Disposable {
 	private focusedEntry: MenuEntry | undefined;
 	private lastPointerPosition: { x: number; y: number; } | undefined;
 
-	constructor(container: HTMLElement, options: MenuOptions) {
+	constructor(container: HTMLElement, options: MenuOptions, styles?: IMenuStyles) {
 		super();
 		const ownerDocument = container.ownerDocument;
 		const element = h(ownerDocument, "div");
@@ -343,10 +363,42 @@ export class Menu extends Disposable {
 			: "ash-menu";
 		element.setAttribute("role", "menu");
 		element.tabIndex = -1;
+		if (styles) {
+			const colors = {
+				'--ash-menu-style-foreground-color': styles.foregroundColor,
+				'--ash-menu-style-background-color': styles.backgroundColor,
+				'--ash-menu-style-selection-foreground-color': styles.selectionForegroundColor,
+				'--ash-menu-style-selection-background-color': styles.selectionBackgroundColor,
+				'--ash-menu-style-border-color': styles.borderColor,
+				'--ash-menu-style-separator-color': styles.separatorColor,
+				'--ash-menu-style-shadow-color': styles.shadowColor,
+			};
+			for (const [property, value] of Object.entries(colors)) {
+				if (value !== undefined) element.style.setProperty(property, value);
+			}
+			if (container.classList.contains('ash-context-view')) {
+				// ContextView owns the popup shell; restore its presentation when this menu releases it.
+				const previous = new Map(Object.keys(colors).map(property => [property, {
+					value: container.style.getPropertyValue(property), priority: container.style.getPropertyPriority(property),
+				}]));
+				for (const [property, value] of Object.entries(colors)) {
+					if (value !== undefined) container.style.setProperty(property, value);
+				}
+				this._register(toDisposable(() => {
+					for (const [property, original] of previous) {
+						if (original.value) container.style.setProperty(property, original.value, original.priority);
+						else container.style.removeProperty(property);
+					}
+				}));
+			}
+		}
 		container.append(element);
 
 		for (const action of options.actions) {
 			const itemOptions: MenuActionViewItemOptions = {
+				menuStyles: styles,
+				buttonStyles: options.buttonStyles,
+				keybindingLabelStyles: options.keybindingLabelStyles,
 				ariaDescription: options.getAriaDescription?.(action),
 				onDidSelect: options.onDidSelect,
 				openSubmenusImmediatelyOnHover: options.openSubmenusImmediatelyOnHover,

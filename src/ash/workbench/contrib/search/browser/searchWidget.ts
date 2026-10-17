@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { h, scheduleAtNextAnimationFrame } from '../../../../base/browser/dom.js';
 import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
 import { LabelActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
@@ -53,6 +54,7 @@ export class SearchWidget extends Disposable {
 		const queryField = h(document, 'div');
 		queryField.className = 'ash-search-query-field';
 		this.replaceToggle = this._register(new Button(queryRow, {
+			...defaultButtonStyles,
 			label: localize('search.toggleReplace', 'Toggle Replace'),
 			title: localize('search.toggleReplace', 'Toggle Replace'),
 			icon: Lxicon.chevronRight,
@@ -72,6 +74,7 @@ export class SearchWidget extends Disposable {
 			history: new Set(history.load().search),
 		}));
 		this.queryOptions = this._register(new ActionBar(queryField, {
+			actionViewItemOptions: { buttonStyles: defaultButtonStyles },
 			ariaLabel: localize('search.options', 'Search options'),
 			highlightToggledItems: true,
 			actionViewItemProvider: action => new LabelActionViewItem(action, {
@@ -96,6 +99,7 @@ export class SearchWidget extends Disposable {
 			history: new Set(history.load().replace),
 		}));
 		this.replaceActions = this._register(new ActionBar(replaceField, {
+			actionViewItemOptions: { buttonStyles: defaultButtonStyles },
 			ariaLabel: localize('search.replaceActions', 'Replacement actions'),
 			highlightToggledItems: true,
 			actionViewItemProvider: action => new LabelActionViewItem(action, { label: action.id === 'search.preserveCase' ? 'AB' : '', ariaLabel: action.label }),

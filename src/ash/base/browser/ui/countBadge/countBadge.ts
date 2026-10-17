@@ -4,6 +4,13 @@ import { formatNlsMessage } from '../../../../nls.js';
 import { getHoverDelegate, type IManagedHover } from '../hover/hoverDelegate.js';
 import './countBadge.css';
 
+/** Host-provided CSS colors, resolved through the containing theme root. */
+export interface ICountBadgeStyles {
+	readonly badgeBackground: string | undefined;
+	readonly badgeForeground: string | undefined;
+	readonly badgeBorder: string | undefined;
+}
+
 export interface ICountBadgeOptions {
 	readonly count?: number;
 	readonly countFormat?: string;
@@ -17,10 +24,20 @@ export class CountBadge extends Disposable {
 	public readonly domNode: HTMLSpanElement;
 	private readonly hover: IManagedHover | undefined;
 
-	constructor(container: HTMLElement, private readonly options: ICountBadgeOptions = {}) {
+	constructor(container: HTMLElement, private readonly options: ICountBadgeOptions = {}, styles?: ICountBadgeStyles) {
 		super();
 		this.domNode = h(container.ownerDocument, 'span');
 		this.domNode.className = 'ash-count-badge';
+		if (styles) {
+			const colors = {
+				'--ash-badge-style-badge-background': styles.badgeBackground,
+				'--ash-badge-style-badge-foreground': styles.badgeForeground,
+				'--ash-badge-style-badge-border': styles.badgeBorder,
+			};
+			for (const [property, value] of Object.entries(colors)) {
+				if (value !== undefined) this.domNode.style.setProperty(property, value);
+			}
+		}
 		this.domNode.classList.toggle('accent', options.presentation === 'accent');
 		this.domNode.classList.toggle('small', options.size === 'small');
 		container.append(this.domNode);

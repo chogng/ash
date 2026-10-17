@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
 import { prototypeScrollRange, type PrototypeScrollPositions } from '../../../common/model/prototypeScroll.js';
 import type { DesignPoint } from '../../../common/core/geometry.js';
 import { addDisposableListener, h, svg } from '../../../../../../base/browser/dom.js';
@@ -39,9 +40,21 @@ export class PrototypePreview extends Disposable {
 		const controls = h(doc, 'div', { className: 'ash-prototype-preview-controls' });
 		this.flow = h(doc, 'select', { attributes: { 'aria-label': localize('sessions.design.prototype.flow', 'Flow starting point') } });
 		controls.append(this.flow);
-		this.back = this._register(new Button(controls, { label: actionLabels().back, onClick: () => this.perform({ id: '', trigger: 'click', actions: [{ action: 'back', transition: defaultPrototypeTransition }] }) }));
-		this._register(new Button(controls, { label: localize('sessions.design.prototype.restart', 'Restart flow'), onClick: () => this.restart(this.start) }));
-		this._register(new Button(controls, { label: localize('sessions.creator.closePreview', 'Close preview'), onClick: () => this.close() }));
+		this.back = this._register(new Button(controls, {
+			...defaultButtonStyles,
+			label: actionLabels().back,
+			onClick: () => this.perform({ id: '', trigger: 'click', actions: [{ action: 'back', transition: defaultPrototypeTransition }] }),
+		}));
+		this._register(new Button(controls, {
+			...defaultButtonStyles,
+			label: localize('sessions.design.prototype.restart', 'Restart flow'),
+			onClick: () => this.restart(this.start),
+		}));
+		this._register(new Button(controls, {
+			...defaultButtonStyles,
+			label: localize('sessions.creator.closePreview', 'Close preview'),
+			onClick: () => this.close(),
+		}));
 		this.status = h(doc, 'span', { attributes: { role: 'status', 'aria-live': 'polite' } });
 		controls.append(this.status);
 		this.scene = svg(doc, 'svg', { className: 'ash-prototype-preview-scene' });

@@ -1,3 +1,4 @@
+import { defaultButtonStyles, defaultSelectBoxStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { ILocalTranscriptionModelService } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { ISpeechService } from '../../../speech/common/speechService.js';
 import { IVoiceCodeTranscriptionBackendService } from '../../../../../platform/renderer/common/dictation.js';
@@ -82,8 +83,12 @@ export class DictationSettingsContent extends Disposable implements SettingsCont
 		this.controls = this._register(instantiation.createInstance(LocalTranscriptionModelControls, h(document, 'div')));
 		this.inputOptions = h(document, 'div');
 		this.inputOptions.className = 'ash-dictation-input-options';
-		this.microphone = this._register(new SelectBox(this.inputOptions, { options: [], ariaLabel: localize({ bundle: 'ash', key: 'dictation.microphone' }, 'Microphone') }));
-		this.language = this._register(new SelectBox(this.inputOptions, { options: [], ariaLabel: localize({ bundle: 'ash', key: 'dictation.language' }, 'Transcription language') }));
+		this.microphone = this._register(new SelectBox(this.inputOptions, {
+			options: [], ariaLabel: localize({ bundle: 'ash', key: 'dictation.microphone' }, 'Microphone')
+		}, defaultSelectBoxStyles));
+		this.language = this._register(new SelectBox(this.inputOptions, {
+			options: [], ariaLabel: localize({ bundle: 'ash', key: 'dictation.language' }, 'Transcription language')
+		}, defaultSelectBoxStyles));
 		this._register(this.microphone.onDidSelect(({ value }) => { void this.configure(DictationConfiguration.inputDevice, value); }));
 		this._register(this.language.onDidSelect(({ value }) => { void this.configure(DictationConfiguration.language, value); }));
 		const updateHint = (): void => {
@@ -96,7 +101,11 @@ export class DictationSettingsContent extends Disposable implements SettingsCont
 		this.connectionStatus = h(document, 'p');
 		this.connectionStatus.setAttribute('role', 'status');
 		this.cloud.append(this.connectionStatus);
-		const connections = this._register(new Button(this.cloud, { label: localize('dictation.connections.manage', 'Manage API connections'), presentation: 'secondary' }));
+		const connections = this._register(new Button(this.cloud, {
+			...defaultButtonStyles,
+			label: localize('dictation.connections.manage', 'Manage API connections'),
+			presentation: 'secondary',
+		}));
 		this._register(connections.onDidClick(() => { void preferences.openSettings({ section: 'models' }); }));
 		this.subscriptionTitle = localize('dictation.subscription.title', 'Codex subscription dictation');
 		this.subscriptionDescription = localize('dictation.subscription.description', 'Use your Codex login from Models. Record up to 3 minutes, then stop to transcribe and insert the text. No separate API key is needed.');
@@ -110,7 +119,11 @@ export class DictationSettingsContent extends Disposable implements SettingsCont
 		this.subscription.setAttribute('aria-labelledby', title.id);
 		this.subscription.setAttribute('aria-describedby', description.id);
 		this.subscription.append(title, description);
-		const account = this._register(new Button(this.subscription, { label: localize('dictation.subscription.manage', 'Manage Codex account'), presentation: 'secondary' }));
+		const account = this._register(new Button(this.subscription, {
+			...defaultButtonStyles,
+			label: localize('dictation.subscription.manage', 'Manage Codex account'),
+			presentation: 'secondary',
+		}));
 		this._register(account.onDidClick(() => { void preferences.openSettings({ section: 'models' }); }));
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(AccessibilityVerbositySettingId.DictationModels)) { updateHint(); }

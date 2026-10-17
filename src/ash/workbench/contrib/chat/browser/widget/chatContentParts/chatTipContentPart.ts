@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
 import { h } from '../../../../../../base/browser/dom.js';
 import { IMarkdownRendererService } from '../../../../../../platform/markdown/browser/markdownRenderer.js';
 import { Button } from '../../../../../../base/browser/ui/button/button.js';
@@ -23,6 +24,7 @@ export class ChatTipContentPart extends DomWidget {
 		const content = this._register(markdownRenderer.render(tip.content, { ownerDocument: document }));
 		this.domNode.append(content.element);
 		this._register(new Button(this.domNode, {
+			...defaultButtonStyles,
 			label: localize('chat.tip.dismiss', 'Dismiss tip'),
 			ariaLabel: localize('chat.tip.dismiss', 'Dismiss tip'),
 			icon: Lxicon.close,

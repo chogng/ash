@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import './postEditWidget.css';
 import { Separator, type IAction } from '../../../../base/common/actions.js';
 import { addDisposableListener, h, stopEvent } from '../../../../base/browser/dom.js';
@@ -67,6 +68,7 @@ class PostEditWidget<T extends TransferEdit> extends Disposable implements ICont
 			run: () => onSelect(index),
 		})), configureAction ? [{ ...configureAction, run: () => configureAction.run(editor) }] : []);
 		this.button = this._register(new Button(this.domNode, {
+			...defaultButtonStyles,
 			label: edits.allEdits[edits.activeEditIndex]!.title,
 			ariaLabel: label,
 			icon: Lxicon.chevronDown,

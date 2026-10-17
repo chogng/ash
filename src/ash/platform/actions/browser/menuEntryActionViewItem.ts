@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../theme/browser/defaultStyles.js';
 import { DropdownWithPrimaryActionViewItem } from './dropdownWithPrimaryActionViewItem.js';
 import { addDisposableListener, ModifierKeyEmitter } from "../../../base/browser/dom.js";
 import { setAriaAttribute } from "../../../base/browser/ui/aria/aria.js";
@@ -179,7 +180,10 @@ export class MenuEntryActionViewItem extends ButtonActionViewItem {
 	private isMouseOver = false;
 
 	constructor(action: MenuItemAction, options: IMenuEntryActionViewItemOptions = {}) {
-		super(action, options);
+		super(action, {
+			buttonStyles: defaultButtonStyles,
+			...options
+		});
 		this.menuItemAction = action;
 		this.activeAction = action;
 	}
@@ -238,7 +242,10 @@ export class SubmenuEntryActionViewItem
 		contextMenuProvider: IContextMenuProvider,
 		options: IMenuEntryActionViewItemOptions = {},
 	) {
-		super(action, () => action.actions, contextMenuProvider, options);
+		super(action, () => action.actions, contextMenuProvider, {
+			buttonStyles: defaultButtonStyles,
+			...options
+		});
 	}
 
 	override render(container: HTMLElement): void {

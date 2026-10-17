@@ -4,7 +4,7 @@ import { Disposable, toDisposable, type IDisposable } from "../../../common/life
 import { assertDefined } from "../../../common/types.js";
 import { addDisposableListener, h } from "../../dom.js";
 import { setAriaAttribute } from "../aria/aria.js";
-import { Button, type ButtonOptions } from "../button/button.js";
+import { Button, type IButtonOptions, type IButtonStyles } from "../button/button.js";
 import { AnchorPosition } from "../contextview/contextview.js";
 import { getHoverDelegate, type IManagedHover } from "../hover/hoverDelegate.js";
 import type { IDelayedHoverOptions } from '../hover/hover.js';
@@ -15,6 +15,7 @@ const ActionHoverGroupId = "actions";
 
 /** Presentation options shared by every ActionBar item representation. */
 export interface ActionViewItemOptions {
+	readonly buttonStyles?: IButtonStyles;
 	/** Allows the host ActionBar to expose this item as a native drag source. */
 	readonly draggable?: boolean;
 	/** Places the item's managed tooltip relative to its trigger. */
@@ -47,8 +48,9 @@ export abstract class ActionViewItem extends Disposable {
 	focus(): void { }
 
 	/** Creates a Button using the shared delay group for adjacent actions. */
-	protected createButton(container: HTMLElement, options: ButtonOptions): Button {
+	protected createButton(container: HTMLElement, options: IButtonOptions): Button {
 		const button = this._register(new Button(container, {
+			...this.actionViewItemOptions.buttonStyles,
 			...options,
 			title: undefined,
 			hoverGroupId: options.hoverGroupId ?? ActionHoverGroupId,

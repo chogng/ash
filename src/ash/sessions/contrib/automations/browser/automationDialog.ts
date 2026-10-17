@@ -1,3 +1,4 @@
+import { defaultButtonStyles, defaultDialogStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Dialog } from '../../../../base/browser/ui/dialog/dialog.js';
@@ -137,6 +138,8 @@ export class AutomationDialog extends Disposable {
 		this.message = h(document, 'p', { attributes: { role: 'status', 'aria-label': localize('automations.saveStatus', 'Save status') } });
 		this.form.append(this.message);
 		this.dialog = this._register(new Dialog(parent, {
+			buttonStyles: defaultButtonStyles,
+			dialogStyles: defaultDialogStyles,
 			title: options.existing ? localize('automations.edit', 'Edit automation') : localize('automations.new', 'New automation'),
 			content: this.form,
 			buttons: [{ label: localize('automations.cancel', 'Cancel'), value: 'cancel' }],
@@ -144,7 +147,12 @@ export class AutomationDialog extends Disposable {
 		}));
 		// Keep commit/cancel reachable while the longer form scrolls, retaining native form submission.
 		const actions = this.dialog.element.querySelector<HTMLElement>('.ash-dialog-actions')!;
-		this.save = this._register(new Button(actions, { label: localize('automations.save', 'Save automation'), presentation: 'primary', type: 'submit' }));
+		this.save = this._register(new Button(actions, {
+			...defaultButtonStyles,
+			label: localize('automations.save', 'Save automation'),
+			presentation: 'primary',
+			type: 'submit',
+		}));
 		this.save.domNode.setAttribute('form', this.form.id);
 		actions.prepend(this.save.domNode);
 		this.dialog.element.classList.add('ash-automation-dialog');

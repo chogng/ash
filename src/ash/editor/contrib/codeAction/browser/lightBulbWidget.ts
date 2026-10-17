@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import './lightBulbWidget.css';
 import { h } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -28,8 +29,13 @@ export class LightBulbWidget extends Disposable implements IContentWidget {
 		this.element = h(editor.getDomNode()!.ownerDocument, 'div');
 		this.element.className = 'ash-editor-lightbulb';
 		this.button = this._register(new Button(this.element, {
-			label: localize('codeAction.lightbulb', 'Show code actions'), icon: Lxicon.lightning, iconOnly: true,
-			presentation: 'quiet', size: 'small', onClick: () => { if (this.trigger) { this.clicked.fire(this.trigger); } },
+			...defaultButtonStyles,
+			label: localize('codeAction.lightbulb', 'Show code actions'),
+			icon: Lxicon.lightning,
+			iconOnly: true,
+			presentation: 'quiet',
+			size: 'small',
+			onClick: () => { if (this.trigger) { this.clicked.fire(this.trigger); } },
 		}));
 		this._register(keybindings.onDidUpdateKeybindings(() => this.updateLabel()));
 		this.updateLabel();

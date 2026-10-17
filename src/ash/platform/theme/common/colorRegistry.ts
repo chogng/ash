@@ -127,8 +127,8 @@ function resolveColorValue(value: ColorValue, resolveIdentifier: (id: string) =>
 	if (!source) return null;
 	switch (value.op) {
 		case "transparent": return source.transparent(value.factor);
-		case "lighten": return mixColor(source, Color.white, value.factor);
-		case "darken": return mixColor(source, Color.black, value.factor);
+		case "lighten": return source.lighten(value.factor);
+		case "darken": return source.darken(value.factor);
 		case "mix": {
 			const other = resolveColorValue(value.other, resolveIdentifier);
 			return other ? mixColor(source, other, value.factor) : null;

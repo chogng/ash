@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import "./views.css";
 import { Emitter } from "../../../../base/common/event.js";
 import { Pane, type IPaneOptions } from "../../../../base/browser/ui/splitview/paneview.js";
@@ -226,7 +227,9 @@ export class ViewWelcomeController extends Disposable {
 					const link = /^\[([^\]]+)\]\((command:[^\s)]+)\)$/u.exec(line);
 					if (link) {
 						const button = this.renderedContent.add(new Button(this.scrollable.contentElement, {
-							label: link[1], title: link[1],
+							...defaultButtonStyles,
+							label: link[1],
+							title: link[1],
 							presentation: 'primary',
 							onClick: () => { void this.open(link[2], descriptor); },
 						}));

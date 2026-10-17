@@ -1,3 +1,8 @@
+import {
+	defaultButtonStyles,
+	defaultInputBoxStyles,
+	defaultListStyles,
+} from '../../../../platform/theme/browser/defaultStyles.js';
 import { localize } from '../../../../nls.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
@@ -83,12 +88,22 @@ class ExtensionsContent extends Disposable {
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		const search = h(mainWindow.document, 'div'); search.className = 'extensions-search'; this.domNode.append(search);
-		this.query = this._register(new InputBox(search, { type: 'search', presentation: 'compact', placeholder: this.isPluginsPane ? localize({ bundle: 'ash.extensions', key: 'searchPlugins' }, 'Search installed extensions') : localize({ bundle: 'ash.extensions', key: 'searchPackages' }, 'Search extensions'), ariaLabel: this.isPluginsPane ? localize({ bundle: 'ash.extensions', key: 'searchPlugins' }, 'Search installed extensions') : localize({ bundle: 'ash.extensions', key: 'searchExtensions' }, 'Search Extensions') }));
+		this.query = this._register(new InputBox(search, {
+			inputBoxStyles: defaultInputBoxStyles,
+			type: 'search',
+			presentation: 'compact',
+			placeholder: this.isPluginsPane ? localize({ bundle: 'ash.extensions', key: 'searchPlugins' }, 'Search installed extensions') : localize({ bundle: 'ash.extensions', key: 'searchPackages' }, 'Search extensions'),
+			ariaLabel: this.isPluginsPane ? localize({ bundle: 'ash.extensions', key: 'searchPlugins' }, 'Search installed extensions') : localize({ bundle: 'ash.extensions', key: 'searchExtensions' }, 'Search Extensions'),
+		}));
 		this.query.value = options.query ?? '';
 		this.status = h(mainWindow.document, 'div'); this.status.className = 'extensions-status'; this.status.setAttribute('role', 'status'); this.domNode.append(this.status);
 		const listContainer = h(mainWindow.document, 'div'); listContainer.className = 'extensions-list'; this.domNode.append(listContainer);
 		this.list = this._register(new List(listContainer, {
-			ariaLabel: this.isPluginsPane ? localize({ bundle: 'ash.extensions', key: 'pluginsPane' }, 'Installed Extensions') : localize({ bundle: 'ash.extensions', key: 'extensionList' }, 'Extensions'), domFocusable: true, keyboardNavigation: true, focusOnMouseMove: false,
+			styles: defaultListStyles,
+			ariaLabel: this.isPluginsPane ? localize({ bundle: 'ash.extensions', key: 'pluginsPane' }, 'Installed Extensions') : localize({ bundle: 'ash.extensions', key: 'extensionList' }, 'Extensions'),
+			domFocusable: true,
+			keyboardNavigation: true,
+			focusOnMouseMove: false,
 			getId: item => `${item.source ?? ExtensionsInputSource.Registry}/${item.installation?.installationId ?? item.summary.id}/${item.summary.version}`,
 			accessibilityProvider: { getAriaLabel: item => `${item.summary.displayName}, ${item.summary.version}, ${item.summary.description}, ${item.source === ExtensionsInputSource.BuiltIn ? localize({ bundle: 'ash.extensions', key: 'builtInFilter' }, 'Built-in') + ', ' : ''}${item.enabled === undefined ? '' : item.enabled ? localize({ bundle: 'ash.extensions', key: 'enabledState' }, 'Enabled') : localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled')}` },
 			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: item => item.summary.displayName },
@@ -141,7 +156,13 @@ class ExtensionsContent extends Disposable {
 		}
 		const actions = h(mainWindow.document, 'div'); actions.className = 'extension-row-actions';
 		if (!item.source && !item.installation && !this.installed.some(entry => entry.package.id === item.summary.id)) {
-			const install = resources.add(new Button(actions, { label: localize({ bundle: 'ash.extensions', key: 'install' }, 'Install'), presentation: 'primary', size: 'small', enabled: !this.working }));
+			const install = resources.add(new Button(actions, {
+				...defaultButtonStyles,
+				label: localize({ bundle: 'ash.extensions', key: 'install' }, 'Install'),
+				presentation: 'primary',
+				size: 'small',
+				enabled: !this.working,
+			}));
 			resources.add(install.onDidClick(event => {
 				event.stopPropagation(); void this.run(async () => {
 					if (this.working) { return; }
@@ -158,7 +179,12 @@ class ExtensionsContent extends Disposable {
 			state.textContent = item.enabled ? localize({ bundle: 'ash.extensions', key: 'enabledState' }, 'Enabled') : localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled');
 			body.append(state);
 			if (item.canChangeEnablement) {
-				const toggle = resources.add(new Button(actions, { label: extensionEnablementLabel(item.enabled), size: 'small', enabled: !this.working && item.installation?.state !== 'pendingRemoval' }));
+				const toggle = resources.add(new Button(actions, {
+					...defaultButtonStyles,
+					label: extensionEnablementLabel(item.enabled),
+					size: 'small',
+					enabled: !this.working && item.installation?.state !== 'pendingRemoval',
+				}));
 				resources.add(toggle.onDidClick(event => {
 					event.stopPropagation();
 					void this.run(async () => {

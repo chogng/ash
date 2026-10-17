@@ -1,3 +1,4 @@
+import { defaultButtonStyles, defaultInputBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
@@ -60,19 +61,36 @@ export class TraceEditor extends EditorPane implements IEditorPane {
 		this.address.value = 'ws://127.0.0.1:4319/';
 		this.token = this.field(toolbar, localize('trace.token', 'Trace token'), 'password');
 		this.connectButton = this._register(new Button(toolbar, {
-			label: localize('trace.connect', 'Connect'), presentation: 'primary', onClick: () => {
+			...defaultButtonStyles,
+			label: localize('trace.connect', 'Connect'),
+			presentation: 'primary',
+			onClick: () => {
 				this.selected = undefined;
 				this.connection.connect(this.address.value, this.token.value);
-			}
+			},
 		}));
-		this.disconnectButton = this._register(new Button(toolbar, { label: localize('trace.disconnect', 'Disconnect'), onClick: () => this.connection.disconnect() }));
-		this._register(new Button(toolbar, { label: localize('trace.clear', 'Clear'), onClick: () => { this.selected = undefined; this.connection.clear(); } }));
+		this.disconnectButton = this._register(new Button(toolbar, {
+			...defaultButtonStyles,
+			label: localize('trace.disconnect', 'Disconnect'),
+			onClick: () => this.connection.disconnect(),
+		}));
+		this._register(new Button(toolbar, {
+			...defaultButtonStyles,
+			label: localize('trace.clear', 'Clear'),
+			onClick: () => { this.selected = undefined; this.connection.clear(); },
+		}));
 		this.exportButton = this._register(new Button(toolbar, {
-			label: localize('trace.export', 'Export filtered OTLP'), onClick: () => {
+			...defaultButtonStyles,
+			label: localize('trace.export', 'Export filtered OTLP'),
+			onClick: () => {
 				triggerDownload(new Blob([exportTrace(this.filtered())], { type: 'application/json' }), 'ash-traces.json', document);
-			}
+			},
 		}));
-		this._register(new Button(toolbar, { label: localize('trace.help', 'Help'), onClick: () => { void this.showHelp(); } }));
+		this._register(new Button(toolbar, {
+			...defaultButtonStyles,
+			label: localize('trace.help', 'Help'),
+			onClick: () => { void this.showHelp(); },
+		}));
 		this.filter = this.field(this.domNode, localize('trace.filter', 'Filter by name, outcome or trace ID'), 'search');
 		this._register(this.filter.onDidChange(() => this.scheduleRender()));
 		this.statusDomNode = h(document, 'div');
@@ -139,7 +157,12 @@ export class TraceEditor extends EditorPane implements IEditorPane {
 		caption.textContent = text;
 		label.append(caption);
 		container.append(label);
-		return this._register(new InputBox(label, { type, ariaLabel: text, presentation: 'field' }));
+		return this._register(new InputBox(label, {
+			inputBoxStyles: defaultInputBoxStyles,
+			type,
+			ariaLabel: text,
+			presentation: 'field',
+		}));
 	}
 
 	private filtered(): readonly TraceSpan[] {

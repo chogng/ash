@@ -1,3 +1,5 @@
+import type { IFindWidgetStyles } from './abstractTree.js';
+import type { IListStyles } from '../list/listWidget.js';
 import { Emitter, type Event } from "../../../common/event.js";
 import { TaskQueue } from "../../../common/async.js";
 import { Disposable, type IDisposable, toDisposable } from "../../../common/lifecycle.js";
@@ -12,6 +14,8 @@ export interface AsyncTreeTwistieState extends TreeTwistieState {
 }
 
 interface AsyncDataTreeCommonOptions<T> {
+	readonly styles?: IListStyles;
+	readonly findWidgetStyles?: IFindWidgetStyles;
 	readonly ariaLabel?: string;
 	readonly multipleSelectionSupport?: boolean;
 	readonly scrolling?: ListScrolling;
@@ -35,6 +39,8 @@ interface AsyncDataTreeCommonOptions<T> {
 }
 
 export interface AsyncDataTreeOptions<T> extends AsyncDataTreeCommonOptions<T> {
+	readonly styles?: IListStyles;
+	readonly findWidgetStyles?: IFindWidgetStyles;
 	readonly expandOnlyOnTwistieClick?: boolean | ((element: T) => boolean);
 	readonly getHeight?: (element: T) => number;
 	readonly dnd?: TreeDragAndDrop<T>;
@@ -503,6 +509,8 @@ export class AsyncDataTree<TInput, T> extends AbstractAsyncDataTree<TInput, T, A
 
 	protected createTree(container: HTMLElement, options: AsyncDataTreeOptions<T>): AsyncTreeView<T> {
 		const tree = new ObjectTree<T>(container, {
+			styles: options.styles,
+			findWidgetStyles: options.findWidgetStyles,
 			ariaLabel: options.ariaLabel,
 			multipleSelectionSupport: options.multipleSelectionSupport,
 			scrolling: options.scrolling,
@@ -545,6 +553,8 @@ export class CompressibleAsyncDataTree<TInput, T> extends AbstractAsyncDataTree<
 
 	protected createTree(container: HTMLElement, options: CompressibleAsyncDataTreeOptions<T>): AsyncTreeView<T> {
 		const tree = new CompressibleObjectTree<T>(container, {
+			styles: options.styles,
+			findWidgetStyles: options.findWidgetStyles,
 			ariaLabel: options.ariaLabel,
 			multipleSelectionSupport: options.multipleSelectionSupport,
 			scrolling: options.scrolling,

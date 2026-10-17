@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
 import './designMotionWidget.css';
 import { addDisposableListener, getWindow, h } from '../../../../../../base/browser/dom.js';
 import { Button } from '../../../../../../base/browser/ui/button/button.js';
@@ -38,7 +39,11 @@ export class DesignMotionWidget extends Disposable {
 		const playback = h(ownerDocument, 'div', { className: 'ash-design-motion-row' });
 		const properties = h(ownerDocument, 'div', { className: 'ash-design-motion-row' });
 		const hint = h(ownerDocument, 'span', { className: 'ash-design-motion-hint' }, localize('sessions.design.motionHint', 'Select an object, add keyframes, then edit its position, rotation and opacity. Interpolation is linear.'));
-		this.playButton = this._register(new Button(playback, { label: localize('sessions.design.playMotion', 'Play'), onClick: () => this.togglePlayback() }));
+		this.playButton = this._register(new Button(playback, {
+			...defaultButtonStyles,
+			label: localize('sessions.design.playMotion', 'Play'),
+			onClick: () => this.togglePlayback(),
+		}));
 		this.timeline = h(ownerDocument, 'input', { properties: { type: 'range', min: '0', max: '1000', step: '1', value: '0' }, attributes: { 'aria-label': localize('sessions.design.motionTime', 'Animation time (ms)') } });
 		this.timeLabel = h(ownerDocument, 'span', { className: 'ash-design-motion-time' });
 		playback.append(this.timeline, this.timeLabel);
@@ -66,19 +71,27 @@ export class DesignMotionWidget extends Disposable {
 				this.commit({ ...motion, keyframes: motion.keyframes.map((frame, index) => index === this.frameIndex ? { ...frame, [field]: input.valueAsNumber } : frame) });
 			}));
 		}
-		this.addButton = this._register(new Button(playback, { label: localize('sessions.design.addKeyframe', 'Add keyframe'), onClick: () => this.addKeyframe() }));
+		this.addButton = this._register(new Button(playback, {
+			...defaultButtonStyles,
+			label: localize('sessions.design.addKeyframe', 'Add keyframe'),
+			onClick: () => this.addKeyframe(),
+		}));
 		this.removeButton = this._register(new Button(playback, {
-			label: localize('sessions.design.removeKeyframe', 'Remove keyframe'), onClick: () => {
+			...defaultButtonStyles,
+			label: localize('sessions.design.removeKeyframe', 'Remove keyframe'),
+			onClick: () => {
 				const motion = this.shape!.motion!;
 				this.commit({ ...motion, keyframes: motion.keyframes.filter((_, index) => index !== this.frameIndex) });
-			}
+			},
 		}));
 		this.clearButton = this._register(new Button(playback, {
-			label: localize('sessions.design.clearMotion', 'Remove animation'), onClick: () => {
+			...defaultButtonStyles,
+			label: localize('sessions.design.clearMotion', 'Remove animation'),
+			onClick: () => {
 				const { motion, ...shape } = this.shape!;
 				this.stop();
 				this.commands.updateShape(shape);
-			}
+			},
 		}));
 		this.domNode.append(hint, playback, properties);
 		this._register(addDisposableListener(this.timeline, 'input', () => { this.stop(); this.setTime(this.timeline.valueAsNumber); }));

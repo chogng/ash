@@ -1,3 +1,4 @@
+import { defaultButtonStyles, defaultInputBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
@@ -75,7 +76,11 @@ export class IssueReporterEditorPane extends EditorPane implements IEditorPane {
 		typeLabel.append(this.type);
 		this._register(addDisposableListener(this.type, 'change', () => this.form.update({ issueType: Number(this.type.value) })));
 		const titleLabel = this.label(content, localize('issue.reportTitle', 'Title'));
-		this.title = this._register(new InputBox(titleLabel, { presentation: 'field', ariaLabel: localize('issue.reportTitle', 'Title') }));
+		this.title = this._register(new InputBox(titleLabel, {
+			inputBoxStyles: defaultInputBoxStyles,
+			presentation: 'field',
+			ariaLabel: localize('issue.reportTitle', 'Title'),
+		}));
 		this.title.inputElement.maxLength = 256;
 		this._register(this.title.onDidChange(issueTitle => this.form.update({ issueTitle })));
 		const bodyLabel = this.label(content, localize('issue.description', 'Description'));
@@ -97,8 +102,16 @@ export class IssueReporterEditorPane extends EditorPane implements IEditorPane {
 		details.append(this.preview);
 		content.append(details);
 		const searchRow = h(document, 'div'); searchRow.className = 'issue-reporter-actions'; content.append(searchRow);
-		this.search = this._register(new Button(searchRow, { label: localize('issue.search', 'Search similar issues'), onClick: () => void this.form.searchGitHubIssues() }));
-		this.cancel = this._register(new Button(searchRow, { label: localize('issue.cancelSearch', 'Cancel search'), onClick: () => this.form.cancelSearch() }));
+		this.search = this._register(new Button(searchRow, {
+			...defaultButtonStyles,
+			label: localize('issue.search', 'Search similar issues'),
+			onClick: () => void this.form.searchGitHubIssues(),
+		}));
+		this.cancel = this._register(new Button(searchRow, {
+			...defaultButtonStyles,
+			label: localize('issue.cancelSearch', 'Cancel search'),
+			onClick: () => this.form.cancelSearch(),
+		}));
 		this.results = h(document, 'ul');
 		this.results.className = 'issue-reporter-results';
 		this.results.setAttribute('aria-label', localize('issue.similarIssues', 'Similar issues'));
@@ -106,13 +119,24 @@ export class IssueReporterEditorPane extends EditorPane implements IEditorPane {
 		this.account = h(document, 'p'); content.append(this.account);
 		const actions = h(document, 'div'); actions.className = 'issue-reporter-actions'; content.append(actions);
 		this.signIn = this._register(new Button(actions, {
-			label: localize('issue.signIn', 'Sign in to GitHub'), onClick: () => {
+			...defaultButtonStyles,
+			label: localize('issue.signIn', 'Sign in to GitHub'),
+			onClick: () => {
 				this.signIn.enabled = false;
 				void this.github.connect().catch(() => { if (!this.isDisposed) { this.status.textContent = localize('issue.signInFailed', 'GitHub sign-in failed. Your report remains here.'); } }).finally(() => { if (!this.isDisposed) { this.signIn.enabled = true; } });
-			}
+			},
 		}));
-		this.submit = this._register(new Button(actions, { label: localize('issue.submit', 'Submit to GitHub'), presentation: 'primary', onClick: () => void this.form.submitIssue() }));
-		this.newReport = this._register(new Button(actions, { label: localize('issue.newReport', 'New report'), onClick: () => { this.form.reset(); this.title.focus(); } }));
+		this.submit = this._register(new Button(actions, {
+			...defaultButtonStyles,
+			label: localize('issue.submit', 'Submit to GitHub'),
+			presentation: 'primary',
+			onClick: () => void this.form.submitIssue(),
+		}));
+		this.newReport = this._register(new Button(actions, {
+			...defaultButtonStyles,
+			label: localize('issue.newReport', 'New report'),
+			onClick: () => { this.form.reset(); this.title.focus(); },
+		}));
 		this.created = h(document, 'a'); content.append(this.created); this.openLink(this.created);
 		this.status = h(document, 'p'); this.status.className = 'issue-reporter-status'; this.status.setAttribute('role', 'status'); content.append(this.status);
 		const hint = h(document, 'p'); hint.className = 'issue-reporter-hint';

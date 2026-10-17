@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
 import { getFonts } from '../../../../../../base/browser/fonts.js';
 import { Button } from '../../../../../../base/browser/ui/button/button.js';
 import { generateUuid } from '../../../../../../base/common/uuid.js';
@@ -34,7 +35,10 @@ export class TextPropertiesWidget extends Disposable {
 		this.fontList = h(document, 'datalist', { attributes: { id: `ash-design-fonts-${generateUuid()}` } });
 		font.setAttribute('list', this.fontList.id); this.domNode.append(this.fontList);
 		const fonts = h(document, 'div', { className: 'ash-design-property-wide' });
-		const loadFonts = this._register(new Button(fonts, { label: localize('sessions.design.loadFonts', 'Load installed fonts') }));
+		const loadFonts = this._register(new Button(fonts, {
+			...defaultButtonStyles,
+			label: localize('sessions.design.loadFonts', 'Load installed fonts'),
+		}));
 		const fontMessage = h(document, 'div', { attributes: { role: 'status' } }); fonts.append(fontMessage); this.domNode.append(fonts);
 		this._register(loadFonts.onDidClick(async () => {
 			loadFonts.enabled = false;

@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { DetachedTerminalSnapshotMirror } from '../../../terminal/browser/chatTerminalCommandMirror.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { OpenSettingsCommandId } from '../../../preferences/common/preferences.js';
@@ -47,11 +48,14 @@ export class InlineChatAttachmentWidget extends Disposable {
 			const before = h(document, 'div');
 			before.className = controlClass;
 			this.openButton = this._register(new Button(before, {
-				label: '', ariaLabel: attachment.kind === 'image'
+				...defaultButtonStyles,
+				label: '',
+				ariaLabel: attachment.kind === 'image'
 					? localize('chat.context.previewImage', 'Preview {0}', attachment.name)
 					: attachment.terminalSnapshot ? localize('terminal.chat.preview', 'Preview terminal snapshot') : localize('chat.context.open', 'Open {0}', attachment.name),
 				...(attachment.kind === 'image' ? {} : { icon: attachment.terminalSnapshot ? Lxicon.terminal : Lxicon.file, iconOnly: true }),
-				size: 'small', presentation: 'quiet',
+				size: 'small',
+				presentation: 'quiet',
 			}));
 			if (attachment.kind === 'image') {
 				this.thumbnail = h(document, 'img');
@@ -64,8 +68,12 @@ export class InlineChatAttachmentWidget extends Disposable {
 		const after = h(document, 'div');
 		after.className = controlClass;
 		const deleteButton = this._register(new Button(after, {
+			...defaultButtonStyles,
 			label: localize('chat.attach.remove', 'Remove {0}', attachment.name),
-			icon: Lxicon.close, iconOnly: true, size: 'small', presentation: 'quiet',
+			icon: Lxicon.close,
+			iconOnly: true,
+			size: 'small',
+			presentation: 'quiet',
 		}));
 		this._register(deleteButton.onDidClick(remove));
 		controls.push({ node: after, before: false });
@@ -135,8 +143,12 @@ export class InlineChatAttachmentWidget extends Disposable {
 		content.append(header);
 		const resources = new DisposableStore();
 		const close = resources.add(new Button(header, {
-			label: snapshot ? localize('terminal.chat.previewClose', 'Close terminal preview') : localize('chat.context.closeImagePreview', 'Close image preview'), icon: Lxicon.close,
-			iconOnly: true, size: 'small', presentation: 'quiet',
+			...defaultButtonStyles,
+			label: snapshot ? localize('terminal.chat.previewClose', 'Close terminal preview') : localize('chat.context.closeImagePreview', 'Close image preview'),
+			icon: Lxicon.close,
+			iconOnly: true,
+			size: 'small',
+			presentation: 'quiet',
 		}));
 		resources.add(close.onDidClick(() => this.contextViews.hide()));
 		let mirror: DetachedTerminalSnapshotMirror | undefined;
@@ -147,8 +159,12 @@ export class InlineChatAttachmentWidget extends Disposable {
 			mirror = resources.add(this.instantiation.createInstance(DetachedTerminalSnapshotMirror, screen));
 			if (this.attachment.resource) {
 				const source = resources.add(new Button(header, {
-					label: localize('chat.context.open', 'Open {0}', this.attachment.name), icon: Lxicon.terminal,
-					iconOnly: true, size: 'small', presentation: 'quiet',
+					...defaultButtonStyles,
+					label: localize('chat.context.open', 'Open {0}', this.attachment.name),
+					icon: Lxicon.terminal,
+					iconOnly: true,
+					size: 'small',
+					presentation: 'quiet',
 				}));
 				resources.add(source.onDidClick(() => { void this.openSource(); }));
 			}

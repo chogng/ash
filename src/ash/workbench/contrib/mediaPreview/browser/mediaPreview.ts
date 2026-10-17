@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -67,6 +68,7 @@ export class MediaPreview extends EditorPane {
 		this.failureDomNode.hidden = true;
 		this.domNode.append(this.viewportDomNode, this.failureDomNode);
 		this.retryButton = this._register(new Button(this.domNode, {
+			...defaultButtonStyles,
 			label: localize('media.playback.retry', 'Retry'),
 			ariaLabel: localize('media.playback.retry', 'Retry'),
 			presentation: 'secondary',

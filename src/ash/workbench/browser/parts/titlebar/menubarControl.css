@@ -17,7 +17,7 @@
 	background: var(--ash-menubar-hover-background);
 }
 
-.ash-workbench[data-color-scheme^="high-contrast-"]
+.ash-workbench:is(.hc-black, .hc-light)
 	.ash-menubar
 	.ash-button:is(.active, :hover):not(:disabled):not(:focus-visible) {
 	outline: var(--ash-strokeThickness) solid var(--ash-contrastBorder);

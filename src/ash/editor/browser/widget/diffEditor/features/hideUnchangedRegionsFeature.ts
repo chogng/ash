@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, getWindow, h } from '../../../../../base/browser/dom.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
@@ -163,7 +164,14 @@ export class HideUnchangedRegionsFeature extends Disposable {
 		const domNode = h(editor.getDomNode().ownerDocument, 'div');
 		domNode.className = 'ash-diff-fold-unchanged';
 		const label = localize('diffEditor.foldUnchanged', 'Collapse unchanged region');
-		const button = this.zones.add(new Button(domNode, { label, title: label, icon: Lxicon.fold, iconOnly: true, size: 'small' }));
+		const button = this.zones.add(new Button(domNode, {
+			...defaultButtonStyles,
+			label,
+			title: label,
+			icon: Lxicon.fold,
+			iconOnly: true,
+			size: 'small',
+		}));
 		this.zones.add(button.onDidClick(() => {
 			region.revealedAbove = 0;
 			region.revealedBelow = 0;
@@ -223,6 +231,7 @@ export class HideUnchangedRegionsFeature extends Disposable {
 		});
 		const showAllLabel = localize('diffEditor.showAll', 'Show all unchanged lines');
 		const showAll = resources.add(new Button(disclosure, {
+			...defaultButtonStyles,
 			label: showAllLabel,
 			title: showAllLabel,
 			icon: Lxicon.unfold,
@@ -328,7 +337,14 @@ export class HideUnchangedRegionsFeature extends Disposable {
 	}
 
 	private addButton(resources: DisposableStore, container: HTMLElement, label: string, className: string, action: () => void): Button {
-		const button = resources.add(new Button(container, { label, title: label, iconOnly: true, presentation: 'quiet', size: 'small' }));
+		const button = resources.add(new Button(container, {
+			...defaultButtonStyles,
+			label,
+			title: label,
+			iconOnly: true,
+			presentation: 'quiet',
+			size: 'small',
+		}));
 		button.domNode.classList.add(className);
 		resources.add(button.onDidClick(event => {
 			// Pointer activation is committed on pointerup so a drag never also clicks.

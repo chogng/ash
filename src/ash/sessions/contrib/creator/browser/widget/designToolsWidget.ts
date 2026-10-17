@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import './designToolsWidget.css';
 import { h } from '../../../../../base/browser/dom.js';
 import { ActionBar } from '../../../../../base/browser/ui/actionbar/actionbar.js';
@@ -61,6 +62,7 @@ export class DesignToolsWidget extends Disposable {
 		};
 		this._register(toDisposable(() => { if (this.menuVisible) { contextMenus.hideContextMenu(); } }));
 		this.tools = this._register(new ActionBar(tools, {
+			actionViewItemOptions: { buttonStyles: defaultButtonStyles },
 			ariaLabel: localize('sessions.design.tools', 'Design tools'),
 			highlightToggledItems: true,
 			actionViewItemProvider: action => {
@@ -72,7 +74,7 @@ export class DesignToolsWidget extends Disposable {
 				return new DesignToolDropdownViewItem(action, dropdown, () => items.map(tool => this.toolActions.get(tool)!), menuProvider);
 			},
 		}));
-		this.modes = this._register(new ActionBar(modes, { ariaLabel: localize('sessions.design.modes', 'Editor modes'), highlightToggledItems: true, actionViewItemProvider: action => new DesignToolViewItem(action) }));
+		this.modes = this._register(new ActionBar(modes, { actionViewItemOptions: { buttonStyles: defaultButtonStyles }, ariaLabel: localize('sessions.design.modes', 'Editor modes'), highlightToggledItems: true, actionViewItemProvider: action => new DesignToolViewItem(action) }));
 		for (const [tool, title, icon] of designToolActions) {
 			const label = title().value;
 			this.toolActions.set(tool, { id: `sessions.design.tool.${tool}`, label, tooltip: label, icon, enabled: true, checked: false, run: () => selectTool(tool) });

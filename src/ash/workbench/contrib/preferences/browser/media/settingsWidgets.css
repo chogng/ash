@@ -43,11 +43,15 @@
 .ash-settings-search-input input {
 	height: 30px;
 	padding: 4px 10px;
-	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-input-style-input-border, var(--ash-input-border));
 	border-radius: var(--ash-cornerRadius-small);
 	outline: none;
-	color: var(--ash-input-foreground);
-	background: var(--ash-input-background);
+	color: var(--ash-input-style-input-foreground, var(--ash-input-foreground));
+	background: var(
+		--ash-input-style-input-background,
+		var(--ash-input-background)
+	);
 }
 
 .ash-settings-search-input input:focus {
@@ -213,11 +217,15 @@
 .ash-general-setting-control:not(.ash-select-box),
 .ash-editor-setting-text {
 	padding: 0 8px;
-	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-input-style-input-border, var(--ash-input-border));
 	border-radius: var(--ash-cornerRadius-small);
 	outline: none;
-	color: var(--ash-input-foreground);
-	background: var(--ash-input-background);
+	color: var(--ash-input-style-input-foreground, var(--ash-input-foreground));
+	background: var(
+		--ash-input-style-input-background,
+		var(--ash-input-background)
+	);
 	font: inherit;
 }
 

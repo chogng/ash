@@ -8,10 +8,14 @@
 .ash-input-box-field {
 	min-height: 30px;
 	box-sizing: border-box;
-	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-input-style-input-border, var(--ash-input-border));
 	border-radius: var(--ash-cornerRadius-small);
-	color: var(--ash-input-foreground);
-	background: var(--ash-input-background);
+	color: var(--ash-input-style-input-foreground, var(--ash-input-foreground));
+	background: var(
+		--ash-input-style-input-background,
+		var(--ash-input-background)
+	);
 }
 
 .ash-input-box-field input,

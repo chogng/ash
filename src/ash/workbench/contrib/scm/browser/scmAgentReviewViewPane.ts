@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { Button } from "../../../../base/browser/ui/button/button.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
 import type { IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
@@ -13,6 +14,7 @@ export class ScmAgentReviewViewPane extends ViewPane {
 		empty.className = "ash-scm-empty";
 		empty.textContent = "No agent changes to review.";
 		const findIssues = this._register(new Button(this.contentElement, {
+			...defaultButtonStyles,
 			label: "Find Issues",
 			icon: Lxicon.codeReview,
 			contentAlignment: "labelCentered",

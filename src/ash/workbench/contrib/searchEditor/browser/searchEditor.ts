@@ -1,3 +1,4 @@
+import { defaultButtonStyles, defaultInputBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { Schemas } from '../../../../base/common/network.js';
 import { ISearchService } from '../../../services/search/common/search.js';
 import { QueryBuilder } from '../../../services/search/common/queryBuilder.js';
@@ -94,6 +95,7 @@ export class SearchEditor extends EditorPane implements IEditorPane {
 		field.append(this.queryInput);
 		const optionLabels: Readonly<Record<string, string>> = { case: 'Aa', word: 'ab', regex: '.*' };
 		this.options = this._register(new ActionBar(field, {
+			actionViewItemOptions: { buttonStyles: defaultButtonStyles },
 			ariaLabel: localize('search.options', 'Search options'),
 			highlightToggledItems: true,
 			actionViewItemProvider: action => new LabelActionViewItem(action, {
@@ -103,11 +105,13 @@ export class SearchEditor extends EditorPane implements IEditorPane {
 		}));
 		form.append(field);
 		this.include = this._register(new InputBox(form, {
+			inputBoxStyles: defaultInputBoxStyles,
 			presentation: 'compact',
 			ariaLabel: localize('search.includesLabel', 'Files to include'),
 			placeholder: localize('search.includes', 'files to include'),
 		}));
 		this.exclude = this._register(new InputBox(form, {
+			inputBoxStyles: defaultInputBoxStyles,
 			presentation: 'compact',
 			ariaLabel: localize('search.excludesLabel', 'Files to exclude'),
 			placeholder: localize('search.excludes', 'files to exclude'),
@@ -115,10 +119,12 @@ export class SearchEditor extends EditorPane implements IEditorPane {
 		const buttons = h(document, 'div');
 		buttons.className = 'ash-search-editor-buttons';
 		this.runButton = this._register(new Button(buttons, {
+			...defaultButtonStyles,
 			label: localize('searchEditor.run', 'Search again'),
 			onClick: () => { void this.runSearch(); },
 		}));
 		this.stopButton = this._register(new Button(buttons, {
+			...defaultButtonStyles,
 			label: localize('search.stop', 'Stop search'),
 			presentation: 'secondary',
 			onClick: () => this.controller?.abort(),

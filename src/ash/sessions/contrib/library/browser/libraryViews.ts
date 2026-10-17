@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, getActiveElement, h } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
@@ -52,7 +53,14 @@ export class LibraryNavigationView extends ViewPane {
 			['images', localize('library.images', 'Images'), Lxicon.image],
 		] as const) { this.appendCategory(id, name, icon); }
 		const section = h(this.contentElement.ownerDocument, 'div', { className: 'ash-library-collections-heading' }, localize('library.collections', 'Collections'));
-		this.navigation.add(new Button(section, { label: localize('library.newCollection', 'New collection'), icon: Lxicon.add, iconOnly: true, enabled: !this.library.state.get().busy, onClick: () => { void this.library.createCollection(); } }));
+		this.navigation.add(new Button(section, {
+			...defaultButtonStyles,
+			label: localize('library.newCollection', 'New collection'),
+			icon: Lxicon.add,
+			iconOnly: true,
+			enabled: !this.library.state.get().busy,
+			onClick: () => { void this.library.createCollection(); },
+		}));
 		this.navigationDomNode.append(section);
 		for (const collection of this.library.state.get().catalog.collections) { this.appendCategory(collection.id, collection.name, Lxicon.folders); }
 		this.navigation.add(addDisposableListener(this.navigationDomNode, 'keydown', event => {
@@ -69,9 +77,12 @@ export class LibraryNavigationView extends ViewPane {
 
 	private appendCategory(id: string, name: string, icon: typeof Lxicon.library): void {
 		const button = this.navigation.add(new Button(this.navigationDomNode, {
-			label: name, icon, onClick: () => {
+			...defaultButtonStyles,
+			label: name,
+			icon,
+			onClick: () => {
 				this.library.selectCategory(id);
-			}
+			},
 		}));
 		button.domNode.dataset.libraryCategory = id;
 		button.domNode.classList.toggle('selected', id === this.library.state.get().category);
@@ -123,16 +134,40 @@ export class LibraryDetailsView extends ViewPane {
 		if (!entry) { return; }
 		const heading = h(this.contentElement.ownerDocument, 'div', { className: 'ash-library-detail-heading' });
 		heading.append(h(this.contentElement.ownerDocument, 'h2', {}, entry.version.name));
-		this.details.add(new Button(heading, { label: localize('library.closeDetails', 'Close details'), icon: Lxicon.close, iconOnly: true, onClick: () => this.library.closeDetails() }));
+		this.details.add(new Button(heading, {
+			...defaultButtonStyles,
+			label: localize('library.closeDetails', 'Close details'),
+			icon: Lxicon.close,
+			iconOnly: true,
+			onClick: () => this.library.closeDetails(),
+		}));
 		const image = h(this.contentElement.ownerDocument, 'img', { className: 'ash-library-detail-image', properties: { alt: entry.version.name } });
 		this.detailDomNode.append(heading, image, h(this.contentElement.ownerDocument, 'p', {}, `${entry.version.width} × ${entry.version.height} · ${Math.ceil(entry.version.size / 1024)} KB`));
 		for (const [label, value] of [[localize('library.source', 'Source'), entry.version.source.toString()], [localize('library.version', 'Version'), entry.version.versionId]] as const) {
 			this.detailDomNode.append(h(this.contentElement.ownerDocument, 'h3', {}, label), h(this.contentElement.ownerDocument, 'p', { className: 'ash-library-detail-value' }, value));
 		}
-		const favoriteButton = this.details.add(new Button(this.detailDomNode, { label: entry.favorite ? localize('library.unfavorite', 'Remove from favorites') : localize('library.addFavorite', 'Add to favorites'), icon: entry.favorite ? Lxicon.starFilled : Lxicon.star, enabled: !this.library.state.get().busy, onClick: () => { void this.library.runMutation(() => this.assets.updateEntry(entry.version.assetId, !entry.favorite, entry.collectionIds)); } }));
+		const favoriteButton = this.details.add(new Button(this.detailDomNode, {
+			...defaultButtonStyles,
+			label: entry.favorite ? localize('library.unfavorite', 'Remove from favorites') : localize('library.addFavorite', 'Add to favorites'),
+			icon: entry.favorite ? Lxicon.starFilled : Lxicon.star,
+			enabled: !this.library.state.get().busy,
+			onClick: () => { void this.library.runMutation(() => this.assets.updateEntry(entry.version.assetId, !entry.favorite, entry.collectionIds)); },
+		}));
 		favoriteButton.domNode.dataset.libraryControl = 'favorite';
-		this.details.add(new Button(this.detailDomNode, { label: localize('library.addToChat', 'Add to conversation'), icon: Lxicon.chat4, enabled: !this.library.state.get().busy, onClick: () => { void this.library.runMutation(() => this.commands.executeCommand('sessions.library.addToChat', entry.version)); } }));
-		this.details.add(new Button(this.detailDomNode, { label: localize('library.useInDesign', 'Use in Design'), icon: Lxicon.image, enabled: !this.library.state.get().busy, onClick: () => { void this.library.runMutation(() => this.commands.executeCommand('sessions.library.useInDesign', entry.version)); } }));
+		this.details.add(new Button(this.detailDomNode, {
+			...defaultButtonStyles,
+			label: localize('library.addToChat', 'Add to conversation'),
+			icon: Lxicon.chat4,
+			enabled: !this.library.state.get().busy,
+			onClick: () => { void this.library.runMutation(() => this.commands.executeCommand('sessions.library.addToChat', entry.version)); },
+		}));
+		this.details.add(new Button(this.detailDomNode, {
+			...defaultButtonStyles,
+			label: localize('library.useInDesign', 'Use in Design'),
+			icon: Lxicon.image,
+			enabled: !this.library.state.get().busy,
+			onClick: () => { void this.library.runMutation(() => this.commands.executeCommand('sessions.library.useInDesign', entry.version)); },
+		}));
 		this.detailDomNode.append(h(this.contentElement.ownerDocument, 'h3', {}, localize('library.collections', 'Collections')));
 		for (const collection of this.library.state.get().catalog.collections) {
 			const label = h(this.contentElement.ownerDocument, 'label', { className: 'ash-library-membership' });
@@ -141,7 +176,13 @@ export class LibraryDetailsView extends ViewPane {
 			label.append(checkbox, h(this.contentElement.ownerDocument, 'span', {}, collection.name)); this.detailDomNode.append(label);
 			this.details.add(addDisposableListener(checkbox, 'change', () => { void this.library.runMutation(() => this.assets.updateEntry(entry.version.assetId, entry.favorite, checkbox.checked ? [...entry.collectionIds, collection.id] : entry.collectionIds.filter(id => id !== collection.id))); }));
 		}
-		this.details.add(new Button(this.detailDomNode, { label: localize('library.newCollection', 'New collection'), icon: Lxicon.add, enabled: !this.library.state.get().busy, onClick: () => { void this.library.createCollection(); } }));
+		this.details.add(new Button(this.detailDomNode, {
+			...defaultButtonStyles,
+			label: localize('library.newCollection', 'New collection'),
+			icon: Lxicon.add,
+			enabled: !this.library.state.get().busy,
+			onClick: () => { void this.library.createCollection(); },
+		}));
 		if (focusKey) { this.detailDomNode.querySelector<HTMLElement>(`[data-library-control="${focusKey}"]`)?.focus(); }
 		if (!this.isBodyVisible()) { return; }
 		const selection = this.library.state.get().selected;

@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import './creatorFrameNavigator.css';
 import { addDisposableListener, h, svg } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -32,11 +33,23 @@ export class CreatorFrameNavigator extends Disposable {
 		this.previewDomNode = h(ownerDocument, 'section', { className: 'ash-creator-frame-preview', attributes: { role: 'region', 'aria-label': localize('sessions.creator.preview', 'Presentation preview'), tabindex: '0' } });
 		this.previewDomNode.hidden = true;
 		const controls = h(ownerDocument, 'div', { className: 'ash-creator-preview-controls' });
-		this.previous = this._register(new Button(controls, { label: localize('sessions.creator.previousPage', 'Previous page'), onClick: () => this.move(-1) }));
+		this.previous = this._register(new Button(controls, {
+			...defaultButtonStyles,
+			label: localize('sessions.creator.previousPage', 'Previous page'),
+			onClick: () => this.move(-1),
+		}));
 		this.counterDomNode = h(ownerDocument, 'span', { attributes: { role: 'status', 'aria-live': 'polite' } });
 		controls.append(this.counterDomNode);
-		this.next = this._register(new Button(controls, { label: localize('sessions.creator.nextPage', 'Next page'), onClick: () => this.move(1) }));
-		this._register(new Button(controls, { label: localize('sessions.creator.closePreview', 'Close preview'), onClick: () => this.showPreview(false) }));
+		this.next = this._register(new Button(controls, {
+			...defaultButtonStyles,
+			label: localize('sessions.creator.nextPage', 'Next page'),
+			onClick: () => this.move(1),
+		}));
+		this._register(new Button(controls, {
+			...defaultButtonStyles,
+			label: localize('sessions.creator.closePreview', 'Close preview'),
+			onClick: () => this.showPreview(false),
+		}));
 		this.sceneDomNode = svg(ownerDocument, 'svg', { className: 'ash-creator-preview-scene' });
 		this.previewDomNode.append(controls, this.sceneDomNode);
 		content.append(this.previewDomNode);

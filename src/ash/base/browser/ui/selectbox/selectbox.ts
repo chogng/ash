@@ -15,6 +15,15 @@ export interface SelectOption {
 	readonly disabled?: boolean;
 }
 
+/** Host-provided CSS colors, resolved through the containing theme root. */
+export interface ISelectBoxStyles {
+	readonly selectBackground: string | undefined;
+	readonly selectForeground: string | undefined;
+	readonly selectBorder: string | undefined;
+	readonly selectListBackground: string | undefined;
+	readonly focusBorder: string | undefined;
+}
+
 export interface SelectBoxOptions {
 	readonly options: readonly SelectOption[];
 	readonly selectedValue?: string;
@@ -46,7 +55,7 @@ export class SelectBox extends Disposable {
 	private activeIndex = -1;
 	private _enabled = true;
 
-	constructor(container: HTMLElement, options: SelectBoxOptions) {
+	constructor(container: HTMLElement, options: SelectBoxOptions, styles?: ISelectBoxStyles) {
 		super();
 		const ownerDocument = container.ownerDocument;
 		const list = h(ownerDocument, "div");
@@ -70,6 +79,24 @@ export class SelectBox extends Disposable {
 		this.element = dropdown.element;
 		const presentation = options.presentation ?? "default";
 		this.element.classList.add("ash-select-box", `ash-select-box-${presentation}`);
+		if (styles) {
+			const colors = {
+				'--ash-select-style-select-background': styles.selectBackground,
+				'--ash-select-style-select-foreground': styles.selectForeground,
+				'--ash-select-style-select-border': styles.selectBorder,
+				'--ash-select-style-focus-border': styles.focusBorder,
+			};
+			for (const [property, value] of Object.entries(colors)) {
+				if (value !== undefined) {
+					this.element.style.setProperty(property, value);
+					if (property !== '--ash-select-style-select-background') list.style.setProperty(property, value);
+				}
+			}
+			const background = styles.selectListBackground;
+			if (background !== undefined) {
+				list.style.setProperty('--ash-select-style-select-list-background', background);
+			}
+		}
 		dropdown.button.classList.add("ash-select-box-button");
 		setRole(dropdown.button, "combobox");
 		setAriaAttribute(dropdown.button, "haspopup", "listbox");

@@ -1,3 +1,4 @@
+import { defaultProgressBarStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import './media/localTranscriptionModelControls.css';
 import { h } from '../../../../base/browser/dom.js';
 import { ProgressBar } from '../../../../base/browser/ui/progressbar/progressbar.js';
@@ -18,7 +19,7 @@ export class LocalTranscriptionModelStatus extends Disposable {
 		this.text = h(document, 'p');
 		this.text.setAttribute('role', 'status');
 		this.text.setAttribute('aria-atomic', 'true');
-		this.progress = this._register(new ProgressBar(this.domNode)).element;
+		this.progress = this._register(new ProgressBar(this.domNode, defaultProgressBarStyles)).element;
 		this.progress.hidden = true;
 		this.progress.setAttribute('aria-label', localize('dictation.model.progress', 'Voice model preparation'));
 		this.domNode.append(this.text, this.progress);

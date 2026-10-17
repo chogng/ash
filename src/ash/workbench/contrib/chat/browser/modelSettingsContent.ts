@@ -1,3 +1,8 @@
+import {
+	defaultButtonStyles,
+	defaultInputBoxStyles,
+	defaultToggleStyles,
+} from '../../../../platform/theme/browser/defaultStyles.js';
 import { ILanguageModelsService } from '../common/languageModels.js';
 import './media/modelSettingsContent.css';
 import { h, isHTMLElement } from '../../../../base/browser/dom.js';
@@ -71,7 +76,9 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 		modelTitle.textContent = localize('sessions.settings.chatModels', 'Chat models');
 		this.modelTitle.append(modelTitle);
 		this.modelSearch = this._register(new InputBox(this.modelTitle, {
-			type: 'search', presentation: 'field',
+			inputBoxStyles: defaultInputBoxStyles,
+			type: 'search',
+			presentation: 'field',
 			ariaLabel: localize('models.catalog.search', 'Search models'),
 			placeholder: localize('models.catalog.searchPlaceholder', 'Search model name or ID'),
 		}));
@@ -90,18 +97,24 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 		this.storageMessage.setAttribute('role', 'status');
 		this.storageStatus.append(this.storageMessage);
 		this.storageRetry = this._register(new Button(this.storageStatus, {
-			label: localize('credentials.storage.retry', 'Retry credential storage'), presentation: 'secondary',
+			...defaultButtonStyles,
+			label: localize('credentials.storage.retry', 'Retry credential storage'),
+			presentation: 'secondary',
 		}));
 		this._register(this.storageRetry.onDidClick(() => {
 			void this.loadApiConnections(++this.apiLoadVersion);
 			void this.loadModels(++this.modelLoadVersion);
 		}));
 		this.storageAuthorize = this._register(new Button(this.storageStatus, {
-			label: localize('credentials.storage.authorize', 'Authorize system keyring'), presentation: 'secondary',
+			...defaultButtonStyles,
+			label: localize('credentials.storage.authorize', 'Authorize system keyring'),
+			presentation: 'secondary',
 		}));
 		this._register(this.storageAuthorize.onDidClick(() => void this.changeStorage('authorize')));
 		this.storageModeButton = this._register(new Button(this.storageStatus, {
-			label: localize('credentials.storage.useFile', 'Use file storage'), presentation: 'secondary',
+			...defaultButtonStyles,
+			label: localize('credentials.storage.useFile', 'Use file storage'),
+			presentation: 'secondary',
 		}));
 		this._register(this.storageModeButton.onDidClick(() => void this.changeStorage('mode')));
 		this.providerTitle = h(this.document, 'span');
@@ -109,7 +122,11 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 		const title = h(this.document, 'span');
 		title.textContent = localize('models.keys.title', 'API key');
 		this.providerTitle.append(title);
-		const add = this._register(new Button(this.providerTitle, { label: localize('models.provider.new', 'New provider'), presentation: 'secondary' }));
+		const add = this._register(new Button(this.providerTitle, {
+			...defaultButtonStyles,
+			label: localize('models.provider.new', 'New provider'),
+			presentation: 'secondary',
+		}));
 		this._register(add.onDidClick(() => {
 			const id = `custom-${createUuid()}`;
 			const card = this.instantiation.createInstance(ChatModelsWidget, this.document, { id, name: '', baseUrl: '', apiFormat: 'responses', order: Date.now(), models: [] }, false, true);
@@ -121,7 +138,12 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 		}));
 		this.expandRow = h(this.document, 'div');
 		this.expandRow.className = 'ash-models-settings-expand';
-		this.expandButton = this._register(new Button(this.expandRow, { label: localize('models.catalog.viewAll', 'viewall models'), icon: Lxicon.chevronDown, presentation: 'secondary' }));
+		this.expandButton = this._register(new Button(this.expandRow, {
+			...defaultButtonStyles,
+			label: localize('models.catalog.viewAll', 'viewall models'),
+			icon: Lxicon.chevronDown,
+			presentation: 'secondary',
+		}));
 		this.expandButton.domNode.setAttribute('aria-expanded', 'false');
 		this._register(this.expandButton.onDidClick(() => {
 			this.expanded = !this.expanded;
@@ -400,6 +422,7 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 		name.textContent = entry.displayName;
 		copy.append(name);
 		const toggle = resources.add(new Switch(row, {
+			...defaultToggleStyles,
 			ariaLabel: localize('sessions.settings.modelVisibility', 'Show {0} in model picker', entry.displayName),
 			checked: this.languageModels.isModelVisible(entry.model),
 			content: copy,

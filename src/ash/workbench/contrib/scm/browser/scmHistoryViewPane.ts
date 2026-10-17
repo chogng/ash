@@ -1,3 +1,4 @@
+import { defaultButtonStyles, defaultListStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { localize2, localize, getNLSLanguage } from '../../../../nls.js';
 import { addDisposableListener, getWindow, h } from "../../../../base/browser/dom.js";
 import { StandardKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
@@ -690,8 +691,13 @@ export class SCMHistoryViewPane extends ViewPane {
 			const resources = new DisposableStore();
 			this.listResources.value = resources;
 			const list = resources.add(new List<HistoryListItem>(this.graphElement, {
-				role: 'tree', ariaLabel: this.graphLabel, scrolling: 'managed',
-				mouseSupport: false, keyboardNavigation: false, multipleSelectionSupport: false,
+				styles: defaultListStyles,
+				role: 'tree',
+				ariaLabel: this.graphLabel,
+				scrolling: 'managed',
+				mouseSupport: false,
+				keyboardNavigation: false,
+				multipleSelectionSupport: false,
 				loopNavigation: false,
 				getId: item => item.id,
 				getHeight: item => item.model ? this.rowHeight(item.model.historyItem) : SWIMLANE_HEIGHT * 2,
@@ -1287,7 +1293,12 @@ export class SCMHistoryViewPane extends ViewPane {
 						directory.className = 'ash-scm-graph-directory';
 						const folders = this.collapsedFolders.get(historyItem.id) ?? new Set<string>();
 						this.collapsedFolders.set(historyItem.id, folders);
-						const folder = resources.add(new Button(directory, { label: parts[depth - 1], icon: folders.has(path) ? Lxicon.chevronRight : Lxicon.chevronDown, ariaLabel: localize('scm.history.folder', 'Folder {0}', path) }));
+						const folder = resources.add(new Button(directory, {
+							...defaultButtonStyles,
+							label: parts[depth - 1],
+							icon: folders.has(path) ? Lxicon.chevronRight : Lxicon.chevronDown,
+							ariaLabel: localize('scm.history.folder', 'Folder {0}', path),
+						}));
 						folder.domNode.classList.add('ash-scm-graph-folder');
 						folder.domNode.dataset.historyFolder = path;
 						folder.domNode.style.setProperty('--scm-graph-change-depth', String(depth - 1));

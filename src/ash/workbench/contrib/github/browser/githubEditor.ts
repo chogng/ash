@@ -1,3 +1,8 @@
+import {
+	defaultButtonStyles,
+	defaultInputBoxStyles,
+	defaultSelectBoxStyles,
+} from '../../../../platform/theme/browser/defaultStyles.js';
 import { IPreferencesService } from '../../../services/preferences/common/preferences.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
@@ -280,10 +285,13 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 				const notification = 'id' in item ? item : undefined;
 				const label = notification ? `${notification.unread ? localize('github.editor.unread', 'Unread') + ' · ' : ''}${notification.repository.owner}/${notification.repository.name} · ${notification.title}` : `#${'number' in item ? item.number : ''} ${item.title}`;
 				const button = this.listResources.add(new Button(row, {
-					label, presentation: 'quiet', onClick: () => {
+					...defaultButtonStyles,
+					label,
+					presentation: 'quiet',
+					onClick: () => {
 						if (notification) { model.selectNotification(notification); return; }
 						if ('number' in item) { this.inlineBody.value = ''; this.issueReply.value = ''; void (model.mode === 'pullRequests' ? model.openPullRequest(item.number) : model.openIssue(item.number)); }
-					}
+					},
 				}));
 				button.domNode.dataset.githubFocus = notification ? `notification-${notification.id}` : `item-${'number' in item ? item.number : ''}`;
 			}
@@ -432,7 +440,11 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 				}),
 			]);
 		}
-		const reply = this.threadResources.add(new InputBox(row, { ariaLabel: localize('github.editor.reply', 'Reply to discussion'), presentation: 'field' }));
+		const reply = this.threadResources.add(new InputBox(row, {
+			inputBoxStyles: defaultInputBoxStyles,
+			ariaLabel: localize('github.editor.reply', 'Reply to discussion'),
+			presentation: 'field',
+		}));
 		reply.inputElement.dataset.githubFocus = `reply-${thread.id}`; reply.value = this.replies.get(thread.id) ?? '';
 		this.threadResources.add(reply.onDidChange(value => this.replies.set(thread.id, value)));
 		const actions = this.toolbar(row, localize('github.editor.threadActions', 'Discussion actions'), this.threadResources);
@@ -632,9 +644,19 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 		};
 	}
 	private toolbar(parent: HTMLElement, ariaLabel: string, resources?: DisposableStore): WorkbenchToolBar { const toolbar = new WorkbenchToolBar(parent, this.contextMenu, { ariaLabel }); return resources ? resources.add(toolbar) : this._register(toolbar); }
-	private input(parent: HTMLElement, text: string, focusKey: string): InputBox { const label = this.element(parent, 'github-field', 'label'); label.append(h(parent.ownerDocument, 'span', text)); const input = this._register(new InputBox(label, { presentation: 'field', ariaLabel: text })); input.inputElement.dataset.githubFocus = focusKey; return input; }
+	private input(parent: HTMLElement, text: string, focusKey: string): InputBox {
+		const label = this.element(parent, 'github-field', 'label'); label.append(h(parent.ownerDocument, 'span', text)); const input = this._register(new InputBox(label, {
+			inputBoxStyles: defaultInputBoxStyles,
+			presentation: 'field',
+			ariaLabel: text,
+		})); input.inputElement.dataset.githubFocus = focusKey; return input;
+	}
 	private textarea(parent: HTMLElement, text: string, focusKey: string): HTMLTextAreaElement { const label = this.element(parent, 'github-field', 'label'); label.append(h(parent.ownerDocument, 'span', text)); const area = h(parent.ownerDocument, 'textarea'); area.setAttribute('aria-label', text); area.dataset.githubFocus = focusKey; area.rows = 3; area.maxLength = 65_536; label.append(area); return area; }
-	private select(parent: HTMLElement, label: string, options: readonly { value: string; label: string; }[]): SelectBox { return this._register(new SelectBox(parent, { ariaLabel: label, options, presentation: 'field', contextViewProvider: this.contextView })); }
+	private select(parent: HTMLElement, label: string, options: readonly { value: string; label: string; }[]): SelectBox {
+		return this._register(new SelectBox(parent, {
+			ariaLabel: label, options, presentation: 'field', contextViewProvider: this.contextView
+		}, defaultSelectBoxStyles));
+	}
 	private element<K extends 'div' | 'label' = 'div'>(parent: HTMLElement, className: string, tag = 'div' as K) { const element = h(parent.ownerDocument, tag); element.className = className; parent.append(element); return element; }
 	private link(parent: HTMLElement, text: string, url: string): void {
 		// Remote text is rendered as text; URLs go through the shared opener's trust policy.

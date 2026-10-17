@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
 import { Color } from '../../../../../../base/common/color.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
 import { createDesignColorPicker } from '../../../browser/widgets/designColorPicker.js';
@@ -173,7 +174,13 @@ export class ResourcePropertiesWidget extends Disposable {
 		this.fields.append(h(this.domNode.ownerDocument, 'details', { attributes: { 'data-resource-section': key }, properties: { open: open.has(key) } }, h(this.domNode.ownerDocument, 'summary', {}, label), fields)); return fields;
 	}
 	private run(action: () => unknown): void { if (this.controller.isBusy) { return; } try { const result = action(); if (result instanceof Promise) { void result.catch(error => status(String(error))); } } catch (error) { status(String(error)); this.update(true); } }
-	private button(parent: HTMLElement, key: string, label: string, action: () => unknown): void { const button = this.controls.add(new Button(parent, { label, onClick: () => this.run(action) })); button.enabled = !this.controller.isBusy; button.domNode.dataset.resourceControl = key; }
+	private button(parent: HTMLElement, key: string, label: string, action: () => unknown): void {
+		const button = this.controls.add(new Button(parent, {
+			...defaultButtonStyles,
+			label,
+			onClick: () => this.run(action),
+		})); button.enabled = !this.controller.isBusy; button.domNode.dataset.resourceControl = key;
+	}
 	private select(parent: HTMLElement, key: string, label: string, value: string, choices: readonly (readonly [string, string])[], change: (value: string) => unknown): void {
 		const input = h(this.domNode.ownerDocument, 'select', { attributes: { 'aria-label': label, 'data-resource-control': key }, properties: { disabled: this.controller.isBusy } }, ...choices.map(([value, label]) => h(this.domNode.ownerDocument, 'option', { properties: { value } }, label))); input.value = value;
 		parent.append(h(this.domNode.ownerDocument, 'label', {}, label, input)); this.controls.add(addDisposableListener(input, 'change', () => this.run(() => change(input.value))));

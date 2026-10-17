@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { Button } from "../../../../../base/browser/ui/button/button.js";
 import {
 	ViewPane,
@@ -33,6 +34,7 @@ export class EmptyView extends ViewPane {
 		message.className = "ash-empty-explorer-message";
 		message.textContent = "Open a folder to explore its files.";
 		this.openButton = this._register(new Button(this.contentElement, {
+			...defaultButtonStyles,
 			label: "Open Folder",
 			enabled: workspaceOpenService.canOpenFolder,
 			title: workspaceOpenService.canOpenFolder

@@ -19,7 +19,19 @@ export type ButtonPresentation = "quiet" | "primary" | "secondary" | "danger";
 /** Standard button sizing shared across product surfaces. */
 export type ButtonSize = "standard" | "small";
 
-export interface ButtonOptions {
+/** CSS colors supplied by the host; the base widget does not depend on the theme registry. */
+export interface IButtonStyles {
+	readonly buttonForeground?: string;
+	readonly buttonBackground?: string;
+	readonly buttonHoverBackground?: string;
+	readonly buttonSecondaryForeground?: string;
+	readonly buttonSecondaryBackground?: string;
+	readonly buttonSecondaryHoverBackground?: string;
+	readonly buttonSecondaryBorder?: string;
+	readonly buttonBorder?: string;
+}
+
+export interface IButtonOptions extends Partial<IButtonStyles> {
 	label: string;
 	icon?: Icon;
 	ariaLabel?: string;
@@ -48,7 +60,7 @@ export class Button extends Disposable {
 	private currentIcon: Icon | undefined;
 	readonly onDidClick: Event<DOMEventMap["click"]>;
 
-	constructor(container: HTMLElement, options: ButtonOptions) {
+	constructor(container: HTMLElement, options: IButtonOptions) {
 		super();
 		const ownerDocument = container.ownerDocument;
 		this.hoverGroupId = options.hoverGroupId;
@@ -72,6 +84,19 @@ export class Button extends Disposable {
 		].filter(value => value !== false).join(" "));
 		this.root = root;
 		this.domNode = root.domNode;
+		const properties = {
+			'--ash-button-style-foreground': options.buttonForeground,
+			'--ash-button-style-background': options.buttonBackground,
+			'--ash-button-style-hover-background': options.buttonHoverBackground,
+			'--ash-button-style-secondary-foreground': options.buttonSecondaryForeground,
+			'--ash-button-style-secondary-background': options.buttonSecondaryBackground,
+			'--ash-button-style-secondary-hover-background': options.buttonSecondaryHoverBackground,
+			'--ash-button-style-secondary-border': options.buttonSecondaryBorder,
+		};
+		for (const [property, value] of Object.entries(properties)) {
+			if (value !== undefined) domNode.style.setProperty(property, value);
+		}
+		if (options.buttonBorder !== undefined) domNode.style.borderColor = options.buttonBorder;
 		if (options.ariaLabel || options.iconOnly) {
 			setAriaAttribute(this.domNode, "label", options.ariaLabel ?? options.label);
 		}

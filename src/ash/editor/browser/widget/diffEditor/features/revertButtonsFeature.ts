@@ -1,3 +1,4 @@
+import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { h } from '../../../../../base/browser/dom.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
@@ -42,7 +43,14 @@ export class RevertButtonsFeature extends Disposable {
 	private addButton(lineNumber: number, id: string, label: string, run: () => void): void {
 		const container = h(this.editor.getDomNode().ownerDocument, 'div');
 		container.className = 'ash-diff-revert';
-		this.buttons.add(new Button(container, { label, icon: Lxicon.arrowLeft, iconOnly: true, size: 'small', onClick: run }));
+		this.buttons.add(new Button(container, {
+			...defaultButtonStyles,
+			label,
+			icon: Lxicon.arrowLeft,
+			iconOnly: true,
+			size: 'small',
+			onClick: run,
+		}));
 		const widget: IGlyphMarginWidget = {
 			getId: () => `diff-revert-${id}`,
 			getDomNode: () => container,
