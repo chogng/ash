@@ -1,5 +1,7 @@
 use crate::CallError;
 use crate::MemberCredential;
+use ash_http_client::HttpClient;
+use ash_package_store::CapabilitySource;
 use std::net::TcpListener;
 use std::net::TcpStream;
 use std::net::UdpSocket;
@@ -25,10 +27,43 @@ pub struct LocalDeployment {
     _directory: tempfile::TempDir,
     url: String,
     administrator: MemberCredential,
+    _media_lease: Option<ash_package_store::PackageLease>,
 }
 
 impl LocalDeployment {
+    /// Resolves or installs the SFU only when the product explicitly hosts a local call.
+    /// Joining an external room and dictation do not resolve this deployment dependency.
+    pub fn livekit_server(home: &Path, http: &dyn HttpClient) -> Result<PathBuf, CallError> {
+        if let Some(path) = std::env::var_os("ASH_LIVEKIT_SERVER_PATH") {
+            return executable(PathBuf::from(path));
+        }
+        let offline = std::env::var_os("ASH_LIVEKIT_PACKAGE").map(PathBuf::from);
+        let source = if let Some(path) = offline.as_deref() {
+            CapabilitySource::Directory(path)
+        } else {
+            // Existing installations can still provide the server alongside the runtime.
+            let context = ash_install_context::InstallContext::current();
+            if let Some(layout) = context.package_layout() {
+                let legacy = layout
+                    .binary_directory()
+                    .join(format!("livekit-server{}", std::env::consts::EXE_SUFFIX));
+                if legacy.is_file() {
+                    return executable(legacy);
+                }
+            }
+            CapabilitySource::ProductBound
+        };
+        let root = ash_package_store::install_capability(home, "livekit", source, http)
+            .map_err(|_| CallError::Deployment)?;
+        executable(
+            root.join("bin")
+                .join(format!("livekit-server{}", std::env::consts::EXE_SUFFIX)),
+        )
+    }
+
     pub fn start(paths: &ServicePaths, database: &Path) -> Result<Self, CallError> {
+        let media_lease = ash_package_store::acquire_package_lease_for_executable(&paths.media)
+            .map_err(|_| CallError::Deployment)?;
         for executable in [&paths.media, &paths.collaboration] {
             if !executable.is_absolute()
                 || executable
@@ -98,6 +133,7 @@ impl LocalDeployment {
             _directory: directory,
             url: format!("http://127.0.0.1:{control_port}"),
             administrator: MemberCredential::generate(),
+            _media_lease: media_lease,
         };
         ready(&mut deployment.media, signal_port)?;
         if let Some(parent) = database.parent() {
@@ -152,6 +188,13 @@ impl Drop for LocalDeployment {
         let _ = self.media.kill();
         let _ = self.media.wait();
     }
+}
+
+fn executable(path: PathBuf) -> Result<PathBuf, CallError> {
+    if !path.is_absolute() || !path.is_file() {
+        return Err(CallError::Deployment);
+    }
+    path.canonicalize().map_err(|_| CallError::Deployment)
 }
 
 fn command(path: &Path) -> Command {

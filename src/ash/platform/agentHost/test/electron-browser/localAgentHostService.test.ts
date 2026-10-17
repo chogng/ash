@@ -9,6 +9,9 @@ import { InstantiationService } from '../../../instantiation/common/instantiatio
 import { ILogService, type LogEntry } from '../../../log/common/log.js';
 import { LogService } from '../../../log/common/logServiceImpl.js';
 import { IRemoteSocketFactoryService, RemoteSocketFactoryService } from '../../../remote/common/remoteSocketFactoryService.js';
+import { AppServerCallService } from '../../../call/browser/appServerCallService.js';
+import { createAppServerVoiceCodeTranscriptionBackend } from '../../../renderer/browser/appServerVoiceCodeTranscriptionBackend.js';
+import { APP_SERVER_METHODS } from '../../../../../../.build/protocol/typescript/index.js';
 import { createTestInitializeResult } from '../common/testAppServerProtocol.js';
 
 suite('Local Agent Host connection service', () => {
@@ -16,6 +19,8 @@ suite('Local Agent Host connection service', () => {
 	const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
 	const previousGlobals = Object.getOwnPropertyDescriptor(globalThis, 'ash');
 	const channels: MessageChannel[] = [];
+	const traffic: { channel: string; method: string; }[] = [];
+	const portChannels: string[] = [];
 	const restarts = new Set<(value: unknown) => void>();
 	let Service: typeof import('../../electron-browser/localAgentHostService.js').LocalAgentHostServiceClient;
 	let tracking: ReturnType<typeof installDisposableTracker>;
@@ -32,14 +37,14 @@ suite('Local Agent Host connection service', () => {
 		ipcRenderer: {
 			send() { },
 			on: (channel, listener) => {
-				assert.equal(channel, 'ash:app-server:restart');
+				assert.ok(['ash:app-server:restart', 'ash:app-server:local:restart'].includes(channel));
 				restarts.add(listener);
 				return { dispose: () => { restarts.delete(listener); } };
 			},
 			invoke: async (channel, params) => {
-				if (channel === 'ash:app-server:initialized') { initialized++; return; }
-				if (channel === 'ash:app-server:recover-runtime') { repairs++; return true; }
-				assert.equal(channel, 'ash:app-server:acquire');
+				if (channel.endsWith(':initialized')) { initialized++; return; }
+				if (channel.endsWith(':recover-runtime')) { repairs++; return true; }
+				assert.ok(['ash:app-server:acquire', 'ash:app-server:local:acquire'].includes(channel));
 				acquisitions++;
 				await pendingAcquisition?.();
 				if (failAcquisition) { throw new Error('acquisition refused'); }
@@ -50,11 +55,17 @@ suite('Local Agent Host connection service', () => {
 					if (!(value.data instanceof Uint8Array)) { return; }
 					ports.port2.postMessage({ ack: true });
 					const frame = JSON.parse(new TextDecoder().decode(value.data).trim());
+					traffic.push({ channel, method: frame.method });
 					if (frame.method === 'initialize') {
 						const result = createTestInitializeResult();
 						if (mismatch && acquisitions === 1) { result.schemaHash = 'incompatible'; }
 						const response = JSON.stringify({ jsonrpc: '2.0', id: frame.id, result }) + '\n';
 						ports.port2.postMessage({ data: new TextEncoder().encode(response) });
+					} else if (frame.method === 'dictation/audio' || frame.method === 'session/list' || frame.method === 'call/start') {
+						const response = frame.method === 'call/start'
+							? { jsonrpc: '2.0', id: frame.id, error: { code: -32073, message: 'fixture refuses devices', data: { kind: 'PermissionRequired' } } }
+							: { jsonrpc: '2.0', id: frame.id, result: frame.method === 'session/list' ? { sessions: [] } : null };
+						ports.port2.postMessage({ data: new TextEncoder().encode(JSON.stringify(response) + '\n') });
 					}
 				});
 				dom.window.dispatchEvent(new dom.window.MessageEvent('message', {
@@ -65,7 +76,7 @@ suite('Local Agent Host connection service', () => {
 				return { enabled: true, byteStream: true, protocolVersion: 1, workspaceId: 'window', workspaceRoot: '/workspace' };
 			},
 		},
-		ipcMessagePort: { acquire: () => ({ dispose() { } }) },
+		ipcMessagePort: { acquire: channel => { portChannels.push(channel); return { dispose() { } }; } },
 		process: { platform: process.platform, arch: process.arch },
 		webUtils: { getPathForFile: () => '' },
 	};
@@ -82,6 +93,7 @@ suite('Local Agent Host connection service', () => {
 	});
 	setup(() => {
 		acquisitions = initialized = repairs = 0;
+		traffic.length = portChannels.length = 0;
 		enabled = true;
 		mismatch = failAcquisition = false;
 		pendingAcquisition = undefined;
@@ -101,6 +113,27 @@ suite('Local Agent Host connection service', () => {
 		services.registerSingleton(IRemoteSocketFactoryService, () => services.createInstance(RemoteSocketFactoryService));
 		return services.createInstance(Service, { clientName: 'test-desktop' });
 	}
+
+	test('SSH workspace and local media use distinct carriers and keep Agent requests on the workspace', async () => {
+		using services = new InstantiationService();
+		using logger = new LogService({ sinks: [] });
+		services.registerInstance(ILogService, logger);
+		services.registerSingleton(IRemoteSocketFactoryService, () => services.createInstance(RemoteSocketFactoryService));
+		using local = services.createInstance(Service, { clientName: 'desktop-media', connection: 'local' });
+		using workspace = services.createInstance(Service, { clientName: 'desktop-workspace' });
+		assert.equal(await local.connect(), true);
+		assert.equal(await workspace.connect(), true);
+		using calls = new AppServerCallService(local.client);
+		await assert.rejects(calls.start({ type: 'local' }), /fixture refuses devices/);
+		await createAppServerVoiceCodeTranscriptionBackend(local.client).pushAudio('dictation', 'AAA=');
+		await workspace.client.request(APP_SERVER_METHODS['session/list'], {});
+		assert.deepEqual(traffic.filter(item => ['call/start', 'dictation/audio', 'session/list'].includes(item.method)), [
+			{ channel: 'ash:app-server:local:acquire', method: 'call/start' },
+			{ channel: 'ash:app-server:local:acquire', method: 'dictation/audio' },
+			{ channel: 'ash:app-server:acquire', method: 'session/list' },
+		]);
+		assert.deepEqual(portChannels, ['ash:app-server:local:port', 'ash:app-server:port']);
+	});
 
 	test('production assembly requires the connection log service', () => {
 		using services = new InstantiationService();

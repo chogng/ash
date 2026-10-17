@@ -7,7 +7,7 @@ Product entrypoints compose the shared package tools for development and release
 - `protocol/generate.py` prepares the shared Rust-owned contract; `protocol/artifacts.py` validates portable source fingerprints and packaged artifacts for preparation and assembly.
 - `lib/cargo_inputs.py` prepares grammar, V8 and speech link inputs from the selected dependency graph for the Cargo command, Code builds and product packaging. Resource-specific modules retain download, validation and caller-override rules.
 - `app_server.py` resolves release binaries and resources.
-- `remote.py` reads [`remote/package.json`](../remote/package.json), restricts the
+- `remote.py` reads [`remote-server/package.json`](../remote-server/package.json), restricts the
   Remote distribution to its declared POSIX targets, and requires bundled Node.
 - `lib/package.py` assembles and validates both development and release packages using `lib/package-layout.json`.
 - `lib/livekit.py` resolves the locked LiveKit server runtime.

@@ -25,6 +25,12 @@ fn closing_the_originating_connection_does_not_cancel_model_preparation() {
             owner_id,
             "continued".into(),
             realtime_voice::ModelRequest {
+                home: root.path().into(),
+                media_network: ash_http_client::OutboundNetworkSnapshot::with_policy(
+                    ash_http_client::HttpClientConfig::default(),
+                    ash_http_client::OutboundNetworkPolicy::default(),
+                )
+                .unwrap(),
                 model_root: root.path().into(),
                 model_id: "continued".into(),
                 operation: realtime_voice::ModelOperation::Import {

@@ -447,6 +447,7 @@ enum ConnectionAuthority {
     #[default]
     Client,
     ProductHost,
+    RemoteHost,
     Browser,
 }
 
@@ -489,13 +490,22 @@ impl ConnectionState {
     }
 
     fn allows_product_host_capabilities(&self) -> bool {
+        matches!(
+            self.authority,
+            ConnectionAuthority::ProductHost | ConnectionAuthority::RemoteHost
+        )
+    }
+
+    fn allows_local_media(&self) -> bool {
         self.authority == ConnectionAuthority::ProductHost
     }
 
     fn allows_extension_source_configuration(&self) -> bool {
         matches!(
             self.authority,
-            ConnectionAuthority::ProductHost | ConnectionAuthority::Browser
+            ConnectionAuthority::ProductHost
+                | ConnectionAuthority::RemoteHost
+                | ConnectionAuthority::Browser
         )
     }
 
@@ -504,7 +514,9 @@ impl ConnectionState {
         // does not grant the product host's unrelated privileged capabilities.
         matches!(
             self.authority,
-            ConnectionAuthority::ProductHost | ConnectionAuthority::Browser
+            ConnectionAuthority::ProductHost
+                | ConnectionAuthority::RemoteHost
+                | ConnectionAuthority::Browser
         )
     }
 
@@ -512,14 +524,18 @@ impl ConnectionState {
         // Authenticated Web saves may change ordinary file attributes, but cannot elevate.
         matches!(
             self.authority,
-            ConnectionAuthority::ProductHost | ConnectionAuthority::Browser
+            ConnectionAuthority::ProductHost
+                | ConnectionAuthority::RemoteHost
+                | ConnectionAuthority::Browser
         )
     }
 
     fn allows_team_capabilities(&self) -> bool {
         matches!(
             self.authority,
-            ConnectionAuthority::ProductHost | ConnectionAuthority::Browser
+            ConnectionAuthority::ProductHost
+                | ConnectionAuthority::RemoteHost
+                | ConnectionAuthority::Browser
         )
     }
 
@@ -1534,7 +1550,10 @@ impl AppServer {
         };
         self.updates.register(
             connection.connection_id,
-            authority == ConnectionAuthority::ProductHost,
+            matches!(
+                authority,
+                ConnectionAuthority::ProductHost | ConnectionAuthority::RemoteHost
+            ),
             &connection.outbound_notifications,
         );
         connection
@@ -2855,6 +2874,33 @@ impl AppServer {
             reader,
             writer,
             self.product_host_connection(),
+            InputEnd::Disconnect,
+        )
+    }
+
+    /// Remote workspaces retain editor/Agent host services, while devices stay on the client.
+    pub(crate) fn serve_remote_jsonl<R: BufRead, W: Write + Send>(
+        &self,
+        reader: R,
+        writer: W,
+    ) -> Result<(), std::io::Error> {
+        self.serve_jsonl_connection(
+            reader,
+            writer,
+            self.open_connection(ConnectionAuthority::RemoteHost),
+            InputEnd::Drain,
+        )
+    }
+
+    pub(crate) fn serve_remote_stream<R: BufRead, W: Write + Send>(
+        &self,
+        reader: R,
+        writer: W,
+    ) -> Result<(), std::io::Error> {
+        self.serve_jsonl_connection(
+            reader,
+            writer,
+            self.open_connection(ConnectionAuthority::RemoteHost),
             InputEnd::Disconnect,
         )
     }

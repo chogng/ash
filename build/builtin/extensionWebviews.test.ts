@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { compileExtensionWebviews } from './extensionWebviews.ts';
 
 test('Rust extension views bundle static assets and track imported source dependencies', async () => {
-	const root = await mkdtemp(resolve(tmpdir(), 'ash-extension-view-'));
+	const root = await realpath(await mkdtemp(resolve(tmpdir(), 'ash-extension-view-')));
 	try {
 		await mkdir(resolve(root, 'src'));
 		await writeFile(resolve(root, 'src/view.js'), 'import { message } from "./shared.js"; import "./view.css"; document.body.textContent = message;');

@@ -1,47 +1,32 @@
-//! Device-independent LiveKit room media. Room permissions belong to the caller.
+//! LiveKit room client. The optional host implementation runs in the separately packaged program.
 
+#[cfg(feature = "host")]
+pub mod backend;
+#[cfg(feature = "host")]
 mod codec;
 mod mixer;
+pub mod protocol;
 mod resample;
 #[cfg(test)]
-#[path = "resample_tests.rs"]
 mod resample_tests;
-mod rtc;
-pub use mixer::AudioMixer;
 mod room;
+#[cfg(feature = "host")]
+mod rtc;
+#[cfg(feature = "host")]
 mod transport;
-#[cfg(test)]
+mod types;
+#[cfg(all(test, feature = "host"))]
 #[path = "video_tests.rs"]
 mod video_tests;
 
+pub use mixer::AudioMixer;
+pub use protocol::ScreenSource;
+pub use protocol::ScreenTarget;
 pub use resample::AudioRate;
 pub use resample::AudioResampler;
-pub use room::AudioFrame;
-pub use room::AudioPublication;
-pub use room::MediaEvent;
 pub use room::MediaRoom;
-pub use room::MediaStats;
-pub use room::ScreenFrame;
-
-#[derive(Debug, thiserror::Error)]
-pub enum MediaError {
-    #[error("invalid media server address")]
-    Address,
-    #[error("media connection failed")]
-    Connection,
-    #[error("media operation timed out")]
-    Timeout,
-    #[error("audio publication is unavailable")]
-    Publication,
-    #[error("audio frame must contain 480 or 960 mono samples at 48 kHz")]
-    AudioFrame,
-    #[error("media event consumer is closed or overloaded")]
-    Consumer,
-    #[error("screen share publication failed")]
-    ScreenShare,
-    #[error("screen capture failed: {0}")]
-    Capture(String),
-}
+pub use room::screen_sources;
+pub use types::*;
 
 pub(crate) fn validate_url(value: &str) -> Result<(), MediaError> {
     let url = url::Url::parse(value).map_err(|_| MediaError::Address)?;

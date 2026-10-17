@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "executables": {
+    "livekitClient": {
+      "path": "bin/ash-livekit-client",
+      "channel": "livekit.v1"
+    },
+    "recognizer": {
+      "path": "bin/ash-realtime-voice",
+      "channel": "recognition.v1"
+    },
+    "voiceHost": { "path": "bin/ash-voice-host" }
+  }
+}

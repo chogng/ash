@@ -1,6 +1,8 @@
 {
   "bazel": [
     "cli/**",
+    "remote-server/**",
+    "livekit-server/**",
     "crates/**",
     "resources/extension-host/*.js",
     "resources/extension-host/*.mjs",
@@ -28,6 +30,8 @@
   "format": null,
   "frontend": [
     "src/**",
+    "remote-server/**",
+    "livekit-server/**",
     "test/**",
     "sdk/**",
     "examples/extensions/**",
@@ -64,6 +68,7 @@
     ".github/workflows/desktop-runtime-acceptance.yml"
   ],
   "media": [
+    "livekit-server/**",
     "crates/livekit-client/**",
     "crates/screen-capture/**",
     "third_party/livekit-rust-sdks/**",
@@ -141,6 +146,8 @@
   ],
   "tooling": [
     "build/**",
+    "remote-server/**",
+    "livekit-server/**",
     "scripts/**",
     "third_party/**",
     "resources/**",

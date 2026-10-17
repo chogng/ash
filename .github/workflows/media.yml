@@ -44,16 +44,26 @@ jobs:
         run: |
           python -B scripts/cargo.py build --locked -p ash-collab-server --bin ash-collab-server
           echo "ASH_TEST_COLLABORATION_SERVER=$(node -p 'require("node:path").resolve(".build/cargo/debug/ash-collab-server.exe")')" >> "$GITHUB_ENV"
+      - name: Build local room and recognition programs separately
+        run: |
+          python -B scripts/cargo.py build --locked -p ash-livekit-client --bin ash-livekit-client --features host
+          python -B scripts/cargo.py build --locked -p ash-realtime-voice --bin ash-realtime-voice --features host
+          echo "ASH_LIVEKIT_CLIENT_PATH=$(node -p 'require("node:path").resolve(".build/cargo/debug/ash-livekit-client.exe")')" >> "$GITHUB_ENV"
+          echo "ASH_RECOGNIZER_PATH=$(node -p 'require("node:path").resolve(".build/cargo/debug/ash-realtime-voice.exe")')" >> "$GITHUB_ENV"
+      - name: Test local room and recognition process contracts
+        run: |
+          python -B scripts/cargo.py test --locked -p ash-livekit-client --features host --lib --test process --test room --test rooms -- --include-ignored --test-threads=1
+          python -B scripts/cargo.py test --locked -p ash-realtime-voice --features host
       - name: Test rooms, authority and model bridge against the real server
         # Each room test runs a real media server and a CPU video/audio pipeline.
         # Keep their time-based transport assertions independent of other rooms.
-        run: python -B scripts/cargo.py test --locked -p ash-livekit-client -p ash-livekit-api -p ash-call -p ash-collab-server -p ash-voice-agent --features ash-call/runtime -- --include-ignored --test-threads=1
+        run: python -B scripts/cargo.py test --locked -p ash-livekit-api -p ash-call -p ash-collab-server -p ash-voice-agent --features ash-call/runtime -- --include-ignored --test-threads=1
       - name: Test screen capture contracts
         run: python -B scripts/cargo.py test --locked -p ash-screen-capture
       - name: Test speech processing
         run: python -B scripts/cargo.py test --locked -p ash-voice-host --features host
       - name: Reject warnings in media packages and tests
-        run: python -B scripts/cargo.py --deny-warnings check --locked -p ash-livekit-client -p ash-screen-capture -p ash-call -p ash-voice-agent -p ash-voice-host --features ash-call/runtime,ash-voice-host/host --all-targets
+        run: python -B scripts/cargo.py --deny-warnings check --locked -p ash-livekit-client -p ash-screen-capture -p ash-call -p ash-voice-agent -p ash-voice-host -p ash-realtime-voice --features ash-call/runtime,ash-voice-host/host,ash-livekit-client/host,ash-realtime-voice/host --all-targets
 
   server-build:
     name: LiveKit ${{ matrix.target }}

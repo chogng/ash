@@ -36,6 +36,7 @@ pub(super) type Failure = String;
 type Reply = oneshot::Sender<Result<CallStatus, Failure>>;
 
 pub(super) struct Session {
+    pub media: PathBuf,
     pub client: CallClient,
     pub url: String,
     pub state: Arc<Mutex<CallStatus>>,
@@ -85,6 +86,65 @@ impl Calls {
             .ok_or_else(|| "Call runtime unavailable".into())
     }
 
+    /// Resolve only after a product-host media operation has passed authorization.
+    pub fn prepare_media(&self, home: &Path) -> Result<PathBuf, Failure> {
+        self.media_executable(home, "ash-livekit-client", "ASH_LIVEKIT_CLIENT_PATH")
+    }
+
+    pub fn audio_executable(&self, home: &Path) -> Result<PathBuf, Failure> {
+        self.media_executable(home, "ash-voice-host", "ASH_VOICE_HOST_PATH")
+    }
+
+    fn media_executable(
+        &self,
+        home: &Path,
+        binary: &str,
+        variable: &str,
+    ) -> Result<PathBuf, Failure> {
+        if let Some(path) = std::env::var_os(variable) {
+            let path = PathBuf::from(path);
+            if !path.is_absolute() || !path.is_file() {
+                return Err("optional media runtime is not installed or available".into());
+            }
+            return path.canonicalize().map_err(|error| error.to_string());
+        }
+        let offline = std::env::var_os("ASH_MEDIA_PACKAGE").map(PathBuf::from);
+        let source = match offline.as_deref() {
+            Some(path) => ash_package_store::CapabilitySource::Directory(path),
+            None => ash_package_store::CapabilitySource::ProductBound,
+        };
+        ash_package_store::resolve_capability_executable(
+            home,
+            "media",
+            binary,
+            source,
+            &ReqwestHttpClient::with_network(self.download_network()?)
+                .map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| error.to_string())
+    }
+
+    pub fn download_network(&self) -> Result<OutboundNetworkSnapshot, Failure> {
+        let config = HttpClientConfig::default()
+            .with_response_body_limit(
+                ash_http_client::ResponseBodyLimit::new(
+                    std::num::NonZeroUsize::new(128 * 1024 * 1024).unwrap(),
+                )
+                .unwrap(),
+            )
+            .with_redirect_policy(ash_http_client::RedirectPolicy::Follow {
+                max_hops: std::num::NonZeroU8::new(5).unwrap(),
+            })
+            .with_timeouts(ash_http_client::TransportTimeouts::new(
+                ash_http_client::Timeout::After(Duration::from_secs(30)),
+                ash_http_client::Timeout::Disabled,
+                ash_http_client::Timeout::Disabled,
+                ash_http_client::Timeout::After(Duration::from_secs(300)),
+            ));
+        OutboundNetworkSnapshot::with_policy(config, self.network_policy.clone())
+            .map_err(|error| error.to_string())
+    }
+
     pub fn start(
         &self,
         owner: u64,
@@ -129,7 +189,8 @@ impl Calls {
                 .check_url(url)
                 .map_err(|error| error.to_string())?;
         }
-        let audio_path = executable("ASH_VOICE_HOST_PATH", "ash-voice-host")?;
+        let media = self.prepare_media(home)?;
+        let audio_path = self.audio_executable(home)?;
         let local = if matches!(params.deployment, CallDeployment::Local) {
             let mut slot = self.local.lock().map_err(|_| "Local service unavailable")?;
             let deployment = if let Some(deployment) = slot.upgrade() {
@@ -138,7 +199,12 @@ impl Calls {
                 let deployment = Arc::new(
                     LocalDeployment::start(
                         &ServicePaths {
-                            media: executable("ASH_LIVEKIT_SERVER_PATH", "livekit-server")?,
+                            media: LocalDeployment::livekit_server(
+                                home,
+                                &ReqwestHttpClient::with_network(self.download_network()?)
+                                    .map_err(|error| error.to_string())?,
+                            )
+                            .map_err(|error| error.to_string())?,
                             collaboration: executable(
                                 "ASH_COLLABORATION_SERVER_PATH",
                                 "ash-collab-server",
@@ -215,6 +281,7 @@ impl Calls {
             let connect = async {
                 tokio::time::timeout(Duration::from_secs(20), async {
                     let room = MediaRoom::connect(
+                        &media,
                         &joined.server_url,
                         &joined.participant_token,
                         if joined.microphone {
@@ -297,6 +364,9 @@ impl Calls {
         let worker_url = url.clone();
         let media_url = joined.server_url.clone();
         let policy_commands = commands.clone();
+        let worker_media = media.clone();
+        let worker_media_lease = ash_package_store::acquire_package_lease_for_executable(&media)
+            .map_err(|error| error.to_string())?;
         let worker = self.executor()?.spawn(async move {
             let _local = local;
             let policy_guard = tokio::spawn(async move {
@@ -308,7 +378,7 @@ impl Calls {
                 let _ = policy_commands.send((None, reply)).await;
             });
             call::SessionRuntime {
-                media: Box::new(super::call_adapters::Room::new(room, worker_screens, room_policy)),
+                media: Box::new(super::call_adapters::Room::new(room, worker_screens, room_policy, worker_media, worker_media_lease)),
                 devices: Box::new(super::call_adapters::Devices::new(audio)),
                 status,
                 changed: Arc::new(move |status| {
@@ -327,6 +397,7 @@ impl Calls {
             .insert(
                 (owner, params.resource_id),
                 Session {
+                    media,
                     client,
                     fingerprint,
                     url,
@@ -425,7 +496,7 @@ impl Drop for Calls {
     }
 }
 
-pub(super) fn executable(variable: &str, name: &str) -> Result<PathBuf, Failure> {
+fn executable(variable: &str, name: &str) -> Result<PathBuf, Failure> {
     let path = if let Some(path) = std::env::var_os(variable) {
         PathBuf::from(path)
     } else {

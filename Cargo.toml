@@ -170,7 +170,7 @@ members = [
     "crates/remote-connections",
     "crates/remote-profile-store",
     "crates/remote-host",
-    "crates/remote-server",
+    "remote-server",
     "crates/rollout",
     "crates/rollout-trace",
     "crates/rmcp-client",
@@ -541,7 +541,7 @@ ash-remote = { path = "crates/remote" }
 ash-remote-connections = { path = "crates/remote-connections" }
 ash-remote-profile-store = { path = "crates/remote-profile-store" }
 ash-remote-host = { path = "crates/remote-host" }
-ash-remote-server = { path = "crates/remote-server" }
+ash-remote-server = { path = "remote-server" }
 ash-rollout = { path = "crates/rollout" }
 ash-rollout-trace = { path = "crates/rollout-trace" }
 ash-rmcp-client = { path = "crates/rmcp-client" }

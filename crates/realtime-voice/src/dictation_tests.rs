@@ -34,6 +34,8 @@ async fn stopping_a_stalled_model_download_closes_the_connection_and_cleans_stag
             1,
             "downloading".into(),
             DictationRequest::Local(LocalDictationRequest {
+                home: root.path().into(),
+                media_network: test_media_network(),
                 input_device: None,
                 model_id: DEFAULT_MODEL_ID.into(),
                 model_root: root.path().into(),
@@ -130,6 +132,8 @@ async fn real_microphone_capture_and_local_session_release_the_device() {
     let (send, receive) = std::sync::mpsc::channel();
     let mut session = LocalSpeechSession::start(
         LocalDictationRequest {
+            home: directory.parent().unwrap().into(),
+            media_network: test_media_network(),
             input_device: None,
             model_id: directory.file_name().unwrap().to_str().unwrap().into(),
             model_root: directory.parent().unwrap().into(),
@@ -216,6 +220,8 @@ fn manager() -> (
 
 fn request() -> DictationRequest {
     DictationRequest::Local(LocalDictationRequest {
+        home: PathBuf::new(),
+        media_network: test_media_network(),
         input_device: None,
         model_id: DEFAULT_MODEL_ID.into(),
         model_root: PathBuf::new(),
@@ -467,4 +473,12 @@ fn a_stalled_pcm_consumer_has_a_bounded_queue() {
     assert!(manager.push_audio(7, "pcm", vec![2]).is_err());
     manager.cancel(7, "pcm").unwrap();
     assert!(!manager.is_active());
+}
+
+fn test_media_network() -> http_client::OutboundNetworkSnapshot {
+    http_client::OutboundNetworkSnapshot::with_policy(
+        http_client::HttpClientConfig::default(),
+        http_client::OutboundNetworkPolicy::default(),
+    )
+    .unwrap()
 }

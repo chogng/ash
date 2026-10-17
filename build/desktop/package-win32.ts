@@ -18,7 +18,7 @@ const bundledApplication = join(outputRoot, 'Ash-win32-x64');
 const python = join(repositoryRoot, 'scripts', '.venv', 'Scripts', 'python.exe');
 
 const [command, ...arguments_] = process.argv.slice(2);
-if (command === 'bundle') await bundle(parseOptions(arguments_, ['--backend-package', '--output']));
+if (command === 'bundle') await bundle(parseOptions(arguments_, ['--backend-package', '--output', '--remote-release']));
 else if (command === 'installer') await installer(parseOptions(arguments_, ['--bundle', '--output']));
 else throw new Error('Usage: package-win32.ts bundle [--backend-package DIR] [--output DIR] | installer [--bundle DIR] [--output DIR]');
 
@@ -56,6 +56,8 @@ async function bundle(options: Map<string, string>): Promise<void> {
 }
 
 async function assembleBundle(stage: string, bundlePath: string, options: Map<string, string>): Promise<void> {
+	const remoteRelease = options.get('--remote-release') ?? process.env.ASH_REMOTE_RELEASE_BINDING;
+	if (!remoteRelease) throw new Error('Remote release binding is required: --remote-release FILE or ASH_REMOTE_RELEASE_BINDING');
 	const updatePublicKey = requireUpdatePublicKey();
 	const destination = dirname(bundlePath);
 	const appStage = join(stage, 'app');
@@ -78,7 +80,7 @@ async function assembleBundle(stage: string, bundlePath: string, options: Map<st
 
 	const sourceBackend = options.get('--backend-package') ?? await buildBackend(stage, electronMetadata.version);
 	const backend = join(stage, 'desktop-backend');
-	await run(python, ['-B', join(repositoryRoot, 'build', 'desktop', 'package_runtime.py'), '--source', sourceBackend, '--output', backend, '--electron-version', electronMetadata.version], repositoryRoot);
+	await run(python, ['-B', join(repositoryRoot, 'build', 'desktop', 'package_runtime.py'), '--source', sourceBackend, '--output', backend, '--electron-version', electronMetadata.version, '--remote-release', resolve(remoteRelease)], repositoryRoot);
 	await validateBackend(backend, electronMetadata.version);
 
 	await mkdir(destination, { recursive: true });
@@ -129,8 +131,10 @@ async function buildBackend(stage: string, electronVersion: string): Promise<str
 		'-B', join(repositoryRoot, 'build', 'app_server.py'),
 		'--target', 'x86_64-pc-windows-msvc',
 		'--javascript-runtime', 'host-provided-node',
+		'--media-distribution', 'bundled',
 		'--electron-version', electronVersion,
 		'--package-dir', backend,
+		'--capability-archive-dir', join(repositoryRoot, '.build', 'releases'),
 	], repositoryRoot);
 	return backend;
 }
@@ -140,6 +144,7 @@ async function validateBackend(path: string, electronVersion: string): Promise<v
 	const application = JSON.parse(await readFile(join(appRoot, 'package.json'), 'utf8'));
 	if (metadata.target !== 'x86_64-pc-windows-msvc' || metadata.javascriptRuntime?.kind !== 'hostProvidedNode'
 		|| metadata.javascriptRuntime.electronVersion !== electronVersion || metadata.components?.node !== undefined
+		|| metadata.components?.remoteServer !== undefined || typeof metadata.remoteRuntimeCatalog?.url !== 'string'
 		|| metadata.layoutVersion !== 2 || metadata.version !== application.version
 		|| metadata.entrypoint !== 'bin/ash-app-server.exe'
 		|| metadata.protocol?.major !== APP_SERVER_PROTOCOL_MAJOR
@@ -150,8 +155,8 @@ async function validateBackend(path: string, electronVersion: string): Promise<v
 		throw new Error(`Backend does not match this Windows desktop build: ${path}`);
 	}
 	await lstat(join(path, metadata.entrypoint));
-	for (const relative of ['ash-resources/node', 'ash-resources/licenses/node']) {
-		if (await exists(join(path, relative))) throw new Error(`Desktop backend contains standalone Node: ${relative}`);
+	for (const relative of ['ash-resources/node', 'ash-resources/licenses/node', 'bin/ash-remote-server.exe', 'ash-remote-runtimes']) {
+		if (await exists(join(path, relative))) throw new Error(`Desktop backend contains a separately distributed runtime: ${relative}`);
 	}
 }
 

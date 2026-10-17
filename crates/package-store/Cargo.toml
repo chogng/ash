@@ -14,7 +14,16 @@ doctest = false
 name = "ash_package_store"
 path = "src/lib.rs"
 
+[features]
+installation = ["dep:ash-http-client", "dep:ash-install-context", "dep:ash-product-update", "dep:tempfile", "dep:thiserror", "dep:url"]
+
 [dependencies]
+ash-http-client = { workspace = true, optional = true }
+ash-install-context = { workspace = true, optional = true }
+ash-product-update = { workspace = true, optional = true, features = ["archives"] }
+tempfile = { workspace = true, optional = true }
+thiserror = { workspace = true, optional = true }
+url = { workspace = true, optional = true }
 fs2 = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -24,6 +33,8 @@ sha2 = { workspace = true }
 windows-sys = { workspace = true, features = ["Win32_Storage_FileSystem"] }
 
 [dev-dependencies]
+flate2.workspace = true
+tar.workspace = true
 tempfile = { workspace = true }
 
 [lints]

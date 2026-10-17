@@ -35,6 +35,39 @@ pub struct ExtensionInvocation {
 }
 
 impl ExtensionHostSupervisor {
+    /// Binds a data-channel call to the currently activated incarnation; resource calls
+    /// are never replayed into a restarted process. Cancellation remains on the returned handle.
+    pub fn begin_data_channel(
+        &self,
+        registration_id: &str,
+        payload: Value,
+        timeout: Duration,
+    ) -> Result<ExtensionInvocationHandle, ExtensionHostError> {
+        let deadline = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|_| ExtensionHostError::RequestTimedOut)?
+            .as_millis()
+            .checked_add(timeout.as_millis())
+            .and_then(|value| u64::try_from(value).ok())
+            .and_then(NonZeroU64::new)
+            .ok_or(ExtensionHostError::RequestTimedOut)?;
+        let snapshot = self.snapshot();
+        self.begin_fenced_invoke(
+            ExtensionInvocationTarget {
+                incarnation: NonZeroU64::new(snapshot.incarnation)
+                    .ok_or(ExtensionHostError::HostExited)?,
+                activation_generation: NonZeroU64::new(snapshot.activation_generation)
+                    .ok_or(ExtensionHostError::AuthorityDenied)?,
+            },
+            ExtensionInvocation {
+                registration_id: registration_id.into(),
+                operation: "receiveData".into(),
+                payload,
+                deadline_unix_millis: deadline,
+            },
+        )
+    }
+
     pub fn begin_invoke(
         &self,
         invocation: ExtensionInvocation,

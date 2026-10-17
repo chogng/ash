@@ -7,6 +7,7 @@ mod cloud;
 mod local;
 mod model_package;
 mod models;
+pub mod recognizer;
 #[cfg(feature = "cloud")]
 mod subscription;
 #[cfg(feature = "cloud")]
@@ -37,6 +38,8 @@ pub use models::ModelRequest;
 
 /// Selects the installed local model package and the audio helper for one session.
 pub struct LocalDictationRequest {
+    pub home: std::path::PathBuf,
+    pub media_network: http_client::OutboundNetworkSnapshot,
     pub model_id: String,
     pub model_root: PathBuf,
     pub audio_host: PathBuf,

@@ -84,6 +84,8 @@ impl ModelPackage {
     }
 
     pub async fn resolve(
+        home: &std::path::Path,
+        media_network: &OutboundNetworkSnapshot,
         cache_root: &Path,
         model_id: &str,
         network: OutboundNetworkSnapshot,
@@ -107,7 +109,8 @@ impl ModelPackage {
                 .await?;
                 progress(ModelProgress::Loading);
                 let package = Self::read(&install.staging)?;
-                let recognizer = package.recognizer(LocalSpeechMode::Dictation)?;
+                let recognizer =
+                    package.recognizer(home, media_network, LocalSpeechMode::Dictation)?;
                 drop(recognizer);
                 cancellation.check().map_err(|error| error.to_string())?;
                 install.publish(&directory)?;
@@ -143,24 +146,27 @@ impl ModelPackage {
 
     pub(crate) fn recognizer(
         &self,
+        home: &std::path::Path,
+        media_network: &OutboundNetworkSnapshot,
         mode: LocalSpeechMode,
-    ) -> Result<sherpa_onnx::OnlineRecognizer, String> {
-        let mut config = sherpa_onnx::OnlineRecognizerConfig::default();
-        config.model_config.paraformer.encoder = Some(self.encoder.to_string_lossy().into_owned());
-        config.model_config.paraformer.decoder = Some(self.decoder.to_string_lossy().into_owned());
-        config.model_config.tokens = Some(self.tokens.to_string_lossy().into_owned());
-        config.model_config.num_threads = 2;
-        if mode == LocalSpeechMode::Conversation {
-            config.enable_endpoint = true;
-            config.rule1_min_trailing_silence = 2.4;
-            config.rule2_min_trailing_silence = 0.9;
-            config.rule3_min_utterance_length = 20.0;
-        }
-        sherpa_onnx::OnlineRecognizer::create(&config)
-            .ok_or_else(|| "Could not load Paraformer dictation model".into())
+    ) -> Result<crate::recognizer::Recognizer, String> {
+        let executable = crate::recognizer::executable(home, media_network)?;
+        crate::recognizer::Recognizer::open(
+            &executable,
+            &self.encoder,
+            &self.decoder,
+            &self.tokens,
+            match mode {
+                LocalSpeechMode::Dictation => crate::recognizer::RecognitionMode::Dictation,
+                LocalSpeechMode::Conversation => crate::recognizer::RecognitionMode::Conversation,
+            },
+        )
+        .map_err(|error| error.to_string())
     }
 
     pub(crate) async fn import(
+        home: &std::path::Path,
+        media_network: &OutboundNetworkSnapshot,
         root: &Path,
         model_id: &str,
         source: &Path,
@@ -212,7 +218,7 @@ impl ModelPackage {
         }
         progress(ModelProgress::Loading);
         let package = Self::read(&install.staging)?;
-        let recognizer = package.recognizer(LocalSpeechMode::Dictation)?;
+        let recognizer = package.recognizer(home, media_network, LocalSpeechMode::Dictation)?;
         drop(recognizer);
         cancellation.check().map_err(|error| error.to_string())?;
         install.publish(&destination)

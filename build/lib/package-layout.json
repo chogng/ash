@@ -6,7 +6,6 @@
   "binaries": {
     "appServer": "bin/ash-app-server{exe}",
     "remote": "bin/ash-remote{exe}",
-    "remoteServer": "bin/ash-remote-server{exe}",
     "execServer": "bin/ash-exec-server{exe}",
     "appServerDaemon": "bin/ash-app-server-daemon{exe}",
     "codeModeHost": "bin/ash-code-mode-host{exe}",
@@ -16,15 +15,18 @@
     "githubAuthentication": "bin/ash-github-authentication{exe}",
     "githubExtension": "bin/ash-github-extension{exe}",
     "remoteSshExtension": "bin/ash-remote-ssh-extension{exe}",
-    "voiceHost": "bin/ash-voice-host{exe}",
     "collaborationServer": "bin/ash-collab-server{exe}",
-    "livekit": "bin/livekit-server{exe}",
     "remoteHost": "bin/ash-remote-host{exe}"
   },
   "optionalBinaries": {
+    "remoteServer": "bin/ash-remote-server{exe}",
     "lldbExtension": "bin/ash-debug-lldb{exe}",
     "devContainerProvider": "bin/ash-dev-container-provider{exe}",
-    "jsExtensionHost": "bin/ash-external-js-ext{exe}"
+    "jsExtensionHost": "bin/ash-external-js-ext{exe}",
+    "voiceHost": "bin/ash-voice-host{exe}",
+    "livekit": "bin/livekit-server{exe}",
+    "livekitClient": "bin/ash-livekit-client{exe}",
+    "recognizer": "bin/ash-realtime-voice{exe}"
   },
   "licenses": [
     {

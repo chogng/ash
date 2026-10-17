@@ -72,8 +72,8 @@ async function preparePackages(): Promise<boolean> {
 	for (const entry of (await readdir(browserExtensionRoots[0], { withFileTypes: true })).filter(entry => entry.isDirectory()).sort((a, b) => a.name.localeCompare(b.name))) {
 		const packageRoot = resolve(browserExtensionRoots[0], entry.name);
 		const files = await readdir(packageRoot);
-		// Rust capability processes are packaged separately from browser extension modules.
-		if (!files.includes('package.json') && files.includes('Cargo.toml')) { continue; }
+		// Product capability processes have independent packages and no browser manifest.
+		if (!files.includes('package.json') && (files.includes('Cargo.toml') || files.includes('runtime.json'))) { continue; }
 		packages.push(packageRoot);
 	}
 	const builtInCount = packages.length;
@@ -111,6 +111,8 @@ async function preparePackages(): Promise<boolean> {
 				if (manifest.ashRuntime?.kind === 'rust' && ['src', 'tests', 'browser', 'Cargo.toml', 'Cargo.lock', 'BUILD.bazel'].includes(entry.name)) { continue; }
 				const path = resolve(resourceDirectory, entry.name);
 				if (entry.isDirectory()) {
+					// Rust source projects are build inputs; generated sibling WASM remains a resource.
+					if ((await readdir(path)).includes('Cargo.toml')) { continue; }
 					await collect(path);
 				}
 				else if (entry.isFile()) { packageResources[relative(packageRoot, path).replaceAll('\\', '/')] = (await readPackageFile(path)).toString('base64'); }

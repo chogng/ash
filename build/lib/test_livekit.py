@@ -40,6 +40,48 @@ class LivekitTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "requires Go 1.26"):
                     resolve_livekit("aarch64-apple-darwin", root=root)
 
+    def test_source_build_removes_symbols_and_debug_information(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            cache = root / "third_party/.cache/livekit/1.0"
+            cache.mkdir(parents=True)
+            archive = cache / "source.tar.gz"
+            archive.write_bytes(b"source archive")
+            lock = root / "third_party/livekit/runtime-lock.json"
+            lock.parent.mkdir(parents=True, exist_ok=True)
+            lock.write_text(
+                json.dumps(
+                    {
+                        "version": "1.0",
+                        "artifacts": {},
+                        "source": {
+                            "url": "https://example.test/source.tar.gz",
+                            "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
+                        },
+                    }
+                )
+            )
+            commands = []
+
+            def run(command, **kwargs):
+                commands.append(command)
+                if command[0] == "tar":
+                    (Path(command[-1]) / "livekit-1.0").mkdir()
+                else:
+                    self.assertIn("-ldflags=-s -w", command)
+                    Path(command[command.index("-o") + 1]).write_bytes(
+                        b"compact server"
+                    )
+
+            with (
+                patch("build.lib.livekit.sys.platform", "darwin"),
+                patch("build.lib.livekit.shutil.which", return_value="go"),
+                patch("build.lib.livekit.subprocess.run", side_effect=run),
+            ):
+                binary = resolve_livekit("aarch64-apple-darwin", root=root)
+            self.assertEqual(b"compact server", binary.read_bytes())
+            self.assertEqual(2, len(commands))
+
     def test_verified_archive_extracts_only_the_server(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

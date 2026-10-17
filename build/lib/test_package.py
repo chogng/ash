@@ -124,6 +124,8 @@ class PackageTests(unittest.TestCase):
                 "ash-dev-container-provider",
                 "ash-debug-lldb",
                 "ash-voice-host",
+                "ash-livekit-client",
+                "ash-realtime-voice",
                 "ash-collab-server",
                 "ash-remote",
                 "ash-remote-host",
@@ -156,7 +158,7 @@ class PackageTests(unittest.TestCase):
                 ),
                 patch("build.lib.package_binaries.cargo_environment", return_value={}),
                 patch(
-                    "build.app_server.resolve_livekit",
+                    "build.lib.media_package.resolve_livekit",
                     return_value=executable_file(root / "livekit", b"livekit"),
                 ),
                 patch(
@@ -181,13 +183,24 @@ class PackageTests(unittest.TestCase):
                         ]
                     ),
                 )
-            command = run.call_args.args[0]
             self.assertEqual(
                 set(names),
-                {command[i + 1] for i, value in enumerate(command) if value == "--bin"},
+                {
+                    command[i + 1]
+                    for call in run.call_args_list
+                    for command in [call.args[0]]
+                    for i, value in enumerate(command)
+                    if value == "--bin"
+                },
             )
             for name in names:
-                self.assertEqual(name.encode(), (output / "bin" / name).read_bytes())
+                package = (
+                    output.with_name(output.name + "-media")
+                    if name
+                    in ("ash-livekit-client", "ash-realtime-voice", "ash-voice-host")
+                    else output
+                )
+                self.assertEqual(name.encode(), (package / "bin" / name).read_bytes())
             self.assertFalse((output / "bin/ash-external-js-ext").exists())
             metadata = json.loads((output / "ash-package.json").read_text())
             self.assertNotIn("jsExtensionHost", metadata["components"])
@@ -882,7 +895,11 @@ class PackageTests(unittest.TestCase):
     def assert_extension_resources(self, extensions: Path) -> None:
         self.assertEqual(
             self.BUILT_IN_EXTENSIONS,
-            sorted(path.name for path in extensions.iterdir() if path.is_dir()),
+            sorted(
+                path.name
+                for path in extensions.iterdir()
+                if path.is_dir() and (path / "package.json").is_file()
+            ),
         )
         seen_ids = set()
         file_templates = []

@@ -61,6 +61,8 @@ async fn run_with_audio(
     let token = cancellation.token();
     let progress_events = Arc::clone(&on_event);
     let package_future = ModelPackage::resolve(
+        &request.home,
+        &request.media_network,
         &request.model_root,
         &request.model_id,
         request.network,
@@ -79,9 +81,8 @@ async fn run_with_audio(
     on_event(LocalSpeechEvent::ModelProgress(
         crate::ModelProgress::Loading,
     ));
-    let recognizer = package.recognizer(mode)?;
+    let recognizer = package.recognizer(&request.home, &request.media_network, mode)?;
     on_event(LocalSpeechEvent::ModelProgress(crate::ModelProgress::Ready));
-    let stream = recognizer.create_stream();
     let mut audio = AudioInput::open(
         &request.audio_host,
         request.input_device,
@@ -96,35 +97,24 @@ async fn run_with_audio(
             _ = &mut *stopped => break,
             capture = audio.next_capture() => {
                 let Some(samples) = capture? else { break; };
-                let waveform = samples.iter().map(|sample| *sample as f32 / 32768.0).collect::<Vec<_>>();
-                stream.accept_waveform(16000, &waveform);
-                while recognizer.is_ready(&stream) {
-                    recognizer.decode(&stream);
+                let result = recognizer.accept_audio(&samples).map_err(|error| error.to_string())?;
+                if result.text != last_text {
+                    last_text = result.text.clone();
+                    on_event(LocalSpeechEvent::Partial { text: result.text.clone() });
                 }
-                if let Some(result) = recognizer.get_result(&stream) {
-                    if result.text != last_text {
-                        last_text = result.text.clone();
-                        on_event(LocalSpeechEvent::Partial { text: result.text.clone() });
+                if mode == LocalSpeechMode::Conversation && result.endpoint {
+                    if !result.text.trim().is_empty() {
+                        on_event(LocalSpeechEvent::Utterance { text: result.text });
                     }
-                    if mode == LocalSpeechMode::Conversation && recognizer.is_endpoint(&stream) {
-                        if !result.text.trim().is_empty() {
-                            on_event(LocalSpeechEvent::Utterance { text: result.text });
-                        }
-                        recognizer.reset(&stream);
-                        last_text.clear();
-                    }
+                    recognizer.reset().map_err(|error| error.to_string())?;
+                    last_text.clear();
                 }
             }
         }
     }
-    stream.input_finished();
-    while recognizer.is_ready(&stream) {
-        recognizer.decode(&stream);
-    }
-    if let Some(result) = recognizer.get_result(&stream) {
-        if mode == LocalSpeechMode::Dictation || !result.text.trim().is_empty() {
-            on_event(LocalSpeechEvent::Utterance { text: result.text });
-        }
+    let result = recognizer.finish().map_err(|error| error.to_string())?;
+    if mode == LocalSpeechMode::Dictation || !result.text.trim().is_empty() {
+        on_event(LocalSpeechEvent::Utterance { text: result.text });
     }
     audio.stop().await.map_err(|error| error.to_string())?;
     audio.close().await.map_err(|error| error.to_string())?;

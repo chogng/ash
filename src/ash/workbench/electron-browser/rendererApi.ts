@@ -1,3 +1,4 @@
+import type { AppServerProtocolClient } from '../../platform/agentHost/browser/appServerProtocolClient.js';
 import type { IExtensionHostApi } from '../../platform/agentHost/common/extensionHostApi.js';
 import { createAppServerExtensionHostApi } from '../../platform/agentHost/browser/extensionHostApi.js';
 import type { IAddress } from '../../platform/remote/common/remoteAgentConnection.js';
@@ -52,7 +53,7 @@ import { createRemoteConnectionApi } from "../../platform/remote/electron-browse
 import type { IWorkspaceTrustRequestService } from '../../platform/workspace/common/workspaceTrust.js';
 import { InstantiationService } from '../../platform/instantiation/common/instantiationService.js';
 
-export type ElectronRendererCapabilityContribution = RendererCapabilityContribution;
+export type ElectronRendererCapabilityContribution = (client: AppServerProtocolClient, appServer: Parameters<RendererCapabilityContribution>[1], localClient: AppServerProtocolClient) => ReturnType<RendererCapabilityContribution>;
 
 /** Composes Electron renderer capabilities from domain-owned IPC adapters. */
 export async function createElectronRendererApi(contributions: readonly ElectronRendererCapabilityContribution[], hostCapabilities: { readonly browser: boolean; readonly textDocuments?: boolean; readonly appTools?: boolean; }, workspaceTrust: IWorkspaceTrustRequestService, mainProcessService: IMainProcessService, resolveRemoteAuthority?: (api: IExtensionHostApi, factories: IRemoteSocketFactoryService, authority: string, attempt: number) => Promise<IAddress>, initializeRemoteExtensions?: (api: IExtensionHostApi, authority: string) => Promise<IExtensionHostApi>): Promise<AshElectronRendererApi & IDisposable> {
@@ -69,6 +70,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 	// Initialization includes the local daemon's cold start, which can take 15 seconds.
 	const localConnection = resources.add(connectionServices.createInstance(LocalAgentHostServiceClient, {
 		clientName: 'ash-desktop',
+		connection: remoteConnection.kind === 'ssh' ? 'local' : 'workspace',
 		initializeTimeoutMs: 30_000,
 		capabilities: {
 			agentInteractions: { version: 1, kinds: ['approval', 'permissions', 'userInput'] },
@@ -101,6 +103,21 @@ export async function createElectronRendererApi(contributions: readonly Electron
 		let backend: IRendererHost;
 		if (enabled) {
 			performance.mark('ash.rendererApi.initialized');
+			if (remoteConnection.kind === 'ssh') {
+				const workspaceConnection = resources.add(connectionServices.createInstance(LocalAgentHostServiceClient, {
+					clientName: 'ash-desktop-remote', initializeTimeoutMs: 30_000,
+					capabilities: {
+						directoryGrantsHost: { version: 1 },
+						agentInteractions: { version: 1, kinds: ['approval', 'permissions', 'userInput'] },
+						...(hostCapabilities.browser ? { browser: { version: 4, observe: true, input: true } } : {}),
+						...(hostCapabilities.textDocuments ? { textDocuments: { version: 2 } } : {}),
+						...(hostCapabilities.appTools ? { appTools: { version: 1, agents: true, desktop: true } } : {}),
+					},
+				}));
+				await workspaceConnection.connect();
+				connection = workspaceConnection;
+				client = workspaceConnection.client;
+			}
 			if (remoteConnection.kind === 'remote') {
 				if (!resolveRemoteAuthority || !initializeRemoteExtensions) { throw new Error('This window does not provide a local Remote resolver'); }
 				localExtensions = createAppServerExtensionHostApi(localClient);
@@ -138,19 +155,16 @@ export async function createElectronRendererApi(contributions: readonly Electron
 					close: id => invoke('ash:oauth-callback:close', { id }),
 				},
 				clipboardService: new ElectronRendererClipboardService(),
-			}, contributions);
+			}, contributions.map(contribution => (client, appServer) => contribution(client, appServer, localClient)));
 			resources.add(backend.mcpServerManagement);
 			resources.add(registerAppServerWorkspaceHost(client, () => connection.whenConnected(), workspaceTrust, backend.workspaceTrust));
 			backend = { ...backend, backup: new AppServerBackupService(localExtensions ? localClient : client, 'ash-editor'), ...(windowExtensions ? { extensionHost: windowExtensions } : {}) };
 			if (client.capabilities?.memories) { backend = { ...backend, memories: resources.add(new AppServerMemoriesService(client)) }; }
 			if (client.capabilities?.contracts.memoryDiagnostics?.version === 1) { backend = { ...backend, memoryDiagnostics: resources.add(new AppServerMemoryDiagnosticsService(client, 'electron', () => invoke<MemoryObservation[]>('ash:memory:collect'))) }; }
-			if (client.capabilities?.contracts.calls?.version === 1) { backend = { ...backend, calls: resources.add(new AppServerCallService(client)) }; }
+			// Device ownership stays on this computer when the workspace connection is remote.
+			if (localClient.capabilities?.contracts.calls?.version === 1) { backend = { ...backend, calls: resources.add(new AppServerCallService(localClient)) }; }
 			if (remoteConnection.kind === 'local' && client.capabilities?.contracts.voiceConversation?.version === 1) { backend = { ...backend, agentVoice: resources.add(new AppServerAgentVoiceService(client)) }; }
-			if (remoteConnection.kind === 'local') {
-				backend = { ...backend, dictation: createAppServerVoiceCodeTranscriptionBackend(client) };
-			} else {
-				backend = { ...backend, localTranscription: undefined };
-			}
+			backend = { ...backend, dictation: createAppServerVoiceCodeTranscriptionBackend(localClient) };
 			if (client.capabilities?.contracts.symphony?.version === 1) { backend = { ...backend, symphony: resources.add(new AppServerSymphonyService(client)) }; }
 			if (client.capabilities?.contracts.automation?.version === 1) { backend = { ...backend, automation: resources.add(new AppServerAutomationService(client)) }; }
 			if (remoteConnection.kind === 'ssh') {

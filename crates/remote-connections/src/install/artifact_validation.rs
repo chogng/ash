@@ -16,7 +16,9 @@ use tar::Archive;
 use super::RemoteRuntimeArtifact;
 use super::RemoteRuntimeInstallError;
 
-const MAX_PACKAGE_METADATA_BYTES: u64 = 64 * 1024;
+// The complete bundled-extension file manifest exceeds 64 KiB. Match the
+// product/catalog consumers' 1 MiB metadata bound without allowing unbounded reads.
+const MAX_PACKAGE_METADATA_BYTES: u64 = 1024 * 1024;
 
 pub(crate) fn open_and_validate_artifact(
     artifact: &RemoteRuntimeArtifact,

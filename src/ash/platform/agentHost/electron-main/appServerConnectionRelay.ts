@@ -31,11 +31,13 @@ export class AppServerConnectionRelay extends Disposable {
 	private acquiredNavigation = -1;
 	private startPromise: CancelablePromise<void> | undefined;
 
-	constructor(options: { readonly enabled: false; } | { readonly enabled: true; readonly processLauncher: IAppServerProcessLauncher; }) {
+	constructor(options: { readonly enabled: false; } | { readonly enabled: true; readonly processLauncher: IAppServerProcessLauncher; }, private readonly connection: 'workspace' | 'local' = 'workspace') {
 		super();
 		this.connectionOptions = options;
 		this._register(toDisposable(() => this.startPromise?.cancel()));
 	}
+
+	private get channelPrefix(): string { return this.connection === 'local' ? 'ash:app-server:local' : 'ash:app-server'; }
 
 	public get options(): { readonly enabled: false; } | { readonly enabled: true; readonly processLauncher: IAppServerProcessLauncher; } { return this.connectionOptions; }
 
@@ -91,7 +93,7 @@ export class AppServerConnectionRelay extends Disposable {
 			// A new document already acquires its own port. Restarting its initial client
 			// would interrupt that initialization; only wake the document we stopped.
 			if (this.nonce === undefined && this.acquiredNavigation === navigationGeneration && this.navigationGeneration === navigationGeneration && this.pendingAcquisitions === 0) {
-				this.renderer.send('ash:app-server:restart');
+				this.renderer.send(`${this.channelPrefix}:restart`);
 			}
 		});
 		// Port acquisition must enter the same queue while we await renderer initialization.
@@ -144,7 +146,7 @@ export class AppServerConnectionRelay extends Disposable {
 		this._register(toDisposable(() => renderer.removeListener('render-process-gone', reset)));
 		this._register(toDisposable(() => renderer.removeListener('did-navigate', navigating)));
 		return [{
-			channel: 'ash:app-server:acquire',
+			channel: `${this.channelPrefix}:acquire`,
 			validate: value => {
 				if (!isRecord(value) || typeof value.nonce !== 'string' || !/^[\da-f-]{36}$/.test(value.nonce)) { throw new Error('Invalid connection nonce'); }
 				return value.nonce;
@@ -177,7 +179,7 @@ export class AppServerConnectionRelay extends Disposable {
 				}
 			},
 		}, {
-			channel: 'ash:app-server:recover-runtime', validate: value => {
+			channel: `${this.channelPrefix}:recover-runtime`, validate: value => {
 				if (!isRecord(value)) { throw new Error('Invalid runtime incompatibility'); }
 				const number = (key: string): number => { const result = value[key]; if (typeof result !== 'number' || !Number.isSafeInteger(result) || result < 0) { throw new Error('Invalid runtime version'); } return result; };
 				if (value.kind === 'majorVersion') { return new AppServerProtocolIncompatibleError({ kind: value.kind, expected: number('expected'), received: number('received') }); }
@@ -190,7 +192,7 @@ export class AppServerConnectionRelay extends Disposable {
 				throw new Error('Invalid runtime incompatibility');
 			}, invoke: value => processLauncher()?.recoverInitializationFailure?.(value) ?? false,
 		}, {
-			channel: 'ash:app-server:initialized', validate: value => value,
+			channel: `${this.channelPrefix}:initialized`, validate: value => value,
 			invoke: value => this.connectionOperations.schedule(async () => {
 				this.assertNotDisposed();
 				if (!isRecord(value) || value.nonce !== this.nonce || this.nonce === undefined) { throw new Error('Connection initialization superseded'); }
@@ -276,7 +278,7 @@ export class AppServerConnectionRelay extends Disposable {
 		port1.on('close', close);
 		port1.start();
 		this.portResources.value = toDisposable(close);
-		renderer.postMessage('ash:app-server:port', { nonce }, [port2]);
+		renderer.postMessage(`${this.channelPrefix}:port`, { nonce }, [port2]);
 	}
 
 	private setState(state: AppServerConnectionState): void {

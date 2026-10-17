@@ -18,8 +18,6 @@
     "src/ash/workbench/services/extensions/**/*.ts",
     "src/ash/workbench/services/language/common/**/*.ts",
     "src/ash/workbench/services/language/test/common/languageFeaturesService.test.ts",
-    "src/ash/workbench/services/textMate/common/**/*.ts",
-    "src/ash/workbench/services/textMate/test/common/**/*.ts",
     "src/ash/workbench/contrib/codeEditor/test/browser/codeEditorPane.test.ts",
     "src/ash/workbench/contrib/codeEditor/test/common/editorInput.test.ts",
     "src/ash/workbench/contrib/preferences/test/browser/settings.test.ts",

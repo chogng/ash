@@ -74,6 +74,14 @@ jobs:
           $releaseEnvironment | Add-Content -LiteralPath $env:GITHUB_ENV -Encoding utf8
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Download matching Remote release binding
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: remote-server-release-binding
+          path: .build/remote-release
+      - name: Select Remote release binding
+        shell: bash
+        run: echo "ASH_REMOTE_RELEASE_BINDING=$GITHUB_WORKSPACE/.build/remote-release/remote-release.json" >> "$GITHUB_ENV"
       - name: Install LLVM symbol tools
         shell: pwsh
         run: |
@@ -358,12 +366,18 @@ jobs:
         shell: bash
         run: |
           desktop=()
+          capabilities=(--package-dir ".build/releases/runtime-${{ matrix.target }}" --package-dir ".build/releases/ash-code-${{ matrix.target }}")
           if [[ "${{ runner.os }}" == "macOS" ]]; then
             arch="$(node -p 'process.arch')"
+            capabilities+=(--package-dir "dist/Ash-darwin-${arch}/Ash.app/Contents/Resources")
             desktop=(--desktop "dist/Ash-darwin-${arch}/Ash.app/Contents/Resources" --archive "ash-desktop=.build/releases/Ash-darwin-${arch}.zip")
           elif [[ "${{ matrix.target }}" == "x86_64-pc-windows-msvc" ]]; then
+            capabilities+=(--package-dir "dist/Ash-win32-x64/resources")
             desktop=(--desktop "dist/Ash-win32-x64/resources" --archive "ash-desktop=dist/AshSetup-${GITHUB_REF_NAME#v}-win32-x64.exe")
           fi
+          ${{ matrix.python }} -B build/release/capabilities.py stage \
+            "${capabilities[@]}" --archives-dir .build/releases \
+            --output ".build/release-artifacts/${{ matrix.target }}"
           ${{ matrix.python }} -B build/release/symbols.py archive \
             --package "ash-code=.build/releases/ash-code-${{ matrix.target }}" \
             --package "ash-app-server=.build/releases/runtime-${{ matrix.target }}" \

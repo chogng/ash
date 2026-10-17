@@ -76,6 +76,7 @@ def resolve_livekit(target: str, *, root: Path = ROOT) -> Path:
                 "-trimpath",
                 "-buildvcs=false",
                 "-mod=readonly",
+                "-ldflags=-s -w",
                 "-o",
                 str(output),
                 "./cmd/server",

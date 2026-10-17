@@ -32,6 +32,8 @@ BINARY_PACKAGES = {
     "ash-app-server-daemon": "ash-app-server-daemon",
     "ash-code-mode-host": "ash-code-mode-host",
     "ash-voice-host": "ash-voice-host",
+    "ash-livekit-client": "ash-livekit-client",
+    "ash-realtime-voice": "ash-realtime-voice",
     "bwrap": "ash-bwrap",
 }
 
@@ -44,6 +46,8 @@ def development_binaries(*, platform_name: str | None = None) -> list[str]:
         "ash-app-server-daemon",
         "ash-code-mode-host",
         "ash-voice-host",
+        "ash-livekit-client",
+        "ash-realtime-voice",
     ]
     if platform_name.startswith("linux"):
         binaries.append("bwrap")
@@ -53,6 +57,19 @@ def development_binaries(*, platform_name: str | None = None) -> list[str]:
 def build_binaries(
     binaries: list[str], environment: dict[str, str]
 ) -> tuple[int, dict[str, Path]]:
+    local_hosts = {"ash-livekit-client", "ash-realtime-voice", "ash-voice-host"}
+    if len(binaries) > 1 and local_hosts.intersection(binaries):
+        groups = [[name for name in binaries if name not in local_hosts]]
+        groups.extend([name] for name in binaries if name in local_hosts)
+        outputs: dict[str, Path] = {}
+        for group in groups:
+            if not group:
+                continue
+            status, built = build_binaries(group, environment)
+            if status != 0:
+                return status, {}
+            outputs.update(built)
+        return 0, outputs
     target = TARGETS[default_target()]
     build_environment = environment.copy()
     if target.target == "x86_64-pc-windows-msvc":
@@ -73,6 +90,9 @@ def build_binaries(
         command.extend(["--package", BINARY_PACKAGES[binary], "--bin", binary])
     if "ash-voice-host" in binaries:
         command.extend(["--features", "ash-voice-host/host"])
+    for name in ("ash-livekit-client", "ash-realtime-voice"):
+        if name in binaries:
+            command.extend(["--features", f"{name}/host"])
     packages = cargo_command_packages("cargo", command[1:], REPOSITORY_ROOT)
     if "ash-app-server-protocol" in packages:
         generate_protocol(root=REPOSITORY_ROOT)

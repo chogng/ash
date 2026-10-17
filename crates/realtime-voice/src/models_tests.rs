@@ -13,6 +13,8 @@ fn failed_import_is_terminal_and_does_not_publish_or_keep_a_staging_directory() 
             1,
             "import-1".into(),
             ModelRequest {
+                home: root.path().into(),
+                media_network: test_media_network(),
                 model_root: root.path().into(),
                 model_id: "imported-model".into(),
                 operation: ModelOperation::Import {
@@ -55,6 +57,8 @@ fn one_process_owned_task_per_model_can_be_cancelled_from_another_connection() {
     let gate = Mutex::new(gate);
     let (send, receive) = mpsc::channel();
     let request = || ModelRequest {
+        home: root.path().into(),
+        media_network: test_media_network(),
         model_root: root.path().into(),
         model_id: "shared".into(),
         operation: ModelOperation::Import {
@@ -150,6 +154,8 @@ fn stop_cancels_a_running_import_and_acknowledges_after_its_terminal_event() {
             1,
             "import".into(),
             ModelRequest {
+                home: root.path().into(),
+                media_network: test_media_network(),
                 model_root: root.path().into(),
                 model_id: "cancelled-model".into(),
                 operation: ModelOperation::Import {
@@ -192,4 +198,12 @@ fn stop_cancels_a_running_import_and_acknowledges_after_its_terminal_event() {
     );
     assert!(receive.try_recv().is_err());
     assert!(!root.path().join(".cancelled-model.installing").exists());
+}
+
+fn test_media_network() -> http_client::OutboundNetworkSnapshot {
+    http_client::OutboundNetworkSnapshot::with_policy(
+        http_client::HttpClientConfig::default(),
+        http_client::OutboundNetworkPolicy::default(),
+    )
+    .unwrap()
 }

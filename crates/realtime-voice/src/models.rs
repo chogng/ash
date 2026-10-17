@@ -27,6 +27,8 @@ pub enum ModelOperation {
 }
 
 pub struct ModelRequest {
+    pub home: std::path::PathBuf,
+    pub media_network: http_client::OutboundNetworkSnapshot,
     pub model_root: PathBuf,
     pub model_id: String,
     pub operation: ModelOperation,
@@ -275,6 +277,8 @@ async fn run(
     let package = match request.operation {
         ModelOperation::Prepare { network } => {
             ModelPackage::resolve(
+                &request.home,
+                &request.media_network,
                 &request.model_root,
                 &request.model_id,
                 network,
@@ -285,6 +289,8 @@ async fn run(
         }
         ModelOperation::Import { source } => {
             return ModelPackage::import(
+                &request.home,
+                &request.media_network,
                 &request.model_root,
                 &request.model_id,
                 &source,
@@ -296,7 +302,11 @@ async fn run(
     };
     token.check().map_err(|error| error.to_string())?;
     progress(ModelProgress::Loading);
-    let _recognizer = package.recognizer(LocalSpeechMode::Dictation)?;
+    let _recognizer = package.recognizer(
+        &request.home,
+        &request.media_network,
+        LocalSpeechMode::Dictation,
+    )?;
     token.check().map_err(|error| error.to_string())?;
     Ok(())
 }

@@ -156,6 +156,8 @@ pub(crate) fn run(profile_root: PathBuf, product_services: Option<PathBuf>) -> R
                             connection.writer,
                             gateway::RemoteLaunch::from_environment(),
                         )
+                    } else if connection.options.role() == ConnectionRole::Remote {
+                        server.serve_remote_stream(connection.reader, connection.writer)
                     } else {
                         server.serve_product_host_stream(connection.reader, connection.writer)
                     };

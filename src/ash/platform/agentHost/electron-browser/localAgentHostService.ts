@@ -10,6 +10,8 @@ import { AppServerSocketTransport } from '../browser/appServerSocketTransport.js
 import { AppServerProtocolIncompatibleError } from '../common/appServerProtocolCompatibility.js';
 import { AppServerMessagePortTransport } from './appServerMessagePortTransport.js';
 
+let nextConnectionId = 0;
+
 /** Owns the window's local App Server lease; the Rust process remains owned by Main. */
 export class LocalAgentHostServiceClient extends Disposable {
 
@@ -21,19 +23,21 @@ export class LocalAgentHostServiceClient extends Disposable {
 	private readonly recovery: AppServerConnectionRecovery;
 	private connectionId = 0;
 	private isEnabled = false;
+	private readonly channelPrefix: string;
 	private hasInitialized = false;
 
 	constructor(
-		options: AppServerProtocolClientOptions,
+		options: AppServerProtocolClientOptions & { readonly connection?: 'workspace' | 'local'; },
 		@IRemoteSocketFactoryService private readonly factories: IRemoteSocketFactoryService,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@ILogService private readonly logService: ILogService,
 	) {
 		super();
+		this.channelPrefix = options.connection === 'local' ? 'ash:app-server:local' : 'ash:app-server';
 		this.carrier = this._register(new AppServerMessagePortTransport(() => {
 			// Recovery owns rejection reporting and the bounded retry budget.
 			void this.connect().catch(() => { });
-		}));
+		}, options.connection));
 		const transport = this._register(instantiationService.createInstance(AppServerSocketTransport, {
 			getAddress: async () => ({ connectTo: new ManagedRemoteConnection(this.connectionId), connectionToken: undefined }),
 			getMetadata: () => this.connectionMetadata,
@@ -68,7 +72,7 @@ export class LocalAgentHostServiceClient extends Disposable {
 		this.assertNotDisposed();
 		performance.mark('ash.appServer.acquired');
 		if (enabled) {
-			const id = ++this.connectionId;
+			const id = this.connectionId = ++nextConnectionId;
 			const socket = this.carrier.socket;
 			let leased = false;
 			this.factoryRegistration.value = this.factories.register(RemoteConnectionType.Managed, {
@@ -93,7 +97,7 @@ export class LocalAgentHostServiceClient extends Disposable {
 			await this.client.connect();
 		} catch (error) {
 			if (!(error instanceof AppServerProtocolIncompatibleError)
-				|| await invoke('ash:app-server:recover-runtime', error.incompatibility) !== true) { throw error; }
+				|| await invoke(`${this.channelPrefix}:recover-runtime`, error.incompatibility) !== true) { throw error; }
 			this.assertNotDisposed();
 			await this.acquire();
 			await this.client.connect();

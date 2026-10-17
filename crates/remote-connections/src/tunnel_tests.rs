@@ -79,12 +79,13 @@ fn listener_readiness_distinguishes_a_live_tunnel_from_an_early_exit() {
 
     let directory = tempfile::tempdir().unwrap();
     let live = directory.path().join("live-ssh");
-    std::fs::write(&live, "#!/bin/sh\nsleep 0.1\n").unwrap();
+    std::fs::write(&live, "#!/bin/sh\nexec sleep 30\n").unwrap();
     let mut permissions = std::fs::metadata(&live).unwrap().permissions();
     permissions.set_mode(0o700);
     std::fs::set_permissions(&live, permissions).unwrap();
-    let local_port = select_available_loopback_port().unwrap();
-    let listener = std::net::TcpListener::bind(("127.0.0.1", local_port.get())).unwrap();
+    // The fixture owns this listener; do not release its port for concurrent tests to claim.
+    let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+    let local_port = NonZeroU16::new(listener.local_addr().unwrap().port()).unwrap();
     let mut tunnel = SshTunnelOptions::new(host(), local_port, NonZeroU16::new(3_000).unwrap())
         .with_ssh_executable(&live)
         .start()

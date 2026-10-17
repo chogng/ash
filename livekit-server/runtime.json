@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "id": "ash.livekit",
+  "scope": "profile",
+  "entrypoint": "bin/livekit-server",
+  "activationEvents": ["onLocalCallHosting"]
+}

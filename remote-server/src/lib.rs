@@ -1,4 +1,4 @@
-//! Headless Remote App Server runtime.
+//! Lightweight remote profile connector.
 //!
 //! This package runs on the target host after a client product installs or selects it. It owns no
 //! SSH client: the connecting host owns SSH; this runtime connects to the remote profile's

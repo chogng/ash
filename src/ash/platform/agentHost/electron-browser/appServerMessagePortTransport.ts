@@ -17,12 +17,14 @@ export class AppServerMessagePortTransport extends Disposable {
 	private enabled: boolean | undefined;
 	private readonly acquisition = this._register(new MutableDisposable<IDisposable>());
 
-	constructor(private readonly restart: () => void) {
+	constructor(private readonly restart: () => void, private readonly connection: 'workspace' | 'local' = 'workspace') {
 		super();
 		this._register(toDisposable(() => this.close()));
-		const subscription = subscribe('ash:app-server:restart', restart);
+		const subscription = subscribe(`${this.channelPrefix}:restart`, restart);
 		this._register(toDisposable(() => subscription.dispose()));
 	}
+
+	private get channelPrefix(): string { return this.connection === 'local' ? 'ash:app-server:local' : 'ash:app-server'; }
 
 	public get connectionMetadata(): unknown {
 		return this.metadata;
@@ -40,7 +42,7 @@ export class AppServerMessagePortTransport extends Disposable {
 		this.assertNotDisposed();
 		this.close();
 		const nonce = this.nonce = generateUuid();
-		const port = acquirePort(undefined, 'ash:app-server:port', nonce);
+		const port = acquirePort(undefined, `${this.channelPrefix}:port`, nonce);
 		const cancellation = toDisposable(() => port.cancel());
 		this.acquisition.value = cancellation;
 		let enabled: boolean | undefined;
@@ -60,7 +62,7 @@ export class AppServerMessagePortTransport extends Disposable {
 				if (this.nonce === nonce) { this.close(); }
 			}, 10_000);
 		});
-		const acquisition = invoke<unknown>('ash:app-server:acquire', { nonce }).then(result => {
+		const acquisition = invoke<unknown>(`${this.channelPrefix}:acquire`, { nonce }).then(result => {
 			if (this.nonce !== nonce) { throw new CancellationError(); }
 			if (!isRecord(result) || typeof result.enabled !== 'boolean' || (result.enabled && result.byteStream !== true)) { throw new Error('Invalid connection acquisition response'); }
 			this.enabled = enabled = result.enabled;
@@ -80,7 +82,7 @@ export class AppServerMessagePortTransport extends Disposable {
 	}
 
 	public async initialized(): Promise<void> {
-		await invoke('ash:app-server:initialized', { nonce: this.nonce });
+		await invoke(`${this.channelPrefix}:initialized`, { nonce: this.nonce });
 	}
 
 	private close(): void {

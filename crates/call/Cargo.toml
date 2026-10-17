@@ -9,9 +9,11 @@ publish.workspace = true
 name = "call"
 
 [features]
-runtime = ["dep:serde", "dep:ash-http-client", "dep:tempfile", "dep:tokio"]
+runtime = ["dep:serde", "dep:ash-http-client", "dep:tempfile", "dep:tokio", "dep:ash-package-store", "dep:ash-install-context"]
 
 [dependencies]
+ash-package-store = { workspace = true, optional = true, features = ["installation"] }
+ash-install-context = { workspace = true, optional = true }
 contract = { package = "ash-call-contract", path = "../call-contract" }
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true }

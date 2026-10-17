@@ -56,11 +56,29 @@ def cargo_command_packages(
     if not cargo_arguments or cargo_arguments[0] not in DEPENDENCY_COMMANDS:
         return set()
 
+    # Normal product builds must not prepare heavyweight optional runtimes merely because
+    # one integration test uses them. Cargo only enables dev edges for test/example targets.
+    arguments = cargo_arguments[1:]
+    options = arguments[: arguments.index("--")] if "--" in arguments else arguments
+    development = cargo_arguments[0] in {"test", "bench"} or any(
+        option
+        in {
+            "--all-targets",
+            "--tests",
+            "--test",
+            "--examples",
+            "--example",
+            "--benches",
+            "--bench",
+        }
+        or option.startswith(("--test=", "--example=", "--bench="))
+        for option in options
+    )
     command = [
         cargo,
         "tree",
         "--edges",
-        "normal,build,dev",
+        "normal,build,dev" if development else "normal,build",
         "--prefix",
         "none",
         "--format",

@@ -1,16 +1,12 @@
 use std::env;
 use std::fmt;
 use std::path::PathBuf;
-
-use ash_app_server::AppServer;
-use ash_app_server::AppServerOptions;
-use ash_app_server::LocalProductServicesConfig;
-use ash_app_server::open_app_server;
+use std::process::Command;
 
 const DIR_ROOT_ENV: &str = "ASH_WORKSPACE_ROOT";
 pub(crate) const PRODUCT_SERVICES_PATH_ENV: &str = "ASH_REMOTE_SERVER_PRODUCT_SERVICES_PATH";
 
-/// Filesystem state selected for one headless Remote App Server process.
+/// Profile and directory inputs selected by one remote connector.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RemoteServerOptions {
     profile_root: PathBuf,
@@ -89,35 +85,9 @@ pub fn run_from_environment_with_product_services(
         }
         [command] if command == "connect" => connect(options()?),
         [command, receiver] if command == "history-export" => {
-            let receiver = ash_protocol::ContentDigest::new(receiver.clone())
-                .map_err(|error| RemoteServerError::new(error.to_string()))?;
-            let options = options()?;
-            let history =
-                ash_state::SqliteThreadStore::open(options.profile_root.join("state.sqlite3"))
-                    .map_err(|error| RemoteServerError::new(error.to_string()))?;
-            history
-                .freeze_history(&receiver)
-                .map_err(|error| RemoteServerError::new(error.to_string()))?;
-            let executable =
-                ash_app_server_daemon::backend_executable_path().map_err(RemoteServerError::new)?;
-            ash_app_server_daemon::run_lifecycle(
-                ash_app_server_daemon::LifecycleCommand::Stop,
-                ash_app_server_daemon::ConnectionOptions::new(
-                    &options.profile_root,
-                    None,
-                    ash_app_server_daemon::GrantSource::HostConfiguration,
-                    None,
-                ),
-                &executable,
-            )
-            .map_err(RemoteServerError::new)?;
-            let attachments = attachment_store::FileAttachmentStore::open(
-                options.profile_root.join("attachments"),
-            )
-            .map_err(|error| RemoteServerError::new(error.to_string()))?;
-            history
-                .export_history(&receiver, &attachments, std::io::stdout().lock())
-                .map_err(|error| RemoteServerError::new(error.to_string()))
+            let mut command = backend_command(&options()?)?;
+            command.args(["history-export", receiver]);
+            execute_backend(command)
         }
         [command, environment, tail @ ..] if command == "execution-connect" => {
             let network = match tail {
@@ -167,7 +137,8 @@ fn connect(options: RemoteServerOptions) -> Result<(), RemoteServerError> {
         options.dir_root,
         ash_app_server_daemon::GrantSource::HostConfiguration,
         options.product_services_path,
-    );
+    )
+    .with_role(ash_app_server_daemon::ConnectionRole::Remote);
     let executable =
         ash_app_server_daemon::backend_executable_path().map_err(RemoteServerError::new)?;
     // Directory authority belongs to this connection, never to the daemon identity. A remote
@@ -176,26 +147,52 @@ fn connect(options: RemoteServerOptions) -> Result<(), RemoteServerError> {
     ash_app_server_daemon::connect_selected(connection, &executable).map_err(RemoteServerError::new)
 }
 
-/// Opens the Remote App Server and serves its JSON Lines protocol over process stdio.
+/// Hands diagnostic stdio to the selected independent App Server executable.
 pub fn serve_stdio(options: RemoteServerOptions) -> Result<(), RemoteServerError> {
-    open_server(&options)?
-        .serve_stdio()
-        .map_err(|error| RemoteServerError::new(error.to_string()))
+    let mut command = backend_command(&options)?;
+    command.arg("--remote-stdio");
+    if let Some(path) = options.product_services_path {
+        command.arg("--product-services").arg(path);
+    }
+    execute_backend(command)
 }
 
-pub(crate) fn open_server(options: &RemoteServerOptions) -> Result<AppServer, RemoteServerError> {
-    let mut server_options = AppServerOptions::new(options.profile_root.clone())
-        .with_host_grok_auth()
-        .with_host_zcode_credentials();
+fn backend_command(options: &RemoteServerOptions) -> Result<Command, RemoteServerError> {
+    let executable =
+        ash_app_server_daemon::backend_executable_path().map_err(RemoteServerError::new)?;
+    let mut command = Command::new(executable);
+    command.env("ASH_HOME", &options.profile_root);
+    // The connector owns the remote directory grant, regardless of local host settings.
+    command.env("ASH_DIR_GRANT_SOURCE", "hostConfiguration");
     if let Some(dir_root) = &options.dir_root {
-        server_options = server_options.with_dir_root(dir_root);
+        command.env(DIR_ROOT_ENV, dir_root);
+    } else {
+        command.env_remove(DIR_ROOT_ENV);
     }
-    if let Some(path) = &options.product_services_path {
-        let services = LocalProductServicesConfig::load(path, &options.profile_root)
+    Ok(command)
+}
+
+fn execute_backend(mut command: Command) -> Result<(), RemoteServerError> {
+    // Replacing the SSH child preserves signals, exit status and all three stdio streams.
+    // The backend executable acquires its own package lease at startup.
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        Err(RemoteServerError::new(command.exec().to_string()))
+    }
+    #[cfg(not(unix))]
+    {
+        let status = command
+            .status()
             .map_err(|error| RemoteServerError::new(error.to_string()))?;
-        server_options = server_options.with_product_services(services);
+        if status.success() {
+            Ok(())
+        } else {
+            Err(RemoteServerError::new(format!(
+                "App Server exited with {status}"
+            )))
+        }
     }
-    open_app_server(server_options).map_err(|error| RemoteServerError::new(error.to_string()))
 }
 
 fn options_from_environment() -> Result<RemoteServerOptions, RemoteServerError> {
