@@ -336,7 +336,7 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
                 GitRemoteMutation::PushReviewed(target.as_ref().expect("validated push target"))
             }
         };
-        let runtime = self.git_runtime_service()?;
+        let runtime = self.context.git_runtime_service()?;
         let outcome = runtime.transport_for(
             params.repository_id.as_deref(),
             operation,

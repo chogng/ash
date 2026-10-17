@@ -2831,12 +2831,17 @@ fn sync_tag_conflicts_are_structured_and_replacement_is_explicit() {
     .with_git_root(mutation_authorization(target.root()))
     .unwrap();
     let cancellation = ash_async_utils::CancellationSource::new();
-    let head = server.git_status(&serde_json::json!({})).unwrap()["head"].clone();
+    let head = server
+        .git_processor()
+        .git_status(&serde_json::json!({}))
+        .unwrap()["head"]
+        .clone();
     let mut request = serde_json::json!({"operationId":"tag-conflict","repositoryId":null,
         "transport":ash_app_server_protocol::protocol::git::GitTransportOptionsDto::default(),
         "operation":{"kind":"pull","mode":"configured","expectedHead":head}});
     request["transport"]["pullTags"] = serde_json::json!(true);
     let conflict = server
+        .git_processor()
         .git_transport(&request, &cancellation.token())
         .unwrap();
     assert_eq!(
@@ -2846,6 +2851,7 @@ fn sync_tag_conflicts_are_structured_and_replacement_is_explicit() {
     assert_eq!(conflict["status"]["head"]["objectId"], before);
     request["transport"]["replaceTags"] = serde_json::json!(true);
     let completed = server
+        .git_processor()
         .git_transport(&request, &cancellation.token())
         .unwrap();
     assert_eq!(
@@ -2865,6 +2871,7 @@ fn sync_tag_conflicts_are_structured_and_replacement_is_explicit() {
     request["transport"]["pullTags"] = serde_json::json!(false);
     request["transport"]["replaceTags"] = serde_json::json!(false);
     server
+        .git_processor()
         .git_transport(&request, &cancellation.token())
         .unwrap();
     assert_eq!(
@@ -2901,7 +2908,7 @@ fn git_version_reports_an_unsupported_installation_and_operations_require_an_upg
     .with_git_root(mutation_authorization(repository.root()))
     .unwrap();
     let version = crate::git_service::with_client(client.clone(), || {
-        server.git_version(&serde_json::json!({}))
+        server.git_processor().git_version(&serde_json::json!({}))
     })
     .unwrap();
     assert_eq!(
@@ -2910,9 +2917,10 @@ fn git_version_reports_an_unsupported_installation_and_operations_require_an_upg
             "kind":"unsupported", "version":"git version 2.39.9", "minimumVersion":"2.40.0"
         })
     );
-    let error =
-        crate::git_service::with_client(client, || server.git_status(&serde_json::json!({})))
-            .unwrap_err();
+    let error = crate::git_service::with_client(client, || {
+        server.git_processor().git_status(&serde_json::json!({}))
+    })
+    .unwrap_err();
     assert!(
         error.to_string().contains("requires Git 2.40.0 or newer"),
         "{error}"
@@ -2938,7 +2946,11 @@ fn reviewed_sync_pull_reaches_the_explicit_target_and_rejects_changed_tracking()
     .with_ephemeral_env_state()
     .with_git_root(mutation_authorization(target.root()))
     .unwrap();
-    let head = server.git_status(&serde_json::json!({})).unwrap()["head"].clone();
+    let head = server
+        .git_processor()
+        .git_status(&serde_json::json!({}))
+        .unwrap()["head"]
+        .clone();
     let before = target.git_output(&["rev-parse", "HEAD"]);
     source.write("remote.txt", "upstream update\n");
     source.git(&["add", "."]);
@@ -2952,12 +2964,14 @@ fn reviewed_sync_pull_reaches_the_explicit_target_and_rejects_changed_tracking()
     target.git(&["config", "branch.main.merge", "refs/heads/other"]);
     assert!(
         server
+            .git_processor()
             .git_transport(&request, &cancellation.token())
             .is_err()
     );
     assert_eq!(target.git_output(&["rev-parse", "HEAD"]), before);
     target.git(&["config", "branch.main.merge", "refs/heads/main"]);
     let pulled = server
+        .git_processor()
         .git_transport(&request, &cancellation.token())
         .unwrap();
     assert_eq!(
@@ -2973,6 +2987,7 @@ fn reviewed_sync_pull_reaches_the_explicit_target_and_rejects_changed_tracking()
     invalid["operation"]["expectedHead"] = serde_json::json!({"type":"detached","objectId":before});
     assert!(
         server
+            .git_processor()
             .git_transport(&invalid, &cancellation.token())
             .is_err()
     );
