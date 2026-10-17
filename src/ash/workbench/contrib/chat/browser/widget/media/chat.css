@@ -17,6 +17,24 @@
 	flex: 1 1 auto;
 }
 
+.ash-chat-history-pagination {
+	display: flex;
+	flex: 0 0 auto;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
+}
+
+.ash-chat-history-pagination[hidden] {
+	display: none;
+}
+
+.ash-chat-history-pagination > span {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
 .ash-chat-history-status {
 	display: flex;
 	flex: 0 0 auto;

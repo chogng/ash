@@ -28,6 +28,15 @@ adapters own App Server DTO conversion; Workbench and Sessions consume the share
 domain contracts. The Sessions provider owns the mapping into `ISession` and
 `IChat`, while `languageModels` owns model picker state for both windows.
 
+Regular Code Chat requests 20-Turn `latest` windows for read and subscribe.
+`ChatWidgetModel` retains explicitly loaded pages and uses `before` cursors to
+load earlier messages. Tail refreshes preserve that prefix; reconnect fills any
+missing windows before joining it. Historical reads do not advance the live
+transcript revision or overwrite execution state. Interaction offers retain their
+connection owner independently of visible history. `ChatWidget` owns pagination,
+focus and reading-position presentation. Consumers that omit the history option,
+including Cowork, retain full-history behavior.
+
 Web embedders load `sessions.web.main.internal.ts` after initializing localization,
 then call `create(container, profile)` and retain its disposable handle. The Web
 entry loads shared and browser contributions; `browser/web.factory.ts` owns the

@@ -60,6 +60,8 @@ export interface IChatWidgetModel extends IDisposable {
 	readonly items: readonly IChatListItem[];
 	readonly inputState: ChatInputState;
 	readonly historyStatus?: IChatSessionHistoryStatus;
+	readonly olderHistory?: { readonly loading: boolean; readonly error?: string; };
+	loadOlderHistory?(): Promise<void>;
 	prepareConversation?(): Promise<{ readonly sessionId: string; readonly threadId: string; }>;
 	send(text: string, mode: ChatMode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[], submissionOptions?: ChatSubmissionOptions): Promise<void>;
 	executeServerCommand(name: string, argumentsText: string, submissionSignal?: AbortSignal): Promise<void>;
@@ -85,6 +87,9 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 	private listWidget: ChatListWidget;
 	private readonly inputPart: IChatInputPart;
 	private readonly goalElement: HTMLDivElement;
+	private readonly olderHistoryElement: HTMLDivElement;
+	private readonly olderHistoryButton: Button;
+	private readonly olderHistoryMessage: HTMLSpanElement;
 	private readonly historyStatusElement: HTMLDivElement;
 	private readonly historyMessage: HTMLSpanElement;
 	private readonly historyAction: Button;
@@ -131,6 +136,19 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		this.goalElement = h(ownerDocument, "div");
 		this.goalElement.className = "ash-chat-goal";
 		this.goalElement.hidden = true;
+		this.olderHistoryElement = h(ownerDocument, 'div');
+		this.olderHistoryElement.className = 'ash-chat-history-pagination';
+		this.olderHistoryElement.hidden = true;
+		this.olderHistoryButton = this._register(new Button(this.olderHistoryElement, {
+			...defaultButtonStyles,
+			label: localize('chat.history.loadOlder', 'Load earlier messages'),
+			size: 'small',
+			presentation: 'quiet',
+		}));
+		this.olderHistoryMessage = h(ownerDocument, 'span');
+		this.olderHistoryMessage.setAttribute('role', 'status');
+		this.olderHistoryElement.append(this.olderHistoryMessage);
+		this._register(this.olderHistoryButton.onDidClick(() => void this.loadOlderHistory()));
 		this.historyStatusElement = h(ownerDocument, 'div');
 		this.historyStatusElement.className = 'ash-chat-history-status';
 		this.historyStatusElement.hidden = true;
@@ -149,11 +167,16 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 				type, priority: 100, name: `chatHistory-${type}-${historyAccessibilityId}`,
 				getProvider: () => {
 					const focused = ownerDocument.activeElement as HTMLElement | null;
-					if (!focused || !this.historyStatusElement.contains(focused)) return undefined;
-					const provider = new AccessibleContentProvider(AccessibleViewProviderId.SessionsChat, { type }, () => type === AccessibleViewType.Help
-						? localize('chat.history.recoveryHelp', 'When chat history or updates cannot load, use Tab to reach Retry loading chat and Enter or Space to retry. Recovery preserves your draft and attachments and never sends a message. Sending stays unavailable until loading succeeds. Closing accessibility help returns focus to recovery, or to the message input when recovery is complete.')
-						: [this.model.historyStatus?.message, this.model.historyStatus?.action.label].filter(Boolean).join('\n'),
-						() => { if (!this.isDisposed) { if (this.historyStatusElement.hidden) this.focus(); else focused.focus(); } }, AccessibilityVerbositySettingId.Chat);
+					const pagination = !!focused && this.olderHistoryElement.contains(focused);
+					if (!focused || !pagination && !this.historyStatusElement.contains(focused)) return undefined;
+					const provider = new AccessibleContentProvider(AccessibleViewProviderId.SessionsChat, { type }, () => pagination
+						? type === AccessibleViewType.Help
+							? localize('chat.history.paginationHelp', 'Chat initially shows recent messages. Use Tab to reach Load earlier messages, then Enter or Space to load another page. Loading preserves your draft, active approvals and reading position. If it fails, use Retry earlier messages. Live messages remain available while older history loads.')
+							: [this.olderHistoryButton.label, this.olderHistoryMessage.textContent].filter(Boolean).join('\n')
+						: type === AccessibleViewType.Help
+							? localize('chat.history.recoveryHelp', 'When chat history or updates cannot load, use Tab to reach Retry loading chat and Enter or Space to retry. Recovery preserves your draft and attachments and never sends a message. Sending stays unavailable until loading succeeds. Closing accessibility help returns focus to recovery, or to the message input when recovery is complete.')
+							: [this.model.historyStatus?.message, this.model.historyStatus?.action.label].filter(Boolean).join('\n'),
+						() => { if (!this.isDisposed) { if ((pagination ? this.olderHistoryElement : this.historyStatusElement).hidden) this.focus(); else focused.focus(); } }, AccessibilityVerbositySettingId.Chat);
 					provider.onDidChangeContent = this.model.onDidChange;
 					return provider;
 				},
@@ -257,7 +280,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			closeWindow: () => this.inputPart.focus(),
 			showSessionsPicker: () => this.inputPart.focus(),
 		}, { showClose: false, showOnboarding: false, inputBoxLayout: true }));
-		this.element.append(this.goalElement, this.listWidget.element, this.historyStatusElement, voiceContainer, this.inputPart.element);
+		this.element.append(this.goalElement, this.olderHistoryElement, this.listWidget.element, this.historyStatusElement, voiceContainer, this.inputPart.element);
 		this._register(listWidgets.onDidChange(widget => {
 			const previous = this.listWidget;
 			const state = previous.getViewState();
@@ -407,6 +430,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			: localize('agentsVoice.connecting', 'Connecting…'));
 		this.renderGoal();
 		this.renderHistoryStatus();
+		this.renderOlderHistory();
 		const items = this.model.items;
 		this.updateConversationState(items.length > 0);
 		this.listWidget.render(items);
@@ -421,6 +445,38 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		const recovering = this.historyRecovery?.status === status && this.historyRecovery?.generation === this.model.composerGeneration;
 		this.historyAction.enabled = !!status && !recovering;
 		this.historyStatusElement.setAttribute('aria-busy', String(recovering));
+	}
+
+	private renderOlderHistory(): void {
+		const history = this.model.olderHistory;
+		this.olderHistoryElement.hidden = !history;
+		this.olderHistoryElement.setAttribute('aria-busy', String(!!history?.loading));
+		this.olderHistoryButton.enabled = !!history && !history.loading;
+		this.olderHistoryButton.label = history?.error
+			? localize('chat.history.retryOlder', 'Retry earlier messages')
+			: localize('chat.history.loadOlder', 'Load earlier messages');
+		this.olderHistoryMessage.textContent = history?.loading
+			? localize('chat.history.loadingOlder', 'Loading earlier messages…')
+			: history?.error ?? '';
+	}
+
+	private async loadOlderHistory(): Promise<void> {
+		if (!this.model.loadOlderHistory || !this.olderHistoryButton.enabled) return;
+		const generation = this.model.composerGeneration;
+		const focused = this.olderHistoryButton.hasFocus();
+		try {
+			await this.model.loadOlderHistory();
+		} catch (error) {
+			if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(String(error));
+		} finally {
+			if (!this.isDisposed && focused && generation === this.model.composerGeneration && !this.element.hidden) {
+				const active = this.element.ownerDocument.activeElement;
+				if (active === this.olderHistoryButton.domNode || active === this.element.ownerDocument.body) {
+					if (this.model.olderHistory) this.olderHistoryButton.focus();
+					else this.listWidget.element.querySelector<HTMLElement>('.ash-chat-transcript')?.focus({ preventScroll: true });
+				}
+			}
+		}
 	}
 
 	private async recoverHistory(): Promise<void> {

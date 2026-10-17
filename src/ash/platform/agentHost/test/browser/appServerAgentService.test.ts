@@ -9,6 +9,33 @@ import { AgentThreadHistoryConflictError } from '../../common/agentService.js';
 import type { AppServerProtocolClient } from '../../browser/appServerProtocolClient.js';
 import { createAppServerAgentThreadService, createAppServerAgentSessionService, createAppServerAgentTurnService } from '../../browser/appServerAgentService.js';
 
+test('Thread history windows reach read and subscribe and retain detached pagination boundaries', async () => {
+	const requests: unknown[] = [];
+	const usage = { modelInvocations: 0, inputTokens: { reported: 0, complete: true }, outputTokens: { reported: 0, complete: true }, cachedInputTokens: { reported: 0, complete: true }, cacheWriteInputTokens: { reported: 0, complete: true }, reasoningTokens: { reported: 0, complete: true } };
+	const boundary = { hasOlderTurns: true, oldestTurnId: 'turn-21' };
+	const service = createAppServerAgentThreadService({
+		async request(definition: { method: string; }, params: unknown): Promise<unknown> {
+			requests.push({ method: definition.method, params });
+			return {
+				thread: { sessionId: 'session', threadId: 'thread', agentId: 'agent', origin: { type: 'root' }, title: 'History', status: 'active', sequence: 80, advisor: { type: 'off' }, usage, referenceCost: { knownAmounts: [], complete: true }, turns: [], hookRuns: [] },
+				transcript: { sessionId: 'session', threadId: 'thread', durableSequence: 80, revision: 9, entries: [] },
+				history: boundary, updates: [],
+			};
+		},
+	} as unknown as AppServerProtocolClient);
+	const latest = { sessionId: 'session', threadId: 'thread', history: { type: 'latest' as const, turnLimit: 20 } };
+	const before = { sessionId: 'session', threadId: 'thread', history: { type: 'before' as const, turnId: 'turn-21', turnLimit: 20 } };
+	const read = await service.read(before);
+	const subscription = await service.subscribe({ ...latest, afterSequence: 78 });
+	assert.deepEqual(requests, [{ method: 'session/thread/read', params: before }, { method: 'session/thread/subscribe', params: { ...latest, afterSequence: 78 } }]);
+	assert.deepEqual(read.history, boundary);
+	assert.deepEqual(subscription.history, boundary);
+	boundary.oldestTurnId = 'mutated';
+	assert.equal(read.history?.oldestTurnId, 'turn-21');
+	assert.equal(subscription.history?.oldestTurnId, 'turn-21');
+	assert.equal(subscription.transcript.revision, 9);
+});
+
 test('message checkpoints and restoration use the existing typed session protocol', async () => {
 	const requests: { method: string; params: unknown; }[] = [];
 	const connection = {

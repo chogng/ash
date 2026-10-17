@@ -948,6 +948,19 @@ Thread {
 
 每个 Turn 始终包含完整的 `items: ThreadItem[]`、累计 `usage`、可选 `contextUsage`、可选 `pendingInteraction` metadata 与可选稳定错误。`contextUsage` 是最近一次模型调用完成后的当前 model-visible context token 数；优先使用 provider-reported input + output，缺字段时使用 Core 的 deterministic input estimate 并以 `source = estimated` 标识。`pendingInteraction` 不含 interaction payload；完整请求只能通过 owner-directed delivery 获得。客户端不得从日志文本或瞬态 delta 推断权威终态或当前上下文占用。
 
+`session/thread/read` 和 `session/thread/subscribe` 接受可选 `history`：
+`{type: "latest", turnLimit}` 读取最近一页，`{type: "before", turnId, turnLimit}`
+读取游标前的一页，Turn 在页内保持时间顺序。响应的 `history.hasOlderTurns` 与
+`history.oldestTurnId` 表达是否还有更早内容及下一游标；省略请求选项保留完整历史。
+有界订阅以快照的 durable sequence 接续回放，已由快照表示的历史事件不会重复返回；
+订阅注册期间的后续更新继续按既有缓冲与序号规则投递。`before` 页不包含实时瞬态输出。
+旧页的 transcript revision 不可替换实时 revision，窗口外的 Turn 缺席也不代表审批已经结束。
+
+Code Chat 当前默认每页 20 Turn；显式翻页保留在现有 Widget model 中，普通刷新读取尾部窗口，
+重连时用有界页补齐与已加载历史之间的缺口。审批仍使用独立 owner-directed offer 的
+Turn、request ID 和当前 Thread sequence。该窗口只约束 Turn 数，单个 Turn 的大内容仍需
+后续按内容大小、附件和调度分别治理。
+
 ### Thread 正文条目与三端显示
 
 当前的分工是：后端确定一段内容属于什么、在哪个 Turn、按什么顺序出现；客户端决定宽度、换行、间距、折叠、滚动和交互。`session/thread/read` 与 `session/thread/subscribe` 均返回 `thread` 和 `transcript`。`transcript` 是 `ThreadTranscriptSnapshot`，含稳定 `entryId`、当前 `revision` 和按序排列的完整条目。定义以 [`ash-thread-transcript`](../crates/thread-transcript/src/model.rs) 与 [`ThreadItem`](../crates/protocol/src/item.rs) 为准。

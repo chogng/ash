@@ -4,7 +4,7 @@
 
 审计基线的结论：Ash Main 已经透明转发字节，避免了 Owl 在 Browser UI 线程完整解析 JSON 的问题。但 Renderer 的 framing 存在可复现的复制放大，完整帧还会重新 UTF-8 编码、同步解析和递归 schema 校验。聊天消费者没有使用后端已有的有界历史能力，进一步放大输入。背压能够限制传输中的字节块，不能等同于限制完整响应处理成本、总内存或控制消息延迟。
 
-**实施状态：第一批 P1 已完成。** 第 1～4 节保留 manifest 对应的优化前审计快照；固定页 framing、接收端副本与重复编码已在现有 owner 中修复，当前实现、测试与前后对比见第 7 节。历史窗口、Worker、JSON.parse／schema 调度和后端输出调整仍是后续候选。
+**实施状态：两批 P1 已实现。** 第 1～4 节保留 manifest 对应的优化前审计快照；固定页 framing、接收端副本与重复编码见第 7 节；Code Chat 的有界历史接入、翻页、回放与审批保护见第 8 节。Worker、JSON.parse／schema 调度和后端输出调整仍是后续候选。
 
 证据快照与文件 hash 见 [manifest.json](research/ash-app-server-data-path-2026-10-17/manifest.json)，实验脚本见 [probe.cjs](research/ash-app-server-data-path-2026-10-17/probe.cjs)。这是调查时的实现，不替代 [前端与 App Server 连接边界](frontend-app-server-boundary.md)或产品契约。工作区有并发开发活动；后续修改前应重新核对文件 hash。
 
@@ -284,3 +284,114 @@ pnpm test:unit:prepared --run src/ash/platform/agentHost/test/browser/appServerS
 ```
 
 单测的正式准备步骤已运行；最终 prepared 运行编译当前源码并执行上述 53 个测试。Renderer 类型检查覆盖 4,163 个文件通过，修改文件的 TypeScript formatter 和文档检查也通过。本批没有改变后端线上协议或生成 DTO，未进行真实 Desktop 交互延迟／RSS 对比。
+
+## 8. 第二批 P1：Code Chat 使用有界历史
+
+### 8.1 调用链与职责
+
+`ChatWidgetModel → IChatService → IAgentThreadService → App Server adapter → Renderer protocol client`
+继续沿既有单一链路调用 `session/thread/read`／`subscribe`。领域接口增加前端拥有的
+`ThreadSnapshotHistory` 和 `ThreadHistoryBoundary`；adapter 机械映射已经生成的正式协议字段，
+并保留响应的游标元数据。Rust 协议、Core、Main relay、进程与 connection 拓扑均无修改。
+
+Code Chat 首次订阅和普通刷新都请求 `{type: "latest", turnLimit: 20}`。
+“加载更早的消息”使用 `{type: "before", turnId: oldestTurnId, turnLimit: 20}`，
+取回完整 Turn 和条目，保留用户显式加载过的前缀；刷新只替换窗口覆盖的尾部。
+同一翻页请求合并重复点击，失败保留游标与内容，允许重试，发送不因旧页失败而被阻断。
+翻页只复制新接收的条目，不重复复制已经拥有的所有旧页。继续使用现有 ChatListWidget 的
+稳定行身份与阅读锚点；无需增加第二个历史 service、缓存或滚动 owner。
+
+未指定 history 的其他消费者保持完整历史行为，包括 Cowork 与现有完整读取操作。
+这批范围是常规 Code Chat，不代表所有 App Server 消费者已经使用窗口。
+
+### 8.2 翻页、回放与审批不丢失的边界
+
+- **旧页与实时状态分离。** `before` 页不覆盖 Thread 的实时执行状态、durable sequence 或 transcript revision。
+  旧页通常 revision 为 0；条目按稳定 ID 合并，重复语音只保留一份，语音锚点随其旧消息保留。
+- **刷新保留已加载前缀。** 新窗口与已加载 Turn 的重叠点决定替换范围。终态与瞬态仍以最新尾部快照和
+  transcript notifications 为准，不能把“窗口外”解释成“已删除”。
+- **重连补齐中间窗口。** 重连传入已知 durable sequence；后端有界订阅以快照 sequence 接续回放，
+  跳过已经由快照表示的历史事件。若新尾部与现有页面之间没有重叠，客户端按 `before` 连续取有界页，
+  找到重叠点后一次组装，避免静默漏掉中间 Turn。每次跨 await 都检查当前代次；A-B-A 导航和释放会使旧结果失效。
+- **旧快照不能抹掉新尾部。** durable sequence 已落后的有界快照即使带来更高流式 revision，也不能
+  替换当前 transcript；客户端继续读取最新窗口。流式 revision 与历史页游标不是同一个时钟。
+- **审批以 offer 为准。** Chat Service 不因有界快照缺少旧 Turn 就撤销现有 offer。
+  Widget 从当前 connection 的 offer 显示交互，提交 offer 中的 Turn ID／request ID 和当前 Thread sequence。
+  解决、取消、Turn 终态、期限与 connection 生命周期继续按既有 owner 规则回收权限。
+  历史分页本身不授予审批权限，也不能由页面内容恢复完整交互请求。
+- **键盘与无障碍。** 英文和中文的加载、失败重试、忙碌状态与帮助文字已补齐。
+  最后一页加载完成后焦点回到 transcript，保留阅读位置与草稿；翻页不发送任何消息。
+
+### 8.3 同一受控 Chromium 场景的前后对比
+
+使用现有 `chatTranscript.integration` 入口，生成 1,000 Turn、每 Turn 一个约 1KiB ASCII 文本回复。
+两种请求消费同一历史：旧方式省略 history，接入后请求最近 20 Turn。预先生成对应响应字符串，
+计时包含实际 `JSON.parse`、生成 decoder 的 envelope／schema 校验、生产 App Server domain adapter、
+`chatTranscriptListItems` 与 `ChatListWidget`；分别 warmup，再进行 5 轮交替顺序采样。
+每轮断言完整／有界条目数为 1,000／20，且最后一条回复完全一致。GC 在计时区间外。
+
+环境：本机 macOS ARM64、Apple M5，Playwright Chromium **149.0.7827.55**。下表为 5 次中位数：
+
+| 阶段／指标                       | read 优化前 → 后   | subscribe 优化前 → 后 |
+| -------------------------------- | ------------------ | --------------------- |
+| 响应字节                         | 2,773,757 → 56,276 | 2,773,770 → 56,289    |
+| JSON.parse                       | 1.7ms → 0.1ms      | 1.8ms → 低于计时精度  |
+| 生成 schema 校验                 | 36.1ms → 1.2ms     | 31.8ms → 0.8ms        |
+| 解析、校验与 domain 映射合计     | 38.0ms → 1.2ms     | 33.7ms → 0.9ms        |
+| 列表组装与 render 调用           | 436.6ms → 9.1ms    | 420.7ms → 8.8ms       |
+| 请求处理起点至 render 后两次 rAF | 485.5ms → 14.5ms   | 466.9ms → 15.2ms      |
+
+该输入的响应大小约减少 **98%**。这是减少传入数据量的组件收益，**不是真实 Desktop 的端到端
+加速比、内存占用或后台存储查询时间**。响应由受控 fixture 提供，两种订阅的 durable replay 都为空；
+没有把省去的全历史重复 replay 算入收益。模型合并、后端 IO、IPC 与真实 provider 延迟未纳入本表。
+两次 rAF 表示浏览器绘制机会，不是逐像素的屏幕呈现时间。CDP TaskDuration 样本也保留，但它包含
+计时区间外的列表清理与浏览器活动，不与表内阶段时长直接等同。
+
+原始样本保留在本机 `.build/investigations/chat-history-p1-2026-10-17/comparison-results.json`，
+首次性能 fixture 失败及重跑日志、成功 HTML report、类型检查配置、旧源码和单测日志保存在同目录及
+`.build/desktop/playwright/`。性能 fixture 初次遗漏 decoder 所需的 `jsonrpc` 字段，已修正；失败未计入样本。
+重现入口：
+
+```sh
+pnpm test:browser:integration chatTranscript.integration.spec.ts --project=chromium --grep 'Chat bounded history'
+```
+
+### 8.4 验证与剩余成本
+
+定向单测覆盖 adapter 参数与元数据映射、逐页完整遍历、旧页与流式更新并发、回放、重连跨多页缺口、
+失败重试、A-B-A／释放、语音去重和旧消息锚点，以及窗口外的审批显示、提交与撤销。
+真实 Chromium 覆盖英文／中文、深色／浅色／高对比度下的键盘翻页、帮助、失败重试、草稿和阅读锚点。
+后端复用已有定向测试验证窗口内瞬态输出与 durable replay，不增加第二套后端历史实现。
+
+实际结果：171 项前端定向单测通过；最后一次模型复制调整后，相关 13 项复测通过。
+Chromium 6 个交互场景及 1 个性能比较场景通过。后端定向测试共 11 项通过（App Server 8 项、Core 3 项）。
+Renderer 类型检查 4,166 文件、Chat integration 定向类型检查 2,727 文件通过；本批 17 个文件格式与
+whitespace 检查通过。中文资源准备检查为 0 缺失条目。Rust 重编译产生既有 ts-rs
+`deny_unknown_fields` 属性解析警告，本批未修改 Rust 代码或依赖。
+
+验证入口：
+
+```sh
+pnpm test:unit:prepared --run src/ash/sessions/test/browser/chatViewPane.test.ts --run src/ash/platform/agentHost/test/browser/appServerAgentService.test.ts
+./node_modules/bun/bin/bun.exe check -p tsconfig.renderer.json --all
+just test ash-app-server --lib thread_read_and_subscribe_keep_transients_within_the_visible_running_history
+just test ash-app-server --lib thread_subscription
+just test ash-core --lib thread_history_
+```
+
+完整 Browser integration 类型检查仍被并发开发的 `terminal.integration.ts:385` 构造参数错误阻断；
+采用相同编译选项、ambient typings 与 Chat 入口完成定向检查后，直接运行原有 `run.ts` runner。
+这不代表当时整套 integration 类型检查通过。
+
+第一批已本地提交为 `656ba0fed`，没有推送。提交门禁因 10 个不在提交范围内的文件格式问题失败，
+本批文件的独立格式和 whitespace 检查通过后，按仓库规定完成本地提交；没有宣称全局门禁通过。
+第二批使用独立提交，未混入第一批提交。
+
+**仍存在的成本：** 20 Turn 是条数边界，单个巨大 Turn 仍可能产生大 JSON；本批没有 Worker 或时间片调度，
+JSON.parse／schema／DOM 仍同步运行。用户主动加载的旧页继续保留，多年断线后的补齐也可能需要很多有界请求；
+窗口不会把全部历史渲染内存限制为 20 Turn。已加载内容较大时，列表派生、数组／Map 合并与旧页保留成本
+仍需进一步实测与治理，不能用本次初始加载收益替代背压和响应大小设计。
+
+后端 `read_voice_transcripts` 仍按整个 Thread 的 sequence 读取语音，再按当前页可见 Item 锚点组装。
+没有 Item 锚点的语音会进入多个页面，由前端按稳定 ID 去重；这类语音历史与 Thread 级元数据
+也不受 20 Turn 条数限制。本次性能 fixture 没有语音，不能据此推断长语音会话的收益。

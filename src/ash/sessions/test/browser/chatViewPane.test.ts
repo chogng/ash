@@ -3565,6 +3565,234 @@ function transcript(value: Thread): ThreadTranscriptSnapshot {
 	};
 }
 
+/** A paged server fixture with independent snapshot and transcript cursors. */
+function pagedChatFixture(initialCount = 65) {
+	let count = initialCount;
+	const requests: { type: 'read' | 'subscribe'; history?: import('../../../platform/agentHost/common/agentService.js').ThreadSnapshotHistory; afterSequence?: number; }[] = [];
+	const full = () => ({
+		...thread(), sequence: count,
+		turns: Array.from({ length: count }, (_, index) => {
+			const turnId = `turn-${index + 1}`;
+			return { ...thread('fixture').turns[0]!, turnId, items: [{ type: 'agentMessage' as const, itemId: `answer-${index + 1}`, turnId, text: `Answer ${index + 1}` }] };
+		}),
+	});
+	const page = (history?: import('../../../platform/agentHost/common/agentService.js').ThreadSnapshotHistory): import('../../../platform/agentHost/common/agentService.js').ThreadRead => {
+		const value = full();
+		const end = history?.type === 'before' ? value.turns.findIndex(turn => turn.turnId === history.turnId) : count;
+		assert.ok(end >= 0, 'the requested cursor must exist');
+		const start = history ? Math.max(0, end - history.turnLimit) : 0;
+		const visible = { ...value, turns: value.turns.slice(start, end) };
+		return {
+			thread: visible,
+			transcript: { sessionId: visible.sessionId, threadId: visible.threadId, durableSequence: count, revision: history?.type === 'before' ? 0 : count, entries: visible.turns.flatMap(turn => turn.items.map(item => ({ type: 'item' as const, entryId: `item:${item.itemId}`, turnId: turn.turnId, item, transient: false }))) },
+			history: history ? { hasOlderTurns: start > 0, oldestTurnId: visible.turns[0]?.turnId } : undefined,
+		};
+	};
+	const active = session('session-1', 'thread-1');
+	const fake = fakeApi({ sessions: [active], thread: full });
+	const api: IRendererHost = {
+		...fake.api,
+		thread: {
+			...fake.api.thread,
+			read: async ({ history }) => { requests.push({ type: 'read', history }); return page(history); },
+			subscribe: async ({ history, afterSequence }) => { requests.push({ type: 'subscribe', history, afterSequence }); return { ...page(history), updates: [] }; },
+		},
+	};
+	return { active, fake, api, requests, page, setCount(value: number) { count = value; } };
+}
+
+test('bounded Chat pages are requested by cursor and retain every message in chronological order', async () => {
+	const fixture = pagedChatFixture();
+	using chat = createChatService(fixture.api);
+	using sessions = new SessionsManagementService(fixture.api);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: fixture.active, threadId: 'thread-1' } }, sessions);
+	await model.initialize();
+	assert.deepEqual(fixture.requests, [{ type: 'subscribe', afterSequence: 0, history: { type: 'latest', turnLimit: 20 } }]);
+	assert.equal(model.items.length, 20);
+	while (model.olderHistory) await model.loadOlderHistory();
+	assert.deepEqual(model.items.map(item => item.text), Array.from({ length: 65 }, (_, index) => `Answer ${index + 1}`));
+	assert.deepEqual(fixture.requests.slice(1).map(request => request.history), ['turn-46', 'turn-26', 'turn-6'].map(turnId => ({ type: 'before', turnId, turnLimit: 20 })));
+});
+
+test('bounded Chat pagination coalesces clicks without replacing live transcript revisions', async () => {
+	const fixture = pagedChatFixture();
+	const delayed = new DeferredPromise<ReturnType<typeof fixture.page>>();
+	fixture.api.thread.read = async params => {
+		assert.equal(params.history?.type, 'before');
+		return delayed.p;
+	};
+	using chat = createChatService(fixture.api);
+	using sessions = new SessionsManagementService(fixture.api);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: fixture.active, threadId: 'thread-1' } }, sessions);
+	await model.initialize();
+	const pending = model.loadOlderHistory();
+	assert.equal(model.loadOlderHistory(), pending);
+	const emit = (revision: number, text: string) => fixture.fake.emit({
+		method: 'session/thread/transcript/update', params: {
+			sessionId: 'session-1', threadId: 'thread-1', durableSequence: 65, revision,
+			changes: [{ type: 'upsert', entry: { type: 'item', entryId: 'item:stream', turnId: 'turn-65', item: { type: 'agentMessage', itemId: 'stream', turnId: 'turn-65', text }, transient: true } }],
+		}
+	});
+	emit(66, 'Live first');
+	await delayed.complete(fixture.page({ type: 'before', turnId: 'turn-46', turnLimit: 20 }));
+	await pending;
+	emit(67, 'Live second');
+	assert.equal(model.thread?.turns.length, 40);
+	assert.equal(model.items.at(-1)?.text, 'Live second');
+	assert.equal(model.items.filter(item => item.text.startsWith('Live')).length, 1);
+	assert.equal(model.inputState.inputBlocked, false);
+});
+
+test('bounded Chat refresh and reconnect preserve loaded pages and fill multi-page replay gaps', async () => {
+	const fixture = pagedChatFixture();
+	using chat = createChatService(fixture.api);
+	using sessions = new SessionsManagementService(fixture.api);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: fixture.active, threadId: 'thread-1' } }, sessions);
+	await model.initialize();
+	await model.loadOlderHistory();
+	fixture.setCount(66);
+	fixture.fake.emit({ method: 'session/thread/update', params: { sessionId: 'session-1', threadId: 'thread-1', durableSequence: 66, update: { type: 'committed', event: { type: 'turnCompleted', threadId: 'thread-1', turnId: 'turn-66' } } } });
+	await waitFor(() => model.thread?.sequence === 66);
+	assert.deepEqual(model.items.map(item => item.text), Array.from({ length: 41 }, (_, index) => `Answer ${index + 26}`));
+	fixture.setCount(111);
+	fixture.fake.emitReady();
+	await waitFor(() => model.thread?.sequence === 111 && model.state === 'ready');
+	assert.deepEqual(model.items.map(item => item.text), Array.from({ length: 86 }, (_, index) => `Answer ${index + 26}`));
+	assert.ok(fixture.requests.filter(request => request.history?.type === 'before').length >= 3);
+	assert.equal(fixture.requests.filter(request => request.type === 'subscribe').at(-1)?.afterSequence, 66);
+	await model.loadOlderHistory();
+	assert.equal(model.items[0]?.text, 'Answer 6');
+});
+
+test('bounded Chat pagination failures retain content, allow sending and retry the same cursor', async () => {
+	const fixture = pagedChatFixture();
+	const read = fixture.api.thread.read;
+	let fail = true;
+	fixture.api.thread.read = params => {
+		if (fail) return Promise.reject(new Error('Synthetic page failure'));
+		return read(params);
+	};
+	using chat = createChatService(fixture.api);
+	using sessions = new SessionsManagementService(fixture.api);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: fixture.active, threadId: 'thread-1' } }, sessions);
+	await model.initialize();
+	await model.loadOlderHistory();
+	assert.match(model.olderHistory?.error ?? '', /Synthetic page failure/);
+	assert.equal(model.items.length, 20);
+	assert.equal(model.inputState.inputBlocked, false);
+	fail = false;
+	await model.loadOlderHistory();
+	assert.equal(model.items.length, 40);
+	assert.equal(model.olderHistory?.error, undefined);
+});
+
+test('bounded Chat discards a retired page after A-B-A navigation and disposal', async () => {
+	const fixture = pagedChatFixture();
+	const pending = new DeferredPromise<ReturnType<typeof fixture.page>>();
+	fixture.api.thread.read = () => pending.p;
+	fixture.api.thread.subscribe = async ({ threadId, history }) => {
+		const result = fixture.page(history);
+		return { ...result, thread: { ...result.thread, threadId }, transcript: { ...result.transcript, threadId }, updates: [] };
+	};
+	using chat = createChatService(fixture.api);
+	using sessions = new SessionsManagementService(fixture.api);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: fixture.active, threadId: 'thread-1' } }, sessions);
+	await model.initialize();
+	const page = model.loadOlderHistory();
+	await nextTask();
+	await model.selectThread({ session: fixture.active, threadId: 'thread-2' });
+	await model.selectThread({ session: fixture.active, threadId: 'thread-1' });
+	await pending.complete(fixture.page({ type: 'before', turnId: 'turn-46', turnLimit: 20 }));
+	await page;
+	assert.equal(model.items.length, 20);
+	assert.equal(model.olderHistory?.loading, false);
+	model.dispose();
+	await model.loadOlderHistory();
+	assert.equal(model.items.length, 0);
+});
+
+test('bounded Chat retains and submits an offered approval outside its visible history window', async () => {
+	const fixture = pagedChatFixture();
+	const resolved: unknown[] = [];
+	fixture.api.turn.resolveInteraction = async params => { resolved.push(params); return { sequence: 66 }; };
+	using chat = createChatService(fixture.api);
+	using sessions = new SessionsManagementService(fixture.api);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: fixture.active, threadId: 'thread-1' } }, sessions);
+	await model.initialize();
+	const interaction = { requestId: 'old-approval', request: { type: 'approval' as const, request: { actionDigest: 'digest', policyRevision: 'policy', reason: 'Write fixture', allowedDecisions: ['approveOnce' as const, 'decline' as const], capabilities: [{ kind: 'fileWrite' as const, scope: '/fixture' }] } } };
+	fixture.fake.emit({ method: 'agent/request', params: { sessionId: 'session-1', threadId: 'thread-1', turnId: 'turn-1', interaction } });
+	await chat.subscribeThread('session-1', 'thread-1', 65, model, { type: 'latest', turnLimit: 20 });
+	assert.equal(model.interaction?.requestId, 'old-approval');
+	await model.resolveInteraction({ type: 'approval', response: { decision: 'approveOnce' } });
+	assert.equal(resolved.length, 1);
+	assert.deepEqual({ ...(resolved[0] as object), commandId: undefined }, { commandId: undefined, sessionId: 'session-1', threadId: 'thread-1', turnId: 'turn-1', requestId: 'old-approval', expectedSequence: 65, response: { type: 'approval', response: { decision: 'approveOnce' } } });
+	fixture.fake.emit({ method: 'session/thread/update', params: { sessionId: 'session-1', threadId: 'thread-1', durableSequence: 66, update: { type: 'committed', event: { type: 'interactionResolved', threadId: 'thread-1', turnId: 'turn-1', requestId: 'old-approval', response: { type: 'approval', response: { decision: 'approveOnce' } } } } } });
+	assert.equal(model.interaction, undefined);
+});
+
+test('bounded Chat applies durable replay after its snapshot and retains the overlapping tail', async () => {
+	const fixture = pagedChatFixture();
+	fixture.api.thread.subscribe = async ({ history }) => {
+		const snapshot = fixture.page(history);
+		fixture.setCount(66);
+		return { ...snapshot, updates: [{ sessionId: 'session-1', threadId: 'thread-1', durableSequence: 66, update: { type: 'committed', event: { type: 'turnCompleted', threadId: 'thread-1', turnId: 'turn-66' } } }] };
+	};
+	using chat = createChatService(fixture.api);
+	using sessions = new SessionsManagementService(fixture.api);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: fixture.active, threadId: 'thread-1' } }, sessions);
+	await model.initialize();
+	await waitFor(() => model.thread?.sequence === 66);
+	assert.deepEqual(model.items.map(item => item.text), Array.from({ length: 21 }, (_, index) => `Answer ${index + 46}`));
+	assert.ok(fixture.requests.some(request => request.type === 'read' && request.history?.type === 'latest'));
+});
+
+test('bounded Chat deduplicates speech across pages and retains its older item anchors after refresh', async () => {
+	const fixture = pagedChatFixture();
+	const read = fixture.api.thread.read;
+	fixture.api.thread.read = async params => {
+		const page = await read(params);
+		const first = page.thread.turns[0]!;
+		const speech = (id: string, afterItemId: string | null): ThreadTranscriptEntry => ({ type: 'voiceTranscript', entryId: id, transcript: { itemId: id, voiceSessionId: 'voice', mediaEpoch: 1, speaker: 'user', text: id, startMs: 0, endMs: 10, afterItemId } });
+		return { ...page, transcript: { ...page.transcript, entries: [speech('global-speech', null), ...page.transcript.entries, speech(`speech-${first.turnId}`, first.items[0]!.itemId)] } };
+	};
+	using chat = createChatService(fixture.api);
+	using sessions = new SessionsManagementService(fixture.api);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: fixture.active, threadId: 'thread-1' } }, sessions);
+	await model.initialize();
+	await model.loadOlderHistory();
+	await model.loadOlderHistory();
+	fixture.setCount(66);
+	fixture.fake.emit({ method: 'session/thread/update', params: { sessionId: 'session-1', threadId: 'thread-1', durableSequence: 66, update: { type: 'committed', event: { type: 'turnCompleted', threadId: 'thread-1', turnId: 'turn-66' } } } });
+	await waitFor(() => model.thread?.sequence === 66);
+	assert.equal(model.items.filter(item => item.text === 'global-speech').length, 1);
+	assert.ok(model.items.some(item => item.text === 'speech-turn-26'));
+	assert.ok(model.items.some(item => item.text === 'speech-turn-6'));
+	assert.equal(model.thread?.turns.length, 61);
+});
+
+test('bounded Chat cannot erase a newer tail when an older read has a newer streaming revision', async () => {
+	const fixture = pagedChatFixture();
+	const pending = new DeferredPromise<ReturnType<typeof fixture.page>>();
+	let reads = 0;
+	fixture.api.thread.read = async ({ history }) => ++reads === 1 ? pending.p : fixture.page(history);
+	using chat = createChatService(fixture.api);
+	using sessions = new SessionsManagementService(fixture.api);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: fixture.active, threadId: 'thread-1' } }, sessions);
+	await model.initialize();
+	const complete = (sequence: number) => fixture.fake.emit({ method: 'session/thread/update', params: { sessionId: 'session-1', threadId: 'thread-1', durableSequence: sequence, update: { type: 'committed', event: { type: 'turnCompleted', threadId: 'thread-1', turnId: `turn-${sequence}` } } } });
+	fixture.setCount(66);
+	const older = fixture.page({ type: 'latest', turnLimit: 20 });
+	complete(66);
+	await waitFor(() => reads === 1);
+	fixture.setCount(67);
+	complete(67);
+	await waitFor(() => model.thread?.sequence === 67);
+	await pending.complete({ ...older, transcript: { ...older.transcript, revision: 68 } });
+	await waitFor(() => reads >= 3);
+	assert.equal(model.items.at(-1)?.text, 'Answer 67');
+	assert.equal(model.thread?.sequence, 67);
+});
+
 function failedTurn(code: TurnError["code"], retryable: boolean, message = "Turn failed"): Omit<Thread["turns"][number], 'items'> & { items: []; } {
 	return {
 		turnId: "turn-1",

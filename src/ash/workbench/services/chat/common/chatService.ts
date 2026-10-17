@@ -1,4 +1,4 @@
-import type { AgentInteractionOffer, ChatHookRun, SessionMode, Turn, Thread, ThreadGoalUpdate, AgentResponse, ThreadUpdateEnvelope, ThreadTranscriptUpdateEnvelope, ThreadRead, ThreadSubscription } from '../../../../platform/agentHost/common/agentService.js';
+import type { AgentInteractionOffer, ChatHookRun, SessionMode, Turn, Thread, ThreadGoalUpdate, AgentResponse, ThreadUpdateEnvelope, ThreadTranscriptUpdateEnvelope, ThreadRead, ThreadSubscription, ThreadSnapshotHistory } from '../../../../platform/agentHost/common/agentService.js';
 export type {
 	ChatImageAttachment,
 	ChatAudioAttachment,
@@ -39,6 +39,8 @@ export type {
 	ThreadTranscriptUpdateEnvelope,
 	ThreadRead,
 	ThreadSubscription,
+	ThreadSnapshotHistory,
+	ThreadHistoryBoundary,
 } from '../../../../platform/agentHost/common/agentService.js';
 import type { ModelRef, AdvisorConfig, AdvisorSelection, ModelProviderCredentialStatus } from '../../../../platform/agentHost/common/agentModels.js';
 export type { ModelRef, AdvisorConfig, AdvisorSelection, ModelProviderCredentialStatus } from '../../../../platform/agentHost/common/agentModels.js';
@@ -272,10 +274,10 @@ export interface IChatService {
 	readonly onDidUpdateTurnChanges: Event<TurnChangesUpdate>;
 	readonly onDidChangeQueue: Event<void>;
 	listSlashCommands(): Promise<readonly SlashCommandDefinition[]>;
-	readThread(sessionId: SessionId, threadId: ThreadId): Promise<ThreadRead>;
+	readThread(sessionId: SessionId, threadId: ThreadId, history?: ThreadSnapshotHistory): Promise<ThreadRead>;
 	readContextUsage(sessionId: SessionId, threadId: ThreadId): Promise<ChatContextUsage>;
 	/** The owner retains the subscription across refreshes/reconnects until explicitly released. */
-	subscribeThread(sessionId: SessionId, threadId: ThreadId, afterSequence: number, owner: object): Promise<ThreadSubscription>;
+	subscribeThread(sessionId: SessionId, threadId: ThreadId, afterSequence: number, owner: object, history?: ThreadSnapshotHistory): Promise<ThreadSubscription>;
 	unsubscribeThread(sessionId: SessionId, threadId: ThreadId, owner: object): Promise<void>;
 	startTurn(options: StartTurnOptions): Promise<void>;
 	queueTurn(options: StartTurnOptions): Promise<void>;

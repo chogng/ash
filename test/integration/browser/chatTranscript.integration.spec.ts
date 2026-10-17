@@ -1,5 +1,75 @@
 import { expect, test } from '@playwright/test';
 
+for (const locale of ['en', 'zh-CN']) for (const theme of ['dark', 'light', 'hc'] as const) {
+	test(`Chat bounded history pagination preserves keyboard focus, draft and reading position in ${locale} ${theme}`, async ({ page }) => {
+		await page.goto(`/chatTranscript.html?locale=${locale}`);
+		await page.evaluate(theme => {
+			window.ashChatTranscriptIntegration.setTheme(theme);
+			window.ashChatTranscriptIntegration.showHistoryPagination(true);
+		}, theme);
+		const chat = page.locator('#app-chat');
+		const draft = chat.locator('textarea');
+		await draft.fill('Keep this draft');
+		const button = chat.getByRole('button', { name: locale === 'en' ? 'Load earlier messages' : '加载更早的消息', exact: true });
+		await button.focus();
+		await expect(button).toBeFocused();
+		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.openAccessibleView(true))).toBe(true);
+		await expect(page.locator('.ash-accessible-view-content')).toHaveValue(locale === 'en' ? /Load earlier messages/ : /加载更早的消息/);
+		await page.keyboard.press('Escape');
+		await expect(button).toBeFocused();
+		await page.keyboard.press('Enter');
+		const pagination = chat.locator('.ash-chat-history-pagination');
+		await expect(pagination).toHaveAttribute('aria-busy', 'true');
+		await expect(button).toBeDisabled();
+		await page.evaluate(() => window.ashChatTranscriptIntegration.finishHistoryPage());
+		const retry = chat.getByRole('button', { name: locale === 'en' ? 'Retry earlier messages' : '重试加载更早的消息', exact: true });
+		await expect(retry).toBeFocused();
+		await expect(pagination.getByRole('status')).toContainText('Synthetic page failure');
+		const viewport = chat.locator('.ash-chat-list-widget .ash-scrollbar-viewport');
+		await viewport.evaluate(element => { element.scrollTop = 500; });
+		const position = () => chat.locator('[data-item-id="recent-10"]').evaluate(element => {
+			const viewport = element.closest('.ash-scrollbar-viewport')!;
+			return element.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
+		});
+		const before = await position();
+		await page.keyboard.press('Space');
+		await expect(pagination).toHaveAttribute('aria-busy', 'true');
+		await page.evaluate(() => window.ashChatTranscriptIntegration.finishHistoryPage());
+		await expect(pagination).toBeHidden();
+		await expect(chat.locator('.ash-chat-item')).toHaveCount(50);
+		await expect.poll(async () => Math.abs(await position() - before)).toBeLessThan(2);
+		await expect(chat.getByRole('log')).toBeFocused();
+		await expect(draft).toHaveValue('Keep this draft');
+		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.historyPageLoads())).toBe(2);
+		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.chatMessages())).toEqual([]);
+	});
+}
+
+test('Chat bounded history response comparison uses the same decoded content and visible endpoint', async ({ page }, testInfo) => {
+	test.setTimeout(120_000);
+	await page.goto('/chatTranscript.html');
+	await page.evaluate(() => window.ashChatTranscriptIntegration.prepareHistoryBenchmark(1000, 1024));
+	const cdp = await page.context().newCDPSession(page);
+	await cdp.send('Performance.enable');
+	const samples: unknown[] = [];
+	try {
+		for (const method of ['read', 'subscribe'] as const) {
+			for (const bounded of [false, true]) await page.evaluate(({ method, bounded }) => window.ashChatTranscriptIntegration.runHistoryBenchmark(method, bounded), { method, bounded });
+			for (let pair = 0; pair < 5; pair++) for (const bounded of pair % 2 ? [true, false] : [false, true]) {
+				await cdp.send('HeapProfiler.collectGarbage');
+				const before = await cdp.send('Performance.getMetrics');
+				const sample = await page.evaluate(({ method, bounded }) => window.ashChatTranscriptIntegration.runHistoryBenchmark(method, bounded), { method, bounded });
+				const after = await cdp.send('Performance.getMetrics');
+				const taskMs = (after.metrics.find(metric => metric.name === 'TaskDuration')!.value - before.metrics.find(metric => metric.name === 'TaskDuration')!.value) * 1000;
+				expect(sample.items).toBe(bounded ? 20 : 1000);
+				expect(sample.lastText).toBe('Answer 1000: ' + 'x'.repeat(1024));
+				samples.push({ method, pair, bounded, ...sample, lastText: undefined, taskMs });
+			}
+		}
+		await testInfo.attach('history-response-comparison.json', { body: JSON.stringify({ browser: page.context().browser()?.version(), turns: 1000, textBytes: 1024, pageTurns: 20, scope: 'Controlled browser response JSON.parse, generated schema, production domain adapter and ChatListWidget through two animation frames. No backend, IPC, full Chat model or Desktop measurement. Empty durable replay in both variants.', samples }, null, 2), contentType: 'application/json' });
+	} finally { await cdp.detach(); }
+});
+
 for (const locale of ['en', 'zh-CN']) for (const cowork of [false, true]) {
 	test(`${cowork ? 'Cowork' : 'Chat'} Voice mute and push to talk preserve the composer in ${locale}`, async ({ page }) => {
 		await page.goto(`/chatTranscript.html?locale=${locale}`); await page.evaluate(cowork => window.ashChatTranscriptIntegration.showChatApp(true, cowork), cowork);

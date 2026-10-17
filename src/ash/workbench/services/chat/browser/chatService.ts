@@ -2,7 +2,7 @@ import { IAgentExecutionSettingsService } from '../../../../platform/agentHost/c
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
 import type { ChatContextUsage, IChatRequestSubmittedEvent } from '../common/chatService.js';
-import type { AgentInteractionOffer, AgentInput } from '../../../../platform/agentHost/common/agentService.js';
+import type { AgentInteractionOffer, AgentInput, ThreadRead, ThreadSnapshotHistory } from '../../../../platform/agentHost/common/agentService.js';
 import { localize } from '../../../../nls.js';
 import type { TurnChangeSetSummary as TurnChangeSetSummaryDto, TurnChangesReadResult as TurnChangesReadResultDto } from '../../../../../../.build/protocol/typescript/index.js';
 import { Emitter } from "../../../../base/common/event.js";
@@ -196,11 +196,11 @@ export class ChatService extends Disposable implements IChatService {
 		};
 	}
 
-	async readThread(sessionId: SessionId, threadId: ThreadId): Promise<{ readonly thread: Thread; readonly transcript: ThreadTranscriptSnapshot; }> {
-		return this.threadApi.read({ sessionId, threadId });
+	async readThread(sessionId: SessionId, threadId: ThreadId, history?: ThreadSnapshotHistory): Promise<ThreadRead> {
+		return this.threadApi.read({ sessionId, threadId, ...(history ? { history } : {}) });
 	}
 
-	async subscribeThread(sessionId: SessionId, threadId: ThreadId, afterSequence: number, owner: object): Promise<ThreadSubscription> {
+	async subscribeThread(sessionId: SessionId, threadId: ThreadId, afterSequence: number, owner: object, history?: ThreadSnapshotHistory): Promise<ThreadSubscription> {
 		this.assertNotDisposed();
 		const key = JSON.stringify([sessionId, threadId]);
 		let subscription = this.threadSubscriptions.get(key);
@@ -210,7 +210,7 @@ export class ChatService extends Disposable implements IChatService {
 		}
 		subscription.owners.add(owner);
 		const offeredBeforeSubscribe = subscription.offer;
-		const pending = this.threadApi.subscribe({ sessionId, threadId, afterSequence });
+		const pending = this.threadApi.subscribe({ sessionId, threadId, afterSequence, ...(history ? { history } : {}) });
 		subscription.pending.add(pending);
 		try {
 			const result = await pending;
@@ -219,7 +219,8 @@ export class ChatService extends Disposable implements IChatService {
 			// Only an offer that predates the RPC can be retired by that snapshot.
 			if (subscription.offer && subscription.offer === offeredBeforeSubscribe) {
 				const turn = result.thread.turns.find(turn => turn.turnId === subscription.offer?.turnId);
-				if (!turn || !['waitingForApproval', 'waitingForUserInput', 'waitingForCapability'].includes(turn.status)) this.retireInteractionOffer(subscription);
+				// An omitted Turn in a bounded window says nothing about its pending interaction.
+				if (turn ? !['waitingForApproval', 'waitingForUserInput', 'waitingForCapability'].includes(turn.status) : !result.history) this.retireInteractionOffer(subscription);
 			}
 			return result;
 		} finally {

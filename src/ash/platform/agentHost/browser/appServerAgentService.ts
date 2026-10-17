@@ -344,7 +344,7 @@ export function createAppServerAgentThreadService(connection: AppServerProtocolC
 		readTraceGraph: (params) => appServerRequest(connection, 'session/trace/graph/read', params),
 		read: async (params) => {
 			const result = await appServerRequest(connection, 'session/thread/read', params);
-			return { thread: toThread(result.thread), directory: result.directory ? { ...result.directory } : result.directory, transcript: toThreadTranscriptSnapshot(result.transcript) };
+			return { thread: toThread(result.thread), directory: result.directory ? { ...result.directory } : result.directory, transcript: toThreadTranscriptSnapshot(result.transcript), ...(result.history ? { history: { ...result.history } } : {}) };
 		},
 		configureAdvisor: async (params) => {
 			const result = await appServerRequest(
@@ -367,7 +367,8 @@ export function createAppServerAgentThreadService(connection: AppServerProtocolC
 				thread: toThread(result.thread),
 				directory: result.directory ? { ...result.directory } : result.directory,
 				transcript: toThreadTranscriptSnapshot(result.transcript),
-				updates: result.updates.map(toThreadUpdate)
+				updates: result.updates.map(toThreadUpdate),
+				...(result.history ? { history: { ...result.history } } : {})
 			};
 		},
 		unsubscribe: (params) => voidResult(appServerRequest(connection, 'session/thread/unsubscribe', params))

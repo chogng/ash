@@ -100,6 +100,8 @@ import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContra
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { localize, setNlsMessages } from '../../../src/ash/nls.js';
 import type { IChatSessionHistoryStatus } from '../../../src/ash/platform/chat/common/chatSessionHistory.js';
+import { decodeAppServerResponse } from '../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
+import type { SessionThreadReadResult } from '../../../.build/protocol/typescript/index.js';
 import { ChatSessionArchiveActionWordingSettingId } from '../../../src/ash/platform/chat/common/sessionArchiveActions.js';
 import { createDisconnectedRendererApi } from '../../../src/ash/workbench/browser/rendererApi.js';
 import { IAgentSessionService, IAgentTurnService, type AgentSession } from '../../../src/ash/platform/agentHost/common/agentService.js';
@@ -336,6 +338,12 @@ let appChatGeneration = 0;
 let historyFailure: IChatSessionHistoryStatus | undefined;
 let finishHistory: (() => void) | undefined;
 let historyRecoveries = 0;
+let olderHistoryState: { loading: boolean; error?: string; } | undefined;
+let finishOlderHistory: (() => void) | undefined;
+let failOlderHistory = false;
+let olderHistoryLoads = 0;
+const historyWires = new Map<string, string>();
+let historyDecodeTiming = { parseMs: 0, schemaMs: 0, bytes: 0 };
 let lifecycleSessions: SessionsManagementService | undefined;
 let lifecycleCommands: CommandService | undefined;
 const lifecycleRequests: { readonly operation: string; readonly sessionId: string; }[] = [];
@@ -375,6 +383,18 @@ const toolService = createAppServerAgentThreadService({
 	onStateChange: (listener: () => void) => connectionChanges.event(listener),
 	onNotification: (listener: (notification: ServerNotification) => void) => toolNotifications.event(listener),
 	async request(definition: { method: string; }, params: unknown) {
+		if (definition.method === 'session/thread/read' || definition.method === 'session/thread/subscribe') {
+			const bounded = !!(params as { history?: unknown; }).history;
+			const wire = historyWires.get(`${definition.method}:${bounded}`);
+			if (!wire) throw new Error('History benchmark was not prepared');
+			const start = performance.now();
+			const parsed: unknown = JSON.parse(wire);
+			const parsedAt = performance.now();
+			const decoded = decodeAppServerResponse(definition.method, parsed);
+			historyDecodeTiming = { parseMs: parsedAt - start, schemaMs: performance.now() - parsedAt, bytes: wire.length };
+			if ('error' in decoded) throw new Error('Unexpected history fixture error');
+			return decoded.result;
+		}
 		linkRequests.push({ method: definition.method, params });
 		switch (definition.method) {
 			case 'tool/resource/open': {
@@ -461,6 +481,11 @@ declare global {
 			setCodeLineHeight(height: number): Promise<void>;
 			setTheme(value: 'dark' | 'light' | 'hc' | 'hcLight'): void;
 			showHistoryFailure(): void;
+			showHistoryPagination(fail?: boolean): void;
+			finishHistoryPage(): void;
+			historyPageLoads(): number;
+			prepareHistoryBenchmark(turns: number, textBytes: number): void;
+			runHistoryBenchmark(method: 'read' | 'subscribe', bounded: boolean): Promise<{ bytes: number; parseMs: number; schemaMs: number; receiveAndMapMs: number; renderMs: number; throughPaintMs: number; items: number; lastText: string; }>;
 			setAIDisabled(value: boolean): Promise<void>;
 			isCodeChatActive(): boolean;
 			finishHistoryRecovery(): void;
@@ -670,6 +695,21 @@ window.ashChatTranscriptIntegration = {
 		const model: IChatWidgetModel = {
 			onDidChange: chatChanges.event, onDidChangeComposer: composerChanges.event, get composerGeneration() { return appChatGeneration; }, sessionId: 'app-session', get threadId() { return appChatThread; }, untitledSessionId: undefined, goal: undefined, get items() { return appItems; },
 			get historyStatus() { return historyFailure; },
+			get olderHistory() { return olderHistoryState; },
+			loadOlderHistory: async () => {
+				olderHistoryLoads++;
+				olderHistoryState = { loading: true };
+				chatChanges.fire();
+				await new Promise<void>(resolve => { finishOlderHistory = resolve; });
+				if (failOlderHistory) {
+					failOlderHistory = false;
+					olderHistoryState = { loading: false, error: localize('chat.history.olderFailed', 'Could not load earlier messages: {0}', 'Synthetic page failure') };
+				} else {
+					appItems = [...Array.from({ length: 20 }, (_, index) => ({ id: `older-${index}`, type: 'agentMessage' as const, text: `Earlier answer ${index}`, transient: false })), ...appItems];
+					olderHistoryState = undefined;
+				}
+				chatChanges.fire();
+			},
 			get inputState() {
 				const aiDisabled = services.get(IConfigurationService).getValue<boolean>(ChatAIDisabledSettingId);
 				return { mode: 'plan' as const, queuedMessages: 0, approvalMode: 'manual' as const, phase: historyFailure ? 'error' as const : 'ready' as const, inputBlocked: !!historyFailure || aiDisabled, aiDisabled, canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false };
@@ -683,6 +723,47 @@ window.ashChatTranscriptIntegration = {
 		document.body.append(container);
 		appChat = cowork ? resources.add(chatServices.createInstance(CoworkWidget, container, 'app-chat', model, () => { }, chatServices.get(ICommandService), undefined, undefined, undefined, (host: HTMLElement, delegate: ChatInputDelegate) => chatServices.createInstance(NewCoworkInputWidget, host, delegate, model))) : resources.add(chatServices.createInstance(ChatWidget, container, 'app-chat', model, () => { }, contextMenus, contextView, chatServices.get(ICommandService), accessibleView, chatServices.get(INotificationService), undefined, undefined, undefined, undefined));
 		appChat.setVisible(true);
+	},
+	showHistoryPagination: (fail = false) => {
+		window.ashChatTranscriptIntegration.showChatApp();
+		olderHistoryLoads = 0;
+		failOlderHistory = fail;
+		olderHistoryState = { loading: false };
+		appItems = Array.from({ length: 30 }, (_, index) => ({ id: `recent-${index}`, type: 'agentMessage', text: `Recent answer ${index}\n\n${'Synthetic response. '.repeat(15)}`, transient: false }));
+		chatChanges.fire();
+	},
+	finishHistoryPage: () => finishOlderHistory?.(),
+	historyPageLoads: () => olderHistoryLoads,
+	prepareHistoryBenchmark: (turns, textBytes) => {
+		appChat?.dispose();
+		root.hidden = false;
+		const usage = { modelInvocations: 0, inputTokens: { reported: 0, complete: true }, outputTokens: { reported: 0, complete: true }, cachedInputTokens: { reported: 0, complete: true }, cacheWriteInputTokens: { reported: 0, complete: true }, reasoningTokens: { reported: 0, complete: true } };
+		for (const bounded of [false, true]) {
+			const first = bounded ? Math.max(0, turns - 20) : 0;
+			const items = Array.from({ length: turns - first }, (_, index) => {
+				const number = index + first + 1;
+				return { type: 'agentMessage' as const, itemId: `history-answer-${number}`, turnId: `history-turn-${number}`, text: `Answer ${number}: ` + 'x'.repeat(textBytes) };
+			});
+			const result: SessionThreadReadResult = {
+				thread: { sessionId: 'history-session', threadId: 'history-thread', agentId: 'history-agent', origin: { type: 'root' }, title: 'Controlled history', status: 'active', sequence: turns, advisor: { type: 'off' }, usage, referenceCost: { knownAmounts: [], complete: true }, hookRuns: [], turns: items.map(item => ({ turnId: item.turnId, status: 'completed', kind: 'coding', mode: 'agent', toolMode: 'direct', approvalMode: 'manual', usage, items: [item] })) },
+				transcript: { sessionId: 'history-session', threadId: 'history-thread', durableSequence: turns, revision: turns, entries: items.map(item => ({ type: 'item', entryId: `item:${item.itemId}`, turnId: item.turnId, item, transient: false })) },
+				...(bounded ? { history: { hasOlderTurns: first > 0, oldestTurnId: items[0]?.turnId } } : {}),
+			};
+			for (const method of ['read', 'subscribe']) historyWires.set(`session/thread/${method}:${bounded}`, JSON.stringify({ jsonrpc: '2.0', id: 1, result: method === 'read' ? result : { ...result, updates: [] } }));
+		}
+	},
+	runHistoryBenchmark: async (method, bounded) => {
+		list.render([]);
+		await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+		const params = { sessionId: 'history-session', threadId: 'history-thread', ...(bounded ? { history: { type: 'latest' as const, turnLimit: 20 } } : {}) };
+		const start = performance.now();
+		const result = method === 'read' ? await toolService.read(params) : await toolService.subscribe({ ...params, afterSequence: 0 });
+		const receivedAt = performance.now();
+		const items = chatTranscriptListItems(result.transcript.entries, result.thread.turns.at(-1)?.turnId, result.thread.turns, result.thread);
+		list.render(items);
+		const renderedAt = performance.now();
+		await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+		return { ...historyDecodeTiming, receiveAndMapMs: receivedAt - start, renderMs: renderedAt - receivedAt, throughPaintMs: performance.now() - start, items: list.element.querySelectorAll('.ash-chat-item').length, lastText: items.at(-1)?.text ?? '' };
 	},
 	showHistoryFailure: () => {
 		window.ashChatTranscriptIntegration.showChatApp();

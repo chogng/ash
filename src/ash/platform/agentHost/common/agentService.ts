@@ -740,16 +740,24 @@ export interface ThreadTranscriptUpdateEnvelope {
 	readonly changes: readonly ThreadTranscriptChange[];
 }
 
+/** A bounded, chronological Turn window. Omission preserves full-history callers. */
+export type ThreadSnapshotHistory =
+	| { readonly type: 'latest'; readonly turnLimit: number; }
+	| { readonly type: 'before'; readonly turnId: string; readonly turnLimit: number; };
+
+export interface ThreadHistoryBoundary {
+	readonly hasOlderTurns: boolean;
+	readonly oldestTurnId?: string | null;
+}
+
 export interface ThreadRead {
 	readonly thread: Thread;
 	readonly directory?: SessionCreateParams['executionTarget'];
 	readonly transcript: ThreadTranscriptSnapshot;
+	readonly history?: ThreadHistoryBoundary;
 }
 
-export interface ThreadSubscription {
-	readonly thread: Thread;
-	readonly directory?: SessionCreateParams['executionTarget'];
-	readonly transcript: ThreadTranscriptSnapshot;
+export interface ThreadSubscription extends ThreadRead {
 	readonly updates: readonly ThreadUpdateEnvelope[];
 }
 
@@ -852,11 +860,12 @@ export interface IAgentThreadService {
 	readTracePayload(params: SessionTracePayloadReadParams): Promise<SessionTracePayloadReadResult>;
 	readTraceGraph(params: SessionReadParams): Promise<SessionTraceGraphReadResult>;
 	configureAdvisor(params: SessionOperationInput<'configureAdvisor'>): Promise<AdvisorConfigureResult>;
-	read(params: { readonly sessionId: string; readonly threadId: string; }): Promise<ThreadRead>;
+	read(params: { readonly sessionId: string; readonly threadId: string; readonly history?: ThreadSnapshotHistory; }): Promise<ThreadRead>;
 	subscribe(params: {
 		readonly sessionId: string;
 		readonly threadId: string;
 		readonly afterSequence: number;
+		readonly history?: ThreadSnapshotHistory;
 	}): Promise<ThreadSubscription>;
 	unsubscribe(params: SessionReadParams & { readonly threadId: string; }): Promise<void>;
 }
