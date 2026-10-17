@@ -38,11 +38,14 @@ jobs:
       - id: platforms
         env:
           PLATFORMS: ${{ inputs.platforms }}
+          MACOS_SIGNING_READY: ${{ vars.ASH_MACOS_SIGNING_IDENTITY != '' && secrets.ASH_MACOS_CERTIFICATE_P12 != '' && secrets.ASH_MACOS_CERTIFICATE_PASSWORD != '' && secrets.ASH_MACOS_NOTARY_KEY_P8 != '' && secrets.ASH_MACOS_NOTARY_KEY_ID != '' && secrets.ASH_MACOS_NOTARY_ISSUER != '' }}
         run: |
           python3 - <<'PY'
           import json, os
           scope = os.environ['PLATFORMS']
           assert scope in ('all', 'linux'), 'Remote platforms must be all or linux'
+          if scope == 'all' and os.environ['MACOS_SIGNING_READY'] != 'true':
+              raise SystemExit('Configure the macOS signing variable and five Apple secrets documented in remote-server/README.md, or select platforms=linux')
           platforms = [
               {'runner': 'macos-26', 'target': 'aarch64-apple-darwin'},
               {'runner': 'macos-26-intel', 'target': 'x86_64-apple-darwin'},
@@ -89,6 +92,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends build-essential pkg-config llvm lldb libssl-dev libcap-dev libdbus-1-dev libgtk-3-dev libwayland-dev libxkbcommon-dev libasound2-dev
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
+        with:
+          version-file: scripts/pyproject.toml
       - name: Prepare packaging dependencies
         run: |
           python3 -B scripts/install_python_tools.py
@@ -190,7 +196,7 @@ jobs:
             $(python3 -c 'import json, os; print(" ".join("--target " + target for target in json.loads(os.environ["REMOTE_TARGETS"])))')
       - name: Publish independent Remote release without replacing existing assets
         run: |
-          gh release create "$REMOTE_TAG" .build/remote-release/assets/* \
+          gh release create "$REMOTE_TAG" .build/remote-release/assets/* .build/remote-release/remote-release.json \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --title "Remote Server $REMOTE_TAG" --notes "Immutable editing and Agent runtimes; clients pin the catalog digest and protocol." \
             --prerelease --latest=false
