@@ -9,6 +9,7 @@ import os
 import queue
 import shlex
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -113,6 +114,7 @@ def verify(
 
                 reader = threading.Thread(target=read, daemon=True)
                 reader.start()
+                failed = False
 
                 def rpc(method, params, error=None):
                     nonlocal counter
@@ -139,7 +141,7 @@ def verify(
                                     value
                                 )
                                 return value["error"]
-                            assert "error" not in value, value
+                            assert "error" not in value, {"method": method, **value}
                             return value["result"]
 
                 try:
@@ -344,6 +346,9 @@ def verify(
                     }
                     reports.append(report)
                     print(json.dumps(report), flush=True)
+                except Exception:
+                    failed = True
+                    raise
                 finally:
                     (base / f"{mode}-wire.json").write_text(
                         json.dumps(wire, indent=2) + "\n"
@@ -354,6 +359,39 @@ def verify(
                     except subprocess.TimeoutExpired:
                         process.kill()
                         process.wait()
+                    if failed:
+                        errors.flush()
+                        diagnostics = [(Path(errors.name), None)]
+                        if managed:
+                            status = subprocess.run(
+                                command(
+                                    [
+                                        str(package / "bin/ash-app-server-daemon"),
+                                        "version",
+                                    ]
+                                ),
+                                env=env,
+                                capture_output=True,
+                                text=True,
+                                timeout=15,
+                            )
+                            if status.returncode == 0:
+                                location = json.loads(status.stdout).get("logPath")
+                                if location:
+                                    diagnostics.append(
+                                        (Path(location), base / f"{mode}-daemon.log")
+                                    )
+                        for source, destination in diagnostics:
+                            if not source.is_file():
+                                continue
+                            data = source.read_bytes()[-65536:]
+                            if destination is not None:
+                                destination.write_bytes(data)
+                            print(
+                                f"--- {mode}: {source.name} ---\n{data.decode(errors='replace')}",
+                                file=sys.stderr,
+                                flush=True,
+                            )
                     if managed:
                         stopped = subprocess.run(
                             command(

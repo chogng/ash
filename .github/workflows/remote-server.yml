@@ -67,6 +67,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     env:
+      CACHE_ON_FAILURE: "true"
       ASH_BUILD_COMMIT: ${{ github.sha }}
       ASH_BUILD_ID: remote-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.target }}
       ASH_SYMBOLS_DIR: ${{ github.workspace }}/.build/remote-release/symbols
@@ -146,7 +147,23 @@ jobs:
         if: always()
         with:
           name: remote-server-smoke-${{ matrix.target }}
-          path: .build/remote-release/smoke.json
+          path: |
+            .build/remote-release/smoke.json
+            .build/remote-release/*-wire.json
+            .build/remote-release/*.log
+      - name: Preserve constructed runtime for failure reproduction
+        if: failure() && hashFiles('.build/remote-release/runtime/ash-package.json') != ''
+        run: |
+          python3 -B build/release/remote.py archive --unsigned \
+            --package-dir .build/remote-release/runtime \
+            --output ".build/remote-release/failed/ash-remote-${{ matrix.target }}.tar.gz"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: failure()
+        with:
+          name: remote-failed-runtime-${{ matrix.target }}
+          path: .build/remote-release/failed/*
+          compression-level: 0
+          if-no-files-found: ignore
 
   publish:
     needs: [plan, build]
