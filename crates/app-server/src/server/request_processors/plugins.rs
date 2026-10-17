@@ -97,7 +97,7 @@ impl<'a> PluginRequestProcessor<'a> {
         let authorization = {
             let runtime = self.env_runtime.read().expect("environment runtime mutex");
             let grant = match params.dir_id.as_deref() {
-                Some(id) => runtime.dirs.get(id),
+                Some(id) => runtime.dirs.get(id).map(|dir| &dir.grant),
                 None => runtime.selected_grant.as_ref(),
             }
             .ok_or_else(invalid_params)?;

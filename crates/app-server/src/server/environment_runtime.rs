@@ -87,8 +87,8 @@ use std::sync::RwLock;
 pub(super) struct EnvRuntime {
     pub(super) selected_grant: Option<Grant>,
     pub(super) selected_file_system: Option<Arc<dyn FileSystem>>,
-    pub(super) dirs: BTreeMap<String, Grant>,
-    pub(super) dir_file_systems: BTreeMap<String, Arc<dyn FileSystem>>,
+    pub(super) dirs: BTreeMap<String, DirRuntime>,
+    primary_dir_id: Option<String>,
     pub(super) _dir_contributions: Option<Arc<DirContributions>>,
     pub(super) dir_grants: Arc<DirGrants>,
     pub(super) turn_executor: TurnExecutor,
@@ -96,16 +96,51 @@ pub(super) struct EnvRuntime {
     pub(super) execution: ExecutionRuntime,
 }
 
+/// Resources share the exact directory grant and are retired together on replacement.
+pub(super) struct DirRuntime {
+    pub(super) grant: Grant,
+    file_system: Arc<dyn FileSystem>,
+    _file_system_watcher: Option<FileSystemWatcher>,
+    content_search: Option<Arc<ContentSearchService>>,
+    terminals: Option<Arc<exec_server::terminal::TerminalService>>,
+    debug_adapters: Option<Arc<crate::debug_service::DebugAdapterService>>,
+}
+
+impl DirRuntime {
+    fn retire(
+        self,
+        retained_search: Option<&Arc<ContentSearchService>>,
+        retained_terminals: Option<&Arc<exec_server::terminal::TerminalService>>,
+        retained_debug_adapters: Option<&Arc<crate::debug_service::DebugAdapterService>>,
+    ) {
+        if let Some(search) = self.content_search
+            && !retained_search.is_some_and(|retained| Arc::ptr_eq(retained, &search))
+        {
+            search.cancel_all();
+        }
+        if let Some(terminals) = self.terminals
+            && !retained_terminals.is_some_and(|retained| Arc::ptr_eq(retained, &terminals))
+        {
+            terminals.terminate_all();
+        }
+        if let Some(debug_adapters) = self.debug_adapters
+            && !retained_debug_adapters
+                .is_some_and(|retained| Arc::ptr_eq(retained, &debug_adapters))
+        {
+            debug_adapters.terminate_all();
+        }
+        self.grant.revoke();
+    }
+}
+
 /// Code-local analysis and watcher resources; never delegated to an execution target.
 #[derive(Default)]
 pub(super) struct WorkspaceRuntime {
     pub(super) _file_system_watcher: Option<FileSystemWatcher>,
-    pub(super) _dir_file_system_watchers: Vec<FileSystemWatcher>,
     pub(super) session_dir_watchers: BTreeMap<(SessionId, PathBuf), SessionDirEntryWatcher>,
     pub(super) _git_watcher: Option<GitWatcher>,
     pub(super) git: Option<Arc<GitRuntime>>,
     pub(super) content_search: Option<Arc<ContentSearchService>>,
-    pub(super) dir_content_search: BTreeMap<String, Arc<ContentSearchService>>,
     pub(super) session_dir_search: BTreeMap<(SessionId, PathBuf), Arc<ContentSearchService>>,
     pub(super) grep: Option<Arc<grep::Service>>,
     pub(super) codebase: Option<Arc<CodebaseRuntime>>,
@@ -120,9 +155,7 @@ pub(super) struct WorkspaceRuntime {
 pub(super) struct ExecutionRuntime {
     pub(super) terminals: Option<Arc<exec_server::terminal::TerminalService>>,
     pub(super) session_terminals: Option<Arc<exec_server::terminal::TerminalService>>,
-    pub(super) dir_terminals: BTreeMap<String, Arc<exec_server::terminal::TerminalService>>,
     pub(super) debug_adapters: Option<Arc<crate::debug_service::DebugAdapterService>>,
-    pub(super) dir_debug_adapters: BTreeMap<String, Arc<crate::debug_service::DebugAdapterService>>,
 }
 
 pub(super) struct SessionDirEntryWatcher {
@@ -146,7 +179,7 @@ impl EnvRuntime {
             selected_grant: None,
             selected_file_system: None,
             dirs: BTreeMap::new(),
-            dir_file_systems: BTreeMap::new(),
+            primary_dir_id: None,
             _dir_contributions: None,
             dir_grants: Arc::new(DirGrants::default()),
             turn_executor,
@@ -645,15 +678,10 @@ impl EnvRuntimeControl {
         }
         authorization.revoke();
         self.hooks.unbind_dir();
-        let dir_grants = std::mem::take(&mut runtime.dirs);
-        runtime.dir_file_systems.clear();
-        let dir_content_search = std::mem::take(&mut runtime.workspace.dir_content_search);
-        let dir_terminals = std::mem::take(&mut runtime.execution.dir_terminals);
-        let dir_debug_adapters = std::mem::take(&mut runtime.execution.dir_debug_adapters);
+        let directories = std::mem::take(&mut runtime.dirs);
+        runtime.primary_dir_id = None;
         let cloud_codebase = runtime.workspace.cloud_codebase.clone();
         let old_file_system_watcher = runtime.workspace._file_system_watcher.take();
-        let old_dir_file_system_watchers =
-            std::mem::take(&mut runtime.workspace._dir_file_system_watchers);
         let codebase = runtime.workspace.codebase.clone();
         let symbol_index = runtime.workspace.symbol_index.clone();
         let customizations = runtime._dir_contributions.clone();
@@ -676,20 +704,10 @@ impl EnvRuntimeControl {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .retain_dir_roots(&language_roots);
 
-        for (_, authorization) in dir_grants {
-            authorization.revoke();
-        }
-        for (_, search) in dir_content_search {
-            search.cancel_all();
-        }
-        for (_, terminals) in dir_terminals {
-            terminals.terminate_all();
-        }
-        for (_, debug_adapters) in dir_debug_adapters {
-            debug_adapters.terminate_all();
+        for (_, directory) in directories {
+            directory.retire(None, None, None);
         }
         drop(old_file_system_watcher);
-        drop(old_dir_file_system_watchers);
         let (watcher, watcher_error) = match (
             permissions.allows(Permission::WatchFiles),
             codebase,
@@ -1517,7 +1535,7 @@ impl AppServer {
             if let Some((id, _)) = runtime
                 .dirs
                 .iter()
-                .find(|(_, grant)| grant.dir().id() == dir.id())
+                .find(|(_, entry)| entry.grant.dir().id() == dir.id())
             {
                 return Ok(id.clone());
             }
@@ -1530,8 +1548,9 @@ impl AppServer {
             let mut dirs = runtime
                 .dirs
                 .iter()
-                .map(|(id, grant)| (id.clone(), grant.clone()))
+                .map(|(id, dir)| (id.clone(), dir.grant.clone()))
                 .collect::<Vec<_>>();
+            dirs.sort_by_key(|(id, _)| runtime.primary_dir_id.as_ref() != Some(id));
             dirs.push((id.clone(), grant.clone()));
             (id, dirs)
         };
@@ -1562,14 +1581,15 @@ impl AppServer {
             let aliases = runtime
                 .dirs
                 .iter()
-                .filter(|(id, grant)| {
+                .filter(|(id, dir)| {
+                    let grant = &dir.grant;
                     !dirs.iter().any(|(next_id, _)| next_id == *id)
                         && dirs.iter().any(|(_, next)| {
                             next.dir().id() == grant.dir().id()
                                 && next.permissions() == grant.permissions()
                         })
                 })
-                .map(|(id, grant)| (id.clone(), grant.clone()))
+                .map(|(id, dir)| (id.clone(), dir.grant.clone()))
                 .collect::<Vec<_>>();
             dirs.extend(aliases);
         }
@@ -1588,6 +1608,7 @@ impl AppServer {
             let unchanged = runtime.dirs.len() == dirs.len()
                 && dirs.iter().all(|(id, next)| {
                     runtime.dirs.get(id).is_some_and(|current| {
+                        let current = &current.grant;
                         current.dir() == next.dir()
                             && current.source() == next.source()
                             && current.permissions() == next.permissions()
@@ -1599,7 +1620,8 @@ impl AppServer {
                 return Ok(runtime
                     .dirs
                     .iter()
-                    .map(|(id, grant)| {
+                    .map(|(id, dir)| {
+                        let grant = &dir.grant;
                         (
                             id.clone(),
                             grant.dir().canonical_path().to_path_buf(),
@@ -1643,7 +1665,7 @@ impl AppServer {
             self.reset_language_env_runtimes();
             return Ok(Vec::new());
         }
-        let Some((_, primary)) = dirs.first() else {
+        let Some((primary_id, primary)) = dirs.first() else {
             unreachable!("empty directory sets are handled above");
         };
         let git_dirs = dirs
@@ -1675,16 +1697,10 @@ impl AppServer {
             .as_ref()
             .filter(|_| !watch_dirs.is_empty())
             .map(|git| git.start_watching(self.config.clone(), watch_dirs));
-        let dirs = dirs.iter().cloned().collect::<BTreeMap<_, _>>();
-        let dir_file_systems = dirs
-            .iter()
-            .map(|(id, authorization)| {
-                let file_system: Arc<dyn FileSystem> =
-                    Arc::new(LocalFileSystem::new(authorization.clone()));
-                (id.clone(), file_system)
-            })
-            .collect::<BTreeMap<_, _>>();
-        self.activate_dir_runtime(primary.clone(), host)?;
+        let primary_id = primary_id.clone();
+        let primary = primary.clone();
+        let dirs = dirs.into_iter().collect::<BTreeMap<_, _>>();
+        self.activate_dir_runtime(primary, host)?;
         let (grep, primary_search, primary_terminals, primary_debug_adapters) = {
             let runtime = self
                 .env_runtime
@@ -1697,55 +1713,46 @@ impl AppServer {
                 runtime.execution.debug_adapters.clone(),
             )
         };
-        let dir_file_system_watchers = dirs
-            .iter()
-            .skip(1)
-            .filter(|(_, grant)| grant.permissions().allows(Permission::WatchFiles))
-            .map(|(id, authorization)| {
-                FileSystemWatcher::start_for_dir(
-                    authorization.dir().clone(),
-                    Arc::clone(&self.updates),
-                    id.clone(),
-                )
-                .map_err(|error| {
-                    EnvRuntimeError::Failed(format!(
-                        "failed to initialize dir folder watcher: {error}"
-                    ))
-                })
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        let dir_content_search = dirs
-            .iter()
-            .enumerate()
-            .filter_map(|(index, (id, authorization))| {
-                if !authorization.permissions().allows(Permission::SearchFiles) {
-                    return None;
-                }
-                let service = if index == 0 {
-                    primary_search.clone()
+        let mut directories = BTreeMap::new();
+        for (id, grant) in &dirs {
+            // Input order selects the primary; map ordering must not change its resource owner.
+            let is_primary = id == &primary_id;
+            let file_system = Arc::new(LocalFileSystem::new(grant.clone()));
+            let file_system_watcher =
+                if !is_primary && grant.permissions().allows(Permission::WatchFiles) {
+                    Some(
+                        FileSystemWatcher::start_for_dir(
+                            grant.dir().clone(),
+                            Arc::clone(&self.updates),
+                            id.clone(),
+                        )
+                        .map_err(|error| {
+                            EnvRuntimeError::Failed(format!(
+                                "failed to initialize dir folder watcher: {error}"
+                            ))
+                        })?,
+                    )
                 } else {
-                    grep.as_ref().and_then(|grep| {
-                        let permission = authorization.authorize(Permission::SearchFiles).ok()?;
-                        ContentSearchService::new_authorized(permission, grep.clone())
-                            .ok()
-                            .map(Arc::new)
-                    })
-                }?;
-                Some((id.clone(), service))
-            })
-            .collect::<BTreeMap<_, _>>();
-        let mut dir_terminals = BTreeMap::new();
-        for (index, (id, authorization)) in dirs.iter().enumerate() {
-            if !authorization
-                .permissions()
-                .allows(Permission::ExecuteCommands)
-            {
-                continue;
-            }
-            let terminals = if index == 0 {
+                    None
+                };
+            let content_search = if !grant.permissions().allows(Permission::SearchFiles) {
+                None
+            } else if is_primary {
+                primary_search.clone()
+            } else {
+                grep.as_ref().and_then(|grep| {
+                    let permission = grant.authorize(Permission::SearchFiles).ok()?;
+                    ContentSearchService::new_authorized(permission, grep.clone())
+                        .ok()
+                        .map(Arc::new)
+                })
+            };
+            let terminals = if !grant.permissions().allows(Permission::ExecuteCommands) {
+                None
+            } else if is_primary {
                 primary_terminals.clone()
             } else {
-                let capability = authorization
+                let capability = grant
                     .authorize(Permission::ExecuteCommands)
                     .map_err(|_| EnvRuntimeError::PermissionRequired)?;
                 Some(Arc::new(
@@ -1756,28 +1763,19 @@ impl AppServer {
                     })?,
                 ))
             };
-            if let Some(terminals) = terminals {
-                dir_terminals.insert(id.clone(), terminals);
-            }
-        }
-        let mut dir_debug_adapters = BTreeMap::new();
-        for (index, (id, authorization)) in dirs.iter().enumerate() {
-            if !authorization.permissions().allows(Permission::LoadConfig)
-                || !authorization
-                    .permissions()
-                    .allows(Permission::ExecuteCommands)
+            let debug_adapters = if !grant.permissions().allows(Permission::LoadConfig)
+                || !grant.permissions().allows(Permission::ExecuteCommands)
             {
-                continue;
-            }
-            let debug_adapters = if index == 0 {
+                None
+            } else if is_primary {
                 primary_debug_adapters.clone()
             } else {
                 Some(Arc::new(
                     crate::debug_service::DebugAdapterService::new(
-                        authorization
+                        grant
                             .authorize(Permission::LoadConfig)
                             .map_err(|_| EnvRuntimeError::PermissionRequired)?,
-                        authorization
+                        grant
                             .authorize(Permission::ExecuteCommands)
                             .map_err(|_| EnvRuntimeError::PermissionRequired)?,
                         exec_server::terminal::safe_process_environment(),
@@ -1789,30 +1787,32 @@ impl AppServer {
                     })?,
                 ))
             };
-            if let Some(debug_adapters) = debug_adapters {
-                dir_debug_adapters.insert(id.clone(), debug_adapters);
-            }
+            directories.insert(
+                id.clone(),
+                DirRuntime {
+                    grant: grant.clone(),
+                    file_system,
+                    _file_system_watcher: file_system_watcher,
+                    content_search,
+                    terminals,
+                    debug_adapters,
+                },
+            );
         }
-        let (previous_watcher, previous_dir_watchers) = {
+        let (previous_watcher, previous_directories) = {
             let mut runtime = self
                 .env_runtime
                 .write()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             let previous_watcher = runtime.workspace._git_watcher.take();
-            let previous_dir_watchers =
-                std::mem::take(&mut runtime.workspace._dir_file_system_watchers);
-            runtime.dirs = dirs.clone();
-            runtime.dir_file_systems = dir_file_systems;
-            runtime.workspace._dir_file_system_watchers = dir_file_system_watchers;
-            runtime.workspace.dir_content_search = dir_content_search;
-            runtime.execution.dir_terminals = dir_terminals;
-            runtime.execution.dir_debug_adapters = dir_debug_adapters;
+            let previous_directories = std::mem::replace(&mut runtime.dirs, directories);
+            runtime.primary_dir_id = Some(primary_id);
             runtime.workspace.git = git;
             runtime.workspace._git_watcher = watcher;
-            (previous_watcher, previous_dir_watchers)
+            (previous_watcher, previous_directories)
         };
         drop(previous_watcher);
-        drop(previous_dir_watchers);
+        drop(previous_directories);
         self.reset_language_env_runtimes();
         Ok(dirs
             .into_iter()
@@ -2322,7 +2322,7 @@ impl AppServer {
             selected_grant: Some(authorization),
             selected_file_system: Some(file_system),
             dirs: BTreeMap::new(),
-            dir_file_systems: BTreeMap::new(),
+            primary_dir_id: None,
             _dir_contributions: Some(Arc::clone(&customizations)),
             dir_grants: Arc::clone(&current.dir_grants),
             turn_executor: current
@@ -2332,12 +2332,10 @@ impl AppServer {
                 .without_context_source("codebase"),
             workspace: WorkspaceRuntime {
                 _file_system_watcher: file_system_watcher,
-                _dir_file_system_watchers: Vec::new(),
                 session_dir_watchers: BTreeMap::new(),
                 _git_watcher: None,
                 git: git.clone(),
                 content_search,
-                dir_content_search: BTreeMap::new(),
                 session_dir_search: BTreeMap::new(),
                 grep,
                 codebase,
@@ -2349,9 +2347,7 @@ impl AppServer {
             execution: ExecutionRuntime {
                 terminals: None,
                 session_terminals: None,
-                dir_terminals: BTreeMap::new(),
                 debug_adapters: None,
-                dir_debug_adapters: BTreeMap::new(),
             },
         };
         let previous = std::mem::replace(&mut *current, next);
@@ -2592,7 +2588,7 @@ impl AppServer {
             selected_grant: Some(authorization),
             selected_file_system: Some(file_system),
             dirs: BTreeMap::new(),
-            dir_file_systems: BTreeMap::new(),
+            primary_dir_id: None,
             _dir_contributions: Some(Arc::clone(&customizations)),
             dir_grants: Arc::clone(&current.dir_grants),
             turn_executor: {
@@ -2607,12 +2603,10 @@ impl AppServer {
             },
             workspace: WorkspaceRuntime {
                 _file_system_watcher: file_system_watcher,
-                _dir_file_system_watchers: Vec::new(),
                 session_dir_watchers: BTreeMap::new(),
                 _git_watcher: None,
                 git: git.clone(),
                 content_search: content_search.clone(),
-                dir_content_search: BTreeMap::new(),
                 session_dir_search: BTreeMap::new(),
                 grep: Some(grep),
                 codebase,
@@ -2624,9 +2618,7 @@ impl AppServer {
             execution: ExecutionRuntime {
                 terminals: Some(Arc::clone(&terminals)),
                 session_terminals: None,
-                dir_terminals: BTreeMap::new(),
                 debug_adapters: debug_adapters.clone(),
-                dir_debug_adapters: BTreeMap::new(),
             },
         };
         let previous = std::mem::replace(&mut *current, next);
@@ -2935,9 +2927,9 @@ impl AppServer {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         if let Some(dir_id) = dir_id {
             return runtime
-                .dir_file_systems
+                .dirs
                 .get(dir_id)
-                .cloned()
+                .map(|dir| Arc::clone(&dir.file_system))
                 .ok_or_else(|| RpcError::new(-32602, AppServerErrorName::InvalidParams));
         }
         runtime
@@ -2987,6 +2979,7 @@ impl AppServer {
             Some(id) => runtime
                 .dirs
                 .get(id)
+                .map(|dir| &dir.grant)
                 .ok_or_else(|| RpcError::new(-32602, AppServerErrorName::InvalidParams))?,
             None => runtime.selected_grant.as_ref().ok_or_else(|| {
                 RpcError::new(-32040, AppServerErrorName::LanguageServiceUnavailable)
@@ -3021,10 +3014,9 @@ impl AppServer {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         if let Some(dir_id) = dir_id {
             return runtime
-                .workspace
-                .dir_content_search
+                .dirs
                 .get(dir_id)
-                .cloned()
+                .and_then(|dir| dir.content_search.clone())
                 .ok_or_else(|| RpcError::new(-32050, AppServerErrorName::SearchUnavailable));
         }
         runtime
@@ -3163,10 +3155,9 @@ impl AppServer {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         if let Some(dir_id) = dir_id {
             return runtime
-                .execution
-                .dir_terminals
+                .dirs
                 .get(dir_id)
-                .cloned()
+                .and_then(|dir| dir.terminals.clone())
                 .ok_or_else(|| RpcError::new(-32060, AppServerErrorName::TerminalUnavailable));
         }
         runtime
@@ -3195,12 +3186,12 @@ impl AppServer {
         // A projectless Agents window has no selected Terminal owner. Reuse the
         // Session source's configured owner; creation still uses its Session grant.
         if let Some(ash_protocol::SessionExecutionTarget::Local { root }) = source {
-            if let Some((id, _)) = runtime
+            if let Some(directory) = runtime
                 .dirs
-                .iter()
-                .find(|(_, grant)| grant.dir().canonical_path() == root)
+                .values()
+                .find(|dir| dir.grant.dir().canonical_path() == root)
             {
-                if let Some(service) = runtime.execution.dir_terminals.get(id) {
+                if let Some(service) = &directory.terminals {
                     return Ok(Arc::clone(service));
                 }
             }
@@ -3229,7 +3220,11 @@ impl AppServer {
         if let Some(session) = &runtime.execution.session_terminals {
             services.push(Arc::clone(session));
         }
-        for service in runtime.execution.dir_terminals.values() {
+        for service in runtime
+            .dirs
+            .values()
+            .filter_map(|dir| dir.terminals.as_ref())
+        {
             if !services
                 .iter()
                 .any(|existing| Arc::ptr_eq(existing, service))
@@ -3250,10 +3245,9 @@ impl AppServer {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         if let Some(dir_id) = dir_id {
             return runtime
-                .execution
-                .dir_debug_adapters
+                .dirs
                 .get(dir_id)
-                .cloned()
+                .and_then(|dir| dir.debug_adapters.clone())
                 .ok_or_else(|| RpcError::new(-32070, AppServerErrorName::DebugAdapterUnavailable));
         }
         runtime
@@ -3274,7 +3268,11 @@ impl AppServer {
         if let Some(primary) = &runtime.execution.debug_adapters {
             services.push(Arc::clone(primary));
         }
-        for service in runtime.execution.dir_debug_adapters.values() {
+        for service in runtime
+            .dirs
+            .values()
+            .filter_map(|dir| dir.debug_adapters.as_ref())
+        {
             if !services
                 .iter()
                 .any(|existing| Arc::ptr_eq(existing, service))
@@ -3578,23 +3576,8 @@ fn retire_env_runtime(
     retained_terminals: Option<&Arc<exec_server::terminal::TerminalService>>,
     retained_debug_adapters: Option<&Arc<crate::debug_service::DebugAdapterService>>,
 ) {
-    for (_, search) in std::mem::take(&mut runtime.workspace.dir_content_search) {
-        if !retained_search.is_some_and(|retained| Arc::ptr_eq(retained, &search)) {
-            search.cancel_all();
-        }
-    }
-    for (_, terminals) in std::mem::take(&mut runtime.execution.dir_terminals) {
-        if !retained_terminals.is_some_and(|retained| Arc::ptr_eq(retained, &terminals)) {
-            terminals.terminate_all();
-        }
-    }
-    for (_, debug_adapters) in std::mem::take(&mut runtime.execution.dir_debug_adapters) {
-        if !retained_debug_adapters.is_some_and(|retained| Arc::ptr_eq(retained, &debug_adapters)) {
-            debug_adapters.terminate_all();
-        }
-    }
-    for (_, authorization) in std::mem::take(&mut runtime.dirs) {
-        authorization.revoke();
+    for (_, directory) in std::mem::take(&mut runtime.dirs) {
+        directory.retire(retained_search, retained_terminals, retained_debug_adapters);
     }
     if let Some(authorization) = runtime.selected_grant.take() {
         authorization.revoke();
@@ -3625,7 +3608,12 @@ fn language_roots_for(runtime: &EnvRuntime) -> std::collections::BTreeSet<PathBu
     let mut roots = runtime.dir_grants.dirs_for(Permission::UseLanguageServices);
     let executable = runtime.dir_grants.dirs_for(Permission::ExecuteCommands);
     roots.retain(|root| executable.contains(root));
-    for grant in runtime.dirs.values().chain(runtime.selected_grant.iter()) {
+    for grant in runtime
+        .dirs
+        .values()
+        .map(|dir| &dir.grant)
+        .chain(runtime.selected_grant.iter())
+    {
         if grant.is_active()
             && grant.permissions().allows(Permission::UseLanguageServices)
             && grant.permissions().allows(Permission::ExecuteCommands)

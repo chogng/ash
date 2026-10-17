@@ -1731,7 +1731,7 @@ impl<C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'_, C> {
                 .read()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             let grant = match params.dir_id.as_deref() {
-                Some(id) => runtime.dirs.get(id),
+                Some(id) => runtime.dirs.get(id).map(|dir| &dir.grant),
                 None => runtime.selected_grant.as_ref(),
             }
             .ok_or_else(|| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;

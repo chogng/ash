@@ -64,7 +64,7 @@ pub(super) fn read(
         runtime
             .selected_grant
             .iter()
-            .chain(runtime.dirs.values())
+            .chain(runtime.dirs.values().map(|dir| &dir.grant))
             .filter_map(|grant| grant.authorize(Permission::ReadFiles).ok()),
     );
     if let Some(scope) = runtime

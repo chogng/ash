@@ -3948,7 +3948,7 @@ test('approval capabilities reach the composer only through owner-directed backe
 	await nextTask();
 });
 
-for (const kind of ['Code', 'Cowork']) {
+for (const kind of ['Code', 'Cowork', 'Code and Cowork']) {
 	test(`${kind} concurrent model visibility saves preserve both enabled rows after the first durable write`, async () => {
 		using configuration = new WorkbenchConfigurationService();
 		const firstWrite = new DeferredPromise<void>();
@@ -3969,12 +3969,13 @@ for (const kind of ['Code', 'Cowork']) {
 		using services = new InstantiationService();
 		services.registerInstance(IConfigurationService, configuration);
 		services.registerInstance(IStorageService, storage);
-		using cowork = services.createInstance(CoworkModelPreferencesService, CoworkModelPreferences);
 		const models = modelsFor(chat);
+		services.registerInstance(ILanguageModelsService, models);
+		using cowork = services.createInstance(CoworkModelPreferencesService, CoworkModelPreferences);
 		const visibility = kind === 'Code' ? models : cowork;
 		const first = visibility.setModelVisible(entries[0]!.model, true);
 		await started.p;
-		const second = visibility.setModelVisible(entries[1]!.model, true);
+		const second = (kind === 'Code and Cowork' ? models : visibility).setModelVisible(entries[1]!.model, true);
 		await firstWrite.complete();
 		await Promise.all([first, second]);
 		assert.deepEqual((await models.listModels()).map(entry => entry.model), entries.map(entry => entry.model));

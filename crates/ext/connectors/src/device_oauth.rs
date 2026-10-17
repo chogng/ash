@@ -271,19 +271,16 @@ impl ConnectorDeviceOAuthService {
             .ok_or_else(provider_unavailable)?;
         let definition = entry.definition().clone();
         let connection_generation = entry.connection().generation();
-        let definition_digest = definition.digest();
         let provider = self
             .providers
             .get(connector_id)
             .ok_or_else(provider_unavailable)?;
         self.credentials
-            .authority()
-            .with_authorized_invocation(
+            .with_connected_oauth_credential(
                 connector_id,
                 connection_generation,
-                &definition_digest,
-                || {
-                    let credential = self.credentials.load_connected_credential(connector_id)?;
+                &definition,
+                |credential| {
                     let replacement = provider.refresh(
                         &definition,
                         crate::ConnectorOAuthRefreshRequest { credential },
@@ -314,7 +311,6 @@ impl ConnectorDeviceOAuthService {
             .ok_or_else(provider_unavailable)?;
         let definition = entry.definition().clone();
         let connection_generation = entry.connection().generation();
-        let definition_digest = definition.digest();
         let provider = self
             .providers
             .get(&connector_id)
@@ -323,13 +319,11 @@ impl ConnectorDeviceOAuthService {
             return Err(provider_unavailable());
         }
         self.credentials
-            .authority()
-            .with_authorized_invocation(
+            .with_connected_oauth_credential(
                 &connector_id,
                 connection_generation,
-                &definition_digest,
-                || {
-                    let credential = self.credentials.load_connected_credential(&connector_id)?;
+                &definition,
+                |credential| {
                     provider.revoke(
                         &definition,
                         crate::ConnectorOAuthRevokeRequest { credential },

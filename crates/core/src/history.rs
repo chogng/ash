@@ -5,6 +5,7 @@ use ash_history::HistoryPrefix;
 use ash_history::StoredEvent;
 use ash_protocol::HistoryPrefixRef;
 use ash_protocol::ThreadEvent;
+use ash_protocol::ThreadId;
 use ash_thread_store::ThreadStore;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -24,6 +25,26 @@ impl<'a> HistoryReader<'a> {
             staged,
             snapshots: BTreeMap::new(),
         }
+    }
+
+    pub(crate) fn load_thread(
+        &mut self,
+        thread_id: &ThreadId,
+    ) -> Result<ThreadSnapshot, CoreError> {
+        let events = self.store.load(thread_id)?;
+        if events.is_empty() {
+            return Err(CoreError::NotFound(thread_id.to_string()));
+        }
+        let mut snapshot = events
+            .iter()
+            .try_fold(None, |snapshot, event| {
+                self.reduce(snapshot, event).map(Some)
+            })?
+            .ok_or_else(|| CoreError::Journal("cannot recover an empty rollout".into()))?;
+        self.store
+            .execution_binding(thread_id)?
+            .apply(&mut snapshot.execution_target);
+        Ok(snapshot)
     }
 
     pub(crate) fn reduce(

@@ -17,8 +17,8 @@ import type { ChatInputDelegate, ChatInputState } from '../../../../workbench/co
 import { ChatInputPart } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
 import { ChatInputEditor } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputEditor.js';
 import { ChatDragAndDrop } from './widget/chatDragAndDrop.js';
-import { NewChatContextAttachments } from './newChatContextAttachments.js';
-import { NewChatInputPasteTarget } from './newChatInputPasteTarget.js';
+import { NewChatContextAttachments } from '../../chat/browser/newChatContextAttachments.js';
+import { NewChatInputPasteTarget } from '../../chat/browser/newChatInputPasteTarget.js';
 import { ChatInputTipPresenter } from './widget/input/chatInputTipPresenter.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { SessionsChatAccessibilityHelp } from './sessionsChatAccessibilityHelp.js';

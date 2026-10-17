@@ -132,7 +132,11 @@ impl ActionPolicyService for SharedExecutionPolicy {
                 .read()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             requested = runtime.dir_grants.requested_context(session, thread);
-            for grant in runtime.selected_grant.iter().chain(runtime.dirs.values()) {
+            for grant in runtime
+                .selected_grant
+                .iter()
+                .chain(runtime.dirs.values().map(|dir| &dir.grant))
+            {
                 if grant.is_active() {
                     roots.push(serde_json::json!({
                     "environment": grant.dir().env().as_str(), "path": grant.dir().canonical_path(),

@@ -146,7 +146,7 @@ impl<'a> TestingRequestProcessor<'a> {
     ) -> Result<Authorization, RpcError> {
         let runtime = self.env_runtime.read().expect("environment runtime mutex");
         let grant = match dir_id {
-            Some(id) => runtime.dirs.get(id),
+            Some(id) => runtime.dirs.get(id).map(|dir| &dir.grant),
             None => runtime.selected_grant.as_ref(),
         }
         .ok_or_else(|| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;

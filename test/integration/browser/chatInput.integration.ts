@@ -367,9 +367,9 @@ services.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
 services.registerSingleton(IScreenshotService, () => services.createInstance(BrowserScreenshotService));
 services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 if (!services.has(IChatSpeechToTextService)) services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
-registerTestDictationOnboarding(services);
 const notifications = resources.add(new NotificationService());
 services.registerInstance(INotificationService, notifications);
+registerTestDictationOnboarding(services);
 const quickInput = resources.add(new TestQuickInputService({ instantiationService: services, container: document.body }));
 services.registerInstance(IQuickInputService, quickInput);
 services.registerInstance(IHistoryService, { getHistory: () => [{ resource: URI.file('/workspace/closed.ts') }], goBack: async () => { }, goForward: async () => { }, reopenLastClosedEditor: async () => { } } satisfies IHistoryService);
@@ -540,8 +540,8 @@ const delegate: ChatInputDelegate = {
 };
 const cowork = new URLSearchParams(location.search).get('surface') === 'cowork';
 const inlineCode = new URLSearchParams(location.search).has('inlineCode');
+registerCodeEditorServices(services);
 if (inlineCode) {
-	registerCodeEditorServices(services);
 	resources.add(registerChatContextActions());
 }
 const editorProvider = inlineCode ? { create: (options: Parameters<typeof ChatInputEditors.create>[0]) => services.createInstance(ChatInputEditor, options) } : ChatInputEditors;

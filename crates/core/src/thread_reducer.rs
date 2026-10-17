@@ -1,4 +1,5 @@
 use crate::CoreError;
+use crate::canonical_json::canonicalize_json;
 use crate::context::ContextCalibration;
 use crate::context::next_context_calibrations;
 use crate::multi_agent::validate_context_seed_digest;
@@ -2973,28 +2974,6 @@ fn event_digest(event: &ThreadEvent) -> Result<String, CoreError> {
         CoreError::Journal(format!("failed to encode canonical Thread event: {error}"))
     })?;
     Ok(format!("sha256:{:x}", Sha256::digest(encoded)))
-}
-
-fn canonicalize_json(value: &mut serde_json::Value) {
-    match value {
-        serde_json::Value::Array(values) => {
-            for value in values {
-                canonicalize_json(value);
-            }
-        }
-        serde_json::Value::Object(object) => {
-            let mut entries = std::mem::take(object).into_iter().collect::<Vec<_>>();
-            for (_, value) in &mut entries {
-                canonicalize_json(value);
-            }
-            entries.sort_by(|left, right| left.0.cmp(&right.0));
-            object.extend(entries);
-        }
-        serde_json::Value::Null
-        | serde_json::Value::Bool(_)
-        | serde_json::Value::Number(_)
-        | serde_json::Value::String(_) => {}
-    }
 }
 
 pub(crate) fn validate_agent_request(request: &AgentRequest) -> Result<(), String> {

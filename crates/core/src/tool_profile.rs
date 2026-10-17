@@ -1,4 +1,5 @@
 use crate::CoreError;
+use crate::canonical_json::canonicalize_json;
 use ash_protocol::ToolDefinition;
 use ash_protocol::ToolProfileSnapshot;
 use sha2::Digest;
@@ -85,28 +86,6 @@ fn tool_definition_digest(definitions: &[ToolDefinition]) -> Result<String, Core
     let encoded = serde_json::to_vec(&value)
         .map_err(|error| CoreError::Context(format!("failed to encode tool profile: {error}")))?;
     Ok(format!("sha256:{:x}", Sha256::digest(encoded)))
-}
-
-fn canonicalize_json(value: &mut serde_json::Value) {
-    match value {
-        serde_json::Value::Array(values) => {
-            for value in values {
-                canonicalize_json(value);
-            }
-        }
-        serde_json::Value::Object(object) => {
-            let mut entries = std::mem::take(object).into_iter().collect::<Vec<_>>();
-            for (_, value) in &mut entries {
-                canonicalize_json(value);
-            }
-            entries.sort_by(|left, right| left.0.cmp(&right.0));
-            object.extend(entries);
-        }
-        serde_json::Value::Null
-        | serde_json::Value::Bool(_)
-        | serde_json::Value::Number(_)
-        | serde_json::Value::String(_) => {}
-    }
 }
 
 #[cfg(test)]

@@ -79,7 +79,8 @@ impl ThreadController {
         }
         let durable = self.store.load(&request.thread_id)?;
         if !durable.is_empty() {
-            let existing = self.load_snapshot(&request.thread_id)?;
+            let existing = crate::history::HistoryReader::new(self.store.as_ref(), &[])
+                .load_thread(&request.thread_id)?;
             let existing = matching_agent_thread(&existing, &request)?;
             *loaded = Some(self.loaded_threads.install(existing.clone()));
             return Ok(existing);

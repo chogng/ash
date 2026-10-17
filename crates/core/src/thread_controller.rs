@@ -725,7 +725,8 @@ impl ThreadController {
         }
         let durable = self.store.load(&request.thread_id)?;
         if !durable.is_empty() {
-            let existing = self.load_snapshot(&request.thread_id)?;
+            let existing = crate::history::HistoryReader::new(self.store.as_ref(), &[])
+                .load_thread(&request.thread_id)?;
             let existing = matching_created_thread(&existing, &request)?;
             *loaded = Some(self.loaded_threads.install(existing.clone()));
             return Ok(existing);
@@ -2892,7 +2893,8 @@ impl ThreadController {
             .loaded
             .lock()
             .map_err(|_| CoreError::Journal("loaded Thread state lock poisoned".into()))?;
-        let mut snapshot = self.load_snapshot(thread_id)?;
+        let mut snapshot =
+            crate::history::HistoryReader::new(self.store.as_ref(), &[]).load_thread(thread_id)?;
         let mut recovery_events = Vec::new();
         for run in snapshot
             .hook_runs
@@ -2964,24 +2966,6 @@ impl ThreadController {
             self.record_batch(&mut snapshot, recovery_events)?;
         }
         *loaded = Some(self.loaded_threads.install(snapshot.clone()));
-        Ok(snapshot)
-    }
-
-    fn load_snapshot(&self, thread_id: &ThreadId) -> Result<ThreadSnapshot, CoreError> {
-        let events = self.store.load(thread_id)?;
-        if events.is_empty() {
-            return Err(CoreError::NotFound(thread_id.to_string()));
-        }
-        let mut reader = crate::history::HistoryReader::new(self.store.as_ref(), &[]);
-        let mut snapshot = events
-            .iter()
-            .try_fold(None, |snapshot, event| {
-                reader.reduce(snapshot, event).map(Some)
-            })?
-            .ok_or_else(|| CoreError::Journal("cannot recover an empty rollout".into()))?;
-        self.store
-            .execution_binding(thread_id)?
-            .apply(&mut snapshot.execution_target);
         Ok(snapshot)
     }
 
@@ -3059,7 +3043,8 @@ impl ThreadController {
             .lock()
             .map_err(|_| CoreError::Journal("loaded Thread state lock poisoned".into()))?;
         if loaded.is_none() {
-            let snapshot = self.load_snapshot(thread_id)?;
+            let snapshot = crate::history::HistoryReader::new(self.store.as_ref(), &[])
+                .load_thread(thread_id)?;
             *loaded = Some(self.loaded_threads.install(snapshot));
         }
         let snapshot = &mut loaded
@@ -3083,7 +3068,8 @@ impl ThreadController {
             .lock()
             .map_err(|_| CoreError::Journal("loaded Thread state lock poisoned".into()))?;
         if loaded.is_none() {
-            let snapshot = self.load_snapshot(thread_id)?;
+            let snapshot = crate::history::HistoryReader::new(self.store.as_ref(), &[])
+                .load_thread(thread_id)?;
             *loaded = Some(self.loaded_threads.install(snapshot));
         }
         let loaded = loaded

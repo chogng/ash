@@ -52,8 +52,6 @@ import { migrateNewChatDraftState, readNewChatDraftState, writeNewChatDraftState
 import type { SessionsPartOptions } from '../../browser/parts/sessionsPart.js';
 import { NewChatContextAttachments } from '../../contrib/chat/browser/newChatContextAttachments.js';
 import { NewChatInputPasteTarget } from '../../contrib/chat/browser/newChatInputPasteTarget.js';
-import { NewChatContextAttachments as CoworkContextAttachments } from '../../contrib/cowork/browser/newChatContextAttachments.js';
-import { NewChatInputPasteTarget as CoworkPasteTarget } from '../../contrib/cowork/browser/newChatInputPasteTarget.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>", { url: 'http://localhost/' });
 for (const [name, value] of Object.entries({
@@ -235,7 +233,9 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 		async executeCommand() { throw new Error("No commands registered"); },
 	};
 	using resources = new DisposableStore();
-	const services = resources.add(createCodeEditorServices(resources).createChild());
+	const editorRoot = createCodeEditorServices(resources);
+	editorRoot.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
+	const services = resources.add(editorRoot.createChild());
 	services.registerInstance(IRendererHostService, createDisconnectedRendererApi());
 	services.registerInstance(IAgentVoiceService, createDisconnectedRendererApi().agentVoice);
 	services.registerSingleton(IPathService, () => services.createInstance(BrowserPathService));
@@ -254,7 +254,6 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { assert.fail('Unexpected editor navigation'); }, focusActiveEditor: () => { } });
 	services.registerInstance(IAppServerSkillApi, { onDidChangeSkills: ready.event, readTextResource: async () => { throw new Error("No Skill body in this test fixture"); }, list: async () => ({ generation: 0, skills: [] }), read: async () => ({ revision: 0, catalog: { generation: 0, skills: [] }, diagnostics: [] }), setEnabled: async () => { } });
 	services.registerInstance(IChatSessionNavigationService, { openConversation: async () => { throw new Error('Unexpected conversation navigation'); } } as unknown as IChatSessionNavigationService);
-	services.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
 	services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 	using notifications = new NotificationService();
@@ -499,27 +498,4 @@ test('Sessions file paste reaches the shared composer once and text paste stays 
 	container.dispatchEvent(text);
 	assert.equal(text.defaultPrevented, false);
 	assert.equal(batches.length, 1);
-});
-
-test('Cowork routes picked and pasted files to the shared composer and releases its event sources', async () => {
-	const container = document.createElement('div');
-	const batches: (readonly File[])[] = [];
-	const files = [new browserEnvironment.window.File(['const captured = true;'], 'sample.ts', { type: 'text/plain' })];
-	using attachments = new CoworkContextAttachments(container, async selected => { batches.push(selected); });
-	using pasteTarget = new CoworkPasteTarget(container, attachments);
-	const picker = container.querySelector<HTMLInputElement>('input[type=file]')!;
-	Object.defineProperty(picker, 'files', { value: files });
-	picker.dispatchEvent(new browserEnvironment.window.Event('change'));
-	const paste = new browserEnvironment.window.Event('paste', { bubbles: true, cancelable: true });
-	Object.defineProperty(paste, 'clipboardData', { value: { files } });
-	container.dispatchEvent(paste);
-	assert.equal(paste.defaultPrevented, true);
-	assert.deepEqual(batches, [files, files]);
-	pasteTarget.dispose();
-	attachments.dispose();
-	container.dispatchEvent(paste);
-	picker.dispatchEvent(new browserEnvironment.window.Event('change'));
-	await attachments.attachFiles(files);
-	assert.equal(batches.length, 2);
-	assert.equal(container.childElementCount, 0);
 });

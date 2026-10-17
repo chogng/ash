@@ -4,6 +4,7 @@ mod approval_request;
 mod attachment_model_service;
 mod attachment_preparation;
 mod browser;
+mod canonical_json;
 mod context;
 mod context_manager;
 mod diagnostic_model;

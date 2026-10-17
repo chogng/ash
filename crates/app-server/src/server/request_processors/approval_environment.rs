@@ -135,7 +135,7 @@ impl<'ctx> ApprovalEnvironmentRequestProcessor<'ctx> {
                 let grant = runtime
                     .selected_grant
                     .iter()
-                    .chain(runtime.dirs.values())
+                    .chain(runtime.dirs.values().map(|dir| &dir.grant))
                     .find(|grant| {
                         grant.dir().canonical_path() == root || grant.dir().requested_path() == root
                     })

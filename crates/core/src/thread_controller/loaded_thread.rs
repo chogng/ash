@@ -173,7 +173,8 @@ impl LoadedThreads {
             .lock()
             .map_err(|_| CoreError::Journal("loaded Thread state lock poisoned".into()))?;
         if loaded.is_none() {
-            let snapshot = self.load_snapshot(thread_id)?;
+            let snapshot = crate::history::HistoryReader::new(self.store.as_ref(), &[])
+                .load_thread(thread_id)?;
             *loaded = Some(self.install(snapshot));
         }
         Ok(loaded
@@ -217,24 +218,6 @@ impl LoadedThreads {
 
     fn next_incarnation(&self) -> ThreadIncarnationId {
         ThreadIncarnationId(self.next_incarnation.fetch_add(1, Ordering::Relaxed))
-    }
-
-    fn load_snapshot(&self, thread_id: &ThreadId) -> Result<ThreadSnapshot, CoreError> {
-        let events = self.store.load(thread_id)?;
-        if events.is_empty() {
-            return Err(CoreError::NotFound(thread_id.to_string()));
-        }
-        let mut reader = crate::history::HistoryReader::new(self.store.as_ref(), &[]);
-        let mut snapshot = events
-            .iter()
-            .try_fold(None, |snapshot, event| {
-                reader.reduce(snapshot, event).map(Some)
-            })?
-            .ok_or_else(|| CoreError::Journal("cannot recover an empty rollout".into()))?;
-        self.store
-            .execution_binding(thread_id)?
-            .apply(&mut snapshot.execution_target);
-        Ok(snapshot)
     }
 }
 

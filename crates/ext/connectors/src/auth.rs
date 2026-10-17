@@ -7,8 +7,10 @@ use crate::ConnectorAccountId;
 use crate::ConnectorConnectionGeneration;
 use crate::ConnectorConnectionState;
 use crate::ConnectorCredentialRef;
+use crate::ConnectorDefinition;
 use crate::ConnectorError;
 use crate::ConnectorId;
+use crate::ConnectorOAuthError;
 use crate::ConnectorSnapshotGeneration;
 use ash_secrets::DeleteSecretOutcome;
 use ash_secrets::SecretKey;
@@ -69,6 +71,22 @@ impl ConnectorCredentialService {
 
     pub fn authority(&self) -> &ConnectorAuthority {
         &self.authority
+    }
+
+    /// Keeps lifecycle credential access inside the exact provider definition and connection lease.
+    pub(crate) fn with_connected_oauth_credential<T>(
+        &self,
+        connector_id: &ConnectorId,
+        connection_generation: ConnectorConnectionGeneration,
+        definition: &ConnectorDefinition,
+        invoke: impl FnOnce(SecretValue) -> Result<T, ConnectorOAuthError>,
+    ) -> Option<Result<T, ConnectorOAuthError>> {
+        self.authority.with_authorized_invocation(
+            connector_id,
+            connection_generation,
+            &definition.digest(),
+            || invoke(self.load_connected_credential(connector_id)?),
+        )
     }
 
     /// Loads the opaque credential for one exact connected account.

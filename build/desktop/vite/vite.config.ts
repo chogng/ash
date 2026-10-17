@@ -1,4 +1,3 @@
-import { localizationPlugin } from "../../resources/localization.ts";
 import { resolve } from "node:path";
 import { defineConfig, normalizePath, type Plugin } from "vite";
 import { AshRendererDirectory } from "../../../src/ash/code/common/application.js";
@@ -113,8 +112,6 @@ export default defineConfig(({ mode, command }) => {
 				},
 			} satisfies Plugin]),
 			buildMetricsPlugin(),
-			// Extension preparation consumes language packs; one watcher publishes both before reloading.
-			localizationPlugin({ watch: false }),
 			hotReloadPlugin({ desktopRoot }),
 			workbenchEntryPlugin(browserEntryPath, [{
 				url: `/${sessionsWebEntry}.html`,
@@ -137,6 +134,7 @@ export default defineConfig(({ mode, command }) => {
 				service: new CSSDevelopmentService({ sourceRoot: resolve(repositoryRoot, 'src'), isBuilt: command === 'build' }),
 			}),
 			productIconsPlugin(),
+			// Extension preparation publishes localization first and owns the shared resource watcher.
 			browserExtensionsPlugin(),
 			{
 				name: "ash-electron-file-html",

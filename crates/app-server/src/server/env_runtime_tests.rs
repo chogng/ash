@@ -453,8 +453,8 @@ fn env_dirs_set_routes_services_by_stable_folder_id() {
                 "id": 2,
                 "method": "env/dirs/set",
                 "params": {"dirs": [
-                    {"id": "first", "path": first.path, "grant": {"type": "host", "permissions": ["readFiles", "writeFiles", "executeCommands", "watchFiles", "browseFiles", "searchFiles", "loadInstructions", "loadConfig", "discoverSkills", "discoverMcp", "useLanguageServices", "discoverHooks", "discoverPlugins", "inspectRepository", "mutateRepository"]}},
-                    {"id": "second", "path": second.path, "grant": {"type": "host", "permissions": ["readFiles", "writeFiles", "executeCommands", "watchFiles", "browseFiles", "searchFiles", "loadInstructions", "loadConfig", "discoverSkills", "discoverMcp", "useLanguageServices", "discoverHooks", "discoverPlugins", "inspectRepository", "mutateRepository"]}}
+                    {"id": "z-first", "path": first.path, "grant": {"type": "host", "permissions": ["readFiles", "writeFiles", "executeCommands", "watchFiles", "browseFiles", "searchFiles", "loadInstructions", "loadConfig", "discoverSkills", "discoverMcp", "useLanguageServices", "discoverHooks", "discoverPlugins", "inspectRepository", "mutateRepository"]}},
+                    {"id": "a-second", "path": second.path, "grant": {"type": "host", "permissions": ["readFiles", "writeFiles", "executeCommands", "watchFiles", "browseFiles", "searchFiles", "loadInstructions", "loadConfig", "discoverSkills", "discoverMcp", "useLanguageServices", "discoverHooks", "discoverPlugins", "inspectRepository", "mutateRepository"]}}
                 ]}
             })
             .to_string(),
@@ -462,12 +462,12 @@ fn env_dirs_set_routes_services_by_stable_folder_id() {
     )
     .unwrap();
 
-    assert_eq!(response["result"]["dirs"][0]["id"], "first");
-    assert_eq!(response["result"]["dirs"][1]["id"], "second");
-    let Ok(first_files) = server.file_system_service_for(Some("first")) else {
+    assert_eq!(response["result"]["dirs"][0]["id"], "a-second");
+    assert_eq!(response["result"]["dirs"][1]["id"], "z-first");
+    let Ok(first_files) = server.file_system_service_for(Some("z-first")) else {
         panic!("first folder file service should be available");
     };
-    let Ok(second_files) = server.file_system_service_for(Some("second")) else {
+    let Ok(second_files) = server.file_system_service_for(Some("a-second")) else {
         panic!("second folder file service should be available");
     };
     assert_eq!(
@@ -481,13 +481,22 @@ fn env_dirs_set_routes_services_by_stable_folder_id() {
         b"multi-root-second"
     );
     assert!(server.file_system_service_for(Some("missing")).is_err());
-    let Ok(first_terminal) = server.terminal_service_for(Some("first")) else {
+    let Ok(first_terminal) = server.terminal_service_for(Some("z-first")) else {
         panic!("first folder terminal service should be available");
     };
-    let Ok(second_terminal) = server.terminal_service_for(Some("second")) else {
+    let Ok(second_terminal) = server.terminal_service_for(Some("a-second")) else {
         panic!("second folder terminal service should be available");
     };
     assert!(!Arc::ptr_eq(&first_terminal, &second_terminal));
+    // The caller's first root owns default services even when its ID sorts last.
+    assert!(Arc::ptr_eq(
+        &first_terminal,
+        &server.terminal_service_for(None).unwrap()
+    ));
+    assert!(Arc::ptr_eq(
+        &server.debug_adapter_service_for(Some("z-first")).unwrap(),
+        &server.debug_adapter_service_for(None).unwrap()
+    ));
 }
 
 #[test]

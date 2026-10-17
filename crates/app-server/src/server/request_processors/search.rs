@@ -100,6 +100,7 @@ impl<'ctx, C: SearchRequestProcessorContext + ?Sized> SearchRequestProcessor<'ct
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .dirs
                 .get(&dir_id)
+                .map(|dir| &dir.grant)
                 .ok_or_else(|| RpcError::new(-32602, AppServerErrorName::InvalidParams))?
                 .authorize(Permission::SearchFiles)
                 .map_err(|_| RpcError::new(-32043, AppServerErrorName::PermissionRequired))?,
@@ -222,6 +223,7 @@ impl<'ctx, C: SearchRequestProcessorContext + ?Sized> SearchRequestProcessor<'ct
                 runtime
                     .dirs
                     .get(&dir_id)
+                    .map(|dir| &dir.grant)
                     .ok_or_else(|| RpcError::new(-32602, AppServerErrorName::InvalidParams))?
                     .authorize(Permission::SearchFiles)
                     .map_err(|_| RpcError::new(-32043, AppServerErrorName::PermissionRequired))?

@@ -246,12 +246,11 @@ impl<'ctx, C: AppToolsRequestProcessorContext + ?Sized> AppToolsRequestProcessor
         {
             authorizations.push(default);
         }
-        authorizations.extend(
-            runtime
-                .dirs
-                .values()
-                .filter_map(|grant| grant.authorize(ash_file_access::Permission::ReadFiles).ok()),
-        );
+        authorizations.extend(runtime.dirs.values().filter_map(|dir| {
+            dir.grant
+                .authorize(ash_file_access::Permission::ReadFiles)
+                .ok()
+        }));
         if let Some(snapshot) = runtime
             .dir_grants
             .snapshot_for(session, ash_file_access::Permission::ReadFiles)

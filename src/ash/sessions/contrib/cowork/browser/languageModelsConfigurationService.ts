@@ -1,29 +1,23 @@
 import type { ModelRef } from '../../../../workbench/services/chat/common/chatService.js';
 import { Emitter } from '../../../../base/common/event.js';
-import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { TaskQueue } from '../../../../base/common/async.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import type { ModelCatalogEntry } from '../../../../workbench/services/chat/common/modelCatalog.js';
-import { modelRefIdentity } from '../../../../workbench/services/chat/common/modelCatalog.js';
-import { ModelCatalogConfiguration, isModelVisibleByDefault, type ModelVisibilityPreference } from '../common/languageModelsConfiguration.js';
+import { ILanguageModelsService } from '../../../../workbench/contrib/chat/common/languageModels.js';
 import type { ILanguageModelsConfigurationService } from '../common/languageModelsConfiguration.js';
-
 
 export class LanguageModelsConfigurationService extends Disposable implements ILanguageModelsConfigurationService {
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChangeModels = this.changed.event;
-	private readonly modelVisibility = new Map<string, ModelVisibilityPreference>();
-	private readonly visibilityUpdates = new TaskQueue();
-	constructor(private readonly preferences: { readonly defaultModelSetting: string; readonly selectedModelStorageKey: string; }, @IConfigurationService private readonly configuration: IConfigurationService, @IStorageService private readonly storage: IStorageService) {
+	constructor(private readonly preferences: { readonly defaultModelSetting: string; readonly selectedModelStorageKey: string; }, @IConfigurationService private readonly configuration: IConfigurationService, @IStorageService private readonly storage: IStorageService, @ILanguageModelsService private readonly models: ILanguageModelsService) {
 		super();
-		this._register(toDisposable(() => this.visibilityUpdates.clearPending()));
-		this.acceptHiddenModels(configuration.getValue(ModelCatalogConfiguration.hiddenModels));
+		// Catalog visibility and its durable writes belong to the shared model service.
+		this._register(models.onDidChangeModels(() => this.changed.fire()));
 		this._register(storage.onDidChangeValue(event => {
 			if (event.scope === StorageScope.PROFILE && event.key === this.preferences.selectedModelStorageKey) { this.changed.fire(); }
 		}));
 		this._register(configuration.onDidChangeConfiguration(event => {
-			if (event.affectsConfiguration(ModelCatalogConfiguration.hiddenModels)) { this.acceptHiddenModels(configuration.getValue(ModelCatalogConfiguration.hiddenModels)); }
 			if (event.affectsConfiguration(this.preferences.defaultModelSetting)) { this.changed.fire(); }
 		}));
 	}
@@ -47,31 +41,10 @@ export class LanguageModelsConfigurationService extends Disposable implements IL
 	}
 
 	public isModelVisible(model: ModelRef): boolean {
-		const preference = this.modelVisibility.get(modelRefIdentity(model));
-		return preference ? preference.visible === true : isModelVisibleByDefault(model);
+		return this.models.isModelVisible(model);
 	}
 
 	public setModelVisible(model: ModelRef, visible: boolean): Promise<void> {
-		return this.visibilityUpdates.schedule(async () => {
-			// Recompute after the previous durable write: separate switches share one setting.
-			const identity = modelRefIdentity(model);
-			if (visible === this.isModelVisible(model)) { return; }
-			const models = [...this.modelVisibility.values()].filter(candidate => modelRefIdentity(candidate) !== identity);
-			if (visible !== isModelVisibleByDefault(model)) { models.push(visible ? { ...model, visible: true } : { ...model }); }
-			await this.configuration.updateValue(ModelCatalogConfiguration.hiddenModels, models);
-		});
-	}
-
-	private acceptHiddenModels(models: readonly ModelVisibilityPreference[]): void {
-		const next = new Map(models.map(model => [modelRefIdentity(model), Object.freeze({ ...model })]));
-		if (sameVisibility(this.modelVisibility, next)) { return; }
-		this.modelVisibility.clear();
-		for (const [identity, model] of next) { this.modelVisibility.set(identity, model); }
-		this.changed.fire();
+		return this.models.setModelVisible(model, visible);
 	}
 }
-
-function sameVisibility(left: ReadonlyMap<string, ModelVisibilityPreference>, right: ReadonlyMap<string, ModelVisibilityPreference>): boolean {
-	return left.size === right.size && [...left].every(([key, model]) => right.has(key) && right.get(key)!.visible === model.visible);
-}
-
