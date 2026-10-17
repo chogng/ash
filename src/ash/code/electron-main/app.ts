@@ -1181,25 +1181,6 @@ export class AshApplication extends Disposable {
 			platform: process.platform,
 			resourcesPath: process.resourcesPath,
 		});
-		const artifact = remoteRuntimeArtifactFromEnvironment(process.env);
-		const runtimeInstaller = artifact === undefined
-			? new RemoteRuntimeProvisioner({
-				source: packagedRemoteRuntimeCatalogSource(
-					{ appPath: app.getAppPath(), isPackaged: app.isPackaged, resourcesPath: process.resourcesPath },
-					join(app.getPath("userData"), "remote-runtime-downloads"),
-				),
-				remoteExecutable,
-				sshExecutable,
-				environment: process.env,
-				installRoot: process.env.ASH_REMOTE_RUNTIME_INSTALL_ROOT,
-			})
-			: new RemoteRuntimeInstaller({
-				remoteExecutable,
-				sshExecutable,
-				environment: process.env,
-				artifact,
-				installRoot: process.env.ASH_REMOTE_RUNTIME_INSTALL_ROOT,
-			});
 		const configuredRuntime = process.env.ASH_REMOTE_ASH_PATH;
 		const connectionProfiles = configuredRuntime === undefined ? new RemoteConnectionProfiles({
 			remoteExecutable,
@@ -1211,7 +1192,32 @@ export class AshApplication extends Disposable {
 			remoteExecutable: configuredRuntime ?? "ash-remote-server",
 			localEnvironment: process.env,
 			carrier,
-			runtimeInstaller,
+			runtimeInstaller: {
+				install: (host, options) => {
+					// A compatible installed runtime does not need a release catalog. Resolve
+					// its trust binding only when bootstrap actually requests installation.
+					const artifact = remoteRuntimeArtifactFromEnvironment(process.env);
+					const installer = artifact === undefined
+						? new RemoteRuntimeProvisioner({
+							source: packagedRemoteRuntimeCatalogSource(
+								{ appPath: app.getAppPath(), isPackaged: app.isPackaged, resourcesPath: process.resourcesPath },
+								join(app.getPath("userData"), "remote-runtime-downloads"),
+							),
+							remoteExecutable,
+							sshExecutable,
+							environment: process.env,
+							installRoot: process.env.ASH_REMOTE_RUNTIME_INSTALL_ROOT,
+						})
+						: new RemoteRuntimeInstaller({
+							remoteExecutable,
+							sshExecutable,
+							environment: process.env,
+							artifact,
+							installRoot: process.env.ASH_REMOTE_RUNTIME_INSTALL_ROOT,
+						});
+					return installer.install(host, options);
+				},
+			},
 			connectionProfiles,
 			logProgress: createRemoteRuntimeInstallProgressLogger(),
 		}));

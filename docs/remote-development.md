@@ -224,6 +224,46 @@ flowchart LR
     SSH --> ZTUI["ash code TUI session"]
 ```
 
+## Desktop SSH / Tailscale 联调
+
+先准备同一 checkout 的后端和 Desktop：
+
+```sh
+pnpm prepare:backend
+pnpm build
+```
+
+在 OpenSSH 配置中保存目标 alias，`HostName` 可使用目标的 Tailscale IPv4 或 MagicDNS
+名称。先用 `ssh -o BatchMode=yes <alias> 'uname -sm'` 确认同一账号的非交互连接可用。
+目标机器需要与当前 Desktop schema 匹配的 Remote 包；开发时可以显式指定该包中
+`bin/ash-remote-server` 的远端绝对路径：
+
+```sh
+ASH_REMOTE_ASH_PATH=/absolute/remote/package/bin/ash-remote-server \
+  pnpm start --remote-ssh=<alias> --folder=/absolute/remote/workspace
+```
+
+`ASH_REMOTE_ASH_PATH` 在目标机器上解析；`ASH_SSH_PATH` 则选择本机 SSH executable。
+已安装且兼容的 runtime 可以直接启动，不要求开发包绑定发布 catalog。只有 runtime 缺失或
+schema 不兼容、实际进入安装流程时，Desktop 才读取并验证安装 artifact / catalog binding。
+显式 runtime 保持开发者所选路径，不写入 active/previous profile。
+
+完整窗口回归使用真实 OpenSSH、临时密钥、严格的 host-key 校验和隔离 profile：
+
+```sh
+pnpm smoketest-no-compile test/smoke/areas/windows/remote-ssh.spec.ts
+ASH_TEST_SSH_ADDRESS="$(tailscale ip -4)" \
+  pnpm smoketest-no-compile test/smoke/areas/windows/remote-ssh.spec.ts
+```
+
+该 macOS 测试默认从 loopback 连接独立 sshd；第二条命令把客户端入口绑定到本机 Tailscale
+IPv4，不需要更改用户 SSH 配置或 authorized_keys。测试从生产 Desktop 入口打开包含空格和
+中文的远端目录，验证编辑保存、搜索、PTY、Ports 转发；复用现有 Remote 验收运行不需要凭据的
+确定性 Agent turn。测试主动切断 SSH 字节流，确认新连接
+generation、同一个 shell PID、未保存内容和同一本机转发端口恢复。截图、trace 和连接摘要写入
+`.build/desktop/playwright/test-results/`。本机 Tailscale 地址回归不代表另一台设备的跨机网络验收；
+跨机联调仍使用上面的 alias 和目标机器独立构建的 runtime。
+
 ## 所有权
 
 Ports 面板消费 [`ITunnelService`](../src/ash/platform/tunnel/common/tunnel.ts)，
