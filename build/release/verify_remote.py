@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify a published Remote release using Desktop bootstrap and real loopback SSH."""
+"""Verify a local or published Remote release through Desktop bootstrap and loopback SSH."""
 
 from __future__ import annotations
 
@@ -21,8 +21,15 @@ sys.path.insert(0, str(ROOT))
 from build.remote_smoke import verify  # noqa: E402
 
 
-def accept(package: Path, binding: Path, report: Path) -> None:
-    package, binding, report = package.resolve(), binding.resolve(), report.resolve()
+def accept(
+    package: Path, report: Path, binding: Path | None, catalog: Path | None
+) -> None:
+    package, report = package.resolve(), report.resolve()
+    source = (
+        ["--binding", str(binding.resolve())]
+        if binding is not None
+        else ["--catalog-dir", str(catalog.resolve())]
+    )
     assert not (package / "ash-resources/capabilities").exists()
     report.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="ash-release-ssh-") as temporary:
@@ -116,8 +123,7 @@ def accept(package: Path, binding: Path, report: Path) -> None:
                             str(script),
                             "--package",
                             str(package),
-                            "--binding",
-                            str(binding),
+                            *source,
                             "--ssh",
                             str(ssh),
                             "--host",
@@ -148,7 +154,10 @@ def accept(package: Path, binding: Path, report: Path) -> None:
                     json.dumps(
                         {
                             "status": "passed",
-                            "binding": json.loads(binding.read_text()),
+                            "binding": json.loads(binding.read_text())
+                            if binding is not None
+                            else None,
+                            "source": "published" if binding is not None else "local",
                             "desktopBootstrap": bootstrap,
                             "editingTerminalAgent": json.loads(
                                 smoke_report.read_text()
@@ -179,10 +188,12 @@ def accept(package: Path, binding: Path, report: Path) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--package-dir", type=Path, required=True)
-    parser.add_argument("--binding-file", type=Path, required=True)
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--binding-file", type=Path)
+    source.add_argument("--catalog-dir", type=Path)
     parser.add_argument("--report", type=Path, required=True)
     args = parser.parse_args()
-    accept(args.package_dir, args.binding_file, args.report)
+    accept(args.package_dir, args.report, args.binding_file, args.catalog_dir)
     return 0
 
 

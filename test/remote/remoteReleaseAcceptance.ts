@@ -1,6 +1,7 @@
-/** Exercises Desktop's real bootstrap against a published release and an isolated SSH host. */
+/** Exercises Desktop's real bootstrap with local or published packages and an isolated SSH host. */
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
@@ -13,8 +14,9 @@ import { RemoteConnectionProfiles } from '../../src/ash/platform/remote/electron
 import { RemoteRuntimeBootstrapMainService } from '../../src/ash/platform/remote/electron-main/remoteRuntimeBootstrapMainService.js';
 import { RemoteRuntimeProvisioner } from '../../src/ash/platform/remote/electron-main/remoteRuntimeProvisioner.js';
 
-const { values } = parseArgs({ options: Object.fromEntries(['package', 'binding', 'ssh', 'host', 'root', 'report'].map(name => [name, { type: 'string' as const }])) });
-for (const name of ['package', 'binding', 'ssh', 'host', 'root', 'report']) assert(values[name], `--${name} is required`);
+const { values } = parseArgs({ options: Object.fromEntries(['package', 'binding', 'catalog-dir', 'ssh', 'host', 'root', 'report'].map(name => [name, { type: 'string' as const }])) });
+for (const name of ['package', 'ssh', 'host', 'root', 'report']) assert(values[name], `--${name} is required`);
+assert(Boolean(values.binding) !== Boolean(values['catalog-dir']), 'select --binding or --catalog-dir');
 const packageRoot = resolve(values.package!);
 const root = resolve(values.root!);
 const ssh = resolve(values.ssh!);
@@ -22,8 +24,9 @@ const host = values.host!;
 await mkdir(root, { recursive: true });
 const workspace = join(root, 'workspace');
 await mkdir(workspace);
-const release = JSON.parse(await readFile(values.binding!, 'utf8'));
 const metadata = JSON.parse(await readFile(join(packageRoot, 'ash-package.json'), 'utf8'));
+const catalogRoot = values['catalog-dir'] === undefined ? undefined : resolve(values['catalog-dir']);
+const release = values.binding === undefined ? { protocol: metadata.protocol } : JSON.parse(await readFile(values.binding, 'utf8'));
 assert.deepEqual(release.protocol, metadata.protocol);
 const environment = buildAppServerEnvironment(process.env, process.platform === 'darwin' ? 'macos' : 'linux', {
 	ASH_HOME: join(root, 'local-profile'), ASH_APP_SERVER_PATH: join(packageRoot, 'bin/ash-app-server'), ASH_SSH_PATH: ssh,
@@ -38,7 +41,9 @@ try {
 		const count = progress.length;
 		const carrier = new AppServerDaemonLauncher({ executable: join(packageRoot, 'bin/ash-app-server-daemon'), args: ['connect-selected'], environment });
 		const provisioner = new RemoteRuntimeProvisioner({
-			source: { kind: 'network', catalogUrl: release.catalog.url, expectedSha256: release.catalog.sha256, cacheRoot: join(root, 'cache') },
+			source: catalogRoot === undefined
+				? { kind: 'network', catalogUrl: release.catalog.url, expectedSha256: release.catalog.sha256, cacheRoot: join(root, 'cache') }
+				: { kind: 'packaged', bundleRoot: catalogRoot, expectedSha256: createHash('sha256').update(await readFile(join(catalogRoot, 'catalog.json'))).digest('hex') },
 			remoteExecutable, sshExecutable: ssh, environment, installRoot: join(root, 'remote-installation'),
 		});
 		const bootstrap = new RemoteRuntimeBootstrapMainService({
@@ -50,7 +55,10 @@ try {
 		try {
 			await bootstrap.processLauncher.validate();
 			if (reconnect) assert.equal(progress.length, count, 'reconnect must not provision or download');
-			else assert(progress.some(event => event.phase === 'downloadComplete' && event.disposition === 'downloaded'));
+			else {
+				assert(progress.some(event => event.phase === 'complete' && event.disposition === 'installed'));
+				if (catalogRoot === undefined) assert(progress.some(event => event.phase === 'downloadComplete' && event.disposition === 'downloaded'));
+			}
 			const child = bootstrap.processLauncher.launch();
 			const closed = new Promise<void>((resolve, reject) => {
 				child.once('error', reject);
@@ -104,7 +112,7 @@ try {
 	assert(installed);
 	const report = {
 		status: 'passed', catalog: release.catalog, protocol: release.protocol, runtime: installed,
-		firstConnectionAutomaticallyDownloaded: true, reconnectReusedActiveRuntimeWithoutProvisioning: true,
+		firstConnectionAutomaticallyInstalled: true, firstConnectionAutomaticallyDownloaded: catalogRoot === undefined, reconnectReusedActiveRuntimeWithoutProvisioning: true,
 		editingSurvivedReconnect: true, productionDesktopBootstrap: true, transport: 'OpenSSH', progress,
 	};
 	await writeFile(values.report!, `${JSON.stringify(report, null, 2)}\n`);
