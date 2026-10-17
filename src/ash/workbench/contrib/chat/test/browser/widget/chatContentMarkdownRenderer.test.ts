@@ -7,6 +7,7 @@ import { suite, test, suiteSetup, suiteTeardown } from 'mocha';
 import { startMarkdownMathExtension } from '../../../../../../../../test/fixtures/markdownExtension.js';
 import { Emitter, Event } from '../../../../../../base/common/event.js';
 import { DeferredPromise } from '../../../../../../base/common/async.js';
+import type { IMarkdownString } from '../../../../../../base/common/htmlContent.js';
 import { DisposableStore, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../../../../platform/agentHost/common/extensionHostApi.js';
 import { createDisconnectedExtensionHostApi } from '../../../../../../platform/agentHost/browser/extensionHostApi.js';
@@ -45,7 +46,15 @@ function services(overrides: Partial<IExtensionHostApi> = {}): InstantiationServ
 		...overrides,
 	});
 	instance.registerInstance(IMarkdownRendererService, instance.createInstance(MarkdownRendererService));
+	instance.registerInstance(ILinkPresentationService, { onDidChangeLinkPresentationRules: Event.None, getLinkPresentationRule: () => undefined } as unknown as ILinkPresentationService);
+	instance.registerInstance(IHoverService, {} as IHoverService);
 	return instance;
+}
+
+function fragmentContents(element: HTMLElement): string {
+	const copy = element.cloneNode(true) as HTMLElement;
+	for (const fragment of copy.querySelectorAll('.ash-chat-markdown-fragment')) fragment.replaceWith(...fragment.childNodes);
+	return copy.innerHTML;
 }
 
 suite('Shared chat Markdown rendering', () => {
@@ -62,6 +71,98 @@ suite('Shared chat Markdown rendering', () => {
 			assert.deepEqual([...result.element.querySelectorAll<HTMLElement>('.ash-katex-container')].map(element => ({ source: element.dataset.latex, display: element.dataset.mathDisplay })), entry.formulas);
 		});
 	}
+
+	for (const [name, source] of [
+		['paragraphs and incomplete inline syntax', 'First **bold** and `code`.\n\nSecond *unfinished\n\nThird [label](https://example.com).'],
+		['setext heading and rule', 'A title\n======\n\nA paragraph\n\n---\n\nTail.'],
+		['table header and body', 'Intro.\n\n| Name | Value |\n| --- | --- |\n| a | **b** |\n| c | d |\n\nTail.'],
+		['loose nested lists', 'Intro.\n\n- one\n\n  continued\n  - nested\n\n- two\n\nOutside.'],
+		['blockquote and alert', 'Intro.\n\n> [!NOTE]\n> First\n>\n> Second\n\nOutside.'],
+		['later reference definition', 'Read [later] and [label][later].\n\nMiddle.\n\n[later]: https://example.com "Title"\n\nTail.'],
+		['definition in a blockquote', 'Read [later].\n\n> [later]: https://example.com\n\nTail.'],
+		['display math across paragraphs', 'Intro.\n\n$$\na +\n\nb\n$$\n\nTail.'],
+		['escaped display math across paragraphs', 'Intro.\n\n\\[\na +\n\nb\n\\]\n\nTail.'],
+		['HTML source and Unicode', '中文 😀 **bold**.\n\n<div>raw\n\nHTML</div>\n\nTail.'],
+		['CRLF normalization', 'First.\r\n\r\nSecond **bold**.\r\n\r\nTail.'],
+	] as const) {
+		test(`incremental blocks match complete rendering: ${name}`, () => {
+			using scope = services();
+			using renderer = scope.createInstance(ChatContentMarkdownRenderer);
+			using part = scope.createInstance(ChatMarkdownContentPart, { ownerDocument: document });
+			for (let end = 1; end <= source.length; end += 3) {
+				const markdown = { value: source.slice(0, end), supportThemeIcons: true, supportAlertSyntax: true };
+				part.tryIncrementalUpdate(markdown, true);
+				using expected = renderer.render(markdown, { fillInIncompleteTokens: true });
+				assert.equal(fragmentContents(part.domNode), expected.element.innerHTML, `${name}, prefix ${end}`);
+			}
+			for (const value of [source, `Inserted.\n\n${source}`, source.replace(/Intro|First|Read/u, 'Corrected'), 'Replaced.', '']) {
+				const markdown = { value, supportThemeIcons: true, supportAlertSyntax: true };
+				part.tryIncrementalUpdate(markdown, false);
+				using expected = renderer.render(markdown);
+				assert.equal(fragmentContents(part.domNode), expected.element.innerHTML, `${name}, correction ${value}`);
+			}
+		});
+	}
+
+	test('completed blocks keep nodes, handlers and current response context through corrections', () => {
+		using scope = services();
+		const actions: string[] = [];
+		using part = scope.createInstance(ChatMarkdownContentPart, {
+			ownerDocument: document, markdown: 'Same.\n\nSame.\n\n[Open](https://example.com)\n\nTail',
+			actionHandler: (_href: string, markdown: IMarkdownString) => actions.push(markdown.value),
+		});
+		const paragraphs = [...part.domNode.querySelectorAll('p')];
+		const link = part.domNode.querySelector('a')!;
+		const next = 'Inserted.\n\nSame.\n\nSame.\n\n[Open](https://example.com)\n\nTail changed.';
+		part.tryIncrementalUpdate({ value: next }, true);
+		assert.equal(part.domNode.querySelectorAll('p')[1], paragraphs[0]);
+		assert.equal(part.domNode.querySelectorAll('p')[2], paragraphs[1]);
+		assert.equal(part.domNode.querySelector('a'), link);
+		link.click();
+		assert.deepEqual(actions, [next]);
+	});
+
+	test('corrections can merge an unchanged preceding block with a new continuation', () => {
+		using scope = services();
+		using renderer = scope.createInstance(ChatContentMarkdownRenderer);
+		using part = scope.createInstance(ChatMarkdownContentPart, { ownerDocument: document });
+		for (const value of ['- first\n\nOutside.', '- first\n\n  continuation.', '> quote\n\nOutside.', '> quote\n\n> continuation.']) {
+			part.tryIncrementalUpdate({ value });
+			using expected = renderer.render({ value });
+			assert.equal(fragmentContents(part.domNode), expected.element.innerHTML, value);
+		}
+	});
+
+	test('metadata changes invalidate retained blocks and preserve the complete renderer size limit', () => {
+		using scope = services();
+		using renderer = scope.createInstance(ChatContentMarkdownRenderer);
+		using part = scope.createInstance(ChatMarkdownContentPart, { ownerDocument: document });
+		const value = '<details><summary>Details</summary>Body</details>\n\n[run](command:test)\n\nTail';
+		for (const supportHtml of [false, true, false]) for (const isTrusted of [false, true]) {
+			const markdown = { value, supportHtml, isTrusted };
+			part.tryIncrementalUpdate(markdown);
+			using expected = renderer.render(markdown);
+			assert.equal(fragmentContents(part.domNode), expected.element.innerHTML);
+		}
+		const before = fragmentContents(part.domNode);
+		assert.throws(() => part.tryIncrementalUpdate({ value: 'x'.repeat(4 * 1024 * 1024 + 1) }), /supported size/u);
+		assert.equal(fragmentContents(part.domNode), before);
+	});
+
+	test('incremental responses retain one ordered formula batch across paragraph boundaries', async () => {
+		const requests: JsonValue[] = [];
+		using scope = services({
+			invoke: async request => {
+				requests.push(request.payload);
+				const { formulas } = request.payload as { formulas: JsonValue[]; };
+				return { results: formulas.map(() => ({ status: 'rendered', html: '<math><mi>x</mi></math>' })) };
+			}
+		});
+		using part = scope.createInstance(ChatMarkdownContentPart, { ownerDocument: document, markdown: 'Intro.\n\n$\\gdef\\foo{x}\\foo$' });
+		part.tryIncrementalUpdate({ value: 'Intro.\n\n$\\gdef\\foo{x}\\foo$\n\nBetween.\n\n$\\foo$' }, true);
+		await changedUntil(part.domNode, () => part.domNode.querySelectorAll('math').length === 2);
+		assert.deepEqual(requests, [{ formulas: [{ source: '\\gdef\\foo{x}\\foo', display: 'inline' }, { source: '\\foo', display: 'inline' }], macros: {} }]);
+	});
 
 	test('coalesces streaming batches and reuses completed results for prose-only updates', async () => {
 		mock.timers.enable({ apis: ['setTimeout'] });
@@ -315,9 +416,6 @@ suite('Shared chat Markdown rendering', () => {
 				return math.invoke(request.registrationId, request.operation, request.payload, signal);
 			}
 		});
-		// This message has no links; decorations still own their normal subscription lifetime.
-		scope.registerInstance(ILinkPresentationService, { onDidChangeLinkPresentationRules: Event.None } as unknown as ILinkPresentationService);
-		scope.registerInstance(IHoverService, {} as IHoverService);
 		using part = scope.createInstance(ChatMarkdownContentPart, { ownerDocument: document, markdown: 'Stable paragraph\n\n$x$' });
 		await pending;
 		const paragraph = part.domNode.querySelector('p');

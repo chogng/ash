@@ -151,7 +151,8 @@ export class CodeBlockPart extends Disposable {
 		this.language.textContent = data.languageId;
 		this.toolbar.setAttribute('aria-label', localize('chat.code.numberedActions', 'Code block {0} actions', data.codeBlockIndex + 1));
 		if (!this.visible) return;
-		const languageId = this.languages.isRegisteredLanguageId(data.languageId) ? data.languageId
+		// Fence info can be empty, incomplete, or an alias rather than a valid registry ID.
+		const languageId = this.languages.getRegisteredLanguageIds().includes(data.languageId) ? data.languageId
 			: this.languages.getLanguageIdByLanguageName(data.languageId) ?? 'plaintext';
 		const model = this.documentModel.value;
 		if (!model) {

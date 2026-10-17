@@ -45,8 +45,10 @@ import { AccessibleViewType, IAccessibleViewService } from '../../../src/ash/pla
 import { AccessibleViewService } from '../../../src/ash/workbench/contrib/accessibility/browser/accessibleView.js';
 import '../../../src/ash/workbench/contrib/chat/browser/chat.contribution.js';
 import '../../../src/ash/base/browser/ui/styles.css';
+import '../../../src/ash/base/browser/markdownRenderer.css';
 import '../../../src/ash/editor/browser/coreCommands.js';
 import { Disposable, DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
+import { Lexer } from '../../../src/ash/base/common/marked/marked.js';
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { Selection } from '../../../src/ash/editor/common/core/selection.js';
@@ -75,6 +77,7 @@ import { IChatSessionNavigationService } from '../../../src/ash/workbench/servic
 import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
 import type { ThreadTranscriptEntry } from '../../../src/ash/platform/agentHost/common/agentService.js';
 import { ChatListWidget } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatListWidget.js';
+import { ChatContentMarkdownRenderer } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatContentMarkdownRenderer.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../src/ash/workbench/common/contributions.js';
 import { EditorExtensionsRegistry } from '../../../src/ash/editor/browser/editorExtensions.js';
 import { SuggestController } from '../../../src/ash/editor/contrib/suggest/browser/suggestController.js';
@@ -87,7 +90,7 @@ import { ICommandService } from '../../../src/ash/platform/commands/common/comma
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
 import { BrowserClipboardService } from '../../../src/ash/platform/clipboard/browser/clipboardService.js';
 import { MainThreadSpeech } from '../../../src/ash/workbench/api/browser/mainThreadSpeech.js';
-import type { IExtensionHostApi, ExtensionHostFleetSnapshot, JsonValue } from '../../../src/ash/platform/agentHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../src/ash/platform/agentHost/common/extensionHostApi.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { ChatAIDisabledSettingId } from '../../../src/ash/platform/chat/common/chatSettings.js';
 import { ViewDescriptorService } from '../../../src/ash/workbench/services/views/browser/viewDescriptorService.js';
@@ -464,12 +467,38 @@ let toolEntries: ThreadTranscriptEntry[] = [];
 let text = 'Reply with `inline`.\n\n```typescript\nconst code = "<safe>";\nsecond line\n```';
 list.render([{ id: 'reply', type: 'agentMessage', text, transient: false }]);
 
+type MarkdownWorkload = 'prose' | 'mixed' | 'fence';
+function markdownWorkload(kind: MarkdownWorkload): string {
+	const prose = 'Streaming **Markdown** with [a link](https://example.com) and `inline code`. 中文内容保持完整。 '.repeat(6);
+	if (kind === 'prose') return Array.from({ length: 96 }, (_, index) => `Paragraph ${index}: ${prose}\n\n`).join('') + 'Final visible marker.';
+	const code = Array.from({ length: kind === 'fence' ? 800 : 36 }, (_, index) => `const value${index} = "streamed code ${index}";`).join('\n');
+	if (kind === 'fence') return `Before code.\n\n\`\`\`typescript\n${code}\n\`\`\`\n\nFinal visible marker.`;
+	return Array.from({ length: 12 }, (_, index) => `Section ${index}: ${prose}\n\n\`\`\`typescript\n${code}\n\`\`\`\n\n`).join('') + 'Final visible marker.';
+}
+
+interface MarkdownBenchmarkResult {
+	readonly bytes: number;
+	readonly chunks: number;
+	readonly wallMs: number;
+	readonly updateMs: number;
+	readonly maxUpdateMs: number;
+	readonly markdownMs: number;
+	readonly renderedCharacters: number;
+	readonly renderCalls: number;
+	readonly lexCalls: number;
+	readonly lexedCharacters: number;
+	readonly removedNodes: number;
+	readonly longTasks: readonly number[];
+	readonly codeBlocks: number;
+	readonly finalVisible: boolean;
+}
+
 declare global {
 	interface Window {
 		ashChatTranscriptIntegration: {
 			holdClipboard(fail?: boolean): void;
 			releaseClipboard(): void;
-			state(): { copied: string; file: string; resource: string; editorCount: number; selection: unknown; notifications: readonly string[]; };
+			state(): { copied: string; file: string; resource: string; editorCount: number; codeModelCount: number; selection: unknown; notifications: readonly string[]; };
 			openSkill(): Promise<void>;
 			referenceReady(line: number, column: number): boolean;
 			openReference(line: number, column: number): Promise<void>;
@@ -501,6 +530,8 @@ declare global {
 			setTranscriptVisible(value: boolean): void;
 			recreateTranscript(): void;
 			stream(value: string, complete: boolean): void;
+			runMarkdownBenchmark(kind: MarkdownWorkload): Promise<MarkdownBenchmarkResult>;
+			compareStreamingMarkdown(value: string, complete: boolean, measureLayout?: boolean): { actual: string; expected: string; layoutError: number; layout: unknown[]; };
 			showLongCode(): string;
 			showTool(): void;
 			openAccessibleView(help: boolean): boolean;
@@ -584,6 +615,7 @@ const readApi: IExtensionHostApi = {
 	}
 };
 let readBridge: MainThreadSpeech | undefined;
+services.registerInstance(IExtensionHostApi, readApi);
 
 window.ashChatTranscriptIntegration = {
 	holdClipboard: (fail = false) => { clipboardFailure = fail; clipboardReady = new Promise(resolve => { releaseClipboard = resolve; }); },
@@ -591,6 +623,7 @@ window.ashChatTranscriptIntegration = {
 	state: () => ({
 		copied: clipboardText, file: file.getModel()!.getValue(), resource: activeResource.toString(),
 		editorCount: services.get(ICodeEditorService).listCodeEditors().length,
+		codeModelCount: services.get(ICodeEditorService).listCodeEditors().filter(editor => editor !== file && editor.getModel()).length,
 		selection: services.get(ICodeEditorService).listCodeEditors().find(editor => editor !== file)?.getSelection(),
 		notifications: services.get(INotificationService).getNotifications().map(item => item.message),
 	}),
@@ -631,6 +664,108 @@ window.ashChatTranscriptIntegration = {
 		previous.dispose();
 	},
 	stream: (value, complete) => list.render([{ id: 'stream', type: 'agentMessage', text: value, transient: !complete }]),
+	compareStreamingMarkdown: (value, complete, measureLayout = false) => {
+		list.render([{ id: 'stream', type: 'agentMessage', text: value, transient: !complete }]);
+		const root = list.element.querySelector<HTMLElement>('.ash-chat-markdown-part')!;
+		const copy = root.cloneNode(true) as HTMLElement;
+		for (const fragment of copy.querySelectorAll('.ash-chat-markdown-fragment')) fragment.replaceWith(...fragment.childNodes);
+		const codeNode = (language: string, text: string): HTMLElement => {
+			const code = document.createElement('code');
+			code.dataset.language = language;
+			code.textContent = text;
+			return code;
+		};
+		const editors = services.get(ICodeEditorService).listCodeEditors();
+		const blocks = [...root.querySelectorAll('.ash-chat-code-block')];
+		for (const [index, block] of copy.querySelectorAll('.ash-chat-code-block').entries()) {
+			const editor = editors.find(editor => blocks[index].contains(editor.getDomNode()));
+			const pre = document.createElement('pre');
+			pre.append(codeNode(block.querySelector('.ash-chat-code-block-language')!.textContent!, editor!.getModel()!.getValue()));
+			block.replaceWith(pre);
+		}
+		using renderer = services.createInstance(ChatContentMarkdownRenderer);
+		using expected = renderer.render({ value, supportThemeIcons: true, supportAlertSyntax: true }, { fillInIncompleteTokens: !complete, codeBlockRendererSync: codeNode });
+		// Provider completion is asynchronous; compare formula identity and syntax here.
+		for (const element of [copy, expected.element]) for (const formula of element.querySelectorAll<HTMLElement>('.ash-katex-container')) formula.textContent = formula.dataset.latex!;
+		let layoutError = 0;
+		const layout: unknown[] = [];
+		if (measureLayout) {
+			expected.element.style.position = 'absolute';
+			expected.element.style.visibility = 'hidden';
+			expected.element.style.width = `${root.getBoundingClientRect().width}px`;
+			root.parentElement!.append(expected.element);
+			const actualBounds = root.getBoundingClientRect();
+			const expectedBounds = expected.element.getBoundingClientRect();
+			layoutError = Math.abs(actualBounds.height - expectedBounds.height);
+			layout.push({ actual: { width: actualBounds.width, height: actualBounds.height }, expected: { width: expectedBounds.width, height: expectedBounds.height } });
+			const actualBlocks = root.querySelectorAll('p,h1,h2,blockquote,table,ul,ol');
+			for (const [index, block] of expected.element.querySelectorAll('p,h1,h2,blockquote,table,ul,ol').entries()) {
+				const actual = actualBlocks[index].getBoundingClientRect();
+				const reference = block.getBoundingClientRect();
+				layoutError = Math.max(layoutError, Math.abs(actual.top - actualBounds.top - (reference.top - expectedBounds.top)), Math.abs(actual.height - reference.height));
+				layout.push({ tag: block.tagName, actual: { top: actual.top - actualBounds.top, height: actual.height }, expected: { top: reference.top - expectedBounds.top, height: reference.height } });
+			}
+		}
+		return { actual: copy.innerHTML, expected: expected.element.innerHTML, layoutError, layout };
+	},
+	runMarkdownBenchmark: async kind => {
+		const source = markdownWorkload(kind);
+		const chunks = 128;
+		const values = Array.from({ length: chunks }, (_, index) => source.slice(0, Math.ceil(source.length * (index + 1) / chunks)));
+		list.render([]);
+		await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+		let markdownMs = 0;
+		let renderedCharacters = 0;
+		let renderCalls = 0;
+		let lexCalls = 0;
+		let lexedCharacters = 0;
+		let removedNodes = 0;
+		const original = ChatContentMarkdownRenderer.prototype.render;
+		const originalLex = Lexer.lex;
+		Lexer.lex = function (source, options) {
+			lexCalls++;
+			lexedCharacters += source.length;
+			return originalLex(source, options);
+		};
+		ChatContentMarkdownRenderer.prototype.render = function (markdown, ...args) {
+			const start = performance.now();
+			renderedCharacters += markdown.value.length;
+			renderCalls++;
+			try { return original.call(this, markdown, ...args); }
+			finally { markdownMs += performance.now() - start; }
+		};
+		const mutations = new MutationObserver(records => { removedNodes += records.reduce((sum, record) => sum + record.removedNodes.length, 0); });
+		mutations.observe(list.element, { childList: true, subtree: true });
+		const longTasks: number[] = [];
+		const observer = new PerformanceObserver(records => { for (const entry of records.getEntries()) longTasks.push(entry.duration); });
+		observer.observe({ entryTypes: ['longtask'] });
+		let updateMs = 0;
+		let maxUpdateMs = 0;
+		const start = performance.now();
+		try {
+			for (const [index, value] of values.entries()) {
+				const before = performance.now();
+				list.render([{ id: 'stream', type: 'agentMessage', text: value, transient: index !== chunks - 1 }]);
+				const elapsed = performance.now() - before;
+				updateMs += elapsed;
+				maxUpdateMs = Math.max(maxUpdateMs, elapsed);
+				// Eight provider updates per frame, identical in both builds.
+				if ((index + 1) % 8 === 0) await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+			}
+			await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+			return {
+				bytes: new TextEncoder().encode(source).byteLength, chunks, wallMs: performance.now() - start,
+				updateMs, maxUpdateMs, markdownMs, renderedCharacters, renderCalls, lexCalls, lexedCharacters, removedNodes, longTasks,
+				codeBlocks: list.element.querySelectorAll('.ash-chat-code-block').length,
+				finalVisible: [...list.element.querySelectorAll('[data-item-id="stream"] p')].at(-1)?.textContent === 'Final visible marker.',
+			};
+		} finally {
+			ChatContentMarkdownRenderer.prototype.render = original;
+			Lexer.lex = originalLex;
+			mutations.disconnect();
+			observer.disconnect();
+		}
+	},
 	refresh: () => list.render([{ id: 'reply', type: 'agentMessage', text, transient: false }]),
 	showLongCode: () => {
 		const code = Array.from({ length: 80 }, (_, index) => `const value${index} = ${index};`).join('\n');

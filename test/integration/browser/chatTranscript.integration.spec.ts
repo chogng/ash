@@ -323,6 +323,115 @@ test('streaming Markdown retains completed text, one code model, selection and f
 	expect(errors).toEqual([]);
 });
 
+test('streaming Markdown controlled rendering comparison', async ({ page }, testInfo) => {
+	test.setTimeout(180_000);
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/chatTranscript.html');
+	const cdp = await page.context().newCDPSession(page);
+	await cdp.send('Performance.enable');
+	const samples: unknown[] = [];
+	try {
+		for (const kind of ['prose', 'mixed', 'fence'] as const) {
+			await page.evaluate(kind => window.ashChatTranscriptIntegration.runMarkdownBenchmark(kind), kind);
+			for (let repetition = 0; repetition < 7; repetition++) {
+				await cdp.send('HeapProfiler.collectGarbage');
+				const before = await cdp.send('Performance.getMetrics');
+				const result = await page.evaluate(kind => window.ashChatTranscriptIntegration.runMarkdownBenchmark(kind), kind);
+				const after = await cdp.send('Performance.getMetrics');
+				expect(result.finalVisible).toBe(true);
+				expect(result.codeBlocks).toBe(kind === 'prose' ? 0 : kind === 'mixed' ? 12 : 1);
+				const taskMs = (after.metrics.find(metric => metric.name === 'TaskDuration')!.value - before.metrics.find(metric => metric.name === 'TaskDuration')!.value) * 1000;
+				samples.push({ kind, repetition, ...result, taskMs });
+			}
+		}
+		await testInfo.attach('markdown-stream-comparison.json', {
+			body: JSON.stringify({
+				browser: page.context().browser()?.version(), label: process.env.ASH_MARKDOWN_BENCHMARK_LABEL ?? 'current',
+				scope: 'Production ChatListWidget, 128 updates, eight updates per animation frame, final content through two animation frames; one warmup and seven samples per workload. GC outside intervals. Browser component only; no backend, IPC or Desktop.', samples,
+			}, null, 2), contentType: 'application/json'
+		});
+		expect(errors).toEqual([]);
+	} finally { await cdp.detach(); }
+});
+
+test('streaming Markdown fences, lists and corrections match a complete render at every boundary', async ({ page }) => {
+	await page.goto('/chatTranscript.html');
+	const sources = [
+		'Before.\n\n```typescript\nconst value = "中文 😀";\nconst next = 2;\n```\n\nAfter.',
+		'````typescript\nconst x = 1;\n```\nkeep\n````\n\nAfter.',
+		'```ts\nx\n```oops\n```\nTail.',
+		'~~~js\nconst a = 1;\n~~~~\nTail.',
+		'   ```typescript\n    x\n   ```\n\nTail.',
+		'Before.\n\n- item\n  ```ts\n  code\n  ```\n\nTail.',
+		'Before.\n\n    indented\n\n    continued\n\nTail.',
+		'```math\nx^2\n```\n\nTail.',
+		'- [ ] first\n- [x] second\n\nTail.',
+	];
+	for (const source of sources) {
+		await page.evaluate(() => window.ashChatTranscriptIntegration.remove());
+		for (let end = 1; end <= source.length; end++) {
+			const value = source.slice(0, end);
+			const state = await page.evaluate(value => window.ashChatTranscriptIntegration.compareStreamingMarkdown(value, false), value);
+			expect(state.actual, `prefix ${end}: ${value}`).toBe(state.expected);
+		}
+		for (const value of [source, `Inserted.\n\n${source}`, source.replace(/const|item|indented|first/u, 'corrected'), 'Replaced.', '']) {
+			const state = await page.evaluate(value => window.ashChatTranscriptIntegration.compareStreamingMarkdown(value, true), value);
+			expect(state.actual, `correction: ${value}`).toBe(state.expected);
+		}
+	}
+	for (const value of ['    first\n\nOutside.', '    first\n\n    continued.', '- first\n\nOutside.', '- first\n\n  ```ts\n  continued\n  ```']) {
+		const state = await page.evaluate(value => window.ashChatTranscriptIntegration.compareStreamingMarkdown(value, true), value);
+		expect(state.actual, `merge correction: ${value}`).toBe(state.expected);
+	}
+});
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`streaming Markdown corrections preserve backward selection, toolbar focus and hidden code in ${locale}`, async ({ page }) => {
+		await page.goto(`/chatTranscript.html?locale=${locale}`);
+		const source = 'Read this paragraph.\n\n```typescript\nconst first = 1;\n```\n\nTail.';
+		await page.evaluate(value => window.ashChatTranscriptIntegration.stream(value, true), source);
+		const article = page.locator('[data-item-id="stream"]');
+		const paragraph = article.locator('p').first();
+		const node = await paragraph.elementHandle();
+		await paragraph.evaluate(element => { window.getSelection()!.setBaseAndExtent(element.firstChild!, 9, element.firstChild!, 5); });
+		await page.evaluate(value => window.ashChatTranscriptIntegration.stream('Inserted.\n\n' + value, true), source);
+		expect(await article.locator('p').nth(1).evaluate((element, old) => element === old, node)).toBe(true);
+		expect(await page.evaluate(() => { const selection = window.getSelection()!; return [selection.toString(), selection.anchorOffset, selection.focusOffset]; })).toEqual(['this', 9, 5]);
+		const copy = article.getByRole('button', { name: locale === 'en' ? 'Copy' : '复制', exact: true });
+		await copy.focus();
+		const revised = source.replace('const first = 1;', 'const corrected = 2;');
+		await page.evaluate(value => window.ashChatTranscriptIntegration.stream(value, false), revised);
+		await expect(copy).toBeFocused();
+		await page.keyboard.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().copied)).toBe('const corrected = 2;');
+		await page.evaluate(() => window.ashChatTranscriptIntegration.setTranscriptVisible(false));
+		await page.evaluate(value => window.ashChatTranscriptIntegration.stream(value.replace('2;', '3;') + '\n\nDone.', true), revised);
+		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.state().codeModelCount)).toBe(0);
+		await page.evaluate(() => window.ashChatTranscriptIntegration.setTranscriptVisible(true));
+		await copy.focus();
+		await page.keyboard.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().copied)).toBe('const corrected = 3;');
+		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.state().editorCount)).toBe(2);
+		await page.evaluate(() => window.ashChatTranscriptIntegration.remove());
+		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.state().editorCount)).toBe(1);
+		await node?.dispose();
+	});
+}
+
+for (const theme of ['dark', 'light', 'hc', 'hcLight'] as const) {
+	test(`streaming Markdown block layout matches a complete render in ${theme}`, async ({ page }) => {
+		await page.goto('/chatTranscript.html');
+		await page.evaluate(theme => window.ashChatTranscriptIntegration.setTheme(theme), theme);
+		const source = '# Heading\n\nFirst paragraph with **bold** text.\n\n> Quoted text.\n\n- one\n- two\n\n| Column | Value |\n| --- | --- |\n| a | b |\n\nLast paragraph.';
+		for (const value of [source.slice(0, 76), source, `Inserted.\n\n${source}`]) {
+			const state = await page.evaluate(value => window.ashChatTranscriptIntegration.compareStreamingMarkdown(value, true, true), value);
+			expect(state.actual).toBe(state.expected);
+			expect(state.layoutError, JSON.stringify(state.layout)).toBeLessThan(1);
+		}
+	});
+}
+
 for (const locale of ['en', 'zh-CN']) {
 	test(`Skill YAML editing shows precise draft diagnostics, repairs them and completes the directory name in ${locale}`, async ({ page }) => {
 		const errors: string[] = [];
