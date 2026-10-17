@@ -54,7 +54,7 @@ Use for `padding`, `margin`, `gap`, and fixed `width`/`height` of spacers. The n
 | 40 | `--ash-spacing-size400` |
 
 ```css
-/* token   */          padding: var(--vscode-spacing-size80) var(--vscode-spacing-size120);
+/* token   */          padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
 /* also ok */          padding: 8px 12px;   /* on-scale raw px is fine */
 /* avoid   */          padding: 5px 7px;    /* off-scale - breaks rhythm */
 ```
@@ -107,7 +107,7 @@ The generic ramp uses two weights — there are no others. Pair every text style
 
 ```css
 /* avoid */            font-weight: 500;   /* not on the 400/600 ramp */
-/* prefer */           font-weight: var(--vscode-fontWeight-semiBold);
+/* prefer */           font-weight: var(--ash-fontWeight-semiBold);
 ```
 
 ## Lxicon size — icon `font-size`

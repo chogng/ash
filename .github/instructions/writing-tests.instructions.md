@@ -1,6 +1,6 @@
 ---
-description: Ash TypeScript test writing guidelines — unit tests, browser integration, snapshots, and clean teardown.
-applyTo: "**/src/ash/**/test/**/*.ts,**/src/ash/**/*.test.ts,test/**/*.ts"
+description: Ash test writing guidelines — unit tests, integration tests, snapshot tests, and clean teardown patterns. Reference when writing or updating tests.
+applyTo: "src/ash/**/test/**/*.ts, src/ash/**/*.test.ts,test/**/*.ts"
 ---
 
 # Writing Tests
