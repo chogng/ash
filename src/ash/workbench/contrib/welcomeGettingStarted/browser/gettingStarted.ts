@@ -78,7 +78,8 @@ export class GettingStartedPage extends EditorPane implements IEditorPane {
 	}
 
 	public override focus(): void {
-		this.domNode?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
+		// Enter the page without selecting an action; Tab moves to the first available button.
+		this.content?.domNode.focus();
 	}
 
 	private cloneAction(): (() => Promise<void>) | undefined {

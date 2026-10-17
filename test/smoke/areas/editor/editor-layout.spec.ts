@@ -449,6 +449,24 @@ test("startup shows Welcome in both empty windows and open workspaces", async ({
 test.describe('welcome brand', () => {
 	test.use({ openWorkspace: false });
 
+	test('Welcome starts without focusing an action and shows focus during keyboard navigation', async ({ workbench }) => {
+		const page = workbench.page;
+		const welcome = workbench.editors.groupAt(0).welcome;
+		const openFolder = welcome.getByRole('button', { name: 'Open folder', exact: true });
+		await expect(welcome).toBeFocused();
+		await expect(welcome).toHaveCSS('outline-style', 'none');
+		await expect(welcome.locator('button:focus')).toHaveCount(0);
+
+		await page.keyboard.press('Tab');
+		await expect(openFolder).toBeFocused();
+		await expect(openFolder).toHaveCSS('outline-style', 'solid');
+		await expect.poll(() => openFolder.evaluate(element => element.matches(':focus-visible'))).toBe(true);
+		await page.keyboard.press('Tab');
+		await expect(openFolder).not.toBeFocused();
+		await page.keyboard.press('Shift+Tab');
+		await expect(openFolder).toBeFocused();
+	});
+
 	test('Welcome reopens as an editor from the command palette', async ({ workbench }) => {
 		const group = workbench.editors.groupAt(0);
 		await expect(group.tabs).toHaveCount(1);

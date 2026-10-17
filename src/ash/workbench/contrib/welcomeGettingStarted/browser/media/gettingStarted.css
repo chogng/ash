@@ -15,6 +15,11 @@
 	background: var(--ash-editor-background);
 }
 
+/* The page is a focus landing region; its actions provide visible keyboard focus. */
+.ash-getting-started:focus {
+	outline: none;
+}
+
 .ash-getting-started[hidden] {
 	display: none;
 }

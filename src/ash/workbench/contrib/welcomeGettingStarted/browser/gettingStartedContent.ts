@@ -53,6 +53,7 @@ export class GettingStarted extends Disposable {
 		this.recentProjects = options.recentProjects ?? [];
 		this.domNode = h(ownerDocument, 'section');
 		this.domNode.className = 'ash-getting-started';
+		this.domNode.tabIndex = -1;
 		this.domNode.setAttribute('role', 'region');
 		this.domNode.setAttribute('aria-label', localize('gettingStarted.title', 'Welcome'));
 		container.append(this.domNode);

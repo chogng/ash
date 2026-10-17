@@ -1,4 +1,5 @@
 import { localize, localize2 } from '../../../../nls.js';
+import { getActiveElement, isHTMLElement } from '../../../../base/browser/dom.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
@@ -62,11 +63,20 @@ AccessibleViewRegistry.register({
 	priority: 100,
 	name: 'gettingStartedHelp',
 	when: GettingStartedFocusedContext.isEqualTo(true),
-	getProvider: accessor => new AccessibleContentProvider(
-		AccessibleViewProviderId.GettingStarted,
-		{ type: AccessibleViewType.Help },
-		() => localize('gettingStarted.accessibilityHelp', 'Welcome\nUse Tab and Shift+Tab to move between actions and recent projects. Press Enter to activate the focused item. Clone repo asks for a repository URL and a destination folder.'),
-		() => accessor.get(IEditorService).focusActiveEditor(),
-		AccessibilityVerbositySettingId.GettingStarted,
-	),
+	getProvider: accessor => {
+		const focused = getActiveElement();
+		return new AccessibleContentProvider(
+			AccessibleViewProviderId.GettingStarted,
+			{ type: AccessibleViewType.Help },
+			() => localize('gettingStarted.accessibilityHelp', 'Welcome\nUse Tab and Shift+Tab to move between actions and recent projects. Press Enter to activate the focused item. Clone repo asks for a repository URL and a destination folder.'),
+			() => {
+				if (isHTMLElement(focused) && focused.isConnected) {
+					focused.focus();
+				} else {
+					accessor.get(IEditorService).focusActiveEditor();
+				}
+			},
+			AccessibilityVerbositySettingId.GettingStarted,
+		);
+	},
 });
