@@ -106,6 +106,8 @@ function createFixtureInstance(id: string) {
 	let screen: XtermTerminal | undefined;
 	let ready: Promise<XtermTerminal | undefined> | undefined;
 	const fixture = {
+		async refreshProperty() { throw new Error('Screen-only fixture has no process properties'); },
+		async serializeState() { throw new Error('Screen-only fixture has no process checkpoint'); },
 		...Disposable.None,
 		id,
 		instanceId: ++nextFixtureInstance,
@@ -324,6 +326,8 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 			pane.setVisible(visible && selected);
 		};
 		const terminals: ITerminalService = {
+			whenConnected: Promise.resolve(),
+			safeDisposeTerminal: async instance => { await terminals.closeTerminal(instance); },
 			...Disposable.None,
 			instances,
 			get activeInstance() { return activeInstance; },

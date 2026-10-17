@@ -7,7 +7,7 @@ import { generateColorThemeCSS } from '../../../src/ash/workbench/services/theme
 let nextThemeRoot = 0;
 
 /** Mounts a fake theme service for component fixtures; product hosts own their styles themselves. */
-export function bindTestColorTheme(service: IThemeService, target: HTMLElement): IDisposable {
+export function bindTestColorTheme(service: IThemeService, target: HTMLElement, scopeSelector?: string): IDisposable {
 	const resources = new DisposableStore();
 	const attribute = 'data-test-theme-root';
 	const previousRoot = target.getAttribute(attribute);
@@ -18,7 +18,7 @@ export function bindTestColorTheme(service: IThemeService, target: HTMLElement):
 	const styles = resources.add(new ManagedStyleSheet(target.ownerDocument));
 	const apply = (): void => {
 		const theme = service.getColorTheme();
-		styles.setText(generateColorThemeCSS(theme, `[${attribute}="${id}"]`).code);
+		styles.setText(generateColorThemeCSS(theme, scopeSelector ?? `[${attribute}="${id}"]`).code);
 		target.setAttribute('data-color-theme', theme.id);
 		target.setAttribute('data-color-scheme', theme.colorScheme);
 		target.classList.toggle('hc-black', theme.colorScheme === ColorScheme.HighContrastDark);

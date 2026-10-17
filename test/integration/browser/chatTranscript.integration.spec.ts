@@ -810,6 +810,8 @@ for (const locale of ['en', 'zh-CN']) {
 
 for (const locale of ['en', 'zh-CN']) {
 	test(`MCP App logs use the existing diagnostic sink without changing Chat in ${locale}`, async ({ page }) => {
+		// Keep the diagnostic rate-limit window fixed while the test crosses frame and protocol boundaries.
+		await page.clock.setFixedTime(new Date('2026-10-17T00:00:00Z'));
 		await page.goto(`/chatTranscript.html?locale=${locale}`); await page.evaluate(() => window.ashChatTranscriptIntegration.showChatApp());
 		const chat = page.locator('#app-chat'); await chat.locator('.ash-chat-tool-invocation > summary').click(); await chat.getByRole('button', { name: locale === 'en' ? 'Open interactive view' : '打开交互式视图' }).click();
 		const frame = page.frameLocator('iframe[title="' + (locale === 'en' ? 'Interactive MCP App' : '交互式 MCP App') + '"]').frameLocator('iframe');

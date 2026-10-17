@@ -44,7 +44,8 @@ root.className = 'ash-workbench';
 root.style.cssText = 'height:100vh;position:relative';
 document.body.append(root);
 const theme = resources.add(new TestThemeService(({ dark: darkColorTheme, hcDark: highContrastDarkColorTheme, hcLight: highContrastLightColorTheme } as const)[parameters.get('theme') as 'dark'] ?? lightColorTheme));
-resources.add(bindTestColorTheme(theme, root));
+// Auxiliary windows mirror this stylesheet and share the Workbench root class.
+resources.add(bindTestColorTheme(theme, root, '.ash-workbench'));
 services.registerInstance(IThemeService, theme);
 services.registerInstance(IStorageService, resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'voice-test', flushInterval: 0 })));
 services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));

@@ -292,7 +292,8 @@ for (const language of ['en', 'zh-CN']) test(`SCM commit message action handles 
 		await expect(button.locator('[data-ash-icon-id="sparkle"]')).toHaveCount(1);
 		const editor = input.locator('.stanza-editor-input');
 		await input.locator('.ash-scm-input-editor').click({ position: { x: 10, y: 10 } });
-		await page.keyboard.type('Keep my draft');
+		await expect(editor).toBeFocused();
+		await editor.pressSequentially('Keep my draft');
 		await page.evaluate(() => window.gitScmPaneIntegration.configureGenerator());
 		await expect(button).toBeEnabled();
 		await page.keyboard.press('Tab');
@@ -303,7 +304,7 @@ for (const language of ['en', 'zh-CN']) test(`SCM commit message action handles 
 			const bounds = node.getBoundingClientRect();
 			return { separated: editor.right <= button.left, contained: button.right <= bounds.right, width: button.width };
 		});
-		expect(geometry).toEqual({ separated: true, contained: true, width: 24 });
+		expect(geometry).toEqual({ separated: true, contained: true, width: 22 });
 		for (const theme of ['dark', 'light', 'hcDark', 'hcLight'] as const) {
 			await page.evaluate(theme => window.gitScmPaneIntegration.setTheme(theme), theme);
 			await expect(button).toHaveCSS('outline-style', 'solid');

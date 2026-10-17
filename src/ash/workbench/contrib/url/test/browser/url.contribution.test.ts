@@ -8,6 +8,7 @@ import { URI } from '../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { OpenerService } from '../../../../../editor/browser/services/openerService.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
+import { IModelService } from '../../../../../editor/common/services/model.js';
 import { StandaloneCommandService } from '../../../../../editor/standalone/browser/standaloneServices.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
@@ -197,7 +198,10 @@ suite('Workbench external link trust', () => {
 		fixture.services.registerInstance(IWorkspaceOpenService, {} as IWorkspaceOpenService);
 		fixture.services.registerInstance(IWorkingCopyService, {} as IWorkingCopyService);
 		fixture.services.registerInstance(ITextFileService, {} as ITextFileService);
-		const extensionHost = fixture.services.createInstance(MainThreadEditors);
+		fixture.services.registerInstance(IModelService, {
+			getModels: () => [], onModelAdded: Event.None, onModelRemoved: Event.None,
+		} as unknown as IModelService);
+		using extensionHost = fixture.services.createInstance(MainThreadEditors);
 		const request = { method: 'openExternal', uri: 'https://extension.test/docs' };
 		const cancelled = extensionHost.handle(request, new AbortController().signal);
 		assert.deepEqual(fixture.opened, []);
@@ -218,6 +222,7 @@ suite('Workbench external link trust', () => {
 		fixture.services.registerInstance(INativeHostService, {
 			onDidRequestOpenExternalUri: links.event,
 			onDidChangeZoomLevel: Event.None,
+			onDidChangeAuxiliaryWindowState: Event.None,
 			getZoomLevel: async () => 0,
 			setZoomLevel: async () => { },
 		} as unknown as INativeHostApi);

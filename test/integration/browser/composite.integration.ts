@@ -18,7 +18,7 @@ import { observableValue, type IReader } from '../../../src/ash/base/common/obse
 import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { addDisposableListener, h } from '../../../src/ash/base/browser/dom.js';
 import { Lxicon } from '../../../src/ash/base/common/lxicons.js';
-import { AuxiliarybarPart } from '../../../src/ash/workbench/browser/parts/auxiliarybar/auxiliarybarPart.js';
+import { AuxiliaryBarPart } from '../../../src/ash/workbench/browser/parts/auxiliarybar/auxiliaryBarPart.js';
 import { Grid } from '../../../src/ash/base/browser/ui/grid/grid.js';
 import { WorkbenchPartView } from '../../../src/ash/workbench/browser/workbenchPartView.js';
 import { Part } from '../../../src/ash/workbench/browser/part.js';
@@ -308,7 +308,7 @@ if (new URLSearchParams(location.search).has('partWidth')) {
 	const descriptor = { id: 'width-chat', title: 'Chat', location: ViewContainerLocation.AuxiliaryBar };
 	resources.add(registry.registerViewContainer(descriptor));
 	resources.add(registry.registerViews(descriptor.id, [{ id: 'width-chat.view', title: 'Chat', ctorDescriptor: new SyncDescriptor(WidthView) }]));
-	const part = resources.add(services.createInstance(AuxiliarybarPart, host, { openComposite: () => { }, viewDescriptorService: services.get(IViewDescriptorService) }));
+	const part = resources.add(services.createInstance(AuxiliaryBarPart, host));
 	const composite = resources.add(services.createInstance(PaneComposite, part.domNode, {
 		viewContainer: descriptor,
 		model: services.get(IViewDescriptorService).getViewContainerModel(descriptor.id)!,
@@ -392,12 +392,12 @@ const models = resources.add(uriIdentityServices.createInstance(BrowserTextModel
 modelServices.registerInstance(IFileTextModelService, models);
 modelServices.registerInstance(ITextModelResourceService, models);
 const editorServices = resources.add(createTestEditorServices(undefined, modelServices));
-resources.add(bindTestColorTheme(editorServices.get(IThemeService), document.documentElement));
+resources.add(bindTestColorTheme(editorServices.get(IThemeService), editorHost));
 if (new URLSearchParams(location.search).has('editorTabs')) {
 	await import('../../../src/ash/workbench/contrib/modernUI/browser/media/roundedCorners.css');
 	await import('../../../src/ash/workbench/contrib/modernUI/browser/media/editorBorder.css');
 	// Use the same title-slot mounting as the product Auxiliary Bar.
-	class ChatTabsPart extends AuxiliarybarPart {
+	class ChatTabsPart extends AuxiliaryBarPart {
 		setChatTitle(title: PartTitleProjection): void {
 			this.setTitleProjection(title);
 		}
@@ -408,11 +408,7 @@ if (new URLSearchParams(location.search).has('editorTabs')) {
 	chatHost.style.cssText = 'display:flex;width:800px;height:120px';
 	document.body.append(chatHost);
 	resources.add(toDisposable(() => chatHost.remove()));
-	const chatPart = resources.add(editorServices.createInstance(ChatTabsPart, chatHost, {
-		openComposite: () => { throw new Error('Composite switching is outside this fixture'); },
-		viewDescriptorService: services.get(IViewDescriptorService),
-	}));
-	chatPart.domNode.style.cssText = 'box-sizing:border-box;width:100%;height:100%';
+
 	let chats = [
 		{ id: 'chat-alpha', label: 'Chat alpha', panelId: 'chat-alpha-panel' },
 		{ id: 'chat-beta', label: 'Chat beta', panelId: 'chat-beta-panel' },
@@ -440,6 +436,10 @@ if (new URLSearchParams(location.search).has('editorTabs')) {
 		editorServices.registerInstance(IMenuService, services.get(IMenuService));
 		editorServices.registerInstance(IContextMenuService, services.get(IContextMenuService));
 	}
+	editorServices.registerInstance(IViewDescriptorService, services.get(IViewDescriptorService));
+	editorServices.registerInstance(ILocalizationService, services.get(ILocalizationService));
+	const chatPart = resources.add(editorServices.createInstance(ChatTabsPart, chatHost));
+	chatPart.domNode.style.cssText = 'box-sizing:border-box;width:100%;height:100%';
 	const chat = resources.add(editorServices.createInstance(ChatViewTitleControl, chatPart.domNode, 'chat', () => {
 		const pick = editorServices.get(IQuickInputService).createQuickPick<{ label: string; id: string; }>();
 		const lifetime = new DisposableStore();

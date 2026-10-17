@@ -113,6 +113,8 @@ test('changing the default folding provider cancels pending results and refreshe
 	document.body.appendChild(container);
 	resources.add(toDisposable(() => container.remove()));
 	using editor = createTestCodeEditor({ container, model, instantiationService: services, languageFeaturesService: features });
+	// Folding decorations are created only for headers in the visible viewport.
+	editor.layout({ width: 800, height: 600 });
 	const foldingRanges = () => model.getAllDecorations().filter(decoration => decoration.options.description === 'folding-expanded').map(decoration => [decoration.range.startLineNumber, decoration.range.endLineNumber]);
 	const changed = new Promise<void>(resolve => {
 		resources.add(model.onDidChangeDecorations(() => {

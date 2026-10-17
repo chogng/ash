@@ -19,7 +19,9 @@ import { createTreeSitterSyntaxTokenBackend } from '../../browser/treeSitterLibr
 import { getLanguageFoldingRules } from '../../../../../platform/language/common/languageFolding.generated.js';
 
 const runtime = (treeSitterNamespace as unknown as { default?: typeof treeSitterNamespace; }).default ?? treeSitterNamespace;
-interface Grammar { name: string; wasm: { path?: string; package?: string; }; languages: { id: string; }[]; highlights: string[]; tags: string[]; folds: string[]; injections: string[]; }
+interface Grammar { name: string; languages: { id: string; }[]; highlights: string[]; tags: string[]; folds: string[]; injections: string[]; }
+const grammarRelease = JSON.parse(readFileSync('third_party/ash-grammars/runtime-lock.json', 'utf8')) as { version: string; wasm: { sha256: string; }; };
+const grammarDirectory = resolve('third_party/.cache/ash-grammars', grammarRelease.version, `wasm-${grammarRelease.wasm.sha256}`, 'wasm');
 const grammars = new Map<string, { directory: string; grammar: Grammar; }>();
 for (const directory of readdirSync('extensions')) {
 	const file = resolve('extensions', directory, 'tree-sitter/grammars.json');
@@ -45,7 +47,7 @@ async function load(id: string): Promise<TreeSitterTokenizationRuntime | undefin
 			const { directory, grammar } = grammars.get(language)!;
 			const resource = (file: string) => file.startsWith('@') ? resolve('extensions', file.slice(1)) : resolve('extensions', directory, file);
 			const queries = (files: string[]) => files.map(file => readFileSync(resource(file), 'utf8')).join('\n');
-			const wasm = grammar.wasm.package ? resolve('node_modules', grammar.wasm.package) : resource(grammar.wasm.path!);
+			const wasm = resolve(grammarDirectory, `${grammar.name}.wasm`);
 			const highlights = queries(grammar.highlights), tags = queries(grammar.tags), folds = queries(grammar.folds), injections = queries(grammar.injections);
 			const parserLanguage = await runtime.Language.load(new Uint8Array(readFileSync(wasm)));
 			return { Parser: runtime.Parser, language: parserLanguage, languageId: editorLanguageForSyntaxLanguage(language), foldingRules: getLanguageFoldingRules(editorLanguageForSyntaxLanguage(language)), query: new runtime.Query(parserLanguage, highlights), folds: new runtime.Query(parserLanguage, folds), ...(tags ? { symbols: new runtime.Query(parserLanguage, tags) } : {}), ...(injections ? { injections: new runtime.Query(parserLanguage, injections) } : {}), loadEmbeddedLanguage: load };

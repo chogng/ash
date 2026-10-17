@@ -137,7 +137,8 @@ async function mockChatGPTRequests(page: Page, answer = 'Synthetic answer'): Pro
 
 for (const locale of ['en', 'zh-CN']) {
 	test(`ChatGPT conversations load more on scroll and keyboard navigation (${locale})`, async ({ page }) => {
-		await page.setViewportSize({ width: 1000, height: 600 });
+		// Keep the first page outside the prefetch threshold until navigation scrolls it.
+		await page.setViewportSize({ width: 1000, height: 400 });
 		await mockChatGPTRequests(page);
 		const offsets: number[] = [];
 		let releasePage: (() => Promise<void>) | undefined;
@@ -212,7 +213,7 @@ for (const theme of ['light', 'dark', 'hcDark', 'hcLight']) {
 		const list = page.locator('.ash-chatgpt-navigation-list');
 		await expect(list.locator('.ash-chatgpt-conversation:visible')).toHaveCount(20);
 		const scrollable = page.locator('.ash-chatgpt-navigation-scrollable');
-		const viewport = scrollable.locator('.ash-scrollbar-viewport');
+		const viewport = scrollable.locator(':scope > .ash-scrollbar-viewport');
 		const scrollbar = scrollable.getByRole('scrollbar', { name: 'Vertical scrollbar' });
 		await expect(scrollbar).toHaveAttribute('aria-disabled', 'false');
 		expect(await viewport.evaluate(element => getComputedStyle(element).scrollbarWidth)).toBe('none');
@@ -271,7 +272,7 @@ test('ChatGPT conversation pagination fills the viewport after resize and pauses
 });
 
 test('ChatGPT conversation pagination retries a failure only after another scroll', async ({ page }) => {
-	await page.setViewportSize({ width: 1000, height: 600 });
+	await page.setViewportSize({ width: 1000, height: 400 });
 	await mockChatGPTRequests(page);
 	const offsets: number[] = [];
 	await page.route('**/service/backend-api/conversations?*', async route => {

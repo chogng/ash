@@ -177,6 +177,7 @@ for (const [locale, installedLabel, installLabel] of [['en', 'Installed', 'Insta
 			expect(requests).toContainEqual(['install', { packageId, version: '1.0.0' }]);
 			expect(requests.some((entry: any) => entry[0] === 'searchPage' && entry[1].query === query && entry[1].capabilityKind === (view === 'skills' ? 'skill' : 'mcp'))).toBe(true);
 			const showInstalled = pane.getByRole('button', { name: locale === 'zh-CN' ? '显示已安装' : 'Show installed', exact: true });
+			await pane.getByRole('button', { name: paneTitle, exact: true }).focus();
 			await showInstalled.focus();
 			await page.keyboard.press('Enter');
 			await search.fill('');

@@ -18,7 +18,7 @@ import type { IEditorPane, IEditorPaneScrollPosition, IEditorPaneWithScrolling }
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
-import { IStatusbarService, StatusbarService, StatusbarAlignment } from '../../../../services/statusbar/browser/statusbar.js';
+import { IStatusbarService, StatusbarAlignment } from '../../../../services/statusbar/browser/statusbar.js';
 import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
 import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
 import { SyncScroll } from '../../browser/scrollLocking.js';
@@ -59,8 +59,7 @@ function setup(resources: DisposableStore, initial: readonly IEditorPane[]) {
 		focusActiveEditor() { },
 	};
 	services.registerInstance(IEditorService, editors);
-	const statusbar = resources.add(new StatusbarService());
-	services.registerInstance(IStatusbarService, statusbar);
+	const statusbar = services.get(IStatusbarService);
 	services.registerInstance(IAccessibilityService, resources.add(new AccessibilityService({ root: document.body, contextKeyService: services.get(IContextKeyService), configurationService: services.get(IConfigurationService) })));
 	const commands = resources.add(new CommandService(services));
 	const host = resources.add(WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, [SyncScroll.ID]));

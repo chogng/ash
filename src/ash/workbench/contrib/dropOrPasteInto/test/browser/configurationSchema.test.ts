@@ -101,7 +101,7 @@ for (const mode of ['paste', 'drop'] as const) {
 		assert.ok(setting);
 		setting.click();
 		await waitFor(() => opened.length === 2);
-		assert.deepEqual(opened, [{ revealSetting: { key, edit: true } }, { revealSetting: { key, edit: true } }]);
+		assert.deepEqual(opened, [{ jsonEditor: true, revealSetting: { key, edit: true } }, { jsonEditor: true, revealSetting: { key, edit: true } }]);
 		host.dispose();
 		assert.equal(CommandsRegistry.hasCommand('workbench.action.configurePreferredPasteAction'), false);
 	});

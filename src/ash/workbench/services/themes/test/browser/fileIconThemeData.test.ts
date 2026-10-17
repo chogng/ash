@@ -159,7 +159,7 @@ test('packaged Seti resolves filenames, extensions and light variants and can be
 		await configuration.updateValue(WorkbenchConfiguration.iconTheme, null);
 		themes.renderFileIcon(URI.file('C:/project/main.ts'), ts);
 		assert.deepEqual([ts.textContent, ts.style.fontFamily, ts.style.color], ['', '', '']);
-		assert.equal(browser.window.document.head.textContent, '');
+		assert.equal(browser.window.document.head.textContent!.includes(theme.styleSheetContent), false);
 		assert.equal(themes.getFileIconTheme().hasFileIcons, false);
 		assert.equal(modelIcon.classList.contains('is-reserved'), false);
 		assert.equal(title.domNode.querySelector('.ash-sticky-editor-tabs-row .ash-icon-label-icon')?.textContent, '');

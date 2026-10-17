@@ -206,7 +206,7 @@ suite('External URI opener production routing', () => {
 			assert.deepEqual([fixture.contributedOpened, fixture.hostOpened, fixture.settings], [
 				choice === 0 ? [`first:${destination.toString()}`] : [],
 				choice === 2 ? [destination.toString()] : [],
-				choice === 3 ? [{ revealSetting: { key: externalUriOpenersSettingId, edit: true } }] : [],
+				choice === 3 ? [{ jsonEditor: true, revealSetting: { key: externalUriOpenersSettingId, edit: true } }] : [],
 			]);
 			assert.equal(picker.isDisposed, true);
 		});

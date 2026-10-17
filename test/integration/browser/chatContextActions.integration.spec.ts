@@ -363,7 +363,9 @@ for (const locale of ['en', 'zh-CN']) {
 			await add.press('Enter');
 			await page.getByRole('dialog').getByRole('option', { name, exact: true }).click();
 			if (name === 'Screenshot…' || name === '截图…') {
-				await page.getByRole('dialog', { name: chinese ? '截图预览' : 'Screenshot Preview' }).getByRole('button', { name: chinese ? '加入聊天' : 'Add to Chat', exact: true }).click();
+				const capture = page.getByRole('dialog', { name: chinese ? '屏幕截图' : 'Screen Capture' });
+				await capture.getByRole('button', { name: chinese ? '整个屏幕' : 'Entire screen', exact: true }).click();
+				await capture.getByRole('button', { name: chinese ? '加入聊天' : 'Add to Chat', exact: true }).click();
 			}
 			if (name === 'Sessions…' || name === '会话…') {
 				await expect(page.getByRole('dialog').getByRole('option', { name: 'Current session', exact: true })).toHaveCount(0);

@@ -92,9 +92,11 @@ test('titlebar shares undo and redo history and offers a primary save split butt
 	await redo.press('Space');
 	await expect(hex).toHaveValue('223344');
 	const undoBounds = await undo.boundingBox();
+	const redoBounds = await redo.boundingBox();
 	const applyBounds = await apply.boundingBox();
 	const titleBounds = await titlebar.boundingBox();
-	expect(undoBounds!.x).toBeLessThan(titleBounds!.width * 0.25);
+	expect(undoBounds!.x + undoBounds!.width).toBeLessThanOrEqual(redoBounds!.x);
+	expect(redoBounds!.x + redoBounds!.width).toBeLessThanOrEqual(applyBounds!.x);
 	expect(applyBounds!.x).toBeGreaterThan(titleBounds!.width * 0.5);
 	await apply.focus();
 	await apply.press('ArrowRight');

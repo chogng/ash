@@ -35,7 +35,7 @@ import { createTestFileService } from '../../../../test/common/testEditorService
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
-import { registerTestWorkbenchInteractionServices, workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
+import { registerTestTerminalLifecycleServices, registerTestWorkbenchInteractionServices, workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
 import { DisposableStore, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { IOutputService } from '../../../output/common/output.js';
 import assert from "node:assert/strict";
@@ -336,6 +336,8 @@ class FakeFileService implements IFileSystemProvider {
 }
 
 class FakeTerminalService extends Disposable implements ITerminalService {
+	readonly whenConnected = Promise.resolve();
+	async safeDisposeTerminal(instance: ITerminalInstance) { await this.closeTerminal(instance); }
 	private readonly createEmitter = this._register(new Emitter<ITerminalInstance>());
 	readonly instances: FakeTerminalInstance[] = [];
 	activeInstance: ITerminalInstance | undefined;
@@ -352,6 +354,8 @@ class FakeTerminalService extends Disposable implements ITerminalService {
 }
 
 class FakeTerminalInstance extends Disposable implements ITerminalInstance {
+	async refreshProperty<T extends import("../../../../../platform/terminal/common/terminal.js").ProcessPropertyType>(_property: T): Promise<import("../../../../../platform/terminal/common/terminal.js").IProcessPropertyMap[T]> { throw new Error("No OS process in task fixture"); }
+	async serializeState(): Promise<import("../../../terminal/common/terminal.js").ITerminalSerializedState> { throw new Error("No process checkpoint in task fixture"); }
 	private static nextInstanceId = 1;
 	readonly instanceId = FakeTerminalInstance.nextInstanceId++;
 	clearBuffer(): void { }
@@ -1015,6 +1019,7 @@ suite('TaskService terminal availability', () => {
 				[IPathService, testPathService(workspace)], [ITerminalProcessService, processes], [IOutputService, output], [ILogService, new NullLoggerService()],
 			)));
 			services.registerSingleton(ICommandService, () => new CommandService(services));
+			registerTestTerminalLifecycleServices(services);
 			const terminals = resources.add(services.createInstance(TerminalService));
 			services.registerInstance(ITerminalService, terminals);
 			registerTaskProfiles(services);
@@ -1081,6 +1086,7 @@ suite('TaskService terminal availability', () => {
 				[ILogService, new NullLoggerService()],
 			)));
 			services.registerSingleton(ICommandService, () => new CommandService(services));
+			registerTestTerminalLifecycleServices(services);
 			const terminals = resources.add(services.createInstance(TerminalService));
 			services.registerInstance(ITerminalService, terminals);
 			registerTaskProfiles(services);

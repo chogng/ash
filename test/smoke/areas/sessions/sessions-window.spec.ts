@@ -3228,7 +3228,7 @@ test('Sessions Activity Bar changes layout while retaining the same session, dra
 	await expect(composer.getByRole('button', { name: 'Remove context.ts', exact: true })).toBeVisible();
 	await expect(page.locator('.ash-sessions-chat-slot.active :is(.ash-chat,.ash-cowork)')).toHaveAttribute('data-untitled-session-id', identity!);
 	expect(await editor.input.evaluate((element, original) => element === original, originalInput)).toBe(true);
-	await navigation.getByRole('button', { name: 'Collaboration', exact: true }).click();
+	await navigation.getByRole('button', { name: 'Agent Teams', exact: true }).click();
 	await expect(page.locator('.ash-teams-panel')).toBeVisible();
 	await navigation.getByRole('button', { name: 'Chat', exact: true }).click();
 	const back = page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Back', exact: true });

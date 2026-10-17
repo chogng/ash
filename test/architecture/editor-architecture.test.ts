@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { test } from "mocha";
 import { findDesktopRoot } from "./testPaths.js";
 
@@ -596,30 +596,33 @@ test("Text engine PieceTree tests follow VS Code's common model layout", () => {
 	assert.equal(statSafe(join(editorRoot, "test/common/pieceTreeTextBuffer.test.ts")), false);
 });
 
-test("Frontend lexical tokens stay independent of App Server syntax facts", () => {
+test("Frontend syntax sessions use the shared backend with a browser Worker fallback", () => {
 	const packageManifest = readFileSync(resolve(desktopRoot, "package.json"), "utf8");
 	const syntaxCrate = readFileSync(resolve(desktopRoot, "crates/syntax/src/lib.rs"), "utf8");
-	const syntaxOperations = readFileSync(resolve(desktopRoot, "crates/app-server/src/server/syntax_operations.rs"), "utf8");
+	const syntaxOperations = readFileSync(resolve(desktopRoot, "crates/app-server/src/server/request_processors/syntax.rs"), "utf8");
+	const syntaxLibrary = readFileSync(join(workbenchRoot, "services/treeSitter/browser/treeSitterLibraryService.ts"), "utf8");
 	const syntaxAdapter = readFileSync(join(workbenchRoot, "services/language/browser/appServerSyntaxProviders.ts"), "utf8");
 	const sharedWorkbench = readFileSync(join(workbenchRoot, "browser/workbench.ts"), "utf8");
 	const workbenchContributions = readFileSync(join(workbenchRoot, "workbench.common.main.ts"), "utf8");
 	const academicContribution = readFileSync(join(workbenchRoot, "contrib/academic/browser/academicEditor.contribution.ts"), "utf8");
 	const styling = readFileSync(join(editorRoot, "common/services/semanticTokensProviderStyling.ts"), "utf8");
-	assert.doesNotMatch(packageManifest, /tree-sitter/u);
-	assert.equal(existsSync(join(editorRoot, "common/services/treeSitter")), false);
+	assert.match(packageManifest, /@vscode\/tree-sitter-wasm/u);
 	assert.match(syntaxCrate, /SyntaxDocument/u);
 	assert.match(syntaxOperations, /SyntaxDocument::open/u);
 	assert.match(syntaxAdapter, /ISyntaxApi/u);
 	assert.doesNotMatch(syntaxAdapter, /provideTokens|tokenPriority|LanguageTokenResult/u);
 	assert.match(syntaxAdapter, /provideDiagnostics/u);
-	assert.match(sharedWorkbench, /syntaxWorkerFactory/u);
+	assert.match(sharedWorkbench, /createSyntaxTokenBackend/u);
+	assert.match(syntaxLibrary, /createAppServerTreeSitterSession/u);
+	assert.match(syntaxLibrary, /if \(!isWeb \|\| this\.syntax\.isAvailable\)/u);
+	assert.match(syntaxLibrary, /new Worker\(new URL\('\.\/treeSitterWorkerMain\.ts'/u);
 	assert.doesNotMatch(sharedWorkbench, /new AppServerSyntaxProviders/u);
 	assert.match(workbenchContributions, /new AppServerSyntaxProviders/u);
 	assert.doesNotMatch(academicContribution, /AppServerSyntaxProviders/u);
 	assert.match(styling, /LanguageToken/u);
 	for (const file of collectFiles(editorRoot)) {
-		if (!file.endsWith(".ts")) continue;
-		assert.doesNotMatch(readFileSync(file, "utf8"), /@vscode\/tree-sitter-wasm/u, relative(editorRoot, file));
+		if (!file.endsWith(".ts") || relative(editorRoot, file).split(sep).includes("test")) continue;
+		assert.doesNotMatch(readFileSync(file, "utf8"), /^import (?!type\b).*from ['"]@vscode\/tree-sitter-wasm['"]/mu, relative(editorRoot, file));
 	}
 });
 
@@ -693,7 +696,7 @@ test("Workbench entries select runtime services and load feature services throug
 	assert.match(workbenchContributions, /api\/browser\/extensionHost\.contribution/u);
 	assert.doesNotMatch(workbenchContributions, /extensionHostServiceRegistration/u);
 	const extensionHostComposition = readFileSync(join(workbenchRoot, 'api/browser/extensionHost.contribution.ts'), 'utf8');
-	assert.match(extensionHostComposition, /dependencies: \[ISpeechService, ITerminalService, ITerminalProfileService, ITerminalProfileResolverService/u);
+	assert.match(extensionHostComposition, /dependencies: \[IDebugService, ISpeechService, ITerminalService, ITerminalProfileService, ITerminalProfileResolverService/u);
 	assert.match(workbenchContributions, /codebaseSymbolsServiceRegistration/u);
 	assert.match(debugContribution, /import ["']\.\/debugService\.js["']/u);
 	assert.match(testingContribution, /services\/testing\/browser\/testingServiceRegistration/u);

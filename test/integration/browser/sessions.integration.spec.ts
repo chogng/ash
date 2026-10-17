@@ -20,7 +20,7 @@ async function expectActivityIconSize(navigation: Locator, size: number, horizon
 		await expect(item).toHaveCSS('width', `${itemSize}px`);
 		await expect(item).toHaveCSS('height', `${itemSize}px`);
 	}
-	await expect(icons).toHaveCount(horizontal ? 6 : 7);
+	await expect(icons).toHaveCount(horizontal ? 7 : 8);
 	const accounts = navigation.page().getByRole('button', { name: 'Accounts', exact: true });
 	await expect(accounts).toHaveCount(1);
 	const titlebarAccounts = navigation.page().locator('[data-part="titlebar"]').getByRole('button', { name: 'Accounts', exact: true });
@@ -681,7 +681,7 @@ test('Sessions titlebar colors resolve under light and dark themes', async ({ pa
 test('Sessions navigation geometry centers icons and enables the component actions', async ({ page }) => {
 	await expect(page.locator("[data-part='activitybar']")).toBeVisible();
 	const activityButtons = page.locator("[data-part='activitybar'] button");
-	expect(await activityButtons.locator('svg').evaluateAll(icons => icons.map(icon => icon.getAttribute('data-ash-icon-id')))).toEqual(['chat-2-filled', 'colab', 'projects', 'code', 'symbol-color', 'agent', 'account']);
+	expect(await activityButtons.locator('svg').evaluateAll(icons => icons.map(icon => icon.getAttribute('data-ash-icon-id')))).toEqual(['chat-2-filled', 'colab', 'agent', 'projects', 'code', 'symbol-color', 'agent', 'account']);
 	await expect(page.locator('.ash-sessions-activity-bottom button')).toHaveCount(1);
 	const chatButton = activityButtons.first();
 	const chatButtonBounds = await chatButton.boundingBox();

@@ -442,7 +442,7 @@ test('Built-in Git, Markdown and Media settings localize, persist and reset thro
 	const defaults = new DefaultSettings(registry);
 	const layout = createSettingsLayout(defaults.all);
 	assert.deepEqual(layout.filter(category => category.id.startsWith('extension.')).map(category => [category.id, category.groups.flatMap(group => group.settings).length]), [
-		['extension.ash.git', 105], ['extension.ash.markdown-language-features', 13], ['extension.ash.media-preview', 2],
+		['extension.ash.git', 103], ['extension.ash.markdown-language-features', 13], ['extension.ash.media-preview', 2],
 	]);
 	assert.equal(defaults.get('mediaPreview.video.loop').title, '循环播放视频');
 	assert.equal(defaults.get('markdown.validate.enabled').title, '检查链接');
@@ -1030,6 +1030,7 @@ test('settingsLayout is the single projection from registered settings to catego
 		'screenshot',
 		'appearance',
 		'layout',
+		'settings-editor',
 		'startup',
 		'browser',
 		'editor-fonts',
@@ -1828,7 +1829,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	workbenchGroup.closest<HTMLElement>('.ash-tree-row')?.click();
 	assert.deepEqual(
 		[...root.querySelectorAll<HTMLElement>('[data-settings-category-id]')].map(element => element.dataset.settingsCategoryId),
-		['general', 'github', 'network', 'screenshot', 'appearance', 'layout', 'startup', 'browser'],
+		['general', 'github', 'network', 'screenshot', 'appearance', 'layout', 'settings-editor', 'startup', 'browser'],
 	);
 	assert.equal(root.querySelector('[data-settings-category-id="general"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
 	assert.equal(root.querySelector('[data-settings-category-id="appearance"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);

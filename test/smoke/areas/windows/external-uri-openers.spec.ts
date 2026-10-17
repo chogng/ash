@@ -236,17 +236,17 @@ test('terminal URL rules support mouse, keyboard selection and Chinese command t
 		await expect(workbench.quickaccess.items.filter({ hasText: 'workbench.action.terminal.openDetectedLink' })).toContainText('终端：打开检测到的链接');
 		await workbench.quickaccess.items.filter({ hasText: 'workbench.action.terminal.openDetectedLink' }).click();
 		const picker = workbench.page.getByRole('dialog', { name: '打开终端链接', exact: true });
-		await expect(picker.getByRole('combobox')).toHaveAttribute('placeholder', '选择要打开的终端网址');
+		await expect(picker.getByRole('combobox')).toHaveAttribute('placeholder', '选择要打开的终端文件或网址');
 		await picker.getByRole('combobox').press('Escape');
 		await expect(workbench.terminal.activeInstance.locator('.xterm-helper-textarea')).toBeFocused();
 		await workbench.quickaccess.runCommand('workbench.action.terminal.openDetectedLink');
 		await workbench.quickaccess.select(url);
 		const browser = workbench.page.locator('.ash-browser-editor:visible');
 		await expect(browser.getByRole('status')).toHaveText('Terminal URL page');
-		await browser.getByRole('textbox', { name: 'Browser address' }).press('Alt+F1');
+		await browser.getByRole('textbox', { name: '浏览器地址', exact: true }).press('Alt+F1');
 		await expect(workbench.page.locator('.ash-accessible-view-content')).toHaveValue(/将 workbench.externalUriOpeners.*ash.browser.open/u);
 		await workbench.page.keyboard.press('Escape');
-		await workbench.page.getByRole('button', { name: 'Close Terminal URL page', exact: true }).click();
+		await workbench.page.getByRole('button', { name: '关闭 Terminal URL page', exact: true }).click();
 		await expect.poll(() => (application as ElectronApplication).evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().flatMap(window => window.contentView.children).filter(child => 'webContents' in child).length)).toBe(0);
 	} finally {
 		server.closeAllConnections();

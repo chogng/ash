@@ -70,8 +70,7 @@ for (const locale of ['en', 'zh-CN']) {
 				await more.focus();
 				await page.keyboard.press('Enter');
 				await expect(page.getByRole('menuitem', { name: label, exact: true })).toBeVisible();
-				await page.keyboard.press('Home');
-				for (let step = 0; step < index; step++) { await page.keyboard.press('ArrowDown'); }
+				await page.getByRole('menuitem', { name: label, exact: true }).focus();
 				await page.keyboard.press('Enter');
 				await expect.poll(() => page.evaluate(() => [...window.ashBrowserViewIntegration.calls])).toEqual(['share', 'permissions', 'downloads'].slice(0, index + 1));
 				await expect(page.getByRole('menu')).toHaveCount(0);

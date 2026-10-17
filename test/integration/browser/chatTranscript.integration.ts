@@ -17,7 +17,7 @@ import { ChatTipService, IChatTipService } from '../../../src/ash/sessions/contr
 import { ILifecycleService } from '../../../src/ash/workbench/services/lifecycle/common/lifecycle.js';
 import { registerTestDictationOnboarding } from '../../../src/ash/workbench/test/common/testDictationServices.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
-import { ILogService, ILoggerService, type LogEntry } from '../../../src/ash/platform/log/common/log.js';
+import { ILogService, ILoggerService, LogLevel, type LogEntry } from '../../../src/ash/platform/log/common/log.js';
 import { ITerminalLogService } from '../../../src/ash/platform/terminal/common/terminal.js';
 import { TerminalLogService } from '../../../src/ash/platform/terminal/common/terminalLogService.js';
 import { LogService } from '../../../src/ash/platform/log/common/logServiceImpl.js';
@@ -119,7 +119,7 @@ if (locale) {
 const resources = new DisposableStore();
 const appLogs: LogEntry[] = [];
 const parentServices = resources.add(new InstantiationService());
-const windowLogger = resources.add(new LogService({ sinks: [{ log: entry => appLogs.push(entry) }] }));
+const windowLogger = resources.add(new LogService({ level: LogLevel.Debug, sinks: [{ log: entry => appLogs.push(entry) }] }));
 parentServices.registerInstance(ILogService, windowLogger);
 parentServices.registerInstance(ILoggerService, windowLogger);
 const services = resources.add(createTestEditorServices(resources.add(new WorkbenchConfigurationService()), parentServices, document));
@@ -675,7 +675,7 @@ window.ashChatTranscriptIntegration = {
 				return { mode: 'plan' as const, queuedMessages: 0, approvalMode: 'manual' as const, phase: historyFailure ? 'error' as const : 'ready' as const, inputBlocked: !!historyFailure || aiDisabled, aiDisabled, canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false };
 			},
 			send: async (text, mode, _skills, contexts, submissionOptions) => { appChatMessages.push({ text, mode, contexts, ...(submissionOptions ? { commandId: submissionOptions.commandId, source: submissionOptions.source } : {}) }); },
-			executeServerCommand: async () => { }, interrupt: async () => { }, selectModel: async () => { }, selectReasoningEffort: async () => { }, selectAutomaticModel: async () => { },
+			executeServerCommand: async () => { }, interrupt: async () => { }, refreshChanges: async () => { }, selectModel: async () => { }, selectReasoningEffort: async () => { }, selectAutomaticModel: async () => { },
 			listAgents: async () => [], selectAgent() { }, selectMode() { }, selectApprovalMode() { }, resolveInteraction: async () => { }, retryFailedTurn: async () => { }, dispose() { }, [Symbol.dispose]() { },
 		};
 		const container = document.createElement('main');

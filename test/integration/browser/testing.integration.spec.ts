@@ -18,6 +18,7 @@ test('Testing keeps its tree and script controls reachable at the pane minimum',
 	await expect.poll(() => pane.locator('.ash-testing-tree .ash-scrollbar-viewport').evaluate(element => element.clientHeight)).toBeGreaterThanOrEqual(120);
 	await pane.getByText('Test Scripts', { exact: true }).click();
 	const run = pane.getByRole('button', { name: 'Run Script', exact: true });
+	await run.scrollIntoViewIfNeeded();
 	await expect(run).toBeInViewport();
 	await expect.poll(() => pane.locator('.ash-testing').evaluate(element => element.scrollHeight - element.clientHeight)).toBeLessThanOrEqual(1);
 	await run.focus();

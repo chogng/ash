@@ -31,7 +31,7 @@ import { CommandService } from '../../../src/ash/workbench/services/commands/com
 import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
 import { BrowserKeyboardLayoutService } from '../../../src/ash/workbench/services/keybinding/browser/keyboardLayoutService.js';
 import { WorkbenchKeybindingService } from '../../../src/ash/workbench/services/keybinding/browser/keybindingService.js';
-import { IStatusbarService, StatusbarService } from '../../../src/ash/workbench/services/statusbar/browser/statusbar.js';
+import { IStatusbarService } from '../../../src/ash/workbench/services/statusbar/browser/statusbar.js';
 import { ITextModelResourceService } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResourceService.js';
 import type { ITextResourceStore } from '../../../src/ash/workbench/services/textmodelResolver/common/textResourceStore.js';
 import { IUserDataProfileService } from '../../../src/ash/workbench/services/userDataProfile/common/userDataProfile.js';
@@ -80,8 +80,7 @@ const part = resources.add(services.createInstance(EditorPart, root, { registry:
 part.layout({ width: 1200, height: 420 });
 const editors = resources.add(new BrowserEditorService(part));
 services.registerInstance(IEditorService, editors);
-const statusbar = resources.add(new StatusbarService());
-services.registerInstance(IStatusbarService, statusbar);
+const statusbar = services.get(IStatusbarService);
 resources.add(services.createInstance(StatusbarPart, root, statusbar));
 const host = resources.add(WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['workbench.contrib.syncScrolling']));
 host.advance(WorkbenchPhase.Eventually);

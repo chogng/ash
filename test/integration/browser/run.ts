@@ -1,6 +1,6 @@
 import { withProcessRun } from '../../../build/processes.ts';
 import { collectTests, playwrightArguments } from '../../../build/playwright.ts';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { constants, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
 import { createServer, type Server } from 'node:http';
 import sirv from 'sirv';
@@ -23,14 +23,13 @@ await withProcessRun(desktopDirectory, async (run, environment) => {
 	};
 	if (!await collectTests(run, testArgs, playwrightArgs, testEnv)) return;
 	const files = playwrightArgs.filter(argument => /\.spec\.[jt]s$/u.test(argument));
-	let syntaxExecutable: string | undefined;
-	if (files.length === 0 || files.some(file => /(?:treeSitter|tokenization|themes|textModel)\.integration\.spec\.[jt]s$/u.test(file))) {
+	let backendPackageRoot: string | undefined;
+	if (files.length === 0 || files.some(file => /(?:treeSitter|tokenization|themes|textModel|markdownEditor|chatgptweb)\.integration\.spec\.[jt]s$/u.test(file))) {
 		const prepared = await run.command('pnpm', ['run', 'prepare:backend'], testEnv);
 		if (prepared.code !== 0) { process.exitCode = prepared.code; return; }
 		const target = `${process.arch === 'arm64' ? 'aarch64' : 'x86_64'}-${process.platform === 'darwin' ? 'apple-darwin' : process.platform === 'win32' ? 'pc-windows-msvc' : 'unknown-linux-gnu'}`;
 		const metadata = JSON.parse(readFileSync(resolve(desktopDirectory, '.build/runtime/dev/store-v1', target, 'host-provided-node/dev-small/prepare-inputs.json'), 'utf8')) as { packageRoot: string; };
-		// Pin the immutable package, so another build cannot replace the backend during this run.
-		syntaxExecutable = resolve(metadata.packageRoot, 'bin', `ash-app-server${process.platform === 'win32' ? '.exe' : ''}`);
+		backendPackageRoot = metadata.packageRoot;
 	}
 	const outputParent = resolve(desktopDirectory, '.build/desktop');
 	mkdirSync(outputParent, { recursive: true });
@@ -38,8 +37,17 @@ await withProcessRun(desktopDirectory, async (run, environment) => {
 	const assetsDirectory = mkdtempSync(resolve(outputParent, 'editor-browser-'));
 	const resultsDirectory = resolve(outputParent, 'playwright', basename(assetsDirectory));
 	let server: Server | undefined;
+	let runtimeDirectory: string | undefined;
 	let exitCode = 1;
 	try {
+		let syntaxExecutable: string | undefined;
+		if (backendPackageRoot) {
+			// Development-package collection can remove an older immutable package during a long test run.
+			// Keep the complete runtime, including grammar resources and helper binaries, until this run exits.
+			runtimeDirectory = mkdtempSync(resolve(outputParent, 'editor-browser-runtime-'));
+			cpSync(backendPackageRoot, runtimeDirectory, { recursive: true, dereference: true, mode: constants.COPYFILE_FICLONE });
+			syntaxExecutable = resolve(runtimeDirectory, 'bin', `ash-app-server${process.platform === 'win32' ? '.exe' : ''}`);
+		}
 		const build = await run.command(process.execPath, ['node_modules/vite/bin/vite.js', 'build', '--config', 'test/integration/browser/vite.config.ts', '--outDir', assetsDirectory], testEnv);
 		if (build.code !== 0) {
 			exitCode = build.code;
@@ -60,6 +68,7 @@ await withProcessRun(desktopDirectory, async (run, environment) => {
 			exitCode = (await run.command(process.execPath, testArgs, {
 				...testEnv,
 				...(syntaxExecutable ? { ASH_TEST_SYNTAX_APP_SERVER: syntaxExecutable } : {}),
+				...(runtimeDirectory ? { ASH_TEST_MARKDOWN_EXTENSION_DIR: resolve(runtimeDirectory, 'bin') } : {}),
 				ASH_EDITOR_BROWSER_BASE_URL: serverUrl,
 				ASH_EDITOR_BROWSER_RUN_DIRECTORY: resultsDirectory,
 			})).code;
@@ -67,6 +76,7 @@ await withProcessRun(desktopDirectory, async (run, environment) => {
 	} finally {
 		if (server) await stop(server);
 		rmSync(assetsDirectory, { recursive: true, force: true });
+		if (runtimeDirectory) rmSync(runtimeDirectory, { recursive: true, force: true });
 	}
 
 	process.exitCode = exitCode;

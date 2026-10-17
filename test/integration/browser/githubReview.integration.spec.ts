@@ -11,7 +11,8 @@ async function load(page: Page): Promise<void> {
 async function openReview(page: Page): Promise<void> {
 	await load(page); await page.getByRole('button', { name: '#7 <img src=x onerror=alert(1)> Review change', exact: true }).click();
 	await expect(page.getByRole('textbox', { name: 'Review summary', exact: true })).toBeEnabled();
-	await expect(page.getByRole('textbox', { name: 'Modified file', exact: true })).toBeVisible();
+	await expect(page.getByRole('region', { name: 'Modified file', exact: true })).toBeVisible();
+	await expect(page.getByRole('textbox', { name: 'Modified file', exact: true })).toHaveAttribute('aria-readonly', 'true');
 }
 
 test('PR review uses pinned renamed-file models, paginated checks and discussions, and confirms merge', async ({ page }) => {

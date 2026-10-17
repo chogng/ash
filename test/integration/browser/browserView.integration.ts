@@ -1,5 +1,5 @@
 import { Event } from '../../../src/ash/base/common/event.js';
-import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
+import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { setIconResolver } from '../../../src/ash/base/browser/ui/lxicons/lxicon.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
 import { IBrowserViewService, BrowserViewStorageScope, type IBrowserViewInfo } from '../../../src/ash/platform/browserView/common/browserView.js';
@@ -28,6 +28,13 @@ import { BrowserEditorInput } from '../../../src/ash/workbench/contrib/browserVi
 import { BrowserEditor } from '../../../src/ash/workbench/contrib/browserView/electron-browser/browserEditor.js';
 import { IChatSessionNavigationService } from '../../../src/ash/workbench/services/chat/common/chatSessionNavigationService.js';
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
+import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
+import { IEditorPart } from '../../../src/ash/workbench/browser/parts/editor/editorPart.js';
+import { IBrowserViewWorkbenchService } from '../../../src/ash/workbench/contrib/browserView/common/browserView.js';
+import { BrowserZoomService, IBrowserZoomService } from '../../../src/ash/workbench/contrib/browserView/common/browserZoomService.js';
+import { IBrowserAutoReloadService } from '../../../src/ash/workbench/contrib/browserView/electron-browser/features/browserAutoReloadFeatures.js';
+import { IChatContextPickService } from '../../../src/ash/workbench/services/chat/common/chatContextService.js';
+import { ChatContextPickService } from '../../../src/ash/workbench/services/chat/browser/chatContextPickService.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
@@ -58,11 +65,13 @@ services.registerInstance(IContextKeyService, contexts);
 services.registerInstance(IQuickInputService, resources.add(new TestQuickInputService({ container: document.body, contextKeyService: contexts })));
 services.registerInstance(IConfigurationService, resources.add(new InMemoryConfigurationService()));
 services.registerInstance(IStorageService, resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'browser-view-layout', backend: localStorage, flushInterval: 0 })));
+services.registerInstance(IBrowserZoomService, resources.add(services.createInstance(BrowserZoomService)));
 const theme = resources.add(new TestThemeService(darkColorTheme));
 services.registerInstance(IThemeService, theme);
 resources.add(bindTestColorTheme(theme, document.body));
 setIconResolver(document, getIconDefinition);
 const commands = resources.add(new CommandService(services));
+services.registerInstance(ICommandService, commands);
 services.registerInstance(IMenuService, new MenuService(commands, contexts));
 // The fixture has no product keybinding registry; menu activation uses the real menu's keyboard handling.
 services.registerInstance(IKeybindingService, { lookupKeybinding: () => undefined } as unknown as IKeybindingService);
@@ -72,6 +81,25 @@ services.registerInstance(IContextMenuService, resources.add(services.createInst
 services.registerInstance(IDialogsModel, { dialogs: [], onWillShowDialog: Event.None, onDidCloseDialog: Event.None } as unknown as IDialogsModel);
 services.registerInstance(IDialogService, { prompt: async () => { calls.push('share'); return {}; } } as unknown as IDialogService);
 services.registerInstance(IChatSessionNavigationService, { getConversations: () => [] } as unknown as IChatSessionNavigationService);
+services.registerInstance(IChatContextPickService, new ChatContextPickService());
+// This component fixture has one pane and no workspace file watchers.
+services.registerInstance(IEditorPart, { groups: [] } as unknown as IEditorPart);
+services.registerInstance(IBrowserViewWorkbenchService, {
+	onDidChangeBrowserViews: Event.None,
+	initialize: async () => { },
+	getKnownBrowserViews: () => new Map(),
+	getContextualBrowserViews: () => new Map(),
+	registerContextualFilter: () => toDisposable(() => { }),
+	registerOpenHandler: () => toDisposable(() => { }),
+	getOrCreateLazy: () => { throw new Error('This fixture owns one browser input'); },
+	createBrowserView: async () => { throw new Error('This fixture owns one browser input'); },
+});
+services.registerInstance(IBrowserAutoReloadService, {
+	onDidChangeState: Event.None,
+	isEnabled: () => false,
+	canReload: () => false,
+	toggle: () => { throw new Error('Auto reload requires a workspace in this fixture'); },
+});
 const info: IBrowserViewInfo = {
 	id: 'browser_target_00000000-0000-0000-0000-000000000000', host: { windowId: 1 }, owner: { type: 'user' }, session: { scope: BrowserViewStorageScope.Workspace },
 	state: { targetId: 'browser_target_00000000-0000-0000-0000-000000000000', url: 'https://example.com/', title: 'Browser layout', loading: false, canGoBack: true, canGoForward: true, visible: true },
@@ -83,6 +111,7 @@ services.registerInstance(IBrowserViewService, {
 	loadURL: async (_id: string, url: string) => { calls.push(url); },
 	onDidEvent: Event.None, getOrCreateBrowserView: async () => info, getState: async () => info.state,
 	layout: async () => { }, setVisible: async () => { }, getSharing: async () => [],
+	updateWindowConfiguration: async () => { }, focus: async () => { },
 	clearPermissions: async () => { calls.push('permissions'); }, cancelDownloads: async () => { calls.push('downloads'); },
 } as unknown as IBrowserViewService);
 const editor = resources.add(services.createInstance(BrowserEditor));

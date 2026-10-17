@@ -1,13 +1,25 @@
 import { execFileSync, spawn } from 'node:child_process';
-import { resolve } from 'node:path';
+import { isAbsolute, resolve } from 'node:path';
+import { statSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { readFile } from 'node:fs/promises';
 
 type ClientRequest = (request: any) => Promise<any>;
 let built = false;
+const preparedExtensionDirectory = process.env.ASH_TEST_MARKDOWN_EXTENSION_DIR;
 
 export function prepareMarkdownExtension(): void {
 	if (built) return;
+	// Browser runs supply their pinned runtime; standalone unit runs compile the CI-test executables below.
+	if (preparedExtensionDirectory) {
+		if (!isAbsolute(preparedExtensionDirectory)) throw new Error('ASH_TEST_MARKDOWN_EXTENSION_DIR must be an absolute path');
+		for (const binary of ['ash-markdown-language-features', 'ash-markdown-math']) {
+			const path = resolve(preparedExtensionDirectory, `${binary}${process.platform === 'win32' ? '.exe' : ''}`);
+			if (!statSync(path).isFile()) throw new Error(`Prepared Markdown extension is not a file: ${path}`);
+		}
+		built = true;
+		return;
+	}
 	execFileSync('just', ['test', 'ash-markdown-language-features', '-p', 'ash-markdown-math', '--profile', 'ci-test', '--no-run', '--locked'], { cwd: process.cwd(), timeout: 600000, stdio: 'pipe', windowsHide: true });
 	built = true;
 }
@@ -16,7 +28,7 @@ export function prepareMarkdownExtension(): void {
 async function startExtensionProcess(binary: string, extensionId: string, capabilities: string[], language: string, documents: readonly any[], configuration: any, folders: readonly string[], clientRequest: ClientRequest) {
 	const root = process.cwd();
 	prepareMarkdownExtension();
-	const executable = resolve(root, '.build/cargo/ci-test', `${binary}${process.platform === 'win32' ? '.exe' : ''}`);
+	const executable = resolve(preparedExtensionDirectory ?? resolve(root, '.build/cargo/ci-test'), `${binary}${process.platform === 'win32' ? '.exe' : ''}`);
 	const child = spawn(executable, [], { cwd: root, windowsHide: true, stdio: 'pipe' });
 	const reader = createInterface({ input: child.stdout });
 	let sequence = 0;

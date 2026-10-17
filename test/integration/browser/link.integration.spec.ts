@@ -206,8 +206,8 @@ test('Output severity and filter focus use theme colors in all four themes', asy
 			probe.style.color = 'var(--ash-focusBorder)';
 			const focusColor = getComputedStyle(probe).color;
 			probe.remove();
-			const input = document.querySelector('#output .ash-output-filter-input')!;
-			return { warning: getComputedStyle(element).color, warningColor, focus: getComputedStyle(input).borderColor, focusColor, width: getComputedStyle(input).borderWidth };
+			const widget = document.querySelector('.ash-output-filter-widget')!;
+			return { warning: getComputedStyle(element).color, warningColor, focus: getComputedStyle(widget).borderColor, focusColor, width: getComputedStyle(widget).borderWidth };
 		});
 		expect(colors.warning).toBe(colors.warningColor);
 		expect(colors.focus).toBe(colors.focusColor);

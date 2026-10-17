@@ -1577,7 +1577,14 @@ test('Design library files publish media and review updates before changing cons
 	const accept = [...view.propertiesDomNode.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent?.startsWith('Accept update:'))!; accept.click();
 	assert.equal(current().children[0].fill, '#ff0000'); assert.equal((current().children[0] as Extract<DesignShape, { kind: 'text'; }>).text, 'My label');
 	consumer.model.undo(); assert.equal(current().children[0].fill, '#123456'); consumer.model.redo();
-	await consumer.saveDocument(); const saved = parseDesignDocument(fileContent); assert.equal(saved.resources!.libraries[0].document.shapes[0].id, main.id);
+	const savingFrom = writes.length;
+	assert.equal(await consumer.saveDocument(), true);
+	// The publisher can autosave too; inspect the consumer's write rather than the fixture's last write across all documents.
+	const savedWrite = writes.slice(savingFrom).reverse().find(write => JSON.parse(write.content).documentId === consumer.model.value.documentId);
+	assert.ok(savedWrite);
+	const saved = parseDesignDocument(savedWrite.content);
+	assert.deepEqual(saved, consumer.model.value);
+	assert.equal(saved.resources!.libraries[0].document.shapes[0].id, main.id);
 	assert.deepEqual(consumer.readMedia(saved.assets[0].versions[0]), bytes); assert.deepEqual(errors, []);
 });
 

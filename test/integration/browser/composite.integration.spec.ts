@@ -437,9 +437,9 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
 		for (const title of ['Changes', 'Graph', 'Agent Review', 'Changes']) {
 			const button = host.getByRole('button', { name: title, exact: true });
 			const expanded = await button.getAttribute('aria-expanded') === 'true';
-			await button.click();
-			await expect(button).toHaveAttribute('aria-expanded', String(!expanded));
-			const frames = await host.evaluate(async element => {
+			// Start recording at the click so protocol round trips cannot miss a short transition.
+			const framesPromise = host.evaluate(async element => {
+				await new Promise<void>(resolve => element.addEventListener('click', () => resolve(), { once: true, capture: true }));
 				const split = element.querySelector<HTMLElement>('.ash-split-view')!;
 				const origin = split.getBoundingClientRect().top;
 				const panes = [...split.querySelectorAll<HTMLElement>(':scope > .ash-split-view-pane')];
@@ -457,6 +457,9 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
 				}
 				return frames;
 			});
+			await button.click();
+			await expect(button).toHaveAttribute('aria-expanded', String(!expanded));
+			const frames = await framesPromise;
 			for (const frame of frames) {
 				for (const edge of frame.edges) {
 					expect(edge.bottom).toBeCloseTo(edge.nextTop, 0);

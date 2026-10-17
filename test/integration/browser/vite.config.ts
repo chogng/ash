@@ -25,6 +25,7 @@ export default defineConfig({
 		rolldownOptions: {
 			output: rendererOutput,
 			input: {
+				auxiliaryBar: resolve(import.meta.dirname, 'auxiliaryBar.html'),
 				collaboration: resolve(import.meta.dirname, 'collaboration.html'),
 				gettingStarted: resolve(import.meta.dirname, 'gettingStarted.html'),
 				markdownEditor: resolve(import.meta.dirname, 'markdownEditor.html'),
@@ -82,9 +83,9 @@ export default defineConfig({
 				url: resolve(import.meta.dirname, 'url.html'),
 				releaseNotes: resolve(import.meta.dirname, 'releaseNotes.html'),
 				webview: resolve(import.meta.dirname, 'webview.html'),
+				webWorkbench: resolve(import.meta.dirname, 'webWorkbench.html'),
 				terminal: resolve(import.meta.dirname, "terminal.html"),
 				textModel: resolve(import.meta.dirname, "textModel.html"),
-				webWorkbench: resolve(import.meta.dirname, 'webWorkbench.html'),
 				standalone: resolve(import.meta.dirname, 'standalone.html'),
 				gpuText: resolve(import.meta.dirname, "gpuText.html"),
 				academic: resolve(import.meta.dirname, "academic.html"),
