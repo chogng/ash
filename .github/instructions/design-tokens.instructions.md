@@ -5,9 +5,11 @@ applyTo: src/ash/**/*.css
 
 # Design tokens for sizing, spacing & radii
 
-Size tokens are registered in [baseSizes.ts](../../src/ash/platform/theme/common/sizes/baseSizes.ts) and emitted as `--ash-*` variables. Use tokens where available, except on-scale spacing literals as allowed below. Structural measurements without tokens may remain literal.
+> **These tokens are the *moves*, not the reasoning.** They implement the **design philosophy** (Values → Principles → Moves): reach for a token *after* naming the feeling and the principle it serves - a radius is an *elevation tier*, a font is a *type role*, not a number. See the [`design-philosophy` skill](../skills/design-philosophy/SKILL.md) for the full vocabulary, worked examples, and how to give UI feedback in design terms.
 
-After changing registrations, run `pnpm stylelint:update`, review [ash-known-variables.json](../../build/lib/stylelint/ash-known-variables.json), then run `pnpm stylelint` and `pnpm hygiene`. Referenced size variables must be in the generated `sizes` list; component-owned variables enter `others` only after verifying their defining owner.
+Ash ships a design-system **size** ramp. These tokens are registered in [baseSizes.ts](../../src/ash/platform/theme/common/sizes/baseSizes.ts) and emitted as `--ash-*` CSS variables. **When generating or editing CSS, use the token variable instead of a raw `px` value** wherever a token exists for that value. This keeps new UI visually consistent with the design system.
+
+> Every `--ash-*` size var you reference must already exist in [ash-known-variables.json](../../build/lib/stylelint/ash-known-variables.json) (`"sizes"` array, alphabetically sorted) or stylelint/hygiene fails. Adding a *new* token means adding it both in `baseSizes.ts` and that JSON file.
 
 ## Rows and toolbar actions
 
@@ -38,7 +40,13 @@ Use for `padding`, `margin`, `gap`, and fixed `width`/`height` of spacers. The n
 | 36 | `--ash-spacing-size360` |
 | 40 | `--ash-spacing-size400` |
 
-On-scale raw px is permitted. Snap off-scale px to the nearest listed value, ties upward; check each shorthand length independently (`0 5px` → `0 6px`). Leave `auto`, `%`, `em`/`rem`, `var()` and `calc()` untouched.
+```css
+/* token   */          padding: var(--vscode-spacing-size80) var(--vscode-spacing-size120);
+/* also ok */          padding: 8px 12px;   /* on-scale raw px is fine */
+/* avoid   */          padding: 5px 7px;    /* off-scale - breaks rhythm */
+```
+
+**What matters is the value, not the token.** Adopting the `var()` is optional — a raw px value is fine **as long as it lands on the scale** (0, 2, 4, 6, 8, 10, 12, 16, 20, 24, 28, 32, 36, 40). What breaks visual rhythm is an **off-scale** value (3, 5, 7, 14, 26px…). Snap those to the nearest scale value (ties round **up**), e.g. `5px → 6px`, `3px → 4px`, `1px → 2px`, `26px → 28px`. Each length of a shorthand is checked independently (`0 5px → 0 6px`). `auto`, `%`, `em`/`rem`, and any `var()`/`calc()` expression are left untouched.
 
 ## Corner radius — `border-radius`
 
@@ -58,7 +66,7 @@ On-scale raw px is permitted. Snap off-scale px to the nearest listed value, tie
 
 ## Font size — `font-size`
 
-Pair each font-size token with the weight listed below:
+Generic UI ramp — pair a **size** token with a **weight** token; "Strong" reuses the matching size token + `fontWeight.semiBold`, **never** a separate "strong" size:
 
 | px | Size var | Weight |
 |----|----------|--------|
@@ -73,7 +81,7 @@ Pair each font-size token with the weight listed below:
 
 ## Font weight — `font-weight`
 
-Use only these two weights:
+The generic ramp uses two weights — there are no others. Pair every text style with one of these:
 
 | weight | Variable | Use |
 |--------|----------|-----|
@@ -84,21 +92,40 @@ Use only these two weights:
 - **"Strong" is not a separate size.** A "Body 1 Strong" / "Label 2 Strong" style reuses the matching `--ash-fontSize-*` token paired with `semiBold`. Never introduce a separate strong *size* token.
 - `normal` ≡ 400 → `regular`. **Leave untouched:** `inherit`, `lighter`, `bolder`, and any `var()`/`calc()` expression. Preserve `!important`.
 
+```css
+/* avoid */            font-weight: 500;   /* not on the 400/600 ramp */
+/* prefer */           font-weight: var(--vscode-fontWeight-semiBold);
+```
+
 ## Lxicon size — icon `font-size`
 
-Lxicons use only these two sizes:
+Lxicons are **only ever 16px or 12px**. There is no in-between size — never use `14px` (or any other value) for a codicon. Pick the base or the compact token:
 
 | px | Variable | Use |
 |----|----------|-----|
 | 16 | `--ash-lxiconFontSize` (base) | default icon size |
 | 12 | `--ash-lxiconFontSize-compact` | dense/inline chrome |
 
-At 12px, use the registered `*Compact` glyph when available and update selectors targeting the original glyph class. Icons without compact variants (agent, vm, info, lock) keep their regular glyph.
+If a design or existing CSS sizes a lxicon at 14px, treat it as a bug: snap it to 16 (default) or 12 (compact) and flag it.
+
+When sizing an icon at the **compact** 12px size, also swap the registered glyph to its `*Compact` variant (e.g. `Lxicon.close` → `Lxicon.closeCompact`) so the icon is visually optimized for the small size. CSS `font-size` alone only scales the icon — it does not change to the compact glyph. Only swap the glyph when no CSS selector targets the original glyph class (e.g. `.lxicon-close`), otherwise update that selector too. Some icons (agent, vm, info, lock) have no compact variant — keep the regular glyph at the compact size.
 
 ## Stroke — border width
 
-Use `--ash-strokeThickness` for 1px border and outline widths, including shorthands. Leave other widths unchanged.
+The design system has a **single** stroke thickness: 1px. Any `border`/`outline` width of 1px should use the token.
+
+| px | Variable |
+|----|----------|
+| 1  | `--ash-strokeThickness` |
+
+```css
+/* prefer */           border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+/* avoid  */           border: 1px solid var(--ash-widget-border);
+```
+
+Applies to the `border: 1px solid <color>` shorthand and `border-width: 1px`. Other widths have no token — leave them as-is.
 
 ## `.stanza-editor-background` must be opaque
 
-Keep `.stanza-editor-background` fully opaque: Stanza uses it to carve reverse-rounded selection notches. For an embedded editor, `.stanza-editor` may be transparent while `.stanza-editor-background` uses the container's solid color.
+`.stanza-editor-background` must use a fully opaque color — making it `transparent` (or any partial alpha) is forbidden. Stanza reuses this layer to carve the reverse-rounded notches out of text selections, so a non-opaque background introduces subtle rendering bugs (blocky selection corners) and performance problems. To blend an embedded editor into its surface, keep `.stanza-editor` transparent and paint `.stanza-editor-background` with the container's solid background color.
+
