@@ -9,7 +9,7 @@ import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Dimension } from '../../../base/browser/dom.js';
 import { Emitter, Event } from '../../../base/common/event.js';
-import { DisposableStore } from '../../../base/common/lifecycle.js';
+import { DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import { installEditorTestDom } from '../../../editor/test/browser/editorTestGlobals.js';
 import { IMenuService, MenusRegistry } from '../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../platform/actions/common/menuService.js';
@@ -133,6 +133,33 @@ test('Sessions titlebar initializes localized actions and closes the application
 
 const layoutTestResources = new DisposableStore();
 suiteTeardown(() => layoutTestResources.dispose());
+
+test('Sessions layout follows titlebar constraints for content, frame and overlay offsets', () => {
+	const browser = new JSDOM('<!doctype html><body></body>');
+	using browserLifetime = toDisposable(() => browser.window.close());
+	using globals = installEditorTestDom(browser, ['Node', 'Element', 'HTMLElement']);
+	using resources = new DisposableStore();
+	class ResizableTitlebar extends TestPart {
+		private height = 35;
+		override get minimumHeight(): number { return this.height; }
+		override get maximumHeight(): number { return this.height; }
+		setHeight(height: number): void {
+			this.height = height;
+			this.notifyConstraintsChanged();
+		}
+	}
+	const titlebar = resources.add(new ResizableTitlebar(browser.window.document.body, 'titlebar'));
+	const parts = new Map<SessionsPartId, Part>(sessionsPartIds.map(id => [id, id === 'titlebar' ? titlebar : resources.add(new TestPart(browser.window.document.body, id))]));
+	using layout = createLayout(browser.window.document.body, parts, { initialDimension: new Dimension(1_200, 800) });
+	layout.layout(new Dimension(1_200, 800));
+	for (const height of [48, 40, 35, 48]) {
+		titlebar.setHeight(height);
+		assert.equal(layout.getPartSize('titlebar').height, height);
+		assert.equal(layout.mainContainerOffset.top, height);
+		assert.equal(layout.domNode.querySelector<HTMLElement>('.ash-sessions-content-card')!.style.top, `${height}px`);
+		assert.equal(layout.getPartSize('sessions').height, 800 - height);
+	}
+});
 
 function createLayout(container: HTMLElement, parts: ReadonlyMap<SessionsPartId, Part>, options: import('../../browser/desktopWorkbench.js').SessionsWorkbenchLayoutOptions & { storageService?: import('../../../platform/storage/common/storage.js').IStorageService; } = {}): import('../../browser/desktopWorkbench.js').DesktopWorkbenchLayout {
 	const ownedStorage = options.storageService ? undefined : layoutTestResources.add(new BrowserStorageService({ ownerWindow: container.ownerDocument.defaultView!, workspaceId: 'sessions', flushInterval: 0, onError: () => { } }));

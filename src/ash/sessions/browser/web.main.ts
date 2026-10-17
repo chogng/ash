@@ -42,6 +42,7 @@ import { ServiceCollection } from '../../platform/instantiation/common/serviceCo
 import { SyncDescriptor } from '../../platform/instantiation/common/descriptors.js';
 import { IWorkbenchEnvironmentService } from '../../workbench/services/environment/common/environmentService.js';
 import { BrowserWorkbenchEnvironmentService } from '../../workbench/services/environment/browser/environmentService.js';
+import { createWebUpdateProvider } from '../../workbench/services/update/browser/updateService.js';
 
 registerSingleton(IHostService, BrowserHostService, InstantiationType.Delayed);
 registerSingleton(ILanguagePackStore, BrowserLanguagePackStore, InstantiationType.Delayed);
@@ -67,7 +68,14 @@ export class SessionsBrowserMain extends Disposable {
 			if (!ownerWindow) throw new Error('Sessions renderer requires an owner window');
 			const browserFiles = host?.webWorkspaceClient ? undefined : this._register(new HTMLFileSystemProvider(ownerWindow.indexedDB, ownerWindow));
 			const workbench = await createSessionsWorkbench({
-				serviceCollection: new ServiceCollection([IWorkbenchEnvironmentService, new SyncDescriptor(BrowserWorkbenchEnvironmentService, [ownerWindow.location])]),
+				serviceCollection: new ServiceCollection([
+					IWorkbenchEnvironmentService,
+					new SyncDescriptor(BrowserWorkbenchEnvironmentService, [
+						ownerWindow.location,
+						host?.webviewEndpoint,
+						{ updateProvider: host?.updateProvider ?? createWebUpdateProvider(container.ownerDocument) },
+					]),
+				]),
 				createAppToolsHost: documentClient ? services => new AppServerAppToolsHost(documentClient!, services.createInstance(AppToolsHost, container.ownerDocument, undefined)) : undefined,
 				createTextDocumentHost: documentClient ? services => {
 					const editing = services.get(IChatEditingService);
@@ -76,6 +84,7 @@ export class SessionsBrowserMain extends Disposable {
 				contributionIds: [
 					'chatResponseResourceWorkbenchContribution',
 					'workbench.contrib.partsSplash',
+					'workbench.contrib.webUpdate',
 					'workbench.contrib.preferences',
 					'workbench.contrib.snippets',
 					'workbench.contrib.sessionsLayout',

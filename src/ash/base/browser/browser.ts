@@ -60,6 +60,27 @@ export function addMatchMediaChangeListener(targetWindow: Window, query: string 
 	mediaQuery.addEventListener('change', listener);
 }
 
+const standaloneWindows = new WeakMap<Window, boolean>();
+
+/** Fullscreen temporarily replaces an installed application's display mode. */
+export function isStandalone(targetWindow: Window = globalThis.window): boolean {
+	if (typeof targetWindow?.matchMedia !== 'function') return false;
+	const installed = targetWindow.matchMedia('(display-mode: standalone), (display-mode: window-controls-overlay)').matches;
+	if (!targetWindow.matchMedia('(display-mode: fullscreen)').matches) {
+		standaloneWindows.set(targetWindow, installed);
+	}
+	return installed || standaloneWindows.get(targetWindow) === true;
+}
+
+export function isWCOEnabled(targetWindow: Window = globalThis.window): boolean {
+	return (targetWindow?.navigator as Navigator & { windowControlsOverlay?: { visible: boolean; }; })?.windowControlsOverlay?.visible === true;
+}
+
+/** The browser supplies viewport coordinates; callers convert to their own container. */
+export function getWCOTitlebarAreaRect(targetWindow: Window): DOMRect | undefined {
+	return (targetWindow.navigator as Navigator & { windowControlsOverlay?: { getTitlebarAreaRect(): DOMRect; }; }).windowControlsOverlay?.getTitlebarAreaRect();
+}
+
 export function getMonacoEnvironment(): IMonacoEnvironment | undefined {
 	return browserGlobals.MonacoEnvironment;
 }

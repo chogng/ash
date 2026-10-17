@@ -11,17 +11,14 @@ import { localize } from '../../../../nls.js';
 import { IMenuService } from '../../../../platform/actions/common/actions.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
-import { Part } from '../../../../workbench/browser/part.js';
+import { WebTitlebarPart } from '../../../../workbench/browser/parts/titlebar/titlebarPart.js';
 import { BrowserMenubarControl } from '../../../../workbench/browser/parts/titlebar/menubarControl.js';
-import { WorkbenchWindowBarHeight } from '../../../../workbench/browser/parts/workbenchPartDimensions.js';
 import { Menus } from '../../menus.js';
 
 /** Window chrome and primary product actions for the dedicated Sessions Workbench. */
-export class TitlebarPart extends Part {
+export class TitlebarPart extends WebTitlebarPart {
 	private readonly activityActions: WorkbenchToolBar;
 	private activityActionViewItemProvider: ActionViewItemProvider | undefined;
-	override get minimumHeight(): number { return WorkbenchWindowBarHeight; }
-	override get maximumHeight(): number { return WorkbenchWindowBarHeight; }
 
 	constructor(
 		container: HTMLElement,
@@ -31,7 +28,7 @@ export class TitlebarPart extends Part {
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
 	) {
-		super(container, 'titlebar', themeService, storageService);
+		super(container, themeService, storageService, 0);
 		this.domNode.classList.add('ash-sessions-titlebar');
 		const left = h(container.ownerDocument, 'div');
 		left.className = 'ash-sessions-titlebar-left';
@@ -47,7 +44,7 @@ export class TitlebarPart extends Part {
 			applicationMenuId: Menus.MenubarMainMenu,
 			titlebarMenuId: Menus.TitleBarLeftLayout,
 		}));
-		menubar.domNode.classList.add('ash-sessions-titlebar-actions');
+		menubar.domNode.classList.add('ash-sessions-titlebar-actions', 'ash-titlebar-interactive-region');
 		const right = h(container.ownerDocument, 'div');
 		right.className = 'ash-sessions-titlebar-right';
 		this.contentDomNode.append(right);

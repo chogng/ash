@@ -11,6 +11,7 @@ import type { WorkbenchDefaultLayout } from "./layout.js";
 import type { HTMLFileSystemProvider } from '../../platform/files/browser/htmlFileSystemProvider.js';
 import type { IWebWorkspaceClient } from '../services/workspaces/browser/workspaceOpenService.js';
 import type { IEmbedderTerminalOptions } from '../services/terminal/common/embedderTerminalService.js';
+import type { IUpdateProvider } from '../services/update/browser/updateService.js';
 
 /**
  * Capabilities and identity supplied by an embedding Web application.
@@ -27,6 +28,8 @@ export interface IWebWorkbenchHost {
 	readonly workspace?: IAnyWorkspaceIdentifier;
 	readonly container?: HTMLElement | null;
 	readonly defaultLayout?: WorkbenchDefaultLayout;
+	/** The embedding application compares its deployed build with this running page. */
+	readonly updateProvider?: IUpdateProvider;
 }
 
 /** Inputs used to create one browser-hosted Workbench instance. */
@@ -42,6 +45,7 @@ export interface IWebWorkbenchConstructionOptions {
 	readonly workspace?: IAnyWorkspaceIdentifier;
 	readonly container: HTMLElement;
 	readonly defaultLayout?: WorkbenchDefaultLayout;
+	readonly updateProvider?: IUpdateProvider;
 }
 
 /** Lifecycle facade returned to a Web Workbench embedder. */

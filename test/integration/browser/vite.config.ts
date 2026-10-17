@@ -3,12 +3,13 @@ import { defineConfig } from "vite";
 import { rendererOutput } from '../../../build/desktop/vite/rendererOutput.js';
 import { rendererDependencyAliases } from '../../../build/desktop/vite/rendererDependencies.js';
 import { workbenchEntryPlugin } from '../../../build/desktop/vite/workbenchEntryPlugin.js';
+import { webUpdatePlugin } from '../../../build/desktop/vite/webUpdatePlugin.js';
 
 export default defineConfig({
 	define: { __ASH_WEB_APP_SERVER__: 'false' },
 	resolve: { alias: rendererDependencyAliases },
 	root: resolve(import.meta.dirname),
-	plugins: [workbenchEntryPlugin('/themeEditor.html', [{
+	plugins: [webUpdatePlugin(), workbenchEntryPlugin('/themeEditor.html', [{
 		url: '/browser/theme-preview/themePreview.html',
 		inputFile: resolve(import.meta.dirname, 'browser/theme-preview/themePreview.html'),
 		sourceFile: resolve(import.meta.dirname, '../../../src/ash/workbench/contrib/themeEditor/browser/themePreview.html'),
@@ -82,6 +83,7 @@ export default defineConfig({
 				webview: resolve(import.meta.dirname, 'webview.html'),
 				terminal: resolve(import.meta.dirname, "terminal.html"),
 				textModel: resolve(import.meta.dirname, "textModel.html"),
+				webWorkbench: resolve(import.meta.dirname, 'webWorkbench.html'),
 				standalone: resolve(import.meta.dirname, 'standalone.html'),
 				gpuText: resolve(import.meta.dirname, "gpuText.html"),
 				academic: resolve(import.meta.dirname, "academic.html"),

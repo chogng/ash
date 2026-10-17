@@ -16,6 +16,34 @@
 	gap: 8px;
 }
 
+.ash-web-titlebar-overlay {
+	-webkit-app-region: drag;
+}
+
+.ash-web-titlebar-overlay .ash-titlebar-interactive-region,
+.ash-web-titlebar-overlay .ash-titlebar-command-center {
+	-webkit-app-region: no-drag;
+}
+
+.ash-web-titlebar-overlay .ash-titlebar-center {
+	position: relative;
+	left: auto;
+	top: auto;
+	flex: 0 1 auto;
+	margin-inline: calc(2 * var(--ash-spacing-size320));
+	transform: none;
+}
+
+.ash-web-titlebar-compact .ash-titlebar-center {
+	width: 32px;
+	margin-inline: var(--ash-spacing-size80);
+}
+
+.ash-web-titlebar-compact .ash-titlebar-command-center-navigation,
+.ash-web-titlebar-compact .ash-titlebar-center-adjacent-actions {
+	display: none;
+}
+
 .ash-workbench-titlebar .ash-workbench-part-content {
 	flex: 0 0 auto;
 	flex-direction: row;

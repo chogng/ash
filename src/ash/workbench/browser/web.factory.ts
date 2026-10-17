@@ -41,6 +41,7 @@ import { EMPTY_WORKSPACE_ID_KEY } from '../services/host/browser/browserHostServ
 import { URI } from '../../base/common/uri.js';
 import { IWorkspaceContextService, type IAnyWorkspaceIdentifier } from '../../platform/workspace/common/workspace.js';
 import { BrowserWorkbenchEnvironmentService } from '../services/environment/browser/environmentService.js';
+import { createWebUpdateProvider } from '../services/update/browser/updateService.js';
 
 /** Creates a browser-hosted Workbench with the shared Web adapters. */
 export async function createWebWorkbench(
@@ -52,7 +53,7 @@ export async function createWebWorkbench(
 
 	return startWorkbench({
 		productName: options.productName,
-		environmentService: new BrowserWorkbenchEnvironmentService(ownerWindow.location, options.webviewEndpoint),
+		environmentService: new BrowserWorkbenchEnvironmentService(ownerWindow.location, options.webviewEndpoint, { updateProvider: options.updateProvider }),
 		createURLService: services => services.createInstance(BrowserURLService, options.urlCallbackProvider),
 		createTextDocumentHost: options.createTextDocumentHost,
 		createStorageService: async storageOptions => new BrowserStorageService(storageOptions),
@@ -126,6 +127,7 @@ export async function startWebWorkbench(
 			...options,
 			webviewEndpoint: host?.webviewEndpoint,
 			urlCallbackProvider: host?.urlCallbackProvider,
+			updateProvider: host?.updateProvider ?? createWebUpdateProvider(document),
 			api,
 			createTextDocumentHost,
 			webWorkspaceClient: host?.webWorkspaceClient,

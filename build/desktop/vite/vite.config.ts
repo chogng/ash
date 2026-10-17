@@ -11,6 +11,7 @@ import { hotReloadPlugin } from "./hotReloadPlugin.ts";
 import { productIconsPlugin } from "./productIconsPlugin.ts";
 import { webAppServerVitePlugin } from "./webAppServerPlugin.ts";
 import { workbenchEntryPlugin } from "./workbenchEntryPlugin.ts";
+import { webUpdatePlugin } from './webUpdatePlugin.ts';
 import { browserExtensionsPlugin } from './extensionsPlugin.ts';
 import { CSSDevelopmentService } from '../../../src/ash/platform/cssDev/node/cssDevService.ts';
 import { installChatGPTVerification } from '../../../src/ash/sessions/contrib/chatgptweb/browser/chatGPTVerification.ts';
@@ -99,6 +100,7 @@ export default defineConfig(({ mode, command }) => {
 			'import.meta.env.ASH_SESSIONS_PROFILE': JSON.stringify(codeSessionsProfile),
 		},
 		plugins: [
+			...(webOnly ? [webUpdatePlugin()] : []),
 			...(webOnly ? [] : [{
 				name: 'ash-chatgpt-verification',
 				generateBundle() { this.emitFile({ type: 'asset' as const, fileName: 'browser/chatgpt/verification.js', source: verificationScript }); },

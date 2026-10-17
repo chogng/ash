@@ -114,6 +114,12 @@ Browser 和 Electron 各使用一个 `workbench.html` 入口。`web.factory.ts` 
 
 嵌入方可在产品入口执行前设置 `globalThis.ashWebWorkbenchHost = { api, workspace }`，这是进程内能力契约，不接受不可信 JSON。未配置宿主的普通 Web 入口使用 disconnected API。认证和连接生命周期见 [前端连接与浏览器能力](design/app-server-connection.md)。
 
+Ash 的 Web 构建根据生成的 HTML、JavaScript 和 CSS 计算内容标识，将其写入页面的 `ash-web-build` meta 和输出根目录的 `web-version.json`。发布时一起替换页面、版本清单和资源。普通 Workbench、连接 App Server 的宿主及 Sessions 都默认接入更新 provider：恢复后检查一次，也可运行“检查更新”；每次使用无缓存、同源、最长 10 秒的 HTTP 请求读取清单，并与页面加载时固定的标识比较。清单路径相对页面解析，支持部署到 URL 子目录。发现不同部署后，通知中的“重新加载以更新”操作经过现有关闭检查与未保存内容保护。开发服务器不生成部署标识，不自动检查更新。
+
+嵌入方仍可在 `ashWebWorkbenchHost` 或 `createWebWorkbench` 的构造选项中提供 `updateProvider`，优先使用外部实现。它的 `checkForUpdate(): Promise<{ version: string } | null>` 返回可用部署标识，或用 `null` 表示当前已是最新版本。直接调用 `createWebWorkbench` 的外部嵌入方未提供 provider 时，更新命令保持禁用。更新状态和操作复用窗口内唯一的更新服务。
+
+Workbench 和 Sessions 的 Web 标题栏共用窗口区域适配，消费浏览器的 Window Controls Overlay 几何信息：左右系统按钮区域用于内容避让，标题栏高度通过 Part 约束通知各自的 Grid。Sessions 的内容边框和浮层偏移同步使用新高度；Workbench 在窄窗口收起相邻按钮。全屏时清除系统按钮留白，恢复后重新读取；普通浏览器页签继续使用常规标题栏。
+
 ### 开发浏览器扩展
 
 开发受信任的浏览器扩展时，将 `ASH_WEB_EXTENSION_PATHS` 设置为扩展包目录；多个目录用当前平台的路径分隔符连接。例如在 PowerShell 中：

@@ -769,7 +769,6 @@
     "chat.changes.file": "{0} 个文件",
     "chat.changes.files": "{0} 个文件",
     "chat.changes.open": "打开变更：{0} 个文件，新增 {1} 行，删除 {2} 行",
-    "chat.changes.title": "变更",
     "chat.changes.invalidIdentity": "查看变更需要一个会话。",
     "chat.changes.unavailable": "此会话已不可用。",
     "chat.input.changesHelp": "输入框上方的变更按钮显示当前会话的文件变更数及新增和删除行数。使用 Tab 聚焦按钮，按 Enter 或空格打开变更。没有变更时隐藏按钮。",

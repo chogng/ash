@@ -49,6 +49,12 @@
 	min-width: 0;
 }
 
+.ash-web-titlebar-compact
+	.ash-titlebar-command-center-button
+	.ash-button-label {
+	display: none;
+}
+
 .ash-titlebar-command-center-button .ash-button-content {
 	max-width: 100%;
 }

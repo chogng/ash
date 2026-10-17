@@ -15,6 +15,8 @@ import "./workbench.common.main.js";
 import './contrib/terminal/browser/terminal.web.contribution.js';
 import './services/tunnel/browser/tunnelService.js';
 import './services/workspaces/browser/workspacesService.js';
+import { BrowserUpdateService } from './services/update/browser/updateService.js';
+import { IUpdateService } from '../platform/update/common/updateService.js';
 import { BrowserHostService } from './services/host/browser/browserHostService.js';
 import { IHostService } from './services/host/browser/host.js';
 import { InstantiationType, registerSingleton } from '../platform/instantiation/common/extensions.js';
@@ -29,6 +31,7 @@ import { ITunnelService } from '../platform/tunnel/common/tunnel.js';
 import { TunnelService } from './services/tunnel/browser/tunnelService.js';
 
 registerSingleton(IHostService, BrowserHostService, InstantiationType.Delayed);
+registerSingleton(IUpdateService, BrowserUpdateService, InstantiationType.Delayed);
 registerSingleton(ILanguagePackStore, BrowserLanguagePackStore, InstantiationType.Delayed);
 registerSingleton(IIssueFormService, IssueFormService, InstantiationType.Delayed);
 

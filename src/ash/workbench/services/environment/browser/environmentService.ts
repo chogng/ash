@@ -1,9 +1,20 @@
-import type { IWorkbenchEnvironmentService } from '../common/environmentService.js';
+import { IWorkbenchEnvironmentService } from '../common/environmentService.js';
+import { refineServiceDecorator } from '../../../../platform/instantiation/common/instantiation.js';
+import type { IWebWorkbenchConstructionOptions } from '../../../browser/web.api.js';
 
-export class BrowserWorkbenchEnvironmentService implements IWorkbenchEnvironmentService {
+export interface IBrowserWorkbenchEnvironmentService extends IWorkbenchEnvironmentService {
+	readonly options: Pick<IWebWorkbenchConstructionOptions, 'updateProvider'>;
+}
+
+export const IBrowserWorkbenchEnvironmentService = refineServiceDecorator<IWorkbenchEnvironmentService, IBrowserWorkbenchEnvironmentService>(IWorkbenchEnvironmentService);
+
+export class BrowserWorkbenchEnvironmentService implements IBrowserWorkbenchEnvironmentService {
 	public readonly webviewExternalEndpoint: string;
 
-	constructor(location: Location, webviewEndpoint?: string) {
+	constructor(location: Location, webviewEndpoint?: string, public readonly options: Pick<IWebWorkbenchConstructionOptions, 'updateProvider'> = {}) {
+		if (options.updateProvider !== undefined && (options.updateProvider === null || typeof options.updateProvider !== 'object' || typeof options.updateProvider.checkForUpdate !== 'function')) {
+			throw new TypeError('Web updateProvider must provide checkForUpdate()');
+		}
 		const isLoopback = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
 		// Service workers require a secure context throughout the iframe's ancestor chain.
 		if (location.protocol === 'http:' && !isLoopback) {

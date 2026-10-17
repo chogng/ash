@@ -1,8 +1,10 @@
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import { getWCOTitlebarAreaRect, isStandalone, isWCOEnabled } from '../../../../base/browser/browser.js';
+import { isWeb } from '../../../../base/common/platform.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { localize } from '../../../../nls.js';
 import "./titlebarpart.css";
-import { addDisposableListener, h } from "../../../../base/browser/dom.js";
+import { addDisposableListener, h, type IDimension } from "../../../../base/browser/dom.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { CommandsRegistry } from "../../../../platform/commands/common/commands.js";
 import { Disposable, DisposableStore, DisposableMap, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
@@ -131,8 +133,64 @@ export class BrowserTitleService extends Disposable implements ITitleService {
 	}
 }
 
+/** Shares browser window geometry while each product retains its titlebar content. */
+export abstract class WebTitlebarPart extends Part {
+	private webTitlebarHeight = WorkbenchWindowBarHeight;
+
+	override get minimumHeight(): number { return this.webTitlebarHeight; }
+	override get maximumHeight(): number { return this.minimumHeight; }
+
+	protected constructor(
+		container: HTMLElement,
+		themeService: IThemeService,
+		storageService: IStorageService,
+		private readonly horizontalPadding: number = 12,
+	) {
+		super(container, 'titlebar', themeService, storageService);
+		if (isWeb) {
+			const targetWindow = container.ownerDocument.defaultView!;
+			const refresh = (): void => this.updateWebWindowControls();
+			const overlay = (targetWindow.navigator as Navigator & { windowControlsOverlay?: EventTarget; }).windowControlsOverlay;
+			if (overlay) this._register(addDisposableListener(overlay, 'geometrychange', refresh));
+			this._register(addDisposableListener(targetWindow, 'resize', refresh));
+			for (const mode of ['standalone', 'window-controls-overlay', 'fullscreen']) {
+				const query = targetWindow.matchMedia?.(`(display-mode: ${mode})`);
+				if (query) this._register(addDisposableListener(query, 'change', refresh));
+			}
+			refresh();
+		}
+	}
+
+	public override layout(_dimension: IDimension): void {
+		if (isWeb) this.updateWebWindowControls();
+	}
+
+	private updateWebWindowControls(): void {
+		const targetWindow = this.domNode.ownerDocument.defaultView!;
+		const area = isWCOEnabled(targetWindow) ? getWCOTitlebarAreaRect(targetWindow) : undefined;
+		// In fullscreen the API can remain enabled while its titlebar rectangle is empty.
+		const overlay = area !== undefined && area.width > 0 && area.height > 0;
+		this.domNode.classList.toggle('ash-web-titlebar-overlay', overlay);
+		this.domNode.classList.toggle('ash-web-titlebar-compact', overlay && area.width < 800);
+		this.domNode.classList.toggle('ash-web-titlebar-standalone', isStandalone(targetWindow));
+		const height = overlay ? Math.max(WorkbenchWindowBarHeight, area.height) : WorkbenchWindowBarHeight;
+		if (overlay) {
+			const bounds = this.domNode.getBoundingClientRect();
+			this.domNode.style.paddingLeft = `${this.horizontalPadding + Math.max(0, area.x - bounds.x)}px`;
+			this.domNode.style.paddingRight = `${this.horizontalPadding + Math.max(0, bounds.right - area.right)}px`;
+		} else {
+			this.domNode.style.removeProperty('padding-left');
+			this.domNode.style.removeProperty('padding-right');
+		}
+		if (height !== this.webTitlebarHeight) {
+			this.webTitlebarHeight = height;
+			this.notifyConstraintsChanged();
+		}
+	}
+}
+
 /** The host-neutral workbench title area and its actions. */
-export class BrowserTitlebarPart extends Part implements ITitlebarPart {
+export class BrowserTitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 	protected readonly menubarVisibilityChanged = this._register(new Emitter<boolean>());
 	public readonly onMenubarVisibilityChange = this.menubarVisibilityChanged.event;
 	private readonly menubar: IMenubarControl;
@@ -148,9 +206,6 @@ export class BrowserTitlebarPart extends Part implements ITitlebarPart {
 	private readonly activityActionsListener = this._register(new MutableDisposable());
 	private activityActions: { bar: GlobalCompositeBar; showContextMenu: (event: MouseEvent | KeyboardEvent) => void; } | undefined;
 
-	override get minimumHeight(): number { return WorkbenchWindowBarHeight; }
-	override get maximumHeight(): number { return WorkbenchWindowBarHeight; }
-
 	constructor(
 		container: HTMLElement,
 		private readonly options: ITitlebarPartFactoryOptions,
@@ -163,7 +218,7 @@ export class BrowserTitlebarPart extends Part implements ITitlebarPart {
 		@IStorageService storageService: IStorageService,
 		@IContextKeyService contextKeyService: IContextKeyService,
 	) {
-		super(container, "titlebar", themeService, storageService);
+		super(container, themeService, storageService);
 		this.contextKeyService = this._register(contextKeyService.createScoped(this.domNode));
 		IsAuxiliaryWindowContext.bindTo(this.contextKeyService);
 		IsCompactTitleBarContext.bindTo(this.contextKeyService);

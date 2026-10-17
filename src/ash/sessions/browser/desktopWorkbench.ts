@@ -290,7 +290,7 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 	private partUpdateDepth = 0;
 	private readonly unavailableParts = new Set<SessionsPartId>();
 	private readonly desiredVisibility: { sessions: boolean; sidebar: boolean; auxiliarybar: boolean; editor: boolean; panel: boolean; };
-	private titlebarHeight = 0;
+	private get titlebarHeight(): number { return this.views.get('titlebar')?.minimumHeight ?? 0; }
 	private readonly initialDimension: Dimension;
 	private readonly stateModel: SessionsWorkbenchLayoutStateModel;
 	private readonly partVisibility = new Map<SessionsPartId, boolean>();
@@ -349,7 +349,6 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 				return editorWidth + detailsWidth + this.layoutPolicy.getFrameMetrics(this.layoutStyle).rightEdge;
 			}, this.compositionChanged.event));
 		}
-		this.titlebarHeight = this.view('titlebar').minimumHeight;
 		this._register(requiredPart(parts, 'editor').onDidChangeConstraints(() => this.compositionChanged.fire()));
 		this._register(this.view('activitybar').part.onDidChangeConstraints(() => this.projectFrameInsets()));
 		const state = this.stateModel.state;
@@ -372,6 +371,11 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 			() => this.detailsWidth,
 			width => this.resizePart('auxiliarybar', new Dimension(Math.min(460, Math.max(180, width)), this.getPartSize('auxiliarybar').height)),
 		));
+		this._register(this.view('titlebar').part.onDidChangeConstraints(() => {
+			// Grid follows Part constraints; overlays and the decorative frame need the same new offset.
+			this.projectFrameInsets();
+			if (this.grid.width > 0 && this.grid.height > 0) this.layout(new Dimension(this.grid.width, this.grid.height));
+		}));
 		// Save before the Grid is disposed; hidden views retain their cached user sizes.
 		this._register(toDisposable(() => this.saveState()));
 	}

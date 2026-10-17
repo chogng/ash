@@ -6,6 +6,7 @@ import { connectWebRendererApi, type RendererCapabilityContribution } from './we
 import { BrowserClipboardService } from '../../platform/clipboard/browser/clipboardService.js';
 import { normalizeExternalUrl } from '../../platform/opener/common/opener.js';
 import { AppServerWebWorkspaceClient } from '../services/workspaces/browser/appServerWebWorkspaceClient.js';
+import { createWebUpdateProvider } from '../services/update/browser/updateService.js';
 
 declare const __ASH_WEB_APP_SERVER__: boolean;
 
@@ -30,6 +31,7 @@ export async function connectBrowserWorkbenchHost(rendererCapabilities: readonly
 		}, { capabilities: { ...(textDocuments ? { textDocuments: { version: 2 } } : {}), ...(appTools ? { appTools: { version: 1, agents: true, desktop: false } } : {}) } }, rendererCapabilities);
 		globalThis.ashWebWorkbenchHost = {
 			api: connected.api,
+			updateProvider: createWebUpdateProvider(window.document),
 			webWorkspaceClient: new AppServerWebWorkspaceClient(endpoint, transport.sessionToken, window),
 			workspace: Object.freeze({
 				id: connected.metadata.workspaceId,
