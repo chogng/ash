@@ -63,7 +63,7 @@ export class QuickInputService extends Disposable implements IQuickInputService 
 		let type: IContextKey<string>;
 		let focus: IContextKey<boolean>;
 		let end: IContextKey<boolean>;
-		const controller = new QuickInputController(this.layoutService.activeContainer, className, {
+		const controller: QuickInputController = new QuickInputController(this.layoutService.activeContainer, className, {
 			onShow: input => {
 				for (const [, controller] of this.inputControllers) {
 					if (controller.currentQuickInput !== input) controller.currentQuickInput?.hide();

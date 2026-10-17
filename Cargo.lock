@@ -1090,9 +1090,9 @@ dependencies = [
  "ash-plugin",
  "ash-protocol",
  "ash-state",
+ "ash-utils-plugins",
  "rusqlite",
  "schemars",
- "ash-utils-plugins",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -1121,9 +1121,9 @@ dependencies = [
  "ash-secrets",
  "ash-state",
  "ash-tools",
+ "ash-utils-plugins",
  "base64 0.22.1",
  "getrandom 0.2.17",
- "ash-utils-plugins",
  "rusqlite",
  "serde",
  "serde_json",
@@ -1197,10 +1197,10 @@ dependencies = [
  "ash-plugin",
  "ash-tools",
  "ash-utils-path",
+ "ash-utils-plugins",
  "async-trait",
  "base64 0.22.1",
  "bytes",
- "ash-utils-plugins",
  "futures",
  "getrandom 0.2.17",
  "semver",
@@ -2145,13 +2145,13 @@ dependencies = [
  "ash-rmcp-client",
  "ash-secrets",
  "ash-tools",
+ "ash-utils-plugins",
  "base64 0.22.1",
  "fs2",
  "getrandom 0.2.17",
  "log",
  "serde",
  "serde_json",
- "ash-utils-plugins",
  "sha2 0.10.9",
  "tempfile",
  "tokio",
@@ -2405,6 +2405,7 @@ dependencies = [
 name = "ash-plugin"
 version = "0.1.0"
 dependencies = [
+ "ash-utils-plugins",
  "semver",
  "serde",
  "serde_json",
@@ -2413,7 +2414,6 @@ dependencies = [
 
 [[package]]
 name = "ash-process-hardening"
- "ash-utils-plugins",
 version = "0.1.0"
 dependencies = [
  "ctor",
@@ -2723,6 +2723,7 @@ version = "0.1.0"
 dependencies = [
  "ash-file-identity",
  "ash-protocol",
+ "ash-utils-plugins",
  "serde",
  "serde-saphyr",
  "sha2 0.10.9",
@@ -2732,7 +2733,6 @@ dependencies = [
 [[package]]
 name = "ash-skills-extension"
 version = "0.1.0"
- "ash-utils-plugins",
 dependencies = [
  "ash-async-utils",
  "ash-config",
@@ -3097,6 +3097,7 @@ dependencies = [
  "ash-utils-home-dir",
  "ash-utils-image",
  "ash-utils-path",
+ "ash-utils-plugins",
  "base64 0.22.1",
  "chrono",
  "crossterm",
@@ -3110,7 +3111,6 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "signal-hook",
- "ash-utils-plugins",
  "strum 0.27.2",
  "strum_macros 0.27.2",
  "syntect",
@@ -3294,6 +3294,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ash-utils-plugins"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "ash-utils-pty"
 version = "0.1.0"
 dependencies = [
@@ -3310,15 +3319,6 @@ dependencies = [
 
 [[package]]
 name = "ash-utils-sleep-inhibitor"
-[[package]]
-name = "ash-utils-plugins"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "tempfile",
-]
-
 version = "0.1.0"
 dependencies = [
  "core-foundation 0.10.1",
