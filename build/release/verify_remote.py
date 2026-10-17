@@ -23,6 +23,7 @@ from build.remote_smoke import verify  # noqa: E402
 
 def accept(package: Path, binding: Path, report: Path) -> None:
     package, binding, report = package.resolve(), binding.resolve(), report.resolve()
+    assert not (package / "ash-resources/capabilities").exists()
     report.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="ash-release-ssh-") as temporary:
         root = Path(temporary).resolve()

@@ -75,14 +75,16 @@ to the Developer ID Application identity and configure these repository Actions 
 `ASH_MACOS_NOTARY_KEY_ID`, and `ASH_MACOS_NOTARY_ISSUER`. Secrets never enter source
 or release archives. Linux-only publication does not require these Apple credentials.
 
-Remote packages retain editing, Agent execution, Node and Code Mode. Audio devices, speech
-inference, RTC/screen capture and the local SFU ship as two separate on-demand packages maintained
-from the existing local `livekit-client`, `realtime-voice` and `voice-host` crates, with LiveKit Server declared under `livekit-server`. The base contains only
-version-bound download descriptors; normal remote startup and ordinary Agent turns install neither.
+Remote packages retain editing, Agent execution, Node and Code Mode. Their fixed
+`--media-distribution none` policy does not build, download or include local media,
+speech inference, RTC/screen capture, the SFU, or their installation descriptors.
+The Remote release workflow prepares only the compiler, debugger/symbol tools and
+system libraries required by the actual Remote dependency graph.
 
 See [media and local hosting delivery](../docs/media-delivery.md) for independent build commands,
-release staging, first-use installation, offline overrides and verification. `--media-package-dir`
-and `--livekit-package-dir` override the sibling package directories; `--capability-archive-dir`
-keeps their downloadable archives outside a temporary product staging directory.
+release staging, first-use installation, offline overrides and verification for
+local product hosts. They maintain local `livekit-client`, `realtime-voice` and
+`voice-host` programs plus the independently deployed `livekit-server`. Their
+packaging and artifact options do not belong to Remote builds.
 
 Desktop remote windows keep calls, dictation and screen capture on the local connection. The remote runtime handles files, terminals and Agent work and rejects device-media requests.

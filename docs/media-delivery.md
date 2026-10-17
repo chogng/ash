@@ -32,8 +32,10 @@ scripts/.venv/bin/python -B build/release/capabilities.py build \
   --archive-dir .build/releases --descriptor-file dist/livekit.json
 ```
 
-`build/app_server.py` 默认 `--media-distribution optional`，与 `build/remote.py` 一样，将媒体与
-LiveKit 下载描述写入 `ash-resources/capabilities/{media,livekit}.json`。Remote 拒绝随包携带媒体。
+`build/app_server.py` 为独立本机宿主默认选择 `--media-distribution optional`，将媒体与
+LiveKit 下载描述写入 `ash-resources/capabilities/{media,livekit}.json`。
+`build/remote.py` 固定使用 `--media-distribution none`：不构建媒体与 LiveKit 附件，也不携带它们的下载描述，
+并拒绝媒体目录、下载 URL 和辅助程序覆盖参数。Remote 发布不安装音频、识别或屏幕构建依赖。
 Desktop 构建显式选择 `--media-distribution bundled`：主包携带 `ash-livekit-client`、`ash-realtime-voice`、`ash-voice-host`，
 仅保留 LiveKit 下载描述，不生成媒体下载附件。两种模式的文件均纳入主包完整清单与身份。
 传入 Desktop 的 `--backend-package` 也必须按 bundled 模式构建，转换器会拒绝缺少媒体的后端。
@@ -51,7 +53,7 @@ Desktop 将归档保存在 `.build/releases`，避免删除 Electron 临时 stag
 
 ## 发布配套附件
 
-Code、App Server 和 Remote 可以引用相同的独立附件，也可以绑定不同构建。
+本机 Code 与 App Server 可以引用相同的独立附件，也可以绑定不同构建。Remote 不引用媒体或 LiveKit 附件。
 Desktop 仅引用 LiveKit 附件；发布校验另外确认随包的媒体程序完整、摘要正确且没有媒体下载描述。
 附件必须与引用它的主包一起发布；独立打包不代表独立升级到未经该主包绑定的版本。
 
@@ -73,7 +75,7 @@ macOS/Linux 的 `platform-checks.yml` 与 Windows 的 `release-windows.yml` 在�
 
 Desktop 安装后可直接使用随包媒体，无需下载或创建 profile 的媒体安装目录；媒体进程仍按资源请求启动。
 独立本机 App Server 首次设备/媒体请求才安装到 `$ASH_HOME/capabilities/media`。
-所有产品仅在本机主持时安装 `$ASH_HOME/capabilities/livekit`。
+本机产品仅在主持通话时安装 `$ASH_HOME/capabilities/livekit`；Remote 不安装它。
 语音选择器主动枚举设备也算媒体请求。云听写使用客户端传入的 PCM 时不需要本机媒体包。
 普通远程连接、重连、文件编辑及文字 Agent 不会触发安装；听写或加入外部房间不会安装 SFU。
 本地模型准备/导入仅在验证推理时需要媒体包，模型下载缓存继续由原有模型服务管理。

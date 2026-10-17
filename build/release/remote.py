@@ -22,6 +22,11 @@ from build.lib.package import (  # noqa: E402
 )
 from build.lib.targets import target_spec  # noqa: E402
 
+LOCAL_MEDIA_DESCRIPTORS = (
+    "ash-resources/capabilities/media.json",
+    "ash-resources/capabilities/livekit.json",
+)
+
 
 def digest(path: Path) -> str:
     with path.open("rb") as source:
@@ -39,6 +44,7 @@ def archive_package(package: Path, output: Path, *, unsigned: bool = False) -> N
         or "remoteServer" not in metadata["components"]
         or {"voiceHost", "livekitClient", "recognizer", "livekit"}
         & metadata["components"].keys()
+        or any(name in metadata["files"] for name in LOCAL_MEDIA_DESCRIPTORS)
         or output.name != f"ash-remote-{spec.target}.tar.gz"
     ):
         raise ValueError("Remote releases require a media-free POSIX release package")
@@ -100,6 +106,7 @@ def archive_record(archive: Path) -> tuple[dict, dict]:
         )
         or {"voiceHost", "livekitClient", "recognizer", "livekit"}
         & metadata["components"].keys()
+        or any(name in files for name in LOCAL_MEDIA_DESCRIPTORS)
     ):
         raise ValueError("Remote archive is not a standalone editing/Agent release")
     return {

@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from build.lib.package_test_support import create_runtime_package
+from build.lib.package import package_build_id, package_files
 from build.release.remote import (
     archive_package,
     archive_record,
@@ -15,6 +16,33 @@ from build.release.remote import (
 
 
 class RemoteReleaseTests(unittest.TestCase):
+    def test_publication_rejects_local_media_download_descriptors(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "source").mkdir()
+            package = create_runtime_package(
+                root / "source", "aarch64-apple-darwin", media_distribution="none"
+            )
+            descriptor = package / "ash-resources/capabilities/livekit.json"
+            descriptor.parent.mkdir()
+            descriptor.write_text("{}")
+            path = package / "ash-package.json"
+            metadata = json.loads(path.read_text())
+            identity = {
+                key: value
+                for key, value in metadata.items()
+                if key not in ("files", "buildId")
+            }
+            files = package_files(package)
+            metadata.update(files=files, buildId=package_build_id(identity, files))
+            path.write_text(json.dumps(metadata))
+            with self.assertRaisesRegex(ValueError, "media-free"):
+                archive_package(
+                    package,
+                    root / "ash-remote-aarch64-apple-darwin.tar.gz",
+                    unsigned=True,
+                )
+
     def test_release_catalog_and_client_binding_preserve_exact_archive_identity(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

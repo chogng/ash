@@ -242,7 +242,7 @@ def create_runtime_package(
         else None,
         remote_host_binary=executable("ash-remote-host"),
         voice_host_binary=executable("ash-voice-host")
-        if media_distribution != "optional"
+        if media_distribution in ("legacy", "bundled")
         else None,
         recognizer_binary=executable("ash-realtime-voice")
         if media_distribution == "bundled"

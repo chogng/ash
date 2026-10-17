@@ -9,6 +9,7 @@ Product entrypoints compose the shared package tools for development and release
 - `app_server.py` resolves release binaries and resources.
 - `remote.py` reads [`remote-server/package.json`](../remote-server/package.json), restricts the
   Remote distribution to its declared POSIX targets, and requires bundled Node.
+  It omits local media builds, attachments and download descriptors.
 - `lib/package.py` assembles and validates both development and release packages using `lib/package-layout.json`.
 - `lib/livekit.py` resolves the locked LiveKit server runtime.
 - `sign.py` signs or verifies staged executables and refreshes package metadata.
@@ -16,7 +17,7 @@ Product entrypoints compose the shared package tools for development and release
 Runtime discovery, Tool policy, sandbox enforcement, notarization, installer
 formats, and update delivery belong to their respective owners.
 
-Root `remote/` owns Remote delivery requirements; `lib/` owns common package
+Root `remote-server/` owns Remote delivery requirements; `lib/` owns common package
 assembly, validation and immutable generation storage. `prepare.py` prepares
 the shared development package; `desktop/` owns incremental Desktop selection.
 Task entrypoints use the existing pnpm and Just commands, with Vite
