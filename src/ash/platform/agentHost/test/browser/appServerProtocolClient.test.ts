@@ -8,7 +8,8 @@ import type { LogEntry } from '../../../log/common/log.js';
 import { LogService } from '../../../log/common/logServiceImpl.js';
 import { AppServerProtocolIncompatibleError } from '../../common/appServerProtocolCompatibility.js';
 import { appServerRequest } from '../../browser/appServerRequest.js';
-import { type AppServerTransport, WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION } from '../../common/appServerTransport.js';
+import { VSBuffer } from '../../../../base/common/buffer.js';
+import { AppServerFrame, type AppServerTransport, WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION } from '../../common/appServerTransport.js';
 import { createTestInitializeResult } from '../common/testAppServerProtocol.js';
 import { SSH_REMOTE_INITIALIZE_TIMEOUT_MS } from '../../../remote/common/remote.js';
 
@@ -73,6 +74,46 @@ test('SSH cold package initialization can outlast ordinary request deadlines', a
 		await request;
 		assert.equal(client.state, 'crashed');
 	} finally { mock.timers.reset(); }
+});
+
+test('transport-checked frames reuse wire length without re-encoding their JSON', async () => {
+	const transport = new ProtocolTransport();
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	await client.connect();
+	const pending = appServerRequest(client, 'session/list', {});
+	const frame = JSON.stringify({ jsonrpc: '2.0', id: transport.frames.at(-1)!.id, result: { sessions: [] } });
+	const encode = mock.method(VSBuffer, 'fromString');
+	try {
+		transport.emit(WEB_APP_SERVER_FRAME_EVENT, new AppServerFrame(frame, Buffer.byteLength(frame)));
+		assert.deepEqual(await pending, { sessions: [] });
+		assert.equal(encode.mock.calls.length, 0);
+	} finally { encode.mock.restore(); }
+});
+
+test('plain frames cannot impersonate a transport-checked length', async () => {
+	const transport = new ProtocolTransport();
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	await client.connect();
+	const pending = appServerRequest(client, 'session/list', {});
+	const frame = JSON.stringify({ jsonrpc: '2.0', id: transport.frames.at(-1)!.id, result: { sessions: [] } });
+	transport.emit(WEB_APP_SERVER_FRAME_EVENT, { frame, byteLength: 320 * 1024 * 1024 + 1 });
+	assert.deepEqual(await pending, { sessions: [] });
+	assert.equal(client.state, 'ready');
+});
+
+test('transport-checked frames still validate the response schema', async () => {
+	const transport = new ProtocolTransport();
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	await client.connect();
+	const pending = appServerRequest(client, 'session/list', {});
+	const rejected = assert.rejects(pending);
+	const frame = JSON.stringify({ jsonrpc: '2.0', id: transport.frames.at(-1)!.id, result: { sessions: 'invalid' } });
+	transport.emit(WEB_APP_SERVER_FRAME_EVENT, new AppServerFrame(frame, Buffer.byteLength(frame)));
+	await rejected;
+	assert.equal(client.state, 'crashed');
 });
 
 test('connection recovery coalesces replacement, preserves the cause and reuses the protocol client', async () => {

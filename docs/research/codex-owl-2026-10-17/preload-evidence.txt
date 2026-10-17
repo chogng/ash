@@ -1,0 +1,193 @@
+Installed app preload excerpt. Line numbers refer to preload.pretty.js, formatted with Prettier 3.9.9.
+Original ASAR path: /.vite/build/preload.js
+
+35: r();
+36: function i(e) {
+37:   return typeof e != `object` ||
+38:     !e ||
+39:     !(`marker` in e) ||
+40:     e.marker !== `codex-host-chunked-message-v1` ||
+41:     !(`transferId` in e) ||
+42:     typeof e.transferId != `string` ||
+43:     !(`sequence` in e) ||
+44:     typeof e.sequence != `number` ||
+45:     !Number.isSafeInteger(e.sequence) ||
+46:     !(`kind` in e)
+47:     ? !1
+48:     : e.kind === `chunk`
+49:       ? `tokens` in e && Array.isArray(e.tokens) && e.tokens.every(a)
+50:       : e.kind === `start` || e.kind === `end`;
+51: }
+52: function a(e) {
+53:   return typeof e != `object` || !e || !(`type` in e)
+54:     ? !1
+55:     : e.type === `array-start` ||
+56:         e.type === `object-start` ||
+57:         e.type === `container-end` ||
+58:         e.type === `string-end`
+59:       ? !0
+60:       : e.type === `string-start`
+61:         ? `target` in e && (e.target === `key` || e.target === `value`)
+62:         : e.type === `key` || e.type === `string-chunk`
+63:           ? `value` in e && typeof e.value == `string`
+64:           : e.type === `value`
+65:             ? `value` in e
+66:               ? e.value == null ||
+67:                 typeof e.value == `boolean` ||
+68:                 typeof e.value == `number` ||
+69:                 typeof e.value == `string`
+70:               : !0
+71:             : !1;
+72: }
+73: var o = `codex_desktop:chunked-message-ack`,
+74:   s = `codex_desktop:remote-hosted-pip-video-frame`,
+75:   c = `codex_desktop:mcp-app-sandbox-host-message`,
+76:   l = `codex_desktop:show-context-menu`,
+77:   u = `codex_desktop:get-sentry-init-options`,
+78:   d = `codex_desktop:get-build-flavor`,
+79:   f = `codex_desktop:get-system-theme-variant`,
+80:   p = `codex_desktop:get-initial-sidebar-bootstrap`,
+81:   m = `codex_desktop:get-fast-mode-rollout-metrics`,
+82:   h = `codex_desktop:system-theme-variant-updated`,
+83:   g = `codex_desktop:trigger-sentry-test`,
+84:   _ = `codex_desktop:connect-app-host`,
+85:   v = `codex_desktop:start-file-drag`,
+86:   y = `codex_desktop:start-link-drag`;
+87: function b(e) {
+88:   return `codex_desktop:worker:${e}:from-view`;
+89: }
+90: function x(e) {
+91:   return `codex_desktop:worker:${e}:for-view`;
+92: }
+93: var S = { darwin: `Mac OS`, linux: `X11; Linux`, win32: `Windows NT 10.0` };
+94: function C({ appVersion: e, platform: t = process.platform, arch: n = process.arch }) {
+95:   return `Codex Desktop/${e} (${S[t] ?? t}; ${n})`;
+96: }
+97: var w = performance.timeOrigin,
+98:   T = `electron`,
+99:   E = `codex_desktop:message-from-view`,
+100:   D = `codex_desktop:message-for-view`,
+101:   O = e.ipcRenderer.sendSync(u),
+102:   k = e.ipcRenderer.sendSync(d),
+103:   A = e.ipcRenderer.sendSync(`codex_desktop:get-shared-object-snapshot`) ?? {},
+104:   j = e.ipcRenderer.sendSync(f),
+105:   M = document.documentElement;
+106: if (M != null) M.dataset.theme = j;
+107: else {
+108:   let e = new MutationObserver(() => {
+109:     let t = document.documentElement;
+110:     t != null && ((t.dataset.theme = j), e.disconnect());
+111:   });
+112:   e.observe(document, { childList: !0 });
+113: }
+114: var N = () => j,
+115:   P = new Set(),
+116:   F;
+117: e.ipcRenderer.on(h, (e, t) => {
+118:   ((j = t),
+119:     P.forEach((e) => {
+120:       e();
+121:     }));
+122: });
+123: function I(e, t) {
+124:   if (t === void 0) {
+125:     delete A[e];
+126:     return;
+127:   }
+128:   A[e] = t;
+129: }
+130: var L = new Map(),
+131:   R = new Map(),
+132:   z = {
+133:     windowType: T,
+134:     acknowledgeChunkedMessage: (t, n) => {
+135:       e.ipcRenderer.send(o, t, n);
+136:     },
+137:     getPreloadStartedAtMs: () => w,
+138:     sendMessageFromView: async (t) => {
+139:       (t.type === `shared-object-set` && I(t.key, t.value), await e.ipcRenderer.invoke(E, t));
+140:     },
+141:     getPathForFile: (t) => e.webUtils.getPathForFile(t) || null,
+142:     startFileDrag: (t) => e.ipcRenderer.sendSync(v, t) === !0,
+143:     startLinkDrag: (t) => {
+144:       e.ipcRenderer.send(y, t);
+145:     },
+146:     sendWorkerMessageFromView: async (t, n) => {
+147:       await e.ipcRenderer.invoke(b(t), n);
+148:     },
+149:     subscribeToWorkerMessages: (t, n) => {
+150:       let r = L.get(t);
+151:       r || ((r = new Set()), L.set(t, r));
+152:       let i = R.get(t);
+153:       return (
+154:         i ||
+155:           ((i = (e, n) => {
+156:             let r = L.get(t);
+157:             r &&
+158:               r.forEach((e) => {
+159:                 e(n);
+160:               });
+161:           }),
+162:           R.set(t, i),
+163:           e.ipcRenderer.on(x(t), i)),
+164:         r.add(n),
+165:         () => {
+166:           let r = L.get(t);
+167:           if (!r || (r.delete(n), r.size > 0)) return;
+168:           L.delete(t);
+169:           let i = R.get(t);
+170:           (i && e.ipcRenderer.removeListener(x(t), i), R.delete(t));
+171:         }
+172:       );
+173:     },
+174:     showContextMenu: async (t, n) => e.ipcRenderer.invoke(l, t, n),
+175:     getFastModeRolloutMetrics: async (t) => e.ipcRenderer.invoke(m, t),
+176:     getSharedObjectSnapshotValue: (e) => A[e],
+177:     getInitialSidebarBootstrap: () => (F === void 0 && (F = e.ipcRenderer.sendSync(p)), F),
+178:     getSystemThemeVariant: N,
+179:     subscribeToSystemThemeVariant: (e) => (
+180:       P.add(e),
+181:       () => {
+182:         P.delete(e);
+183:       }
+184:     ),
+185:     triggerSentryTestError: async () => {
+186:       await e.ipcRenderer.invoke(g);
+187:     },
+188:     getSentryInitOptions: () => O,
+189:     getDesktopUserAgent: () => C({ appVersion: O.appVersion }),
+190:     getAppSessionId: () => O.codexAppSessionId,
+191:     getBuildFlavor: () => k,
+192:     isDeviceCheckSupported: () => process.platform === `darwin` && process.arch === `arm64`,
+193:     isIntelMacBuild: () => process.platform === `darwin` && process.arch === `x64`,
+194:   };
+195: (e.ipcRenderer.on(D, (e, t) => {
+196:   if (!i(t)) {
+197:     let e = t;
+198:     if (e.type === `shared-object-updated`) I(e.key, e.value);
+199:     else if (e.type === `remote-hosted-pip-content-layout-state-changed`)
+200:       for (let [t, n] of B)
+201:         n.threadID === e.state.activeThreadID &&
+202:           !e.state.orderedPresentationIDs.includes(t) &&
+203:           (n.decoder.close(), B.delete(t));
+204:   }
+205:   window.dispatchEvent(new MessageEvent(`message`, { data: t }));
+206: }),
+207:   e.ipcRenderer.on(c, (e, t) => {
+208:     let n = window.location.origin;
+209:     n !== `null` && window.postMessage(t, n, e.ports);
+210:   }));
+211: var B = new Map();
+212: (e.ipcRenderer.on(s, (e, t) => {
+213:   if (`stopped` in t) {
+214:     for (let [e, n] of B) n.threadID === t.threadID && (n.decoder.close(), B.delete(e));
+215:     return;
+
+Additional bridge export lines:
+273:       }),
+274:     );
+275: }),
+276:   e.contextBridge.exposeInMainWorld(`codexWindowType`, T),
+277:   e.contextBridge.exposeInMainWorld(`electronBridge`, z),
+278:   typeof window < `u` &&
+279:     window.addEventListener(`message`, (t) => {

@@ -1,4 +1,4 @@
-import { WEB_APP_SERVER_PROTOCOL_VERSION, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_CLOSED_EVENT, type AppServerTransport } from '../common/appServerTransport.js';
+import { AppServerFrame, WEB_APP_SERVER_PROTOCOL_VERSION, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_CLOSED_EVENT, type AppServerTransport } from '../common/appServerTransport.js';
 import { APP_SERVER_METHODS, APP_SERVER_SERVER_REQUESTS, type AppServerMethod, type AppServerMethodDefinition, type InitializeResult, type MethodParams, type MethodResult, type ServerCapabilities, type ServerNotification } from "../../../../../.build/protocol/typescript/index.js";
 import { decodeAppServerEnvelope, decodeAppServerNotification, decodeAppServerResponse, decodeAppServerServerRequest } from "../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js";
 import { VSBuffer } from "../../../base/common/buffer.js";
@@ -536,6 +536,7 @@ function validateConnectedPayload(payload: unknown): AppServerConnectionMetadata
 }
 
 function validateFramePayload(payload: unknown): { frame: string; byteLength: number; } {
+	if (payload instanceof AppServerFrame) return payload;
 	if (!isRecord(payload) || typeof payload.frame !== "string") throw new Error("App Server bridge frame is invalid");
 	const byteLength = VSBuffer.fromString(payload.frame).byteLength;
 	if (byteLength > MAX_FRAME_BYTES) throw new Error(`App Server frame exceeds ${MAX_FRAME_BYTES} bytes`);

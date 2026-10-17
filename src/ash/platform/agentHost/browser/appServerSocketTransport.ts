@@ -5,7 +5,10 @@ import { SocketCloseEventType, type ISocket, type SocketCloseEvent } from '../..
 import { IRemoteSocketFactoryService } from '../../remote/common/remoteSocketFactoryService.js';
 import { RemoteConnectionType } from '../../remote/common/remoteAuthorityResolver.js';
 import type { IAddressProvider } from '../../remote/common/remoteAgentConnection.js';
-import { type AppServerTransport, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_CLOSED_EVENT } from '../common/appServerTransport.js';
+import { AppServerFrame, type AppServerTransport, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_CLOSED_EVENT } from '../common/appServerTransport.js';
+
+const framePageBytes = 64 * 1024;
+const maxFrameBytes = 320 * 1024 * 1024;
 
 interface SocketConnection extends IAddressProvider {
 	getMetadata(): unknown;
@@ -84,8 +87,8 @@ export class AppServerSocketTransport extends Disposable implements AppServerTra
 			resources.add(toDisposable(() => socket.dispose()));
 			resources.add(socket.onData(data => {
 				if (this.socket === socket) {
-					// WebSocket messages carry one JSON value; stream carriers retain JSONL boundaries.
-					this.acceptData(isWebSocket ? VSBuffer.concat([data, VSBuffer.fromString('\n')]) : data);
+					// WebSocket already owns the message boundary; stream carriers use JSONL.
+					if (isWebSocket) { this.acceptFrame(data); } else { this.acceptData(data); }
 				}
 			}));
 			resources.add(socket.onClose(event => {
@@ -107,52 +110,67 @@ export class AppServerSocketTransport extends Disposable implements AppServerTra
 
 	private acceptData(data: VSBuffer): void {
 		let start = 0;
-		for (let index = 0; index < data.byteLength; index++) {
-			if (data.buffer[index] !== 10) {
-				continue;
-			}
-			if (!this.append(data.slice(start, index))) {
+		for (; ;) {
+			const index = data.buffer.indexOf(10, start);
+			if (index === -1) {
+				this.append(data.slice(start));
 				return;
 			}
-			const bytes = VSBuffer.concat(this.parts, this.bufferedBytes);
-			this.parts = [];
-			this.bufferedBytes = 0;
-			try {
-				if (!bytes.byteLength || bytes.buffer.at(-1) === 13) {
-					throw new Error('App Server JSONL requires nonempty LF frames');
+			let bytes = data.slice(start, index);
+			if (this.bufferedBytes) {
+				if (!this.append(bytes)) { return; }
+				const lastPageBytes = this.bufferedBytes % framePageBytes;
+				if (lastPageBytes) {
+					this.parts[this.parts.length - 1] = this.parts[this.parts.length - 1].slice(0, lastPageBytes);
 				}
-				const frame = new TextDecoder('utf-8', { fatal: true }).decode(bytes.buffer);
-				this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame });
-				if (!this.socket) {
-					return;
-				}
-			} catch (error) {
-				this.disconnect();
-				this.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: String(error) });
-				return;
+				bytes = this.parts.length === 1 ? this.parts[0] : VSBuffer.concat(this.parts, this.bufferedBytes);
+				this.parts = [];
+				this.bufferedBytes = 0;
 			}
+			// A complete frame in this callback is decoded before its input can be reused.
+			if (!this.acceptFrame(bytes)) { return; }
 			start = index + 1;
 		}
-		this.append(data.slice(start));
 	}
 
 	private append(data: VSBuffer): boolean {
-		if (this.bufferedBytes + data.byteLength > 320 * 1024 * 1024) {
+		if (this.bufferedBytes + data.byteLength > maxFrameBytes) {
 			this.disconnect();
 			this.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: 'App Server frame exceeds transport capacity' });
 			return false;
 		}
-		if (data.byteLength) {
-			this.bufferedBytes += data.byteLength;
-			let owned = VSBuffer.wrap(data.buffer.slice());
-			// Keep geometrically sized fragments so tiny packets cannot grow an unbounded array
-			// or force a copy of the entire partial frame on each packet.
-			while (this.parts.length && this.parts[this.parts.length - 1].byteLength < owned.byteLength * 2) {
-				owned = VSBuffer.concat([this.parts.pop()!, owned]);
-			}
-			this.parts.push(owned);
+		// Fixed pages own retained bytes with one copy, independent of packet size.
+		// The frame limit also bounds the number of pages even for one-byte packets.
+		let offset = 0;
+		while (offset < data.byteLength) {
+			const pageOffset = this.bufferedBytes % framePageBytes;
+			if (pageOffset === 0) { this.parts.push(VSBuffer.alloc(framePageBytes)); }
+			const length = Math.min(framePageBytes - pageOffset, data.byteLength - offset);
+			this.parts[this.parts.length - 1].buffer.set(data.buffer.subarray(offset, offset + length), pageOffset);
+			this.bufferedBytes += length;
+			offset += length;
 		}
 		return true;
+	}
+
+	private acceptFrame(bytes: VSBuffer): boolean {
+		if (bytes.byteLength > maxFrameBytes) {
+			this.disconnect();
+			this.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: 'App Server frame exceeds transport capacity' });
+			return false;
+		}
+		try {
+			if (!bytes.byteLength || bytes.buffer.at(-1) === 13) {
+				throw new Error('App Server JSONL requires nonempty LF frames');
+			}
+			const frame = new TextDecoder('utf-8', { fatal: true }).decode(bytes.buffer);
+			this.emit(WEB_APP_SERVER_FRAME_EVENT, new AppServerFrame(frame, bytes.byteLength));
+			return this.socket !== undefined;
+		} catch (error) {
+			this.disconnect();
+			this.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: String(error) });
+			return false;
+		}
 	}
 
 	private closed(event: SocketCloseEvent): void {

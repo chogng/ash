@@ -1,0 +1,208 @@
+Owl process architecture evidence
+Observed app: ChatGPT 26.1013.40934 build 20770, macOS ARM64.
+Observation: main browser PID 91912. A 1-second sample and current descendant process listing were inspected.
+The framework is stripped: many sample symbol names have large offsets and are not reliable exact function names. ChromeMain, system event-loop frames, named threads, Node worker loops and loaded images are stronger evidence.
+
+DIRECT CHILDREN (irrelevant command arguments omitted)
+12050 parent=91912 /Applications/ChatGPT.app/Contents/Frameworks/Codex Framework.framework/Versions/155.0.8059.80/Helpers/Codex (Renderer).app/Contents/MacOS/Codex (Renderer) --type=renderer --owl-scoped-user-agent-additional-hosts=openai.com,chatgpt.com,chatgpt.site,chatgpt-team.site --owl-scoped-user-agent-prefix=CodexBrowser
+28807 parent=91912 /Applications/ChatGPT.app/Contents/Frameworks/Codex Framework.framework/Versions/155.0.8059.80/Helpers/Codex (Renderer).app/Contents/MacOS/Codex (Renderer) --type=renderer --owl-scoped-user-agent-additional-hosts=openai.com,chatgpt.com,chatgpt.site,chatgpt-team.site --owl-scoped-user-agent-prefix=CodexBrowser
+48363 parent=91912 /Applications/ChatGPT.app/Contents/Frameworks/Codex Framework.framework/Versions/155.0.8059.80/Helpers/Codex (Renderer).app/Contents/MacOS/Codex (Renderer) --type=renderer --owl-scoped-user-agent-additional-hosts=openai.com,chatgpt.com,chatgpt.site,chatgpt-team.site --owl-scoped-user-agent-prefix=CodexBrowser
+53646 parent=91912 /Applications/ChatGPT.app/Contents/Frameworks/Codex Framework.framework/Versions/155.0.8059.80/Helpers/Codex (Renderer).app/Contents/MacOS/Codex (Renderer) --type=renderer --owl-scoped-user-agent-additional-hosts=openai.com,chatgpt.com,chatgpt.site,chatgpt-team.site --owl-scoped-user-agent-prefix=CodexBrowser
+66143 parent=91912 /Applications/ChatGPT.app/Contents/Frameworks/Codex Framework.framework/Versions/155.0.8059.80/Helpers/Codex (Renderer).app/Contents/MacOS/Codex (Renderer) --type=renderer --owl-scoped-user-agent-additional-hosts=openai.com,chatgpt.com,chatgpt.site,chatgpt-team.site --owl-scoped-user-agent-prefix=CodexBrowser
+91912 parent=1 /Applications/ChatGPT.app/Contents/MacOS/ChatGPT
+91922 parent=91912 /Applications/ChatGPT.app/Contents/Frameworks/Codex Framework.framework/Versions/155.0.8059.80/Helpers/Codex (Service).app/Contents/MacOS/Codex (Service) --type=gpu-process
+91923 parent=91912 /Applications/ChatGPT.app/Contents/Frameworks/Codex Framework.framework/Versions/155.0.8059.80/Helpers/Codex (Service).app/Contents/MacOS/Codex (Service) --type=utility --utility-sub-type=network.mojom.NetworkService --service-sandbox-type=network --owl-scoped-user-agent-additional-hosts=openai.com,chatgpt.com,chatgpt.site,chatgpt-team.site --owl-scoped-user-agent-prefix=CodexBrowser
+91924 parent=91912 /Applications/ChatGPT.app/Contents/Frameworks/Codex Framework.framework/Versions/155.0.8059.80/Helpers/Codex (Service).app/Contents/MacOS/Codex (Service) --type=utility --utility-sub-type=storage.mojom.StorageService --service-sandbox-type=service
+92551 parent=91912 /Applications/ChatGPT.app/Contents/Resources/native/bare-modifier-monitor
+92565 parent=91912 /Applications/ChatGPT.app/Contents/Frameworks/Codex Framework.framework/Versions/155.0.8059.80/Helpers/Codex (Renderer).app/Contents/MacOS/Codex (Renderer) --type=renderer --owl-scoped-user-agent-additional-hosts=openai.com,chatgpt.com,chatgpt.site,chatgpt-team.site --owl-scoped-user-agent-prefix=CodexBrowser
+92566 parent=91912 /Applications/ChatGPT.app/Contents/Frameworks/Codex Framework.framework/Versions/155.0.8059.80/Helpers/Codex (Renderer).app/Contents/MacOS/Codex (Renderer) --type=renderer --owl-scoped-user-agent-additional-hosts=openai.com,chatgpt.com,chatgpt.site,chatgpt-team.site --owl-scoped-user-agent-prefix=CodexBrowser
+92585 parent=91912 /Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex -c features.code_mode_host=true app-server
+92587 parent=91912 /Applications/ChatGPT.app/Contents/Frameworks/Codex Framework.framework/Versions/155.0.8059.80/Helpers/Codex (Service).app/Contents/MacOS/Codex (Service) --type=utility --utility-sub-type=audio.mojom.AudioService --service-sandbox-type=audio
+92646 parent=91912 /Users/lx/.codex/computer-use/Codex Computer Use.app/Contents/MacOS/SkyComputerUseService
+92660 parent=91912 /Applications/ChatGPT.app/Contents/Frameworks/Codex Framework.framework/Versions/155.0.8059.80/Helpers/Codex (Renderer).app/Contents/MacOS/Codex (Renderer) --type=renderer --owl-scoped-user-agent-additional-hosts=openai.com,chatgpt.com,chatgpt.site,chatgpt-team.site --owl-scoped-user-agent-prefix=CodexBrowser
+92699 parent=91912 /Applications/ChatGPT.app/Contents/Frameworks/Codex Framework.framework/Versions/155.0.8059.80/Helpers/Codex (Renderer).app/Contents/MacOS/Codex (Renderer) --type=renderer --owl-scoped-user-agent-additional-hosts=openai.com,chatgpt.com,chatgpt.site,chatgpt-team.site --owl-scoped-user-agent-prefix=CodexBrowser
+92705 parent=91912 /Users/lx/Library/Application Support/Codex/artifact-sessions/runtime-generations/generation-4qrs88/runtime/bin/node /Users/lx/Library/Application Support/Codex/artifact-sessions/runtime-generations/g
+92732 parent=91912 /Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex -c forced_login_method="chatgpt" exec-server
+93445 parent=91912 /Applications/ChatGPT.app/Contents/Frameworks/Codex Framework.framework/Versions/155.0.8059.80/Helpers/Codex (Renderer).app/Contents/MacOS/Codex (Renderer) --type=renderer --owl-scoped-user-agent-additional-hosts=openai.com,chatgpt.com,chatgpt.site,chatgpt-team.site --owl-scoped-user-agent-prefix=CodexBrowser
+93448 parent=91912 /Applications/ChatGPT.app/Contents/Frameworks/Codex Framework.framework/Versions/155.0.8059.80/Helpers/Codex (Renderer).app/Contents/MacOS/Codex (Renderer) --type=renderer --owl-scoped-user-agent-additional-hosts=openai.com,chatgpt.com,chatgpt.site,chatgpt-team.site --owl-scoped-user-agent-prefix=CodexBrowser
+94149 parent=91912 /Applications/ChatGPT.app/Contents/Frameworks/Codex Framework.framework/Versions/155.0.8059.80/Helpers/Codex (Renderer).app/Contents/MacOS/Codex (Renderer) --type=renderer --owl-scoped-user-agent-additional-hosts=openai.com,chatgpt.com,chatgpt.site,chatgpt-team.site --owl-scoped-user-agent-prefix=CodexBrowser
+
+BROWSER PID SAMPLE EXCERPTS
+Source browser-sample.txt lines 1-16
+1: Analysis of sampling ChatGPT (pid 91912) every 10 milliseconds
+2: Process:         ChatGPT [91912]
+3: Path:            /Applications/ChatGPT.app/Contents/MacOS/ChatGPT
+4: Load Address:    0x104b1c000
+5: Identifier:      com.openai.codex
+6: Version:         26.1013.40934 (20770)
+7: Code Type:       ARM64
+8: Platform:        macOS
+9: Parent Process:  launchd [1]
+10: Target Type:     live task
+11:
+12: Date/Time:       2026-10-17 09:08:20.083 -0700
+13: Launch Time:     2026-10-17 03:19:57.779 -0700
+14: OS Version:      macOS 27.0.1 (26A434)
+15: Report Version:  7
+16: Analysis Tool:   /usr/bin/sample
+Source browser-sample.txt lines 24-29
+24:     87 Thread_161817289   DispatchQueue_1: com.apple.main-thread  (serial)
+25:     + 87 start  (in dyld) + 6688  [0x1911abe80]
+26:     +   87 main  (in ChatGPT) + 200  [0x104b1c810]
+27:     +     87 ChromeMain  (in Codex Framework) + 448  [0x119ce947c]
+28:     +       87 v8::metrics::Recorder::GetContext(v8::Isolate*, v8::metrics::Recorder::ContextId)  (in Codex Framework) + 501452  [0x11b9d7d48]
+29:     +         87 media$cxxbridge1$199$SymphoniaDecoder$decode  (in Codex Framework) + 178644  [0x11bd63fe8]
+Source browser-sample.txt lines 37-55
+37:     +                         87 -[NSApplication run]  (in AppKit) + 396  [0x195beb90c]
+38:     +                           87 std::__Cr::__shared_ptr_pointer[abi:sqn240000]<v8::BackingStore*, std::__Cr::default_delete<v8::BackingStore>, std::__Cr::allocator<v8::BackingStore>>::__on_zero_shared()  (in Codex Framework) + 1160944  [0x11d813a24]
+39:     +                             87 v8::BackingStore::MaxByteLength() const  (in Codex Framework) + 137948  [0x119f2f49c]
+40:     +                               87 uv_os_getpid  (in Codex Framework) + 90572  [0x11e74b0cc]
+41:     +                                 87 -[NSApplication(NSEventRouting) nextEventMatchingMask:untilDate:inMode:dequeue:]  (in AppKit) + 292  [0x19647026c]
+42:     +                                   87 -[NSApplication(NSEventRouting) _nextEventMatchingEventMask:untilDate:inMode:dequeue:]  (in AppKit) + 780  [0x196470748]
+43:     +                                     87 _DPSNextEvent  (in AppKit) + 580  [0x195bf84fc]
+44:     +                                       87 _DPSBlockUntilNextEventMatchingListInMode  (in AppKit) + 292  [0x195f3b29c]
+45:     +                                         87 _BlockUntilNextEventMatchingListInMode  (in HIToolbox) + 48  [0x19ebfa380]
+46:     +                                           87 ReceiveNextEventCommon  (in HIToolbox) + 492  [0x19ea7791c]
+47:     +                                             87 RunCurrentEventLoopInMode  (in HIToolbox) + 320  [0x19ea74590]
+48:     +                                               87 _CFRunLoopRunSpecificWithOptions  (in CoreFoundation) + 536  [0x19171b82c]
+49:     +                                                 87 __CFRunLoopRun  (in CoreFoundation) + 1172  [0x191641334]
+50:     +                                                   87 __CFRunLoopServiceMachPort  (in CoreFoundation) + 160  [0x191642aec]
+51:     +                                                     87 mach_msg  (in libsystem_kernel.dylib) + 24  [0x19153cfac]
+52:     +                                                       87 mach_msg_overwrite  (in libsystem_kernel.dylib) + 480  [0x191545a28]
+53:     +                                                         87 mach_msg2_internal  (in libsystem_kernel.dylib) + 76  [0x19154f8e0]
+54:     +                                                           87 mach_msg2_trap  (in libsystem_kernel.dylib) + 8  [0x19153cc20]
+55:     87 Thread_161817310
+Source browser-sample.txt lines 76-100
+76:     87 Thread_161817330: DelayedTaskSchedulerWorker
+77:     + 87 thread_start  (in libsystem_pthread.dylib) + 8  [0x19157ccec]
+78:     +   87 _pthread_start  (in libsystem_pthread.dylib) + 136  [0x191581d00]
+79:     +     87 node::WorkerThreadsTaskRunner::DelayedTaskScheduler::Start()::'lambda'(void*)::__invoke(void*)  (in Codex Framework) + 184  [0x11e09c2a8]
+80:     +       87 uv_run  (in Codex Framework) + 936  [0x11e8fe0f8]
+81:     +         87 uv__io_poll  (in Codex Framework) + 1112  [0x11e9134c4]
+82:     +           87 kevent  (in libsystem_kernel.dylib) + 8  [0x191542fcc]
+83:     87 Thread_161817331: V8Worker
+84:     + 87 thread_start  (in libsystem_pthread.dylib) + 8  [0x19157ccec]
+85:     +   87 _pthread_start  (in libsystem_pthread.dylib) + 136  [0x191581d00]
+86:     +     87 node::WorkerThreadsTaskRunner::WorkerThreadsTaskRunner(int, node::PlatformDebugLogLevel)  (in Codex Framework) + 1504  [0x11e098f60]
+87:     +       87 _pthread_cond_wait  (in libsystem_pthread.dylib) + 980  [0x1915821d0]
+88:     +         87 __psynch_cvwait  (in libsystem_kernel.dylib) + 8  [0x19154050c]
+89:     87 Thread_161817332: V8Worker
+90:     + 87 thread_start  (in libsystem_pthread.dylib) + 8  [0x19157ccec]
+91:     +   87 _pthread_start  (in libsystem_pthread.dylib) + 136  [0x191581d00]
+92:     +     87 node::WorkerThreadsTaskRunner::WorkerThreadsTaskRunner(int, node::PlatformDebugLogLevel)  (in Codex Framework) + 1504  [0x11e098f60]
+93:     +       87 _pthread_cond_wait  (in libsystem_pthread.dylib) + 980  [0x1915821d0]
+94:     +         87 __psynch_cvwait  (in libsystem_kernel.dylib) + 8  [0x19154050c]
+95:     87 Thread_161817333: V8Worker
+96:     + 87 thread_start  (in libsystem_pthread.dylib) + 8  [0x19157ccec]
+97:     +   87 _pthread_start  (in libsystem_pthread.dylib) + 136  [0x191581d00]
+98:     +     87 node::WorkerThreadsTaskRunner::WorkerThreadsTaskRunner(int, node::PlatformDebugLogLevel)  (in Codex Framework) + 1504  [0x11e098f60]
+99:     +       87 _pthread_cond_wait  (in libsystem_pthread.dylib) + 980  [0x1915821d0]
+100:     +         87 __psynch_cvwait  (in libsystem_kernel.dylib) + 8  [0x19154050c]
+Source browser-sample.txt lines 684-692
+684:     87 Thread_161818798: git
+685:     + 87 thread_start  (in libsystem_pthread.dylib) + 8  [0x19157ccec]
+686:     +   87 _pthread_start  (in libsystem_pthread.dylib) + 136  [0x191581d00]
+687:     +     87 node::worker::Worker::SelfSize() const  (in Codex Framework) + 140  [0x11e134e2c]
+688:     +       87 node::worker::Worker::Run()  (in Codex Framework) + 4800  [0x121851348]
+689:     +         87 node::SpinEventLoopInternal(node::Environment*)  (in Codex Framework) + 480  [0x11def04b8]
+690:     +           87 uv_run  (in Codex Framework) + 936  [0x11e8fe0f8]
+691:     +             87 uv__io_poll  (in Codex Framework) + 1112  [0x11e9134c4]
+692:     +               87 kevent  (in libsystem_kernel.dylib) + 8  [0x191542fcc]
+Source browser-sample.txt lines 749-757
+749:     87 Thread_161819739: open-in
+750:     + 87 thread_start  (in libsystem_pthread.dylib) + 8  [0x19157ccec]
+751:     +   87 _pthread_start  (in libsystem_pthread.dylib) + 136  [0x191581d00]
+752:     +     87 node::worker::Worker::SelfSize() const  (in Codex Framework) + 140  [0x11e134e2c]
+753:     +       87 node::worker::Worker::Run()  (in Codex Framework) + 4800  [0x121851348]
+754:     +         87 node::SpinEventLoopInternal(node::Environment*)  (in Codex Framework) + 480  [0x11def04b8]
+755:     +           87 uv_run  (in Codex Framework) + 936  [0x11e8fe0f8]
+756:     +             87 uv__io_poll  (in Codex Framework) + 1112  [0x11e9134c4]
+757:     +               87 kevent  (in libsystem_kernel.dylib) + 8  [0x191542fcc]
+Source browser-sample.txt lines 860-870
+860:        0x119960000 -        0x11996993b +remote-control-device-key.node (0) <752C111B-FCF7-3869-A236-60C75A23CC05> /Applications/ChatGPT.app/Contents/Resources/native/remote-control-device-key.node
+861:        0x119a6c000 -        0x119a71583 +browser-use-peer-authorization.node (0) <B47298DE-98B9-32A1-A2FC-A0327EB08640> /Applications/ChatGPT.app/Contents/Resources/native/browser-use-peer-authorization.node
+862:        0x119bc0000 -        0x119bd9b6f  com.apple.security.csparser (3.0 - 62460.1.3) <2AEB08C5-FF01-384A-9916-4E7346A65A23> /System/Library/Frameworks/Security.framework/Versions/A/PlugIns/csparser.bundle/Contents/MacOS/csparser
+863:        0x119ce4000 -        0x128f9df7f +com.openai.codex.framework (155.0.8059.80 - 8059.80) <4C4C44FC-5555-3144-A1CE-B4E503BF8038> /Applications/ChatGPT.app/Contents/Frameworks/Codex Framework.framework/Versions/155.0.8059.80/Codex Framework
+864:        0x14eb5c000 -        0x14ebbf207 +node.napi.armv8.node (0) <C9539077-2B8C-3A90-AA80-2612CC512704> /Applications/ChatGPT.app/Contents/Resources/app.asar.unpacked/node_modules/objc-js/prebuilds/darwin-arm64/node.napi.armv8.node
+865:        0x14ec68000 -        0x14ec7c3c3 +sparkle.node (0) <9DBF8893-DA99-3D4C-904B-1970D0710205> /Applications/ChatGPT.app/Contents/Resources/native/sparkle.node
+866:        0x14ece8000 -        0x14ecf0583 +hid-topology-watcher.node (0) <2643DFFF-7FCB-375B-896B-5943E1F5985F> /Applications/ChatGPT.app/Contents/Resources/native/hid-topology-watcher.node
+867:        0x14ed14000 -        0x14ed27fff +node.napi.node (0) <7F629F79-6F34-3CAB-A865-C680D125D295> /Applications/ChatGPT.app/Contents/Resources/app.asar.unpacked/node_modules/@worklouder/device-kit-oai/node_modules/@worklouder/wl-device-kit/node_modules/serialport/node_modules/@serialport/bindings-cpp/prebuilds/darwin-x64+arm64/node.napi.node
+868:        0x154bac000 -        0x154d4225f +better_sqlite3.node (0) <B7C67257-15F9-3323-AB74-C39CF9CE25BD> /Applications/ChatGPT.app/Contents/Resources/app.asar.unpacked/node_modules/better-sqlite3/build/Release/better_sqlite3.node
+869:        0x154d78000 -        0x154e1682f +sky.node (0) <8DD21C46-3CF0-3AD3-9B77-317642421A0D> /Applications/ChatGPT.app/Contents/Resources/native/sky.node
+870:        0x15dab0000 -        0x15db01e6b +org.sparkle-project.Sparkle (2.9.1 - 2054) <40DC82A7-3B46-36D6-824F-09BFE439E798> /Applications/ChatGPT.app/Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle
+
+FRAMEWORK SOURCE PATHS, LIFECYCLE AND IPC INTERFACE STRINGS
+Framework strings line 219014: owl.mojom.ElectronIPC
+Framework strings line 219015: owl.mojom.ElectronWebContentsUtility
+Framework strings line 226901: ../../owl/browser/electron_app_main_process_host.cc
+Framework strings line 226958: ../../owl/browser/electron_session_host.cc
+Framework strings line 227078: ../../owl/browser/electron_web_contents_host.cc
+Framework strings line 227144: Bootstrapped electron/js2c/browser_init for %s.
+Framework strings line 227145: MarkBrowserStartupReady
+Framework strings line 227146: ../../owl/browser/node_app_runner.cc
+Framework strings line 227174: A Node main module is already running in this process.
+Framework strings line 227182: Electron browser bootstrap did not signal process.appCodeLoaded().
+Framework strings line 227183: Electron node main process disconnected with code
+Framework strings line 398178: WakeupMainThread
+Framework strings line 398179: ../../owl/common/node_bindings.cc
+Framework strings line 398196: activateUvLoop
+Framework strings line 425490: ../../owl/browser/api/electron_api_web_contents.cc
+Framework strings line 425861: owl.mojom.ElectronRenderer
+Framework strings line 426094: ElectronIPC::MessageSync
+Framework strings line 427534: ../../owl/renderer/electron_ipc_native.cc
+Framework strings line 427591: ../../owl/renderer/api/electron_api_ipc_renderer.cc
+
+EMBEDDED ELECTRON JAVASCRIPT
+Framework strings line 227797; process.appCodeLoaded:
+tionMenu:w}=__webpack_require__("./lib/browser/default-menu.ts");a.once("will-finish-launching",w);const{appCodeLoaded:b}=process;if(delete process.appCodeLoaded,c)if("module"===d.type&&!m.endsWith(".cjs")||m.endsWith(".mjs")){const{runEntryPointWithESMLoader:e}=require("internal/modules/run_main"),t=__webpack_require__("url").pathToFileURL(s.join(c,m));e(async e=>{try{await e.import(t.toString(),void 0,Object.create(null)),b()}catch(e){b(),process.emit("uncaughtException",e)}})}else b(),i._load(s.join(c,m),i,!0);else console.error("Failed to locate a valid package to load (app, app.asar or default_app.asar)"),console.error("This normally means you've damaged the Electron package somehow"),b()})()})();
+
+
+Framework strings line 227797; addIpcDispatchListeners:
+bject.create(null);Object.defineProperty(p,"id",{get:()=>"window:-4:"+u--}),p.name="",Object.freeze(p),c.prototype._init=function(){if((0,n.addIpcDispatchListeners)(this),this.extensions){const rerouteExtensionEvent=e=>{const t=s.warnOnce(`${e} event`,`session.extensions ${e} event`);this.extensions.on(e,(...r)=>{0!==this.listenerCount(e)&&(t(),this.emit(e,...r))})};rerouteExtensionEvent("extension-loaded"),rerouteExtensionEvent("extension-unloaded"),rerouteExtensionEvent("extension-ready")}},c.prototype.fetch=function(e,t){return(0,o.fetchWithSession)(e,t,this,i.net.request)},c.prototype.setDisplayMediaRequestHandler=function(e,t){if(!e)return this._setDisplayMediaRequestHandler(e,t);this._setDisplayMediaRequestHandler(async(r,o)=>t&&t.useSystemPicker&&d()?o({video:p}):e(r,o),t)};const h=s.warnOnce("session.getPreloads","session.getPreloadScripts");c
+
+Framework strings line 227797; getIpcEmittersForFrameEvent:
+ternal"))n.ipcMainInternal.emit(t,e,...r);else if("frame"===e.type){addReplyToEvent(e),e.sender.emit("ipc-message",e,t,...r);for(const o of getIpcEmittersForFrameEvent(e))o?.emit(t,e,...r)}else"service-worker"===e.type&&(addServiceWorkerPropertyToEvent(e),getServiceWorkerFromEvent(e)?.ipc.emit(t,e,...r))}),e.on("-ipc-invoke",async function(e,t,r){const replyWithError=r=>{console.error(`Error occurred in handler for '${t}':`,r),e._replyChannel.sendReply({error:r.toString()})},s=[];if(a.getHiddenValue(e,"internal"))s.push(n.ipcMainInternal);else if("frame"===e.type)s.push(...getIpcEmittersForFrameEvent(e));else if("service-worker"===e.type){addServiceWorkerPropertyToEvent(e);const t=getServiceWorkerFromEvent(e)?.ipc;s.push(t)}const i=s.find(e=>e?._invokeHandlers.has(t));if(i){const n=i._invokeHandlers.get(t);try{l=await o.resolve(n(e,...r)),e._replyChannel.
+
+Framework strings line 227797; _replyChannel.sendReply:
+t(t,e,...r))}),e.on("-ipc-invoke",async function(e,t,r){const replyWithError=r=>{console.error(`Error occurred in handler for '${t}':`,r),e._replyChannel.sendReply({error:r.toString()})},s=[];if(a.getHiddenValue(e,"internal"))s.push(n.ipcMainInternal);else if("frame"===e.type)s.push(...getIpcEmittersForFrameEvent(e));else if("service-worker"===e.type){addServiceWorkerPropertyToEvent(e);const t=getServiceWorkerFromEvent(e)?.ipc;s.push(t)}const i=s.find(e=>e?._invokeHandlers.has(t));if(i){const n=i._invokeHandlers.get(t);try{l=await o.resolve(n(e,...r)),e._replyChannel.sendReply({result:l})}catch(e){replyWithError(e)}}else replyWithError(new Error(`No handler registered for '${t}'`));var l}),e.on("-ipc-message-sync",function(e,t,r){const o=a.getHiddenValue(e,"internal");if((e=>{Object.defineProperty(e,"returnValue",{set:t=>e._replyChannel.sendReply(t),g
+
+Framework strings line 227797; getHiddenValue:
+eProperty(t,"__esModule",{value:!0}),t.addIpcDispatchListeners=function addIpcDispatchListeners(e){e.on("-ipc-message",function(e,t,r){if(a.getHiddenValue(e,"internal"))n.ipcMainInternal.emit(t,e,...r);else if("frame"===e.type){addReplyToEvent(e),e.sender.emit("ipc-message",e,t,...r);for(const o of getIpcEmittersForFrameEvent(e))o?.emit(t,e,...r)}else"service-worker"===e.type&&(addServiceWorkerPropertyToEvent(e),getServiceWorkerFromEvent(e)?.ipc.emit(t,e,...r))}),e.on("-ipc-invoke",async function(e,t,r){const replyWithError=r=>{console.error(`Error occurred in handler for '${t}':`,r),e._replyChannel.sendReply({error:r.toString()})},s=[];if(a.getHiddenValue(e,"internal"))s.push(n.ipcMainInternal);else if("frame"===e.type)s.push(...getIpcEmittersForFrameEvent(e));else if("service-worker"===e.type){addServiceWorkerPropertyToEvent(e);const t=getS
+
+Framework strings line 227797; electron_browser_web_contents:
+ct.defineProperty(t,"__esModule",{value:!0});const o=r("./lib/browser/api/exports/electron.ts"),{WebContentsView:n}=process._linkedBinding("electron_browser_web_contents_view");Object.setPrototypeOf(n.prototype,o.View.prototype),t.default=n},"./lib/browser/api/web-contents.ts"(e,t,r){var o=r("./lib/common/webpack-globals-provider.ts").Promise;Object.defineProperty(t,"__esModule",{value:!0}),t.create=function create(e={}){return new g(e)},t.fromId=function fromId(e){return w.fromId(e)},t.fromFrame=function fromFrame(e){return w.fromFrame(e)},t.fromDevToolsTargetId=function fromDevToolsTargetId(e){return w.fromDevToolsTargetId(e)},t.getFocusedWebContents=function getFocusedWebContents(){let e=null;for(const t of w.getAllWebContents())if(t.isFocused()&&(null==e&&(e=t),"webview"===t.getType()))return t;return e},t.getAllWebContents=function getAllWebContents(){
+
+Framework strings line 227797; ipc-message-sync:
+Channel.sendReply({result:l})}catch(e){replyWithError(e)}}else replyWithError(new Error(`No handler registered for '${t}'`));var l}),e.on("-ipc-message-sync",function(e,t,r){const o=a.getHiddenValue(e,"internal");if((e=>{Object.defineProperty(e,"returnValue",{set:t=>e._replyChannel.sendReply(t),get:()=>{}})})(e),o)n.ipcMainInternal.emit(t,e,...r);else if("frame"===e.type){addReplyToEvent(e);const o=e.sender,n=getIpcEmittersForFrameEvent(e);0===o.listenerCount("ipc-message-sync")&&n.every(e=>!e||0===e.listenerCount(t))&&console.warn(`WebContents #${o.id} called ipcRenderer.sendSync() with '${t}' channel without listeners.`),o.emit("ipc-message-sync",e,t,...r);for(const o of n)o?.emit(t,e,...r)}else"service-worker"===e.type&&(addServiceWorkerPropertyToEvent(e),getServiceWorkerFromEvent(e)?.ipc.emit(t,e,...r))}),e.on("-ipc-message-host",function(e
+
+Framework strings line 227830; electron_renderer_ipc:
+s;let i;Object.defineProperty(t,"__esModule",{value:!0}),t.getIPCRenderer=function getIPCRenderer(){if(i)return i;const e=r._linkedBinding("electron_renderer_ipc");switch(r.type){case"renderer":return i=e.createForRenderFrame();case"service-worker":return i=e.createForServiceWorker();default:throw new Error(`Cannot create IPCRenderer for '${r.type}' process`)}}},"./lib/renderer/ipc-renderer-internal-utils.ts"(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.handle=void 0,t.invokeSync=function invokeSync(e,...t){const[n,i]=r.ipcRendererInternal.sendSync(e,...t);if(n)throw n;return i};const r=n("./lib/renderer/ipc-renderer-internal.ts");t.handle=function(e,t){r.ipcRendererInternal.on(e,async(n,r,...i)=>{const o=`${e}_RESPONSE_${r}`;try{n.sender.send(o,null,await t(n,...i))}catch(e){n.sender.send(o,e)}})}},"./lib/renderer/ipc-renderer-internal
+
+Framework strings line 227830; ipcRendererInternal:
+enderer-internal.ts"),s=r._linkedBinding("electron_common_shared_texture"),a="IMPORT_SHARED_TEXTURE_TRANSFER_MAIN_TO_RENDERER";let l=null;o.ipcRendererInternal.on(a,async(e,t,...n)=>{const r=`${a}_RESPONSE_${t}`;try{const t=n[0],o=n[1],a=s.finishTransferSharedTexture(Object.assign(t,{id:o})),d=a.getFrameCreationSyncToken();e.sender.send(r,null,d);const c={importedSharedTexture:{textureId:o,subtle:a,getVideoFrame:a.getVideoFrame,release:()=>{a.release(async()=>{await i.default.invoke("IMPORT_SHARED_TEXTURE_RELEASE_RENDERER_TO_MAIN",o)})}}};await(l?.(c,...n.slice(2)))}catch(t){e.sender.send(r,t)}});const d={subtle:s,setSharedTextureReceiver:e=>{l=e}};t.default=d},"./lib/renderer/api/web-frame.ts"(e,t,n){var r=n("./lib/common/webpack-provider.ts").process;Object.defineProperty(t,"__esModule",{value:!0});const i=n("./lib/common/deprecate.ts"),o=n("./l
+
+Framework strings line 227832; electron_renderer_ipc:
+);let o;Object.defineProperty(t,"__esModule",{value:!0}),t.getIPCRenderer=function getIPCRenderer(){if(o)return o;const e=n._linkedBinding("electron_renderer_ipc");switch(n.type){case"renderer":return o=e.createForRenderFrame();case"service-worker":return o=e.createForServiceWorker();default:throw new Error(`Cannot create IPCRenderer for '${n.type}' process`)}}},"./lib/renderer/ipc-renderer-internal-utils.ts"(e,t,r){"use strict";Object.defineProperty(t,"__esModule",{value:!0}),t.handle=void 0,t.invokeSync=function invokeSync(e,...t){const[r,o]=n.ipcRendererInternal.sendSync(e,...t);if(r)throw r;return o};const n=r("./lib/renderer/ipc-renderer-internal.ts");t.handle=function(e,t){n.ipcRendererInternal.on(e,async(r,n,...o)=>{const i=`${e}_RESPONSE_${n}`;try{r.sender.send(i,null,await t(r,...o))}catch(e){r.sender.send(i,e)}})}},"./lib/renderer/ipc-rend
+
+Framework strings line 227832; ipcRendererInternal:
+enderer-internal.ts"),s=n._linkedBinding("electron_common_shared_texture"),a="IMPORT_SHARED_TEXTURE_TRANSFER_MAIN_TO_RENDERER";let u=null;i.ipcRendererInternal.on(a,async(e,t,...r)=>{const n=`${a}_RESPONSE_${t}`;try{const t=r[0],i=r[1],a=s.finishTransferSharedTexture(Object.assign(t,{id:i})),l=a.getFrameCreationSyncToken();e.sender.send(n,null,l);const c={importedSharedTexture:{textureId:i,subtle:a,getVideoFrame:a.getVideoFrame,release:()=>{a.release(async()=>{await o.default.invoke("IMPORT_SHARED_TEXTURE_RELEASE_RENDERER_TO_MAIN",i)})}}};await(u?.(c,...r.slice(2)))}catch(t){e.sender.send(n,t)}});const l={subtle:s,setSharedTextureReceiver:e=>{u=e}};t.default=l},"./lib/renderer/api/web-frame.ts"(e,t,r){"use strict";var n=r("./node_modules/process/browser.js");Object.defineProperty(t,"__esModule",{value:!0});const o=r("./lib/common/deprecate.ts"),i=
+
+Framework strings line 227834; getHiddenValue:
+b/utility/parent-port.ts"),s=__webpack_require__("events"),o=__webpack_require__("url"),n=process._linkedBinding("electron_common_v8_util").getHiddenValue(process,"_serviceStartupScript");process.argv.splice(1,1,n),__webpack_require__("./lib/common/init.ts"),process._linkedBinding("electron_browser_event_emitter").setEventEmitterPrototype(s.EventEmitter.prototype);const i=new t.ParentPort;Object.defineProperty(process,"parentPort",{enumerable:!0,writable:!1,value:i}),i.on("newListener",e=>{"message"===e&&0===i.listenerCount("message")&&i.start()}),i.on("removeListener",e=>{"message"===e&&0===i.listenerCount("message")&&i.pause()});const{runEntryPointWithESMLoader:a}=require("internal/modules/run_main"),l=(0,o.pathToFileURL)(n);a(async e=>{try{await e.import(l.toString(),void 0,Object.create(null))}catch(e){internalBinding("errors").triggerUnc
+
+
+APPLICATION PRELOAD BOUNDARY
+/.vite/build/main-CLu1A25j.js: app-server --
+p-ssh-websocket-v0.sock`),` || true) && `,_6,` && : >`,h6,`) && { SSH_AUTH_SOCK=`,g6,` nohup `,l.Vt(t),` -c features.code_mode_host=true`,` app-server --listen `,l.Vt(`unix://`),` </dev/null >${h6} 2>&1 & }`].join(``),a;try{a=await this.runRemoteLoginShellCommand({command:i,context:e,operation:`app_server_bootstrap`,timeoutMessage:`SSH: app-server bootstrap timed out`})}catch(e){throw this.createSshSetupError(`remote_app_server_start`,e)}let{code:o,stdout:s,stderr:c}=a;if(o!==0){this.logger.warning(`ssh_websocket_v0.remote_app_server_bootstrap_failed`,{safe:{code:o},sensitive:{sshAlias:this.options.sshConnection.alias,sshHost:this.options.sshCon
+
+/.vite/build/preload.js: contextBridge.exposeInMainWorld
+tructured-log`),t),sendMetric:t=>e.ipcRenderer.send(r.createKey(`metric`),t)};if(window.__SENTRY_IPC__[r.namespace]=t,e.contextBridge)try{e.contextBridge.exposeInMainWorld(`__SENTRY_IPC__`,window.__SENTRY_IPC__)}catch{}}}r();function i(e){return typeof e!=`object`||!e||!(`marker`in e)||e.marker!==`codex-host-chunked-message-v1`||!(`transferId`in e)||typeof e.transferId!=`string`||!(`sequence`in e)||typeof e.sequence!=`number`||!Number.isSafeInteger(e.sequence)||!(`kind`in e)?!1:e.kind===`chunk`?`tokens`in e&&Array.isArray(e.tokens)&&e.tokens.every(a):e.kind===`start`||e.kind===`end`}function a(e){return typeof e!=`object`||!e||!(`type`in e)?!1:e.type===`array-sta
+
+/.vite/build/preload.js: exposeInMainWorld
+),t),sendMetric:t=>e.ipcRenderer.send(r.createKey(`metric`),t)};if(window.__SENTRY_IPC__[r.namespace]=t,e.contextBridge)try{e.contextBridge.exposeInMainWorld(`__SENTRY_IPC__`,window.__SENTRY_IPC__)}catch{}}}r();function i(e){return typeof e!=`object`||!e||!(`marker`in e)||e.marker!==`codex-host-chunked-message-v1`||!(`transferId`in e)||typeof e.transferId!=`string`||!(`sequence`in e)||typeof e.sequence!=`number`||!Number.isSafeInteger(e.sequence)||!(`kind`in e)?!1:e.kind===`chunk`?`tokens`in e&&Array.isArray(e.tokens)&&e.tokens.every(a):e.kind===`start`||e.kind===`end`}function a(e){return typeof e!=`object`||!e||!(`type`in e)?!1:e.type===`array-sta
+
+/.vite/build/preload.js: ipcRenderer.invoke
+e.ipcRenderer.send(o,t,n)},getPreloadStartedAtMs:()=>w,sendMessageFromView:async t=>{t.type===`shared-object-set`&&I(t.key,t.value),await e.ipcRenderer.invoke(E,t)},getPathForFile:t=>e.webUtils.getPathForFile(t)||null,startFileDrag:t=>e.ipcRenderer.sendSync(v,t)===!0,startLinkDrag:t=>{e.ipcRenderer.send(y,t)},sendWorkerMessageFromView:async(t,n)=>{await e.ipcRenderer.invoke(b(t),n)},subscribeToWorkerMessages:(t,n)=>{let r=L.get(t);r||(r=new Set,L.set(t,r));let i=R.get(t);return i||(i=(e,n)=>{let r=L.get(t);r&&r.forEach(e=>{e(n)})},R.set(t,i),e.ipcRenderer.on(x(t),i)),r.add(n),()=>{let r=L.get(t);if(!r||(r.delete(n),r.size>0))return;L.delete(t);let i=
+
+/.vite/build/preload.js: sendMessageFromView
+urn}A[e]=t}var L=new Map,R=new Map,z={windowType:T,acknowledgeChunkedMessage:(t,n)=>{e.ipcRenderer.send(o,t,n)},getPreloadStartedAtMs:()=>w,sendMessageFromView:async t=>{t.type===`shared-object-set`&&I(t.key,t.value),await e.ipcRenderer.invoke(E,t)},getPathForFile:t=>e.webUtils.getPathForFile(t)||null,startFileDrag:t=>e.ipcRenderer.sendSync(v,t)===!0,startLinkDrag:t=>{e.ipcRenderer.send(y,t)},sendWorkerMessageFromView:async(t,n)=>{await e.ipcRenderer.invoke(b(t),n)},subscribeToWorkerMessages:(t,n)=>{let r=L.get(t);r||(r=new Set,L.set(t,r));let i=R.get(t);return i||(i=(e,n)=>{let r=L.get(t);r&&r.forEach(e=>{e(n)})},R.set(t,i),e.ipcRenderer.on(x(t),i)),

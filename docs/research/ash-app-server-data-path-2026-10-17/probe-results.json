@@ -1,0 +1,379 @@
+[
+  {
+    "kind": "environment",
+    "node": "v24.21.0",
+    "v8": "13.6.233.17-node.53",
+    "source": "src/ash/platform/agentHost/browser/appServerSocketTransport.ts",
+    "sha256": "7896bae1dda926a36339862f710d70e0a6a4b6a1915df618cb91027ee9be44d8",
+    "scope": "source-extracted methods, Uint8Array VSBuffer-equivalent adapter; no Electron/actual UI/IPC timing"
+  },
+  {
+    "kind": "framing",
+    "payloadMiB": 4,
+    "packetBytes": 8192,
+    "totalMs": 8.71,
+    "maxSliceMs": 0.61,
+    "copyAmplification": 11,
+    "concatCalls": 512,
+    "samples": [
+      {
+        "totalMs": 6.1640299999995705,
+        "maxSlice": 0.4007090000000062,
+        "copiedBytes": 46137402,
+        "conCats": 512
+      },
+      {
+        "totalMs": 8.117552999999077,
+        "maxSlice": 0.3768339999999739,
+        "copiedBytes": 46137402,
+        "conCats": 512
+      },
+      {
+        "totalMs": 8.70596300000014,
+        "maxSlice": 0.6067079999999692,
+        "copiedBytes": 46137402,
+        "conCats": 512
+      },
+      {
+        "totalMs": 9.741999999999678,
+        "maxSlice": 0.8980829999999855,
+        "copiedBytes": 46137402,
+        "conCats": 512
+      },
+      {
+        "totalMs": 11.937574000000609,
+        "maxSlice": 1.4884999999999877,
+        "copiedBytes": 46137402,
+        "conCats": 512
+      }
+    ]
+  },
+  {
+    "kind": "framing",
+    "payloadMiB": 4,
+    "packetBytes": 65536,
+    "totalMs": 6.43,
+    "maxSliceMs": 1.29,
+    "copyAmplification": 8,
+    "concatCalls": 64,
+    "samples": [
+      {
+        "totalMs": 5.662711000000286,
+        "maxSlice": 0.5045420000000149,
+        "copiedBytes": 33554490,
+        "conCats": 64
+      },
+      {
+        "totalMs": 6.015378999999939,
+        "maxSlice": 0.38187499999997954,
+        "copiedBytes": 33554490,
+        "conCats": 64
+      },
+      {
+        "totalMs": 6.431038000000058,
+        "maxSlice": 1.29441700000001,
+        "copiedBytes": 33554490,
+        "conCats": 64
+      },
+      {
+        "totalMs": 7.334413000000211,
+        "maxSlice": 0.9771660000000111,
+        "copiedBytes": 33554490,
+        "conCats": 64
+      },
+      {
+        "totalMs": 9.44574799999964,
+        "maxSlice": 0.6613750000000209,
+        "copiedBytes": 33554490,
+        "conCats": 64
+      }
+    ]
+  },
+  {
+    "kind": "framing",
+    "payloadMiB": 16,
+    "packetBytes": 8192,
+    "totalMs": 90.57,
+    "maxSliceMs": 8.8,
+    "copyAmplification": 13,
+    "concatCalls": 2048,
+    "samples": [
+      {
+        "totalMs": 56.1596209999999,
+        "maxSlice": 6.30991599999993,
+        "copiedBytes": 218103866,
+        "conCats": 2048
+      },
+      {
+        "totalMs": 74.41149299999984,
+        "maxSlice": 10.066082999999935,
+        "copiedBytes": 218103866,
+        "conCats": 2048
+      },
+      {
+        "totalMs": 90.56861000000043,
+        "maxSlice": 8.795166999999992,
+        "copiedBytes": 218103866,
+        "conCats": 2048
+      },
+      {
+        "totalMs": 101.5410989999998,
+        "maxSlice": 13.69079099999999,
+        "copiedBytes": 218103866,
+        "conCats": 2048
+      },
+      {
+        "totalMs": 103.05785599999945,
+        "maxSlice": 15.841584000000012,
+        "copiedBytes": 218103866,
+        "conCats": 2048
+      }
+    ]
+  },
+  {
+    "kind": "framing",
+    "payloadMiB": 16,
+    "packetBytes": 65536,
+    "totalMs": 49.47,
+    "maxSliceMs": 5.37,
+    "copyAmplification": 10,
+    "concatCalls": 256,
+    "samples": [
+      {
+        "totalMs": 40.52041500000007,
+        "maxSlice": 7.56716700000004,
+        "copiedBytes": 167772218,
+        "conCats": 256
+      },
+      {
+        "totalMs": 43.8304239999984,
+        "maxSlice": 5.447750000000042,
+        "copiedBytes": 167772218,
+        "conCats": 256
+      },
+      {
+        "totalMs": 49.470248000000765,
+        "maxSlice": 5.373291999999992,
+        "copiedBytes": 167772218,
+        "conCats": 256
+      },
+      {
+        "totalMs": 64.02116699999715,
+        "maxSlice": 14.445208000000093,
+        "copiedBytes": 167772218,
+        "conCats": 256
+      },
+      {
+        "totalMs": 64.16321199999902,
+        "maxSlice": 27.377958000000035,
+        "copiedBytes": 167772218,
+        "conCats": 256
+      }
+    ]
+  },
+  {
+    "kind": "framing",
+    "payloadMiB": 64,
+    "packetBytes": 8192,
+    "totalMs": 313.25,
+    "maxSliceMs": 21.34,
+    "copyAmplification": 15,
+    "concatCalls": 8192,
+    "samples": [
+      {
+        "totalMs": 255.10784700000454,
+        "maxSlice": 16.678791000000047,
+        "copiedBytes": 1006633018,
+        "conCats": 8192
+      },
+      {
+        "totalMs": 297.43021500001623,
+        "maxSlice": 13.141916000000037,
+        "copiedBytes": 1006633018,
+        "conCats": 8192
+      },
+      {
+        "totalMs": 313.2465500000055,
+        "maxSlice": 21.33854199999996,
+        "copiedBytes": 1006633018,
+        "conCats": 8192
+      },
+      {
+        "totalMs": 384.5219089999948,
+        "maxSlice": 34.059499999999844,
+        "copiedBytes": 1006633018,
+        "conCats": 8192
+      },
+      {
+        "totalMs": 401.3648770000218,
+        "maxSlice": 66.74720799999977,
+        "copiedBytes": 1006633018,
+        "conCats": 8192
+      }
+    ]
+  },
+  {
+    "kind": "framing",
+    "payloadMiB": 64,
+    "packetBytes": 65536,
+    "totalMs": 238.93,
+    "maxSliceMs": 16.2,
+    "copyAmplification": 12,
+    "concatCalls": 1024,
+    "samples": [
+      {
+        "totalMs": 221.25164399999994,
+        "maxSlice": 30.168709000000035,
+        "copiedBytes": 805306426,
+        "conCats": 1024
+      },
+      {
+        "totalMs": 226.98138499999368,
+        "maxSlice": 11.960416999999325,
+        "copiedBytes": 805306426,
+        "conCats": 1024
+      },
+      {
+        "totalMs": 238.93274199999905,
+        "maxSlice": 16.20441699999992,
+        "copiedBytes": 805306426,
+        "conCats": 1024
+      },
+      {
+        "totalMs": 255.8965829999961,
+        "maxSlice": 17.22820800000045,
+        "copiedBytes": 805306426,
+        "conCats": 1024
+      },
+      {
+        "totalMs": 349.2759000000019,
+        "maxSlice": 37.75683300000037,
+        "copiedBytes": 805306426,
+        "conCats": 1024
+      }
+    ]
+  },
+  {
+    "kind": "framing-candidate",
+    "variant": "fixed 64KiB pages, same source acceptData",
+    "payloadMiB": 64,
+    "packetBytes": 65536,
+    "totalMs": 181.7,
+    "maxSliceMs": 15.55,
+    "copyAmplification": 2,
+    "concatCalls": 1,
+    "samples": [
+      {
+        "totalMs": 150.15997599996717,
+        "maxSlice": 14.624749999999949,
+        "copiedBytes": 134217786,
+        "conCats": 1
+      },
+      {
+        "totalMs": 163.3037749999885,
+        "maxSlice": 18.197791999999936,
+        "copiedBytes": 134217786,
+        "conCats": 1
+      },
+      {
+        "totalMs": 181.6955889999972,
+        "maxSlice": 15.551166000000194,
+        "copiedBytes": 134217786,
+        "conCats": 1
+      },
+      {
+        "totalMs": 192.5872400000053,
+        "maxSlice": 17.196124999999483,
+        "copiedBytes": 134217786,
+        "conCats": 1
+      },
+      {
+        "totalMs": 296.8612479999938,
+        "maxSlice": 50.15483399999994,
+        "copiedBytes": 134217786,
+        "conCats": 1
+      }
+    ]
+  },
+  {
+    "kind": "protocol",
+    "method": "session/thread/read",
+    "entries": 1000,
+    "wireMiB": 1.02,
+    "reencodeForLength": {
+      "medianMs": 0.33,
+      "samples": [
+        0.40812499999992724, 0.3204999999998108, 0.3251669999999649,
+        0.3239160000002812, 0.32516599999962637
+      ]
+    },
+    "parse": {
+      "medianMs": 2.01,
+      "samples": [
+        3.3430829999997513, 4.517166999999972, 1.2145829999999478,
+        1.9512919999997393, 2.0101669999994556
+      ]
+    },
+    "validation": {
+      "medianMs": 2.2,
+      "samples": [
+        3.556124999999156, 2.1977920000008453, 2.126541999999972,
+        1.9380000000001019, 5.270083000000341
+      ]
+    }
+  },
+  {
+    "kind": "protocol",
+    "method": "session/thread/read",
+    "entries": 10000,
+    "wireMiB": 10.23,
+    "reencodeForLength": {
+      "medianMs": 3.25,
+      "samples": [
+        1.7635410000002594, 3.2300410000007105, 3.2754159999994954,
+        3.2705409999998665, 3.2456249999995634
+      ]
+    },
+    "parse": {
+      "medianMs": 13.15,
+      "samples": [
+        32.61866699999973, 24.22454099999959, 11.416374999999789,
+        7.346833000000515, 13.153707999999824
+      ]
+    },
+    "validation": {
+      "medianMs": 14.29,
+      "samples": [
+        38.5630000000001, 7.910750000000007, 13.372416999999587,
+        28.847333000000617, 14.294082999999773
+      ]
+    }
+  },
+  {
+    "kind": "protocol",
+    "method": "session/thread/read",
+    "entries": 50000,
+    "wireMiB": 51.2,
+    "reencodeForLength": {
+      "medianMs": 17.52,
+      "samples": [
+        35.30937499999982, 25.456707999999708, 16.703875000000153,
+        10.415750000000116, 17.518417000000227
+      ]
+    },
+    "parse": {
+      "medianMs": 60.97,
+      "samples": [
+        71.02408400000058, 60.96708299999955, 65.2255409999998,
+        40.86145800000031, 45.90504200000032
+      ]
+    },
+    "validation": {
+      "medianMs": 75.1,
+      "samples": [
+        59.19566699999996, 106.84020799999962, 75.09616599999936,
+        117.87291699999969, 53.42399999999998
+      ]
+    }
+  }
+]

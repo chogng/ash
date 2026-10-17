@@ -2,7 +2,7 @@ import { AbstractDisposable } from '../../../base/common/lifecycle.js';
 import { isRecord } from '../../../base/common/types.js';
 import { decodeWebSessionInfo } from '../../../../../.build/protocol/typescript/WebProtocolDecoder.js';
 import type { WebSessionInfo } from '../../../../../.build/protocol/typescript/index.js';
-import { type AppServerTransport, WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION } from '../common/appServerTransport.js';
+import { AppServerFrame, type AppServerTransport, WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION } from '../common/appServerTransport.js';
 
 const maxBufferedBytes = 320 * 1024 * 1024;
 
@@ -102,8 +102,10 @@ export class AppServerWebSocketTransport extends AbstractDisposable implements A
 	}
 
 	private readonly handleMessage = (event: MessageEvent): void => {
-		if (typeof event.data !== 'string' || new TextEncoder().encode(event.data).byteLength > maxBufferedBytes) { this.handleClose(); return; }
-		this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: event.data });
+		if (typeof event.data !== 'string') { this.handleClose(); return; }
+		const byteLength = new TextEncoder().encode(event.data).byteLength;
+		if (byteLength > maxBufferedBytes) { this.handleClose(); return; }
+		this.emit(WEB_APP_SERVER_FRAME_EVENT, new AppServerFrame(event.data, byteLength));
 	};
 
 	private readonly handleClose = (): void => {

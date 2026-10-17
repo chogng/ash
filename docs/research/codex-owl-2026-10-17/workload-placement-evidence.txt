@@ -1,0 +1,1366 @@
+Codex packaged application workload placement evidence
+App: 26.1013.40934 build 20770. Sources extracted read-only from app.asar and formatted with Prettier.
+These excerpts establish execution placement and synchronous call paths; they do not establish measured latency or current feature enablement.
+
+
+WORKER CONSTRUCTION AND ROUTING
+Source: main-CLu1A25j.pretty.js lines 159522-159553
+159522:         this.worker?.postMessage({ type: `worker-tracing-sample-rate-update`, sampleRate: e }));
+159523:     }
+159524:     ensureWorker() {
+159525:       if (this.worker) return this.worker;
+159526:       let e = p.i(`worker-manager`),
+159527:         r = (0, S.join)(__dirname, `worker.js`),
+159528:         i = t._(n.i.resolve()),
+159529:         a = D.app.isPackaged ? D.app.getAppPath() : process.cwd(),
+159530:         o = this.mainRpcTarget == null ? null : new E.MessageChannel(),
+159531:         s = this.startupConfig.getResolved(),
+159532:         c = new E.MessageChannel(),
+159533:         u = {
+159534:           sentryRpcPort: c.port2,
+159535:           analyticsEnabled: s != null && s.analytics?.enabled !== !1,
+159536:           workerId: this.id,
+159537:           sentryInitOptions: { ...g.it, desktopTraceSampleRate: this.desktopTraceSampleRate },
+159538:           maxLogLevel: i,
+159539:           sentryRewriteFramesRoot: a,
+159540:           spawnInsideWsl: l.xt(),
+159541:           mainRpcPort: o?.port2 ?? null,
+159542:         },
+159543:         d = new E.Worker(r, {
+159544:           name: this.id,
+159545:           workerData: u,
+159546:           transferList: [c.port2, ...(o == null ? [] : [o.port2])],
+159547:         });
+159548:       return (
+159549:         this.sentryRpcSessions.set(d, B9(c.port1, new b3e())),
+159550:         o != null &&
+159551:           this.mainRpcTarget != null &&
+159552:           this.mainRpcSessions.set(d, B9(o.port1, this.mainRpcTarget)),
+159553:         this.cesRequests.set(d, new Map()),
+
+WORKER REGISTRATION, SHORTCUT FALLBACK, COMPUTER-USE LIFETIME
+Source: main-CLu1A25j.pretty.js lines 159871-159958
+159871:   };
+159872: function E3e({ disposables: e, isTrustedIpcEvent: t, startupConfig: n, applicationNetwork: r }) {
+159873:   let i = new Te(),
+159874:     a = new v3e(),
+159875:     o = [],
+159876:     s = new H9(`git`, {
+159877:       startupConfig: n,
+159878:       applicationNetwork: r,
+159879:       hostOnlyEventTypes: new Set([
+159880:         `create-worktree-path`,
+159881:         `create-worktree-setup-started`,
+159882:         `create-worktree-stream`,
+159883:         `github-request-progress`,
+159884:       ]),
+159885:       singleRecipientEventTypes: new Set([`git-performance-operation`, `git-performance-watcher-snapshot`]),
+159886:       onWorkerRequestSent: () => {
+159887:         a.recordInvocation();
+159888:       },
+159889:     }),
+159890:     c = new H9(`open-in`, { startupConfig: n, applicationNetwork: r }),
+159891:     l = new Map();
+159892:   c.setMainRpcHandler(async (e) => {
+159893:     switch (e.method) {
+159894:       case `read-shortcut-link`: {
+159895:         let t = l.get(e.params.path);
+159896:         t ?? ((t = D.shell.readShortcutLink(e.params.path)), l.set(e.params.path, t));
+159897:         let { icon: n, target: r } = t;
+159898:         return { icon: n, target: r };
+159899:       }
+159900:       case `ces-telemetry`:
+159901:         throw Error(`Unsupported open-in worker request`);
+159902:     }
+159903:   });
+159904:   let d = new Set(),
+159905:     f = new Map(),
+159906:     p = new Map(),
+159907:     m = null,
+159908:     h = null;
+159909:   e.add(() => {
+159910:     f.forEach((e) => {
+159911:       e();
+159912:     });
+159913:   });
+159914:   let _ = (e, t, n, r) => {
+159915:       ((m = { authMethod: e, userId: t, email: n, accountId: r }),
+159916:         o.forEach((i) => {
+159917:           i(e, t, n, r);
+159918:         }),
+159919:         f.forEach((i, a) => {
+159920:           a.setSentryUser(e, t, n, r);
+159921:         }),
+159922:         p.forEach((i) => {
+159923:           i.setSentryUser(e, t, n, r);
+159924:         }));
+159925:     },
+159926:     v = (e) => s.requestFromHost(e),
+159927:     y = async (e) => {
+159928:       let t = new H9(`computer-use`, { startupConfig: n, applicationNetwork: r });
+159929:       C(t);
+159930:       let a = i.subscribe((e) => {
+159931:           t.emitAppEvent(e);
+159932:         }),
+159933:         o = !1,
+159934:         s = () => {
+159935:           o || ((o = !0), a.dispose(), f.delete(t), t.dispose());
+159936:         };
+159937:       f.set(t, s);
+159938:       try {
+159939:         let n =
+159940:           e.method === `start` && `requestId` in e.params && typeof e.params.requestId == `string`
+159941:             ? e.params.requestId
+159942:             : null;
+159943:         t.startWorker();
+159944:         let r = await t.requestFromHost(e);
+159945:         return (
+159946:           n != null && D3e(r) && b({ params: { requestId: n }, signal: e.signal }).catch(() => void 0),
+159947:           r
+159948:         );
+159949:       } finally {
+159950:         s();
+159951:       }
+159952:     },
+159953:     b = (e) => w(e.params.requestId, e.signal),
+159954:     x = (t) => {
+159955:       (e.add(t),
+159956:         o.push((e, n, r, i) => {
+159957:           t.setSentryUser(e, n, r, i);
+159958:         }),
+
+GIT OPERATIONS DISPATCH
+Source: worker.pretty.js lines 94165-94198
+94165:               throw Error(`GitHub requests require a Node Git worker`);
+94166:             p = Q(await this.dependencies.requestGitHub(e.params, i.signal));
+94167:             break;
+94168:           case `origin-url`: {
+94169:             let t = await this.gitManager.getRepoRepository(e.params.cwd, o);
+94170:             p = Q({ originUrl: t == null ? null : await t.getOriginUrl() });
+94171:             break;
+94172:           }
+94173:           case `origin-and-roots`:
+94174:             p = Q({ origins: await Y2(e.params.discoveryDirs, this.gitManager, o) });
+94175:             break;
+94176:           case `worktree-shell-environment`: {
+94177:             let t = await this.gitManager.getWorktreeRepository(e.params.cwd, o);
+94178:             p = Q({ shellEnvironment: t == null ? null : await qTe(t, i.signal) });
+94179:             break;
+94180:           }
+94181:           case `worktree-owner`: {
+94182:             let t = await this.gitManager.getWorktreeRepository(e.params.cwd, o);
+94183:             p = Q({ ownerThreadId: t == null ? null : ((await Q2(t))?.ownerThreadId ?? null) });
+94184:             break;
+94185:           }
+94186:           case `default-remote-branch`: {
+94187:             let t = await this.gitManager.getWorktreeRepository(e.params.cwd, o);
+94188:             p = Q({ branch: t == null ? null : ((await m2(t))?.branch ?? null) });
+94189:             break;
+94190:           }
+94191:           case `automation-writable-roots`:
+94192:             p = Q({ roots: await gAe({ ...e.params, gitManager: this.gitManager, host: o }) });
+94193:             break;
+94194:           case `merge-base`: {
+94195:             let t = await this.gitManager.getWorktreeRepository(e.params.cwd, o);
+94196:             p = Q({
+94197:               mergeBaseSha: t == null || !e.params.baseBranch ? null : await F2(t, e.params.baseBranch),
+94198:             });
+
+GIT STATUS AND DIFF DISPATCH
+Source: worker.pretty.js lines 94305-94360
+94305:                 this.gitManager.getWorktreeRepositoryForRoot(e.params.root, o),
+94306:                 e.params.candidates,
+94307:                 e.params.currentBranch,
+94308:                 i.signal,
+94309:               ),
+94310:             });
+94311:             break;
+94312:           case `branch-metadata`:
+94313:             p = Q(await FOe(this.gitManager, e.params.cwd, o, i.signal));
+94314:             break;
+94315:           case `status-summary`: {
+94316:             let t = await this.gitManager.getWorktreeRepository(e.params.cwd, o),
+94317:               n =
+94318:                 t == null
+94319:                   ? { type: `error`, failureReason: `repository_unavailable` }
+94320:                   : await N2(t, e.params.includeUntrackedFiles, void 0, i.signal);
+94321:             ((p = Q(n)), (l = { operation: `status-summary`, result: n }));
+94322:             break;
+94323:           }
+94324:           case `branch-diff-stats`: {
+94325:             let t = await FP(
+94326:               K4(
+94327:                 String(e.params.cwd),
+94328:                 this.gitManager,
+94329:                 o,
+94330:                 e.params.baseBranch,
+94331:                 e.params.hideWhitespace,
+94332:                 e.params.includeUntrackedFiles,
+94333:                 N6(e.params.operationSource),
+94334:               ),
+94335:               i.signal,
+94336:             );
+94337:             ((p = Q(t)), (l = { operation: `branch-diff-stats`, result: t }));
+94338:             break;
+94339:           }
+94340:           case `review-summary`: {
+94341:             let t = await this.gitManager.getWorktreeRepository(e.params.cwd, o),
+94342:               r = I6(
+94343:                 t == null
+94344:                   ? { type: `error`, source: e.params.source, failureReason: `repository_unavailable` }
+94345:                   : await FP(
+94346:                       J4({ ...e.params, maxUntrackedFiles: N6(e.params.operationSource), worktreeRepo: t }),
+94347:                       i.signal,
+94348:                     ),
+94349:                 n,
+94350:               );
+94351:             ((p = Q(r)), (l = { operation: `review-summary`, result: r }));
+94352:             break;
+94353:           }
+94354:           case `review-source-line-counts`: {
+94355:             let t = await this.gitManager.getWorktreeRepository(e.params.cwd, o),
+94356:               n;
+94357:             ((n =
+94358:               t == null
+94359:                 ? e.params.sources.map((e) => ({
+94360:                     source: e,
+
+GIT WORKER EXECUTION-HOST RPC
+Source: worker.pretty.js lines 101145-101230
+101145:   };
+101146: }
+101147: var pFe = class {
+101148:   rpc;
+101149:   codexHomePromise = null;
+101150:   platformFamilyPromise = null;
+101151:   platformOsPromise = null;
+101152:   hostConfig;
+101153:   id;
+101154:   isLocal;
+101155:   constructor(e, t) {
+101156:     ((this.rpc = e), (this.hostConfig = t), (this.id = t.id), (this.isLocal = !oP(t) && rP(t.id) == null));
+101157:   }
+101158:   async spawn(e) {
+101159:     let { signal: t, startPriority: n, ...r } = e;
+101160:     t?.throwIfAborted();
+101161:     let i = uV(),
+101162:       a = await this.callHost(async (e) => {
+101163:         try {
+101164:           var t = CG();
+101165:           let a = n?.priority,
+101166:             o = t.u(e.spawn({ ...r, startPriority: a, ...(i == null ? {} : { trace: i }) })),
+101167:             s =
+101168:               a === `background`
+101169:                 ? n?.onPromotion(() => {
+101170:                     o.promote().catch(() => {});
+101171:                   })
+101172:                 : void 0;
+101173:           try {
+101174:             return await o.result();
+101175:           } finally {
+101176:             s?.();
+101177:           }
+101178:         } catch (e) {
+101179:           t.e = e;
+101180:         } finally {
+101181:           t.d();
+101182:         }
+101183:       }),
+101184:       o = !1,
+101185:       s = !1,
+101186:       c = a.process.wait().finally(() => {
+101187:         ((o = !0), t?.removeEventListener(`abort`, l), a[Symbol.dispose]());
+101188:       });
+101189:     c.catch(() => {});
+101190:     let l = () => {
+101191:       o || s || ((s = !0), a.process.kill().catch(() => {}));
+101192:     };
+101193:     return (
+101194:       t?.addEventListener(`abort`, l, { once: !0 }),
+101195:       t?.aborted && l(),
+101196:       {
+101197:         stdin: a.stdin,
+101198:         stdout: a.stdout,
+101199:         stderr: a.stderr,
+101200:         kill: l,
+101201:         resize: async (e) => {
+101202:           await a.process.resize(e);
+101203:         },
+101204:         wait: () => c,
+101205:       }
+101206:     );
+101207:   }
+101208:   readFile(e) {
+101209:     return this.callHost((t) => t.readFile(e));
+101210:   }
+101211:   async writeFile(e, t, n = {}) {
+101212:     (n.signal?.throwIfAborted(), await this.callHost((n) => n.writeFile(e, t)), n.signal?.throwIfAborted());
+101213:   }
+101214:   async createDirectory(e, t = {}) {
+101215:     await this.callHost((n) => n.createDirectory(e, t));
+101216:   }
+101217:   async stat(e, t = {}) {
+101218:     return mFe(await this.callHost((n) => n.stat(e, t)));
+101219:   }
+101220:   async readDirectory(e) {
+101221:     return (await this.callHost((t) => t.readDirectory(e))).map(hFe);
+101222:   }
+101223:   async remove(e, t = {}) {
+101224:     await this.callHost((n) => n.remove(e, t));
+101225:   }
+101226:   async copyFile(e, t, n = {}) {
+101227:     await this.callHost((r) => r.copyFile(e, t, n));
+101228:   }
+101229:   async copy(e, t, n = {}) {
+101230:     await this.callHost((r) => r.copy(e, t, n));
+
+LOCAL EXECUTION HOST SPAWNS ASYNCHRONOUSLY AND USES PROMISE FILE IO
+Source: src-DsLVGakC.pretty.js lines 64552-64630
+64552: var qQ = class {
+64553:   runsInsideWsl;
+64554:   workspaceRoot = new io(this);
+64555:   hostConfig = { id: `local`, display_name: `Local`, kind: `local` };
+64556:   id = `local`;
+64557:   isLocal = !0;
+64558:   constructor(e = o.xt()) {
+64559:     this.runsInsideWsl = e;
+64560:   }
+64561:   getFileSystemPath(e) {
+64562:     return this.runsInsideWsl ? JQ(e) : e;
+64563:   }
+64564:   async spawn(e) {
+64565:     let { args: t, env: n } = HQ(e.args, e.env, this.runsInsideWsl),
+64566:       r = c.n(),
+64567:       i = c.n(),
+64568:       a = null,
+64569:       s = !1,
+64570:       l = 0,
+64571:       u = 0,
+64572:       d = (t, n) => {
+64573:         (t === `stdout` ? (l += n.length) : (u += n.length),
+64574:           e.outputBytesCap != null &&
+64575:             (t === `stdout` ? l : u) > e.outputBytesCap &&
+64576:             (a == null ? (s = !0) : a.kill()));
+64577:       },
+64578:       f = o.et({
+64579:         args: t,
+64580:         allowedNonZeroExitCodes: e.allowedNonZeroExitCodes,
+64581:         collectOutput: !1,
+64582:         cwd: e.cwd,
+64583:         detached: e.killProcessTree === !0 && process.platform !== `win32`,
+64584:         env: n,
+64585:         signal: e.signal,
+64586:         spawnInsideWsl: this.runsInsideWsl,
+64587:         streamStdin: !0,
+64588:         windowsHide: e.windowsHide,
+64589:         stderrChunkHandler: (e) => {
+64590:           (d(`stderr`, e), i.enqueue(e));
+64591:         },
+64592:         stdoutChunkHandler: (e) => {
+64593:           (d(`stdout`, e), r.enqueue(e));
+64594:         },
+64595:       });
+64596:     a = zQ(
+64597:       f,
+64598:       r,
+64599:       i,
+64600:       e.timeoutMs == null ? null : setTimeout(() => a?.kill(), e.timeoutMs),
+64601:       e.killProcessTree ? () => BQ(f) : void 0,
+64602:     );
+64603:     let p = () => a.kill();
+64604:     (e.signal?.addEventListener(`abort`, p), (e.signal?.aborted || s) && a.kill());
+64605:     let m = () => e.signal?.removeEventListener(`abort`, p);
+64606:     return (a.wait().then(m, m), a);
+64607:   }
+64608:   async readFile(e) {
+64609:     return VQ((0, m.createReadStream)(this.getFileSystemPath(e)));
+64610:   }
+64611:   async writeFile(e, t, n = {}) {
+64612:     await (0, S.pipeline)(v.Readable.from(c.r(t)), (0, m.createWriteStream)(this.getFileSystemPath(e)), {
+64613:       signal: n.signal,
+64614:     });
+64615:   }
+64616:   async createDirectory(e, t = {}) {
+64617:     await m.promises.mkdir(this.getFileSystemPath(e), { recursive: t.recursive ?? !0 });
+64618:   }
+64619:   stat(e, t = {}) {
+64620:     let n = this.getFileSystemPath(e);
+64621:     return t.followSymlinks === !1 ? m.promises.lstat(n) : m.promises.stat(n);
+64622:   }
+64623:   readDirectory(e) {
+64624:     return m.promises.readdir(this.getFileSystemPath(e), { withFileTypes: !0 });
+64625:   }
+64626:   async remove(e, t = {}) {
+64627:     let n = this.getFileSystemPath(e);
+64628:     if (t.recursive === !1) {
+64629:       let e = await m.promises.lstat(n).catch((e) => {
+64630:         if (t.force !== !1 && e.code === `ENOENT`) return null;
+
+LOCAL EXECUTION HOST REGISTERED IN MAIN
+Source: main-CLu1A25j.pretty.js lines 145560-145578
+145560:         this.disposables.add(this.publishedStatsig),
+145561:         (this.diamondController = null));
+145562:       let d = new a.k();
+145563:       ((this.deviceStorage = new Fg(
+145564:         e.executionCodexHome,
+145565:         d,
+145566:         (e) => s.listThreads(e),
+145567:         (e) => s.readThread(e, { includeTurns: !1 }),
+145568:         S.default.join(D.app.getPath(`userData`), `storage-cache`),
+145569:       )),
+145570:         (this.remoteControlDeviceKeyClient = new yXe(
+145571:           u.Lt({ env: process.env, resourcesPath: process.resourcesPath }),
+145572:         )),
+145573:         this.executionHostRegistry.add(u.h, d),
+145574:         (this.appServerConnectionRegistry = new see()),
+145575:         this.appServerConnectionRegistry.addConnection(u.h, s),
+145576:         (this.cumberbatchController = new w_e(
+145577:           this.appServerConnectionRegistry,
+145578:           (e, t) => this.fetchWrapper.fetchAuthenticatedJson(e, t),
+
+GIT RPC TARGET IS EXECUTION-HOST REGISTRY
+Source: main-CLu1A25j.pretty.js lines 147314-147324
+147314:     }
+147315:     getLocalAppServerClient() {
+147316:       return this.appServerConnectionRegistry.getConnection(u.h);
+147317:     }
+147318:     getLocalAuthToken({ refreshToken: e }) {
+147319:       return this.getLocalAppServerClient().getAuthToken({ refreshToken: e });
+147320:     }
+147321:     getAppServerClient(e = u.h) {
+147322:       return this.executionHostRegistry.getWithGitAliases(e, this.appServerConnectionRegistry);
+147323:     }
+147324:     registerIpcClientForWebContents(e) {
+
+COMPUTER-USE WORKER SERVICES
+Source: worker.pretty.js lines 106659-106736
+106659: }
+106660: function F9(e, t) {
+106661:   return typeof e == `object` && !!e && `code` in e && e.code === t;
+106662: }
+106663: function ORe(e, t, n) {
+106664:   switch (e) {
+106665:     case `computer-use`: {
+106666:       let e = async (e) => {
+106667:         let n = await t.request({ method: `computer-use-service-pid`, params: {} });
+106668:         try {
+106669:           return await e(n);
+106670:         } catch (e) {
+106671:           if (!(e instanceof Error) || !/^AESendMessage failed with -600(?:\s|$)/.test(e.message)) throw e;
+106672:         }
+106673:         return (
+106674:           await t.request({
+106675:             method: `computer-use-invalidate-service-pid`,
+106676:             params: { processIdentifier: n },
+106677:           }),
+106678:           e(await t.request({ method: `computer-use-service-pid`, params: {} }))
+106679:         );
+106680:       };
+106681:       return {
+106682:         computerUse: {
+106683:           requestPermissions: (t) => e((e) => PFe({ ...t, serviceProcessIdentifier: e })),
+106684:           getNextCaptureUpdate: async (e) =>
+106685:             IFe({
+106686:               ...e,
+106687:               serviceProcessIdentifier: await t.request({ method: `computer-use-service-pid`, params: {} }),
+106688:             }),
+106689:           startCapture: async (t) => e((e) => FFe({ ...t, serviceProcessIdentifier: e })),
+106690:           stopApplication: ({ applicationId: t }) =>
+106691:             e((e) => XFe({ applicationId: t, serviceProcessIdentifier: e })),
+106692:           controlSkysight: (t) => e((e) => JFe({ ...t, serviceProcessIdentifier: e })),
+106693:           getStatusItemMenuState: () => e((e) => YFe({ serviceProcessIdentifier: e })),
+106694:           getSkysightSettings: () => e((e) => QFe({ serviceProcessIdentifier: e })),
+106695:           updateSkysightSettings: (t) => e((e) => $Fe({ serviceProcessIdentifier: e, settings: t })),
+106696:           updateSkysightObservationPolicy: (t) => e((e) => ZFe({ ...t, serviceProcessIdentifier: e })),
+106697:           clearSkysightHistory: ({ interval: t, scope: n }) =>
+106698:             e((e) => eIe({ interval: t, serviceProcessIdentifier: e, scope: n })),
+106699:           searchMessagesChats: (t) => e((e) => BFe({ ...t, serviceProcessIdentifier: e })),
+106700:         },
+106701:       };
+106702:     }
+106703:     case `git`: {
+106704:       let e = new bje();
+106705:       return {
+106706:         git: {
+106707:           watchIgnoreSources:
+106708:             process.platform === `linux`
+106709:               ? {
+106710:                   getEnvironment: async () => {
+106711:                     if (n == null) throw Error(`Git hosts require a main RPC connection`);
+106712:                     return n.getLocalGitIgnoreEnvironment();
+106713:                   },
+106714:                   getWatchTargets: DPe,
+106715:                 }
+106716:               : void 0,
+106717:           createExecutionHost: (e) => {
+106718:             if (n == null) throw Error(`Git hosts require a main RPC connection`);
+106719:             return new pFe(n, e);
+106720:           },
+106721:           startMetadataWatch: (t, n) =>
+106722:             t.isLocal
+106723:               ? process.platform === `linux` && n.recursive !== !1
+106724:                 ? j9(n, { ignoredPaths: [] })
+106725:                 : e.startFileWatch(n)
+106726:               : t.startFileWatch(n),
+106727:           startWorkingTreeWatch: (t, n, r) =>
+106728:             t.isLocal
+106729:               ? process.platform === `linux`
+106730:                 ? j9(n, { ignoredPaths: [g.posix.join(n.path, `.git`), ...r] })
+106731:                 : e.startFileWatch(n)
+106732:               : t.startFileWatch(n),
+106733:         },
+106734:       };
+106735:     }
+106736:     case `open-in`:
+
+COMPUTER-USE APPLE EVENT BRIDGE
+Source: worker.pretty.js lines 101386-101460
+101386:     requestType: K5(`RspT`),
+101387:     requestData: K5(`ReqD`),
+101388:     clientApiVersion: K5(`ClVn`),
+101389:     directObject: K5(`----`),
+101390:     errorNumber: K5(`errn`),
+101391:     errorString: K5(`errs`),
+101392:     data: K5(`tdta`),
+101393:     utf8Text: K5(`utf8`),
+101394:     kernelProcessID: K5(`kpid`),
+101395:     sint32: K5(`long`),
+101396:   },
+101397:   CFe = -1,
+101398:   wFe = 0,
+101399:   TFe = 3,
+101400:   EFe = 60,
+101401:   Z5 = 1048576;
+101402: async function Q5({ request: e, requestType: t, serviceProcessIdentifier: n, timeoutSeconds: r }) {
+101403:   if (process.platform !== `darwin`)
+101404:     throw Error(`Codex Computer Use native bridge is only available on macOS`);
+101405:   return DFe({
+101406:     request: e,
+101407:     requestType: t,
+101408:     runtime: await _Fe(),
+101409:     serviceProcessIdentifier: n,
+101410:     timeoutSeconds: r,
+101411:   });
+101412: }
+101413: function DFe({ request: e, requestType: t, runtime: n, serviceProcessIdentifier: r, timeoutSeconds: i }) {
+101414:   let a = B5(),
+101415:     o = B5(),
+101416:     s = B5(),
+101417:     c = [];
+101418:   try {
+101419:     return (
+101420:       vFe({ descriptorType: X5.kernelProcessID, pid: r, runtime: n, target: a }),
+101421:       c.push(a),
+101422:       U5(n.AECreateAppleEvent(X5.eventClass, X5.eventID, a, CFe, wFe, o), `AECreateAppleEvent`),
+101423:       c.push(o),
+101424:       V5({ event: o, keyword: X5.requestType, runtime: n, typeCode: X5.utf8Text, value: t }),
+101425:       V5({ event: o, keyword: X5.clientApiVersion, runtime: n, typeCode: X5.utf8Text, value: SFe }),
+101426:       yFe({
+101427:         data: Buffer.from(JSON.stringify($5(e)), `utf8`),
+101428:         event: o,
+101429:         keyword: X5.requestData,
+101430:         runtime: n,
+101431:         typeCode: X5.data,
+101432:       }),
+101433:       U5(n.AESendMessage(o, s, TFe, Math.ceil(i * EFe)), `AESendMessage`),
+101434:       c.push(s),
+101435:       OFe(n, s)
+101436:     );
+101437:   } finally {
+101438:     for (let e of c.reverse()) n.AEDisposeDesc(e);
+101439:   }
+101440: }
+101441: function OFe(e, t) {
+101442:   let n = H5({ desiredType: X5.sint32, event: t, keyword: X5.errorNumber, maxSize: 4, runtime: e });
+101443:   if (n.status === 0) {
+101444:     let r = H5({ desiredType: X5.utf8Text, event: t, keyword: X5.errorString, maxSize: Z5, runtime: e }),
+101445:       i = r.status === 0 ? r.data.toString(`utf8`) : `Unknown error`;
+101446:     throw Error(`Codex Computer Use Apple Event error ${n.data.readInt32LE(0)}: ${i}`);
+101447:   }
+101448:   let r = H5({ desiredType: X5.data, event: t, keyword: X5.directObject, maxSize: Z5, runtime: e });
+101449:   if (r.status !== 0)
+101450:     throw Error(`Codex Computer Use Apple Event reply did not include response data (${W5(r.status)})`);
+101451:   return JSON.parse(r.data.toString(`utf8`));
+101452: }
+101453: function $5(e) {
+101454:   return Array.isArray(e)
+101455:     ? e.map($5)
+101456:     : typeof e != `object` || !e
+101457:       ? e
+101458:       : Object.fromEntries(
+101459:           Object.entries(e)
+101460:             .filter(([, e]) => e !== void 0)
+
+OPEN-IN WORKER DISPATCH
+Source: worker.pretty.js lines 100158-100217
+100158:   }
+100159: }
+100160: var SPe = class extends gV {
+100161:   dependencies;
+100162:   iconSemaphore = new o$.Sema(1);
+100163:   commandPromises = new Map();
+100164:   constructor(e, t) {
+100165:     (super(e), (this.dependencies = t));
+100166:   }
+100167:   async handleRequest(e) {
+100168:     try {
+100169:       switch (e.method) {
+100170:         case `load-target-icon`: {
+100171:           let t = await this.getTargetCommand(e.params);
+100172:           await this.iconSemaphore.acquire();
+100173:           try {
+100174:             this.emit({
+100175:               type: `worker-response`,
+100176:               response: {
+100177:                 id: e.id,
+100178:                 method: e.method,
+100179:                 result: Q({ icon: await this.dependencies.getTargetIcon({ ...e.params, command: t }) }),
+100180:               },
+100181:             });
+100182:           } finally {
+100183:             this.iconSemaphore.release();
+100184:           }
+100185:           return;
+100186:         }
+100187:         case `get-target-command`:
+100188:           this.emit({
+100189:             type: `worker-response`,
+100190:             response: {
+100191:               id: e.id,
+100192:               method: e.method,
+100193:               result: Q({ command: await this.getTargetCommand(e.params) }),
+100194:             },
+100195:           });
+100196:           return;
+100197:       }
+100198:     } catch (t) {
+100199:       this.emit({ type: `worker-response`, response: { id: e.id, method: e.method, result: Lz(t) } });
+100200:     }
+100201:   }
+100202:   handleCancel() {}
+100203:   getTargetCommand(e) {
+100204:     let t = JSON.stringify([e.target, e.customTarget?.command]),
+100205:       n = this.commandPromises.get(t);
+100206:     if (n != null) return n;
+100207:     let r = this.dependencies.detectTarget(e);
+100208:     return (this.commandPromises.set(t, r), r.catch(() => this.commandPromises.delete(t)), r);
+100209:   }
+100210: };
+100211: function CPe(e, t, n = {}) {
+100212:   switch (e) {
+100213:     case `computer-use`:
+100214:       return new bPe(t, n.computerUse);
+100215:     case `open-in`:
+100216:       if (n.openIn == null) throw Error(`Open in worker dependencies are required`);
+100217:       return new SPe(t, n.openIn);
+
+APP-SERVER API BOUNDARY EXAMPLES
+Source: main-CLu1A25j.pretty.js lines 31672-31704
+31672:           e.generation !== t ||
+31673:           !(0, Fe.default)(this.evaluations.readReadyExecutionAssignments(), n)
+31674:         )
+31675:           throw new a.wr({ status: `not-ready`, reason: `execution-config-loading` });
+31676:       };
+31677:       (!e.rolloutCompressionRequested &&
+31678:         i.Ei(e.connection.appServerVersion, `rolloutCompression`) &&
+31679:         e.connection
+31680:           .sendAppServerRequest(`config/read`, { includeLayers: !1 }, s)
+31681:           .then(({ config: t }) => {
+31682:             if (pue.parse(t).features?.local_thread_store_compression ?? r.localThreadStoreCompression)
+31683:               return e.connection.sendAppServerRequest(`rollout/compress`, void 0, () => {
+31684:                 (s(), (e.rolloutCompressionRequested = !0));
+31685:               });
+31686:           })
+31687:           .catch((n) => {
+31688:             !this.disposed &&
+31689:               e.generation === t &&
+31690:               !(n instanceof a.wr) &&
+31691:               this.logger.warning(`Failed to trigger rollout compression`, {
+31692:                 safe: {},
+31693:                 sensitive: { error: n },
+31694:               });
+31695:           }),
+31696:         await e.connection.sendAppServerRequest(`experimentalFeature/enablement/set`, { enablement: o }, s),
+31697:         !this.disposed && e.generation === t && this.onChanged(e.connection.hostId));
+31698:     }
+31699:   },
+31700:   hue = r.O({ isGovCloud: r._() }),
+31701:   ub = `account/bedrock/checkGovCloudRequirements`,
+31702:   db = new WeakMap(),
+31703:   gue = class extends u.Nt {
+31704:     connections;
+
+CLOUD COMMAND EXECUTION
+Source: main-CLu1A25j.pretty.js lines 93866-93909
+93866:       let h = this.connection
+93867:         .sendAppServerExtensionRequest(
+93868:           `command/exec`,
+93869:           {
+93870:             environmentId: this.environmentId,
+93871:             processId: t,
+93872:             command: [
+93873:               `sh`,
+93874:               `-c`,
+93875:               `printf "\\0" >&2; n="$1"; shift; if test "$n" -eq 0; then exec "$@" </dev/null; else head -c "$n" | "$@"; fi`,
+93876:               `sh`,
+93877:               String(f),
+93878:               ...e.args,
+93879:             ],
+93880:             cwd: e.cwd,
+93881:             env: { ...e.env, BASH_ENV: null, ENV: null },
+93882:             streamStdin: f > 0,
+93883:             streamStdoutStderr: !0,
+93884:             timeoutMs: e.timeoutMs,
+93885:             disableTimeout: e.timeoutMs == null,
+93886:             outputBytesCap: Math.min(e.outputBytesCap ?? 1048576, 1048576),
+93887:           },
+93888:           void 0,
+93889:           { timeoutMs: null },
+93890:         )
+93891:         .then((e) => {
+93892:           let { exitCode: t } = iFe.parse(e);
+93893:           if (u != null) throw u;
+93894:           if (c) throw Error(`Cloud Git command cancelled`);
+93895:           return { code: t, signal: null };
+93896:         })
+93897:         .then(
+93898:           (e) => (n.close(), r.close(), e),
+93899:           (e) => {
+93900:             throw (n.error(e), r.error(e), e);
+93901:           },
+93902:         )
+93903:         .finally(() => {
+93904:           ((s = !0), i.resolve(void 0), m(), e.signal?.removeEventListener(`abort`, p));
+93905:         });
+93906:       return (
+93907:         h.catch(() => void 0),
+93908:         {
+93909:           stdout: n.stream,
+
+ARTIFACT SESSION IS AN EXTERNAL HOST
+Source: main-CLu1A25j.pretty.js lines 161031-161047
+161031:     ((process.env[ia] = Ie.pipePath),
+161032:     (process.env[aa] = Ie.verifyingIdentity),
+161033:     (process.env[qn] = Ie.verifyingIdentity));
+161034:   let Le = n.i.resolve() === n.i.Dev ? process.env.CODEX_ELECTRON_ARTIFACT_SESSION_RUNTIME_ROOT : void 0,
+161035:     K = await yte
+161036:       .start({
+161037:         isEnabled: () => q().artifactSession,
+161038:         loadPrimaryRuntimePaths: Le == null ? void 0 : () => l.V({ installRoot: Le }),
+161039:         rootDirectory: (0, S.join)(D.app.getPath(`userData`), `artifact-sessions`),
+161040:       })
+161041:       .catch(
+161042:         (e) => (
+161043:           p.r().warning(`Failed to start the Artifact Session host`, { safe: {}, sensitive: { error: e } }),
+161044:           null
+161045:         ),
+161046:       );
+161047:   process.env.CODEX_SAGE_BACKFILL_TRACKER_TAB_REUSE = `1`;
+
+PACKAGED APP DISABLES MAIN-HOSTED JS APPSERVERMANAGER
+Source: main-CLu1A25j.pretty.js lines 160787-160803
+160787:     j = n.i.allowDebugMenu(s),
+160788:     M = D.app.getVersion(),
+160789:     N = g.T({ app: D.app }),
+160790:     P = g.C({ app: D.app }),
+160791:     F = p.o(`startup`),
+160792:     I = {},
+160793:     L = (e, t, n = {}) => {
+160794:       let i = Date.now();
+160795:       (n.background !== !0 && (I[e] = i - t),
+160796:         F.trace(e, { safe: { phaseElapsedMs: i - t, startupElapsedMs: i - r, ...n } }));
+160797:     };
+160798:   L(`bootstrap handoff complete`, r, { appWhenReadyResolved: D.app.isReady() });
+160799:   let R = process.platform === `darwin`,
+160800:     z = process.platform === `win32`,
+160801:     B = !D.app.isPackaged,
+160802:     V = B && process.env.CODEX_APP_SERVER_MANAGER_IN_MAIN === `1`,
+160803:     H = new a.Fr();
+
+MAIN-THREAD SQLITE MIGRATION
+Source: main-CLu1A25j.pretty.js lines 20565-20623
+20565:     (o.close(), a.close());
+20566:   }
+20567: }
+20568: function Hm(e, t) {
+20569:   let n = Um(e, t, `threads`),
+20570:     r = n.includes(`updated_at_ms`) ? `updated_at_ms` : `updated_at`,
+20571:     i = n.map(qm).join(`, `),
+20572:     a = n.map(() => `?`).join(`, `),
+20573:     o = e.prepare(`SELECT ${i} FROM threads WHERE id = ?`),
+20574:     s = e.prepare(`INSERT INTO threads (${i}) VALUES (${a})`),
+20575:     c = 0,
+20576:     l = 0,
+20577:     u = new Set();
+20578:   e.exec(`BEGIN IMMEDIATE`);
+20579:   try {
+20580:     for (let a of t.prepare(`SELECT ${i} FROM threads`).all()) {
+20581:       let t = a.id;
+20582:       if (typeof t != `string`) continue;
+20583:       let i = o.get(t);
+20584:       if (i == null) {
+20585:         (s.run(...n.map((e) => a[e] ?? null)), (c += 1), u.add(t));
+20586:         continue;
+20587:       }
+20588:       let d = Km(a[r]) > Km(i[r]),
+20589:         f = n.filter((e) => e !== `id` && !Gm(a[e]) && (Gm(i[e]) || (d && a[e] !== i[e])));
+20590:       f.length !== 0 &&
+20591:         (e
+20592:           .prepare(`UPDATE threads SET ${f.map((e) => `${qm(e)} = ?`).join(`, `)} WHERE id = ?`)
+20593:           .run(...f.map((e) => a[e] ?? null), t),
+20594:         (l += 1),
+20595:         u.add(t));
+20596:     }
+20597:     let a = Um(e, t, `thread_spawn_edges`),
+20598:       d = 0;
+20599:     if (a.length > 0) {
+20600:       let n = a.map(qm).join(`, `),
+20601:         r = e.prepare(
+20602:           `INSERT OR IGNORE INTO thread_spawn_edges (${n}) VALUES (${a.map(() => `?`).join(`, `)})`,
+20603:         );
+20604:       for (let e of t.prepare(`SELECT ${n} FROM thread_spawn_edges`).all())
+20605:         d += Number(r.run(...a.map((t) => e[t] ?? null)).changes);
+20606:     }
+20607:     let f = Um(e, t, `thread_dynamic_tools`),
+20608:       p = 0;
+20609:     if (f.length > 0) {
+20610:       let n = f.map(qm).join(`, `),
+20611:         r = t.prepare(`SELECT ${n} FROM thread_dynamic_tools WHERE thread_id = ?`),
+20612:         i = e.prepare(
+20613:           `INSERT OR IGNORE INTO thread_dynamic_tools (${n}) VALUES (${f.map(() => `?`).join(`, `)})`,
+20614:         );
+20615:       for (let e of u) for (let t of r.all(e)) p += Number(i.run(...f.map((e) => t[e] ?? null)).changes);
+20616:     }
+20617:     return (e.exec(`COMMIT`), { dynamicToolsInserted: p, inserted: c, repaired: l, spawnEdgesInserted: d });
+20618:   } catch (t) {
+20619:     throw (e.exec(`ROLLBACK`), t);
+20620:   }
+20621: }
+20622: function Um(e, t, n) {
+20623:   let r = new Set(Wm(t, n));
+
+SQLITE MIGRATION INVOKED IN STARTUP
+Source: main-CLu1A25j.pretty.js lines 160850-160863
+160850:   }
+160851:   let W = await g.Q({ moduleDir: __dirname }),
+160852:     ie = W.globalState.getStored(`electron-desktop-otraces-sample-rate`) ?? 0;
+160853:   (g.X(ie),
+160854:     (U = Date.now()),
+160855:     await Tse(W.globalState, Cse),
+160856:     await W.settingsStore.captureInitialFollowUpQueueMode(),
+160857:     await wse(W.globalState));
+160858:   let ae = j && W.settingsStore.getEffective(i.J.debugChromePagesEnabled.key) === !0;
+160859:   (D.app.setDebugChromePagesEnabled(ae),
+160860:     Ku(ae),
+160861:     L(`local data migrations completed`, U),
+160862:     await Lm(W.codexHome),
+160863:     hi(gi({}, { buildFlavor: s })));
+
+MAIN-THREAD SCREENSHOT COMPACTION TRIGGER
+Source: main-CLu1A25j.pretty.js lines 72860-72865
+72860:     }
+72861:     compactThreadCommentScreenshotsIfNeeded(e) {
+72862:       if (e.snapshot.comments.length < 10) return;
+72863:       let t = HEe(e.snapshot.comments);
+72864:       t !== e.snapshot.comments && (e.snapshot = { ...e.snapshot, comments: t });
+72865:     }
+
+MAIN-THREAD IMAGE DECODE, CROP, RESIZE, ENCODE
+Source: main-CLu1A25j.pretty.js lines 73412-73476
+73412:   };
+73413: function HEe(e) {
+73414:   let t = !1,
+73415:     n = e.map((e) => {
+73416:       if (e.screenshot == null || e.screenshot.isCompact === !0 || (e.additionalAnchors?.length ?? 0) > 0)
+73417:         return e;
+73418:       if (((t = !0), e.anchor.kind === `virtual`)) {
+73419:         let t = LH(D.nativeImage.createFromDataURL(e.screenshot.dataUrl), 768);
+73420:         return {
+73421:           ...e,
+73422:           screenshot: { ...e.screenshot, dataUrl: t.toDataURL(), ...t.getSize(), isCompact: !0 },
+73423:         };
+73424:       }
+73425:       let n = e.screenshot.annotationViewportRect ?? e.screenshot.cropViewportRect ?? e.anchor.rect,
+73426:         r = e.screenshot.markerViewportPoint ?? e.markerViewportPoint,
+73427:         i = aH(n, r) ?? e.anchor.rect;
+73428:       return {
+73429:         ...e,
+73430:         screenshot: IH(
+73431:           UEe(D.nativeImage.createFromDataURL(e.screenshot.dataUrl), e, i),
+73432:           !0,
+73433:           i,
+73434:           e.screenshot.annotationViewportRect ?? e.anchor.rect,
+73435:           r,
+73436:         ),
+73437:       };
+73438:     });
+73439:   return t ? n : e;
+73440: }
+73441: function UEe(e, t, n) {
+73442:   let r = t.screenshot;
+73443:   return r?.cropViewportRect == null
+73444:     ? FH(e, { annotation: t, screenshotCropRect: n, shouldUseCompactScreenshot: !0 })
+73445:     : LH(GEe(e, r.cropViewportRect, n, t.viewportSize, r.cropPaddingPx ?? 32), 768);
+73446: }
+73447: function FH(e, { annotation: t, screenshotCropRect: n, shouldUseCompactScreenshot: r }) {
+73448:   let i = t.viewportSize,
+73449:     a = n != null && i != null && i.width > 0 && i.height > 0;
+73450:   return LH(a ? WEe(e, n, i, r ? 16 : 32) : e, r ? 768 : a ? CEe : iH);
+73451: }
+73452: function IH(e, t, n, r, i) {
+73453:   let { width: a, height: o } = e.getSize();
+73454:   return {
+73455:     annotationViewportRect: r ?? void 0,
+73456:     ...(n == null ? {} : { cropPaddingPx: t ? 16 : 32, cropViewportRect: n }),
+73457:     dataUrl: e.toDataURL(),
+73458:     ...(t ? { isCompact: !0 } : {}),
+73459:     markerViewportPoint: i,
+73460:     width: a,
+73461:     height: o,
+73462:   };
+73463: }
+73464: function WEe(e, t, n, r) {
+73465:   let i = oH(e.getSize(), t, n, r);
+73466:   return i == null ? e : e.crop(i);
+73467: }
+73468: function GEe(e, t, n, r, i) {
+73469:   let a = TEe(e.getSize(), t, n, r, i);
+73470:   return a == null ? e : e.crop(a);
+73471: }
+73472: function LH(e, t) {
+73473:   let n = e.getSize(),
+73474:     r = wEe(n, t);
+73475:   return r === n ? e : e.resize(r);
+73476: }
+
+ASYNCHRONOUS CAPTURE FOLLOWED BY SYNCHRONOUS IMAGE PROCESSING
+Source: main-CLu1A25j.pretty.js lines 73058-73077
+73058:     }
+73059:     async captureBrowserScreenshot(e, t) {
+73060:       try {
+73061:         let n = t.readyMessage.annotationViewportRect ?? t.annotationViewportRect,
+73062:           r = t.readyMessage.markerViewportPoint ?? t.markerViewportPoint,
+73063:           i = t.screenshotCropRect == null ? null : (aH(n, r) ?? t.screenshotCropRect);
+73064:         return IH(
+73065:           FH(await e.capturePage(), {
+73066:             annotation: t.annotation,
+73067:             screenshotCropRect: i,
+73068:             shouldUseCompactScreenshot: t.shouldUseCompactScreenshot,
+73069:           }),
+73070:           t.shouldUseCompactScreenshot,
+73071:           i,
+73072:           n,
+73073:           r,
+73074:         );
+73075:       } catch (e) {
+73076:         (MH().warning(`failed to capture browser comment screenshot`, { safe: {}, sensitive: { error: e } }),
+73077:           this.errorReporter.reportNonFatal(e instanceof Error ? e : Error(String(e)), {
+
+STDIO JSON PARSE DEFAULT BUFFER THRESHOLD
+Source: application-network-startup-DB1VeU3v.pretty.js lines 11412-11425
+11412:       (t.exports = o),
+11413:       (t.exports.flexAssembler = (e) => new o(e)));
+11414:   }),
+11415:   _s = Math.min(268435456, Math.floor(v.constants.MAX_STRING_LENGTH / 2)),
+11416:   vs = Buffer.alloc(0),
+11417:   ys = new WeakSet(),
+11418:   bs = class extends f.Writable {
+11419:     options;
+11420:     currentLine = this.createLine();
+11421:     maxBufferedLineBytes;
+11422:     constructor(e) {
+11423:       (super(), (this.options = e), (this.maxBufferedLineBytes = e.maxBufferedLineBytes ?? _s));
+11424:     }
+11425:     _write(e, t, n) {
+
+JSON PARSE AND OBJECT ASSEMBLY BEFORE DISPATCH
+Source: application-network-startup-DB1VeU3v.pretty.js lines 11626-11669
+11626:     parseBufferedLine(e) {
+11627:       if (e.hasNonWhitespace)
+11628:         try {
+11629:           let t =
+11630:             e.bufferedChunks.length === 1
+11631:               ? e.bufferedChunks[0]
+11632:               : Buffer.concat(e.bufferedChunks, e.contentBytes);
+11633:           this.setCompletedMessage(e, JSON.parse(t.toString(`utf8`)));
+11634:         } catch (t) {
+11635:           ((e.error = Cs(t)), (e.completedMessage = null));
+11636:         } finally {
+11637:           e.bufferedChunks = [];
+11638:         }
+11639:     }
+11640:     setCompletedMessage(e, t) {
+11641:       if (typeof t != `object` || !t || Array.isArray(t) || ts(t)) {
+11642:         ((e.error = Error(`App-server stdout line did not contain a JSON-RPC object`)),
+11643:           (e.completedMessage = null));
+11644:         return;
+11645:       }
+11646:       e.completedMessage = t;
+11647:     }
+11648:     completeLine(e) {
+11649:       if (e.settled) return;
+11650:       if (((e.settled = !0), e.error != null)) this.options.onError(e.error, e.lineBytes);
+11651:       else if (e.completedMessage != null) {
+11652:         (cs(e.completedMessage, e.lineBytes),
+11653:           `result` in e.completedMessage &&
+11654:             e.completedMessage.result != null &&
+11655:             typeof e.completedMessage.result == `object` &&
+11656:             cs(e.completedMessage.result, e.lineBytes),
+11657:           `params` in e.completedMessage &&
+11658:             e.completedMessage.params != null &&
+11659:             typeof e.completedMessage.params == `object` &&
+11660:             cs(e.completedMessage.params, e.lineBytes),
+11661:           e.hasChunkedArray && ys.add(e.completedMessage));
+11662:         let t = Date.now();
+11663:         (e.progress != null && ((e.progress.bytesReceived = e.lineBytes), (e.progress.receivedAtMs = t)),
+11664:           this.options.onMessage(e.completedMessage, e.lineBytes, {
+11665:             receiveStartedAtMs: e.progress?.startedAtMs ?? t,
+11666:             receivedAtMs: t,
+11667:           }));
+11668:       } else
+11669:         e.hasNonWhitespace &&
+
+MESSAGE DISPATCH BUDGET CONSTANTS
+Source: application-network-startup-DB1VeU3v.pretty.js lines 11785-11794
+11785:   As = t.O({ appServerVersion: t.N() }),
+11786:   js = (0, s.promisify)(p.execFile),
+11787:   Ms = 200,
+11788:   Ns = 8,
+11789:   Ps = [100, 250, 500, 1e3, 2500, 5e3],
+11790:   Fs = [65536, 262144, 1048576],
+11791:   Is = 200,
+11792:   Ls = 8,
+11793:   Rs = 1024,
+11794:   zs = [`bin`, `wsl`],
+
+MESSAGE DISPATCH YIELDS
+Source: application-network-startup-DB1VeU3v.pretty.js lines 12007-12050
+12007:     scheduleStdoutDispatch() {
+12008:       this.stdoutDispatchHandle ||= setImmediate(() => {
+12009:         ((this.stdoutDispatchHandle = null), this.dispatchPendingStdoutLines(!1));
+12010:       });
+12011:     }
+12012:     flushPendingStdoutLines() {
+12013:       this.dispatchPendingStdoutLines(!0);
+12014:     }
+12015:     dispatchPendingStdoutLines(e) {
+12016:       if (this.stdoutMessageQueue.getDepth() === 0) return;
+12017:       let t = this.stdoutMessageQueue.drain({
+12018:         flushAll: e,
+12019:         maxItemsPerSlice: Ms,
+12020:         maxSliceMs: Ns,
+12021:         onItem: (e) => {
+12022:           this.onmessage?.({ type: `message`, data: e });
+12023:         },
+12024:       });
+12025:       if (
+12026:         ((t.durationMs >= Ls || t.remainingCount >= Is) &&
+12027:           this.logger.debug(`stdio_stdout_dispatch_slice`, {
+12028:             safe: {
+12029:               flushAll: e,
+12030:               dispatchedCount: t.drainedCount,
+12031:               queueRemaining: t.remainingCount,
+12032:               dispatchDurationMs: t.durationMs,
+12033:               queueDepthHighWaterMark: t.queueDepthHighWaterMark,
+12034:             },
+12035:             sensitive: {},
+12036:           }),
+12037:         t.drainedAll)
+12038:       ) {
+12039:         t.queueDepthHighWaterMark >= Ps[0] &&
+12040:           this.logger.debug(`stdio_stdout_queue_drained`, {
+12041:             safe: { queueDepthHighWaterMark: t.queueDepthHighWaterMark },
+12042:             sensitive: {},
+12043:           });
+12044:         return;
+12045:       }
+12046:       e || this.scheduleStdoutDispatch();
+12047:     }
+12048:     resetStdoutDispatchState() {
+12049:       ((this.stdoutDispatchHandle &&= (clearImmediate(this.stdoutDispatchHandle), null)),
+12050:         this.stdoutMessageQueue.clear());
+
+IPC CHUNKING AND ACKNOWLEDGMENTS
+Source: src-DsLVGakC.pretty.js lines 57655-57740
+57655: var MG = 4194304,
+57656:   NG = 2097152,
+57657:   PG = class {
+57658:     options;
+57659:     batchTargetBytes;
+57660:     inlineThresholdBytes;
+57661:     targets = new Map();
+57662:     constructor(e) {
+57663:       ((this.options = e),
+57664:         (this.batchTargetBytes = e.batchTargetBytes ?? NG),
+57665:         (this.inlineThresholdBytes = e.inlineThresholdBytes ?? MG));
+57666:     }
+57667:     send(e, t) {
+57668:       let n = this.shouldChunk(t),
+57669:         r = this.targets.get(e);
+57670:       if (r == null && !n) {
+57671:         this.options.deliver(e, t, null);
+57672:         return;
+57673:       }
+57674:       let i = r ?? this.createTarget(e);
+57675:       (i.messages.push({ chunked: n, message: t }), this.drain(i));
+57676:     }
+57677:     sendInline(e, t) {
+57678:       let n = this.targets.get(e);
+57679:       if (n == null) {
+57680:         this.options.deliver(e, t, null);
+57681:         return;
+57682:       }
+57683:       (n.messages.push({ chunked: !1, message: t }), this.drain(n));
+57684:     }
+57685:     sendCritical(e, t) {
+57686:       let n = this.shouldChunk(t),
+57687:         r = this.targets.get(e);
+57688:       if (!n && r == null)
+57689:         try {
+57690:           this.options.deliver(e, t, null);
+57691:           return;
+57692:         } catch (n) {
+57693:           let r = this.createTarget(e);
+57694:           (r.criticalMessages.push({ chunked: !1, message: t }), this.handleSendError(r, n));
+57695:           return;
+57696:         }
+57697:       let i = r ?? this.createTarget(e);
+57698:       (i.criticalMessages.push({ chunked: n, message: t }), n || this.drainCritical(i), this.drain(i));
+57699:     }
+57700:     acknowledge(e, t, n) {
+57701:       let r = this.targets.get(e),
+57702:         i = r?.transfer;
+57703:       if (r != null && !r.sending && i != null && i.delivered && i.id === t && i.part?.sequence === n) {
+57704:         if (i.part.kind === `end`) {
+57705:           ((r.transfer = null), this.drain(r));
+57706:           return;
+57707:         }
+57708:         this.sendNextPart(r, i);
+57709:       }
+57710:     }
+57711:     dispose(e) {
+57712:       let t = this.targets.get(e);
+57713:       t != null && this.cleanup(t);
+57714:     }
+57715:     shouldChunk(e) {
+57716:       let t = this.options.getPayload(e);
+57717:       if (`message` in t && FG(t.message)) {
+57718:         let e =
+57719:           o.C(t.message) ?? (`result` in t.message && FG(t.message.result) ? o.C(t.message.result) : void 0);
+57720:         if (e != null) return e > this.inlineThresholdBytes;
+57721:       }
+57722:       if (`params` in t && FG(t.params)) {
+57723:         let e = o.C(t.params);
+57724:         if (e != null) return e > this.inlineThresholdBytes;
+57725:       }
+57726:       return o.T(t, this.inlineThresholdBytes);
+57727:     }
+57728:     createTarget(e) {
+57729:       let t = {
+57730:         criticalMessages: [],
+57731:         draining: !1,
+57732:         loading: this.options.isLoading?.(e) === !0,
+57733:         messages: [],
+57734:         retryTimer: null,
+57735:         sending: !1,
+57736:         target: e,
+57737:         transfer: null,
+57738:         unsubscribe: null,
+57739:       };
+57740:       return (
+
+MAIN-THREAD MAC PERMISSION HELPER SYNC WAIT
+Source: main-CLu1A25j.pretty.js lines 9873-9888
+9873: }
+9874: function zl(e, t = `press`) {
+9875:   let n = ql(e) ?? Kl(e);
+9876:   process.platform !== `darwin` || n == null || t === `immediatePress` || Fl.has(n) || Bl();
+9877: }
+9878: function Bl() {
+9879:   if (process.platform !== `darwin`) return;
+9880:   let e = tu();
+9881:   if (e != null)
+9882:     try {
+9883:       (0, N.spawnSync)(e, [`--request-permission`], { stdio: `ignore`, timeout: 1e4 });
+9884:     } catch (e) {
+9885:       p.r().warning(`Failed to request input monitoring access`, { safe: {}, sensitive: { error: e } });
+9886:     }
+9887: }
+9888: function Vl(e, t, n = !1, r) {
+
+MAIN-THREAD DURABLE PROJECT STATE WRITE
+Source: main-CLu1A25j.pretty.js lines 118869-118911
+118869:   cGe = r.O({ starts: r.h(r.D()), retryAt: r.D(), updatedAt: r.D() }),
+118870:   u2 = class {
+118871:     #e;
+118872:     #t;
+118873:     #n;
+118874:     constructor(e, t, n) {
+118875:       ((this.#e = (0, S.join)(e, `project-chatgpt-provisioning`)),
+118876:         (this.#t = (0, S.join)(this.#e, `${(0, _.createHash)(`sha256`).update(t).digest(`hex`)}.json`)),
+118877:         (this.#n = n));
+118878:     }
+118879:     lock() {
+118880:       return cw({ name: sw.projectChatGptProvisioning, lockPath: `${this.#t}.lock`, onLost: () => {} });
+118881:     }
+118882:     read() {
+118883:       let e;
+118884:       try {
+118885:         e = (0, b.readFileSync)(this.#t, `utf8`);
+118886:       } catch (e) {
+118887:         if (e instanceof Error && `code` in e && e.code === `ENOENT`) return null;
+118888:         throw e;
+118889:       }
+118890:       return this.#n.parse(JSON.parse(e));
+118891:     }
+118892:     write(e) {
+118893:       (0, b.mkdirSync)(this.#e, { recursive: !0, mode: 448 });
+118894:       let t = `${this.#t}.${(0, _.randomUUID)()}.tmp`;
+118895:       try {
+118896:         let n = (0, b.openSync)(t, `wx`, 384);
+118897:         try {
+118898:           ((0, b.writeFileSync)(n, JSON.stringify(this.#n.parse(e))), (0, b.fsyncSync)(n));
+118899:         } finally {
+118900:           (0, b.closeSync)(n);
+118901:         }
+118902:         if (((0, b.renameSync)(t, this.#t), process.platform !== `win32`)) {
+118903:           let e = (0, b.openSync)(this.#e, `r`);
+118904:           try {
+118905:             (0, b.fsyncSync)(e);
+118906:           } finally {
+118907:             (0, b.closeSync)(e);
+118908:           }
+118909:         }
+118910:       } finally {
+118911:         (0, b.rmSync)(t, { force: !0 });
+
+MAIN-THREAD REALTIME HANDOFF ROLLOUT PARSING
+Source: main-CLu1A25j.pretty.js lines 22778-22798
+22778: async function gg(e, t, n = 0) {
+22779:   let r = (await (0, k.readFile)(e, `utf8`))
+22780:       .split(/\r?\n/)
+22781:       .filter((e) => e.trim().length > 0)
+22782:       .flatMap((e) => {
+22783:         try {
+22784:           let t = JSON.parse(e);
+22785:           return yg(t) ? [t] : [];
+22786:         } catch {
+22787:           return [];
+22788:         }
+22789:       }),
+22790:     i = r.find((e) => e.type === `session_meta`),
+22791:     a = r.findIndex((e) => _g(e, `task_started`, t)),
+22792:     o = r.findIndex((e, n) => n >= a && _g(e, `task_complete`, t));
+22793:   return a >= 0 && o >= a
+22794:     ? [...(i == null ? [] : [i]), ...r.slice(a, o + 1)]
+22795:     : n >= 2
+22796:       ? null
+22797:       : (await (0, ae.setTimeout)(100), gg(e, t, n + 1));
+22798: }
+
+DICTATION HISTORY SYNCHRONOUS IO, WRITES LIMITED TO 20 ITEMS
+Source: main-CLu1A25j.pretty.js lines 60766-60835
+60766:       }
+60767:     : { hasBinding: !0, hotkey: n.key };
+60768: }
+60769: async function PP(e, t) {
+60770:   return a.Dt({ commandId: e, update: t == null ? { type: `clear` } : { type: `set`, accelerator: t } });
+60771: }
+60772: async function FP({ commandId: e, hotkey: t }) {
+60773:   let n = MP(e);
+60774:   return t == null || n.hasBinding || n.hotkey === t ? null : PP(e, t);
+60775: }
+60776: function IP({ keymapHotkey: e, legacyHotkey: t }) {
+60777:   return e.hasBinding ? e.hotkey : (t ?? e.hotkey);
+60778: }
+60779: var LP = 20,
+60780:   RP = `transcription-history.jsonl`,
+60781:   zP = r.O({ id: r.N(), createdAtMs: r.D(), text: r.N() });
+60782: function BP() {
+60783:   let e = GP();
+60784:   if (!(0, b.existsSync)(e)) return [];
+60785:   try {
+60786:     let t = [];
+60787:     for (let n of (0, b.readFileSync)(e, `utf8`).split(/\r?\n/)) {
+60788:       let e = n.trim();
+60789:       if (e.length !== 0)
+60790:         try {
+60791:           let n = zP.safeParse(JSON.parse(e));
+60792:           n.success && t.push(n.data);
+60793:         } catch {}
+60794:     }
+60795:     return t.slice(-20).reverse();
+60796:   } catch (e) {
+60797:     return (
+60798:       p.r().warning(`Failed to read global dictation history`, { safe: {}, sensitive: { error: e } }),
+60799:       []
+60800:     );
+60801:   }
+60802: }
+60803: function VP(e) {
+60804:   WP([e, ...BP().filter(({ id: t }) => t !== e.id)].slice(0, LP));
+60805: }
+60806: function HP(e) {
+60807:   if (e.length === 0) return;
+60808:   let t = new Set(e);
+60809:   WP(BP().filter(({ id: e }) => !t.has(e)));
+60810: }
+60811: function UP() {
+60812:   WP(BP());
+60813: }
+60814: function WP(e) {
+60815:   try {
+60816:     let t = GP(),
+60817:       n = `${t}.${(0, _.randomUUID)()}.tmp`;
+60818:     (0, b.mkdirSync)((0, S.dirname)(t), { mode: 448, recursive: !0 });
+60819:     try {
+60820:       ((0, b.writeFileSync)(
+60821:         n,
+60822:         e.toReversed().map((e) => JSON.stringify(e)).join(`
+60823: `) +
+60824:           (e.length > 0
+60825:             ? `
+60826: `
+60827:             : ``),
+60828:         { encoding: `utf8`, flag: `wx`, mode: 384 },
+60829:       ),
+60830:         (0, b.renameSync)(n, t),
+60831:         (0, b.chmodSync)(t, 384));
+60832:     } catch (e) {
+60833:       throw ((0, b.rmSync)(n, { force: !0 }), e);
+60834:     }
+60835:   } catch (e) {
+
+THUMBNAIL DELEGATION AND ENCODING
+Source: main-CLu1A25j.pretty.js lines 94234-94264
+94234:           if (
+94235:             (h != null &&
+94236:               ((s = await (0, k.mkdtemp)(S.join((0, w.tmpdir)(), `codex-remote-file-thumbnail-`))),
+94237:               (_ = S.join(s, ye(S.posix.basename(u)))),
+94238:               await (0, k.writeFile)(_, h, { flag: `wx`, mode: 384 })),
+94239:             this.isDisposed)
+94240:           )
+94241:             return { dataUrl: null };
+94242:           ((c = !0), (this.nativeThumbnailInFlight = !0));
+94243:           let v = (async () => {
+94244:               try {
+94245:                 return await D.nativeImage.createThumbnailFromPath(_, { height: r, width: r });
+94246:               } finally {
+94247:                 (s != null && (await (0, k.rm)(s, { force: !0, recursive: !0 }).catch(() => void 0)),
+94248:                   (this.nativeThumbnailInFlight = !1));
+94249:               }
+94250:             })(),
+94251:             y = await Promise.race([
+94252:               v,
+94253:               new Promise((t) => {
+94254:                 ((e = setTimeout(t, nJ, null)), e.unref());
+94255:               }),
+94256:             ]);
+94257:           if (y == null) return { dataUrl: null, reason: `timeout` };
+94258:           if (this.isDisposed || y.isEmpty()) return { dataUrl: null };
+94259:           let b = y.toPNG();
+94260:           return {
+94261:             byteLength: g,
+94262:             dataUrl: b.length === 0 ? null : `data:image/png;base64,${b.toString(`base64`)}`,
+94263:           };
+94264:         } catch {

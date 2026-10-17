@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { MessageChannel } from 'node:worker_threads';
+import { mock } from 'node:test';
 import { JSDOM } from 'jsdom';
 import { setup, suite, suiteSetup, suiteTeardown, teardown, test } from 'mocha';
 import { DisposableTracker, installDisposableTracker } from '../../../../base/common/lifecycle.js';
@@ -135,6 +136,51 @@ suite('App Server MessagePort transport', () => {
 			assert.throws(() => socket.write(VSBuffer.fromString('old')), /socket is closed/);
 		} finally { channel.port1.close(); channel.port2.close(); }
 	});
+
+	for (const shared of [false, true]) {
+		test(`${shared ? 'shared incoming bytes are copied' : 'incoming bytes reuse received storage'} and acknowledge only after synchronous consumption`, async () => {
+			using transport = new Transport(() => { });
+			const ready = transport.acquire();
+			const channel = new MessageChannel();
+			try {
+				requests[0].resolve({ enabled: true, byteStream: true });
+				dom.window.dispatchEvent(new dom.window.MessageEvent('message', { source: dom.window as unknown as Window, data: { nonce: requests[0].nonce }, ports: [channel.port1 as unknown as MessagePort] }));
+				await ready;
+				let receivedArray: Uint8Array | undefined;
+				const incomingPort = channel.port1 as unknown as MessagePort;
+				const onmessage = incomingPort.onmessage!;
+				incomingPort.onmessage = event => {
+					receivedArray = (event.data as { data: Uint8Array; }).data;
+					onmessage.call(incomingPort, event);
+				};
+				let consumed = false;
+				using subscription = transport.socket.onData(data => {
+					if (shared) {
+						assert.notEqual(data.buffer.buffer, receivedArray!.buffer);
+					} else {
+						assert.equal(data.buffer.buffer, receivedArray!.buffer);
+						assert.equal(data.buffer.byteOffset, receivedArray!.byteOffset);
+					}
+					assert.equal(data.toString(), '你好😀\n');
+					consumed = true;
+				});
+				const post = mock.method(channel.port1, 'postMessage', (value: unknown) => {
+					assert.equal(consumed, true);
+					assert.deepEqual(value, { ack: true });
+					channel.port2.close();
+				});
+				try {
+					const closed = new Promise<void>(resolve => channel.port2.once('close', resolve));
+					const encoded = new TextEncoder().encode('你好😀\n');
+					const storage = new Uint8Array(shared ? new SharedArrayBuffer(encoded.length + 4) : new ArrayBuffer(encoded.length + 4));
+					storage.set(encoded, 2);
+					channel.port2.postMessage({ data: storage.subarray(2, encoded.length + 2) });
+					await closed;
+					assert.equal(post.mock.calls.length, 1);
+				} finally { post.mock.restore(); }
+			} finally { channel.port1.close(); channel.port2.close(); }
+		});
+	}
 
 
 	test('releasing the renderer lease tells Main that the closure is intentional', async () => {

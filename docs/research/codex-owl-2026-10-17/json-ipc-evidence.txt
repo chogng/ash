@@ -1,0 +1,1331 @@
+Installed ChatGPT.app 26.1013.40934 (20770). Read-only inspection on 2026-10-17.
+All line references below refer to locally formatted bundle copies, not original source files.
+
+=== Chunked arrays, materialization, synchronous size walk ===
+/tmp/ash-owl-inspection/application-network-startup-DB1VeU3v.pretty.js:10174
+10174: function Yo(e) {
+10175:   if (process.env.CODEX_APP_SERVER_FORCE_CLI === `1`) return null;
+10176:   let t = process.env.CODEX_APP_SERVER_WS_URL ?? e.websocket_url;
+10177:   return !t || typeof t != `string` ? null : t;
+10178: }
+10179: var Xo = 4194304,
+10180:   Zo = 32,
+10181:   Qo = 16,
+10182:   $o = class {
+10183:     chunks;
+10184:     length;
+10185:     constructor(e, t) {
+10186:       ((this.chunks = e), (this.length = t));
+10187:     }
+10188:   },
+10189:   es = class {
+10190:     chunkTargetBytes;
+10191:     chunks = [];
+10192:     currentChunk = [];
+10193:     currentChunkBytes = 0;
+10194:     length = 0;
+10195:     constructor(e = Xo) {
+10196:       this.chunkTargetBytes = e;
+10197:     }
+10198:     add(e) {
+10199:       let t = rs(e, this.chunkTargetBytes);
+10200:       (this.currentChunk.length > 0 &&
+10201:         this.currentChunkBytes + t > this.chunkTargetBytes &&
+10202:         (this.chunks.push(this.currentChunk), (this.currentChunk = []), (this.currentChunkBytes = 0)),
+10203:         this.currentChunk.push(e),
+10204:         (this.currentChunkBytes += t),
+10205:         (this.length += 1));
+10206:     }
+10207:     finish() {
+10208:       return (
+10209:         this.currentChunk.length > 0 && this.chunks.push(this.currentChunk),
+10210:         this.chunks.length <= 1 ? (this.chunks[0] ?? []) : new $o(this.chunks, this.length)
+10211:       );
+10212:     }
+10213:   };
+10214: function ts(e) {
+10215:   return e instanceof $o;
+10216: }
+10217: function ns(e) {
+10218:   if (ts(e)) {
+10219:     let t = [];
+10220:     for (let n of e.chunks) for (let e of n) t.push(ns(e));
+10221:     return t;
+10222:   }
+10223:   if (Array.isArray(e)) return e.map(ns);
+10224:   if (typeof e != `object` || !e) return e;
+10225:   let t = {};
+10226:   for (let [n, r] of Object.entries(e))
+10227:     Object.defineProperty(t, n, { configurable: !0, enumerable: !0, value: ns(r), writable: !0 });
+10228:   return t;
+10229: }
+10230: function rs(e, t = 2 ** 53 - 1) {
+10231:   return as(e, t, !1);
+10232: }
+10233: function is(e, t) {
+10234:   return as(e, t, !0) > t;
+10235: }
+10236: function as(e, t, n) {
+10237:   let r = new WeakSet(),
+10238:     i = [{ type: `value`, value: e }],
+10239:     a = 0;
+10240:   for (; i.length > 0 && a <= t;) {
+10241:     let e = i.pop();
+10242:     if (e == null) break;
+10243:     if (e.type === `values`) {
+10244:       let t = e.values.next();
+10245:       t.done || i.push(e, { type: `value`, value: t.value });
+10246:       continue;
+10247:     }
+10248:     if (e.type === `leave`) {
+10249:       r.delete(e.value);
+10250:       continue;
+10251:     }
+10252:     if (e.type === `object`) {
+10253:       let t = e.entries[e.index];
+10254:       t != null && ((e.index += 1), (a += t[0].length * 2 + Qo), i.push(e, { type: `value`, value: t[1] }));
+10255:       continue;
+10256:     }
+10257:     let t = e.value;
+10258:     if (typeof t == `string`) {
+10259:       a += t.length * 2 + Qo;
+10260:       continue;
+10261:     }
+10262:     if (typeof t != `object` || !t) {
+10263:       a += Qo;
+10264:       continue;
+10265:     }
+10266:     if (!r.has(t)) {
+10267:       if ((r.add(t), (a += Zo), ts(t))) {
+10268:         if (n) return 1 / 0;
+10269:         i.push({ type: `leave`, value: t }, { type: `values`, values: os(t) });
+10270:       } else
+10271:         Array.isArray(t)
+10272:           ? i.push({ type: `leave`, value: t }, { type: `values`, values: t.values() })
+10273:           : i.push({ type: `leave`, value: t }, { type: `object`, entries: Object.entries(t), index: 0 });
+10274:     }
+10275:   }
+10276:   return a;
+10277: }
+10278: function* os(e) {
+10279:   for (let t of e.chunks) yield* t;
+10280: }
+10281: var ss = new WeakMap();
+10282: function cs(e, t) {
+10283:   ss.set(e, t);
+10284: }
+10285: function ls(e) {
+
+=== JSONL buffer threshold and receive loop ===
+/tmp/ash-owl-inspection/application-network-startup-DB1VeU3v.pretty.js:11412
+11412:       (t.exports = o),
+11413:       (t.exports.flexAssembler = (e) => new o(e)));
+11414:   }),
+11415:   _s = Math.min(268435456, Math.floor(v.constants.MAX_STRING_LENGTH / 2)),
+11416:   vs = Buffer.alloc(0),
+11417:   ys = new WeakSet(),
+11418:   bs = class extends f.Writable {
+11419:     options;
+11420:     currentLine = this.createLine();
+11421:     maxBufferedLineBytes;
+11422:     constructor(e) {
+11423:       (super(), (this.options = e), (this.maxBufferedLineBytes = e.maxBufferedLineBytes ?? _s));
+11424:     }
+11425:     _write(e, t, n) {
+11426:       this.consumeBuffer(e, 0, n);
+11427:     }
+11428:     _final(e) {
+11429:       if (
+11430:         this.currentLine.lineBytes > 0 ||
+11431:         this.currentLine.hasNonWhitespace ||
+11432:         this.currentLine.completedMessage != null ||
+11433:         this.currentLine.error != null
+11434:       ) {
+11435:         this.finishCurrentLine(e);
+11436:         return;
+11437:       }
+11438:       e();
+11439:     }
+11440:     _destroy(e, t) {
+11441:       (this.currentLine.parser?.destroy(), t(e));
+11442:     }
+11443:     getCurrentLineProgress() {
+11444:       return this.currentLine.progress;
+11445:     }
+11446:     consumeBuffer(e, t, n) {
+11447:       let r = t,
+11448:         i = () => {
+11449:           for (; r < e.length;) {
+11450:             let t = e.indexOf(10, r);
+11451:             if (t === -1) {
+11452:               this.appendLineChunk(this.currentLine, e.subarray(r), n);
+11453:               return;
+11454:             }
+11455:             let a = t + 1,
+11456:               o = this.currentLine;
+11457:             o.lineBytes += 1;
+11458:             let s = !1,
+11459:               c = !0;
+11460:             if (
+11461:               (this.appendLineChunk(o, e.subarray(r, t), () => {
+11462:                 this.finishCurrentLine(() => {
+11463:                   if (c) {
+11464:                     s = !0;
+11465:                     return;
+11466:                   }
+11467:                   ((r = a), i());
+11468:                 });
+11469:               }),
+11470:               (c = !1),
+11471:               !s)
+11472:             )
+11473:               return;
+11474:             r = a;
+11475:           }
+
+=== Buffered/streaming parser and size hints ===
+/tmp/ash-owl-inspection/application-network-startup-DB1VeU3v.pretty.js:11500
+11500:         (e.lineBytes += t.length),
+11501:         t.length > 0 &&
+11502:           ((e.progress ??= { startedAtMs: Date.now(), bytesReceived: 0 }),
+11503:           (e.progress.bytesReceived = e.lineBytes)),
+11504:         this.trackNonWhitespace(e, t),
+11505:         e.error != null || t.length === 0)
+11506:       ) {
+11507:         n();
+11508:         return;
+11509:       }
+11510:       if (e.parser != null) {
+11511:         this.writeParserChunks(e, [t], n);
+11512:         return;
+11513:       }
+11514:       if ((e.bufferedChunks.push(t), e.contentBytes <= this.maxBufferedLineBytes)) {
+11515:         n();
+11516:         return;
+11517:       }
+11518:       let r = e.bufferedChunks;
+11519:       e.bufferedChunks = [];
+11520:       try {
+11521:         (this.createStreamingParser(e), this.writeParserChunks(e, r, n));
+11522:       } catch (t) {
+11523:         ((e.error = Cs(t)), (e.completedMessage = null), n());
+11524:       }
+11525:     }
+11526:     createStreamingParser(e) {
+11527:       let t = hs(),
+11528:         n = gs(),
+11529:         r = t.asStream({ jsonStreaming: !0, packValues: !0, streamValues: !1 });
+11530:       e.parser = r;
+11531:       let i = n.connectTo(r, {
+11532:         objectRules: [
+11533:           {
+11534:             filter: () => !0,
+11535:             create: () => ({}),
+11536:             add: (e, t, n) => {
+11537:               Object.defineProperty(e, t, { configurable: !0, enumerable: !0, value: n, writable: !0 });
+11538:             },
+11539:           },
+11540:         ],
+11541:         arrayRules: [
+11542:           {
+11543:             filter: () => !0,
+11544:             create: () => new es(this.options.arrayChunkBytes),
+11545:             add: (e, t) => {
+11546:               e.add(t);
+11547:             },
+11548:             finalize: (t) => {
+11549:               let n = t.finish();
+11550:               return (ts(n) && (e.hasChunkedArray = !0), n);
+11551:             },
+11552:           },
+11553:         ],
+11554:       });
+11555:       (i.on(`done`, () => {
+11556:         if (((e.parsedValueCount += 1), e.parsedValueCount > 1)) {
+11557:           ((e.error = Error(`App-server stdout line contained multiple JSON values`)),
+11558:             (e.completedMessage = null));
+11559:           return;
+11560:         }
+11561:         this.setCompletedMessage(e, i.current);
+11562:       }),
+11563:         r.on(`error`, (t) => {
+11564:           ((e.error = t),
+11565:             (e.completedMessage = null),
+11566:             e.finished && queueMicrotask(() => this.completeLine(e)));
+11567:         }));
+11568:     }
+11569:     writeParserChunks(e, t, n) {
+11570:       let r = e.parser;
+11571:       if (r == null) {
+11572:         n(Error(`Streaming parser was not initialized`));
+11573:         return;
+11574:       }
+11575:       let i = 0,
+11576:         a = !1,
+11577:         o = () => {
+11578:           a || ((a = !0), r.removeListener(`drain`, s), r.removeListener(`error`, o), n());
+11579:         },
+11580:         s = () => {
+11581:           for (r.removeListener(`drain`, s), r.removeListener(`error`, o); i < t.length && e.error == null;) {
+11582:             let n = t[i];
+11583:             ((t[i] = vs), (i += 1));
+11584:             let a;
+11585:             try {
+11586:               a = r.write(n);
+11587:             } catch (t) {
+11588:               ((e.error = Cs(t)), (e.completedMessage = null), o());
+11589:               return;
+11590:             }
+11591:             if (e.error != null) {
+11592:               o();
+11593:               return;
+11594:             }
+11595:             if (!a) {
+11596:               (r.once(`drain`, s), r.once(`error`, o));
+11597:               return;
+11598:             }
+11599:           }
+11600:           o();
+11601:         };
+11602:       s();
+11603:     }
+11604:     finishCurrentLine(e) {
+11605:       let t = this.currentLine;
+11606:       if (
+11607:         ((t.finished = !0),
+11608:         (t.finishCallback = () => {
+11609:           ((this.currentLine = this.createLine()), e());
+11610:         }),
+11611:         t.error != null)
+11612:       ) {
+11613:         (t.parser?.destroy(), this.completeLine(t));
+11614:         return;
+11615:       }
+11616:       if (t.parser == null) {
+11617:         (this.parseBufferedLine(t), this.completeLine(t));
+11618:         return;
+11619:       }
+11620:       try {
+11621:         t.parser.end(() => this.completeLine(t));
+11622:       } catch (e) {
+11623:         ((t.error = Cs(e)), (t.completedMessage = null), this.completeLine(t));
+11624:       }
+11625:     }
+11626:     parseBufferedLine(e) {
+11627:       if (e.hasNonWhitespace)
+11628:         try {
+11629:           let t =
+11630:             e.bufferedChunks.length === 1
+11631:               ? e.bufferedChunks[0]
+11632:               : Buffer.concat(e.bufferedChunks, e.contentBytes);
+11633:           this.setCompletedMessage(e, JSON.parse(t.toString(`utf8`)));
+11634:         } catch (t) {
+11635:           ((e.error = Cs(t)), (e.completedMessage = null));
+11636:         } finally {
+11637:           e.bufferedChunks = [];
+11638:         }
+11639:     }
+11640:     setCompletedMessage(e, t) {
+11641:       if (typeof t != `object` || !t || Array.isArray(t) || ts(t)) {
+11642:         ((e.error = Error(`App-server stdout line did not contain a JSON-RPC object`)),
+11643:           (e.completedMessage = null));
+11644:         return;
+11645:       }
+11646:       e.completedMessage = t;
+11647:     }
+11648:     completeLine(e) {
+11649:       if (e.settled) return;
+11650:       if (((e.settled = !0), e.error != null)) this.options.onError(e.error, e.lineBytes);
+11651:       else if (e.completedMessage != null) {
+11652:         (cs(e.completedMessage, e.lineBytes),
+11653:           `result` in e.completedMessage &&
+11654:             e.completedMessage.result != null &&
+11655:             typeof e.completedMessage.result == `object` &&
+11656:             cs(e.completedMessage.result, e.lineBytes),
+11657:           `params` in e.completedMessage &&
+11658:             e.completedMessage.params != null &&
+11659:             typeof e.completedMessage.params == `object` &&
+11660:             cs(e.completedMessage.params, e.lineBytes),
+11661:           e.hasChunkedArray && ys.add(e.completedMessage));
+11662:         let t = Date.now();
+11663:         (e.progress != null && ((e.progress.bytesReceived = e.lineBytes), (e.progress.receivedAtMs = t)),
+11664:           this.options.onMessage(e.completedMessage, e.lineBytes, {
+11665:             receiveStartedAtMs: e.progress?.startedAtMs ?? t,
+11666:             receivedAtMs: t,
+11667:           }));
+11668:       } else
+11669:         e.hasNonWhitespace &&
+11670:           this.options.onError(
+11671:             Error(`App-server stdout line did not contain a complete JSON value`),
+11672:             e.lineBytes,
+11673:           );
+11674:       let t = e.finishCallback;
+11675:       ((e.finishCallback = null), t?.());
+
+=== Queue budget is checked after whole handler ===
+/tmp/ash-owl-inspection/application-network-startup-DB1VeU3v.pretty.js:1684
+1684: var Cn = class {
+1685:     options;
+1686:     items = [];
+1687:     readIndex = 0;
+1688:     queueDepthHighWaterMark = 0;
+1689:     nextDepthThresholdIndex = 0;
+1690:     constructor(e) {
+1691:       this.options = e;
+1692:     }
+1693:     enqueue(e) {
+1694:       return this.enqueueMany([e]);
+1695:     }
+1696:     enqueueMany(e) {
+1697:       if (e.length === 0) return [];
+1698:       (this.maybeCompact(!1), this.items.push(...e));
+1699:       let t = this.getDepth();
+1700:       t > this.queueDepthHighWaterMark && (this.queueDepthHighWaterMark = t);
+1701:       let n = [];
+1702:       for (
+1703:         ;
+1704:         this.nextDepthThresholdIndex < this.options.depthThresholds.length &&
+1705:         t >= this.options.depthThresholds[this.nextDepthThresholdIndex];
+1706:       ) {
+1707:         let e = this.options.depthThresholds[this.nextDepthThresholdIndex];
+1708:         ((this.nextDepthThresholdIndex += 1),
+1709:           n.push({ threshold: e, queueDepth: t, queueDepthHighWaterMark: this.queueDepthHighWaterMark }));
+1710:       }
+1711:       return n;
+1712:     }
+1713:     drain(e) {
+1714:       if (this.getDepth() === 0)
+1715:         return {
+1716:           drainedCount: 0,
+1717:           remainingCount: 0,
+1718:           durationMs: 0,
+1719:           queueDepthHighWaterMark: this.queueDepthHighWaterMark,
+1720:           drainedAll: !0,
+1721:         };
+1722:       let t = Date.now(),
+1723:         n = 0;
+1724:       for (; this.readIndex < this.items.length;) {
+1725:         let r = this.items[this.readIndex];
+1726:         if (
+1727:           (delete this.items[this.readIndex],
+1728:           (this.readIndex += 1),
+1729:           e.onItem(r),
+1730:           (n += 1),
+1731:           !e.flushAll && (n >= e.maxItemsPerSlice || Date.now() - t >= e.maxSliceMs))
+1732:         )
+1733:           break;
+1734:       }
+1735:       let r = this.getDepth(),
+1736:         i = Date.now() - t,
+1737:         a = this.queueDepthHighWaterMark;
+1738:       return r === 0
+1739:         ? ((this.items.length = 0),
+1740:           (this.readIndex = 0),
+
+=== Parsed message dispatch logs parseDurationMs=0 ===
+/tmp/ash-owl-inspection/application-network-startup-DB1VeU3v.pretty.js:1900
+1900:             return;
+1901:           }
+1902:           if (`line` in e) {
+1903:             this.handleIncomingLine(e.line, e.receivedAtMs);
+1904:             return;
+1905:           }
+1906:           (this.trackIncomingLineBytes(e.lineBytes),
+1907:             this.dispatchParsedMessage(e.message, e.lineBytes, 0, e.timing));
+1908:         },
+1909:       });
+1910:       if (
+1911:         ((t.durationMs >= this.options.slowDrainSliceMs ||
+1912:           t.remainingCount >= this.options.drainRemainingLogThreshold) &&
+1913:           this.options.logger.debug(`incoming_line_queue_drain_slice`, {
+1914:             safe: {
+1915:               flushAll: e,
+1916:               drainedCount: t.drainedCount,
+1917:               queueRemaining: t.remainingCount,
+1918:               drainDurationMs: t.durationMs,
+1919:               queueDepthHighWaterMark: t.queueDepthHighWaterMark,
+1920:             },
+1921:             sensitive: {},
+1922:           }),
+1923:         t.drainedAll)
+1924:       ) {
+1925:         this.options.queueDepthThresholds.length > 0 &&
+1926:           t.queueDepthHighWaterMark >= this.options.queueDepthThresholds[0] &&
+1927:           this.options.logger.debug(`incoming_line_queue_drained`, {
+1928:             safe: { queueDepthHighWaterMark: t.queueDepthHighWaterMark },
+1929:             sensitive: {},
+1930:           });
+
+=== Local stdio parser is constructed without threshold overrides ===
+/tmp/ash-owl-inspection/application-network-startup-DB1VeU3v.pretty.js:11828
+11828:     logger = r.i(`StdioConnection`);
+11829:     constructor(e, t) {
+11830:       ((this.options = e),
+11831:         (this.ioStatsTracker = t),
+11832:         (this.wslProcess = e.wslDistro == null ? null : new Es(e.wslDistro)),
+11833:         (this.stdoutMessageReader = new ws({
+11834:           onError: (e, t) => {
+11835:             this.logger.error(`Failed to parse app-server stdout JSONL message`, {
+11836:               safe: { lineBytes: t },
+11837:               sensitive: { error: e },
+11838:             });
+11839:           },
+11840:           onMessage: (e, t, n) => {
+11841:             let r = new In(e, t, n);
+11842:             (this.onMessageReceived?.({ type: `message`, data: r }), this.enqueueStdoutMessage(r));
+11843:           },
+11844:           onFinish: this.onStdoutParserFinish,
+11845:           onStreamError: this.onStdoutParserError,
+11846:         })),
+11847:         this.spawnProcess());
+11848:     }
+11849:     send(e) {
+11850:       if (this.readyState !== Q.Open || !this.proc || !this.proc.stdin || this.proc.stdin.destroyed)
+11851:         throw new Ja(`Codex app-server process is not available`);
+11852:       let t = `${e}\n`;
+11853:       (this.ioStatsTracker.trackWritten(Buffer.byteLength(t, `utf8`)), this.proc.stdin.write(t));
+
+=== Stdout scheduling and flushAll ===
+/tmp/ash-owl-inspection/application-network-startup-DB1VeU3v.pretty.js:11935
+11935:       ((this.processExit = { code: e, signal: t }), this.finishProcessExitIfReady());
+11936:     };
+11937:     finishProcessExitIfReady() {
+11938:       if (!this.stdoutParserFinished || this.processExit == null) return;
+11939:       let { code: e, signal: t } = this.processExit;
+11940:       (this.flushPendingStdoutLines(),
+11941:         this.cleanupProcessListeners(),
+11942:         this.resetStdoutDispatchState(),
+11943:         (this.proc = null),
+11944:         (this.readyState = Q.Closed),
+11945:         this.emitClose({
+11946:           type: `close`,
+11947:           code: e,
+11948:           reason: this.lastStderrMessage,
+11949:           signal: t,
+11950:           wasClean: e === 0,
+11951:         }));
+11952:     }
+11953:     onStdoutData = (e) => {
+11954:       this.ioStatsTracker.trackRead(typeof e == `string` ? Buffer.byteLength(e, `utf8`) : e.length);
+11955:     };
+11956:     onStdoutParserFinish = () => {
+11957:       ((this.stdoutParserFinished = !0), this.flushPendingStdoutLines(), this.finishProcessExitIfReady());
+11958:     };
+11959:     onStdoutParserError = (e) => {
+11960:       (this.onerror?.({ type: `error`, error: e, message: e.message }),
+11961:         (this.stdoutParserFinished = !0),
+11962:         this.finishProcessExitIfReady());
+11963:     };
+11964:     onStderrData = (e) => {
+11965:       let t = (this.wslProcess?.readStderr(e) ?? e.toString()).trim();
+11966:       t && ((this.lastStderrMessage = t), this.onerror?.({ type: `error`, message: t }));
+11967:     };
+11968:     onStdinError = (e) => {
+11969:       this.onerror?.({ type: `error`, error: e, message: e.message });
+11970:     };
+11971:     cleanupProcessListeners() {
+11972:       let e = this.proc;
+11973:       e &&
+11974:         (e.removeListener(`error`, this.onProcessError),
+11975:         e.removeListener(`exit`, this.onProcessExit),
+11976:         e.stderr && e.stderr.removeListener(`data`, this.onStderrData),
+11977:         e.stdout && e.stdout.removeListener(`data`, this.onStdoutData),
+11978:         e.stdin && e.stdin.removeListener(`error`, this.onStdinError),
+11979:         this.stdoutMessageReader.dispose());
+11980:     }
+11981:     emitClose(e) {
+11982:       this.closeEmitted || ((this.closeEmitted = !0), this.onclose?.(e));
+11983:     }
+11984:     enqueueStdoutMessage(e) {
+11985:       let t = this.stdoutLineSizeTracker.track(e.lineBytes);
+11986:       for (let e of t)
+11987:         this.logger.trace(`stdio_stdout_line_size_threshold`, {
+11988:           safe: {
+11989:             threshold: e.threshold,
+11990:             lineBytes: e.sizeBytes,
+11991:             lineBytesHighWaterMark: e.sizeBytesHighWaterMark,
+11992:           },
+11993:           sensitive: {},
+11994:         });
+11995:       let n = this.stdoutMessageQueue.enqueue(e);
+11996:       for (let e of n)
+11997:         this.logger.trace(`stdio_stdout_queue_depth_threshold`, {
+11998:           safe: {
+11999:             threshold: e.threshold,
+12000:             queueDepth: e.queueDepth,
+12001:             queueDepthHighWaterMark: e.queueDepthHighWaterMark,
+12002:           },
+12003:           sensitive: {},
+12004:         });
+12005:       this.scheduleStdoutDispatch();
+12006:     }
+12007:     scheduleStdoutDispatch() {
+12008:       this.stdoutDispatchHandle ||= setImmediate(() => {
+12009:         ((this.stdoutDispatchHandle = null), this.dispatchPendingStdoutLines(!1));
+12010:       });
+12011:     }
+12012:     flushPendingStdoutLines() {
+12013:       this.dispatchPendingStdoutLines(!0);
+12014:     }
+12015:     dispatchPendingStdoutLines(e) {
+12016:       if (this.stdoutMessageQueue.getDepth() === 0) return;
+12017:       let t = this.stdoutMessageQueue.drain({
+12018:         flushAll: e,
+12019:         maxItemsPerSlice: Ms,
+12020:         maxSliceMs: Ns,
+12021:         onItem: (e) => {
+12022:           this.onmessage?.({ type: `message`, data: e });
+12023:         },
+12024:       });
+12025:       if (
+12026:         ((t.durationMs >= Ls || t.remainingCount >= Is) &&
+12027:           this.logger.debug(`stdio_stdout_dispatch_slice`, {
+12028:             safe: {
+12029:               flushAll: e,
+12030:               dispatchedCount: t.drainedCount,
+12031:               queueRemaining: t.remainingCount,
+12032:               dispatchDurationMs: t.durationMs,
+12033:               queueDepthHighWaterMark: t.queueDepthHighWaterMark,
+12034:             },
+12035:             sensitive: {},
+12036:           }),
+12037:         t.drainedAll)
+12038:       ) {
+12039:         t.queueDepthHighWaterMark >= Ps[0] &&
+12040:           this.logger.debug(`stdio_stdout_queue_drained`, {
+12041:             safe: { queueDepthHighWaterMark: t.queueDepthHighWaterMark },
+12042:             sensitive: {},
+12043:           });
+12044:         return;
+12045:       }
+12046:       e || this.scheduleStdoutDispatch();
+12047:     }
+
+=== Token protocol, 4 MiB threshold / 2 MiB target, sendInline and ACK ===
+/tmp/ash-owl-inspection/src-DsLVGakC.pretty.js:57554
+57554: var TG = 64,
+57555:   EG = 16;
+57556: function* DG(e, t) {
+57557:   let n = 0;
+57558:   yield { marker: ue, kind: `start`, transferId: t.transferId, sequence: n };
+57559:   let r = OG(e, Math.max(1, Math.floor(t.batchTargetBytes / 4))),
+57560:     i = null;
+57561:   for (;;) {
+57562:     let e = [],
+57563:       a = 0;
+57564:     for (;;) {
+57565:       let n = i == null ? r.next() : { done: !1, value: i };
+57566:       if (((i = null), n.done)) break;
+57567:       let o = AG(n.value);
+57568:       if (e.length > 0 && a + o > t.batchTargetBytes) {
+57569:         i = n.value;
+57570:         break;
+57571:       }
+57572:       (e.push(n.value), (a += o));
+57573:     }
+57574:     if (e.length === 0) break;
+57575:     ((n += 1), yield { marker: ue, kind: `chunk`, transferId: t.transferId, sequence: n, tokens: e });
+57576:   }
+57577:   ((n += 1), yield { marker: ue, kind: `end`, transferId: t.transferId, sequence: n });
+57578: }
+57579: function* OG(e, t) {
+57580:   let n = new WeakSet(),
+57581:     r = [{ type: `value`, value: e }];
+57582:   for (; r.length > 0;) {
+57583:     let e = r.pop();
+57584:     if (e == null) return;
+57585:     if (e.type === `token`) {
+57586:       yield e.token;
+57587:       continue;
+57588:     }
+57589:     if (e.type === `leave`) {
+57590:       n.delete(e.value);
+57591:       continue;
+57592:     }
+57593:     if (e.type === `string`) {
+57594:       yield* kG(e.value, e.target, t);
+57595:       continue;
+57596:     }
+57597:     if (e.type === `values`) {
+57598:       let t = e.values.next();
+57599:       t.done || r.push(e, { type: `value`, value: t.value });
+57600:       continue;
+57601:     }
+57602:     if (e.type === `entries`) {
+57603:       let t = e.entries.next();
+57604:       t.done ||
+57605:         r.push(e, { type: `value`, value: t.value[1] }, { type: `string`, value: t.value[0], target: `key` });
+57606:       continue;
+57607:     }
+57608:     let i = e.value;
+57609:     if (typeof i == `string`) {
+57610:       yield* kG(i, `value`, t);
+57611:       continue;
+57612:     }
+57613:     if (i == null || typeof i == `number` || typeof i == `boolean` || i === void 0) {
+57614:       yield { type: `value`, value: i };
+57615:       continue;
+57616:     }
+57617:     if (typeof i != `object`) throw Error(`Unsupported chunked message value: ${typeof i}`);
+57618:     if (n.has(i)) throw Error(`Chunked messages cannot contain cyclic values`);
+57619:     if ((n.add(i), o.w(i) || Array.isArray(i))) {
+57620:       (yield { type: `array-start` },
+57621:         r.push(
+57622:           { type: `leave`, value: i },
+57623:           { type: `token`, token: { type: `container-end` } },
+57624:           { type: `values`, values: o.w(i) ? jG(i) : i.values() },
+57625:         ));
+57626:       continue;
+57627:     }
+57628:     (yield { type: `object-start` },
+57629:       r.push(
+57630:         { type: `leave`, value: i },
+57631:         { type: `token`, token: { type: `container-end` } },
+57632:         { type: `entries`, entries: Object.entries(i).values() },
+57633:       ));
+57634:   }
+57635: }
+57636: function* kG(e, t, n) {
+57637:   if (e.length <= n) {
+57638:     t === `key` ? yield { type: `key`, value: e } : yield { type: `value`, value: e };
+57639:     return;
+57640:   }
+57641:   yield { type: `string-start`, target: t };
+57642:   for (let t = 0; t < e.length; t += n) yield { type: `string-chunk`, value: e.slice(t, t + n) };
+57643:   yield { type: `string-end` };
+57644: }
+57645: function AG(e) {
+57646:   let t = null;
+57647:   return (
+57648:     (e.type === `key` || e.type === `value` || e.type === `string-chunk`) && (t = e.value),
+57649:     TG + (typeof t == `string` ? t.length * 2 : EG)
+57650:   );
+57651: }
+57652: function* jG(e) {
+57653:   for (let t of e.chunks) yield* t;
+57654: }
+57655: var MG = 4194304,
+57656:   NG = 2097152,
+57657:   PG = class {
+57658:     options;
+57659:     batchTargetBytes;
+57660:     inlineThresholdBytes;
+57661:     targets = new Map();
+57662:     constructor(e) {
+57663:       ((this.options = e),
+57664:         (this.batchTargetBytes = e.batchTargetBytes ?? NG),
+57665:         (this.inlineThresholdBytes = e.inlineThresholdBytes ?? MG));
+57666:     }
+57667:     send(e, t) {
+57668:       let n = this.shouldChunk(t),
+57669:         r = this.targets.get(e);
+57670:       if (r == null && !n) {
+57671:         this.options.deliver(e, t, null);
+57672:         return;
+57673:       }
+57674:       let i = r ?? this.createTarget(e);
+57675:       (i.messages.push({ chunked: n, message: t }), this.drain(i));
+57676:     }
+57677:     sendInline(e, t) {
+57678:       let n = this.targets.get(e);
+57679:       if (n == null) {
+57680:         this.options.deliver(e, t, null);
+57681:         return;
+57682:       }
+57683:       (n.messages.push({ chunked: !1, message: t }), this.drain(n));
+57684:     }
+57685:     sendCritical(e, t) {
+57686:       let n = this.shouldChunk(t),
+57687:         r = this.targets.get(e);
+57688:       if (!n && r == null)
+57689:         try {
+57690:           this.options.deliver(e, t, null);
+57691:           return;
+57692:         } catch (n) {
+57693:           let r = this.createTarget(e);
+57694:           (r.criticalMessages.push({ chunked: !1, message: t }), this.handleSendError(r, n));
+57695:           return;
+57696:         }
+57697:       let i = r ?? this.createTarget(e);
+57698:       (i.criticalMessages.push({ chunked: n, message: t }), n || this.drainCritical(i), this.drain(i));
+57699:     }
+57700:     acknowledge(e, t, n) {
+57701:       let r = this.targets.get(e),
+57702:         i = r?.transfer;
+57703:       if (r != null && !r.sending && i != null && i.delivered && i.id === t && i.part?.sequence === n) {
+57704:         if (i.part.kind === `end`) {
+57705:           ((r.transfer = null), this.drain(r));
+57706:           return;
+57707:         }
+57708:         this.sendNextPart(r, i);
+57709:       }
+57710:     }
+57711:     dispose(e) {
+57712:       let t = this.targets.get(e);
+57713:       t != null && this.cleanup(t);
+57714:     }
+57715:     shouldChunk(e) {
+57716:       let t = this.options.getPayload(e);
+57717:       if (`message` in t && FG(t.message)) {
+57718:         let e =
+57719:           o.C(t.message) ?? (`result` in t.message && FG(t.message.result) ? o.C(t.message.result) : void 0);
+57720:         if (e != null) return e > this.inlineThresholdBytes;
+57721:       }
+57722:       if (`params` in t && FG(t.params)) {
+57723:         let e = o.C(t.params);
+57724:         if (e != null) return e > this.inlineThresholdBytes;
+57725:       }
+57726:       return o.T(t, this.inlineThresholdBytes);
+57727:     }
+57728:     createTarget(e) {
+57729:       let t = {
+57730:         criticalMessages: [],
+57731:         draining: !1,
+57732:         loading: this.options.isLoading?.(e) === !0,
+57733:         messages: [],
+57734:         retryTimer: null,
+57735:         sending: !1,
+57736:         target: e,
+57737:         transfer: null,
+57738:         unsubscribe: null,
+57739:       };
+57740:       return (
+57741:         this.targets.set(e, t),
+
+=== Synchronous iterator.next and unbudgeted inline queue draining ===
+/tmp/ash-owl-inspection/src-DsLVGakC.pretty.js:57750
+57750:     }
+57751:     drain(e) {
+57752:       if (!(e.draining || e.loading || e.sending || e.transfer != null || this.targets.get(e.target) !== e)) {
+57753:         e.draining = !0;
+57754:         try {
+57755:           if ((this.drainCritical(e), e.retryTimer != null)) return;
+57756:           for (; e.transfer == null;) {
+57757:             let t = e.criticalMessages.shift(),
+57758:               n = t ?? e.messages.shift();
+57759:             if (n == null) break;
+57760:             if (!n.chunked) {
+57761:               try {
+57762:                 this.options.deliver(e.target, n.message, null);
+57763:               } catch (t) {
+57764:                 (e.messages.unshift(n), this.handleSendError(e, t));
+57765:                 break;
+57766:               }
+57767:               continue;
+57768:             }
+57769:             let r = (0, f.randomUUID)(),
+57770:               i = {
+57771:                 critical: t != null,
+57772:                 delivered: !1,
+57773:                 id: r,
+57774:                 iterator: DG(this.options.getPayload(n.message), {
+57775:                   batchTargetBytes: this.batchTargetBytes,
+57776:                   transferId: r,
+57777:                 }),
+57778:                 message: n.message,
+57779:                 part: null,
+57780:               };
+57781:             ((e.transfer = i), this.sendNextPart(e, i));
+57782:           }
+57783:         } finally {
+57784:           e.draining = !1;
+57785:         }
+57786:         e.transfer == null && e.messages.length === 0 && e.criticalMessages.length === 0 && this.cleanup(e);
+57787:       }
+57788:     }
+57789:     drainCritical(e) {
+57790:       if (!(
+57791:         e.loading ||
+57792:         e.sending ||
+57793:         e.transfer?.critical === !0 ||
+57794:         e.retryTimer != null ||
+57795:         this.targets.get(e.target) !== e
+57796:       ))
+57797:         for (; e.criticalMessages.length > 0;) {
+57798:           let t = e.criticalMessages[0];
+57799:           if (t == null || t.chunked) return;
+57800:           (e.criticalMessages.shift(), (e.sending = !0));
+57801:           try {
+57802:             this.options.deliver(e.target, t.message, null);
+57803:           } catch (n) {
+57804:             (e.criticalMessages.unshift(t), this.handleSendError(e, n));
+57805:             return;
+57806:           } finally {
+57807:             e.sending = !1;
+57808:           }
+57809:         }
+57810:     }
+57811:     sendNextPart(e, t) {
+57812:       let n;
+57813:       try {
+57814:         n = t.iterator.next();
+57815:       } catch (n) {
+57816:         ((e.transfer = null), this.requeueTransfer(e, t), this.handleSendError(e, n));
+57817:         return;
+57818:       }
+57819:       if (n.done) {
+57820:         ((e.transfer = null),
+57821:           this.requeueTransfer(e, t),
+57822:           this.handleSendError(e, Error(`Chunked message transfer ended without an end part`)));
+57823:         return;
+57824:       }
+57825:       ((t.part = n.value), (t.delivered = !1), this.sendCurrentPart(e, t));
+57826:     }
+57827:     sendCurrentPart(e, t) {
+57828:       let n = t.part;
+57829:       if (n != null && e.transfer === t && this.targets.get(e.target) === e) {
+57830:         if (this.options.isAvailable?.(e.target) === !1) {
+57831:           this.cleanup(e);
+57832:           return;
+57833:         }
+57834:         e.sending = !0;
+57835:         try {
+57836:           (this.options.deliver(e.target, t.message, n), (t.delivered = !0));
+57837:         } catch (t) {
+57838:           this.handleSendError(e, t);
+57839:         } finally {
+57840:           e.sending = !1;
+57841:         }
+57842:       }
+57843:     }
+57844:     handleSendError(e, t) {
+57845:       this.options.onSendError(e.target, t);
+57846:       let n = this.options.retryDelayMs;
+57847:       if (n == null) {
+57848:         this.cleanup(e);
+57849:         return;
+57850:       }
+57851:       e.retryTimer ??= setTimeout(() => {
+57852:         ((e.retryTimer = null),
+57853:           this.drainCritical(e),
+57854:           e.retryTimer ??
+57855:             (e.transfer != null && !e.transfer.delivered && this.sendCurrentPart(e, e.transfer),
+57856:             e.transfer ?? this.drain(e)));
+57857:       }, n);
+57858:     }
+57859:     handleLoading(e) {
+57860:       if (this.targets.get(e.target) !== e) return;
+57861:       ((e.loading = !0), e.retryTimer != null && (clearTimeout(e.retryTimer), (e.retryTimer = null)));
+57862:       let t = e.transfer;
+57863:       t != null && ((e.transfer = null), this.requeueTransfer(e, t));
+57864:     }
+57865:     handleLoaded(e) {
+
+=== Normal app-server response delivery uses send/sendCritical ===
+/tmp/ash-owl-inspection/src-DsLVGakC.pretty.js:50132
+50132:     sendClientResponse(e, t, n, r, i, a, s) {
+50133:       let c = (r) => {
+50134:         if (e != null && !e.isDestroyed()) {
+50135:           let i = {
+50136:             type: `mcp-response`,
+50137:             hostId: this.options.hostId,
+50138:             hostMetrics: a,
+50139:             message: t,
+50140:             ...(r == null ? {} : { receivedAtMs: Date.now(), requestMethod: n, trace: r }),
+50141:           };
+50142:           if ((s === `critical` || (s == null && n != null && _R.has(n))) && e.sendCritical != null) {
+50143:             e.sendCritical(this.options.messageChannel, i);
+50144:             return;
+50145:           }
+50146:           e.send(this.options.messageChannel, i);
+50147:           return;
+50148:         }
+50149:         this.broadcastToWindows({
+50150:           type: `mcp-response`,
+50151:           hostId: this.options.hostId,
+50152:           hostMetrics: a,
+50153:           message: t,
+50154:         });
+50155:       };
+50156:       if (r == null || n == null) {
+50157:         c();
+50158:         return;
+50159:       }
+50160:       o.rn(
+50161:         {
+50162:           attributes: {
+50163:             "app_server.method": n,
+50164:             "app_server.response_error": t.error != null,
+50165:             "electron.broadcast_fallback": e == null || e.isDestroyed(),
+
+=== Huge notifications/requests materialize before routing ===
+/tmp/ash-owl-inspection/src-DsLVGakC.pretty.js:53995
+53995:     routeIncomingMessage(e, t, r = e, i = Date.now()) {
+53996:       if (!oL(e) && o.x(e)) return this.routeIncomingMessage(o.S(e), t, r, i);
+53997:       let a = hL(this.options.hostConfig, e);
+53998:       if (a != null)
+53999:         return (
+54000:           this.initialized && this.connection
+
+=== Internal host response materialization versus window routing ===
+/tmp/ash-owl-inspection/src-DsLVGakC.pretty.js:54415
+54415:         targetDestroyed: m,
+54416:         hasCoalescedWaiters: l,
+54417:       }),
+54418:         a?.destination.type === `host`
+54419:           ? a.destination.resolve(o.S(u))
+54420:           : ((f != null && !f.isDestroyed()) || !l) &&
+54421:             this.messageDelivery.sendClientResponse(
+54422:               f,
+54423:               u,
+54424:               a?.method,
+54425:               a?.trace,
+54426:               r,
+54427:               p,
+54428:               a?.scheduling?.priority,
+54429:             ));
+54430:       for (let e of this.clientRequestQueue.complete(i))
+54431:         e.destination.type === `host`
+54432:           ? e.destination.resolve(o.S({ ...u, id: e.id }))
+54433:           : e.destination.sender.isDestroyed() ||
+54434:             this.messageDelivery.sendClientResponse(
+54435:               e.destination.sender,
+54436:               { ...u, id: e.id },
+54437:               e.method,
+54438:               e.trace,
+54439:               r,
+54440:               this.messageDelivery.getClientRequestHostMetrics(e, r, t),
+54441:               e.scheduling?.priority,
+54442:             );
+54443:     }
+54444:     markLoginRequiredForCloudRequirementsAuthError(e, t) {
+
+=== Window client adapter routes through size-aware sender ===
+/tmp/ash-owl-inspection/main-CLu1A25j.pretty.js:89723
+89723:     webContents;
+89724:     chunkedMessageSender;
+89725:     browserWindow;
+89726:     ownsBackgroundThread;
+89727:     id;
+89728:     destroyedListeners = new Set();
+89729:     focusChangedListeners = new Set();
+89730:     constructor(e, t, n = null, r = null) {
+89731:       ((this.webContents = e),
+89732:         (this.chunkedMessageSender = t),
+89733:         (this.browserWindow = n),
+89734:         (this.ownsBackgroundThread = r),
+89735:         (this.id = e.id));
+89736:     }
+89737:     send(e, t) {
+89738:       if (
+89739:         this.ownsBackgroundThread != null &&
+89740:         this.webContents.getBackgroundThrottling() &&
+89741:         t.type !== `mcp-response` &&
+89742:         t.type !== `codex-app-server-initialized` &&
+89743:         t.type !== `codex-app-server-connection-changed`
+89744:       ) {
+89745:         let e = t.params;
+89746:         if (t.type === `mcp-request`) {
+89747:           if (t.request == null || typeof t.request != `object` || !(`params` in t.request)) return;
+89748:           e = t.request.params;
+89749:         } else if (t.type !== `mcp-notification`) return;
+89750:         if (
+89751:           typeof t.hostId != `string` ||
+89752:           typeof e != `object` ||
+89753:           !e ||
+89754:           !(`threadId` in e) ||
+89755:           typeof e.threadId != `string` ||
+89756:           !this.ownsBackgroundThread(t.hostId, e.threadId)
+89757:         )
+89758:           return;
+89759:       }
+89760:       this.chunkedMessageSender.send(this.webContents, e, t);
+89761:     }
+89762:     sendCritical(e, t) {
+89763:       this.chunkedMessageSender.sendCritical(this.webContents, e, t);
+89764:     }
+89765:     isDestroyed() {
+89766:       return this.webContents.isDestroyed();
+89767:     }
+89768:     isFocused() {
+
+=== Separate synthesized response helper can sendInline ===
+/tmp/ash-owl-inspection/main-CLu1A25j.pretty.js:93680
+93680:     this.sendMessageToView(e, { type: `custom-prompts-updated`, prompts: t });
+93681:   }
+93682:   sendMessageToView(e, t) {
+93683:     this.chunkedMessageSender.sendInlineMessageForView(e, t);
+93684:   }
+93685:   sendAppServerResponseToView(e, t, n, r, i, a) {
+93686:     let o = (i) => {
+93687:       let o = {
+93688:         type: `mcp-response`,
+93689:         hostId: t,
+93690:         message: r,
+93691:         ...(i == null ? {} : { receivedAtMs: Date.now(), requestMethod: n, trace: i }),
+93692:       };
+93693:       if (a === `critical`) {
+93694:         this.chunkedMessageSender.sendCritical(e, g.Dt, o);
+93695:         return;
+93696:       }
+93697:       this.sendMessageToView(e, o);
+93698:     };
+93699:     if (i == null) {
+93700:       o();
+93701:       return;
+93702:     }
+93703:     l.rn(
+93704:       {
+93705:         attributes: {
+93706:           "app_server.method": n,
+93707:           "app_server.response_error": r.error != null,
+93708:           "electron.broadcast_fallback": !1,
+93709:           ...(r.error == null ? {} : l.Xt(r.error.code, r.error)),
+93710:         },
+93711:         name: `electron.response_route`,
+93712:         op: `codex.app_server.response_route`,
+93713:         trace: i,
+93714:       },
+93715:       () => {
+
+=== VS Code fetch bridge stringify before chunk sender ===
+/tmp/ash-owl-inspection/main-CLu1A25j.pretty.js:31062
+31062:         let a = await this.fetchHandler.handleVSCodeRequest(
+31063:             e,
+31064:             r,
+31065:             t.body ? JSON.parse(t.body) : void 0,
+31066:             i.Ln(t.headers?.[`x-codex-git-source`]) ? t.headers[i.Mn] : null,
+31067:             n,
+31068:           ),
+31069:           o = {
+31070:             type: `fetch-response`,
+31071:             responseType: `success`,
+31072:             requestId: t.requestId,
+31073:             status: 200,
+31074:             headers: { "content-type": `application/json` },
+31075:             bodyJsonString: JSON.stringify(a ?? null),
+31076:           };
+31077:         t.responsePriority === `critical`
+31078:           ? this.options.chunkedMessageSender.sendCritical(e, g.Dt, o)
+31079:           : this.options.chunkedMessageSender.send(e, g.Dt, o);
+31080:       } catch (n) {
+31081:         let r = Zy(n),
+31082:           i = {
+
+=== webContents.send and asynchronous IPC ACK listener ===
+/tmp/ash-owl-inspection/main-CLu1A25j.pretty.js:12189
+12189:   return typeof e == `object` && !!e && `code` in e && e.code === t;
+12190: }
+12191: var mae = 1e3,
+12192:   hae = class {
+12193:     logger = p.a(`ChunkedMessageSender`);
+12194:     sender;
+12195:     constructor(e = {}) {
+12196:       this.sender = new a.Vt({
+12197:         ...e,
+12198:         deliver: (e, t, n) => {
+12199:           e.send(t.channel, n ?? t.payload);
+12200:         },
+12201:         getPayload: (e) => e.payload,
+12202:         isAvailable: (e) => !e.isDestroyed(),
+12203:         isLoading: (e) => e.isLoading?.() === !0,
+12204:         onSendError: (e, t) => {
+12205:           this.logger().warning(`chunked_message_send_failed`, {
+12206:             safe: { webContentsId: e.id },
+12207:             sensitive: { error: t },
+12208:           });
+12209:         },
+12210:         retryDelayMs: mae,
+12211:         subscribe: (e, t) => (
+12212:           e.once?.(`destroyed`, t.onDestroyed),
+12213:           e.on?.(`did-start-loading`, t.onLoading),
+12214:           e.on?.(`did-stop-loading`, t.onLoaded),
+12215:           () => {
+12216:             (e.removeListener?.(`destroyed`, t.onDestroyed),
+12217:               e.removeListener?.(`did-start-loading`, t.onLoading),
+12218:               e.removeListener?.(`did-stop-loading`, t.onLoaded));
+12219:           }
+12220:         ),
+12221:       });
+12222:     }
+12223:     send(e, t, n) {
+12224:       e.isDestroyed() || this.sender.send(e, { channel: t, payload: n });
+12225:     }
+12226:     sendInline(e, t, n) {
+12227:       e.isDestroyed() || this.sender.sendInline(e, { channel: t, payload: n });
+12228:     }
+12229:     sendCritical(e, t, n) {
+12230:       e.isDestroyed() || this.sender.sendCritical(e, { channel: t, payload: n });
+12231:     }
+12232:     sendInlineMessageForView(e, t) {
+12233:       this.sendInline(e, g.Dt, t);
+12234:     }
+12235:     acknowledge(e, t, n) {
+12236:       this.sender.acknowledge(e, t, n);
+12237:     }
+12238:   },
+12239:   gae = r.F([r.N(), r.D().int()]);
+12240: function _ae({ chunkedMessageSender: e, isTrustedIpcEvent: t }) {
+12241:   D.ipcMain.on(g.bt, (n, r, i) => {
+12242:     if (!t(n)) return;
+12243:     let a = gae.safeParse([r, i]);
+12244:     a.success && e.acknowledge(n.sender, ...a.data);
+12245:   });
+12246: }
+12247: var sd = p.a(`codex-app-config`),
+12248:   vae = `codex-app`,
+12249:   yae = `config.json`,
+12250:   cd = 1,
+12251:   bae = r.O({ version: r.D().int().optional() }),
+12252:   xae = r.O({ remotePath: r.N().trim().min(1), label: r.N().optional() }).strict(),
+
+=== Renderer token assembly and whole-string join ===
+/tmp/ash-owl-inspection/renderer-app-shared-52443cbe9ac4.pretty.js:494
+494: }
+495: var p, m, h;
+496: function g() {
+497:   return (g = t(() => {
+498:     (d(),
+499:       (p = Symbol(`unset`)),
+500:       (m = class {
+501:         transfers = new Map();
+502:         receive(e) {
+503:           if (!l(e)) return { type: `passthrough`, message: e };
+504:           if (e.kind === `start`) {
+505:             this.transfers.clear();
+506:             let t = { assembler: new h(), nextSequence: e.sequence + 1 };
+507:             return (this.transfers.set(e.transferId, t), { type: `pending`, acknowledgement: f(e) });
+508:           }
+509:           let t = this.transfers.get(e.transferId);
+510:           return t == null || e.sequence !== t.nextSequence
+511:             ? (this.transfers.delete(e.transferId), { type: `pending`, acknowledgement: null })
+512:             : ((t.nextSequence += 1),
+513:               e.kind === `chunk`
+514:                 ? (t.assembler.consume(e.tokens), { type: `pending`, acknowledgement: f(e) })
+515:                 : (this.transfers.delete(e.transferId),
+516:                   { type: `complete`, message: t.assembler.finish(), acknowledgement: f(e) }));
+517:         }
+518:       }),
+519:       (h = class {
+520:         stack = [];
+521:         root = p;
+522:         stringChunks = null;
+523:         stringTarget = null;
+524:         consume(e) {
+525:           for (let t of e)
+526:             switch (t.type) {
+527:               case `array-start`: {
+528:                 let e = [];
+529:                 (this.saveValue(e), this.stack.push({ type: `array`, value: e }));
+530:                 break;
+531:               }
+532:               case `object-start`: {
+533:                 let e = {};
+534:                 (this.saveValue(e), this.stack.push({ type: `object`, value: e, key: null }));
+535:                 break;
+536:               }
+537:               case `container-end`:
+538:                 if (this.stack.pop() == null)
+539:                   throw Error(`Chunked message contained an unmatched container end`);
+540:                 break;
+541:               case `key`:
+542:                 this.setKey(t.value);
+543:                 break;
+544:               case `value`:
+545:                 this.saveValue(t.value);
+546:                 break;
+547:               case `string-start`:
+548:                 if (this.stringChunks != null) throw Error(`Chunked message contained nested string chunks`);
+549:                 ((this.stringChunks = []), (this.stringTarget = t.target));
+550:                 break;
+551:               case `string-chunk`:
+552:                 if (this.stringChunks == null) throw Error(`Chunked message string chunk had no start token`);
+553:                 this.stringChunks.push(t.value);
+554:                 break;
+555:               case `string-end`: {
+556:                 if (this.stringChunks == null || this.stringTarget == null)
+557:                   throw Error(`Chunked message string end had no start token`);
+558:                 let e = this.stringChunks.join(``),
+559:                   t = this.stringTarget;
+560:                 ((this.stringChunks = null),
+561:                   (this.stringTarget = null),
+562:                   t === `key` ? this.setKey(e) : this.saveValue(e));
+563:                 break;
+564:               }
+565:             }
+566:         }
+567:         finish() {
+568:           if (this.root === p || this.stack.length > 0 || this.stringChunks != null)
+569:             throw Error(`Chunked message ended before its value was complete`);
+570:           return this.root;
+571:         }
+572:         setKey(e) {
+573:           let t = this.stack.at(-1);
+574:           if (t?.type !== `object` || t.key != null) throw Error(`Chunked message key was outside an object`);
+575:           t.key = e;
+576:         }
+577:         saveValue(e) {
+578:           let t = this.stack.at(-1);
+579:           if (t == null) {
+580:             if (this.root !== p) throw Error(`Chunked message contained multiple root values`);
+581:             this.root = e;
+582:             return;
+583:           }
+584:           if (t.type === `array`) {
+585:             t.value.push(e);
+586:             return;
+587:           }
+588:           if (t.key == null) throw Error(`Chunked message object value had no key`);
+589:           (Object.defineProperty(t.value, t.key, {
+590:             configurable: !0,
+591:             enumerable: !0,
+592:             value: e,
+593:             writable: !0,
+594:           }),
+595:             (t.key = null));
+596:         }
+597:       }));
+598:   }))();
+599: }
+600: function _(e, t, n) {
+601:   function r(n, r) {
+602:     if (
+603:       (n._zod ||
+604:         Object.defineProperty(n, "_zod", { value: { def: r, constr: o, traits: new Set() }, enumerable: !1 }),
+605:       n._zod.traits.has(e))
+606:     )
+607:       return;
+608:     (n._zod.traits.add(e), t(n, r));
+609:     let i = o.prototype,
+610:       a = Object.keys(i);
+611:     for (let e = 0; e < a.length; e++) {
+
+=== ACK sent after assembly, before downstream application processing ===
+/tmp/ash-owl-inspection/renderer-app-shared-52443cbe9ac4.pretty.js:12976
+12976:   if (Zm.has(e)) return Zm.get(e) ?? null;
+12977:   let t = Jee(e, window);
+12978:   return (Zm.set(e, t), t);
+12979: }
+12980: function Jee(e, t) {
+12981:   let n = e.source,
+12982:     r = n === t ? t.location.origin : void 0;
+12983:   if ((n != null && n !== t) || (n === t && r !== `` && r !== Qee && e.origin !== r)) return null;
+12984:   let i = e.data;
+12985:   if (Zee(i)) {
+12986:     let e = Yee(t).receive(i);
+12987:     if (
+12988:       (e.type !== `passthrough` &&
+12989:         e.acknowledgement != null &&
+12990:         t.electronBridge?.acknowledgeChunkedMessage?.(
+12991:           e.acknowledgement.transferId,
+12992:           e.acknowledgement.sequence,
+12993:         ),
+12994:       e.type === `pending`)
+12995:     )
+12996:       return null;
+12997:     i = e.message;
+12998:   }
+12999:   return typeof i != `object` || !i || !Xee(i) ? null : i;
+13000: }
+13001: function Yee(e) {
+13002:   let t = $ee.get(e);
+
+=== Isolated synthetic benchmark ===
+Source: /tmp/ash-owl-inspection/json-ipc-bench.cjs
+Command: node --expose-gc /tmp/ash-owl-inspection/json-ipc-bench.cjs
+Runtime: Node v24.21.0 arm64. NOT live Owl CPU profiling, excludes IPC serialization, renderer, and actual app handlers.
+Nested transcript 3.94 MiB: median JSON.parse 1.35 ms; median concat+decode+parse 1.52 ms.
+Nested transcript 15.75 MiB: median JSON.parse 5.68 ms; median concat+decode+parse 6.28 ms.
+Nested transcript 63 MiB: median JSON.parse 27.44 ms; median concat+decode+parse 31.13 ms.
+200k-key plain object: second token generator.next includes eager Object.entries and took 36.52 ms (single run).
+Bench generator functions DG/OG/kG/AG/jG are copied verbatim from installed bundle; only custom-array type predicate is stubbed false for plain JSON inputs.

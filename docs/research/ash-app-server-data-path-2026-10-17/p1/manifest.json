@@ -1,0 +1,87 @@
+{
+  "date": "2026-10-17",
+  "timezone": "America/Los_Angeles",
+  "headAtValidation": "332d2264f4985da17d03b560e3feb85c24011aa0",
+  "scope": "First P1 implementation: fixed-page Renderer framing, receive storage ownership, and transport-checked byte length. Worktree includes unrelated changes.",
+  "sources": {
+    "src/ash/platform/agentHost/browser/appServerSocketTransport.ts": {
+      "bytes": 8014,
+      "sha256": "81d03fe492a4a7a44d6db3e0bf4ef57da284b8793745a7153b840a4b875184f6"
+    },
+    "src/ash/platform/agentHost/browser/appServerProtocolClient.ts": {
+      "bytes": 25436,
+      "sha256": "fa2e8286ea48be82e989c170a0e444fbde7432660249a424ab25cd52ebc2efd1"
+    },
+    "src/ash/platform/agentHost/browser/appServerWebSocketTransport.ts": {
+      "bytes": 6769,
+      "sha256": "ab69d17a49d56b61347775432a7453ab8a79a6ac5abad3e7981e80837df9dc02"
+    },
+    "src/ash/platform/agentHost/common/appServerTransport.ts": {
+      "bytes": 1199,
+      "sha256": "9f9850c9087e59944a0f4d89c0285f99648747bdc6145e4dd2cef6ad5d192b7b"
+    },
+    "src/ash/platform/agentHost/electron-browser/appServerMessagePortTransport.ts": {
+      "bytes": 8540,
+      "sha256": "c66e23c60e3da925f746d13035f67c4390d3c5e3accbc4fa6203eb8680a45745"
+    },
+    "src/ash/platform/agentHost/test/browser/appServerSocketTransport.test.ts": {
+      "bytes": 13217,
+      "sha256": "309285db30ec78137d1555db5e731b815c76347e567a9c65e2a9dbc326bc4244"
+    },
+    "src/ash/platform/agentHost/test/browser/appServerProtocolClient.test.ts": {
+      "bytes": 26242,
+      "sha256": "6062bab8c38d8386253baf524c9d87de3c77f9f1fd06e7f5b441891a4f0322d6"
+    },
+    "src/ash/platform/agentHost/test/electron-browser/appServerMessagePortTransport.test.ts": {
+      "bytes": 10581,
+      "sha256": "677c8a0f4dfc9749b349db423773153de5a6d80e31fb1e21897b7e2161e0585b"
+    }
+  },
+  "validation": {
+    "unitTests": {
+      "command": "pnpm test:unit:prepared --run src/ash/platform/agentHost/test/browser/appServerSocketTransport.test.ts --run src/ash/platform/agentHost/test/browser/appServerProtocolClient.test.ts --run src/ash/platform/agentHost/test/electron-browser/appServerMessagePortTransport.test.ts",
+      "passed": 53,
+      "failedFiles": 0
+    },
+    "rendererTypecheck": {
+      "command": "./node_modules/bun/bin/bun.exe check -p tsconfig.renderer.json --all",
+      "checkedFiles": 4163,
+      "passed": true
+    },
+    "typescriptFormatting": {
+      "checkedFiles": 8,
+      "unformatted": 0
+    }
+  },
+  "benchmark": {
+    "node": "v24.21.0",
+    "v8": "13.6.233.17-node.53",
+    "cpu": "Apple M5",
+    "samplesPerVersion": 5,
+    "order": "alternating before/after within one process",
+    "timingScope": "Source-extracted production framing and VSBuffer methods, including UTF-8 decode. Excludes Electron IPC, JSON.parse/schema, business consumers and UI. Copy counting is separate from timings.",
+    "baselineHashes": {
+      "appServerSocketTransport": "7896bae1dda926a36339862f710d70e0a6a4b6a1915df618cb91027ee9be44d8",
+      "appServerProtocolClient": "20e7a2b95402a584dfacf0bb9dce3c66d533b1386662a7d719b8dde82d9f4052"
+    },
+    "limits": [
+      "Not an end-to-end UI measurement.",
+      "Cumulative copied bytes are not peak RSS.",
+      "Single-callback maximum did not improve in the 64 MiB sample."
+    ]
+  },
+  "evidenceFiles": {
+    "baseline-source.json": {
+      "bytes": 2702,
+      "sha256": "376eb683eab6c0c9990a736d2efd6d0d00f8a17b2cd350dde60090770e1ac1b6"
+    },
+    "compare.cjs": {
+      "bytes": 8527,
+      "sha256": "a331abef557b577a96f29fed359da2647ea2d26ae2b2f92108632bf234e69574"
+    },
+    "comparison-results.json": {
+      "bytes": 19104,
+      "sha256": "ad6aec034bad2ea8062c254b72b97c6c73a1271d9cbbcaf07423831d5073f19e"
+    }
+  }
+}

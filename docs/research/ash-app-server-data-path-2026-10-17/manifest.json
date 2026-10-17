@@ -1,0 +1,137 @@
+{
+  "date": "2026-10-17",
+  "timezone": "America/Los_Angeles",
+  "ashHead": "d0437c21125c01e0f87713668ffee438d30ac72c",
+  "scope": "Working-tree code audit and isolated Node source-method/decoder experiments. No real Desktop profiling or product implementation changes.",
+  "method": "Framing methods extracted from current TypeScript AST; equivalent Uint8Array VSBuffer concat adapter counts copies. Decoder loads actual generated schema via TypeScript transpilation. Five samples per scenario; protocol stages timed independently.",
+  "limitations": [
+    "Concurrent development activity; elapsed times are not controlled end-to-end baselines.",
+    "Copy amplification is cumulative copied payload bytes, not peak memory or RSS.",
+    "No Electron IPC timing or internal copy count measurement.",
+    "Fixed-page candidate is an isolated experiment, not a product patch."
+  ],
+  "sourceFiles": {
+    "crates/app-server/src/server.rs": {
+      "bytes": 202812,
+      "sha256": "723ad97d24076d9d28752d16d7362aa45e75e840b20eef516a95577c73a3c4de"
+    },
+    "crates/app-server/src/managed/gateway.rs": {
+      "bytes": 53423,
+      "sha256": "ea1639e06e5d2d8a2ce4655a3342555f759af9c12666bb614a17437cb57894f4"
+    },
+    "crates/app-server/src/managed/gateway/local.rs": {
+      "bytes": 9334,
+      "sha256": "9d8f4b560dcbaae412805414a35f2c4a650a69086ad288a90fe0097440696c24"
+    },
+    "crates/app-server/src/server/message_queue.rs": {
+      "bytes": 6325,
+      "sha256": "cef3c8587820a7c534c3b1ce32df47d374f773777e6beb07ccf05a11ea824286"
+    },
+    "crates/app-server-transport/src/lib.rs": {
+      "bytes": 4918,
+      "sha256": "25070ce269474e1562a4e6d86ffb93ec7601126ff0d5d5e82b1cf715cba8e978"
+    },
+    "crates/app-server-daemon/src/client.rs": {
+      "bytes": 28196,
+      "sha256": "1c75770991ccf73e345ef86d51676ab7881bf3b1d86ad3269c900718f03b99c0"
+    },
+    "src/ash/platform/agentHost/electron-main/appServerConnectionRelay.ts": {
+      "bytes": 14428,
+      "sha256": "356100a785644b48c614bb8a016bccc360045262fe89c2fb9c693cc36870b092"
+    },
+    "src/ash/platform/agentHost/node/childProcessJsonlTransport.ts": {
+      "bytes": 13245,
+      "sha256": "c168e9afbba2d69f8e9e6f7d550fd6988f469330d4fa96b344db77bee45f607f"
+    },
+    "src/ash/platform/agentHost/electron-browser/appServerMessagePortTransport.ts": {
+      "bytes": 8231,
+      "sha256": "e42fabac6c43f2bb5eaeb96ad676fdc3ed7d666834e0c60f408aa06d42d0fe2a"
+    },
+    "src/ash/platform/agentHost/browser/appServerSocketTransport.ts": {
+      "bytes": 7149,
+      "sha256": "7896bae1dda926a36339862f710d70e0a6a4b6a1915df618cb91027ee9be44d8"
+    },
+    "src/ash/platform/agentHost/browser/appServerProtocolClient.ts": {
+      "bytes": 25364,
+      "sha256": "20e7a2b95402a584dfacf0bb9dce3c66d533b1386662a7d719b8dde82d9f4052"
+    },
+    "crates/app-server-protocol/src/typescript_decoder.template.ts": {
+      "bytes": 21537,
+      "sha256": "3118529594ca2e5e633015bb8c57c565e076ffda0c6fcb062c7e97aadcecd9a7"
+    },
+    "crates/app-server/src/server/request_processors/agent.rs": {
+      "bytes": 84690,
+      "sha256": "67f54553d91bbb14ccf4a6ab69a8be1394e25a8b022515427ef64776f6855c56"
+    },
+    "crates/thread-transcript/src/model.rs": {
+      "bytes": 7464,
+      "sha256": "30607fcc226af6668fbd6a9ad179f79a7ddc00836ee1803104acf50bfe4a5894"
+    },
+    "src/ash/workbench/services/chat/browser/chatService.ts": {
+      "bytes": 25125,
+      "sha256": "4ea25e594b569efc7647281eb9133fcc2a737576ad18933dd0b4be33bc7c4d81"
+    },
+    "src/ash/platform/agentHost/browser/appServerAgentService.ts": {
+      "bytes": 45768,
+      "sha256": "f3ac268bae3eb8ed83a3786b9ae1563626857efd36ce9f826d7b47de8f36f878"
+    },
+    "src/ash/sessions/browser/chatWidgetModel.ts": {
+      "bytes": 55064,
+      "sha256": "7e2173f2c38aaf89217850ab5807c64fac2521260afb6c3a0f4bfe47491cf3e1"
+    },
+    "src/ash/base/common/buffer.ts": {
+      "bytes": 4588,
+      "sha256": "77a7301918eacea18df89f79f80a5cb9cb542308b0e9fdac9b5e7dd199328a0e"
+    },
+    "src/ash/base/common/event.ts": {
+      "bytes": 9555,
+      "sha256": "6d79dab375738b13d6313d213fc3328468c73eae1fc03d29dc93ab8f3ca873a6"
+    },
+    "src/ash/platform/agentHost/common/agentService.ts": {
+      "bytes": 34212,
+      "sha256": "11112f01ee775ea8f87464f79cf945f62c709906bf9fcfc44dd1bb5d85fd9bd7"
+    },
+    "src/ash/platform/agentHost/electron-browser/localAgentHostService.ts": {
+      "bytes": 4914,
+      "sha256": "2296c444998cd3e22c527df386edcfcafc187bae3c46378d2e1a9dc6c2374405"
+    },
+    ".build/protocol/typescript/AppServerProtocolDecoder.ts": {
+      "bytes": 22031,
+      "sha256": "3298c975d0b29d0cc75eba9ef15563e526e32a4740e6e8b72507f9c0d8a57742"
+    },
+    ".build/protocol/typescript/AppServerProtocolSchema0.ts": {
+      "bytes": 199825,
+      "sha256": "06ff7677fa847c98eb63663f65ad50e90071ac53764518a1200bdcaba5444ebf"
+    },
+    ".build/protocol/typescript/AppServerProtocolSchema1.ts": {
+      "bytes": 199796,
+      "sha256": "15b84839f74ae0ed320b80ca46e7a9b469b5ec4f3fce8be028a0069e71f4e8ef"
+    },
+    ".build/protocol/typescript/AppServerProtocolSchema2.ts": {
+      "bytes": 180104,
+      "sha256": "d1e9e4a38f73cf3e48cb6c5470a3f2662d790f3230b4063f6a737399d08b0989"
+    },
+    ".build/protocol/typescript/AppServerProtocolSchema3.ts": {
+      "bytes": 102748,
+      "sha256": "531c46df0b6c2ba9fb4b6a7b3a3b78540e52b47a14214e40c86497b201b455d1"
+    },
+    "node_modules/electron/electron.d.ts": {
+      "bytes": 1142542,
+      "sha256": "052e0df7720f38466a78bca35e66f22c3717222936627f283ff0114a0966e369"
+    }
+  },
+  "evidenceFiles": {
+    "probe-results.json": {
+      "bytes": 9213,
+      "sha256": "031b009c7c35e9f4fdbae5f11ef3a15b8ed2e5cf1b27722031c85bee9f03bbb7"
+    },
+    "probe.cjs": {
+      "bytes": 7639,
+      "sha256": "e6fd9551d4640159acdcde9aaa8833c98957453150cd135d3e1e67dddf0b5582"
+    },
+    "source-evidence.txt": {
+      "bytes": 46503,
+      "sha256": "779b1d29b36e0761db510f24958697e93ed272ed1114a6d3e0ac319d9ed90174"
+    }
+  }
+}

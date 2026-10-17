@@ -1,0 +1,246 @@
+Static inspection of /Applications/ChatGPT.app, app version 26.1013.40934, build 20770.
+Public API comparison: local upstream electron package 44.4.5 electron.d.ts.
+Evidence establishes packaged implementation and application calls; it does not establish every feature is enabled.
+
+Framework strings line 108781: -owl-native-glass-container
+Framework strings line 108791: -owl-native-glass-spacing
+Framework strings line 108894: -owl-native-material
+Framework strings line 226953: session.searchHistory() visitSource 'agent' requires BrowsingHistoryActorIntegrationM3 to be enabled.
+Framework strings line 424686: BaseWindow.getNativeWindowHandle is not supported in Owl
+Framework strings line 424689: getBackgroundColor() is not implemented in Owl
+Framework strings line 424690: BaseWindow.setProgressBar is not supported in Owl
+Framework strings line 424711: source must be "atlas" or "chrome".
+Framework strings line 425148: electron_browser_owl_update_policies
+Framework strings line 425285: session.fromPath() is not supported in Owl.
+Framework strings line 425395: searchHistory options.visitSource must be 'all', 'agent', or 'other'
+Framework strings line 501242: -owl-native-glass-container
+Framework strings line 501244: -owl-native-glass-spacing
+Framework strings line 501246: -owl-native-material
+
+Application bootstrap bootstrap-Dn-4EbjT.js:
+eck-for-updates":`Check for Updates`,quit:`Quit`};if(process.versions.electron!=null&&typeof y.app.showTaskManager!=`function`)throw Error(`Codex requires the Owl app shell; stock Electron is no longer supported.`);async function uA(e){let{appUpdates:t}=zT(),n=t.getIsUpdateReady()?[`install-update`,`quit`]:t.hasUpdater
+
+OWL SOURCE PATHS
+../../owl/browser/accelerator_util.cc
+../../owl/browser/api/electron_api_app.cc
+../../owl/browser/api/electron_api_auto_updater.cc
+../../owl/browser/api/electron_api_autocomplete.cc
+../../owl/browser/api/electron_api_base_window.cc
+../../owl/browser/api/electron_api_base_window.h
+../../owl/browser/api/electron_api_browser_window.cc
+../../owl/browser/api/electron_api_content_tracing.cc
+../../owl/browser/api/electron_api_cookies.cc
+../../owl/browser/api/electron_api_crash_reporter.cc
+../../owl/browser/api/electron_api_debugger.cc
+../../owl/browser/api/electron_api_desktop_capturer.cc
+../../owl/browser/api/electron_api_dialog.cc
+../../owl/browser/api/electron_api_download_item.cc
+../../owl/browser/api/electron_api_event_emitter.cc
+../../owl/browser/api/electron_api_extensions.cc
+../../owl/browser/api/electron_api_favicon_service.cc
+../../owl/browser/api/electron_api_global_shortcut.cc
+../../owl/browser/api/electron_api_menu.cc
+../../owl/browser/api/electron_api_native_theme.cc
+../../owl/browser/api/electron_api_notification.cc
+../../owl/browser/api/electron_api_owl_update_policies.cc
+../../owl/browser/api/electron_api_permission_prompt.cc
+../../owl/browser/api/electron_api_power_monitor.cc
+../../owl/browser/api/electron_api_power_save_blocker.cc
+../../owl/browser/api/electron_api_printing.cc
+../../owl/browser/api/electron_api_protocol.cc
+../../owl/browser/api/electron_api_push_notifications.cc
+../../owl/browser/api/electron_api_screen.cc
+../../owl/browser/api/electron_api_service_worker_main.cc
+../../owl/browser/api/electron_api_session.cc
+../../owl/browser/api/electron_api_system_preferences.cc
+../../owl/browser/api/electron_api_system_preferences_mac.mm
+../../owl/browser/api/electron_api_top_sites.cc
+../../owl/browser/api/electron_api_tray.cc
+../../owl/browser/api/electron_api_utility_process.cc
+../../owl/browser/api/electron_api_view.cc
+../../owl/browser/api/electron_api_web_contents.cc
+../../owl/browser/api/electron_api_web_contents_view.cc
+../../owl/browser/api/electron_api_web_frame_main.cc
+../../owl/browser/api/electron_api_web_view_manager.cc
+../../owl/browser/api/gpuinfo_manager.cc
+../../owl/browser/api/message_port.cc
+../../owl/browser/browser.cc
+../../owl/browser/browser_mac.mm
+../../owl/browser/browser_profile_importer.cc
+../../owl/browser/browser_profile_importer_extensions.cc
+../../owl/browser/contents_container_view.h
+../../owl/browser/electron_app_main_process_host.cc
+../../owl/browser/electron_app_window.cc
+../../owl/browser/electron_app_window_mac.mm
+../../owl/browser/electron_dialogs_mac.mm
+../../owl/browser/electron_download_history.cc
+../../owl/browser/electron_popup_menu.cc
+../../owl/browser/electron_session_host.cc
+../../owl/browser/electron_session_open_url.cc
+../../owl/browser/electron_session_top_sites.cc
+../../owl/browser/electron_url_loader_factory.cc
+../../owl/browser/electron_web_contents_host.cc
+../../owl/browser/electron_web_request_url_loader_factory.cc
+../../owl/browser/electron_web_request_websocket.cc
+../../owl/browser/extension_action_menu.cc
+../../owl/browser/extension_popup.cc
+../../owl/browser/native_material_controller.cc
+../../owl/browser/native_system_font_catalog_mac.mm
+../../owl/browser/node_app_runner.cc
+../../owl/browser/notification_presenter_mac.mm
+../../owl/browser/owl_notification_presenter_bridge_state.cc
+../../owl/browser/pointer_coordinate_safety.cc
+../../owl/browser/relauncher.cc
+../../owl/browser/relauncher_mac.cc
+../../owl/browser/system_font_catalog.cc
+../../owl/browser/tracing_coordinator.cc
+../../owl/browser/web_notification_navigation.cc
+../../owl/browser/web_view_popup_contents_view.cc
+../../owl/common/api/electron_api_asar.cc
+../../owl/common/api/electron_api_clipboard.cc
+../../owl/common/api/electron_api_command_line.cc
+../../owl/common/api/electron_api_crashpad_support.cc
+../../owl/common/api/electron_api_environment.cc
+../../owl/common/api/electron_api_native_image.cc
+../../owl/common/api/electron_api_native_image_mac.mm
+../../owl/common/api/electron_api_net.cc
+../../owl/common/api/electron_api_shell.cc
+../../owl/common/api/electron_api_shell_platform_mac.mm
+../../owl/common/api/electron_api_url_loader.cc
+../../owl/common/api/electron_api_v8_util.cc
+../../owl/common/gin_helper/reply_channel.cc
+../../owl/common/node_bindings.cc
+../../owl/common/node_util.cc
+../../owl/common/thread_restrictions.cc
+../../owl/host/chrome/services/mac_notifications/communication_notification_manager.mm
+../../owl/host/content/browser/devtools/child_frame_screenshot_capture.cc
+../../owl/host/content/browser/renderer_host/reparented_surface_capture.cc
+../../owl/host/content/browser/web_contents/inner_web_contents_capture.cc
+../../owl/host/stuck_web_request_reporter.cc
+../../owl/host/third_party/blink/renderer/core/native_material_style_tracker.cc
+../../owl/host/ui/compositor/native_material_compositor.cc
+../../owl/renderer/api/electron_api_context_bridge.cc
+../../owl/renderer/api/electron_api_crash_reporter_renderer.cc
+../../owl/renderer/api/electron_api_ipc_renderer.cc
+../../owl/renderer/api/electron_api_web_frame.cc
+../../owl/renderer/api/electron_api_web_utils.cc
+../../owl/renderer/electron_ipc_native.cc
+
+APPLICATION CALLS AND UPSTREAM API COMPARISON
+API browserProfileImporter; upstream Electron 44.4.5 public types: absent; application files sampled: 1
+  /.vite/build/main-CLu1A25j.js
+  latform===`win32`)return new e(t,n)}async getImportSignals(){if(!await this.isImportAllowed())return null;let e=this.getBrowserSession();if(e==null)return null;let t;try{t=await e.browserProfileImporter.getSignals()}catch{return this.logger.warning(`Unable to inspect browser profile import signals`),null}return i.li.parse(t)}async importBrowserProfile(e){if(!await this.isImportAllowed())throw Error(`Browser profile import is disabled by managed policy`);let t=i.si.parse(e);if(t.importExtensions&&t
+API importProfile; upstream Electron 44.4.5 public types: absent; application files sampled: 0
+API autocomplete; upstream Electron 44.4.5 public types: absent; application files sampled: 2
+  /.vite/build/main-CLu1A25j.js
+  nURL:e.destinationURL,faviconDataURL:t,fillIntoEdit:e.fillIntoEdit,inlineAutocompletion:e.inlineAutocompletion,isSearch:e.isSearch===!0,type:e.type??``}}var Nfe=class extends u.Nt{autocomplete;owner;constructor(e,t){super(),this.autocomplete=e,this.owner=t}start(e,t){this.autocomplete.start(this.owner,e,t)}stop(e){this.autocomplete.stop(this.owner,e)}accept(e){this.autocomplete.accept(this.owner,e)}recordNavigation(e){this.autocomplete.recordNavigation(this.owner,e)}deleteMatch(e){this.a
+  /.vite/build/src-DsLVGakC.js
+  -z0-9_-]{1,48}$/).refine(e=>e!==`__proto__`&&e!==`constructor`&&e!==`prototype`),z_=t.O({fieldIds:t.h(R_).max(6),id:R_,label:t.N().trim().min(1).max(120)}),B_=t.O({fields:t.h(t.O({autocomplete:t.N().nullish(),id:R_,label:t.N(),required:t._(),type:t.d([`email`,`number`,`password`,`search`,`tel`,`text`,`url`])})).max(6),options:t.h(z_).max(10).optional(),origin:t.R().refine(e=>{let t=new URL(e).protocol;return t===`https:`||t===`http:`}),qrCode:t._().optional(),qrCodePayload:t.N().optional
+API faviconService; upstream Electron 44.4.5 public types: absent; application files sampled: 1
+  /.vite/build/main-CLu1A25j.js
+  );l(i);let a=D.BrowserWindow.fromWebContents(t),o=a==null?void 0:D.screen.getDisplayMatching(a.getBounds()).scaleFactor;await Promise.all(n.map(async({url:t},n)=>{let a=await bx(e.faviconService,{destinationURL:t,iconURL:null,scaleFactor:o}).catch(()=>null);s&&c===r&&a!=null&&(i=i.map((e,t)=>t===n?{...e,faviconDataURL:a}:e),l(i))}))},d=e=>{u(e)},f=()=>{s&&(s=!1,o.off(`changed`,d),t.off(`destroyed`,f),i[Symbol.dispose]())};return o.on(`changed`,d),t.once(`destroyed`,f),i.onRpcBroken(f),o.ge
+API topSites; upstream Electron 44.4.5 public types: absent; application files sampled: 1
+  /.vite/build/main-CLu1A25j.js
+  wser?.allowExternalBrowserSettingsImport!==!1}};function spe(e,t,n){if(e==null||t.isDestroyed())try{var r=a.jr();r.u(n(null));return}catch(e){r.e=e}finally{r.d()}let i=n.dup(),o=e.topSites,s=!0,c=0,l=e=>{if(s)try{var t=a.jr();t.u(i(e))}catch(e){t.e=e}finally{t.d()}},u=async n=>{let r=++c,i=n.map(e=>({...e,faviconDataURL:null}));l(i);let a=D.BrowserWindow.fromWebContents(t),o=a==null?void 0:D.screen.getDisplayMatching(a.getBounds()).scaleFactor;await Promise.all(n.map(async({url:t},n)
+API searchHistory; upstream Electron 44.4.5 public types: absent; application files sampled: 1
+  /.vite/build/main-CLu1A25j.js
+  ites.removeBlockedUrl(e)}async getBrowsingDataSettings(){return this.#e.getBrowsingDataSettings()}async getBrowsingDataSummary(e){let t=upe(e),[n,r,i,a]=await Promise.all([this.#e.searchHistory({deduplicateByDay:!0,matchingAlgorithm:`alwaysPrefix`,maxResults:0,startTime:t,text:``}),this.#e.cookies.get({}).catch(()=>null),this.#e.getCacheSize?.().catch(()=>null)??Promise.resolve(null),this.#e.getDownloadHistory().catch(()=>null)]),o=new Set,s=null;for(let e of n){if(!Cx(e))continue;let t=n
+API getDownloadHistory; upstream Electron 44.4.5 public types: absent; application files sampled: 1
+  /.vite/build/main-CLu1A25j.js
+  matchingAlgorithm:`alwaysPrefix`,maxResults:0,startTime:t,text:``}),this.#e.cookies.get({}).catch(()=>null),this.#e.getCacheSize?.().catch(()=>null)??Promise.resolve(null),this.#e.getDownloadHistory().catch(()=>null)]),o=new Set,s=null;for(let e of n){if(!Cx(e))continue;let t=new URL(e.url).hostname||e.url;s??=t,o.add(t)}let c=r==null?null:new Set(r.flatMap(({domain:e})=>e==null?[]:[e.replace(/^\./,``)]));return{cache:i==null?null:{sizeBytes:i},downloads:a==null?null:{count:a.filter(({startTim
+API searchDownloadHistory; upstream Electron 44.4.5 public types: absent; application files sampled: 1
+  /.vite/build/main-CLu1A25j.js
+  gedDownloadIds.delete(e);this.notifyChanged()}async searchHistory(e){let t=Date.now(),n=e.maxResults??100,r=e.offset??0,i=this.browserSession==null?null:(await this.browserSession.searchDownloadHistory(e)).filter(XH),a=e.text.toLowerCase(),o=new Map;for(let e of i??[])o.set(e.guid,this.getNativeItem(e,t));if(r===0)for(let e of this.liveDownloads.values())(o.has(e.id)||i==null&&(e.filename.toLowerCase().includes(a)||e.url.toLowerCase().includes(a)))&&o.set(e.id,this.getLiveItem(e));let s=Array.fro
+API setPermissionPromptHandler; upstream Electron 44.4.5 public types: absent; application files sampled: 1
+  /.vite/build/main-CLu1A25j.js
+  mpt`],dEe=class{options;configured=!1;constructor(e){this.options=e}configure(){let e=D.session.fromPartition(Vu(`app`),{permissionHandling:`browser`});return this.configured?e:(e.setPermissionPromptHandler(this.options.onPermissionPrompt),e.setPermissionRequestHandler((e,t,n)=>{n(!1)}),e.setPermissionCheckHandler(()=>!1),e.setOpenURLHandler(this.options.onOpenURL),e.setWebContentsActivationHandler(this.options.onActivateWebContents),e.on(`web-notification-clicked`,(e,t)=>this.options.onWebNotificatio
+API showPageInfoDialog; upstream Electron 44.4.5 public types: absent; application files sampled: 1
+  /.vite/build/main-CLu1A25j.js
+  lect-comment`:t.selectComment(n,i,a.commentId,c.browserTabId)}return`accepted`}function kNe({anchorBounds:e,origin:t,siteUrl:n,webContents:r}){return r==null||r.isDestroyed()?!1:r.showPageInfoDialog({anchorBounds:ANe(t,e),siteUrl:n})}function ANe(e,t){if(t==null||!Number.isFinite(t.x)||!Number.isFinite(t.y)||!Number.isFinite(t.width)||!Number.isFinite(t.height)||t.width<=0||t.height<=0)return;let n=D.BrowserWindow.fromWebContents(e);if(n==null||n.isDestroyed())return;let r=n.getContentBounds()
+API getExtensionToolbarState; upstream Electron 44.4.5 public types: absent; application files sampled: 1
+  /.vite/build/main-CLu1A25j.js
+  dStart(8,`0`);return`#${t.slice(2)}${t.slice(0,2)}`}async function Jfe(e){let t=_x(e);if(t.status!==`available`)return{status:`unsupported`};let n=t.webContents.session.extensions.getExtensionToolbarState();return{actions:t.webContents.getExtensionActions().map(e=>qfe(e,n)),status:`available`,supportsContextMenu:!0}}async function Yfe(e,t,n,r){if(t.isDestroyed())return null;let i=()=>{let t=e.extensions.getExtensionToolbarState();return{extensions:e.extensions.getAllExtensions().map(e=>({iconDataUrl
+API setExtensionPinned; upstream Electron 44.4.5 public types: absent; application files sampled: 1
+  /.vite/build/main-CLu1A25j.js
+   s===`triggered`&&i.recordUse(o,n),s}async function Zfe(e,{actionId:t,pinned:n},r){let i=_x(e);if(i.status!==`available`)return i.status;let a=i.webContents.session,o=a.extensions.setExtensionPinned(t,n);return(o===`updated`||o===`unchanged`)&&r.refreshPins(a),o}async function Qfe(e,t,{actionId:n,anchorBounds:r,source:i,sourceType:a},o,s=!1){let c=_x(e);if(c.status!==`available`)return c.status;if(t.isDestroyed())return`invalid-target`;let l=c.webContents.session,u=await c.webContents.showExte
+API triggerExtensionAction; upstream Electron 44.4.5 public types: absent; application files sampled: 1
+  /.vite/build/main-CLu1A25j.js
+   Xfe(e,t,{actionId:n,anchorBounds:r},i){let a=_x(e);if(a.status!==`available`)return a.status;if(t.isDestroyed())return`invalid-target`;let o=a.webContents.session,s=a.webContents.triggerExtensionAction(n,{anchorRect:vx(t,r)});return s===`triggered`&&i.recordUse(o,n),s}async function Zfe(e,{actionId:t,pinned:n},r){let i=_x(e);if(i.status!==`available`)return i.status;let a=i.webContents.session,o=a.extensions.setExtensionPinned(t,n);return(o===`updated`||o===`unchanged`)&&r.refreshPins(a),o}async
+API createWebViewTransfer; upstream Electron 44.4.5 public types: absent; application files sampled: 1
+  /.vite/build/main-CLu1A25j.js
+  fer===!0||l.pendingCommentModeActivation!=null||l.snapshot.isTweaksEditorOpen===!0||p.comments.hasActiveEditor(t.owner,l.conversationId,l.browserTabId,l))return`not-moved`;let m=d.createWebViewTransfer(n.owner);l.pendingWindowTransfer=!0,n.pendingWindowTransfer={token:m.token,webContents:d};let h=()=>m.cancel();a.addEventListener(`abort`,h,{once:!0}),i.attach({kind:`browser`,data:{token:m.token}}).catch(h);let g=!1;try{let r=await m.finished;return r===`moved`?(g=!0,p.comments.dismiss(t.owner,l.c
+API adoptWebContents; upstream Electron 44.4.5 public types: absent; application files sampled: 0
+API setAgentActive; upstream Electron 44.4.5 public types: absent; application files sampled: 1
+  /.vite/build/main-CLu1A25j.js
+  .owner,{type:`navigate-to-route`,path:a})},l=r,u=r,d=n.isSuspended,f=n.isColdRestore;n.dispose(),n.isRestoring=d,n.isSuspended=!1,n.pendingSuspensionId=null,n.view.webContents=r,r.setAgentActive(e.getThreadStateForWindow(t,n.conversationId,n.browserTabId)?.isBrowserUseActive??!1),n.isMainFrameLoading=r.isLoadingMainFrame(),n.isWaitingForResponse=!1;let p=qMe(r)??XK(r);n.takeIncompleteNavigationObservation=p.takeObservation;let m=()=>void 0;n.initialNavigationSync=new Promise(e=>{m=e});let
+API setPageCapturePaintLeaseEnabled; upstream Electron 44.4.5 public types: absent; application files sampled: 1
+  /.vite/build/main-CLu1A25j.js
+  his.releasePageCapturePaintLease(n)}if((this.pageCapturePaintLeaseWebContentsByTabId.get(e.cdpTabId)??null)!==t.webContents){this.releasePageCapturePaintLease(e);try{t.webContents.setPageCapturePaintLeaseEnabled(!0),this.pageCapturePaintLeaseWebContentsByTabId.set(e.cdpTabId,t.webContents)}catch(n){kG().warning(`IAB_LIFECYCLE failed to acquire page capture paint lease`,{safe:{pageKey:t.pageKey,routeKey:e.routeKey,tabId:e.cdpTabId,webContentsId:t.webContents.id},sensitive:{error:n}})}}}}releasePageCapturePa
+API waitForViewportSize; upstream Electron 44.4.5 public types: absent; application files sampled: 1
+  /.vite/build/main-CLu1A25j.js
+  notation-feature-preview`,preview:t.preview})}clear(){let e=this.active;this.active=null,e?.dispose()}},Sx=new WeakMap;async function ipe(e,t,n){if(n?.aborted)return!1;try{let r=e.waitForViewportSize(t),i=Sx.get(r)??{complete:null};if(Sx.has(r))i.complete?.(!1);else{Sx.set(r,i);let e=e=>{Sx.delete(r),i.complete?.(e)};r.then(()=>e(!0),()=>e(!1))}return await new Promise(e=>{let t=t=>{i.complete=null,n?.removeEventListener(`abort`,r),e(t)},r=()=>t(!1);i.complete=t,n?.addEventListener(`abort`,r,{o
+API getFontFamilies; upstream Electron 44.4.5 public types: absent; application files sampled: 1
+  /.vite/build/main-CLu1A25j.js
+  #i=!0,this.#e(e).catch(()=>this.unsubscribe()).finally(()=>{this.#i=!1})):(this.#e(e).catch(()=>this.unsubscribe()),e.type===`error`&&this.unsubscribe()))}},bZe=class extends u.Nt{getFontFamilies(){return D.systemPreferences.getFontFamilies()}},J8=p.a(`mac-notification-permission`),xZe=7,SZe=`/System/Library/Frameworks/UserNotifications.framework/UserNotifications`,Y8,X8=0,Z8;async function CZe(){if(process.platform===`darwin`)try{J8().info(`macOS notification permission request started`,{s
+API setAccessibilitySupportFeatures; upstream Electron 44.4.5 public types: present; application files sampled: 0
+API configureMeasurementCollection; upstream Electron 44.4.5 public types: absent; application files sampled: 1
+  /.vite/build/main-CLu1A25j.js
+  :case`audio/x-wav`:return`wav`;default:return`webm`}}function TJ(e,t){return e instanceof Error&&`code`in e&&e.code===t}var EJ;function WFe(){if(EJ!=null)return EJ;if(typeof D.app.configureMeasurementCollection==`function`&&typeof D.app.collectMeasurements==`function`)return EJ=new GFe,EJ}var GFe=class extends u.Nt{async configureMeasurementCollection(e){D.app.configureMeasurementCollection(e)}async collectMeasurements(){return D.app.collectMeasurements()}},DJ=class{sessionPromise;callbacks;options;decode
+API collectMeasurements; upstream Electron 44.4.5 public types: absent; application files sampled: 1
+  /.vite/build/main-CLu1A25j.js
+  tion TJ(e,t){return e instanceof Error&&`code`in e&&e.code===t}var EJ;function WFe(){if(EJ!=null)return EJ;if(typeof D.app.configureMeasurementCollection==`function`&&typeof D.app.collectMeasurements==`function`)return EJ=new GFe,EJ}var GFe=class extends u.Nt{async configureMeasurementCollection(e){D.app.configureMeasurementCollection(e)}async collectMeasurements(){return D.app.collectMeasurements()}},DJ=class{sessionPromise;callbacks;options;decoder=new W.StringDecoder(`utf8`);session=null;set
+API showTaskManager; upstream Electron 44.4.5 public types: absent; application files sampled: 2
+  /.vite/build/bootstrap-Dn-4EbjT.js
+   requires HTTPS.`,`https-required`)}var lA={"install-update":`Install Update`,"check-for-updates":`Check for Updates`,quit:`Quit`};if(process.versions.electron!=null&&typeof y.app.showTaskManager!=`function`)throw Error(`Codex requires the Owl app shell; stock Electron is no longer supported.`);async function uA(e){let{appUpdates:t}=zT(),n=t.getIsUpdateReady()?[`install-update`,`quit`]:t.hasUpdater()?[`check-for-updates`,`quit`]:[`quit`];switch(n[(await y.dialog.showMessageBox({type:`error`
+  /.vite/build/main-CLu1A25j.js
+  defaultMessage:`Send Feedback`}),click:he},{type:`separator`},{label:C.formatMessage({messageId:`electron.appMenu.help.taskManager`,defaultMessage:`Task Manager`}),click:()=>D.app.showTaskManager()},nt,...n.i.supportsStartupPerformanceRecording(t)?[{id:`restart-record-startup`,label:C.formatMessage({messageId:`electron.appMenu.trace.restartStartup`,defaultMessage:`Restart and Record Startup Performance`}),enabled:!g.b()&&Vq()===`idle`,click:()=>{!g.b()&&Vq()===`idle`&&g.x()}}]:[],...It,...r
+API setRuntimeFeatures; upstream Electron 44.4.5 public types: absent; application files sampled: 1
+  /.vite/build/main-CLu1A25j.js
+  )}async isOwlFeatureEnabled(e){try{return D.app.isRuntimeFeatureEnabled(e)}catch(e){if(e instanceof Error&&e.message.startsWith(`Unsupported Owl feature:`))return!1;throw e}}async setRuntimeFeatures(e){let t={...VZ},n=!1;for(let r of Pt){let i=e[r];typeof i==`boolean`&&(t[r]=i,n=!0)}n&&(D.app.setRuntimeFeatures(t),VZ=t)}};function UZ(e){return`setLegacyChromePolicyFallbackEnabled`in e&&typeof e.setLegacyChromePolicyFallbackEnabled==`function`}function NVe(){VZ={},D.app.setRuntimeFeatures({})}f
+API setOpenURLHandler; upstream Electron 44.4.5 public types: absent; application files sampled: 1
+  /.vite/build/main-CLu1A25j.js
+  er`});return this.configured?e:(e.setPermissionPromptHandler(this.options.onPermissionPrompt),e.setPermissionRequestHandler((e,t,n)=>{n(!1)}),e.setPermissionCheckHandler(()=>!1),e.setOpenURLHandler(this.options.onOpenURL),e.setWebContentsActivationHandler(this.options.onActivateWebContents),e.on(`web-notification-clicked`,(e,t)=>this.options.onWebNotificationClicked(t)),this.options.downloadStore.registerSession({browserSession:e,browserSessionRegistry:this.options.browserSessionRegistry,find
+API setWebContentsActivationHandler; upstream Electron 44.4.5 public types: absent; application files sampled: 1
+  /.vite/build/main-CLu1A25j.js
+  ionPromptHandler(this.options.onPermissionPrompt),e.setPermissionRequestHandler((e,t,n)=>{n(!1)}),e.setPermissionCheckHandler(()=>!1),e.setOpenURLHandler(this.options.onOpenURL),e.setWebContentsActivationHandler(this.options.onActivateWebContents),e.on(`web-notification-clicked`,(e,t)=>this.options.onWebNotificationClicked(t)),this.options.downloadStore.registerSession({browserSession:e,browserSessionRegistry:this.options.browserSessionRegistry,findPageStateForWebContentsId:this.options.findPageStateForWeb
+API getFaviconImage; upstream Electron 44.4.5 public types: absent; application files sampled: 1
+  /.vite/build/main-CLu1A25j.js
+  ll||e.isDestroyed()||t.isDestroyed())return;let i=yx.get(e)??new Map,o=r.dup(),s=!0,c,l=e=>{if(s&&e!==c)try{var t=a.jr();c=e,t.u(o(e))}catch(e){t.e=e}finally{t.d()}},u=()=>{l(xx(e.getFaviconImage({size:n}),2))},d=(e,t,r)=>{r.sizes.includes(n)?u():l(null)},f=()=>{if(!s)return;s=!1,e.removeListener(`owl-favicon-image-updated`,d),e.removeListener(`destroyed`,p),t.removeListener(`destroyed`,f),o[Symbol.dispose]();let r=(i.get(n)??1)-1;r===0?i.delete(n):i.set(n,r),i.size===0&&yx.delete(e),e.isDe
+API setContentInsets; upstream Electron 44.4.5 public types: absent; application files sampled: 1
+  /.vite/build/main-CLu1A25j.js
+  (t.url,n)||this.comments.dismissForCommittedNavigation(e.owner,t.conversationId,t.browserTabId,r)}syncRuntimeStateToPage(e,t){let n=e.view.webContents;n==null||n.isDestroyed()||(n.setContentInsets({top:t.topContentInset}),this.comments.syncRuntimeStateToPage(this.browserPageHostLifecycle.findPageStateForWebContentsId(n.id)?.windowState.owner??n,e.conversationId,n,t))}syncCommentSnapshot(e,t,n){let r=this.getCurrentWindowState(e);r!=null&&this.syncThreadState(r,t,n),n.page!=null&&this.syncRun
+API setWebsiteReportingEnabled; upstream Electron 44.4.5 public types: absent; application files sampled: 1
+  /.vite/build/bootstrap-Dn-4EbjT.js
+  ral-pr[0-9]+)\.chatgpt-staging\.com$/)?.[1],r=e.searchParams.getAll(`staging_env`);return n==null?r.length===0:r.length===1&&r[0]===n}var Ln=new WeakSet;function Rn(e){Ln.add(e),e.setWebsiteReportingEnabled(!1)}function zn(e){let t=new WeakSet,n=n=>{t.has(n)||(t.add(n),n.setWebsiteReportingEnabled(!1),e.then(e=>n.setWebsiteReportingEnabled(e&&!Ln.has(n)),()=>{}))};y.app.on(`session-created`,n),y.app.whenReady().then(()=>n(y.session.defaultSession))}var Bn=class{devRendererOrigin;startupPolicy;state={k
+
+CUSTOM CSS
+/.vite/build/main-CLu1A25j.js
+`Target.detachFromTarget`,{sessionId:e}).catch(()=>{});t?.[Symbol.dispose]()}}var FK=p.a(`browser-sidebar-manager`),IK=`-owl-native-contents-close`,LK=`being-captured-state-changed`,RK=`password-manager-open-settings`,zK=`page-info-open-site-settings`,BK=`owl-favicon-image-updated`,VK=50,HK=100,UK=new WeakMap,RMe={[i.yo.BATCH]:{action:`annotate
+/webview/assets/app-initial-e7c27dd40beb.css
+{--avatar-overlay-native-corner-radius:15px;border-radius:var(--avatar-overlay-native-corner-radius)}._Material_9q659_2{-owl-native-material:var(--avatar-overlay-native-material,glass);--owl-native-glass-adaptive-appearance:off;--owl-native-glass-variant:regular;--avatar-overlay-css-material-elevation:0 0 transparent;border:1px solid var(
+/webview/assets/app-initial-e7c27dd40beb.css
+atar-overlay-native-corner-radius)}._Material_9q659_2{-owl-native-material:var(--avatar-overlay-native-material,glass);--owl-native-glass-adaptive-appearance:off;--owl-native-glass-variant:regular;--avatar-overlay-css-material-elevation:0 0 transparent;border:1px solid var(--color-border)}@supports (color:color-mix(in lab, red, red)){._Material_9q659_2{bo
+/webview/assets/app-initial-e7c27dd40beb.css
+al_9q659_2{-owl-native-material:var(--avatar-overlay-native-material,glass);--owl-native-glass-adaptive-appearance:off;--owl-native-glass-variant:regular;--avatar-overlay-css-material-elevation:0 0 transparent;border:1px solid var(--color-border)}@supports (color:color-mix(in lab, red, red)){._Material_9q659_2{border:1px solid color-mix(in srg
+/webview/assets/app-initial-e7c27dd40beb.css
+tar-overlay-native-surface-id=voice-microphone],._Material_9q659_2[data-avatar-overlay-native-surface-id=voice-output]{--owl-native-glass-variant:system}._Material_9q659_2[data-avatar-overlay-material-variant=quick-chat-stash-extension]{--avatar-overlay-native-corner-radius:12px;border-radius:var(--avatar-overlay-native-corner-radius)}._Materi
+/webview/assets/app-initial-e7c27dd40beb.css
+ar-overlay-caption-pointed-part=base]{top:2px}._Material_9q659_2[data-avatar-overlay-material-variant=transcript-chip]{--owl-native-glass-variant:system;border-radius:var(--radius-full);border:0;width:fit-content;max-width:100%;display:flex}._Material_9q659_2[data-avatar-overlay-material-variant=transcript-card]{--owl-native-glass-variant:syst
+/webview/assets/app-initial-e7c27dd40beb.css
+width:fit-content;max-width:100%;display:flex}._Material_9q659_2[data-avatar-overlay-material-variant=transcript-card]{--owl-native-glass-variant:system;min-width:0;max-height:calc(var(--mini-transcript-max-height,100dvh) - var(--overflow-fade-top,0px));overscroll-behavior:contain;border-radius:var(--radius-4xl-base);border:0;flex-direction:co
+/webview/assets/app-initial-e7c27dd40beb.css
+59_2[data-avatar-overlay-material-variant=transcript-message]{--avatar-overlay-css-material-elevation:var(--shadow-lg);--owl-native-glass-variant:system;gap:var(--spacing);width:fit-content;max-width:80%;min-height:calc(var(--spacing) * 8);border-width:0;flex-direction:column;align-items:stretch;padding:8px 11px;display:flex}[data-orb-message]
+/webview/assets/app-initial-e7c27dd40beb.css
+_9q659_2[data-avatar-overlay-material-variant=transcript-message][data-transcript-role]:has([data-orbit-message-parts]){-owl-native-material:none;box-shadow:none;-webkit-backdrop-filter:none;background:0 0;border-radius:0;padding:0}._Material_9q659_2[data-avatar-overlay-material-variant=transcript-message][data-transcript-role=user]{--ava
+/webview/assets/app-initial-e7c27dd40beb.css
+-transcript-role=user]{--avatar-overlay-message-tint:rgb(from var(--avatar-overlay-message-glass-color) r g b / alpha);--owl-native-tint-color:var(--avatar-overlay-message-tint);--avatar-overlay-material-background:linear-gradient(var(--avatar-overlay-message-tint), var(--avatar-overlay-message-tint)), var(--color-surface)}._Material_9q659_
+/webview/assets/app-initial-e7c27dd40beb.css
+var(--color-surface)}._Material_9q659_2[data-avatar-overlay-material-variant=reaction-badge][data-transcript-role=user]{-owl-native-material:none;background:var(--color-surface);-webkit-backdrop-filter:none;backdrop-filter:none}@media (forced-colors:active){._Material_9q659_2[data-avatar-overlay-material-variant=reaction-badge][data-trans
+/webview/assets/app-initial-e7c27dd40beb.css
+nsform}._Material_9q659_2[data-avatar-overlay-native-surface-id=voice-status][data-avatar-overlay-compact-tone=neutral]{-owl-native-material:none}@media (forced-colors:active){._Material_9q659_2{background:canvas}}html[data-owl-native-glass=active] ._Material_9q659_2:is([data-avatar-overlay-material-variant=quick-chat-caption-connector],[
+/webview/assets/app-initial-e7c27dd40beb.css
+ct-tone=neutral]{-owl-native-material:none}@media (forced-colors:active){._Material_9q659_2{background:canvas}}html[data-owl-native-glass=active] ._Material_9q659_2:is([data-avatar-overlay-material-variant=quick-chat-caption-connector],[data-avatar-overlay-material-variant=speech-caption-connector]){display:block}._Material_9q659_2:whe
+/webview/assets/app-initial-e7c27dd40beb.css
+:#ffffff1f}@media (forced-colors:active){._Material_9q659_2:where(:not([data-theme])){background:canvas}}}html:not([data-owl-native-glass=active]) [data-quick-chat-glass-group] ._Material_9q659_2:not([data-avatar-overlay-material-variant=activity],[data-avatar-overlay-material-variant=activity-dismiss]){background:var(--color-surface);
+/webview/assets/app-initial-e7c27dd40beb.css
+ox-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none;will-change:transform;border-color:#0000}html:not([data-owl-native-glass=active]) [data-quick-chat-glass-group] ._Material_9q659_2:not([data-avatar-overlay-material-variant=activity],[data-avatar-overlay-material-variant=activity-dismiss])[data-avatar-overlay-quick-chat-c

@@ -137,7 +137,12 @@ class MessagePortSocket extends Disposable implements ISocket {
 				return;
 			}
 			if (value.data instanceof Uint8Array && value.data.byteLength <= 320 * 1024 * 1024) {
-				this.dataEmitter.fire(VSBuffer.wrap(new Uint8Array(value.data)));
+				// Ordinary MessagePort storage is already owned; only shared storage
+				// needs a copy before readers can safely retain or decode its contents.
+				const data = value.data.buffer instanceof ArrayBuffer
+					? new Uint8Array(value.data.buffer, value.data.byteOffset, value.data.byteLength)
+					: new Uint8Array(value.data);
+				this.dataEmitter.fire(VSBuffer.wrap(data));
 				if (!this.closed) {
 					port.postMessage({ ack: true });
 				}

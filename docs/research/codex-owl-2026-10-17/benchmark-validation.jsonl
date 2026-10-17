@@ -1,0 +1,5 @@
+{"node":"v24.21.0","arch":"arm64","note":"isolated synthetic benchmark, not live Owl/UI profiling"}
+{"scenario":"nested transcript","MiB":3.94,"parseMs":1.47,"concatDecodeParseMs":1.68,"chunking":{"parts":7,"maxNextMs":2.5,"totalNextMs":7.35}}
+{"scenario":"nested transcript","MiB":15.75,"parseMs":6.04,"concatDecodeParseMs":6.97,"chunking":{"parts":22,"maxNextMs":1.3,"totalNextMs":14.55}}
+{"scenario":"nested transcript","MiB":63,"parseMs":30.21,"concatDecodeParseMs":37.14,"chunking":{"parts":81,"maxNextMs":1.02,"totalNextMs":45.4}}
+{"scenario":"200k-key object","secondTokenMs":51.19,"includes":"eager Object.entries before the second token"}

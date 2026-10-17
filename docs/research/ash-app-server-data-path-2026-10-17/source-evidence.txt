@@ -1,0 +1,1054 @@
+Ash data path source excerpts, 2026-10-17. Line numbers belong to the recorded working-tree file hash.
+
+=== crates/app-server/src/server.rs ===
+SHA-256: 723ad97d24076d9d28752d16d7362aa45e75e840b20eef516a95577c73a3c4de
+Lines 4555-4580:
+4555: pub(super) fn decode<T: for<'a> Deserialize<'a>>(params: &Value) -> Result<T, RpcError> {
+4556:     serde_json::from_value(params.clone())
+4557:         .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))
+4558: }
+4559:
+4560: pub(super) fn result<T: serde::Serialize>(value: &T) -> Result<Value, RpcError> {
+4561:     serde_json::to_value(value)
+4562:         .map_err(|_| RpcError::new(-32000, AppServerErrorName::InternalError))
+4563: }
+4564:
+4565: pub(super) fn core_error(error: CoreError) -> RpcError {
+4566:     // Keep private diagnostics actionable while the public protocol uses stable error names.
+4567:     eprintln!("App Server core operation failed: {error}");
+4568:     match error {
+4569:         CoreError::WorkspaceCheckpointConflict => {
+4570:             RpcError::new(-32010, AppServerErrorName::ThreadHistoryConflict)
+4571:         }
+4572:         CoreError::CommandConflict => RpcError::new(-32004, AppServerErrorName::CommandConflict),
+4573:         CoreError::NotFound(_) => RpcError::new(-32011, AppServerErrorName::CoreOperationFailed),
+4574:         _ => RpcError::new(-32010, AppServerErrorName::CoreOperationFailed),
+4575:     }
+4576: }
+4577:
+4578: fn serialize_response(value: Value) -> String {
+4579:     serde_json::to_string(&value).expect("JSON-RPC response must serialize")
+4580: }
+
+=== crates/app-server/src/managed/gateway.rs ===
+SHA-256: ea1639e06e5d2d8a2ce4655a3342555f759af9c12666bb614a17437cb57894f4
+Lines 307-324:
+307:     let mut reader = JsonlReader::new(reader, DEFAULT_MAX_MESSAGE_BYTES);
+308:     let (outbound, incoming) = crate::server::message_queue::outbound_queue(256);
+309:     thread::scope(|scope| {
+310:         let requests = RequestDispatcher::start(scope)?;
+311:         let writer_telemetry = profile_server.telemetry.clone();
+312:         let writer_handle = scope.spawn(move || {
+313:             let mut writer = JsonlWriter::new(writer, DEFAULT_MAX_MESSAGE_BYTES);
+314:             while let Ok(message) = incoming.recv() {
+315:                 message.write_to(&mut writer, &writer_telemetry)?;
+316:             }
+317:             Ok::<(), io::Error>(())
+318:         });
+319:
+320:         let profile_connection = profile_server.product_host_connection();
+321:         let ide_attachment = Arc::clone(&profile_connection.ide_attachment);
+322:         let profile_notifications = profile_server.connection_notifications(&profile_connection);
+323:         let profile_outbound = outbound.clone();
+324:         scope.spawn(move || {
+Lines 813-840:
+813: fn tag_resource_handles(message: &mut Value, route_id: usize) {
+814:     for path in ["/result/resourceId", "/result/resource/resourceId"] {
+815:         if let Some(value) = message.pointer_mut(path) {
+816:             if let Some(id) = value.as_str() {
+817:                 *value = Value::String(format!("gateway-resource:{route_id}:{id}"));
+818:             }
+819:         }
+820:     }
+821: }
+822:
+823: fn tag_resource_response(response: String, route_id: usize) -> String {
+824:     if !response.contains("\"resourceId\"") {
+825:         return response;
+826:     }
+827:     let Ok(mut message) = serde_json::from_str::<Value>(&response) else {
+828:         return response;
+829:     };
+830:     // Call/dictation results also use resourceId, but do not expose byte metadata.
+831:     if message.pointer("/result/sha256").is_some()
+832:         || message.pointer("/result/dataBase64").is_some()
+833:         || message.pointer("/result/resource/sha256").is_some()
+834:     {
+835:         tag_resource_handles(&mut message, route_id);
+836:         message.to_string()
+837:     } else {
+838:         response
+839:     }
+840: }
+
+=== crates/app-server/src/managed/gateway/local.rs ===
+SHA-256: 9d8f4b560dcbaae412805414a35f2c4a650a69086ad288a90fe0097440696c24
+Lines 138-157:
+138:                     break;
+139:                 }
+140:                 let output = outbound.clone();
+141:                 let RoutedRequest { raw, admission } = request;
+142:                 requests.dispatch(
+143:                     Arc::clone(&target.server),
+144:                     &target.connection,
+145:                     raw,
+146:                     move |response| {
+147:                         let result = output
+148:                             .send(super::tag_resource_response(response, route_id).into())
+149:                             .map_err(|_| io::Error::from(io::ErrorKind::BrokenPipe));
+150:                         drop(admission);
+151:                         result
+152:                     },
+153:                 )?;
+154:             }
+155:             Ok(())
+156:         });
+157:         Self {
+
+=== crates/app-server/src/server/message_queue.rs ===
+SHA-256: cef3c8587820a7c534c3b1ce32df47d374f773777e6beb07ccf05a11ea824286
+Lines 163-205:
+163: pub(crate) struct OutboundSender {
+164:     sender: mpsc::SyncSender<OutgoingMessage>,
+165:     budget: MessageBudget,
+166: }
+167:
+168: pub(crate) struct OutboundReceiver {
+169:     receiver: mpsc::Receiver<OutgoingMessage>,
+170:     budget: MessageBudget,
+171: }
+172:
+173: /// All outputs for one connection share a byte ceiling, including the frame being written.
+174: /// Preserve the largest valid editor frame; several large frames must wait for the writer.
+175: pub(crate) fn outbound_queue(capacity: usize) -> (OutboundSender, OutboundReceiver) {
+176:     let budget = MessageBudget::new(DEFAULT_MAX_MESSAGE_BYTES);
+177:     let (sender, receiver) = mpsc::sync_channel(capacity);
+178:     (
+179:         OutboundSender {
+180:             sender,
+181:             budget: budget.clone(),
+182:         },
+183:         OutboundReceiver { receiver, budget },
+184:     )
+185: }
+186:
+187: impl OutboundSender {
+188:     pub(crate) fn send(&self, mut message: OutgoingMessage) -> io::Result<()> {
+189:         message.bytes = Some(self.budget.reserve(message.raw.len())?);
+190:         self.sender
+191:             .send(message)
+192:             .map_err(|_| io::Error::from(io::ErrorKind::BrokenPipe))
+193:     }
+194: }
+195:
+196: impl OutboundReceiver {
+197:     pub(crate) fn recv(&self) -> Result<OutgoingMessage, mpsc::RecvError> {
+198:         self.receiver.recv()
+199:     }
+200:     pub(crate) fn recv_timeout(
+201:         &self,
+202:         timeout: std::time::Duration,
+203:     ) -> Result<OutgoingMessage, mpsc::RecvTimeoutError> {
+204:         self.receiver.recv_timeout(timeout)
+205:     }
+
+=== crates/app-server-transport/src/lib.rs ===
+SHA-256: 25070ce269474e1562a4e6d86ffb93ec7601126ff0d5d5e82b1cf715cba8e978
+Lines 33-54:
+33: /// Maximum JSONL frame size shared by both ends of the local App Server transport.
+34: ///
+35: /// An editor file is capped at 50 MiB before serialization, while JSON escaping can
+36: /// expand one UTF-8 byte to six wire bytes. Keep the transport bound large enough
+37: /// to carry that validated payload without making framing unbounded.
+38: pub const DEFAULT_MAX_MESSAGE_BYTES: usize = 320 * 1024 * 1024;
+39:
+40: /// Relays an open response stream without retaining bytes until connection close.
+41: pub fn relay_output(reader: &mut impl Read, writer: &mut impl Write) -> io::Result<()> {
+42:     let mut buffer = [0_u8; 8192];
+43:     loop {
+44:         let read = match reader.read(&mut buffer) {
+45:             Ok(read) => read,
+46:             Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+47:             Err(error) => return Err(error),
+48:         };
+49:         if read == 0 {
+50:             return Ok(());
+51:         }
+52:         writer.write_all(&buffer[..read])?;
+53:         writer.flush()?;
+54:     }
+Lines 124-151:
+124: pub struct JsonlWriter<W> {
+125:     writer: W,
+126:     max_message_bytes: usize,
+127: }
+128:
+129: impl<W: Write> JsonlWriter<W> {
+130:     pub fn new(writer: W, max_message_bytes: usize) -> Self {
+131:         Self {
+132:             writer,
+133:             max_message_bytes,
+134:         }
+135:     }
+136:
+137:     pub fn write_message(&mut self, message: &str) -> io::Result<()> {
+138:         if message.len() > self.max_message_bytes {
+139:             return Err(io::Error::new(
+140:                 io::ErrorKind::InvalidData,
+141:                 "JSON-RPC message exceeds limit",
+142:             ));
+143:         }
+144:         self.writer.write_all(message.as_bytes())?;
+145:         self.writer.write_all(b"\n")?;
+146:         self.writer.flush()
+147:     }
+148: }
+149:
+150: pub struct StdioTransport;
+151: impl StdioTransport {
+
+=== crates/app-server-daemon/src/client.rs ===
+SHA-256: 1c75770991ccf73e345ef86d51676ab7881bf3b1d86ad3269c900718f03b99c0
+Lines 699-724:
+699: fn proxy_stdio(mut stream: UnixStream, options: &ConnectionOptions) -> io::Result<()> {
+700:     write_json_line(&mut stream, &ConnectionPrelude::from_options(options))?;
+701:     relay_stdio(stream)
+702: }
+703:
+704: fn relay_stdio(stream: UnixStream) -> io::Result<()> {
+705:     let mut socket_writer = stream.try_clone()?;
+706:     let input = thread::Builder::new()
+707:         .name("ash-local-app-server-stdin".into())
+708:         .spawn(move || {
+709:             let copied = io::copy(&mut io::stdin().lock(), &mut socket_writer);
+710:             let _ = socket_writer.shutdown(Shutdown::Write);
+711:             copied
+712:         })?;
+713:     let mut output = io::stdout().lock();
+714:     relay_output(&mut BufReader::new(stream), &mut output)?;
+715:     // The command must exit when the daemon closes its side, even while the
+716:     // launcher keeps stdin open. A blocking process-stdin read cannot be joined
+717:     // here; the command process owns and terminates that reader thread.
+718:     if input.is_finished() {
+719:         input
+720:             .join()
+721:             .map_err(|_| io::Error::other("Local App Server stdin proxy panicked"))??;
+722:     }
+723:     Ok(())
+724: }
+
+=== src/ash/platform/agentHost/electron-main/appServerConnectionRelay.ts ===
+SHA-256: 356100a785644b48c614bb8a016bccc360045262fe89c2fb9c693cc36870b092
+Lines 205-280:
+205: 		}];
+206: 	}
+207:
+208: 	private attach(renderer: WebContents, nonce: string, transport: ChildProcessJsonlTransport): void {
+209: 		this.nonce = nonce;
+210: 		this.acquiredNavigation = this.navigationGeneration;
+211: 		const { port1, port2 } = new MessageChannelMain();
+212: 		this.setState('initializing');
+213: 		const sent: number[] = [];
+214: 		let bytes = 0;
+215: 		let writes = 0;
+216: 		let writeBytes = 0;
+217: 		let closed = false;
+218: 		let intentionalClose = false;
+219: 		const close = (): void => {
+220: 			if (closed) { return; }
+221: 			closed = true;
+222: 			data.dispose();
+223: 			ended.dispose();
+224: 			const intentional = intentionalClose || this.state === 'stopping' || this.isDisposed;
+225: 			// Delayed port/process events own only this attachment, never its replacement.
+226: 			if (this.transport.value === transport && this.nonce === nonce) {
+227: 				this.transport.clearAndLeak();
+228: 				this.nonce = undefined;
+229: 				this.diagnostic = transport.diagnostics();
+230: 				if (intentionalClose) {
+231: 					this.generation++;
+232: 					this.setState('stopped');
+233: 				} else if (!intentional) {
+234: 					this.generation++;
+235: 					this.setState('crashed');
+236: 				}
+237: 			}
+238: 			port1.postMessage({ closed: 'App Server connection closed', intentional });
+239: 			port1.close();
+240: 			transport.dispose();
+241: 		};
+242: 		const data = transport.onData(chunk => {
+243: 			const size = chunk.byteLength;
+244: 			if (sent.length >= 128 || bytes + size > DEFAULT_MAX_JSONL_FRAME_BYTES) { close(); return; }
+245: 			sent.push(size);
+246: 			bytes += size;
+247: 			port1.postMessage({ data: new Uint8Array(chunk) });
+248: 			if (sent.length >= 4) { transport.process.stdout.pause(); }
+249: 		});
+250: 		const ended = transport.onClose(error => {
+251: 			if (closed) { return; }
+252: 			port1.postMessage({ closed: transport.diagnostics() || error.message });
+253: 			close();
+254: 		});
+255: 		port1.on('message', event => {
+256: 			if (closed) { return; }
+257: 			const value: unknown = event.data;
+258: 			if (!isRecord(value)) { close(); return; }
+259: 			if (value.intentional === true) {
+260: 				intentionalClose = true;
+261: 				close();
+262: 				return;
+263: 			}
+264: 			if (value.ack === true) {
+265: 				const size = sent.shift();
+266: 				if (size === undefined) { close(); return; }
+267: 				bytes -= size;
+268: 				if (sent.length < 4) { transport.process.stdout.resume(); }
+269: 				return;
+270: 			}
+271: 			if (!(value.data instanceof Uint8Array) || writes >= 128) { close(); return; }
+272: 			const size = value.data.byteLength;
+273: 			if (writeBytes + size > DEFAULT_MAX_JSONL_FRAME_BYTES) { close(); return; }
+274: 			writeBytes += size;
+275: 			writes++;
+276: 			void transport.sendBytes(value.data).then(() => { if (!closed) { port1.postMessage({ ack: true }); } }, close).finally(() => { writes--; writeBytes -= size; });
+277: 		});
+278: 		port1.on('close', close);
+279: 		port1.start();
+280: 		this.portResources.value = toDisposable(close);
+
+=== src/ash/platform/agentHost/node/childProcessJsonlTransport.ts ===
+SHA-256: c168e9afbba2d69f8e9e6f7d550fd6988f469330d4fa96b344db77bee45f607f
+Lines 195-214:
+195: 	private readonly onStdoutData = (chunk: Buffer | string): void => {
+196: 		if (this.terminalError) return;
+197: 		const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, "utf8");
+198: 		if (this.stdoutMode === 'bytes') {
+199: 			if (bytes.byteLength > this.maxFrameBytes) {
+200: 				this.fail(new Error('App Server byte chunk exceeds transport capacity'));
+201: 				return;
+202: 			}
+203: 			for (const listener of this.dataListeners) {
+204: 				try {
+205: 					listener(bytes);
+206: 				} catch (error) {
+207: 					this.fail(error instanceof Error ? error : new Error('App Server byte listener failed'));
+208: 					return;
+209: 				}
+210: 				if (this.terminalError) {
+211: 					return;
+212: 				}
+213: 			}
+214: 			return;
+
+=== src/ash/platform/agentHost/electron-browser/appServerMessagePortTransport.ts ===
+SHA-256: e42fabac6c43f2bb5eaeb96ad676fdc3ed7d666834e0c60f408aa06d42d0fe2a
+Lines 112-150:
+112:
+113: 	constructor(private readonly port: MessagePort) {
+114: 		super();
+115: 		this._register(toDisposable(() => this.finish()));
+116: 		port.onmessage = event => {
+117: 			if (this.closed) {
+118: 				return;
+119: 			}
+120: 			const value: unknown = event.data;
+121: 			if (!isRecord(value)) {
+122: 				this.finish(new Error('Invalid transport message'));
+123: 				return;
+124: 			}
+125: 			if (value.ack === true) {
+126: 				if (!this.pending.length) {
+127: 					this.finish(new Error('Unexpected transport write acknowledgement'));
+128: 					return;
+129: 				}
+130: 				this.pendingBytes -= this.pending.shift()!;
+131: 				if (!this.pending.length) {
+132: 					for (const waiter of this.drainWaiters) {
+133: 						waiter.resolve();
+134: 					}
+135: 					this.drainWaiters.clear();
+136: 				}
+137: 				return;
+138: 			}
+139: 			if (value.data instanceof Uint8Array && value.data.byteLength <= 320 * 1024 * 1024) {
+140: 				this.dataEmitter.fire(VSBuffer.wrap(new Uint8Array(value.data)));
+141: 				if (!this.closed) {
+142: 					port.postMessage({ ack: true });
+143: 				}
+144: 				return;
+145: 			}
+146: 			if (value.intentional === true) {
+147: 				this.finish();
+148: 				return;
+149: 			}
+150: 			this.finish(new Error(typeof value.closed === 'string' ? value.closed : 'App Server connection closed'));
+
+=== src/ash/platform/agentHost/browser/appServerSocketTransport.ts ===
+SHA-256: 7896bae1dda926a36339862f710d70e0a6a4b6a1915df618cb91027ee9be44d8
+Lines 78-93:
+78: 			const resources = new DisposableStore();
+79: 			this.connectionResources.value = resources;
+80: 			this.socket = socket;
+81: 			this.messageFraming = isWebSocket;
+82: 			this.connecting = false;
+83: 			// The acquisition owner retains the carrier; this client closes its lease on disconnect.
+84: 			resources.add(toDisposable(() => socket.dispose()));
+85: 			resources.add(socket.onData(data => {
+86: 				if (this.socket === socket) {
+87: 					// WebSocket messages carry one JSON value; stream carriers retain JSONL boundaries.
+88: 					this.acceptData(isWebSocket ? VSBuffer.concat([data, VSBuffer.fromString('\n')]) : data);
+89: 				}
+90: 			}));
+91: 			resources.add(socket.onClose(event => {
+92: 				if (this.socket === socket) {
+93: 					this.closed(event);
+Lines 108-164:
+108: 	private acceptData(data: VSBuffer): void {
+109: 		let start = 0;
+110: 		for (let index = 0; index < data.byteLength; index++) {
+111: 			if (data.buffer[index] !== 10) {
+112: 				continue;
+113: 			}
+114: 			if (!this.append(data.slice(start, index))) {
+115: 				return;
+116: 			}
+117: 			const bytes = VSBuffer.concat(this.parts, this.bufferedBytes);
+118: 			this.parts = [];
+119: 			this.bufferedBytes = 0;
+120: 			try {
+121: 				if (!bytes.byteLength || bytes.buffer.at(-1) === 13) {
+122: 					throw new Error('App Server JSONL requires nonempty LF frames');
+123: 				}
+124: 				const frame = new TextDecoder('utf-8', { fatal: true }).decode(bytes.buffer);
+125: 				this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame });
+126: 				if (!this.socket) {
+127: 					return;
+128: 				}
+129: 			} catch (error) {
+130: 				this.disconnect();
+131: 				this.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: String(error) });
+132: 				return;
+133: 			}
+134: 			start = index + 1;
+135: 		}
+136: 		this.append(data.slice(start));
+137: 	}
+138:
+139: 	private append(data: VSBuffer): boolean {
+140: 		if (this.bufferedBytes + data.byteLength > 320 * 1024 * 1024) {
+141: 			this.disconnect();
+142: 			this.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: 'App Server frame exceeds transport capacity' });
+143: 			return false;
+144: 		}
+145: 		if (data.byteLength) {
+146: 			this.bufferedBytes += data.byteLength;
+147: 			let owned = VSBuffer.wrap(data.buffer.slice());
+148: 			// Keep geometrically sized fragments so tiny packets cannot grow an unbounded array
+149: 			// or force a copy of the entire partial frame on each packet.
+150: 			while (this.parts.length && this.parts[this.parts.length - 1].byteLength < owned.byteLength * 2) {
+151: 				owned = VSBuffer.concat([this.parts.pop()!, owned]);
+152: 			}
+153: 			this.parts.push(owned);
+154: 		}
+155: 		return true;
+156: 	}
+157:
+158: 	private closed(event: SocketCloseEvent): void {
+159: 		const partial = this.bufferedBytes > 0;
+160: 		this.disconnect();
+161: 		const intentional = !partial && event?.type === SocketCloseEventType.NodeSocketCloseEvent && !event.hadError;
+162: 		let message: string | undefined;
+163: 		if (partial) {
+164: 			message = 'App Server connection ended with an unterminated frame';
+
+=== src/ash/platform/agentHost/browser/appServerProtocolClient.ts ===
+SHA-256: 20e7a2b95402a584dfacf0bb9dce3c66d533b1386662a7d719b8dde82d9f4052
+Lines 205-229:
+205: 	private requestRaw<M extends AppServerMethod>(definition: AppServerMethodDefinition<M>, params: MethodParams<M>, timeoutMs: number): Promise<MethodResult<M>> {
+206: 		if (this.pending.size >= 128) {
+207: 			return Promise.reject(new Error('App Server request limit reached'));
+208: 		}
+209: 		const id = this.nextRequestId++;
+210: 		const promise = new Promise<MethodResult<M>>((resolve, reject) => {
+211: 			const timeout = setTimeout(() => {
+212: 				const pending = this.pending.get(id);
+213: 				if (!pending) return;
+214: 				this.fail(new Error(`App Server request timed out: ${definition.method}`));
+215: 			}, timeoutMs);
+216: 			const pending: PendingRequest = {
+217: 				method: definition.method,
+218: 				resolve: (value) => resolve(value as MethodResult<M>),
+219: 				reject,
+220: 				timeout,
+221: 			};
+222: 			this.pending.set(id, pending);
+223: 		});
+224: 		try {
+225: 			const frame = JSON.stringify({ jsonrpc: "2.0", id, method: definition.method, params });
+226: 			this.transport.send(WEB_APP_SERVER_FRAME_EVENT, { frame });
+227: 		} catch (error) {
+228: 			this.rejectPending(id, toError(error));
+229: 		}
+Lines 245-302:
+245: 	};
+246:
+247: 	private readonly handleFrame = (payload: unknown): void => {
+248: 		if (this.disposed || this.isClosing || this._state === 'stopped' || this._state === 'crashed') {
+249: 			return;
+250: 		}
+251: 		try {
+252: 			const { frame, byteLength } = validateFramePayload(payload);
+253: 			const message: unknown = JSON.parse(frame);
+254: 			const envelope = decodeAppServerEnvelope(message);
+255: 			if (envelope.kind === "notification" || envelope.kind === "serverRequest") {
+256: 				if (this._state !== 'ready') {
+257: 					// A carrier can deliver the initialize response and subsequent calls in one
+258: 					// batch. Gate host effects until compatibility has actually been checked.
+259: 					if (this.bufferedCalls.length >= 128 || this.bufferedCallBytes + byteLength > MAX_FRAME_BYTES) { throw new Error('App Server initialization call limit reached'); }
+260: 					this.bufferedCalls.push(message as Record<string, unknown>);
+261: 					this.bufferedCallBytes += byteLength;
+262: 				} else {
+263: 					this.handleInboundCall(message as Record<string, unknown>);
+264: 				}
+265: 			} else {
+266: 				this.handleResponse(message as Record<string, unknown>);
+267: 			}
+268: 		} catch (error) {
+269: 			this.fail(toError(error));
+270: 		}
+271: 	};
+272:
+273: 	private readonly handleClosed = (payload: unknown): void => {
+274: 		if (this.disposed || this.isClosing || this._state === 'stopped') { return; }
+275: 		const intentional = isRecord(payload) && payload.intentional === true;
+276: 		const fallback = intentional ? 'App Server connection stopped' : 'App Server bridge closed';
+277: 		const message = isRecord(payload) && typeof payload.message === "string" && payload.message.trim()
+278: 			? payload.message
+279: 			: fallback;
+280: 		if (intentional) { this.shutdown(new Error(message), 'stopped'); return; }
+281: 		this.fail(new Error(message));
+282: 	};
+283:
+284: 	private handleResponse(message: Record<string, unknown>): void {
+285: 		if (!Number.isSafeInteger(message.id) || (message.id as number) <= 0) throw new Error("App Server emitted an invalid response ID");
+286: 		const id = message.id as number;
+287: 		const pending = this.pending.get(id);
+288: 		if (!pending) {
+289: 			// Request IDs never repeat. A response from a retired connection cannot complete
+290: 			// this generation; an unknown or duplicate current response is a protocol failure.
+291: 			if (id < this.firstRequestId) { return; }
+292: 			throw new Error('App Server emitted an unmatched response ID');
+293: 		}
+294: 		const response = decodeAppServerResponse(pending.method, message);
+295: 		this.pending.delete(id);
+296: 		clearTimeout(pending.timeout);
+297: 		if ("error" in response) {
+298: 			pending.reject(new AppServerRemoteError(response.error.code, response.error.message, response.error.data));
+299: 			return;
+300: 		}
+301: 		pending.resolve(response.result);
+302: 	}
+Lines 538-544:
+538: function validateFramePayload(payload: unknown): { frame: string; byteLength: number; } {
+539: 	if (!isRecord(payload) || typeof payload.frame !== "string") throw new Error("App Server bridge frame is invalid");
+540: 	const byteLength = VSBuffer.fromString(payload.frame).byteLength;
+541: 	if (byteLength > MAX_FRAME_BYTES) throw new Error(`App Server frame exceeds ${MAX_FRAME_BYTES} bytes`);
+542: 	return { frame: payload.frame, byteLength };
+543: }
+544:
+
+=== crates/app-server-protocol/src/typescript_decoder.template.ts ===
+SHA-256: 3118529594ca2e5e633015bb8c57c565e076ffda0c6fcb062c7e97aadcecd9a7
+Lines 38-46:
+38: const numericArrays = new WeakMap<Exclude<JsonSchema, boolean>, NumericArrayPlan | null>();
+39: const propertyEntries = new WeakMap<Exclude<JsonSchema, boolean>, readonly (readonly [string, JsonSchema])[]>();
+40: type TaggedUnion = { readonly property: string; readonly variants: ReadonlyMap<string, JsonSchema>; };
+41: const taggedUnions = new WeakMap<Exclude<JsonSchema, boolean>, TaggedUnion | null>();
+42: type MethodVariant = Exclude<JsonSchema, boolean> & { readonly properties: { readonly method: { readonly const: string } } };
+43: // Every generated client result variant has a distinct method, so large results need only validate their own variant.
+44: const clientResultVariants = ((protocolSchema as Exclude<JsonSchema, boolean>).$defs!.ClientResultSchema as Exclude<JsonSchema, boolean>).oneOf!;
+45: const clientResultSchemas = new Map(clientResultVariants.map(schema => [(schema as MethodVariant).properties.method.const, schema] as const));
+46:
+Lines 105-122:
+105: export function decodeAppServerResult<M extends AppServerMethod>(method: M, value: unknown): MethodResult<M> {
+106: 	const schema = clientResultSchemas.get(method);
+107: 	if (!schema) throw failure('$.method', 'unknown method');
+108: 	validate(schema, { method, result: value }, '$');
+109: 	return value as MethodResult<M>;
+110: }
+111:
+112: export function decodeAppServerResponse<M extends AppServerMethod>(method: M, value: unknown): AppServerResponse<M> {
+113: 	const envelope = decodeAppServerEnvelope(value);
+114: 	if (envelope.kind === 'response') {
+115: 		return { jsonrpc: '2.0', id: envelope.id, result: decodeAppServerResult(method, envelope.result) };
+116: 	}
+117: 	if (envelope.kind === 'error') {
+118: 		return { jsonrpc: '2.0', id: envelope.id, error: decodeAppServerError(envelope.error) };
+119: 	}
+120: 	throw failure('$', 'expected a client response');
+121: }
+122:
+Lines 175-195:
+175: function validate(schema: JsonSchema, value: unknown, path: string): void {
+176: 	if (schema === true) return;
+177: 	if (schema === false) throw failure(path, 'value is forbidden');
+178: 	if (schema.$ref) validate(resolveReference(schema.$ref, path), value, path);
+179: 	if (schema.type !== undefined && !matchesType(schema.type, value)) throw failure(path, `expected ${typeDescription(schema.type)}`);
+180: 	if (Object.hasOwn(schema, 'const') && !deepEqual(schema.const, value)) throw failure(path, `expected ${JSON.stringify(schema.const)}`);
+181: 	if (schema.enum && !schema.enum.some(item => deepEqual(item, value))) throw failure(path, 'value is not a registered enum member');
+182: 	validateComposition(schema, value, path);
+183: 	if (typeof value === 'number') validateNumber(schema, value, path);
+184: 	if (typeof value === 'string') validateString(schema, value, path);
+185: 	if (Array.isArray(value)) validateArray(schema, value, path);
+186: 	if (isRecord(value)) validateObject(schema, value, path);
+187: }
+188:
+189: function validateComposition(schema: Exclude<JsonSchema, boolean>, value: unknown, path: string): void {
+190: 	if (schema.oneOf) {
+191: 		const matchingSchemas = matchingOneOf(schema, value, path);
+192: 		if (matchingSchemas.length !== 1) throw failure(path, `expected exactly one schema variant, matched ${matchingSchemas.length}`);
+193: 	}
+194: 	if (schema.anyOf && !schema.anyOf.some(candidate => matches(candidate, value, path))) {
+195: 		throw failure(path, 'value does not match any allowed schema');
+Lines 236-270:
+236: function validateString(schema: Exclude<JsonSchema, boolean>, value: string, path: string): void {
+237: 	if (schema.minLength !== undefined || schema.maxLength !== undefined) {
+238: 		const length = [...value].length;
+239: 		if (schema.minLength !== undefined && length < schema.minLength) throw failure(path, `expected at least ${schema.minLength} characters`);
+240: 		if (schema.maxLength !== undefined && length > schema.maxLength) throw failure(path, `expected at most ${schema.maxLength} characters`);
+241: 	}
+242: 	if (schema.pattern !== undefined && !new RegExp(schema.pattern, 'u').test(value)) throw failure(path, `expected string matching ${schema.pattern}`);
+243: }
+244:
+245: function validateArray(schema: Exclude<JsonSchema, boolean>, value: readonly unknown[], path: string): void {
+246: 	if (schema.minItems !== undefined && value.length < schema.minItems) throw failure(path, `expected at least ${schema.minItems} items`);
+247: 	if (schema.maxItems !== undefined && value.length > schema.maxItems) throw failure(path, `expected at most ${schema.maxItems} items`);
+248: 	// Draft 2020-12 tuples validate their fixed prefix independently of trailing items.
+249: 	// Ordinary arrays have no prefix, so their items schema still applies everywhere.
+250: 	const prefix = schema.prefixItems ?? [];
+251: 	if (!schema.uniqueItems) {
+252: 		if (prefix.length === 0 && schema.items === undefined) return;
+253: 		if (validateNumericArray(schema, value)) return;
+254: 	}
+255: 	for (let index = 0; index < value.length; index++) {
+256: 		const itemSchema = index < prefix.length ? prefix[index] : schema.items;
+257: 		if (itemSchema !== undefined) validate(itemSchema, value[index], `${path}[${index}]`);
+258: 	}
+259: 	if (schema.uniqueItems) {
+260: 		for (let left = 0; left < value.length; left += 1) {
+261: 			for (let right = left + 1; right < value.length; right += 1) {
+262: 				if (deepEqual(value[left], value[right])) throw failure(`${path}[${right}]`, 'expected unique items');
+263: 			}
+264: 		}
+265: 	}
+266: }
+267:
+268: /** Successful numeric checks avoid allocating error paths for every coordinate.
+269:  * Unsupported schemas and invalid values use the general validator, retaining
+270:  * its exact errors. Only immutable schema data is cached, never wire values.
+
+=== crates/app-server/src/server/request_processors/agent.rs ===
+SHA-256: 67f54553d91bbb14ccf4a6ab69a8be1394e25a8b022515427ef64776f6855c56
+Lines 1129-1159:
+1129:     }
+1130:
+1131:     pub(super) fn session_thread_read(&self, params: &Value) -> Result<Value, RpcError> {
+1132:         let params: SessionThreadReadParams = decode(params)?;
+1133:         let include_transient = !matches!(
+1134:             params.history.as_ref(),
+1135:             Some(ThreadSnapshotHistory::Before { .. })
+1136:         );
+1137:         let (thread, history, _) = self.read_session_thread_history(
+1138:             &params.session_id,
+1139:             &params.thread_id,
+1140:             params.history,
+1141:         )?;
+1142:         let voice_transcripts = self
+1143:             .context
+1144:             .agent_runtime()
+1145:             .read_voice_transcripts(&thread.thread_id, thread.sequence)
+1146:             .map_err(core_error)?;
+1147:         let transcript =
+1148:             self.updates
+1149:                 .thread_transcript_snapshot(&thread, include_transient, &voice_transcripts);
+1150:         result(&SessionThreadReadResult {
+1151:             directory: self.context.thread_directory(&params.thread_id)?,
+1152:             thread,
+1153:             transcript,
+1154:             history,
+1155:         })
+1156:     }
+1157:
+1158:     pub(super) fn thread_goal_get(&self, params: &Value) -> Result<Value, RpcError> {
+1159:         let params: ThreadGoalGetParams = decode(params)?;
+Lines 1299-1339:
+1299:     fn read_session_thread_history(
+1300:         &self,
+1301:         session_id: &ash_protocol::SessionId,
+1302:         thread_id: &ash_protocol::ThreadId,
+1303:         history: Option<ThreadSnapshotHistory>,
+1304:     ) -> Result<
+1305:         (
+1306:             ash_protocol::Thread,
+1307:             Option<ThreadHistoryBoundary>,
+1308:             Vec<AgentRequestEnvelope>,
+1309:         ),
+1310:         RpcError,
+1311:     > {
+1312:         let Some(history) = history else {
+1313:             let snapshot = self.read_session_thread_snapshot(session_id, thread_id)?;
+1314:             let pending = snapshot
+1315:                 .turns
+1316:                 .iter()
+1317:                 .filter_map(|turn| {
+1318:                     turn.pending_interaction
+1319:                         .as_ref()
+1320:                         .map(|interaction| AgentRequestEnvelope {
+1321:                             session_id: session_id.clone(),
+1322:                             thread_id: thread_id.clone(),
+1323:                             turn_id: turn.turn_id.clone(),
+1324:                             interaction: interaction.clone(),
+1325:                         })
+1326:                 })
+1327:                 .collect();
+1328:             return Ok((snapshot.public_thread(), None, pending));
+1329:         };
+1330:         let page = self
+1331:             .context
+1332:             .agent_runtime()
+1333:             .read_thread_history(thread_id, &history_window(history)?)
+1334:             .map_err(|error| {
+1335:                 if matches!(error, core_api::CoreError::InvalidInput(_)) {
+1336:                     RpcError::new(-32602, AppServerErrorName::InvalidParams)
+1337:                 } else {
+1338:                     core_error(error)
+1339:                 }
+
+=== crates/thread-transcript/src/model.rs ===
+SHA-256: 30607fcc226af6668fbd6a9ad179f79a7ddc00836ee1803104acf50bfe4a5894
+Lines 127-150:
+127:     pub fn from_thread(thread: &Thread) -> Self {
+128:         let mut entries = Vec::new();
+129:         for turn in &thread.turns {
+130:             entries.extend(
+131:                 turn.items
+132:                     .iter()
+133:                     .filter(|item| !matches!(item, ThreadItem::Reasoning { text, .. } if text.is_empty()))
+134:                     .cloned()
+135:                     .map(|item| ThreadTranscriptEntry::Item {
+136:                         entry_id: item_entry_id(item.item_id().as_str()),
+137:                         turn_id: turn.turn_id.clone(),
+138:                         item,
+139:                         transient: false,
+140:                     }),
+141:             );
+142:             entries.extend(
+143:                 thread
+144:                     .hook_runs
+145:                     .iter()
+146:                     .filter(|run| run.turn_id.as_ref() == Some(&turn.turn_id))
+147:                     .map(|run| ThreadTranscriptEntry::HookRun {
+148:                         entry_id: format!("hook:{}", run.run_id),
+149:                         turn_id: turn.turn_id.clone(),
+150:                         run: run.clone(),
+
+=== src/ash/workbench/services/chat/browser/chatService.ts ===
+SHA-256: 4ea25e594b569efc7647281eb9133fcc2a737576ad18933dd0b4be33bc7c4d81
+Lines 198-215:
+198: 	async readThread(sessionId: SessionId, threadId: ThreadId): Promise<{ readonly thread: Thread; readonly transcript: ThreadTranscriptSnapshot; }> {
+199: 		return this.threadApi.read({ sessionId, threadId });
+200: 	}
+201:
+202: 	async subscribeThread(sessionId: SessionId, threadId: ThreadId, afterSequence: number, owner: object): Promise<ThreadSubscription> {
+203: 		this.assertNotDisposed();
+204: 		const key = JSON.stringify([sessionId, threadId]);
+205: 		let subscription = this.threadSubscriptions.get(key);
+206: 		if (!subscription) {
+207: 			subscription = { generation: this.appServerApi.connectionGeneration, sessionId, threadId, owners: new Set(), pending: new Set() };
+208: 			this.threadSubscriptions.set(key, subscription);
+209: 		}
+210: 		subscription.owners.add(owner);
+211: 		const offeredBeforeSubscribe = subscription.offer;
+212: 		const pending = this.threadApi.subscribe({ sessionId, threadId, afterSequence });
+213: 		subscription.pending.add(pending);
+214: 		try {
+215: 			const result = await pending;
+
+=== src/ash/platform/agentHost/browser/appServerAgentService.ts ===
+SHA-256: f3ac268bae3eb8ed83a3786b9ae1563626857efd36ce9f826d7b47de8f36f878
+Lines 345-350:
+345: 		read: async (params) => {
+346: 			const result = await appServerRequest(connection, 'session/thread/read', params);
+347: 			return { thread: toThread(result.thread), directory: result.directory ? { ...result.directory } : result.directory, transcript: toThreadTranscriptSnapshot(result.transcript) };
+348: 		},
+349: 		configureAdvisor: async (params) => {
+350: 			const result = await appServerRequest(
+Lines 496-552:
+496: function toThread(thread: ThreadDto): Thread {
+497: 	return {
+498: 		agentId: thread.agentId,
+499: 		origin:
+500: 			thread.origin.type === 'message'
+501: 				? {
+502: 					type: 'message',
+503: 					parentThreadId: thread.origin.parentThreadId,
+504: 					parentSequence: thread.origin.parentSequence,
+505: 					itemId: thread.origin.itemId,
+506: 					boundary: thread.origin.boundary
+507: 				}
+508: 				: { ...thread.origin },
+509: 		sessionId: thread.sessionId,
+510: 		threadId: thread.threadId,
+511: 		title: thread.title,
+512: 		status: thread.status,
+513: 		sequence: thread.sequence,
+514: 		goal: thread.goal ? { ...thread.goal } : thread.goal,
+515: 		advisor: thread.advisor,
+516: 		usage: {
+517: 			modelInvocations: thread.usage.modelInvocations,
+518: 			inputTokens: { ...thread.usage.inputTokens },
+519: 			outputTokens: { ...thread.usage.outputTokens },
+520: 			cachedInputTokens: { ...thread.usage.cachedInputTokens },
+521: 			cacheWriteInputTokens: { ...thread.usage.cacheWriteInputTokens },
+522: 			reasoningTokens: { ...thread.usage.reasoningTokens }
+523: 		},
+524: 		turns: thread.turns.map((turn) => ({
+525: 			turnId: turn.turnId,
+526: 			kind: turn.kind,
+527: 			status: turn.status,
+528: 			mode: turn.mode,
+529: 			approvalMode: turn.approvalMode,
+530: 			model: turn.model ? { ...turn.model } : turn.model,
+531: 			reasoningEffort: turn.reasoningEffort,
+532: 			plan: turn.plan
+533: 				? {
+534: 					explanation: turn.plan.explanation,
+535: 					steps: turn.plan.steps.map((step) => ({ ...step }))
+536: 				}
+537: 				: turn.plan,
+538: 			usage: {
+539: 				modelInvocations: turn.usage.modelInvocations,
+540: 				inputTokens: { ...turn.usage.inputTokens },
+541: 				outputTokens: { ...turn.usage.outputTokens },
+542: 				cachedInputTokens: { ...turn.usage.cachedInputTokens },
+543: 				cacheWriteInputTokens: { ...turn.usage.cacheWriteInputTokens },
+544: 				reasoningTokens: { ...turn.usage.reasoningTokens }
+545: 			},
+546: 			items: turn.items.map(toThreadItem),
+547: 			error: turn.error ? { ...turn.error } : turn.error
+548: 		}))
+549: 	};
+550: }
+551:
+552: /** Strip transport-only approval fields and detach nested request payloads from the wire frame. */
+Lines 611-619:
+611: function toThreadTranscriptSnapshot(snapshot: ThreadTranscriptSnapshotDto): ThreadTranscriptSnapshot {
+612: 	return {
+613: 		sessionId: snapshot.sessionId,
+614: 		threadId: snapshot.threadId,
+615: 		durableSequence: snapshot.durableSequence,
+616: 		revision: snapshot.revision,
+617: 		entries: snapshot.entries.map(toThreadTranscriptEntry)
+618: 	};
+619: }
+Lines 640-681:
+640: function toThreadTranscriptEntry(entry: ThreadTranscriptEntryDto): ThreadTranscriptEntry {
+641: 	switch (entry.type) {
+642: 		case 'voiceTranscript': return { type: 'voiceTranscript', entryId: entry.entryId, transcript: { itemId: entry.transcript.itemId, voiceSessionId: entry.transcript.voiceSessionId, mediaEpoch: entry.transcript.mediaEpoch, speaker: entry.transcript.speaker, text: entry.transcript.text, startMs: entry.transcript.startMs, endMs: entry.transcript.endMs, afterItemId: entry.transcript.afterItemId } };
+643: 		case 'hookRun':
+644: 			return {
+645: 				type: 'hookRun',
+646: 				entryId: entry.entryId,
+647: 				turnId: entry.turnId,
+648: 				run: { ...entry.run, status: { ...entry.run.status } }
+649: 			};
+650: 		case 'item':
+651: 			return {
+652: 				type: 'item',
+653: 				entryId: entry.entryId,
+654: 				turnId: entry.turnId,
+655: 				item: toThreadItem(entry.item),
+656: 				transient: entry.transient
+657: 			};
+658: 		case 'turnPlan':
+659: 			return {
+660: 				type: 'turnPlan',
+661: 				entryId: entry.entryId,
+662: 				turnId: entry.turnId,
+663: 				plan: { explanation: entry.plan.explanation, steps: entry.plan.steps.map((step) => ({ ...step })) }
+664: 			};
+665: 		case 'turnError':
+666: 			return { type: 'turnError', entryId: entry.entryId, turnId: entry.turnId, error: { ...entry.error } };
+667: 		case 'toolOutput':
+668: 			return {
+669: 				type: 'toolOutput',
+670: 				entryId: entry.entryId,
+671: 				turnId: entry.turnId,
+672: 				toolCallId: entry.toolCallId,
+673: 				stream: entry.stream,
+674: 				text: entry.text
+675: 			};
+676: 	}
+677: }
+678:
+679: function toThreadItem(item: ThreadItemDto): ThreadItem {
+680: 	// Detach tool provenance and result content from transport values before Chat retains them.
+681: 	// Reads and notifications share this conversion.
+
+=== src/ash/sessions/browser/chatWidgetModel.ts ===
+SHA-256: 7e2173f2c38aaf89217850ab5807c64fac2521260afb6c3a0f4bfe47491cf3e1
+Lines 982-1000:
+982: 		const threadId = active.threadId;
+983: 		const generation = this.generation;
+984: 		const request = ++this.readRequest;
+985: 		try {
+986: 			const result = await this.chatService.readThread(active.session.sessionId, threadId);
+987: 			if (
+988: 				this.isDisposed ||
+989: 				generation !== this.generation ||
+990: 				(request !== this.readRequest && result.thread.sequence <= (this._thread?.sequence ?? 0) && result.transcript.revision <= this.transcriptRevision) ||
+991: 				result.thread.threadId !== this.threadId
+992: 			) return;
+993: 			const snapshot = this.acceptThreadSnapshot(result, request);
+994: 			if (!snapshot.thread) { if (snapshot.transcript) this._onDidChange.fire(); return; }
+995: 			void this.loadContextUsage(generation);
+996: 			this._error = undefined;
+997: 			this._historyStatus.set(undefined);
+998: 			this._state = "ready";
+999: 			this._onDidChange.fire();
+1000: 		} catch (error) {
+Lines 1034-1049:
+1034: 	private acceptThreadSnapshot(result: Awaited<ReturnType<IChatService['readThread']>>, request: number): { readonly thread: boolean; readonly transcript: boolean; } {
+1035: 		const sequence = this._thread?.sequence ?? 0;
+1036: 		const thread = result.thread.sequence >= this.durableSequence && (result.thread.sequence > sequence || result.thread.sequence === sequence && request >= this.snapshotRequest);
+1037: 		if (thread) {
+1038: 			this._thread = result.thread;
+1039: 			this.durableSequence = Math.max(this.durableSequence, result.thread.sequence);
+1040: 			this.snapshotRequest = Math.max(this.snapshotRequest, request);
+1041: 		}
+1042: 		const transcript = result.transcript.revision >= this.transcriptRevision;
+1043: 		if (transcript) {
+1044: 			this.transcriptEntries = result.transcript.entries.map(entry => cloneTranscriptEntry(entry));
+1045: 			this.transcriptRevision = result.transcript.revision;
+1046: 		}
+1047: 		return { thread, transcript };
+1048: 	}
+1049:
+
+=== src/ash/base/common/buffer.ts ===
+SHA-256: 77a7301918eacea18df89f79f80a5cb9cb542308b0e9fdac9b5e7dd199328a0e
+Lines 13-43:
+13: 	}
+14:
+15: 	public static fromString(source: string): VSBuffer {
+16: 		textEncoder ??= new TextEncoder();
+17: 		return new VSBuffer(textEncoder.encode(source));
+18: 	}
+19:
+20: 	public static concat(buffers: readonly VSBuffer[], totalLength?: number): VSBuffer {
+21: 		if (totalLength === undefined) {
+22: 			totalLength = buffers.reduce((length, buffer) => length + buffer.byteLength, 0);
+23: 		}
+24:
+25: 		const result = VSBuffer.alloc(totalLength);
+26: 		let offset = 0;
+27: 		for (const buffer of buffers) {
+28: 			result.set(buffer, offset);
+29: 			offset += buffer.byteLength;
+30: 		}
+31: 		return result;
+32: 	}
+33:
+34: 	public readonly byteLength: number;
+35:
+36: 	private constructor(public readonly buffer: Uint8Array<ArrayBuffer>) {
+37: 		this.byteLength = buffer.byteLength;
+38: 	}
+39:
+40: 	public toString(): string {
+41: 		textDecoder ??= new TextDecoder(undefined, { ignoreBOM: true });
+42: 		return textDecoder.decode(this.buffer);
+43: 	}
+
+=== src/ash/base/common/event.ts ===
+SHA-256: 6d79dab375738b13d6313d213fc3328468c73eae1fc03d29dc93ab8f3ca873a6
+Lines 103-123:
+103: class EventDeliveryQueueImpl implements EventDeliveryQueue {
+104: 	readonly _isEventDeliveryQueue = true;
+105: 	private readonly deliveries: BufferedEventDelivery[] = [];
+106: 	private isDelivering = false;
+107:
+108: 	enqueue(deliveries: readonly BufferedEventDelivery[]): void {
+109: 		this.deliveries.push(...deliveries);
+110: 		if (this.isDelivering) return;
+111: 		this.isDelivering = true;
+112: 		try {
+113: 			for (let index = 0; index < this.deliveries.length; index += 1) {
+114: 				this.deliveries[index]!.deliver();
+115: 			}
+116: 		} finally {
+117: 			this.deliveries.length = 0;
+118: 			this.isDelivering = false;
+119: 		}
+120: 	}
+121: }
+122:
+123: let activeEventBuffer: BufferedEventDelivery[] | undefined;
+
+=== src/ash/platform/agentHost/common/agentService.ts ===
+SHA-256: 11112f01ee775ea8f87464f79cf945f62c709906bf9fcfc44dd1bb5d85fd9bd7
+Lines 850-862:
+850: 	readTrace(params: SessionTraceReadParams): Promise<SessionTraceReadResult>;
+851: 	readTraceDiagnostics(params: SessionTraceDiagnosticsReadParams): Promise<SessionTraceDiagnosticsReadResult>;
+852: 	readTracePayload(params: SessionTracePayloadReadParams): Promise<SessionTracePayloadReadResult>;
+853: 	readTraceGraph(params: SessionReadParams): Promise<SessionTraceGraphReadResult>;
+854: 	configureAdvisor(params: SessionOperationInput<'configureAdvisor'>): Promise<AdvisorConfigureResult>;
+855: 	read(params: { readonly sessionId: string; readonly threadId: string; }): Promise<ThreadRead>;
+856: 	subscribe(params: {
+857: 		readonly sessionId: string;
+858: 		readonly threadId: string;
+859: 		readonly afterSequence: number;
+860: 	}): Promise<ThreadSubscription>;
+861: 	unsubscribe(params: SessionReadParams & { readonly threadId: string; }): Promise<void>;
+862: }
+
+=== src/ash/platform/agentHost/electron-browser/localAgentHostService.ts ===
+SHA-256: 2296c444998cd3e22c527df386edcfcafc187bae3c46378d2e1a9dc6c2374405
+Lines 45-58:
+45: 		this.client = new AppServerProtocolClient(transport, options);
+46: 		this._register(toDisposable(() => this.client.dispose()));
+47: 		this.recovery = this._register(new AppServerConnectionRecovery(
+48: 			this.client,
+49: 			() => this.open(),
+50: 			(message, error) => this.logService.error('app-server', message, error),
+51: 		));
+52: 	}
+53:
+54: 	public get connectionMetadata(): unknown {
+55: 		return this.carrier.connectionMetadata;
+56: 	}
+57:
+58: 	public async connect(): Promise<boolean> {
+Lines 84-104:
+84: 					return socket;
+85: 				},
+86: 			});
+87: 		}
+88: 		return enabled;
+89: 	}
+90:
+91: 	private async open(): Promise<void> {
+92: 		this.assertNotDisposed();
+93: 		this.client.disconnect();
+94: 		this.isEnabled = await this.acquire();
+95: 		if (!this.isEnabled) { return; }
+96: 		try {
+97: 			await this.client.connect();
+98: 		} catch (error) {
+99: 			if (!(error instanceof AppServerProtocolIncompatibleError)
+100: 				|| await invoke(`${this.channelPrefix}:recover-runtime`, error.incompatibility) !== true) { throw error; }
+101: 			this.assertNotDisposed();
+102: 			await this.acquire();
+103: 			await this.client.connect();
+104: 		}

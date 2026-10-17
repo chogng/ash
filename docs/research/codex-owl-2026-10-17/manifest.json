@@ -1,0 +1,135 @@
+{
+  "inspectedOn": "2026-10-17",
+  "timezone": "America/Los_Angeles",
+  "platform": "macOS 27.0.1 (26A434), arm64",
+  "application": {
+    "path": "/Applications/ChatGPT.app",
+    "identifier": "com.openai.codex",
+    "version": "26.1013.40934",
+    "build": "20770",
+    "owlRuntime": {
+      "packagedFrom": "/Users/runner/work/minirepo/minirepo/codex/codex-apps/electron/out/ChatGPT-darwin-arm64/ChatGPT.app",
+      "runtimeArchiveSha": "03e2f596a4b90b53b47848812328d6e19c19b506ce0c4b75387259d9900876cc",
+      "runtimeName": "owl"
+    },
+    "owlAppIni": "[Owl]\nUserDataDirectoryName=Codex\nAppVersion=26.1013.40934\n"
+  },
+  "sourceArtifacts": [
+    {
+      "path": "/Applications/ChatGPT.app/Contents/Resources/app.asar",
+      "bytes": 582430926,
+      "sha256": "5ddc4e48259aa6f979e04529b1a5a4ae54b0f5c4ad6db5c6e004924c10916ddb"
+    },
+    {
+      "path": "/Applications/ChatGPT.app/Contents/Frameworks/Codex Framework.framework/Versions/155.0.8059.80/Codex Framework",
+      "bytes": 272846608,
+      "sha256": "2306fadc440e2ba60052eae9a5de05835c2c6e16d6ef5aae800b09a2746aaeed"
+    }
+  ],
+  "extractedBundles": [
+    {
+      "cacheName": "main-CLu1A25j.js",
+      "archivePath": "/.vite/build/main-CLu1A25j.js",
+      "bytes": 4049636,
+      "sha256": "8aedee047ec0a078e65b24dc917c64ad544220395e773feb6740f4447008a495"
+    },
+    {
+      "cacheName": "src-DsLVGakC.js",
+      "archivePath": "/.vite/build/src-DsLVGakC.js",
+      "bytes": 1608479,
+      "sha256": "28a0918f01c50b0eb17676e894998ad7182f119d978adf0467ccaac3583f259c"
+    },
+    {
+      "cacheName": "application-network-startup-DB1VeU3v.js",
+      "archivePath": "/.vite/build/application-network-startup-DB1VeU3v.js",
+      "bytes": 292827,
+      "sha256": "c338bbdde151467554d63beea59206848ca38a68abe16b0477d983a172c67578"
+    },
+    {
+      "cacheName": "worker.js",
+      "archivePath": "/.vite/build/worker.js",
+      "bytes": 2442306,
+      "sha256": "a23348d825dfa28e9b7b90cea45363ba09cb5192eab4ecc0febe12c808e3d930"
+    },
+    {
+      "cacheName": "bootstrap-Dn-4EbjT.js",
+      "archivePath": "/.vite/build/bootstrap-Dn-4EbjT.js",
+      "bytes": 523922,
+      "sha256": "6d11c372acf41d8b79975a8c99cf7027758977f56cdfd0c7eaa770d362687101"
+    },
+    {
+      "cacheName": "preload.js",
+      "archivePath": "/.vite/build/preload.js",
+      "bytes": 6909,
+      "sha256": "a3e622f8d80a83e58fb3cfcc640fa7e14e6461cccdae9ef7d7b0c821dde256b7"
+    },
+    {
+      "cacheName": "renderer-app-shared-52443cbe9ac4.js",
+      "archivePath": "/webview/assets/app-shared-52443cbe9ac4.js",
+      "bytes": 5846882,
+      "sha256": "64e2b99444d28f5a0067e309a56912749763af09f9b27f083fce2d702a2b9fc3"
+    }
+  ],
+  "formatting": {
+    "tool": "Prettier",
+    "version": "3.9.9",
+    "parser": "babel",
+    "note": "Excerpt line numbers refer to formatted local bundle copies, not original TypeScript. Full bundles are not vendored; evidence excerpts are preserved."
+  },
+  "ashComparison": {
+    "head": "8b26605f93b9afcdaaa1e53870aa6929fa56c141",
+    "scope": "Read-only working-tree snapshots in ash-comparison-evidence.txt; no performance profiling."
+  },
+  "limitations": [
+    "Static implementation is not proof of feature enablement.",
+    "Sample PIDs and addresses are version/run specific.",
+    "Synthetic benchmark runs in separate Node, not live Owl or Ash.",
+    "Original temporary cache is optional; preserved excerpts are sufficient to read this report."
+  ],
+  "evidenceFiles": {
+    "ash-comparison-evidence.txt": {
+      "bytes": 11025,
+      "sha256": "0bd180c020f9dba713fb5526859dcb8d27a2a2b635075d5d99e72517e7b7b3c8"
+    },
+    "benchmark-validation.jsonl": {
+      "bytes": 648,
+      "sha256": "aee3a4087ec96ce67539f184ff1c651977406b9dd86912b5810716f7f244e323"
+    },
+    "ipc-js-evidence.txt": {
+      "bytes": 10844,
+      "sha256": "09d004619a6e01b7b41eb256c2b2f0eb06e33cdf38c2a62989f9d946f3f869c6"
+    },
+    "json-ipc-bench.cjs": {
+      "bytes": 4861,
+      "sha256": "b750ddd519762bf85ad3344f1949c8d272348bf420ae848c45d64bf93aa4c842"
+    },
+    "json-ipc-evidence.txt": {
+      "bytes": 52774,
+      "sha256": "165b22e56b49346aea254cebf13ca3aaa17cd7444b670280aee4e94f5aadb93b"
+    },
+    "node-ui-loop-evidence.txt": {
+      "bytes": 18561,
+      "sha256": "5c79f68e4074a249dee4729de7a641d41dbe4654f54f8c184cc5816b9b8f56c5"
+    },
+    "owl-source-paths.txt": {
+      "bytes": 5141,
+      "sha256": "816229dbf4d42879e7740194cf47cff872b6e0d6c1568624ca44d284c782c9ba"
+    },
+    "preload-evidence.txt": {
+      "bytes": 7142,
+      "sha256": "34495923224307c0776b11594fb06f993d34c8673c696a3107d7f1f9ee29c26b"
+    },
+    "process-architecture-evidence.txt": {
+      "bytes": 32139,
+      "sha256": "4e6da976791eb2033022718734502a579f1ec0e1e80b18616c56eec077bfa138"
+    },
+    "runtime-api-evidence.txt": {
+      "bytes": 30608,
+      "sha256": "7aa49e169815a7de9dd1d10e3fd992c979ea682ccc3aac35b4290a2ebf2b5a17"
+    },
+    "workload-placement-evidence.txt": {
+      "bytes": 56243,
+      "sha256": "70812fccde7b6da3e61678cc9aae749f9757580b9cff8d818ff46df7872b93a2"
+    }
+  }
+}

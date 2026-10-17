@@ -1,0 +1,251 @@
+Ash working-tree comparison snapshot, 2026-10-17. HEAD 8b26605f93b9afcdaaa1e53870aa6929fa56c141.
+These are inspected code paths, not measured performance results.
+
+Source: src/ash/platform/agentHost/electron-main/appServerConnectionRelay.ts, lines 68-84, sha256=fcff9dccc630405d4d6194499e21b86a96df2db0fbe2a1dd70b14798afc6f0c2
+68: 		await this.connectionOperations.schedule(async () => {
+69: 			this.assertNotDisposed();
+70: 			if (token.isCancellationRequested) { throw new CancellationError(); }
+71: 			if (!this.options.enabled) { throw new Error('App Server is disabled'); }
+72: 			if (previousTransport && this.transport.value === previousTransport) { await this.stopConnection(); }
+73: 			// Validation and carrier shutdown can outlive the window that requested the restart.
+74: 			this.assertNotDisposed();
+75: 			if (token.isCancellationRequested) { throw new CancellationError(); }
+76: 			// An acquisition or another start may already own the new connection generation.
+77: 			if (!this.transport.value) {
+78: 				this.transport.value = new ChildProcessJsonlTransport(this.options.processLauncher.launch(), { stdoutMode: 'bytes' });
+79: 				this.setState('starting');
+80: 			}
+81: 			if (this.state === 'ready') { return; }
+82: 			if (!this.renderer || this.renderer.isDestroyed()) { return; }
+83: 			ready = new Promise<void>((resolve, reject) => {
+84: 				resources.add(disposableTimeout(() => reject(new Error('Renderer initialization timed out')), 15_000));
+
+Source: src/ash/platform/agentHost/electron-main/appServerConnectionRelay.ts, lines 235-279, sha256=fcff9dccc630405d4d6194499e21b86a96df2db0fbe2a1dd70b14798afc6f0c2
+235: 			}
+236: 			port1.postMessage({ closed: 'App Server connection closed', intentional });
+237: 			port1.close();
+238: 			transport.dispose();
+239: 		};
+240: 		const data = transport.onData(chunk => {
+241: 			const size = chunk.byteLength;
+242: 			if (sent.length >= 128 || bytes + size > DEFAULT_MAX_JSONL_FRAME_BYTES) { close(); return; }
+243: 			sent.push(size);
+244: 			bytes += size;
+245: 			port1.postMessage({ data: new Uint8Array(chunk) });
+246: 			if (sent.length >= 4) { transport.process.stdout.pause(); }
+247: 		});
+248: 		const ended = transport.onClose(error => {
+249: 			if (closed) { return; }
+250: 			port1.postMessage({ closed: transport.diagnostics() || error.message });
+251: 			close();
+252: 		});
+253: 		port1.on('message', event => {
+254: 			if (closed) { return; }
+255: 			const value: unknown = event.data;
+256: 			if (!isRecord(value)) { close(); return; }
+257: 			if (value.intentional === true) {
+258: 				intentionalClose = true;
+259: 				close();
+260: 				return;
+261: 			}
+262: 			if (value.ack === true) {
+263: 				const size = sent.shift();
+264: 				if (size === undefined) { close(); return; }
+265: 				bytes -= size;
+266: 				if (sent.length < 4) { transport.process.stdout.resume(); }
+267: 				return;
+268: 			}
+269: 			if (!(value.data instanceof Uint8Array) || writes >= 128) { close(); return; }
+270: 			const size = value.data.byteLength;
+271: 			if (writeBytes + size > DEFAULT_MAX_JSONL_FRAME_BYTES) { close(); return; }
+272: 			writeBytes += size;
+273: 			writes++;
+274: 			void transport.sendBytes(value.data).then(() => { if (!closed) { port1.postMessage({ ack: true }); } }, close).finally(() => { writes--; writeBytes -= size; });
+275: 		});
+276: 		port1.on('close', close);
+277: 		port1.start();
+278: 		this.portResources.value = toDisposable(close);
+279: 		renderer.postMessage('ash:app-server:port', { nonce }, [port2]);
+
+Source: src/ash/platform/agentHost/node/childProcessJsonlTransport.ts, lines 9-29, sha256=c168e9afbba2d69f8e9e6f7d550fd6988f469330d4fa96b344db77bee45f607f
+9: export const DEFAULT_MAX_JSONL_FRAME_BYTES = 320 * 1024 * 1024;
+10: export const DEFAULT_MAX_STDERR_BYTES = 65_536;
+11: export const DEFAULT_MAX_PENDING_WRITES = 128;
+12:
+13: export interface ChildProcessJsonlTransportOptions {
+14: 	stdoutMode?: 'jsonl' | 'bytes';
+15: 	maxFrameBytes?: number;
+16: 	maxStderrBytes?: number;
+17: 	maxPendingWrites?: number;
+18: 	closeTimeoutMs?: number;
+19: }
+20:
+21: type FrameListener = (frame: string) => void;
+22: type DataListener = (data: Uint8Array) => void;
+23: type CloseListener = (error: Error) => void;
+24:
+25: /**
+26:  * Owns stream lifecycle for one spawned App Server process. JSONL consumers use the
+27:  * default framing mode; Desktop selects byte delivery and frames in its Renderer.
+28:  *
+29:  * This transport deliberately has no knowledge of JSON-RPC methods or request identifiers.
+
+Source: src/ash/platform/agentHost/node/childProcessJsonlTransport.ts, lines 195-214, sha256=c168e9afbba2d69f8e9e6f7d550fd6988f469330d4fa96b344db77bee45f607f
+195: 	private readonly onStdoutData = (chunk: Buffer | string): void => {
+196: 		if (this.terminalError) return;
+197: 		const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, "utf8");
+198: 		if (this.stdoutMode === 'bytes') {
+199: 			if (bytes.byteLength > this.maxFrameBytes) {
+200: 				this.fail(new Error('App Server byte chunk exceeds transport capacity'));
+201: 				return;
+202: 			}
+203: 			for (const listener of this.dataListeners) {
+204: 				try {
+205: 					listener(bytes);
+206: 				} catch (error) {
+207: 					this.fail(error instanceof Error ? error : new Error('App Server byte listener failed'));
+208: 					return;
+209: 				}
+210: 				if (this.terminalError) {
+211: 					return;
+212: 				}
+213: 			}
+214: 			return;
+
+Source: src/ash/platform/agentHost/electron-browser/appServerMessagePortTransport.ts, lines 112-169, sha256=d4b955867d5dd335d7904fc17e58e1f4cce9271c27a502d5ce22bf72ea4d9dd9
+112: 		super();
+113: 		this._register(toDisposable(() => this.finish()));
+114: 		port.onmessage = event => {
+115: 			if (this.closed) {
+116: 				return;
+117: 			}
+118: 			const value: unknown = event.data;
+119: 			if (!isRecord(value)) {
+120: 				this.finish(new Error('Invalid transport message'));
+121: 				return;
+122: 			}
+123: 			if (value.ack === true) {
+124: 				if (!this.pending.length) {
+125: 					this.finish(new Error('Unexpected transport write acknowledgement'));
+126: 					return;
+127: 				}
+128: 				this.pendingBytes -= this.pending.shift()!;
+129: 				if (!this.pending.length) {
+130: 					for (const waiter of this.drainWaiters) {
+131: 						waiter.resolve();
+132: 					}
+133: 					this.drainWaiters.clear();
+134: 				}
+135: 				return;
+136: 			}
+137: 			if (value.data instanceof Uint8Array && value.data.byteLength <= 320 * 1024 * 1024) {
+138: 				this.dataEmitter.fire(VSBuffer.wrap(new Uint8Array(value.data)));
+139: 				if (!this.closed) {
+140: 					port.postMessage({ ack: true });
+141: 				}
+142: 				return;
+143: 			}
+144: 			if (value.intentional === true) {
+145: 				this.finish();
+146: 				return;
+147: 			}
+148: 			this.finish(new Error(typeof value.closed === 'string' ? value.closed : 'App Server connection closed'));
+149: 		};
+150: 		port.onmessageerror = () => this.finish(new Error('App Server port message could not be decoded'));
+151: 		port.start();
+152: 	}
+153:
+154: 	public write(buffer: VSBuffer): void {
+155: 		if (this.closed || this.ending) {
+156: 			throw this.failure ?? new Error('App Server socket is closed');
+157: 		}
+158: 		if (this.pending.length >= 128 || this.pendingBytes + buffer.byteLength > 320 * 1024 * 1024) {
+159: 			const error = new Error('App Server transport capacity exceeded');
+160: 			this.finish(error);
+161: 			throw error;
+162: 		}
+163: 		this.pending.push(buffer.byteLength);
+164: 		this.pendingBytes += buffer.byteLength;
+165: 		try {
+166: 			this.port.postMessage({ data: buffer.buffer });
+167: 		} catch (error) {
+168: 			this.finish(error instanceof Error ? error : new Error('App Server byte write failed'));
+169: 			throw error;
+
+Source: src/ash/platform/agentHost/browser/appServerSocketTransport.ts, lines 105-137, sha256=7896bae1dda926a36339862f710d70e0a6a4b6a1915df618cb91027ee9be44d8
+105: 		}
+106: 	}
+107:
+108: 	private acceptData(data: VSBuffer): void {
+109: 		let start = 0;
+110: 		for (let index = 0; index < data.byteLength; index++) {
+111: 			if (data.buffer[index] !== 10) {
+112: 				continue;
+113: 			}
+114: 			if (!this.append(data.slice(start, index))) {
+115: 				return;
+116: 			}
+117: 			const bytes = VSBuffer.concat(this.parts, this.bufferedBytes);
+118: 			this.parts = [];
+119: 			this.bufferedBytes = 0;
+120: 			try {
+121: 				if (!bytes.byteLength || bytes.buffer.at(-1) === 13) {
+122: 					throw new Error('App Server JSONL requires nonempty LF frames');
+123: 				}
+124: 				const frame = new TextDecoder('utf-8', { fatal: true }).decode(bytes.buffer);
+125: 				this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame });
+126: 				if (!this.socket) {
+127: 					return;
+128: 				}
+129: 			} catch (error) {
+130: 				this.disconnect();
+131: 				this.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: String(error) });
+132: 				return;
+133: 			}
+134: 			start = index + 1;
+135: 		}
+136: 		this.append(data.slice(start));
+137: 	}
+
+Source: src/ash/platform/agentHost/browser/appServerProtocolClient.ts, lines 240-280, sha256=20e7a2b95402a584dfacf0bb9dce3c66d533b1386662a7d719b8dde82d9f4052
+240: 			this.connectReject = undefined;
+241: 			resolve?.(metadata);
+242: 		} catch (error) {
+243: 			this.fail(toError(error));
+244: 		}
+245: 	};
+246:
+247: 	private readonly handleFrame = (payload: unknown): void => {
+248: 		if (this.disposed || this.isClosing || this._state === 'stopped' || this._state === 'crashed') {
+249: 			return;
+250: 		}
+251: 		try {
+252: 			const { frame, byteLength } = validateFramePayload(payload);
+253: 			const message: unknown = JSON.parse(frame);
+254: 			const envelope = decodeAppServerEnvelope(message);
+255: 			if (envelope.kind === "notification" || envelope.kind === "serverRequest") {
+256: 				if (this._state !== 'ready') {
+257: 					// A carrier can deliver the initialize response and subsequent calls in one
+258: 					// batch. Gate host effects until compatibility has actually been checked.
+259: 					if (this.bufferedCalls.length >= 128 || this.bufferedCallBytes + byteLength > MAX_FRAME_BYTES) { throw new Error('App Server initialization call limit reached'); }
+260: 					this.bufferedCalls.push(message as Record<string, unknown>);
+261: 					this.bufferedCallBytes += byteLength;
+262: 				} else {
+263: 					this.handleInboundCall(message as Record<string, unknown>);
+264: 				}
+265: 			} else {
+266: 				this.handleResponse(message as Record<string, unknown>);
+267: 			}
+268: 		} catch (error) {
+269: 			this.fail(toError(error));
+270: 		}
+271: 	};
+272:
+273: 	private readonly handleClosed = (payload: unknown): void => {
+274: 		if (this.disposed || this.isClosing || this._state === 'stopped') { return; }
+275: 		const intentional = isRecord(payload) && payload.intentional === true;
+276: 		const fallback = intentional ? 'App Server connection stopped' : 'App Server bridge closed';
+277: 		const message = isRecord(payload) && typeof payload.message === "string" && payload.message.trim()
+278: 			? payload.message
+279: 			: fallback;
+280: 		if (intentional) { this.shutdown(new Error(message), 'stopped'); return; }

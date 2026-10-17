@@ -1,0 +1,15 @@
+{
+  "appServerSocketTransport": {
+    "path": "src/ash/platform/agentHost/browser/appServerSocketTransport.ts",
+    "sha256": "7896bae1dda926a36339862f710d70e0a6a4b6a1915df618cb91027ee9be44d8",
+    "methods": [
+      "private acceptData(data: VSBuffer): void {\n\t\tlet start = 0;\n\t\tfor (let index = 0; index < data.byteLength; index++) {\n\t\t\tif (data.buffer[index] !== 10) {\n\t\t\t\tcontinue;\n\t\t\t}\n\t\t\tif (!this.append(data.slice(start, index))) {\n\t\t\t\treturn;\n\t\t\t}\n\t\t\tconst bytes = VSBuffer.concat(this.parts, this.bufferedBytes);\n\t\t\tthis.parts = [];\n\t\t\tthis.bufferedBytes = 0;\n\t\t\ttry {\n\t\t\t\tif (!bytes.byteLength || bytes.buffer.at(-1) === 13) {\n\t\t\t\t\tthrow new Error('App Server JSONL requires nonempty LF frames');\n\t\t\t\t}\n\t\t\t\tconst frame = new TextDecoder('utf-8', { fatal: true }).decode(bytes.buffer);\n\t\t\t\tthis.emit(WEB_APP_SERVER_FRAME_EVENT, { frame });\n\t\t\t\tif (!this.socket) {\n\t\t\t\t\treturn;\n\t\t\t\t}\n\t\t\t} catch (error) {\n\t\t\t\tthis.disconnect();\n\t\t\t\tthis.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: String(error) });\n\t\t\t\treturn;\n\t\t\t}\n\t\t\tstart = index + 1;\n\t\t}\n\t\tthis.append(data.slice(start));\n\t}",
+      "private append(data: VSBuffer): boolean {\n\t\tif (this.bufferedBytes + data.byteLength > 320 * 1024 * 1024) {\n\t\t\tthis.disconnect();\n\t\t\tthis.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: 'App Server frame exceeds transport capacity' });\n\t\t\treturn false;\n\t\t}\n\t\tif (data.byteLength) {\n\t\t\tthis.bufferedBytes += data.byteLength;\n\t\t\tlet owned = VSBuffer.wrap(data.buffer.slice());\n\t\t\t// Keep geometrically sized fragments so tiny packets cannot grow an unbounded array\n\t\t\t// or force a copy of the entire partial frame on each packet.\n\t\t\twhile (this.parts.length && this.parts[this.parts.length - 1].byteLength < owned.byteLength * 2) {\n\t\t\t\towned = VSBuffer.concat([this.parts.pop()!, owned]);\n\t\t\t}\n\t\t\tthis.parts.push(owned);\n\t\t}\n\t\treturn true;\n\t}"
+    ]
+  },
+  "appServerProtocolClient": {
+    "path": "src/ash/platform/agentHost/browser/appServerProtocolClient.ts",
+    "sha256": "20e7a2b95402a584dfacf0bb9dce3c66d533b1386662a7d719b8dde82d9f4052",
+    "validateFramePayload": "function validateFramePayload(payload: unknown): { frame: string; byteLength: number; } {\n\tif (!isRecord(payload) || typeof payload.frame !== \"string\") throw new Error(\"App Server bridge frame is invalid\");\n\tconst byteLength = VSBuffer.fromString(payload.frame).byteLength;\n\tif (byteLength > MAX_FRAME_BYTES) throw new Error(`App Server frame exceeds ${MAX_FRAME_BYTES} bytes`);\n\treturn { frame: payload.frame, byteLength };\n}"
+  }
+}

@@ -3,6 +3,7 @@ import { AppServerProtocolClient } from '../../browser/appServerProtocolClient.j
 import { appServerRequest } from '../../browser/appServerRequest.js';
 import { createTestInitializeResult } from '../common/testAppServerProtocol.js';
 import assert from 'node:assert/strict';
+import { mock } from 'node:test';
 import { test } from 'mocha';
 import { VSBuffer } from '../../../../base/common/buffer.js';
 import { Disposable, type IDisposable } from '../../../../base/common/lifecycle.js';
@@ -10,9 +11,9 @@ import { Emitter } from '../../../../base/common/event.js';
 import { SocketCloseEventType, type ISocket, type SocketCloseEvent, type SocketDiagnosticsEventType } from '../../../../base/parts/ipc/common/ipc.net.js';
 import { InstantiationService } from '../../../instantiation/common/instantiationService.js';
 import { IRemoteSocketFactoryService, RemoteSocketFactoryService } from '../../../remote/common/remoteSocketFactoryService.js';
-import { ManagedRemoteConnection, RemoteConnectionType } from '../../../remote/common/remoteAuthorityResolver.js';
+import { ManagedRemoteConnection, RemoteConnectionType, WebSocketRemoteConnection } from '../../../remote/common/remoteAuthorityResolver.js';
 import { AppServerSocketTransport } from '../../browser/appServerSocketTransport.js';
-import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT } from '../../common/appServerTransport.js';
+import { AppServerFrame, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT } from '../../common/appServerTransport.js';
 
 class PeerSocket extends Disposable implements ISocket {
 	private readonly data = this._register(new Emitter<VSBuffer>());
@@ -45,16 +46,16 @@ class PeerSocket extends Disposable implements ISocket {
 	public traceSocketEvent(_type: SocketDiagnosticsEventType): void { }
 }
 
-function assemble(socket: PeerSocket): { services: InstantiationService; transport: AppServerSocketTransport; } {
+function assemble(socket: PeerSocket, webSocket = false): { services: InstantiationService; transport: AppServerSocketTransport; } {
 	const services = new InstantiationService();
 	services.registerSingleton(IRemoteSocketFactoryService, () => services.createInstance(RemoteSocketFactoryService));
-	const registration = services.get(IRemoteSocketFactoryService).register(RemoteConnectionType.Managed, {
-		supports: connection => connection.id === 9,
+	const registration = services.get(IRemoteSocketFactoryService).register(webSocket ? RemoteConnectionType.WebSocket : RemoteConnectionType.Managed, {
+		supports: () => true,
 		connect: async () => socket,
 	});
 	socket.own(registration);
 	const transport = services.createInstance(AppServerSocketTransport, {
-		getAddress: async () => ({ connectTo: new ManagedRemoteConnection(9), connectionToken: undefined }),
+		getAddress: async () => ({ connectTo: webSocket ? new WebSocketRemoteConnection('localhost', 9) : new ManagedRemoteConnection(9), connectionToken: undefined }),
 		getMetadata: () => ({ protocolVersion: 1, workspaceId: 'w', workspaceRoot: '/workspace' }),
 	});
 	return { services, transport };
@@ -81,12 +82,12 @@ test('App Server socket adapter preserves split UTF-8 frames and serializes one 
 	socket.receive(bytes.slice(14));
 	assert.deepEqual({ sent: socket.written, frames }, {
 		sent: ['{"id":1}\n'],
-		frames: [{ frame: '{"text":"你好"}' }, { frame: '{"id":2}' }],
+		frames: [new AppServerFrame('{"text":"你好"}', Buffer.byteLength('{"text":"你好"}')), new AppServerFrame('{"id":2}', 8)],
 	});
 });
 
 test('malformed or unfinished peer frames close the socket and never reach the protocol client', async () => {
-	for (const bytes of [new Uint8Array([255, 10]), new TextEncoder().encode('{}\r\n'), new TextEncoder().encode('{}')]) {
+	for (const bytes of [new Uint8Array([255, 10]), new TextEncoder().encode('\n'), new TextEncoder().encode('{}\r\n'), new TextEncoder().encode('{}')]) {
 		using socket = new PeerSocket();
 		const assembly = assemble(socket);
 		using services = assembly.services;
@@ -102,6 +103,109 @@ test('malformed or unfinished peer frames close the socket and never reach the p
 		assert.deepEqual(frames, []);
 		assert.equal(socket.isDisposed, true);
 	}
+});
+
+for (const packetBytes of [1, 7, 8192, 65536]) {
+	test(`fragmented frames preserve owned UTF-8 bytes across pages with ${packetBytes}-byte packets`, async () => {
+		using socket = new PeerSocket();
+		const assembly = assemble(socket);
+		using services = assembly.services;
+		using transport = assembly.transport;
+		const frame = JSON.stringify({ text: 'x'.repeat(65520) + '你好😀'.repeat(9000) });
+		const input = new TextEncoder().encode(`${frame}\n{"next":true}\n`);
+		const reusable = new Uint8Array(packetBytes);
+		const frames: unknown[] = [];
+		transport.on(WEB_APP_SERVER_FRAME_EVENT, value => frames.push(value));
+		await connect(transport);
+		for (let offset = 0; offset < input.length; offset += packetBytes) {
+			const length = Math.min(packetBytes, input.length - offset);
+			reusable.set(input.subarray(offset, offset + length));
+			socket.receive(reusable.subarray(0, length));
+			reusable.fill(0);
+		}
+		assert.deepEqual(frames, [new AppServerFrame(frame, Buffer.byteLength(frame)), new AppServerFrame('{"next":true}', 13)]);
+	});
+}
+
+test('large fragmented frames have bounded allocation and only one final concatenation', async () => {
+	using socket = new PeerSocket();
+	const assembly = assemble(socket);
+	using services = assembly.services;
+	using transport = assembly.transport;
+	await connect(transport);
+	const frame = JSON.stringify({ text: 'x'.repeat(256 * 1024) });
+	const input = new TextEncoder().encode(`${frame}\n`);
+	const frames: unknown[] = [];
+	transport.on(WEB_APP_SERVER_FRAME_EVENT, value => frames.push(value));
+	const allocate = mock.method(VSBuffer, 'alloc');
+	const concatenate = mock.method(VSBuffer, 'concat');
+	try {
+		for (let offset = 0; offset < input.length; offset += 1024) {
+			socket.receive(input.subarray(offset, offset + 1024));
+		}
+		assert.deepEqual(frames, [new AppServerFrame(frame, Buffer.byteLength(frame))]);
+		const allocatedBytes = allocate.mock.calls.reduce((sum, call) => sum + call.arguments[0], 0);
+		assert.ok(allocatedBytes <= 2 * input.length + 65536, `allocated ${allocatedBytes} bytes for ${input.length} input bytes`);
+		assert.equal(concatenate.mock.calls.length, 1);
+	} finally {
+		allocate.mock.restore();
+		concatenate.mock.restore();
+	}
+});
+
+test('complete frames and WebSocket message boundaries need no fragment copies', async () => {
+	for (const webSocket of [false, true]) {
+		using socket = new PeerSocket();
+		const assembly = assemble(socket, webSocket);
+		using services = assembly.services;
+		using transport = assembly.transport;
+		await connect(transport);
+		const frame = '{"text":"你好😀"}';
+		const frames: unknown[] = [];
+		transport.on(WEB_APP_SERVER_FRAME_EVENT, value => frames.push(value));
+		const input = new TextEncoder().encode(frame + (webSocket ? '' : '\n'));
+		const allocate = mock.method(VSBuffer, 'alloc');
+		try {
+			socket.receive(input);
+			assert.deepEqual(frames, [new AppServerFrame(frame, Buffer.byteLength(frame))]);
+			assert.equal(allocate.mock.calls.length, 0);
+		} finally { allocate.mock.restore(); }
+	}
+});
+
+test('over-capacity frames close before decoding or retaining their bytes', async () => {
+	const input = new Uint8Array(320 * 1024 * 1024 + 1);
+	for (const webSocket of [false, true]) {
+		using socket = new PeerSocket();
+		const assembly = assemble(socket, webSocket);
+		using services = assembly.services;
+		using transport = assembly.transport;
+		const frames: unknown[] = [];
+		const closed: unknown[] = [];
+		transport.on(WEB_APP_SERVER_FRAME_EVENT, value => frames.push(value));
+		transport.on(WEB_APP_SERVER_CLOSED_EVENT, value => closed.push(value));
+		await connect(transport);
+		socket.receive(input);
+		assert.deepEqual(frames, []);
+		assert.deepEqual(closed, [{ message: 'App Server frame exceeds transport capacity' }]);
+		assert.equal(socket.isDisposed, true);
+	}
+});
+
+test('disconnect from a frame listener stops delivery of the remaining input batch', async () => {
+	using socket = new PeerSocket();
+	const assembly = assemble(socket);
+	using services = assembly.services;
+	using transport = assembly.transport;
+	const frames: unknown[] = [];
+	transport.on(WEB_APP_SERVER_FRAME_EVENT, value => {
+		frames.push(value);
+		transport.send(WEB_APP_SERVER_DISCONNECT_EVENT);
+	});
+	await connect(transport);
+	socket.receive(new TextEncoder().encode('{}\n{}\npartial'));
+	assert.deepEqual(frames, [new AppServerFrame('{}', 2)]);
+	assert.equal(socket.isDisposed, true);
 });
 
 test('disconnect during factory connection disposes a late socket without publishing readiness', async () => {
