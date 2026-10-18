@@ -286,6 +286,7 @@ pub(crate) fn render(
                 if let Some(target) = writer.link.take()
                     && crate::render::links::web_destination(&target).is_none()
                 {
+                    let target = crate::render::links::display_local_destination(&target);
                     writer.text(&format!(" ({target})"));
                 }
                 writer.styles.pop();

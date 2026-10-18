@@ -11,6 +11,7 @@ name = "ash_debug_adapter"
 path = "src/lib.rs"
 
 [dependencies]
+ash-utils-string = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["io-util", "process", "rt-multi-thread", "sync"] }

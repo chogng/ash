@@ -22,6 +22,8 @@ use ash_protocol::ModelRequest;
 use ash_protocol::ModelResponse;
 use ash_protocol::ModelStreamEvent;
 use ash_protocol::SessionId;
+use ash_utils_string::take_bytes_at_char_boundary;
+use ash_utils_string::to_json_string_bounded;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
@@ -1015,10 +1017,9 @@ impl Writer {
         }
         let payload_id = format!("payload-{}", self.manifest.next_payload);
         self.manifest.next_payload = self.manifest.next_payload.saturating_add(1);
-        let mut buffer = BoundedBuffer(Vec::new());
-        let bytes = serde_json::to_writer(&mut buffer, value)
+        let bytes = to_json_string_bounded(value, MAX_PAYLOAD_BYTES)
             .ok()
-            .map(|()| buffer.0);
+            .map(String::into_bytes);
         let mut reference = PayloadRef {
             payload_id,
             kind,
@@ -1078,9 +1079,9 @@ impl Writer {
             event,
         };
         let recorded = (|| -> Result<(), String> {
-            let mut buffer = BoundedBuffer(Vec::new());
-            serde_json::to_writer(&mut buffer, &event).map_err(|error| error.to_string())?;
-            let bytes = buffer.0;
+            let bytes = to_json_string_bounded(&event, MAX_EVENT_METADATA_BYTES)
+                .map_err(|error| error.to_string())?
+                .into_bytes();
             if self.manifest.bytes_written + bytes.len() + 1 > MAX_CAPTURE_BYTES
                 || bytes.len() > MAX_EVENT_METADATA_BYTES
                 || self.event_bytes + bytes.len() + 1 > MAX_CAPTURE_EVENT_BYTES
@@ -1331,11 +1332,7 @@ impl Drop for ModelAttemptTrace {
     }
 }
 fn bounded_message(value: &str) -> String {
-    let mut end = value.len().min(4096);
-    while !value.is_char_boundary(end) {
-        end -= 1;
-    }
-    value[..end].into()
+    take_bytes_at_char_boundary(value, 4096).into()
 }
 
 impl core_api::ExecutionDiagnostics for TraceRecorder {
@@ -1493,21 +1490,6 @@ fn read_bounded(path: &Path, limit: usize) -> Result<Vec<u8>, String> {
         return Err("diagnostic file exceeds recording limit".into());
     }
     Ok(bytes)
-}
-struct BoundedBuffer(Vec<u8>);
-impl Write for BoundedBuffer {
-    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-        if self.0.len().saturating_add(bytes.len()) > MAX_PAYLOAD_BYTES {
-            return Err(std::io::Error::other(
-                "diagnostic payload exceeds recording limit",
-            ));
-        }
-        self.0.extend_from_slice(bytes);
-        Ok(bytes.len())
-    }
-    fn flush(&mut self) -> std::io::Result<()> {
-        Ok(())
-    }
 }
 pub(super) fn unix_ms() -> u64 {
     SystemTime::now()

@@ -20,6 +20,7 @@ use crate::ThreadStore;
 use crate::ThreadWorktreeBinder;
 use crate::ThreadWorktreeBindingRequest;
 use crate::WriterLease;
+use ash_utils_string::take_bytes_at_char_boundary;
 
 use crate::thread_reducer::validate_agent_request;
 use ash_attachments::Attachments;
@@ -1970,13 +1971,7 @@ impl ThreadController {
                     } if owner == turn_id => Some(text),
                     _ => None,
                 })
-                .map(|text| {
-                    let mut end = text.len().min(500);
-                    while !text.is_char_boundary(end) {
-                        end -= 1;
-                    }
-                    text[..end].to_owned()
-                });
+                .map(|text| take_bytes_at_char_boundary(text, 500).to_owned());
             Ok(Some((turn_id.clone(), turn.status, summary)))
         })
     }

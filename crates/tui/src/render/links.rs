@@ -1,5 +1,6 @@
 //! Link text and frame annotations contain no terminal escape sequences.
 
+use ash_utils_string::normalize_markdown_hash_location_suffix;
 use ratatui::layout::Rect;
 use ratatui::text::Line;
 use ratatui::text::Span;
@@ -100,6 +101,27 @@ pub(crate) fn web_destination(value: &str) -> Option<String> {
     }
     let url = Url::parse(value).ok()?;
     (matches!(url.scheme(), "http" | "https") && url.host_str().is_some()).then(|| url.to_string())
+}
+
+/// Normalizes only local file location syntax for copyable display. The destination never gains
+/// an executable hyperlink, and web URL fragments retain their original navigation semantics.
+pub(crate) fn display_local_destination(value: &str) -> std::borrow::Cow<'_, str> {
+    let Some((path, suffix)) = value.rsplit_once('#') else {
+        return value.into();
+    };
+    let local = path.starts_with("file://")
+        || path.starts_with('/')
+        || path.starts_with("~/")
+        || path.starts_with("./")
+        || path.starts_with("../")
+        || path.starts_with("\\\\")
+        || matches!(path.as_bytes(), [drive, b':', b'/' | b'\\', ..] if drive.is_ascii_alphabetic())
+        || (!path.is_empty() && Url::parse(path).is_err());
+    if local && let Some(location) = normalize_markdown_hash_location_suffix(&format!("#{suffix}"))
+    {
+        return format!("{path}{location}").into();
+    }
+    value.into()
 }
 
 /// Wrap text and its links in one pass; destinations never participate in width measurement.

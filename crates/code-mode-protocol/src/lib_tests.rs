@@ -1,6 +1,48 @@
 use super::*;
 
 #[test]
+fn output_limit_preserves_unicode_markers_and_images_at_small_budgets() {
+    let image = OutputItem::Image {
+        image_url: "data:image/png;base64,AAAA".into(),
+        detail: None,
+    };
+    for (budget, expected) in [
+        (0, ""),
+        (11, ""),
+        (12, " [truncated]"),
+        (13, "a [truncated]"),
+        (14, "a [truncated]"),
+        (16, "a中 [truncated]"),
+    ] {
+        let mut response = RuntimeResponse::Running {
+            cell_id: CellId::new("cell-1").unwrap(),
+            content_items: vec![
+                OutputItem::Text {
+                    text: "a中😀".repeat(10),
+                },
+                image.clone(),
+            ],
+        };
+        limit_output(&mut response, Some(budget));
+        let mut content_items = Vec::new();
+        if !expected.is_empty() {
+            content_items.push(OutputItem::Text {
+                text: expected.into(),
+            });
+        }
+        content_items.push(image.clone());
+        assert_eq!(
+            response,
+            RuntimeResponse::Running {
+                cell_id: CellId::new("cell-1").unwrap(),
+                content_items,
+            },
+            "budget {budget}",
+        );
+    }
+}
+
+#[test]
 fn frame_round_trip_uses_little_endian_length_prefix() {
     let value = HostFrame {
         request_id: Some(42),

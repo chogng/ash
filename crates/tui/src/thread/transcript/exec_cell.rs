@@ -8,6 +8,8 @@ use ash_protocol::ToolActivity;
 use ash_protocol::ToolCallId;
 use ash_protocol::ToolName;
 use ash_protocol::ToolOutputStream;
+use ash_utils_string::take_bytes_at_char_boundary;
+use ash_utils_string::truncate_middle_with_marker;
 use std::collections::BTreeSet;
 
 const MAX_GROUP_CALLS: usize = 16;
@@ -575,31 +577,14 @@ fn bounded_text(text: &str, max_bytes: usize, max_lines: usize) -> String {
     if joined.len() <= max_bytes {
         return joined;
     }
-    let head = max_bytes / 2;
-    let tail = max_bytes.saturating_sub(head);
-    let prefix = truncate_utf8(&joined, head);
-    let suffix_start = joined.len().saturating_sub(tail);
-    let suffix_start = next_char_boundary(&joined, suffix_start);
-    format!("{prefix}\n… output omitted …\n{}", &joined[suffix_start..])
+    truncate_middle_with_marker(&joined, max_bytes, "\n… output omitted …\n")
 }
 
 fn truncate_utf8(text: &str, max_bytes: usize) -> String {
     if text.len() <= max_bytes {
         return text.to_owned();
     }
-    let mut end = max_bytes.min(text.len());
-    while !text.is_char_boundary(end) {
-        end = end.saturating_sub(1);
-    }
-    format!("{}…", &text[..end])
-}
-
-fn next_char_boundary(text: &str, start: usize) -> usize {
-    let mut index = start.min(text.len());
-    while index < text.len() && !text.is_char_boundary(index) {
-        index = index.saturating_add(1);
-    }
-    index
+    format!("{}…", take_bytes_at_char_boundary(text, max_bytes))
 }
 
 #[cfg(test)]

@@ -5,6 +5,7 @@ use crate::MemoryId;
 use crate::MemoryScope;
 use crate::MemorySource;
 use crate::MemoryStoreContextRequest;
+use ash_utils_string::take_bytes_at_char_boundary;
 use async_utils::CancellationToken;
 use base64::Engine;
 use schemars::JsonSchema;
@@ -247,14 +248,11 @@ pub(crate) fn excerpt(
         .min()
         .and_then(|offset| offsets.get(offset).copied())
         .unwrap_or(0);
-    let mut start = hit.saturating_sub(max_bytes / 4);
-    while !memory.body.is_char_boundary(start) {
-        start -= 1;
-    }
-    let mut end = (start + max_bytes).min(memory.body.len());
-    while !memory.body.is_char_boundary(end) {
-        end -= 1;
-    }
+    let start = memory
+        .body
+        .floor_char_boundary(hit.saturating_sub(max_bytes / 4));
+    let text = take_bytes_at_char_boundary(&memory.body[start..], max_bytes);
+    let end = start + text.len();
     (
         MemoryCitation {
             memory_id: memory.memory_id.clone(),
@@ -263,7 +261,7 @@ pub(crate) fn excerpt(
             start_byte: start as u32,
             end_byte: end as u32,
         },
-        memory.body[start..end].to_owned(),
+        text.to_owned(),
     )
 }
 

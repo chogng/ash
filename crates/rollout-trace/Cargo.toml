@@ -11,6 +11,7 @@ name = "ash_rollout_trace"
 path = "src/lib.rs"
 
 [dependencies]
+ash-utils-string = { workspace = true }
 core-api = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

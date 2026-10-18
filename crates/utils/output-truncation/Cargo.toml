@@ -10,5 +10,8 @@ doctest = false
 name = "ash_utils_output_truncation"
 path = "src/lib.rs"
 
+[dependencies]
+ash-utils-string = { workspace = true }
+
 [lints]
 workspace = true

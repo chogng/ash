@@ -1202,7 +1202,8 @@ fn estimate_audio(duration_ms: u64) -> ContextTokenCount {
 }
 
 fn estimate_bytes(bytes: usize, overhead: u32) -> ContextTokenCount {
-    let content = u32::try_from(bytes).unwrap_or(u32::MAX).saturating_add(3) / 4;
+    let content =
+        u32::try_from(ash_utils_string::approx_tokens_from_byte_count(bytes)).unwrap_or(u32::MAX);
     ContextTokenCount::new(content.saturating_add(overhead))
 }
 

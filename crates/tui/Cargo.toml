@@ -15,6 +15,7 @@ in-process-tests = ["ash-app-server-client/in-process", "dep:ash-client"]
 
 [dependencies]
 ash-utils-plugins = { workspace = true }
+ash-utils-string = { workspace = true }
 fuzzy-match = { workspace = true }
 features = { workspace = true }
 ash-utils-home-dir = { workspace = true }

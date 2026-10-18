@@ -10,6 +10,7 @@ name = "mxc_sandbox"
 doctest = false
 
 [dependencies]
+ash-utils-string = { workspace = true }
 mxc-sdk = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true, features = ["derive"] }

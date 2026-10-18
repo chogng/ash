@@ -1243,3 +1243,12 @@ fn a_lower_pressure_limit_can_recompact_an_existing_checkpoint_without_new_histo
             < super::estimate_checkpoint(Some(&state.context_checkpoints[0])).get()
     );
 }
+#[test]
+#[cfg(target_pointer_width = "64")]
+fn byte_estimate_converts_to_tokens_before_saturating_the_domain_counter() {
+    assert_eq!(
+        super::estimate_bytes(u32::MAX as usize + 1, 0).get(),
+        1_073_741_824
+    );
+    assert_eq!(super::estimate_bytes(usize::MAX, 100).get(), u32::MAX);
+}

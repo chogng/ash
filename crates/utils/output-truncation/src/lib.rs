@@ -1,9 +1,13 @@
 //! Deterministic UTF-8-safe truncation for model-visible tool and command output.
 
+pub use ash_utils_string::approx_bytes_for_tokens;
+pub use ash_utils_string::approx_token_count;
+pub use ash_utils_string::approx_tokens_from_byte_count;
+use ash_utils_string::plan_middle_truncation;
+use ash_utils_string::take_bytes_at_char_boundary;
+
 /// Default hard byte budget for model-visible output produced by a tool.
 pub const DEFAULT_TOOL_OUTPUT_MAX_BYTES: usize = 1024 * 1024;
-
-const APPROX_BYTES_PER_TOKEN: usize = 4;
 
 /// Selects the deterministic budget used when output is made model-visible.
 ///
@@ -27,21 +31,6 @@ impl ToolOutputTruncationPolicy {
     const fn uses_token_marker(self) -> bool {
         matches!(self, Self::ApproximateTokens(_))
     }
-}
-
-/// Estimates tokens for a bounded truncation decision using four UTF-8 bytes per token.
-pub const fn approx_token_count(text: &str) -> usize {
-    approx_tokens_from_byte_count(text.len())
-}
-
-/// Converts an approximate token budget into its byte budget.
-pub const fn approx_bytes_for_tokens(tokens: usize) -> usize {
-    tokens.saturating_mul(APPROX_BYTES_PER_TOKEN)
-}
-
-/// Estimates tokens from a byte count using the shared four-bytes-per-token rule.
-pub const fn approx_tokens_from_byte_count(bytes: usize) -> usize {
-    bytes.div_ceil(APPROX_BYTES_PER_TOKEN)
 }
 
 /// Adds a model-visible warning to text that was truncated from the middle.
@@ -68,7 +57,7 @@ pub fn formatted_truncate_text(content: &str, policy: ToolOutputTruncationPolicy
     if formatted.len() <= maximum_bytes {
         formatted
     } else {
-        truncate_to_bytes(&formatted, maximum_bytes)
+        take_bytes_at_char_boundary(&formatted, maximum_bytes).to_owned()
     }
 }
 
@@ -95,70 +84,22 @@ fn truncate_middle(content: &str, maximum_bytes: usize, use_token_marker: bool) 
     };
     let reserved_marker = format_truncation_marker(use_token_marker, maximum_units);
     if reserved_marker.len() >= maximum_bytes {
-        return truncate_to_bytes(&reserved_marker, maximum_bytes);
+        return take_bytes_at_char_boundary(&reserved_marker, maximum_bytes).to_owned();
     }
 
-    let content_budget = maximum_bytes - reserved_marker.len();
-    let (removed_chars, prefix, suffix) = split_string(
-        content,
-        content_budget / 2,
-        content_budget - content_budget / 2,
-    );
-    let removed_bytes = content
-        .len()
-        .saturating_sub(prefix.len())
-        .saturating_sub(suffix.len());
-    let marker = format_truncation_marker(
+    let Some(mut plan) = plan_middle_truncation(content, maximum_bytes, &reserved_marker) else {
+        return content.to_owned();
+    };
+    let removed = &content[plan.removed.clone()];
+    plan.marker = format_truncation_marker(
         use_token_marker,
         if use_token_marker {
-            approx_tokens_from_byte_count(removed_bytes)
+            approx_tokens_from_byte_count(removed.len())
         } else {
-            removed_chars
+            removed.chars().count()
         },
     );
-
-    let mut output = String::with_capacity(prefix.len() + marker.len() + suffix.len());
-    output.push_str(prefix);
-    output.push_str(&marker);
-    output.push_str(suffix);
-    truncate_to_bytes(&output, maximum_bytes)
-}
-
-fn split_string(content: &str, beginning_bytes: usize, ending_bytes: usize) -> (usize, &str, &str) {
-    let length = content.len();
-    let tail_start_target = length.saturating_sub(ending_bytes);
-    let mut prefix_end = 0usize;
-    let mut suffix_start = length;
-    let mut removed_chars = 0usize;
-    let mut suffix_started = false;
-
-    for (index, character) in content.char_indices() {
-        let character_end = index + character.len_utf8();
-        if character_end <= beginning_bytes {
-            prefix_end = character_end;
-            continue;
-        }
-
-        if index >= tail_start_target {
-            if !suffix_started {
-                suffix_start = index;
-                suffix_started = true;
-            }
-            continue;
-        }
-
-        removed_chars = removed_chars.saturating_add(1);
-    }
-
-    if suffix_start < prefix_end {
-        suffix_start = prefix_end;
-    }
-
-    (
-        removed_chars,
-        &content[..prefix_end],
-        &content[suffix_start..],
-    )
+    plan.apply(content)
 }
 
 fn format_truncation_marker(use_token_marker: bool, removed_units: usize) -> String {
@@ -167,16 +108,6 @@ fn format_truncation_marker(use_token_marker: bool, removed_units: usize) -> Str
     } else {
         format!("…{removed_units} chars truncated…")
     }
-}
-
-fn truncate_to_bytes(value: &str, maximum_bytes: usize) -> String {
-    let boundary = value
-        .char_indices()
-        .take_while(|(index, character)| *index + character.len_utf8() <= maximum_bytes)
-        .map(|(index, character)| index + character.len_utf8())
-        .last()
-        .unwrap_or(0);
-    value[..boundary].to_owned()
 }
 
 #[cfg(test)]

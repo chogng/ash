@@ -10,6 +10,7 @@ name = "testing"
 doctest = false
 
 [dependencies]
+ash-utils-string = { workspace = true }
 ash-async-utils = { workspace = true }
 ash-file-access = { workspace = true }
 ash-sandboxing = { workspace = true }

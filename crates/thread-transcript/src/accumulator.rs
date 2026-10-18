@@ -19,6 +19,7 @@ use ash_protocol::ToolCallId;
 use ash_protocol::ToolOutputStream;
 use ash_protocol::TurnId;
 use ash_protocol::TurnStatus;
+use ash_utils_string::take_bytes_at_char_boundary;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::VecDeque;
@@ -614,20 +615,11 @@ fn append_bounded(target: &mut String, addition: &str) {
         target.push_str(addition);
         return;
     }
-    let end = char_boundary_at_or_before(addition, available);
-    target.push_str(&addition[..end]);
+    target.push_str(take_bytes_at_char_boundary(addition, available));
     target.push_str(TRUNCATION_MARKER);
 }
 
 fn truncate_to_char_boundary(value: &mut String, maximum: usize) {
-    let end = char_boundary_at_or_before(value, maximum);
+    let end = take_bytes_at_char_boundary(value, maximum).len();
     value.truncate(end);
-}
-
-fn char_boundary_at_or_before(value: &str, maximum: usize) -> usize {
-    let mut end = maximum.min(value.len());
-    while !value.is_char_boundary(end) {
-        end -= 1;
-    }
-    end
 }

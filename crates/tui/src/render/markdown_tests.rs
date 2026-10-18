@@ -1,6 +1,23 @@
 use super::*;
 use crate::render::test_context;
 
+#[test]
+fn local_markdown_locations_are_copyable_without_changing_web_fragments() {
+    let rows = render_text(
+        "[src](src/main.rs#L12C3-L14C9) [readme](README.md#L2) [site](https://example.com/#L7)",
+        160,
+    );
+    let text = rows
+        .iter()
+        .map(|row| row.line.to_string())
+        .collect::<Vec<_>>()
+        .join("\n");
+    insta::assert_snapshot!(text, @"src (src/main.rs:12:3-14:9) readme (README.md:2) site");
+    let links = rows.iter().flat_map(|row| &row.links).collect::<Vec<_>>();
+    assert_eq!(links.len(), 1);
+    assert_eq!(links[0].destination, "https://example.com/#L7");
+}
+
 fn render_text(source: &str, width: usize) -> Vec<HyperlinkLine> {
     let context = test_context();
     let mut output = Vec::new();

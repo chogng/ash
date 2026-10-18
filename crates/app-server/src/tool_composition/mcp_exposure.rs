@@ -74,7 +74,7 @@ pub(super) fn decide_mcp_catalog_search(
 fn estimate_definition_tokens(definitions: &[ToolDefinition]) -> usize {
     // Stable, local v1 estimate: canonical JSON bytes divided by four, rounded up.
     let bytes = serde_json::to_vec(definitions).map_or(usize::MAX, |value| value.len());
-    bytes.saturating_add(3) / 4
+    ash_utils_string::approx_tokens_from_byte_count(bytes)
 }
 
 struct McpMetaToolService {

@@ -97,3 +97,25 @@ fn commonjs_snapshot_captures_data_and_modules_without_compiling_unused_files() 
     data.set_len(super::MAX_MODULE_BYTES as u64 + 1).unwrap();
     assert!(Package::read_vscode("example".into(), root.path().into(), "main.cjs".into()).is_err());
 }
+#[test]
+fn vscode_bootstrap_uses_ascii_literals_and_preserves_unicode_package_sources() {
+    let root = tempfile::tempdir().unwrap();
+    let directory = root.path().join("工作区🚀");
+    std::fs::create_dir(&directory).unwrap();
+    let source = "exports.activate = () => '東京🚀\u{2028}\u{2029}';";
+    std::fs::write(directory.join("入口.cjs"), source).unwrap();
+    std::fs::write(directory.join("package.json"), r#"{"publisher":"example","name":"unicode","contributes":{"commands":[{"command":"example.open","title":"打开🚀"}]}}"#).unwrap();
+    let package =
+        Package::read_vscode("example.unicode".into(), directory, "入口.cjs".into()).unwrap();
+    let wrapper = &package.sources["入口.cjs"];
+    assert!(wrapper.is_ascii());
+    let (_, literal) = wrapper.split_once("loadCommonJS(JSON.parse(").unwrap();
+    let encoded_sources = serde_json::Deserializer::from_str(literal)
+        .into_iter::<String>()
+        .next()
+        .unwrap()
+        .unwrap();
+    let sources: std::collections::BTreeMap<String, String> =
+        serde_json::from_str(&encoded_sources).unwrap();
+    assert_eq!(sources["入口.cjs"], source);
+}

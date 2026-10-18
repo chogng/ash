@@ -8,6 +8,16 @@ use ash_protocol::ToolName;
 use ash_protocol::ToolOutputStream;
 
 #[test]
+fn bounded_output_includes_the_omission_notice_in_its_byte_budget() {
+    let input = format!("head{}tail", "😀".repeat(80));
+    let output = super::bounded_text(&input, 32, 100);
+    assert!(output.len() <= 32);
+    assert!(output.starts_with("head"));
+    assert!(output.ends_with("tail"));
+    assert!(output.contains("output omitted"));
+}
+
+#[test]
 fn exploration_calls_group_by_declared_activity_instead_of_name() {
     let mut cell = ExecCell::start(
         "read-entry".into(),

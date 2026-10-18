@@ -362,11 +362,11 @@ impl ContextCompactionService for ModelContextCompactionService {
                 "context compaction model returned no checkpoint summary".into(),
             ));
         }
-        let estimated_tokens = u32::try_from(ash_prompts::checkpoint_summary_bytes(&summary))
-            .unwrap_or(u32::MAX)
-            .saturating_add(3)
-            / 4
-            + 6;
+        let estimated_tokens = u32::try_from(ash_utils_string::approx_tokens_from_byte_count(
+            ash_prompts::checkpoint_summary_bytes(&summary),
+        ))
+        .unwrap_or(u32::MAX)
+        .saturating_add(6);
         if estimated_tokens > request.target_tokens.get() {
             return Err(CoreError::Context(format!(
                 "context checkpoint exceeds its {} token target",
@@ -395,7 +395,8 @@ pub(super) fn estimate_compaction_input(
     let input =
         encode_compaction_input(covered, previous_checkpoint, source_items, retention_prompt)?;
     let bytes = input.len().saturating_add(COMPACTION_PROMPT.body().len());
-    let content_tokens = u32::try_from(bytes).unwrap_or(u32::MAX).saturating_add(3) / 4;
+    let content_tokens =
+        u32::try_from(ash_utils_string::approx_tokens_from_byte_count(bytes)).unwrap_or(u32::MAX);
     Ok(ContextTokenCount::new(
         content_tokens.saturating_add(COMPACTION_INPUT_OVERHEAD_TOKENS),
     ))

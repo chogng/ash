@@ -10,6 +10,7 @@ name = "ash-external-js-ext"
 path = "src/main.rs"
 
 [dependencies]
+ash-utils-string = { workspace = true }
 external-ext-protocol.workspace = true
 serde_json.workspace = true
 serde.workspace = true

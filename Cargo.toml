@@ -204,9 +204,9 @@ members = [
     "crates/utils/string",
     "crates/utils/path-uri",
     "crates/utils/path-utils",
-    "crates/utils/pty",
     "crates/utils/plugins",
     "crates/utils/process",
+    "crates/utils/pty",
     "crates/utils/sleep-inhibitor",
     "crates/utils/stream-parser",
     "crates/utils/template",
@@ -582,10 +582,10 @@ ash-utils-output-truncation = { path = "crates/utils/output-truncation" }
 ash-utils-string = { path = "crates/utils/string" }
 ash-utils-path = { path = "crates/utils/path-utils" }
 ash-utils-path-uri = { path = "crates/utils/path-uri" }
-ash-utils-stream-parser = { path = "crates/utils/stream-parser" }
-ash-utils-template = { path = "crates/utils/template" }
 ash-utils-plugins = { path = "crates/utils/plugins" }
 ash-utils-process = { path = "crates/utils/process" }
+ash-utils-stream-parser = { path = "crates/utils/stream-parser" }
+ash-utils-template = { path = "crates/utils/template" }
 ash-utils-pty = { path = "crates/utils/pty" }
 sleep_inhibitor = { package = "ash-utils-sleep-inhibitor", path = "crates/utils/sleep-inhibitor" }
 ash-file-access = { path = "crates/file-access" }

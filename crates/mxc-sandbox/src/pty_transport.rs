@@ -1,5 +1,6 @@
 //! Bounded helper environment transport; workload environment stays in the request.
 
+use ash_utils_string::take_bytes_at_char_boundary;
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::fmt;
@@ -38,12 +39,9 @@ pub(super) fn encode(payload: &str, env: &mut HashMap<String, String>) -> Result
     let mut chunks = Vec::new();
     let mut start = 0;
     while start < payload.len() {
-        let mut end = (start + CHUNK_BYTES).min(payload.len());
-        while !payload.is_char_boundary(end) {
-            end -= 1;
-        }
-        chunks.push(payload[start..end].to_owned());
-        start = end;
+        let chunk = take_bytes_at_char_boundary(&payload[start..], CHUNK_BYTES);
+        chunks.push(chunk.to_owned());
+        start += chunk.len();
     }
     env.retain(|key, _| !is_key(key.as_ref()));
     env.insert(COUNT.into(), chunks.len().to_string());

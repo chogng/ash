@@ -6,9 +6,10 @@ license-file.workspace = true
 publish.workspace = true
 
 [features]
-runtime = ["dep:queue", "dep:ash-async-utils", "dep:ash-config", "dep:ash-core", "dep:ash-file-access", "dep:ash-git", "dep:ash-remote", "dep:ash-remote-profile-store", "dep:base64", "dep:features", "dep:worktree", "dep:rusqlite", "dep:state"]
+runtime = ["dep:queue", "dep:ash-async-utils", "dep:ash-config", "dep:ash-core", "dep:ash-file-access", "dep:ash-git", "dep:ash-remote", "dep:ash-remote-profile-store", "dep:ash-utils-string", "dep:base64", "dep:features", "dep:worktree", "dep:rusqlite", "dep:state"]
 
 [dependencies]
+ash-utils-string = { workspace = true, optional = true }
 contract = { package = "ash-task-delivery-contract", path = "../task-delivery-contract" }
 ash-async-utils = { workspace = true, optional = true }
 ash-config = { workspace = true, optional = true }

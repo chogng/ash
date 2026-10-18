@@ -1,3 +1,4 @@
+use ash_utils_string::plan_middle_truncation;
 use std::collections::BTreeMap;
 
 use ash_protocol::ContentPart;
@@ -295,26 +296,30 @@ fn truncate_head_tail(text: &str, max_bytes: usize, continuation: &str) -> Strin
     if text.len() <= max_bytes {
         return text.to_owned();
     }
-    let marker = format!(
+    let mut marker = format!(
         "\n[context truncated: original {} bytes; middle omitted; {continuation}]\n",
         text.len()
     );
-    let content_bytes = max_bytes.saturating_sub(marker.len());
-    let head_end = floor_char_boundary(text, content_bytes / 2);
-    let tail_start = ceil_char_boundary(text, text.len().saturating_sub(content_bytes - head_end));
-    let omitted = tail_start.saturating_sub(head_end);
-    let marker = format!(
-        "\n[context truncated: original {} bytes; omitted {} middle bytes; {continuation}]\n",
-        text.len(),
-        omitted
-    );
-    let mut result = String::with_capacity(max_bytes);
-    result.push_str(&text[..head_end]);
-    result.push_str(&marker);
-    let available_tail = max_bytes.saturating_sub(result.len());
-    let tail_start = ceil_char_boundary(text, text.len().saturating_sub(available_tail));
-    result.push_str(&text[tail_start..]);
-    result
+    loop {
+        let Some(plan) = plan_middle_truncation(text, max_bytes, &marker) else {
+            return text.to_owned();
+        };
+        // Tiny budgets retain a source prefix when even the notice cannot fit.
+        if plan.marker.is_empty() {
+            return plan.apply(text);
+        }
+        let exact_marker = format!(
+            "\n[context truncated: original {} bytes; omitted {} middle bytes; {continuation}]\n",
+            text.len(),
+            plan.removed.len(),
+        );
+        if marker == exact_marker {
+            return plan.apply(text);
+        }
+        // Marker length determines the retained budget. Starting with the shorter notice makes
+        // the omitted count converge as its decimal digit count grows.
+        marker = exact_marker;
+    }
 }
 
 fn truncate_chars(text: &str, max_chars: usize) -> (String, bool) {
@@ -333,25 +338,36 @@ fn truncate_chars(text: &str, max_chars: usize) -> (String, bool) {
     (result, true)
 }
 
-fn floor_char_boundary(text: &str, mut index: usize) -> usize {
-    index = index.min(text.len());
-    while index > 0 && !text.is_char_boundary(index) {
-        index -= 1;
-    }
-    index
-}
-
-fn ceil_char_boundary(text: &str, mut index: usize) -> usize {
-    index = index.min(text.len());
-    while index < text.len() && !text.is_char_boundary(index) {
-        index += 1;
-    }
-    index
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn head_tail_notice_cannot_overrun_a_tiny_byte_budget() {
+        for maximum in 0..20 {
+            let output = truncate_head_tail("中😀abcdefghijklmnop", maximum, "read in chunks");
+            assert!(output.len() <= maximum);
+        }
+    }
+
+    #[test]
+    fn head_tail_notice_counts_the_actual_removed_bytes() {
+        let input = format!("head{}tail", "中😀".repeat(200));
+        let output = truncate_head_tail(&input, 180, "read in chunks");
+        let (prefix, notice_and_tail) = output.split_once("\n[context truncated: ").unwrap();
+        let (notice, tail) = notice_and_tail.split_once("]\n").unwrap();
+        let omitted = notice
+            .split_once("omitted ")
+            .unwrap()
+            .1
+            .split_once(' ')
+            .unwrap()
+            .0
+            .parse::<usize>()
+            .unwrap();
+        assert_eq!(omitted, input.len() - prefix.len() - tail.len());
+        assert!(output.len() <= 180);
+    }
     use ash_protocol::ImageDetail;
     use ash_protocol::ItemId;
     use ash_protocol::ToolCallCaller;

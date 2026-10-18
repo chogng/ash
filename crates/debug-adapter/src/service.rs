@@ -1,3 +1,4 @@
+use ash_utils_string::take_bytes_at_char_boundary;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::path::PathBuf;
@@ -582,18 +583,10 @@ fn spawn_stderr_reader(
                 let remaining = MAX_BUFFERED_STDERR_BYTES.saturating_sub(state.stderr.len());
                 state
                     .stderr
-                    .push_str(&text[..floor_char_boundary(&text, remaining)]);
+                    .push_str(take_bytes_at_char_boundary(&text, remaining));
             }
         }
     })
-}
-
-fn floor_char_boundary(value: &str, maximum_bytes: usize) -> usize {
-    let mut end = value.len().min(maximum_bytes);
-    while end > 0 && !value.is_char_boundary(end) {
-        end -= 1;
-    }
-    end
 }
 
 fn push_message(state: &Arc<Mutex<DebugAdapterState>>, message: Value) {

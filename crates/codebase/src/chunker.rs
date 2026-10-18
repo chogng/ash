@@ -2,6 +2,7 @@ use ash_syntax::AnalysisLimits;
 use ash_syntax::DocumentRevision;
 use ash_syntax::SyntaxDocument;
 use ash_syntax::SyntaxLanguage;
+use ash_utils_string::take_bytes_at_char_boundary;
 use sha2::Digest;
 use sha2::Sha256;
 
@@ -148,7 +149,7 @@ fn append_bounded_ranges(
     ranges: &mut Vec<std::ops::Range<usize>>,
 ) {
     while end.saturating_sub(start) > max_bytes {
-        let hard_end = floor_char_boundary(source, start + max_bytes);
+        let hard_end = start + take_bytes_at_char_boundary(&source[start..end], max_bytes).len();
         let split = source[start..hard_end]
             .rfind('\n')
             .map(|relative| start + relative + 1)
@@ -160,14 +161,6 @@ fn append_bounded_ranges(
     if start < end && !source[start..end].trim().is_empty() {
         ranges.push(start..end);
     }
-}
-
-fn floor_char_boundary(source: &str, mut offset: usize) -> usize {
-    offset = offset.min(source.len());
-    while !source.is_char_boundary(offset) {
-        offset -= 1;
-    }
-    offset
 }
 
 pub(crate) fn line_starts(source: &str) -> Vec<usize> {

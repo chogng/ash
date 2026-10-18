@@ -2,6 +2,22 @@ use super::*;
 use ratatui::style::Style;
 
 #[test]
+fn local_display_normalizes_only_valid_location_suffixes() {
+    for (input, expected) in [
+        ("src/main.rs#L12", "src/main.rs:12"),
+        ("README.md#L3C2-L7C9", "README.md:3:2-7:9"),
+        ("C:\\项目\\main.rs#L4C2", "C:\\项目\\main.rs:4:2"),
+        ("file:///tmp/a.rs#L2", "file:///tmp/a.rs:2"),
+        ("https://example.com/#L2", "https://example.com/#L2"),
+        ("ssh://host/tmp/a.rs#L2", "ssh://host/tmp/a.rs#L2"),
+        ("src/main.rs#Lbad", "src/main.rs#Lbad"),
+        ("src/main.rs#section", "src/main.rs#section"),
+    ] {
+        assert_eq!(display_local_destination(input), expected);
+    }
+}
+
+#[test]
 fn links_wrap_with_wide_text_and_never_enter_the_visible_buffer() {
     let mut line = HyperlinkLine::default();
     line.push(

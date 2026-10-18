@@ -1,3 +1,4 @@
+use ash_utils_string::to_ascii_json_string;
 use std::collections::BTreeMap;
 use std::path::Component;
 use std::path::Path;
@@ -40,7 +41,7 @@ impl Package {
             .and_then(serde_json::Value::as_str)
             .ok_or("missing VS Code name")?;
         let public_extension_id = format!("{publisher}.{name}");
-        let configuration = serde_json::to_string(
+        let configuration = to_ascii_json_string(
             &serde_json::json!({
                 "commands": commands,
                 "extensionId": public_extension_id,
@@ -54,14 +55,16 @@ impl Package {
         // Package files are function bodies/data, not ESM imports. The loader reads only
         // this captured map after confinement and shares one cache throughout the incarnation.
         // Defer package evaluation until its window facts are bound and host activation has begun.
-        let sources = serde_json::to_string(
+        // Keep captured user paths, labels and source text inside ASCII JSON literals, including
+        // line separators and supplementary Unicode characters; runtime values remain unchanged.
+        let sources = to_ascii_json_string(
             &serde_json::to_string(&package.sources).map_err(|error| error.to_string())?,
         )
         .map_err(|error| error.to_string())?;
-        let root = serde_json::to_string(root.to_str().ok_or("package root is not UTF-8")?)
+        let root = to_ascii_json_string(root.to_str().ok_or("package root is not UTF-8")?)
             .map_err(|error| error.to_string())?;
-        let entry_name = serde_json::to_string(&entry).map_err(|error| error.to_string())?;
-        let separator = serde_json::to_string(&std::path::MAIN_SEPARATOR.to_string())
+        let entry_name = to_ascii_json_string(&entry).map_err(|error| error.to_string())?;
+        let separator = to_ascii_json_string(&std::path::MAIN_SEPARATOR.to_string())
             .map_err(|error| error.to_string())?;
         let wrapper = format!(
             "import {{ createApi }} from '@ash/vscode';\nimport {{ loadCommonJS }} from '@ash/commonjs';\nlet bridge, module;\nexport async function activate(context, capabilities, initialization) {{ bridge = createApi({configuration}, JSON.parse(initialization)); module = loadCommonJS(JSON.parse({sources}), {root}, {separator}, {entry_name}, bridge.api); return bridge.activate(context, module.exports.activate, module.exports, JSON.parse(capabilities)); }}\nexport function deactivate() {{ bridge?.deactivate(); return module?.exports.deactivate?.(); }}\n"

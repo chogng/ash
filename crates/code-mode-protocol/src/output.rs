@@ -1,5 +1,6 @@
 use crate::OutputItem;
 use crate::RuntimeResponse;
+use ash_utils_string::take_bytes_at_char_boundary;
 
 /// Bounds the text in one observation without altering the cell's execution or resource ceiling.
 /// UTF-8 bytes are a conservative token estimate when no provider tokenizer is available.
@@ -40,10 +41,7 @@ pub fn limit_output(response: &mut RuntimeResponse, max_tokens: Option<u32>) {
 fn truncate(text: &mut String, remaining: &mut usize) {
     if text.len() > *remaining {
         let suffix = " [truncated]";
-        let mut end = remaining.saturating_sub(suffix.len());
-        while !text.is_char_boundary(end) {
-            end -= 1;
-        }
+        let end = take_bytes_at_char_boundary(text, remaining.saturating_sub(suffix.len())).len();
         text.truncate(end);
         if *remaining >= suffix.len() {
             text.push_str(suffix);

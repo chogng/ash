@@ -1,3 +1,4 @@
+use ash_utils_string::take_bytes_at_char_boundary;
 use std::collections::HashMap;
 use std::time::Duration;
 use std::time::Instant;
@@ -171,10 +172,7 @@ pub(crate) fn run(operation: &Operation, catalog: Catalog, authorization: Author
         let mut completed = completed;
         // Bound retained output for the whole run as well as each individual case.
         if completed.output.len() > remaining_output {
-            let mut end = remaining_output;
-            while !completed.output.is_char_boundary(end) {
-                end -= 1;
-            }
+            let end = take_bytes_at_char_boundary(&completed.output, remaining_output).len();
             completed.output.truncate(end);
             completed.output_truncated = true;
         }
@@ -374,10 +372,7 @@ fn result(
     });
     let output_truncated = capture_truncated || output.len() > 16 * 1024;
     if output.len() > 16 * 1024 {
-        let mut end = 16 * 1024;
-        while !output.is_char_boundary(end) {
-            end -= 1;
-        }
+        let end = take_bytes_at_char_boundary(&output, 16 * 1024).len();
         output.truncate(end);
     }
     TestResult {

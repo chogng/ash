@@ -27,6 +27,7 @@ use ash_remote::SshTarget;
 use ash_remote_profile_store::RemoteConnectionCatalog;
 use ash_remote_profile_store::RemoteConnectionName;
 use ash_remote_profile_store::RemoteConnectionProfileStore;
+use ash_utils_string::take_bytes_at_char_boundary;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use protocol::AgentId;
@@ -343,10 +344,7 @@ impl Runtime {
         let truncated = text.as_ref().is_some_and(|s| s.len() > MAX_TEXT_BYTES);
         let text = text.map(|mut s| {
             if truncated {
-                let mut end = MAX_TEXT_BYTES;
-                while !s.is_char_boundary(end) {
-                    end -= 1;
-                }
+                let end = take_bytes_at_char_boundary(&s, MAX_TEXT_BYTES).len();
                 s.truncate(end);
             }
             s
