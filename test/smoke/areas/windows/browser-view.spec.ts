@@ -655,6 +655,9 @@ for (const locale of ['en', 'zh-CN']) {
 			for (const name of [labels.back, labels.forward, labels.reload, labels.go, labels.help]) {
 				await expect(editor.getByRole('button', { name, exact: true })).toBeVisible();
 			}
+			await workbench.quickaccess.open('>workbench.action.browser.goBack');
+			await expect(workbench.quickaccess.items.filter({ hasText: 'workbench.action.browser.goBack' })).toHaveCount(0);
+			await workbench.quickaccess.close();
 			await addressField.fill(url);
 			await addressField.press('Enter');
 			await expect(editor.getByRole('status')).toHaveText('Navigation page');
@@ -715,7 +718,7 @@ for (const locale of ['en', 'zh-CN']) {
 				await view.webContents.executeJavaScript("history.pushState({}, '', '/routed'); document.title = 'Routed page';");
 			});
 			await expect(addressField).toHaveValue(`${url}routed`);
-			await editor.getByRole('button', { name: labels.back, exact: true }).click();
+			await workbench.quickaccess.runCommand('workbench.action.browser.goBack');
 			await expect(addressField).toHaveValue(url);
 			await editor.getByRole('button', { name: labels.forward, exact: true }).click();
 			await expect(addressField).toHaveValue(`${url}routed`);
@@ -781,6 +784,20 @@ for (const locale of ['en', 'zh-CN']) {
 			try {
 				// No test focus/click occurs after Enter: the product must hand keyboard input to the page.
 				await expect.poll(() => pageView.evaluate(view => view.webContents.isFocused())).toBe(true);
+				await pageView.evaluate(view => {
+					view.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'F6' });
+					view.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'F6' });
+				});
+				await expect(addressField).toBeFocused();
+				await addressField.fill('uncommitted address');
+				await addressField.press('ArrowDown');
+				const suggestions = page.getByRole('combobox', { name: locale === 'en' ? 'Browser address' : '浏览器地址', exact: true });
+				await expect(suggestions).toBeFocused();
+				await suggestions.press('Escape');
+				await expect(suggestions).toHaveCount(0);
+				await expect(addressField).toHaveValue(url);
+				await expect.poll(() => pageView.evaluate(view => view.webContents.isFocused())).toBe(true);
+
 				await pageView.evaluate(view => {
 					view.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Tab' });
 					view.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Tab' });

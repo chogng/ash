@@ -1,7 +1,7 @@
 import { localize, localize2 } from '../../../../nls.js';
 import { ExternalUriOpenerPriority } from '../../../../editor/common/languages.js';
 import { IExternalUriOpenerService, type IExternalUriOpener } from '../../externalUriOpener/common/externalUriOpenerService.js';
-import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { extUri } from '../../../../base/common/resources.js';
 
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
@@ -11,7 +11,7 @@ import { EditorPanes } from '../../../browser/editor.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
-import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { BrowserEditor } from './browserEditor.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
@@ -40,6 +40,7 @@ registerWorkbenchContribution('workbench.contrib.browserView', WorkbenchPhase.Bl
 	const instantiation = services.get(IInstantiationService);
 	const views = services.get(IBrowserViewWorkbenchService);
 	const configuration = services.get(IConfigurationService);
+	store.add(bindNavigationContext(services));
 	store.add(services.get(IExternalUriOpenerService).registerExternalOpenerProvider({
 		async *getOpeners(): AsyncIterable<IExternalUriOpener> {
 			yield {
@@ -85,3 +86,44 @@ import './features/browserDevToolsFeature.js';
 import './features/browserDataStorageFeatures.js';
 
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+
+import { BrowserNavigationFeatures, CONTEXT_BROWSER_CAN_GO_BACK, CONTEXT_BROWSER_CAN_GO_FORWARD } from './features/browserNavigationFeatures.js';
+import { BrowserEditorErrorFeatures } from './features/browserEditorErrorFeatures.js';
+import { WebContentsViewRendererFeature } from './features/webContentsViewRendererFeature.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+
+import { BrowserEditorChatIntegration } from './features/browserEditorChatFeatures.js';
+import { BrowserEditorFindFeature } from './features/browserEditorFindFeature.js';
+
+BrowserEditor.registerContribution(BrowserNavigationFeatures);
+BrowserEditor.registerContribution(BrowserEditorErrorFeatures);
+BrowserEditor.registerContribution(WebContentsViewRendererFeature);
+BrowserEditor.registerContribution(BrowserEditorChatIntegration);
+BrowserEditor.registerContribution(BrowserEditorFindFeature);
+
+function bindNavigationContext(services: ServicesAccessor): DisposableStore {
+	const store = new DisposableStore();
+	// The command palette is outside the pane DOM, so its history keys follow only the active pane.
+	const active = store.add(new DisposableStore());
+	const editors = services.get(IEditorPart);
+	const contexts = services.get(IContextKeyService);
+	const back = CONTEXT_BROWSER_CAN_GO_BACK.bindTo(contexts);
+	const forward = CONTEXT_BROWSER_CAN_GO_FORWARD.bindTo(contexts);
+	const update = (): void => {
+		active.clear();
+		const pane = editors.activePane;
+		const render = (): void => contexts.bufferChangeEvents(() => {
+			back.set(pane instanceof BrowserEditor && pane.model?.state.canGoBack === true);
+			forward.set(pane instanceof BrowserEditor && pane.model?.state.canGoForward === true);
+		});
+		if (pane instanceof BrowserEditor) {
+			active.add(pane.onDidChangeModel(update));
+			if (pane.model) { active.add(pane.model.onDidChangeState(render)); }
+		}
+		render();
+	};
+	store.add(editors.onDidChangeEditors(update));
+	store.add(toDisposable(() => { back.reset(); forward.reset(); }));
+	update();
+	return store;
+}

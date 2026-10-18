@@ -60,6 +60,11 @@ suite('Browser Workbench page lifecycle', () => {
 		f.service.goBack = async () => { calls.push('back'); };
 		f.service.goForward = async () => { calls.push('forward'); };
 		f.service.reload = async (_id, hard) => { calls.push(hard ? 'hard' : 'reload'); };
+		for (const command of ['goBack', 'goForward']) {
+			await f.services.invokeFunction(CommandsRegistry.getCommand('workbench.action.browser.' + command)!);
+		}
+		assert.deepEqual(calls, []);
+		f.events.fire({ type: 'stateChanged', state: { ...info.state, canGoBack: true, canGoForward: true } });
 		for (const command of ['goBack', 'goForward', 'reload', 'hardReload']) {
 			await f.services.invokeFunction(CommandsRegistry.getCommand('workbench.action.browser.' + command)!);
 		}

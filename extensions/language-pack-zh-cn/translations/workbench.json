@@ -2400,8 +2400,11 @@
     "browser.sitePermissionCurrent": "当前决定：{0}",
     "browser.screenshotTooLarge": "完整页面超出截图大小限制。",
     "browser.screenshotUnavailable": "无法截取该页面。",
-    "browser.auditHelp": "在地址栏中按向下键可选择历史或收藏建议。Escape 恢复页面地址。浏览器命令提供后退、前进、重新加载、忽略缓存重新加载、打开文件和关闭浏览器标签页。管理网站权限可更改当前站点的位置、摄像头、麦克风、通知或剪贴板决定。截取的控制台日志和页面截图会保持私密，直到从聊天中的“浏览器选择内容”明确添加。浏览器数据存储和 localhost 链接设置用于新页面和链接打开。",
+    "browser.auditHelp": "在地址栏中按向下键可选择导航、搜索、历史或收藏建议。Enter 接受选中的操作。Escape 恢复页面地址并返回网页；离开建议列表时保留你移动后的焦点。浏览器命令提供后退、前进、重新加载、忽略缓存重新加载、打开文件和关闭浏览器标签页。管理网站权限可更改当前站点的位置、摄像头、麦克风、通知或剪贴板决定。截取的控制台日志和页面截图会保持私密，直到从聊天中的“浏览器选择内容”明确添加。浏览器数据存储和 localhost 链接设置用于新页面和链接打开。",
     "browser.externalCommand": "浏览器：在系统浏览器中打开",
-    "browser.settingsCommand": "浏览器：打开设置"
+    "browser.settingsCommand": "浏览器：打开设置",
+    "browser.enterAddress": "输入网址",
+    "browser.enterAddressOrSearch": "搜索或输入网址",
+    "browser.searchFor": "搜索 {0}"
   }
 }

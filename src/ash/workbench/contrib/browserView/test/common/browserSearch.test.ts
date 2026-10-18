@@ -15,8 +15,10 @@ suite('Browser address intent', () => {
 	test('the production resolver respects disabled search and configured engines', async () => {
 		using configuration = new InMemoryConfigurationService(Registry.as<IConfigurationRegistry>(Extensions.Configuration));
 		const search = new BrowserSearchFeatures(configuration);
-		assert.deepEqual(['', 'example.com/path', 'localhost:5173/a', 'two words'].map(value => search.resolve(value)), [undefined, 'https://example.com/path', 'http://localhost:5173/a', 'two words']);
+		assert.deepEqual(['', 'example.com/path', 'localhost:5173/a', 'two words', 'intranet'].map(value => search.resolve(value)), [undefined, 'https://example.com/path', 'http://localhost:5173/a', 'two words', 'https://intranet']);
 		await configuration.updateValue(BrowserSearchEngineSettingId, BrowserSearchEngineId.DuckDuckGo, ConfigurationTarget.MEMORY);
+		assert.equal(search.resolve('intranet', true), 'https://intranet');
+		assert.equal(search.resolve('intranet'), 'https://duckduckgo.com/?q=intranet');
 		assert.equal(search.resolve('A & B'), 'https://duckduckgo.com/?q=A+%26+B');
 		assert.equal(search.resolve('https://example.test/private'), 'https://example.test/private');
 	});

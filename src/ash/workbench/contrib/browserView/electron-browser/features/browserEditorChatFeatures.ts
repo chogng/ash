@@ -1,4 +1,4 @@
-import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { encodeBase64 } from '../../../../../base/common/buffer.js';
 import { URI } from '../../../../../base/common/uri.js';
@@ -6,29 +6,41 @@ import { localize } from '../../../../../nls.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IChatContextPickService, type ChatContextPick } from '../../../../services/chat/common/chatContextService.js';
 import type { IBrowserViewModel } from '../../common/browserView.js';
+import { BrowserEditor, BrowserEditorContribution } from '../browserEditor.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import type { IElementData } from '../../../../../platform/browserView/common/browserView.js';
 
 const selections = new WeakMap<IBrowserViewModel, BrowserPageSelections>();
 
 /** Split editors borrow one attachment source for the lifetime of their shared page model. */
-export class BrowserEditorChatIntegration extends Disposable {
-	private readonly binding = this._register(new MutableDisposable<IDisposable>());
+export class BrowserEditorChatIntegration extends BrowserEditorContribution {
 	private current: BrowserPageSelections | undefined;
 
-	constructor(@IInstantiationService private readonly instantiation: IInstantiationService) { super(); }
+	constructor(editor: BrowserEditor, @IInstantiationService private readonly instantiation: IInstantiationService) { super(editor); }
 
-	public setModel(model: IBrowserViewModel | undefined, changed: (message: string) => void): void {
-		if (this.current?.model === model) { return; }
-		this.binding.clear();
-		this.current = undefined;
-		if (!model) { return; }
+	protected override onModelAttached(model: IBrowserViewModel, store: DisposableStore): void {
 		let source = selections.get(model);
 		if (!source) {
 			source = this.instantiation.createInstance(BrowserPageSelections, model);
 			selections.set(model, source);
 		}
 		this.current = source;
-		this.binding.value = source.attach(changed);
+		store.add(source.attach(message => {
+			if (this.editor.model === model && !this.isDisposed) { this.editor.setStatus(message); }
+		}));
+	}
+	override onModelDetached(): void { this.current = undefined; }
+	override onContainerCreated(): void {
+		this._register(AccessibleViewRegistry.register({
+			type: AccessibleViewType.View, priority: 100, name: 'browserSelections:' + crypto.randomUUID(),
+			when: ActiveEditorContext.isEqualTo(BrowserViewEditorId),
+			getProvider: () => {
+				const content = this.getAccessibleContent();
+				if (!this.editor.isVisible() || !this.editor.model || !content) { return undefined; }
+				return new AccessibleContentProvider(AccessibleViewProviderId.Browser, { type: AccessibleViewType.View }, () => content, () => this.editor.ensureBrowserFocus(), AccessibilityVerbositySettingId.Browser);
+			},
+		}));
 	}
 
 	public addConsoleLogsToChat(): Promise<void> { return this.current?.captureConsole() ?? Promise.resolve(); }
@@ -161,11 +173,10 @@ import { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
 import { BrowserViewEditorId } from '../../common/browserView.js';
 import { ActiveEditorContext } from '../../../../common/contextkeys.js';
 import { localize2 } from '../../../../../nls.js';
-import type { BrowserEditor } from '../browserEditor.js';
 for (const command of [
-	{ id: BrowserViewCommandId.AddConsoleLogsToChat, title: localize2({ bundle: 'ash.workbench', key: 'browser.consoleCommand' }, 'Browser: Capture Console Logs for Chat'), run: (pane: BrowserEditor) => pane.addConsoleLogsToChat() },
-	{ id: BrowserViewCommandId.AddScreenshotToChat, title: localize2({ bundle: 'ash.workbench', key: 'browser.pageCommand' }, 'Browser: Capture Screenshot for Chat'), run: (pane: BrowserEditor) => pane.addScreenshotToChat(false) },
-	{ id: BrowserViewCommandId.AddFullPageScreenshotToChat, title: localize2({ bundle: 'ash.workbench', key: 'browser.fullPageCommand' }, 'Browser: Capture Full Page Screenshot for Chat'), run: (pane: BrowserEditor) => pane.addScreenshotToChat(true) },
+	{ id: BrowserViewCommandId.AddConsoleLogsToChat, title: localize2({ bundle: 'ash.workbench', key: 'browser.consoleCommand' }, 'Browser: Capture Console Logs for Chat'), run: (pane: BrowserEditor) => pane.getContribution(BrowserEditorChatIntegration)?.addConsoleLogsToChat() },
+	{ id: BrowserViewCommandId.AddScreenshotToChat, title: localize2({ bundle: 'ash.workbench', key: 'browser.pageCommand' }, 'Browser: Capture Screenshot for Chat'), run: (pane: BrowserEditor) => pane.getContribution(BrowserEditorChatIntegration)?.addScreenshotToChat(false) },
+	{ id: BrowserViewCommandId.AddFullPageScreenshotToChat, title: localize2({ bundle: 'ash.workbench', key: 'browser.fullPageCommand' }, 'Browser: Capture Full Page Screenshot for Chat'), run: (pane: BrowserEditor) => pane.getContribution(BrowserEditorChatIntegration)?.addScreenshotToChat(true) },
 ]) {
 	registerAction2(class BrowserCaptureAction extends Action2 {
 		constructor() { super({ id: command.id, title: command.title, f1: true, precondition: ActiveEditorContext.isEqualTo(BrowserViewEditorId) }); }

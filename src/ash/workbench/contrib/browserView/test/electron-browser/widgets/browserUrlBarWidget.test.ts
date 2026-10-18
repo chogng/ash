@@ -35,6 +35,31 @@ suite('Browser URL suggestions', () => {
 		f.accepted.fire({ inBackground: false }); await settle();
 		assert.deepEqual(f.applied, []);
 	});
+	test('accepting a suggestion cannot navigate a page replaced before the action runs', async () => {
+		using f = fixture();
+		f.widget.openUrlPicker();
+		f.pick.selectedItems = [{ label: 'Captured', apply: () => { f.applied.push('captured'); } }];
+		f.accepted.fire({ inBackground: false });
+		f.host.input = undefined;
+		await settle();
+		assert.deepEqual(f.applied, []);
+		assert.equal(f.focused, 0);
+	});
+	test('a slow accepted suggestion respects a later focus change', async () => {
+		using f = fixture();
+		const navigation = promiseWithResolvers<void>();
+		f.widget.openUrlPicker();
+		f.pick.selectedItems = [{ label: 'Slow', apply: () => navigation.promise }];
+		f.accepted.fire({ inBackground: false });
+		await settle();
+		const button = f.dom.window.document.createElement('button');
+		f.dom.window.document.body.append(button);
+		button.focus();
+		navigation.resolve();
+		await settle();
+		assert.equal(f.dom.window.document.activeElement, button);
+		assert.equal(f.focused, 0);
+	});
 	test('keyboard dismissal returns to the page and clearing cancels an open suggestion picker', async () => {
 		using f = fixture(); f.widget.refreshUrl();
 		f.widget.inputElement.value = 'unfinished';

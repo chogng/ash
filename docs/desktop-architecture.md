@@ -1317,6 +1317,32 @@ App Server 先检查当前 `network.allowedHosts`，再通过 Core 的网络审�
 授权和 App Server 协议，用户页面默认私有，分享只授予指定 Thread 的当前连接。PDF、trace、network inspection、console 和高级 locator
 属于后续独立契约。当前连接、释放与恢复的细节见[前端连接与浏览器能力](design/app-server-connection.md)。
 
+### 7.3 BrowserView 双语导航与对齐范围
+
+2026-10-18 在当前 checkout 继续完成原 `browser-view-todo.md` 的实现。原双语导航已随
+`b67d57566` 提交；本轮对照本地 VS Code `a2acc8c864a` 的公开契约、生产调用及测试，
+闭合以下三条现有行为链：
+
+- Back／Forward 的 `Action2` 条件跟随活动页面的真实历史状态。既有 BrowserView 注册入口拥有窗口的导航 context keys，并随活动编辑器、模型切换和释放更新；隐藏页不能覆盖当前命令条件，直接执行命令也不会向无对应历史的页面发送操作。
+- `BrowserEditorContribution` 统一模型 attach／detach 和模型级订阅清理。导航、加载／失败状态、页面展示、Find 与 Chat 选择内容均由现有注册入口创建贡献；编辑器只协调输入、widget 挂载、可见性、布局和焦点，不再逐项调用 feature 的 `setModel`。导航借用历史／收藏／权限／缩放／仿真 helper；Main 继续拥有页面状态，分栏继续借用同一页面和选择内容源。
+- `BrowserUrlBarWidget` 继续使用 Ash 的 InputBox 和 Quick Input。导航提供主要动作及 placeholder：启用搜索后，地址优先提供转到，文本查询提供搜索，歧义输入同时提供两者；搜索设置变化会刷新已打开列表。Escape 恢复页面地址并回到网页，普通失焦保留用户的新焦点，迟到建议及异步接受不能操作替代页面或抢走后续焦点。禁用搜索时，直接 Enter 与列表的转到操作对无 scheme 的主机名使用同一 URL 规则。
+
+中英文 ARIA、导航文案、Loading／Stop、失败提示、帮助和新增搜索文案均通过客户端 NLS。
+页面脚本和 Electron `WebContentsView` 的焦点转交继续由原 Main／Renderer 边界负责。
+真实 Electron 回归曾发现 document 捕获阶段的全局快捷键先消费 Escape；地址栏改在所属
+window 的捕获阶段记录取消后，真实网页焦点往返通过，未修改共享快捷键或 Quick Input 的行为。
+
+本轮正常入口验证：
+
+- BrowserView 单测 153 项、21 个文件通过；最后地址解析／建议改动另有 7 项定向单测通过。
+- Chromium `browserView.integration.spec.ts` 12 项通过，包含双语历史、模型替换、导航命令条件、搜索设置即时更新、接受／取消／失焦，以及双语各 1000／500／240px 布局和菜单键盘操作。
+- 真实 macOS Electron 10 项通过，覆盖双语导航／键盘、下载、网站权限、分享、选择与批注附件、分栏及关闭释放；补强的双语键盘场景另有 2 项通过，验证 F6 返回地址栏、建议列表 Escape 后真实网页获得焦点、Tab 输入及命令面板往返。
+- 正常 Desktop 构建、Renderer／automation 类型检查、定向 TS 格式及 `git diff --check` 通过。日志保存在 `.build/browser-view-implementation-20261018/`；早期失败单独保留，未用后续通过结果覆盖。
+
+本节关闭当前已选行为链，不宣称整个 BrowserView 的 API 或所有能力均与上游等同。
+地址栏 DOM 使用 Ash 组件；证书 URL renderer 等尚无当前 producer 的可选端口没有新增空实现。
+本轮未运行 VS Code 窗口配对或 Windows／Linux 实机验收；其他浏览器能力限制仍见上一节。
+
 ## 8. Desktop 提交 App Server 能力需求
 
 Desktop 开发者在实现前提交一份符合

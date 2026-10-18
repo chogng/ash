@@ -14,6 +14,8 @@ export type IUrlPickerItem = IQuickPickItem & { readonly id?: string; apply?(inp
 export interface IBrowserUrlBarHost {
 	readonly input: BrowserEditorInput | undefined;
 	ensureBrowserFocus(): void;
+	getPrimaryActions?(text: string): readonly IUrlPickerItem[];
+	getPlaceholder?(): string;
 }
 
 /** Owns address editing; updates from Chromium do not overwrite an address the user is editing. */
@@ -22,6 +24,7 @@ export class BrowserUrlBarWidget extends Disposable {
 	public readonly inputElement: HTMLInputElement;
 	private readonly input: InputBox;
 	private readonly picker = this._register(new MutableDisposable<DisposableStore>());
+	private refreshPicker: (() => void) | undefined;
 	private providers: readonly IBrowserUrlSuggestionProvider[] = [];
 	constructor(private readonly host: IBrowserUrlBarHost, parent: HTMLElement, private readonly navigate: (text: string) => Promise<void>, private readonly report: (error: unknown) => void,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
@@ -38,6 +41,7 @@ export class BrowserUrlBarWidget extends Disposable {
 		this.inputElement = this.input.inputElement;
 		this.inputElement.type = 'url';
 		this._register(addDisposableListener<KeyboardEvent>(this.inputElement, 'keydown', event => {
+			if (event.isComposing) { return; }
 			if (event.key === 'ArrowDown') { event.preventDefault(); this.openUrlPicker(); }
 			else if (event.key === 'Escape') { event.preventDefault(); this.inputElement.value = this.host.input?.model?.state.url ?? ''; this.host.ensureBrowserFocus(); }
 		}));
@@ -49,13 +53,16 @@ export class BrowserUrlBarWidget extends Disposable {
 	public openUrlPicker(): void {
 		const input = this.host.input;
 		if (!input?.model) { return; }
+		const model = input.model;
 		const resources = new DisposableStore();
 		this.picker.value = resources;
 		const picker = resources.add(this.quickInput.createQuickPick<IUrlPickerItem>());
 		const cancellation = resources.add(new MutableDisposable<import('../../../../../base/common/lifecycle.js').IDisposable>());
 		let revision = 0;
 		let accepted = false;
+		let escape = false;
 		picker.ariaLabel = localize({ bundle: 'ash.workbench', key: 'browser.address' }, 'Browser address');
+		picker.placeholder = this.host.getPlaceholder?.() ?? '';
 		picker.value = this.value;
 		picker.valueSelection = { start: 0, end: picker.value.length };
 		picker.sortByLabel = false;
@@ -66,26 +73,47 @@ export class BrowserUrlBarWidget extends Disposable {
 			const source = new CancellationTokenSource();
 			cancellation.value = toDisposable(() => source.dispose(true));
 			const text = picker.value;
-			const primary = { label: localize({ bundle: 'ash.workbench', key: 'browser.goToAddress' }, 'Go to {0}', text), alwaysShow: true };
-			picker.items = [primary];
+			const fallback: IUrlPickerItem = { id: 'address', label: localize({ bundle: 'ash.workbench', key: 'browser.goToAddress' }, 'Go to {0}', text), alwaysShow: true };
+			const primary = (this.host.getPrimaryActions?.(text.trim()) ?? [fallback]).map(item => ({ ...item, alwaysShow: true }));
+			picker.placeholder = this.host.getPlaceholder?.() ?? '';
+			picker.items = primary;
+			picker.activeItems = primary.filter(item => item.id === active).slice(0, 1);
+			if (!picker.activeItems.length) { picker.activeItems = primary.slice(0, 1); }
 			void Promise.allSettled(this.providers.map(provider => provider.getSuggestions({ text, input }, source.token))).then(results => {
-				if (source.token.isCancellationRequested || request !== revision || this.picker.value !== resources || this.host.input !== input) { return; }
+				if (source.token.isCancellationRequested || request !== revision || this.picker.value !== resources || this.host.input !== input || input.model !== model) { return; }
 				const items = results.flatMap((result, index) => result.status === 'fulfilled' && result.value.length ? [{ type: 'separator' as const, label: this.providers[index]!.label }, ...filterQuickPickItems(result.value, text)] : []);
-				picker.items = [primary, ...items];
-				picker.activeItems = active ? picker.items.filter(item => !('type' in item) && item.id === active) as IUrlPickerItem[] : [primary];
+				picker.items = [...primary, ...items];
+				const selectedId = picker.activeItems[0]?.id;
+				const retained = selectedId ? picker.items.filter(item => !('type' in item) && item.id === selectedId) as IUrlPickerItem[] : [];
+				picker.activeItems = retained.length ? retained : primary.slice(0, 1);
 			});
 		};
+		this.refreshPicker = () => load();
+		resources.add(toDisposable(() => { if (this.picker.value === resources || !this.picker.value) { this.refreshPicker = undefined; } }));
+		// Window capture observes dismissal before Workbench's document-level keybinding handler consumes Escape.
+		resources.add(addDisposableListener<KeyboardEvent>(this.inputElement.ownerDocument.defaultView!, 'keydown', event => {
+			if (this.picker.value === resources && !event.isComposing && event.key === 'Escape') { escape = true; }
+		}, true));
 		resources.add(picker.onDidChangeValue(() => load(true)));
 		for (const provider of this.providers) { if (provider.onDidChange) { resources.add(provider.onDidChange(() => load())); } }
 		resources.add(picker.onDidAccept(() => {
 			accepted = true;
-			const selected = picker.selectedItems[0]; const text = picker.value;
+			const selected = picker.selectedItems[0] ?? picker.activeItems[0]; const text = picker.value;
 			picker.hide();
-			if (this.host.input !== input || input.isDisposed) { return; }
-			void Promise.resolve().then(() => selected?.apply ? selected.apply(input) : this.navigate(text)).then(() => { if (!this.isDisposed && this.host.input === input) { this.host.ensureBrowserFocus(); } }, this.report);
+			const focused = this.inputElement.ownerDocument.activeElement;
+			const address = this.value;
+			void Promise.resolve().then(async () => {
+				if (this.isDisposed || this.host.input !== input || input.model !== model || input.isDisposed) { return; }
+				if (selected?.apply) { await selected.apply(input); }
+				else { await this.navigate(text); }
+				if (!this.isDisposed && this.host.input === input && input.model === model && this.inputElement.ownerDocument.activeElement === focused && this.value === address) { this.host.ensureBrowserFocus(); }
+			}).catch(error => { if (!this.isDisposed && this.host.input === input && input.model === model) { this.report(error); } });
 		}));
 		resources.add(picker.onDidHide(() => {
-			if (!accepted && this.picker.value === resources && this.host.input === input) { this.inputElement.value = picker.value; this.inputElement.focus(); }
+			if (!accepted && this.picker.value === resources && this.host.input === input) {
+				this.inputElement.value = model.state.url;
+				if (escape) { this.host.ensureBrowserFocus(); }
+			}
 			if (this.picker.value === resources) { this.picker.clear(); }
 		}));
 		resources.add(toDisposable(() => picker.hide()));
@@ -94,6 +122,8 @@ export class BrowserUrlBarWidget extends Disposable {
 	public get value(): string { return this.inputElement.value; }
 	public refreshUrl(): void {
 		this.input.enabled = !!this.host.input?.model;
+		this.inputElement.placeholder = this.host.getPlaceholder?.() ?? '';
+		this.refreshPicker?.();
 		const url = this.host.input?.model?.state.url ?? '';
 		this.previewUrl(url);
 	}

@@ -124,7 +124,7 @@ declare global {
 		ashEditorTitleIntegration: {
 			split(): Promise<void>;
 			open(name: string, preview?: boolean): Promise<void>;
-			state(): { active: string; groups: { id: string; visible: boolean; locked: boolean; tabs: string[]; previews: boolean[]; }[]; };
+			state(): { active: IEditorPart['activeGroup']['id']; groups: { id: IEditorPart['activeGroup']['id']; visible: boolean; locked: boolean; tabs: string[]; previews: boolean[]; }[]; };
 			activate(index: number): void;
 		};
 		ashChatTitleIntegration: {

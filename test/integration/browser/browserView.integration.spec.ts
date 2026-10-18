@@ -25,6 +25,75 @@ for (const locale of ['en', 'zh-CN']) {
 		await page.evaluate(() => window.ashBrowserViewIntegration.dispose());
 	});
 
+	test(`browser model replacement retires navigation state and command conditions in ${locale}`, async ({ page }) => {
+		await page.goto(`/browserView.html?locale=${locale}`);
+		await page.waitForFunction(() => !!window.ashBrowserViewIntegration);
+		const back = page.getByRole('button', { name: locale === 'en' ? 'Back' : '后退', exact: true });
+		const forward = page.getByRole('button', { name: locale === 'en' ? 'Forward' : '前进', exact: true });
+		await page.evaluate(() => window.ashBrowserViewIntegration.history(false, false));
+		await expect(back).toBeDisabled();
+		await expect(forward).toBeDisabled();
+		expect(await page.evaluate(() => window.ashBrowserViewIntegration.commands())).toEqual([]);
+		await page.evaluate(() => window.ashBrowserViewIntegration.history(true, false));
+		await expect(back).toBeEnabled();
+		expect(await page.evaluate(() => window.ashBrowserViewIntegration.commands())).toEqual(['workbench.action.browser.goBack']);
+		await back.click();
+		await page.evaluate(() => window.ashBrowserViewIntegration.attach('second'));
+		await page.evaluate(() => window.ashBrowserViewIntegration.history(false, true));
+		await page.evaluate(() => window.ashBrowserViewIntegration.oldPageStatus());
+		await expect(page.getByRole('status')).toHaveText('Browser layout');
+		await expect(back).toBeDisabled();
+		await expect(forward).toBeEnabled();
+		expect(await page.evaluate(() => window.ashBrowserViewIntegration.commands())).toEqual(['workbench.action.browser.goForward']);
+		await forward.click();
+		expect(await page.evaluate(() => [...window.ashBrowserViewIntegration.calls])).toEqual(['back', 'forward']);
+		await page.evaluate(() => window.ashBrowserViewIntegration.detach());
+		expect(await page.evaluate(() => window.ashBrowserViewIntegration.commands())).toEqual([]);
+		await expect(page.locator('.ash-browser-address input')).toBeDisabled();
+		await expect(page.getByRole('status')).toBeEmpty();
+		await page.evaluate(() => window.ashBrowserViewIntegration.dispose());
+	});
+
+	test(`browser address suggestions apply live search settings and preserve dismissal focus in ${locale}`, async ({ page }) => {
+		await page.goto(`/browserView.html?locale=${locale}`);
+		await page.waitForFunction(() => !!window.ashBrowserViewIntegration);
+		const label = locale === 'en' ? 'Browser address' : '浏览器地址';
+		const address = page.getByRole('textbox', { name: label, exact: true });
+		await expect(address).toHaveAttribute('placeholder', locale === 'en' ? 'Enter a URL' : '输入网址');
+		await page.evaluate(() => window.ashBrowserViewIntegration.setSearch('google'));
+		await expect(address).toHaveAttribute('placeholder', locale === 'en' ? 'Search or enter a URL' : '搜索或输入网址');
+		await address.fill('intranet');
+		await address.press('ArrowDown');
+		const picker = page.getByRole('combobox', { name: label, exact: true });
+		await expect(picker).toBeFocused();
+		const options = page.getByRole('option');
+		await expect(options).toContainText([locale === 'en' ? 'Search for intranet' : '搜索 intranet', locale === 'en' ? 'Go to intranet' : '转到 intranet']);
+		await picker.fill('two words');
+		await expect(options).toHaveCount(1);
+		await page.evaluate(() => window.ashBrowserViewIntegration.setSearch('duckduckgo'));
+		await picker.press('Enter');
+		await expect.poll(() => page.evaluate(() => [...window.ashBrowserViewIntegration.calls])).toEqual(['https://duckduckgo.com/?q=two+words']);
+		await address.fill('https://example.com/');
+		await address.press('ArrowDown');
+		await expect(picker).toBeFocused();
+		await expect(options).toContainText([locale === 'en' ? 'Go to https://example.com/' : '转到 https://example.com/', locale === 'en' ? 'Search for https://example.com/' : '搜索 https://example.com/']);
+		await picker.press('Escape');
+		await expect(picker).toHaveCount(0);
+		await expect(address).toHaveValue('https://example.com/');
+		await expect(page.locator('.ash-browser-viewport')).toBeFocused();
+		await address.fill('unfinished');
+		await address.press('ArrowDown');
+		await expect(picker).toBeFocused();
+		const back = page.getByRole('button', { name: locale === 'en' ? 'Back' : '后退', exact: true });
+		await back.focus();
+		await expect(picker).toHaveCount(0);
+		await expect(back).toBeFocused();
+		await expect(address).toHaveValue('https://example.com/');
+		await page.evaluate(() => window.ashBrowserViewIntegration.setSearch('none'));
+		await expect(address).toHaveAttribute('placeholder', locale === 'en' ? 'Enter a URL' : '输入网址');
+		await page.evaluate(() => window.ashBrowserViewIntegration.dispose());
+	});
+
 	for (const width of [1000, 500, 240]) {
 		test(`browser navigation leaves usable address space and keyboard page actions in ${locale} at ${width}px`, async ({ page }, testInfo) => {
 			await page.setViewportSize({ width, height: 600 });

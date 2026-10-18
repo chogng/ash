@@ -1,3 +1,4 @@
+import { BrowserNavigationFeatures } from './browserNavigationFeatures.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import type { IAction } from '../../../../../base/common/actions.js';
 import { localize } from '../../../../../nls.js';
@@ -84,6 +85,6 @@ registerAction2(class ManageBrowserPermissionsAction extends Action2 {
 	constructor() { super({ id: BrowserViewCommandId.ManagePermissions, title: localize2({ bundle: 'ash.workbench', key: 'browser.managePermissionsCommand' }, 'Browser: Manage Website Permissions'), f1: true, precondition: ActiveEditorContext.isEqualTo(BrowserViewEditorId) }); }
 	override async run(accessor: import('../../../../../platform/instantiation/common/instantiation.js').ServicesAccessor): Promise<void> {
 		const pane = accessor.get(IEditorPart).activePane;
-		if (pane?.id === BrowserViewEditorId) { await (pane as BrowserEditor).managePermissions(); }
+		if (pane?.id === BrowserViewEditorId) { await (pane as BrowserEditor).getContribution(BrowserNavigationFeatures)?.permissions.manage(); }
 	}
 });

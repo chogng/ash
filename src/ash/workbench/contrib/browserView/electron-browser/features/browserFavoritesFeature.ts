@@ -1,3 +1,4 @@
+import { BrowserNavigationFeatures } from './browserNavigationFeatures.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import type { IAction } from '../../../../../base/common/actions.js';
 import { isRecord } from '../../../../../base/common/types.js';
@@ -81,6 +82,6 @@ registerAction2(class BrowserFeatureAction extends Action2 {
 	constructor() { super({ id: BrowserViewCommandId.ToggleFavorite, title: localize2({ bundle: 'ash.workbench', key: 'browser.favoriteCommand' }, 'Browser: Toggle Favorite'), f1: true, precondition: ActiveEditorContext.isEqualTo(BrowserViewEditorId) }); }
 	override async run(accessor: import('../../../../../platform/instantiation/common/instantiation.js').ServicesAccessor): Promise<void> {
 		const pane = accessor.get(IEditorPart).activePane;
-		if (pane?.id === BrowserViewEditorId) { await (pane as BrowserEditor).toggleFavorite(); }
+		if (pane?.id === BrowserViewEditorId) { await (pane as BrowserEditor).getContribution(BrowserNavigationFeatures)?.favorites.toggle(); }
 	}
 });

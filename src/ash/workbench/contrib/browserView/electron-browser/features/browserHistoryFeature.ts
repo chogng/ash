@@ -1,3 +1,4 @@
+import { BrowserNavigationFeatures } from './browserNavigationFeatures.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../nls.js';
 import { IBrowserViewService } from '../../../../../platform/browserView/common/browserView.js';
@@ -68,6 +69,6 @@ registerAction2(class BrowserFeatureAction extends Action2 {
 	constructor() { super({ id: BrowserViewCommandId.ShowHistory, title: localize2({ bundle: 'ash.workbench', key: 'browser.historyCommand' }, 'Browser: Show History'), f1: true, precondition: ActiveEditorContext.isEqualTo(BrowserViewEditorId) }); }
 	override async run(accessor: import('../../../../../platform/instantiation/common/instantiation.js').ServicesAccessor): Promise<void> {
 		const pane = accessor.get(IEditorPart).activePane;
-		if (pane?.id === BrowserViewEditorId) { await (pane as BrowserEditor).showHistory(); }
+		if (pane?.id === BrowserViewEditorId) { await (pane as BrowserEditor).getContribution(BrowserNavigationFeatures)?.history.show(); }
 	}
 });

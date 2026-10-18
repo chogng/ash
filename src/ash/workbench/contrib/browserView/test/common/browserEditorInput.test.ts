@@ -1,3 +1,4 @@
+import type { BrowserEditor } from '../../electron-browser/browserEditor.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { Emitter, Event } from '../../../../../base/common/event.js';
@@ -9,7 +10,7 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { EditorInputSerializerRegistry } from '../../../../services/editor/common/editorInputSerializer.js';
 import { BrowserEditorInput, BrowserEditorSerializer, type IBrowserEditorInputData } from '../../common/browserEditorInput.js';
-import { IBrowserViewWorkbenchService } from '../../common/browserView.js';
+import { IBrowserViewWorkbenchService, type IBrowserViewModel } from '../../common/browserView.js';
 import { BrowserViewUri } from '../../../../../platform/browserView/common/browserViewUri.js';
 import { setNlsMessages, resetNlsResolver } from '../../../../../nls.js';
 import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
@@ -116,9 +117,11 @@ suite('Browser editor page model and restoration', () => {
 		f.instantiation.registerInstance(IChatContextPickService, contexts);
 		const input = f.input(data);
 		const model = await input.resolve();
-		using left = f.instantiation.createInstance(BrowserEditorChatIntegration);
-		using right = f.instantiation.createInstance(BrowserEditorChatIntegration);
-		left.setModel(model, () => { }); right.setModel(model, () => { });
+		using modelChanges = new Emitter<{ model: IBrowserViewModel | undefined; isNew: boolean; }>();
+		const editor = { onDidChangeModel: modelChanges.event, model, setStatus: () => { } } as unknown as BrowserEditor;
+		using left = f.instantiation.createInstance(BrowserEditorChatIntegration, editor);
+		using right = f.instantiation.createInstance(BrowserEditorChatIntegration, editor);
+		modelChanges.fire({ model, isNew: false });
 		assert.equal(contexts.items.length, 1);
 		f.events.fire({ type: 'elementPicked', targetId: id, data: { elementId: 'element-one', comment: 'Review spacing', outerHTML: '<button>Pick</button>', computedStyle: 'display: block', bounds: { x: 0, y: 0, width: 30, height: 20 } } });
 		const picks = await contexts.items[0]!.providePicks('Review');

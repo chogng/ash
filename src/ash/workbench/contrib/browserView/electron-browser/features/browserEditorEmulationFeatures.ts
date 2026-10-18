@@ -1,3 +1,4 @@
+import { BrowserNavigationFeatures } from './browserNavigationFeatures.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { IBrowserViewService, type IBrowserDeviceProfile } from '../../../../../platform/browserView/common/browserView.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
@@ -46,6 +47,6 @@ registerAction2(class BrowserFeatureAction extends Action2 {
 	constructor() { super({ id: 'workbench.action.browser.toggleDeviceEmulation', title: localize2({ bundle: 'ash.workbench', key: 'browser.emulationCommand' }, 'Browser: Device Emulation'), f1: true, precondition: ActiveEditorContext.isEqualTo(BrowserViewEditorId) }); }
 	override async run(accessor: import('../../../../../platform/instantiation/common/instantiation.js').ServicesAccessor): Promise<void> {
 		const pane = accessor.get(IEditorPart).activePane;
-		if (pane?.id === BrowserViewEditorId) { await (pane as BrowserEditor).showDeviceEmulation(); }
+		if (pane?.id === BrowserViewEditorId) { await (pane as BrowserEditor).getContribution(BrowserNavigationFeatures)?.emulation.show(); }
 	}
 });
