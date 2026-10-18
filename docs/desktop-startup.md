@@ -84,3 +84,15 @@ Main 的同 nonce 记录将慢等待进一步隔离出来：三组连接的 vali
 本轮没有可归因的启动优化前后收益，也未修改模块加载和后端兼容性契约。后续分别验证按选定语言加载资源的完整生命周期，以及将冷连接内部 Rust 阶段携带同一连接标识；候选应继续覆盖上述四组和首次功能成本，通过数据决定是否保留实现。比较脚本已防止把 profile 批次混入无 profile 对照，并把 nonce 不匹配的 Main 阶段判为不完整。Python 比较回归12 项、Main／automation 类型检查、prepared Desktop 构建和最终真实 Desktop 场景均通过；所有本次测试拥有的窗口及后端已退出。
 
 提交前的生命周期复核另补15 项 MessagePort transport 单测，覆盖20 轮重连后的 mark 数量有界、并行 transport 独立释放和晚到 initialized 确认；原取消、错误、ACK 和端口释放用例也全部通过。一次独立合成 Desktop 场景核对当前 lease 恰有三个私有 mark、与 Main 的 nonce 一致，以及归一化前后的每个 startTimeMs／detail 完全相等；该验证不作新性能对照，原20 个有效样本保留。证据位于 `.build/ash-playwright-mcp/evidence/startup-marks-lifecycle-2026-10-18T21-08-13-877Z/`。
+
+### 2026-10-18 F1 本机复核
+
+新增真实 macOS Electron 回归使用隔离 profile、UI-only 模式和显式激活的原生窗口。先确认原生窗口及 document 都有焦点，再发送真实 F1；命令输入必须获得焦点、值为 `>` 且命令选项可见，Escape 关闭后恢复之前的焦点。此入口没有点击标题栏，也没有直接执行命令。最终单个回归通过（1.3s），automation 类型检查通过；日志 `.build/todo-round2-f1-final.log` 和 `.build/todo-round2-f1-automation-check.log`。
+
+调查另记录了名义 hidden／active 两组的原生窗口可见性、focusable、焦点与实际 F1 keydown。两组在按键前都实际可见、有焦点，按键均到达并成功打开命令面板，因此没有形成真正隐藏窗口的对照，不能将旧失败归因为隐藏模式。独立 JSON、截图、原始视频和诊断脚本保存在 `.build/investigations/desktop-f1-2026-10-18/`；观察性对照没有加入长期回归。
+
+本次未重跑四组启动性能采样、未复现历史 F1 失败，也未修改快捷键分发或启动入口。新的实窗回归只证明当前原生焦点前置条件下的行为；旧失败的原因继续保留在根 TODO。
+
+```sh
+pnpm run test:smoke:ui:no-compile test/smoke/areas/windows/desktop-command-palette.spec.ts --max-failures=1
+```
