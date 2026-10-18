@@ -206,7 +206,7 @@ let mediaPreviewRoot: HTMLElement | undefined;
 services.registerInstance(IEditorService, {
 	onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None,
 	get activeEditor() { return { resource: activeResource }; },
-	visibleEditorPanes: [],
+	activeEditorPane: undefined, visibleEditorPanes: [],
 	get visibleEditors() { return [{ resource: activeResource }]; },
 	openEditor: async input => {
 		if (input.resource.scheme === 'chat-response-resource' && /\.(?:png|jpeg|gif|webp|wav|mp3|m4a|webm|ogg)$/u.test(input.resource.path)) {

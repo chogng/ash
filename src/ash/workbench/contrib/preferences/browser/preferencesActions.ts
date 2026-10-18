@@ -14,6 +14,68 @@ import { OpenKeyboardShortcutsCommandId, OpenSettingsCommandId, OpenSettingsJson
 import { ResourceContext } from '../../../common/contextkeys.js';
 import { UserSettingsResource } from '../../../services/preferences/common/settingsEditorInput.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
+import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
+import {
+	CONTEXT_KEYBINDINGS_EDITOR, CONTEXT_KEYBINDINGS_SEARCH_FOCUS, CONTEXT_KEYBINDINGS_SEARCH_HAS_VALUE,
+	KEYBINDINGS_EDITOR_COMMAND_RECORD_SEARCH_KEYS, KEYBINDINGS_EDITOR_COMMAND_SORTBY_PRECEDENCE, KEYBINDINGS_EDITOR_COMMAND_CLEAR_SEARCH_RESULTS,
+} from '../common/preferences.js';
+import { KeybindingsEditor } from './keybindingsEditor.js';
+
+registerAction2(class RecordSearchKeysAction extends Action2 {
+	constructor() {
+		super({
+			id: KEYBINDINGS_EDITOR_COMMAND_RECORD_SEARCH_KEYS,
+			title: localize2('keybindings.recordKeys', 'Record Keys'),
+			keybinding: {
+				primary: Keybinding.single(logicalKey('k', { altKey: true })),
+				mac: { primary: Keybinding.single(logicalKey('k', { primaryKey: true, altKey: true })) },
+				weight: KeybindingWeight.WorkbenchContrib,
+				when: ContextKeyExpr.and(CONTEXT_KEYBINDINGS_EDITOR.isEqualTo(true), CONTEXT_KEYBINDINGS_SEARCH_FOCUS.isEqualTo(true)),
+			},
+		});
+	}
+	override run(accessor: ServicesAccessor): void {
+		const pane = accessor.get(IEditorService).activeEditorPane;
+		if (pane instanceof KeybindingsEditor) pane.recordSearchKeys();
+	}
+});
+
+registerAction2(class SortKeybindingsByPrecedenceAction extends Action2 {
+	constructor() {
+		super({
+			id: KEYBINDINGS_EDITOR_COMMAND_SORTBY_PRECEDENCE,
+			title: localize2('keybindings.sortByPrecedence', 'Sort by Precedence (Highest first)'),
+			keybinding: {
+				primary: Keybinding.single(logicalKey('p', { altKey: true })),
+				mac: { primary: Keybinding.single(logicalKey('p', { primaryKey: true, altKey: true })) },
+				weight: KeybindingWeight.WorkbenchContrib,
+				when: CONTEXT_KEYBINDINGS_EDITOR.isEqualTo(true),
+			},
+		});
+	}
+	override run(accessor: ServicesAccessor): void {
+		const pane = accessor.get(IEditorService).activeEditorPane;
+		if (pane instanceof KeybindingsEditor) pane.toggleSortByPrecedence();
+	}
+});
+
+registerAction2(class ClearKeybindingsSearchAction extends Action2 {
+	constructor() {
+		super({
+			id: KEYBINDINGS_EDITOR_COMMAND_CLEAR_SEARCH_RESULTS,
+			title: localize2('keybindings.clearSearch', 'Clear Keybindings Search Input'),
+			keybinding: {
+				primary: Keybinding.single(logicalKey('Escape')),
+				weight: KeybindingWeight.WorkbenchContrib,
+				when: ContextKeyExpr.and(CONTEXT_KEYBINDINGS_EDITOR.isEqualTo(true), CONTEXT_KEYBINDINGS_SEARCH_FOCUS.isEqualTo(true), CONTEXT_KEYBINDINGS_SEARCH_HAS_VALUE.isEqualTo(true)),
+			},
+		});
+	}
+	override run(accessor: ServicesAccessor): void {
+		const pane = accessor.get(IEditorService).activeEditorPane;
+		if (pane instanceof KeybindingsEditor) pane.clearSearchResults();
+	}
+});
 
 registerAction2(class OpenSettingsAction extends Action2 {
 	constructor() {

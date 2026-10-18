@@ -46,12 +46,22 @@
 }
 
 .ash-modal-editor-title {
+	min-width: 0;
+	overflow: hidden;
+	flex: 1;
 	margin: 0;
 	font-size: var(--ash-fontSize-heading3);
 	font-weight: var(--ash-fontWeight-semiBold);
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
-.ash-modal-editor-close {
+.ash-modal-editor-actions {
+	flex: 0 0 auto;
+	margin-inline-end: 4px;
+}
+
+.ash-modal-editor .ash-modal-editor-close {
 	width: 28px;
 	min-width: 28px;
 	height: 28px;

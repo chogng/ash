@@ -48,6 +48,10 @@ export class BrowserEditorService extends Disposable implements IEditorService, 
 		return this.editorPart.activeInput;
 	}
 
+	get activeEditorPane(): IEditorPane | undefined {
+		return this.editorPart.activePane;
+	}
+
 	get visibleEditors(): readonly IResourceEditorInput[] {
 		const state = this.editorPart.getEditorState();
 		const editors = this.editorPart.groups.flatMap(group => this.editorPart.isGroupVisible(group.id) && group.activeInput ? [group.activeInput] : []);

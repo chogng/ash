@@ -2934,7 +2934,7 @@ window.ashStandaloneIntegration = {
 			save: async () => { throw new Error('Saving is outside this fixture'); },
 			saveAll: async () => { throw new Error('Saving is outside this fixture'); },
 			onDidActiveEditorChange: EventUtils.None, onDidVisibleEditorsChange: EventUtils.None,
-			activeEditor: undefined, visibleEditors: [], visibleEditorPanes: [], focusActiveEditor: () => { },
+			activeEditor: undefined, visibleEditors: [], activeEditorPane: undefined, visibleEditorPanes: [], focusActiveEditor: () => { },
 			openEditor: async input => {
 				if (!services.has(IMultiDiffSourceResolverService)) services.registerSingleton(IMultiDiffSourceResolverService, () => services.createInstance(MultiDiffSourceResolverService));
 				const host = h(document, 'div');

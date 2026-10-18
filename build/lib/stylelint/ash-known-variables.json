@@ -172,6 +172,8 @@
 		"--ash-keybindingLabel-border",
 		"--ash-keybindingLabel-bottomBorder",
 		"--ash-keybindingLabel-foreground",
+		"--ash-keybindingTable-headerBackground",
+		"--ash-keybindingTable-rowsBackground",
 		"--ash-list-activeSelectionBackground",
 		"--ash-list-activeSelectionForeground",
 		"--ash-list-hoverBackground",

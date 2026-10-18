@@ -37,6 +37,7 @@ export interface IEditorService {
 	readonly onDidActiveEditorChange: Event<void>;
 	readonly onDidVisibleEditorsChange: Event<void>;
 	readonly activeEditor: IResourceEditorInput | undefined;
+	readonly activeEditorPane: IEditorPane | undefined;
 	readonly visibleEditors: readonly IResourceEditorInput[];
 	readonly visibleEditorPanes: readonly IEditorPane[];
 	/** Resolves after display, an error page, or expected cancellation; ignoreError leaves failures with the caller. */

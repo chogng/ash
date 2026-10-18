@@ -167,7 +167,7 @@ widgetServices.registerInstance(IEditorService, {
 	onDidVisibleEditorsChange: Event.None,
 	activeEditor: undefined,
 	visibleEditors: [],
-	visibleEditorPanes: [],
+	activeEditorPane: undefined, visibleEditorPanes: [],
 	openEditor: async () => { throw new Error('Terminal fixture does not open editors'); },
 	save: async () => ({ success: true, editors: [] }),
 	saveAll: async () => ({ success: true, editors: [] }),

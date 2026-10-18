@@ -195,6 +195,9 @@ export interface IOpenKeybindingsEditorOptions {
 
 export interface IKeybindingsEditorPane extends IEditorPane {
 	search(filter: string): void;
+	recordSearchKeys(): void;
+	toggleSortByPrecedence(): void;
+	clearSearchResults(): void;
 }
 
 /** Workbench-level entry point for opening Preferences surfaces. */

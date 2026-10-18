@@ -5,21 +5,28 @@ import {
 } from '../../../../platform/theme/browser/defaultStyles.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
+import { registerColor, transparent } from '../../../../platform/theme/common/colorUtils.js';
 import type { IResourceEditorInput } from '../../../common/editor.js';
 import './media/keybindingsEditor.css';
 import type { IKeybindingsEditorPane } from '../../../services/preferences/common/preferences.js';
-import { h, isHTMLElement, stopEvent } from '../../../../base/browser/dom.js';
+import { addDisposableListener, h, isHTMLElement, stopEvent } from '../../../../base/browser/dom.js';
 import type { IDimension } from '../../../../base/browser/dom.js';
 import { isModifierKey, StandardKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { KeybindingLabel } from '../../../../base/browser/ui/keybindinglabel/keybindinglabel.js';
-import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
+import { Table } from '../../../../base/browser/ui/table/tableWidget.js';
+import type { ITableColumn, ITableRenderer } from '../../../../base/browser/ui/table/table.js';
+import { observeElementSize } from '../../../../base/browser/observer.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { getKeybindingLabel, KeybindingLabelStyle } from '../../../../base/common/keybindingLabels.js';
 import { MAX_KEYBINDING_CHORDS } from '../../../../base/common/keybindings.js';
-import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
+import { Separator, type IAction } from '../../../../base/common/actions.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { getHoverDelegate, type IManagedHover } from '../../../../base/browser/ui/hover/hoverDelegate.js';
 import type { IContextKey } from "../../../../platform/contextkey/common/contextkey.js";
 import { IContextKeyService, type IScopedContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { KeybindingContextKeys, IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
@@ -29,6 +36,10 @@ import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { IKeybindingEditingService } from '../../../services/keybinding/common/keybindingEditing.js';
 import { isKeybindingsEditorInput, KeybindingsEditorInput } from '../../../services/preferences/browser/keybindingsEditorInput.js';
 import { type KeybindingsEditorModel, type KeyboardShortcutItem } from '../../../services/preferences/browser/keybindingsEditorModel.js';
+import {
+	CONTEXT_KEYBINDINGS_EDITOR, CONTEXT_KEYBINDINGS_SEARCH_FOCUS, CONTEXT_KEYBINDINGS_SEARCH_HAS_VALUE,
+	KEYBINDINGS_EDITOR_COMMAND_RECORD_SEARCH_KEYS, KEYBINDINGS_EDITOR_COMMAND_SORTBY_PRECEDENCE, KEYBINDINGS_EDITOR_COMMAND_CLEAR_SEARCH_RESULTS,
+} from '../common/preferences.js';
 
 let nextRecorderHelpId = 1;
 
@@ -40,10 +51,20 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 	private model: KeybindingsEditorModel | undefined;
 	private readonly inputReference = this._register(new MutableDisposable<IDisposable>());
 	private readonly modelListener = this._register(new MutableDisposable<IDisposable>());
-	private readonly rows = new Map<string, KeyboardShortcutRow>();
+	private readonly actionButtons = new Set<Button>();
 	private container: HTMLDivElement | undefined;
 	private searchInput: InputBox | undefined;
-	private list: HTMLDivElement | undefined;
+	private recordSearchButton: Button | undefined;
+	private sortSearchButton: Button | undefined;
+	private recordingBadge: HTMLSpanElement | undefined;
+	private searchRecordingContext: IContextKey<boolean> | undefined;
+	private editorContext: IContextKey<boolean> | undefined;
+	private searchFocusContext: IContextKey<boolean> | undefined;
+	private searchHasValueContext: IContextKey<boolean> | undefined;
+	private readonly searchChords: string[] = [];
+	private clearSearchButton: Button | undefined;
+	private table: Table<KeyboardShortcutItem> | undefined;
+	private tableContainer: HTMLDivElement | undefined;
 	private empty: HTMLParagraphElement | undefined;
 	private count: HTMLSpanElement | undefined;
 	private status: HTMLParagraphElement | undefined;
@@ -53,7 +74,6 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 	private whenInput: InputBox | undefined;
 	private saveButton: Button | undefined;
 	private cancelButton: Button | undefined;
-	private scrollable: ScrollableElement | undefined;
 	private scopedContext: IScopedContextKeyService | undefined;
 	private recordingContext: IContextKey<boolean> | undefined;
 	private editingItem: KeyboardShortcutItem | undefined;
@@ -67,15 +87,12 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 		@IKeyboardLayoutService private readonly keyboardLayoutService: IKeyboardLayoutService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IKeybindingEditingService private readonly keybindingEditingService: IKeybindingEditingService,
+		@ICommandService private readonly commandService: ICommandService,
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
 	) {
 		super(KeybindingsEditor.ID, themeService, storageService);
 		this._register(toDisposable(() => this.clearInput()));
-		this._register(toDisposable(() => {
-			for (const row of this.rows.values()) row.dispose();
-			this.rows.clear();
-		}));
 	}
 
 	public override create(parent: HTMLElement): void {
@@ -83,7 +100,7 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 		const ownerDocument = parent.ownerDocument;
 		const container = h(ownerDocument, 'div');
 		container.className = 'ash-keybindings-editor';
-		container.setAttribute('aria-label', 'Keyboard Shortcuts');
+		container.setAttribute('aria-label', localize('workbench.manageKeyboardShortcuts', 'Keyboard Shortcuts'));
 		parent.append(container);
 		super.create(container);
 		this.container = container;
@@ -91,28 +108,76 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 
 		this.scopedContext = this._register(this.contextKeyService.createScoped(container));
 		this.recordingContext = KeybindingContextKeys.isRecording.bindTo(this.scopedContext);
-
-		const header = h(ownerDocument, 'header');
-		header.className = 'ash-keybindings-header';
-		const heading = h(ownerDocument, 'h1');
-		heading.textContent = 'Keyboard Shortcuts';
-		const description = h(ownerDocument, 'p');
-		description.textContent = 'Search commands, inspect defaults, and customize user keybindings.';
-		header.append(heading, description);
+		this.editorContext = CONTEXT_KEYBINDINGS_EDITOR.bindTo(this.scopedContext);
 
 		const toolbar = h(ownerDocument, 'div');
 		toolbar.className = 'ash-keybindings-toolbar';
 		this.searchInput = this._register(new InputBox(toolbar, {
 			inputBoxStyles: defaultInputBoxStyles,
 			type: 'search',
-			placeholder: 'Search keybindings',
-			ariaLabel: 'Search keybindings',
+			presentation: 'field',
+			placeholder: localize('keybindings.search', 'Search keybindings'),
+			ariaLabel: localize('keybindings.search', 'Search keybindings'),
 		}));
 		this.searchInput.element.classList.add('ash-keybindings-search');
+		const searchContext = this._register(this.scopedContext.createScoped(this.searchInput.inputElement));
+		this.searchRecordingContext = KeybindingContextKeys.isRecording.bindTo(searchContext);
+		this.searchFocusContext = CONTEXT_KEYBINDINGS_SEARCH_FOCUS.bindTo(searchContext);
+		this.searchHasValueContext = CONTEXT_KEYBINDINGS_SEARCH_HAS_VALUE.bindTo(searchContext);
+		const searchActions = h(ownerDocument, 'div');
+		searchActions.className = 'ash-keybindings-search-actions';
+		this.searchInput.element.append(searchActions);
+		this.recordingBadge = h(ownerDocument, 'span');
+		this.recordingBadge.className = 'ash-keybindings-recording-badge';
+		this.recordingBadge.textContent = localize('keybindings.recordingKeys', 'Recording Keys');
+		this.recordingBadge.hidden = true;
+		searchActions.append(this.recordingBadge);
+		this.recordSearchButton = this._register(new Button(searchActions, {
+			...defaultButtonStyles,
+			label: localize('keybindings.recordKeys', 'Record Keys'),
+			icon: Lxicon.recordKeys,
+			iconOnly: true,
+			checked: false,
+			onClick: () => this.recordSearchButton?.checked ? this.setSearchRecording(false) : this.recordSearchKeys(),
+		}));
+		this.sortSearchButton = this._register(new Button(searchActions, {
+			...defaultButtonStyles,
+			label: localize('keybindings.sortByPrecedence', 'Sort by Precedence (Highest first)'),
+			icon: Lxicon.sortPrecedence,
+			iconOnly: true,
+			checked: false,
+			onClick: () => this.toggleSortByPrecedence(),
+		}));
+		this.clearSearchButton = this._register(new Button(searchActions, {
+			...defaultButtonStyles,
+			label: localize('keybindings.clearSearch', 'Clear Keybindings Search Input'),
+			icon: Lxicon.clearAll,
+			iconOnly: true,
+			onClick: () => this.clearSearchResults(),
+		}));
+		for (const button of [this.recordSearchButton, this.sortSearchButton, this.clearSearchButton]) {
+			button.toggleClassName('ash-keybindings-search-action', true);
+		}
+		this.clearSearchButton.toggleClassName('ash-keybindings-clear-search', true);
 		this.count = h(ownerDocument, 'span');
 		this.count.className = 'ash-keybindings-count';
+		this.count.setAttribute('aria-live', 'polite');
+		this.count.setAttribute('aria-atomic', 'true');
 		toolbar.append(this.searchInput.element, this.count);
-		this._register(this.searchInput.onDidChange(() => this.renderRows(this.model?.items ?? [])));
+		this._register(this.searchInput.onDidChange(() => {
+			if (!this.recordSearchButton?.checked || !this.searchInput?.value) this.searchChords.length = 0;
+			this.searchHasValueContext?.set(!!this.searchInput?.value);
+			this.renderRows();
+		}));
+		this._register(this.searchInput.onDidFocus(() => {
+			this.searchFocusContext?.set(true);
+			this.updateSearchActionTooltips();
+		}));
+		this._register(this.searchInput.onDidBlur(() => this.searchFocusContext?.set(false)));
+		this._register(this.keybindingService.onDidUpdateKeybindings(() => this.updateSearchActionTooltips()));
+		this.updateSearchActionTooltips();
+		this._register(this.searchInput.onKeyDown(event => this.handleSearchKeyDown(event)));
+		this.searchInput.inputElement.setAttribute('aria-description', localize('keybindings.searchHelp', 'Use Record Keys to search for an exact shortcut, Sort by Precedence to show higher priority rules first, and Clear to reset the query. Escape exits recording. Each action shows its current shortcut in its tooltip. Tab reaches the search actions.'));
 
 		this.recorder = this.createRecorder(ownerDocument);
 		this.status = h(ownerDocument, 'p');
@@ -120,28 +185,25 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 		this.status.setAttribute('role', 'status');
 		this.status.hidden = true;
 
-		const scrollHost = h(ownerDocument, 'div');
-		scrollHost.className = 'ash-keybindings-scroll-host';
-		this.scrollable = this._register(new ScrollableElement(scrollHost, {
-			direction: 'vertical',
-			vertical: 'auto',
-			tabIndex: -1,
-			wheel: { consume: 'when-scrolling' },
-		}));
-		this.scrollable.element.classList.add('ash-keybindings-scrollable');
-		this.list = h(ownerDocument, 'div');
-		this.list.className = 'ash-keybindings-list';
-		this.list.setAttribute('role', 'table');
-		this.list.setAttribute('aria-label', 'Keyboard shortcuts');
-		this.list.append(createTableHeader(ownerDocument));
+		const tableContainer = this.tableContainer = h(ownerDocument, 'div');
+		tableContainer.className = 'ash-keybindings-list';
+		this.table = this._register(this.createTable(tableContainer));
 		this.empty = h(ownerDocument, 'p');
 		this.empty.className = 'ash-keybindings-empty';
-		this.empty.textContent = 'No keyboard shortcuts match this search.';
+		this.empty.textContent = localize('keybindings.empty', 'No keyboard shortcuts match this search.');
 		this.empty.hidden = true;
-		this.scrollable.append(this.list, this.empty);
-		scrollHost.append(this.scrollable.element);
-		container.append(header, toolbar, this.recorder, this.status, scrollHost);
-		this.renderRows([]);
+		tableContainer.append(this.empty);
+		container.append(toolbar, this.recorder, this.status, tableContainer);
+		this._register(observeElementSize(tableContainer, size => this.table?.layout(size.height, size.width)));
+		this._register(addDisposableListener(this.table.domNode, 'dblclick', event => {
+			if (isHTMLElement(event.target) && event.target.closest('.ash-table-row') && !event.target.closest('button')) this.editFocusedShortcut();
+		}));
+		this._register(addDisposableListener(this.table.domNode, 'keydown', event => {
+			if (event.key !== 'Enter' || !isHTMLElement(event.target) || !event.target.closest('.ash-table-row') || event.target.closest('button,input,textarea')) return;
+			stopEvent(event);
+			this.editFocusedShortcut();
+		}));
+		this.renderRows();
 	}
 
 	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
@@ -160,8 +222,10 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 			// Cancellation belongs to this request, even if a replacement reuses the input.
 			if (this.isDisposed || this.inputReference.value !== reference) return;
 			this.model = model;
-			this.modelListener.value = model.onDidChange(items => this.renderRows(items));
-			this.renderRows(model.items);
+			this.editorContext?.set(this.isVisible());
+			this.searchFocusContext?.set(this.isVisible() && this.searchInput?.inputElement === this.container?.ownerDocument.activeElement);
+			this.modelListener.value = model.onDidChange(() => this.renderRows());
+			this.renderRows();
 		} catch (error) {
 			if (this.inputReference.value === reference) this.clearInput();
 			throw error;
@@ -169,31 +233,313 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 	}
 
 	public override clearInput(): void {
+		this.editorContext?.reset();
+		this.searchFocusContext?.reset();
+		this.setSearchRecording(false, false);
 		this.closeRecorder(false);
 		this.modelListener.clear();
 		this.model = undefined;
 		this.input = undefined;
 		this.inputReference.clear();
-		this.renderRows([]);
+		this.renderRows();
 	}
 
 	public override layout(_dimension: IDimension): void {
-		this.scrollable?.layout();
+		if (this.tableContainer) this.table?.layout(this.tableContainer.clientHeight, this.tableContainer.clientWidth);
 	}
 
 	public override setVisible(visibility: boolean): void {
 		super.setVisible(visibility);
+		this.editorContext?.set(visibility && !!this.input);
+		this.searchFocusContext?.set(visibility && this.searchInput?.inputElement === this.container?.ownerDocument.activeElement);
 		if (!visibility) this.recordingContext?.reset();
 		else if (this.editingItem) this.recordingContext?.set(true);
+		this.searchRecordingContext?.set(visibility && !!this.recordSearchButton?.checked);
 	}
 
 	public override focus(): void {
 		this.searchInput?.focus();
 	}
 
+	public override getActions(): readonly IAction[] {
+		const label = localize('keybindings.openJsonEditor', 'Open Keyboard Shortcuts (JSON)');
+		return [{
+			id: 'workbench.action.openGlobalKeybindingsFile',
+			label,
+			tooltip: label,
+			icon: Lxicon.code,
+			enabled: true,
+			run: () => this.commandService.executeCommand('workbench.action.openGlobalKeybindingsFile'),
+		}];
+	}
+
+	public override getSecondaryActions(): readonly IAction[] {
+		const source = /@source:\s*(system|default|user|extension|unassigned)\b/i.exec(this.searchInput?.value ?? '')?.[1].toLowerCase();
+		return [
+			...[
+				['system', 'keybindings.editor.showDefaultKeybindings', localize('keybindings.showSystem', 'Show System Keybindings')],
+				['user', 'keybindings.editor.showUserKeybindings', localize('keybindings.showUser', 'Show User Keybindings')],
+				['extension', 'keybindings.editor.showExtensionKeybindings', localize('keybindings.showExtension', 'Show Extension Keybindings')],
+				['unassigned', 'keybindings.editor.showUnassignedKeybindings', localize('keybindings.showUnassigned', 'Show Unassigned Commands')],
+			].map(([value, id, label]) => ({
+				id,
+				label,
+				tooltip: label,
+				enabled: true,
+				checked: source === value || value === 'system' && source === 'default',
+				run: () => this.search(`@source:${value}`),
+			})),
+			new Separator(),
+			{
+				id: 'keybindings.editor.clearSearchResults',
+				label: localize('keybindings.showAll', 'Show All Keybindings'),
+				tooltip: localize('keybindings.showAll', 'Show All Keybindings'),
+				enabled: true,
+				checked: !source,
+				run: () => this.search(''),
+			},
+		];
+	}
+
 	public search(filter: string): void {
+		this.searchChords.length = 0;
 		if (this.searchInput) this.searchInput.value = filter;
+		this.renderRows();
 		this.focus();
+	}
+
+	public recordSearchKeys(): void {
+		if (!this.recordSearchButton?.checked) this.setSearchRecording(true);
+		else this.focus();
+	}
+
+	public toggleSortByPrecedence(): void {
+		if (!this.sortSearchButton) return;
+		this.sortSearchButton.checked = !this.sortSearchButton.checked;
+		this.renderRows();
+		this.focus();
+	}
+
+	public clearSearchResults(): void {
+		this.search('');
+	}
+
+	private updateSearchActionTooltips(): void {
+		for (const [button, command] of [
+			[this.recordSearchButton, KEYBINDINGS_EDITOR_COMMAND_RECORD_SEARCH_KEYS],
+			[this.sortSearchButton, KEYBINDINGS_EDITOR_COMMAND_SORTBY_PRECEDENCE],
+			[this.clearSearchButton, KEYBINDINGS_EDITOR_COMMAND_CLEAR_SEARCH_RESULTS],
+		] as const) {
+			if (!button) continue;
+			const binding = this.keybindingService.lookupKeybinding(command, this.contextKeyService.getContext(this.searchInput?.inputElement));
+			const tooltip = binding
+				? localize('keybindings.actionWithKeybinding', '{0} ({1})', button.label, getKeybindingLabel(binding))
+				: button.label;
+			button.setTitle(tooltip);
+			button.domNode.setAttribute('aria-label', tooltip);
+		}
+	}
+
+	private setSearchRecording(recording: boolean, focus = true): void {
+		if (this.recordSearchButton) this.recordSearchButton.checked = recording;
+		this.searchChords.length = 0;
+		this.searchRecordingContext?.set(recording);
+		if (this.recordingBadge) this.recordingBadge.hidden = !recording;
+		if (this.searchInput) {
+			const label = recording
+				? localize('keybindings.recordingSearch', 'Recording Keys. Press Escape to exit')
+				: localize('keybindings.search', 'Search keybindings');
+			this.searchInput.placeholder = label;
+			this.searchInput.inputElement.setAttribute('aria-label', label);
+			this.searchInput.inputElement.readOnly = recording;
+		}
+		if (focus) this.focus();
+	}
+
+	private handleSearchKeyDown(event: KeyboardEvent): void {
+		const recording = this.recordSearchButton?.checked;
+		if (recording && event.key === 'Escape' && !event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey) {
+			stopEvent(event);
+			this.setSearchRecording(false);
+			return;
+		}
+		if (!recording || event.key === 'Tab' && !event.ctrlKey && !event.altKey && !event.metaKey) return;
+		stopEvent(event);
+		if (event.repeat || event.isComposing || isModifierKey(event) || event.key === 'Process') return;
+		const keyboardEvent = new StandardKeyboardEvent(event);
+		const resolved = this.keyboardLayoutService.getKeyboardMapper().resolveKeyboardEvent(keyboardEvent);
+		const chord = getKeybindingLabel(resolved, KeybindingLabelStyle.UserSettings);
+		if (!chord || !this.searchInput) return;
+		if (this.searchChords.length === MAX_KEYBINDING_CHORDS) this.searchChords.length = 0;
+		this.searchChords.push(chord);
+		this.searchInput.value = `"${this.searchChords.join(' ')}"`;
+	}
+
+	private createTable(container: HTMLElement): Table<KeyboardShortcutItem> {
+		const actions: ITableRenderer<KeyboardShortcutItem, ShortcutActionsTemplate> = {
+			templateId: 'shortcut-actions',
+			renderTemplate: element => {
+				const store = new DisposableStore();
+				element.classList.add('ash-keybindings-row-actions');
+				const template: ShortcutActionsTemplate = {
+					element, store, item: undefined,
+					edit: store.add(new Button(element, {
+						...defaultButtonStyles,
+						label: localize('keybindings.edit', 'Edit'),
+						icon: Lxicon.edit,
+						iconOnly: true,
+						size: 'small',
+						onClick: () => { if (template.item) this.openRecorder(template.item); },
+					})),
+					remove: store.add(new Button(element, {
+						...defaultButtonStyles,
+						label: localize('keybindings.remove', 'Remove'),
+						icon: Lxicon.trash,
+						iconOnly: true,
+						size: 'small',
+						onClick: () => { if (template.item) void this.removeItem(template.item); },
+					})),
+				};
+				for (const button of [template.edit, template.remove]) {
+					button.toggleClassName('ash-keybindings-row-action', true);
+					this.actionButtons.add(button);
+				}
+				return template;
+			},
+			renderElement: (item, index, template) => {
+				template.item = item;
+				// Decorate Table's retained content; Table remains the only row owner.
+				const row = template.element.parentElement!;
+				row.classList.add('ash-keybindings-row');
+				row.classList.toggle('is-odd', index % 2 === 1);
+				row.dataset.keybindingId = item.id;
+				const editLabel = item.key
+					? localize('keybindings.editTitle', 'Edit keybinding for {0}', item.commandLabel)
+					: localize('keybindings.addTitle', 'Add keybinding for {0}', item.commandLabel);
+				template.edit.label = item.key ? localize('keybindings.edit', 'Edit') : localize('keybindings.add', 'Add');
+				template.edit.icon = item.key ? Lxicon.edit : Lxicon.add;
+				template.edit.setTitle(editLabel);
+				template.edit.domNode.setAttribute('aria-label', editLabel);
+				const removeLabel = localize('keybindings.removeTitle', 'Remove keybinding for {0}', item.commandLabel);
+				template.remove.setTitle(removeLabel);
+				template.remove.domNode.setAttribute('aria-label', removeLabel);
+				template.remove.hidden = item.source !== 'user';
+				template.edit.enabled = template.remove.enabled = !this.saving;
+			},
+			disposeTemplate: template => {
+				this.actionButtons.delete(template.edit);
+				this.actionButtons.delete(template.remove);
+				template.store.dispose();
+			},
+		};
+		const command: ITableRenderer<KeyboardShortcutItem, { label: HTMLElement; id: HTMLElement; hovers: DisposableStore; }> = {
+			templateId: 'shortcut-command',
+			renderTemplate: element => {
+				const content = h(element.ownerDocument, 'div');
+				content.className = 'ash-keybindings-command';
+				const label = h(element.ownerDocument, 'span');
+				label.className = 'ash-keybindings-command-label';
+				const id = h(element.ownerDocument, 'span');
+				id.className = 'ash-keybindings-command-id';
+				content.append(label, id);
+				element.append(content);
+				return { label, id, hovers: new DisposableStore() };
+			},
+			renderElement: (item, _index, template) => {
+				template.label.textContent = item.commandLabel;
+				template.id.textContent = item.command ?? '';
+				template.id.hidden = !commandIdMatches(item, this.searchInput?.value ?? '');
+				template.hovers.clear();
+				for (const [target, content] of [[template.label, `${item.commandLabel}${item.command ? ` (${item.command})` : ''}`], [template.id, item.command ?? '']] as const) {
+					if (content) template.hovers.add(getHoverDelegate().setupHover({ target, content }));
+				}
+			},
+			disposeTemplate: template => template.hovers.dispose(),
+		};
+		const keybinding: ITableRenderer<KeyboardShortcutItem, { element: HTMLElement; label: MutableDisposable<KeybindingLabel>; hover: MutableDisposable<IManagedHover>; }> = {
+			templateId: 'shortcut-keybinding',
+			renderTemplate: element => {
+				element.classList.add('ash-keybindings-key');
+				return { element, label: new MutableDisposable<KeybindingLabel>(), hover: new MutableDisposable<IManagedHover>() };
+			},
+			renderElement: (item, _index, template) => {
+				const resolved = item.keybindingItem.resolvedKeybinding;
+				template.hover.value = item.keyLabel ? getHoverDelegate().setupHover({ target: template.element, content: item.keyLabel }) : undefined;
+				if (!resolved) {
+					template.label.clear();
+					template.element.textContent = item.keyLabel;
+				} else if (template.label.value) {
+					template.label.value.keybinding = resolved;
+				} else {
+					template.element.textContent = '';
+					template.label.value = new KeybindingLabel(template.element, {
+						...defaultKeybindingLabelStyles,
+						keybinding: resolved,
+						presentation: 'keycap',
+					});
+				}
+			},
+			disposeTemplate: template => {
+				template.label.dispose();
+				template.hover.dispose();
+			},
+		};
+		const columns: ITableColumn<KeyboardShortcutItem, KeyboardShortcutItem>[] = [
+			{
+				label: '', tooltip: localize('keybindings.actions', 'Actions'),
+				templateId: actions.templateId,
+				weight: 0, minimumWidth: 48, maximumWidth: 48,
+				project: item => item,
+			},
+			{
+				label: localize('keybindings.command', 'Command'),
+				templateId: command.templateId,
+				weight: 3.2, minimumWidth: 180,
+				project: item => item,
+			},
+			{
+				label: localize('keybindings.keybinding', 'Keybinding'),
+				templateId: keybinding.templateId,
+				weight: 2.2, minimumWidth: 180,
+				project: item => item,
+			},
+			{
+				label: localize('keybindings.when', 'When'),
+				templateId: 'shortcut-when',
+				weight: 3.3, minimumWidth: 160,
+				project: item => item,
+			},
+			{
+				label: localize('keybindings.source', 'Source'),
+				templateId: 'shortcut-source',
+				weight: 1.3, minimumWidth: 90,
+				project: item => item,
+			},
+		];
+		const renderers = [actions, command, keybinding, shortcutTextRenderer('when'), shortcutTextRenderer('source')];
+		const table = new Table('KeybindingsEditor', container, {
+			headerRowHeight: 30,
+			getHeight: item => commandIdMatches(item, this.searchInput?.value ?? '') ? 40 : 24,
+		}, columns, renderers, {
+			ariaLabel: localize('workbench.manageKeyboardShortcuts', 'Keyboard Shortcuts'),
+			scrolling: 'managed',
+			identityProvider: { getId: item => item.id },
+			accessibilityProvider: {
+				getAriaLabel: item => localize('keybindings.rowLabel', '{0}, {1}, {2}, {3}',
+					item.commandLabel,
+					item.keyLabel || localize('keybindings.sourceUnassigned', 'Unassigned'),
+					item.when || localize('keybindings.always', 'Always'),
+					item.sourceLabel,
+				),
+			},
+		});
+		table.domNode.setAttribute('aria-description', localize('keybindings.tableHelp', 'Use arrow keys to navigate shortcuts and Enter to edit. Tab reaches row actions and column separators. Drag a column separator, or focus it and use arrow keys, to resize columns. Double-click a separator to reset its column width.'));
+		return table;
+	}
+
+	private editFocusedShortcut(): void {
+		const index = this.table?.getFocus()[0];
+		if (index !== undefined) this.openRecorder(this.table!.row(index));
 	}
 
 	private createRecorder(ownerDocument: Document): HTMLDivElement {
@@ -204,11 +550,11 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 		const fields = h(ownerDocument, 'div');
 		fields.className = 'ash-keybindings-recorder-fields';
 		const keyField = h(ownerDocument, 'label');
-		keyField.textContent = 'Keybinding';
+		keyField.textContent = localize('keybindings.keybinding', 'Keybinding');
 		this.keyInput = this._register(new InputBox(keyField, {
 			inputBoxStyles: defaultInputBoxStyles,
-			placeholder: 'Press the desired key combination',
-			ariaLabel: 'Record keybinding',
+			placeholder: localize('keybindings.pressKeys', 'Press the desired key combination'),
+			ariaLabel: localize('keybindings.record', 'Record keybinding'),
 			presentation: 'field',
 		}));
 		this.keyInput.inputElement.readOnly = true;
@@ -220,11 +566,11 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 		this.keyInput.inputElement.setAttribute('aria-describedby', help.id);
 		keyField.append(this.keyInput.element);
 		const whenField = h(ownerDocument, 'label');
-		whenField.textContent = 'When';
+		whenField.textContent = localize('keybindings.when', 'When');
 		this.whenInput = this._register(new InputBox(whenField, {
 			inputBoxStyles: defaultInputBoxStyles,
-			placeholder: 'Optional context expression',
-			ariaLabel: 'Keybinding when condition',
+			placeholder: localize('keybindings.optionalWhen', 'Optional context expression'),
+			ariaLabel: localize('keybindings.whenLabel', 'Keybinding when condition'),
 			presentation: 'field',
 		}));
 		whenField.append(this.whenInput.element);
@@ -234,14 +580,14 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 		actions.className = 'ash-keybindings-recorder-actions';
 		this.saveButton = this._register(new Button(actions, {
 			...defaultButtonStyles,
-			label: 'Save',
+			label: localize('keybindings.save', 'Save'),
 			presentation: 'primary',
 			onClick: () => void this.saveEditingItem(),
 		}));
 		this.saveButton.toggleClassName('ash-keybindings-save', true);
 		this.cancelButton = this._register(new Button(actions, {
 			...defaultButtonStyles,
-			label: 'Cancel',
+			label: localize('keybindings.cancel', 'Cancel'),
 			presentation: 'secondary',
 			onClick: () => { if (!this.saving) this.closeRecorder(); },
 		}));
@@ -260,9 +606,11 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 		this.editingItem = item;
 		// A stored binding is a preview: the first recorded chord replaces it.
 		this.recordedChords.length = 0;
-		this.recorderTitle.textContent = `${item.source === 'user' ? 'Edit' : 'Add'} keybinding for ${item.commandLabel}`;
-		this.keyInput.value = item.source === 'user' ? item.key : '';
-		this.whenInput.value = item.source === 'user' ? item.when : '';
+		this.recorderTitle.textContent = item.key
+			? localize('keybindings.editTitle', 'Edit keybinding for {0}', item.commandLabel)
+			: localize('keybindings.addTitle', 'Add keybinding for {0}', item.commandLabel);
+		this.keyInput.value = item.key;
+		this.whenInput.value = item.when;
 		this.recorder.hidden = false;
 		this.recordingContext?.set(true);
 		this.keyInput.focus();
@@ -330,7 +678,7 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 		this.setStatus(localize('keybindings.recordingSaving', 'Saving keybinding…'), false);
 		try {
 			const key = this.keyInput.value.trim();
-			if (!this.keybindingService.resolveUserBinding(key)) throw new TypeError(`Invalid keybinding: ${key || '(empty)'}`);
+			if (!this.keybindingService.resolveUserBinding(key)) throw new TypeError(localize('keybindings.invalidKey', 'Enter a valid keybinding before saving.'));
 			await this.keybindingEditingService.editKeybinding(item.keybindingItem, key, this.whenInput.value.trim() || undefined);
 			if (this.isDisposed || this.editingItem !== item) return;
 			// The saved row can be replaced by the asynchronous file watcher.
@@ -363,7 +711,7 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 		if (this.whenInput) this.whenInput.enabled = !saving;
 		if (this.saveButton) this.saveButton.enabled = !saving;
 		if (this.cancelButton) this.cancelButton.enabled = !saving;
-		for (const row of this.rows.values()) row.setEnabled(!saving);
+		for (const button of this.actionButtons) button.enabled = !saving;
 	}
 
 	private async removeItem(item: KeyboardShortcutItem): Promise<void> {
@@ -374,41 +722,25 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 			await this.keybindingEditingService.removeKeybinding(item.keybindingItem);
 			if (this.isDisposed || this.inputReference.value !== reference) return;
 			if (this.editingItem?.id === item.id) this.closeRecorder();
-			this.setStatus('Keybinding removed.', false);
+			this.setStatus(localize('keybindings.removed', 'Keybinding removed.'), false);
 		} catch (error) {
 			if (this.isDisposed || this.inputReference.value !== reference) return;
-			this.setStatus(error instanceof Error ? error.message : 'Unable to remove the keybinding.', true);
+			this.setStatus(error instanceof Error ? error.message : localize('keybindings.removeFailed', 'Unable to remove the keybinding.'), true);
 		}
 	}
 
-	private renderRows(allItems: readonly KeyboardShortcutItem[]): void {
-		if (!this.list) return;
+	private renderRows(): void {
+		if (!this.table) return;
 		// A split editor shares the input/model, but each pane owns its search field.
-		const items = filterItems(allItems, this.searchInput?.value ?? '');
-		const retained = new Set<string>();
-		for (const item of items) {
-			retained.add(item.id);
-			let row = this.rows.get(item.id);
-			if (!row) {
-				row = new KeyboardShortcutRow(this.list, item, {
-					onEdit: candidate => this.openRecorder(candidate),
-					onRemove: candidate => void this.removeItem(candidate),
-				});
-				this.rows.set(item.id, row);
-			} else {
-				row.update(item);
-			}
-			row.setEnabled(!this.saving);
-			this.list.append(row.element);
-		}
-		for (const [id, row] of this.rows) {
-			if (retained.has(id)) continue;
-			row.dispose();
-			this.rows.delete(id);
-		}
-		if (this.count) this.count.textContent = `${items.length} shortcuts`;
+		const items = this.model?.fetch(this.searchInput?.value ?? '', !!this.sortSearchButton?.checked) ?? [];
+		if (this.clearSearchButton) this.clearSearchButton.enabled = !!this.searchInput?.value;
+		this.table.splice(0, this.table.length, items);
+		const countLabel = this.sortSearchButton?.checked
+			? localize('keybindings.countByPrecedence', '{0} shortcuts, sorted by precedence, highest first', items.length)
+			: localize('keybindings.countAlphabetically', '{0} shortcuts, sorted alphabetically', items.length);
+		if (this.count && this.count.textContent !== countLabel) this.count.textContent = countLabel;
 		if (this.empty) this.empty.hidden = items.length !== 0;
-		this.scrollable?.layout();
+		this.updateTitleArea();
 	}
 
 	private setStatus(message: string, isError: boolean): void {
@@ -419,123 +751,51 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 	}
 }
 
-class KeyboardShortcutRow extends Disposable {
-	public readonly element: HTMLDivElement;
-	private item: KeyboardShortcutItem;
-	private readonly command: HTMLSpanElement;
-	private readonly commandId: HTMLSpanElement;
-	private readonly key: HTMLSpanElement;
-	private readonly keybindingLabel = this._register(new MutableDisposable<KeybindingLabel>());
-	private readonly when: HTMLSpanElement;
-	private readonly source: HTMLSpanElement;
-	private readonly edit: Button;
-	private readonly remove: Button | undefined;
-
-	constructor(container: HTMLElement, item: KeyboardShortcutItem, callbacks: { readonly onEdit: (item: KeyboardShortcutItem) => void; readonly onRemove: (item: KeyboardShortcutItem) => void; }) {
-		super();
-		this.item = item;
-		const ownerDocument = container.ownerDocument;
-		this.element = h(ownerDocument, 'div');
-		this.element.className = 'ash-keybindings-row';
-		this.element.setAttribute('role', 'row');
-		this.element.dataset.keybindingId = item.id;
-		const commandCell = h(ownerDocument, 'div');
-		commandCell.className = 'ash-keybindings-command';
-		commandCell.setAttribute('role', 'cell');
-		this.command = h(ownerDocument, 'span');
-		this.command.className = 'ash-keybindings-command-label';
-		this.commandId = h(ownerDocument, 'span');
-		this.commandId.className = 'ash-keybindings-command-id';
-		commandCell.append(this.command, this.commandId);
-		this.key = cell(ownerDocument, 'ash-keybindings-key');
-		this.when = cell(ownerDocument, 'ash-keybindings-when');
-		this.source = cell(ownerDocument, 'ash-keybindings-source');
-		const actions = h(ownerDocument, 'div');
-		actions.className = 'ash-keybindings-row-actions';
-		actions.setAttribute('role', 'cell');
-		this.edit = this._register(new Button(actions, {
-			...defaultButtonStyles,
-			label: item.source === 'user' ? 'Edit' : 'Add',
-			title: item.source === 'user' ? 'Edit keybinding' : 'Add keybinding',
-			presentation: 'secondary',
-			size: 'small',
-			onClick: () => callbacks.onEdit(this.item),
-		}));
-		this.edit.toggleClassName('ash-keybindings-row-action', true);
-		if (item.source === 'user') {
-			this.remove = this._register(new Button(actions, {
-				...defaultButtonStyles,
-				label: 'Remove',
-				title: 'Remove keybinding',
-				presentation: 'danger',
-				size: 'small',
-				onClick: () => callbacks.onRemove(this.item),
-			}));
-			this.remove.toggleClassName('ash-keybindings-row-action', true);
-		}
-		this.element.append(commandCell, this.key, this.when, this.source, actions);
-		container.append(this.element);
-		this._register(toDisposable(() => this.element.remove()));
-		this.update(item);
-	}
-
-	public update(item: KeyboardShortcutItem): void {
-		this.item = item;
-		this.command.textContent = item.commandLabel;
-		this.commandId.textContent = item.command ?? '';
-		const keybinding = item.keybindingItem.resolvedKeybinding;
-		if (!keybinding) {
-			this.keybindingLabel.clear();
-			this.key.textContent = item.keyLabel || '—';
-		} else if (this.keybindingLabel.value) {
-			this.keybindingLabel.value.keybinding = keybinding;
-		} else {
-			this.key.textContent = '';
-			this.keybindingLabel.value = new KeybindingLabel(this.key, {
-				...defaultKeybindingLabelStyles,
-				keybinding,
-				presentation: 'keycap',
-			});
-		}
-		this.when.textContent = item.when || '—';
-		this.source.textContent = item.sourceLabel;
-		this.element.classList.toggle('is-user', item.source === 'user');
-	}
-
-	public setEnabled(enabled: boolean): void {
-		this.edit.enabled = enabled;
-		if (this.remove) this.remove.enabled = enabled;
-	}
+interface ShortcutActionsTemplate {
+	readonly element: HTMLElement;
+	readonly store: DisposableStore;
+	readonly edit: Button;
+	readonly remove: Button;
+	item: KeyboardShortcutItem | undefined;
 }
 
-function createTableHeader(ownerDocument: Document): HTMLDivElement {
-	const header = h(ownerDocument, 'div');
-	header.className = 'ash-keybindings-table-header';
-	header.setAttribute('role', 'row');
-	for (const label of ['Command', 'Keybinding', 'When', 'Source', 'Actions']) {
-		const heading = h(ownerDocument, 'span');
-		heading.setAttribute('role', 'columnheader');
-		heading.textContent = label;
-		header.append(heading);
-	}
-	return header;
+function shortcutTextRenderer(column: 'when' | 'source'): ITableRenderer<KeyboardShortcutItem, { element: HTMLElement; hover: MutableDisposable<IManagedHover>; }> {
+	return {
+		templateId: `shortcut-${column}`,
+		renderTemplate: container => {
+			const element = h(container.ownerDocument, 'span');
+			element.className = `ash-keybindings-${column}`;
+			container.append(element);
+			return { element, hover: new MutableDisposable<IManagedHover>() };
+		},
+		renderElement: (item, _index, template) => {
+			const content = column === 'when' ? item.when : item.sourceLabel;
+			template.element.textContent = content;
+			template.hover.value = content ? getHoverDelegate().setupHover({ target: template.element, content }) : undefined;
+		},
+		disposeTemplate: template => template.hover.dispose(),
+	};
 }
 
-function cell(ownerDocument: Document, className: string): HTMLSpanElement {
-	const element = h(ownerDocument, 'span');
-	element.className = className;
-	element.setAttribute('role', 'cell');
-	return element;
+/** Command IDs supplement names only when the free-text query matches the ID. */
+function commandIdMatches(item: KeyboardShortcutItem, query: string): boolean {
+	const command = item.command?.toLocaleLowerCase();
+	if (!command) return false;
+	const label = item.commandLabel.toLocaleLowerCase();
+	const text = query.toLocaleLowerCase().replace(/@(?:source|command):\s*\S+/g, '');
+	return text.split(/\s+/).some(term => term && command.includes(term) && !label.includes(term));
 }
 
-function filterItems(items: readonly KeyboardShortcutItem[], query: string): readonly KeyboardShortcutItem[] {
-	const normalized = query.trim().toLocaleLowerCase();
-	if (!normalized) return items;
-	const terms = normalized.split(/\s+/).filter(Boolean);
-	return items.filter(item => {
-		const searchable = `${item.commandLabel} ${item.command ?? ''} ${item.key} ${item.keyLabel} ${item.when} ${item.sourceLabel}`.toLocaleLowerCase();
-		return terms.every(term => term.startsWith('@command:')
-			? item.command?.toLocaleLowerCase() === term.slice('@command:'.length)
-			: searchable.includes(term));
-	});
-}
+registerColor('keybindingTable.headerBackground', {
+	dark: transparent('foreground', 0.04),
+	light: transparent('foreground', 0.04),
+	hcDark: 'editor.background',
+	hcLight: 'editor.background',
+}, { description: 'Background color for the keyboard shortcuts table header.', owner: 'workbench.preferences' });
+
+registerColor('keybindingTable.rowsBackground', {
+	dark: transparent('foreground', 0.04),
+	light: transparent('foreground', 0.04),
+	hcDark: 'editor.background',
+	hcLight: 'editor.background',
+}, { description: 'Background color for the keyboard shortcuts table alternating rows.', owner: 'workbench.preferences' });

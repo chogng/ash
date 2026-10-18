@@ -1117,6 +1117,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "sort-precedence",
+      "file": "sort-precedence.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "source-control",
       "file": "source-control.svg",
       "rendering": "symbolic"

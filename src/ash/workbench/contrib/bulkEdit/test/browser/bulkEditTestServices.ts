@@ -18,6 +18,7 @@ export class TestEditorService implements IEditorService {
 	public readonly onDidActiveEditorChange = Event.None;
 	public readonly onDidVisibleEditorsChange = Event.None;
 	public readonly activeEditor = undefined;
+	public readonly activeEditorPane = undefined;
 	public readonly visibleEditors = [];
 	public readonly visibleEditorPanes = [];
 	public readonly opened: IResourceEditorInput[] = [];

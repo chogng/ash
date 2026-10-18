@@ -6,62 +6,96 @@
 	min-height: 0;
 	box-sizing: border-box;
 	flex-direction: column;
+	padding: var(--ash-spacing-size120) var(--ash-spacing-size120) 0
+		var(--ash-spacing-size280);
 	color: var(--ash-foreground);
 	background: var(--ash-editor-background);
-}
-
-.ash-keybindings-header,
-.ash-keybindings-toolbar,
-.ash-keybindings-recorder,
-.ash-keybindings-status {
-	width: min(1180px, calc(100% - 48px));
-	margin-right: auto;
-	margin-left: auto;
-}
-
-.ash-keybindings-header {
-	padding-top: 28px;
-}
-
-.ash-keybindings-header h1 {
-	margin: 0;
-	font-size: var(--ash-fontSize-heading1);
-	font-weight: var(--ash-fontWeight-semiBold);
-}
-
-.ash-keybindings-header p {
-	margin: 6px 0 20px;
-	color: var(--ash-description-foreground);
+	container: ash-keybindings / inline-size;
 }
 
 .ash-keybindings-toolbar {
-	display: flex;
-	align-items: center;
-	gap: 16px;
-	padding-bottom: 16px;
+	position: relative;
+	flex: 0 0 auto;
+	padding-bottom: var(--ash-spacing-size120);
 }
 
 .ash-keybindings-search {
-	min-width: 240px;
+	display: flex;
+	width: 100%;
+	align-items: center;
+}
+
+.ash-keybindings-search input {
+	min-width: 0;
+	width: 0;
 	flex: 1 1 auto;
 }
 
-.ash-keybindings-count {
+.ash-keybindings-search-actions {
+	display: flex;
 	flex: 0 0 auto;
-	color: var(--ash-description-foreground);
-	font-size: 12px;
+	align-items: center;
+	gap: var(--ash-spacing-size40);
+	margin-inline-end: var(--ash-spacing-size40);
+}
+
+.ash-keybindings-search input::-webkit-search-cancel-button {
+	display: none;
+}
+
+.ash-keybindings-count {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+}
+
+.ash-keybindings-editor .ash-keybindings-search-action,
+.ash-keybindings-editor .ash-keybindings-row-action {
+	width: var(--ash-toolbar-actionSize);
+	min-width: var(--ash-toolbar-actionSize);
+	height: var(--ash-toolbar-actionSize);
+	min-height: var(--ash-toolbar-actionSize);
+	box-sizing: border-box;
+	padding: 0;
+	border: 0;
+	color: var(--ash-foreground);
+}
+
+.ash-keybindings-recording-badge {
+	padding: var(--ash-spacing-size20) var(--ash-spacing-size60);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, transparent);
+	border-radius: var(--ash-cornerRadius-small);
+	color: var(--ash-badge-foreground);
+	background: var(--ash-badge-background);
+	font-size: var(--ash-fontSize-body2);
+	white-space: nowrap;
+}
+
+.ash-keybindings-search-action.checked {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+	background: var(--ash-actionBar-toggledBackground);
+}
+
+.ash-keybindings-search-action:not(:disabled):hover,
+.ash-keybindings-row-action:not(:disabled):hover {
+	background: var(--ash-toolbar-hoverBackground);
 }
 
 .ash-keybindings-recorder {
 	display: grid;
 	box-sizing: border-box;
 	align-items: end;
-	padding: 16px;
+	padding: var(--ash-spacing-size160);
 	border: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	border-radius: var(--ash-cornerRadius-medium);
-	margin-bottom: 16px;
+	margin-bottom: var(--ash-spacing-size120);
 	background: var(--ash-editor-background);
-	gap: 12px;
+	gap: var(--ash-spacing-size120);
 	grid-template-columns: minmax(0, 1fr) auto;
 }
 
@@ -79,14 +113,14 @@
 .ash-keybindings-recorder-help {
 	margin: 0;
 	color: var(--ash-description-foreground);
-	font-size: 12px;
+	font-size: var(--ash-fontSize-label1);
 	grid-column: 1 / -1;
 }
 
 .ash-keybindings-recorder-fields {
 	display: grid;
 	min-width: 0;
-	gap: 12px;
+	gap: var(--ash-spacing-size120);
 	grid-template-columns: minmax(190px, 0.75fr) minmax(230px, 1.25fr);
 }
 
@@ -95,8 +129,8 @@
 	min-width: 0;
 	flex-direction: column;
 	color: var(--ash-description-foreground);
-	font-size: 12px;
-	gap: 6px;
+	font-size: var(--ash-fontSize-label1);
+	gap: var(--ash-spacing-size60);
 }
 
 .ash-keybindings-recorder-actions,
@@ -104,100 +138,97 @@
 	display: flex;
 	align-items: center;
 	justify-content: flex-end;
-	gap: 4px;
+	gap: var(--ash-spacing-size40);
 }
 
 .ash-keybindings-status {
-	min-height: 18px;
-	margin-top: -7px;
-	margin-bottom: 8px;
+	margin: 0 0 var(--ash-spacing-size80);
 	color: var(--ash-description-foreground);
-	font-size: 12px;
+	font-size: var(--ash-fontSize-label1);
 }
 
 .ash-keybindings-status[hidden] {
-	visibility: hidden;
+	display: none;
 }
 
 .ash-keybindings-status.is-error {
 	color: var(--ash-error-foreground);
 }
 
-.ash-keybindings-scroll-host,
-.ash-keybindings-scrollable {
+.ash-keybindings-list {
+	position: relative;
 	min-width: 0;
+	min-height: 0;
+	flex: 1 1 auto;
+	box-sizing: border-box;
+	overflow: hidden;
+}
+
+.ash-keybindings-list .ash-table {
+	display: flex;
+	height: 100%;
+	flex-direction: column;
+	border: 0;
+	overflow-y: hidden;
+}
+
+.ash-keybindings-list .ash-table-header {
+	box-sizing: border-box;
+	flex-shrink: 0;
+	border-bottom-color: var(--ash-contrastBorder, transparent);
+	background: var(--ash-keybindingTable-headerBackground);
+}
+
+.ash-keybindings-list .ash-table-body {
 	min-height: 0;
 	flex: 1 1 auto;
 }
 
-.ash-keybindings-scrollable {
-	width: 100%;
-	height: 100%;
+.ash-keybindings-list .ash-table-cell,
+.ash-keybindings-list .ash-table-column-header {
+	padding: 0 var(--ash-spacing-size100);
 }
 
-.ash-keybindings-list,
-.ash-keybindings-empty {
-	width: min(1180px, calc(100% - 48px));
-	box-sizing: border-box;
-	margin-right: auto;
-	margin-left: auto;
+.ash-keybindings-list .ash-keybindings-row-actions {
+	justify-content: flex-start;
+	padding: 0;
 }
 
-.ash-keybindings-list {
-	overflow: hidden;
-	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
-	border-radius: var(--ash-cornerRadius-medium);
-	margin-bottom: 28px;
-}
-
-.ash-keybindings-table-header,
+.ash-keybindings-list .ash-table-row,
 .ash-keybindings-row {
-	display: grid;
-	min-width: 760px;
-	align-items: center;
-	grid-template-columns:
-		minmax(260px, 1.6fr) minmax(150px, 0.8fr) minmax(150px, 0.8fr)
-		90px 132px;
+	border-radius: var(--ash-cornerRadius-small);
 }
 
-.ash-keybindings-table-header {
-	min-height: 34px;
-	color: var(--ash-description-foreground);
-	background: var(--ash-sideBar-background);
-	font-size: 11px;
-	font-weight: var(--ash-fontWeight-semiBold);
-	text-transform: uppercase;
+.ash-keybindings-list
+	.ash-table-row:not(:hover):not(.selected):not(:focus-within)
+	.is-odd {
+	background: var(--ash-keybindingTable-rowsBackground);
 }
 
-.ash-keybindings-table-header > *,
-.ash-keybindings-row > * {
-	min-width: 0;
-	padding: 8px 12px;
+.ash-keybindings-list .ash-table-row.selected:focus-within {
+	color: var(--ash-list-activeSelectionForeground);
+	background: var(--ash-list-activeSelectionBackground);
 }
 
-.ash-keybindings-row {
-	min-height: 52px;
-	border-top: var(--ash-strokeThickness) solid var(--ash-widget-border);
+.ash-keybindings-row-action {
+	opacity: 0;
 }
 
-.ash-keybindings-row:hover,
-.ash-keybindings-row:focus-within {
-	background: var(--ash-list-hoverBackground);
-}
-
-.ash-keybindings-row.is-user {
-	box-shadow: inset 2px 0 var(--ash-focusBorder);
+.ash-table-row:hover .ash-keybindings-row-action,
+.ash-table-row:focus-within .ash-keybindings-row-action {
+	opacity: 1;
 }
 
 .ash-keybindings-command {
 	display: flex;
+	min-width: 0;
+	width: 100%;
 	flex-direction: column;
-	gap: 2px;
+	gap: var(--ash-spacing-size20);
 }
 
 .ash-keybindings-command-label {
 	overflow: hidden;
-	font-weight: var(--ash-fontWeight-semiBold);
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
@@ -205,34 +236,57 @@
 .ash-keybindings-command-id,
 .ash-keybindings-when,
 .ash-keybindings-source {
+	min-width: 0;
+	width: 100%;
 	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ash-keybindings-command-id {
 	color: var(--ash-description-foreground);
-	font-size: 11px;
+	font-size: var(--ash-fontSize-body2);
+}
+
+.ash-keybindings-command-id,
+.ash-keybindings-when {
+	font-family: var(--ash-font-family-monospace);
+}
+
+.ash-table-row.selected:focus-within .ash-keybindings-command-id,
+.ash-table-row.selected:focus-within .ash-keybindings-row-action {
+	color: inherit;
+}
+
+.ash-keybindings-key {
+	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
 .ash-keybindings-key .ash-keybinding-label,
 .ash-keybindings-key .ash-keybinding-label-chord {
-	flex-wrap: wrap;
+	flex-wrap: nowrap;
+}
+
+.ash-keybindings-key .ash-keybinding-label-keycap kbd {
+	min-width: 24px;
+	height: 18px;
+	padding: 0 var(--ash-spacing-size40);
+	font-size: var(--ash-fontSize-body2);
 }
 
 .ash-keybindings-empty {
-	padding: 32px 0;
+	position: absolute;
+	top: 30px;
+	left: 0;
+	right: 0;
+	padding: var(--ash-spacing-size320) 0;
 	color: var(--ash-description-foreground);
 	text-align: center;
 }
 
-@media (max-width: 860px) {
-	.ash-keybindings-header,
-	.ash-keybindings-toolbar,
-	.ash-keybindings-recorder,
-	.ash-keybindings-status,
-	.ash-keybindings-list,
-	.ash-keybindings-empty {
-		width: calc(100% - 24px);
-	}
-
+@container ash-keybindings (max-width: 860px) {
 	.ash-keybindings-recorder {
 		grid-template-columns: minmax(0, 1fr);
 	}

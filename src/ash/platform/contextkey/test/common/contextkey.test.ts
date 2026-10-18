@@ -3,6 +3,32 @@ import { test } from "mocha";
 import { ContextKeyExpr, RawContextKey } from "../../../../platform/contextkey/common/contextkey.js";
 import { ContextKeyService } from "../../browser/contextKeyService.js";
 
+test('serialized shortcut conditions retain values, operators and grouping after editing', () => {
+	using context = new ContextKeyService();
+	const expressions = [
+		'editorFocus && (mode == edit || resourceExtname =~ /\\.ts$/i)',
+		'!readOnly && count >= 2 && count < 5',
+		'mode in modes && otherMode not in modes',
+		'!(readOnly || mode != edit)',
+		'path == "C:\\\\Users\\\\O\'Brien"',
+	];
+	for (const text of expressions) {
+		const original = ContextKeyExpr.deserialize(text)!;
+		const restored = ContextKeyExpr.deserialize(original.serialize())!;
+		assert.deepEqual(restored.keys(), original.keys());
+		for (const mode of ['edit', 'preview']) for (const readOnly of [true, false]) {
+			context.setContext('mode', mode);
+			context.setContext('editorFocus', true);
+			context.setContext('readOnly', readOnly);
+			context.setContext('count', 3);
+			context.setContext('modes', ['edit']);
+			context.setContext('resourceExtname', '.ts');
+			context.setContext('path', "C:\\Users\\O'Brien");
+			assert.equal(restored.evaluate(context), original.evaluate(context), text);
+		}
+	}
+});
+
 test("typed context keys reset to their declared default", () => {
 	using service = new ContextKeyService();
 	const ready = new RawContextKey<boolean>(

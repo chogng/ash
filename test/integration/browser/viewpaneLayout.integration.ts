@@ -103,7 +103,7 @@ const symphony: ISymphonyService = {
 	control: async () => { }, enable: async () => { },
 };
 const editors: IEditorService = {
-	activeEditor: undefined, visibleEditors: [], visibleEditorPanes: [], onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None,
+	activeEditor: undefined, visibleEditors: [], activeEditorPane: undefined, visibleEditorPanes: [], onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None,
 	openEditor: async () => { throw new Error('Editor opening is outside this fixture'); }, focusActiveEditor: () => { },
 	save: async () => { throw new Error('Saving is outside this fixture'); }, saveAll: async () => { throw new Error('Saving is outside this fixture'); },
 };

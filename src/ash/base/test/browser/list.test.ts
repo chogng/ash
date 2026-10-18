@@ -8,6 +8,38 @@ import { List } from "../../browser/ui/list/listWidget.js";
 import { h } from "../../browser/dom.js";
 import { isMacintosh } from "../../common/platform.js";
 
+test('ListView refreshes retained row geometry when a content splice changes delegate height', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		let height = 24;
+		using view = new ListView<string>(dom.window.document.body, {
+			scrolling: 'managed',
+			getId: item => item,
+			getHeight: () => height,
+			reuseRows: true,
+			renderItem: item => h(dom.window.document, 'span', undefined, item),
+		});
+		const viewport = view.domNode.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
+		Object.defineProperties(viewport, {
+			clientWidth: { value: 300 },
+			clientHeight: { value: 200 },
+			scrollHeight: { get: () => height * 2 },
+		});
+		view.items = ['First', 'Second'];
+		const first = view.row(0)!;
+		const second = view.row(1)!;
+		for (height of [40, 24]) {
+			view.splice(0, 2, ['First', 'Second']);
+			assert.equal(view.row(0), first);
+			assert.equal(view.row(1), second);
+			assert.equal(first.style.height, `${height}px`);
+			assert.equal(second.style.height, `${height}px`);
+			assert.equal(second.style.top, `${height}px`);
+			assert.equal(view.element.style.height, `${height * 2}px`);
+		}
+	} finally { dom.window.close(); }
+});
+
 test('List navigates by labels without taking text input or modifier shortcuts', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {

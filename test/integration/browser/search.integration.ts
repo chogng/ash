@@ -153,7 +153,7 @@ instantiation.registerInstance(IReplaceService, instantiation.createInstance(Rep
 instantiation.registerInstance(IEditorService, {
 	save: async () => { throw new Error('Saving is outside this fixture'); },
 	saveAll: async () => { throw new Error('Saving is outside this fixture'); },
-	onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [], visibleEditorPanes: [],
+	onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [], activeEditorPane: undefined, visibleEditorPanes: [],
 	openEditor: async (input, options, target) => { opened.push({ resource: input.resource.toString(), options, target }); },
 	focusActiveEditor() { },
 });

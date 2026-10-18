@@ -267,6 +267,11 @@ export class ListView<T> extends Disposable {
 				this.options.updateItem?.(item, index, row, cached !== undefined);
 				if (cached) {
 					this.updateRowHeight(row, item, itemId);
+				} else if (this.options.getHeight) {
+					// Reuse the splice's measured geometry; retained items can change height too.
+					const bottom = index + 1 === this.rangeMap.count ? this.rangeMap.size : this.rangeMap.positionAt(index + 1);
+					const height = `${bottom - this.rangeMap.positionAt(index)}px`;
+					if (row.style.height !== height) row.style.height = height;
 				}
 			} else {
 				if (existing) {

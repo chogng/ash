@@ -132,9 +132,12 @@ for (const variant of [{ locale: 'en', theme: 'light' }, { locale: 'zh-CN', them
 			await expect(search).toBeFocused();
 			await expect(modal.locator('.ash-keybindings-row')).toHaveCount(1);
 			await expect(modal.locator('.ash-keybindings-command-id')).toHaveText(`test.quickAccess.${command}`);
-			await expect(modal.locator('.ash-keybindings-source')).toHaveText(command === 'AlphaFormat' ? 'Default' : 'Unassigned');
+			await expect(modal.locator('.ash-keybindings-source')).toHaveText(command === 'AlphaFormat'
+				? variant.locale === 'zh-CN' ? '系统' : 'System'
+				: variant.locale === 'zh-CN' ? '未分配' : 'Unassigned');
 			const closeButton = modal.getByRole('button', { name: variant.locale === 'zh-CN' ? `关闭${title}` : `Close ${title}`, exact: true });
 			await expect(closeButton.locator('svg')).toBeVisible();
+			expect((await closeButton.locator('.ash-button-content').boundingBox())!.width).toBeGreaterThanOrEqual(16);
 			await closeButton.focus();
 			await page.keyboard.press('Shift+Tab');
 			expect(await modal.evaluate(element => element.contains(element.ownerDocument.activeElement))).toBe(true);
@@ -142,12 +145,347 @@ for (const variant of [{ locale: 'en', theme: 'light' }, { locale: 'zh-CN', them
 			if (close === 'Escape') {
 				await modal.screenshot({ path: testInfo.outputPath('keyboard-shortcuts-modal.png') });
 				await search.press('Escape');
+				await expect(search).toHaveValue('');
+				await expect(modal).toBeVisible();
+				await search.press('Escape');
 			} else {
 				await closeButton.click();
 			}
 			await expect(modal).toBeHidden();
 			await expect(open).toBeFocused();
 		}
+		expect(await page.evaluate(() => window.ashQuickAccessIntegration.executions)).toEqual([]);
+	});
+
+	test(`Keyboard Shortcuts search actions record exact chords and sort by real precedence (${variant.locale}, ${variant.theme})`, async ({ page }, testInfo) => {
+		await page.goto(`/quickAccess.html?${new URLSearchParams({ ...variant, shortcuts: '1', shortcutToolbar: '1' })}`);
+		await page.getByRole('button', { name: 'Open commands' }).click();
+		const picker = page.locator('.ash-quick-pick');
+		await picker.getByRole('combobox').fill('>Alpha Format');
+		await picker.getByRole('button', { name: variant.locale === 'zh-CN' ? '配置快捷键' : 'Configure Keybinding' }).click();
+		const modal = page.locator('.ash-modal-editor');
+		const search = modal.locator('.ash-keybindings-search input');
+		const actions = modal.locator('.ash-keybindings-search-actions');
+		const record = actions.getByRole('button', { name: variant.locale === 'zh-CN' ? '录制按键' : 'Record Keys', exact: false });
+		const sort = actions.getByRole('button', { name: variant.locale === 'zh-CN' ? '按优先级排序（从高到低）' : 'Sort by Precedence (Highest first)', exact: false });
+		const clear = actions.getByRole('button', { name: variant.locale === 'zh-CN' ? '清空快捷键搜索输入' : 'Clear Keybindings Search Input', exact: false });
+		expect(await actions.locator('svg').evaluateAll(icons => icons.map(icon => icon.getAttribute('data-ash-icon-id')))).toEqual(['record-keys', 'sort-precedence', 'clear-all']);
+		await expect(record).toHaveAttribute('aria-pressed', 'false');
+		await expect(sort).toHaveAttribute('aria-pressed', 'false');
+		await clear.click();
+		await expect(clear).toBeDisabled();
+		await record.focus();
+		await page.keyboard.press('Enter');
+		await expect(record).toHaveAttribute('aria-pressed', 'true');
+		await expect(search).toBeFocused();
+		await expect(search).toHaveAttribute('readonly', '');
+		const badge = modal.locator('.ash-keybindings-recording-badge');
+		await expect(badge).toHaveText(variant.locale === 'zh-CN' ? '正在录制按键' : 'Recording Keys');
+		await expect(badge).toBeVisible();
+		await search.press('Control+Alt+9');
+		await expect(search).toHaveValue(/^"ctrl\+alt\+.*9.*"$/);
+		await expect(modal.locator('.ash-keybindings-row')).toHaveCount(3);
+		expect(await page.evaluate(() => window.ashQuickAccessIntegration.executions)).toEqual([]);
+		await search.press('Control+x');
+		await expect(modal.locator('.ash-keybindings-empty')).toBeVisible();
+		const chordQuery = await search.inputValue();
+		await search.press('Escape');
+		await expect(record).toHaveAttribute('aria-pressed', 'false');
+		await expect(badge).toBeHidden();
+		await expect(search).toHaveValue(chordQuery);
+		await expect(modal).toBeVisible();
+		await search.press('Control+Alt+9');
+		await expect.poll(() => page.evaluate(() => window.ashQuickAccessIntegration.executions)).toEqual(['YankeeLatest']);
+		await clear.click();
+		await search.fill('test.shortcutToolbar');
+		const commands = () => modal.locator('.ash-keybindings-command-id').allTextContents();
+		await expect.poll(commands).toEqual(['test.shortcutToolbar.AlphaLate', 'test.shortcutToolbar.YankeeLatest', 'test.shortcutToolbar.ZuluEarly']);
+		await sort.click();
+		await expect(sort).toHaveAttribute('aria-pressed', 'true');
+		await expect(search).toHaveValue('test.shortcutToolbar');
+		await expect.poll(commands).toEqual(['test.shortcutToolbar.YankeeLatest', 'test.shortcutToolbar.ZuluEarly', 'test.shortcutToolbar.AlphaLate']);
+		await expect(modal.locator('.ash-keybindings-count')).toContainText(variant.locale === 'zh-CN' ? '按优先级' : 'precedence');
+		await record.click();
+		await clear.click();
+		await search.press('Control+Alt+9');
+		await expect.poll(commands).toEqual(['test.shortcutToolbar.YankeeLatest', 'test.shortcutToolbar.ZuluEarly', 'test.shortcutToolbar.AlphaLate']);
+		expect(await page.evaluate(() => window.ashQuickAccessIntegration.executions)).toEqual(['YankeeLatest']);
+		await modal.screenshot({ path: testInfo.outputPath('keybindings-search-actions-recording.png') });
+		await search.press('Tab');
+		await expect(record).toBeFocused();
+		await page.keyboard.press('Tab');
+		await expect(sort).toBeFocused();
+		await page.keyboard.press('Space');
+		await expect(sort).toHaveAttribute('aria-pressed', 'false');
+		await expect(search).toBeFocused();
+		await expect.poll(commands).toEqual(['test.shortcutToolbar.AlphaLate', 'test.shortcutToolbar.YankeeLatest', 'test.shortcutToolbar.ZuluEarly']);
+		await page.setViewportSize({ width: 700, height: 720 });
+		const bounds = (await modal.locator('.ash-keybindings-search').boundingBox())!;
+		for (const button of [record, sort, clear]) {
+			const box = (await button.boundingBox())!;
+			expect(box.height).toBe(22);
+			expect(box.x + box.width).toBeLessThanOrEqual(bounds.x + bounds.width);
+			expect((await button.locator('.ash-button-content').boundingBox())!.width).toBeGreaterThanOrEqual(16);
+		}
+		await modal.screenshot({ path: testInfo.outputPath('keybindings-search-actions-narrow.png') });
+		await search.press('Escape');
+		await search.press('Escape');
+		await expect(search).toHaveValue('');
+		await expect(clear).toBeDisabled();
+	});
+
+	test(`Keyboard Shortcuts keeps the compact layout and reveals actions on intent (${variant.locale}, ${variant.theme})`, async ({ page }, testInfo) => {
+		await page.goto(`/quickAccess.html?${new URLSearchParams({ ...variant, shortcuts: '1', shortcutRows: '1' })}`);
+		await page.getByRole('button', { name: 'Open commands' }).click();
+		const picker = page.locator('.ash-quick-pick');
+		await picker.getByRole('combobox').fill('>Alpha Format');
+		await picker.getByRole('button', { name: variant.locale === 'zh-CN' ? '配置快捷键' : 'Configure Keybinding' }).click();
+		const modal = page.locator('.ash-modal-editor');
+		const editor = modal.locator('.ash-keybindings-editor');
+		const search = editor.locator('.ash-keybindings-search input');
+		const grid = editor.getByRole('grid');
+		const row = grid.locator('.ash-table-row').first();
+		await page.mouse.move(2, 2);
+		await expect(editor.locator('h1')).toHaveCount(0);
+		await expect(row.locator('.ash-keybindings-command-id')).toBeHidden();
+		await expect(row).toHaveCSS('height', '24px');
+		await expect(row.locator('.ash-keybinding-label kbd').first()).toHaveCSS('height', '18px');
+		await expect(editor.locator('.ash-keybindings-list')).toHaveCSS('border-top-width', '0px');
+		await expect(editor.locator('.ash-keybindings-list')).toHaveCSS('border-radius', '0px');
+		const editorBounds = (await editor.boundingBox())!;
+		const searchBounds = (await search.boundingBox())!;
+		const tableBounds = (await grid.boundingBox())!;
+		expect(searchBounds.y - editorBounds.y).toBeLessThanOrEqual(16);
+		expect(tableBounds.y - searchBounds.y - searchBounds.height).toBeLessThanOrEqual(16);
+		const edit = row.locator('.ash-keybindings-row-action').first();
+		await expect(edit).toHaveCSS('opacity', '0');
+		await row.hover();
+		await expect(edit).toHaveCSS('opacity', '1');
+		await edit.focus();
+		await page.mouse.move(2, 2);
+		await expect(edit).toHaveCSS('opacity', '1');
+		await search.fill('test.shortcutTable.row000');
+		await expect(row.locator('.ash-keybindings-command-id')).toBeVisible();
+		await expect(row).toHaveCSS('height', '40px');
+		await search.fill('row000');
+		await expect(row.locator('.ash-keybindings-command-id')).toBeHidden();
+		await expect(row).toHaveCSS('height', '24px');
+		const clear = editor.getByRole('button', { name: variant.locale === 'zh-CN' ? '清空快捷键搜索输入' : 'Clear Keybindings Search Input', exact: false });
+		await clear.click();
+		await expect(search).toHaveValue('');
+		await expect(search).toBeFocused();
+		await expect(clear).toBeDisabled();
+		await expect.poll(() => grid.locator('.ash-table-row').count()).toBeGreaterThan(10);
+		const striped = grid.locator('.ash-keybindings-row.is-odd').first();
+		await expect(striped).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await page.mouse.move(2, 2);
+		await modal.screenshot({ path: testInfo.outputPath('keybindings-compact-table.png') });
+		await page.setViewportSize({ width: 700, height: 720 });
+		await expect.poll(() => grid.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
+		const narrowEditor = (await editor.boundingBox())!;
+		const narrowSearch = (await search.boundingBox())!;
+		expect(narrowSearch.x + narrowSearch.width).toBeLessThanOrEqual(narrowEditor.x + narrowEditor.width);
+		const chordsFit = await grid.locator('.ash-keybinding-label-chord').evaluateAll(chords => chords.every(chord => {
+			const cell = chord.closest('.ash-keybindings-key')!.getBoundingClientRect();
+			return chord.getBoundingClientRect().width <= cell.width - 20;
+		}));
+		expect(chordsFit).toBe(true);
+		await modal.screenshot({ path: testInfo.outputPath('keybindings-compact-narrow.png') });
+	});
+
+	test(`Keyboard Shortcuts title menu and icon editing (${variant.locale}, ${variant.theme})`, async ({ page }, testInfo) => {
+		await page.goto(`/quickAccess.html?${new URLSearchParams({ ...variant, shortcuts: '1' })}`);
+		await page.getByRole('button', { name: 'Open commands' }).click();
+		const picker = page.locator('.ash-quick-pick');
+		await picker.getByRole('combobox').fill('>Alpha Format');
+		await picker.getByRole('button', { name: variant.locale === 'zh-CN' ? '配置快捷键' : 'Configure Keybinding' }).click();
+		const modal = page.locator('.ash-modal-editor');
+		const toolbar = modal.locator('.ash-modal-editor-actions');
+		await expect(toolbar.getByRole('button', { name: variant.locale === 'zh-CN' ? '打开键盘快捷方式 (JSON)' : 'Open Keyboard Shortcuts (JSON)', exact: true }).locator('svg')).toBeVisible();
+		const more = toolbar.locator('.ash-toolbar-more-actions button');
+		const search = modal.locator('.ash-keybindings-search input');
+		for (const [source, label] of [
+			['system', variant.locale === 'zh-CN' ? '显示系统快捷键' : 'Show System Keybindings'],
+			['user', variant.locale === 'zh-CN' ? '显示用户快捷键' : 'Show User Keybindings'],
+			['extension', variant.locale === 'zh-CN' ? '显示扩展快捷键' : 'Show Extension Keybindings'],
+			['unassigned', variant.locale === 'zh-CN' ? '显示未分配快捷键的命令' : 'Show Unassigned Commands'],
+		]) {
+			await more.click();
+			await expect(page.locator('.ash-menu-leading-check > .ash-icon:visible')).toHaveCount(1);
+			await expect(page.locator('.ash-menu')).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			if (source === 'system') await page.screenshot({ path: testInfo.outputPath('keybindings-source-menu.png') });
+			await page.getByRole('menuitemcheckbox', { name: label, exact: true }).click();
+			await expect(search).toHaveValue(`@source:${source}`);
+			await expect(search).toBeFocused();
+			if (source === 'user' || source === 'extension') await expect(modal.locator('.ash-keybindings-empty')).toBeVisible();
+		}
+		await search.fill('@source:system @command:test.quickAccess.AlphaFormat');
+		const row = modal.locator('.ash-keybindings-row');
+		const edit = row.locator('.ash-keybindings-row-action:visible');
+		await expect(edit).toHaveCount(1);
+		await expect(edit.locator('svg')).toBeVisible();
+		await edit.focus();
+		await page.keyboard.press('Enter');
+		const recorder = modal.locator('.ash-keybindings-record-input input');
+		await expect(recorder).toBeFocused();
+		await recorder.press('Control+j');
+		await page.keyboard.press('Tab');
+		const when = modal.locator('.ash-keybindings-recorder-fields label:nth-child(2) input');
+		await expect(when).toBeFocused();
+		await when.fill('editorFocus && mode == edit');
+		await modal.getByRole('button', { name: variant.locale === 'zh-CN' ? '保存' : 'Save', exact: true }).click();
+		await expect(modal.locator('.ash-keybindings-status')).toHaveText(variant.locale === 'zh-CN' ? '快捷键已保存。' : 'Keybinding saved.');
+		await expect(modal.locator('.ash-keybindings-recorder')).toBeHidden();
+		await search.fill('@source:user @command:test.quickAccess.AlphaFormat');
+		await expect(row).toHaveCount(1);
+		await expect(row.locator('.ash-keybindings-source')).toHaveText(variant.locale === 'zh-CN' ? '用户' : 'User');
+		await expect(row.locator('.ash-keybindings-when')).toHaveText('editorFocus && mode == edit');
+		await expect(row.locator('.ash-keybindings-row-action svg')).toHaveCount(2);
+		await modal.screenshot({ path: testInfo.outputPath('keybindings-icons-and-toolbar.png') });
+		await page.setViewportSize({ width: 700, height: 720 });
+		await expect(edit.first()).toBeVisible();
+		await row.getByRole('button', { name: variant.locale === 'zh-CN' ? '移除“Alpha Format”的快捷键' : 'Remove keybinding for Alpha Format' }).click();
+		await expect(row).toHaveCount(0);
+	});
+
+	test(`Keyboard Shortcuts uses resizable table columns and virtual keyboard navigation (${variant.locale}, ${variant.theme})`, async ({ page }, testInfo) => {
+		await page.goto(`/quickAccess.html?${new URLSearchParams({ ...variant, shortcuts: '1', shortcutRows: '1' })}`);
+		await page.getByRole('button', { name: 'Open commands' }).click();
+		const picker = page.locator('.ash-quick-pick');
+		await picker.getByRole('combobox').fill('>Alpha Format');
+		await picker.getByRole('button', { name: variant.locale === 'zh-CN' ? '配置快捷键' : 'Configure Keybinding' }).click();
+		const modal = page.locator('.ash-modal-editor');
+		const search = modal.locator('.ash-keybindings-search input');
+		await search.fill('test.shortcutTable');
+		const grid = modal.getByRole('grid');
+		await expect(grid).toHaveAttribute('aria-rowcount', '161');
+		await expect(grid).toHaveAttribute('aria-colcount', '5');
+		await expect.poll(() => grid.locator('.ash-table-row').count()).toBeGreaterThan(0);
+		expect(await grid.locator('.ash-table-row').count()).toBeLessThan(160);
+		const headers = grid.getByRole('columnheader');
+		const commandHeader = headers.nth(1);
+		const separator = grid.getByRole('separator').first();
+		const originalWidth = (await commandHeader.boundingBox())!.width;
+		const sash = (await separator.boundingBox())!;
+		await page.mouse.move(sash.x + sash.width / 2, sash.y + sash.height / 2);
+		await page.mouse.down();
+		await page.mouse.move(sash.x + sash.width / 2 + 72, sash.y + sash.height / 2);
+		await page.mouse.up();
+		await expect.poll(async () => (await commandHeader.boundingBox())!.width).toBeGreaterThan(originalWidth + 40);
+		const widths = () => headers.evaluateAll(elements => elements.map(element => Math.round(element.getBoundingClientRect().width)));
+		const draggedWidths = await widths();
+		await search.fill('test.shortcutTable row000');
+		await expect(grid.locator('.ash-table-row')).toHaveCount(1);
+		expect(await widths()).toEqual(draggedWidths);
+		await separator.focus();
+		await page.keyboard.press('ArrowRight');
+		await expect.poll(widths).not.toEqual(draggedWidths);
+		await separator.dblclick();
+		await expect.poll(async () => (await commandHeader.boundingBox())!.width).toBeLessThan(draggedWidths[1]);
+		await search.fill('test.shortcutTable');
+		const headerTop = (await commandHeader.boundingBox())!.y;
+		await grid.locator('.ash-table-row').first().focus();
+		await page.keyboard.press('End');
+		const last = grid.locator('.ash-table-row').filter({ has: page.locator('.ash-keybindings-command-id', { hasText: 'test.shortcutTable.row159' }) });
+		await expect(last).toBeFocused();
+		expect((await commandHeader.boundingBox())!.y).toBe(headerTop);
+		await page.keyboard.press('ArrowUp');
+		await page.keyboard.press('ArrowRight');
+		const focusedCell = grid.locator('.ash-table-cell:focus');
+		await expect(focusedCell).toHaveAttribute('aria-colindex', '1');
+		await page.keyboard.press('Enter');
+		await expect(modal.locator('.ash-keybindings-record-input input')).toBeFocused();
+		await modal.getByRole('button', { name: variant.locale === 'zh-CN' ? '取消' : 'Cancel', exact: true }).click();
+		await expect(focusedCell).toBeFocused();
+		const aligned = await grid.evaluate(element => {
+			const headerWidths = [...element.querySelectorAll('[role="columnheader"]')].map(cell => Math.round(cell.getBoundingClientRect().width));
+			const cellWidths = [...element.querySelector('.ash-table-row')!.querySelectorAll('[role="gridcell"]')].map(cell => Math.round(cell.getBoundingClientRect().width));
+			return { headerWidths, cellWidths };
+		});
+		expect(aligned.cellWidths).toEqual(aligned.headerWidths);
+		await modal.screenshot({ path: testInfo.outputPath('keybindings-resizable-table.png') });
+		await page.setViewportSize({ width: 700, height: 720 });
+		await expect.poll(() => grid.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
+	});
+}
+
+for (const variant of [
+	{ os: 'mac', locale: 'zh-CN', theme: 'dark', userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' },
+	{ os: 'windows', locale: 'en', theme: 'light', userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+	{ os: 'linux', locale: 'en', theme: 'hc', userAgent: 'Mozilla/5.0 (X11; Linux x86_64)' },
+]) {
+	test(`Keyboard Shortcuts tooltips and command shortcuts follow platform defaults and user overrides (${variant.os})`, async ({ page }, testInfo) => {
+		await page.addInitScript(userAgent => Object.defineProperty(navigator, 'userAgent', { get: () => userAgent }), variant.userAgent);
+		await page.goto(`/quickAccess.html?${new URLSearchParams({ os: variant.os, locale: variant.locale, theme: variant.theme, shortcuts: '1', shortcutToolbar: '1' })}`);
+		const trigger = page.getByRole('button', { name: 'Open commands' });
+		await trigger.click();
+		const picker = page.locator('.ash-quick-pick');
+		await picker.getByRole('combobox').fill('>Alpha Format');
+		await picker.getByRole('button', { name: variant.locale === 'zh-CN' ? '配置快捷键' : 'Configure Keybinding' }).click();
+		const modal = page.locator('.ash-modal-editor');
+		const search = modal.locator('.ash-keybindings-search input');
+		const buttons = modal.locator('.ash-keybindings-search-action');
+		const record = buttons.nth(0), sort = buttons.nth(1), clear = buttons.nth(2);
+		const recordLabel = variant.locale === 'zh-CN' ? '录制按键' : 'Record Keys';
+		const sortLabel = variant.locale === 'zh-CN' ? '按优先级排序（从高到低）' : 'Sort by Precedence (Highest first)';
+		const clearLabel = variant.locale === 'zh-CN' ? '清空快捷键搜索输入' : 'Clear Keybindings Search Input';
+		const recordKey = variant.os === 'mac' ? 'Alt+Meta+k' : 'Alt+k';
+		const sortKey = variant.os === 'mac' ? 'Alt+Meta+p' : 'Alt+p';
+		await expect(record).toHaveAttribute('title', `${recordLabel} (${variant.os === 'mac' ? '⌥⌘K' : 'Alt+K'})`);
+		await expect(sort).toHaveAttribute('title', `${sortLabel} (${variant.os === 'mac' ? '⌥⌘P' : 'Alt+P'})`);
+		await expect(clear).toHaveAttribute('title', `${clearLabel} (Escape)`);
+		await search.press(recordKey);
+		await expect(record).toHaveAttribute('aria-pressed', 'true');
+		await search.press('Escape');
+		await expect(record).toHaveAttribute('aria-pressed', 'false');
+		await expect(search).not.toHaveValue('');
+		await search.press('Escape');
+		await expect(search).toHaveValue('');
+		await expect(clear).toBeDisabled();
+		await search.fill('test.shortcutToolbar');
+		const row = modal.locator('.ash-table-row').first();
+		await row.focus();
+		await page.keyboard.press(recordKey);
+		await expect(record).toHaveAttribute('aria-pressed', 'false');
+		await page.keyboard.press(sortKey);
+		await expect(sort).toHaveAttribute('aria-pressed', 'true');
+		await expect(search).toBeFocused();
+		await expect(modal.locator('.ash-keybindings-command-id').first()).toHaveText('test.shortcutToolbar.YankeeLatest');
+		await modal.screenshot({ path: testInfo.outputPath('keybindings-default-command-shortcuts.png') });
+		await page.evaluate(async () => window.ashQuickAccessIntegration.writeShortcutBindings([
+			{ key: 'f6', command: 'keybindings.editor.recordSearchKeys', when: 'inKeybindings && inKeybindingsSearch' },
+			{ key: 'f7', command: 'keybindings.editor.toggleSortByPrecedence', when: 'inKeybindings' },
+			{ key: 'f8', command: 'keybindings.editor.clearSearchResults', when: 'inKeybindings && inKeybindingsSearch && keybindingsSearchHasValue' },
+			{ key: 'escape', command: null },
+		]));
+		await expect(record).toHaveAttribute('title', `${recordLabel} (F6)`);
+		await expect(sort).toHaveAttribute('title', `${sortLabel} (F7)`);
+		await expect(clear).toHaveAttribute('title', `${clearLabel} (F8)`);
+		await expect(record).toHaveAttribute('aria-label', `${recordLabel} (F6)`);
+		await search.press('F6');
+		await expect(record).toHaveAttribute('aria-pressed', 'true');
+		await search.press('Escape');
+		await expect(record).toHaveAttribute('aria-pressed', 'false');
+		const query = await search.inputValue();
+		await search.press('Escape');
+		await expect(search).toHaveValue(query);
+		await expect(modal).toBeVisible();
+		await search.press('F7');
+		await expect(sort).toHaveAttribute('aria-pressed', 'false');
+		await expect(modal.locator('.ash-keybindings-command-id').first()).toHaveText('test.shortcutToolbar.AlphaLate');
+		await search.press('F8');
+		await expect(search).toHaveValue('');
+		await expect(search).toBeFocused();
+		await expect(clear).toBeDisabled();
+		await page.evaluate(async ({ recordKey, sortKey }) => window.ashQuickAccessIntegration.writeShortcutBindings([
+			{ key: recordKey, command: null }, { key: sortKey, command: null }, { key: 'escape', command: null },
+		]), { recordKey: variant.os === 'mac' ? 'alt+cmd+k' : 'alt+k', sortKey: variant.os === 'mac' ? 'alt+cmd+p' : 'alt+p' });
+		await expect(record).toHaveAttribute('title', recordLabel);
+		await expect(sort).toHaveAttribute('title', sortLabel);
+		await expect(clear).toHaveAttribute('title', clearLabel);
+		await modal.locator('.ash-modal-editor-close').click();
+		await trigger.press(sortKey);
+		await expect(modal).toBeHidden();
 		expect(await page.evaluate(() => window.ashQuickAccessIntegration.executions)).toEqual([]);
 	});
 }

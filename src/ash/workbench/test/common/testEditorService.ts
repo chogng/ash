@@ -6,8 +6,9 @@ export const emptyEditorServiceState = Object.freeze({
 	onDidActiveEditorChange: Event.None,
 	onDidVisibleEditorsChange: Event.None,
 	activeEditor: undefined,
+	activeEditorPane: undefined,
 	visibleEditors: Object.freeze([]),
 	visibleEditorPanes: Object.freeze([]),
 	save: async () => ({ success: true, editors: [] }),
 	saveAll: async () => ({ success: true, editors: [] }),
-}) satisfies Pick<IEditorService, 'onDidActiveEditorChange' | 'onDidVisibleEditorsChange' | 'activeEditor' | 'visibleEditors' | 'visibleEditorPanes' | 'save' | 'saveAll'>;
+}) satisfies Pick<IEditorService, 'onDidActiveEditorChange' | 'onDidVisibleEditorsChange' | 'activeEditor' | 'activeEditorPane' | 'visibleEditors' | 'visibleEditorPanes' | 'save' | 'saveAll'>;

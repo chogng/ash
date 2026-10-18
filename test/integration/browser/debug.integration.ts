@@ -74,7 +74,7 @@ const openedSources: unknown[] = [];
 const editors: IEditorService = {
 	save: async () => { throw new Error('Saving is outside this fixture'); },
 	saveAll: async () => { throw new Error('Saving is outside this fixture'); },
-	onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, get activeEditor() { return activeInput; }, visibleEditors: [], visibleEditorPanes: [],
+	onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, get activeEditor() { return activeInput; }, visibleEditors: [], activeEditorPane: undefined, visibleEditorPanes: [],
 	openEditor: async (_input, options?: EditorOpenOptions) => {
 		activeInput = _input;
 		if (_input.editorId === DISASSEMBLY_VIEW_ID) {

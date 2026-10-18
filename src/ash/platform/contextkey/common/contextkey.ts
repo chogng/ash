@@ -20,6 +20,8 @@ export interface Context {
 export interface ContextKeyExpression {
 	evaluate(context: Context): boolean;
 	keys(): ReadonlySet<string>;
+	/** A parseable when clause, retaining operators and comparison values. */
+	serialize(): string;
 }
 
 export interface ContextKeyChangeEvent {
@@ -80,7 +82,10 @@ class Expression implements ContextKeyExpression {
 	constructor(
 		readonly evaluate: (context: Context) => boolean,
 		readonly keys: () => ReadonlySet<string>,
+		private readonly text: string,
 	) { }
+
+	serialize(): string { return this.text; }
 }
 
 /** Factory functions for context expressions used by contributions. */
@@ -90,17 +95,18 @@ export const ContextKeyExpr = {
 	},
 
 	true(): ContextKeyExpression {
-		return new Expression(() => true, () => new Set());
+		return new Expression(() => true, () => new Set(), 'true');
 	},
 
 	false(): ContextKeyExpression {
-		return new Expression(() => false, () => new Set());
+		return new Expression(() => false, () => new Set(), 'false');
 	},
 
 	has(key: string): ContextKeyExpression {
 		return new Expression(
 			(context) => Boolean(context.getValue(key)),
 			() => new Set([key]),
+			key,
 		);
 	},
 
@@ -108,6 +114,7 @@ export const ContextKeyExpr = {
 		return new Expression(
 			(context) => !context.getValue(key),
 			() => new Set([key]),
+			`!${key}`,
 		);
 	},
 
@@ -119,6 +126,7 @@ export const ContextKeyExpr = {
 			// When clauses compare numeric text and numeric context values equivalently.
 			(context) => context.getValue(key) == value,
 			() => new Set([key]),
+			`${key} == ${JSON.stringify(value)}`,
 		);
 	},
 
@@ -127,13 +135,14 @@ export const ContextKeyExpr = {
 		return new Expression(
 			(context) => !expression.evaluate(context),
 			() => new Set([key]),
+			typeof value === 'boolean' ? (value ? `!${key}` : key) : `${key} != ${JSON.stringify(value)}`,
 		);
 	},
 
 	regex(key: string, value: RegExp): ContextKeyExpression {
 		// Global and sticky flags carry mutable match state across evaluations.
 		const regexp = new RegExp(value.source, value.flags.replace(/[gy]/gu, ''));
-		return new Expression(context => regexp.test(String(context.getValue(key))), () => new Set([key]));
+		return new Expression(context => regexp.test(String(context.getValue(key))), () => new Set([key]), `${key} =~ ${regexp}`);
 	},
 
 	in(key: string, valueKey: string): ContextKeyExpression {
@@ -147,28 +156,28 @@ export const ContextKeyExpr = {
 				return false;
 			}
 			return Object.keys(collection).some(candidate => membershipValueEquals(value, candidate));
-		}, () => new Set([key, valueKey]));
+		}, () => new Set([key, valueKey]), `${key} in ${valueKey}`);
 	},
 
 	notIn(key: string, valueKey: string): ContextKeyExpression {
 		const expression = this.in(key, valueKey);
-		return new Expression(context => !expression.evaluate(context), () => expression.keys());
+		return new Expression(context => !expression.evaluate(context), () => expression.keys(), `${key} not in ${valueKey}`);
 	},
 
 	greater(key: string, value: number | string): ContextKeyExpression {
-		return numericComparison(key, value, (left, right) => left > right);
+		return numericComparison(key, value, (left, right) => left > right, '>');
 	},
 
 	greaterEquals(key: string, value: number | string): ContextKeyExpression {
-		return numericComparison(key, value, (left, right) => left >= right);
+		return numericComparison(key, value, (left, right) => left >= right, '>=');
 	},
 
 	smaller(key: string, value: number | string): ContextKeyExpression {
-		return numericComparison(key, value, (left, right) => left < right);
+		return numericComparison(key, value, (left, right) => left < right, '<');
 	},
 
 	smallerEquals(key: string, value: number | string): ContextKeyExpression {
-		return numericComparison(key, value, (left, right) => left <= right);
+		return numericComparison(key, value, (left, right) => left <= right, '<=');
 	},
 
 	and(
@@ -181,6 +190,7 @@ export const ContextKeyExpr = {
 		return combineExpressions(
 			defined,
 			(context) => defined.every((expression) => expression.evaluate(context)),
+			'&&',
 		);
 	},
 
@@ -194,6 +204,7 @@ export const ContextKeyExpr = {
 		return combineExpressions(
 			defined,
 			(context) => defined.some((expression) => expression.evaluate(context)),
+			'||',
 		);
 	},
 };
@@ -201,12 +212,13 @@ export const ContextKeyExpr = {
 function combineExpressions(
 	expressions: readonly ContextKeyExpression[],
 	evaluate: (context: Context) => boolean,
+	operator: string,
 ): ContextKeyExpression {
 	const keys = new Set<string>();
 	for (const expression of expressions) {
 		for (const key of expression.keys()) keys.add(key);
 	}
-	return new Expression(evaluate, () => keys);
+	return new Expression(evaluate, () => keys, expressions.map(expression => `(${expression.serialize()})`).join(` ${operator} `));
 }
 
 function membershipValueEquals(value: ContextKeyValue, candidate: unknown): boolean {
@@ -220,12 +232,12 @@ function membershipValueEquals(value: ContextKeyValue, candidate: unknown): bool
 	return extUriIgnorePathCase.isEqual(URI.parse(value), URI.parse(candidate));
 }
 
-function numericComparison(key: string, value: number | string, compare: (left: number, right: number) => boolean): ContextKeyExpression {
+function numericComparison(key: string, value: number | string, compare: (left: number, right: number) => boolean, operator: string): ContextKeyExpression {
 	const right = parseFloat(String(value));
 	return new Expression(context => {
 		const left = context.getValue(key);
 		return (typeof left === 'number' || typeof left === 'string') && compare(parseFloat(String(left)), right);
-	}, () => new Set([key]));
+	}, () => new Set([key]), `${key} ${operator} ${JSON.stringify(value)}`);
 }
 
 export interface ParsingError {
@@ -300,7 +312,7 @@ export class Parser {
 				return this.fail(token, localize('contextkey.expectedKey', 'Expected a context key, received "{0}".', Scanner.getLexeme(token)));
 			}
 			const operand = this.parseUnary();
-			return new Expression(context => !operand.evaluate(context), () => operand.keys());
+			return new Expression(context => !operand.evaluate(context), () => operand.keys(), `!(${operand.serialize()})`);
 		}
 		if (this.match(TokenType.LParen)) {
 			const expression = this.parseOr();
