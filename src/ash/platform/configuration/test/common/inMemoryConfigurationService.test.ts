@@ -4,11 +4,31 @@ import { URI } from '../../../../base/common/uri.js';
 import { ConfigurationTarget } from '../../../../platform/configuration/common/configuration.js';
 import { ConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { InMemoryConfigurationService } from '../../../../platform/configuration/common/inMemoryConfigurationService.js';
+import type { IConfigurationChangeEvent } from '../../common/configuration.js';
 
 function integer(value: unknown): number {
 	if (!Number.isInteger(value) || (value as number) < 1) throw new TypeError('value must be a positive integer');
 	return value as number;
 }
+
+test('in-memory change events index exact sections and descendants without matching adjacent names', async () => {
+	const registry = new ConfigurationRegistry();
+	registry.registerConfiguration({ key: 'editor.options', defaultValue: 1, parse: integer });
+	registry.registerConfiguration({ key: 'editorial.enabled', defaultValue: true, parse: Boolean });
+	using service = new InMemoryConfigurationService(registry);
+	const events: IConfigurationChangeEvent[] = [];
+	using listener = service.onDidChangeConfiguration(event => events.push(event));
+	await service.updateValue('editor.options', 2);
+	await service.updateValue('editorial.enabled', false);
+
+	const sections = ['editor', 'editor.options', 'editor.option', 'editor.options.fontSize', 'editorial', '', 'editor.', 'Editor'];
+	assert.deepEqual(events.map(event => sections.map(section => event.affectsConfiguration(section))), [
+		[true, true, false, false, false, false, false, false],
+		[false, false, false, false, true, false, false, false],
+	]);
+	assert.deepEqual(events.map(event => [...event.affectedKeys]), [['editor.options'], ['editorial.enabled']]);
+	assert.equal(events[0]!.affectsConfiguration('editor'), true, 'an older event retains its own index');
+});
 
 test('in-memory configuration resolves base and language override values', async () => {
 	const registry = new ConfigurationRegistry();

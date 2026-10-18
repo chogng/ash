@@ -25,6 +25,25 @@ import { TestConfigurationService as WorkbenchConfigurationService } from '../..
 
 import { ConfigurationTarget, addToValueTree, getConfigValueInTarget, getConfigurationValue, getLanguageTagSettingPlainKey, isConfigurationOverrides, isConfigurationUpdateOverrides, isConfigured, merge, removeFromValueTree, toValuesTree } from "../../../../platform/configuration/common/configuration.js";
 
+test('workbench change events index ancestor and descendant sections without matching adjacent names', async () => {
+	const registry = new ConfigurationRegistry();
+	registry.registerConfiguration({ key: 'editor.options', defaultValue: { fontSize: 12 }, parse: value => value as { fontSize: number; } });
+	registry.registerConfiguration({ key: 'editorial.enabled', defaultValue: true, parse: Boolean });
+	using service = new WorkbenchConfigurationService({ registry });
+	const events: import('../../common/configuration.js').IConfigurationChangeEvent[] = [];
+	using listener = service.onDidChangeConfiguration(event => events.push(event));
+	await service.updateValue('editor.options', { fontSize: 16 });
+	await service.updateValue('editorial.enabled', false);
+
+	const sections = ['editor', 'editor.options', 'editor.option', 'editor.options.fontSize', 'editorial', '', 'editor.', 'Editor'];
+	assert.deepEqual(events.map(event => sections.map(section => event.affectsConfiguration(section))), [
+		[true, true, false, true, false, false, false, false],
+		[false, false, false, false, true, false, false, false],
+	]);
+	assert.deepEqual(events.map(event => [...event.affectedKeys]), [['editor.options'], ['editorial.enabled']]);
+	assert.equal(events[0]!.affectsConfiguration('editor.options.fontSize'), true, 'an older event retains its own index');
+});
+
 test('configuration tags are validated before replacing live registrations', () => {
 	const registry = new ConfigurationRegistry();
 	const active = { properties: { 'test.active': { type: 'boolean' as const, default: true, tags: ['preview'] } } };

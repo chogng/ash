@@ -4,6 +4,8 @@ import { editJsonObjectProperty, parseJsonDocument } from '../../../../base/comm
 import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
 import { extUriBiasedIgnorePathCase, extUriIgnorePathCase } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
+import { TernarySearchTree } from '../../../../base/common/ternarySearchTree.js';
+import { WellDefinedPrefixTree } from '../../../../base/common/prefixTree.js';
 import { equals } from '../../../../base/common/objects.js';
 import { CancellationError, isCancellationError } from '../../../../base/common/errors.js';
 import { ConfigurationModel, ConfigurationModelParser, UserSettings } from '../../../../platform/configuration/common/configurationModels.js';
@@ -58,6 +60,7 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 	private workspaceResource: WorkspaceConfiguration | FolderConfiguration | undefined;
 	private workspaceInitialized = false;
 	private workspace: IWorkspace;
+	private workspaceFolders: TernarySearchTree<URI, IWorkspaceFolder>;
 	private readonly workspaceChanged = this._register(new Emitter<IWorkspaceChangeEvent>());
 	readonly onDidChangeWorkspace = this.workspaceChanged.event;
 	private readonly foldersChanged = this._register(new Emitter<IWorkspaceFoldersChangeEvent>());
@@ -81,6 +84,7 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 	) {
 		super();
 		this.workspace = resolveWorkspace(options.workspace ?? { id: 'empty-window' });
+		this.workspaceFolders = indexWorkspaceFolders(this.workspace);
 		this.settingsResource = profile.currentProfile.settingsResource;
 		this.userSettings = this._register(new UserSettings(this.settingsResource, {}, extUriBiasedIgnorePathCase, userFiles, log));
 		this.registry = options.registry ?? Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
@@ -111,21 +115,7 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 	}
 
 	getWorkspaceFolder(resource: URI): IWorkspaceFolder | null {
-		const candidate = resource.with({ query: null, fragment: null });
-		let match: IWorkspaceFolder | null = null;
-		for (const folder of this.workspace.folders) {
-			// Explicit drive and UNC roots belong to Windows even when the renderer runs
-			// on another OS. POSIX and remote roots retain their own casing semantics.
-			const comparison = folder.uri.scheme === 'file' && (folder.uri.authority || /^\/[a-z]:($|\/)/i.test(folder.uri.path))
-				? extUriIgnorePathCase : extUriBiasedIgnorePathCase;
-			if (
-				comparison.isEqualOrParent(candidate, folder.uri)
-				&& (!match || folder.uri.toEncodedComponents().path.length > match.uri.toEncodedComponents().path.length)
-			) {
-				match = folder;
-			}
-		}
-		return match;
+		return this.workspaceFolders.findSubstr(resource) ?? null;
 	}
 
 	/** Publishes one immutable snapshot of the workspace accepted by this window's host. */
@@ -133,7 +123,9 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 		const workspace = resolveWorkspace(next);
 		const previous = this.workspace;
 		if (sameWorkspace(previous, workspace)) return;
+		const workspaceFolders = indexWorkspaceFolders(workspace);
 		this.workspace = workspace;
+		this.workspaceFolders = workspaceFolders;
 		// Every listener observes the same immutable committed snapshot. Granular
 		// events describe that commit; they never maintain a second folder list.
 		const previousState = workbenchStateFromWorkspace(previous);
@@ -594,15 +586,17 @@ function configurationChangeEvent(
 	source: ConfigurationTarget = ConfigurationTarget.USER_LOCAL,
 ): IConfigurationChangeEvent {
 	const affectedKeys = new Set([...change.keys, ...change.overrides.flatMap(([, keys]) => keys)]);
+	// Each listener queries the same immutable event; index its dotted keys once.
+	const affectedSections = new WellDefinedPrefixTree<boolean>();
+	for (const key of affectedKeys) affectedSections.insert(key.split('.'), true);
 	return Object.freeze({
 		source,
 		affectedKeys,
 		change,
 		affectsConfiguration(configuration: string, overrides?: IConfigurationOverrides): boolean {
 			if (overrides !== undefined && !isConfigurationOverrides(overrides)) throw new TypeError('Configuration overrides are invalid');
-			const affected = [...affectedKeys].some(key =>
-				key === configuration || key.startsWith(`${configuration}.`) || configuration.startsWith(`${key}.`));
-			if (!affected) return false;
+			const sections = configuration.split('.');
+			if (!affectedSections.hasKeyOrParent(sections) && !affectedSections.hasKeyOrChildren(sections)) return false;
 			if (!overrides) return true;
 			const before = resolveConfiguration(previous, configuration, overrides);
 			const after = resolveConfiguration(current, configuration, overrides);
@@ -796,6 +790,26 @@ function sameWorkspace(left: IWorkspace, right: IWorkspace): boolean {
 				folder.name === candidate.name &&
 				folder.index === candidate.index;
 		});
+}
+
+function indexWorkspaceFolders(workspace: IWorkspace): TernarySearchTree<URI, IWorkspaceFolder> {
+	const index = TernarySearchTree.forUris<IWorkspaceFolder>(resource => {
+		// Drive and UNC roots retain Windows casing semantics on every renderer OS.
+		const comparison = resource.scheme === 'file' && (resource.authority || /^\/[a-z]:($|\/)/i.test(resource.path))
+			? extUriIgnorePathCase : extUriBiasedIgnorePathCase;
+		return comparison.ignorePathCasing(resource);
+	}, () => true);
+	const ranked = [...workspace.folders].sort((left, right) => right.uri.toEncodedComponents().path.length - left.uri.toEncodedComponents().path.length);
+	for (const folder of ranked) {
+		// Membership ignores decorations on the candidate, never on a root. Keep
+		// typed snapshots consistent with persisted roots, which reject them.
+		if (folder.uri.query || folder.uri.fragment) continue;
+		// Existing membership ranks encoded path length, then snapshot order. A
+		// better ancestor always wins beneath this root, so this root cannot win.
+		// Skipping it also preserves that policy for escaped or trailing slashes.
+		if (!index.findSubstr(folder.uri)) index.set(folder.uri, folder);
+	}
+	return index;
 }
 
 function resolveWorkspace(

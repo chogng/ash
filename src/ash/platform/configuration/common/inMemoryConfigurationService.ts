@@ -1,6 +1,7 @@
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { equals } from '../../../base/common/objects.js';
+import { WellDefinedPrefixTree } from '../../../base/common/prefixTree.js';
 import type { IWorkspaceFolder } from '../../workspace/common/workspace.js';
 import { Registry } from '../../registry/common/platform.js';
 import {
@@ -252,13 +253,16 @@ export class InMemoryConfigurationService extends Disposable implements IConfigu
 		for (const [, keys] of change.overrides) {
 			for (const key of keys) affectedKeys.add(key);
 		}
+		// Each listener queries the same immutable event; index its dotted keys once.
+		const affectedSections = new WellDefinedPrefixTree<boolean>();
+		for (const key of affectedKeys) affectedSections.insert(key.split('.'), true);
 		const event: IConfigurationChangeEvent = {
 			source: ConfigurationTarget.MEMORY,
 			affectedKeys,
 			change,
 			affectsConfiguration: (section, overrides) => {
 				if (overrides !== undefined && !isConfigurationOverrides(overrides)) throw new TypeError('Configuration overrides are invalid');
-				if (![...affectedKeys].some(key => key === section || key.startsWith(`${section}.`))) return false;
+				if (!affectedSections.hasKeyOrChildren(section.split('.'))) return false;
 				if (!overrides) return true;
 				const before = this.getSectionValue(previous, section, overrides.overrideIdentifier);
 				const after = this.getSectionValue(current, section, overrides.overrideIdentifier);
