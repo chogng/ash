@@ -40,6 +40,8 @@ Agent 执行、审批与终端呈现的详细边界以 [Platform Terminal 的前
 
 扩展 Profile 的注册、激活、撤回和取消属于原 Extension Host 链。工作区或 provider 代次失效后，晚到的 PTY 由原关闭端口回收；实例关闭释放 provider 的引用，重启重新取得 handle。
 
+Profile 选择器属于单次命令。工作区或执行连接变化会关闭并退休该选择，目录选择和默认 Profile 写入前也核对其生命周期；同名 Profile 或相同操作系统再次出现不能恢复旧选择。后续命令使用新的选择器。
+
 ## 输入与命令
 
 xterm 的文本和原始字节输入经实例进入同一进程输入 owner。`sendText` 负责换行、执行用的 Enter 与 bracketed paste；原始键盘和二进制输入保留原有编码。输入和尺寸操作等待执行端或 provider 确认，关闭会拒绝排队及进行中的操作，迟到回复不能恢复已关闭的输入链。
@@ -48,7 +50,7 @@ xterm 的文本和原始字节输入经实例进入同一进程输入 owner。`s
 
 `terminal.integrated.enableMultiLinePasteWarning` 由 TypeScript 窗口配置解释，沿现有 `settings.json` 的用户／工作区层解析，默认 `auto`。`auto` 在 bracketed paste 模式下放行，其他情况下移除单条命令末尾的换行及空白，对其余多行文本确认；`always` 对 LF、CRLF 和 CR 换行均确认，即使 Shell 启用了 bracketed paste；`never` 关闭确认。对话框仅展示有界开头预览，接受后发送原文；Escape 取消且恢复有效原实例的焦点。
 
-最近命令选择器从终端历史 owner 读取按 Profile 保存的命令，只在用户明确接受后重跑。听写文字进入原实例输入链，由用户按 Enter 执行；切换实例、退出或隐藏面板取消录音。
+最近命令选择器从终端历史 owner 读取按 Profile 保存的命令，只在用户明确接受后重跑。最近命令和目录选择都绑定原 PID；切换实例、重连、退出、关闭或工作区替换会退休并关闭选择器，切换回来不能恢复旧选择。目录发送等待确认期间失效时也不再抢回焦点。听写文字进入原实例输入链，由用户按 Enter 执行；切换实例、退出或隐藏面板取消录音。
 
 ### 运行编辑器选区
 
@@ -85,6 +87,8 @@ ShellIntegrationAddon 消费已提交事件；`CwdDetectionCapability` 持有已
 隐藏面板保留实例、PTY、屏幕、待提交输入、分屏比例与焦点。面板组由 `TerminalGroupService` 管理成员，`TerminalGroup` 使用横向 SplitView；列表从组模型派生行顺序、连接线与可访问位置描述。标签拖到另一标签之前／之后可加入该组或重排；拖到可见窗格左／右侧使用相同 `moveInstance` 操作，资源只匹配本窗口的存活实例。组内重排将比例与实例一起保留。Join or Reorder Terminals 提供同等键盘选择器，取消、切换实例或关闭后不应用过期结果。
 
 `TerminalEditorService` 将同一个 TerminalInstance 移入或移出编辑区，编辑器 pane 只承载原 xterm。移动不复制屏幕或重建进程；关闭终端编辑器标签通过原编辑器关闭链释放实例。重命名和图标变化由实例保存，标签与编辑器通过原事件更新。
+
+标准终端创建和已有实例的编辑器展示尊重 `preserveFocus`：后台打开不改变活动终端，也不因编辑器选中事件重定向 Send Sequence；实际聚焦终端后才切换输入目的地。实例构造失败时，创建工厂先释放已取得的 PTY，再向调用方返回原错误。扩展 Profile provider 自行创建时的焦点契约及多组承载的关闭确认仍见 TODO。
 
 编辑区 Split 捕获原终端所在组，通过编辑器组服务调用现有 EditorPart 的相邻组操作。新终端的创建同时携带原实例和准确的目标组，继续使用 TerminalService 的 cwd／Profile 解析；原 PTY 与屏幕不变。父实例代次失效时关闭迟到的新进程；创建失败只清理本次仍为空的目标组。Panel 位置与方向切换仍须由布局服务提供契约，不能从窗口宽高推断。
 
@@ -128,6 +132,14 @@ Desktop 的 `enablePersistentSessions` 控制协调 reload。准备阶段等待�
 目录行为同步写入现有终端无障碍帮助；英文／中文帮助与原输入同步、buffer tracker 共 4 项回归通过，日志 `.build/todo-round2-terminal-accessibility.log`。
 
 测试入口描述可重复检查的行为，不替代特定平台的实机结果。未完成动作与平台验收集中在 [Terminal TODO](../TODO.md#terminal--todo)，可选增强保留在[发展候选（未排期）](../TODO.md#发展候选未排期)。
+
+2026-10-18 在 macOS ARM64 复核 Terminal 全链路与已装载的 terminalContrib，对照本地 VS Code `72e9539ed6b` 的公开契约、生产调用与测试，未执行上游窗口配对。本轮验证如下：
+
+- 29 个终端领域单测文件累计 365 项通过。领域运行中 27 个文件的 209 项通过；另两个文件暴露新增测试的 DI 注册与 disposable 归属问题，修正后分别以原编译入口复验 Profile 60 项、实例服务 96 项通过。日志为 `.build/terminal-alignment-all-units.log`、`.build/terminal-alignment-profile-units.log`、`.build/terminal-alignment-service-units.log`。
+- Chromium 的 `terminal.integration.spec.ts` 全部 120 项通过，包含中英文 Profile 选择失效、后台编辑器焦点与输入目的地、Find、链接、历史、剪贴板和无障碍。首次加载失败来自 fixture 缺少链接贡献的视图与 Explorer 依赖，补齐原服务装配后通过；未延长断言。日志 `.build/terminal-alignment-browser-final.log`。
+- `pnpm run pretest:smoke:desktop` 的真实后端准备、正常 Desktop 构建与 automation 类型检查通过。实机面板输入／隐藏恢复通过，英文及中文 reload 的原 PID、输出、分屏、待提交输入与焦点断言在一次定向复验中全部通过。首次英文用例因 daemon 清理的身份保护退出 1，记录与剩余调查见 TODO，复验不视为 daemon 缺陷已修。日志 `.build/terminal-alignment-desktop-build.log`、`.build/terminal-alignment-desktop-smoke.log`、`.build/terminal-alignment-desktop-retry.log`。
+
+本轮未修改 Rust，也未重跑 Rust 单测；后端源码审计和本机实机结果不替代 Windows、Linux 或跨机器 SSH 验收。目录集合和样式核对不代替行为通过；尚未闭合的贡献与恢复能力继续按 TODO 的真实前置推进。
 
 ```sh
 just verify ash-exec-server --lib

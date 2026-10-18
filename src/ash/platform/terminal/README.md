@@ -35,7 +35,9 @@ Rust 领域服务拥有完整 Agent loop：模型调用、工具选择与调度�
 
 `common/terminal.ts` 导出 `ITerminalProcessService` 的 DI 标识。Workbench 与 Sessions 注册 `IRendererHost.terminal` 后，Terminal contribution 经容器注入进程服务与 Workspace。SSH 宿主直接使用拥有租约管理的服务对象。传输层使用 Ash 的创建与分页读取契约；`contrib/terminal/browser/terminalProcessManager.ts` 将其接为输出、命令和退出事件，拥有游标与解析等待。适配层与工作台之间的身份和顺序约束见 [Terminal 运行契约](../../../../docs/terminal.md#进程接入)。
 
-后端链路是 `app-server/src/server/terminal_operations.rs` → `exec-server/src/terminal.rs` → `utils/pty`；App Server 只校验和分发协议，`exec-server` 拥有交互进程，PTY 工具层拥有操作系统句柄、原始字节、尺寸和进程终止。协议及 decoder 由 `app-server-protocol` 生成，不能在此手改生成物。
+后端链路是 `app-server/src/server/request_processors/terminals.rs` → `exec-server/src/terminal.rs` → `utils/pty`；App Server 只校验和分发协议，`exec-server` 拥有交互进程，PTY 工具层拥有操作系统句柄、原始字节、尺寸和进程终止。协议及 decoder 由 `app-server-protocol` 生成，不能在此手改生成物。
+
+创建与恢复后的操作仍属于发起时的 owner。dispose、runtime replacement 或关闭使等待中的操作失效；恢复完成后、实际发送请求前再次核对原记录与 connection generation，读取与属性查询的迟到回复也不发布。关闭只处理当前登记的身份，退休或未知身份不会转发到新宿主。晚到的 create／attach 成功结果只通过原连接回收，不能登记成新租约。
 
 重连测试位于 `test/browser/reconnectableTerminalProcessService.test.ts`，覆盖 Renderer 的租约旋转、连接代次、二进制输出和目录路由；旧 Electron Main 测试路径已按用户确认退出。
 

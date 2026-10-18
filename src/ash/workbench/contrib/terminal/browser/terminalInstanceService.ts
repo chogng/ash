@@ -1,4 +1,4 @@
-import { CancellationError } from '../../../../base/common/errors.js';
+import { CancellationError, onUnexpectedError } from '../../../../base/common/errors.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { AgentHostTerminalService } from './agentHostTerminalService.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
@@ -99,29 +99,35 @@ export class TerminalInstanceService extends Disposable {
 			await child.close();
 			throw new CancellationError();
 		}
-		const instance = this.instantiationService.createInstance(TerminalInstance,
-			`terminal-instance-${instanceNumber}`,
-			instanceNumber,
-			workspaceFolder.id,
-			processWorkspaceFolderId,
-			child,
-			created.ready,
-			options.title ?? terminalProfileTitle(created.profile),
-			{ ...created.profile, icon: options.icon, color: options.color },
-			created.connectionPersistence,
-			restored ? restored.customTitle : options.title,
-			callbacks.getConnectionState,
-			() => callbacks.onClosed(instance),
-			callbacks.onTitleChanged,
-			undefined,
-			Object.freeze({ ...launch, profile: profile.type === 'custom' ? profile : { type: 'profile' as const, profileId: created.profile.profileId } }),
-			options.initialText,
-			options.waitOnExit,
-			options.dimensions,
-			this.backend,
-			restored,
-		);
-		return instance;
+		try {
+			const instance = this.instantiationService.createInstance(TerminalInstance,
+				`terminal-instance-${instanceNumber}`,
+				instanceNumber,
+				workspaceFolder.id,
+				processWorkspaceFolderId,
+				child,
+				created.ready,
+				options.title ?? terminalProfileTitle(created.profile),
+				{ ...created.profile, icon: options.icon, color: options.color },
+				created.connectionPersistence,
+				restored ? restored.customTitle : options.title,
+				callbacks.getConnectionState,
+				() => callbacks.onClosed(instance),
+				callbacks.onTitleChanged,
+				undefined,
+				Object.freeze({ ...launch, profile: profile.type === 'custom' ? profile : { type: 'profile' as const, profileId: created.profile.profileId } }),
+				options.initialText,
+				options.waitOnExit,
+				options.dimensions,
+				this.backend,
+				restored,
+			);
+			return instance;
+		} catch (error) {
+			// Until construction succeeds, this factory still owns the acquired PTY.
+			await child.close().catch(onUnexpectedError);
+			throw error;
+		}
 	}
 
 	private requireWorkspaceFolder(dirId?: string) {

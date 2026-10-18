@@ -64,6 +64,84 @@ suite('reconnectable terminal creation lifetime', () => {
 	});
 });
 
+suite('reconnectable terminal operations after retirement', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	for (const retirement of ['dispose', 'replacement'] as const) {
+		test(`a late close after ${retirement} cannot address a process on the replacement connection`, async () => {
+			const supervisor = new TestSupervisor();
+			using service = new ReconnectableTerminalProcessService(supervisor as unknown as AppServerProtocolClient);
+			await service.create({ rows: 24, cols: 80, profile: { type: 'default' } });
+			if (retirement === 'dispose') service.dispose();
+			else service.prepareForServerReplacement();
+			const before = [...supervisor.requests];
+			supervisor.generation++;
+			await service.close({ terminalId: 'terminal-1' });
+			assert.deepEqual(supervisor.requests, before);
+		});
+	}
+
+	test('closing an unknown or already closed terminal never dispatches another close', async () => {
+		const supervisor = new TestSupervisor();
+		using service = new ReconnectableTerminalProcessService(supervisor as unknown as AppServerProtocolClient);
+		await service.close({ terminalId: 'unknown' });
+		assert.equal(supervisor.requests.length, 0);
+		await service.create({ rows: 24, cols: 80, profile: { type: 'default' } });
+		await service.close({ terminalId: 'terminal-1' });
+		await service.close({ terminalId: 'terminal-1' });
+		assert.deepEqual(supervisor.requests.map(request => request.method), ['terminal/create', 'terminal/close']);
+	});
+
+	for (const retirement of ['close', 'dispose', 'replacement'] as const) {
+		for (const operation of ['write', 'read', 'resize', 'signal', 'processInfo', 'lease'] as const) {
+			test(`${operation} waiting for recovery cannot dispatch after ${retirement}`, async () => {
+				const supervisor = new TestSupervisor();
+				const reply = new DeferredPromise<void>();
+				supervisor.attachReply = reply.p;
+				const failures: unknown[] = [];
+				using service = new ReconnectableTerminalProcessService(supervisor as unknown as AppServerProtocolClient, { reportError: (_message, error) => failures.push(error) });
+				await service.create({ dirId: 'original-folder', rows: 24, cols: 80, profile: { type: 'default' } });
+				supervisor.emit('crashed');
+				supervisor.generation++;
+				supervisor.emit('ready');
+				const identity = { dirId: 'original-folder', terminalId: 'terminal-1' };
+				const operations = {
+					write: () => service.write({ ...identity, data: 'retired input' }),
+					read: () => service.read({ ...identity, afterSequence: 0, afterCommandSequence: 0, maxChunks: 1 }),
+					resize: () => service.resize({ ...identity, rows: 30, cols: 100 }),
+					signal: () => service.sendSignal({ ...identity, signal: 'interrupt' }),
+					processInfo: () => service.getProcessInfo(identity),
+					lease: () => service.getReconnectLease(identity.terminalId),
+				};
+				const rejected = assert.rejects(operations[operation](), isCancellationError);
+				const closing = retirement === 'close' ? service.close(identity) : undefined;
+				if (retirement === 'dispose') service.dispose();
+				else if (retirement === 'replacement') service.prepareForServerReplacement();
+				await reply.complete();
+				await rejected;
+				await closing;
+				assert.equal(supervisor.requests.some(request => !['terminal/create', 'terminal/attach', 'terminal/close'].includes(request.method)), false);
+				assert.ok(supervisor.requests.some(request => request.method === 'terminal/close'));
+				assert.deepEqual(failures, []);
+			});
+		}
+	}
+
+	test('restore attachment cannot publish process information returned after close', async () => {
+		const supervisor = new TestSupervisor();
+		const reply = new DeferredPromise<void>();
+		supervisor.processInfoReply = reply.p;
+		using service = new ReconnectableTerminalProcessService(supervisor as unknown as AppServerProtocolClient);
+		const restoring = service.attach({ terminalId: 'terminal-1', dirId: 'original-folder', reconnectToken: FIRST_TOKEN, reconnectGracePeriodMillis: 30000 }, { rows: 24, cols: 80 }, { profileId: 'shell', title: 'Shell', isDefault: true });
+		const rejected = assert.rejects(restoring, isCancellationError);
+		await waitFor(() => supervisor.requests.some(request => request.method === 'terminal/processInfo'));
+		await service.close({ terminalId: 'terminal-1', dirId: 'original-folder' });
+		await reply.complete();
+		await rejected;
+		await assert.rejects(service.getReconnectLease('terminal-1'), /no longer recoverable/);
+	});
+});
+
 test('a replacement renderer attaches the original process and rotates its handoff credential', async () => {
 	const supervisor = new TestSupervisor();
 	supervisor.shellType = 'pwsh';
@@ -287,6 +365,8 @@ class TestSupervisor {
 	successfulAttachments = 0;
 	invalidCreateLease = false;
 	createReply: Promise<void> | undefined;
+	attachReply: Promise<void> | undefined;
+	processInfoReply: Promise<void> | undefined;
 	output: Buffer | undefined;
 	cwd: { value: string; afterOutputSequence: number; isTrusted?: boolean; } | undefined;
 	readonly requests: RecordedRequest[] = [];
@@ -325,8 +405,10 @@ class TestSupervisor {
 			case APP_SERVER_METHODS["terminal/writeBinary"].method:
 				return null;
 			case APP_SERVER_METHODS['terminal/processInfo'].method:
+				await this.processInfoReply;
 				return { ready: { pid: 1234, cwd: '/backend/workspace', shellType: this.shellType }, cwd: '/backend/current', rows: 40, cols: 120 };
 			case APP_SERVER_METHODS["terminal/attach"].method:
+				await this.attachReply;
 				if (this.attachFailures > 0) {
 					this.attachFailures -= 1;
 					throw new Error("terminal is still detaching");

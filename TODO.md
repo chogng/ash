@@ -92,6 +92,7 @@
 
 ## Terminal · TODO
 
+- [ ] **复核 · macOS smoke 清理**：2026-10-18 英文 terminal reload 的产品断言完成后，daemon stop 的超时终止阶段触发 `refusing to terminate a reused or stale daemon pid`，首次命令退出 1；随后英／中两项定向复验通过。原 PID 已不存在、端点 PID／socket 已清理；保留身份保护，继续核查正常退出与二次身份校验之间的竞态。原日志 `.build/terminal-alignment-desktop-smoke.log`，失败附件 `.build/terminal-alignment-desktop-first-results/`，复验 `.build/terminal-alignment-desktop-retry.log`；本轮未修改 daemon。
 - [ ] **复核历史启动抖动** · 定位终端首次 `page.goto` 的 HTTP 文档请求挂起／ERR_ABORTED；原 trace 未加载产品代码，原因尚未查明。若再次出现，按原 trace 调查服务器首次连接，不延长断言。原日志 `.build/path-owner-browser-final.log`、`.build/path-owner-terminal-retry-prepared.log`，原 trace `.build/desktop/playwright/editor-browser-PCDyWW/results/`。
 
 终端契约见 [Terminal](docs/terminal.md)。以下按现有调用链分批推进；上游行为参照 `terminalActions.ts`、`terminalTabsList.ts`、`terminalContrib/clipboard` 与 `terminalContrib/history`。
@@ -100,6 +101,8 @@
 - [ ] **后端前置 · 跨窗口转移**：独立定义进程租约、屏幕及输入交接并验收；现有 30 秒租约只闭合同一 Desktop 窗口 reload，Web 保持 connection-owned 生命周期。
 - [ ] **后端前置 · 应用退出后恢复输出、cwd 和布局**：有限 `TerminalRecorder` replay 与命令文本历史不等于完整终端恢复；缺少持久化缓冲、布局和重建 Shell 的入口。与保留原进程的 reload 分开验收；不承诺任意旧命令跨应用退出继续执行。
 - [ ] **复核 · 文件链接扩展**：补工作区搜索型链接、外部 provider 与适用配置的实际入口；工作区外目录打开另需沿原窗口／工作区授权契约处理。工作区内显式目录路径的鼠标／键盘定位已完成，范围与关闭／重连验证见 [Terminal](docs/terminal.md)。
+- [ ] **可做 · 编辑器多组关闭确认**：同一终端资源可被多个 Editor Group 承载，`TerminalEditor` 的 close handler 目前会先释放实例，导致关闭旧组标签时杀掉另一组仍承载的 PTY。先由 EditorPart 向 custom close handler 提供准确关闭集合并尊重 `excludeSticky`，再只在最后一个宿主关闭时确认及释放；补单标签、全部关闭和取消回归，不能仅跳过其他宿主而绕过全部关闭确认。
+- [ ] **前端契约前置 · 扩展 Profile 后台创建焦点**：标准终端创建和已有实例 editor reveal 已尊重 `preserveFocus`；`createContributedTerminalProfile` 的 provider 创建选项尚未携带该意图，provider 内递归创建仍可激活实例。须贯通原 provider 契约及创建入口，避免事后恢复旧 active 覆盖用户期间的主动选择。
 - [ ] **验收** · 补跨机器 SSH、Windows PTY／PowerShell，以及 Linux Desktop 的真实 OS 文件拖入；应用退出后的 revive 独立验收。Linux 文件链接、reload、活动文件／选中文本执行和最近目录选择器的 6 项真实 Desktop 场景已通过，范围见 [Terminal](docs/terminal.md)。
 
 高频交互验收同时观察原进程身份、待提交输入、选区和焦点；执行、权限和工具调度继续归 Rust。

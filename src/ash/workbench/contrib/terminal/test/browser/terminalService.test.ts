@@ -688,8 +688,9 @@ async function waitFor(condition: () => boolean, timeoutMillis = 1_000): Promise
 	}
 }
 
-function terminalServices(processService: ITerminalProcessService, workspace: IWorkspaceContextService): InstantiationService {
+function terminalServices(processService: ITerminalProcessService, workspace: IWorkspaceContextService, pathServiceFactory?: () => IPathService): InstantiationService {
 	const services = new InstantiationService(new ServiceCollection([ITerminalProcessService, processService], [IWorkspaceContextService, workspace]));
+	if (pathServiceFactory) services.registerSingleton(IPathService, pathServiceFactory);
 	registerTestTerminalCreationServices(services);
 	services.registerSingleton(ITerminalService, () => services.createInstance(TerminalService));
 	return services;
@@ -706,6 +707,28 @@ test('TerminalService rejects missing process and workspace registrations before
 
 suite('TerminalService lifecycle', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('an instance construction failure releases its process before rejecting creation', async () => {
+		const processes = new TestTerminalProcessService([]);
+		const release = deferred<void>();
+		processes.closeGates.push(release.promise);
+		using workspace = folderWorkspaceContext();
+		const failure = new Error('Terminal instance dependency failed');
+		using services = terminalServices(processes, workspace, () => { throw failure; });
+		const terminals = services.get(ITerminalService);
+		const published: ITerminalInstance[] = [];
+		using listener = terminals.onDidCreateInstance(instance => published.push(instance));
+		let settled = false;
+		const creating = terminals.createTerminal({ profile: { type: 'default' } });
+		const rejected = assert.rejects(creating.finally(() => { settled = true; }), error => error === failure);
+		await waitFor(() => processes.closeCalls.length === 1);
+		assert.equal(settled, false);
+		assert.deepEqual(terminals.instances, []);
+		assert.deepEqual(published, []);
+		release.resolve();
+		await rejected;
+		assert.deepEqual(processes.closeCalls, ['terminal-1']);
+	});
 
 	for (const disposeEarly of [false, true]) test(`retired PTY cleanup preserves its replacement registration with early disposal ${disposeEarly}`, async () => {
 		const release = deferred<void>();

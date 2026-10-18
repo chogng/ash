@@ -1,6 +1,6 @@
 import { APP_SERVER_METHODS, type TerminalAttachResult, type TerminalReconnectLease } from "../../../../../.build/protocol/typescript/index.js";
 import { timeout } from "../../../base/common/async.js";
-import { CancellationError } from '../../../base/common/errors.js';
+import { CancellationError, isCancellationError } from '../../../base/common/errors.js';
 import { Disposable, toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
 import type { AppServerConnectionState } from "../../agentHost/common/appServerApi.js";
 import type { AppServerProtocolClient } from "../../agentHost/browser/appServerProtocolClient.js";
@@ -135,7 +135,8 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 	}
 
 	async write(params: ITerminalProcessWriteOptions): Promise<void> {
-		await this.ensureAttached(params.terminalId);
+		const record = await this.ensureAttached(params.terminalId);
+		this.assertAttached(record);
 		const { data, ...identity } = params;
 		if (typeof data === 'string') {
 			await this.supervisor.request(APP_SERVER_METHODS['terminal/write'], { ...identity, data });
@@ -145,12 +146,13 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 	}
 
 	async getReconnectLease(terminalId: string): Promise<ITerminalReconnectLease> {
-		await this.ensureAttached(terminalId);
-		const record = this.requireTerminal(terminalId);
+		const record = await this.ensureAttached(terminalId);
+		this.assertAttached(record);
 		return { terminalId, ...workspaceFolder(record.dirId), reconnectToken: record.reconnectToken, reconnectGracePeriodMillis: record.reconnectGracePeriodMillis };
 	}
 
 	async attach(lease: ITerminalReconnectLease, dimensions: { readonly rows: number; readonly cols: number; }, profile: ITerminalProcessProfile): Promise<ITerminalProcessCreation> {
+		if (this.isDisposed) throw new CancellationError();
 		if (this.terminals.has(lease.terminalId)) throw new Error('Terminal is already attached');
 		const record: TerminalRecord = {
 			terminalId: lease.terminalId, dirId: lease.dirId,
@@ -161,9 +163,10 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 		try {
 			await this.ensureAttached(record.terminalId);
 			const info = await this.getProcessInfo({ terminalId: record.terminalId, ...workspaceFolder(record.dirId) });
+			this.assertAttached(record);
 			return { terminalId: record.terminalId, ready: info.ready, profile, connectionPersistence: 'reconnectable' };
 		} catch (error) {
-			this.terminals.delete(record.terminalId);
+			if (this.terminals.get(record.terminalId) === record) this.terminals.delete(record.terminalId);
 			throw error;
 		}
 	}
@@ -173,23 +176,29 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 		record.rows = params.rows;
 		record.cols = params.cols;
 		await this.ensureAttached(record.terminalId);
+		this.assertAttached(record);
 		await this.supervisor.request(APP_SERVER_METHODS["terminal/resize"], params);
 	}
 
 	async sendSignal(params: ITerminalProcessCloseOptions & { readonly signal: 'interrupt'; }): Promise<void> {
-		await this.ensureAttached(params.terminalId);
+		const record = await this.ensureAttached(params.terminalId);
+		this.assertAttached(record);
 		await this.supervisor.request(APP_SERVER_METHODS['terminal/sendSignal'], params);
 	}
 
 	async read(params: ITerminalProcessReadOptions): Promise<ITerminalProcessReadResult> {
-		await this.ensureAttached(params.terminalId);
+		const record = await this.ensureAttached(params.terminalId);
+		this.assertAttached(record);
 		const result = await this.supervisor.request(APP_SERVER_METHODS["terminal/read"], params);
+		this.assertAttached(record);
 		return decodeTerminalProcessReadResult(result);
 	}
 
 	async getProcessInfo(params: ITerminalProcessCloseOptions): Promise<ITerminalProcessInfo> {
-		await this.ensureAttached(params.terminalId);
+		const record = await this.ensureAttached(params.terminalId);
+		this.assertAttached(record);
 		const result = await this.supervisor.request(APP_SERVER_METHODS['terminal/processInfo'], params);
+		this.assertAttached(record);
 		return { ...result, ready: decodeTerminalProcessReady(result.ready), cwd: result.cwd ?? undefined };
 	}
 
@@ -199,14 +208,14 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 			return;
 		}
 		const record = this.terminals.get(params.terminalId);
-		if (!record) {
-			await this.supervisor.request(APP_SERVER_METHODS["terminal/close"], params);
-			return;
-		}
+		// A cleared record belongs to a retired owner or has already been closed.
+		// Its identity cannot authorize a close on the current execution host.
+		if (!record) return;
 		record.closing = true;
 		try {
 			if (this.supervisor.state === "ready") {
 				await this.ensureAttached(record.terminalId, true);
+				this.assertAttached(record, true);
 				await this.supervisor.request(APP_SERVER_METHODS["terminal/close"], params);
 			}
 		} finally {
@@ -248,27 +257,33 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 		for (const record of this.terminals.values()) {
 			if (record.generation === this.supervisor.generation || record.closing) continue;
 			void this.ensureAttached(record.terminalId).catch(error => {
-				if (!(error instanceof RecoverySupersededError)) {
+				if (!(error instanceof RecoverySupersededError) && !isCancellationError(error)) {
 					this.reportError(`Failed to recover Remote terminal ${record.terminalId}`, error);
 				}
 			});
 		}
 	}
 
-	private ensureAttached(terminalId: string, allowClosing = false): Promise<void> {
+	private async ensureAttached(terminalId: string, allowClosing = false): Promise<TerminalRecord> {
 		const record = this.requireTerminal(terminalId);
-		if (record.closing && !allowClosing) return Promise.reject(new Error("Remote terminal is closing"));
+		if (this.isDisposed || (record.closing && !allowClosing)) throw new CancellationError();
 		const generation = this.supervisor.generation;
-		if (record.generation === generation) return Promise.resolve();
+		if (record.generation === generation) return record;
 		if (this.supervisor.state !== "ready") {
 			return Promise.reject(new Error(`Remote terminal is waiting for App Server recovery: ${this.supervisor.state}`));
 		}
-		if (record.recovery?.generation === generation) return record.recovery.promise;
+		if (record.recovery?.generation === generation) {
+			await record.recovery.promise;
+			return record;
+		}
 		const promise = this.recover(record, generation);
 		record.recovery = { generation, promise };
-		return promise.finally(() => {
+		try {
+			await promise;
+		} finally {
 			if (record.recovery?.promise === promise) record.recovery = undefined;
-		});
+		}
+		return record;
 	}
 
 	private async recover(record: TerminalRecord, generation: number): Promise<void> {
@@ -291,6 +306,7 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 				this.acceptAttachment(record, generation, attached);
 				return;
 			} catch (error) {
+				if (isCancellationError(error)) throw error;
 				lastError = error;
 			}
 			if (this.supervisor.state !== "ready" || this.supervisor.generation !== generation) {
@@ -313,10 +329,24 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 		if (this.supervisor.state !== "ready" || this.supervisor.generation !== generation) {
 			throw new RecoverySupersededError();
 		}
+		if (this.isDisposed || this.terminals.get(record.terminalId) !== record) {
+			// A retired owner can still receive a successful attach. Release only on
+			// the same connection, without publishing the rotated credential.
+			void this.supervisor.request(APP_SERVER_METHODS['terminal/close'], { ...workspaceFolder(record.dirId), terminalId: record.terminalId }).catch(() => { });
+			throw new CancellationError();
+		}
 		record.reconnectToken = lease.reconnectToken;
 		record.reconnectGracePeriodMillis = lease.reconnectGracePeriodMillis;
 		record.generation = generation;
 		record.recoveryDeadline = undefined;
+	}
+
+	private assertAttached(record: TerminalRecord, allowClosing = false): void {
+		// Every caller resumes in its own microtask after recovery. A close or
+		// replacement can retire the record before that caller dispatches its RPC.
+		if (this.isDisposed || this.terminals.get(record.terminalId) !== record || (record.closing && !allowClosing) || this.supervisor.state !== 'ready' || record.generation !== this.supervisor.generation) {
+			throw new CancellationError();
+		}
 	}
 
 	private requireTerminal(terminalId: string): TerminalRecord {
