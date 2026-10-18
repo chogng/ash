@@ -4,3 +4,4 @@ export const SAVE_FILE_COMMAND_ID = 'workbench.action.files.save';
 export const REVEAL_IN_EXPLORER_COMMAND_ID = 'revealInExplorer';
 export const COPY_PATH_COMMAND_ID = 'copyFilePath';
 export const COPY_RELATIVE_PATH_COMMAND_ID = 'copyRelativeFilePath';
+export const REMOVE_ROOT_FOLDER_COMMAND_ID = 'removeRootFolder';

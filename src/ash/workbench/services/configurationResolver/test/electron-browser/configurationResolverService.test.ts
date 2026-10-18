@@ -36,7 +36,7 @@ import { ServiceCollection } from '../../../../../platform/instantiation/common/
 import { createSshRemoteWorkspaceUri } from '../../../../../platform/remote/common/remote.js';
 import { IWorkspaceContextService, type IWorkspaceFolder } from '../../../../../platform/workspace/common/workspace.js';
 import { initializeTestLocalization } from '../../../localization/test/common/localizationTestUtils.js';
-import { WorkspaceContextService } from '../../../workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../configuration/test/common/testServices.js';
 import { ITerminalProcessService } from '../../../../../platform/terminal/common/terminal.js';
 import { IConfigurationResolverService } from '../../common/configurationResolver.js';
 import '../../browser/configurationResolverService.js';
@@ -49,7 +49,7 @@ function testRendererHost(os = OperatingSystem.Linux): IRendererHost {
 suite('ConfigurationResolverService', () => {
 	test('named environment lookup retains a single Session directory grant', async () => {
 		const scope = 'session:thread%3Aone:%2Fsession-workspace';
-		using workspace = new WorkspaceContextService({ id: 'session', folders: [{ id: scope, uri: URI.file('/session-workspace'), name: 'session', index: 0 }] });
+		using workspace = new TestWorkspaceService({ id: 'session', folders: [{ id: scope, uri: URI.file('/session-workspace'), name: 'session', index: 0 }] });
 		using services = new InstantiationService(new ServiceCollection(...getSingletonServiceDescriptors(), [IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, testRendererHost()], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], [IWorkspaceContextService, workspace], [ITerminalProcessService, { getEnvironment: async (names: readonly string[], dirId: string | undefined) => { assert.deepEqual(names, ['PATH']); assert.equal(dirId, scope); return { PATH: '/session/bin' }; } }]));
 		services.registerSingleton(ICommandService, () => new CommandService(services));
 		assert.equal(await services.get(IConfigurationResolverService).resolveAsync(workspace.getWorkspace().folders[0], '${env:PATH}'), '/session/bin');
@@ -57,7 +57,7 @@ suite('ConfigurationResolverService', () => {
 
 	for (const os of [OperatingSystem.Windows, OperatingSystem.Linux, OperatingSystem.Macintosh]) {
 		test(`explicit environment resolution uses execution host case rules without acquiring host environment ${os}`, async () => {
-			using workspace = new WorkspaceContextService({ id: 'environment', uri: URI.file('/work/project') });
+			using workspace = new TestWorkspaceService({ id: 'environment', uri: URI.file('/work/project') });
 			const base = createDisconnectedRendererApi();
 			const host = { ...base, hasAppServer: true, appServer: { ...base.appServer, operatingSystem: os } };
 			using services = new InstantiationService(new ServiceCollection(...getSingletonServiceDescriptors(), [IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, host], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], [IWorkspaceContextService, workspace], [ITerminalProcessService, { getEnvironment: async () => { throw new Error('Explicit environment must not acquire host values'); } }]));
@@ -70,7 +70,7 @@ suite('ConfigurationResolverService', () => {
 	}
 
 	test('interaction maps and replacements share contributed variable caching, nested resolution and cancellation', async () => {
-		using workspace = new WorkspaceContextService({ id: 'variables', uri: URI.file('/work/project') });
+		using workspace = new TestWorkspaceService({ id: 'variables', uri: URI.file('/work/project') });
 		using services = new InstantiationService(new ServiceCollection(...getSingletonServiceDescriptors(), [IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], [IWorkspaceContextService, workspace], [ITerminalProcessService, { getEnvironment: async () => ({}) }]));
 		services.registerSingleton(ICommandService, () => new CommandService(services));
 		const resolver = services.get(IConfigurationResolverService);
@@ -96,7 +96,7 @@ suite('ConfigurationResolverService', () => {
 	});
 
 	test('workspace retirement cancels a pending contributed variable before a later command runs', async () => {
-		using workspace = new WorkspaceContextService({ id: 'variables', uri: URI.file('/work/project') });
+		using workspace = new TestWorkspaceService({ id: 'variables', uri: URI.file('/work/project') });
 		using services = new InstantiationService(new ServiceCollection(...getSingletonServiceDescriptors(), [IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], [IWorkspaceContextService, workspace], [ITerminalProcessService, { getEnvironment: async () => ({}) }]));
 		services.registerSingleton(ICommandService, () => new CommandService(services));
 		const resolver = services.get(IConfigurationResolverService);
@@ -116,7 +116,7 @@ suite('ConfigurationResolverService', () => {
 	for (const key of ['resolverInputs', 'resolverInputs.inputs']) {
 		test(`configured inputs select the canonical default or user scope through the public target argument for ${key}`, async () => {
 			using resources = new DisposableStore();
-			using workspace = new WorkspaceContextService({ id: 'inputs', uri: URI.file('/work/project') });
+			using workspace = new TestWorkspaceService({ id: 'inputs', uri: URI.file('/work/project') });
 			const registry = new ConfigurationRegistry();
 			const wrap = (command: string) => key.endsWith('.inputs') ? [{ id: 'target', type: 'command', command }] : { inputs: [{ id: 'target', type: 'command', command }] };
 			registry.registerConfiguration({ key, defaultValue: wrap('resolver.inputs.default'), parse: value => value });
@@ -139,7 +139,7 @@ suite('ConfigurationResolverService', () => {
 		{ resource: createSshRemoteWorkspaceUri('build', '/srv/project folder'), os: OperatingSystem.Linux, path: '/srv/project folder' },
 	]) {
 		test(`resolves nested execution data without mutating configuration for ${resource.scheme}:${resource.path}`, async () => {
-			using workspace = new WorkspaceContextService({ id: 'test', uri: resource });
+			using workspace = new TestWorkspaceService({ id: 'test', uri: resource });
 			using services = new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, testRendererHost(os)], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], ...getSingletonServiceDescriptors(), [ITerminalProcessService, { getEnvironment: async () => ({}) }], [IWorkspaceContextService, workspace]));
 			services.registerSingleton(ICommandService, () => new CommandService(services));
 			const resolver = services.get(IConfigurationResolverService);
@@ -156,7 +156,7 @@ suite('ConfigurationResolverService', () => {
 	for (const os of [OperatingSystem.Linux, OperatingSystem.Windows]) {
 		test(`resolves installed extension locations on the execution host and retires catalog entries (${os})`, async () => {
 			using owner = new DisposableStore();
-			using workspace = new WorkspaceContextService({ id: 'test' });
+			using workspace = new TestWorkspaceService({ id: 'test' });
 			const base = createDisconnectedRendererApi();
 			const host = { ...base, hasAppServer: true, appServer: { ...base.appServer, operatingSystem: os } };
 			using services = new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, host], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], ...getSingletonServiceDescriptors(), [ITerminalProcessService, { getEnvironment: async () => ({}) }], [IWorkspaceContextService, workspace]));
@@ -184,7 +184,7 @@ suite('ConfigurationResolverService', () => {
 
 	test('cancels pending extension catalog acquisition before a command variable can run', async () => {
 		using owner = new DisposableStore();
-		using workspace = new WorkspaceContextService({ id: 'before', uri: URI.file('/before') });
+		using workspace = new TestWorkspaceService({ id: 'before', uri: URI.file('/before') });
 		using services = new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], ...getSingletonServiceDescriptors(), [ITerminalProcessService, { getEnvironment: async () => ({}) }], [IWorkspaceContextService, workspace]));
 		services.registerSingleton(ICommandService, () => new CommandService(services));
 		const entered = new DeferredPromise<void>();
@@ -204,7 +204,12 @@ suite('ConfigurationResolverService', () => {
 
 	test('uses folder names for selectors and reads the current workspace at each call', async () => {
 		let folders: readonly IWorkspaceFolder[] = [{ id: 'server', uri: createSshRemoteWorkspaceUri('build', '/srv/server'), name: 'Server', index: 0 }];
-		const workspace: IWorkspaceContextService = { onDidChangeWorkspace: Event.None, getWorkspace: () => ({ id: 'test', folders }), getWorkbenchState: () => 2, getWorkspaceFolder: () => null };
+		const workspace: IWorkspaceContextService = {
+			onDidChangeWorkspace: Event.None,
+			onDidChangeWorkspaceFolders: Event.None,
+			onDidChangeWorkbenchState: Event.None,
+			onDidChangeWorkspaceName: Event.None, getWorkspace: () => ({ id: 'test', folders }), getWorkbenchState: () => 2, getWorkspaceFolder: () => null
+		};
 		using services = new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], ...getSingletonServiceDescriptors(), [ITerminalProcessService, { getEnvironment: async () => ({}) }], [IWorkspaceContextService, workspace]));
 		services.registerSingleton(ICommandService, () => new CommandService(services));
 		const resolver = services.get(IConfigurationResolverService);
@@ -218,7 +223,7 @@ suite('ConfigurationResolverService', () => {
 	test('reports missing folders in the selected language and allows folderless literal configurations', async () => {
 		using localization = toDisposable(resetNlsResolver);
 		initializeTestLocalization('zh-CN');
-		using workspace = new WorkspaceContextService({ id: 'empty' });
+		using workspace = new TestWorkspaceService({ id: 'empty' });
 		using services = new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], ...getSingletonServiceDescriptors(), [ITerminalProcessService, { getEnvironment: async () => ({}) }], [IWorkspaceContextService, workspace]));
 		services.registerSingleton(ICommandService, () => new CommandService(services));
 		const resolver = services.get(IConfigurationResolverService);
@@ -232,14 +237,14 @@ suite('ConfigurationResolverService', () => {
 	});
 
 	test('requires the command service before the registered resolver can resolve configuration', () => {
-		using workspace = new WorkspaceContextService({ id: 'test' });
+		using workspace = new TestWorkspaceService({ id: 'test' });
 		using services = new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], ...getSingletonServiceDescriptors(), [ITerminalProcessService, { getEnvironment: async () => ({}) }], [IWorkspaceContextService, workspace]));
 		assert.throws(() => services.get(IConfigurationResolverService).resolveAsync(undefined, ''), /Unknown service: commandService/);
 	});
 });
 
 test('ConfigurationResolverService resolves each command reference once per invocation with resolved configuration and aliases', async () => {
-	using workspace = new WorkspaceContextService({ id: 'test', uri: URI.file('/project') });
+	using workspace = new TestWorkspaceService({ id: 'test', uri: URI.file('/project') });
 	using services = new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, testRendererHost()], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], ...getSingletonServiceDescriptors(), [ITerminalProcessService, { getEnvironment: async () => ({}) }], [IWorkspaceContextService, workspace]));
 	services.registerSingleton(ICommandService, () => new CommandService(services));
 	const seen: unknown[] = [];
@@ -259,7 +264,7 @@ test('ConfigurationResolverService resolves each command reference once per invo
 test('ConfigurationResolverService rejects non-string command results in the selected language and stops on cancellation', async () => {
 	using localization = toDisposable(resetNlsResolver);
 	initializeTestLocalization('zh-CN');
-	using workspace = new WorkspaceContextService({ id: 'test' });
+	using workspace = new TestWorkspaceService({ id: 'test' });
 	using services = new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], ...getSingletonServiceDescriptors(), [ITerminalProcessService, { getEnvironment: async () => ({}) }], [IWorkspaceContextService, workspace]));
 	services.registerSingleton(ICommandService, () => new CommandService(services));
 	let later = 0;
@@ -276,7 +281,7 @@ test('ConfigurationResolverService rejects non-string command results in the sel
 });
 
 test('ConfigurationResolverService stops pending interactions when the workspace changes', async () => {
-	using workspace = new WorkspaceContextService({ id: 'test', uri: URI.file('/before') });
+	using workspace = new TestWorkspaceService({ id: 'test', uri: URI.file('/before') });
 	using services = new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], ...getSingletonServiceDescriptors(), [ITerminalProcessService, { getEnvironment: async () => ({}) }], [IWorkspaceContextService, workspace]));
 	services.registerSingleton(ICommandService, () => new CommandService(services));
 	const entered = new DeferredPromise<void>();
@@ -295,7 +300,7 @@ test('ConfigurationResolverService stops pending interactions when the workspace
 });
 
 test('ConfigurationResolverService preserves backslashes in Remote folder basenames', async () => {
-	using workspace = new WorkspaceContextService({ id: 'test', uri: createSshRemoteWorkspaceUri('build', '/srv/project\\folder') });
+	using workspace = new TestWorkspaceService({ id: 'test', uri: createSshRemoteWorkspaceUri('build', '/srv/project\\folder') });
 	using services = new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], ...getSingletonServiceDescriptors(), [ITerminalProcessService, { getEnvironment: async () => ({}) }], [IWorkspaceContextService, workspace]));
 	services.registerSingleton(ICommandService, () => new CommandService(services));
 	const resolver = services.get(IConfigurationResolverService);
@@ -336,7 +341,7 @@ async function waitForPrompt(document: Document, label?: string): Promise<HTMLIn
 for (const resource of [URI.file('/inputs'), createSshRemoteWorkspaceUri('build', '/srv/inputs')]) {
 	test(`ConfigurationResolverService resolves prompt and pick inputs from ${resource.scheme} with defaults, nested replacement results and keyboard focus`, async () => {
 		using owner = new DisposableStore();
-		using workspace = new WorkspaceContextService({ id: 'inputs', uri: resource });
+		using workspace = new TestWorkspaceService({ id: 'inputs', uri: resource });
 		const inputs = [
 			{ id: 'name', type: 'promptString', description: 'Project name', default: 'before', password: true },
 			{ id: 'mode', type: 'pickString', description: 'Build mode', options: ['debug', { label: 'Optimized', value: 'release' }], default: 'release' },
@@ -366,7 +371,7 @@ for (const resource of [URI.file('/inputs'), createSshRemoteWorkspaceUri('build'
 
 test('ConfigurationResolverService scopes command inputs to launch.json and reevaluates each invocation with declared args', async () => {
 	using owner = new DisposableStore();
-	using workspace = new WorkspaceContextService({ id: 'inputs', uri: URI.file('/inputs') });
+	using workspace = new TestWorkspaceService({ id: 'inputs', uri: URI.file('/inputs') });
 	const root = workspace.getWorkspace().folders[0]!;
 	const { services } = inputServices(owner, workspace, [
 		[URI.joinPath(root.uri, '.vscode/launch.json'), JSON.stringify({ inputs: [{ id: 'value', type: 'command', command: 'resolver.test.input', args: { selection: 'launch' } }] })],
@@ -384,7 +389,7 @@ test('ConfigurationResolverService scopes command inputs to launch.json and reev
 for (const cancellation of ['escape', 'workspace', 'dispose', 'pick'] as const) {
 	test(`ConfigurationResolverService cancels ${cancellation} input and never invokes later commands`, async () => {
 		using owner = new DisposableStore();
-		using workspace = new WorkspaceContextService({ id: 'inputs', uri: URI.file('/inputs') });
+		using workspace = new TestWorkspaceService({ id: 'inputs', uri: URI.file('/inputs') });
 		const folder = workspace.getWorkspace().folders[0]!;
 		const input = cancellation === 'pick'
 			? { id: 'value', type: 'pickString', description: 'Value', options: ['one'] }
@@ -406,7 +411,7 @@ for (const cancellation of ['escape', 'workspace', 'dispose', 'pick'] as const) 
 
 test('ConfigurationResolverService validates referenced input definitions before any interaction or command', async () => {
 	using owner = new DisposableStore();
-	using workspace = new WorkspaceContextService({ id: 'inputs', uri: URI.file('/inputs') });
+	using workspace = new TestWorkspaceService({ id: 'inputs', uri: URI.file('/inputs') });
 	const folder = workspace.getWorkspace().folders[0]!;
 	const { services, document } = inputServices(owner, workspace, [[URI.joinPath(folder.uri, '.vscode/tasks.json'), JSON.stringify({
 		inputs: [
@@ -427,7 +432,7 @@ test('ConfigurationResolverService validates referenced input definitions before
 
 test('ConfigurationResolverService retires a pending configured command on workspace change without waiting for its producer', async () => {
 	using owner = new DisposableStore();
-	using workspace = new WorkspaceContextService({ id: 'inputs', uri: URI.file('/inputs') });
+	using workspace = new TestWorkspaceService({ id: 'inputs', uri: URI.file('/inputs') });
 	const folder = workspace.getWorkspace().folders[0]!;
 	const { services } = inputServices(owner, workspace, [[URI.joinPath(folder.uri, '.vscode/tasks.json'), JSON.stringify({ inputs: [{ id: 'pending', type: 'command', command: 'resolver.test.pendingInput' }] })]]);
 	const entered = new DeferredPromise<void>();
@@ -443,7 +448,12 @@ test('ConfigurationResolverService retires a pending configured command on works
 
 test('ConfigurationResolverService reads selected Remote environment once and resolves nested command references once', async () => {
 	const folder: IWorkspaceFolder = { id: 'server', name: 'Server', uri: createSshRemoteWorkspaceUri('build', '/srv/project'), index: 1 };
-	const workspace: IWorkspaceContextService = { onDidChangeWorkspace: Event.None, getWorkspace: () => ({ id: 'remote', folders: [{ ...folder, id: 'client', name: 'Client', uri: createSshRemoteWorkspaceUri('build', '/srv/client'), index: 0 }, folder] }), getWorkbenchState: () => 2, getWorkspaceFolder: () => folder };
+	const workspace: IWorkspaceContextService = {
+		onDidChangeWorkspace: Event.None,
+		onDidChangeWorkspaceFolders: Event.None,
+		onDidChangeWorkbenchState: Event.None,
+		onDidChangeWorkspaceName: Event.None, getWorkspace: () => ({ id: 'remote', folders: [{ ...folder, id: 'client', name: 'Client', uri: createSshRemoteWorkspaceUri('build', '/srv/client'), index: 0 }, folder] }), getWorkbenchState: () => 2, getWorkspaceFolder: () => folder
+	};
 	const reads: unknown[] = [];
 	using services = new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], ...getSingletonServiceDescriptors(), [IWorkspaceContextService, workspace], [ITerminalProcessService, {
 		getEnvironment: async (names: readonly string[], dirId?: string) => {
@@ -464,7 +474,7 @@ test('ConfigurationResolverService reads selected Remote environment once and re
 });
 
 test('ConfigurationResolverService cancels pending host lookup before executing command variables', async () => {
-	using workspace = new WorkspaceContextService({ id: 'before', uri: URI.file('/before') });
+	using workspace = new TestWorkspaceService({ id: 'before', uri: URI.file('/before') });
 	const entered = new DeferredPromise<void>();
 	const environment = new DeferredPromise<Readonly<Record<string, string>>>();
 	using services = new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], ...getSingletonServiceDescriptors(), [IWorkspaceContextService, workspace], [ITerminalProcessService, {
@@ -484,7 +494,7 @@ test('ConfigurationResolverService cancels pending host lookup before executing 
 test('ConfigurationResolverService validates environment names in the selected language', async () => {
 	using localization = toDisposable(resetNlsResolver);
 	initializeTestLocalization('zh-CN');
-	using workspace = new WorkspaceContextService({ id: 'test' });
+	using workspace = new TestWorkspaceService({ id: 'test' });
 	using services = new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], ...getSingletonServiceDescriptors(), [ITerminalProcessService, { getEnvironment: async () => ({}) }], [IWorkspaceContextService, workspace]));
 	services.registerSingleton(ICommandService, () => new CommandService(services));
 	await assert.rejects(services.get(IConfigurationResolverService).resolveAsync(undefined, '${env:}'), { message: '必须提供环境变量名称。' });
@@ -492,7 +502,7 @@ test('ConfigurationResolverService validates environment names in the selected l
 
 test('execution variables use the Windows host paths and scalar configuration snapshot across command substitution', async () => {
 	using resources = new DisposableStore();
-	using workspace = new WorkspaceContextService({ id: 'windows', uri: URI.from({ scheme: Schemas.file, path: '/c:/work/project' }) });
+	using workspace = new TestWorkspaceService({ id: 'windows', uri: URI.from({ scheme: Schemas.file, path: '/c:/work/project' }) });
 	const registry = new ConfigurationRegistry();
 	for (const [key, defaultValue] of Object.entries({ 'resolver.text': '${env:HOME}', 'resolver.number': 0, 'resolver.boolean': false, 'resolver.structured': { value: 1 } })) registry.registerConfiguration({ key, defaultValue, parse: value => value });
 	const configuration = resources.add(new WorkbenchConfigurationService({ registry }));
@@ -518,7 +528,7 @@ test('execution variables use the Windows host paths and scalar configuration sn
 });
 
 test('execution home uses host facts and rejects missing facts instead of deriving home from the workspace', async () => {
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') });
 	const base = createDisconnectedRendererApi();
 	const host = { ...base, hasAppServer: true, appServer: { ...base.appServer, operatingSystem: OperatingSystem.Linux } };
 	using services = new InstantiationService(new ServiceCollection(...getSingletonServiceDescriptors(), [IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, host], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], [IWorkspaceContextService, workspace], [ITerminalProcessService, { getEnvironment: async () => ({}) }]));
@@ -553,7 +563,7 @@ test('configuration expressions retain a balanced outer variable argument and le
 
 test('the real resolver follows nested host and configuration references in keys and values with one evaluation per name', async () => {
 	using resources = new DisposableStore();
-	using workspace = new WorkspaceContextService({ id: 'nested', uri: URI.file('/nested') });
+	using workspace = new TestWorkspaceService({ id: 'nested', uri: URI.file('/nested') });
 	const registry = new ConfigurationRegistry();
 	for (const [key, defaultValue] of Object.entries({ 'nested.a': 'A=${config:nested.b}', 'nested.b': '${env:REDIRECTED}', 'nested.cycle': '${config:nested.cycle}' })) registry.registerConfiguration({ key, defaultValue, parse: value => value });
 	const configuration = resources.add(new WorkbenchConfigurationService({ registry }));
@@ -572,7 +582,7 @@ test('the real resolver follows nested host and configuration references in keys
 
 test('configured input replacement values discover later inputs and retain their definitions without invoking producers twice', async () => {
 	using owner = new DisposableStore();
-	using workspace = new WorkspaceContextService({ id: 'nested-inputs', uri: URI.file('/nested-inputs') });
+	using workspace = new TestWorkspaceService({ id: 'nested-inputs', uri: URI.file('/nested-inputs') });
 	const folder = workspace.getWorkspace().folders[0]!;
 	const definitions = ['host', 'site', 'tld'].map(id => ({ id, type: 'command', command: `resolver.nested.${id}` }));
 	const { services } = inputServices(owner, workspace, [[URI.joinPath(folder.uri, '.vscode/tasks.json'), JSON.stringify({ inputs: definitions })]]);
@@ -598,7 +608,7 @@ test('configuration expressions reject excessive recursive expansion with a loca
 suite('ConfigurationResolverService execution platform selection', () => {
 	for (const [os, key] of [[OperatingSystem.Windows, 'windows'], [OperatingSystem.Macintosh, 'osx'], [OperatingSystem.Linux, 'linux']] as const) {
 		test(`selects ${key} before interactive resolution and preserves the source and cached expression`, async () => {
-			using workspace = new WorkspaceContextService({ id: 'platform', uri: URI.file(os === OperatingSystem.Windows ? 'C:\\project' : '/project') });
+			using workspace = new TestWorkspaceService({ id: 'platform', uri: URI.file(os === OperatingSystem.Windows ? 'C:\\project' : '/project') });
 			const base = createDisconnectedRendererApi();
 			const host = { ...base, hasAppServer: true, appServer: { ...base.appServer, operatingSystem: os } };
 			using services = new InstantiationService(new ServiceCollection(...getSingletonServiceDescriptors(), [IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, host], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], [IWorkspaceContextService, workspace], [ITerminalProcessService, { getEnvironment: async () => ({}) }]));
@@ -625,7 +635,7 @@ suite('ConfigurationResolverService execution platform selection', () => {
 	test('rejects unknown execution OS and malformed selected overrides in the current language without executing commands', async () => {
 		using localization = toDisposable(resetNlsResolver);
 		initializeTestLocalization('zh-CN');
-		using workspace = new WorkspaceContextService({ id: 'platform', uri: URI.file('/project') });
+		using workspace = new TestWorkspaceService({ id: 'platform', uri: URI.file('/project') });
 		const base = createDisconnectedRendererApi();
 		const host = { ...base, hasAppServer: true, appServer: { ...base.appServer, operatingSystem: undefined as OperatingSystem | undefined } };
 		using services = new InstantiationService(new ServiceCollection(...getSingletonServiceDescriptors(), [IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, host], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], [IWorkspaceContextService, workspace], [ITerminalProcessService, { getEnvironment: async () => ({}) }]));

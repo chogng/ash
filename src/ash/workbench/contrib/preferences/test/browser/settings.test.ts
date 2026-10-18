@@ -176,7 +176,7 @@ const { BrowserEditorService } = await import('../../../../services/editor/brows
 const { ILocalizationService: LocalizationServiceId } = await import('../../../../services/localization/common/localizationService.js');
 const { createSettingWidget: instantiateSettingWidget } = await import('../../browser/settingsWidgets.js');
 const { DefaultSettings, SettingsEditorModel } = await import('../../../../services/preferences/common/settingsModels.js');
-const { TestConfigurationService: WorkbenchConfigurationService } = await import("../../../../services/configuration/test/common/testServices.js");
+const { TestConfigurationService: WorkspaceService } = await import("../../../../services/configuration/test/common/testServices.js");
 const { productLanguagePackCatalogs } = await import('../../../../services/localization/common/localizationCatalogs.js');
 const { ILanguagePackService: LanguagePackServiceId } = await import('../../../../../platform/languagePacks/common/languagePacks.js');
 const { ILocaleService, LocalizationConfiguration } = await import('../../../../services/localization/common/locale.js');
@@ -297,7 +297,7 @@ test('Chinese indexed search settings explain engine scope in the control and ac
 	browserEnvironment.window.document.body.append(root);
 	resources.add(toDisposable(() => root.remove()));
 	const services = resources.add(new InstantiationService());
-	services.registerInstance(ConfigurationServiceId, resources.add(new WorkbenchConfigurationService()));
+	services.registerInstance(ConfigurationServiceId, resources.add(new WorkspaceService()));
 	services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));
 	services.registerInstance(IContextViewService, resources.add(new BrowserContextViewService(root)));
 	services.registerInstance(RemoteAgentServiceId, { onDidChangeConnectionState: Event.None, onDidChangeConnection: Event.None } as IAppServerRemoteAgentService);
@@ -449,13 +449,13 @@ test('Built-in Git, Markdown and Media settings localize, persist and reset thro
 	const severity = defaults.get('markdown.validate.fragmentLinks.enabled');
 	assert.equal(severity.valueType, 'select');
 	assert.deepEqual(severity.configuration.setting?.valueType === 'select' ? severity.configuration.setting.options.map(option => option.label) : [], ['忽略', '警告', '错误']);
-	using configuration = new WorkbenchConfigurationService({ registry });
+	using configuration = new WorkspaceService({ registry });
 	await configuration.updateValue('mediaPreview.video.loop', true);
 	await configuration.updateValue('markdown.validate.enabled', false);
 	await configuration.updateValue('git.untrackedChanges', 'separate');
 	const document = (await configuration.read()).source;
 	assert.deepEqual(JSON.parse(document), { 'mediaPreview.video.loop': true, 'markdown.validate.enabled': false, 'git.untrackedChanges': 'separate' });
-	using reopened = new WorkbenchConfigurationService({ registry, source: document });
+	using reopened = new WorkspaceService({ registry, source: document });
 	assert.equal(reopened.getValue('git.untrackedChanges'), 'separate');
 	await assert.rejects(reopened.updateValue('git.untrackedChanges', 'unsupported'), TypeError);
 	await reopened.updateValue('mediaPreview.video.loop', undefined);
@@ -465,7 +465,7 @@ test('Built-in Git, Markdown and Media settings localize, persist and reset thro
 
 test('File exclusion Settings show defaults, persist disabled rules and reset through the widget', async () => {
 	using resources = new DisposableStore();
-	const configuration = resources.add(new WorkbenchConfigurationService());
+	const configuration = resources.add(new WorkspaceService());
 	const root = h(browserEnvironment.window.document, 'div');
 	browserEnvironment.window.document.body.append(root);
 	resources.add(toDisposable(() => root.remove()));
@@ -501,7 +501,7 @@ test('File exclusion Settings show defaults, persist disabled rules and reset th
 	assert.deepEqual(displayedRules(), defaults.filter(pattern => pattern !== '**/.DS_Store'));
 	assert.deepEqual(JSON.parse((await configuration.read()).source)['files.exclude'], { '**/.DS_Store': false }, 'only the explicit override is persisted');
 	assert.equal(widget.domNode.classList.contains('is-configured'), true);
-	using reopened = new WorkbenchConfigurationService({ source: (await configuration.read()).source });
+	using reopened = new WorkspaceService({ source: (await configuration.read()).source });
 	assert.equal(reopened.getValue<Record<string, boolean>>('files.exclude')['**/.DS_Store'], false);
 	assert.equal(reopened.getValue<Record<string, boolean>>('files.exclude')['**/.git'], true);
 	const add = widget.domNode.querySelector<HTMLButtonElement>(':scope > .ash-pattern-actions button')!;
@@ -567,7 +567,7 @@ test('File exclusion Settings show defaults, persist disabled rules and reset th
 test('URL rule suggestions follow extension registration without changing saved IDs', async () => {
 	using resources = new DisposableStore();
 	const { updateContributedOpeners } = await import('../../../externalUriOpener/common/configuration.js');
-	const configuration = resources.add(new WorkbenchConfigurationService());
+	const configuration = resources.add(new WorkspaceService());
 	await configuration.updateValue('workbench.externalUriOpeners', { '*': 'extension:test:viewer' });
 	const root = h(browserEnvironment.window.document, 'div');
 	browserEnvironment.window.document.body.replaceChildren(root);
@@ -610,7 +610,7 @@ test('Configured markers follow explicit local user overrides and expose one acc
 	const registry = new ConfigurationRegistry();
 	registry.registerConfiguration({ key: 'status.flag', defaultValue: true, parse: value => value as boolean, scope: ConfigurationScope.LANGUAGE_OVERRIDABLE, setting: { valueType: 'boolean', title: 'Flag', description: '' } });
 	registry.registerConfiguration({ key: 'status.object', defaultValue: {}, parse: value => value as Record<string, unknown>, setting: { valueType: 'stringMap', title: 'Object', description: '', structuredValues: true, keyLabel: 'Key', valueLabel: 'Value', addLabel: 'Add', removeLabel: 'Remove', incompleteMessage: 'Incomplete', duplicateMessage: 'Duplicate' } });
-	const configuration = resources.add(new WorkbenchConfigurationService({ registry }));
+	const configuration = resources.add(new WorkspaceService({ registry }));
 	const root = h(browserEnvironment.window.document, 'div');
 	browserEnvironment.window.document.body.replaceChildren(root);
 	resources.add(toDisposable(() => root.remove()));
@@ -683,7 +683,7 @@ test('Copy Setting as JSON reads the latest local user values and preserves fals
 		key: 'copy.structured', defaultValue: {}, parse: value => value as Record<string, unknown>,
 		setting: { valueType: 'stringMap', title: 'Object', description: '', structuredValues: true, keyLabel: 'Key', valueLabel: 'Value', addLabel: 'Add', removeLabel: 'Remove', incompleteMessage: 'Incomplete', duplicateMessage: 'Duplicate' },
 	});
-	const configuration = resources.add(new WorkbenchConfigurationService({ registry }));
+	const configuration = resources.add(new WorkspaceService({ registry }));
 	const root = h(browserEnvironment.window.document, 'div');
 	browserEnvironment.window.document.body.replaceChildren(root);
 	resources.add(toDisposable(() => root.remove()));
@@ -794,7 +794,7 @@ test('Chinese setting actions, search filters and pending saves expose translate
 	const root = h(browserEnvironment.window.document, 'div');
 	browserEnvironment.window.document.body.replaceChildren(root);
 	resources.add(toDisposable(() => root.remove()));
-	const configuration = resources.add(new WorkbenchConfigurationService());
+	const configuration = resources.add(new WorkspaceService());
 	const contextView = resources.add(new BrowserContextViewService(root));
 	let actions: readonly IAction[] = [];
 	const contextMenuProvider = {
@@ -1304,7 +1304,7 @@ test('Modified Settings derives membership from accepted local overrides through
 			return super.writeFile(...args);
 		}
 	}();
-	const configuration = resources.add(new WorkbenchConfigurationService({ registry, files: api }));
+	const configuration = resources.add(new WorkspaceService({ registry, files: api }));
 	const tree = resources.add(new SettingsTreeModel<string>(id => registry.getConfiguration(id) !== undefined && configuration.inspect(id).userLocalValue !== undefined));
 	tree.setChildren([...registry.getConfigurations(), 'service.status'].map(id => ({ element: { kind: 'item', id, title: 'Preference', description: '', value: id } })));
 	tree.setQuery('@modified');
@@ -1328,13 +1328,13 @@ test('Modified Settings derives membership from accepted local overrides through
 	blockWrites = false;
 	await configuration.updateValue('modified.default', undefined);
 	assert.deepEqual(visible(), configured.slice(0, -1));
-	using restored = new WorkbenchConfigurationService({ registry, files: api });
+	using restored = new WorkspaceService({ registry, files: api });
 	await restored.reloadConfiguration();
 	assert.deepEqual([...registry.getConfigurations()].filter(id => restored.inspect(id).userLocalValue !== undefined), configured.slice(0, -1));
 });
 
 test('Settings table of contents follows modified result counts through reset', async () => {
-	using configuration = new WorkbenchConfigurationService();
+	using configuration = new WorkspaceService();
 	using tree = new SettingsTreeModel<ISetting | SettingsContentItem>(id => configurationRegistry.getConfiguration(id) !== undefined && configuration.inspect(id).userLocalValue !== undefined);
 	tree.setChildren(settingsRootNodes(createSettingsLayout(new DefaultSettings().all)));
 	using listener = configuration.onDidChangeConfiguration(() => tree.refilter());
@@ -1368,7 +1368,7 @@ test('Models Settings keeps loading API connections when the model catalog chang
 	ownerDocument.body.replaceChildren();
 	const root = h(ownerDocument, 'div');
 	ownerDocument.body.append(root);
-	const configuration = disposables.add(new WorkbenchConfigurationService());
+	const configuration = disposables.add(new WorkspaceService());
 	const contextView = disposables.add(new BrowserContextViewService(root));
 	const changed = disposables.add(new Emitter<void>());
 	const model = { provider: 'openai', model: 'gpt-test' };
@@ -1464,7 +1464,7 @@ test('Models Settings orders enabled models by catalog position and restores dis
 	services.registerInstance(IDialogService, {} as IDialogService);
 	services.registerInstance(ISecretStorageStatusService, { readState: async () => ({ status: 'available' }), authorizeAccess: async () => ({ status: 'available' }), setStorageMode: async mode => ({ status: 'available', mode }) });
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
-	services.registerInstance(ConfigurationServiceId, resources.add(new WorkbenchConfigurationService()));
+	services.registerInstance(ConfigurationServiceId, resources.add(new WorkspaceService()));
 	services.registerInstance(INotificationService, resources.add(new NotificationService()));
 	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
 	const content = resources.add(services.createInstance(ModelSettingsContent, root));
@@ -1582,7 +1582,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		},
 		hideContextMenu() { },
 	};
-	const configuration = disposables.add(new WorkbenchConfigurationService());
+	const configuration = disposables.add(new WorkspaceService());
 	const languagePacksChanged = disposables.add(new Emitter<void>());
 	const catalogs = [...productLanguagePackCatalogs];
 	const languagePacks: ILanguagePackService = {
@@ -1743,7 +1743,11 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	const connectionIdentityChanged = disposables.add(new Emitter<RemoteAgentConnection>());
 	let connectionIdentity: RemoteAgentConnection = { kind: 'local', generation: 1 };
 	services.registerInstance(ITraceSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, configured: null, recording: { type: 'disabled' } }), configure: async () => { } });
-	services.registerInstance(IFileDialogService, { showOpenDialog: async () => undefined, showSaveDialog: async () => undefined, pickFileToSave: async () => undefined, showSaveConfirm: async () => 2 });
+	services.registerInstance(IFileDialogService, {
+		pickFolderAndOpen: async () => { throw new Error('Unexpected folder open'); },
+		pickWorkspaceAndOpen: async () => { throw new Error('Unexpected workspace open'); },
+		showOpenDialog: async () => undefined, showSaveDialog: async () => undefined, pickFileToSave: async () => undefined, showSaveConfirm: async () => 2
+	});
 	services.registerInstance(RemoteAgentServiceId, {
 		onDidChangeConnectionState: connectionChanged.event,
 		onDidChangeConnection: connectionIdentityChanged.event,
@@ -2426,7 +2430,7 @@ test('Local model controls share translated snapshots and keep preparation runni
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	resources.add(toDisposable(resetNlsResolver));
-	const configuration = resources.add(new WorkbenchConfigurationService());
+	const configuration = resources.add(new WorkspaceService());
 	await configuration.updateValue(DictationConfiguration.model, 'imported-model');
 	const services = resources.add(new InstantiationService());
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
@@ -2517,7 +2521,7 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 		refreshModels: async () => [],
 		testProviderModel: async () => failed ? { type: 'failed', message: 'Endpoint rejected this model' } : { type: 'passed' },
 	} as unknown as IChatService;
-	const configuration = disposables.add(new WorkbenchConfigurationService());
+	const configuration = disposables.add(new WorkspaceService());
 	const services = disposables.add(new InstantiationService());
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
@@ -2660,7 +2664,7 @@ test('Settings widgets require their scoped clipboard registration and clean up 
 	browserEnvironment.window.document.body.append(root);
 	resources.add(toDisposable(() => root.remove()));
 	const services = resources.add(new InstantiationService());
-	const configuration = resources.add(new WorkbenchConfigurationService());
+	const configuration = resources.add(new WorkspaceService());
 	services.registerInstance(ConfigurationServiceId, configuration);
 	services.registerInstance(IContextViewService, resources.add(new BrowserContextViewService(root)));
 	services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom' as const, showContextMenu() { }, hideContextMenu() { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None });
@@ -2674,7 +2678,7 @@ test('Models Settings keeps checks silent and requires explicit authorization an
 	browserEnvironment.window.document.body.append(root);
 	resources.add(toDisposable(() => root.remove()));
 	const services = resources.add(new InstantiationService());
-	services.registerInstance(ConfigurationServiceId, resources.add(new WorkbenchConfigurationService()));
+	services.registerInstance(ConfigurationServiceId, resources.add(new WorkspaceService()));
 	services.registerInstance(INotificationService, resources.add(new NotificationService()));
 	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
 	services.registerInstance(ILanguageModelsService, {

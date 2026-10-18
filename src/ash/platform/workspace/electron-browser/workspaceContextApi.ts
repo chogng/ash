@@ -4,10 +4,12 @@ import { WORKSPACE_CONFIGURATION_CHANNEL, WORKSPACE_CONFIGURATION_CHANGED_CHANNE
 import { FileKind, FileNotFoundError, FileRevisionConflictError, type IFileWriteResult } from '../../files/common/files.js';
 import type { URI } from '../../../base/common/uri.js';
 import { toDisposable } from '../../../base/common/lifecycle.js';
+import { CancellationError } from '../../../base/common/errors.js';
 
 function configurationResult(resource: URI, value: unknown): IFileWriteResult {
 	if (!value || typeof value !== 'object') throw new TypeError('Invalid workspace configuration response');
 	const result = value as Record<string, unknown>;
+	if (result.error === 'notCurrent') throw new CancellationError('The workspace configuration is no longer current');
 	if (result.error === 'revisionConflict') throw new FileRevisionConflictError(resource);
 	if (result.error === 'notFound') throw new FileNotFoundError(resource);
 	if (typeof result.revision !== 'string' || !Number.isSafeInteger(result.sizeBytes) || (result.sizeBytes as number) < 0

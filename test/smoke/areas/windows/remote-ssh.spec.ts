@@ -134,3 +134,103 @@ test('SSH Desktop edits, searches, forwards ports and recovers the same terminal
 		}
 	}
 });
+
+test('SSH multi-root menus persist remote identities and retain a terminal in the surviving root', { tag: ['@electron-app-server', '@darwin'] }, async ({ }, testInfo) => {
+	test.setTimeout(240_000);
+	const packageRoot = developmentAshPackagePath(process.env.ASH_SMOKE_DESKTOP_DIRECTORY ?? resolve('.'));
+	const fixture = await createSshFixture(join(packageRoot, 'bin/ash-app-server-daemon'), process.env.ASH_TEST_SSH_ADDRESS);
+	const first = join(fixture.root, 'work-client');
+	const second = join(fixture.root, 'work-server');
+	const saved = join(fixture.root, 'team.ash-workspace');
+	let desktop: Awaited<ReturnType<typeof launchElectron>> | undefined;
+	try {
+		await Promise.all([mkdir(first), mkdir(second)]);
+		await writeFile(join(first, 'client.txt'), 'remote_workspace_token client\n');
+		await writeFile(join(second, 'server.txt'), 'remote_workspace_token server\n');
+		desktop = await launchElectron({
+			appServerMode: 'required', userDataDirectory: join(fixture.root, 'desktop'),
+			workspaceDirectory: first, workspacePermissions: 'development', startupTimeout: 60_000,
+			extraArgs: [`--remote-ssh=${fixture.host}`],
+			environment: { ...process.env, ASH_SSH_PATH: fixture.ssh, ASH_REMOTE_ASH_PATH: join(packageRoot, 'bin/ash-remote-server') },
+		});
+		const { workbench } = desktop.driver;
+		const page = workbench.page;
+		const app = desktop.application;
+		await page.context().tracing.start({ screenshots: true, snapshots: true, sources: true });
+		await app.evaluate(({ dialog }, saved) => {
+			dialog.showSaveDialog = (async () => ({ canceled: false, filePath: saved })) as typeof dialog.showSaveDialog;
+			dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [saved] })) as typeof dialog.showOpenDialog;
+		}, saved);
+		const context = () => page.evaluate(() => (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke('ash:workspace:context:read') as Promise<{ folders: { id: string; uri: string; }[]; configuration?: string; remoteAuthority?: string; }>);
+		const fileMenu = async (label: string) => {
+			await expect.poll(() => app.evaluate(({ Menu }, label) => Menu.getApplicationMenu()?.items.find(item => item.label === 'File')?.submenu?.items.find(item => item.label === label)?.enabled, label)).toBe(true);
+			await app.evaluate(({ Menu }, label) => Menu.getApplicationMenu()!.items.find(item => item.label === 'File')!.submenu!.items.find(item => item.label === label)!.click({ altKey: false }), label);
+		};
+		await test.step('Add a second root through the File menu and real remote permission prompt', async () => {
+			await fileMenu('Add Folder to Workspace...');
+			const input = page.locator('.ash-quick-pick input');
+			await input.fill(second); await input.press('Enter');
+			await page.getByRole('dialog', { name: 'Ash', exact: true }).getByRole('button', { name: 'Trust Folder & Enable Features', exact: true }).click();
+			await expect.poll(async () => (await context()).folders.length).toBe(2);
+			expect((await context()).folders.every(folder => folder.uri.startsWith(`ash-remote://ssh+${fixture.host}/`))).toBe(true);
+		});
+		const roots = (await context()).folders;
+		await test.step('Read, edit and search the second remote root', async () => {
+			await workbench.quickaccess.open('server.txt'); await workbench.quickaccess.select('server.txt');
+			const editor = workbench.editors.groupAt(0).editor;
+			await editor.waitForEditorFocus(); await editor.input.press('ControlOrMeta+End');
+			await editor.waitForTypeInEditor('saved_in_second_remote_root');
+			await fileMenu('Remove Folder from Workspace...');
+			await page.locator('.ash-quick-pick').getByText('work-server', { exact: true }).click();
+			const errors = page.getByRole('region', { name: 'Notifications', exact: true });
+			await expect(errors.getByText(/Save or revert unsaved files/)).toBeVisible();
+			expect((await context()).folders).toHaveLength(2);
+			await errors.getByRole('button', { name: 'Remove notification', exact: true }).click();
+			await workbench.quickaccess.runCommand('workbench.action.files.save');
+			await expect.poll(() => readFile(join(second, 'server.txt'), 'utf8')).toContain('saved_in_second_remote_root');
+			await workbench.search.open(); await workbench.search.search('remote_workspace_token');
+			await expect(workbench.search.status).toHaveText('2 results');
+		});
+		await test.step('Save local metadata containing remote URI roots', async () => {
+			await fileMenu('Save Workspace As...');
+			await expect.poll(async () => (await context()).configuration).toContain('team.ash-workspace');
+			const metadata = JSON.parse(await readFile(saved, 'utf8'));
+			expect(metadata.remoteAuthority).toBe(`ssh+${fixture.host}`);
+			expect(metadata.folders.map((folder: { uri: string; }) => folder.uri)).toEqual(roots.map(folder => folder.uri));
+		});
+		await page.getByRole('tab', { name: 'Explorer', exact: true }).click();
+		await test.step('Remove the first root from Explorer while a second-root terminal survives', async () => {
+			await workbench.terminal.show();
+			await workbench.terminal.runCommand(`printf '%s\\n' "$PWD" > cwd-before.txt`);
+			await expect.poll(() => readFile(join(second, 'cwd-before.txt'), 'utf8').catch(() => '')).toContain('server');
+			const row = page.locator('.ash-explorer .ash-tree-row').filter({ has: page.locator(`[data-resource=${JSON.stringify(roots[0]!.uri)}]`) });
+			await workbench.menus.select(app, async () => { await row.click(); await row.press('Shift+F10'); }, ['Remove Folder from Workspace...']);
+			await expect.poll(async () => (await context()).folders.map(folder => folder.id)).toEqual([roots[1]!.id]);
+			await workbench.quickaccess.runCommand('workbench.action.terminal.focus');
+			await workbench.terminal.runCommand(`printf '%s\\n' "$PWD" > cwd-after.txt`);
+			await expect.poll(() => readFile(join(second, 'cwd-after.txt'), 'utf8').catch(() => '')).toContain('server');
+			expect(await readFile(join(first, 'client.txt'), 'utf8')).toContain('remote_workspace_token');
+		});
+		await test.step('Close and reopen the saved workspace on the same SSH authority', async () => {
+			await fileMenu('Close Workspace');
+			await expect.poll(async () => (await context()).folders.length).toBe(0);
+			await workbench.waitForReady();
+			expect((await context()).remoteAuthority).toBe(`ssh+${fixture.host}`);
+			await fileMenu('Open Workspace from File...');
+			await expect.poll(async () => (await context()).folders.map(folder => folder.uri)).toEqual([roots[1]!.uri]);
+			await workbench.waitForReady();
+			await expect(page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'server' }).first()).toBeVisible();
+		});
+		const screenshot = testInfo.outputPath('remote-multi-root-reopened.png');
+		await page.screenshot({ path: screenshot });
+		await testInfo.attach('remote-multi-root-reopened', { path: screenshot, contentType: 'image/png' });
+	} finally {
+		if (desktop) {
+			const trace = testInfo.outputPath('remote-multi-root-trace.zip');
+			await desktop.driver.workbench.page.context().tracing.stop({ path: trace }).catch(() => { });
+			await testInfo.attach('remote-multi-root-trace', { path: trace, contentType: 'application/zip' }).catch(() => { });
+			await desktop.close();
+		}
+		await fixture.close();
+	}
+});

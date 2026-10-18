@@ -17,7 +17,7 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/tes
 import { ITaskService, type IWorkspaceTask } from '../../../../services/tasks/common/taskService.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
-import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
 import { RUN_BUILD_TASK_COMMAND_ID, RUN_TASK_COMMAND_ID, RUN_TEST_TASK_COMMAND_ID } from '../../common/tasks.js';
 
 interface TaskItem extends IQuickPickItem { readonly task: IWorkspaceTask; }
@@ -61,7 +61,7 @@ suite('Tasks command catalog and async service lifetime', () => {
 				using picker = new Picker();
 				const firstFolder = { id: 'a', uri: URI.file('/workspace/a'), name: 'A', index: 0 };
 				const activeFolder = { id: 'b', uri: URI.file('/workspace/b'), name: 'B', index: 1 };
-				using workspace = new WorkspaceContextService({ id: 'workspace', folders: [firstFolder, activeFolder] });
+				using workspace = new TestWorkspaceService({ id: 'workspace', folders: [firstFolder, activeFolder] });
 				const catalog: readonly IWorkspaceTask[] = [
 					{ id: 'a:task', label: 'Task A', command: 'command-a', source: 'vscode', group, dirId: 'a', groupIsDefault: '**/*.ts' },
 					{ id: 'b:task', label: 'Task B', command: 'command-b', source: 'vscode', group, dirId: 'b', groupIsDefault: currentDefault },

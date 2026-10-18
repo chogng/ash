@@ -39,8 +39,8 @@ import {
 	WorkspacePathKind,
 } from "../../../../platform/workspaces/node/workspaces.js";
 import {
-	WorkspaceContextService,
-} from "../../../../workbench/services/workspaces/browser/workspaceContextService.js";
+	TestWorkspaceService,
+} from "../../../../workbench/services/configuration/test/common/testServices.js";
 
 let windowServices: InstantiationService;
 setup(() => {
@@ -75,7 +75,7 @@ test("windows service resolves SSH folders without reading the local filesystem"
 	assert.ok(isRemoteWorkspaceIdentifier(workspace));
 	assert.equal(workspace.uri.toString(), "ash-remote://ssh+work-server/home/ash/project");
 	assert.equal(workspace.id.length, 64);
-	assert.equal(new WorkspaceContextService(workspace).getWorkspace().folders[0]?.name, "project");
+	assert.equal(new TestWorkspaceService(workspace).getWorkspace().folders[0]?.name, "project");
 });
 
 test("windows service resolves a canonical single-folder identity", async () => {
@@ -104,7 +104,7 @@ test("windows service resolves a canonical single-folder identity", async () => 
 		WorkbenchState.FOLDER,
 	);
 
-	const context = new WorkspaceContextService(workspace);
+	const context = new TestWorkspaceService(workspace);
 	assert.equal(context.getWorkbenchState(), WorkbenchState.FOLDER);
 	assert.equal(context.getWorkspace().folders[0]?.name, "project");
 });
@@ -135,7 +135,7 @@ test("windows service recognizes explicit workspace files", async () => {
 		workspace.configPath.toString(),
 		URI.file(canonicalPath).toString(),
 	);
-	const context = new WorkspaceContextService(workspace);
+	const context = new TestWorkspaceService(workspace);
 	assert.equal(context.getWorkbenchState(), WorkbenchState.WORKSPACE);
 	assert.equal(context.getWorkspace().name, "team");
 });
@@ -172,7 +172,7 @@ test("workspaces service resolves ordered folders from VS Code workspace files",
 		{ name: "api", index: 1, path: URI.file(resolve("api")).fsPath },
 	]);
 	assert.notEqual(workspace.folders[0]?.id, workspace.folders[1]?.id);
-	assert.equal(new WorkspaceContextService(workspace).getWorkbenchState(), WorkbenchState.WORKSPACE);
+	assert.equal(new TestWorkspaceService(workspace).getWorkbenchState(), WorkbenchState.WORKSPACE);
 });
 
 test("non-empty workspace identifiers are stable for canonical URIs", () => {
@@ -214,7 +214,7 @@ test("loose files and launches without a target remain empty", async () => {
 		WorkbenchState.EMPTY,
 	);
 	assert.equal(
-		new WorkspaceContextService(looseFileWorkspace).getWorkbenchState(),
+		new TestWorkspaceService(looseFileWorkspace).getWorkbenchState(),
 		WorkbenchState.EMPTY,
 	);
 	await assert.rejects(
@@ -566,4 +566,13 @@ test("App Server workspace adapter routes only connection recovery into a retry"
 		workspaceId: workspace.id,
 		previousWorkspaceId: UNKNOWN_EMPTY_WINDOW_WORKSPACE.id,
 	}]);
+});
+
+test('Browser temporary workspace identifiers round-trip through URI boundaries without local filesystem paths', () => {
+	const identifier = { id: 'temporary', configPath: URI.parse('ash-userdata:/workspaces/temporary/workspace.ash-workspace') };
+	const restored = parseWorkspaceIdentifier(serializeWorkspaceIdentifier(identifier));
+	assert.equal(workspaceFromIdentifier(restored).configuration?.toString(), identifier.configPath.toString());
+	for (const configPath of ['ash-userdata:/user/settings.json', 'ash-userdata:/workspaces/temporary/settings.json', 'ash-userdata:/workspaces/../user/workspace.ash-workspace']) {
+		assert.throws(() => parseWorkspaceIdentifier({ id: 'invalid', configPath }));
+	}
 });

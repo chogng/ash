@@ -18,11 +18,11 @@ import { IFileService, FileSystemProviderCapabilities } from '../../../platform/
 import { IUriIdentityService } from '../../../platform/uriIdentity/common/uriIdentity.js';
 import { UriIdentityService } from '../../../platform/uriIdentity/common/uriIdentityService.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
-import { WorkspaceContextService } from '../../../workbench/services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../workbench/services/configuration/test/common/testServices.js';
 import { IDialogService, IFileDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { DialogService } from '../../../workbench/services/dialogs/common/dialogService.js';
 import { FileDialogService } from '../../../workbench/services/dialogs/browser/fileDialogService.js';
-import type { IWebWorkspaceClient } from '../../../workbench/services/workspaces/browser/workspaceOpenService.js';
+import type { IWebWorkspaceClient } from '../../../workbench/services/workspaces/browser/appServerWebWorkspaceClient.js';
 import { registerTestDictationOnboarding } from '../../../workbench/test/common/testDictationServices.js';
 import { IVoiceCodeTranscriptionBackendService } from '../../../platform/renderer/common/dictation.js';
 import { ISpeechService } from '../../../workbench/contrib/speech/common/speechService.js';
@@ -271,7 +271,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 		onDidChangeFiles: Event.None, stat: unexpectedFileOperation, readDirectory: unexpectedFileOperation, readFile: unexpectedFileOperation, writeFile: unexpectedFileOperation, createFile: unexpectedFileOperation, createDirectory: unexpectedFileOperation, copy: unexpectedFileOperation, rename: unexpectedFileOperation, delete: unexpectedFileOperation
 	}));
 	services.registerInstance(IUriIdentityService, resources.add(services.createInstance(UriIdentityService)));
-	services.registerInstance(IWorkspaceContextService, resources.add(new WorkspaceContextService({ id: 'sessions-test', folders: [] })));
+	services.registerInstance(IWorkspaceContextService, resources.add(new TestWorkspaceService({ id: 'sessions-test', folders: [] })));
 
 	services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 	services.registerInstance(INotificationService, notifications);

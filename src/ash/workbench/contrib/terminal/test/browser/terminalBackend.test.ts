@@ -11,7 +11,7 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { ITerminalProcessService, type ITerminalProcessCreation } from '../../../../../platform/terminal/common/terminal.js';
-import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
 import { TerminalService } from '../../browser/terminalService.js';
 import { ITerminalService, type ITerminalView } from '../../../../services/terminal/browser/terminal.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
@@ -25,7 +25,7 @@ import '../../electron-browser/localTerminalBackend.js';
 registerRemoteContributions();
 
 function fixture(owner: DisposableStore, remote: boolean) {
-	const workspace = owner.add(new WorkspaceContextService({ id: 'workspace', uri: remote ? URI.from({ scheme: 'ash-remote', authority: 'host-one', path: '/project' }) : URI.file('/project') }));
+	const workspace = owner.add(new TestWorkspaceService({ id: 'workspace', uri: remote ? URI.from({ scheme: 'ash-remote', authority: 'host-one', path: '/project' }) : URI.file('/project') }));
 	const creation = new DeferredPromise<ITerminalProcessCreation>();
 	const closed: string[] = [];
 	const written: string[] = [];

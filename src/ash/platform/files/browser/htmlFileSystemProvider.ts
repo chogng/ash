@@ -104,8 +104,9 @@ export class HTMLFileSystemProvider extends Disposable implements IFileSystemPro
 
 	public async openDirectory(resource: URI): Promise<URI> {
 		const { saved, parts } = await this.directory(resource, true);
-		if (parts.length !== 0) throw new Error('Expected a registered browser folder');
-		return rootUri(saved);
+		let handle = saved.handle;
+		for (const part of parts) handle = await handle.getDirectoryHandle(part);
+		return parts.length ? URI.joinPath(rootUri(saved), ...parts) : rootUri(saved);
 	}
 
 	/** Resolves a previously authorized folder for the browser's starting location. */

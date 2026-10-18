@@ -1911,6 +1911,9 @@ function inactiveCommandService(): ICommandService {
 function testWorkspaceContext(): IWorkspaceContextService {
 	return {
 		onDidChangeWorkspace: Event.None,
+		onDidChangeWorkspaceFolders: Event.None,
+		onDidChangeWorkbenchState: Event.None,
+		onDidChangeWorkspaceName: Event.None,
 		getWorkbenchState: () => WorkbenchState.EMPTY,
 		getWorkspace: () => ({ id: 'empty', folders: [] }),
 		getWorkspaceFolder: () => null,

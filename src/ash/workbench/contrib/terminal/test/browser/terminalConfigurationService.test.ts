@@ -1,3 +1,5 @@
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { registerTestTerminalLifecycleServices } from '../../../../test/browser/workbenchTestServices.js';
 import { IEnvironmentVariableService } from '../../common/environmentVariable.js';
 import { EnvironmentVariableService } from '../../common/environmentVariableService.js';
@@ -25,7 +27,7 @@ import { ITerminalProcessService } from '../../../../../platform/terminal/common
 import { registerTerminalPlatformConfiguration } from '../../../../../platform/terminal/common/terminalPlatformConfiguration.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
-import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
 
 import { ITerminalService, type ITerminalProfile } from '../../../../services/terminal/browser/terminal.js';
 import { TerminalConfigurationService } from '../../browser/terminalConfigurationService.js';
@@ -44,10 +46,11 @@ const shells = [
 
 function createServices(owner: DisposableStore, useInstances = false) {
 	const services = owner.add(new InstantiationService());
+	services.registerInstance(ICommandService, owner.add(new CommandService(services)));
 	services.registerInstance(ILogService, new NullLoggerService());
 	const configuration = owner.add(new WorkbenchConfigurationService());
 	const connection = owner.add(new Emitter<import('../../../../../platform/terminal/common/terminal.js').TerminalProcessConnectionState>());
-	const workspace = owner.add(new WorkspaceContextService({ id: 'test', uri: URI.file('/workspace') }));
+	const workspace = owner.add(new TestWorkspaceService({ id: 'test', uri: URI.file('/workspace') }));
 	let calls = 0;
 	const launches: ITerminalProcessCreateOptions[] = [];
 	const closed: ITerminalProcessCloseOptions[] = [];
@@ -140,7 +143,8 @@ suite('Terminal configuration and interactive profiles', () => {
 			{ id: 'two', name: 'two', uri: URI.file('/second'), index: 1 },
 		];
 		workspace.updateWorkspace({ id: 'multi-root', configuration: config, folders });
-		await configuration.initialize(workspace, files);
+		configuration.updateWorkspace(workspace.getWorkspace());
+		await configuration.initialize(files);
 		const routes: (string | undefined)[] = [];
 		processes.getEnvironment = async (_profile, dirId) => { routes.push(dirId); return {}; };
 		const resolver = services.get(ITerminalProfileResolverService);

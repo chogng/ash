@@ -3,7 +3,7 @@ import { BrowserContextMenuService } from '../../../src/ash/platform/contextview
 import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
 import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
 import type { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
-import { WorkspaceContextService } from '../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { IChangesViewService } from '../../../src/ash/sessions/contrib/changes/common/changesViewService.js';
 import { ChangesViewService } from '../../../src/ash/sessions/contrib/changes/browser/changesViewService.js';
 import type { ISessionChangesService } from '../../../src/ash/sessions/contrib/changes/common/sessionChangesService.js';
@@ -70,6 +70,7 @@ const resources = new DisposableStore();
 const root = document.querySelector<HTMLElement>('#root')!;
 resources.add(bindTestColorTheme(resources.add(new TestThemeService(params.has('hc') ? highContrastDarkColorTheme : params.has('hcLight') ? highContrastLightColorTheme : params.has('dark') ? darkColorTheme : lightColorTheme)), root));
 const contextKeys = resources.add(new ContextKeyService());
+contextKeys.setContext('openFolderWorkspaceSupport', true);
 const configuration = resources.add(new InMemoryConfigurationService());
 const notifications = resources.add(new NotificationService());
 const changesServices = resources.add(new InstantiationService());
@@ -111,7 +112,7 @@ const changes: TurnChangeDetails = {
 	summary: { changeSetId: 'fixture', sessionId: 'fixture', threadId: 'fixture-thread', turnId: 'turn', repositoryId: 'repo', statistics: { files: 30, additions: 30, deletions: 30 }, captureState: 'sealed', messageState: 'unconfigured', commitState: 'idle', committedPaths: [], dependencies: [], externalDependencyPaths: [], warnings: [], conflictPaths: [], revision: 1 },
 	files: Array.from({ length: 30 }, (_, index) => ({ path: `file-${index}.ts`, kind: 'modified', binary: false, additions: 1, deletions: 1 })),
 };
-const workspace = resources.add(new WorkspaceContextService(params.has('emptyWorkspace') ? { id: 'empty' } : { id: 'fixture', uri: URI.file('/fixture') }));
+const workspace = resources.add(new TestWorkspaceService(params.has('emptyWorkspace') ? { id: 'empty' } : { id: 'fixture', uri: URI.file('/fixture') }));
 const contextMenus = resources.add(new BrowserContextMenuService(
 	new MenuService(changesServices.get(ICommandService), contextKeys), contextKeys,
 	{ lookupKeybinding: () => undefined } as unknown as IKeybindingService,
@@ -123,9 +124,8 @@ markers.changeAll('fixture', [{ resource: URI.file('/fixture/file.ts'), marker: 
 if (params.has('noProblems')) markers.changeAll('fixture', []);
 const pane = resources.add(view === 'empty'
 	? new EmptyView(root, { id: 'fixture.empty', title: 'Files' }, {
-		canOpenFolder: true, canOpenWorkspace: false, openFolder: async () => { throw new Error('Folder opening failed. '.repeat(12)); },
-		openWorkspace: async () => { throw new Error('Workspace opening is outside this fixture'); }, pickFolder: async () => undefined,
-	})
+		pickFolderAndOpen: async () => { throw new Error('Folder opening failed. '.repeat(12)); },
+	} as unknown as import('../../../src/ash/platform/dialogs/common/dialogs.js').IFileDialogService, contextKeys)
 	: view === 'review'
 		? new ScmAgentReviewViewPane(root, { id: 'fixture.review', title: 'Agent Review' })
 		: view === 'problems'

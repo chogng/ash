@@ -15,7 +15,7 @@ import { ConfigurationResolverService } from '../../../../services/configuration
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
-import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
 import type { DebugSessionStartOptions } from '../../browser/debugSession.js';
 import assert from "node:assert/strict";
 import { suite, test } from "mocha";
@@ -563,7 +563,7 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 }
 
 async function startSession(options: Omit<DebugSessionStartOptions, 'resolvedConfiguration'>): Promise<DebugSession> {
-	using workspace = new WorkspaceContextService({ id: 'test', uri: options.workspace });
+	using workspace = new TestWorkspaceService({ id: 'test', uri: options.workspace });
 	const base = createDisconnectedRendererApi();
 	const host = { ...base, hasAppServer: true, appServer: { ...base.appServer, operatingSystem: OperatingSystem.Windows } };
 	using services = new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, host], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], [ITerminalProcessService, { getEnvironment: async () => ({}) }], [IWorkspaceContextService, workspace]));

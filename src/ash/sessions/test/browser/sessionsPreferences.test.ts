@@ -41,7 +41,7 @@ import { CommandsRegistry, ICommandService } from '../../../platform/commands/co
 import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
 import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
-import { WorkspaceContextService } from '../../../workbench/services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../workbench/services/configuration/test/common/testServices.js';
 import { IAppServerRemoteAgentService } from '../../../workbench/services/remote/common/appServerRemoteAgentService.js';
 import { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { IEditorService } from '../../../workbench/services/editor/common/editorService.js';
@@ -219,11 +219,15 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	services.registerInstance(IMenuService, services.createInstance(MenuService));
 	services.registerInstance(IDialogService, {} as IDialogService);
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => [] });
-	using workspace = new WorkspaceContextService({ id: 'sessions-preferences', folders: [] });
+	using workspace = new TestWorkspaceService({ id: 'sessions-preferences', folders: [] });
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IAppServerRemoteAgentService, { connectionState: 'connected', connection: { kind: 'local', generation: 1 }, onDidChangeConnectionState: Event.None, onDidChangeConnection: Event.None, reconnect: async () => ({ kind: 'alreadyConnected' }), rollbackRuntime: async () => ({ kind: 'cancelled' }) });
 	services.registerInstance(ITraceSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, configured: null, recording: { type: 'disabled' } }), configure: async () => { } });
-	services.registerInstance(IFileDialogService, { showOpenDialog: async () => undefined, showSaveDialog: async () => undefined, pickFileToSave: async () => undefined, showSaveConfirm: async () => 2 });
+	services.registerInstance(IFileDialogService, {
+		pickFolderAndOpen: async () => { throw new Error('Unexpected folder open'); },
+		pickWorkspaceAndOpen: async () => { throw new Error('Unexpected workspace open'); },
+		showOpenDialog: async () => undefined, showSaveDialog: async () => undefined, pickFileToSave: async () => undefined, showSaveConfirm: async () => 2
+	});
 	services.registerInstance(IChatSessionNavigationService, { getActiveConversation: () => undefined, getConversations: () => [], captureActiveDraft: async () => undefined, openConversation: async () => { }, startVoiceConversation: async () => { throw new Error("Unexpected voice start"); }, appendToActiveDraft: () => { } });
 	const editorOpens: { resource: string; target: unknown; }[] = [];
 	services.registerInstance(IEditorService, {

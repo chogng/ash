@@ -23,8 +23,8 @@ import { URI } from '../../../../../base/common/uri.js';
 import { createFileSystemProviderError, FileKind, FileNotFoundError, FileSystemProviderErrorCode, IFileService, type IFileStat, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
 import { IWorkspaceContextService, type IAnyWorkspaceIdentifier } from '../../../../../platform/workspace/common/workspace.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
-import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
-import { IWorkspaceOpenService } from '../../../../services/workspaces/browser/workspaceOpenService.js';
+import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
+import { IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
 import { BrowserContextViewService } from '../../../../../platform/contextview/browser/contextViewService.js';
@@ -235,14 +235,14 @@ function configuration(name: string): IDebugConfiguration { return { id: name, n
 
 /** Workspace dependencies for the debug pane's production creation path. */
 export class DebugViewTestServices extends Disposable {
-	public readonly workspace: WorkspaceContextService;
+	public readonly workspace: TestWorkspaceService;
 	public readonly documents = new Map<string, string>();
 	public folderOpens = 0;
 	public writes = 0;
 
 	constructor(identifier: IAnyWorkspaceIdentifier = { id: 'workspace', uri: URI.file('/workspace') }) {
 		super();
-		this.workspace = this._register(new WorkspaceContextService(identifier));
+		this.workspace = this._register(new TestWorkspaceService(identifier));
 	}
 
 	/** Mounts the registered Debug constructor through the real Part title renderer. */
@@ -306,7 +306,7 @@ export class DebugViewTestServices extends Disposable {
 		const stat = (resource: URI): IFileStat => ({ resource, kind: FileKind.File, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined });
 		const unexpected = async (): Promise<never> => { throw new Error('Unexpected file operation'); };
 		services.set(IWorkspaceContextService, this.workspace);
-		services.set(IWorkspaceOpenService, { canOpenFolder: true, canOpenWorkspace: true, openFolder: async () => { this.folderOpens++; }, openWorkspace: unexpected, pickFolder: unexpected });
+		services.set(IFileDialogService, { pickFolderAndOpen: async () => { this.folderOpens++; }, pickWorkspaceAndOpen: unexpected, pickFileToSave: unexpected, showOpenDialog: unexpected, showSaveDialog: unexpected, showSaveConfirm: unexpected });
 		services.set(IFileService, this._register(createTestFileService({
 			capabilities: FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy,
 			onDidChangeCapabilities: Event.None,

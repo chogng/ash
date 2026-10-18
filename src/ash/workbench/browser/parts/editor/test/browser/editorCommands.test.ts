@@ -16,7 +16,7 @@ import { MenuService } from '../../../../../../platform/actions/common/menuServi
 import { CloseWorkspaceAction } from '../../../../actions/workspaceActions.js';
 import { IHostService } from '../../../../../services/host/browser/host.js';
 import { IWorkspaceContextService } from '../../../../../../platform/workspace/common/workspace.js';
-import { WorkspaceContextService } from '../../../../../services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../../../services/configuration/test/common/testServices.js';
 import { createTestWorkbenchContextKeysHandler } from '../../../../../test/common/testWorkbenchContextKeys.js';
 import { ActiveEditorFirstInGroupContext, ActiveEditorLastInGroupContext, EditorGroupEditorsCountContext, EditorsVisibleContext, MultipleEditorsSelectedInGroupContext } from '../../../../../common/contextkeys.js';
 import type { IEditorGroup } from '../../../../../services/editor/common/editorGroupsService.js';
@@ -235,7 +235,7 @@ test('tab close and split menus operate on the clicked group and selected editor
 
 test('Close Workspace delegates an empty window to the host and follows workspace menu state', async () => {
 	using registration = registerAction2(CloseWorkspaceAction);
-	using workspace = new WorkspaceContextService({ id: 'folder', uri: URI.file('/project') });
+	using workspace = new TestWorkspaceService({ id: 'folder', uri: URI.file('/project') });
 	using services = new InstantiationService();
 	using contextKeys = new ContextKeyService();
 	using bindings = createTestWorkbenchContextKeysHandler(contextKeys, { workspaceContextService: workspace, browserLocalFolderSupported: true });

@@ -13,6 +13,9 @@ test('LabelService formats workspace paths and invalidates registered formatters
 	const resource = URI.file('/workspace/src/main.ts');
 	const workspace: IWorkspaceContextService = {
 		onDidChangeWorkspace: Event.None,
+		onDidChangeWorkspaceFolders: Event.None,
+		onDidChangeWorkbenchState: Event.None,
+		onDidChangeWorkspaceName: Event.None,
 		getWorkspace: () => ({ id: 'workspace', folders: [{ id: 'root', uri: root, name: 'workspace', index: 0 }] }),
 		getWorkbenchState: () => WorkbenchState.FOLDER,
 		getWorkspaceFolder: () => ({ id: 'root', uri: root, name: 'workspace', index: 0 }),
@@ -43,6 +46,9 @@ test('LabelService normalizes absolute Windows drive labels while retaining work
 	const folder = { id: 'root', uri: root, name: 'workspace', index: 0 };
 	const workspace: IWorkspaceContextService = {
 		onDidChangeWorkspace: Event.None,
+		onDidChangeWorkspaceFolders: Event.None,
+		onDidChangeWorkbenchState: Event.None,
+		onDidChangeWorkspaceName: Event.None,
 		getWorkspace: () => ({ id: 'workspace', folders: [folder] }),
 		getWorkbenchState: () => WorkbenchState.FOLDER,
 		getWorkspaceFolder: () => folder,
@@ -75,7 +81,10 @@ test('LabelService reads connection home for each label and invalidates labels o
 		}
 	};
 	const workspace = {
-		onDidChangeWorkspace: Event.None, getWorkspace: () => ({ id: 'label-home', folders: [] }),
+		onDidChangeWorkspace: Event.None,
+		onDidChangeWorkspaceFolders: Event.None,
+		onDidChangeWorkbenchState: Event.None,
+		onDidChangeWorkspaceName: Event.None, getWorkspace: () => ({ id: 'label-home', folders: [] }),
 		getWorkbenchState: () => WorkbenchState.EMPTY, getWorkspaceFolder: () => null
 	};
 	using labels = new LabelService(workspace, new BrowserPathService(host, workspace), host);

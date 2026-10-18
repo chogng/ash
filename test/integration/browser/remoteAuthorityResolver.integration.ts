@@ -25,7 +25,12 @@ const packages = createBuiltinExtensionFixture();
 services.registerInstance(IExtensionApi, packages);
 const unavailable = (operation: string): never => { throw new Error(`Unexpected backend operation: ${operation}`); };
 services.registerInstance(IFileService, resources.add(new FileService()));
-services.registerInstance(IWorkspaceContextService, { onDidChangeWorkspace: Event.None, getWorkspace: () => ({ id: 'empty', folders: [] }), getWorkbenchState: () => WorkbenchState.EMPTY, getWorkspaceFolder: () => null });
+services.registerInstance(IWorkspaceContextService, {
+	onDidChangeWorkspace: Event.None,
+	onDidChangeWorkspaceFolders: Event.None,
+	onDidChangeWorkbenchState: Event.None,
+	onDidChangeWorkspaceName: Event.None, getWorkspace: () => ({ id: 'empty', folders: [] }), getWorkbenchState: () => WorkbenchState.EMPTY, getWorkspaceFolder: () => null
+});
 services.registerInstance(IAppServerApi, createDisconnectedAppServerApi(unavailable));
 let host: WebWorkerExtensionHost | undefined;
 

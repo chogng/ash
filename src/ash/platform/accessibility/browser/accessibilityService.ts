@@ -47,7 +47,7 @@ export class AccessibilityService extends Disposable implements IAccessibilitySe
 		this.systemMotionReduced = false;
 		this.systemTransparencyReduced = false;
 		this.accessibilityModeEnabledContext = CONTEXT_ACCESSIBILITY_MODE_ENABLED.bindTo(options.contextKeyService);
-		setARIAContainer(options.root);
+		this._register(setARIAContainer(options.root));
 		this._register(toDisposable(() => {
 			this.accessibilityModeEnabledContext.reset();
 			this.root.classList.remove("ash-reduce-motion", "ash-enable-motion", "ash-reduce-transparency", "ash-underline-links");

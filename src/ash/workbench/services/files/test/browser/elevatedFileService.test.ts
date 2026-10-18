@@ -12,7 +12,7 @@ import { createDisconnectedFileApi } from '../../../../../platform/files/browser
 import { AppServerFileSystemProvider } from '../../../../../platform/agentHost/browser/appServerFileSystemProvider.js';
 import { AppServerRemoteError } from '../../../../../platform/agentHost/common/appServerError.js';
 import type { FsWriteFileParams, FsWriteFileElevatedParams, FsWriteFileResult } from '../../../../../../../.build/protocol/typescript/index.js';
-import { WorkspaceContextService } from '../../../workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../configuration/test/common/testServices.js';
 import { FilesConfigurationService, IFilesConfigurationService } from '../../../filesConfiguration/common/filesConfigurationService.js';
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../configuration/test/common/testServices.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
@@ -32,7 +32,7 @@ const saved: FsWriteFileResult = { revision: 'saved-revision', metadata: { fileT
 
 function fixture(write: (request: FsWriteFileElevatedParams, signal?: AbortSignal) => Promise<FsWriteFileResult>, ordinary?: (request: FsWriteFileParams) => Promise<FsWriteFileResult>) {
 	const services = new InstantiationService();
-	const workspace = new WorkspaceContextService({ id: 'project', uri: URI.file('/project') });
+	const workspace = new TestWorkspaceService({ id: 'project', uri: URI.file('/project') });
 	const configuration = new WorkbenchConfigurationService();
 	const policy = new FilesConfigurationService(configuration, workspace);
 	const provider = new AppServerFileSystemProvider({

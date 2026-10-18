@@ -32,6 +32,11 @@ import { ExplorerFocusedContext, IExplorerService } from './files.js';
 import { VIEW_ID } from '../common/files.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import type { ExplorerView } from './views/explorerView.js';
+import { ADD_ROOT_FOLDER_COMMAND_ID } from '../../../browser/actions/workspaceCommands.js';
+import { REMOVE_ROOT_FOLDER_COMMAND_ID } from './fileConstants.js';
+import { removeRootFolder } from './fileActions.js';
+import { ExplorerRootContext, ExplorerFolderContext } from '../common/files.js';
+import { EnterMultiRootWorkspaceSupportContext } from '../../../common/contextkeys.js';
 
 interface BinaryComparisonItem extends IQuickPickItem {
 	readonly input: IResourceEditorInput;
@@ -233,6 +238,7 @@ registerAction2(class CollapseExplorerFoldersAction extends Action2 {
 });
 
 CommandsRegistry.registerMany([
+	{ id: REMOVE_ROOT_FOLDER_COMMAND_ID, handler: removeRootFolder },
 	{ id: NEW_FILE_COMMAND_ID, handler: createNewFile },
 	{ id: NEW_FOLDER_COMMAND_ID, handler: createNewFolder },
 	{ id: OPEN_TO_SIDE_COMMAND_ID, handler: openExplorerItemToSide },
@@ -246,6 +252,17 @@ CommandsRegistry.registerMany([
 	{ id: PASTE_FILE_COMMAND_ID, handler: pasteExplorerItems },
 	{ id: CANCEL_CUT_COMMAND_ID, handler: cancelExplorerCut },
 ]);
+
+MenusRegistry.appendMenuItem(MenuId.ExplorerContext, {
+	command: { id: ADD_ROOT_FOLDER_COMMAND_ID, title: localize2('workspace.addFolder', 'Add Folder to Workspace...') },
+	when: ContextKeyExpr.and(ExplorerRootContext.isEqualTo(true), EnterMultiRootWorkspaceSupportContext.isEqualTo(true)),
+	group: '2_workspace', order: 10,
+});
+MenusRegistry.appendMenuItem(MenuId.ExplorerContext, {
+	command: { id: REMOVE_ROOT_FOLDER_COMMAND_ID, title: localize2('workspace.removeFolder', 'Remove Folder from Workspace...') },
+	when: ContextKeyExpr.and(ExplorerRootContext.isEqualTo(true), ExplorerFolderContext.isEqualTo(true), EnterMultiRootWorkspaceSupportContext.isEqualTo(true), ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0)),
+	group: '2_workspace', order: 30,
+});
 
 MenusRegistry.appendMenuItem(MenuId.CommandPalette, { command: { id: NEW_FILE_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'workbench.newFile' }, 'New File...') }, when: ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0) });
 MenusRegistry.appendMenuItem(MenuId.CommandPalette, { command: { id: NEW_FOLDER_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'files.newFolder' }, 'New Folder...') }, when: ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0) });

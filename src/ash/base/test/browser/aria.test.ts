@@ -88,3 +88,16 @@ function nextAnimationFrame(targetWindow: DOMWindow): Promise<void> {
 		scheduleAtNextAnimationFrame(targetWindow as unknown as Window, resolve);
 	});
 }
+
+
+test('ARIA container initialization returns the lifetime that cancels pending announcements', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using region = setARIAContainer(dom.window.document.body);
+		status('Pending');
+		assert.equal(dom.window.document.querySelectorAll('.ash-aria-live').length, 1);
+		region.dispose();
+		await nextAnimationFrame(dom.window);
+		assert.equal(dom.window.document.querySelectorAll('.ash-aria-live').length, 0);
+	} finally { dom.window.close(); }
+});

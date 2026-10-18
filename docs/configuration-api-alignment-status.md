@@ -45,7 +45,7 @@ TypeScript 的 `settings.json` 由配置系统解释。后端的 `config.toml` �
 
 ### 设置模型与配置层
 
-设置修改 → `WorkbenchConfigurationService.updateValue` / JSONC 资源保存 → 现有宿主持久化或 `IFileService` 条件写入 → 已提交快照 → `ConfigurationModel` → 设置读取、inspection、变更通知。Sessions 提供当前注册的窗口默认值和只读规则，共用同一用户设置资源。
+设置修改 → `WorkspaceService.updateValue` / JSONC 资源保存 → 现有宿主持久化或 `IFileService` 条件写入 → 已提交快照 → `ConfigurationModel` → 设置读取、inspection、变更通知。Sessions 提供当前注册的窗口默认值和只读规则，共用同一用户设置资源。
 
 Workbench 服务负责配置层的组合和设置写入路由；模型是已规范化配置的不可变快照。Workspace／Folder 的 JSONC 源文本及 watch 生命周期由 `configuration/browser/configuration.ts` 管理，内容 revision 和文件读写由现有 `IFileService` 管理。Policy 来源属于宿主，配置层只读取和校验它。该切片没有 DOM 或布局变化。
 
@@ -121,7 +121,7 @@ Policy 层已实现注册定义、实时值解析、最高优先级、写入限�
 
 Workspace／Folder／Policy 切片：6 个定向测试文件、74 项测试通过，覆盖模型合并、各层 precedence 和 inspection、作用域过滤、目标推导、JSONC 注释、外部重载与非法输入、工作区切换和迟到读取、revision 冲突、脏工作副本、策略初始化竞态、非法策略保留和撤回、动态扩展贡献及设置控件。9 个修改的 TypeScript 文件通过格式检查，`git diff --check` 通过；中文 policy 错误断言和本地化生成检查通过。Renderer 类型检查通过。尚未运行真实窗口 E2E 或系统策略来源验证。
 
-`WorkbenchConfigurationService` 现在保存默认、用户和合并后的不可变模型；原长期维护的有效值表、用户值表、语言值表和覆盖块数组已退出。值读取、inspection、导出的配置数据和事件前后比较使用这些模型。Sessions 通过原继承入口获得同一行为。
+`WorkspaceService` 现在保存默认、用户和合并后的不可变模型；原长期维护的有效值表、用户值表、语言值表和覆盖块数组已退出。值读取、inspection、导出的配置数据和事件前后比较使用这些模型。Sessions 通过原继承入口获得同一行为。
 
 单语言覆盖优先于组合语言覆盖，与源文档顺序无关。结构化设置按对象成员合并，数组整体替换。父设置改变后，可以精确查询其子路径是否受到影响；保存下来的旧事件和配置数据不随后续更新改变。原 JSONC 源文本和 revision 仍由现有资源链拥有。
 

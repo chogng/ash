@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { test } from 'mocha';
 import { ConfigurationScope, ConfigurationRegistry, type IConfigurationNode } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { ConfigurationTarget } from '../../../../../platform/configuration/common/configuration.js';
-import { TestConfigurationService as WorkbenchConfigurationService } from '../../../../../workbench/services/configuration/test/common/testServices.js';
+import { TestConfigurationService as WorkspaceService } from '../../../../../workbench/services/configuration/test/common/testServices.js';
 import { configurationSettingBinding, SettingModel } from '../../../../../workbench/services/preferences/common/settingsModels.js';
 import { ActivityBarPosition, WorkbenchConfiguration } from '../../../../../workbench/common/configuration.js';
 import { productLanguagePackCatalogs } from '../../../../../workbench/services/localization/common/localizationCatalogs.js';
@@ -19,10 +19,10 @@ import { ConfigurationService as SessionsConfigurationService } from '../../brow
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
+import { CancellationError } from '../../../../../base/common/errors.js';
 import { FileService } from '../../../../../platform/files/common/fileService.js';
 import { InMemoryFileSystemProvider } from '../../../../../platform/files/common/inMemoryFilesystemProvider.js';
 import type { IPolicyService, PolicyDefinition, PolicyValue } from '../../../../../platform/policy/common/policy.js';
-import { WorkspaceContextService } from '../../../../../workbench/services/workspaces/browser/workspaceContextService.js';
 import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { BrowserWorkingCopyService } from '../../../../../workbench/services/workingCopy/browser/browserWorkingCopyService.js';
 import type { IWorkingCopy } from '../../../../../workbench/services/workingCopy/common/workingCopyService.js';
@@ -70,11 +70,15 @@ async function createLayeredConfiguration(policies?: IPolicyService, fileService
 			});
 		}
 		registry.registerConfiguration({ key: 'editor.fixed', defaultValue: 'default', agentsWindow: { default: 'fixed', readOnly: true }, scope: ConfigurationScope.RESOURCE, parse: value => String(value) });
-		const workspace = disposables.add(new WorkspaceContextService({ id: 'multi', configuration: workspaceFile, folders: roots.map((uri, index) => ({ uri, id: String(index), name: String(index), index })) }));
 		const errors: unknown[] = [];
-		const configuration = disposables.add(new ConfigurationService({ registry, onError: error => errors.push(error), source: '{ "editor.layer": "user", "[typescript]": { "editor.layer": "user-ts" } }' }));
-		await configuration.initialize(workspace, files, policies, workingCopies);
-		return { disposables, provider, files, roots, folderFiles, workspaceFile, workspace, configuration, registry, errors, write, workingCopies };
+		const configuration = disposables.add(new ConfigurationService({
+			workspace: { id: 'multi', configuration: workspaceFile, folders: roots.map((uri, index) => ({ uri, id: String(index), name: String(index), index })) },
+			registry,
+			onError: error => errors.push(error),
+			source: '{ "editor.layer": "user", "[typescript]": { "editor.layer": "user-ts" } }',
+		}));
+		await configuration.initialize(files, policies, workingCopies);
+		return { disposables, provider, files, roots, folderFiles, workspaceFile, workspace: configuration, configuration, registry, errors, write, workingCopies };
 	} catch (error) { disposables.dispose(); throw error; }
 }
 
@@ -211,6 +215,67 @@ test('A late read from a retired workspace cannot replace the selected workspace
 	assert.equal(host.configuration.getValue('editor.layer'), 'other');
 });
 
+test('A retired workspace load cannot report a revoked-file error against its replacement', async () => {
+	let release!: () => void;
+	let started!: () => void;
+	const entered = new Promise<void>(resolve => { started = resolve; });
+	const gate = new Promise<void>(resolve => { release = resolve; });
+	class DeferredFileService extends FileService {
+		hold = false;
+		override async readFile(...args: Parameters<FileService['readFile']>) {
+			if (this.hold && args[0].path === '/project/example.code-workspace') {
+				started();
+				await gate;
+				throw new Error('The host revoked access to the previous workspace file');
+			}
+			return super.readFile(...args);
+		}
+	}
+	const files = new DeferredFileService();
+	const host = await createLayeredConfiguration(undefined, files);
+	using cleanup = host.disposables;
+	files.hold = true;
+	host.configuration.updateWorkspace({ ...host.configuration.getWorkspace(), name: 'Retiring' });
+	const loading = host.configuration.reloadConfiguration();
+	try {
+		await entered;
+		host.configuration.updateWorkspace({ id: 'replacement', uri: host.roots[1]! });
+		await host.configuration.reloadConfiguration();
+	} finally { release(); }
+	await loading;
+	assert.equal(host.configuration.getValue('editor.layer'), 'other');
+	assert.deepEqual(host.errors, []);
+});
+
+test('A host-cancelled configuration load is silent while Renderer still displays the previous workspace', async () => {
+	let release!: () => void;
+	let started!: () => void;
+	const entered = new Promise<void>(resolve => { started = resolve; });
+	const gate = new Promise<void>(resolve => { release = resolve; });
+	class DeferredFileService extends FileService {
+		hold = false;
+		override async readFile(...args: Parameters<FileService['readFile']>) {
+			if (this.hold && args[0].path === '/project/example.code-workspace') {
+				this.hold = false;
+				started();
+				await gate;
+				throw new CancellationError();
+			}
+			return super.readFile(...args);
+		}
+	}
+	const files = new DeferredFileService();
+	const host = await createLayeredConfiguration(undefined, files);
+	using cleanup = host.disposables;
+	files.hold = true;
+	host.configuration.updateWorkspace({ ...host.configuration.getWorkspace(), name: 'Replacing' });
+	const loading = host.configuration.reloadConfiguration();
+	await entered;
+	release();
+	await loading;
+	assert.deepEqual(host.errors, []);
+});
+
 test('Conditional folder writes reject a concurrent file revision and retain the external edit', async () => {
 	class ConflictingProvider extends InMemoryFileSystemProvider {
 		conflict = false;
@@ -298,7 +363,7 @@ test('Late contributions apply current Sessions defaults and read-only rules acr
 	const registry = new ConfigurationRegistry();
 	const source = '{ "editor.dynamic": "user", "[typescript]": { "editor.dynamic": "language" } }';
 	using sessions = new ConfigurationService({ registry, source: source });
-	using workbench = new WorkbenchConfigurationService({ registry, source: source });
+	using workbench = new WorkspaceService({ registry, source: source });
 	const changes: ConfigurationTarget[] = [];
 	using listener = sessions.onDidChangeConfiguration(event => {
 		assert.equal(event.affectsConfiguration('editor.dynamic'), true);
@@ -360,7 +425,7 @@ test('Late typed registrations use Sessions defaults while invalid contribution 
 test('Sessions defaults, inspection and reset use the window default while ordinary Workbench keeps its default', async () => {
 	const registry = createRegistry();
 	using sessions = new ConfigurationService({ registry });
-	using workbench = new WorkbenchConfigurationService({ registry });
+	using workbench = new WorkspaceService({ registry });
 	using model = new SettingModel(configurationSettingBinding(sessions, registry.getConfiguration('editor.editable')!));
 	assert.deepEqual([sessions.getValue('editor'), workbench.getValue('editor'), model.state.defaultValue], [
 		{ editable: 'sessions', fixed: 'sessions' }, { editable: 'workbench', fixed: 'workbench' }, 'sessions',
@@ -398,7 +463,7 @@ test('Two windows share the profile file while ignored settings still notify fil
 		using registration = files.registerProvider(Schemas.vscodeUserData, provider);
 		const registry = createRegistry();
 		using sessions = new ConfigurationService({ registry, files });
-		using workbench = new WorkbenchConfigurationService({ registry, files });
+		using workbench = new WorkspaceService({ registry, files });
 		const changes: string[][] = [];
 		let fileChanges = 0;
 		using changed = sessions.onDidChangeConfiguration(event => changes.push([...event.affectedKeys]));
@@ -434,7 +499,7 @@ test('Production window settings keep Workbench values and report a localized Se
 	const source = JSON.stringify({ [WorkbenchConfiguration.windowTitle]: 'Custom', [WorkbenchConfiguration.sideBarLocation]: 'right', [WorkbenchConfiguration.activityBarLocation]: 'top', [WorkbenchConfiguration.activityBarCompact]: true });
 	const initialSnapshot = { revision: 1, document: { version: 1 as const, source } };
 	using sessions = new ConfigurationService({ source });
-	using workbench = new WorkbenchConfigurationService({ source });
+	using workbench = new WorkspaceService({ source });
 	assert.deepEqual([
 		sessions.getValue(WorkbenchConfiguration.windowTitle), sessions.getValue(WorkbenchConfiguration.sideBarLocation), sessions.getValue(WorkbenchConfiguration.activityBarLocation), sessions.getValue(WorkbenchConfiguration.activityBarCompact),
 		workbench.getValue(WorkbenchConfiguration.windowTitle), workbench.getValue(WorkbenchConfiguration.sideBarLocation), workbench.getValue(WorkbenchConfiguration.activityBarLocation), workbench.getValue(WorkbenchConfiguration.activityBarCompact),

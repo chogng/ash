@@ -5,26 +5,29 @@ import { ConfigurationTarget, IConfigurationService } from '../../../../platform
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { TerminalSettingPrefix } from '../../../../platform/terminal/common/terminal.js';
 import { ITerminalProfileService } from '../../../services/terminal/common/terminal.js';
-import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { IWorkspaceContextService, type IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
-import { pickWorkspaceFolder } from '../../../services/workspaces/browser/workspaceOpenService.js';
+import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { PICK_WORKSPACE_FOLDER_COMMAND_ID } from '../../../browser/actions/workspaceCommands.js';
 
 interface ProfileItem extends IQuickPickItem { readonly profileId: string; }
 
 /** A command-owned selection lifetime; cancelling never acquires a terminal process. */
 export class TerminalProfileQuickpick extends Disposable {
 	private readonly selection = this._register(new MutableDisposable<DisposableStore>());
-	private readonly cancellation = new AbortController();
+	private readonly cancellation = new CancellationTokenSource();
 	constructor(
 		@ITerminalProfileService private readonly profiles: ITerminalProfileService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
+		@ICommandService private readonly commands: ICommandService,
 	) {
 		super();
-		this._register(toDisposable(() => this.cancellation.abort()));
+		this._register(toDisposable(() => this.cancellation.dispose(true)));
 	}
 
 	async showAndGetResult(type: 'setDefault' | 'createInstance', dirId?: string): Promise<string | undefined> {
@@ -32,7 +35,7 @@ export class TerminalProfileQuickpick extends Disposable {
 		if (!dirId && folders.length > 1) {
 			const active = this.instantiation.get(IEditorService).activeEditor?.resource;
 			const folder = (active && this.workspace.getWorkspaceFolder(active))
-				|| await pickWorkspaceFolder(this.quickInput, folders, localize('terminal.selectFolder', 'Select a workspace folder for the terminal.'), this.cancellation.signal);
+				|| await this.commands.executeCommand<IWorkspaceFolder | undefined>(PICK_WORKSPACE_FOLDER_COMMAND_ID, [{ placeHolder: localize('terminal.selectFolder', 'Select a workspace folder for the terminal.') }, this.cancellation.token]);
 			if (!folder || this.isDisposed) return undefined;
 			dirId = folder.id;
 		}

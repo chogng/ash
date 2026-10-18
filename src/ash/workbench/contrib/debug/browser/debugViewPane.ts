@@ -15,7 +15,10 @@ import { Pane, PaneView } from "../../../../base/browser/ui/splitview/paneview.j
 import { observeElementSize, observeResize } from "../../../../base/browser/observer.js";
 import { listRowHeight } from '../../../../base/common/uiSizes.js';
 import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
-import { IWorkspaceOpenService } from "../../../services/workspaces/browser/workspaceOpenService.js";
+import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
+import { OpenFolderWorkspaceSupportContext, BrowserLocalFolderSupportContext } from '../../../common/contextkeys.js';
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { IAction } from "../../../../base/common/actions.js";
 import { Lxicon } from "../../../../base/common/lxicons.js";
@@ -123,7 +126,8 @@ export class DebugViewPane extends ViewPane {
 		@IEditorService private readonly editor: IEditorService,
 		@IContextMenuService contextMenus: IContextMenuService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
-		@IWorkspaceOpenService private readonly workspaceOpen: IWorkspaceOpenService,
+		@IFileDialogService private readonly fileDialogs: IFileDialogService,
+		@IContextKeyService private readonly contexts: IContextKeyService,
 		@ICommandService private readonly commands: ICommandService,
 		@IUriIdentityService private readonly uriIdentity: IUriIdentityService,
 		@ILogService private readonly logService: ILogService,
@@ -276,7 +280,7 @@ export class DebugViewPane extends ViewPane {
 
 	private async configure(): Promise<void> {
 		if (this.workspace.getWorkspace().folders.length === 0) {
-			await this.workspaceOpen.openFolder();
+			await this.fileDialogs.pickFolderAndOpen();
 			return;
 		}
 		const controller = new AbortController();
@@ -746,7 +750,7 @@ export class DebugViewPane extends ViewPane {
 		this.controls.hidden = !showInspection;
 		this.controls.classList.toggle("empty", !showInspection);
 		this.welcomeButton.label = hasFolder ? localize("debug.createLaunch", "Create a launch.json file") : localize("debug.openFolder", "Open Folder");
-		this.welcomeButton.enabled = hasFolder || this.workspaceOpen.canOpenFolder;
+		this.welcomeButton.enabled = hasFolder || this.contexts.contextMatchesRules(ContextKeyExpr.or(OpenFolderWorkspaceSupportContext.isEqualTo(true), BrowserLocalFolderSupportContext.isEqualTo(true)));
 		this.welcomeDescription.textContent = hasFolder
 			? localize("debug.welcomeConfigure", "To customize Run and Debug, create a launch.json file and add a debug configuration.")
 			: localize("debug.welcomeOpenFolder", "To customize Run and Debug, open a folder and create a launch.json file.");

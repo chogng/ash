@@ -8,7 +8,7 @@ import { InMemoryConfigurationService } from '../../../platform/configuration/co
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { ResourceGlobMatcher } from '../../common/resources.js';
-import { WorkspaceContextService } from '../../services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../services/configuration/test/common/testServices.js';
 
 function registry(): ConfigurationRegistry {
 	const registry = new ConfigurationRegistry();
@@ -18,7 +18,7 @@ function registry(): ConfigurationRegistry {
 
 suite('ResourceGlobMatcher', () => {
 	test('resolves folder rules, nested roots and resources outside the workspace', () => {
-		using workspace = new WorkspaceContextService({
+		using workspace = new TestWorkspaceService({
 			id: 'multi', folders: [
 				{ id: 'first', name: 'first', index: 0, uri: URI.file('/first') },
 				{ id: 'nested', name: 'nested', index: 1, uri: URI.file('/first/nested') },
@@ -34,7 +34,7 @@ suite('ResourceGlobMatcher', () => {
 	});
 
 	test('matches absolute Windows and non-file paths alongside relative rules', () => {
-		using workspace = new WorkspaceContextService({ id: 'win', uri: URI.file('C:/project') });
+		using workspace = new TestWorkspaceService({ id: 'win', uri: URI.file('C:/project') });
 		using configuration = new InMemoryConfigurationService(registry());
 		using matcher = new ResourceGlobMatcher(() => ({ 'C:\\project\\generated\\**': true, 'src/**': true, '/remote/**': true }), () => true, workspace, configuration);
 		assert.deepEqual([
@@ -45,7 +45,7 @@ suite('ResourceGlobMatcher', () => {
 	});
 
 	test('announces effective changes, discards removed roots and releases listeners', async () => {
-		using workspace = new WorkspaceContextService({ id: 'first', uri: URI.file('/first') });
+		using workspace = new TestWorkspaceService({ id: 'first', uri: URI.file('/first') });
 		using configuration = new InMemoryConfigurationService(registry());
 		const matcher = new ResourceGlobMatcher(() => configuration.getValue<IExpression>('test.expression'), event => event.affectsConfiguration('test.expression'), workspace, configuration);
 		let changes = 0;
@@ -61,7 +61,7 @@ suite('ResourceGlobMatcher', () => {
 	});
 
 	test('checks sibling conditions without retaining caller-owned expressions', async () => {
-		using workspace = new WorkspaceContextService({ id: 'root', uri: URI.file('/root') });
+		using workspace = new TestWorkspaceService({ id: 'root', uri: URI.file('/root') });
 		using configuration = new InMemoryConfigurationService(registry());
 		const expression: IExpression = { '**/*.js': { when: '$(basename).ts' } };
 		using matcher = new ResourceGlobMatcher(() => expression, () => true, workspace, configuration);

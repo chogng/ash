@@ -9,7 +9,7 @@ import { createDisconnectedRendererApi } from '../../../../workbench/browser/ren
 import { createSshRemoteWorkspaceUri } from '../../../remote/common/remote.js';
 import { IUriIdentityService } from '../../../uriIdentity/common/uriIdentity.js';
 import { TestUriIdentityServices } from '../../../uriIdentity/test/common/uriIdentityTestServices.js';
-import { WorkspaceContextService } from '../../../../workbench/services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../../workbench/services/configuration/test/common/testServices.js';
 import { createTestTextFileService } from '../../../../workbench/test/common/testEditorServices.js';
 import { BrowserTextResourceStore } from '../../../../workbench/contrib/codeEditor/browser/browserTextResourceStore.js';
 import { BrowserTextModelService } from '../../../../workbench/services/textmodelResolver/browser/browserTextModelService.js';
@@ -21,7 +21,7 @@ suite('App Server directory path identity', () => {
 
 	test('insensitive children retain sensitive parent identity, URI components and escaped separators', async () => {
 		const root = URI.file('/workspace');
-		using workspace = new WorkspaceContextService({ id: 'project', uri: root });
+		using workspace = new TestWorkspaceService({ id: 'project', uri: root });
 		const host = createDisconnectedRendererApi();
 		const requests: unknown[] = [];
 		using provider = new AppServerFileSystemProvider({
@@ -60,7 +60,7 @@ suite('App Server directory path identity', () => {
 	test('local and remote roots consume independent rules and unknown rules preserve differences', async () => {
 		const local = URI.file('/local');
 		const remote = createSshRemoteWorkspaceUri('server', '/remote');
-		using workspace = new WorkspaceContextService({ id: 'multi', folders: [{ id: 'local', uri: local, name: 'local', index: 0 }, { id: 'remote', uri: remote, name: 'remote', index: 1 }] });
+		using workspace = new TestWorkspaceService({ id: 'multi', folders: [{ id: 'local', uri: local, name: 'local', index: 0 }, { id: 'remote', uri: remote, name: 'remote', index: 1 }] });
 		const host = createDisconnectedRendererApi();
 		using provider = new AppServerFileSystemProvider({ directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })), resourceApi: host.resource, api: { ...host.fs, readPathCaseSensitivity: async params => ({ scopes: [{ path: '.', sensitivity: params.dirId === 'local' ? 'insensitive' : 'unknown' }] }) } });
 		using files = new FileService();
@@ -75,7 +75,7 @@ suite('App Server directory path identity', () => {
 
 	test('reconnection, environment replacement and disposal discard late casing responses', async () => {
 		const root = URI.file('/workspace');
-		using workspace = new WorkspaceContextService({ id: 'project', uri: root });
+		using workspace = new TestWorkspaceService({ id: 'project', uri: root });
 		using connection = new Emitter<void>();
 		let generation = 1;
 		let response = new DeferredPromise<FsReadPathCaseSensitivityResult>();
@@ -111,7 +111,7 @@ suite('App Server directory path identity', () => {
 
 	test('cancelling one waiter preserves the shared query and file changes refresh its facts', async () => {
 		const root = URI.file('/workspace');
-		using workspace = new WorkspaceContextService({ id: 'project', uri: root });
+		using workspace = new TestWorkspaceService({ id: 'project', uri: root });
 		using changes = new Emitter<FsChanged>();
 		const response = new DeferredPromise<FsReadPathCaseSensitivityResult>();
 		let count = 0;
@@ -138,7 +138,7 @@ suite('App Server directory path identity', () => {
 
 	test('the production model acquisition prepares backend rules before sharing edited aliases', async () => {
 		const root = URI.file('/workspace');
-		using workspace = new WorkspaceContextService({ id: 'project', uri: root });
+		using workspace = new TestWorkspaceService({ id: 'project', uri: root });
 		const host = createDisconnectedRendererApi();
 		const reads: string[] = [];
 		using provider = new AppServerFileSystemProvider({
@@ -164,7 +164,7 @@ suite('App Server directory path identity', () => {
 	});
 	test('file changes refresh an in-flight acquisition without cancelling it or reusing an edited alias', async () => {
 		const root = URI.file('/workspace');
-		using workspace = new WorkspaceContextService({ id: 'project', uri: root });
+		using workspace = new TestWorkspaceService({ id: 'project', uri: root });
 		using changes = new Emitter<FsChanged>();
 		const oldResponse = new DeferredPromise<FsReadPathCaseSensitivityResult>();
 		let queries = 0;
@@ -201,7 +201,7 @@ suite('App Server directory path identity', () => {
 
 	test('a shorter refresh removes unconfirmed descendants while preserving sibling facts', async () => {
 		const root = URI.file('/workspace');
-		using workspace = new WorkspaceContextService({ id: 'project', uri: root });
+		using workspace = new TestWorkspaceService({ id: 'project', uri: root });
 		using changes = new Emitter<FsChanged>();
 		let missing = false;
 		const host = createDisconnectedRendererApi();
@@ -236,7 +236,7 @@ suite('App Server directory path identity', () => {
 
 	test('transient rule eviction keeps retained URI facts and releases them with their owner', async () => {
 		const root = URI.file('/workspace');
-		using workspace = new WorkspaceContextService({ id: 'project', uri: root });
+		using workspace = new TestWorkspaceService({ id: 'project', uri: root });
 		const host = createDisconnectedRendererApi();
 		using provider = new AppServerFileSystemProvider({
 			directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })), resourceApi: host.resource,
@@ -259,7 +259,7 @@ suite('App Server directory path identity', () => {
 
 	test('discovering directory rules does not reread existing clean models', async () => {
 		const root = URI.file('/workspace');
-		using workspace = new WorkspaceContextService({ id: 'project', uri: root });
+		using workspace = new TestWorkspaceService({ id: 'project', uri: root });
 		const host = createDisconnectedRendererApi();
 		const reads: string[] = [];
 		using provider = new AppServerFileSystemProvider({
@@ -289,7 +289,7 @@ suite('App Server directory path identity', () => {
 
 	test('unrelated workspace events keep another root query valid', async () => {
 		const root = URI.file('/one');
-		using workspace = new WorkspaceContextService({
+		using workspace = new TestWorkspaceService({
 			id: 'multi', folders: [
 				{ id: 'one', uri: root, name: 'one', index: 0 },
 				{ id: 'two', uri: URI.file('/two'), name: 'two', index: 1 },
@@ -318,7 +318,7 @@ suite('App Server directory path identity', () => {
 
 	test('provider replacement rejects its predecessor query without committing canonical spelling', async () => {
 		const root = URI.file('/workspace');
-		using workspace = new WorkspaceContextService({ id: 'project', uri: root });
+		using workspace = new TestWorkspaceService({ id: 'project', uri: root });
 		const response = new DeferredPromise<FsReadPathCaseSensitivityResult>();
 		const host = createDisconnectedRendererApi();
 		using predecessor = new AppServerFileSystemProvider({ directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })), resourceApi: host.resource, api: { ...host.fs, readPathCaseSensitivity: () => response.p } });
@@ -339,7 +339,7 @@ suite('App Server directory path identity', () => {
 
 	test('invalid observation paths cannot partially change shared comparison facts', async () => {
 		const root = URI.file('/workspace');
-		using workspace = new WorkspaceContextService({ id: 'project', uri: root });
+		using workspace = new TestWorkspaceService({ id: 'project', uri: root });
 		const host = createDisconnectedRendererApi();
 		using provider = new AppServerFileSystemProvider({
 			directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })), resourceApi: host.resource,

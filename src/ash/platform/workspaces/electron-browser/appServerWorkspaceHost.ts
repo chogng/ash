@@ -33,7 +33,7 @@ export async function initializeWorkspace(client: AppServerProtocolClient, works
 	if (dirs.length) { await client.request(APP_SERVER_METHODS['env/dirs/set'], { dirs }); }
 }
 
-export function registerAppServerWorkspaceHost(client: AppServerProtocolClient, ready: () => Promise<void>, workspaceTrust: IWorkspaceTrustRequestService, trustApi: IWorkspaceTrustApi, validateFolders: (folders: readonly URI[]) => void = () => { }): IDisposable {
+export function registerAppServerWorkspaceHost(client: AppServerProtocolClient, ready: () => Promise<void>, workspaceTrust: IWorkspaceTrustRequestService, trustApi: IWorkspaceTrustApi, validateFolders: (folders: readonly URI[]) => void = () => { }, resourceForPath: (path: string) => URI = URI.file): IDisposable {
 	const subscription = subscribe('ash:workspace:operation', (value: unknown) => {
 		if (!isRecord(value) || typeof value.nonce !== 'string' || !isRecord(value.params)) { return; }
 		const { nonce, operation, params } = value;
@@ -69,7 +69,7 @@ export function registerAppServerWorkspaceHost(client: AppServerProtocolClient, 
 				}
 				case 'validateFolders': {
 					const request = decodeAppServerRequestParams('env/dirs/set', { dirs: params.folders });
-					validateFolders(request.dirs.map(folder => URI.file(folder.path)));
+					validateFolders(request.dirs.map(folder => resourceForPath(folder.path)));
 					return;
 				}
 				case 'setFolders': return client.request(APP_SERVER_METHODS['env/dirs/set'], decodeAppServerRequestParams('env/dirs/set', { dirs: params.folders }));

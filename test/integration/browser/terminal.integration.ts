@@ -374,7 +374,12 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 		services.registerInstance(IViewsService, { openView: () => pane, getViewWithId: () => pane, focusView: () => { pane.focus(); return true; } } as unknown as IViewsService);
 		services.registerInstance(IPreferencesService, { openSettings: async () => { } } as unknown as IPreferencesService);
 		services.registerInstance(INotificationService, lifetime.add(new NotificationService()));
-		services.registerInstance(IWorkspaceContextService, { onDidChangeWorkspace: workspaceChanged.event, getWorkspace: () => workspace, getWorkbenchState: () => 2, getWorkspaceFolder: resource => workspace.folders.find(folder => extUri.isEqualOrParent(resource, folder.uri)) ?? null });
+		services.registerInstance(IWorkspaceContextService, {
+			onDidChangeWorkspace: workspaceChanged.event,
+			onDidChangeWorkspaceFolders: Event.None,
+			onDidChangeWorkbenchState: Event.None,
+			onDidChangeWorkspaceName: Event.None, getWorkspace: () => workspace, getWorkbenchState: () => 2, getWorkspaceFolder: resource => workspace.folders.find(folder => extUri.isEqualOrParent(resource, folder.uri)) ?? null
+		});
 		services.registerInstance(IConfigurationService, lifetime.add(new WorkbenchConfigurationService({ source: '{"dictation.backend":"cloud"}' })));
 		services.registerInstance(ITerminalProcessService, {
 			operatingSystem: new URLSearchParams(location.search).get('os') === 'windows' ? OperatingSystem.Windows : OperatingSystem.Linux, onConnectionState: Event.None,
@@ -421,10 +426,13 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 			setLayoutStyle: () => { },
 		}), {
 			onDidChangeWorkspace: workspaceChanged.event,
+			onDidChangeWorkspaceFolders: Event.None,
+			onDidChangeWorkbenchState: Event.None,
+			onDidChangeWorkspaceName: Event.None,
 			getWorkspace: () => workspace,
 			getWorkbenchState: () => 2,
 			getWorkspaceFolder: resource => workspace.folders.find(folder => extUri.isEqualOrParent(resource, folder.uri)) ?? null,
-		}, services, profileService, resolver, services.get(ITerminalProcessService), services.get(ITerminalGroupService), services.get(IEditorService), services.get(IQuickInputService)));
+		}, services, profileService, resolver, services.get(ITerminalProcessService), services.get(ITerminalGroupService), services.get(IEditorService), services.get(ICommandService)));
 		root.append(pane.partTitleProjection.actions!);
 		pane.layout(Math.max(0, root.clientHeight - pane.partTitleProjection.actions!.offsetHeight), 0, root.clientWidth);
 		return {
@@ -509,17 +517,17 @@ declare global {
 
 if (new URLSearchParams(location.search).has('assembly')) {
 	await import('../../../src/ash/workbench/contrib/terminal/terminal.all.js');
-	const [{ InstantiationService }, { ServiceCollection }, { ITerminalProcessService }, { IWorkspaceContextService }, { WorkspaceContextService }, { installWorkbenchServiceContributions }] = await Promise.all([
+	const [{ InstantiationService }, { ServiceCollection }, { ITerminalProcessService }, { IWorkspaceContextService }, { TestWorkspaceService }, { installWorkbenchServiceContributions }] = await Promise.all([
 		import('../../../src/ash/platform/instantiation/common/instantiationService.js'),
 		import('../../../src/ash/platform/instantiation/common/serviceCollection.js'),
 		import('../../../src/ash/platform/terminal/common/terminal.js'),
 		import('../../../src/ash/platform/workspace/common/workspace.js'),
-		import('../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js'),
+		import('../../../src/ash/workbench/services/configuration/test/common/testServices.js'),
 		import('../../../src/ash/workbench/browser/workbenchServiceContributions.js'),
 	]);
 	window.ashTerminalAssemblyIntegration = async () => {
 		using resources = new DisposableStore();
-		const workspace = resources.add(new WorkspaceContextService({ id: 'assembly', uri: URI.file('/workspace') }));
+		const workspace = resources.add(new TestWorkspaceService({ id: 'assembly', uri: URI.file('/workspace') }));
 		const calls: string[] = [];
 		const written = new Set<string>();
 		let nextProcess = 1;
@@ -589,19 +597,19 @@ declare global {
 if (new URLSearchParams(location.search).has('embedder')) {
 	widget.dispose();
 	await import('../../../src/ash/workbench/contrib/terminal/terminal.all.js');
-	const [{ IEmbedderTerminalService }, { TerminalMainContribution }, { getSingletonServiceDescriptors }, { ServiceCollection }, { ITerminalProcessService }, { IWorkspaceContextService }, { WorkspaceContextService }, { installWorkbenchServiceContributions }, { WorkbenchContributionsRegistry, WorkbenchPhase }] = await Promise.all([
+	const [{ IEmbedderTerminalService }, { TerminalMainContribution }, { getSingletonServiceDescriptors }, { ServiceCollection }, { ITerminalProcessService }, { IWorkspaceContextService }, { TestWorkspaceService }, { installWorkbenchServiceContributions }, { WorkbenchContributionsRegistry, WorkbenchPhase }] = await Promise.all([
 		import('../../../src/ash/workbench/services/terminal/common/embedderTerminalService.js'),
 		import('../../../src/ash/workbench/contrib/terminal/browser/terminalMainContribution.js'),
 		import('../../../src/ash/platform/instantiation/common/extensions.js'),
 		import('../../../src/ash/platform/instantiation/common/serviceCollection.js'),
 		import('../../../src/ash/platform/terminal/common/terminal.js'),
 		import('../../../src/ash/platform/workspace/common/workspace.js'),
-		import('../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js'),
+		import('../../../src/ash/workbench/services/configuration/test/common/testServices.js'),
 		import('../../../src/ash/workbench/browser/workbenchServiceContributions.js'),
 		import('../../../src/ash/workbench/common/contributions.js'),
 	]);
 	const descriptor = getSingletonServiceDescriptors().find(([id]) => id === IEmbedderTerminalService)![1];
-	const workspace = store.add(new WorkspaceContextService({ id: 'host-output' }));
+	const workspace = store.add(new TestWorkspaceService({ id: 'host-output' }));
 	const backendCalls: string[] = [];
 	const rejectBackend = async (): Promise<never> => { backendCalls.push('unexpected'); throw new Error('Host output has no backend'); };
 	const services = store.add(widgetServices.createChild(new ServiceCollection(
@@ -671,11 +679,11 @@ declare global {
 if (new URLSearchParams(location.search).has('stream')) {
 	widget.dispose();
 	await import('../../../src/ash/workbench/contrib/terminal/terminal.all.js');
-	const [{ ServiceCollection }, { ITerminalProcessService }, { IWorkspaceContextService }, { WorkspaceContextService }, { installWorkbenchServiceContributions }] = await Promise.all([
+	const [{ ServiceCollection }, { ITerminalProcessService }, { IWorkspaceContextService }, { TestWorkspaceService }, { installWorkbenchServiceContributions }] = await Promise.all([
 		import('../../../src/ash/platform/instantiation/common/serviceCollection.js'),
 		import('../../../src/ash/platform/terminal/common/terminal.js'),
 		import('../../../src/ash/platform/workspace/common/workspace.js'),
-		import('../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js'),
+		import('../../../src/ash/workbench/services/configuration/test/common/testServices.js'),
 		import('../../../src/ash/workbench/browser/workbenchServiceContributions.js'),
 	]);
 	const reads: number[] = [];
@@ -752,7 +760,7 @@ if (new URLSearchParams(location.search).has('stream')) {
 			};
 		},
 	};
-	const workspace = store.add(new WorkspaceContextService({ id: 'stream', uri: URI.file('/workspace') }));
+	const workspace = store.add(new TestWorkspaceService({ id: 'stream', uri: URI.file('/workspace') }));
 	const services = store.add(widgetServices.createChild(new ServiceCollection([ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
 	setupTerminalFixtureServices(services, store);
 	installWorkbenchServiceContributions({ container: services, register: value => store.add(value), blockRestorationUntil: () => { } });
@@ -819,11 +827,11 @@ declare global {
 if (new URLSearchParams(location.search).has('input')) {
 	widget.dispose();
 	await import('../../../src/ash/workbench/contrib/terminal/terminal.all.js');
-	const [{ ServiceCollection }, { ITerminalProcessService }, { IWorkspaceContextService }, { WorkspaceContextService }, { installWorkbenchServiceContributions }] = await Promise.all([
+	const [{ ServiceCollection }, { ITerminalProcessService }, { IWorkspaceContextService }, { TestWorkspaceService }, { installWorkbenchServiceContributions }] = await Promise.all([
 		import('../../../src/ash/platform/instantiation/common/serviceCollection.js'),
 		import('../../../src/ash/platform/terminal/common/terminal.js'),
 		import('../../../src/ash/platform/workspace/common/workspace.js'),
-		import('../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js'),
+		import('../../../src/ash/workbench/services/configuration/test/common/testServices.js'),
 		import('../../../src/ash/workbench/browser/workbenchServiceContributions.js'),
 	]);
 	const clipboardFixture = new URLSearchParams(location.search).has('clipboard');
@@ -881,7 +889,7 @@ if (new URLSearchParams(location.search).has('input')) {
 			outputGap: false, commandEvents: [], nextCommandSequence: 0, commandEventGap: false, exited: false, exitCode: undefined,
 		}),
 	};
-	const workspace = store.add(new WorkspaceContextService({ id: 'input', uri: URI.file('/workspace') }));
+	const workspace = store.add(new TestWorkspaceService({ id: 'input', uri: URI.file('/workspace') }));
 	const services = store.add(widgetServices.createChild(new ServiceCollection([ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
 	setupTerminalFixtureServices(services, store);
 	installWorkbenchServiceContributions({ container: services, register: value => store.add(value), blockRestorationUntil: () => { } });

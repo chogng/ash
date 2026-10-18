@@ -22,7 +22,7 @@ import { ITextFileService } from '../../../textfile/common/textfiles.js';
 import { TextFileService } from '../../../textfile/browser/textFileService.js';
 import { UserDataProfileService } from '../../../userDataProfile/browser/userDataProfileService.js';
 import { IUserDataProfileService } from '../../../userDataProfile/common/userDataProfile.js';
-import { WorkspaceContextService } from '../../../workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../configuration/test/common/testServices.js';
 import { IWorkingCopyHistoryService } from '../../common/workingCopyHistory.js';
 import { WorkingCopyHistoryService } from '../../common/workingCopyHistoryService.js';
 import { WorkingCopyHistoryTracker } from '../../common/workingCopyHistoryTracker.js';
@@ -36,7 +36,7 @@ test('local history captures successful saves, honors exclusion and retention, a
 		using userData = new FileUserDataProvider(disk, URI.file(join(directory, 'profile')));
 		using registration = files.registerProvider('ash-userdata', userData);
 		using configuration = new InMemoryConfigurationService();
-		using workspace = new WorkspaceContextService({ id: 'root', uri: URI.file(directory) });
+		using workspace = new TestWorkspaceService({ id: 'root', uri: URI.file(directory) });
 		using policy = new FilesConfigurationService(configuration, workspace);
 		using textFiles = new TextFileService(files, policy, new BrowserElevatedFileService(), configuration);
 		using shutdown = new Emitter<IWillShutdownEvent>();

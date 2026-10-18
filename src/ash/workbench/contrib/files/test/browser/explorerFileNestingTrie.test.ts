@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { URI } from '../../../../../base/common/uri.js';
 import { Event } from '../../../../../base/common/event.js';
-import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
 import type { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { FileKind, type IFileService } from '../../../../../platform/files/common/files.js';
 import { ExplorerFileNestingSettingId, ExplorerFileNestingTrie } from '../../common/explorerFileNestingTrie.js';
@@ -38,7 +38,7 @@ test('Explorer data source nests configured files and keeps folders separate', a
 		onDidChangeConfiguration: Event.None,
 		getValue: (key: string) => key === ExplorerFileNestingSettingId.Enabled ? enabled : key === ExplorerFileNestingSettingId.Patterns ? { '*.ts': '${capture}.js' } : undefined,
 	} as IConfigurationService;
-	using workspace = new WorkspaceContextService({ id: 'project', uri: folder });
+	using workspace = new TestWorkspaceService({ id: 'project', uri: folder });
 	using source = new ExplorerDataSource(new FileSorter(configuration), fileService, configuration, workspace);
 	const root = new ExplorerItem(folder, 'project', FileKind.Directory);
 

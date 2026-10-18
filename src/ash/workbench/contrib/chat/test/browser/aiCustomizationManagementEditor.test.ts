@@ -24,7 +24,7 @@ import { TestThemeService } from '../../../../../platform/theme/test/common/test
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
 import { IAppServerRemoteAgentService } from '../../../../services/remote/common/appServerRemoteAgentService.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
-import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
 import type { ITextFileSaveEvent } from '../../../../services/textfile/common/textFileService.js';
 import { ITextFileService } from '../../../../services/textfile/common/textfiles.js';
 import { IWorkbenchHostService } from '../../../../services/host/common/workbenchHostService.js';
@@ -40,7 +40,7 @@ function setup(resources: DisposableStore, read: () => Promise<readonly HookSour
 	const keys = resources.add(new ContextKeyService());
 	const views = resources.add(new BrowserContextViewService(document.body));
 	const theme = resources.add(new TestThemeService(darkColorTheme));
-	const workspace = resources.add(new WorkspaceContextService({ id: 'fixture', folders: [{ id: 'folder', name: 'fixture', index: 0, uri: URI.file('/fixture') }] }));
+	const workspace = resources.add(new TestWorkspaceService({ id: 'fixture', folders: [{ id: 'folder', name: 'fixture', index: 0, uri: URI.file('/fixture') }] }));
 	const saved = resources.add(new Emitter<ITextFileSaveEvent>());
 	const hooks = { onDidChangeHooks: Event.None, list: read };
 	const remote = { connection: { kind: 'local' as const, generation: 1 }, connectionState: 'connected' as const, onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None, reconnect: async () => ({ kind: 'alreadyConnected' as const }), rollbackRuntime: async () => ({ kind: 'cancelled' as const }) };

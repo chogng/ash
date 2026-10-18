@@ -54,7 +54,7 @@ import { ICommandService, CommandsRegistry } from '../../../src/ash/platform/com
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { FileKind, IFileService } from '../../../src/ash/platform/files/common/files.js';
 import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
-import { WorkspaceContextService } from '../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { IEditorGroupsService } from '../../../src/ash/workbench/services/editor/common/editorGroupsService.js';
 import { IWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/common/workingCopyService.js';
 import { IHistoryService } from '../../../src/ash/workbench/services/history/common/history.js';
@@ -427,7 +427,7 @@ const terminalInstance: ITerminalInstance = {
 	xterm: undefined, xtermReadyPromise: Promise.resolve(undefined), getContribution: () => null, attachToElement: () => { }, detachFromElement: () => { }, sendSignal: async () => { }, sendText: async () => { }, processBinary: async () => { }, resize: () => { }, close: async () => { },
 };
 const root = URI.file('/workspace');
-services.registerInstance(IWorkspaceContextService, resources.add(new WorkspaceContextService({ id: 'workspace', folders: [{ id: 'workspace', index: 0, uri: root, name: 'workspace' }] })));
+services.registerInstance(IWorkspaceContextService, resources.add(new TestWorkspaceService({ id: 'workspace', folders: [{ id: 'workspace', index: 0, uri: root, name: 'workspace' }] })));
 const terminalHost = document.createElement('div');
 document.body.append(terminalHost);
 services.registerInstance(IAccessibilitySignalService, { playSignal: async () => { }, playSignalLoop: () => Disposable.None });

@@ -1,6 +1,7 @@
+import { addDisposableListener } from '../../../../base/browser/dom.js';
 import './media/appToolsHost.css';
 import { CancellationError } from '../../../../base/common/errors.js';
-import { throwIfCancelled } from '../../../../base/common/cancellation.js';
+import { CancellationTokenSource, throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { ITaskService, type ITaskRun, type IWorkspaceTask, type ITaskDescription, type ITaskOutput } from '../../../../workbench/services/tasks/common/taskService.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -15,7 +16,7 @@ import { IViewsService } from '../../../../workbench/services/views/common/views
 import { TERMINAL_VIEW_ID } from '../../../../workbench/contrib/terminal/common/terminal.js';
 import { ITerminalProfileResolverService } from '../../../../workbench/services/terminal/common/terminal.js';
 import { ITerminalProcessService, type IShellLaunchConfig } from '../../../../platform/terminal/common/terminal.js';
-import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { IWorkspaceContextService, type IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import type { IUpdateService, UpdateCheckResult } from '../../../../platform/update/common/updateService.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
@@ -23,8 +24,8 @@ import { createDiffEditorInput } from '../../../../workbench/common/editor/diffE
 import { IChatSessionNavigationService } from '../../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { ISessionGroupsService, type SessionGroup } from '../../../services/sessions/browser/sessionGroupsService.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
-import { pickWorkspaceFolder } from '../../../../workbench/services/workspaces/browser/workspaceOpenService.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { PICK_WORKSPACE_FOLDER_COMMAND_ID } from '../../../../workbench/browser/actions/workspaceCommands.js';
 import { getRemoteAuthority } from '../../../../platform/remote/common/remoteHosts.js';
 
 /** Window-owned execution; tool definitions and durable business operations belong to Rust. */
@@ -45,6 +46,7 @@ export class AppToolsHost extends Disposable implements IAppToolsHost {
 		@ISessionGroupsService private readonly groups: ISessionGroupsService,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@IAccessibilityService private readonly accessibility: IAccessibilityService,
+		@ICommandService private readonly commands: ICommandService,
 	) {
 		super();
 		this._register(workspace.onDidChangeWorkspace(() => this.terminalGeneration++));
@@ -125,10 +127,12 @@ export class AppToolsHost extends Disposable implements IAppToolsHost {
 		assertCurrent();
 		const os = this.terminalProcesses.operatingSystem;
 		if (os === undefined) throw new Error(localize('terminal.profile.platformUnavailable', 'The terminal execution host is not ready.'));
+		using selection = new CancellationTokenSource();
+		using selectionListener = addDisposableListener(signal, 'abort', () => selection.cancel());
 		const folders = this.workspace.getWorkspace().folders;
 		const activeResource = this.editors.activeEditor?.resource;
 		const folder = (activeResource && this.workspace.getWorkspaceFolder(activeResource))
-			|| (folders.length === 1 ? folders[0] : await pickWorkspaceFolder(this.instantiation.get(IQuickInputService), folders, localize('terminal.selectFolder', 'Select a workspace folder for the terminal.'), signal));
+			|| (folders.length === 1 ? folders[0] : await this.commands.executeCommand<IWorkspaceFolder | undefined>(PICK_WORKSPACE_FOLDER_COMMAND_ID, [{ placeHolder: localize('terminal.selectFolder', 'Select a workspace folder for the terminal.') }, selection.token]));
 		assertCurrent();
 		if (!folder) throw new CancellationError();
 		const options = { os, remoteAuthority: getRemoteAuthority(folder.uri), workspaceFolder: folder, allowAgentHostShell: true };

@@ -24,7 +24,7 @@ import { IChatSessionNavigationService } from '../../../workbench/services/chat/
 import { IViewsService } from '../../../workbench/services/views/common/viewsService.js';
 import { IEditorService } from '../../../workbench/services/editor/common/editorService.js';
 import { EditorInputSerializers } from '../../../workbench/services/editor/common/editorInputSerializer.js';
-import { WorkspaceContextService } from '../../../workbench/services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../workbench/services/configuration/test/common/testServices.js';
 import { createThreadMultiDiffEditorInput, createTurnMultiDiffEditorInput } from '../../browser/turnMultiDiffSource.js';
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 
@@ -63,7 +63,7 @@ test('Sessions registers its regular Workbench service and starts its catalog', 
 	services.registerInstance(IAgentTurnService, api.turn);
 	services.registerInstance(IServerEventApi, api.events);
 	services.registerInstance(IAppServerApi, { connectionGeneration: 1, getConnectionState: async () => 'ready', getSlashCommands: async () => [], onConnectionState: Event.None });
-	using workspace = new WorkspaceContextService({ id: 'empty-window' });
+	using workspace = new TestWorkspaceService({ id: 'empty-window' });
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IQuickInputService, {} as IQuickInputService);
 	services.registerInstance(IChatService, {} as IChatService);

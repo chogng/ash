@@ -7,7 +7,7 @@ import { LogService } from '../../../log/common/logServiceImpl.js';
 import { InstantiationService } from '../../../instantiation/common/instantiationService.js';
 import { IWorkspaceContextService } from '../../../workspace/common/workspace.js';
 import { URI } from '../../../../base/common/uri.js';
-import { WorkspaceContextService } from '../../../../workbench/services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../../workbench/services/configuration/test/common/testServices.js';
 import { TerminalLogService } from '../../common/terminalLogService.js';
 
 suite('Terminal scoped logging', () => {
@@ -23,7 +23,7 @@ suite('Terminal scoped logging', () => {
 			flush: async () => { flushed = true; },
 		}));
 		const services = lifetime.add(new InstantiationService());
-		const workspace = lifetime.add(new WorkspaceContextService({ id: 'workspace-original', uri: URI.file('/workspace') }));
+		const workspace = lifetime.add(new TestWorkspaceService({ id: 'workspace-original', uri: URI.file('/workspace') }));
 		services.registerInstance(ILoggerService, host);
 		services.registerInstance(IWorkspaceContextService, workspace);
 		const terminal = lifetime.add(services.createInstance(TerminalLogService));

@@ -1,9 +1,9 @@
 import { URI } from '../../../base/common/uri.js';
-import { extUriBiasedIgnorePathCase } from '../../../base/common/resources.js';
+import { basename, dirname, extUriBiasedIgnorePathCase, type IExtUri } from '../../../base/common/resources.js';
 import { Schemas } from '../../../base/common/network.js';
 import type { Event } from '../../../base/common/event.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
-import { hasWorkspaceFileExtension, type IWorkspaceIdentifier } from '../../workspace/common/workspace.js';
+import { hasWorkspaceFileExtension, type IWorkspaceFolder, type IWorkspaceIdentifier } from '../../workspace/common/workspace.js';
 
 export interface IRecentFolder {
 	readonly folderUri: URI;
@@ -134,8 +134,8 @@ function parseStoredWorkspaceFolder(value: unknown, owner: string): IStoredWorks
 	}
 	if (uri !== undefined) {
 		const parsed = URI.parse(uri);
-		if (parsed.scheme !== 'file') {
-			throw new Error(`${owner} URI must use the file scheme`);
+		if (parsed.scheme !== Schemas.file && parsed.scheme !== Schemas.ashRemote) {
+			throw new Error(`${owner} URI must use the file or ash-remote scheme`);
 		}
 		if (parsed.query || parsed.fragment) {
 			throw new Error(`${owner} URI must not contain a query or fragment`);
@@ -160,4 +160,33 @@ function optionalNonEmptyString(value: unknown, owner: string): string | undefin
 		throw new Error(`${owner} must be a non-empty string`);
 	}
 	return value;
+}
+
+/** Resolve persisted entries without granting access to the resources they name. */
+export function toWorkspaceFolders(configuredFolders: readonly IStoredWorkspaceFolder[], workspaceConfigFile: URI, comparison: IExtUri = extUriBiasedIgnorePathCase): IWorkspaceFolder[] {
+	const folders: IWorkspaceFolder[] = [];
+	for (const entry of configuredFolders) {
+		let uri = entry.uri ? URI.parse(entry.uri) : (entry.path!.startsWith('/') ? workspaceConfigFile.with({ path: entry.path! }) : URI.joinPath(dirname(workspaceConfigFile), entry.path!));
+		if (uri.path.length > 1 && !/^\/[A-Za-z]:\/$/.test(uri.path)) uri = uri.with({ path: uri.path.replace(/\/+$/, '') });
+		if (uri.scheme !== Schemas.file && uri.scheme !== Schemas.ashRemote) throw new TypeError('Unsupported workspace folder scheme');
+		if (folders.some(folder => comparison.isEqual(folder.uri, uri))) continue;
+		folders.push({ id: uri.toString(), uri, name: entry.name ?? basename(uri), index: folders.length });
+	}
+	return folders;
+}
+
+/** Relative paths are meaningful only within the same filesystem authority. */
+export function getStoredWorkspaceFolder(folderURI: URI, forceAbsolute: boolean, folderName: string | undefined, targetConfigFolderURI: URI, comparison: IExtUri = extUriBiasedIgnorePathCase): IStoredWorkspaceFolder {
+	let relative: string | undefined;
+	if (!forceAbsolute && folderURI.scheme === targetConfigFolderURI.scheme && folderURI.authority === targetConfigFolderURI.authority) {
+		const from = targetConfigFolderURI.path.split('/').filter(Boolean);
+		const to = folderURI.path.split('/').filter(Boolean);
+		let shared = 0;
+		while (shared < from.length && shared < to.length && (comparison.ignorePathCasing(folderURI) ? from[shared]!.toLowerCase() === to[shared]!.toLowerCase() : from[shared] === to[shared])) shared++;
+		relative = [...from.slice(shared).map(() => '..'), ...to.slice(shared)].join('/');
+	}
+	return {
+		...(relative === undefined ? { uri: folderURI.toString() } : { path: relative || '.' }),
+		...(folderName === undefined ? {} : { name: folderName }),
+	};
 }

@@ -9,7 +9,7 @@ import { FileService } from '../../../../../platform/files/common/fileService.js
 import { FileNotFoundError, type IFileChangeEvent } from '../../../../../platform/files/common/files.js';
 import { UriIdentityService } from '../../../../../platform/uriIdentity/common/uriIdentityService.js';
 import { MemoryFileService } from '../../../../contrib/bulkEdit/test/browser/bulkEditTestServices.js';
-import { WorkspaceContextService } from '../../../workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../configuration/test/common/testServices.js';
 import { WorkspaceExtensionsConfigService } from '../../common/workspaceExtensionsConfig.js';
 import { ExtensionRecommendationsService } from '../../../../contrib/extensions/browser/extensionRecommendationsService.js';
 import { ExtensionRecommendationReason } from '../../common/extensionRecommendations.js';
@@ -33,9 +33,9 @@ class RecommendationsFileProvider extends MemoryFileService {
 	public invalidate(resource: URI): void { this.changes.fire({ resources: [resource] }); }
 }
 
-function fixture(resources: readonly (readonly [URI, string])[] = []): { lifetime: DisposableStore; workspace: WorkspaceContextService; files: FileService; provider: RecommendationsFileProvider; configs: WorkspaceExtensionsConfigService; recommendations: ExtensionRecommendationsService; } {
+function fixture(resources: readonly (readonly [URI, string])[] = []): { lifetime: DisposableStore; workspace: TestWorkspaceService; files: FileService; provider: RecommendationsFileProvider; configs: WorkspaceExtensionsConfigService; recommendations: ExtensionRecommendationsService; } {
 	const lifetime = new DisposableStore();
-	const workspace = lifetime.add(new WorkspaceContextService({ id: 'project', uri: URI.file('/project') }));
+	const workspace = lifetime.add(new TestWorkspaceService({ id: 'project', uri: URI.file('/project') }));
 	const files = lifetime.add(new FileService());
 	const changes = lifetime.add(new Emitter<IFileChangeEvent>());
 	const provider = new RecommendationsFileProvider(changes, resources);

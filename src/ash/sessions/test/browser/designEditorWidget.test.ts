@@ -26,7 +26,7 @@ import type { DesignEditorContributionContext } from '../../contrib/creator/brow
 import { ConfirmResult, IDialogService, IFileDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { FileKind, FileRevisionConflictError, FileNotFoundError, IFileService, type IFileWriteRequest, type IFileSystemProvider, type IFileWriteOptions, type IFileWriteResult, FileSystemProviderCapabilities } from '../../../platform/files/common/files.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
-import { WorkspaceContextService } from '../../../workbench/services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../workbench/services/configuration/test/common/testServices.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { BrowserWorkingCopyService } from '../../../workbench/services/workingCopy/browser/browserWorkingCopyService.js';
 import { IWorkingCopyService } from '../../../workbench/services/workingCopy/common/workingCopyService.js';
@@ -99,7 +99,7 @@ services.registerInstance(IContextKeyService, contextKeys);
 services.registerSingleton(IWorkingCopyService, () => services.createInstance(BrowserWorkingCopyService));
 services.registerInstance(IConfigurationService, configuration);
 services.registerInstance(IThemeService, theme);
-services.registerInstance(IWorkspaceContextService, new WorkspaceContextService({ id: 'design-test', folders: [] }));
+services.registerInstance(IWorkspaceContextService, new TestWorkspaceService({ id: 'design-test', folders: [] }));
 const designStorage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: generateUuid(), flushInterval: 0 });
 services.registerInstance(IStorageService, designStorage);
 services.registerInstance(IUserDataProfileService, new UserDataProfileService());
@@ -126,7 +126,11 @@ services.registerInstance(IContextMenuService, {
 	},
 	hideContextMenu: () => { contextMenu?.onHide?.(true); contextMenu = undefined; },
 });
-services.registerInstance(IFileDialogService, { pickFileToSave: unexpected, showSaveConfirm: async () => saveDecision, showSaveDialog: async () => resource, showOpenDialog: async () => [resource] });
+services.registerInstance(IFileDialogService, {
+	pickFolderAndOpen: async () => { throw new Error('Unexpected folder open'); },
+	pickWorkspaceAndOpen: async () => { throw new Error('Unexpected workspace open'); },
+	pickFileToSave: unexpected, showSaveConfirm: async () => saveDecision, showSaveDialog: async () => resource, showOpenDialog: async () => [resource]
+});
 services.registerInstance(IDialogService, { onWillShowDialog: AshEvent.None, onDidShowDialog: AshEvent.None, showMessage: unexpected, info: unexpected, warn: unexpected, error: async message => { errors.push(message); }, confirm: unexpected, prompt: unexpected, input: unexpected, about: unexpected });
 services.registerInstance(IAssetService, { getCatalog: unexpected, updateEntry: unexpected, createCollection: unexpected, deleteCollection: unexpected, importImage: unexpected, getVersion: unexpected, readVersion: unexpected });
 services.registerInstance(ISessionsLayoutService, { ...Disposable.None, conversationVisible: false, onDidChangeConversationVisibility: AshEvent.None, setConversationVisible: unexpected, openEntry: unexpected, restore: unexpected });
@@ -2285,6 +2289,9 @@ class AutoSaveFixture extends Disposable {
 		this.child.registerInstance(IFileService, this.files);
 		this.child.registerInstance(IStorageService, this.storage);
 		this.child.registerInstance(IFileDialogService, {
+			pickFolderAndOpen: async () => { throw new Error('Unexpected folder open'); },
+			pickWorkspaceAndOpen: async () => { throw new Error('Unexpected workspace open'); },
+
 			pickFileToSave: unexpected,
 			showSaveConfirm: async () => { this.confirmations++; throw new Error('Automatic saving must not ask to save'); },
 			showSaveDialog: async () => { this.saveDialogs++; return this.copyResource; },

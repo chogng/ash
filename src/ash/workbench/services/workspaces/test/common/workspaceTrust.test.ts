@@ -5,7 +5,7 @@ import { URI } from '../../../../../base/common/uri.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { DEVELOPMENT_DIR_PERMISSIONS, IWorkspaceTrustApi, READ_DIR_PERMISSIONS, type WorkspaceTrustPermission } from '../../../../../platform/workspace/common/workspaceTrust.js';
-import { WorkspaceContextService } from '../../browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../configuration/test/common/testServices.js';
 import { WorkspaceTrustManagementService } from '../../common/workspaceTrust.js';
 import { IRemoteAuthorityResolverService } from '../../../../../platform/remote/common/remoteAuthorityResolver.js';
 import { RemoteAuthorityResolverService } from '../../../../../platform/remote/browser/remoteAuthorityResolverService.js';
@@ -17,7 +17,7 @@ import { NativeExtensionService } from '../../../extensions/electron-browser/nat
 
 test('Workspace Trust reads current Rust permissions for each workspace folder', async () => {
 	using changes = new Emitter<void>();
-	using workspace = new WorkspaceContextService({ id: 'empty' });
+	using workspace = new TestWorkspaceService({ id: 'empty' });
 	const allowed = new Map<string, readonly WorkspaceTrustPermission[]>();
 	const reads: string[] = [];
 	const permissions: IWorkspaceTrustApi = {
@@ -87,7 +87,7 @@ for (const prefix of ['ssh', 'team']) {
 	test(`remote trust uses ${prefix} resolver canonical identity without turning its hint into a directory grant`, async () => {
 		using changes = new Emitter<void>();
 		using fleetChanges = new Emitter<number>();
-		using workspace = new WorkspaceContextService({ id: 'remote', uri: URI.parse(`ash-remote://${prefix}+build/alias`) });
+		using workspace = new TestWorkspaceService({ id: 'remote', uri: URI.parse(`ash-remote://${prefix}+build/alias`) });
 		using services = new InstantiationService();
 		using resolver = services.createInstance(DesktopRemoteAuthorityResolverService);
 		services.registerInstance(IRemoteAuthorityResolverService, resolver);

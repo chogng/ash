@@ -49,7 +49,7 @@ import { ITerminalService } from '../../../../services/terminal/browser/terminal
 import { DebugService } from '../../browser/debugService.js';
 import { AdapterManager } from '../../browser/debugAdapterManager.js';
 import { BrowserStorageService } from '../../../../services/storage/browser/storageService.js';
-import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
 
 test('DAP runInTerminal creates an integrated PowerShell terminal with quoted arguments', async () => {
 	const writes: string[] = [];
@@ -93,7 +93,7 @@ suite('DAP terminal availability', () => {
 				write: async () => { calls.push('write'); void submitted.complete(undefined); await acknowledgement.p; },
 				resize: async () => { }, close: async () => { calls.push('close'); },
 			};
-			const workspace = resources.add(new WorkspaceContextService({ id: 'test', uri: URI.file('/workspace') }));
+			const workspace = resources.add(new TestWorkspaceService({ id: 'test', uri: URI.file('/workspace') }));
 			const services = resources.add(new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], [ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
 			const terminals = resources.add(services.createInstance(TerminalService));
 			let finished = false;
@@ -131,7 +131,7 @@ suite('DAP terminal availability', () => {
 				resize: async () => { },
 				close: async options => { calls.push(`close:${options.terminalId}`); },
 			};
-			const workspace = resources.add(new WorkspaceContextService({ id: 'test', uri: URI.file('/workspace') }));
+			const workspace = resources.add(new TestWorkspaceService({ id: 'test', uri: URI.file('/workspace') }));
 			const services = resources.add(new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], [ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
 			const terminals = resources.add(services.createInstance(TerminalService));
 			const response = await launchWithTerminalRequest(terminals, { kind: 'integrated', args: ['app'] }, { terminalProcesses: processes });
@@ -150,7 +150,7 @@ suite('DAP terminal launch policies through execution owners', () => {
 
 	function assemble(owner: DisposableStore, os: OperatingSystem = OperatingSystem.Linux) {
 		const connection = owner.add(new Emitter<import('../../../../../platform/terminal/common/terminal.js').TerminalProcessConnectionState>());
-		const workspace = owner.add(new WorkspaceContextService({ id: 'test', uri: URI.file('/workspace') }));
+		const workspace = owner.add(new TestWorkspaceService({ id: 'test', uri: URI.file('/workspace') }));
 		const configuration = owner.add(new WorkbenchConfigurationService());
 		const created: import('../../../../../platform/terminal/common/terminal.js').ITerminalProcessCreateOptions[] = [];
 		const writes: string[] = [];
@@ -266,7 +266,7 @@ suite('DAP terminal launch policies through execution owners', () => {
 	}
 });
 
-async function launchWithTerminalRequest(terminals: ITerminalService, argumentsValue: unknown, options: { terminalProcesses?: ITerminalProcessService; configuration?: IConfigurationService; workspace?: WorkspaceContextService; activeResource?: URI; adapterRoutes?: (string | undefined)[]; onReady?: (service: DebugService, session: IDebugSession) => Promise<void>; } = {}): Promise<Record<string, unknown>> {
+async function launchWithTerminalRequest(terminals: ITerminalService, argumentsValue: unknown, options: { terminalProcesses?: ITerminalProcessService; configuration?: IConfigurationService; workspace?: TestWorkspaceService; activeResource?: URI; adapterRoutes?: (string | undefined)[]; onReady?: (service: DebugService, session: IDebugSession) => Promise<void>; } = {}): Promise<Record<string, unknown>> {
 	using resources = new DisposableStore();
 	const adapters = resources.add(new AdapterManager());
 	let resolveResponse!: (response: Record<string, unknown>) => void;
@@ -293,7 +293,7 @@ async function launchWithTerminalRequest(terminals: ITerminalService, argumentsV
 	const browser = new JSDOM('', { url: 'https://ash.test' });
 	resources.add(toDisposable(() => browser.window.close()));
 	const storage = resources.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'test', backend: browser.window.localStorage, flushInterval: 0 }));
-	const workspace = options.workspace ?? resources.add(new WorkspaceContextService({ id: 'test', uri: URI.file('/workspace') }));
+	const workspace = options.workspace ?? resources.add(new TestWorkspaceService({ id: 'test', uri: URI.file('/workspace') }));
 	const unexpectedProcess = async (): Promise<never> => { throw new Error('Fake terminal must not access a PTY'); };
 	const terminalProcesses: ITerminalProcessService = options.terminalProcesses ?? {
 		operatingSystem: OperatingSystem.Linux, onConnectionState: Event.None, getConnectionState: async () => 'ready',
@@ -340,7 +340,7 @@ async function resolveTerminalProfile(selection: import('../../../../../platform
 }
 
 test('activity-selected debug roots bind the adapter and integrated terminal to the same directory', async () => {
-	using workspace = new WorkspaceContextService({
+	using workspace = new TestWorkspaceService({
 		id: 'team', configuration: URI.file('/team.ash-workspace'), folders: [
 			{ id: 'one', name: 'one', uri: URI.file('/first'), index: 0 },
 			{ id: 'two', name: 'two', uri: URI.file('/second'), index: 1 },

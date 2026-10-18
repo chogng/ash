@@ -47,7 +47,7 @@ import { AutoLockGroupsConfiguration, DefaultBinaryEditorConfiguration, DynamicE
 import { createDiffEditorInput } from "../../../../../common/editor/diffEditorInput.js";
 import { InMemoryConfigurationService } from "../../../../../../platform/configuration/common/inMemoryConfigurationService.js";
 import { EditorCloseEmptyGroupsConfiguration, EditorFocusRecentEditorAfterCloseConfiguration } from '../../../../../services/editor/common/editorConfiguration.js';
-import { WorkspaceContextService } from '../../../../../services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../../../services/configuration/test/common/testServices.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { FileNotFoundError, type IFileService } from "../../../../../../platform/files/common/files.js";
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../../../../../platform/configuration/common/configurationRegistry.js";
@@ -1609,7 +1609,7 @@ for (const target of ['activeGroup', 'sideGroup'] as const) {
 		const entered = new DeferredPromise<void>();
 		const gate = new DeferredPromise<FsReadPathCaseSensitivityResult>();
 		try {
-			using workspace = new WorkspaceContextService({ id: 'project', uri: URI.file('/project') });
+			using workspace = new TestWorkspaceService({ id: 'project', uri: URI.file('/project') });
 			const host = createDisconnectedRendererApi();
 			using provider = new AppServerFileSystemProvider({
 				directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })), resourceApi: host.resource, api: {
@@ -2499,7 +2499,7 @@ test('EditorPart diff breadcrumbs display and navigate the modified path without
 		const registry = new EditorPaneRegistry();
 		using registration = registry.registerEditorPane(descriptor('stanza.editor.diff', '', () => new TestEditorPane('stanza.editor.diff')));
 		using services = createTestEditorServices(undefined, undefined, dom.window.document);
-		const workspace = services.get(IWorkspaceContextService) as WorkspaceContextService;
+		const workspace = services.get(IWorkspaceContextService) as TestWorkspaceService;
 		workspace.updateWorkspace({ id: 'breadcrumbs', folders: [{ id: 'project', name: 'Project', uri: URI.file('/project'), index: 0 }] });
 		const breadcrumbs = new BreadcrumbsService();
 		const selected: string[] = [];
@@ -2570,7 +2570,7 @@ test('HistoryService excludes configured resources and updates navigation when r
 		registry.registerEditorPane(descriptor('ash.test.historyRules', '.ts', () => new TestEditorPane('ash.test.historyRules')));
 		using editor = createEditorPart(dom.window.document.body, { registry });
 		using contextKeys = new ContextKeyService();
-		using workspace = new WorkspaceContextService({ id: 'history', uri: URI.file('C:/project') });
+		using workspace = new TestWorkspaceService({ id: 'history', uri: URI.file('C:/project') });
 		using configuration = new InMemoryConfigurationService();
 		using historyServices = createTestEditorServices(undefined, undefined, dom.window.document);
 		using history = new HistoryService(editor, contextKeys, configuration, workspace, historyServices.get(IStorageService));
@@ -3276,7 +3276,7 @@ test("EditorPart rejects an open superseded by ordinary content", async () => {
 test('slow directory identity cannot replace a newer editor or ordinary content', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {
-		using workspace = new WorkspaceContextService({ id: 'project', uri: URI.file('/project') });
+		using workspace = new TestWorkspaceService({ id: 'project', uri: URI.file('/project') });
 		const host = createDisconnectedRendererApi();
 		const delayed = new Map<string, DeferredPromise<FsReadPathCaseSensitivityResult>>();
 		const old = new DeferredPromise<FsReadPathCaseSensitivityResult>();
@@ -4026,6 +4026,8 @@ class TestWorkingCopy extends Disposable implements IWorkingCopy {
 }
 
 class TestFileDialogService implements IFileDialogService {
+	async pickFolderAndOpen(): Promise<void> { throw new Error('Unexpected folder open'); }
+	async pickWorkspaceAndOpen(): Promise<void> { throw new Error('Unexpected workspace open'); }
 	readonly prompts: string[][] = [];
 	private readonly results: ConfirmResult[];
 
@@ -4378,7 +4380,7 @@ for (const scenario of [
 			using parts = createEditorParts(main, windows, container => createAuxiliaryPart(container, registry), accessibility, storage);
 			using editors = new BrowserEditorService(parts);
 			using codeEditors = new CodeEditorService(parts);
-			using workspace = new WorkspaceContextService({ id: 'execution-file', folders: [{ id: 'client', name: 'Client', uri: scenario.root, index: 0 }] });
+			using workspace = new TestWorkspaceService({ id: 'execution-file', folders: [{ id: 'client', name: 'Client', uri: scenario.root, index: 0 }] });
 			const base = createDisconnectedRendererApi();
 			const entered = new DeferredPromise<void>();
 			const environment = new DeferredPromise<Record<string, string>>();

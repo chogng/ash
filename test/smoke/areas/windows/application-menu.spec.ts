@@ -69,9 +69,7 @@ test.describe('File menu closes the workspace', () => {
 				const folder = await root.getDirectoryHandle(`ash-close-${crypto.randomUUID()}`, { create: true });
 				Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
 			});
-			await page.keyboard.press('F1');
-			await page.locator('.ash-quick-pick').getByRole('combobox').fill('Open Folder');
-			await page.keyboard.press('Enter');
+			await workbench.quickaccess.runCommand('workbench.action.files.openFolderViaWorkspace');
 		}
 		if (target.kind === 'browser') await expect(page.locator('.ash-explorer')).toBeVisible();
 		await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
@@ -417,4 +415,117 @@ test('application menu opens real commands and updates Go when an editor opens',
 	await hoverMenuItem(mainMenu.getByRole('menuitem', { name: 'Terminal' }));
 	await page.getByRole('menu').last().getByRole('menuitem', { name: 'Focus Terminal' }).click();
 	await expect(page.locator('.ash-terminal-view')).toBeVisible();
+});
+
+test('Browser workspace files persist multiple authorized handles across save, close, reopen and reload', { tag: ['@browser-ui'] }, async ({ workbench }, testInfo) => {
+	const page = workbench.page;
+	const fixture = await page.evaluate(async () => {
+		const name = `ash-multi-${crypto.randomUUID()}`;
+		const home = await (await navigator.storage.getDirectory()).getDirectoryHandle(name, { create: true });
+		const client = await home.getDirectoryHandle('client', { create: true });
+		const server = await home.getDirectoryHandle('server', { create: true });
+		const writable = await (await server.getFileHandle('kept.txt', { create: true })).createWritable();
+		await writable.write('server file is retained'); await writable.close();
+		Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => client });
+		return name;
+	});
+	await workbench.quickaccess.runCommand('workbench.action.files.openFolderViaWorkspace');
+	await expect(page.locator('.ash-explorer')).toBeVisible();
+	const targetWorkspaceId = new URL(page.url()).searchParams.get('folder')! + '/team.ash-workspace';
+	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
+	await workbench.editors.groupAt(0).editor.waitForEditorFocus();
+	await workbench.editors.groupAt(0).editor.waitForTypeInEditor('unsaved browser workspace draft');
+	const chooseDirectory = async (name: string) => page.evaluate(async ({ fixture, name }) => {
+		const home = await (await navigator.storage.getDirectory()).getDirectoryHandle(fixture);
+		const directory = await home.getDirectoryHandle(name);
+		Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => directory });
+	}, { fixture, name });
+	const fileMenu = async (label: string) => {
+		await page.getByRole('button', { name: 'Application menu', exact: true }).click();
+		await page.getByRole('menu').first().getByRole('menuitem', { name: 'File', exact: true }).click();
+		await page.getByRole('menu').last().getByRole('menuitem', { name: label, exact: true }).click();
+	};
+	await chooseDirectory('server');
+	await fileMenu('Add Folder to Workspace...');
+	await page.getByRole('dialog').getByRole('button', { name: 'Done', exact: true }).click();
+	const roots = page.locator('.ash-explorer .ash-tree-row[aria-level="1"]');
+	await expect(roots).toHaveCount(2);
+	await expect(page).toHaveURL(/workspace=ash-userdata/);
+	await page.reload();
+	await workbench.waitForReady();
+	await expect(roots).toHaveCount(2);
+	await chooseDirectory('client');
+	const conflictKey = await page.evaluate(async targetWorkspaceId => {
+		const database = await new Promise<IDBDatabase>((resolve, reject) => { const request = indexedDB.open('ash-working-copy-backups', 1); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+		try {
+			return await new Promise<string>((resolve, reject) => {
+				const transaction = database.transaction('backups', 'readwrite');
+				const store = transaction.objectStore('backups');
+				const reading = store.getAll();
+				let key = '';
+				reading.onsuccess = () => {
+					const source = reading.result.find(record => record.content.includes('unsaved browser workspace draft'));
+					if (!source) { transaction.abort(); return; }
+					key = `${targetWorkspaceId}\0${source.resource}`;
+					store.put({ ...source, key, workspaceId: targetWorkspaceId, content: 'existing target recovery', revision: 'other-writer' });
+				};
+				transaction.oncomplete = () => resolve(key);
+				transaction.onabort = () => reject(transaction.error ?? new Error('Missing source recovery'));
+			});
+		} finally { database.close(); }
+	}, targetWorkspaceId);
+	const saveWorkspace = async () => {
+		await fileMenu('Save Workspace As...');
+		const save = page.getByRole('dialog', { name: 'Save Workspace As...' });
+		await save.getByRole('textbox', { name: 'File name, field 1' }).fill('team.ash-workspace');
+		await save.getByRole('button', { name: 'OK', exact: true }).click();
+	};
+	await saveWorkspace();
+	await expect(page.getByRole('region', { name: 'Notifications', exact: true }).getByText('Backup conflict', { exact: true })).toBeVisible();
+	await page.getByRole('region', { name: 'Notifications', exact: true }).getByRole('button', { name: 'Remove notification', exact: true }).click();
+	await expect(page).toHaveURL(/workspace=ash-userdata/);
+	await page.evaluate(async conflictKey => {
+		const database = await new Promise<IDBDatabase>((resolve, reject) => { const request = indexedDB.open('ash-working-copy-backups', 1); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+		try {
+			await new Promise<void>((resolve, reject) => {
+				const transaction = database.transaction('backups', 'readwrite');
+				const store = transaction.objectStore('backups');
+				const reading = store.get(conflictKey);
+				reading.onsuccess = () => { if (reading.result?.content !== 'existing target recovery') transaction.abort(); else store.delete(conflictKey); };
+				transaction.oncomplete = () => resolve(); transaction.onabort = () => reject(new Error('Target recovery was overwritten'));
+			});
+		} finally { database.close(); }
+	}, conflictKey);
+	await saveWorkspace();
+	await expect(page).toHaveURL(/workspace=file/);
+	const saved = await page.evaluate(async fixture => {
+		const home = await (await navigator.storage.getDirectory()).getDirectoryHandle(fixture);
+		const client = await home.getDirectoryHandle('client');
+		return JSON.parse(await (await (await client.getFileHandle('team.ash-workspace')).getFile()).text());
+	}, fixture);
+	expect(saved.folders).toHaveLength(2);
+	await page.reload();
+	await workbench.waitForReady();
+	await expect(roots).toHaveCount(2);
+	await expect(workbench.editors.groupAt(0).content.locator('.stanza-editor-line-text').first()).toContainText('unsaved browser workspace draft');
+	const server = roots.filter({ hasText: 'server' });
+	await server.click(); await server.press('Shift+F10');
+	await page.getByRole('menu').last().getByRole('menuitem', { name: 'Remove Folder from Workspace...', exact: true }).click();
+	await expect(roots).toHaveCount(1);
+	expect(await page.evaluate(async fixture => {
+		const home = await (await navigator.storage.getDirectory()).getDirectoryHandle(fixture);
+		return (await (await (await home.getDirectoryHandle('server')).getFileHandle('kept.txt')).getFile()).text();
+	}, fixture)).toBe('server file is retained');
+	await fileMenu('Close Workspace');
+	await page.getByRole('dialog', { name: 'Save Changes' }).getByRole('button', { name: "Don't Save", exact: true }).click();
+	await workbench.waitForReady();
+	await expect(page).not.toHaveURL(/workspace=/);
+	await chooseDirectory('client');
+	await fileMenu('Open Workspace from File...');
+	await page.locator('.ash-quick-pick').getByText('team.ash-workspace', { exact: true }).click();
+	await expect(roots).toHaveCount(1);
+	await expect(page).toHaveURL(/workspace=file/);
+	const screenshot = testInfo.outputPath('browser-workspace-reopened.png');
+	await page.screenshot({ path: screenshot });
+	await testInfo.attach('browser-workspace-reopened', { path: screenshot, contentType: 'image/png' });
 });

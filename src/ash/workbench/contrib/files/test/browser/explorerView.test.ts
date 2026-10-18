@@ -25,7 +25,7 @@ import { ExplorerFileNestingSettingId } from '../../common/explorerFileNestingTr
 import '../../../../services/filesConfiguration/common/filesConfigurationService.js';
 import '../../browser/files.contribution.js';
 import { FileKind, FileNotFoundError, type IFileSystemProvider, type IFileWriteOptions, type IFileWriteResult, FileSystemProviderCapabilities } from "../../../../../platform/files/common/files.js";
-import { WorkspaceContextService } from "../../../../../workbench/services/workspaces/browser/workspaceContextService.js";
+import { TestWorkspaceService } from "../../../../services/configuration/test/common/testServices.js";
 import { IResourceIconRenderer } from "../../../../browser/labels.js";
 import { IHoverService, type IManagedHover } from "../../../../../platform/hover/browser/hoverService.js";
 import { ListConfiguration } from "../../../../../platform/list/browser/listService.js";
@@ -156,7 +156,7 @@ test("ExplorerView opens workspace files on single click", async () => {
 		delete: async () => { throw new Error("Explorer must not delete files in this test"); },
 	};
 	using fileService = createTestFileService(fileProvider);
-	using workspaceContextService = new WorkspaceContextService({
+	using workspaceContextService = new TestWorkspaceService({
 		id: "workspace",
 		uri: root,
 	});
@@ -219,21 +219,16 @@ test("ExplorerView opens workspace files on single click", async () => {
 			"../../../../../workbench/contrib/files/browser/views/emptyView.js"
 		);
 		let folderOpens = 0;
+		using contexts = new ContextKeyService();
+		contexts.setContext('openFolderWorkspaceSupport', true);
 		using emptyView = new EmptyView(
 			browser.window.document.body,
 			{
 				id: EmptyView.ID,
 				title: EmptyView.TITLE,
 			},
-			{
-				canOpenFolder: true,
-				canOpenWorkspace: true,
-				openFolder: async () => {
-					folderOpens += 1;
-				},
-				openWorkspace: async () => { },
-				pickFolder: async () => undefined,
-			},
+			{ pickFolderAndOpen: async () => { folderOpens++; } } as unknown as import('../../../../../platform/dialogs/common/dialogs.js').IFileDialogService,
+			contexts,
 		);
 		assert.equal(emptyView.element.dataset.viewId, EmptyView.ID);
 		assert.equal(

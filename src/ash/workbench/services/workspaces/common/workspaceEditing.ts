@@ -1,7 +1,7 @@
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { URI } from '../../../../base/common/uri.js';
 
-/** Edits the local window's workspace metadata through its owning desktop host. */
+/** Edits workspace metadata through its owning host; directory authorization remains separate. */
 export interface IWorkspaceEditingService {
 	validateFolders(folders: readonly URI[]): void;
 	addFolders(folders: readonly { readonly uri: URI; readonly name?: string; }[]): Promise<void>;

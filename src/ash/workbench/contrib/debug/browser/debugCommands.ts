@@ -1,16 +1,17 @@
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { IWorkspaceContextService, type IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
 import { FileNotFoundError, FileSystemProviderErrorCode, toFileSystemProviderErrorCode, IFileService } from '../../../../platform/files/common/files.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
-import { IWorkspaceOpenService } from '../../../services/workspaces/browser/workspaceOpenService.js';
+import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { DEBUG_VIEW_ID, IDebugService, START_DEBUG_COMMAND_ID, SELECT_AND_START_ID, DebugConfigurationProviderTriggerKind, type DebugConfiguration, type IDebugConfiguration, type IDebugCompound } from '../common/debug.js';
 import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { CancellationError, isCancellationError } from '../../../../base/common/errors.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize, localize2 } from '../../../../nls.js';
-import { pickWorkspaceFolder } from '../../../services/workspaces/browser/workspaceOpenService.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { PICK_WORKSPACE_FOLDER_COMMAND_ID } from '../../../browser/actions/workspaceCommands.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { AppServerAvailableContext } from '../../../common/contextkeys.js';
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
@@ -119,11 +120,11 @@ registerAction2(class ConfigureDebugAction extends Action2 {
 		const folder = selectedFolder === undefined
 			? folders.find(folder => folder.id === selected?.dirId)
 			?? (activeResource ? workspace.getWorkspaceFolder(activeResource) : null)
-			?? (folders.length === 1 ? folders[0] : folders.length ? await pickWorkspaceFolder(accessor.get(IQuickInputService), folders, localize('debug.selectFolder', 'Select a workspace folder to configure debugging.')) : undefined)
+			?? (folders.length === 1 ? folders[0] : folders.length ? await accessor.get(ICommandService).executeCommand<IWorkspaceFolder | undefined>(PICK_WORKSPACE_FOLDER_COMMAND_ID, [{ placeHolder: localize('debug.selectFolder', 'Select a workspace folder to configure debugging.') }]) : undefined)
 			: workspace.getWorkspace().folders.find(folder => folder.uri.toString() === selectedFolder.toString());
 		if (selectedFolder && !folder) throw new CancellationError();
 		if (!folder) {
-			if (!folders.length) await accessor.get(IWorkspaceOpenService).openFolder();
+			if (!folders.length) await accessor.get(IFileDialogService).pickFolderAndOpen();
 			return;
 		}
 		const files = accessor.get(IFileService);

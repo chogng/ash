@@ -14,7 +14,7 @@ import { IWorkspaceContextService } from '../../../../../platform/workspace/comm
 import { AppServerProtocolClient } from '../../../../../platform/agentHost/browser/appServerProtocolClient.js';
 import { createTestInitializeResult } from '../../../../../platform/agentHost/test/common/testAppServerProtocol.js';
 import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, type AppServerTransport } from '../../../../../platform/agentHost/common/appServerTransport.js';
-import { WorkspaceContextService } from '../../../workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../configuration/test/common/testServices.js';
 import { IWorkingCopyService } from '../../../workingCopy/common/workingCopyService.js';
 import { BrowserWorkingCopyService } from '../../../workingCopy/browser/browserWorkingCopyService.js';
 import { IEditorGroupsService } from '../../common/editorGroupsService.js';
@@ -66,7 +66,7 @@ async function fixture() {
 		const services = lifetime.add(new TestUriIdentityServices());
 		const resource = URI.file('/project/lib.rs');
 		const model = lifetime.add(new TextModel('unsaved selection', { resource }));
-		const workspace = lifetime.add(new WorkspaceContextService({ id: 'project', name: 'Project', folders: [{ id: 'folder', name: 'Project', index: 0, uri: URI.file('/project') }] }));
+		const workspace = lifetime.add(new TestWorkspaceService({ id: 'project', name: 'Project', folders: [{ id: 'folder', name: 'Project', index: 0, uri: URI.file('/project') }] }));
 		const workingCopies = lifetime.add(services.createInstance(BrowserWorkingCopyService));
 		lifetime.add(workingCopies.register({ resource, backupKind: 'text', isDirty: true, hasExternalChange: false, onDidChangeDirty: Event.None, onDidChangeExternalChange: Event.None, onDidChangeContent: Event.None, backup: () => model.getValue(), restoreBackup: () => assert.fail('context must not mutate the model'), save: async () => assert.fail('context must not save'), saveAs: async () => assert.fail('context must not save'), revert: async () => assert.fail('context must not revert'), ...toDisposable(() => { }) }));
 		services.registerInstance(IWorkspaceContextService, workspace);

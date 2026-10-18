@@ -58,9 +58,11 @@ export class WorkbenchContextKeysHandler extends Disposable {
 			updateWorkspaceKeys(workbenchState, workspaceFolderCount, workspaceContextService);
 			return { workbenchState, workspaceFolderCount };
 		});
-		this._register(workspaceContextService.onDidChangeWorkspace(() => {
+		const update = () => {
 			contextKeyService.bufferChangeEvents(() => updateWorkspaceKeys(keys.workbenchState, keys.workspaceFolderCount, workspaceContextService));
-		}));
+		};
+		this._register(workspaceContextService.onDidChangeWorkbenchState(update));
+		this._register(workspaceContextService.onDidChangeWorkspaceFolders(update));
 		this._register(toDisposable(() => resetContextKeys(contextKeyService, Object.values(keys))));
 	}
 

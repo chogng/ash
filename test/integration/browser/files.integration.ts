@@ -32,7 +32,7 @@ import { createDisconnectedExtensionHostApi } from '../../../src/ash/platform/ag
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import { IAppServerApi } from '../../../src/ash/platform/agentHost/common/appServerApi.js';
 import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
-import { WorkspaceContextService } from '../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { BulkEditTestServices, MemoryFileService } from '../../../src/ash/workbench/contrib/bulkEdit/test/browser/bulkEditTestServices.js';
 import { BulkEditService } from '../../../src/ash/workbench/contrib/bulkEdit/browser/bulkEditService.js';
 import { BrowserTextModelService } from '../../../src/ash/workbench/services/textmodelResolver/browser/browserTextModelService.js';
@@ -368,7 +368,7 @@ const integration = {
 			connectionGeneration: 0,
 			getConnectionState: async () => 'stopped', getSlashCommands: async () => [], onConnectionState: () => toDisposable(() => { }),
 		});
-		services.registerInstance(IWorkspaceContextService, lifetime.add(new WorkspaceContextService({
+		services.registerInstance(IWorkspaceContextService, lifetime.add(new TestWorkspaceService({
 			id: 'offline-folders', folders: [browserRoot, backendRoot, unknownRoot].map((uri, index) => ({ uri, index, id: String(index), name: `Root ${index}` })),
 		})));
 		const host = lifetime.add(new WebWorkerExtensionHost({

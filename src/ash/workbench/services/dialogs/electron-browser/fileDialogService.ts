@@ -1,3 +1,6 @@
+import { SimpleFileDialog } from '../browser/simpleFileDialog.js';
+import { IWorkspaceContextService, getWorkspaceRemoteAuthority } from '../../../../platform/workspace/common/workspace.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { URI } from '../../../../base/common/uri.js';
 import type { OpenDialogOptions } from '../../../../base/parts/sandbox/common/electronTypes.js';
 import { localize } from '../../../../nls.js';
@@ -10,11 +13,12 @@ import {
 import type { INativeHostApi } from '../../../../platform/native/common/nativeHost.js';
 import { INativeHostService } from '../../../common/services.js';
 import { AbstractFileDialogService } from '../browser/abstractFileDialogService.js';
+import { IHostService } from '../../host/browser/host.js';
 
 /** Selects a filesystem path in the desktop window that owns the editor. */
 export class FileDialogService extends AbstractFileDialogService implements IFileDialogService {
-	constructor(@INativeHostService private readonly host: INativeHostApi, @IDialogService dialogs: IDialogService) {
-		super(() => dialogs);
+	constructor(@INativeHostService private readonly host: INativeHostApi, @IDialogService dialogs: IDialogService, @IHostService hostService: IHostService, @IWorkspaceContextService private readonly workspace: IWorkspaceContextService, @IInstantiationService private readonly instantiation: IInstantiationService) {
+		super(() => dialogs, hostService);
 	}
 
 	async pickFileToSave(defaultUri: URI): Promise<URI | undefined> {
@@ -39,6 +43,9 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 	}
 
 	async showOpenDialog(options: IOpenDialogOptions): Promise<readonly URI[] | undefined> {
+		if (options.canSelectFolders && options.canSelectFiles === false && getWorkspaceRemoteAuthority(this.workspace.getWorkspace())) {
+			return this.instantiation.createInstance(SimpleFileDialog).showOpenDialog(options);
+		}
 		this.validateFileSystem(options.availableFileSystems, options.defaultUri);
 		if (options.canSelectFiles === false && options.canSelectFolders !== true) {
 			throw new TypeError('Open dialog must allow files or folders');

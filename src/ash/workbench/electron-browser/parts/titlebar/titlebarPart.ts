@@ -1,5 +1,5 @@
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
-import { IMenuService } from '../../../../platform/actions/common/actions.js';
+import { IMenuService, MenuId } from '../../../../platform/actions/common/actions.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import { isMacintosh } from "../../../../base/common/platform.js";
@@ -53,7 +53,7 @@ export class NativeTitlebarPart extends BrowserTitlebarPart {
 		super(
 			container,
 			options,
-			(menus, contextMenus, localization, contextKeys) => new ElectronMenubarControl(container, nativeMenubar, menus, contextMenus, localization, contextKeys),
+			(menus, contextMenus, localization, contextKeys) => new ElectronMenubarControl(container, nativeMenubar, menus, contextMenus, localization, contextKeys, instantiationService),
 			instantiationService,
 			menuService,
 			contextMenuService,
@@ -150,6 +150,7 @@ class ElectronMenubarControl extends Disposable
 		contextMenuService: IContextMenuService,
 		localizationService: ILocalizationService,
 		contextKeyService: IContextKeyService,
+		instantiationService: IInstantiationService,
 	) {
 		super();
 		const browserMenubar = this._register(new BrowserMenubarControl(
@@ -162,10 +163,7 @@ class ElectronMenubarControl extends Disposable
 		));
 		this.domNode = browserMenubar.domNode;
 		if (isMacintosh) {
-			this._register(new NativeMenubarControl(
-				menuService,
-				nativeMenubar,
-			));
+			this._register(instantiationService.createInstance(NativeMenubarControl, nativeMenubar, MenuId.MenubarMainMenu));
 		}
 	}
 }

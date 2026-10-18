@@ -40,7 +40,7 @@ import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContra
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { OutputViewPane } from '../../../src/ash/workbench/contrib/output/browser/outputView.js';
 import { OutputService } from '../../../src/ash/workbench/contrib/output/browser/outputServices.js';
-import { WorkspaceContextService } from '../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { TestQuickInputService } from '../../../src/ash/platform/quickinput/test/browser/testQuickInputService.js';
@@ -110,7 +110,7 @@ const customOpened: string[] = [];
 resources.add(services.createInstance(Link, document.querySelector<HTMLElement>('#custom-link')!, {
 	label: 'Custom action', href: 'https://example.test/custom',
 }, { opener: (href: string) => customOpened.push(href), textLinkForeground: '#ff8080' }));
-const workspace = resources.add(new WorkspaceContextService({ id: 'link-test', uri: URI.file('/workspace') }));
+const workspace = resources.add(new TestWorkspaceService({ id: 'link-test', uri: URI.file('/workspace') }));
 services.registerInstance(IWorkspaceContextService, workspace);
 services.registerInstance(IContextMenuService, menus);
 services.registerInstance(IStorageService, resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'link', backend: window.localStorage, flushInterval: 0 })));

@@ -1,4 +1,10 @@
-import { WorkspaceContextService } from '../../../workspaces/browser/workspaceContextService.js';
+import '../../../../../editor/test/browser/testEditorDom.js';
+import { BrowserHostService } from '../../../host/browser/browserHostService.js';
+import type { ILifecycleService } from '../../../lifecycle/common/lifecycle.js';
+import { IPathService } from '../../../../../platform/path/common/pathService.js';
+import { IHostService } from '../../../host/browser/host.js';
+import { TestHostService } from '../../../host/test/browser/testHostService.js';
+import { TestWorkspaceService } from '../../../configuration/test/common/testServices.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { afterEach, suiteTeardown } from 'mocha';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
@@ -15,11 +21,11 @@ import { Emitter } from '../../../../../base/common/event.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { ConfirmResult, DialogResult, DialogSeverity, type IDialogService, IFileDialogService, type IInputDialogOptions, type IMessageDialogOptions } from '../../../../../platform/dialogs/common/dialogs.js';
 import type { HTMLFileSystemProvider } from '../../../../../platform/files/browser/htmlFileSystemProvider.js';
-import { FileKind, FileNotFoundError, type IFileService } from '../../../../../platform/files/common/files.js';
+import { FileKind, FileNotFoundError, IFileService } from '../../../../../platform/files/common/files.js';
 import type { IQuickInputService, IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { FileDialogService } from '../../browser/fileDialogService.js';
 import { DialogService } from '../../common/dialogService.js';
-import { WebWorkspaceOpenService, type IWebWorkspaceClient } from '../../../workspaces/browser/workspaceOpenService.js';
+import type { IWebWorkspaceClient } from '../../../workspaces/browser/appServerWebWorkspaceClient.js';
 
 test('file dialog service owns the save, discard, and cancel decision', async () => {
 	using dialogs = new DialogService();
@@ -424,8 +430,9 @@ for (const { label, os, resource, path } of [
 		assert.deepEqual(await service.showOpenDialog({ canSelectFiles: false, canSelectFolders: true, defaultUri: resource }), [resource]);
 		assert.deepEqual(listed, [path]);
 		services.registerInstance(IFileDialogService, service);
-		const workspace = services.createInstance(WebWorkspaceOpenService, client, () => dialogs, async () => true);
-		await workspace.openFolder();
+		using workspace = new BrowserHostService({ workspaceProvider: { kind: 'server', client, prepareSwitch: async () => true } }, {} as ILifecycleService, dialogs, services.get(IPathService), {} as IFileService);
+		const picked = await service.showOpenDialog({ canSelectFiles: false, canSelectFolders: true });
+		await workspace.openWindow([{ folderUri: picked![0]! }]);
 		assert.deepEqual({ listed, authorized, activated }, { listed: [path, home, path], authorized: [path], activated: true });
 	});
 }
@@ -441,7 +448,8 @@ function createFileDialogService(host: ConstructorParameters<typeof FileDialogSe
 function createServices(os: OperatingSystem, userHome?: string): InstantiationService {
 	const api = createDisconnectedRendererApi();
 	const services = serviceFixtures.add(new InstantiationService(new ServiceCollection(...getSingletonServiceDescriptors())));
-	services.registerInstance(IWorkspaceContextService, serviceFixtures.add(new WorkspaceContextService({ id: 'dialog-test', folders: [] })));
+	services.registerInstance(IHostService, new TestHostService());
+	services.registerInstance(IWorkspaceContextService, serviceFixtures.add(new TestWorkspaceService({ id: 'dialog-test', folders: [] })));
 	services.registerInstance(IRendererHostService, { ...api, hasAppServer: true, appServer: { ...api.appServer, operatingSystem: os, userHome } });
 	return services;
 }

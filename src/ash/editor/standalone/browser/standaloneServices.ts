@@ -81,6 +81,9 @@ import { Range } from '../../common/core/range.js';
 import { type ITextModel } from '../../common/model.js';
 
 export class StandaloneWorkspaceContextService implements IWorkspaceContextService {
+	readonly onDidChangeWorkspaceFolders = Event.None;
+	readonly onDidChangeWorkbenchState = Event.None;
+	readonly onDidChangeWorkspaceName = Event.None;
 	readonly onDidChangeWorkspace = Event.None;
 	private readonly workspace: IWorkspace = Object.freeze({ id: 'standalone', folders: [] });
 

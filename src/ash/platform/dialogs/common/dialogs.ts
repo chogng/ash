@@ -143,10 +143,17 @@ export const IDialogService =
 
 /** Selects a file path for an editor Save As operation. */
 export interface IFileDialogService {
+	pickFolderAndOpen(options?: IPickAndOpenOptions): Promise<void>;
+	pickWorkspaceAndOpen(options?: IPickAndOpenOptions): Promise<void>;
 	pickFileToSave(defaultUri: URI): Promise<URI | undefined>;
 	showSaveConfirm(fileNamesOrResources: readonly (string | URI)[], detail?: string): Promise<ConfirmResult>;
 	showSaveDialog(options: ISaveDialogOptions): Promise<URI | undefined>;
 	showOpenDialog(options: IOpenDialogOptions): Promise<readonly URI[] | undefined>;
+}
+
+export interface IPickAndOpenOptions {
+	readonly forceNewWindow?: boolean;
+	readonly defaultUri?: URI;
 }
 
 export enum ConfirmResult {

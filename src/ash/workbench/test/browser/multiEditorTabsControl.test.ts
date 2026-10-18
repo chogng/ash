@@ -32,7 +32,7 @@ import { setNlsResolver, resetNlsResolver } from '../../../nls.js';
 import { productLanguagePackCatalogs } from '../../services/localization/common/localizationCatalogs.js';
 import { EditorGroupModel } from '../../common/editor/editorGroupModel.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
-import { WorkspaceContextService } from '../../services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../services/configuration/test/common/testServices.js';
 import { FileKind } from '../../../platform/files/common/files.js';
 import type { FileElement } from '../../browser/parts/editor/breadcrumbsModel.js';
 
@@ -69,7 +69,7 @@ test('EditorTitleControl starts breadcrumbs at the owning workspace and refreshe
 	try {
 		using configuration = new InMemoryConfigurationService();
 		using services = createTestEditorServices(configuration);
-		const workspace = services.get(IWorkspaceContextService) as WorkspaceContextService;
+		const workspace = services.get(IWorkspaceContextService) as TestWorkspaceService;
 		workspace.updateWorkspace({ id: 'ash', uri: URI.file('/Users/lx/Desktop/ash') });
 		const group = new EditorGroupModel();
 		let selected: FileElement | undefined;
@@ -109,7 +109,7 @@ test('Editor breadcrumbs respect URI segment boundaries for remote, Windows and 
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {
 		using services = createTestEditorServices();
-		const workspace = services.get(IWorkspaceContextService) as WorkspaceContextService;
+		const workspace = services.get(IWorkspaceContextService) as TestWorkspaceService;
 		using control = services.createInstance(EditorBreadcrumbsControl, dom.window.document.body, undefined, undefined);
 		const cases = [
 			{ root: 'vscode-remote://ssh-remote+host/home/lx/ash', file: 'vscode-remote://ssh-remote+host/home/lx/ash/src/main.ts', labels: ['ash', 'src', 'main.ts'] },
@@ -442,7 +442,7 @@ suite('Editor tab label format', () => {
 		const dom = new JSDOM('<!doctype html><body></body>');
 		try {
 			using services = createTestEditorServices();
-			const workspace = services.get(IWorkspaceContextService) as WorkspaceContextService;
+			const workspace = services.get(IWorkspaceContextService) as TestWorkspaceService;
 			workspace.updateWorkspace({ id: 'labels', uri: URI.file('/work/ash') });
 			const group = new EditorGroupModel();
 			const first = { resource: URI.file('/work/ash/client/src/index.ts') };
@@ -474,7 +474,7 @@ suite('Editor tab label format', () => {
 		const dom = new JSDOM('<!doctype html><body></body>');
 		try {
 			using services = createTestEditorServices();
-			const workspace = services.get(IWorkspaceContextService) as WorkspaceContextService;
+			const workspace = services.get(IWorkspaceContextService) as TestWorkspaceService;
 			workspace.updateWorkspace({ id: 'labels', uri: URI.file('/work/ash') });
 			const group = new EditorGroupModel();
 			const rootFile = { resource: URI.file('/work/ash/index.ts') };
@@ -509,7 +509,7 @@ suite('Editor tab label format', () => {
 		try {
 			using configuration = new InMemoryConfigurationService();
 			using services = createTestEditorServices(configuration);
-			const workspace = services.get(IWorkspaceContextService) as WorkspaceContextService;
+			const workspace = services.get(IWorkspaceContextService) as TestWorkspaceService;
 			workspace.updateWorkspace({ id: 'labels', uri: URI.file('/work/ash') });
 			const group = new EditorGroupModel();
 			const file = { resource: URI.file('/work/ash/client/src/index.ts') };

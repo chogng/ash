@@ -26,7 +26,7 @@ import { OperatingSystem } from '../../../../../base/common/platform.js';
 import { createExtensionHostTaskProvider } from '../../../../api/browser/extensionHostWorkflowBridge.js';
 import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { CommandService } from '../../../commands/common/commandService.js';
-import { WorkspaceContextService } from '../../../workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../configuration/test/common/testServices.js';
 import { ConfigurationResolverService } from '../../../configurationResolver/browser/configurationResolverService.js';
 import { IConfigurationResolverService } from '../../../configurationResolver/common/configurationResolver.js';
 import { SyncDescriptor } from '../../../../../platform/instantiation/common/descriptors.js';
@@ -70,6 +70,9 @@ suite('Workspace task progress signals', () => {
 			const root = URI.file('/project');
 			const workspace: IWorkspaceContextService = {
 				onDidChangeWorkspace: Event.None,
+				onDidChangeWorkspaceFolders: Event.None,
+				onDidChangeWorkbenchState: Event.None,
+				onDidChangeWorkspaceName: Event.None,
 				getWorkspace: () => ({ id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'project', index: 0 }] }),
 				getWorkbenchState: () => 2, getWorkspaceFolder: () => null,
 			};
@@ -144,6 +147,9 @@ test('TaskService discovers UTF-8 configuration through the provider text contra
 	});
 	const workspace: IWorkspaceContextService = {
 		onDidChangeWorkspace: Event.None,
+		onDidChangeWorkspaceFolders: Event.None,
+		onDidChangeWorkbenchState: Event.None,
+		onDidChangeWorkspaceName: Event.None,
 		getWorkspace: () => ({ id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'task-text', index: 0 }] }),
 		getWorkbenchState: () => 2, getWorkspaceFolder: () => null,
 	};
@@ -165,6 +171,9 @@ test("TaskService discovers tasks, creates a shell execution, and tracks its exi
 	});
 	const workspace: IWorkspaceContextService = {
 		onDidChangeWorkspace: Event.None,
+		onDidChangeWorkspaceFolders: Event.None,
+		onDidChangeWorkbenchState: Event.None,
+		onDidChangeWorkspaceName: Event.None,
 		getWorkspace: () => ({ id: "workspace", folders: [{ id: "workspace", uri: root, name: "project", index: 0 }] }),
 		getWorkbenchState: () => 2,
 		getWorkspaceFolder: () => null,
@@ -204,6 +213,9 @@ test("TaskService atomically owns dynamic providers and merges their tasks on re
 	const files = new FakeFileService(root, { ".vscode/tasks.json": '{"version":"2.0.0","tasks":[{"label":"Build","command":"build","group":"build"}]}' });
 	const workspace: IWorkspaceContextService = {
 		onDidChangeWorkspace: Event.None,
+		onDidChangeWorkspaceFolders: Event.None,
+		onDidChangeWorkbenchState: Event.None,
+		onDidChangeWorkspaceName: Event.None,
 		getWorkspace: () => ({ id: "workspace", folders: [{ id: "workspace", uri: root, name: "project", index: 0 }] }),
 		getWorkbenchState: () => 2,
 		getWorkspaceFolder: () => null,
@@ -235,6 +247,9 @@ test("TaskService retains the last good task set when a provider refresh fails",
 	const root = URI.file("C:\\project");
 	const workspace: IWorkspaceContextService = {
 		onDidChangeWorkspace: Event.None,
+		onDidChangeWorkspaceFolders: Event.None,
+		onDidChangeWorkbenchState: Event.None,
+		onDidChangeWorkspaceName: Event.None,
 		getWorkspace: () => ({ id: "workspace", folders: [{ id: "workspace", uri: root, name: "project", index: 0 }] }),
 		getWorkbenchState: () => 2,
 		getWorkspaceFolder: () => null,
@@ -257,7 +272,7 @@ test("TaskService retains the last good task set when a provider refresh fails",
 test('concurrent dispatch shares one pending task and a canceled joiner does not stop its owner', async () => {
 	using resources = new DisposableStore();
 	using terminals = new FakeTerminalService();
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') });
 	using service = taskServices(resources, new FakeFileService(URI.file('/workspace'), { '.vscode/tasks.json': '{"version":"2.0.0","tasks":[{"label":"Check","command":"check","runOptions":{"instancePolicy":"silent"}}]}' }), workspace, terminals).createInstance(TaskService);
 	const task = (await service.refresh())[0];
 	const creating = new DeferredPromise<void>();
@@ -291,7 +306,7 @@ test('concurrent dispatch shares one pending task and a canceled joiner does not
 test('a failed current refresh rejects a superseded dispatch instead of using the retained catalog', async () => {
 	using resources = new DisposableStore();
 	using terminals = new FakeTerminalService();
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') });
 	using service = taskServices(resources, new FakeFileService(URI.file('/workspace'), { '.vscode/tasks.json': '{"version":"2.0.0","tasks":[{"label":"Check","command":"check"}]}' }), workspace, terminals).createInstance(TaskService);
 	const release = new DeferredPromise<void>();
 	const discovering = new DeferredPromise<void>();
@@ -447,7 +462,7 @@ suite('Task shell profiles through execution owners', () => {
 
 	function assemble(owner: DisposableStore, os = OperatingSystem.Linux, executionOptions = {}) {
 		const root = URI.file('/workspace');
-		const workspace = owner.add(new WorkspaceContextService({ id: 'workspace', uri: root }));
+		const workspace = owner.add(new TestWorkspaceService({ id: 'workspace', uri: root }));
 		const document = {
 			version: '2.0.0', tasks: [
 				{ label: 'Shell', type: 'shell', command: 'compiler', args: ['two words', { value: '$HOME', quoting: 'strong' }], options: { env: { mode: 'task', REMOVED: null }, ...executionOptions }, presentation: { reveal: 'never' } },
@@ -813,7 +828,7 @@ for (const canceled of [false, true]) {
 		using resources = new DisposableStore();
 		using terminals = new FakeTerminalService();
 		const root = URI.file('/workspace');
-		using workspace = new WorkspaceContextService({ id: 'workspace', uri: root });
+		using workspace = new TestWorkspaceService({ id: 'workspace', uri: root });
 		const document = { version: '2.0.0', tasks: [{ label: 'Search', type: 'process', command: 'compiler', problemMatcher: { fileLocation: ['search', { include: '${workspaceFolder}/search[work]', exclude: '${workspaceFolder}/search[work]/ignored' }], pattern: { regexp: '^(.+):(\\d+):(\\d+) (.+)$', file: 1, line: 2, column: 3, message: 4 } } }] };
 		const baseServices = taskServices(resources, new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify(document) }), workspace, terminals);
 		const requested = new DeferredPromise<void>();
@@ -860,7 +875,7 @@ test('background search readiness waits for diagnostics before launching a depen
 	using resources = new DisposableStore();
 	using terminals = new FakeTerminalService();
 	const root = URI.file('/workspace');
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: root });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: root });
 	const document = {
 		version: '2.0.0', tasks: [
 			{ label: 'Watch', type: 'process', command: 'compiler', isBackground: true, problemMatcher: { fileLocation: 'search', severity: 'warning', pattern: { regexp: '^(.+):(\\d+):(\\d+) (.+)$', file: 1, line: 2, column: 3, message: 4 }, background: { activeOnStart: true, beginsPattern: '^BUILD$', endsPattern: '^READY$' } } },
@@ -892,7 +907,7 @@ test('search failure waits for terminal release before completing a failed task'
 	using resources = new DisposableStore();
 	using terminals = new FakeTerminalService();
 	const root = URI.file('/workspace');
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: root });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: root });
 	const document = { version: '2.0.0', tasks: [{ label: 'Search', type: 'process', command: 'compiler', problemMatcher: { fileLocation: 'search', pattern: { regexp: '^(.+):(\\d+):(\\d+) (.+)$', file: 1, line: 2, column: 3, message: 4 } } }] };
 	const baseServices = taskServices(resources, new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify(document) }), workspace, terminals);
 	const lookup = new DeferredPromise<FileSearchResult>();
@@ -924,7 +939,7 @@ test('search matcher rejects a directory outside the workspace before process cr
 	using resources = new DisposableStore();
 	using terminals = new FakeTerminalService();
 	const root = URI.file('/workspace');
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: root });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: root });
 	const document = { version: '2.0.0', tasks: [{ label: 'Outside', command: 'compiler', problemMatcher: { fileLocation: ['search', { include: '/outside' }], pattern: { regexp: '^(.+):(\\d+):(\\d+) (.+)$', file: 1, line: 2, column: 3, message: 4 } } }] };
 	using tasks = taskServices(resources, new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify(document) }), workspace, terminals).createInstance(TaskService);
 	const [task] = await tasks.refresh();
@@ -936,7 +951,7 @@ test('TaskService selects the execution host platform before resolving command, 
 	using resources = new DisposableStore();
 	using terminals = new FakeTerminalService();
 	const root = URI.file('/workspace');
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: root });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: root });
 	const creates: ITerminalCreateOptions[] = [];
 	const create = terminals.createTerminal.bind(terminals);
 	terminals.createTerminal = async options => { creates.push(options); return create(options); };
@@ -1010,7 +1025,12 @@ suite('TaskService terminal availability', () => {
 				write: async () => { throw new Error('A configured task must not write shell command input'); },
 				resize: async () => { }, close: async () => { calls.push('close'); },
 			};
-			const workspace: IWorkspaceContextService = { onDidChangeWorkspace: Event.None, getWorkspace: () => ({ id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'Workspace', index: 0 }] }), getWorkbenchState: () => 2, getWorkspaceFolder: () => null };
+			const workspace: IWorkspaceContextService = {
+				onDidChangeWorkspace: Event.None,
+				onDidChangeWorkspaceFolders: Event.None,
+				onDidChangeWorkbenchState: Event.None,
+				onDidChangeWorkspaceName: Event.None, getWorkspace: () => ({ id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'Workspace', index: 0 }] }), getWorkbenchState: () => 2, getWorkspaceFolder: () => null
+			};
 			const logs: string[] = [];
 			const output = { createChannel: () => ({ ...Disposable.None, appendLine: (entry: { text: string; }) => { logs.push(entry.text); } }) } as unknown as IOutputService;
 			const services = resources.add(new InstantiationService(new ServiceCollection([IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)],
@@ -1072,6 +1092,9 @@ suite('TaskService terminal availability', () => {
 			};
 			const workspace: IWorkspaceContextService = {
 				onDidChangeWorkspace: Event.None,
+				onDidChangeWorkspaceFolders: Event.None,
+				onDidChangeWorkbenchState: Event.None,
+				onDidChangeWorkspaceName: Event.None,
 				getWorkspace: () => ({ id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'Workspace', index: 0 }] }),
 				getWorkbenchState: () => 2,
 				getWorkspaceFolder: () => null,
@@ -1114,7 +1137,7 @@ suite('Task terminal reuse policies', () => {
 	function assemble(owner: DisposableStore, panel: 'shared' | 'dedicated' | 'new' | undefined, presentation: { reveal?: 'always' | 'silent' | 'never'; close?: boolean; } = {}) {
 		const services = workbenchInstantiationService(owner);
 		registerTestWorkbenchInteractionServices(owner, services);
-		const workspace = services.get(IWorkspaceContextService) as WorkspaceContextService;
+		const workspace = services.get(IWorkspaceContextService) as TestWorkspaceService;
 		const root = URI.file('/workspace');
 		workspace.updateWorkspace({ id: 'workspace', uri: root });
 		const document = { version: '2.0.0', tasks: ['First', 'Second'].map(label => ({ label, type: 'process', command: label.toLowerCase(), args: [], options: { cwd: `/workspace/${label.toLowerCase()}`, env: { TASK: label } }, presentation: { panel, ...presentation } })) };
@@ -1258,7 +1281,12 @@ suite('TaskService configuration capabilities', () => {
 			using terminals = new FakeTerminalService();
 			const root = URI.file('/workspace');
 			const contents: Record<string, string> = { '.vscode/tasks.json': JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Check', command: 'check', ...configuration }] }) };
-			const workspace: IWorkspaceContextService = { onDidChangeWorkspace: Event.None, getWorkspace: () => ({ id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'Workspace', index: 0 }] }), getWorkbenchState: () => 2, getWorkspaceFolder: () => null };
+			const workspace: IWorkspaceContextService = {
+				onDidChangeWorkspace: Event.None,
+				onDidChangeWorkspaceFolders: Event.None,
+				onDidChangeWorkbenchState: Event.None,
+				onDidChangeWorkspaceName: Event.None, getWorkspace: () => ({ id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'Workspace', index: 0 }] }), getWorkbenchState: () => 2, getWorkspaceFolder: () => null
+			};
 			const services = taskServices(resources, new FakeFileService(root, contents), workspace, terminals);
 			using service = services.createInstance(TaskService);
 			await service.refresh();
@@ -1279,7 +1307,12 @@ suite('TaskService configuration capabilities', () => {
 		using terminals = new FakeTerminalService();
 		const root = URI.file('/workspace');
 		const contents: Record<string, string> = { '.vscode/tasks.json': '{"version":"2.0.0","tasks":[{"label":"Check","command":"check"}]}' };
-		const workspace: IWorkspaceContextService = { onDidChangeWorkspace: Event.None, getWorkspace: () => ({ id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'Workspace', index: 0 }] }), getWorkbenchState: () => 2, getWorkspaceFolder: () => null };
+		const workspace: IWorkspaceContextService = {
+			onDidChangeWorkspace: Event.None,
+			onDidChangeWorkspaceFolders: Event.None,
+			onDidChangeWorkbenchState: Event.None,
+			onDidChangeWorkspaceName: Event.None, getWorkspace: () => ({ id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'Workspace', index: 0 }] }), getWorkbenchState: () => 2, getWorkspaceFolder: () => null
+		};
 		using service = taskServices(resources, new FakeFileService(root, contents), workspace, terminals).createInstance(TaskService);
 		const task = (await service.refresh())[0];
 		contents['.vscode/tasks.json'] = '{"version":"2.0.0","tasks":[{"label":"Check","command":"check","presentation":{"group":"parallel"}}]}';
@@ -1299,7 +1332,12 @@ suite('TaskService configuration capabilities', () => {
 		using resources = new DisposableStore();
 		using terminals = new FakeTerminalService();
 		const root = URI.file('/workspace');
-		const workspace: IWorkspaceContextService = { onDidChangeWorkspace: Event.None, getWorkspace: () => ({ id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'Workspace', index: 0 }] }), getWorkbenchState: () => 2, getWorkspaceFolder: () => null };
+		const workspace: IWorkspaceContextService = {
+			onDidChangeWorkspace: Event.None,
+			onDidChangeWorkspaceFolders: Event.None,
+			onDidChangeWorkbenchState: Event.None,
+			onDidChangeWorkspaceName: Event.None, getWorkspace: () => ({ id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'Workspace', index: 0 }] }), getWorkbenchState: () => 2, getWorkspaceFolder: () => null
+		};
 		using service = taskServices(resources, new FakeFileService(root, { '.vscode/tasks.json': '{"version":"2.0.0","tasks":[{"label":"Check","command":"check"}]}' }), workspace, terminals).createInstance(TaskService);
 		const delayed = new DeferredPromise<void>();
 		const discovering = new DeferredPromise<void>();
@@ -1327,7 +1365,12 @@ suite('TaskService configuration resolution', () => {
 			using resources = new DisposableStore();
 			using terminals = new FakeTerminalService();
 			const folder = { id: 'workspace', uri: root, name: 'Project', index: 0 };
-			const workspace: IWorkspaceContextService = { onDidChangeWorkspace: Event.None, getWorkspace: () => ({ id: 'workspace', folders: [folder] }), getWorkbenchState: () => 2, getWorkspaceFolder: () => folder };
+			const workspace: IWorkspaceContextService = {
+				onDidChangeWorkspace: Event.None,
+				onDidChangeWorkspaceFolders: Event.None,
+				onDidChangeWorkbenchState: Event.None,
+				onDidChangeWorkspaceName: Event.None, getWorkspace: () => ({ id: 'workspace', folders: [folder] }), getWorkbenchState: () => 2, getWorkspaceFolder: () => folder
+			};
 			const command = 'echo "${workspaceFolder:Project}" ${workspaceFolderBasename} "${env:HOME}"';
 			using service = taskServices(resources, new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Resolve', command }] }) }), workspace, terminals, os).createInstance(TaskService);
 			const task = (await service.refresh())[0]!;
@@ -1343,7 +1386,12 @@ suite('TaskService configuration resolution', () => {
 			using resources = new DisposableStore();
 			using terminals = new FakeTerminalService();
 			const folder = { id: 'workspace', uri: root, name: 'Project', index: 0 };
-			const workspace: IWorkspaceContextService = { onDidChangeWorkspace: Event.None, getWorkspace: () => ({ id: 'workspace', folders: [folder] }), getWorkbenchState: () => 2, getWorkspaceFolder: () => folder };
+			const workspace: IWorkspaceContextService = {
+				onDidChangeWorkspace: Event.None,
+				onDidChangeWorkspaceFolders: Event.None,
+				onDidChangeWorkbenchState: Event.None,
+				onDidChangeWorkspaceName: Event.None, getWorkspace: () => ({ id: 'workspace', folders: [folder] }), getWorkbenchState: () => 2, getWorkspaceFolder: () => folder
+			};
 			const creates: ITerminalCreateOptions[] = [];
 			const create = terminals.createTerminal.bind(terminals);
 			terminals.createTerminal = async options => { creates.push(options); return create(options); };
@@ -1365,7 +1413,12 @@ suite('TaskService configuration resolution', () => {
 		using resources = new DisposableStore();
 		using terminals = new FakeTerminalService();
 		const root = URI.file('/workspace');
-		const workspace: IWorkspaceContextService = { onDidChangeWorkspace: Event.None, getWorkspace: () => ({ id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'Project', index: 0 }] }), getWorkbenchState: () => 2, getWorkspaceFolder: () => null };
+		const workspace: IWorkspaceContextService = {
+			onDidChangeWorkspace: Event.None,
+			onDidChangeWorkspaceFolders: Event.None,
+			onDidChangeWorkbenchState: Event.None,
+			onDidChangeWorkspaceName: Event.None, getWorkspace: () => ({ id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'Project', index: 0 }] }), getWorkbenchState: () => 2, getWorkspaceFolder: () => null
+		};
 		using service = taskServices(resources, new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Resolve', command: '${workspaceFolder:Missing}/build' }] }) }), workspace, terminals).createInstance(TaskService);
 		await assert.rejects(service.run((await service.refresh())[0]!));
 		assert.deepEqual({ terminals: terminals.instances, runs: service.activeRuns, last: service.lastRun }, { terminals: [], runs: [], last: undefined });
@@ -1376,7 +1429,7 @@ test('TaskService admits only registered contributed variables and resolves them
 	using resources = new DisposableStore();
 	using terminals = new FakeTerminalService();
 	const root = URI.file('/workspace');
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: root });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: root });
 	const services = taskServices(resources, new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Contributed', type: 'process', command: '${taskTarget}', args: ['${taskTarget}'] }, { label: 'Unknown', type: 'process', command: '${unregisteredTarget}' }, { label: 'Current build', type: 'process', command: '/compiler', group: { kind: 'build', isDefault: true } }] }) }), workspace, terminals);
 	const resolver = services.get(IConfigurationResolverService);
 	let calls = 0;
@@ -1402,7 +1455,7 @@ for (const retirement of ['workspace', 'dispose'] as const) {
 		using resources = new DisposableStore();
 		using terminals = new FakeTerminalService();
 		const root = URI.file('/workspace');
-		using workspace = new WorkspaceContextService({ id: 'workspace', uri: root });
+		using workspace = new TestWorkspaceService({ id: 'workspace', uri: root });
 		const services = taskServices(resources, new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Choose build', command: 'build', group: 'build' }] }) }), workspace, terminals);
 		using tasks = services.createInstance(TaskService);
 		await tasks.refresh();
@@ -1425,7 +1478,7 @@ test('TaskService cancels dispatch when the workspace changes during configurati
 	using resources = new DisposableStore();
 	using terminals = new FakeTerminalService();
 	const root = URI.file('/workspace');
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: root });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: root });
 	const services = taskServices(resources, new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Resolve', command: '${workspaceFolder}/build' }] }) }), workspace, terminals);
 	const resolver = services.get(IConfigurationResolverService);
 	const entered = new DeferredPromise<void>();
@@ -1457,7 +1510,7 @@ test('TaskService cancels dispatch when the workspace changes during configurati
 test('TaskService resolves command variables once and reevaluates them for a new run', async () => {
 	using resources = new DisposableStore();
 	using terminals = new FakeTerminalService();
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') });
 	const input = { version: '2.0.0', tasks: [{ label: 'Resolve', command: 'build ${command:tasks.test.target} ${command:tasks.test.target}', detail: '${command:tasks.test.unused}' }] };
 	let calls = 0;
 	using unused = CommandsRegistry.register('tasks.test.unused', () => { throw new Error('Task metadata must not invoke commands'); });
@@ -1480,7 +1533,7 @@ test('TaskService resolves command variables once and reevaluates them for a new
 test('TaskService does not publish a run or create a terminal when command resolution is canceled', async () => {
 	using resources = new DisposableStore();
 	using terminals = new FakeTerminalService();
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') });
 	using command = CommandsRegistry.register('tasks.test.cancel', () => undefined);
 	using service = taskServices(resources, new FakeFileService(URI.file('/workspace'), { '.vscode/tasks.json': '{"version":"2.0.0","tasks":[{"label":"Cancel","command":"${command:tasks.test.cancel}"}]}' }), workspace, terminals).createInstance(TaskService);
 	let starts = 0;
@@ -1494,7 +1547,7 @@ test('TaskService rejects an empty resolved command before terminal creation in 
 	using localization = toDisposable(resetNlsResolver);
 	initializeTestLocalization('zh-CN');
 	using terminals = new FakeTerminalService();
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') });
 	using command = CommandsRegistry.register('tasks.test.empty', () => '');
 	using service = taskServices(resources, new FakeFileService(URI.file('/workspace'), { '.vscode/tasks.json': '{"version":"2.0.0","tasks":[{"label":"Empty","command":"${command:tasks.test.empty}"}]}' }), workspace, terminals).createInstance(TaskService);
 	await assert.rejects(service.run((await service.refresh())[0]!), { message: '解析后的任务命令为空，或包含无效字符。' });
@@ -1505,7 +1558,7 @@ for (const cause of ['workspace', 'dispose'] as const) {
 	test(`TaskService closes a terminal created after ${cause} invalidates dispatch`, async () => {
 		using resources = new DisposableStore();
 		using terminals = new FakeTerminalService();
-		using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
+		using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') });
 		const entered = new DeferredPromise<void>();
 		const finish = new DeferredPromise<void>();
 		const create = terminals.createTerminal.bind(terminals);
@@ -1530,7 +1583,7 @@ test('TaskService resolves configured command inputs at dispatch, reevaluates re
 	using resources = new DisposableStore();
 	using terminals = new FakeTerminalService();
 	const root = URI.file('/workspace');
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: root });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: root });
 	const input = {
 		version: '2.0.0',
 		inputs: [{ id: 'target', type: 'command', command: 'tasks.test.input', args: { target: 'release' } }],
@@ -1567,7 +1620,7 @@ test('TaskService resolves inherited and overridden environment values before te
 	using resources = new DisposableStore();
 	using terminals = new FakeTerminalService();
 	const root = URI.file('/workspace');
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: root });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: root });
 	const input = { version: '2.0.0', options: { env: { MODE: 'default', HOME_COPY: '${env:HOME}' } }, tasks: [{ label: 'Environment', command: 'build', options: { env: { MODE: 'task', ROOT: '${workspaceFolder}' } } }] };
 	const services = taskServices(resources, new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify(input) }), workspace, terminals);
 	const creations: ITerminalCreateOptions[] = [];
@@ -1586,7 +1639,7 @@ test('TaskService resolves environments from an Extension Host provider through 
 	using resources = new DisposableStore();
 	using terminals = new FakeTerminalService();
 	const root = URI.file('/workspace');
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: root });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: root });
 	const services = taskServices(resources, new FakeFileService(root, {}), workspace, terminals);
 	using service = services.createInstance(TaskService);
 	const environments: unknown[] = [];
@@ -1604,7 +1657,7 @@ test('TaskService resolves environments from an Extension Host provider through 
 test('shell task arguments are quoted after variable resolution and explicit shell options reach the process owner', async () => {
 	using resources = new DisposableStore();
 	using terminals = new FakeTerminalService();
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') });
 	const contents = {
 		'.vscode/tasks.json': JSON.stringify({
 			version: '2.0.0', tasks: [{
@@ -1631,7 +1684,7 @@ test('shell task arguments are quoted after variable resolution and explicit she
 test('provider shell execution selects the execution host profile and cancellation releases pending discovery', async () => {
 	using resources = new DisposableStore();
 	using terminals = new FakeTerminalService();
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') });
 	const entered = new DeferredPromise<void>();
 	const release = new DeferredPromise<readonly ITerminalProfile[]>();
 	terminals.getProfiles = () => { void entered.complete(undefined); return release.p; };
@@ -1661,7 +1714,7 @@ test('an unknown task execution OS reports the selected locale and creates no te
 	using resources = new DisposableStore();
 	using terminals = new FakeTerminalService();
 	terminals.getProfiles = async () => [];
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') });
 	const services = taskServices(resources, new FakeFileService(URI.file('/workspace'), { '.vscode/tasks.json': JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Shell', command: 'compiler', args: ['file name'] }] }) }), workspace, terminals);
 	const paths = Object.create(services.get(IPathService)) as IPathService;
 	paths.getOperatingSystem = async () => undefined;
@@ -1674,7 +1727,7 @@ test('an unknown task execution OS reports the selected locale and creates no te
 test('process tasks resolve literal arguments and cwd into a process spawn without terminal command input', async () => {
 	using resources = new DisposableStore();
 	using terminals = new FakeTerminalService();
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') });
 	const input = { version: '2.0.0', tasks: [{ label: 'Process', type: 'process', command: 'node', args: ['', 'two words', '${env:HOME}', '$(touch injected)', '$HOME'], options: { cwd: '${workspaceFolder}/child' }, problemMatcher: { base: '$tsc', fileLocation: ['relative', '${env:HOME}/sources'] } }] };
 	const services = taskServices(resources, new FakeFileService(URI.file('/workspace'), { '.vscode/tasks.json': JSON.stringify(input) }), workspace, terminals);
 	const creations: ITerminalCreateOptions[] = [];
@@ -1697,7 +1750,7 @@ test('process tasks resolve literal arguments and cwd into a process spawn witho
 test('background matcher readiness starts a dependent task and termination closes its background process', async () => {
 	using resources = new DisposableStore();
 	using terminals = new FakeTerminalService();
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') });
 	const input = {
 		version: '2.0.0', tasks: [
 			{ label: 'Watch', type: 'process', command: 'watch', isBackground: true, problemMatcher: { owner: 'compiler', pattern: { regexp: '^(.+):(\\d+):(\\d+): (error|warning): (.+)$', severity: 4, message: 5 }, background: { activeOnStart: true, beginsPattern: '^BUILD$', endsPattern: '^READY$' } } },
@@ -1728,7 +1781,7 @@ test('background matcher readiness starts a dependent task and termination close
 test('task graph validation rejects cycles before creating any terminal', async () => {
 	using resources = new DisposableStore();
 	using terminals = new FakeTerminalService();
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') });
 	const input = { version: '2.0.0', tasks: [{ label: 'A', command: 'a', dependsOn: 'B' }, { label: 'B', command: 'b', dependsOn: 'A' }] };
 	using service = taskServices(resources, new FakeFileService(URI.file('/workspace'), { '.vscode/tasks.json': JSON.stringify(input) }), workspace, terminals).createInstance(TaskService);
 	await assert.rejects(service.run((await service.refresh())[0]!), /circular dependency/);
@@ -1738,7 +1791,7 @@ test('task graph validation rejects cycles before creating any terminal', async 
 test('configured provider tasks resolve only at dispatch and preserve their definition and workspace options', async () => {
 	using resources = new DisposableStore();
 	using terminals = new FakeTerminalService();
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') });
 	const input = { version: '2.0.0', tasks: [{ label: 'Extension build', type: 'builder', target: 'app', options: { cwd: '${workspaceFolder}/src', env: { MODE: 'configured' } } }] };
 	using service = taskServices(resources, new FakeFileService(URI.file('/workspace'), { '.vscode/tasks.json': JSON.stringify(input) }), workspace, terminals).createInstance(TaskService);
 	const creations: ITerminalCreateOptions[] = [];
@@ -1761,7 +1814,7 @@ test('configured provider tasks resolve only at dispatch and preserve their defi
 test('dependency diagnostics prevent the parent task and retain errors in Problems', async () => {
 	using resources = new DisposableStore();
 	using terminals = new FakeTerminalService();
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') });
 	const input = { version: '2.0.0', tasks: [{ label: 'Compile', command: 'compile', problemMatcher: '$tsc' }, { label: 'Launch', command: 'launch', dependsOn: 'Compile' }] };
 	const services = taskServices(resources, new FakeFileService(URI.file('/workspace'), { '.vscode/tasks.json': JSON.stringify(input) }), workspace, terminals);
 	using service = services.createInstance(TaskService);
@@ -1780,7 +1833,7 @@ test('dependency diagnostics prevent the parent task and retain errors in Proble
 test('CustomExecution opens after task listeners, receives input and resize, and closes once on termination', async () => {
 	using resources = new DisposableStore();
 	using placeholderTerminals = new FakeTerminalService();
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') });
 	const parent = taskServices(resources, new FakeFileService(URI.file('/workspace'), {}), workspace, placeholderTerminals);
 	const services = parent.createChild(new ServiceCollection([ITerminalProcessService, {
 		operatingSystem: OperatingSystem.Linux,
@@ -1834,7 +1887,7 @@ test('CustomExecution opens after task listeners, receives input and resize, and
 test('Extension Host CustomExecution streams ordered events without a shell and closes when its provider retires', async () => {
 	using resources = new DisposableStore();
 	using placeholderTerminals = new FakeTerminalService();
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') });
 	const parent = taskServices(resources, new FakeFileService(URI.file('/workspace'), {}), workspace, placeholderTerminals);
 	const services = parent.createChild(new ServiceCollection([ITerminalProcessService, {
 		operatingSystem: OperatingSystem.Linux,
@@ -1882,7 +1935,7 @@ test('TaskService awaits the current extension matcher catalog and honors cancel
 	using resources = new DisposableStore();
 	using terminals = new FakeTerminalService();
 	const root = URI.file('/workspace');
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: root });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: root });
 	const services = taskServices(resources, new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Contributed', command: 'compiler', problemMatcher: '$task-ready' }] }) }), workspace, terminals).createChild(new ServiceCollection(), resources);
 	const manifestJson = JSON.stringify({ name: 'task-ready', publisher: 'acme', version: '1.0.0', contributes: { problemMatchers: [{ name: 'task-ready', owner: 'task-ready', pattern: { regexp: '^(.+):(\\d+) (.+)$', file: 1, line: 2, message: 3 } }] } });
 	const catalog = { generation: 2, diagnostics: [], extensions: [{ id: 'acme.task-ready', name: 'task-ready', publisher: 'acme', version: '1.0.0', displayName: 'Task ready', sourceKind: 'plugin' as const, manifestJson, manifestSha256: `sha256:${createHash('sha256').update(manifestJson).digest('hex')}`, packageSha256: 'sha256:' + 'a'.repeat(64) }] };
@@ -1907,7 +1960,7 @@ test('TaskService awaits the current extension matcher catalog and honors cancel
 test('first task discovery waits for dormant provider registration without canceling itself', async () => {
 	using resources = new DisposableStore();
 	const root = URI.file('/workspace');
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: root });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: root });
 	using terminals = new FakeTerminalService();
 	const services = taskServices(resources, new FakeFileService(root, {}), workspace, terminals);
 	using tasks = services.createInstance(TaskService);
@@ -1931,7 +1984,7 @@ test('first task discovery waits for dormant provider registration without cance
 
 test('configured task queries retain presentation and expose boolean TaskGroup defaults for globs', async () => {
 	using resources = new DisposableStore();
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') });
 	using terminals = new FakeTerminalService();
 	const document = {
 		version: '2.0.0', tasks: [
@@ -1961,7 +2014,7 @@ for (const placement of ['task', 'taskPlain', 'defaults', 'taskPlatform', 'defau
 		using resources = new DisposableStore();
 		const services = workbenchInstantiationService(resources);
 		registerTestWorkbenchInteractionServices(resources, services);
-		const workspace = services.get(IWorkspaceContextService) as WorkspaceContextService;
+		const workspace = services.get(IWorkspaceContextService) as TestWorkspaceService;
 		const root = URI.file('/workspace');
 		workspace.updateWorkspace({ id: 'workspace', uri: root });
 		const group = placement === 'task' ? { kind: 'build', isDefault: '**/*.ts' } : 'build';
@@ -2027,7 +2080,7 @@ suite('Extension task execution lifecycle', () => {
 				const services = workbenchInstantiationService(resources);
 				registerTestWorkbenchInteractionServices(resources, services);
 				const root = URI.file('/workspace');
-				const workspace = services.get(IWorkspaceContextService) as WorkspaceContextService;
+				const workspace = services.get(IWorkspaceContextService) as TestWorkspaceService;
 				workspace.updateWorkspace({ id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'Workspace', index: 0 }, { id: 'second', uri: URI.file('/workspace/second'), name: 'Second', index: 1 }] });
 				services.registerInstance(IFileService, resources.add(createTestFileService(new FakeFileService(root, {}))));
 				services.registerInstance(IPathService, testPathService(workspace));
@@ -2199,7 +2252,7 @@ suite('Task rerun variable policy through the execution owners', () => {
 				using resources = new DisposableStore();
 				const services = workbenchInstantiationService(resources);
 				registerTestWorkbenchInteractionServices(resources, services);
-				const workspace = services.get(IWorkspaceContextService) as WorkspaceContextService;
+				const workspace = services.get(IWorkspaceContextService) as TestWorkspaceService;
 				const root = URI.file('/rerun');
 				workspace.updateWorkspace({ id: 'rerun', uri: root });
 				const runOptions = { reevaluateOnRerun: reevaluate };
@@ -2305,7 +2358,7 @@ suite('Task instance limits through the execution owners', () => {
 				using resources = new DisposableStore();
 				const services = workbenchInstantiationService(resources);
 				registerTestWorkbenchInteractionServices(resources, services);
-				const workspace = services.get(IWorkspaceContextService) as WorkspaceContextService;
+				const workspace = services.get(IWorkspaceContextService) as TestWorkspaceService;
 				const root = URI.file('/instances');
 				workspace.updateWorkspace({ id: 'instances', uri: root });
 				const files = resources.add(createTestFileService(new FakeFileService(root, {
@@ -2444,7 +2497,7 @@ suite('Task instance policies through the execution owners', () => {
 		const parent = workbenchInstantiationService(owner);
 		registerTestWorkbenchInteractionServices(owner, parent);
 		const services = parent.createChild(new ServiceCollection(), owner);
-		const workspace = services.get(IWorkspaceContextService) as WorkspaceContextService;
+		const workspace = services.get(IWorkspaceContextService) as TestWorkspaceService;
 		const root = URI.file('/policy');
 		workspace.updateWorkspace({ id: 'policy', uri: root });
 		services.registerInstance(IFileService, owner.add(createTestFileService(new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Policy', type: 'process', command: 'compiler', runOptions }] }) }, fileChanges))));
@@ -2615,7 +2668,7 @@ suite('Agent Task runs through the shared execution owner', () => {
 
 	function assemble(resources: DisposableStore, tasks: Record<string, unknown>[]) {
 		const root = URI.file('/project');
-		const workspace = resources.add(new WorkspaceContextService({ id: 'workspace', uri: root }));
+		const workspace = resources.add(new TestWorkspaceService({ id: 'workspace', uri: root }));
 		const documents = { '.vscode/tasks.json': JSON.stringify({ version: '2.0.0', tasks }) };
 		const terminals = resources.add(new FakeTerminalService());
 		const services = taskServices(resources, new FakeFileService(root, documents), workspace, terminals);
@@ -2918,7 +2971,7 @@ test('multi-root shell tasks resolve profiles and configured environment in thei
 		{ id: 'one', name: 'one', uri: URI.file('/workspaces/first'), index: 0 },
 		{ id: 'two', name: 'two', uri: URI.file('/workspaces/second'), index: 1 },
 	];
-	using workspace = new WorkspaceContextService({ id: 'team', configuration: URI.file('/team.ash-workspace'), folders });
+	using workspace = new TestWorkspaceService({ id: 'team', configuration: URI.file('/team.ash-workspace'), folders });
 	const document = { version: '2.0.0', tasks: [{ label: 'Second shell', type: 'shell', command: 'build', presentation: { reveal: 'never' } }] };
 	const services = taskServices(resources, new FakeFileService(URI.file('/workspaces'), { 'second/.vscode/tasks.json': JSON.stringify(document) }), workspace, terminals);
 	const routes: (string | undefined)[] = [];

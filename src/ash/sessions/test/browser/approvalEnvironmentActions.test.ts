@@ -1,7 +1,7 @@
 import { quickInputServiceTestControls } from '../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { QuickInputType, type IQuickPickDidAcceptEvent } from '../../../platform/quickinput/common/quickInput.js';
 import { Event as QuickPickTestEvent } from '../../../base/common/event.js';
-import { WorkspaceContextService } from '../../../workbench/services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../workbench/services/configuration/test/common/testServices.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { createSshRemoteWorkspaceUri } from '../../../platform/remote/common/remote.js';
 import type { SessionWorkspaceSelection } from '../../services/sessions/common/session.js';
@@ -194,7 +194,7 @@ test('review preparation refuses explicit, window and durable remote targets bef
 			sessions: [{ sessionId: 'remote', workspace: { authorityId: 'build-host', root: '/same-as-local' }, chats: [{ threadId: 'remote-thread' }] }],
 			untitledSessions: [{ untitledSessionId: 'chosen', workspace: scope === 'window' ? { type: 'current' } : { type: 'ssh', host: 'build-host', root: '/same-as-local' } }],
 		} as unknown as ISessionsManagementService);
-		using context = new WorkspaceContextService({ id: 'remote-workspace', folders: [{ id: 'folder', index: 0, name: 'Project', uri: createSshRemoteWorkspaceUri('build-host', '/same-as-local') }] });
+		using context = new TestWorkspaceService({ id: 'remote-workspace', folders: [{ id: 'folder', index: 0, name: 'Project', uri: createSshRemoteWorkspaceUri('build-host', '/same-as-local') }] });
 		services.registerInstance(IWorkspaceContextService, context);
 		using commands = new CommandService(services);
 		await assert.rejects(commands.executeCommand('chat.guardian.setup', { ...(scope === 'thread' ? { sessionId: 'remote', threadId: 'remote-thread' } : { untitledSessionId: 'chosen' }), inputState: {} } as IChatWidgetModel), /remote project is not supported yet/u);

@@ -2,7 +2,7 @@ import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { URI } from "../../../../base/common/uri.js";
 import { type IWorkingCopyBackupService, type WorkingCopyBackup } from "../common/workingCopyBackupService.js";
 import { generateUuid } from '../../../../base/common/uuid.js';
-import { BackupError } from '../../../../platform/backup/common/backup.js';
+import { type IBackupWorkspace, BackupError } from '../../../../platform/backup/common/backup.js';
 
 interface StoredBackup {
 	readonly key: string;
@@ -27,6 +27,7 @@ export class IndexedDbWorkingCopyBackupService extends Disposable implements IWo
 	private readonly fallback = new Map<string, StoredBackup>();
 	private readonly observed = new Map<string, StoredBackup>();
 	private readonly snapshots = new WeakMap<WorkingCopyBackup, StoredBackup>();
+	private movedRecords: { readonly workspaceId: string; readonly records: readonly StoredBackup[]; } | undefined;
 
 	constructor(private workspaceId: string, factory: IDBFactory | undefined = globalThis.indexedDB) {
 		super();
@@ -86,10 +87,61 @@ export class IndexedDbWorkingCopyBackupService extends Disposable implements IWo
 		if (expected) await this.deleteRecordIfUnchanged(expected);
 	}
 
+
+	/** Move only observed source versions; conflicting target drafts abort the whole transaction. */
+	async moveBackups(target: IBackupWorkspace): Promise<void> {
+		const sourceId = this.workspaceId;
+		if (target.id === sourceId) return;
+		const prepare = (source: readonly StoredBackup[], destination: readonly StoredBackup[]): StoredBackup[] => {
+			const current = new Map(source.map(record => [record.key, record]));
+			for (const [key, expected] of this.observed) {
+				if (expected.workspaceId === sourceId && !sameVersion(current.get(key), expected)) throw new BackupError('conflict');
+			}
+			const existing = new Set(destination.map(record => record.resource));
+			return source.map(record => {
+				if (!sameVersion(record, this.observed.get(record.key)) || existing.has(record.resource)) throw new BackupError('conflict');
+				return { ...record, key: backupKey(target.id, URI.parse(record.resource)), workspaceId: target.id, revision: generateUuid() };
+			});
+		};
+		const database = await this.database;
+		let movedRecords: readonly StoredBackup[] = [];
+		if (!database) {
+			const records = [...this.fallback.values()];
+			const source = records.filter(record => record.workspaceId === sourceId);
+			const destination = records.filter(record => record.workspaceId === target.id);
+			const moved = movedRecords = prepare(source, destination);
+			for (const record of moved) this.fallback.set(record.key, record);
+			for (const record of source) this.fallback.delete(record.key);
+		} else {
+			const transaction = database.transaction(STORE_NAME, 'readwrite');
+			const store = transaction.objectStore(STORE_NAME);
+			const source = store.index('workspaceId').getAll(sourceId) as IDBRequest<StoredBackup[]>;
+			const destination = store.index('workspaceId').getAll(target.id) as IDBRequest<StoredBackup[]>;
+			let completed = 0;
+			let failure: unknown;
+			const loaded = () => {
+				if (++completed !== 2) return;
+				try {
+					const moved = movedRecords = prepare(source.result, destination.result);
+					for (const record of moved) store.put(record);
+					for (const record of source.result) store.delete(record.key);
+				} catch (error) { failure = error; transaction.abort(); }
+			};
+			source.onsuccess = loaded;
+			destination.onsuccess = loaded;
+			try { await transactionDone(transaction); }
+			catch (error) { throw failure ?? error; }
+		}
+		for (const [key, record] of this.observed) if (record.workspaceId === sourceId) this.observed.delete(key);
+		this.movedRecords = { workspaceId: target.id, records: movedRecords };
+	}
+
 	switchWorkspace(workspaceId: string): void {
 		if (!workspaceId.trim()) throw new TypeError("Working-copy backup service requires a workspace id");
 		this.workspaceId = workspaceId;
 		this.observed.clear();
+		if (this.movedRecords?.workspaceId === workspaceId) for (const record of this.movedRecords.records) this.observed.set(record.key, record);
+		this.movedRecords = undefined;
 	}
 
 	/** Migration may remove only the source version acknowledged by the new storage owner. */

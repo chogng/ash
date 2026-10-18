@@ -32,7 +32,11 @@ function services(trace: ITraceSettingsService): InstantiationService {
 	const result = new InstantiationService();
 	result.registerInstance(ITraceSettingsService, trace);
 	result.registerInstance(IAppServerRemoteAgentService, { connectionState: 'connected', connection: { kind: 'local', generation: 1 }, onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None, reconnect: async () => ({ kind: 'alreadyConnected' }), rollbackRuntime: async () => ({ kind: 'cancelled' }) });
-	result.registerInstance(IFileDialogService, { showOpenDialog: async () => [URI.file('/recordings')], showSaveDialog: async () => undefined, pickFileToSave: async () => undefined, showSaveConfirm: async () => 2 });
+	result.registerInstance(IFileDialogService, {
+		pickFolderAndOpen: async () => { throw new Error('Unexpected folder open'); },
+		pickWorkspaceAndOpen: async () => { throw new Error('Unexpected workspace open'); },
+		showOpenDialog: async () => [URI.file('/recordings')], showSaveDialog: async () => undefined, pickFileToSave: async () => undefined, showSaveConfirm: async () => 2
+	});
 	return result;
 }
 

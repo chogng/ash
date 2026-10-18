@@ -27,7 +27,7 @@ import { AgentHostTerminalService } from '../../browser/agentHostTerminalService
 import { BasePty } from '../../common/basePty.js';
 import { TerminalProcessExtHostProxy } from '../../browser/terminalProcessExtHostProxy.js';
 import { ITerminalService, type ITerminalInstance, type ITerminalCommandStatusEvent } from "../../../../services/terminal/browser/terminal.js";
-import { WorkspaceContextService } from "../../../../services/workspaces/browser/workspaceContextService.js";
+import { TestWorkspaceService } from "../../../../services/configuration/test/common/testServices.js";
 
 const DEFAULT_PROFILE = {
 	profileId: "command-prompt",
@@ -37,7 +37,7 @@ const DEFAULT_PROFILE = {
 
 test('the interrupt command reaches the Rust process port and preserves the terminal', async () => {
 	const processes = new TestTerminalProcessService([]);
-	using workspace = new WorkspaceContextService({ id: 'signals', uri: URI.file('/workspace') });
+	using workspace = new TestWorkspaceService({ id: 'signals', uri: URI.file('/workspace') });
 	using services = terminalServices(processes, workspace);
 	const terminals = services.get(ITerminalService);
 	const instance = await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
@@ -54,7 +54,7 @@ test('the interrupt command reaches the Rust process port and preserves the term
 
 test("TerminalService keeps empty windows off the process API and enables a folder after transition", async () => {
 	const processService = new TestTerminalProcessService([]);
-	using workspace = new WorkspaceContextService({ id: "empty-window" });
+	using workspace = new TestWorkspaceService({ id: "empty-window" });
 	using services = terminalServices(processService, workspace);
 	const service = services.get(ITerminalService);
 
@@ -73,7 +73,7 @@ test("TerminalService keeps empty windows off the process API and enables a fold
 test('a single Session folder keeps its process route through creation and closing after selection changes', async () => {
 	const processService = new TestTerminalProcessService([]);
 	const scope = 'session:thread%3Aone:%2Fsession-workspace';
-	using workspace = new WorkspaceContextService({ id: 'session', folders: [{ id: scope, uri: URI.file('/session-workspace'), name: 'session', index: 0 }] });
+	using workspace = new TestWorkspaceService({ id: 'session', folders: [{ id: scope, uri: URI.file('/session-workspace'), name: 'session', index: 0 }] });
 	using services = terminalServices(processService, workspace);
 	const service = services.get(ITerminalService);
 	const originalList = processService.listProfiles.bind(processService);
@@ -535,8 +535,8 @@ class TestTerminalProcessService implements ITerminalProcessService {
 	}
 }
 
-function folderWorkspaceContext(): WorkspaceContextService {
-	return new WorkspaceContextService({ id: "workspace", uri: URI.file("/workspace") });
+function folderWorkspaceContext(): TestWorkspaceService {
+	return new TestWorkspaceService({ id: "workspace", uri: URI.file("/workspace") });
 }
 
 function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T) => void; readonly reject: (error: Error) => void; } {
@@ -1321,7 +1321,7 @@ suite('TerminalService lifecycle', () => {
 		const creation = deferred<void>();
 		const processService = new TestTerminalProcessService([]);
 		processService.creationGates.push(creation.promise);
-		using workspace = new WorkspaceContextService({
+		using workspace = new TestWorkspaceService({
 			id: 'multi-root',
 			folders: [
 				{ id: 'first', uri: URI.file('/first'), name: 'first', index: 0 },
@@ -1652,7 +1652,7 @@ test('TerminalService evaluates the exit display callback before exit delivery a
 
 test('TerminalService retains the spawn environment snapshot when relaunching a terminal', async () => {
 	const processes = new TestTerminalProcessService([]);
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') });
 	using services = terminalServices(processes, workspace);
 	const service = services.get(ITerminalService);
 	const env = { MODE: 'original', REMOVE: null };
@@ -1670,7 +1670,7 @@ suite('Terminal Send Sequence', () => {
 
 	function setup(owner: DisposableStore) {
 		const processes = new TestTerminalProcessService([]);
-		const workspace = owner.add(new WorkspaceContextService({ id: 'sequence', uri: URI.file('/workspace') }));
+		const workspace = owner.add(new TestWorkspaceService({ id: 'sequence', uri: URI.file('/workspace') }));
 		const services = owner.add(terminalServices(processes, workspace));
 		const terminals = services.get(ITerminalService);
 		const commands = owner.add(new CommandService(services));

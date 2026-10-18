@@ -17,7 +17,7 @@ import { ILabelService, LabelService } from '../../../../../../platform/label/co
 import { IWorkspaceContextService, type IWorkspace } from '../../../../../../platform/workspace/common/workspace.js';
 import { BrowserWorkingCopyService } from '../../../../../services/workingCopy/browser/browserWorkingCopyService.js';
 import { IWorkingCopyService, type IWorkingCopy } from '../../../../../services/workingCopy/common/workingCopyService.js';
-import { WorkspaceContextService } from '../../../../../services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../../../services/configuration/test/common/testServices.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { ContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
@@ -35,7 +35,7 @@ suiteTeardown(() => uriIdentityServices.dispose());
 interface TestContext {
 	readonly dom: JSDOM;
 	readonly services: InstantiationService;
-	readonly workspace: WorkspaceContextService;
+	readonly workspace: TestWorkspaceService;
 	readonly workingCopies: BrowserWorkingCopyService;
 	readonly labels: LabelService;
 	readonly editors: TestEditorService;
@@ -47,7 +47,7 @@ function createContext(resources: DisposableStore): TestContext {
 	const dom = new JSDOM('<!doctype html><title>Previous title</title>');
 	resources.add(toDisposable(() => dom.window.close()));
 	const services = resources.add(new InstantiationService());
-	const workspace = resources.add(new WorkspaceContextService({ id: 'test', folders: [] }));
+	const workspace = resources.add(new TestWorkspaceService({ id: 'test', folders: [] }));
 	const workingCopies = resources.add(uriIdentityServices.createInstance(BrowserWorkingCopyService));
 	const labels = resources.add(createTestLabelService(workspace));
 	const editors = resources.add(new TestEditorService());

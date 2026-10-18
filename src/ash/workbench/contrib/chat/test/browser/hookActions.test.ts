@@ -13,7 +13,7 @@ import { ContextKeyService } from '../../../../../platform/contextkey/browser/co
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
-import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
 import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { IAppServerRemoteAgentService } from '../../../../services/remote/common/appServerRemoteAgentService.js';
@@ -37,7 +37,7 @@ for (const change of ['workspace', 'dismiss'] as const) test(`Configure Hooks ig
 	const services = resources.add(new InstantiationService());
 	const context = resources.add(new ContextKeyService());
 	const quick = resources.add(new TestQuickInputService({ container: document.body, contextKeyService: context }));
-	const workspace = resources.add(new WorkspaceContextService({ id: 'original', folders: [{ id: 'folder', name: 'fixture', index: 0, uri: URI.file('/fixture') }] }));
+	const workspace = resources.add(new TestWorkspaceService({ id: 'original', folders: [{ id: 'folder', name: 'fixture', index: 0, uri: URI.file('/fixture') }] }));
 	const pending = new DeferredPromise<readonly HookSource[]>();
 	const started = new DeferredPromise<void>();
 	const errors: unknown[] = [];
@@ -69,7 +69,7 @@ for (const change of ['workspace', 'dismiss'] as const) test(`Configure Hooks ig
 test('Opening a Hook configuration cannot create or focus the old file after a workspace switch during IO', async () => {
 	using resources = new DisposableStore();
 	const services = resources.add(new InstantiationService());
-	const workspace = resources.add(new WorkspaceContextService({ id: 'fixture', folders: [{ id: 'folder', name: 'fixture', index: 0, uri: URI.file('/fixture') }] }));
+	const workspace = resources.add(new TestWorkspaceService({ id: 'fixture', folders: [{ id: 'folder', name: 'fixture', index: 0, uri: URI.file('/fixture') }] }));
 	const pending = new DeferredPromise<void>();
 	const calls: string[] = [];
 	services.registerInstance(IWorkspaceContextService, workspace);
@@ -88,7 +88,7 @@ test('Opening a generic remote Hook configuration preserves its owning authority
 	using resources = new DisposableStore();
 	const services = resources.add(new InstantiationService());
 	const root = URI.parse('ash-remote://fixture-cloud/fixture');
-	const workspace = resources.add(new WorkspaceContextService({ id: 'fixture', folders: [{ id: 'folder', name: 'fixture', index: 0, uri: root }] }));
+	const workspace = resources.add(new TestWorkspaceService({ id: 'fixture', folders: [{ id: 'folder', name: 'fixture', index: 0, uri: root }] }));
 	const calls: string[] = [];
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IAppServerRemoteAgentService, { connection: { kind: 'remote', generation: 1, authority: 'fixture-cloud' } } as IAppServerRemoteAgentService);

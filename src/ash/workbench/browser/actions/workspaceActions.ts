@@ -7,13 +7,12 @@ import { IsNativeContext } from '../../../platform/contextkey/common/contextkeys
 import type { ServicesAccessor } from '../../../platform/instantiation/common/instantiation.js';
 import { BrowserLocalFolderSupportContext, OpenFolderWorkspaceSupportContext, WorkbenchStateContext } from '../../common/contextkeys.js';
 import { IHostService } from '../../services/host/browser/host.js';
-import { getWorkspaceRemoteAuthority, IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
-import { IWorkspaceOpenService } from '../../services/workspaces/browser/workspaceOpenService.js';
-import { pickWorkspaceFolder } from '../../services/workspaces/browser/workspaceOpenService.js';
+import { getWorkspaceRemoteAuthority, IWorkspaceContextService, type IWorkspaceFolder } from '../../../platform/workspace/common/workspace.js';
+import { ADD_ROOT_FOLDER_COMMAND_ID, PICK_WORKSPACE_FOLDER_COMMAND_ID, SET_ROOT_FOLDER_COMMAND_ID } from './workspaceCommands.js';
+import { ICommandService } from '../../../platform/commands/common/commands.js';
 import { IWorkspaceEditingService } from '../../services/workspaces/common/workspaceEditing.js';
 import { EnterMultiRootWorkspaceSupportContext, WorkspaceFolderCountContext } from '../../common/contextkeys.js';
 import { IFileDialogService } from '../../../platform/dialogs/common/dialogs.js';
-import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
 import { localize } from '../../../nls.js';
 import { status } from '../../../base/browser/ui/aria/aria.js';
 import { IEditorService } from '../../services/editor/common/editorService.js';
@@ -29,11 +28,7 @@ export class OpenWorkspaceAction extends Action2 {
 		});
 	}
 	override async run(accessor: ServicesAccessor): Promise<void> {
-		const files = await accessor.get(IFileDialogService).showOpenDialog({
-			canSelectFiles: true, canSelectFolders: false,
-			filters: [{ name: localize('workspace.fileType', 'Ash Workspace'), extensions: ['ash-workspace', 'code-workspace'] }]
-		});
-		if (files?.[0]) await accessor.get(IWorkspaceOpenService).openWorkspace(files[0].fsPath);
+		await accessor.get(IFileDialogService).pickWorkspaceAndOpen();
 	}
 }
 
@@ -59,10 +54,7 @@ export class AddRootFolderAction extends Action2 {
 		});
 	}
 	override async run(accessor: ServicesAccessor): Promise<void> {
-		const folders = await accessor.get(IFileDialogService).showOpenDialog({ canSelectFiles: false, canSelectFolders: true, canSelectMany: true, title: localize('workspace.addFolder', 'Add Folder to Workspace...') });
-		if (!folders?.length) return;
-		await accessor.get(IWorkspaceEditingService).addFolders(folders.map(uri => ({ uri })));
-		status(localize('workspace.foldersUpdated', 'Workspace folders updated.'));
+		await accessor.get(ICommandService).executeCommand(ADD_ROOT_FOLDER_COMMAND_ID);
 	}
 }
 
@@ -75,7 +67,7 @@ export class RemoveRootFolderAction extends Action2 {
 		});
 	}
 	override async run(accessor: ServicesAccessor): Promise<void> {
-		const folder = await pickWorkspaceFolder(accessor.get(IQuickInputService), accessor.get(IWorkspaceContextService).getWorkspace().folders, localize('workspace.removeFolder', 'Remove Folder from Workspace...'));
+		const folder = await accessor.get(ICommandService).executeCommand<IWorkspaceFolder | undefined>(PICK_WORKSPACE_FOLDER_COMMAND_ID, [{ placeHolder: localize('workspace.removeFolder', 'Remove Folder from Workspace...') }]);
 		if (!folder) return;
 		await accessor.get(IWorkspaceEditingService).removeFolders([folder.uri]);
 		status(localize('workspace.foldersUpdated', 'Workspace folders updated.'));
@@ -158,7 +150,7 @@ export class OpenFolderAction extends Action2 {
 	}
 
 	override run(accessor: ServicesAccessor): Promise<void> {
-		return accessor.get(IWorkspaceOpenService).openFolder();
+		return accessor.get(IFileDialogService).pickFolderAndOpen();
 	}
 }
 
@@ -175,6 +167,6 @@ export class OpenFolderViaWorkspaceAction extends Action2 {
 	}
 
 	override run(accessor: ServicesAccessor): Promise<void> {
-		return accessor.get(IWorkspaceOpenService).openFolder();
+		return accessor.get(ICommandService).executeCommand<void>(SET_ROOT_FOLDER_COMMAND_ID);
 	}
 }

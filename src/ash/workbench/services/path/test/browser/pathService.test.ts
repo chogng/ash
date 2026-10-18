@@ -1,4 +1,4 @@
-import { WorkspaceContextService } from '../../../workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../configuration/test/common/testServices.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
@@ -89,7 +89,7 @@ function createServices(getOS: () => OperatingSystem | undefined, getHome: () =>
 		localUserHome,
 		appServer: { ...host.appServer, get operatingSystem() { return getOS(); }, get userHome() { return getHome(); } },
 	}]));
-	services.registerSingleton(IWorkspaceContextService, () => new WorkspaceContextService({ id: 'path-test', folders: [] }));
+	services.registerSingleton(IWorkspaceContextService, () => new TestWorkspaceService({ id: 'path-test', folders: [] }));
 	return services;
 }
 

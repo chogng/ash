@@ -21,7 +21,7 @@ import { InstantiationService } from "../../../../../platform/instantiation/comm
 import { IConfigurationService } from "../../../../../platform/configuration/common/configuration.js";
 import { IContentSearchService as ContentSearchServiceId } from "../../../../../platform/search/common/search.js";
 import { IWorkspaceContextService } from "../../../../../platform/workspace/common/workspace.js";
-import { WorkspaceContextService } from "../../../../services/workspaces/browser/workspaceContextService.js";
+import { TestWorkspaceService } from "../../../../services/configuration/test/common/testServices.js";
 import { IEditorService } from "../../../../services/editor/common/editorService.js";
 import { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import { BrowserContextViewService } from "../../../../../platform/contextview/browser/contextViewService.js";
@@ -737,7 +737,7 @@ function installDomGlobals(browser: JSDOM): readonly string[] {
 	return Object.keys(globals);
 }
 
-function createServices(store: DisposableStore, browser: JSDOM, search: ViewSearchProvider, configured?: WorkbenchConfigurationService, workspace?: WorkspaceContextService, replace?: IReplaceService): InstantiationService {
+function createServices(store: DisposableStore, browser: JSDOM, search: ViewSearchProvider, configured?: WorkbenchConfigurationService, workspace?: TestWorkspaceService, replace?: IReplaceService): InstantiationService {
 	const configuration = configured ?? store.add(new WorkbenchConfigurationService());
 	const services = store.add(new InstantiationService());
 	services.registerInstance(ICommandService, store.add(new CommandService(services)));
@@ -752,7 +752,7 @@ function createServices(store: DisposableStore, browser: JSDOM, search: ViewSear
 	services.registerInstance(IContextKeyService, store.add(new ContextKeyService()));
 	services.registerInstance(IContextMenuService, menus);
 	services.registerInstance(IHoverService, store.add(new HoverService(configuration, contextView, menus)));
-	services.registerInstance(IWorkspaceContextService, workspace ?? store.add(new WorkspaceContextService({ id: "workspace", uri: URI.file("/workspace") })));
+	services.registerInstance(IWorkspaceContextService, workspace ?? store.add(new TestWorkspaceService({ id: "workspace", uri: URI.file("/workspace") })));
 	services.registerInstance(ILabelService, store.add(createTestLabelService(services.get(IWorkspaceContextService), OperatingSystem.Linux)));
 	services.registerInstance(IEditorService, { ...emptyEditorServiceState, onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [], openEditor: async () => { }, focusActiveEditor() { } });
 	services.registerInstance(IStorageService, store.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: "workspace", flushInterval: 0 })));
@@ -939,7 +939,7 @@ test('Copy All formats the retained model in root, folder, filename and range or
 	const written: string[] = [];
 	try {
 		using store = new DisposableStore();
-		const workspace = store.add(new WorkspaceContextService({
+		const workspace = store.add(new TestWorkspaceService({
 			id: 'multi', folders: [
 				{ id: 'workspace', name: 'workspace', index: 0, uri: URI.file('/workspace') },
 				{ id: 'other', name: 'other', index: 1, uri: URI.parse('ssh://host/other') },
@@ -1478,7 +1478,7 @@ test('Expand All runs for empty, partially collapsed and multi-root results with
 	let searched = 0;
 	try {
 		using store = new DisposableStore();
-		const workspace = store.add(new WorkspaceContextService({
+		const workspace = store.add(new TestWorkspaceService({
 			id: 'multiple', folders: [
 				{ id: 'workspace', name: 'Workspace', index: 0, uri: URI.file('/workspace') },
 				{ id: 'other', name: 'Other', index: 1, uri: URI.file('/other') },

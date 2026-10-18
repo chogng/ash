@@ -1,21 +1,45 @@
+import { parseJsonc } from '../../../../base/common/jsonc.js';
+import { basename } from '../../../../base/common/resources.js';
+import { IFileService, FileKind } from '../../../../platform/files/common/files.js';
+import { parseStoredWorkspaceFolders, toWorkspaceFolders } from '../../../../platform/workspaces/common/workspaces.js';
+import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { IPathService } from '../../../../platform/path/common/pathService.js';
+import { OperatingSystem } from '../../../../base/common/platform.js';
+import { localize } from '../../../../nls.js';
+import type { HTMLFileSystemProvider } from '../../../../platform/files/browser/htmlFileSystemProvider.js';
+import { workspaceFromIdentifier, type IWorkspace } from '../../../../platform/workspace/common/workspace.js';
+import type { IWebWorkspaceClient } from '../../workspaces/browser/appServerWebWorkspaceClient.js';
 import { addDisposableListener, hasAppFocus } from '../../../../base/browser/dom.js';
 import { getWindows, onDidRegisterWindow, onDidUnregisterWindow } from '../../../../base/browser/window.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
-import type { IOpenEmptyWindowOptions } from '../../../../platform/window/common/window.js';
+import type { IOpenEmptyWindowOptions, IOpenWindowOptions, IWindowOpenable } from '../../../../platform/window/common/window.js';
 import { ILifecycleService, ShutdownVetoError } from '../../lifecycle/common/lifecycle.js';
 import { IHostService } from './host.js';
 import { VSBuffer } from '../../../../base/common/buffer.js';
 
 export const EMPTY_WORKSPACE_ID_KEY = 'ash.workbench.emptyWorkspaceId';
 
+/** The embedding host owns directory handles or the authenticated server session. */
+export interface BrowserHostServiceOptions {
+	readonly workspaceProvider?:
+	| { readonly kind: 'local'; readonly provider: HTMLFileSystemProvider; readonly updateWorkspace: (workspace: IWorkspace) => Promise<void>; }
+	| { readonly kind: 'server'; readonly client: IWebWorkspaceClient; readonly prepareSwitch: () => Promise<boolean>; };
+}
+
 export class BrowserHostService extends Disposable implements IHostService {
 	private readonly focusChanged = this._register(new Emitter<boolean>());
 	public readonly onDidChangeFocus = this.focusChanged.event;
 	public get hasFocus(): boolean { return hasAppFocus(); }
 	private readonly ownerWindow = window;
-	constructor(@ILifecycleService private readonly lifecycle: ILifecycleService) {
+	constructor(
+		private readonly options: BrowserHostServiceOptions,
+		@ILifecycleService private readonly lifecycle: ILifecycleService,
+		@IDialogService private readonly dialogs: IDialogService,
+		@IPathService private readonly paths: IPathService,
+		@IFileService private readonly files: IFileService,
+	) {
 		super();
 		let lastFocus = this.hasFocus;
 		// Blur and focus can arrive in one window handoff; publish the aggregate after that handoff.
@@ -95,10 +119,20 @@ export class BrowserHostService extends Disposable implements IHostService {
 		}
 	}
 
-	public async openWindow(options: IOpenEmptyWindowOptions = {}): Promise<void> {
+	public openWindow(options?: IOpenEmptyWindowOptions): Promise<void>;
+	public openWindow(toOpen: readonly IWindowOpenable[], options?: IOpenWindowOptions): Promise<void>;
+	public async openWindow(toOpenOrOptions: readonly IWindowOpenable[] | IOpenEmptyWindowOptions = {}, openOptions: IOpenWindowOptions = {}): Promise<void> {
+		if (Array.isArray(toOpenOrOptions)) {
+			if (!this.options.workspaceProvider) throw new Error(localize('workspace.openUnavailable', 'Opening workspaces is unavailable in this host.'));
+			if (toOpenOrOptions.length !== 1) throw new Error(localize('workspace.oneWindowTarget', 'Open one workspace per window request.'));
+			await this.openWorkspace(toOpenOrOptions[0]!, openOptions);
+			return;
+		}
+		const options = toOpenOrOptions as IOpenEmptyWindowOptions;
 		if (options.remoteAuthority !== undefined) throw new Error('This browser host cannot open a Remote window');
 		const url = new URL(this.ownerWindow.location.href);
 		url.searchParams.delete('folder');
+		url.searchParams.delete('workspace');
 		if (!options.forceReuseWindow) {
 			this.ownerWindow.open(url.href, '_blank');
 			return;
@@ -112,4 +146,40 @@ export class BrowserHostService extends Disposable implements IHostService {
 		this.ownerWindow.sessionStorage.setItem(EMPTY_WORKSPACE_ID_KEY, `empty-window-${crypto.randomUUID()}`);
 		this.ownerWindow.location.assign(url.href);
 	}
+	private async openWorkspace(target: IWindowOpenable, options: IOpenWindowOptions): Promise<void> {
+		const provider = this.options.workspaceProvider!;
+		if (options.forceNewWindow) throw new Error(localize({ bundle: 'ash', key: 'workbench.newWindowUnavailable' }, 'Opening a new window is unavailable in this host'));
+		if ('workspaceUri' in target) {
+			if (provider.kind !== 'local') throw new Error(localize('workspace.editUnavailable', 'Workspace editing is unavailable in this host.'));
+			const resource = target.workspaceUri;
+			const document = parseJsonc((await this.files.readFile(resource)).content, resource.toString());
+			const folders = toWorkspaceFolders(parseStoredWorkspaceFolders(document, resource.toString()), resource);
+			for (const folder of folders) {
+				if (folder.uri.scheme !== 'file' || !folder.uri.path.startsWith('/@browser/')) throw new TypeError(localize('workspace.browserFoldersOnly', 'Browser workspaces require folders selected through the browser.'));
+				await provider.provider.openDirectory(folder.uri);
+				if ((await this.files.stat(folder.uri)).kind !== FileKind.Directory) throw new TypeError(localize('workspace.folderNotDirectory', 'Workspace folder must be a directory.'));
+			}
+			await provider.updateWorkspace({ id: resource.toString(), configuration: resource, name: basename(resource).replace(/\.(ash|code)-workspace$/i, ''), folders });
+			return;
+		}
+		if (provider.kind === 'local') {
+			const resource = await provider.provider.openDirectory(target.folderUri);
+			await provider.updateWorkspace(workspaceFromIdentifier({ id: resource.toString(), uri: resource }));
+			return;
+		}
+		const resource = target.folderUri;
+		const path = resource.authority ? `//${resource.authority}${resource.path}` : resource.path;
+		const hostPath = await this.paths.getOperatingSystem(resource) === OperatingSystem.Windows ? path.replace(/^\/(?=[a-z]:\/)/i, '').replaceAll('/', '\\') : path;
+		const selected = await provider.client.list(hostPath);
+		const approved = await this.dialogs.confirm({
+			title: localize({ bundle: 'ash', key: 'workbench.serverFolderAuthorizeTitle' }, 'Authorize Server Folder'),
+			message: localize({ bundle: 'ash', key: 'workbench.serverFolderAuthorizeMessage' }, 'Allow this browser tab to open and change files in {0}?', selected.path),
+			detail: localize({ bundle: 'ash', key: 'workbench.serverFolderAuthorizeDetail' }, 'A folder outside the current permission scope also needs approval on the server computer.'),
+			primaryButton: localize({ bundle: 'ash', key: 'workbench.serverFolderAuthorizeButton' }, 'Open Folder'),
+		});
+		if (!approved.confirmed) return;
+		const activate = await provider.client.authorize(selected.path);
+		if (await provider.prepareSwitch()) activate();
+	}
+
 }

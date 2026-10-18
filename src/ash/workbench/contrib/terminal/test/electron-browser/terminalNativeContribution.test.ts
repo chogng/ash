@@ -25,7 +25,7 @@ import { TestConfigurationService } from '../../../../services/configuration/tes
 import { ShutdownVetoError } from '../../../../services/lifecycle/common/lifecycle.js';
 import '../../common/terminalConfiguration.js';
 import { BaseSecretStorageService } from '../../../../../platform/secrets/common/secrets.js';
-import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
 import { TerminalService } from '../../browser/terminalService.js';
 import { TerminalNativeContribution } from '../../electron-browser/terminalNativeContribution.js';
 
@@ -43,7 +43,7 @@ function fixture(owner: DisposableStore, release: (id: string) => Promise<void>,
 	services.registerInstance(ILogService, log);
 	services.registerInstance(IStorageService, storage);
 	services.registerInstance(IConfigurationService, owner.add(new TestConfigurationService({ source: JSON.stringify(settings) })));
-	services.registerInstance(IWorkspaceContextService, owner.add(new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') })));
+	services.registerInstance(IWorkspaceContextService, owner.add(new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') })));
 	let next = 0;
 	const closes: string[] = [];
 	const writes: string[] = [];

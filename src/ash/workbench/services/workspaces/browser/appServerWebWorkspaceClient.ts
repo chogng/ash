@@ -1,6 +1,17 @@
 import { decodeWebListenInfo, decodeWebWorkspaceListResult } from '../../../../../../.build/protocol/typescript/WebProtocolDecoder.js';
 import type { WebWorkspaceListRequest, WebWorkspaceOpenRequest } from '../../../../../../.build/protocol/typescript/index.js';
-import type { IWebWorkspaceClient, IWebWorkspaceDirectoryList } from './workspaceOpenService.js';
+
+/** Host-neutral directory selection; generated transport types stay in this adapter. */
+export interface IWebWorkspaceDirectoryList {
+	readonly path: string;
+	readonly parent: string | null;
+	readonly directories: readonly { readonly name: string; readonly path: string; }[];
+}
+
+export interface IWebWorkspaceClient {
+	list(path: string): Promise<IWebWorkspaceDirectoryList>;
+	authorize(path: string): Promise<() => void>;
+}
 
 /** Authenticated browser control requests stay outside the workspace-bound JSONL connection. */
 export class AppServerWebWorkspaceClient implements IWebWorkspaceClient {

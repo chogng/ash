@@ -14,6 +14,7 @@ import { IWorkspaceContextService, type IWorkspaceFolder } from '../../../../pla
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IFilesConfigurationService } from '../../../services/filesConfiguration/common/filesConfigurationService.js';
 import { IExplorerService } from './files.js';
+import { IWorkspaceEditingService } from '../../../services/workspaces/common/workspaceEditing.js';
 import { FileEditorInput } from './editors/fileEditorInput.js';
 
 // Command registration lives in fileActions.contribution.ts. Download is implemented there by FileDownload.
@@ -27,6 +28,21 @@ export const CUT_FILE_COMMAND_ID = 'filesExplorer.cut';
 export const COPY_FILE_COMMAND_ID = 'filesExplorer.copy';
 export const PASTE_FILE_COMMAND_ID = 'filesExplorer.paste';
 export const CANCEL_CUT_COMMAND_ID = 'filesExplorer.cancelCut';
+
+/** Removes only selected workspace roots; never deletes their files or promotes a child directory to a root. */
+export async function removeRootFolder(accessor: ServicesAccessor, resource?: unknown, selectedResources?: unknown): Promise<void> {
+	if (resource !== undefined && !URI.isUri(resource)) throw new TypeError('Workspace root must be a URI');
+	if (selectedResources !== undefined && (!Array.isArray(selectedResources) || !selectedResources.every(URI.isUri))) throw new TypeError('Workspace roots must be URIs');
+	const selected = selectedResources as readonly URI[] | undefined;
+	// Menus forward both the clicked root and the selection snapshot. Explicit
+	// invocations use their URI; only keyboard invocations consult live selection.
+	const resources = selected?.length ? selected : resource ? [resource as URI] : accessor.get(IExplorerService).getContext().map(item => item.resource);
+	const workspace = accessor.get(IWorkspaceContextService).getWorkspace();
+	const folders = workspace.folders.filter(folder => resources.some(uri => extUriBiasedIgnorePathCase.isEqual(folder.uri, uri)));
+	if (!folders.length) return;
+	await accessor.get(IWorkspaceEditingService).removeFolders(folders.map(folder => folder.uri));
+	status(localize('workspace.foldersUpdated', 'Workspace folders updated.'));
+}
 
 /** Handles {@link COPY_FILE_COMMAND_ID} and {@link CUT_FILE_COMMAND_ID}; roots and nested selections are omitted. */
 export async function copyExplorerItems(accessor: ServicesAccessor, cut: boolean): Promise<void> {

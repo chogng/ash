@@ -23,7 +23,7 @@ import { productLanguagePackCatalogs } from '../../../../services/localization/c
 import { ILocalizationService } from '../../../../services/localization/common/localizationService.js';
 import { createSettingsEditorInput } from '../../../../services/preferences/common/settingsEditorInput.js';
 import { IAppServerRemoteAgentService } from '../../../../services/remote/common/appServerRemoteAgentService.js';
-import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
 import { SettingsSearchQuery } from '../../../preferences/browser/settingsSearch.js';
 import { LanguageServerSettingsContent, LanguageServerSettingsTarget } from '../../browser/languageServerSettingsContent.js';
 import '../../browser/languageServers.contribution.js';
@@ -63,7 +63,7 @@ class SettingsFixture extends DisposableStore {
 		});
 		this.services.registerInstance(IExtensionManagementService, { onDidChangeInstalled: this.installed.event } as IExtensionManagementService);
 		this.services.registerInstance(ICommandService, { executeCommand: async (id: string, ...args: unknown[]) => { this.commands.push([id, ...args]); } } as unknown as ICommandService);
-		this.services.registerInstance(IWorkspaceContextService, this.add(new WorkspaceContextService({ id: 'test', folders: [] })));
+		this.services.registerInstance(IWorkspaceContextService, this.add(new TestWorkspaceService({ id: 'test', folders: [] })));
 		this.services.registerInstance(ILocalizationService, {
 			whenReady: Promise.resolve(),
 			translate: (bundle, key, text, parameters) => {

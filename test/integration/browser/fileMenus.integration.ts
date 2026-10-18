@@ -21,7 +21,7 @@ import { createTestEditorServices, createTestFileService } from '../../../src/as
 import { MemoryFileService, TestEditorService } from '../../../src/ash/workbench/contrib/bulkEdit/test/browser/bulkEditTestServices.js';
 import { IEditorService, type EditorOpenOptions, type EditorOpenTarget } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import type { IResourceEditorInput } from '../../../src/ash/workbench/common/editor.js';
-import { WorkspaceContextService } from '../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
 import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
 import { BrowserClipboardService } from '../../../src/ash/platform/clipboard/browser/clipboardService.js';
@@ -80,7 +80,7 @@ provider.readDirectory = async folder => {
 	return folder.path === root.path ? [{ resource, name: 'main.ts', kind: FileKind.File }] : [];
 };
 services.registerInstance(IFileService, lifetime.add(createTestFileService(provider)));
-services.registerInstance(IWorkspaceContextService, lifetime.add(new WorkspaceContextService({ id: 'file-menus-integration', uri: root })));
+services.registerInstance(IWorkspaceContextService, lifetime.add(new TestWorkspaceService({ id: 'file-menus-integration', uri: root })));
 const contexts = services.get(IContextKeyService);
 const commands = lifetime.add(new CommandService(services));
 services.registerInstance(ICommandService, commands);

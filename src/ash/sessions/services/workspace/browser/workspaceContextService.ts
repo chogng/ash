@@ -2,17 +2,18 @@ import { extUriBiasedIgnorePathCase, basename } from '../../../../base/common/re
 import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
 import { buildAgentHostSessionWorkspace } from '../../../common/agentHostSessionWorkspace.js';
 import type { IWorkspace, IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
-import { WorkspaceContextService } from '../../../../workbench/services/workspaces/browser/workspaceContextService.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
 import { ISessionsService } from '../../sessions/browser/sessionsService.js';
 import type { ISession } from '../../sessions/common/session.js';
 
 /** Explorer follows the selection; filesystem routing is owned by the shared file provider. */
-export class SessionsWorkspaceContextService extends WorkspaceContextService {
+export class SessionsWorkspaceContextService extends Disposable {
 	constructor(
 		private readonly hostWorkspace: () => IWorkspace,
+		private readonly updateWorkspace: (workspace: IWorkspace) => void,
 		@ISessionsService private readonly sessions: ISessionsService,
 	) {
-		super(hostWorkspace());
+		super();
 		this._register(sessions.onDidChange(() => this.updateSelection()));
 		this.updateSelection();
 	}

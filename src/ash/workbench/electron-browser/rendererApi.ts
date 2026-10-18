@@ -1,3 +1,4 @@
+import { createSshRemoteWorkspaceUri } from '../../platform/remote/common/remote.js';
 import { AppServerChannelService } from "../../platform/collaboration/browser/appServerChannelService.js";
 import type { AppServerProtocolClient } from '../../platform/agentHost/browser/appServerProtocolClient.js';
 import type { IExtensionHostApi } from '../../platform/agentHost/common/extensionHostApi.js';
@@ -159,7 +160,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 				clipboardService: new ElectronRendererClipboardService(),
 			}, contributions.map(contribution => (client, appServer) => contribution(client, appServer, localClient)));
 			resources.add(backend.mcpServerManagement);
-			resources.add(registerAppServerWorkspaceHost(client, () => connection.whenConnected(), workspaceTrust, backend.workspaceTrust, folders => workspaceApi.validateFolders(folders)));
+			resources.add(registerAppServerWorkspaceHost(client, () => connection.whenConnected(), workspaceTrust, backend.workspaceTrust, folders => workspaceApi.validateFolders(folders), path => remoteConnection.kind === 'ssh' ? createSshRemoteWorkspaceUri(remoteConnection.host, path) : URI.file(path)));
 			// Editor recovery belongs to this Desktop profile, including SSH workspaces.
 			backend = { ...backend, backup: new AppServerBackupService(localClient, 'ash-editor'), ...(windowExtensions ? { extensionHost: windowExtensions } : {}) };
 			if (client.capabilities?.memories) { backend = { ...backend, memories: resources.add(new AppServerMemoriesService(client)) }; }

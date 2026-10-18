@@ -15,8 +15,9 @@ import type { HTMLFileSystemProvider } from '../../../../platform/files/browser/
 import { FileKind, FileNotFoundError, type IFileService } from '../../../../platform/files/common/files.js';
 import type { IQuickInputService, IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { IPathService } from '../../../../platform/path/common/pathService.js';
-import type { IWebWorkspaceClient, IWebWorkspaceDirectoryList } from '../../workspaces/browser/workspaceOpenService.js';
+import type { IWebWorkspaceClient, IWebWorkspaceDirectoryList } from '../../workspaces/browser/appServerWebWorkspaceClient.js';
 import { AbstractFileDialogService } from './abstractFileDialogService.js';
+import { IHostService } from '../../host/browser/host.js';
 
 interface FileDialogHostBase {
 	readonly quickInput: () => IQuickInputService;
@@ -51,8 +52,8 @@ type WorkspaceFileItem = IQuickPickItem & (
 
 /** Selects folders and Save As targets for a browser Workbench. */
 export class FileDialogService extends AbstractFileDialogService implements IFileDialogService {
-	constructor(private readonly host: FileDialogHost, dialogs: () => IDialogService, @IPathService private readonly paths: IPathService) {
-		super(dialogs);
+	constructor(private readonly host: FileDialogHost, dialogs: () => IDialogService, @IPathService private readonly paths: IPathService, @IHostService hostService: IHostService) {
+		super(dialogs, hostService);
 	}
 
 	async showOpenDialog(options: IOpenDialogOptions): Promise<readonly URI[] | undefined> {

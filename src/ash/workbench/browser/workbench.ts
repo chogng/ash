@@ -1,3 +1,5 @@
+import { IWorkspaceEditingService } from '../services/workspaces/common/workspaceEditing.js';
+import { IWorkspacesService } from '../../platform/workspaces/common/workspaces.js';
 import { IChannelService } from "../../platform/collaboration/common/channelService.js";
 import { TreeSitterLibraryService, TreeSitterSyntaxProviders, createTreeSitterSyntaxTokenBackend } from '../services/treeSitter/browser/treeSitterLibraryService.js';
 import { ITreeSitterLibraryService } from '../../editor/common/services/treeSitter/treeSitterLibraryService.js';
@@ -174,24 +176,16 @@ import {
 	IStatusbarService,
 	StatusbarService,
 } from "../services/statusbar/browser/statusbar.js";
-import {
-	WorkspaceContextService,
-} from "../services/workspaces/browser/workspaceContextService.js";
-import {
-	IWorkspaceOpenService,
-	WorkspaceOpenService,
-	BrowserWorkspaceOpenService,
-	WebWorkspaceOpenService,
-	type IWebWorkspaceClient,
-} from "../services/workspaces/browser/workspaceOpenService.js";
-import { RecentWorkspacesService } from "../services/workspaces/browser/recentWorkspacesService.js";
-import { IRecentWorkspacesService } from "../services/workspaces/common/recentWorkspacesService.js";
+import type { IWebWorkspaceClient } from '../services/workspaces/browser/appServerWebWorkspaceClient.js';
+import { IHostService } from '../services/host/browser/host.js';
+import { BrowserHostService } from '../services/host/browser/browserHostService.js';
+import { SyncDescriptor } from '../../platform/instantiation/common/descriptors.js';
 import { IViewDescriptorService } from "../common/views.js";
 import { ViewDescriptorService } from "../services/views/browser/viewDescriptorService.js";
 import { IViewsService } from "../services/views/common/viewsService.js";
 import { ViewsService } from "../services/views/browser/viewsService.js";
 import {
-	WorkbenchConfigurationService,
+	WorkspaceService,
 } from "../services/configuration/browser/configurationService.js";
 import type { DialogService } from "../services/dialogs/common/dialogService.js";
 import { WorkbenchContextKeysHandler } from './contextkeys.js';
@@ -493,7 +487,7 @@ export class Workbench extends Disposable {
 	};
 	/** Resolves after dirty working copies are restored and AfterRestored contributions are active. */
 	readonly whenRestored: Promise<void>;
-	private readonly workspaceContext: WorkspaceContextService;
+	private readonly workspaceContext: WorkspaceService;
 	private readonly configurationService: IConfigurationService;
 	private readonly storage: IStorageService & { switchWorkspace(workspaceId: string): void | Promise<void>; };
 	private readonly editor: IEditorPartsService;
@@ -554,6 +548,25 @@ export class Workbench extends Disposable {
 		if (clipboardService) {
 			serviceCollection.set(IClipboardService, clipboardService);
 		}
+		if (!nativeHostApi && !serviceCollection.has(IHostService)) {
+			serviceCollection.set(IHostService, new SyncDescriptor(BrowserHostService, [{
+				workspaceProvider: browserFileSystemProvider ? {
+					kind: 'local', provider: browserFileSystemProvider, updateWorkspace: async (next: IWorkspace) => {
+						services.get(IWorkspaceEditingService).validateFolders(next.folders.map(folder => folder.uri));
+						await this.updateWorkspace(next);
+					},
+				} : webWorkspaceClient ? {
+					kind: 'server', client: webWorkspaceClient,
+					prepareSwitch: async () => {
+						await this.workingCopyBackupTracker.flush();
+						if (!await this.editor.closeAllEditors({ reason: 'reset' })) return false;
+						await this.workingCopyBackupTracker.flush();
+						await this.storage.flush(WillSaveStateReason.WORKSPACE_CHANGE);
+						return true;
+					},
+				} : undefined,
+			}], true));
+		}
 		for (const [id, descriptor] of getSingletonServiceDescriptors()) {
 			if (!serviceCollection.has(id)) { serviceCollection.set(id, descriptor); }
 		}
@@ -590,9 +603,20 @@ export class Workbench extends Disposable {
 		services.registerInstance(IExtensionResourceLoaderService, enabledExtensions.resources);
 		services.registerInstance(IExtensionApi, enabledExtensions);
 		services.registerInstance(IExtensionBackendApi, api.extensionBackend);
-		const workspaceContext = this._register(new WorkspaceContextService(workspace));
+		const fileService = this._register(services.createInstance(FileService));
+		this._register(userDataFileSystemProvider);
+		this._register(fileService.registerProvider(Schemas.vscodeUserData, userDataFileSystemProvider));
+		services.registerInstance(IUserDataProfileService, new UserDataProfileService());
+		services.registerInstance(IFileService, fileService);
+		const workspaceContext = this._register(services.createInstance(WorkspaceService, { workspace, initialConfiguration }));
+		const configuration = workspaceContext;
+		this.configurationService = configuration;
+		services.registerInstance(IConfigurationService, configuration);
 		this.workspaceContext = workspaceContext;
 		services.registerInstance(IWorkspaceContextService, workspaceContext);
+		const lifecycleService = this.lifecycleService = this._register(createLifecycleService(services));
+		services.registerInstance(ILifecycleService, lifecycleService);
+
 		AppServerAvailableContext.bindTo(contextKeys).set(api.hasAppServer);
 		services.registerInstance(IVoiceCodeTranscriptionBackendService, api.dictation);
 		services.registerInstance(IAgentVoiceService, api.agentVoice);
@@ -654,26 +678,6 @@ export class Workbench extends Disposable {
 				workspaceRoot: () => services.get(IWorkspaceContextService).getWorkspace().folders[0]?.uri,
 			}, () => services.get(IDialogService)));
 		}
-		const workspaceOpenService = browserFileSystemProvider
-			? new BrowserWorkspaceOpenService(
-				browserFileSystemProvider,
-				workspace => this.updateWorkspace(workspace),
-				services.get(IFileDialogService),
-			)
-			: webWorkspaceClient
-				? services.createInstance(WebWorkspaceOpenService,
-					webWorkspaceClient,
-					() => services.get(IDialogService),
-					async () => {
-						await this.workingCopyBackupTracker.flush();
-						if (!await this.editor.closeAllEditors({ reason: 'reset' })) return false;
-						await this.workingCopyBackupTracker.flush();
-						await this.storage.flush(WillSaveStateReason.WORKSPACE_CHANGE);
-						return true;
-					},
-				)
-				: new WorkspaceOpenService(nativeHostApi, services.getOptional(IFileDialogService), () => services.get(IDialogService));
-		services.registerInstance(IWorkspaceOpenService, workspaceOpenService);
 		const labelService = this._register(services.createInstance(LabelService));
 		services.registerInstance(ILabelService, labelService);
 		services.registerInstance(IDecorationsService, this._register(services.createInstance(DecorationsService, workbenchRoot.ownerDocument)));
@@ -698,20 +702,10 @@ export class Workbench extends Disposable {
 			},
 		});
 		this._register(workspaceFileService);
-		const fileService = this._register(services.createInstance(FileService));
-		this._register(userDataFileSystemProvider);
-		this._register(fileService.registerProvider(Schemas.vscodeUserData, userDataFileSystemProvider));
-		services.registerInstance(IUserDataProfileService, new UserDataProfileService());
 		if (workspaceFileSystemProvider) this._register(workspaceFileSystemProvider);
 		this._register(fileService.registerProvider(Schemas.file, workspaceFileSystemProvider ?? browserFileSystemProvider ?? workspaceFileService));
 		this._register(fileService.registerProvider(Schemas.ashRemote, workspaceFileService));
-		services.registerInstance(IFileService, fileService);
 		services.registerInstance(ISystemFileTransferService, workspaceFileService);
-		const configuration = this._register(services.createInstance(WorkbenchConfigurationService, {
-			initialConfiguration,
-		}));
-		this.configurationService = configuration;
-		services.registerInstance(IConfigurationService, configuration);
 		const languagePackService = this._register(services.createInstance(WebLanguagePacksService, builtinLanguagePackCatalogs, preinstalledLanguagePacks));
 		services.registerInstance(ILanguagePackService, languagePackService);
 		const textFileService = this._register(services.createInstance(TextFileService));
@@ -847,8 +841,6 @@ export class Workbench extends Disposable {
 		const storage = this._register(storageService);
 		this.workbenchWindow = workbenchWindow;
 		this.storage = storage;
-		const lifecycleService = this.lifecycleService = this._register(createLifecycleService(services));
-		services.registerInstance(ILifecycleService, lifecycleService);
 		services.registerInstance(ILocaleService, this._register(services.createInstance(WorkbenchLocaleService)));
 		if (nativeHostApi && !createHostColorSchemeService) { throw new Error('Desktop Workbench requires its system appearance service'); }
 		const hostColors = this._register(createHostColorSchemeService ? createHostColorSchemeService(services) : new BrowserHostColorSchemeService(this.ownerWindow));
@@ -903,8 +895,6 @@ export class Workbench extends Disposable {
 		this._register(toDisposable(() => {
 			if (!lifecycleService.willShutdown) saveFontInfo();
 		}));
-		const recentWorkspaces = this._register(services.createInstance(RecentWorkspacesService));
-		services.registerInstance(IRecentWorkspacesService, recentWorkspaces);
 		this._register(lifecycleService.onBeforeShutdown(event => {
 			// Page teardown clears font caches before async shutdown joins complete.
 			saveFontInfo();
@@ -983,7 +973,7 @@ export class Workbench extends Disposable {
 		const accountPolicies = this._register(new AccountPolicyService(services.get(IAccountService), api.github, logService));
 		const policies = this._register(new MultiplexPolicyService([systemPolicies, accountPolicies]));
 		services.registerInstance(IPolicyService, policies);
-		serviceContributionReady.push(configuration.initialize(workspaceContext, fileService, policies, workingCopyService));
+		serviceContributionReady.push(configuration.initialize(fileService, policies, workingCopyService));
 		const accessibilityService = this._register(nativeHostApi
 			? services.createInstance(NativeAccessibilityService, workbenchRoot)
 			: new AccessibilityService({
@@ -1247,7 +1237,7 @@ export class Workbench extends Disposable {
 			layoutService.layout();
 			await viewsReady;
 		});
-		this.whenRestored = this.completeStartupRestoration([keybindingsReady, extensionReady, paneRestoration, recentWorkspaces.initialize(), ...serviceContributionReady], workingCopyBackups, editor, editorParts, contributions, saveFontInfo);
+		this.whenRestored = this.completeStartupRestoration([keybindingsReady, extensionReady, paneRestoration, services.get(IWorkspacesService).getRecentlyOpened().then(() => { }), ...serviceContributionReady], workingCopyBackups, editor, editorParts, contributions, saveFontInfo);
 		if (createWindow) {
 			this._register(createWindow(services));
 		}
@@ -1358,6 +1348,7 @@ export class Workbench extends Disposable {
 			return;
 		}
 		if (workspace.configuration) {
+			const restoreLayout = this.workspaceContext.getWorkbenchState() === WorkbenchState.EMPTY;
 			// Entering/saving a workspace from this live window changes its storage
 			// identity, while open editors and unsaved buffers belong to the user.
 			await this.workingCopyBackupTracker.shutdown();
@@ -1373,6 +1364,10 @@ export class Workbench extends Disposable {
 				this.workingCopyBackupTracker.cancelShutdown();
 			}
 			await this.workingCopyBackupTracker.flush();
+			if (restoreLayout) {
+				this.workbenchLayout.restoreWorkspaceState(workbenchStateFromWorkspace(workspace));
+				await this.restoreActiveViewContainers?.();
+			}
 			return;
 		}
 		await this.workingCopyBackupTracker.flush();

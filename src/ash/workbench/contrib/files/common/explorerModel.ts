@@ -42,7 +42,9 @@ export class ExplorerModel extends Disposable {
 function explorerRoot(workspace: IWorkspace): ExplorerItem | undefined {
 	const roots = workspace.folders.map(folder => new ExplorerItem(folder.uri, folder.name, FileKind.Directory));
 	if (roots.length === 0) return undefined;
-	if (roots.length === 1) return roots[0];
+	// A workspace file stays a workspace after removing all but one root. Its
+	// remaining root must remain visible so root-specific menus still have a target.
+	if (roots.length === 1 && !workspace.configuration) return roots[0];
 	return new ExplorerItem(
 		URI.parse(`ash-workspace:/${encodeURIComponent(workspace.id)}`),
 		workspace.name ?? 'Workspace',

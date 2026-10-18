@@ -1,3 +1,5 @@
+import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
+import { IPathService } from '../../../src/ash/platform/path/common/pathService.js';
 import '../../../src/ash/base/browser/ui/styles.css';
 import '../../../src/ash/workbench/browser/media/style.css';
 import { ActionRunner } from '../../../src/ash/base/common/actions.js';
@@ -126,7 +128,9 @@ updateServices.registerInstance(ILifecycleService, {
 		sessionStorage.setItem('webUpdateShutdown', reason);
 	},
 } as ILifecycleService);
-updateServices.registerInstance(IHostService, resources.add(updateServices.createInstance(BrowserHostService)));
+updateServices.registerInstance(IDialogService, {} as IDialogService);
+updateServices.registerInstance(IPathService, {} as IPathService);
+updateServices.registerInstance(IHostService, resources.add(updateServices.createInstance(BrowserHostService, {})));
 updateServices.registerInstance(IUpdateService, resources.add(updateServices.createInstance(BrowserUpdateService)));
 const notifications = resources.add(new NotificationService());
 updateServices.registerInstance(INotificationService, notifications);

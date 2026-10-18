@@ -179,6 +179,9 @@ const users = resources.add(await loadUserThemes(services, URI.file('/themes')))
 services.registerInstance(IUserThemeService, users);
 await themes.setColorTheme('aurora');
 services.registerInstance(IFileDialogService, {
+	pickFolderAndOpen: async () => { throw new Error('Unexpected folder open'); },
+	pickWorkspaceAndOpen: async () => { throw new Error('Unexpected workspace open'); },
+
 	pickFileToSave: async () => undefined, showSaveConfirm: async () => saveOnClose ? ConfirmResult.SAVE : ConfirmResult.DONT_SAVE,
 	showSaveDialog: async () => undefined, showOpenDialog: async () => undefined,
 });

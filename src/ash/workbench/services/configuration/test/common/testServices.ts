@@ -1,3 +1,4 @@
+import type { IAnyWorkspaceIdentifier, IWorkspace } from '../../../../../platform/workspace/common/workspace.js';
 import { FileService } from '../../../../../platform/files/common/fileService.js';
 import { InMemoryFileSystemProvider } from '../../../../../platform/files/common/inMemoryFilesystemProvider.js';
 import { FileNotFoundError, type IFileService } from '../../../../../platform/files/common/files.js';
@@ -6,7 +7,7 @@ import { URI } from '../../../../../base/common/uri.js';
 import { NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { ConfigurationModelParser } from '../../../../../platform/configuration/common/configurationModels.js';
 import { UserDataProfileService } from '../../../userDataProfile/browser/userDataProfileService.js';
-import { WorkbenchConfigurationService, type WorkbenchConfigurationServiceOptions } from '../../browser/configurationService.js';
+import { WorkspaceService, type WorkspaceServiceOptions } from '../../browser/configurationService.js';
 
 const resource = URI.from({ scheme: Schemas.vscodeUserData, path: '/user/settings.json' });
 const log = new NullLoggerService();
@@ -39,7 +40,7 @@ export class TestConfigurationFiles extends FileService {
 	}
 }
 
-interface TestOptions extends WorkbenchConfigurationServiceOptions {
+interface TestOptions extends WorkspaceServiceOptions {
 	readonly source?: string;
 	readonly files?: IFileService;
 }
@@ -64,7 +65,7 @@ async function write(files: IFileService, source: string, expectedRevision?: str
 }
 
 /** Test composition only; production resolves required services through DI. */
-export function testConfigurationService(Service: typeof WorkbenchConfigurationService) {
+export function testConfigurationService(Service: typeof WorkspaceService) {
 	class Fixture extends Service {
 		readonly fileService: IFileService;
 		constructor(options: TestOptions = {}) {
@@ -87,5 +88,12 @@ export function testConfigurationService(Service: typeof WorkbenchConfigurationS
 	} as unknown as new (options?: TestOptions) => Fixture;
 }
 
-export const TestConfigurationService = testConfigurationService(WorkbenchConfigurationService);
+export const TestConfigurationService = testConfigurationService(WorkspaceService);
 export type TestConfigurationService = InstanceType<typeof TestConfigurationService>;
+
+/** Workspace-only tests still exercise the production context and own the settings provider. */
+export class TestWorkspaceService extends TestConfigurationService {
+	constructor(workspace: IAnyWorkspaceIdentifier | IWorkspace) {
+		super({ workspace });
+	}
+}

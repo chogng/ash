@@ -33,7 +33,7 @@ import "../../../../workbench/electron-browser/desktop.contribution.js";
 import {
 	CommandService,
 } from "../../../../workbench/services/commands/common/commandService.js";
-import { IWorkspaceOpenService } from "../../../../workbench/services/workspaces/browser/workspaceOpenService.js";
+import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { OpenFolderWorkspaceSupportContext } from '../../../../workbench/common/contextkeys.js';
 
 test("native host routes validate folder picking and developer tools", async () => {
@@ -219,16 +219,10 @@ test("desktop commands are available from the command palette", async () => {
 		},
 	});
 	let folderOpens = 0;
-	services.registerInstance(IWorkspaceOpenService, {
-		canOpenFolder: true,
-		canOpenWorkspace: true,
-		async openFolder() {
-			folderOpens += 1;
-		},
-		async openWorkspace() { },
-		async pickFolder() {
-			return undefined;
-		},
+	services.registerInstance(IFileDialogService, {
+		pickFolderAndOpen: async () => { folderOpens++; },
+		pickWorkspaceAndOpen: async () => { },
+		pickFileToSave: async () => undefined, showOpenDialog: async () => undefined, showSaveDialog: async () => undefined, showSaveConfirm: async () => 2,
 	});
 	using commands = new CommandService(services);
 	using contexts = new ContextKeyService();

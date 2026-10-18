@@ -21,7 +21,7 @@ import { CustomViewService, ICustomViewService } from '../../../../services/cust
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { BrowserStorageService } from '../../../../../workbench/services/storage/browser/storageService.js';
-import { WorkspaceContextService } from '../../../../../workbench/services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../../../workbench/services/configuration/test/common/testServices.js';
 import { IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
 import { ILifecycleService, LifecyclePhase } from '../../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { AbstractLifecycleService } from '../../../../../workbench/services/lifecycle/common/lifecycleService.js';
@@ -467,7 +467,7 @@ class LayoutFixture extends Disposable {
 	public readonly lifecycle = this._register(new TestLifecycle(undefined, new NullLoggerService(), this.storage));
 	public readonly catalog = this._register(new TestCatalog());
 	public readonly editor = this._register(new TestEditors());
-	public readonly workspace = this._register(new WorkspaceContextService({ id: 'a', folders: [] }));
+	public readonly workspace = this._register(new TestWorkspaceService({ id: 'a', folders: [] }));
 	public readonly errors: string[] = [];
 	public readonly partsChanged = this._register(new Emitter<void>());
 	public readonly panelOpened = this._register(new Emitter<string>());

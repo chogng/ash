@@ -27,7 +27,6 @@ import type { SessionsProfile } from "../common/sessionsProfile.js";
 import type { Workbench } from '../browser/workbench.js';
 import { createSessionsWorkbench } from '../browser/workbenchFactory.js';
 import { isMacintosh } from '../../base/common/platform.js';
-import { IMenuService } from '../../platform/actions/common/actions.js';
 import { NativeMenubarControl } from '../../workbench/electron-browser/parts/titlebar/menubarControl.js';
 import { Menus } from '../browser/menus.js';
 import { TitlebarPart } from '../browser/parts/titlebar/titlebarPart.js';
@@ -217,7 +216,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 			createTitlebarPart: (titlebarContainer, services) => {
 				if (isMacintosh) {
 					// Publish this window's menu so switching focus never dispatches Workbench-only actions here.
-					sessions.add(new NativeMenubarControl(services.get(IMenuService), api.nativeMenubar, Menus.MenubarMainMenu));
+					sessions.add(services.createInstance(NativeMenubarControl, api.nativeMenubar, Menus.MenubarMainMenu));
 				}
 				return services.createInstance(TitlebarPart, titlebarContainer, isMacintosh ? 'actions-only' : 'application-menu');
 			},

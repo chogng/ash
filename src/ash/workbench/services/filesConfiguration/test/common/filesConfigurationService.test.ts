@@ -10,7 +10,7 @@ import { FileKind } from '../../../../../platform/files/common/files.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { FilesConfigurationService, IFilesConfigurationService } from '../../common/filesConfigurationService.js';
-import { WorkspaceContextService } from '../../../workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../configuration/test/common/testServices.js';
 import { TextFileService } from '../../../textfile/browser/textFileService.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { Event } from '../../../../../base/common/event.js';
@@ -19,7 +19,7 @@ import { productLanguagePackCatalogs } from '../../../localization/common/locali
 suite('Configured file policies', () => {
 	test('applies writable exceptions, retains filesystem read-only and announces changes', async () => {
 		using configuration = new InMemoryConfigurationService();
-		using workspace = new WorkspaceContextService({ id: 'root', uri: URI.file('/root') });
+		using workspace = new TestWorkspaceService({ id: 'root', uri: URI.file('/root') });
 		using services = new InstantiationService();
 		services.registerInstance(IConfigurationService, configuration);
 		services.registerInstance(IWorkspaceContextService, workspace);
@@ -46,7 +46,7 @@ suite('Configured file policies', () => {
 
 	test('blocks the actual save service and publishes only completed writes', async () => {
 		using configuration = new InMemoryConfigurationService();
-		using workspace = new WorkspaceContextService({ id: 'root', uri: URI.file('/root') });
+		using workspace = new TestWorkspaceService({ id: 'root', uri: URI.file('/root') });
 		using policy = new FilesConfigurationService(configuration, workspace);
 		const resource = URI.file('/root/main.ts');
 		let writes = 0;
@@ -72,7 +72,7 @@ suite('Configured file policies', () => {
 
 	test('uses the shipped Chinese catalog for read-only explanations', async () => {
 		using configuration = new InMemoryConfigurationService();
-		using workspace = new WorkspaceContextService({ id: 'root', uri: URI.file('/root') });
+		using workspace = new TestWorkspaceService({ id: 'root', uri: URI.file('/root') });
 		using policy = new FilesConfigurationService(configuration, workspace);
 		await configuration.updateValue('files.readonlyInclude', { '**/*.ts': true });
 		setNlsMessages('zh-CN', productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);

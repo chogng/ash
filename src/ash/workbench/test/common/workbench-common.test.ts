@@ -22,7 +22,7 @@ import { Registry } from "../../../platform/registry/common/platform.js";
 import {
 	WorkbenchState,
 } from "../../../platform/workspace/common/workspace.js";
-import { WorkspaceContextService } from "../../../workbench/services/workspaces/browser/workspaceContextService.js";
+import { TestWorkspaceService } from "../../services/configuration/test/common/testServices.js";
 import { BrowserWorkingCopyService } from '../../../workbench/services/workingCopy/browser/browserWorkingCopyService.js';
 import {
 	getVisibleViewContextKey,
@@ -58,7 +58,7 @@ suiteTeardown(() => uriIdentityServices.dispose());
 
 test("workbench context keys describe the current workspace", () => {
 	using contextKeys = new ContextKeyService();
-	using workspace = new WorkspaceContextService({
+	using workspace = new TestWorkspaceService({
 		id: "workspace",
 		uri: URI.file("C:\\project"),
 	});

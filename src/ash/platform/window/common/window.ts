@@ -54,6 +54,12 @@ export interface IOpenEmptyWindowOptions {
 	readonly remoteAuthority?: string;
 }
 
+export type IWindowOpenable = { readonly folderUri: URI; } | { readonly workspaceUri: URI; };
+
+export interface IOpenWindowOptions extends IOpenEmptyWindowOptions {
+	readonly forceNewWindow?: boolean;
+}
+
 export function validateOpenEmptyWindowOptions(value: unknown): IOpenEmptyWindowOptions {
 	if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Invalid empty window options');
 	const options = value as Record<string, unknown>;

@@ -205,7 +205,12 @@ function fixture() {
 	const configuration = resources.add(new InMemoryConfigurationService());
 	const services = resources.add(new InstantiationService(new ServiceCollection(
 		[IConfigurationService, configuration],
-		[IWorkspaceContextService, { onDidChangeWorkspace: Event.None, getWorkspace: () => ({ id: 'browser-test', folders: [] }), getWorkbenchState: () => WorkbenchState.FOLDER, getWorkspaceFolder: () => null }],
+		[IWorkspaceContextService, {
+			onDidChangeWorkspace: Event.None,
+			onDidChangeWorkspaceFolders: Event.None,
+			onDidChangeWorkbenchState: Event.None,
+			onDidChangeWorkspaceName: Event.None, getWorkspace: () => ({ id: 'browser-test', folders: [] }), getWorkbenchState: () => WorkbenchState.FOLDER, getWorkspaceFolder: () => null
+		}],
 		[IWorkspaceTrustManagementService, { onDidChangeTrust: Event.None, getUriTrustInfo: async (uri: import('../../../../../base/common/uri.js').URI) => ({ uri, trusted: true, permissions: undefined }), getWorkspaceTrustInfo: async () => ({ isTrusted: true, isReadOnly: false }) }],
 		[IFileService, { readFileBytes: async () => { throw new Error('No test file configured'); } } as unknown as IFileService], [IBrowserViewService, pages], [IEditorService, editors], [IEditorPart, editorPart], [IDialogsModel, dialogs],
 		[ITelemetryService, new NullTelemetryServiceShape()], [ISessionsManagementService, management], [ISessionsService, sessions],

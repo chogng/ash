@@ -18,10 +18,10 @@ import { IWorkspaceContextService } from '../../../../../platform/workspace/comm
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { type ServerNotification } from '../../../../../../../.build/protocol/typescript/index.js';
-import { WorkspaceContextService } from "../../../workspaces/browser/workspaceContextService.js";
+import { TestWorkspaceService } from "../../../configuration/test/common/testServices.js";
 import { AppServerLanguageProviders } from "../../browser/appServerLanguageProviders.js";
 
-function createProviders(languages: LanguageFeaturesService, api: ILanguageApi, workspace: WorkspaceContextService, options: { workspaceTrust?: IWorkspaceTrustManagementService; events?: IServerEventApi; } = {}): AppServerLanguageProviders {
+function createProviders(languages: LanguageFeaturesService, api: ILanguageApi, workspace: TestWorkspaceService, options: { workspaceTrust?: IWorkspaceTrustManagementService; events?: IServerEventApi; } = {}): AppServerLanguageProviders {
 	using services = new InstantiationService();
 	services.registerInstance(ILanguageFeaturesService, languages);
 	services.registerInstance(IWorkspaceContextService, workspace);
@@ -36,7 +36,7 @@ function createProviders(languages: LanguageFeaturesService, api: ILanguageApi, 
 
 test('language providers require the scoped trust registration even when the backend authorizes Web requests', () => {
 	using services = new InstantiationService();
-	using workspace = new WorkspaceContextService({ id: 'empty' });
+	using workspace = new TestWorkspaceService({ id: 'empty' });
 	using languages = new LanguageFeaturesService();
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(ILanguageFeaturesService, languages);
@@ -54,7 +54,7 @@ function definition(languages: LanguageFeaturesService, model: TextModel, resour
 
 test("App Server language providers map cross-resource locations without double-encoding paths", async () => {
 	using languages = new LanguageFeaturesService();
-	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:/project") });
+	using workspace = new TestWorkspaceService({ id: "workspace", uri: URI.file("C:/project") });
 	const api = new FakeLanguageApi();
 	using providers = createProviders(languages, api, workspace);
 	await tick();
@@ -73,7 +73,7 @@ test("App Server language providers map cross-resource locations without double-
 
 test('App Server Shell registration uses the editor grammar language identity', async () => {
 	using languages = new LanguageFeaturesService();
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/project') });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/project') });
 	const api = new FakeLanguageApi();
 	using providers = createProviders(languages, api, workspace);
 	await tick();
@@ -85,7 +85,7 @@ test('App Server Shell registration uses the editor grammar language identity', 
 
 test("App Server language providers route resources through their owning Workspace folder", async () => {
 	using languages = new LanguageFeaturesService();
-	using workspace = new WorkspaceContextService({
+	using workspace = new TestWorkspaceService({
 		id: "multi-root",
 		folders: [
 			{ id: "frontend", uri: URI.file("C:/frontend"), name: "frontend", index: 0 },
@@ -108,7 +108,7 @@ test("App Server language providers route resources through their owning Workspa
 
 test("App Server workspace symbols query every supported Code language and deduplicate results", async () => {
 	using languages = new LanguageFeaturesService();
-	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:/project") });
+	using workspace = new TestWorkspaceService({ id: "workspace", uri: URI.file("C:/project") });
 	const api = new FakeLanguageApi();
 	using providers = createProviders(languages, api, workspace);
 	await tick();
@@ -122,7 +122,7 @@ test("App Server workspace symbols query every supported Code language and dedup
 
 test("App Server hover and completion providers keep revision, resource, and insertion semantics", async () => {
 	using languages = new LanguageFeaturesService();
-	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:/project") });
+	using workspace = new TestWorkspaceService({ id: "workspace", uri: URI.file("C:/project") });
 	const api = new FakeLanguageApi();
 	const events = new FakeServerEvents();
 	using providers = createProviders(languages, api, workspace, { events });
@@ -177,7 +177,7 @@ test("App Server hover and completion providers keep revision, resource, and ins
 
 test("App Server rename and code actions preserve ordered workspace file operations", async () => {
 	using languages = new LanguageFeaturesService();
-	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:/project") });
+	using workspace = new TestWorkspaceService({ id: "workspace", uri: URI.file("C:/project") });
 	const api = new FakeLanguageApi();
 	using providers = createProviders(languages, api, workspace);
 	await tick();
@@ -209,7 +209,7 @@ test("App Server rename and code actions preserve ordered workspace file operati
 
 test("App Server formatting providers preserve snapshot, options, range, and edits", async () => {
 	using languages = new LanguageFeaturesService();
-	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:/project") });
+	using workspace = new TestWorkspaceService({ id: "workspace", uri: URI.file("C:/project") });
 	const api = new FakeLanguageApi();
 	using providers = createProviders(languages, api, workspace);
 	await tick();
@@ -230,7 +230,7 @@ test("App Server formatting providers preserve snapshot, options, range, and edi
 
 test('App Server range formatting discards a response after the model changes', async () => {
 	using languages = new LanguageFeaturesService();
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/project') });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/project') });
 	const api = new FakeLanguageApi();
 	let release!: () => void;
 	const pending = new Promise<void>(resolve => { release = resolve; });
@@ -249,7 +249,7 @@ test('App Server range formatting discards a response after the model changes', 
 
 test("App Server language providers do not send documents above their transport limit", async () => {
 	using languages = new LanguageFeaturesService();
-	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:/project") });
+	using workspace = new TestWorkspaceService({ id: "workspace", uri: URI.file("C:/project") });
 	const api = new FakeLanguageApi();
 	using providers = createProviders(languages, api, workspace);
 	await tick();
@@ -262,7 +262,7 @@ test("App Server language providers do not send documents above their transport 
 
 test("App Server language providers register only while directory permissions allow execution", async () => {
 	using languages = new LanguageFeaturesService();
-	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:/project") });
+	using workspace = new TestWorkspaceService({ id: "workspace", uri: URI.file("C:/project") });
 	const api = new FakeLanguageApi();
 	const events = new FakeServerEvents();
 	using permissions = new FakeWorkspaceTrustService([]);
@@ -296,7 +296,7 @@ class FakeServerEvents implements IServerEventApi {
 
 test('Desktop providers discover custom routes and retire disabled routes after a profile change', async () => {
 	using languages = new LanguageFeaturesService();
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/project') });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/project') });
 	using trust = new FakeWorkspaceTrustService(['executeCommands', 'useLanguageServices']);
 	const api = new FakeLanguageApi();
 	api.availableServers = [];
@@ -437,7 +437,7 @@ class FakeLanguageApi implements ILanguageApi {
 
 test("installed language servers register new languages and uninstall removes their providers", async () => {
 	using languages = new LanguageFeaturesService();
-	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("/project") });
+	using workspace = new TestWorkspaceService({ id: "workspace", uri: URI.file("/project") });
 	const api = new FakeLanguageApi();
 	api.availableServers = [];
 	const events = new FakeServerEvents();
@@ -463,7 +463,7 @@ test("installed language servers register new languages and uninstall removes th
 
 test('Workspace language providers leave committed Git snapshots to editor providers', async () => {
 	using languages = new LanguageFeaturesService();
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/project') });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/project') });
 	const api = new FakeLanguageApi();
 	using providers = createProviders(languages, api, workspace);
 	await tick();
@@ -480,7 +480,7 @@ test('Workspace language providers leave committed Git snapshots to editor provi
 
 test('negotiated triggers replace registrations and dynamic removal drops obsolete characters', async () => {
 	using languages = new LanguageFeaturesService();
-	using workspace = new WorkspaceContextService({ id: 'triggers', uri: URI.file('/project') });
+	using workspace = new TestWorkspaceService({ id: 'triggers', uri: URI.file('/project') });
 	const events = new FakeServerEvents();
 	using providers = createProviders(languages, new FakeLanguageApi(), workspace, { events });
 	await tick();

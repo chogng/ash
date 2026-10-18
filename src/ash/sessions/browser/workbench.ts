@@ -32,7 +32,6 @@ import { ISnippetsService } from '../../workbench/contrib/snippets/browser/snipp
 import { IMessageHistoryService } from '../../platform/messageHistory/common/messageHistory.js';
 import { GlobalExtensionEnablementService } from '../../platform/extensionManagement/common/extensionEnablementService.js';
 import { IGlobalExtensionEnablementService } from '../../platform/extensionManagement/common/extensionManagement.js';
-import { IWorkspaceOpenService, WorkspaceOpenService } from '../../workbench/services/workspaces/browser/workspaceOpenService.js';
 import { withEnabledBuiltInExtensions } from '../../platform/extensions/browser/extensionApi.js';
 import { WebWorkerExtensionHost } from '../../workbench/services/extensions/browser/webWorkerExtensionHost.js';
 import { IExtensionBackendApi } from '../../platform/agentHost/common/extensionBackendApi.js';
@@ -371,7 +370,7 @@ export abstract class Workbench extends Disposable {
 		this._register(fileService.registerProvider(Schemas.vscodeUserData, userDataFileSystemProvider));
 		services.registerInstance(IUserDataProfileService, new UserDataProfileService());
 		services.registerInstance(IFileService, fileService);
-		const configurationService = this.configurationService = this._register(services.createInstance(ConfigurationService, { initialConfiguration: options.initialConfiguration }));
+		const configurationService = this.configurationService = this._register(services.createInstance(ConfigurationService, { initialConfiguration: options.initialConfiguration, workspace: options.workspace() }));
 		services.registerInstance(IStorageService, storageService);
 		const extensionManagementService = this._register(new AppServerExtensionManagementService(options.api.extensionManagement, options.api.events));
 		services.registerInstance(IExtensionManagementService, extensionManagementService);
@@ -478,7 +477,8 @@ export abstract class Workbench extends Disposable {
 		const chat = this._register(services.createInstance(ChatService));
 		services.registerInstance(ISessionsService, view);
 		services.registerInstance(ISessionGroupsService, this._register(services.createInstance(SessionGroupsService)));
-		const workspace = this._register(services.createInstance(SessionsWorkspaceContextService, options.workspace));
+		const workspace = configurationService;
+		this._register(services.createInstance(SessionsWorkspaceContextService, options.workspace, (next: IWorkspace) => workspace.updateWorkspace(next)));
 		services.registerInstance(IWorkspaceContextService, workspace);
 		services.registerInstance(IMarkerService, this._register(new MarkerService()));
 		const files = this._register(services.createInstance(SessionFileService, options.api, () => options.workspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } }))));
@@ -555,7 +555,7 @@ export abstract class Workbench extends Disposable {
 		const accountPolicies = this._register(new AccountPolicyService(accountService, options.api.github, this.logService));
 		const policies = this._register(new MultiplexPolicyService([systemPolicies, accountPolicies]));
 		services.registerInstance(IPolicyService, policies);
-		serviceContributionReady.push(configurationService.initialize(workspace, fileService, policies, workingCopies));
+		serviceContributionReady.push(configurationService.initialize(fileService, policies, workingCopies));
 		const sessionGitHub = this._register(services.createInstance(SessionsGitHubService));
 		services.registerInstance(ISessionsGitHubService, sessionGitHub);
 		sessionGitHub.initialize();
@@ -652,8 +652,6 @@ export abstract class Workbench extends Disposable {
 		const notificationsCenter = this._register(services.createInstance(NotificationsCenter, this.domNode, feedbackHost, notificationActionRunner, undefined, () => services.get(IAccessibleViewService).getOpenAriaHint(AccessibilityVerbositySettingId.Notifications)));
 		services.registerInstance(INotificationsCenter, notificationsCenter);
 		services.registerInstance(IFileDialogService, options.createFileDialogService(services));
-		// Session workspaces belong to their execution context; editor actions cannot replace that context.
-		services.registerInstance(IWorkspaceOpenService, new WorkspaceOpenService(undefined, services.get(IFileDialogService), () => dialogs));
 		const hoverService = this._register(new HoverService(configurationService, contextViews, contextMenus));
 		services.registerInstance(IHoverService, hoverService);
 		this._register(setHoverDelegate(hoverService));

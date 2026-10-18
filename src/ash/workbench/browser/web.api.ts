@@ -9,7 +9,7 @@ import type {
 } from "../../platform/workspace/common/workspace.js";
 import type { WorkbenchDefaultLayout } from "./layout.js";
 import type { HTMLFileSystemProvider } from '../../platform/files/browser/htmlFileSystemProvider.js';
-import type { IWebWorkspaceClient } from '../services/workspaces/browser/workspaceOpenService.js';
+import type { IWebWorkspaceClient } from '../services/workspaces/browser/appServerWebWorkspaceClient.js';
 import type { IEmbedderTerminalOptions } from '../services/terminal/common/embedderTerminalService.js';
 import type { IUpdateProvider } from '../services/update/browser/updateService.js';
 

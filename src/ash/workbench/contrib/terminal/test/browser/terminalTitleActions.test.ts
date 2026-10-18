@@ -262,7 +262,7 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 	const { ITerminalService } = await import('../../../../services/terminal/browser/terminal.js');
 	const { TerminalViewPane } = await import('../../browser/terminalView.js');
 	const { IWorkbenchLayoutService } = await import('../../../../services/layout/browser/layoutService.js');
-	const { WorkspaceContextService } = await import('../../../../services/workspaces/browser/workspaceContextService.js');
+	const { TestWorkspaceService } = await import('../../../../services/configuration/test/common/testServices.js');
 	const { IWorkspaceContextService } = await import('../../../../../platform/workspace/common/workspace.js');
 	const { IPreferencesService } = await import('../../../../services/preferences/common/preferences.js');
 	const { INotificationService } = await import('../../../../../platform/notification/common/notification.js');
@@ -295,7 +295,7 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 	services.registerInstance(IKeybindingService, { onDidUpdateKeybindings: Event.None, lookupKeybinding: () => undefined } as unknown as IKeybindingService);
 	services.registerInstance(IMenuService, new MenuService(commandService, context));
 	services.registerInstance(IContextMenuService, contextMenuService);
-	services.registerInstance(IWorkspaceContextService, resources.add(new WorkspaceContextService({ id: 'terminal-title-test', folders: [] })));
+	services.registerInstance(IWorkspaceContextService, resources.add(new TestWorkspaceService({ id: 'terminal-title-test', folders: [] })));
 	// This scenario has no workspace or shell. Any shell acquisition would violate the title lifecycle boundary.
 	services.registerInstance(ITerminalService, {
 		instances: [], activeInstance: undefined,

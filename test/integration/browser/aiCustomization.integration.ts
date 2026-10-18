@@ -29,7 +29,7 @@ import { IEditorService } from '../../../src/ash/workbench/services/editor/commo
 import { IWorkbenchHostService } from '../../../src/ash/workbench/services/host/common/workbenchHostService.js';
 import { IPromptsService } from '../../../src/ash/workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import { PromptsService } from '../../../src/ash/workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.js';
-import { WorkspaceContextService } from '../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { ITextFileService } from '../../../src/ash/workbench/services/textfile/common/textfiles.js';
 import type { ITextFileSaveEvent } from '../../../src/ash/workbench/services/textfile/common/textFileService.js';
 import settings from '../../../extensions/language-pack-zh-cn/translations/settings.json' with { type: 'json' };
@@ -46,7 +46,7 @@ const keys = resources.add(new ContextKeyService());
 const views = resources.add(new BrowserContextViewService(document.body));
 const theme = resources.add(new TestThemeService(new URLSearchParams(location.search).has('hc') ? highContrastDarkColorTheme : darkColorTheme));
 resources.add(bindTestColorTheme(theme, document.documentElement));
-const workspace = resources.add(new WorkspaceContextService({ id: 'fixture', folders: [{ id: 'folder', name: 'fixture', index: 0, uri: URI.file('/fixture') }] }));
+const workspace = resources.add(new TestWorkspaceService({ id: 'fixture', folders: [{ id: 'folder', name: 'fixture', index: 0, uri: URI.file('/fixture') }] }));
 const saved = resources.add(new Emitter<ITextFileSaveEvent>());
 let reads = 0;
 let opened = 0;

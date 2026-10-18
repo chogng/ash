@@ -1,3 +1,4 @@
+import { Schemas } from '../../../base/common/network.js';
 import { URI } from "../../../base/common/uri.js";
 import { basename } from "../../../base/common/resources.js";
 import { isMacintosh } from "../../../base/common/platform.js";
@@ -49,6 +50,7 @@ export interface ISingleFolderWorkspaceIdentifier
 /** Identifies a workbench opened from a multi-root workspace file. */
 export interface IWorkspaceIdentifier extends IBaseWorkspaceIdentifier {
 	readonly configPath: URI;
+	readonly remoteAuthority?: string;
 }
 
 /** Identifies the workspace, folder, or empty context hosted by one window. */
@@ -89,6 +91,7 @@ export function workspaceFromIdentifier(identifier: IAnyWorkspaceIdentifier): IW
 			id: identifier.id,
 			folders: [],
 			configuration: identifier.configPath,
+			...(identifier.remoteAuthority ? { remoteAuthority: identifier.remoteAuthority } : {}),
 			name: workspaceName(identifier.configPath),
 		});
 	}
@@ -107,9 +110,18 @@ export interface IWorkspaceChangeEvent {
 	readonly workspace: IWorkspace;
 }
 
+export interface IWorkspaceFoldersChangeEvent {
+	readonly added: readonly IWorkspaceFolder[];
+	readonly removed: readonly IWorkspaceFolder[];
+	readonly changed: readonly IWorkspaceFolder[];
+}
+
 /** Live workspace identity available to workbench contributions. */
 export interface IWorkspaceContextService {
 	readonly onDidChangeWorkspace: Event<IWorkspaceChangeEvent>;
+	readonly onDidChangeWorkspaceFolders: Event<IWorkspaceFoldersChangeEvent>;
+	readonly onDidChangeWorkbenchState: Event<WorkbenchState>;
+	readonly onDidChangeWorkspaceName: Event<void>;
 	getWorkspace(): IWorkspace;
 	getWorkbenchState(): WorkbenchState;
 	getWorkspaceFolder(resource: URI): IWorkspaceFolder | null;
@@ -147,7 +159,7 @@ export function workspaceOpenTarget(workspace: IWorkspace): string | undefined {
 
 /** Recognizes workspace configuration paths accepted by the desktop host. */
 export function hasWorkspaceFileExtension(path: string | URI): boolean {
-	const value = (typeof path === 'string' ? path : path.fsPath).toLowerCase();
+	const value = (typeof path === 'string' ? path : path.path).toLowerCase();
 	return value.endsWith('.ash-workspace') || value.endsWith('.code-workspace');
 }
 
@@ -176,6 +188,7 @@ export function isRemoteWorkspaceIdentifier(value: unknown): value is ISingleFol
 /** Connection identity survives closing the folder in an SSH window. */
 export function getWorkspaceRemoteAuthority(workspace: IAnyWorkspaceIdentifier | IWorkspace): string | undefined {
 	if (isSingleFolderWorkspaceIdentifier(workspace)) return getRemoteAuthority(workspace.uri);
+	if (isWorkspaceIdentifier(workspace)) return workspace.remoteAuthority;
 	if ('folders' in workspace) {
 		const folder = workspace.folders.find(folder => isRemoteResource(folder.uri));
 		return workspace.remoteAuthority ?? (folder ? getRemoteAuthority(folder.uri) : undefined);
@@ -223,6 +236,7 @@ export function serializeWorkspaceIdentifier(
 		return {
 			id: workspace.id,
 			configPath: workspace.configPath.toString(),
+			...(workspace.remoteAuthority ? { remoteAuthority: workspace.remoteAuthority } : {}),
 		};
 	}
 	if (isSingleFolderWorkspaceIdentifier(workspace)) {
@@ -241,10 +255,11 @@ export function parseWorkspaceIdentifier(
 	const record = exactRecord(value);
 	const id = nonEmptyString(record.id, "workspace id");
 	if ("configPath" in record) {
-		requireExactKeys(record, ["configPath", "id"]);
+		requireExactKeys(record, record.remoteAuthority === undefined ? ["configPath", "id"] : ["configPath", "id", "remoteAuthority"]);
 		return Object.freeze({
 			id,
-			configPath: fileWorkspaceConfigUri(record.configPath, "workspace config path"),
+			configPath: workspaceConfigUri(record.configPath, "workspace config path"),
+			...(record.remoteAuthority === undefined ? {} : { remoteAuthority: parseRemoteAuthority(record.remoteAuthority) }),
 		});
 	}
 	if ("uri" in record) {
@@ -304,7 +319,7 @@ export function parseWorkspace(value: unknown): IWorkspace {
 	}
 	const configuration = record.configuration === undefined
 		? undefined
-		: fileWorkspaceConfigUri(record.configuration, 'workspace configuration');
+		: workspaceConfigUri(record.configuration, 'workspace configuration');
 	const name = record.name === undefined ? undefined : nonEmptyString(record.name, 'workspace name');
 	const remoteAuthority = record.remoteAuthority === undefined ? undefined : parseRemoteAuthority(record.remoteAuthority);
 	return freezeWorkspace({ id, folders, ...(configuration ? { configuration } : {}), ...(name ? { name } : {}), ...(remoteAuthority ? { remoteAuthority } : {}) });
@@ -348,7 +363,11 @@ function workspaceResourceUri(value: unknown, field: string): URI {
 	throw new Error(`${field} must use the file or ash-remote scheme`);
 }
 
-function fileWorkspaceConfigUri(value: unknown, field: string): URI {
+function workspaceConfigUri(value: unknown, field: string): URI {
+	if (typeof value === 'string') {
+		const resource = URI.parse(value);
+		if (resource.scheme === Schemas.vscodeUserData && resource.path.startsWith('/workspaces/') && hasWorkspaceFileExtension(resource) && !resource.path.split('/').some(segment => segment === '.' || segment === '..') && !resource.authority && !resource.query && !resource.fragment) return resource;
+	}
 	const uri = workspaceResourceUri(value, field);
 	if (uri.scheme !== "file") throw new Error(`${field} must use the file scheme`);
 	return uri;

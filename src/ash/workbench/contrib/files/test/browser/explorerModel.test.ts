@@ -13,8 +13,8 @@ import { InMemoryConfigurationService } from '../../../../../platform/configurat
 import { ConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { FileKind, type IFileService } from '../../../../../platform/files/common/files.js';
 import { ExplorerFileNestingSettingId } from '../../common/explorerFileNestingTrie.js';
-import { ExplorerItem } from '../../common/explorerModel.js';
-import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
+import { ExplorerItem, ExplorerModel } from '../../common/explorerModel.js';
+import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
 import { TestConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
 import '../../../../services/filesConfiguration/common/filesConfigurationService.js';
 import { ExplorerDataSource, FileSorter } from '../../browser/views/explorerViewer.js';
@@ -23,7 +23,7 @@ import { SortOrder, LexicographicOptions } from '../../common/files.js';
 
 test('Explorer hides default metadata entries at every depth and honors user overrides and resets', async () => {
 	const root = URI.file('/project');
-	using workspace = new WorkspaceContextService({ id: 'project', uri: root });
+	using workspace = new TestWorkspaceService({ id: 'project', uri: root });
 	using configuration = new TestConfigurationService();
 	const directories = ['.git', '.svn', '.hg', '.jj', '.vscode', 'src'];
 	const names = [...directories, '.DS_Store', 'Thumbs.db', '.gitignore', 'README.md'];
@@ -53,7 +53,7 @@ test('Explorer hides default metadata entries at every depth and honors user ove
 
 test('Explorer applies exclusion conditions before nesting and reorders files when settings change', async () => {
 	const root = URI.file('/project');
-	using workspace = new WorkspaceContextService({ id: 'project', uri: root });
+	using workspace = new TestWorkspaceService({ id: 'project', uri: root });
 	using configuration = new InMemoryConfigurationService();
 	const getValue = configuration.getValue.bind(configuration);
 	configuration.getValue = ((section?: string) => section ? getValue(section) : getValue()) as typeof configuration.getValue;
@@ -99,7 +99,7 @@ test('Explorer model groups generated files and keeps directories as separate ro
 	using configuration = new InMemoryConfigurationService(registry);
 	await configuration.updateValue(ExplorerFileNestingSettingId.Enabled, true);
 	await configuration.updateValue(ExplorerFileNestingSettingId.Patterns, { '*.ts': '${capture}.js' });
-	using workspace = new WorkspaceContextService({ id: 'project', uri: root });
+	using workspace = new TestWorkspaceService({ id: 'project', uri: root });
 	const getValue = configuration.getValue.bind(configuration);
 	configuration.getValue = ((section?: string) => section ? getValue(section) : getValue()) as typeof configuration.getValue;
 	using source = new ExplorerDataSource(new FileSorter(configuration), files, configuration, workspace);
@@ -120,7 +120,7 @@ test('Explorer drag policy moves a selection once, copies without overwrite, and
 	using browserLifetime = { [Symbol.dispose]: () => browser.window.close() };
 
 	const root = URI.file('/project');
-	using workspace = new WorkspaceContextService({ id: 'project', uri: root });
+	using workspace = new TestWorkspaceService({ id: 'project', uri: root });
 	using configuration = new InMemoryConfigurationService();
 	const operations: string[] = [];
 	const existing = new Set<string>();
@@ -170,3 +170,17 @@ async function waitForEffects(predicate: () => boolean): Promise<void> {
 	}
 	assert.fail('Timed out waiting for Explorer file operation');
 }
+
+
+test('a workspace file retains its visible root after shrinking to one folder', () => {
+	const first = { id: 'one', uri: URI.file('/one'), name: 'One', index: 0 };
+	const second = { id: 'two', uri: URI.file('/two'), name: 'Two', index: 1 };
+	using workspace = new TestWorkspaceService({ id: 'team', configuration: URI.file('/team.ash-workspace'), folders: [first, second] });
+	using model = new ExplorerModel(workspace);
+	workspace.updateWorkspace({ ...workspace.getWorkspace(), folders: [first] });
+	assert.equal(model.root?.resource.scheme, 'ash-workspace');
+	assert.deepEqual(model.root?.children?.map(item => item.resource), [first.uri]);
+	workspace.updateWorkspace({ id: 'one', uri: first.uri });
+	assert.equal(model.root?.resource.toString(), first.uri.toString());
+	assert.equal(model.root?.children, undefined);
+});

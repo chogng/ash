@@ -16,7 +16,7 @@ import { createEmptyTestLanguagePacks } from '../../../localization/test/common/
 import { ILanguagePackService } from '../../../../../platform/languagePacks/common/languagePacks.js';
 import '../../../../../editor/test/browser/testEditorDom.js';
 import { IEditorService } from '../../../editor/common/editorService.js';
-import { IWorkspaceOpenService } from '../../../workspaces/browser/workspaceOpenService.js';
+import { IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { IWorkingCopyService } from '../../../workingCopy/common/workingCopyService.js';
 import { IViewsService } from '../../../views/common/viewsService.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
@@ -29,7 +29,7 @@ import type { ExtensionClientHandler } from '../../../../api/common/extHost.prot
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { FileService } from '../../../../../platform/files/common/fileService.js';
 import { getNLSLanguage } from '../../../../../nls.js';
-import { WorkspaceContextService } from '../../../workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../configuration/test/common/testServices.js';
 import { ConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { MainThreadConfiguration } from '../../../../api/browser/mainThreadConfiguration.js';
@@ -1113,6 +1113,13 @@ function acquireFile(services: InstantiationService, text: string, resource: URI
 
 function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesService, tasks: ProviderSink<TaskProvider>, tests: ProviderSink<TestProfileProvider>, output?: IOutputService, debug = new ProviderSink<IDebugConfigurationProvider>(), remote?: { connections: IRemoteConnectionApi; confirm: IDialogService['confirm']; }, extensionApi?: IExtensionApi): InstantiationService {
 	const services = workbenchInstantiationService(undefined, undefined, {
+		dialogService: {
+			onWillShowDialog: Event.None, onDidShowDialog: Event.None,
+			confirm: remote?.confirm ?? (() => assert.fail('Unexpected Remote confirmation')),
+			showMessage: () => assert.fail('Unexpected dialog'),
+			info: () => assert.fail('Unexpected dialog'), warn: () => assert.fail('Unexpected dialog'), error: () => assert.fail('Unexpected dialog'),
+			about: () => assert.fail('Unexpected dialog'), prompt: () => assert.fail('Unexpected dialog'), input: () => assert.fail('Unexpected dialog'),
+		},
 		languageFeatures: languages, output, fileResources: {
 			onDidChange: Event.None,
 			resolve: async input => ({ resource: input.resource, text: input.bootstrapText ?? '', revision: '1' }),
@@ -1135,7 +1142,7 @@ function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesServ
 	// These registrations exercise host callbacks without opening editor UI.
 	services.registerInstance(IEditorService, { openEditor: async () => assert.fail('Unexpected editor open') } as unknown as IEditorService);
 	services.registerInstance(IEditorPart, { groups: [], activeGroup: undefined } as unknown as IEditorPart);
-	services.registerInstance(IWorkspaceOpenService, { canOpenFolder: false, canOpenWorkspace: false, openFolder: async () => assert.fail('Unexpected folder open'), openWorkspace: async () => assert.fail('Unexpected workspace open'), pickFolder: async () => assert.fail('Unexpected folder picker') });
+	services.registerInstance(IFileDialogService, { pickFolderAndOpen: async () => assert.fail('Unexpected folder open'), pickWorkspaceAndOpen: async () => assert.fail('Unexpected workspace open'), pickFileToSave: async () => undefined, showOpenDialog: async () => assert.fail('Unexpected folder picker'), showSaveDialog: async () => undefined, showSaveConfirm: async () => 2 });
 	services.registerInstance(IWorkingCopyService, { get: () => assert.fail('Unexpected working copy request') } as unknown as IWorkingCopyService);
 	services.registerInstance(IViewsService, { openView: async () => assert.fail('Unexpected view open') } as unknown as IViewsService);
 	services.registerInstance(IClipboardService, { writeText: async () => assert.fail('Unexpected clipboard write') } as unknown as IClipboardService);
@@ -1162,13 +1169,7 @@ function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesServ
 	});
 	services.registerInstance(IRemoteConnectionApi, remote?.connections ?? UnavailableRemoteConnectionApi);
 	services.registerSingleton(IRemoteConnectionService, () => services.createInstance(RemoteConnectionService));
-	services.registerInstance(IDialogService, {
-		onWillShowDialog: Event.None, onDidShowDialog: Event.None,
-		confirm: remote?.confirm ?? (() => assert.fail('Unexpected Remote confirmation')),
-		showMessage: () => assert.fail('Unexpected dialog'),
-		info: () => assert.fail('Unexpected dialog'), warn: () => assert.fail('Unexpected dialog'), error: () => assert.fail('Unexpected dialog'),
-		about: () => assert.fail('Unexpected dialog'), prompt: () => assert.fail('Unexpected dialog'), input: () => assert.fail('Unexpected dialog'),
-	});
+
 	services.registerSingleton(IMarkerService, () => services.createInstance(MarkerService));
 	services.registerInstance(ILogService, new NullLoggerService());
 	services.registerSingleton(ILifecycleService, () => services.createInstance(FixtureLifecycleService, undefined));
@@ -1571,7 +1572,7 @@ test('workspace bridge reads the actual workspace owner and fences cleared subsc
 	const api = new FakeExtensionHostApi(snapshot(1, 'acme.run', [{ kind: 'workspaceEvents', registrationId: 'window' }]));
 	using languages = new LanguageFeaturesService();
 	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
-	using workspace = new WorkspaceContextService({ id: 'empty' });
+	using workspace = new TestWorkspaceService({ id: 'empty' });
 	using scope = services.createChild();
 	scope.registerInstance(IWorkspaceContextService, workspace);
 	const errors: unknown[] = [];
@@ -1607,7 +1608,7 @@ test('Node startup and recovery requests read fresh facts from the existing wind
 	const registry = new ConfigurationRegistry();
 	registry.registerConfiguration({ key: 'sample.enabled', defaultValue: true, parse: value => Boolean(value) });
 	using configuration = new InMemoryConfigurationService(registry);
-	using workspace = new WorkspaceContextService({ id: 'empty' });
+	using workspace = new TestWorkspaceService({ id: 'empty' });
 	using scope = services.createChild();
 	scope.registerInstance(IConfigurationService, configuration);
 	scope.registerInstance(IWorkspaceContextService, workspace);

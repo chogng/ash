@@ -22,7 +22,7 @@ import { InstantiationService } from '../../../platform/instantiation/common/ins
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { BrowserStorageService } from '../../services/storage/browser/storageService.js';
-import { WorkspaceContextService } from '../../services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../services/configuration/test/common/testServices.js';
 import { TextResourcePropertiesService } from '../../services/textresourceProperties/common/textResourcePropertiesService.js';
 import { TextModelResolverService } from '../../services/textmodelResolver/common/textModelResolverService.js';
 import { IFileTextModelService, ITextModelResourceService } from '../../services/textmodelResolver/common/textModelResourceService.js';
@@ -67,7 +67,7 @@ class TestWorkbenchServices extends InstantiationService {
 	public readonly resources = this._register(new DisposableStore());
 }
 
-export function workbenchInstantiationService(owner?: Pick<DisposableStore, 'add'>, storage?: IStorageService, overrides: { readonly languageFeatures?: ILanguageFeaturesService; readonly output?: IOutputService; readonly fileResources?: ITextResourceStore; } = {}): TestWorkbenchServices {
+export function workbenchInstantiationService(owner?: Pick<DisposableStore, 'add'>, storage?: IStorageService, overrides: { readonly languageFeatures?: ILanguageFeaturesService; readonly output?: IOutputService; readonly fileResources?: ITextResourceStore; readonly dialogService?: IDialogService; } = {}): TestWorkbenchServices {
 	const services = new TestWorkbenchServices();
 	owner?.add(services);
 	const resources = services.resources;
@@ -84,13 +84,14 @@ export function workbenchInstantiationService(owner?: Pick<DisposableStore, 'add
 	services.registerInstance(ILanguageService, languages);
 	services.registerInstance(ILanguageFeaturesService, features);
 	services.registerInstance(IModelService, resources.add(new ModelService(configuration, services.createInstance(TextResourcePropertiesService), languages, features, languageConfiguration)));
-	services.registerInstance(IWorkspaceContextService, resources.add(new WorkspaceContextService({ id: 'test', uri: URI.file('/workspace') })));
+	services.registerInstance(IWorkspaceContextService, resources.add(new TestWorkspaceService({ id: 'test', uri: URI.file('/workspace') })));
 	if (!storage) {
 		const browser = new JSDOM('', { url: 'https://ash.test' });
 		resources.add(toDisposable(() => browser.window.close()));
 		storage = resources.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'test', backend: browser.window.localStorage, flushInterval: 0 }));
 	}
 	services.registerInstance(IStorageService, storage);
+	if (overrides.dialogService) services.registerInstance(IDialogService, overrides.dialogService);
 	registerTestTerminalLifecycleServices(services);
 	const fileModels = resources.add(uriIdentityServices.createInstance(BrowserTextModelService, overrides.fileResources ?? {
 		onDidChange: Event.None,

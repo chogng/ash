@@ -32,7 +32,7 @@ import { createDisconnectedExtensionHostApi } from '../../../src/ash/platform/ag
 import { createExtensionHostInitialization } from '../../../src/ash/workbench/services/extensions/common/extensionHostProtocol.js';
 import { type ExtensionClientSource, type JsonValue } from '../../../src/ash/platform/agentHost/common/extensionHostApi.js';
 import { type ExtensionClientOperation, type ExtensionClientResult } from '../../../src/ash/workbench/api/common/extHost.protocol.js';
-import { WorkspaceContextService } from '../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { InMemoryConfigurationService } from '../../../src/ash/platform/configuration/common/inMemoryConfigurationService.js';
 import { MainThreadSCM } from '../../../src/ash/workbench/api/browser/mainThreadSCM.js';
 import { MainThreadExtensionBackend } from '../../../src/ash/workbench/api/browser/mainThreadExtensionBackend.js';
@@ -93,7 +93,7 @@ for (const source of [scmChineseMessages, settingsChineseMessages]) {
 
 const lifetime = new DisposableStore();
 const services = lifetime.add(new InstantiationService());
-const workspace = lifetime.add(new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') }));
+const workspace = lifetime.add(new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') }));
 const gitConfigurationRegistry = new ConfigurationRegistry();
 gitConfigurationRegistry.updateConfigurations({ add: [...parseExtensionManifest(JSON.stringify(gitManifest), { id: 'ash.git', name: 'git', publisher: 'ash', version: '0.1.0' }).contributes.configuration], remove: [] });
 const configuration = lifetime.add(new InMemoryConfigurationService(gitConfigurationRegistry));

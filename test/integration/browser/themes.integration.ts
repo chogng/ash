@@ -22,7 +22,7 @@ import { NullLoggerService } from '../../../src/ash/platform/log/common/log.js';
 import { DecorationsService } from '../../../src/ash/workbench/services/decorations/browser/decorationsService.js';
 import type { IDecorationData } from '../../../src/ash/workbench/services/decorations/common/decorations.js';
 import { DEFAULT_LABELS_CONTAINER, ResourceLabels } from '../../../src/ash/workbench/browser/labels.js';
-import { WorkspaceContextService } from '../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { BrowserTextModelService } from '../../../src/ash/workbench/services/textmodelResolver/browser/browserTextModelService.js';
 import manifest from '../../../extensions/theme-seti/package.json' with { type: 'json' };
 import themeUrl from '../../../extensions/theme-seti/icons/vs-seti-icon-theme.json?url';
@@ -312,7 +312,7 @@ document.querySelector('#light')!.addEventListener('click', () => { void configu
 document.querySelector('#svg-icons')!.addEventListener('click', () => { void configuration.updateValue(WorkbenchConfiguration.productIconTheme, 'test-svg-product'); });
 document.querySelector('#default-icons')!.addEventListener('click', () => { void configuration.updateValue(WorkbenchConfiguration.productIconTheme, 'default'); });
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
-const workspace = resources.add(new WorkspaceContextService({ id: 'icon-models', folders: [] }));
+const workspace = resources.add(new TestWorkspaceService({ id: 'icon-models', folders: [] }));
 resources.add(languages.registerLanguage({ id: 'rust' }));
 const models = resources.add(uriIdentityServices.createInstance(BrowserTextModelService, { onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: '', revision: undefined }), save: async () => ({ revision: undefined }) } satisfies ITextResourceStore, { languageService: languages }));
 const labels = resources.add(new ResourceLabels(DEFAULT_LABELS_CONTAINER, { workspaceContextService: workspace, resourceIconRenderer: themes, fileModels: models, languageService: languages }));

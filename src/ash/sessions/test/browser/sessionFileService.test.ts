@@ -1,7 +1,7 @@
 import { QueryBuilder } from '../../../workbench/services/search/common/queryBuilder.js';
 import { SearchService } from '../../../workbench/services/search/common/searchService.js';
 import { BulkEditTestServices } from '../../../workbench/contrib/bulkEdit/test/browser/bulkEditTestServices.js';
-import { WorkspaceContextService } from '../../../workbench/services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../workbench/services/configuration/test/common/testServices.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -40,7 +40,8 @@ test('Session files preserve their original directory through selection, directo
 		using sessions = services.createInstance(SessionsService);
 		services.registerInstance(ISessionsService, sessions);
 		await sessions.initialize();
-		using workspace = services.createInstance(SessionsWorkspaceContextService, () => ({ id: 'host', folders: [] }));
+		using workspace = new TestWorkspaceService({ id: 'host', folders: [] });
+		using workspaceSelection = services.createInstance(SessionsWorkspaceContextService, () => ({ id: 'host', folders: [] }), (next: import('../../../platform/workspace/common/workspace.js').IWorkspace) => workspace.updateWorkspace(next));
 		services.registerInstance(IWorkspaceContextService, workspace);
 		const calls: unknown[] = [];
 		const host = createDisconnectedRendererApi();
@@ -141,7 +142,7 @@ test('Workbench file and content search retain Session directory authorization a
 	const uri = URI.file('/sessions/first');
 	const owner = { sessionId: 'first', path: uri.fsPath };
 	const folder = { id: `session:${encodeURIComponent(owner.sessionId)}:${encodeURIComponent(owner.path)}`, name: 'first', index: 0, uri };
-	using workspace = new WorkspaceContextService({ id: 'session', folders: [folder] });
+	using workspace = new TestWorkspaceService({ id: 'session', folders: [folder] });
 	using services = new InstantiationService();
 	services.registerInstance(IWorkspaceContextService, workspace);
 	using provider = new MemoryProvider();
@@ -193,7 +194,8 @@ test('restored file identity waits for backend routing independently of Session 
 		services.registerInstance(ICustomViewService, customViews);
 		using sessions = services.createInstance(SessionsService);
 		services.registerInstance(ISessionsService, sessions);
-		using workspace = services.createInstance(SessionsWorkspaceContextService, () => ({ id: 'source', folders: [{ id: 'source', index: 0, name: 'source', uri: URI.file('/source') }] }));
+		using workspace = new TestWorkspaceService({ id: 'host', folders: [] });
+		using workspaceSelection = services.createInstance(SessionsWorkspaceContextService, () => ({ id: 'source', folders: [{ id: 'source', index: 0, name: 'source', uri: URI.file('/source') }] }), (next: import('../../../platform/workspace/common/workspace.js').IWorkspace) => workspace.updateWorkspace(next));
 		services.registerInstance(IWorkspaceContextService, workspace);
 		const calls: unknown[] = [];
 		const host = createDisconnectedRendererApi();

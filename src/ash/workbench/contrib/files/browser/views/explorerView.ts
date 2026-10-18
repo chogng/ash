@@ -1,3 +1,4 @@
+import { ExplorerRootContext, ExplorerFolderContext } from '../../common/files.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import type { IAsyncDataTreeViewState } from '../../../../../base/browser/ui/tree/asyncDataTree.js';
 import { isRecord } from '../../../../../base/common/types.js';
@@ -64,6 +65,8 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 	private readonly scopedContext: IScopedContextKeyService;
 	private readonly hasContextResource: IContextKey<boolean>;
 	private readonly contextIsFile: IContextKey<boolean>;
+	private readonly contextIsRoot: IContextKey<boolean>;
+	private readonly contextIsFolder: IContextKey<boolean>;
 	private readonly contextCanModify: IContextKey<boolean>;
 	private readonly contextCanCreate: IContextKey<boolean>;
 	private compressedFocusIndex = 0;
@@ -170,6 +173,8 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		ExplorerFocusedContext.bindTo(this.scopedContext).set(true);
 		this.hasContextResource = this.scopedContext.createKey<boolean>('ashExplorerHasResource', false);
 		this.contextIsFile = this.scopedContext.createKey<boolean>('ashExplorerIsFile', false);
+		this.contextIsRoot = ExplorerRootContext.bindTo(this.scopedContext);
+		this.contextIsFolder = ExplorerFolderContext.bindTo(this.scopedContext);
 		this.contextCanModify = this.scopedContext.createKey<boolean>('ashExplorerCanModify', false);
 		this.contextCanCreate = this.scopedContext.createKey<boolean>('ashExplorerCanCreate', false);
 		this.hasCutFiles = this.scopedContext.createKey<boolean>('ashExplorerHasCutFiles', explorerService.getToCopy().cut);
@@ -529,6 +534,8 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		const isRoot = item ? item.resource.scheme === 'ash-workspace' || !!folder && extUriBiasedIgnorePathCase.isEqual(folder.uri, item.resource) : false;
 		this.hasContextResource.set(!!item);
 		this.contextIsFile.set(item?.kind === FileKind.File);
+		this.contextIsRoot.set(isRoot);
+		this.contextIsFolder.set(item?.kind === FileKind.Directory);
 		this.contextCanModify.set(!!item && !isRoot);
 		this.contextCanCreate.set(item
 			? item.kind === FileKind.Directory && item.resource.scheme !== 'ash-workspace'

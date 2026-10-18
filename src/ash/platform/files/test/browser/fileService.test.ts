@@ -16,7 +16,7 @@ import { workspaceResourceFromPath } from "../../../workspace/common/workspace.j
 import { FileKind, FileNotFoundError, FileRevisionConflictError } from "../../../../platform/files/common/files.js";
 import type { FsChanged } from "../../../../../../.build/protocol/typescript/index.js";
 import { workspaceRelativePath, type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
-import { WorkspaceContextService } from "../../../../workbench/services/workspaces/browser/workspaceContextService.js";
+import { TestWorkspaceService } from "../../../../workbench/services/configuration/test/common/testServices.js";
 import { createSshRemoteWorkspaceUri } from "../../../../platform/remote/common/remote.js";
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { WorkspaceWatcher } from '../../../../workbench/contrib/files/browser/workspaceWatcher.js';
@@ -31,7 +31,7 @@ test("disconnected file API declines system file paste without requiring App Ser
 });
 
 test("AppServerFileSystemProvider passes the paste destination and move request to App Server", async () => {
-	using workspace = new WorkspaceContextService({ id: 'project', uri: URI.file('/project') });
+	using workspace = new TestWorkspaceService({ id: 'project', uri: URI.file('/project') });
 	const requests: unknown[] = [];
 	using service = new AppServerFileSystemProvider({
 		directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
@@ -124,7 +124,7 @@ test('AppServer file operations and notifications preserve POSIX basenames on di
 	const renamedName = `renamed-${originalName}`;
 	const source = root.joinPathSegment(originalName);
 	const target = root.joinPathSegment(renamedName);
-	using workspace = new WorkspaceContextService({ id: 'project', uri: root });
+	using workspace = new TestWorkspaceService({ id: 'project', uri: root });
 	using changes = new Emitter<FsChanged>();
 	const requests: unknown[] = [];
 	using provider = new AppServerFileSystemProvider({
@@ -158,7 +158,7 @@ test("AppServerFileSystemProvider maps wire entries back to resource URIs", asyn
 	const root = URI.parse("file:///C:/project");
 	const releasedResources: string[] = [];
 	using workspaceContextService: IWorkspaceContextService =
-		new WorkspaceContextService({ id: "workspace", uri: root });
+		new TestWorkspaceService({ id: "workspace", uri: root });
 	const service = new AppServerFileSystemProvider({
 		directories: () => workspaceContextService.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 		api: {
@@ -264,7 +264,7 @@ test("AppServerFileSystemProvider maps wire entries back to resource URIs", asyn
 });
 
 test('workspace stream cancellation releases a snapshot allocated after the caller stops', async () => {
-	using workspace = new WorkspaceContextService({ id: 'project', uri: URI.file('/project') });
+	using workspace = new TestWorkspaceService({ id: 'project', uri: URI.file('/project') });
 	using cancellation = new CancellationTokenSource();
 	const allocated = new DeferredPromise<{ resource: { resourceId: string; mimeType: string; size: number; sha256: string; }; revision: string; }>();
 	const released: string[] = [];
@@ -287,7 +287,7 @@ test('workspace stream cancellation releases a snapshot allocated after the call
 });
 
 test('workspace stream cancellation stops requesting chunks and releases its snapshot', async () => {
-	using workspace = new WorkspaceContextService({ id: 'project', uri: URI.file('/project') });
+	using workspace = new TestWorkspaceService({ id: 'project', uri: URI.file('/project') });
 	using cancellation = new CancellationTokenSource();
 	const requested: number[] = [];
 	const released: string[] = [];
@@ -313,7 +313,7 @@ test('workspace stream cancellation stops requesting chunks and releases its sna
 
 test("AppServerFileSystemProvider maps App Server revision conflicts to the file contract", async () => {
 	const resource = URI.parse("file:///C:/project/src/main.ts");
-	using workspaceContextService: IWorkspaceContextService = new WorkspaceContextService({ id: "workspace", uri: URI.parse("file:///C:/project") });
+	using workspaceContextService: IWorkspaceContextService = new TestWorkspaceService({ id: "workspace", uri: URI.parse("file:///C:/project") });
 	const service = new AppServerFileSystemProvider({
 		directories: () => workspaceContextService.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 		resourceApi: unavailableResourceApi(),
@@ -339,7 +339,7 @@ test("AppServerFileSystemProvider maps App Server revision conflicts to the file
 });
 
 test('AppServerFileSystemProvider reports missing entries through the file contract for every read operation', async () => {
-	using workspace = new WorkspaceContextService({ id: 'project', uri: URI.file('/project') });
+	using workspace = new TestWorkspaceService({ id: 'project', uri: URI.file('/project') });
 	const resource = URI.file('/project/missing');
 	let error: Error = new AppServerRemoteError(-32000, 'Missing entry', { kind: 'FileSystemNotFound' });
 	const missing = async (): Promise<never> => { throw error; };
@@ -364,7 +364,7 @@ test("AppServerFileSystemProvider reads connection-owned binary resources in bou
 	bytes[bytes.length - 1] = 70;
 	const readOffsets: number[] = [];
 	const releasedResources: string[] = [];
-	using workspaceContextService: IWorkspaceContextService = new WorkspaceContextService({ id: "workspace", uri: root });
+	using workspaceContextService: IWorkspaceContextService = new TestWorkspaceService({ id: "workspace", uri: root });
 	const service = new AppServerFileSystemProvider({
 		directories: () => workspaceContextService.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 		api: {
@@ -412,7 +412,7 @@ test("AppServerFileSystemProvider reads connection-owned binary resources in bou
 
 test("AppServerFileSystemProvider maps App Server invalidations to workspace resources", () => {
 	const root = URI.parse("file:///C:/project");
-	using workspaceContextService: IWorkspaceContextService = new WorkspaceContextService({ id: "workspace", uri: root });
+	using workspaceContextService: IWorkspaceContextService = new TestWorkspaceService({ id: "workspace", uri: root });
 	using changes = new Emitter<FsChanged>();
 	using service = new AppServerFileSystemProvider({
 		directories: () => workspaceContextService.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
@@ -430,7 +430,7 @@ test("AppServerFileSystemProvider maps App Server invalidations to workspace res
 });
 
 test("AppServerFileSystemProvider routes nested multi-root resources by Workspace folder id", async () => {
-	using workspaceContextService: IWorkspaceContextService = new WorkspaceContextService({
+	using workspaceContextService: IWorkspaceContextService = new TestWorkspaceService({
 		id: "multi-root",
 		folders: [
 			{ id: "parent", uri: URI.parse("file:///C:/project"), name: "parent", index: 0 },
@@ -544,7 +544,7 @@ test('FileService decodes text from provider bytes without changing revisions or
 });
 
 test('AppServerFileSystemProvider releases a byte resource when reading its content fails', async () => {
-	using workspace = new WorkspaceContextService({ id: 'read-failure', uri: URI.file('/workspace') });
+	using workspace = new TestWorkspaceService({ id: 'read-failure', uri: URI.file('/workspace') });
 	const failure = new Error('Resource read failed');
 	const released: string[] = [];
 	using provider = new AppServerFileSystemProvider({
@@ -746,7 +746,7 @@ suite('FileService capability and watch ownership', () => {
 		using provider = new TestFileProvider('workspace');
 		using service = new FileService();
 		using registration = service.registerProvider('file', provider);
-		using workspace = new WorkspaceContextService({ id: 'first', uri: URI.file('/first') });
+		using workspace = new TestWorkspaceService({ id: 'first', uri: URI.file('/first') });
 		using watcher = new WorkspaceWatcher(service, workspace);
 		const observed: (readonly URI[] | undefined)[] = [];
 		const changed = new DeferredPromise<void>();
@@ -895,7 +895,7 @@ class TestFileProvider implements IFileSystemProvider {
 }
 
 test('file text codec requests preserve logical text and backend encoding metadata through the provider', async () => {
-	using workspace = new WorkspaceContextService({ id: 'project', uri: URI.file('/project') });
+	using workspace = new TestWorkspaceService({ id: 'project', uri: URI.file('/project') });
 	const resource = URI.file('/project/encoding.txt');
 	const requests: unknown[] = [];
 	using provider = new AppServerFileSystemProvider({
@@ -916,7 +916,7 @@ test('file text codec requests preserve logical text and backend encoding metada
 
 test('file text codec errors retain their domain category and conflicts protect encoding-only saves', async () => {
 	const { FileSystemProviderErrorCode, toFileSystemProviderErrorCode } = await import('../../common/files.js');
-	using workspace = new WorkspaceContextService({ id: 'project', uri: URI.file('/project') });
+	using workspace = new TestWorkspaceService({ id: 'project', uri: URI.file('/project') });
 	const resource = URI.file('/project/encoding.txt');
 	using provider = new AppServerFileSystemProvider({
 		directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })), resourceApi: unavailableResourceApi(),
@@ -931,7 +931,7 @@ test('file text codec errors retain their domain category and conflicts protect 
 });
 
 test('shared resource routing keeps conversation files independent of Workspace selection and rechecks backend access', async () => {
-	using workspace = new WorkspaceContextService({ id: 'source', uri: URI.file('/source') });
+	using workspace = new TestWorkspaceService({ id: 'source', uri: URI.file('/source') });
 	const calls: unknown[] = [];
 	let writable = true;
 	let resolutions = 0;

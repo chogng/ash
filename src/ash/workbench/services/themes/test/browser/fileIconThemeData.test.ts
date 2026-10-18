@@ -20,7 +20,7 @@ import { JSDOM } from 'jsdom';
 import { ILanguageService } from '../../../../../editor/common/languages/language.js';
 import { LanguageService } from '../../../../../editor/common/services/languageService.js';
 import { DEFAULT_LABELS_CONTAINER, ResourceLabels } from '../../../../browser/labels.js';
-import { WorkspaceContextService } from '../../../workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../configuration/test/common/testServices.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
@@ -74,7 +74,7 @@ test('packaged Seti resolves filenames, extensions and light variants and can be
 		assert.notEqual(render('main.ts').style.color, ts.style.color);
 		let iconChanges = 0;
 		using iconListener = themes.onDidChangeResourceIcons(() => iconChanges++);
-		using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('C:/project') });
+		using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('C:/project') });
 		using labels = new ResourceLabels(DEFAULT_LABELS_CONTAINER, { workspaceContextService: workspace, resourceIconRenderer: themes, fileModels: models, languageService: languages });
 		const label = labels.create(browser.window.document.body);
 		label.setFile(URI.file('C:/project/source.custom'));

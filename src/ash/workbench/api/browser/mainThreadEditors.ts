@@ -1,3 +1,5 @@
+import { IContextKeyService, ContextKeyExpr } from '../../../platform/contextkey/common/contextkey.js';
+import { OpenFolderWorkspaceSupportContext, BrowserLocalFolderSupportContext } from '../../common/contextkeys.js';
 import { TextModelChangeReason } from '../../../editor/common/core/textChange.js';
 import { IModelService } from '../../../editor/common/services/model.js';
 import type { ITextModel } from '../../../editor/common/model.js';
@@ -13,7 +15,9 @@ import { IEditorService } from '../../services/editor/common/editorService.js';
 import { IEditorPart } from '../../browser/parts/editor/editorPart.js';
 import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
 import { DialogSeverity, IDialogService } from '../../../platform/dialogs/common/dialogs.js';
-import { IWorkspaceOpenService } from '../../services/workspaces/browser/workspaceOpenService.js';
+import { IFileDialogService } from '../../../platform/dialogs/common/dialogs.js';
+import { IHostService } from '../../services/host/browser/host.js';
+import { hasWorkspaceFileExtension } from '../../../platform/workspace/common/workspace.js';
 import { IWorkingCopyService } from '../../services/workingCopy/common/workingCopyService.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { IViewsService } from '../../services/views/common/viewsService.js';
@@ -62,8 +66,9 @@ export class MainThreadEditors extends Disposable {
 		private readonly quickInput: IQuickInputService,
 		@IDialogService
 		private readonly dialogs: IDialogService,
-		@IWorkspaceOpenService
-		private readonly workspace: IWorkspaceOpenService,
+		@IFileDialogService private readonly fileDialogs: IFileDialogService,
+		@IHostService private readonly host: IHostService,
+		@IContextKeyService private readonly contexts: IContextKeyService,
 		@IWorkingCopyService
 		private readonly workingCopies: IWorkingCopyService,
 		@IInstantiationService
@@ -136,7 +141,10 @@ export class MainThreadEditors extends Disposable {
 				});
 			}
 			case 'openEditorResources': return [...new Set(this.part.groups.flatMap(group => group.inputs.map(input => input.resource.toString())))].slice(0, 4096);
-			case 'hostFacts': return { canClone: this.workspace.canOpenWorkspace, canOpenWorkspace: this.workspace.canOpenWorkspace };
+			case 'hostFacts': {
+				const canOpenWorkspace = this.contexts.contextMatchesRules(ContextKeyExpr.or(OpenFolderWorkspaceSupportContext.isEqualTo(true), BrowserLocalFolderSupportContext.isEqualTo(true)));
+				return { canClone: canOpenWorkspace, canOpenWorkspace };
+			}
 			case 'input': {
 				using cancellation = new CancellationTokenSource();
 				const abort = () => cancellation.cancel();
@@ -168,17 +176,18 @@ export class MainThreadEditors extends Disposable {
 				return { selection: result.result ?? null };
 			}
 			case 'pickFolder': {
-				const folder = await this.workspace.pickFolder(optionalText(request.defaultPath));
-				// The selected path belongs to the filesystem host, which may differ from
-				// both the renderer and the extension process. Only URIs cross this boundary.
-				const resource = folder === undefined ? undefined : await this.paths.fileURI(folder);
+				const defaultPath = optionalText(request.defaultPath);
+				const resources = await this.fileDialogs.showOpenDialog({ canSelectFiles: false, canSelectFolders: true, defaultUri: defaultPath === undefined ? undefined : await this.paths.fileURI(defaultPath) });
+				const resource = resources?.[0];
 				signal.throwIfAborted();
 				return resource?.toString() ?? null;
 			}
-			case 'openWorkspace':
+			case 'openWorkspace': {
 				if (request.forceNewWindow !== undefined && typeof request.forceNewWindow !== 'boolean') throw new TypeError('Invalid workspace window policy');
-				await this.workspace.openWorkspace(text(request.path), request.forceNewWindow === true);
+				const resource = await this.paths.fileURI(text(request.path));
+				await this.host.openWindow([hasWorkspaceFileExtension(resource) ? { workspaceUri: resource } : { folderUri: resource }], { forceNewWindow: request.forceNewWindow === true });
 				return null;
+			}
 			case 'openView':
 				await this.instantiation.invokeFunction(accessor => accessor.get(IViewsService).openView(text(request.id), request.focus === true));
 				return null;

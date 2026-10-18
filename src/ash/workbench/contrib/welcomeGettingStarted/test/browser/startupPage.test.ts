@@ -8,7 +8,7 @@ import { formatNlsMessage, resetNlsResolver, setNlsResolver } from '../../../../
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { Registry } from '../../../../../platform/registry/common/platform.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
-import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
 import type { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { isGettingStartedInput } from '../../browser/gettingStartedInput.js';
@@ -38,7 +38,7 @@ test('Startup editor setting opens Welcome only when the selected workspace perm
 		async openEditor(input: IResourceEditorInput) { opened.push(input); },
 		focusActiveEditor() { },
 	} satisfies IEditorService;
-	using workspace = new WorkspaceContextService({ id: 'empty', folders: [] });
+	using workspace = new TestWorkspaceService({ id: 'empty', folders: [] });
 	using runner = new StartupPageRunnerContribution(configuration, editor, workspace);
 	await runner.onWorkspaceRestored();
 	assert.equal(opened.length, 1);
@@ -84,7 +84,7 @@ test('Welcome waits for restored editors and accepts only implemented startup mo
 		async openEditor(input: IResourceEditorInput) { opened.push(input); },
 		focusActiveEditor() { },
 	} satisfies IEditorService;
-	using workspace = new WorkspaceContextService({ id: 'folder', folders: [{ id: 'folder', uri: URI.file('/folder'), name: 'folder', index: 0 }] });
+	using workspace = new TestWorkspaceService({ id: 'folder', folders: [{ id: 'folder', uri: URI.file('/folder'), name: 'folder', index: 0 }] });
 	using runner = new StartupPageRunnerContribution(configuration, editor, workspace);
 	await runner.onWorkspaceRestored();
 	assert.equal(opened.length, 1);

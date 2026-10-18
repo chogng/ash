@@ -1,3 +1,5 @@
+import { createSshRemoteWorkspaceUri } from '../../../remote/common/remote.js';
+import { getWorkspaceRemoteAuthority, serializeWorkspaceIdentifier, parseWorkspaceIdentifier } from '../../../workspace/common/workspace.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, writeFile, rename, rm, realpath, symlink } from 'node:fs/promises';
@@ -175,7 +177,11 @@ test('workspace metadata access is limited to the current file and preserves rev
 	const uri = URI.file(path).toString();
 	const original = await f.editing.configuration({ operation: 'read', uri }) as { revision: string; content: string; };
 	assert.ok(original.content.includes('folders'));
-	await assert.rejects(f.editing.configuration({ operation: 'read', uri: URI.file(join(f.root, 'private.txt')).toString() }), /Only the current workspace configuration/);
+	const sibling = URI.file(join(f.root, 'private.txt')).toString();
+	await writeFile(URI.parse(sibling).fsPath, 'private content');
+	assert.deepEqual(await f.editing.configuration({ operation: 'read', uri: sibling }), { error: 'notCurrent' });
+	await assert.rejects(f.editing.configuration({ operation: 'write', uri: sibling, content: 'overwritten', options: { create: false, overwrite: true } }), /Only the current workspace configuration/);
+	assert.equal(await readFile(URI.parse(sibling).fsPath, 'utf8'), 'private content');
 	const external = '{"folders":[],"settings":{"external":true}}';
 	await writeFile(path, external);
 	assert.deepEqual(await f.editing.configuration({ operation: 'write', uri, content: '{}', options: { create: false, overwrite: true, expectedRevision: original.revision } }), { error: 'revisionConflict' });
@@ -235,4 +241,50 @@ test('external removal is vetoed before changing the backend when dirty files re
 	assert.match(String(f.errors[0]), /dirty folder/);
 	assert.equal(f.requests.length, calls);
 	assert.equal(f.context.getResolvedWorkspace(), previous);
+});
+
+
+test('Remote root edits preserve one authority and persist URI entries without reading remote paths in Main', async () => {
+	await using f = await fixture();
+	const first = createSshRemoteWorkspaceUri('test-host', '/remote-only/client');
+	const second = createSshRemoteWorkspaceUri('test-host', '/remote-only/server');
+	f.context.updateWorkspace(getSingleFolderWorkspaceIdentifier(first));
+	await f.editing.edit({ operation: 'folders', index: 1, deleteCount: 0, folders: [{ uri: second.toString(), name: 'Server' }] });
+	const current = f.context.getResolvedWorkspace();
+	assert.equal(getWorkspaceRemoteAuthority(current), 'ssh+test-host');
+	assert.deepEqual(f.requests.at(-1)!.map(folder => folder.path), ['/remote-only/client', '/remote-only/server']);
+	const stored = parseJsonc(await readFile(current.configuration!.fsPath, 'utf8')) as { folders: { uri: string; }[]; remoteAuthority: string; };
+	assert.deepEqual(stored.folders.map(folder => folder.uri), [first.toString(), second.toString()]);
+	assert.equal(stored.remoteAuthority, 'ssh+test-host');
+	const target = join(f.root, 'saved.ash-workspace');
+	await f.editing.edit({ operation: 'save', path: target });
+	const reopened = await f.manager.resolveWorkspace(getWorkspaceIdentifier(URI.file(target)));
+	assert.deepEqual(reopened.folders.map(folder => folder.uri.toString()), [first.toString(), second.toString()]);
+	assert.equal(getWorkspaceRemoteAuthority(reopened), 'ssh+test-host');
+	await f.editing.edit({ operation: 'folders', index: 0, deleteCount: 2, folders: [] });
+	assert.equal(getWorkspaceRemoteAuthority(f.context.getResolvedWorkspace()), 'ssh+test-host');
+	assert.equal(getWorkspaceRemoteAuthority(parseWorkspaceIdentifier(serializeWorkspaceIdentifier(f.context.getWorkspace()))), 'ssh+test-host');
+});
+
+test('Remote root edits reject local and foreign authorities and roll back a backend rejection', async () => {
+	await using f = await fixture();
+	const first = createSshRemoteWorkspaceUri('test-host', '/remote-only/client');
+	const second = createSshRemoteWorkspaceUri('test-host', '/remote-only/server');
+	f.context.updateWorkspace(getSingleFolderWorkspaceIdentifier(first));
+	await f.editing.edit({ operation: 'folders', index: 1, deleteCount: 0, folders: [{ uri: second.toString() }] });
+	const current = f.context.getResolvedWorkspace();
+	const original = await readFile(current.configuration!.fsPath, 'utf8');
+	for (const uri of [URI.file(f.first), createSshRemoteWorkspaceUri('other-host', '/remote-only/server')]) {
+		await assert.rejects(f.editing.edit({ operation: 'folders', index: 2, deleteCount: 0, folders: [{ uri: uri.toString() }] }), /remote host/);
+	}
+	f.reject(new Error('Remote backend rejected folder update'));
+	await assert.rejects(f.editing.edit({ operation: 'folders', index: 0, deleteCount: 1, folders: [] }), /Remote backend rejected/);
+	assert.equal(f.context.getResolvedWorkspace(), current);
+	assert.equal(await readFile(current.configuration!.fsPath, 'utf8'), original);
+});
+
+
+test('Desktop metadata resolution rejects browser profile URIs before filesystem access', async () => {
+	const manager = new WorkspacesManagementMainService({ resolvePath: async () => { throw new Error('Unexpected local path access'); }, readFile: async () => { throw new Error('Unexpected local file read'); } });
+	await assert.rejects(manager.resolveWorkspace({ id: 'browser', configPath: URI.from({ scheme: 'ash-userdata', path: '/workspaces/temporary/workspace.ash-workspace' }) }), /local file/);
 });

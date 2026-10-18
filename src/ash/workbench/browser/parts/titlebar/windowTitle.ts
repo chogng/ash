@@ -39,7 +39,9 @@ export class WindowTitle extends Disposable {
 	) {
 		super();
 		this._register(editorGroupsContainer.onDidChangeActiveGroup(() => this.bindActiveGroup()));
-		this._register(workspaceService.onDidChangeWorkspace(() => this.updateTitle()));
+		this._register(workspaceService.onDidChangeWorkspaceName(() => this.updateTitle()));
+		this._register(workspaceService.onDidChangeWorkspaceFolders(() => this.updateTitle()));
+		this._register(workspaceService.onDidChangeWorkbenchState(() => this.updateTitle()));
 		this._register(labelService.onDidChangeFormatters(() => this.updateTitle()));
 		this._register(workingCopyService.onDidChangeDirty(() => this.updateTitle()));
 		this._register(workingCopyService.onDidRegister(() => this.updateTitle()));

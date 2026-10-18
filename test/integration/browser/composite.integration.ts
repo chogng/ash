@@ -102,7 +102,7 @@ import { IFileService } from '../../../src/ash/platform/files/common/files.js';
 import { IUriIdentityService } from '../../../src/ash/platform/uriIdentity/common/uriIdentity.js';
 import { AppServerFileSystemProvider } from '../../../src/ash/platform/agentHost/browser/appServerFileSystemProvider.js';
 import { createDisconnectedFileApi } from '../../../src/ash/platform/files/browser/fileApi.js';
-import { WorkspaceContextService } from '../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { FileEditorInput } from '../../../src/ash/workbench/contrib/files/browser/editors/fileEditorInput.js';
 import { StandaloneServices } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
 import { CodeEditorWidget } from '../../../src/ash/editor/browser/widget/codeEditor/codeEditorWidget.js';
@@ -284,7 +284,7 @@ if (new URLSearchParams(location.search).has('problems')) {
 		{ resource: URI.file('/project/src/utils.ts'), marker: { severity: MarkerSeverity.Warning, message: "'result' is declared but its value is never read.", source: 'ts', startLineNumber: 4, startColumn: 1, endLineNumber: 4, endColumn: 7 } },
 	]);
 	services.registerInstance(IMarkerService, markers);
-	services.registerInstance(IWorkspaceContextService, resources.add(new WorkspaceContextService({ id: 'problems', uri: URI.file('/project') })));
+	services.registerInstance(IWorkspaceContextService, resources.add(new TestWorkspaceService({ id: 'problems', uri: URI.file('/project') })));
 	services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { throw new Error('Editor opening is outside this title scenario'); }, focusActiveEditor() { } });
 	services.registerInstance(IClipboardService, { writeText: async (text: string) => { copiedProblems.push(text); } } as IClipboardService);
 	services.registerInstance(IContextMenuService, resources.add(new BrowserContextMenuService(
@@ -633,7 +633,7 @@ window.ashCompositeIntegration = {
 		(editorServices.get(IThemeService) as TestThemeService).setColorTheme(theme);
 	},
 	openFileAliases: async target => {
-		const workspace = resources.add(new WorkspaceContextService({ id: 'composite', uri: URI.file('/composite') }));
+		const workspace = resources.add(new TestWorkspaceService({ id: 'composite', uri: URI.file('/composite') }));
 		const unavailable = (): never => { throw new Error('Unexpected file operation in editor identity fixture'); };
 		const provider = resources.add(new AppServerFileSystemProvider({
 			directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),

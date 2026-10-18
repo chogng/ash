@@ -1,3 +1,4 @@
+import { createSshRemoteWorkspaceUri } from '../../../remote/common/remote.js';
 import assert from 'node:assert/strict';
 import { suite, suiteSetup, suiteTeardown, test } from 'mocha';
 import { Event } from '../../../../base/common/event.js';
@@ -142,6 +143,18 @@ suite('workspace trust during directory opening', () => {
 			assert.deepEqual(writes, [{ path: '/partial', grant }]);
 		} finally { reply = undefined; }
 	});
+	test('Remote folder validation preserves the remote resource identity for dirty-owner checks', async () => {
+		const client = { request: async () => { throw new Error('must not mutate directories'); } } as unknown as AppServerProtocolClient;
+		using registration = host.registerAppServerWorkspaceHost(client, async () => { }, { requestWorkspaceTrust: async () => 'cancel' }, trustApi(new Map(), []), folders => {
+			assert.equal(folders[0]?.toString(), 'ash-remote://ssh+host/second');
+		}, path => createSshRemoteWorkspaceUri('host', path));
+		const completion = new Promise<unknown>(resolve => { reply = resolve; });
+		try {
+			listeners.get('ash:workspace:operation')!({ nonce: 'remote', operation: 'validateFolders', params: { folders: [{ id: 'second', path: '/second', grant: { type: 'config' } }] } });
+			assert.deepEqual(await completion, { nonce: 'remote', result: undefined });
+		} finally { reply = undefined; }
+	});
+
 	test('folder validation asks the editor owner without sending a backend directory mutation', async () => {
 		const client = { request: async () => { throw new Error('must not mutate directories'); } } as unknown as AppServerProtocolClient;
 		using registration = host.registerAppServerWorkspaceHost(client, async () => { }, { requestWorkspaceTrust: async () => 'cancel' }, trustApi(new Map(), []), folders => {

@@ -8,9 +8,11 @@ import {
 	toDisposable,
 } from "../../../../base/common/lifecycle.js";
 import { isMacintosh } from "../../../../base/common/platform.js";
+import { getErrorMessage, isCancellationError } from '../../../../base/common/errors.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import {
 	type IMenu,
-	type IMenuService,
+	IMenuService,
 	MenuId,
 	MenuItemAction,
 } from "../../../../platform/actions/common/actions.js";
@@ -41,9 +43,10 @@ export class NativeMenubarControl extends Disposable
 	readonly domNode = undefined;
 
 	constructor(
-		menuService: IMenuService,
 		api: INativeMenubarApi,
-		applicationMenuId: MenuId = MenuId.MenubarMainMenu,
+		applicationMenuId: MenuId,
+		@IMenuService menuService: IMenuService,
+		@INotificationService private readonly notifications: INotificationService,
 	) {
 		super();
 		this.api = api;
@@ -55,13 +58,20 @@ export class NativeMenubarControl extends Disposable
 		}
 		const selection = api.onDidSelect(({ revision, id }) => {
 			const action = this.actionsByRevision.get(revision)?.get(id);
-			if (action) runAction(action);
+			if (action) void this.runAction(action);
 		});
 		this._register(toDisposable(() => selection.dispose()));
 		this._register(toDisposable(() => {
 			this.actionsByRevision.clear();
 		}));
 		this.synchronize();
+	}
+
+	private async runAction(action: IAction): Promise<void> {
+		try { await action.run(); }
+		catch (error) {
+			if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(getErrorMessage(error));
+		}
 	}
 
 	private synchronize(): void {
@@ -215,14 +225,4 @@ function trimSeparators(
 	}
 	if (result[result.length - 1]?.type === "separator") result.pop();
 	return result;
-}
-
-function runAction(action: IAction): void {
-	try {
-		Promise.resolve(action.run()).catch((error: unknown) => {
-			console.error(`Menubar action failed: ${action.id}`, error);
-		});
-	} catch (error) {
-		console.error(`Menubar action failed: ${action.id}`, error);
-	}
 }

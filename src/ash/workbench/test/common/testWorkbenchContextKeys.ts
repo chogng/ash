@@ -56,6 +56,9 @@ const emptyGroup: IEditorGroup = Object.freeze({
 
 const emptyWorkspaceContextService: IWorkspaceContextService = Object.freeze({
 	onDidChangeWorkspace: Event.None,
+	onDidChangeWorkspaceFolders: Event.None,
+	onDidChangeWorkbenchState: Event.None,
+	onDidChangeWorkspaceName: Event.None,
 	getWorkspace: () => Object.freeze({ id: 'test-workspace', folders: Object.freeze([]) }),
 	getWorkbenchState: () => WorkbenchState.EMPTY,
 	getWorkspaceFolder: () => null,

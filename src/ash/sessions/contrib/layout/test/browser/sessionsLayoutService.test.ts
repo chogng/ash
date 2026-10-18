@@ -25,7 +25,7 @@ import { NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { BrowserStorageService } from '../../../../../workbench/services/storage/browser/storageService.js';
-import { WorkspaceContextService } from '../../../../../workbench/services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../../../workbench/services/configuration/test/common/testServices.js';
 import { IEditorPart } from '../../../../../workbench/browser/parts/editor/editorPart.js';
 import { IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
 import type { EditorPartChangeEvent } from '../../../../../workbench/services/editor/common/editorState.js';
@@ -207,7 +207,7 @@ class EntryFixture extends Disposable {
 	public readonly lifecycle = this._register(new TestLifecycle(undefined, new NullLoggerService(), this.storage));
 	public readonly contextKeys = this._register(new ContextKeyService());
 	public readonly customViews = this._register(new CustomViewService(new NullLoggerService(), this.storage));
-	private readonly workspace = this._register(new WorkspaceContextService({ id: 'sessions', folders: [] }));
+	private readonly workspace = this._register(new TestWorkspaceService({ id: 'sessions', folders: [] }));
 	public readonly editorChanged = this._register(new Emitter<EditorPartChangeEvent>());
 	public readonly activeEditorChanged = this._register(new Emitter<void>());
 	public readonly revealActiveEditor = this._register(new Emitter<void>());

@@ -38,7 +38,7 @@ import { InMemoryConfigurationService } from '../../../platform/configuration/co
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { IResourceIconRenderer, IResourceLabelService, ResourceLabelService } from '../../browser/labels.js';
-import { WorkspaceContextService } from '../../services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../services/configuration/test/common/testServices.js';
 import { ILinkPresentationService } from '../../../platform/dataChannel/common/dataChannel.js';
 import { LinkPresentationService } from '../../services/dataChannel/browser/dataChannelService.js';
 import { darkColorTheme } from '../../../platform/theme/common/colorTheme.js';
@@ -79,7 +79,7 @@ export function createTestTextFileService(files: IFileSystemProvider | IFileServ
 class TestTextFileService extends TextFileService {
 	constructor(provider: IFileSystemProvider | IFileService, suppliedConfiguration?: IConfigurationService) {
 		const configuration = suppliedConfiguration ?? new WorkbenchConfigurationService();
-		const workspace = new WorkspaceContextService({ id: 'test-text-files', folders: [] });
+		const workspace = new TestWorkspaceService({ id: 'test-text-files', folders: [] });
 		const policy = new FilesConfigurationService(configuration, workspace);
 		let ownedFiles: FileService | undefined;
 		let files: IFileService;
@@ -166,7 +166,7 @@ export function createTestEditorServices(configuration?: IConfigurationService, 
 	} else if (!services.has(IConfigurationService)) {
 		services.registerSingleton(IConfigurationService, () => new InMemoryConfigurationService());
 	}
-	services.registerSingleton(IWorkspaceContextService, () => new WorkspaceContextService({ id: 'test-editor', folders: [] }));
+	services.registerSingleton(IWorkspaceContextService, () => new TestWorkspaceService({ id: 'test-editor', folders: [] }));
 	if (!services.has(IFilesConfigurationService)) services.registerSingleton(IFilesConfigurationService, () => services.createInstance(FilesConfigurationService));
 	if (!services.has(IResourceIconRenderer)) services.registerInstance(IResourceIconRenderer, { onDidChangeResourceIcons: Event.None, getFileIconTheme: () => noFileIconTheme, renderFileIcon() { } });
 	if (!services.has(IStatusbarService)) services.registerSingleton(IStatusbarService, () => new StatusbarService());

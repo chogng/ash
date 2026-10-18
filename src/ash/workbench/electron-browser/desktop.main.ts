@@ -15,7 +15,7 @@ import { SyncDescriptor } from '../../platform/instantiation/common/descriptors.
 import { IWorkspaceEditingService } from '../services/workspaces/common/workspaceEditing.js';
 import { WorkspaceEditingService } from '../services/workspaces/electron-browser/workspaceEditingService.js';
 import { IContextKeyService } from '../../platform/contextkey/browser/contextKeyService.js';
-import { IWorkspaceContextService, getWorkspaceRemoteAuthority } from '../../platform/workspace/common/workspace.js';
+import { IWorkspaceContextService } from '../../platform/workspace/common/workspace.js';
 import { EnterMultiRootWorkspaceSupportContext } from '../common/contextkeys.js';
 import { WORKSPACE_EDIT_ERROR_CHANNEL } from '../../platform/workspace/common/workspaceIpc.js';
 import { INotificationService } from '../../platform/notification/common/notification.js';
@@ -192,7 +192,7 @@ export class DesktopMain extends Disposable {
 						catch (error) { event.veto(error instanceof Error ? error : new Error(String(error))); }
 					}));
 					const support = EnterMultiRootWorkspaceSupportContext.bindTo(services.get(IContextKeyService));
-					const update = () => support.set(!getWorkspaceRemoteAuthority(context.getWorkspace()));
+					const update = () => support.set(true);
 					update();
 					this._register(context.onDidChangeWorkspace(update));
 					this._register(toDisposable(() => support.reset()));

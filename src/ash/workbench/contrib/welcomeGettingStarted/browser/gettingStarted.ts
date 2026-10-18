@@ -1,5 +1,6 @@
 import { URI } from '../../../../base/common/uri.js';
-import { IWorkspacesService } from '../../../../platform/workspaces/common/workspaces.js';
+import { IWorkspacesService, recentWorkspaceUri } from '../../../../platform/workspaces/common/workspaces.js';
+import { basename } from '../../../../base/common/resources.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
@@ -9,8 +10,10 @@ import { RawContextKey, type IContextKey } from '../../../../platform/contextkey
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ICommandService, CommandsRegistry } from '../../../../platform/commands/common/commands.js';
 import { IGitHubConnectionService } from '../../../services/accounts/common/gitHubConnectionService.js';
-import { IRecentWorkspacesService } from '../../../services/workspaces/common/recentWorkspacesService.js';
-import { IWorkspaceOpenService } from '../../../services/workspaces/browser/workspaceOpenService.js';
+import { IHostService } from '../../../services/host/browser/host.js';
+import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { OpenFolderWorkspaceSupportContext, BrowserLocalFolderSupportContext } from '../../../common/contextkeys.js';
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { ConnectToRemoteCommandId } from '../../remote/browser/remoteActions.js';
 import { GettingStarted, type IGettingStartedProject } from './gettingStartedContent.js';
@@ -25,11 +28,12 @@ export class GettingStartedPage extends EditorPane implements IEditorPane {
 	private domNode: HTMLElement | undefined;
 	private content: GettingStarted | undefined;
 	private focusedContext: IContextKey<boolean> | undefined;
+	private recentGeneration = 0;
 
 	constructor(
-		@IRecentWorkspacesService private readonly recentWorkspaces: IRecentWorkspacesService,
 		@IWorkspacesService private readonly workspacesService: IWorkspacesService,
-		@IWorkspaceOpenService private readonly workspaceOpenService: IWorkspaceOpenService,
+		@IHostService private readonly host: IHostService,
+		@IFileDialogService private readonly fileDialogs: IFileDialogService,
 		@ICommandService private readonly commandService: ICommandService,
 		@IContextKeyService private readonly contextKeyService: IContextKeyService,
 		@IGitHubConnectionService private readonly githubConnection: IGitHubConnectionService,
@@ -38,7 +42,7 @@ export class GettingStartedPage extends EditorPane implements IEditorPane {
 	) {
 		super(GettingStartedPageId, themeService, storageService);
 		this._register(CommandsRegistry.onDidChangeCommands(() => this.content?.setCloneRepositoryAction(this.cloneAction())));
-		this._register(this.recentWorkspaces.onDidChange(() => this.content?.setRecentProjects(this.projects())));
+		this._register(this.workspacesService.onDidChangeRecentlyOpened(() => { void this.refreshProjects(); }));
 	}
 
 	public override create(parent: HTMLElement): void {
@@ -56,14 +60,15 @@ export class GettingStartedPage extends EditorPane implements IEditorPane {
 		}));
 
 		this.content = this._register(new GettingStarted(domNode, {
-			recentProjects: this.projects(),
+			recentProjects: [],
 			actions: {
-				openFolder: this.workspaceOpenService.canOpenFolder ? () => this.workspaceOpenService.openFolder() : undefined,
+				openFolder: this.canOpenFolder ? () => this.fileDialogs.pickFolderAndOpen() : undefined,
 				cloneRepository: this.cloneAction(),
 				connectViaSsh: () => this.commandService.executeCommand(ConnectToRemoteCommandId),
 				connectGitHub: () => this.githubConnection.connect(),
 			},
 		}));
+		void this.refreshProjects();
 	}
 
 	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
@@ -86,17 +91,27 @@ export class GettingStartedPage extends EditorPane implements IEditorPane {
 	}
 
 	private cloneAction(): (() => Promise<void>) | undefined {
-		return CommandsRegistry.hasCommand('git.clone') && this.workspaceOpenService.canOpenWorkspace ? () => this.commandService.executeCommand('git.clone') : undefined;
+		return CommandsRegistry.hasCommand('git.clone') && this.canOpenFolder ? () => this.commandService.executeCommand('git.clone') : undefined;
 	}
 
-	private projects(): readonly IGettingStartedProject[] {
-		return this.recentWorkspaces.recentWorkspaces.map(project => ({
-			name: project.name,
-			path: project.path,
-			onRemove: () => this.workspacesService.removeRecentlyOpened([URI.file(project.root)]),
-			...(this.workspaceOpenService.canOpenWorkspace ? {
-				onOpen: () => this.recentWorkspaces.openWorkspace(project.root),
-			} : {}),
-		}));
+	private get canOpenFolder(): boolean {
+		return this.contextKeyService.contextMatchesRules(ContextKeyExpr.or(OpenFolderWorkspaceSupportContext.isEqualTo(true), BrowserLocalFolderSupportContext.isEqualTo(true)));
+	}
+
+	private async refreshProjects(): Promise<void> {
+		const generation = ++this.recentGeneration;
+		try {
+			const recents = await this.workspacesService.getRecentlyOpened();
+			if (this.isDisposed || generation !== this.recentGeneration) return;
+			const projects: IGettingStartedProject[] = recents.workspaces.map(recent => {
+				const resource = recentWorkspaceUri(recent);
+				return {
+					name: recent.label ?? basename(resource), path: resource.fsPath,
+					onRemove: () => this.workspacesService.removeRecentlyOpened([resource]),
+					...(this.canOpenFolder ? { onOpen: () => this.host.openWindow(['workspace' in recent ? { workspaceUri: resource } : { folderUri: resource }]) } : {}),
+				};
+			});
+			this.content?.setRecentProjects(projects);
+		} catch (error) { console.error('Failed to read recent projects', error); }
 	}
 }

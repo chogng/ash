@@ -89,7 +89,7 @@ import { IFileService, type IFileChangeEvent } from '../../../src/ash/platform/f
 import { FileService } from '../../../src/ash/platform/files/common/fileService.js';
 import { MemoryFileService } from '../../../src/ash/workbench/contrib/bulkEdit/test/browser/bulkEditTestServices.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
-import { WorkspaceContextService } from '../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { IUriIdentityService } from '../../../src/ash/platform/uriIdentity/common/uriIdentity.js';
 import { UriIdentityService } from '../../../src/ash/platform/uriIdentity/common/uriIdentityService.js';
 import { IWorkspaceExtensionsConfigService, WorkspaceExtensionsConfigService } from '../../../src/ash/workbench/services/extensionRecommendations/common/workspaceExtensionsConfig.js';
@@ -391,7 +391,7 @@ services.registerInstance(IEditorService, {
 		await pane.setInput(input, editorAbort.signal);
 	},
 } as IEditorService);
-const workspace = disposables.add(new WorkspaceContextService({ id: 'fixture', uri: URI.file('/project') }));
+const workspace = disposables.add(new TestWorkspaceService({ id: 'fixture', uri: URI.file('/project') }));
 services.registerInstance(IWorkspaceContextService, workspace);
 const recommendationsResource = URI.file('/project/.ash/extensions.json');
 const files = disposables.add(new FileService());

@@ -19,7 +19,7 @@ import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../
 import { IWorkspaceContextService } from '../../../../../../platform/workspace/common/workspace.js';
 import { TerminalCapability } from '../../../../../../platform/terminal/common/capabilities/capabilities.js';
 import { IEditorService } from '../../../../../services/editor/common/editorService.js';
-import { WorkspaceContextService } from '../../../../../services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../../../services/configuration/test/common/testServices.js';
 import type { ITerminalInstance, IXtermTerminal } from '../../../../../services/terminal/browser/terminal.js';
 import { ITerminalConfigurationService } from '../../../../terminal/browser/terminal.js';
 import { TerminalLinkContribution } from '../../browser/terminalLinkContribution.js';
@@ -41,7 +41,7 @@ function fixture(lifetime: DisposableStore, root = URI.file('/project'), cwd = '
 		return { dispose() { providerDisposed = true; subscription.dispose(); } };
 	};
 	const services = lifetime.add(new InstantiationService());
-	const workspace = lifetime.add(new WorkspaceContextService({ id: 'project', uri: root }));
+	const workspace = lifetime.add(new TestWorkspaceService({ id: 'project', uri: root }));
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IPathService, {
 		getPath: async () => cwd.startsWith('C:') ? win32 : posix,

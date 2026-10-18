@@ -1,13 +1,13 @@
 import type { IRegisteredConfiguration } from '../../../../platform/configuration/common/configurationRegistry.js';
-import { WorkbenchConfigurationService, type WorkbenchConfigurationServiceOptions } from '../../../../workbench/services/configuration/browser/configurationService.js';
+import { WorkspaceService, type WorkspaceServiceOptions } from '../../../../workbench/services/configuration/browser/configurationService.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { IUserDataProfileService } from '../../../../workbench/services/userDataProfile/common/userDataProfile.js';
 
 /** Resolves Agents Window defaults without changing the shared settings resource. */
-export class ConfigurationService extends WorkbenchConfigurationService {
+export class ConfigurationService extends WorkspaceService {
 	constructor(
-		options: Omit<WorkbenchConfigurationServiceOptions, 'defaults' | 'readOnlyKeys'> = {},
+		options: Omit<WorkspaceServiceOptions, 'defaults' | 'readOnlyKeys'> = {},
 		@IFileService files: IFileService,
 		@ILogService log: ILogService,
 		@IUserDataProfileService profile: IUserDataProfileService,

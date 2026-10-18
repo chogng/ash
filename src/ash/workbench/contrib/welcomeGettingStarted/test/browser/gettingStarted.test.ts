@@ -14,25 +14,26 @@ import { GettingStartedPage } from '../../browser/gettingStarted.js';
 const GitCloneCommandId = 'git.clone';
 import type { IGitHubConnectionService } from '../../../../services/accounts/common/gitHubConnectionService.js';
 import type { IWorkspacesService } from '../../../../../platform/workspaces/common/workspaces.js';
-import type { IRecentWorkspacesService } from '../../../../services/workspaces/common/recentWorkspacesService.js';
-import type { IWorkspaceOpenService } from '../../../../services/workspaces/browser/workspaceOpenService.js';
+import { TestHostService } from '../../../../services/host/test/browser/testHostService.js';
+import type { IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 
 suite('Welcome page', () => {
 	test('dispatches the Git clone command from an empty desktop window', async () => {
 		const dom = new JSDOM('<!doctype html><body></body>');
 		const calls: string[] = [];
 		using registeredClone = CommandsRegistry.register('git.clone', () => { });
-		const recent = { onDidChange: Event.None, recentWorkspaces: [] } as unknown as IRecentWorkspacesService;
-		const workspace = { canOpenFolder: true, canOpenWorkspace: true } as IWorkspaceOpenService;
+		const history = { onDidChangeRecentlyOpened: Event.None, getRecentlyOpened: async () => ({ workspaces: [] }) } as unknown as IWorkspacesService;
+		const host = new TestHostService();
 		let commandDispatched: (() => void) | undefined;
 		const dispatched = new Promise<void>(resolve => { commandDispatched = resolve; });
 		const commands = { executeCommand: async (id: string) => { calls.push(id); commandDispatched?.(); } } as ICommandService;
 		using contextKeys = new ContextKeyService();
+		contextKeys.setContext('openFolderWorkspaceSupport', true);
 		using services = createTestComponentServices(undefined, undefined, dom.window.document);
 		using page = new GettingStartedPage(
-			recent,
-			{} as IWorkspacesService,
-			workspace,
+			history,
+			host,
+			{} as IFileDialogService,
 			commands,
 			contextKeys,
 			{} as IGitHubConnectionService,

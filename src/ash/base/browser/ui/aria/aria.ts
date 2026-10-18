@@ -180,9 +180,10 @@ const maximumMessageLength = 20_000;
 
 let ariaLiveRegion: AriaLiveRegion | undefined;
 
-export function setARIAContainer(parent: HTMLElement): void {
+export function setARIAContainer(parent: HTMLElement): IDisposable {
 	ariaLiveRegion?.dispose();
 	ariaLiveRegion = new AriaLiveRegion(parent.ownerDocument, parent);
+	return ariaLiveRegion;
 }
 
 export function alert(message: string): void {

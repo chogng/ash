@@ -6,12 +6,12 @@ import { StandaloneServices } from '../../../src/ash/editor/standalone/browser/s
 import * as stanza from '../../../src/ash/editor/editor.main.js';
 import type { ServerNotification } from '../../../.build/protocol/typescript/index.js';
 import { createDisconnectedLanguageApi } from '../../../src/ash/platform/language/browser/languageApi.js';
-import { WorkspaceContextService } from '../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { AppServerLanguageProviders } from '../../../src/ash/workbench/services/language/browser/appServerLanguageProviders.js';
 
 const store = new DisposableStore();
 const changes = store.add(new Emitter<ServerNotification>());
-const workspace = store.add(new WorkspaceContextService({ id: 'workspace', uri: stanza.URI.file('/project') }));
+const workspace = store.add(new TestWorkspaceService({ id: 'workspace', uri: stanza.URI.file('/project') }));
 store.add(stanza.languages.registerLanguages([{ description: { id: 'python', extensions: ['.py'] } }]));
 const model = store.add(stanza.editor.createModel('pri', 'python', stanza.URI.file('/project/main.py')));
 const editor = store.add(stanza.editor.create(document.querySelector<HTMLElement>('#editor')!, { model }));

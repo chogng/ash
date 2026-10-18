@@ -45,7 +45,7 @@ import { isCancellationError } from '../../../../../base/common/errors.js';
 import { resetNlsResolver } from '../../../../../nls.js';
 import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
-import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
 import { ITerminalProcessService } from '../../../../../platform/terminal/common/terminal.js';
 import { ConfigurationResolverService } from '../../../../services/configurationResolver/browser/configurationResolverService.js';
 import { IConfigurationResolverService } from '../../../../services/configurationResolver/common/configurationResolver.js';
@@ -447,6 +447,9 @@ class TestStorageService extends Disposable implements IStorageService {
 function workspaceService(root: URI): IWorkspaceContextService {
 	return {
 		onDidChangeWorkspace: Event.None,
+		onDidChangeWorkspaceFolders: Event.None,
+		onDidChangeWorkbenchState: Event.None,
+		onDidChangeWorkspaceName: Event.None,
 		getWorkspace: () => ({ id: "workspace", folders: [{ id: "workspace", uri: root, name: "project", index: 0 }] }),
 		getWorkbenchState: () => 2,
 		getWorkspaceFolder: () => null,
@@ -547,7 +550,7 @@ test('DebugService prevents launch after failed, cancelled or retired editor sav
 	for (const outcome of ['cancelled', 'failed', 'workspaceChanged'] as const) {
 		using resources = new DisposableStore();
 		const root = URI.file('/workspace');
-		using workspace = new WorkspaceContextService({ id: 'workspace', uri: root });
+		using workspace = new TestWorkspaceService({ id: 'workspace', uri: root });
 		using tasks = new FakeTaskService();
 		using processes = new FakeDebugAdapterProcessService();
 		using adapters = new AdapterManager();
@@ -652,7 +655,7 @@ test('DebugService rejects a missing folder before executing preLaunchTask or st
 test('DebugService cancels dispatch when the workspace changes during preLaunchTask', async () => {
 	using resources = new DisposableStore();
 	const root = URI.file('/workspace');
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: root });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: root });
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
 	using adapters = new AdapterManager();
@@ -761,7 +764,7 @@ test('DebugService cancels before preLaunchTask and adapter launch when command 
 test('DebugService cannot launch into a replacement workspace after a pending command resolves', async () => {
 	using resources = new DisposableStore();
 	const root = URI.file('/workspace');
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: root });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: root });
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
 	using adapters = new AdapterManager();
@@ -846,7 +849,7 @@ test('DebugService resolves Host-broker adapter descriptors only at dispatch and
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
 	using adapters = new AdapterManager();
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: root });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: root });
 	const calls: unknown[] = [];
 	using registration = adapters.registerFactories([createExtensionHostDebugAdapterFactory('hosted', 'extension:hosted', async (operation, payload, signal) => {
 		assert.equal(signal.aborted, false);
@@ -911,7 +914,7 @@ for (const change of ['workspace', 'factory', 'dispose'] as const) {
 		const entered = new DeferredPromise<AbortSignal>();
 		const result = new DeferredPromise<{ program: string; arguments: string[]; }>();
 		using registration = adapters.registerFactories([{ type: 'hosted', label: 'Hosted', sourceId: 'extension:hosted', createDebugAdapterDescriptor: async (_configuration, signal) => { void entered.complete(signal); return result.p; } }]);
-		using workspace = new WorkspaceContextService({ id: 'workspace', uri: root });
+		using workspace = new TestWorkspaceService({ id: 'workspace', uri: root });
 		using service = createDebugService(resources, new FakeFileService(root), workspace, processes, {} as ITerminalService, new TestStorageService(), tasks, adapters);
 		const pending = assert.rejects(service.startDebugging({ id: 'pending', name: 'Pending', type: 'hosted', request: 'launch', arguments: {}, preLaunchTask: 'build' }), isCancellationError);
 		const signal = await entered.p;
@@ -1032,7 +1035,7 @@ test('DebugService closes a late initialized adapter instead of publishing it in
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
 	using adapters = new AdapterManager();
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: root });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: root });
 	const entered = new DeferredPromise<void>();
 	const release = new DeferredPromise<void>();
 	const closed: string[] = [];
@@ -1145,7 +1148,7 @@ for (const cancellation of ['undefined result', 'provider retirement', 'workspac
 		using processes = new FakeDebugAdapterProcessService();
 		using adapters = new AdapterManager();
 		const root = URI.file('/workspace');
-		using workspace = new WorkspaceContextService({ id: 'workspace', uri: root });
+		using workspace = new TestWorkspaceService({ id: 'workspace', uri: root });
 		using service = createDebugService(resources, new FakeFileService(root), workspace, processes, {} as ITerminalService, new TestStorageService(), tasks, adapters);
 		const entered = new DeferredPromise<AbortSignal>();
 		const finish = new DeferredPromise<null | undefined>();
@@ -1247,7 +1250,7 @@ for (const selection of ['accept', 'escape', 'workspace replacement'] as const) 
 		using localization = toDisposable(resetNlsResolver);
 		initializeTestLocalization('zh-CN');
 		const root = URI.file('/workspace');
-		using workspace = new WorkspaceContextService({ id: 'workspace', uri: root });
+		using workspace = new TestWorkspaceService({ id: 'workspace', uri: root });
 		using tasks = new FakeTaskService();
 		using processes = new FakeDebugAdapterProcessService();
 		using adapters = new AdapterManager();
@@ -1379,7 +1382,7 @@ test('workspace retirement during debug extension activation prevents provider i
 	using adapters = new AdapterManager();
 	using extensions = new TestExtensionService();
 	const root = URI.file('/workspace');
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: root });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: root });
 	using service = createDebugService(resources, new FakeFileService(root), workspace, processes, {} as ITerminalService, new TestStorageService(), tasks, adapters, undefined, undefined, extensions);
 	const entered = new DeferredPromise<void>();
 	const release = new DeferredPromise<void>();
@@ -1402,7 +1405,7 @@ suite('Extension debug session lifecycle', () => {
 			using resources = new DisposableStore();
 			const services = workbenchInstantiationService(resources);
 			const root = URI.file('/workspace');
-			const workspace = services.get(IWorkspaceContextService) as WorkspaceContextService;
+			const workspace = services.get(IWorkspaceContextService) as TestWorkspaceService;
 			services.registerInstance(IFileService, resources.add(createTestFileService(new FakeFileService(root))));
 			services.registerInstance(IPathService, testPathService(workspace));
 			services.registerSingleton(ICommandService, () => new CommandService(services));
@@ -1895,7 +1898,7 @@ test('installed inline descriptors use the real DAP session and await implementa
 test('extension debug session options retain parent identity, inherit noDebug, merge consoles, and route managed lifecycle', async () => {
 	using resources = new DisposableStore();
 	const root = URI.file('/workspace');
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: root });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: root });
 	using tasks = new FakeTaskService();
 	using processes = new FakeDebugAdapterProcessService();
 	processes.requestHandler = request => request.command === 'initialize'
@@ -2005,7 +2008,7 @@ for (const hasOpenFolder of [true, false]) {
 	test(`extension folderless launches retain no workspace binding with an open folder ${hasOpenFolder}`, async () => {
 		using resources = new DisposableStore();
 		const root = URI.file('/workspace');
-		using workspace = new WorkspaceContextService(hasOpenFolder ? { id: 'workspace', uri: root } : { id: 'empty' });
+		using workspace = new TestWorkspaceService(hasOpenFolder ? { id: 'workspace', uri: root } : { id: 'empty' });
 		using tasks = new FakeTaskService();
 		using processes = new FakeDebugAdapterProcessService();
 		processes.requestHandler = request => request.command === 'initialize' ? { supportsConfigurationDoneRequest: true }

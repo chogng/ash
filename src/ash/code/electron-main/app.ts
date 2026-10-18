@@ -1078,6 +1078,7 @@ export class AshApplication extends Disposable {
 		const resources = new DisposableStore();
 		try {
 			const resolvedWorkspace = await workspaces.resolveWorkspace(workspace);
+			if ('configPath' in workspace) workspace = { ...workspace, ...(getWorkspaceRemoteAuthority(resolvedWorkspace) ? { remoteAuthority: getWorkspaceRemoteAuthority(resolvedWorkspace) } : {}) };
 			const workspaceContext = resources.add(new WorkspaceContextMainService(workspace, resolvedWorkspace));
 			const supervisor = resources.add(this.createAppServerConnectionRelay(workspace, resources));
 
@@ -1508,7 +1509,9 @@ export class AshApplication extends Disposable {
 				},
 				openWorkspace: async (root, forceNewWindow) => {
 					if (hasWorkspaceFileExtension(root)) {
-						const workspace = await this.windowsMainService.resolveWorkspaceOpenTarget({ kind: WorkspaceOpenTargetKind.Workspace, path: root }, process.cwd());
+						let workspace = await this.windowsMainService.resolveWorkspaceOpenTarget({ kind: WorkspaceOpenTargetKind.Workspace, path: root }, process.cwd());
+						const resolved = await workspaces.resolveWorkspace(workspace);
+						if ('configPath' in workspace && getWorkspaceRemoteAuthority(resolved)) workspace = { ...workspace, remoteAuthority: getWorkspaceRemoteAuthority(resolved) };
 						if (forceNewWindow) await this.openWorkspace(workspace, workspaces, true);
 						else await replaceWorkspace(workspace, true);
 					} else if (forceNewWindow) await this.openWorkspace(await workspaces.resolveFolder(root), workspaces, true);

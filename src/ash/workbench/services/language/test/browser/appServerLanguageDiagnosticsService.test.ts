@@ -17,11 +17,11 @@ import { IWorkspaceContextService } from '../../../../../platform/workspace/comm
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { type ServerNotification } from '../../../../../../../.build/protocol/typescript/index.js';
-import { WorkspaceContextService } from "../../../workspaces/browser/workspaceContextService.js";
+import { TestWorkspaceService } from "../../../configuration/test/common/testServices.js";
 import { type CodeIntelligenceDocumentSnapshot, type ICodeIntelligenceDocumentService } from "../../../codeIntelligence/common/codeIntelligenceDocumentService.js";
 import { AppServerLanguageDiagnosticsService } from "../../browser/appServerLanguageDiagnosticsService.js";
 
-function createDiagnosticsService(api: ILanguageApi, events: IServerEventApi, workspace: WorkspaceContextService, documents?: ICodeIntelligenceDocumentService, trust?: IWorkspaceTrustManagementService, saves: Event<ITextFileSaveEvent> = Event.None): AppServerLanguageDiagnosticsService {
+function createDiagnosticsService(api: ILanguageApi, events: IServerEventApi, workspace: TestWorkspaceService, documents?: ICodeIntelligenceDocumentService, trust?: IWorkspaceTrustManagementService, saves: Event<ITextFileSaveEvent> = Event.None): AppServerLanguageDiagnosticsService {
 	using services = new InstantiationService();
 	services.registerInstance(IServerEventApi, events);
 	services.registerInstance(ITextFileService, { onDidSave: saves, onDidChangeFiles: Event.None, resolve: async () => { throw new Error('unexpected resolve'); }, save: async () => { throw new Error('unexpected save'); } });
@@ -38,7 +38,7 @@ test("App Server diagnostics service synchronizes, filters revisions, and closes
 	const events = new FakeServerEvents();
 	const api = new FakeLanguageApi();
 	const documents = new FakeCodeIntelligenceDocuments();
-	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:/project") });
+	using workspace = new TestWorkspaceService({ id: "workspace", uri: URI.file("C:/project") });
 	using service = createDiagnosticsService(api, events, workspace, documents);
 	using model = new TextModel("fn main() {}\n");
 	const resource = URI.file("C:/project/main.rs");
@@ -88,7 +88,7 @@ suite('App Server diagnostics shutdown', () => {
 				api.synchronized.push(request);
 				return new Promise((_, reject) => { rejectSynchronization = reject; });
 			};
-			using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/project') });
+			using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/project') });
 			using service = createDiagnosticsService(api, new FakeServerEvents(), workspace);
 			using model = new TextModel('fn main() {}\n');
 			using acquisition = service.acquire(URI.file('/project/main.rs'), 'rust', model);
@@ -117,7 +117,7 @@ suite('App Server diagnostics shutdown', () => {
 				if (api.workspaceDiagnosticPulls > 1) return api.workspaceReport;
 				return new Promise((_, reject) => { rejectReport = reject; });
 			};
-			using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/project') });
+			using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/project') });
 			using service = createDiagnosticsService(api, new FakeServerEvents(), workspace);
 			await tick();
 			assert.ok(rejectReport);
@@ -137,7 +137,7 @@ suite('App Server diagnostics shutdown', () => {
 	test('disposal cancels queued document closes before the transport stops', async () => {
 		const api = new FakeLanguageApi();
 		const documents = new FakeCodeIntelligenceDocuments();
-		using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/project') });
+		using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/project') });
 		using service = createDiagnosticsService(api, new FakeServerEvents(), workspace, documents);
 		using model = new TextModel('fn main() {}\n');
 		using acquisition = service.acquire(URI.file('/project/main.rs'), 'rust', model);
@@ -154,7 +154,7 @@ suite('App Server diagnostics shutdown', () => {
 test("App Server diagnostics retain pushes received before the editor acquires its model", async () => {
 	const events = new FakeServerEvents();
 	const api = new FakeLanguageApi();
-	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("/project") });
+	using workspace = new TestWorkspaceService({ id: "workspace", uri: URI.file("/project") });
 	using service = createDiagnosticsService(api, events, workspace);
 	await tick();
 	const resource = URI.file("/project/main.rs");
@@ -172,7 +172,7 @@ test("App Server diagnostics retain pushes received before the editor acquires i
 test("App Server diagnostics discard a push from a different revision when acquiring a model", async () => {
 	const events = new FakeServerEvents();
 	const api = new FakeLanguageApi();
-	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("/project") });
+	using workspace = new TestWorkspaceService({ id: "workspace", uri: URI.file("/project") });
 	using service = createDiagnosticsService(api, events, workspace);
 	await tick();
 	const resource = URI.file("/project/main.rs");
@@ -187,7 +187,7 @@ test("App Server diagnostics keep equal relative paths isolated by Workspace fol
 	const events = new FakeServerEvents();
 	const api = new FakeLanguageApi();
 	const documents = new FakeCodeIntelligenceDocuments();
-	using workspace = new WorkspaceContextService({
+	using workspace = new TestWorkspaceService({
 		id: "multi-root",
 		folders: [
 			{ id: "one", uri: URI.file("C:/one"), name: "one", index: 0 },
@@ -209,7 +209,7 @@ test("App Server diagnostics keep equal relative paths isolated by Workspace fol
 
 test('App Server diagnostics synchronize Shell documents using the grammar language identity', async () => {
 	const api = new FakeLanguageApi();
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/project') });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/project') });
 	using service = createDiagnosticsService(api, new FakeServerEvents(), workspace);
 	using model = new TextModel('echo hello', { languageId: 'shellscript' });
 	using acquisition = service.acquire(URI.file('/project/main.sh'), 'shellscript', model);
@@ -287,7 +287,7 @@ test("App Server diagnostics service includes unopened workspace reports", async
 	const events = new FakeServerEvents();
 	const api = new FakeLanguageApi();
 	api.workspaceReport = { supported: true, snapshots: [{ path: "src/unopened.rs", diagnostics: [{ range: { start: { lineIndex: 2, columnIndex: 1 }, end: { lineIndex: 2, columnIndex: 4 } }, severity: "warning", message: "workspace warning", code: null, source: "fixture" }] }] };
-	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:/project") });
+	using workspace = new TestWorkspaceService({ id: "workspace", uri: URI.file("C:/project") });
 	using service = createDiagnosticsService(api, events, workspace);
 	await tick();
 	await tick();
@@ -311,7 +311,7 @@ test("App Server diagnostics service treats typed unavailable pulls as unsupport
 	const originalConsoleError = console.error;
 	console.error = (...arguments_: unknown[]) => reported.push(arguments_);
 	try {
-		using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:/project") });
+		using workspace = new TestWorkspaceService({ id: "workspace", uri: URI.file("C:/project") });
 		using service = createDiagnosticsService(api, events, workspace);
 		using model = new TextModel("fn main() {}\n");
 		using acquisition = service.acquire(URI.file("C:/project/main.rs"), "rust", model);
@@ -329,7 +329,7 @@ test("App Server diagnostics service treats typed unavailable pulls as unsupport
 test("App Server diagnostics service waits for a workspace folder before pulling workspace diagnostics", async () => {
 	const events = new FakeServerEvents();
 	const api = new FakeLanguageApi();
-	using workspace = new WorkspaceContextService({ id: "empty-window" });
+	using workspace = new TestWorkspaceService({ id: "empty-window" });
 	using service = createDiagnosticsService(api, events, workspace);
 
 	await tick();
@@ -345,7 +345,7 @@ test("App Server diagnostics service gates Editor synchronization on directory p
 	const events = new FakeServerEvents();
 	const api = new FakeLanguageApi();
 	using permissions = new FakeWorkspaceTrustService([]);
-	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:/project") });
+	using workspace = new TestWorkspaceService({ id: "workspace", uri: URI.file("C:/project") });
 	using service = createDiagnosticsService(api, events, workspace, undefined, permissions);
 	using model = new TextModel("fn main() {}\n");
 	using acquisition = service.acquire(URI.file("C:/project/main.rs"), "rust", model);
@@ -386,7 +386,7 @@ test("installing a language server synchronizes an already open document and uni
 	const api = new FakeLanguageApi();
 	api.availableServers = [];
 	const events = new FakeServerEvents();
-	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("/project") });
+	using workspace = new TestWorkspaceService({ id: "workspace", uri: URI.file("/project") });
 	using service = createDiagnosticsService(api, events, workspace);
 	using model = new TextModel("value = 1", { languageId: "python" });
 	using acquisition = service.acquire(URI.file("/project/main.py"), "python", model);
@@ -410,7 +410,7 @@ for (const desktop of [false, true]) test(`profile configuration changes replay 
 	api.availableServers = [];
 	const events = new FakeServerEvents();
 	using trust = new FakeWorkspaceTrustService(['executeCommands', 'useLanguageServices']);
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/project') });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/project') });
 	using service = createDiagnosticsService(api, events, workspace, undefined, desktop ? trust : undefined);
 	using model = new TextModel('value = 1', { languageId: 'python' });
 	const resource = URI.file('/project/main.py');
@@ -437,7 +437,7 @@ test("uninstall discards pending workspace diagnostic reports and late server no
 	let complete!: (report: Awaited<ReturnType<ILanguageApi["directoryDiagnostics"]>>) => void;
 	api.directoryDiagnostics = () => new Promise(resolve => { complete = resolve; });
 	const events = new FakeServerEvents();
-	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("/project") });
+	using workspace = new TestWorkspaceService({ id: "workspace", uri: URI.file("/project") });
 	using service = createDiagnosticsService(api, events, workspace);
 	await tick();
 	api.availableServers = [];
@@ -454,7 +454,7 @@ test("uninstall discards pending workspace diagnostic reports and late server no
 });
 
 for (const nested of [false, true]) test(`live folder edits rebind acquired documents and retire old overlays, nested=${nested}`, async () => {
-	using workspace = new WorkspaceContextService({ id: 'one', uri: URI.file('/project') });
+	using workspace = new TestWorkspaceService({ id: 'one', uri: URI.file('/project') });
 	const api = new FakeLanguageApi();
 	const documents = new FakeCodeIntelligenceDocuments();
 	using service = createDiagnosticsService(api, new FakeServerEvents(), workspace, documents);
@@ -479,7 +479,7 @@ for (const nested of [false, true]) test(`live folder edits rebind acquired docu
 });
 
 test('a synchronization in flight retires its old binding before replaying into a new root', async () => {
-	using workspace = new WorkspaceContextService({ id: 'one', uri: URI.file('/project') });
+	using workspace = new TestWorkspaceService({ id: 'one', uri: URI.file('/project') });
 	const api = new FakeLanguageApi();
 	let release!: () => void;
 	const blocked = new Promise<void>(resolve => { release = resolve; });
@@ -510,7 +510,7 @@ test('successful saves synchronize the current dirty snapshot before reporting e
 	const synchronize = api.synchronize.bind(api);
 	api.synchronize = async params => { operations.push(['synchronize', params.document.text]); await synchronize(params); };
 	api.save = async params => { operations.push(['save', params.text]); };
-	using workspace = new WorkspaceContextService({ id: 'save', uri: URI.file('/project') });
+	using workspace = new TestWorkspaceService({ id: 'save', uri: URI.file('/project') });
 	using service = createDiagnosticsService(api, new FakeServerEvents(), workspace, undefined, undefined, saves.event);
 	using model = new TextModel('saved');
 	const resource = URI.file('/project/main.rs');

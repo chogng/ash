@@ -14,7 +14,7 @@ import { InMemoryConfigurationService } from '../../../src/ash/platform/configur
 import { type IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { TextModel } from '../../../src/ash/editor/common/model/textModel.js';
 import { create, createModel } from '../../../src/ash/editor/standalone/browser/standaloneEditor.js';
-import { WorkspaceContextService } from '../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { BrowserWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/browser/browserWorkingCopyService.js';
 import { TestingService } from '../../../src/ash/workbench/services/testing/browser/testingService.js';
 import { TestExecutionService, TestDebugService } from '../../../src/ash/workbench/services/testing/test/common/testExecutionService.js';
@@ -35,7 +35,7 @@ if (new URLSearchParams(location.search).get('locale') === 'zh-cn') {
 const store = new DisposableStore();
 const uriIdentityServices = store.add(new TestUriIdentityServices());
 const backend = store.add(new TestExecutionService());
-const workspace = store.add(new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') }));
+const workspace = store.add(new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') }));
 const copies = store.add(uriIdentityServices.createInstance(BrowserWorkingCopyService));
 let scriptRuns = 0;
 const tasks: ITaskService = {

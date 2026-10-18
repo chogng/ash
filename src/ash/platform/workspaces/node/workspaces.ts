@@ -9,8 +9,8 @@ export function createEmptyWorkspaceIdentifier(): IEmptyWorkspaceIdentifier {
 }
 
 /** Creates the stable identity of one multi-root workspace file. */
-export function getWorkspaceIdentifier(configPath: URI): IWorkspaceIdentifier {
-	return Object.freeze({ id: stableWorkspaceId(configPath), configPath });
+export function getWorkspaceIdentifier(configPath: URI, remoteAuthority?: string): IWorkspaceIdentifier {
+	return Object.freeze({ id: stableWorkspaceId(configPath), configPath, ...(remoteAuthority ? { remoteAuthority } : {}) });
 }
 
 /** Creates the stable identity of one single-folder workspace. */

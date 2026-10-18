@@ -44,7 +44,7 @@ import { IQuickInputService, type IQuickInputService as QuickInputServiceContrac
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { IEditorService, type IEditorService as EditorServiceContract } from '../../../../services/editor/common/editorService.js';
-import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
 import type { IEditorPart as EditorPartContract } from '../../../../browser/parts/editor/editorPart.js';
 import { COPY_PATH_COMMAND_ID, COPY_RELATIVE_PATH_COMMAND_ID, OPEN_FILE_COMMAND_ID, SAVE_FILE_COMMAND_ID } from '../../browser/fileConstants.js';
 import { CANCEL_CUT_COMMAND_ID, COPY_FILE_COMMAND_ID, CUT_FILE_COMMAND_ID, DELETE_FILE_COMMAND_ID, DOWNLOAD_COMMAND_ID, NEW_FILE_COMMAND_ID, NEW_FOLDER_COMMAND_ID, OPEN_TO_SIDE_COMMAND_ID, PASTE_FILE_COMMAND_ID, RENAME_FILE_COMMAND_ID } from '../../browser/fileActions.js';
@@ -120,6 +120,9 @@ test('Open File command opens every file selected by the dialog', async () => {
 		const opened: URI[] = [];
 		const services = createFileActionServices();
 		services.registerInstance(IFileDialogService, {
+			pickFolderAndOpen: async () => { throw new Error('Unexpected folder open'); },
+			pickWorkspaceAndOpen: async () => { throw new Error('Unexpected workspace open'); },
+
 			pickFileToSave: async () => { throw new Error('Unexpected Save As'); },
 			showSaveConfirm: async () => { throw new Error('Unexpected save confirmation'); },
 			showSaveDialog: async () => { throw new Error('Unexpected save dialog'); },
@@ -149,7 +152,7 @@ for (const fileRoot of fileCommandRoots) {
 			const root = URI.parse(fileRoot.uri);
 			const created: URI[] = [];
 			const opened: URI[] = [];
-			using workspace = new WorkspaceContextService({ id: 'project', uri: root });
+			using workspace = new TestWorkspaceService({ id: 'project', uri: root });
 			const services = createFileActionServices();
 			using explorerService = createExplorerService(workspace);
 			services.registerInstance(IWorkspaceContextService, workspace);
@@ -203,7 +206,7 @@ test('New Folder command creates a directory under the selected folder', async (
 	const root = URI.file('/project');
 	const folder = URI.file('/project/src');
 	const created: URI[] = [];
-	using workspace = new WorkspaceContextService({ id: 'project', uri: root });
+	using workspace = new TestWorkspaceService({ id: 'project', uri: root });
 	using explorer = createExplorerService(workspace);
 	using registration = explorer.registerView({
 		refresh: async () => { },
@@ -242,7 +245,7 @@ test('Explorer copy and cut paste selected files with conflict names', async () 
 	const second = new ExplorerItem(URI.file('/project/two.txt'), 'two.txt', FileKind.File);
 	const folder = new ExplorerItem(URI.file('/project/dest'), 'dest', FileKind.Directory);
 	let selected: readonly ExplorerItem[] = [first, second];
-	using workspace = new WorkspaceContextService({ id: 'project', uri: root });
+	using workspace = new TestWorkspaceService({ id: 'project', uri: root });
 	using explorer = createExplorerService(workspace);
 	using registration = explorer.registerView({ refresh: async () => { }, getContext: () => selected, getAccessibleContent: () => '', selectResource: async () => { }, focus() { }, hasFocus: () => false });
 	const existing = new Set(['/project/one.txt', '/project/two.txt', '/project/dest', '/project/dest/one.txt']);
@@ -311,7 +314,7 @@ test('Explorer paste keeps copy and cut operations across windows', async () => 
 		writeResources: async (resources: readonly URI[], operation: 'copy' | 'move') => { clipboardResources = { resources: [...resources], operation }; },
 		hasResources: async () => clipboardResources.resources.length > 0,
 	};
-	using workspace = new WorkspaceContextService({ id: 'project', uri: root });
+	using workspace = new TestWorkspaceService({ id: 'project', uri: root });
 	using first = createExplorerService(workspace);
 	using second = createExplorerService(workspace);
 	using firstView = first.registerView({ refresh: async () => { }, getContext: () => [new ExplorerItem(source, '100% ready.bin', FileKind.File)], getAccessibleContent: () => '', selectResource: async () => { }, focus() { }, hasFocus: () => false });
@@ -354,7 +357,7 @@ test('Explorer cut across nested workspace roots copies before deleting the sour
 	const source = URI.file('/project/nested/main.ts');
 	const destination = URI.file('/project/destination');
 	let selected = new ExplorerItem(source, 'main.ts', FileKind.File);
-	using workspace = new WorkspaceContextService({
+	using workspace = new TestWorkspaceService({
 		id: 'project',
 		folders: [
 			{ id: 'outer', uri: URI.file('/project'), name: 'project', index: 0 },
@@ -402,7 +405,7 @@ test('Explorer paste forwards copy and move requests to the system file transfer
 	try {
 		setARIAContainer(browser.window.document.body);
 		const destination = URI.file('/project/destination');
-		using workspace = new WorkspaceContextService({ id: 'project', uri: URI.file('/project') });
+		using workspace = new TestWorkspaceService({ id: 'project', uri: URI.file('/project') });
 		using explorer = createExplorerService(workspace);
 		using view = explorer.registerView({ refresh: async () => { }, getContext: () => [new ExplorerItem(destination, 'destination', FileKind.Directory)], getAccessibleContent: () => '', selectResource: async () => { }, focus() { }, hasFocus: () => false });
 		const pastes: { directory: string; moveRequested: boolean; }[] = [];
@@ -446,7 +449,7 @@ test('Explorer paste imports exact bytes from the system file list', async () =>
 			length: { value: 1 },
 			[Symbol.iterator]: { value: function* () { yield file; } },
 		});
-		using workspace = new WorkspaceContextService({ id: 'project', uri: root });
+		using workspace = new TestWorkspaceService({ id: 'project', uri: root });
 		using explorer = createExplorerService(workspace);
 		using view = explorer.registerView({ refresh: async () => { }, getContext: () => [new ExplorerItem(destination, 'destination', FileKind.Directory)], getAccessibleContent: () => '', selectResource: async () => { }, focus() { }, hasFocus: () => false });
 		const writes: { resource: string; bytes: number[]; }[] = [];
@@ -485,7 +488,7 @@ test('Copy Path commands copy the active file and its workspace-relative path', 
 		const root = URI.file('/project');
 		const file = URI.file('/project/src/main.ts');
 		const copied: string[] = [];
-		using workspace = new WorkspaceContextService({ id: 'project', folders: [{ id: 'project', uri: root, name: 'project', index: 0 }] });
+		using workspace = new TestWorkspaceService({ id: 'project', folders: [{ id: 'project', uri: root, name: 'project', index: 0 }] });
 		const services = createFileActionServices();
 		let activeEditor: IResourceEditorInput = { resource: file };
 		services.registerInstance(IEditorService, {
@@ -581,7 +584,7 @@ test('Explorer menu commands rename, open beside the editor, and delete the sele
 	const renamed: string[] = [];
 	const deleted: string[] = [];
 	const opened: string[] = [];
-	using workspace = new WorkspaceContextService({ id: 'project', uri: root });
+	using workspace = new TestWorkspaceService({ id: 'project', uri: root });
 	using explorer = createExplorerService(workspace);
 	using registration = explorer.registerView({
 		refresh: async () => { },
@@ -638,7 +641,7 @@ test('Explorer menu commands rename, open beside the editor, and delete the sele
 test('Explorer bulk commands retain multi-selection and deduplicate nested deletion targets', async () => {
 	await import('../../browser/fileActions.contribution.js');
 	const root = URI.file('/project');
-	using workspace = new WorkspaceContextService({ id: 'project', uri: root });
+	using workspace = new TestWorkspaceService({ id: 'project', uri: root });
 	using explorer = createExplorerService(workspace);
 	const selected = [
 		new ExplorerItem(root, 'project', FileKind.Directory),
@@ -691,7 +694,7 @@ test('Reveal in OS command sends the selected local file to the desktop host', a
 	const selected = URI.parse('file:///C:/project/src/main.ts');
 	const other = URI.parse('file:///C:/project/other.ts');
 	const revealed: string[] = [];
-	using workspace = new WorkspaceContextService({ id: 'project', uri: root });
+	using workspace = new TestWorkspaceService({ id: 'project', uri: root });
 	using explorer = createExplorerService(workspace);
 	using registration = explorer.registerView({
 		refresh: async () => { },
@@ -732,7 +735,7 @@ test('tab copy actions copy clicked and selected file paths without changing the
 	const second = new FileEditorInput(URI.file('/project/src/second.ts'));
 	const group = { id: 'main', inputs: [active, clicked, second], selectedInputs: [active], editors: [active, clicked, second].map(input => ({ input })), activeInput: active };
 	const copied: string[] = [];
-	using workspace = new WorkspaceContextService({ id: 'project', uri: URI.file('/project') });
+	using workspace = new TestWorkspaceService({ id: 'project', uri: URI.file('/project') });
 	using services = createFileActionServices();
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IEditorGroupsService, { getGroup: (id: string) => id === group.id ? group : undefined } as unknown as IEditorGroupsService);
@@ -769,7 +772,7 @@ test('Reveal tab menu groups both destinations and targets the clicked inactive 
 	const clicked = new FileEditorInput(URI.file('/project/src/clicked.ts'));
 	const group = { id: 'main', inputs: [active, clicked], selectedInputs: [active], editors: [{ input: active }, { input: clicked }], activeInput: active };
 	const effects: unknown[] = [];
-	using workspace = new WorkspaceContextService({ id: 'project', uri: URI.file('/project') });
+	using workspace = new TestWorkspaceService({ id: 'project', uri: URI.file('/project') });
 	using explorer = createExplorerService(workspace);
 	using view = explorer.registerView({
 		refresh: async () => { },
@@ -824,7 +827,7 @@ for (const scenario of [
 	for (const command of [NEW_FILE_COMMAND_ID, NEW_FOLDER_COMMAND_ID, RENAME_FILE_COMMAND_ID]) {
 		test(`file name rules reach ${command}: ${scenario.label}`, async () => {
 			await import('../../browser/fileActions.contribution.js');
-			using workspace = new WorkspaceContextService({ id: 'test', uri: scenario.root });
+			using workspace = new TestWorkspaceService({ id: 'test', uri: scenario.root });
 			using explorer = createExplorerService(workspace);
 			const original = scenario.root.joinPathSegment('original.txt');
 			using view = explorer.registerView({
@@ -860,7 +863,7 @@ for (const scenario of [
 	}
 	test(`paste applies destination file name rules: ${scenario.label}`, async () => {
 		await import('../../browser/fileActions.contribution.js');
-		using workspace = new WorkspaceContextService({ id: 'test', uri: scenario.root });
+		using workspace = new TestWorkspaceService({ id: 'test', uri: scenario.root });
 		using explorer = createExplorerService(workspace);
 		const source = scenario.root.joinPathSegment(scenario.name);
 		const destination = scenario.root.joinPathSegment('destination');
@@ -891,7 +894,7 @@ test('file name validation reports the target filesystem error in Chinese', asyn
 	await import('../../browser/fileActions.contribution.js');
 	initializeTestLocalization('zh-CN');
 	try {
-		using workspace = new WorkspaceContextService({ id: 'test', uri: URI.parse('file:///C:/project') });
+		using workspace = new TestWorkspaceService({ id: 'test', uri: URI.parse('file:///C:/project') });
 		using explorer = createExplorerService(workspace);
 		using services = createFileActionServices(OperatingSystem.Windows);
 		services.registerInstance(IWorkspaceContextService, workspace);
@@ -913,7 +916,7 @@ test('file name validation reports the target filesystem error in Chinese', asyn
 test('Explorer paste keeps its original directory and stops after a workspace switch', async () => {
 	await import('../../browser/fileActions.contribution.js');
 	const root = URI.file('/project');
-	using workspace = new WorkspaceContextService({ id: 'project', uri: root });
+	using workspace = new TestWorkspaceService({ id: 'project', uri: root });
 	using explorer = createExplorerService(workspace);
 	const first = new ExplorerItem(root.joinPathSegment('first'), 'first', FileKind.Directory);
 	const second = new ExplorerItem(root.joinPathSegment('second'), 'second', FileKind.Directory);
@@ -960,7 +963,7 @@ test('Explorer read-only policy blocks rename and makes deletion override explic
 	try {
 		const root = URI.file('/project');
 		const resource = root.joinPathSegment('locked.ts');
-		using workspace = new WorkspaceContextService({ id: 'project', uri: root });
+		using workspace = new TestWorkspaceService({ id: 'project', uri: root });
 		using explorer = createExplorerService(workspace);
 		using view = explorer.registerView({ refresh: async () => { }, getContext: () => [new ExplorerItem(resource, 'locked.ts', FileKind.File)], hasFocus: () => false, getAccessibleContent: () => '', selectResource: async () => { }, focus() { } });
 		using services = createFileActionServices();
@@ -1002,7 +1005,7 @@ test('Explorer read-only policy blocks rename and makes deletion override explic
 	}
 });
 
-function createExplorerService(workspace: WorkspaceContextService): ExplorerService {
+function createExplorerService(workspace: TestWorkspaceService): ExplorerService {
 	return new ExplorerService(workspace, configurations.add(new FileService()), configurations.add(new InMemoryConfigurationService()));
 }
 

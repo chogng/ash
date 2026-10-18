@@ -1,3 +1,6 @@
+import { IFileService } from '../../../../../../platform/files/common/files.js';
+import { IDialogService } from '../../../../../../platform/dialogs/common/dialogs.js';
+import { IPathService } from '../../../../../../platform/path/common/pathService.js';
 import { emptyEditorServiceState } from '../../../../../test/common/testEditorService.js';
 import { TestUriIdentityServices } from '../../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { operatingSystem, OperatingSystem } from '../../../../../../base/common/platform.js';
@@ -73,7 +76,7 @@ const { IEditorService } = await import('../../../../../services/editor/common/e
 const { IWorkingCopyService } = await import('../../../../../services/workingCopy/common/workingCopyService.js');
 const { BrowserWorkingCopyService } = await import('../../../../../services/workingCopy/browser/browserWorkingCopyService.js');
 const { IWorkspaceContextService } = await import('../../../../../../platform/workspace/common/workspace.js');
-const { WorkspaceContextService } = await import('../../../../../services/workspaces/browser/workspaceContextService.js');
+const { TestWorkspaceService } = await import('../../../../../services/configuration/test/common/testServices.js');
 const { ILabelService, LabelService } = await import('../../../../../../platform/label/common/labelService.js');
 const { ILocalizationService: LocalizationServiceId } = await import('../../../../../services/localization/common/localizationService.js');
 const { IConfigurationService } = await import('../../../../../../platform/configuration/common/configuration.js');
@@ -111,7 +114,10 @@ test('host focus follows registered windows without publishing a false blur duri
 	resources.add(toDisposable(() => Reflect.deleteProperty(main.document, 'hasFocus')));
 	const services = resources.add(new InstantiationService());
 	services.registerInstance(ILifecycleService, {} as import('../../../../../services/lifecycle/common/lifecycle.js').ILifecycleService);
-	const host = resources.add(services.createInstance(BrowserHostService));
+	services.registerInstance(IDialogService, {} as IDialogService);
+	services.registerInstance(IPathService, {} as IPathService);
+	services.registerInstance(IFileService, {} as IFileService);
+	const host = resources.add(services.createInstance(BrowserHostService, {}));
 	resources.add(registerWindow(popup.window as unknown as Window));
 	const changes: boolean[] = [];
 	resources.add(host.onDidChangeFocus(value => changes.push(value)));
@@ -141,7 +147,7 @@ test('title service shares the resolved title with its registered part and relea
 	const services = resources.add(new InstantiationService());
 	const commandService = resources.add(new CommandService(services));
 	const contextKeys = resources.add(new ContextKeyService());
-	const workspace = resources.add(new WorkspaceContextService({ id: 'title-service', folders: [] }));
+	const workspace = resources.add(new TestWorkspaceService({ id: 'title-service', folders: [] }));
 	const activeChanged = resources.add(new Emitter<void>());
 	let activeEditor: import('../../../../../common/editor.js').IResourceEditorInput | undefined;
 	const editors: import('../../../../../services/editor/common/editorService.js').IEditorService = {

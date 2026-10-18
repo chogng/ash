@@ -7,6 +7,8 @@ import type { ICommandService } from '../../../../../../platform/commands/common
 import { ContextKeyService } from "../../../../../../platform/contextkey/browser/contextKeyService.js";
 import type { INativeMenubarApi, INativeMenubarData, INativeMenubarSelection } from '../../../../../../platform/menubar/common/nativeMenubar.js';
 import { NativeMenubarControl } from '../../../../../../workbench/electron-browser/parts/titlebar/menubarControl.js';
+import { NotificationService } from '../../../../../services/notification/common/notificationService.js';
+import { CancellationError } from '../../../../../../base/common/errors.js';
 
 test('failed menubar updates retain the last installed revision', async () => {
 	const changes = new Emitter<IMenuChangeEvent>();
@@ -14,10 +16,12 @@ test('failed menubar updates retain the last installed revision', async () => {
 	const updates: INativeMenubarData[] = [];
 	const failures = new Set<number>();
 	const runs: string[] = [];
+	let commandFailure: Error | undefined;
 	const commandService = {
 		onWillExecuteCommand: Event.None,
 		onDidExecuteCommand: Event.None,
 		executeCommand: async (id: string) => {
+			if (commandFailure) throw commandFailure;
 			runs.push(id);
 		},
 	} as ICommandService;
@@ -56,7 +60,8 @@ test('failed menubar updates retain the last installed revision', async () => {
 			return { dispose: () => disposable.dispose() };
 		},
 	};
-	using control = new NativeMenubarControl(menuService, api);
+	using notifications = new NotificationService();
+	using control = new NativeMenubarControl(api, MenuId.MenubarMainMenu, menuService, notifications);
 	await waitFor(() => updates.length === 1);
 	const firstItem = updates[0]!.menus[0]!.items[0];
 	assert.equal(firstItem?.type, 'action');
@@ -75,6 +80,15 @@ test('failed menubar updates retain the last installed revision', async () => {
 	selections.fire({ revision: 1, id: firstItem.id });
 	await waitFor(() => runs.length === 2);
 	assert.deepEqual(runs, ['save-as', 'save']);
+
+	commandFailure = new Error('Save or revert unsaved files before changing their workspace folder.');
+	selections.fire({ revision: 1, id: firstItem.id });
+	await waitFor(() => notifications.getNotifications().length === 1);
+	assert.equal(notifications.getNotifications()[0]!.message, commandFailure.message);
+	commandFailure = new CancellationError();
+	selections.fire({ revision: 1, id: firstItem.id });
+	await new Promise(resolve => setTimeout(resolve, 0));
+	assert.equal(notifications.getNotifications().length, 1, 'cancellation is silent');
 
 	changes.dispose();
 	selections.dispose();

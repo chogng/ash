@@ -2,7 +2,7 @@ import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/tes
 import { URI } from '../../../../../base/common/uri.js';
 import { TestExecutionService, TestDebugService } from '../common/testExecutionService.js';
 import { Event } from '../../../../../base/common/event.js';
-import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../configuration/test/common/testServices.js';
 import { BrowserWorkingCopyService } from '../../../../services/workingCopy/browser/browserWorkingCopyService.js';
 import { NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { type ITestExecutionService } from '../../../../../platform/testing/common/testExecutionService.js';
@@ -23,7 +23,7 @@ test("TestingService exposes only test tasks and projects passed and failed runs
 		task("unit", "Unit", "test"),
 		task("integration", "Integration", "test"),
 	]);
-	using workspace = new WorkspaceContextService({ id: 'empty', folders: [] });
+	using workspace = new TestWorkspaceService({ id: 'empty', folders: [] });
 	using copies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using debug = new TestDebugService();
 	using service = new TestingService(tasks, noExecution, workspace, copies, new NullLoggerService(), debug.service);
@@ -46,7 +46,7 @@ test("TestingService exposes only test tasks and projects passed and failed runs
 
 test("TestingService owns dynamic Test Profile providers and maps profiles to test tasks", async () => {
 	using tasks = new FakeTaskService([task("unit", "Unit", "test"), task("build", "Build", "build")]);
-	using workspace = new WorkspaceContextService({ id: 'empty', folders: [] });
+	using workspace = new TestWorkspaceService({ id: 'empty', folders: [] });
 	using copies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using debug = new TestDebugService();
 	using service = new TestingService(tasks, noExecution, workspace, copies, new NullLoggerService(), debug.service);
@@ -68,7 +68,7 @@ test("TestingService owns dynamic Test Profile providers and maps profiles to te
 
 test("TestingService rejects profiles that do not reference a current test task", async () => {
 	using tasks = new FakeTaskService([task("unit", "Unit", "test")]);
-	using workspace = new WorkspaceContextService({ id: 'empty', folders: [] });
+	using workspace = new TestWorkspaceService({ id: 'empty', folders: [] });
 	using copies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using debug = new TestDebugService();
 	using service = new TestingService(tasks, noExecution, workspace, copies, new NullLoggerService(), debug.service);
@@ -134,7 +134,7 @@ const noExecution: ITestExecutionService = {
 test('TestingService consumes completion before start responses and releases exact runs once', async () => {
 	using tasks = new FakeTaskService([]);
 	using backend = new TestExecutionService();
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') });
 	using copies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using debug = new TestDebugService();
 	using service = new TestingService(tasks, backend, workspace, copies, new NullLoggerService(), debug.service);
@@ -151,7 +151,7 @@ test('TestingService ignores old sequences, cancels a run, and keeps scripts ind
 	using tasks = new FakeTaskService([task('script', 'Script', 'test')]);
 	using backend = new TestExecutionService();
 	backend.holdRuns = true;
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') });
 	using copies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using debug = new TestDebugService();
 	using service = new TestingService(tasks, backend, workspace, copies, new NullLoggerService(), debug.service);
@@ -172,7 +172,7 @@ test('TestingService releases an accepted discovery after workspace replacement 
 	using backend = new TestExecutionService();
 	let finish!: () => void;
 	backend.pendingDiscovery = new Promise<void>(resolve => { finish = resolve; });
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') });
 	using copies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using debug = new TestDebugService();
 	using service = new TestingService(tasks, backend, workspace, copies, new NullLoggerService(), debug.service);
@@ -197,7 +197,7 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 
 test('TestingService runs scripts independently of backend test discovery', async () => {
 	using tasks = new FakeTaskService([task('script', 'Script', 'test')]);
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') });
 	using copies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using debug = new TestDebugService();
 	using service = new TestingService(tasks, noExecution, workspace, copies, new NullLoggerService(), debug.service);
@@ -209,7 +209,7 @@ test('TestingService runs scripts independently of backend test discovery', asyn
 test('TestingService starts the prepared exact test with the DAP owner and cancels the session', async () => {
 	using tasks = new FakeTaskService([]);
 	using backend = new TestExecutionService();
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/workspace') });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') });
 	using copies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using debug = new TestDebugService();
 	using service = new TestingService(tasks, backend, workspace, copies, new NullLoggerService(), debug.service);

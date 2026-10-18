@@ -27,7 +27,7 @@ import { localize, setNlsMessages } from '../../../src/ash/nls.js';
 import { Event } from '../../../src/ash/base/common/event.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
-import { WorkspaceContextService } from '../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { IEditorService, type EditorOpenOptions, type EditorOpenTarget } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { ContextKeyService, IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
@@ -127,7 +127,7 @@ instantiation.registerInstance(IMenuService, instantiation.createInstance(MenuSe
 resultMenus = store.add(instantiation.createInstance(BrowserContextMenuService));
 instantiation.registerInstance(IContextMenuService, menus);
 instantiation.registerInstance(IHoverService, store.add(new HoverService(configuration, contextView, menus)));
-const workspace = store.add(new WorkspaceContextService({
+const workspace = store.add(new TestWorkspaceService({
 	id: 'workspace', folders: [
 		{ id: 'first', name: 'workspace', index: 0, uri: new URLSearchParams(location.search).has('windows') ? URI.from({ scheme: 'file', path: '/c:/workspace' }) : URI.file('/workspace') },
 		{ id: 'second', name: 'other', index: 1, uri: URI.parse('ssh://host/other') },

@@ -39,7 +39,7 @@ import { ITerminalProcessService, type ITerminalProcessCreateOptions, type Termi
 import { OperatingSystem } from '../../../src/ash/base/common/platform.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
-import { WorkspaceContextService } from '../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { IConfigurationResolverService } from '../../../src/ash/workbench/services/configurationResolver/common/configurationResolver.js';
@@ -131,7 +131,7 @@ resources.add(new SessionsList(container, management, view, 'Tasks', 'New task',
 const services = resources.add(new InstantiationService());
 services.registerInstance(IStorageService, storage);
 const platform = new URL(location.href).searchParams.get('os') ?? 'linux';
-const workspace = resources.add(new WorkspaceContextService({ id: 'app-tools', uri: platform === 'windows' ? URI.from({ scheme: 'file', path: '/c:/workspace' }) : URI.file('/workspace') }));
+const workspace = resources.add(new TestWorkspaceService({ id: 'app-tools', uri: platform === 'windows' ? URI.from({ scheme: 'file', path: '/c:/workspace' }) : URI.file('/workspace') }));
 const configuration = resources.add(new WorkbenchConfigurationService());
 const terminalConnection = resources.add(new Emitter<import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessConnectionState>());
 let executionOS: OperatingSystem | undefined = platform === 'windows' ? OperatingSystem.Windows : platform === 'osx' ? OperatingSystem.Macintosh : OperatingSystem.Linux;

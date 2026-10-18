@@ -44,7 +44,7 @@ import { getBrowserTextResourceStore } from '../../../src/ash/workbench/contrib/
 import { TextFileService } from '../../../src/ash/workbench/services/textfile/browser/textFileService.js';
 import { FilesConfigurationService, IFilesConfigurationService } from '../../../src/ash/workbench/services/filesConfiguration/common/filesConfigurationService.js';
 import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
-import { WorkspaceContextService } from '../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 
 declare global {
@@ -92,7 +92,7 @@ const themes = [darkColorTheme, lightColorTheme, highContrastDarkColorTheme];
 const theme = resources.add(new TestThemeService(darkColorTheme));
 services.registerInstance(IThemeService, theme);
 resources.add(bindTestColorTheme(theme, document.body));
-services.registerInstance(IWorkspaceContextService, resources.add(new WorkspaceContextService({ id: 'url-integration', folders: [] })));
+services.registerInstance(IWorkspaceContextService, resources.add(new TestWorkspaceService({ id: 'url-integration', folders: [] })));
 registerTestComponentServices(services);
 services.registerInstance(IFilesConfigurationService, resources.add(services.createInstance(FilesConfigurationService)));
 const textFiles = resources.add(services.createInstance(TextFileService));

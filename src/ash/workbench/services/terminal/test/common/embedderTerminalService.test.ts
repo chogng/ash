@@ -14,7 +14,7 @@ import { TerminalMainContribution } from '../../../../contrib/terminal/browser/t
 import { ITerminalService, type ITerminalInstance } from '../../browser/terminal.js';
 import { TERMINAL_VIEW_ID } from '../../../../contrib/terminal/common/terminal.js';
 import { IViewsService } from '../../../views/common/viewsService.js';
-import { WorkspaceContextService } from '../../../workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../configuration/test/common/testServices.js';
 import { IEmbedderTerminalService, type IEmbedderTerminalPty } from '../../common/embedderTerminalService.js';
 
 suite('Embedder terminal creation', () => {
@@ -201,7 +201,7 @@ class HostPty extends Disposable implements IEmbedderTerminalPty {
 function createServices(owner: DisposableStore): { services: InstantiationService; terminals: ITerminalService; reveals: string[]; } {
 	const descriptor = getSingletonServiceDescriptors().find(([id]) => id === IEmbedderTerminalService)?.[1];
 	assert.ok(descriptor);
-	const workspace = owner.add(new WorkspaceContextService({ id: 'empty-window' }));
+	const workspace = owner.add(new TestWorkspaceService({ id: 'empty-window' }));
 	const rejectBackend = async (): Promise<never> => { throw new Error('Host PTY must not access the backend'); };
 	const reveals: string[] = [];
 	const services = owner.add(new InstantiationService(new ServiceCollection(

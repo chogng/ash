@@ -34,7 +34,6 @@ import { IEditorService } from '../../../../services/editor/common/editorService
 import { NotificationService } from '../../../../services/notification/common/notificationService.js';
 import { ITextFileService } from '../../../../services/textfile/common/textfiles.js';
 import { IWorkingCopyService } from '../../../../services/workingCopy/common/workingCopyService.js';
-import { IWorkspaceOpenService } from '../../../../services/workspaces/browser/workspaceOpenService.js';
 import { BrowserStorageService } from '../../../../services/storage/browser/storageService.js';
 import { ITrustedDomainService } from '../../common/trustedDomainService.js';
 import { TRUSTED_DOMAINS_URI } from '../../browser/trustedDomains.js';
@@ -195,7 +194,6 @@ suite('Workbench external link trust', () => {
 		using fixture = new URLFixture();
 		// Other editor operations are outside this host request and must remain unused.
 		fixture.services.registerInstance(IEditorPart, {} as IEditorPart);
-		fixture.services.registerInstance(IWorkspaceOpenService, {} as IWorkspaceOpenService);
 		fixture.services.registerInstance(IWorkingCopyService, {} as IWorkingCopyService);
 		fixture.services.registerInstance(ITextFileService, {} as ITextFileService);
 		fixture.services.registerInstance(IModelService, {

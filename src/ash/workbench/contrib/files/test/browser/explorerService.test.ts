@@ -7,14 +7,14 @@ import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { FileService } from '../../../../../platform/files/common/fileService.js';
 import { FileKind, FileSystemProviderCapabilities, type IFileChangeEvent, type IWatchOptions } from '../../../../../platform/files/common/files.js';
-import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
 import { ExplorerService } from '../../browser/explorerService.js';
 import { ExplorerItem } from '../../common/explorerModel.js';
 
 ensureNoDisposablesAreLeakedInTestSuite();
 
 test('Explorer service exposes the current view and releases it on disposal', () => {
-	using workspace = new WorkspaceContextService({ id: 'project', uri: URI.file('/project') });
+	using workspace = new TestWorkspaceService({ id: 'project', uri: URI.file('/project') });
 	using configuration = new InMemoryConfigurationService();
 	using files = new FileService();
 	using service = new ExplorerService(workspace, files, configuration);
@@ -46,7 +46,7 @@ test('Explorer service exposes the current view and releases it on disposal', ()
 test('Explorer service batches workspace file invalidations and discards pending changes on workspace switch', async () => {
 	const firstRoot = URI.file('/project');
 	const secondRoot = URI.file('/next');
-	using workspace = new WorkspaceContextService({ id: 'project', uri: firstRoot });
+	using workspace = new TestWorkspaceService({ id: 'project', uri: firstRoot });
 	using changes = new Emitter<IFileChangeEvent>();
 	using configuration = new InMemoryConfigurationService();
 	using files = new FileService();
@@ -113,7 +113,7 @@ test('Explorer service batches workspace file invalidations and discards pending
 });
 
 test('Explorer auto-reveal honors conditions and settings without changing manual selection', async () => {
-	using workspace = new WorkspaceContextService({ id: 'root', uri: URI.file('/root') });
+	using workspace = new TestWorkspaceService({ id: 'root', uri: URI.file('/root') });
 	using configuration = new InMemoryConfigurationService();
 	using files = new FileService();
 	using service = new ExplorerService(workspace, files, configuration);

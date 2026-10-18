@@ -1,7 +1,7 @@
 import type { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
 import type { IContextMenuDelegate } from '../../../../../base/browser/contextmenu.js';
 import type { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
-import { WorkspaceContextService } from '../../../../services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
 import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import { resetNlsResolver } from '../../../../../nls.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
@@ -22,7 +22,7 @@ test("ProblemsViewPane filters diagnostics and opens the selected range", async 
 	const main = URI.file("C:\\project\\src\\main.rs");
 	const library = URI.file("C:\\project\\src\\lib.rs");
 	using markerService = new MarkerService();
-	using workspace = new WorkspaceContextService({ id: 'project', uri: URI.file('/project') });
+	using workspace = new TestWorkspaceService({ id: 'project', uri: URI.file('/project') });
 	let menu: IContextMenuDelegate | undefined;
 	const copied: string[] = [];
 	let copyFailure = false;

@@ -33,7 +33,7 @@ import { IMenuService, MenuId } from "../../../../platform/actions/common/action
 import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
 import { AppServerRemoteError } from "../../../../platform/agentHost/common/appServerError.js";
-import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
+import { IWorkspaceContextService, type IWorkspaceFolder } from "../../../../platform/workspace/common/workspace.js";
 import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../browser/parts/views/viewPane.js";
 import { IWorkbenchLayoutService } from "../../../services/layout/browser/layoutService.js";
 import { type ITerminalDimensions, type ITerminalInstance, type ITerminalProfile, ITerminalService, ITerminalGroupService, type IXtermTerminal } from "../../../services/terminal/browser/terminal.js";
@@ -43,8 +43,7 @@ import "./media/terminal.css";
 import { h, addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { observeResize } from "../../../../base/browser/observer.js";
 import { IEditorService } from '../../../services/editor/common/editorService.js';
-import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
-import { pickWorkspaceFolder } from '../../../services/workspaces/browser/workspaceOpenService.js';
+import { PICK_WORKSPACE_FOLDER_COMMAND_ID } from '../../../browser/actions/workspaceCommands.js';
 import { TerminalProfileQuickpick } from './terminalProfileQuickpick.js';
 
 const DEFAULT_DIMENSIONS: ITerminalDimensions = { rows: 24, cols: 80 };
@@ -74,7 +73,7 @@ export class TerminalViewPane extends ViewPane {
 		@ITerminalProcessService private readonly processes: ITerminalProcessService,
 		@ITerminalGroupService private readonly groups: ITerminalGroupService,
 		@IEditorService private readonly editors: IEditorService,
-		@IQuickInputService private readonly quickInput: IQuickInputService,
+		@ICommandService private readonly commands: ICommandService,
 	) {
 		super(container, options);
 		this.terminalService = terminalService;
@@ -209,7 +208,7 @@ export class TerminalViewPane extends ViewPane {
 			const activeResource = this.editors.activeEditor?.resource;
 			const folder = parent ? folders.find(folder => folder.id === parent.dirId)
 				: (activeResource && this.workspaceContext.getWorkspaceFolder(activeResource))
-				|| (folders.length === 1 ? folders[0] : await pickWorkspaceFolder(this.quickInput, folders, localize('terminal.selectFolder', 'Select a workspace folder for the terminal.')));
+				|| (folders.length === 1 ? folders[0] : await this.commands.executeCommand<IWorkspaceFolder | undefined>(PICK_WORKSPACE_FOLDER_COMMAND_ID, [{ placeHolder: localize('terminal.selectFolder', 'Select a workspace folder for the terminal.') }]));
 			if (!folder || this.isDisposed || !focus && !this.isBodyVisible()) return;
 			await this.profileService.refreshAvailableProfiles(folder.id);
 			if (this.isDisposed || !focus && !this.isBodyVisible()) return;

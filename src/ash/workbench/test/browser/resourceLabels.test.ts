@@ -14,7 +14,7 @@ import { NullLoggerService } from '../../../platform/log/common/log.js';
 import type { IDecorationData } from '../../services/decorations/common/decorations.js';
 import { operatingSystem, OperatingSystem } from '../../../base/common/platform.js';
 import { LabelService } from '../../../platform/label/common/labelService.js';
-import { WorkspaceContextService } from '../../services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../services/configuration/test/common/testServices.js';
 import { DecorationsService } from '../../services/decorations/browser/decorationsService.js';
 import { DEFAULT_LABELS_CONTAINER, IResourceLabelService, ResourceLabels, type IResourceIconRenderer } from '../../browser/labels.js';
 
@@ -22,7 +22,7 @@ test('ResourceLabels formats files and reacts to icon and decoration changes', (
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const root = URI.file('C:/project');
 	const resource = URI.file('C:/project/src/main.ts');
-	using workspace = new WorkspaceContextService({ id: 'workspace', uri: root });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: root });
 	using decorations = new DecorationsService(dom.window.document, new NullLoggerService());
 	using decorationUpdates = new Emitter<readonly URI[]>();
 	let decorationData: IDecorationData | undefined;
@@ -97,7 +97,7 @@ test('ResourceLabels formats files and reacts to icon and decoration changes', (
 test('Workspace labels use the closest folder for nested resources', () => {
 	const root = URI.file('/project');
 	const nested = URI.file('/project/src');
-	using workspace = new WorkspaceContextService({
+	using workspace = new TestWorkspaceService({
 		id: 'workspace',
 		configuration: URI.file('/project.code-workspace'),
 		folders: [
@@ -118,7 +118,7 @@ test('Workspace labels use the closest folder for nested resources', () => {
 test('a label group updates icon visibility and releases all of its labels', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {
-		using workspace = new WorkspaceContextService({ id: 'test', folders: [] });
+		using workspace = new TestWorkspaceService({ id: 'test', folders: [] });
 		using changes = new Emitter<void>();
 		let renders = 0;
 		using labels = new ResourceLabels(DEFAULT_LABELS_CONTAINER, {
