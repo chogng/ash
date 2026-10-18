@@ -51,7 +51,7 @@ interface ChatPaneEntry {
 /**
  * Retains conversations behind one title and history switcher.
  *
- * Each untitled or active durable Session owns one retained ChatWidget. Thread
+ * Each opened untitled or durable Session owns one retained ChatWidget. Thread
  * selection remains internal to durable panes, while untitled sessions
  * materialize only when their first message is sent.
  */
@@ -267,12 +267,14 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		const focusedElement = this.element.ownerDocument.activeElement;
 		const restoreFocus = isHTMLElement(focusedElement) && this.paneHost.contains(focusedElement);
 		this.rekeyMaterializedPanes();
+		const activePaneId = this.activePaneId();
 		const entries: ChatPaneEntry[] = [];
 		const retainedPaneIds = new Set<string>();
 		for (const untitledSession of this.sessionService.untitledSessions) {
 			const paneId = untitledSessionPaneId(untitledSession);
 			retainedPaneIds.add(paneId);
 			let pane = this.panes.get(paneId);
+			if (!pane && paneId !== activePaneId) continue;
 			if (!pane) {
 				pane = this.instantiationService.createInstance<ChatWidget<ChatWidgetModel>>(ChatWidget,
 					this.paneHost,
@@ -303,6 +305,9 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 			const paneId = sessionPaneId(session);
 			retainedPaneIds.add(paneId);
 			let pane = this.panes.get(paneId);
+			// Catalog history is not an opened conversation. Instantiating every
+			// entry also restores every subscription and catalog read on reconnect.
+			if (!pane && paneId !== activePaneId) continue;
 			if (!pane) {
 				pane = this.instantiationService.createInstance<ChatWidget<ChatWidgetModel>>(ChatWidget,
 					this.paneHost,
@@ -333,7 +338,6 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 			this.panes.delete(paneId);
 			pane.dispose();
 		}
-		const activePaneId = this.activePaneId();
 		const activePane = activePaneId ? this.panes.get(activePaneId) : undefined;
 		const orderedNodes = [...entries.map((entry) => entry.pane.element), this.empty];
 		for (let index = 0; index < orderedNodes.length; index += 1) {
@@ -381,7 +385,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		const untitledSessionId = this.initialUntitledSessionId;
 		this.initialUntitledSessionId = undefined;
 		if (!untitledSessionId || !this.panes.has(`untitled:${untitledSessionId}`)) return;
-		if ([...this.panes.keys()].some((paneId) => paneId.startsWith("session:"))) {
+		if (this.sessionService.sessions.some(session => session.status === 'active' && this.selectionForSession(session))) {
 			this.sessionService.discardUntitledSession(untitledSessionId);
 		}
 	}

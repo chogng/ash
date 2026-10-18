@@ -345,6 +345,48 @@ test("Chat contribution owns the fixed Auxiliary Bar view", () => {
 	assert.equal(registry.getDefaultViewContainer(ViewContainerLocation.AgentSidebar), undefined);
 });
 
+test('100 catalog sessions instantiate only opened conversations and reconnect those retained drafts', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using browserOwner = toDisposable(() => dom.window.close());
+	dom.window.HTMLElement.prototype.scrollTo = () => { };
+	using contextView = new BrowserContextViewService(dom.window.document.body);
+	const fake = fakeApi({ sessions: Array.from({ length: 100 }, (_, index) => session(`session-${index + 1}`, `thread-${index + 1}`)) });
+	const subscribed: string[] = [];
+	const subscribe = fake.api.thread.subscribe;
+	fake.api.thread.subscribe = params => { subscribed.push(params.sessionId); return subscribe(params); };
+	using sessions = new SessionsManagementService(fake.api);
+	using chat = createChatService(fake.api);
+	const services = createInputServices(contextView, chat);
+	const menus = services.get(IMenuService);
+	using pane = new ChatViewPane(
+		dom.window.document.body, { id: CHAT_VIEW_ID, title: 'Chat' }, chat, sessions,
+		menus, services.get(IContextMenuService), contextView, services.get(ICommandService),
+		testLayoutService(), unavailableFileService, unavailableAccessibleViewService, notifications,
+		services, services.get(IConfigurationService), services.get(IStorageService), userDataProfile,
+	);
+	dom.window.document.body.append(pane.element);
+	await sessions.initialize();
+	await nextTask();
+	assert.equal(pane.element.querySelectorAll('.ash-chat[data-session-id]').length, 1);
+	assert.deepEqual([...new Set(subscribed)], ['session-1']);
+	const first = pane.element.querySelector<HTMLElement>('.ash-chat[data-session-id="session-1"]')!;
+	const input = first.querySelector<HTMLTextAreaElement>('.ash-chat-textarea-input')!;
+	typeChatText(dom.window, input, 'retained draft');
+	sessions.selectThread('session-2', 'thread-2');
+	await nextTask();
+	assert.equal(pane.element.querySelectorAll('.ash-chat[data-session-id]').length, 2);
+	assert.deepEqual([...new Set(subscribed)], ['session-1', 'session-2']);
+	subscribed.length = 0;
+	fake.emitReady();
+	await nextTask();
+	assert.deepEqual([...new Set(subscribed)].sort(), ['session-1', 'session-2']);
+	sessions.selectThread('session-1', 'thread-1');
+	await nextTask();
+	assert.equal(pane.element.querySelector('.ash-chat[data-session-id="session-1"]'), first);
+	assert.equal(input.value, 'retained draft');
+	assert.equal(first.hidden, false);
+});
+
 test("Chat title and history switching retain conversations and drafts", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	dom.window.HTMLElement.prototype.scrollTo = () => { };
@@ -4963,7 +5005,8 @@ for (const navigate of [false, true]) {
 			if (!navigate) throw error;
 			assert.ok(isCancellationError(error));
 		});
-		await waitFor(() => pane.element.querySelectorAll('.ash-chat-pane-host > .ash-chat').length === 2);
+		await waitFor(() => sessions.sessions.some(session => session.sessionId === created.sessionId));
+		assert.equal(pane.element.querySelectorAll('.ash-chat-pane-host > .ash-chat').length, 1);
 		let target = original;
 		if (navigate) {
 			sessions.selectThread(created.sessionId, 'thread-1');
