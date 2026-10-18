@@ -919,16 +919,7 @@ impl LocalProfileRuntime {
                 config.clone(),
             )))
             .map_err(open_error)?;
-        let secrets: Arc<dyn SecretStore> = Arc::new(
-            ProfileSecretStore::open(
-                profile_root.join("secrets"),
-                Arc::new(
-                    ash_keyring_store::KeyringSecretStore::for_profile(&profile_root)
-                        .map_err(|error| OpenAppServerError(error.to_string()))?,
-                ),
-            )
-            .map_err(|error| OpenAppServerError(error.to_string()))?,
-        );
+        let secrets = open_profile_secrets(&profile_root)?;
         let diagnostics = diagnostics::Diagnostics::default();
         let telemetry = ash_otel::Telemetry::new(diagnostics.clone());
         let plugin_authority = PluginActivationAuthority::open(profile_root.join("plugins"))
@@ -1116,6 +1107,20 @@ impl CodebaseProviders {
         self.cloud = cloud;
         self
     }
+}
+
+fn open_profile_secrets(profile_root: &Path) -> Result<Arc<dyn SecretStore>, OpenAppServerError> {
+    #[cfg(not(test))]
+    let keyring =
+        ash_keyring_store::KeyringSecretStore::for_profile(profile_root).map_err(open_error)?;
+    // Unit tests reopen profiles but must never allocate persistent entries in the developer's
+    // OS keyring. Keep their injected keys inside the fixture so TempDir owns their lifetime.
+    #[cfg(test)]
+    let keyring = ash_secrets::FileSecretStore::open(profile_root.join("test-keyring"))
+        .map_err(open_error)?;
+    ProfileSecretStore::open(profile_root.join("secrets"), Arc::new(keyring))
+        .map(|store| Arc::new(store) as Arc<dyn SecretStore>)
+        .map_err(open_error)
 }
 
 /// Opens the App Server used by embedded clients and server process hosts.
@@ -1333,16 +1338,7 @@ pub fn open_app_server_with_codebase_providers(
         }
         (Some(runtime), None) => Arc::clone(&runtime.secrets),
         (None, Some(connectors)) => Arc::clone(&connectors.secrets),
-        (None, None) => Arc::new(
-            ProfileSecretStore::open(
-                options.profile_root.join("secrets"),
-                Arc::new(
-                    ash_keyring_store::KeyringSecretStore::for_profile(&options.profile_root)
-                        .map_err(|error| OpenAppServerError(error.to_string()))?,
-                ),
-            )
-            .map_err(|error| OpenAppServerError(error.to_string()))?,
-        ),
+        (None, None) => open_profile_secrets(&options.profile_root)?,
     };
     let mut connector_runtime = match options.connector_runtime.take() {
         Some(runtime) => Some(runtime),

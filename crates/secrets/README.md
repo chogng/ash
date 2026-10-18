@@ -75,15 +75,19 @@ cargo test -p ash-secrets
 bazel test //crates/secrets:secrets-unit-tests
 ```
 
-当前测试覆盖 memory/file round-trip、replace/delete、Debug redaction、key validation、unavailable error、Unix 0700/0600 权限、symlink 拒绝、stale staging cleanup、key filename 隐藏与 1 MiB 上限；Windows 实现 owner-only protected DACL 与 write-through atomic replacement。
+当前测试覆盖 memory/file round-trip、replace/delete、Debug redaction、key validation、unavailable error、Unix 0700/0600 权限、symlink 拒绝、stale staging cleanup、key filename 隐藏与 1 MiB 上限；Windows 实现 owner-only protected DACL、staging sync 与 atomic replacement。
 新增 backend 时必须补 error/log/debug negative tests，并证明 replacement/delete/drop 的 secret
 buffer 处理。
 
 ## 当前限制与演进
 
-当前具有 memory、unavailable、私有明文文件和认证加密文件 backend。`ProfileSecretStore` 是本地产品默认，host 注入 `ash-keyring-store::KeyringSecretStore` 只保存随机主密钥。文件使用 AES-256-GCM，随机 nonce、版本头与绑定文件名的 AAD；AES key schedule 和 `SecretValue` 在释放时清理。Unix 使用 0700/0600 与原子 rename，Windows 使用 owner-only protected DACL 与 write-through atomic replacement。
+当前具有 memory、unavailable、私有明文文件和认证加密文件 backend。`ProfileSecretStore` 是本地产品默认，host 注入 `ash-keyring-store::KeyringSecretStore` 只保存随机主密钥。文件使用 AES-256-GCM，随机 nonce、版本头与绑定文件名的 AAD；AES key schedule 和 `SecretValue` 在释放时清理。Unix 使用 0700/0600 与原子 rename，Windows 使用 owner-only protected DACL、staging sync 与 atomic replacement。
 
-`open` 不访问 keyring。第一次操作或 `check_availability` 在跨进程文件锁下初始化主密钥并迁移旧 `values/`：密文进入 `encrypted/values/`，重读校验后才删除对应明文。中断后继续迁移，冲突时保留两份；key 缺失、错误或密文损坏返回稳定分类，绝不降级到明文或静默重置。每次操作重新读取 keyring，避免缓存绕过访问撤销。`check_availability` 同时验证现有密文。
+全新的空库执行读取或删除时直接返回不存在，不访问 keyring 或分配主密钥。首次写入和显式
+availability 检查仍初始化加密；已有 legacy value、密文或 key-check 的库继续验证原始主密钥，
+不能把 keyring 访问失败当作凭据不存在。主密钥需跨进程重启保留，不在 runtime Drop 时删除。
+
+`open` 不访问 keyring。首次写入、显式 `check_availability` 或操作已有数据时，在跨进程文件锁下初始化主密钥并迁移旧 `values/`：密文进入 `encrypted/values/`，重读校验后才删除对应明文。中断后继续迁移，冲突时保留两份；key 缺失、错误或密文损坏返回稳定分类，绝不降级到明文或静默重置。成功获取并验证的主密钥由当前 store 复用，释放时清零；重新打开的 store 观察 keyring 的访问撤销，失败结果不缓存。`check_availability` 同时验证现有密文。
 
 `ProfileSecretStore` 默认 encrypted，也支持用户显式选择 file：选择与迁移日志保存于 root 的
 `storage-mode`。两种模式沿用同一跨进程锁和私有文件 IO，切换先验证、逐项写入并重读核对后才

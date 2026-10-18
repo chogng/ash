@@ -65,6 +65,38 @@ impl SecretStore for CountingKeyring {
 }
 
 #[test]
+fn empty_reads_and_deletes_do_not_allocate_a_persistent_master_key() {
+    let root = tempfile::tempdir().unwrap();
+    let keyring = Arc::new(CountingKeyring::default());
+    let name = key("provider/absent");
+    for _ in 0..2 {
+        let store = ProfileSecretStore::open(root.path(), keyring.clone()).unwrap();
+        assert!(store.load(&name).unwrap().is_none());
+        assert_eq!(store.delete(&name).unwrap(), DeleteSecretOutcome::NotFound);
+        assert_eq!(fs::read_dir(&store.files.values).unwrap().count(), 0);
+    }
+    assert_eq!(keyring.loads.load(Ordering::SeqCst), 0);
+    assert_eq!(keyring.stores.load(Ordering::SeqCst), 0);
+
+    // An explicit availability request still verifies that a new key can be persisted.
+    let store = ProfileSecretStore::open(root.path(), keyring.clone()).unwrap();
+    store.check_availability().unwrap();
+    assert_eq!(keyring.loads.load(Ordering::SeqCst), 1);
+    assert_eq!(keyring.stores.load(Ordering::SeqCst), 1);
+    drop(store);
+    keyring.delete(&key(MASTER_KEY_NAME)).unwrap();
+    let reopened = ProfileSecretStore::open(root.path(), keyring).unwrap();
+    assert_eq!(
+        reopened.load(&name).unwrap_err().kind(),
+        SecretStoreErrorKind::KeyMissing
+    );
+    assert_eq!(
+        reopened.delete(&name).unwrap_err().kind(),
+        SecretStoreErrorKind::KeyMissing
+    );
+}
+
+#[test]
 fn queued_secret_operations_and_status_queries_acquire_the_master_key_once() {
     let root = tempfile::tempdir().unwrap();
     let keyring = Arc::new(CountingKeyring::default());

@@ -146,7 +146,7 @@ profile file backend 的最低要求：
 
 `config.toml`、SQLite、Extensions cache 和普通 JSON 只保存 non-secret reference。daemon 默认将凭据认证加密后写入 `<profile>/secrets/encrypted/values/`。256-bit 随机主密钥由 profile 隔离的 `KeyringSecretStore` 保存。每个 profile runtime 在成功获取并验证主密钥后于 store 内持有 `SecretValue`，释放时清零；后续读写和状态查询复用该密钥。主密钥获取或校验失败不缓存结果，因此用户显式授权或恢复原始钥匙串条目后，同一个 runtime 可以重试。没有全局密钥或凭据值缓存，各次操作仍读取并认证最新文件。钥匙串锁定、条目删除或权限变更由重新打开的 runtime 观察；已有 runtime 持有的密钥不会立即失效。文件使用 AES-256-GCM、新随机 nonce、版本头及绑定文件名的附加认证数据；不同 key 的密文不能交换。私有权限、同步写入与原子替换继续适用，没有明文 fallback 或双写。
 
-`store.lock` 跨进程序列化主密钥创建、迁移和文件操作。第一次存储操作或 `check_availability` 将旧 `secrets/values/` 的明文逐项写入加密目录，重读校验持久密文后才删除对应旧文件。中断后可继续迁移，冲突时保留两份数据并返回错误。`key-check` 校验主密钥；已有密文但 keyring 条目丢失时不生成替代密钥。`FileSecretStore` 保留作为显式 backend 和迁移源。
+`store.lock` 跨进程序列化主密钥创建、迁移和文件操作。全新空库的读取和删除直接返回不存在，不分配主密钥；首次写入、显式 `check_availability` 或操作已有数据才初始化加密。迁移时将旧 `secrets/values/` 的明文逐项写入加密目录，重读校验持久密文后才删除对应旧文件。中断后可继续迁移，冲突时保留两份数据并返回错误。`key-check` 校验主密钥；已有密文但 keyring 条目丢失时不生成替代密钥。`FileSecretStore` 保留作为显式 backend 和迁移源。
 
 构造 store 不访问系统 keyring；无法访问 keyring 时 App Server 仍可启动。`secrets/status` 返回 available、unavailable、accessDenied、keyMissing、corrupted、migrationFailed 或 failure，并验证已有密文完整性。状态不包含凭据、主密钥、路径或原始系统错误。前端保留已有的凭据遮蔽值，显示本地化恢复提示并提供显式重试；操作时的存储错误也通过稳定 `data.kind` 返回。查询可能触发初始化和迁移，因此协议按全局写操作串行。
 
@@ -271,7 +271,7 @@ Desktop renderer ──▶ SecretStore
 4. secrets 只保存 opaque bytes，不理解 token 或 account。
 5. Config 只保存 reference，不保存 secret。
 6. API/client/Core 不读取 secret store。
-7. 本地 composition 默认使用认证加密文件，随机主密钥保存在系统 keyring；Unix 强制 0700/0600，Windows 使用 owner-only protected DACL 和 write-through atomic replacement。
+7. 本地 composition 默认使用认证加密文件，随机主密钥保存在系统 keyring；Unix 强制 0700/0600，Windows 使用 owner-only protected DACL、staging sync 和 atomic replacement。
 8. `ash-keyring-store` 是默认加密文件 backend 的主密钥 facility，也可由 host 显式注入为直接凭据 backend；两种模式不 fallback 或双写。
 9. `LocalProfileRuntime` 拥有一个 profile 的唯一 `SecretStore`；共享 profile runtime 时注入不同 store 会直接拒绝，不形成第二套 credential authority。
 10. `provider/apiKey/set` 与 `provider/probe` 可把新 key 交给受信任的 App Server；后端不提供读取已存 key 的接口。local composition 将同一个 `SecretStore` 注入模型、Connector、MCP 与订阅认证 adapter。订阅 token 只在本地 credential owner 与单次模型请求之间流动，不进入 Core Agent Loop 状态。

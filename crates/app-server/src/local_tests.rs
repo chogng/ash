@@ -2165,6 +2165,26 @@ fn user_network_config_is_loaded_before_start_and_reconciled_on_edit() {
 }
 
 #[test]
+fn default_profile_secrets_keep_unit_test_keys_inside_the_fixture() {
+    let profile = tempfile::tempdir().unwrap();
+    let name = ash_secrets::SecretKey::new("test/profile-credential").unwrap();
+    let store = open_profile_secrets(profile.path()).unwrap();
+    store
+        .store(&name, &ash_secrets::SecretValue::new(b"fixture".to_vec()))
+        .unwrap();
+    assert_eq!(
+        std::fs::read_dir(profile.path().join("test-keyring/values"))
+            .unwrap()
+            .count(),
+        1,
+        "unit-test master keys must be owned by the temporary fixture"
+    );
+    drop(store);
+    let reopened = open_profile_secrets(profile.path()).unwrap();
+    assert_eq!(reopened.load(&name).unwrap().unwrap().expose(), b"fixture");
+}
+
+#[test]
 fn encrypted_storage_shared_profile_runtime_reuses_one_store_across_env_hosts() {
     let profile = tempfile::tempdir().unwrap();
     let first_dir = tempfile::tempdir().unwrap();

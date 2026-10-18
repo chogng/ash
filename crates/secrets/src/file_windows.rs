@@ -25,7 +25,6 @@ use windows_sys::Win32::Security::PSID;
 use windows_sys::Win32::Storage::FileSystem::FILE_ALL_ACCESS;
 use windows_sys::Win32::Storage::FileSystem::MOVEFILE_WRITE_THROUGH;
 use windows_sys::Win32::Storage::FileSystem::MoveFileExW;
-use windows_sys::Win32::Storage::FileSystem::REPLACEFILE_WRITE_THROUGH;
 use windows_sys::Win32::Storage::FileSystem::ReplaceFileW;
 
 pub(super) fn set_private_directory_permissions(path: &Path) -> io::Result<()> {
@@ -98,7 +97,8 @@ pub(super) fn promote_file(staging: &Path, destination: &Path) -> io::Result<()>
                 destination.as_ptr(),
                 staging.as_ptr(),
                 std::ptr::null(),
-                REPLACEFILE_WRITE_THROUGH,
+                // The staging file is already synced; REPLACEFILE_WRITE_THROUGH is unsupported.
+                0,
                 std::ptr::null_mut(),
                 std::ptr::null_mut(),
             )

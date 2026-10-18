@@ -67,6 +67,16 @@ cargo test -p ash-keyring-store
 cargo clippy -p ash-keyring-store --all-targets --no-deps -- -D warnings
 ```
 
-测试使用 private fake backend，不访问开发者真实 keyring，覆盖 binary round trip、replace/delete、
+普通测试使用 private fake backend，不访问开发者真实 keyring，覆盖 binary round trip、replace/delete、
 profile isolation、metadata hashing、error sanitization 和 size limit。新增平台 adapter 时必须继续实现
 完整三操作，并同步本文与 [`docs/secrets.md`](../../docs/secrets.md)。
+
+Windows 的真实 keyring 验证需显式运行：
+
+```text
+just test ash-keyring-store --test system_keyring -- --ignored --exact real_keyring_round_trip_and_process_restart
+```
+
+该测试使用独立临时 profile，通过三个独立子进程验证 WinCred 二进制读写、覆盖、删除及加密
+profile 的重启恢复，并确认主密钥没有轮换。父进程在成功或失败后清理两个测试条目，再删除
+临时目录；普通 App Server 单元测试的密钥则随临时目录清理，不能使用持久 OS keyring。

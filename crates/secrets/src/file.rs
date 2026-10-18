@@ -36,7 +36,7 @@ const KEY_DOMAIN: &[u8] = b"ash-file-secret-store-key-v1\0";
 /// Keys are represented only by domain-separated SHA-256 filenames. Values are written through a
 /// private, synced staging file and atomically promoted under a process-local operation lock. On
 /// Unix, directories are mode 0700 and value files are mode 0600. Windows uses an owner-only
-/// protected DACL and write-through atomic replacement. Other platforms fail closed.
+/// protected DACL with synced staging and atomic replacement. Other platforms fail closed.
 pub struct FileSecretStore {
     values: PathBuf,
     boundary: CanonicalPathRoot,
@@ -153,6 +153,9 @@ impl FileSecretStore {
             let mut file = options.open(&staging).map_err(store_io)?;
             file.write_all(value.expose()).map_err(store_io)?;
             file.sync_all().map_err(store_io)?;
+            // ReplaceFileW opens the replacement without write sharing. Release our writer
+            // before promotion; sharing deletion alone does not permit an existing-file replace.
+            drop(file);
             promote_file(&staging, destination)?;
             sync_directory(
                 destination

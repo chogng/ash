@@ -70,8 +70,9 @@ pub struct ProfileSecretStore {
 impl ProfileSecretStore {
     /// Opens private directories without accessing the keyring or displaying system prompts.
     ///
-    /// The first availability check or secret operation initializes encryption and migrates old
-    /// files. Keeping keyring access lazy lets the application show a recoverable storage error.
+    /// The first availability check, write, or operation on existing data initializes encryption
+    /// and migrates old files. Empty reads and deletes never allocate a persistent keyring entry.
+    /// Keeping keyring access lazy lets the application show a recoverable storage error.
     pub fn open(
         root: impl AsRef<Path>,
         keyring: Arc<dyn SecretStore>,
@@ -176,6 +177,27 @@ impl ProfileSecretStore {
                 | SecretStoreErrorKind::MigrationFailed => error,
             })?;
         Ok(key)
+    }
+
+    // Callers hold both operation locks. Even a key-check witness means this profile has been
+    // initialized, so it must keep the usual missing-key and integrity checks. Only a completely
+    // empty store can answer absence without a key; legacy values still require migration.
+    fn is_uninitialized(&self) -> Result<bool, SecretStoreError> {
+        if self.master_key.get().is_some() {
+            return Ok(false);
+        }
+        for directory in [&self.files.values, &self.legacy.values] {
+            if fs::read_dir(directory)
+                .map_err(store_io)?
+                .next()
+                .transpose()
+                .map_err(store_io)?
+                .is_some()
+            {
+                return Ok(false);
+            }
+        }
+        Ok(true)
     }
 
     fn storage_state(&self) -> Result<StorageState, SecretStoreError> {
@@ -385,6 +407,9 @@ impl SecretStore for ProfileSecretStore {
         if self.current_mode()? == SecretStorageMode::File {
             return self.legacy.load(key);
         }
+        if self.is_uninitialized()? {
+            return Ok(None);
+        }
         let master = self.prepare()?;
         let path = self.files.value_path(key);
         let Some(value) = self.files.load_path(&path, encrypted_limit())? else {
@@ -421,6 +446,9 @@ impl SecretStore for ProfileSecretStore {
         let _lock = acquire_file_lock(&self.root, &self.boundary)?;
         if self.current_mode()? == SecretStorageMode::File {
             return self.legacy.delete(key);
+        }
+        if self.is_uninitialized()? {
+            return Ok(DeleteSecretOutcome::NotFound);
         }
         self.prepare()?;
         self.files.delete_path(&self.files.value_path(key))
