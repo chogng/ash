@@ -3788,9 +3788,11 @@ test('bounded Chat cannot erase a newer tail when an older read has a newer stre
 	await waitFor(() => reads === 1);
 	fixture.setCount(67);
 	complete(67);
-	await waitFor(() => model.thread?.sequence === 67);
+	await nextTask();
+	assert.equal(reads, 1);
 	await pending.complete({ ...older, transcript: { ...older.transcript, revision: 68 } });
-	await waitFor(() => reads >= 3);
+	await waitFor(() => model.thread?.sequence === 67);
+	assert.equal(reads, 2);
 	assert.equal(model.items.at(-1)?.text, 'Answer 67');
 	assert.equal(model.thread?.sequence, 67);
 });

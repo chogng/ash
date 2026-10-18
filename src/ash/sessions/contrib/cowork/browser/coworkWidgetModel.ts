@@ -54,8 +54,9 @@ export class CoworkWidgetModel extends Disposable {
 	private _error: string | undefined;
 	private generation = 0;
 	private _composerGeneration = 0;
-	private readPending = false;
+	private readPending: number | undefined;
 	private readRequest = 0;
+	private threadRead: { readonly generation: number; promise: Promise<void>; invalidated: boolean; } | undefined;
 	private durableSequence = 0;
 	private snapshotRequest = 0;
 	private initializePromise: Promise<void> | undefined;
@@ -911,15 +912,44 @@ export class CoworkWidgetModel extends Disposable {
 	}
 
 	private scheduleRefresh(): void {
-		if (this.readPending) return;
-		this.readPending = true;
+		const generation = this.generation;
+		if (this.readPending === generation) return;
+		this.readPending = generation;
 		queueMicrotask(() => {
-			this.readPending = false;
+			if (this.readPending === generation) this.readPending = undefined;
+			if (this.isDisposed || generation !== this.generation) return;
 			void this.refreshThread();
 		});
 	}
 
-	private async refreshThread(): Promise<void> {
+	private refreshThread(): Promise<void> {
+		if (this.isDisposed || !this.activeSession) return Promise.resolve();
+		const generation = this.generation;
+		if (this.threadRead?.generation === generation) {
+			this.threadRead.invalidated = true;
+			// The pending result may still advance state, but its failure no longer
+			// describes the refresh requested after this notification or mutation.
+			this.readRequest++;
+			return this.threadRead.promise;
+		}
+		const read = { generation, promise: Promise.resolve(), invalidated: false };
+		this.threadRead = read;
+		read.promise = (async () => {
+			try {
+				do {
+					read.invalidated = false;
+					await this.readThreadSnapshot();
+					// Retire the original read before issuing one replacement for the
+					// accumulated updates. Writes keep their own execution and result.
+				} while (!this.isDisposed && generation === this.generation && read.invalidated);
+			} finally {
+				if (this.threadRead === read) this.threadRead = undefined;
+			}
+		})();
+		return read.promise;
+	}
+
+	private async readThreadSnapshot(): Promise<void> {
 		const active = this.activeSession;
 		if (!active) return;
 		const threadId = active.threadId;

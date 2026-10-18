@@ -104,21 +104,194 @@ for (const kind of ['Code', 'Cowork'] as const) test(`${kind} model releases bot
 	await f.model.initialize();
 	assert.equal(f.model.items.length, 1);
 	const pending = new DeferredPromise<ThreadRead>();
-	let readStarted = false;
-	f.threadApi.read = async () => { readStarted = true; return pending.p; };
+	let reads = 0;
+	f.threadApi.read = async () => { reads++; return pending.p; };
 	let unsubscribed = 0;
 	f.threadApi.unsubscribe = async () => { unsubscribed++; };
 	f.updates.fire({ sessionId: 'session', threadId: 'A', durableSequence: 2, update: { type: 'committed', event: { type: 'turnCompleted', turnId: 'shared-turn' } } });
-	await waitFor(() => readStarted);
+	await waitFor(() => reads === 1);
+	f.transcripts.fire({ sessionId: 'session', threadId: 'A', durableSequence: 2, revision: 4, changes: [] });
+	await turnTask();
 	f.model.dispose();
 	assert.equal(f.model.thread, undefined);
 	assert.deepEqual(f.model.items, []);
 	if (f.model instanceof ChatWidgetModel) assert.equal(f.model.olderHistory, undefined);
 	await pending.complete(messageHistory('A', 2, 'Late replacement body'));
 	await waitFor(() => unsubscribed === 1);
+	await turnTask();
+	assert.equal(reads, 1);
 	assert.equal(f.model.thread, undefined);
 	assert.deepEqual(f.model.items, []);
 });
+
+test('Code a repeatedly stale bounded snapshot stops at the replacement read and exposes an explicit retry', async () => {
+	const f = fixture('Code');
+	using resources = f.resources;
+	await f.model.initialize();
+	assert.ok(f.model instanceof ChatWidgetModel);
+	const model = f.model;
+	const pending = new DeferredPromise<ThreadRead>();
+	const unexpected = new DeferredPromise<ThreadRead>();
+	const stale = { ...snapshot('A', 2), history: { hasOlderTurns: false } };
+	let reads = 0;
+	f.threadApi.read = () => {
+		reads++;
+		if (reads === 1) return pending.p;
+		if (reads === 2) return Promise.resolve(stale);
+		// Bound the failing behavior too: an automatic third read must fail
+		// the count assertion instead of starving the test runner's event loop.
+		return unexpected.p;
+	};
+	const notify = (sequence: number) => f.updates.fire({ sessionId: 'session', threadId: 'A', durableSequence: sequence, update: { type: 'committed', event: { type: 'turnCompleted', turnId: 'turn-A' } } });
+	notify(2);
+	await waitFor(() => reads === 1);
+	notify(3);
+	await turnTask();
+	await pending.complete(stale);
+	await waitFor(() => model.historyStatus !== undefined || reads > 2);
+	assert.equal(reads, 2);
+	assert.equal(model.historyStatus?.kind, 'live');
+	assert.equal(model.state, 'error');
+	assert.equal(model.thread?.sequence, 1);
+	await turnTask();
+	assert.equal(reads, 2);
+	f.threadApi.read = async () => {
+		reads++;
+		return { ...snapshot('A', 3), history: { hasOlderTurns: false } };
+	};
+	await model.historyStatus!.action.run();
+	assert.equal(reads, 3);
+	assert.equal(model.historyStatus, undefined);
+	assert.equal(model.thread?.sequence, 3);
+	assert.equal(model.state, 'ready');
+	assert.equal(f.starts.length, 0);
+});
+
+for (const kind of ['Code', 'Cowork'] as const) {
+	test(`${kind} a queued notification cannot refresh another selection or suppress its new generation`, async () => {
+		const f = fixture(kind);
+		using resources = f.resources;
+		await f.model.initialize();
+		const reads: string[] = [];
+		f.threadApi.read = async ({ threadId }) => {
+			reads.push(threadId);
+			return snapshot(threadId, 2);
+		};
+		const notify = (threadId: string) => f.updates.fire({ sessionId: 'session', threadId, durableSequence: 2, update: { type: 'committed', event: { type: 'turnCompleted', turnId: `turn-${threadId}` } } });
+		notify('A');
+		await f.model.selectThread({ session: f.session, threadId: 'B' });
+		await turnTask();
+		assert.deepEqual(reads, []);
+		notify('B');
+		const selecting = f.model.selectThread({ session: f.session, threadId: 'A' });
+		notify('A');
+		await selecting;
+		await waitFor(() => f.model.thread?.sequence === 2);
+		assert.deepEqual(reads, ['A']);
+		assert.equal(f.model.threadId, 'A');
+		assert.equal(f.model.error, undefined);
+	});
+
+	test(`${kind} Thread and transcript notification bursts share one read and one replacement`, async () => {
+		const f = fixture(kind);
+		using resources = f.resources;
+		await f.model.initialize();
+		const reads: DeferredPromise<ThreadRead>[] = [];
+		f.threadApi.read = () => {
+			const read = new DeferredPromise<ThreadRead>();
+			reads.push(read);
+			return read.p;
+		};
+		for (let sequence = 2; sequence <= 151; sequence++) {
+			f.updates.fire({ sessionId: 'session', threadId: 'A', durableSequence: sequence, update: { type: 'committed', event: { type: 'turnCompleted', turnId: 'turn-A' } } });
+			f.transcripts.fire({ sessionId: 'session', threadId: 'A', durableSequence: sequence, revision: sequence + 2, changes: [] });
+			// Separate scheduling turns reproduce a burst that microtask-only
+			// coalescing cannot contain while the backend read is still pending.
+			if (sequence % 10 === 0) await turnTask();
+		}
+		await turnTask();
+		assert.equal(reads.length, 1);
+		await reads[0]!.complete(snapshot('A', 2));
+		await waitFor(() => reads.length === 2);
+		await reads[1]!.complete(snapshot('A', 151));
+		await waitFor(() => f.model.thread?.sequence === 151);
+		await turnTask();
+		assert.equal(reads.length, 2);
+		assert.equal(f.model.error, undefined);
+	});
+
+	for (const failed of [false, true]) {
+		test(`${kind} a queued post-write refresh ${failed ? 'reports its own error without retrying the write' : 'waits for a fresh snapshot without repeating the write'}`, async () => {
+			const f = fixture(kind);
+			using resources = f.resources;
+			await f.model.initialize();
+			const reads: DeferredPromise<ThreadRead>[] = [];
+			f.threadApi.read = () => {
+				const read = new DeferredPromise<ThreadRead>();
+				reads.push(read);
+				return read.p;
+			};
+			f.updates.fire({ sessionId: 'session', threadId: 'A', durableSequence: 2, update: { type: 'committed', event: { type: 'turnCompleted', turnId: 'turn-A' } } });
+			await waitFor(() => reads.length === 1);
+			let submitted = false;
+			const submitting = f.model.send('Write once').then(() => { submitted = true; });
+			await waitFor(() => f.starts.length === 1);
+			await turnTask();
+			assert.equal(reads.length, 1);
+			assert.equal(submitted, false);
+			await reads[0]!.error(new Error('Obsolete read failed'));
+			await waitFor(() => reads.length === 2);
+			assert.equal(f.model.error, undefined);
+			if (failed) await reads[1]!.error(new Error('Post-write read failed'));
+			else await reads[1]!.complete(snapshot('A', 3));
+			await submitting;
+			await turnTask();
+			assert.equal(f.starts.length, 1);
+			assert.equal(reads.length, 2);
+			assert.equal(f.model.state, failed ? 'error' : 'ready');
+			if (failed) assert.match(f.model.error ?? '', /Post-write read failed/);
+			else assert.equal(f.model.thread?.sequence, 3);
+		});
+	}
+
+	for (const failed of [false, true]) {
+		test(`${kind} an invalidated read from an earlier A-B-A generation cannot drain or replace the current refresh after ${failed ? 'failure' : 'completion'}`, async () => {
+			const f = fixture(kind);
+			using resources = f.resources;
+			await f.model.initialize();
+			const reads: DeferredPromise<ThreadRead>[] = [];
+			f.threadApi.read = () => {
+				const read = new DeferredPromise<ThreadRead>();
+				reads.push(read);
+				return read.p;
+			};
+			const notify = (sequence: number) => f.updates.fire({ sessionId: 'session', threadId: 'A', durableSequence: sequence, update: { type: 'committed', event: { type: 'turnCompleted', turnId: 'turn-A' } } });
+			notify(2);
+			await waitFor(() => reads.length === 1);
+			notify(3);
+			await turnTask();
+			assert.equal(reads.length, 1);
+			await f.model.selectThread({ session: f.session, threadId: 'B' });
+			await f.model.selectThread({ session: f.session, threadId: 'A' });
+			notify(2);
+			await waitFor(() => reads.length === 2);
+			if (failed) await reads[0]!.error(new Error('Retired A failure'));
+			else await reads[0]!.complete(messageHistory('A', 99, 'Retired A body'));
+			await turnTask();
+			assert.equal(reads.length, 2);
+			assert.equal(f.model.thread?.sequence, 1);
+			assert.equal(f.model.error, undefined);
+			notify(3);
+			await turnTask();
+			assert.equal(reads.length, 2);
+			await reads[1]!.complete(snapshot('A', 2));
+			await waitFor(() => reads.length === 3);
+			await reads[2]!.complete(snapshot('A', 3));
+			await waitFor(() => f.model.thread?.sequence === 3);
+			assert.deepEqual(f.model.items, []);
+		});
+	}
+}
 
 for (const kind of ['Code', 'Cowork'] as const) {
 	for (const aba of [false, true]) {
@@ -151,13 +324,16 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		assert.equal(f.starts.length, 1); assert.equal(f.starts[0]!.commandId, 'voice-task'); assert.equal('source' in f.starts[0]!, false); assert.equal('signal' in f.starts[0]!, false);
 	});
 	for (const failed of [false, true]) {
-		test(`${kind} snapshot lifetime ignores an earlier ${failed ? 'error' : 'snapshot'} after a newer read`, async () => {
+		test(`${kind} snapshot refresh retires an earlier ${failed ? 'error' : 'snapshot'} before reading accumulated updates`, async () => {
 			const f = fixture(kind); using resources = f.resources; await f.model.initialize();
 			const reads: DeferredPromise<ThreadRead>[] = []; f.threadApi.read = () => { const read = new DeferredPromise<ThreadRead>(); reads.push(read); return read.p; };
 			const emit = (sequence: number) => f.updates.fire({ sessionId: 'session', threadId: 'A', durableSequence: sequence, update: { type: 'committed', event: { type: 'turnCompleted', turnId: 'turn-A' } } });
-			emit(2); await waitFor(() => reads.length === 1); emit(3); await waitFor(() => reads.length === 2);
-			await reads[1]!.complete(snapshot('A', 3)); await waitFor(() => f.model.thread?.sequence === 3);
+			emit(2); await waitFor(() => reads.length === 1); emit(3); await turnTask();
+			assert.equal(reads.length, 1);
 			if (failed) await reads[0]!.error(new Error('Old snapshot failure')); else await reads[0]!.complete(snapshot('A', 2));
+			await waitFor(() => reads.length === 2);
+			assert.equal(f.model.error, undefined);
+			await reads[1]!.complete(snapshot('A', 3)); await waitFor(() => f.model.thread?.sequence === 3);
 			await turnTask(); assert.equal(f.model.thread?.sequence, 3); assert.equal(f.model.thread?.title, 'Sequence 3'); assert.equal(f.model.error, undefined); assert.equal(f.model.state, 'ready');
 		});
 	}
@@ -241,13 +417,15 @@ for (const kind of ['Code', 'Cowork'] as const) {
 			assert.equal(f.model.interaction?.requestId, 'replacement'); assert.equal(f.model.state, state); assert.equal(f.model.error, undefined);
 		});
 	}
-	test(`${kind} snapshot ordering accepts a genuinely newer sequence from an earlier issued read`, async () => {
+	test(`${kind} replacement refresh cannot roll back a newer sequence returned by the retired read`, async () => {
 		const f = fixture(kind); using resources = f.resources; await f.model.initialize();
 		const reads: DeferredPromise<ThreadRead>[] = []; f.threadApi.read = () => { const read = new DeferredPromise<ThreadRead>(); reads.push(read); return read.p; };
 		const emit = (sequence: number) => f.updates.fire({ sessionId: 'session', threadId: 'A', durableSequence: sequence, update: { type: 'committed', event: { type: 'turnCompleted', turnId: 'turn-A' } } });
-		emit(2); await waitFor(() => reads.length === 1); emit(3); await waitFor(() => reads.length === 2);
-		await reads[1]!.complete(snapshot('A', 3)); await waitFor(() => f.model.thread?.sequence === 3);
-		await reads[0]!.complete(snapshot('A', 4)); await waitFor(() => f.model.thread?.sequence === 4);
+		emit(2); await waitFor(() => reads.length === 1); emit(3); await turnTask();
+		assert.equal(reads.length, 1);
+		await reads[0]!.complete(snapshot('A', 4)); await waitFor(() => reads.length === 2);
+		assert.equal(f.model.thread?.sequence, 4);
+		await reads[1]!.complete(snapshot('A', 3)); await turnTask();
 		assert.equal(f.model.thread?.title, 'Sequence 4'); assert.equal(f.model.error, undefined);
 	});
 	test(`${kind} submission cannot borrow a different Thread source identity`, async () => {

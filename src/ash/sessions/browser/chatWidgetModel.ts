@@ -66,8 +66,9 @@ export class ChatWidgetModel extends Disposable {
 	private _error: string | undefined;
 	private readonly _historyStatus = observableValue<IChatSessionHistoryStatus | undefined>(this, undefined);
 	private generation = 0;
-	private readPending = false;
+	private readPending: number | undefined;
 	private readRequest = 0;
+	private threadRead: { readonly generation: number; promise: Promise<void>; invalidated: boolean; } | undefined;
 	private durableSequence = 0;
 	private snapshotRequest = 0;
 	private initializePromise: Promise<void> | undefined;
@@ -1088,15 +1089,44 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	private scheduleRefresh(): void {
-		if (this.readPending) return;
-		this.readPending = true;
+		const generation = this.generation;
+		if (this.readPending === generation) return;
+		this.readPending = generation;
 		queueMicrotask(() => {
-			this.readPending = false;
+			if (this.readPending === generation) this.readPending = undefined;
+			if (this.isDisposed || generation !== this.generation) return;
 			void this.refreshThread();
 		});
 	}
 
-	private async refreshThread(): Promise<void> {
+	private refreshThread(): Promise<void> {
+		if (this.isDisposed || !this.activeSession) return Promise.resolve();
+		const generation = this.generation;
+		if (this.threadRead?.generation === generation) {
+			this.threadRead.invalidated = true;
+			// The pending result may still advance state, but its failure no longer
+			// describes the refresh requested after this notification or mutation.
+			this.readRequest++;
+			return this.threadRead.promise;
+		}
+		const read = { generation, promise: Promise.resolve(), invalidated: false };
+		this.threadRead = read;
+		read.promise = (async () => {
+			try {
+				do {
+					read.invalidated = false;
+					await this.readThreadSnapshot();
+					// Retire the original read before issuing one replacement for the
+					// accumulated updates. Writes keep their own execution and result.
+				} while (!this.isDisposed && generation === this.generation && read.invalidated);
+			} finally {
+				if (this.threadRead === read) this.threadRead = undefined;
+			}
+		})();
+		return read.promise;
+	}
+
+	private async readThreadSnapshot(): Promise<void> {
 		const active = this.activeSession;
 		if (!active) return;
 		const threadId = active.threadId;
@@ -1112,7 +1142,7 @@ export class ChatWidgetModel extends Disposable {
 				(request !== this.readRequest && result.thread.sequence <= (this._thread?.sequence ?? 0) && result.transcript.revision <= this.transcriptRevision) ||
 				result.thread.threadId !== this.threadId
 			) return;
-			const snapshot = this.acceptThreadSnapshot(result, request);
+			const snapshot = this.acceptThreadSnapshot(result, request, true);
 			if (!snapshot.thread) { if (snapshot.transcript) this._onDidChange.fire(); return; }
 			void this.loadContextUsage(generation);
 			this._error = undefined;
@@ -1153,7 +1183,7 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	/** Hydration and refresh obey the same sequence floor; streaming revisions advance independently. */
-	private acceptThreadSnapshot(result: Awaited<ReturnType<IChatService['readThread']>>, request: number): { readonly thread: boolean; readonly transcript: boolean; } {
+	private acceptThreadSnapshot(result: Awaited<ReturnType<IChatService['readThread']>>, request: number, refresh = false): { readonly thread: boolean; readonly transcript: boolean; } {
 		const sequence = this._thread?.sequence ?? 0;
 		const thread = result.thread.sequence >= this.durableSequence && (result.thread.sequence > sequence || result.thread.sequence === sequence && request >= this.snapshotRequest);
 		const incoming = new Set(result.thread.turns.map(turn => turn.turnId));
@@ -1169,7 +1199,14 @@ export class ChatWidgetModel extends Disposable {
 		// A bounded stale snapshot cannot describe Turns already added past its tail.
 		// Recover with a fresh window rather than erasing their transcript entries.
 		const transcript = result.transcript.revision >= this.transcriptRevision && (thread || !result.history);
-		if (!thread && result.history && (result.thread.sequence < this.durableSequence || result.transcript.revision > this.transcriptRevision)) this.scheduleRefresh();
+		if (!thread && result.history && (result.thread.sequence < this.durableSequence || result.transcript.revision > this.transcriptRevision)) {
+			if (!refresh) this.scheduleRefresh();
+			else if (!this.threadRead?.invalidated) {
+				// A response alone must not keep the refresh loop alive when the
+				// backend repeatedly returns a checkpoint behind our known history.
+				this.setHistoryError(new Error(localize('chat.history.changed', 'Chat history changed. Try loading again.')), 'live');
+			}
+		}
 		if (transcript) {
 			const retained = new Set(prefix.map(turn => turn.turnId));
 			const retainedItems = new Set(prefix.flatMap(turn => turn.items.map(item => item.itemId)));

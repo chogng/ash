@@ -154,7 +154,13 @@ ChatWidgetModel 的 refresh 在 await 后使用 generation、request 和 revisio
 
 Chat 的 Changes 摘要按当前模型代次共享在途读取。durable sequence 推进时串行补读最新摘要，迟到的旧代次或已关闭模型不能发布结果；提交和执行接口不参与合并。`chatViewPane.test.ts` 158 项通过，其中新增两个场景覆盖三次并发调用合并、读取期间历史推进与关闭后的迟到结果，日志 `.build/todo-chat-refresh/` 和 `.build/todo-general-document/all-unit-final.log`。
 
-这些结果证明消费者请求数量及生命周期约束，不是整条 Desktop 的性能测量，也没有给未支持取消的文件 provider 或 RPC 增加物理中止保证。Thread／transcript 等其他读取、传输取消和大内容按需读取仍待推进；已有帧的解析成本不能据此宣称消失。
+Code／Cowork 的 Thread／transcript 刷新也按模型 generation 共享在途读取。跨多个调度轮次到达的 committed 通知和 transcript revision 缺口只标记一次补读；当前 RPC 成功或失败退休后，再串行取得最新快照。写入后的刷新加入同一补读并等待结束，写请求及其结果不合并或重放。旧刷新失败不覆盖后续刷新，最后一次失败仍显示现有重试入口。A-B-A 切换、重新订阅和 dispose 阻止旧代次继续补读，旧代次清理不能清掉当前读取。
+
+已知落后于 durable sequence 的 bounded 快照保留现有尾部和 transcript；刷新响应本身不再无限触发下一轮读取。没有新的通知或写入时，仍落后的快照进入可显式重试的错误状态。订阅发现落后仍会发起首次恢复，正常通知继续驱动补读。
+
+本轮 `ChatWidgetModel` 的 81 项与 `ChatViewPane` 的 158 项单测通过，覆盖跨调度轮次的 150 次 Thread／transcript 通知、写入恰好一次、最终错误与显式重试、旧代次成功／失败、排队微任务跨选择和关闭后的迟到结果。日志 `.build/todo-selected-unit.log` 与补齐微任务代次回归后的 `.build/todo-refresh-final-unit.log`；Renderer 类型检查和 prepared Desktop Host／Renderer 构建通过。
+
+这些结果证明消费者请求数量及生命周期约束，不是整条 Desktop 的性能测量，也没有给未支持取消的文件 provider 或 RPC 增加物理中止保证。通用传输取消和大内容按需读取仍待推进；已有帧的解析成本不能据此宣称消失。
 
 ### 4.1 当前链路怎样反压上游
 
