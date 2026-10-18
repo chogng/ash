@@ -1317,6 +1317,16 @@
       "rendering": "symbolic"
     },
     {
+      "id": "whitespace",
+      "file": "whitespace.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "whitespace-filled",
+      "file": "whitespace-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "worktree",
       "file": "worktree.svg",
       "rendering": "symbolic"
