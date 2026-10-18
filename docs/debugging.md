@@ -109,7 +109,7 @@ flowchart LR
 | 能力                                                                                                    | 当前 owner                                                            |
 | ------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | 通用 gutter 槽位与编辑器模型                                                                            | Editor；Workbench 通过现有 contribution 展示断点与源码                |
-| launch/compound、断点目录/绑定、Watch 与检查编排、线程/栈帧选择                                         | TS Workbench Debug；保存、配置回调、Tasks/Terminal 仍由原领域服务拥有 |
+| launch/compound、可编辑断点目录与 Watch 定义及其持久化、线程/栈帧选择                                   | TS Workbench Debug；保存、配置回调、Tasks/Terminal 仍由原领域服务拥有 |
 | 初始化/配置门禁、动态能力、执行状态、会话断点意图/绑定/主动事件、初始异常过滤器、Watch 和检查编排及失效 | `ash-debug-manager`；Workbench 仅持有带 revision 的只读运行快照       |
 | DAP 请求编号、响应配对、请求超时和反向请求应答编号                                                      | `ash-debug-client`                                                    |
 | 单会话 client/transport 生命周期、有界双向观察与输出分页                                                | `ash-debug-manager`                                                   |
@@ -117,7 +117,7 @@ flowchart LR
 | Environment、目录 Grant、App Server 连接归属与 typed dispatch                                           | 原有授权和连接 owner                                                  |
 | 子进程、连接、framing、传输缓冲与回收                                                                   | `ash-debug-adapter`；inline 实现 IO 保留在其扩展宿主                  |
 
-Editor 不得 import Debug service；它只提供无领域语义的 gutter decoration contract。表中 Rust runtime 指当前 `ash-debug-adapter` 的进程与传输层，不承担 launch 配置或断点领域语义；目标 Rust manager 将承担上文明确的领域职责，各窗口选择仍归 Workbench。扩展的来源、宿主、注册与授权边界见 [`editor-extensions.md`](editor-extensions.md)。
+Editor 不得 import Debug service；它只提供无领域语义的 gutter decoration contract。`ash-debug-adapter` 仅承担进程与传输层，断点运行意图和绑定由 `ash-debug-manager` 拥有；各窗口选择仍归 Workbench。扩展的来源、宿主、注册与授权边界见 [`editor-extensions.md`](editor-extensions.md)。
 
 ## 持久性与失败语义
 
@@ -133,7 +133,7 @@ compound 启动中任一配置失败时，已经启动的会话会回滚。自�
 
 ## 当前实现与后续演进
 
-具体调试器可以由可选 Rust 扩展提供。内置包 [`debug-lldb`](../extensions/debug-lldb/README.md) 为 CodeLLDB 注册 `lldb`，首次调试时下载固定版本及 SHA-256 的完整平台运行包，校验、解压后原子发布到执行环境的缓存；初始配置发现不触发下载。状态栏显示下载和解压进度，可点击取消或在失败时重试，命令面板也提供安装/重试及取消入口。多个窗口用磁盘锁协调同一缓存，各自拥有调用和取消；完整缓存支持离线复用，开发和离线部署可用扩展程序的 `--prepare-runtime` 提前准备。`debug.lldb.codeLldbPath` 可选择已有 CodeLLDB，`debug.lldb.runtimeDirectory` 可选择预填充目录。原有 `lldb-dap` 类型及 `debug.lldb.adapterPath`、`debug.lldb.adapterArgs` 保留为已安装 LLVM 工具链的接入方式。停用会撤销注册并回收准备任务，缺少扩展时不回落到内置 LLDB 实现。会话、断点、调用栈和 REPL 仍由 Workbench Debug 唯一拥有，Adapter 进程仍由共享 Rust DAP runtime 启动和回收。
+具体调试器可以由可选 Rust 扩展提供。内置包 [`debug-lldb`](../extensions/debug-lldb/README.md) 为 CodeLLDB 注册 `lldb`，首次调试时下载固定版本及 SHA-256 的完整平台运行包，校验、解压后原子发布到执行环境的缓存；初始配置发现不触发下载。状态栏显示下载和解压进度，可点击取消或在失败时重试，命令面板也提供安装/重试及取消入口。多个窗口用磁盘锁协调同一缓存，各自拥有调用和取消；完整缓存支持离线复用，开发和离线部署可用扩展程序的 `--prepare-runtime` 提前准备。`debug.lldb.codeLldbPath` 可选择已有 CodeLLDB，`debug.lldb.runtimeDirectory` 可选择预填充目录。原有 `lldb-dap` 类型及 `debug.lldb.adapterPath`、`debug.lldb.adapterArgs` 保留为已安装 LLVM 工具链的接入方式。停用会撤销注册并回收准备任务，缺少扩展时不回落到内置 LLDB 实现。运行会话、断点绑定与检查编排由 Rust manager 拥有；Workbench 保留可编辑目录、选择与 REPL，Adapter 进程由共享 Rust DAP runtime 启动和回收。
 
 当前已实现：已授权 stdio adapter、连接级归属、有界 framing/分页、显式和声明式适配器解析、初始化与请求配对、持久行断点和函数断点、变量数据断点、指令断点、异常断点、线程/栈/递归变量、Watch/`evaluate`、调试控制台、虚拟源码、多会话、compound、restart、Tasks 生命周期、`runInTerminal`、Code-only 组装和断点 gutter。Remote Workbench 复用相同协议让 App Server 在远端启动 adapter，并保持 Workspace 变量、断点、调用栈源码和集成终端都映射到同一个远端 Environment。
 
