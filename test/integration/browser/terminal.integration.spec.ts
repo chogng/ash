@@ -1152,6 +1152,41 @@ test('configured terminal profile reaches the real picker and resolver with argv
 	expect(errors).toEqual([]);
 });
 
+test('terminal split action layers the hovered half over its shared background', async ({ page }, testInfo) => {
+	await page.goto('/terminal.html?pane&profiles&browser&workbench');
+	await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
+	await page.evaluate(() => window.ashTerminalPaneIntegration.panel(true));
+	const toolbar = page.locator('.ash-terminal-title-toolbar');
+	const split = toolbar.locator('.ash-dropdown-with-primary-action-view-item');
+	const primary = toolbar.getByRole('button', { name: 'New Terminal', exact: true });
+	const dropdown = toolbar.getByRole('button', { name: 'Select Terminal Profile', exact: true });
+	await expect(primary).toBeEnabled();
+	await expect(dropdown).toBeEnabled();
+	for (const theme of ['light', 'dark', 'hcLight', 'hcDark'] as const) {
+		await page.evaluate(theme => window.ashTerminalPaneIntegration.theme(theme), theme);
+		await page.getByRole('textbox', { name: 'Outside terminal', exact: true }).hover();
+		await expect(split).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		for (const [name, hovered, other] of [['primary', primary, dropdown], ['dropdown', dropdown, primary]] as const) {
+			await hovered.hover();
+			const groupBackground = await split.evaluate(element => getComputedStyle(element).backgroundColor);
+			expect(groupBackground).not.toBe('rgba(0, 0, 0, 0)');
+			await expect(hovered).toHaveCSS('background-color', groupBackground);
+			await expect(other).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			await toolbar.screenshot({ path: testInfo.outputPath(`${theme}-${name}-hover.png`) });
+		}
+	}
+	await primary.focus();
+	await primary.press('ArrowRight');
+	await expect(dropdown).toBeFocused();
+	await dropdown.press('ArrowDown');
+	await expect(page.getByRole('menuitem', { name: 'Select Default Profile', exact: true })).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(dropdown).toBeFocused();
+	await dropdown.press('ArrowLeft');
+	await expect(primary).toBeFocused();
+	await page.evaluate(() => window.ashTerminalPaneIntegration.dispose());
+});
+
 test('terminal title toolbar opens captured instance actions, splits with a profile and closes the last terminal', async ({ page }, testInfo) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));

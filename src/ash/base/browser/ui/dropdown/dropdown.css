@@ -92,9 +92,14 @@
 }
 
 .ash-toolbar .ash-dropdown-with-primary-dropdown > .ash-button {
-	width: var(--ash-toolbar-actionSize);
-	min-width: var(--ash-toolbar-actionSize);
-	padding: 0 2px;
+	box-sizing: border-box;
+	width: calc(
+		var(--ash-lxiconFontSize-compact) + 2 * var(--ash-spacing-size20)
+	);
+	min-width: calc(
+		var(--ash-lxiconFontSize-compact) + 2 * var(--ash-spacing-size20)
+	);
+	padding: 0 var(--ash-spacing-size20);
 	border-radius: 0 var(--ash-cornerRadius-small) var(--ash-cornerRadius-small)
 		0;
 }
@@ -108,6 +113,6 @@
 }
 
 .ash-dropdown-with-primary-dropdown .ash-dropdown-menu-indicator .ash-icon {
-	width: var(--ash-lxiconFontSize);
-	height: var(--ash-lxiconFontSize);
+	width: var(--ash-lxiconFontSize-compact);
+	height: var(--ash-lxiconFontSize-compact);
 }

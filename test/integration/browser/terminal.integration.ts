@@ -86,6 +86,10 @@ if (new URLSearchParams(location.search).get('locale') === 'zh-CN') {
 }
 
 const store = new DisposableStore();
+if (new URLSearchParams(location.search).has('workbench')) {
+	await import('../../../src/ash/workbench/browser/media/style.css');
+	document.body.classList.add('ash-workbench');
+}
 store.add(installTestDictationAudio(window));
 setIconResolver(document, icon => getIconDefinition(icon));
 function setupTerminalFixtureServices(services: import('../../../src/ash/platform/instantiation/common/instantiationService.js').InstantiationService, lifetime: DisposableStore): void {
