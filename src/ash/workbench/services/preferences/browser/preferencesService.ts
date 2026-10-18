@@ -112,11 +112,10 @@ export class PreferencesService extends Disposable implements IPreferencesServic
 				? KeybindingsEditorInput.getOrCreate(activeEditor, this.instantiationService)
 				: this.keybindingsEditorInput?.deref();
 			if (!input || input.isDisposed) input = this.instantiationService.createInstance(KeybindingsEditorInput);
-			// Ash updates a reused tab's input metadata. Reuse its live input too, so
-			// the tab cannot retain a disposed duplicate while its pane uses another.
+			// Reuse the live input when returning to the modal or opening a shortcut already held by a group.
 			this.keybindingsEditorInput = new WeakRef(input);
 			using reference = input.acquire();
-			await this.editorService.openEditor(input, { pinned: true });
+			await this.editorService.openEditor(input, { pinned: true }, 'modalGroup');
 			if (options?.query !== undefined) {
 				// The focused pane is the opened target even when split panes share the same input.
 				this.editorService.focusActiveEditor();

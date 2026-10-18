@@ -60,7 +60,7 @@ const { isSettingsEditorInput } = await import('../../../../../workbench/service
 
 suiteTeardown(() => browserEnvironment.window.close());
 
-test('Keyboard Shortcuts opens as one Editor tab and reconciles resource rows incrementally', async () => {
+test('Keyboard Shortcuts reuses one modal and reconciles resource rows across editor groups', async () => {
 	using disposables = new DisposableStore();
 	const ownerDocument = browserEnvironment.window.document;
 	ownerDocument.body.replaceChildren();
@@ -141,12 +141,12 @@ test('Keyboard Shortcuts opens as one Editor tab and reconciles resource rows in
 	assert.ok(editor.activeInput instanceof EditorInput, 'The shortcut input owns the resolved model lifetime');
 	assert.ok(editor.activeInput === openedInput, 'Duplicate opens retain the live input identity');
 	assert.ok(await openedInput.resolve() === openedModel, 'Duplicate opens retain the resolved model');
-	assert.ok(editor.activePane === openedPane, 'The repeated tab open reuses its pane without rebinding');
+	assert.ok(editor.activePane === openedPane, 'The repeated modal open reuses its pane without rebinding');
 	assert.equal(openedInput.isDisposed, false, 'Releasing the duplicate open request retains the pane-owned input');
-	assert.equal(modalHost.hidden, true);
-	assert.equal(editor.activeGroup.inputs.length, 1);
+	assert.equal(modalHost.hidden, false);
+	assert.equal(editor.activeGroup.inputs.length, 0);
 	assert.equal(editor.activeInput?.resource.toString(), 'ash-preferences:/keyboard-shortcuts');
-	assert.equal(ownerDocument.querySelector('.ash-tab-label')?.textContent, 'Keyboard Shortcuts');
+	assert.equal(ownerDocument.querySelector('.ash-modal-editor-title')?.textContent, 'Keyboard Shortcuts');
 
 	const search = ownerDocument.querySelector<HTMLInputElement>('.ash-keybindings-search input');
 	assert.ok(search);
@@ -201,6 +201,13 @@ test('Keyboard Shortcuts opens as one Editor tab and reconciles resource rows in
 	assert.deepEqual((await resources.read()).map(binding => binding.command), ['test.shortcuts.alpha']);
 	let modelDisposals = 0;
 	disposables.add(openedModel.onWillDispose(() => { modelDisposals += 1; }));
+	// Normal groups can share the same input independently of Preferences' modal target.
+	const transfer = openedInput.acquire();
+	try {
+		await editorService.openEditor(openedInput, { pinned: true }, 'activeGroup');
+	} finally {
+		transfer.dispose();
+	}
 	const sourceGroup = editor.activeGroup;
 	await editor.splitActiveGroupHorizontal();
 	const splitGroup = editor.activeGroup;
@@ -211,13 +218,16 @@ test('Keyboard Shortcuts opens as one Editor tab and reconciles resource rows in
 	await preferences.openGlobalKeybindingSettings(false, { query: '@command:test.shortcuts.beta' });
 	assert.equal(splitSearches.size, 2);
 	for (const [input, previousValue] of splitSearches) {
-		assert.equal(input.value, input === ownerDocument.activeElement ? '@command:test.shortcuts.beta' : previousValue);
+		assert.equal(input.value, previousValue);
 	}
+	assert.equal((ownerDocument.activeElement as HTMLInputElement).value, '@command:test.shortcuts.beta');
 	await preferences.openGlobalKeybindingSettings(false, { query: '' });
+	assert.equal(await editor.closeEditor(openedInput), true);
 	assert.equal(await sourceGroup.closeEditor(sourceGroup.inputs[0]!), true);
 	assert.deepEqual([openedInput.isDisposed, openedModel.isDisposed(), modelDisposals], [false, false, 0]);
 	await preferences.openGlobalKeybindingSettings(false);
 	assert.ok(splitGroup.inputs[0] === openedInput, 'A duplicate open in the remaining group keeps its live metadata');
+	assert.equal(await editor.closeEditor(openedInput), true);
 	const remainingRoot = ownerDocument.querySelector<HTMLElement>('.ash-keybindings-editor');
 	assert.ok(remainingRoot);
 	findButton(shortcutRow(ownerDocument, 'test.shortcuts.alpha')!, 'Edit').click();
@@ -246,6 +256,8 @@ test('Keyboard Shortcuts opens as one Editor tab and reconciles resource rows in
 	assert.ok(editor.activeInput === restoredInput, 'Opening restored shortcuts retains the pane input');
 	assert.ok(await restoredInput.resolve() === restoredModel, 'Restored shortcuts retain one model');
 	assert.equal(editor.activeGroup.inputs.length, 1);
+	assert.equal(await editor.closeEditor(restoredInput), true);
+	assert.deepEqual([restoredInput.isDisposed, restoredModel.isDisposed()], [false, false]);
 	assert.equal(await editor.closeEditor(restoredInput), true);
 	assert.deepEqual([restoredInput.isDisposed, restoredModel.isDisposed()], [true, true]);
 });

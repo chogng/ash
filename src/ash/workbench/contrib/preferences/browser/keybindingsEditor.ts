@@ -32,7 +32,7 @@ import { type KeybindingsEditorModel, type KeyboardShortcutItem } from '../../..
 
 let nextRecorderHelpId = 1;
 
-/** A tab-hosted editor for searching and updating the active keybindings resource. */
+/** Editor pane for searching and updating the active keybindings resource in modal or group hosts. */
 export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorPane {
 	public static readonly ID = 'workbench.editor.keybindings';
 	public readonly id = KeybindingsEditor.ID;

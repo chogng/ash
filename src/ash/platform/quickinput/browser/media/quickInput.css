@@ -1,3 +1,10 @@
+/*
+ * User-approved Quick Input appearance: borderless transparent search, neutral outer
+ * border and shadow, gray pointer hover, distinct keyboard selection, and compact
+ * trailing actions. Preserve the current geometry, typography, colors and focus cues.
+ * Before changing this appearance (including through related rendering code), warn
+ * the user about the proposed visual changes and obtain their explicit approval.
+ */
 .ash-quick-input-host {
 	position: absolute;
 	box-sizing: border-box;
@@ -41,6 +48,7 @@
 }
 
 .ash-quick-pick-input {
+	position: relative;
 	padding: var(--ash-spacing-size60) var(--ash-spacing-size60)
 		var(--ash-spacing-size40);
 }
@@ -61,6 +69,47 @@
 
 .ash-quick-pick-input input:focus {
 	border-color: var(--ash-focusBorder);
+}
+
+/* Search shares the overlay surface; high-contrast themes retain a field outline. */
+.ash-quick-pick-filter input,
+.ash-quick-pick-filter input:focus {
+	border-color: var(--ash-contrastBorder, transparent);
+	color: var(--ash-foreground);
+	background: transparent;
+}
+
+.ash-quick-pick-filter input::placeholder {
+	color: var(--ash-input-placeholderForeground);
+	opacity: 1;
+}
+
+.ash-quick-pick-input.has-value input {
+	padding-right: calc(
+		var(--ash-toolbar-actionSize) + var(--ash-spacing-size80)
+	);
+}
+
+.ash-quick-pick-input-actions {
+	position: absolute;
+	top: var(--ash-spacing-size80);
+	right: var(--ash-spacing-size80);
+}
+
+.ash-quick-pick-input-actions[hidden] {
+	display: none;
+}
+
+.ash-quick-pick-input-actions .ash-action-label {
+	box-sizing: border-box;
+	width: var(--ash-toolbar-actionSize);
+	height: var(--ash-toolbar-actionSize);
+	padding: 0;
+	color: var(--ash-foreground);
+}
+
+.ash-quick-pick-input-actions .ash-action-label:hover {
+	background: var(--ash-toolbar-hoverBackground);
 }
 
 .ash-quick-pick-navigation {
@@ -162,7 +211,10 @@
 	font-size: var(--ash-fontSize-label1);
 }
 
-.ash-quick-pick-list .ash-list-row.is-active {
+/* Keyboard selection takes precedence over the base List hover under a stationary pointer. */
+.ash-quick-pick-list .ash-list-row.is-active,
+.ash-quick-pick-list:not(.ash-quick-pick-list-menu)
+	.ash-list-row.is-active:hover {
 	color: var(
 		--ash-list-style-list-active-selection-foreground,
 		var(--ash-list-activeSelectionForeground)
@@ -174,7 +226,10 @@
 }
 
 .ash-quick-pick-list:not(.ash-quick-pick-list-menu)
-	.ash-list-row:hover:not(.is-active) {
+	.ash-list-row:hover:not(.is-active),
+.ash-quick-pick-list.pointer-navigation:not(.ash-quick-pick-list-menu)
+	.ash-list-row.is-active:hover {
+	color: var(--ash-foreground);
 	background: var(
 		--ash-list-style-list-hover-background,
 		var(--ash-list-hoverBackground)
@@ -283,6 +338,18 @@
 	color: inherit;
 }
 
+.ash-quick-pick-list.pointer-navigation
+	.ash-list-row.is-active:hover
+	.ash-quick-pick-separator,
+.ash-quick-pick-list.pointer-navigation
+	.ash-list-row.is-active:hover
+	.ash-quick-pick-row-description,
+.ash-quick-pick-list.pointer-navigation
+	.ash-list-row.is-active:hover
+	.ash-quick-pick-row-detail {
+	color: var(--ash-description-foreground);
+}
+
 .ash-quick-pick-row-keybinding {
 	flex: 0 0 auto;
 	max-width: 55%;
@@ -294,6 +361,13 @@
 	border-color: currentColor;
 	color: inherit;
 	background: transparent;
+}
+
+.ash-quick-pick-row-actions.ash-action-bar {
+	order: 2;
+	flex: 0 0 auto;
+	/* Grouping actions must retain the spacing previously supplied by the row. */
+	gap: inherit;
 }
 
 .ash-quick-pick-row-action.icon-only {
@@ -310,6 +384,10 @@
 	background: transparent;
 	opacity: 0;
 	cursor: pointer;
+}
+
+.ash-quick-pick-row-action.icon-only:not(:disabled):hover {
+	background: var(--ash-toolbar-hoverBackground);
 }
 
 .ash-quick-pick-row-action.icon-only svg.ash-icon {

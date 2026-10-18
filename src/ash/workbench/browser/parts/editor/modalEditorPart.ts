@@ -20,6 +20,7 @@ import type { EditorOpenOptions } from '../../../services/editor/common/editorSe
 import { type EditorGroupOptions, EditorOpenSupersededError } from './editorGroupView.js';
 import type { EditorPaneCreationOptions } from './editorPane.js';
 import type { IEditorPaneRegistry } from '../../editor.js';
+import { localize } from '../../../../nls.js';
 
 export interface ModalEditorPartOptions {
 	readonly container: HTMLElement;
@@ -82,8 +83,9 @@ export class ModalEditorPart extends Disposable {
 		this.domNode.setAttribute('aria-labelledby', this.titleDomNode.id);
 		this.closeButton = this._register(new Button(headerDomNode, {
 			...defaultButtonStyles,
-			label: 'Close editor',
+			label: localize('workbench.closeEditor', 'Close'),
 			icon: Lxicon.close,
+			iconOnly: true,
 			onClick: () => this.requestClose(),
 		}));
 		this.closeButton.toggleClassName('ash-modal-editor-close', true);
@@ -277,7 +279,7 @@ export class ModalEditorPart extends Disposable {
 	private updateTitle(input: IResourceEditorInput): void {
 		const title = editorInputLabel(input);
 		this.titleDomNode.textContent = title;
-		const closeLabel = `Close ${title}`;
+		const closeLabel = localize('modalEditor.close', 'Close {0}', title);
 		this.closeButton.label = closeLabel;
 		this.closeButton.setTitle(closeLabel);
 		this.closeButton.domNode.setAttribute('aria-label', closeLabel);

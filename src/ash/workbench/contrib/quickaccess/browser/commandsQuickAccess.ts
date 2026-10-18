@@ -18,6 +18,7 @@ import { IStorageService, StorageScope } from '../../../../platform/storage/comm
 import { localize, localize2 } from '../../../../nls.js';
 import { ShowAllCommandsCommandId } from '../../../browser/quickaccess.js';
 import { commandActionLabel } from '../../../../platform/action/common/action.js';
+import { IPreferencesService } from '../../../services/preferences/common/preferences.js';
 
 interface ICommandQuickPickItem extends IPickerQuickAccessItem {
 	readonly commandId: string;
@@ -33,6 +34,8 @@ export class CommandsQuickAccessProvider extends PickerQuickAccessProvider<IComm
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@IStorageService private readonly storageService: IStorageService,
+		@IPreferencesService private readonly preferencesService: IPreferencesService,
+		@IQuickInputService private readonly quickInputService: IQuickInputService,
 	) {
 		super('>');
 		this.history = this._register(this.instantiationService.createInstance(CommandsHistory));
@@ -125,12 +128,25 @@ export class CommandsQuickAccessProvider extends PickerQuickAccessProvider<IComm
 						).catch(onUnexpectedError);
 					});
 				},
-				trigger: () => { history.remove(command.commandId); return TriggerAction.REFRESH_PICKER; },
-				buttons: recent ? [{
+				trigger: buttonIndex => {
+					if (buttonIndex === 0) {
+						// Restore the displaced focus before Preferences opens and focuses its editor.
+						this.quickInputService.currentQuickInput?.hide();
+						void this.preferencesService.openGlobalKeybindingSettings(false, { query: `@command:${command.commandId}` }).catch(onUnexpectedError);
+						return TriggerAction.CLOSE_PICKER;
+					}
+					history.remove(command.commandId);
+					return TriggerAction.REFRESH_PICKER;
+				},
+				buttons: [{
+					id: 'configureKeybinding',
+					label: localize('quickAccess.configureKeybinding', 'Configure Keybinding'),
+					iconClass: ThemeIcon.asClassName(Lxicon.gear),
+				}, ...(recent ? [{
 					id: 'removeFromHistory',
 					label: localize('quickAccess.removeFromHistory', 'Remove from Command History'),
 					iconClass: ThemeIcon.asClassName(Lxicon.close),
-				}] : undefined,
+				}] : [])],
 			});
 		}
 		return picks;

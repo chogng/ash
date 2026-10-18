@@ -58,10 +58,6 @@
 	padding: 0;
 }
 
-.ash-modal-editor-close > span {
-	display: none;
-}
-
 .ash-modal-editor-content {
 	display: flex;
 	min-width: 0;

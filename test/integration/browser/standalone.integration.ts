@@ -73,6 +73,8 @@ import { IThemeService } from '../../../src/ash/platform/theme/common/themeServi
 import '../../../src/ash/workbench/contrib/bulkEdit/browser/preview/bulkEdit.css';
 import type { IQuickPickItem } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { CommandsQuickAccessProvider } from '../../../src/ash/workbench/contrib/quickaccess/browser/commandsQuickAccess.js';
+import { IPreferencesService } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
+import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { TestQuickInputService } from '../../../src/ash/platform/quickinput/test/browser/testQuickInputService.js';
 import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
 
@@ -3206,6 +3208,12 @@ window.ashStandaloneIntegration = {
 		const services = scrollGeometryResources.add(StandaloneServices.get(IInstantiationService).createChild());
 		services.registerInstance(IDialogService, dialogs);
 		services.registerInstance(IStorageService, scrollGeometryResources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'standalone', flushInterval: 0 })));
+		services.registerInstance(IQuickInputService, inputs);
+		services.registerInstance(IPreferencesService, {
+			openSettings: async () => { throw new Error('Unexpected settings request'); },
+			openUserSettings: async () => { throw new Error('Unexpected user settings request'); },
+			openGlobalKeybindingSettings: async () => { throw new Error('Unexpected keybindings request'); },
+		});
 		const provider = services.createInstance(CommandsQuickAccessProvider);
 		scrollGeometryResources.add(provider.provide(picker));
 		picker.value = 'Keep editor position';

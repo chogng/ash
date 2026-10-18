@@ -21,6 +21,9 @@ import { CommandService } from '../../../src/ash/workbench/services/commands/com
 import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
 import { DialogSeverity, IDialogService, type IDialogOutcome } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 import { StandaloneCodeEditorService } from '../../../src/ash/editor/standalone/browser/standaloneCodeEditorService.js';
+import { IPreferencesService } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
+import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
+import { TestQuickInputService } from '../../../src/ash/platform/quickinput/test/browser/testQuickInputService.js';
 
 declare global {
 	interface Window {
@@ -125,6 +128,12 @@ window.ashDialogIntegration = {
 		services.registerInstance(ICodeEditorService, editors);
 		services.registerInstance(IConfigurationService, commandResources.add(new InMemoryConfigurationService()));
 		services.registerInstance(IStorageService, commandResources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'dialog', flushInterval: 0 })));
+		services.registerInstance(IQuickInputService, commandResources.add(new TestQuickInputService({ container: document.body, instantiationService: services })));
+		services.registerInstance(IPreferencesService, {
+			openSettings: async () => { throw new Error('Unexpected settings request'); },
+			openUserSettings: async () => { throw new Error('Unexpected user settings request'); },
+			openGlobalKeybindingSettings: async () => { throw new Error('Unexpected keybindings request'); },
+		});
 		const provider = commandResources.add(services.createInstance(CommandsQuickAccessProvider));
 		const accept = commandResources.add(new Emitter<IQuickPickDidAcceptEvent>());
 		const picker = {

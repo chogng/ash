@@ -51,6 +51,7 @@ import type { EditorOpenOptions } from '../../../src/ash/workbench/services/edit
 import type { IResourceEditorInput } from '../../../src/ash/workbench/common/editor.js';
 import type { IEditorPart as EditorPartContract } from '../../../src/ash/workbench/browser/parts/editor/editorPart.js';
 import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
+import { IPreferencesService } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
 import '../../../src/ash/workbench/browser/media/style.css';
 import '../../../src/ash/base/browser/ui/inputbox/inputbox.css';
 
@@ -64,6 +65,8 @@ declare global {
 			holdNextRequest(): void;
 			releaseRequest(): void;
 			requests: { kind: string; query?: string; page: number; }[];
+			keybindingRequests: { textual: boolean; query?: string; pickerVisible: boolean; }[];
+			executions: readonly string[];
 		};
 	}
 }
@@ -90,7 +93,12 @@ const commandBindings = new Map([
 	['test.quickAccess.Format', resolveKeybinding(Keybinding.chord(logicalKey('k', { primaryKey: true }), logicalKey('Enter', { primaryKey: true })), shortcutOS)],
 	['test.quickAccess.ZuluFormat', resolveKeybinding(Keybinding.single(physicalKey('F1')), shortcutOS)],
 ]);
-services.registerInstance(IKeybindingService, { lookupKeybinding: (command: string) => commandBindings.get(command), onDidUpdateKeybindings: Event.None } as unknown as IKeybindingService);
+services.registerInstance(IKeybindingService, {
+	lookupKeybinding: (command: string) => commandBindings.get(command),
+	resolveKeybinding: (binding: Keybinding) => resolveKeybinding(binding, shortcutOS),
+	getKeybindings: () => [],
+	onDidUpdateKeybindings: Event.None,
+} as unknown as IKeybindingService);
 const contexts = resources.add(new ContextKeyService());
 const commands = resources.add(new CommandService(services));
 services.registerInstance(ICommandService, commands);
@@ -151,6 +159,16 @@ resources.add(CommandsRegistry.register('git.getRepositoryContexts', () => [{
 services.registerInstance(IMenuService, new MenuService(commands, contexts));
 const quickInput = resources.add(new TestQuickInputService({ instantiationService: services, container: document.body, contextKeyService: contexts }));
 services.registerInstance(IQuickInputService, quickInput);
+const keybindingRequests: { textual: boolean; query?: string; pickerVisible: boolean; }[] = [];
+let shortcutPreferences: IPreferencesService | undefined;
+services.registerInstance(IPreferencesService, {
+	openSettings: async () => { throw new Error('Unexpected settings request'); },
+	openUserSettings: async () => { throw new Error('Unexpected user settings request'); },
+	openGlobalKeybindingSettings: async (textual, options) => {
+		keybindingRequests.push({ textual, query: options?.query, pickerVisible: quickInput.currentQuickInput !== undefined });
+		await shortcutPreferences?.openGlobalKeybindingSettings(textual, options);
+	},
+});
 // Editor commands register additional palette entries and styles. Load them only for this scenario.
 if (parameters.get('reopen') === '1') {
 	const { EditorPaneRegistry } = await import('../../../src/ash/workbench/browser/editor.js');
@@ -189,8 +207,70 @@ if (parameters.get('reopen') === '1') {
 const quickAccess = quickInput.quickAccess;
 const theme = parameters.get('theme') === 'hc' ? highContrastDarkColorTheme : parameters.get('theme') === 'dark' ? darkColorTheme : lightColorTheme;
 resources.add(bindTestColorTheme(resources.add(new TestThemeService(theme)), document.body));
+if (parameters.has('shortcuts')) {
+	resources.add(KeybindingsRegistry.registerKeybindingRule({
+		command: 'test.quickAccess.AlphaFormat',
+		keybinding: Keybinding.single(logicalKey('p', { primaryKey: true, shiftKey: true })),
+		source: KeybindingSource.Builtin,
+	}));
+	const { createTestEditorServices, createTestFileService } = await import('../../../src/ash/workbench/test/common/testEditorServices.js');
+	const { MemoryFileService } = await import('../../../src/ash/workbench/contrib/bulkEdit/test/browser/bulkEditTestServices.js');
+	const { EditorPart } = await import('../../../src/ash/workbench/browser/parts/editor/editorPart.js');
+	const { EditorPaneRegistry } = await import('../../../src/ash/workbench/browser/editor.js');
+	const { EditorPaneMatch } = await import('../../../src/ash/workbench/browser/parts/editor/editorPane.js');
+	const { BrowserEditorService } = await import('../../../src/ash/workbench/services/editor/browser/browserEditorService.js');
+	const { KeybindingsEditor } = await import('../../../src/ash/workbench/contrib/preferences/browser/keybindingsEditor.js');
+	const { isKeybindingsEditorInput } = await import('../../../src/ash/workbench/services/preferences/browser/keybindingsEditorInput.js');
+	const { PreferencesService } = await import('../../../src/ash/workbench/services/preferences/browser/preferencesService.js');
+	const { IContextKeyService } = await import('../../../src/ash/platform/contextkey/browser/contextKeyService.js');
+	const { IKeyboardLayoutService } = await import('../../../src/ash/platform/keyboardLayout/common/keyboardLayout.js');
+	const { BrowserKeyboardLayoutService } = await import('../../../src/ash/workbench/services/keybinding/browser/keyboardLayoutService.js');
+	const { WorkbenchKeybindingService } = await import('../../../src/ash/workbench/services/keybinding/browser/keybindingService.js');
+	const { BrowserContextMenuService } = await import('../../../src/ash/platform/contextview/browser/contextMenuService.js');
+	const { BrowserContextViewService } = await import('../../../src/ash/platform/contextview/browser/contextViewService.js');
+	const { IKeybindingEditingService, KeybindingsEditingService } = await import('../../../src/ash/workbench/services/keybinding/common/keybindingEditing.js');
+	const { IUserDataProfileService } = await import('../../../src/ash/workbench/services/userDataProfile/common/userDataProfile.js');
+	const { UserDataProfileService } = await import('../../../src/ash/workbench/services/userDataProfile/browser/userDataProfileService.js');
+	const { BrowserWorkingCopyService } = await import('../../../src/ash/workbench/services/workingCopy/browser/browserWorkingCopyService.js');
+	const { Schemas } = await import('../../../src/ash/base/common/network.js');
+	const scope = resources.add(services.createChild());
+	scope.registerInstance(IFileService, resources.add(createTestFileService(new MemoryFileService([]), [Schemas.vscodeUserData])));
+	scope.registerInstance(IContextKeyService, contexts);
+	scope.registerInstance(IUserDataProfileService, new UserDataProfileService());
+	const layout = resources.add(new BrowserKeyboardLayoutService({ navigator, operatingSystem: shortcutOS }));
+	scope.registerInstance(IKeyboardLayoutService, layout);
+	const keybindings = resources.add(scope.createInstance(WorkbenchKeybindingService, {
+		ownerDocument: document, commandService: commands, contextKeyService: contexts, keyboardLayoutService: layout,
+	}));
+	scope.registerInstance(IKeybindingService, keybindings);
+	await keybindings.initialize();
+	const editorServices = resources.add(createTestEditorServices(configuration, scope));
+	editorServices.registerSingleton(IWorkingCopyService, () => editorServices.createInstance(BrowserWorkingCopyService));
+	editorServices.registerSingleton(IKeybindingEditingService, () => editorServices.createInstance(KeybindingsEditingService));
+	const registry = new EditorPaneRegistry();
+	resources.add(registry.registerEditorPane({
+		id: KeybindingsEditor.ID, name: 'Keyboard Shortcuts',
+		canOpen: input => isKeybindingsEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None,
+		create: () => editorServices.createInstance(KeybindingsEditor),
+	}));
+	const container = document.createElement('main');
+	container.style.cssText = 'position:absolute;inset:48px 0 0';
+	document.body.append(container);
+	const menus = services.get(IMenuService);
+	// Keep title menus in the modal's focus scope, as the product host does.
+	const views = resources.add(new BrowserContextViewService(container));
+	const contextMenus = resources.add(new BrowserContextMenuService(menus, contexts, keybindings, views, services.get(INotificationService)));
+	const editor = resources.add(editorServices.createInstance(EditorPart, container, {
+		registry, contextKeyService: contexts, keybindingService: keybindings, keyboardLayoutService: layout,
+		titleActions: { menuService: menus, contextMenuProvider: contextMenus },
+	}));
+	editor.layout({ width: innerWidth, height: innerHeight - 48 });
+	editorServices.registerInstance(IEditorService, resources.add(new BrowserEditorService(editor)));
+	shortcutPreferences = resources.add(editorServices.createInstance(PreferencesService));
+	await import('../../../src/ash/workbench/contrib/preferences/browser/preferencesActions.js');
+}
 const executions: string[] = [];
-for (const label of ['Alpha Format', 'Zulu Format', 'Format']) {
+for (const label of ['Alpha Format', 'Zulu Format', 'Format', 'Unbound command']) {
 	resources.add(registerAction2(class extends Action2 {
 		constructor() { super({ id: `test.quickAccess.${label.replaceAll(' ', '')}`, title: label, f1: true }); }
 		public override run(): void {
@@ -238,6 +318,8 @@ window.ashQuickAccessIntegration = {
 	holdNextRequest: () => { holdNext = true; },
 	releaseRequest: () => { releaseHeld?.(); releaseHeld = undefined; },
 	requests,
+	keybindingRequests,
+	executions,
 };
 for (const trigger of document.querySelectorAll<HTMLButtonElement>('#open, #files')) trigger.disabled = false;
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });

@@ -35,6 +35,8 @@ import { IQuickInputService } from '../../../../../platform/quickinput/common/qu
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { KeybindingsRegistry } from '../../../../../platform/keybinding/common/keybindingsRegistry.js';
 import '../../../search/browser/search.contribution.js';
+import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
+import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 
 test('empty-editor navigation commands open the file picker and focus file search', async () => {
 	using services = new InstantiationService();
@@ -58,6 +60,12 @@ function registerHistoryServices(services: InstantiationService, resources: Disp
 	resources.add(toDisposable(() => dom.window.close()));
 	services.registerInstance(IConfigurationService, resources.add(new InMemoryConfigurationService()));
 	services.registerInstance(IStorageService, resources.add(new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'commands', flushInterval: 0 })));
+	services.registerInstance(IQuickInputService, resources.add(new TestQuickInputService({ container: dom.window.document.body, instantiationService: services })));
+	services.registerInstance(IPreferencesService, {
+		openSettings: async () => { throw new Error('Unexpected settings request'); },
+		openUserSettings: async () => { throw new Error('Unexpected user settings request'); },
+		openGlobalKeybindingSettings: async () => { throw new Error('Unexpected keybindings request'); },
+	});
 }
 
 test('Command Palette finds localized commands by their English title and reports command errors', async () => {

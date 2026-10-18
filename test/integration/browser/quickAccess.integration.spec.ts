@@ -1,5 +1,157 @@
 import { expect, test } from '@playwright/test';
 
+for (const variant of [{ locale: 'en', theme: 'light' }, { locale: 'zh-CN', theme: 'dark' }, { locale: 'en', theme: 'hc' }]) {
+	test(`Quick Pick clears input through its toolbar and retains focus (${variant.locale}, ${variant.theme})`, async ({ page }, testInfo) => {
+		await page.goto(`/quickAccess.html?${new URLSearchParams(variant)}`);
+		const trigger = page.getByRole('button', { name: 'Open files' });
+		await trigger.click();
+		const picker = page.getByRole('dialog');
+		const input = picker.getByRole('combobox');
+		const clearLabel = variant.locale === 'zh-CN' ? '清空输入' : 'Clear input';
+		const actions = picker.getByRole('toolbar', { name: clearLabel, includeHidden: true });
+		const clear = actions.getByRole('button', { name: clearLabel });
+		await expect(input).toHaveAttribute('type', 'text');
+		const borderColor = await picker.evaluate(element => getComputedStyle(element).borderColor);
+		await expect(actions).toBeHidden();
+		await input.fill('file-1');
+		await expect(picker).toHaveCSS('border-color', borderColor);
+		await expect(clear).toBeVisible();
+		await expect(picker.getByText('file-0.ts', { exact: true })).toHaveCount(0);
+		const fieldBounds = (await input.boundingBox())!;
+		const actionBounds = (await clear.boundingBox())!;
+		expect(actionBounds.x).toBeGreaterThan(fieldBounds.x);
+		expect(actionBounds.x + actionBounds.width).toBeLessThanOrEqual(fieldBounds.x + fieldBounds.width);
+		expect(actionBounds.y).toBeGreaterThanOrEqual(fieldBounds.y);
+		expect(actionBounds.y + actionBounds.height).toBeLessThanOrEqual(fieldBounds.y + fieldBounds.height);
+		await picker.screenshot({ path: testInfo.outputPath('quick-pick-clear-input.png') });
+		await clear.click();
+		await expect(input).toHaveValue('');
+		await expect(input).toBeFocused();
+		await expect(actions).toBeHidden();
+		await expect(picker.getByText('file-0.ts', { exact: true })).toBeVisible();
+		for (const key of ['Enter', 'Space']) {
+			await input.fill('file-2');
+			await input.press('Tab');
+			await expect(clear).toBeFocused();
+			await expect(clear).toHaveCSS('outline-style', 'solid');
+			await expect(picker).toHaveCSS('border-color', borderColor);
+			await clear.press(key);
+			await expect(input).toHaveValue('');
+			await expect(input).toBeFocused();
+			await expect(actions).toBeHidden();
+		}
+		await input.press('Escape');
+		await expect(picker).toHaveCount(0);
+		await expect(trigger).toBeFocused();
+	});
+
+	test(`Command Palette configures shortcuts without executing commands or changing history (${variant.locale}, ${variant.theme})`, async ({ page }, testInfo) => {
+		await page.goto(`/quickAccess.html?${new URLSearchParams(variant)}`);
+		const open = page.getByRole('button', { name: 'Open commands' });
+		const picker = page.getByRole('dialog');
+		const input = picker.getByRole('combobox');
+		const configureLabel = variant.locale === 'zh-CN' ? '配置快捷键' : 'Configure Keybinding';
+		const removeLabel = variant.locale === 'zh-CN' ? '从命令历史记录中移除' : 'Remove from Command History';
+		await open.click();
+		await input.fill('>Format');
+		const alpha = picker.getByRole('option').filter({ has: page.locator('.ash-quick-pick-row-label', { hasText: /^Alpha Format$/ }) });
+		const gear = alpha.getByRole('button', { name: configureLabel });
+		await expect(gear).toHaveCSS('opacity', '0');
+		await alpha.hover();
+		await expect(gear).toHaveCSS('opacity', '1');
+		await expect(alpha.getByRole('toolbar')).toHaveCount(1);
+		await expect(gear.locator('svg')).toHaveAttribute('aria-hidden', 'true');
+		await picker.screenshot({ path: testInfo.outputPath('configure-keybinding.png') });
+		await expect(gear).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		const rowBackground = await alpha.evaluate(element => getComputedStyle(element).backgroundColor);
+		await gear.hover();
+		await expect(gear).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await expect(alpha).toHaveCSS('background-color', rowBackground);
+		await picker.screenshot({ path: testInfo.outputPath('configure-keybinding-hover.png') });
+		await alpha.hover();
+		await expect(gear).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await gear.click();
+		await expect(picker).toHaveCount(0);
+		await expect.poll(() => page.evaluate(() => window.ashQuickAccessIntegration.keybindingRequests)).toEqual([
+			{ textual: false, query: '@command:test.quickAccess.AlphaFormat', pickerVisible: false },
+		]);
+		await open.click();
+		await input.fill('>Unbound command');
+		await expect(picker.getByRole('button', { name: removeLabel })).toHaveCount(0);
+		await input.press('Tab');
+		await page.keyboard.press('Tab');
+		await expect(picker.getByRole('tab').first()).toBeFocused();
+		await page.keyboard.press('Tab');
+		const unboundGear = picker.getByRole('button', { name: configureLabel });
+		await expect(unboundGear).toBeFocused();
+		await expect(unboundGear).toHaveCSS('opacity', '1');
+		await unboundGear.press('Enter');
+		await expect(picker).toHaveCount(0);
+		await expect.poll(() => page.evaluate(() => window.ashQuickAccessIntegration.keybindingRequests.at(-1))).toEqual({
+			textual: false, query: '@command:test.quickAccess.Unboundcommand', pickerVisible: false,
+		});
+		expect(await page.evaluate(() => window.ashQuickAccessIntegration.executions)).toEqual([]);
+		await open.click();
+		const recentLabel = variant.locale === 'zh-CN' ? '最近使用' : 'recently used';
+		await expect(picker.getByRole('separator', { name: recentLabel })).toHaveCount(0);
+		await input.fill('>Format');
+		await input.press('Enter');
+		await expect(picker).toHaveCount(0);
+		await open.click();
+		await input.fill('>Format');
+		const recent = picker.getByRole('option').filter({ has: page.locator('.ash-quick-pick-row-label', { hasText: /^Format$/ }) });
+		await expect(recent.getByRole('button', { name: removeLabel })).toHaveCount(1);
+		await recent.getByRole('button', { name: configureLabel }).click();
+		await expect(picker).toHaveCount(0);
+		await expect.poll(() => page.evaluate(() => window.ashQuickAccessIntegration.keybindingRequests.at(-1))).toEqual({
+			textual: false, query: '@command:test.quickAccess.Format', pickerVisible: false,
+		});
+		expect(await page.evaluate(() => window.ashQuickAccessIntegration.executions)).toEqual(['Format']);
+		await open.click();
+		await expect(picker.getByRole('separator', { name: recentLabel })).toHaveCount(1);
+		await expect(recent.getByRole('button', { name: removeLabel })).toHaveCount(1);
+	});
+
+	test(`Command Palette opens the real shortcut editor in a modal and restores focus (${variant.locale}, ${variant.theme})`, async ({ page }, testInfo) => {
+		await page.goto(`/quickAccess.html?${new URLSearchParams(variant)}&shortcuts=1`);
+		const open = page.getByRole('button', { name: 'Open commands' });
+		await expect(open).toBeEnabled();
+		const picker = page.locator('.ash-quick-pick');
+		const configureLabel = variant.locale === 'zh-CN' ? '配置快捷键' : 'Configure Keybinding';
+		const title = variant.locale === 'zh-CN' ? '键盘快捷方式' : 'Keyboard Shortcuts';
+		const modal = page.getByRole('dialog', { name: title, exact: true });
+		for (const [label, command, close] of [['Alpha Format', 'AlphaFormat', 'Escape'], ['Unbound command', 'Unboundcommand', 'button']] as const) {
+			await open.click();
+			await picker.getByRole('combobox').fill(`>${label}`);
+			await picker.getByRole('button', { name: configureLabel }).click();
+			await expect(picker).toHaveCount(0);
+			await expect(modal).toBeVisible();
+			await expect(modal).toHaveAttribute('aria-modal', 'true');
+			const search = modal.locator('.ash-keybindings-search input');
+			await expect(search).toHaveValue(`@command:test.quickAccess.${command}`);
+			await expect(search).toBeFocused();
+			await expect(modal.locator('.ash-keybindings-row')).toHaveCount(1);
+			await expect(modal.locator('.ash-keybindings-command-id')).toHaveText(`test.quickAccess.${command}`);
+			await expect(modal.locator('.ash-keybindings-source')).toHaveText(command === 'AlphaFormat' ? 'Default' : 'Unassigned');
+			const closeButton = modal.getByRole('button', { name: variant.locale === 'zh-CN' ? `关闭${title}` : `Close ${title}`, exact: true });
+			await expect(closeButton.locator('svg')).toBeVisible();
+			await closeButton.focus();
+			await page.keyboard.press('Shift+Tab');
+			expect(await modal.evaluate(element => element.contains(element.ownerDocument.activeElement))).toBe(true);
+			await search.focus();
+			if (close === 'Escape') {
+				await modal.screenshot({ path: testInfo.outputPath('keyboard-shortcuts-modal.png') });
+				await search.press('Escape');
+			} else {
+				await closeButton.click();
+			}
+			await expect(modal).toBeHidden();
+			await expect(open).toBeFocused();
+		}
+		expect(await page.evaluate(() => window.ashQuickAccessIntegration.executions)).toEqual([]);
+	});
+}
+
 for (const locale of ['en', 'zh-CN']) {
 	test(`Reopen With selects an editor, supports background acceptance and restores focus on cancel (${locale})`, async ({ page }) => {
 		await page.goto(`/quickAccess.html?locale=${locale}&reopen=1`);
@@ -89,6 +241,8 @@ for (const variant of [{ locale: 'en', theme: 'light' }, { locale: 'zh-CN', them
 		await expect(tabs.nth(0)).toHaveAttribute('aria-selected', 'true');
 		await input.fill('>Fix');
 		await page.keyboard.press('Tab');
+		await expect(picker.getByRole('button', { name: variant.locale === 'zh-CN' ? '清空输入' : 'Clear input' })).toBeFocused();
+		await page.keyboard.press('Tab');
 		await expect(tabs.nth(0)).toBeFocused();
 		await page.keyboard.press('ArrowRight');
 		await page.keyboard.press('ArrowRight');
@@ -129,11 +283,16 @@ for (const variant of [{ locale: 'en', theme: 'light' }, { locale: 'zh-CN', them
 		await expect(input).toBeFocused();
 		await expect(picker).toHaveCSS('border-radius', '8px');
 		await expect(input).toHaveCSS('border-radius', '4px');
-		const focusColor = variant.theme === 'hc' ? 'rgb(255, 255, 255)' : variant.theme === 'dark' ? 'rgb(0, 127, 212)' : 'rgb(0, 120, 212)';
-		await expect(input).toHaveCSS('border-color', focusColor);
-		if (variant.theme === 'hc') {
-			await expect(picker).toHaveCSS('border-color', 'rgb(255, 255, 255)');
-		}
+		const borderColor = variant.theme === 'hc' ? 'rgb(255, 255, 255)' : variant.theme === 'dark' ? 'rgb(69, 69, 69)' : 'rgb(212, 212, 212)';
+		await expect(picker).toHaveCSS('border-color', borderColor);
+		await expect(input).toHaveCSS('border-color', variant.theme === 'hc' ? 'rgb(255, 255, 255)' : 'rgba(0, 0, 0, 0)');
+		await expect(input).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		const placeholder = await input.evaluate(element => {
+			const style = getComputedStyle(element, '::placeholder');
+			return { color: style.color, opacity: style.opacity };
+		});
+		expect(placeholder.opacity).toBe('1');
+		expect(placeholder.color).toBe(variant.theme === 'hc' ? 'rgb(255, 255, 255)' : variant.theme === 'dark' ? 'rgb(143, 143, 143)' : 'rgb(118, 118, 118)');
 		const first = picker.getByRole('option').first();
 		const detail = first.locator('.ash-quick-pick-row-detail');
 		const label = first.locator('.ash-quick-pick-row-label');
@@ -148,9 +307,23 @@ for (const variant of [{ locale: 'en', theme: 'light' }, { locale: 'zh-CN', them
 		expect((await results.boundingBox())!.height).toBeLessThanOrEqual(700 * 0.4);
 		expect((await picker.boundingBox())!.width).toBeLessThanOrEqual(600);
 		await page.screenshot({ path: testInfo.outputPath('quick-access.png') });
+		const hoverColor = variant.theme === 'hc' ? 'rgb(51, 51, 51)' : variant.theme === 'dark' ? 'rgb(42, 45, 46)' : 'rgb(232, 232, 232)';
+		const foreground = variant.theme === 'hc' ? 'rgb(255, 255, 255)' : variant.theme === 'dark' ? 'rgb(204, 204, 204)' : 'rgb(59, 59, 59)';
+		await first.hover();
+		await expect(first).toHaveCSS('background-color', hoverColor);
+		await expect(first).toHaveCSS('color', foreground);
+		const second = picker.getByRole('option').nth(1);
+		await second.hover();
+		await expect(second).toHaveClass(/is-active/);
+		await expect(second).toHaveCSS('background-color', hoverColor);
+		await expect(input).toHaveAttribute('aria-activedescendant', await second.getAttribute('id') ?? '');
+		await picker.screenshot({ path: testInfo.outputPath('quick-access-hover.png') });
+		await page.keyboard.press('ArrowUp');
+		// Returning to the row under a stationary pointer must restore keyboard selection styling.
 		await page.keyboard.press('ArrowDown');
 		const active = picker.locator('.ash-list-row.is-active');
 		await expect(active.locator('.ash-quick-pick-row-label')).toHaveText('file-1.ts');
+		await expect(active).toHaveCSS('background-color', variant.theme === 'hc' ? 'rgb(255, 255, 255)' : variant.theme === 'dark' ? 'rgb(4, 57, 94)' : 'rgb(0, 96, 192)');
 		await expect(input).toHaveAttribute('aria-activedescendant', await active.getAttribute('id') ?? '');
 		await page.keyboard.press('PageDown');
 		await page.keyboard.press('PageDown');
@@ -201,8 +374,12 @@ for (const variant of [{ locale: 'en', theme: 'light' }, { locale: 'zh-CN', them
 		const remove = page.getByRole('button', { name: removeName });
 		await expect(remove.locator('svg.ash-icon')).toHaveAttribute('aria-hidden', 'true');
 		await page.keyboard.press('Tab');
+		await expect(page.getByRole('button', { name: variant.locale === 'zh-CN' ? '清空输入' : 'Clear input' })).toBeFocused();
+		await page.keyboard.press('Tab');
 		await expect(page.getByRole('tab').first()).toBeFocused();
 		await page.keyboard.press('Tab');
+		await expect(page.getByRole('button', { name: variant.locale === 'zh-CN' ? '配置快捷键' : 'Configure Keybinding' })).toBeFocused();
+		await page.keyboard.press('ArrowRight');
 		await expect(remove).toBeFocused();
 		await expect(remove).toHaveCSS('opacity', '1');
 		await page.keyboard.press('Enter');

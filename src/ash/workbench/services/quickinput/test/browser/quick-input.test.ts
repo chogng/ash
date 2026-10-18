@@ -1,4 +1,5 @@
 import { installEditorTestDom } from '../../../../../editor/test/browser/editorTestGlobals.js';
+import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
 import type { IDisposable } from '../../../../../base/common/lifecycle.js';
 import { getWindowById, getWindowId, registerWindow } from '../../../../../base/browser/window.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
@@ -101,6 +102,11 @@ test('Quick Pick item button fires without accepting its row', () => {
 	assert.deepEqual(triggered, ['main.ts:close']);
 	assert.deepEqual(accepted, []);
 	assert.equal(button.closest('.ash-editor-quick-pick-item.dirty') !== null, true);
+	assert.equal(button.closest('[role="toolbar"]') !== null, true);
+	list.items = [{ label: 'other.ts' }];
+	button.click();
+	assert.deepEqual(triggered, ['main.ts:close'], 'Removed row actions release their click handlers');
+	assert.equal(list.element.querySelector('[role="toolbar"]'), null);
 	list.dispose();
 	dom.window.close();
 });
@@ -716,6 +722,11 @@ function registerHistoryServices(services: InstantiationService): DisposableStor
 	resources.add(toDisposable(() => dom.window.close()));
 	services.registerInstance(IConfigurationService, resources.add(new InMemoryConfigurationService()));
 	services.registerInstance(IStorageService, resources.add(new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'commands', flushInterval: 0 })));
+	services.registerInstance(IPreferencesService, {
+		openSettings: async () => { throw new Error('Unexpected settings request'); },
+		openUserSettings: async () => { throw new Error('Unexpected user settings request'); },
+		openGlobalKeybindingSettings: async () => { throw new Error('Unexpected keybindings request'); },
+	});
 	return resources;
 }
 

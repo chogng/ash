@@ -1,6 +1,9 @@
 import { defaultInputBoxStyles } from '../../theme/browser/defaultStyles.js';
 import { addDisposableListener, stopEvent, h, isHTMLElement } from "../../../base/browser/dom.js";
 import { TabList } from '../../../base/browser/ui/tablist/tabList.js';
+import { ActionBar } from '../../../base/browser/ui/actionbar/actionbar.js';
+import { LabelActionViewItem } from '../../../base/browser/ui/actionbar/actionViewItems.js';
+import { Lxicon } from '../../../base/common/lxicons.js';
 import { getViewport } from '../../../base/browser/geometry.js';
 import { AnchorPosition, layout2d } from '../../../base/common/layout.js';
 import {
@@ -56,6 +59,7 @@ export class QuickPick<TItem extends IQuickPickItem>
 	public anchor?: unknown;
 	public anchorPosition?: 'above' | 'below';
 	private readonly inputBox: InputBox;
+	private readonly inputActions: ActionBar;
 	private readonly list: QuickInputList<TItem>;
 	private readonly progress: HTMLDivElement;
 	private readonly navigationHost: HTMLDivElement;
@@ -141,14 +145,33 @@ export class QuickPick<TItem extends IQuickPickItem>
 		this.list.element.id = `${this.list.listId}-panel`;
 		this.inputBox = this._register(new InputBox(this.element, {
 			inputBoxStyles: defaultInputBoxStyles,
-			type: "search",
+			type: "text",
 			ariaLabel: localize('quickInput.title', 'Quick Pick'),
 			role: "combobox",
 			ariaAutoComplete: "list",
 			ariaControls: this.list.listId,
 			ariaExpanded: true,
 		}));
-		this.inputBox.element.classList.add("ash-quick-pick-input");
+		this.inputBox.element.classList.add("ash-quick-pick-input", "ash-quick-pick-filter");
+		const clearLabel = localize('quickInput.clearInput', 'Clear input');
+		this.inputActions = this._register(new ActionBar(this.inputBox.element, {
+			ariaLabel: clearLabel,
+			actionViewItemProvider: action => new LabelActionViewItem(action, { label: '', ariaLabel: action.label }),
+			actions: [{
+				id: 'quickInput.clearInput',
+				label: clearLabel,
+				tooltip: clearLabel,
+				icon: Lxicon.clearAll,
+				enabled: true,
+				run: () => {
+					// Focus the field before its now-empty value hides the action that was activated.
+					this.inputBox.focus();
+					this.value = '';
+				},
+			}],
+		}));
+		this.inputActions.element.classList.add('ash-quick-pick-input-actions');
+		this.inputActions.element.hidden = true;
 		this.navigationHost = h(ownerDocument, 'div');
 		this.navigationHost.className = 'ash-quick-pick-navigation';
 		this.navigationHost.hidden = true;
@@ -347,6 +370,8 @@ export class QuickPick<TItem extends IQuickPickItem>
 	}
 
 	private handleValueChange(value: string): void {
+		this.inputActions.element.hidden = value.length === 0;
+		this.inputBox.element.classList.toggle('has-value', value.length > 0);
 		this.list.filter(this._filterValue(value));
 		if (this.visible) this.layout();
 		this._onDidChangeValue.fire(value);

@@ -6,10 +6,13 @@ import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable, DisposableMap, toDisposable } from "../../../base/common/lifecycle.js";
 import type { IKeyMods, IQuickPickItem, IQuickPickItemButton, IQuickPickSeparator } from "../common/quickInput.js";
 import { QuickPickFocus } from '../common/quickInput.js';
-import { h, stopEvent } from "../../../base/browser/dom.js";
+import { addDisposableListener, h, isElement, stopEvent } from "../../../base/browser/dom.js";
 import { localize } from '../../../nls.js';
 import { appendIcon, getRegisteredIcon } from '../../../base/browser/ui/lxicons/lxicon.js';
 import { Lxicon } from '../../../base/common/lxicons.js';
+import { ActionBar } from '../../../base/browser/ui/actionbar/actionbar.js';
+import { ActionViewItem } from '../../../base/browser/ui/actionbar/actionViewItems.js';
+import type { IAction } from '../../../base/common/actions.js';
 
 export interface QuickInputListActiveChangeEvent<TItem> {
 	readonly item: TItem | undefined;
@@ -23,6 +26,7 @@ export class QuickInputList<TItem extends IQuickPickItem>
 	private readonly empty: HTMLDivElement;
 	private readonly list: List<TItem>;
 	private readonly keybindingLabels = this._register(new DisposableMap<HTMLDivElement, KeybindingLabel>());
+	private readonly rowActions = this._register(new DisposableMap<HTMLDivElement, ActionBar>());
 	private readonly _onDidAccept = this._register(new Emitter<TItem>());
 	private readonly _onDidChangeActive =
 		this._register(new Emitter<QuickInputListActiveChangeEvent<TItem>>());
@@ -83,9 +87,23 @@ export class QuickInputList<TItem extends IQuickPickItem>
 			domFocusable: true,
 			scrolling: 'managed',
 			renderItem: (item, _index, row) => this.renderItem(item, row),
-			onDidRemoveRow: row => this.keybindingLabels.deleteAndDispose(row),
+			onDidRemoveRow: row => {
+				this.keybindingLabels.deleteAndDispose(row);
+				this.rowActions.deleteAndDispose(row);
+			},
 		}));
 		this.list.element.classList.add("ash-quick-pick-list-items");
+		if (presentation === 'quickPick') {
+			// Pointer focus still determines acceptance; only its visual treatment differs from keyboard focus.
+			this._register(addDisposableListener(this.list.element, 'mousemove', event => {
+				if (isElement(event.target) && event.target.closest('.ash-list-row')) {
+					this.element.classList.add('pointer-navigation');
+				}
+			}));
+			this._register(addDisposableListener(container, 'keydown', () => {
+				this.element.classList.remove('pointer-navigation');
+			}, true));
+		}
 		this.list.domNode.classList.add('ash-quick-pick-list-scrollable');
 		this.list.domNode.hidden = true;
 		this.empty = h(ownerDocument, "div");
@@ -152,6 +170,7 @@ export class QuickInputList<TItem extends IQuickPickItem>
 	}
 
 	focus(what: QuickPickFocus): void {
+		this.element.classList.remove('pointer-navigation');
 		switch (what) {
 			case QuickPickFocus.First:
 				this.list.setActiveIndex(0);
@@ -234,6 +253,7 @@ export class QuickInputList<TItem extends IQuickPickItem>
 	}
 
 	private renderItem(item: TItem, row: HTMLDivElement): HTMLDivElement {
+		this.rowActions.deleteAndDispose(row);
 		const ownerDocument = this.element.ownerDocument;
 		const content = h(ownerDocument, "div");
 		content.className = "ash-quick-pick-row-content";
@@ -293,35 +313,76 @@ export class QuickInputList<TItem extends IQuickPickItem>
 			keybinding.element.classList.add("ash-quick-pick-row-keybinding");
 			this.keybindingLabels.set(row, keybinding);
 		}
-		for (const button of item.buttons ?? []) {
-			const action = h(ownerDocument, 'button');
-			action.type = 'button';
-			action.className = 'ash-quick-pick-row-action';
-			action.textContent = button.label;
-			action.setAttribute('aria-label', button.label);
-			if (button.iconClass) {
-				action.textContent = '';
-				action.title = button.label;
-				action.classList.add('icon-only');
-				const iconId = button.iconClass.split(/\s+/).find(name => name.startsWith('ash-icon-'))?.slice('ash-icon-'.length);
-				const icon = iconId ? getRegisteredIcon(iconId, ownerDocument) : undefined;
-				if (icon) {
-					appendIcon(icon, action);
-				} else {
-					const artwork = h(ownerDocument, 'span');
-					artwork.className = button.iconClass;
-					artwork.setAttribute('aria-hidden', 'true');
-					action.append(artwork);
-				}
-			}
-			action.addEventListener('click', event => {
-				stopEvent(event);
-				this.keyMods = { ctrlCmd: event.ctrlKey || event.metaKey, alt: event.altKey, shift: event.shiftKey };
-				this.buttonEmitter.fire({ item, button });
+		if (item.buttons?.length) {
+			const buttons = item.buttons;
+			const actions = new ActionBar(content, {
+				ariaLabel: localize('quickInput.itemActions', 'Actions for {0}', item.label),
+				actionViewItemProvider: action => new QuickInputButtonActionViewItem(action, buttons.find(button => button.id === action.id)?.iconClass),
+				actions: buttons.map(button => ({
+					id: button.id,
+					label: button.label,
+					tooltip: button.label,
+					enabled: true,
+					run: context => {
+						// The view supplies the native click event for both pointer and keyboard activation.
+						const event = context as MouseEvent;
+						this.keyMods = { ctrlCmd: event.ctrlKey || event.metaKey, alt: event.altKey, shift: event.shiftKey };
+						this.buttonEmitter.fire({ item, button });
+					},
+				})),
 			});
-			content.append(action);
+			actions.element.classList.add('ash-quick-pick-row-actions');
+			this.rowActions.set(row, actions);
 		}
 		return content;
+	}
+}
+
+/** Keeps the approved row-button presentation while ActionBar owns action navigation and lifetime. */
+class QuickInputButtonActionViewItem extends ActionViewItem {
+	private button: HTMLButtonElement | undefined;
+
+	constructor(action: IAction, private readonly iconClass: string | undefined) {
+		super(action);
+	}
+
+	override render(container: HTMLElement): void {
+		const ownerDocument = container.ownerDocument;
+		const button = h(ownerDocument, 'button');
+		button.type = 'button';
+		button.disabled = !this.action.enabled;
+		button.className = 'ash-quick-pick-row-action';
+		button.textContent = this.iconClass ? '' : this.action.label;
+		button.setAttribute('aria-label', this.action.label);
+		if (this.iconClass) {
+			button.classList.add('icon-only');
+			const iconId = this.iconClass.split(/\s+/).find(name => name.startsWith('ash-icon-'))?.slice('ash-icon-'.length);
+			const icon = iconId ? getRegisteredIcon(iconId, ownerDocument) : undefined;
+			if (icon) {
+				appendIcon(icon, button);
+			} else {
+				const artwork = h(ownerDocument, 'span');
+				artwork.className = this.iconClass;
+				artwork.setAttribute('aria-hidden', 'true');
+				button.append(artwork);
+			}
+		}
+		this._register(addDisposableListener(button, 'click', event => {
+			stopEvent(event);
+			this.action.run(event);
+		}));
+		this.setupHover(button, this.action.tooltip);
+		this._register(toDisposable(() => button.remove()));
+		this.button = button;
+		container.append(button);
+	}
+
+	override setTabbable(tabbable: boolean): void {
+		if (this.button) this.button.tabIndex = tabbable ? 0 : -1;
+	}
+
+	override focus(): void {
+		this.button?.focus();
 	}
 }
 
