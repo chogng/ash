@@ -1590,16 +1590,33 @@ test('moved comparison supports keyboard exit, read-only views, wrapping and dis
 	await move.press('Enter');
 	const toolbar = editor.getByRole('toolbar', { name: 'Moved code comparison' });
 	await expect(toolbar).toBeVisible();
+	const content = await page.evaluate(() => window.ashDiffIntegration.linePositions(3, 15));
+	// Unequal column widths can wrap identical text into different line counts.
+	// The shorter side's trailing zone completes the aligned comparison row.
+	expect(content.originalBottom - content.originalTop).toBeGreaterThan(content.modifiedBottom - content.modifiedTop);
 	await expect.poll(() => page.evaluate(() => {
-		const position = window.ashDiffIntegration.linePositions(3, 15);
+		const position = window.ashDiffIntegration.linePositions(3, 15, true);
 		return position.originalBottom - position.originalTop - position.modifiedBottom + position.modifiedTop;
 	})).toBe(0);
+	const assertVisibleBlockEndAligned = async () => {
+		await page.evaluate(() => {
+			const position = window.ashDiffIntegration.linePositions(4, 16);
+			window.ashDiffIntegration.scrollModified(position.modifiedTop - 90);
+		});
+		const originalEnd = editor.locator('.original .view-line').filter({ hasText: /^\}$/u });
+		const modifiedEnd = editor.locator('.modified .view-line').filter({ hasText: /^\}$/u });
+		await expect(originalEnd).toBeVisible();
+		await expect(modifiedEnd).toBeVisible();
+		await expect.poll(async () => (await originalEnd.boundingBox())!.y - (await modifiedEnd.boundingBox())!.y).toBe(0);
+	};
+	await assertVisibleBlockEndAligned();
 	await editor.getByRole('separator').press('ArrowLeft');
 	await editor.getByRole('separator').press('ArrowLeft');
 	await expect.poll(() => page.evaluate(() => {
 		const position = window.ashDiffIntegration.linePositions(4, 16);
 		return position.originalTop - position.originalScrollTop - position.modifiedTop + position.modifiedScrollTop;
 	})).toBe(0);
+	await assertVisibleBlockEndAligned();
 	await page.locator('#single .modified .stanza-editor-input').press('Escape');
 	await expect(toolbar).toBeHidden();
 	await revealMove();

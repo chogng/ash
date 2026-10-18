@@ -91,6 +91,12 @@ Work / Code 工作台与通用文档编辑器的目标行为见 [目标设计](w
 
 依次验收版本绑定的差异计算、单文件 Diff 的行内与跨行几何、同步滚动和选择、多文件列表与切换。比较结果只读当前版本的模型；切换输入或关闭 pane 后取消旧请求并释放旧视图。
 
+2026-10-18 复核并闭合 Chromium 的 3 项既有失败。分隔条的英文／中文用例失败在 `ArrowRight` 后的 `Alt+ArrowLeft`，尚未执行到复位：770 px 可分配宽度中，394 px 转为比例再乘回得到 `393.99999999999994`，`Math.floor` 多丢一像素，原列宽因而为 358 而非 359。`DiffEditorSash` 只对用户调整后的比例投影取最近像素；配置默认比例继续向下取整，保留奇数宽度的既有布局契约。
+
+移动比较的 72 px 来自测试坐标使用错误。`getBottomForLineNumber` 默认不含该行后的 view zone；不同分栏宽度下，同一长行内容高为 288／216 px，较短一侧已有 72 px 对齐 zone。修复前诊断确认含 zone 的行底与下一行起点均为 540 px，两侧滚动同为 450 px，实际可见结束括号的屏幕 y 均为 228 px。测试现在显式测量含尾 zone 的行跨度，并在分隔条调整前后检查可见结束行的 DOM 坐标；严格的零差断言保留，移动块布局无需修改。
+
+原 3 项从失败变为通过；相邻换行、移动连接、编辑移动块、undo、折叠几何及双语言分隔条共 10 项真实 Chromium 回归通过。owner 单元文件 22 项通过（`.build/todo-round2-diff-unit.log`），其中新增用例覆盖连续一像素往返、比例缩放与双击复位；Renderer 类型检查通过（`.build/todo-round2-renderer-check.log`）。这 10 项已包含原 3 项，复跑不重复计数。前后日志、原始 trace、诊断 JSON 和修改前源码位于 `.build/investigations/diff-layout-2026-10-18/`；浏览器结果为 `.build/desktop/playwright/editor-browser-PZNDFT/` 和 `editor-browser-86ywFy/`。这不是完整 Diff 或跨平台验收。
+
 ### 8. 宿主与持久化
 
 在第 0 部分建立挂载契约后，再逐项闭合 Standalone 服务、Workbench pane/input、文件 dirty/save/revert、外部变更冲突、工作副本恢复和 Code 工作台中的代码与 Academic 文档装配。Workbench 持有文件与 pane 生命周期；Editor 仍持有编辑事务、选区和视图。Web 与 Electron 分别用真实入口验证。

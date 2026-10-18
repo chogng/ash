@@ -257,6 +257,36 @@ test('DiffEditorWidget applies the split ratio and disables its separator when r
 	assert.throws(() => editor.setSplitViewOptions(true, 1), /between 0.1 and 0.9/);
 });
 
+test('DiffEditorWidget retains exact keyboard sash steps across ratio round trips and resize', async () => {
+	using services = createServices();
+	using original = new TextModel('before');
+	using modified = new TextModel('after');
+	using computation = new WidgetTestDiffComputationService();
+	using model = new DiffModel({ original, modified, diffProvider: computation, diffOptions });
+	await waitForReady(model);
+	const container = browserEnvironment.window.document.createElement('main');
+	using editor = services.createInstance(DiffEditorWidget, { container, model });
+	editor.layout({ width: 800, height: 80 });
+	const sash = editor.element.querySelector<HTMLElement>('.stanza-diff-sash')!;
+	const originalWidth = () => Number.parseFloat(editor.element.style.getPropertyValue('--stanza-diff-original-width'));
+	const initial = originalWidth();
+	const press = (key: string, altKey = false) => sash.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key, altKey, bubbles: true }));
+	press('ArrowRight');
+	assert.equal(originalWidth(), initial + 10);
+	press('ArrowLeft', true);
+	assert.equal(originalWidth(), initial + 9);
+	for (let iteration = 0; iteration < 10; iteration++) {
+		press('ArrowRight', true);
+		assert.equal(originalWidth(), initial + 10);
+		press('ArrowLeft', true);
+		assert.equal(originalWidth(), initial + 9);
+	}
+	editor.layout({ width: 1031, height: 80 });
+	assert.equal(originalWidth(), 477);
+	sash.dispatchEvent(new browserEnvironment.window.Event('dblclick', { bubbles: true }));
+	assert.equal(originalWidth(), 465);
+});
+
 test('DiffEditorWidget retains unwrapped alignment zones and accessible inline deletions across resizes', async () => {
 	using services = createServices();
 	using original = new TextModel('first\nremoved\nlast');

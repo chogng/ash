@@ -42,10 +42,12 @@ export class DiffEditorSash extends Disposable {
 	}
 
 	public get left(): number {
-		const ratio = this.options.enableSplitViewResizing
-			? this.ratio ?? this.options.splitViewDefaultRatio
-			: this.options.splitViewDefaultRatio;
-		const desired = Math.floor(ratio * this.width);
+		const ratio = this.options.enableSplitViewResizing ? this.ratio : undefined;
+		// User movement starts in whole pixels. Recover the nearest pixel after
+		// the ratio round trip instead of flooring floating-point error into a lost step.
+		const desired = ratio === undefined
+			? Math.floor(this.options.splitViewDefaultRatio * this.width)
+			: Math.round(ratio * this.width);
 		if (this.width <= MINIMUM_EDITOR_WIDTH * 2 + this.leadingWidth) return desired;
 		return Math.max(MINIMUM_EDITOR_WIDTH + this.leadingWidth, Math.min(this.width - MINIMUM_EDITOR_WIDTH, desired));
 	}

@@ -1077,12 +1077,12 @@ const harness = {
 	selectModifiedAll(): void {
 		single.modifiedEditor.setSelection(Range.fromPositions(modified.positionAt(0), modified.positionAt(modified.getText().length)));
 	},
-	linePositions(originalLineNumber: number, modifiedLineNumber: number) {
+	linePositions(originalLineNumber: number, modifiedLineNumber: number, includeTrailingViewZones = false) {
 		return {
 			originalTop: single.originalEditor.getTopForLineNumber(originalLineNumber),
 			modifiedTop: single.modifiedEditor.getTopForLineNumber(modifiedLineNumber),
-			originalBottom: single.originalEditor.getBottomForLineNumber(originalLineNumber),
-			modifiedBottom: single.modifiedEditor.getBottomForLineNumber(modifiedLineNumber),
+			originalBottom: single.originalEditor.getBottomForLineNumber(originalLineNumber, includeTrailingViewZones),
+			modifiedBottom: single.modifiedEditor.getBottomForLineNumber(modifiedLineNumber, includeTrailingViewZones),
 			originalContentHeight: single.originalEditor.getContentHeight(),
 			modifiedContentHeight: single.modifiedEditor.getContentHeight(),
 			originalScrollTop: single.originalEditor.getScrollTop(),
