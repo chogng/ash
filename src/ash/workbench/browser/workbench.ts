@@ -1,6 +1,7 @@
 import { readDefaultLogLevels, DefaultLogLevelsService, IDefaultLogLevelsService } from '../services/log/common/defaultLogLevels.js';
 import '../services/configuration/common/jsonEditingService.js';
 import { IWorkspaceEditingService, WorkspaceTransitionCommittedError } from '../services/workspaces/common/workspaceEditing.js';
+import { IBrowserPasswordService, UnavailableBrowserPasswordService } from '../../platform/browserView/common/browserPasswordService.js';
 import { IWorkspacesService } from '../../platform/workspaces/common/workspaces.js';
 import { IChannelService } from "../../platform/collaboration/common/channelService.js";
 import { TreeSitterLibraryService, TreeSitterSyntaxProviders, createTreeSitterSyntaxTokenBackend } from '../services/treeSitter/browser/treeSitterLibraryService.js';
@@ -675,6 +676,7 @@ export class Workbench extends Disposable {
 		if (api.memoryDiagnostics) { services.registerInstance(IMemoryDiagnosticsService, api.memoryDiagnostics); }
 		if (api.channels) services.registerInstance(IChannelService, api.channels);
 		if (api.calls) { services.registerInstance(ICallService, api.calls); }
+		if (!services.has(IBrowserPasswordService)) { services.registerInstance(IBrowserPasswordService, UnavailableBrowserPasswordService); }
 		services.registerInstance(AppServerApiId, api.appServer);
 		const remoteAgentService = this._register(services.createInstance(AppServerRemoteAgentService, { remoteApi: api.remote }));
 		services.registerInstance(IAppServerRemoteAgentService, remoteAgentService);

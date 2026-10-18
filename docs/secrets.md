@@ -160,6 +160,18 @@ profile 存储方式由唯一 `ProfileSecretStore` 保存于 `<profile>/secrets/
 
 Desktop 的通用存储状态与错误契约位于 `src/ash/platform/secrets/common/secrets.ts`。`ISecretStorageStatusService.readState()` 由同目录的 App Server adapter 对接 `secrets/status`，在 Editor 和 Agents 窗口各自的服务容器中注册；模型设置页直接消费该服务及其授权和存储切换操作。模型等领域的 RPC adapter 通过 secrets adapter 统一转换结构化存储错误，领域接口不转发通用存储状态。当前没有通用凭据存取或变更事件接口，待真实消费者需要时再补充。
 
+### Electron 内置浏览器认证
+
+内置浏览器的 HTTP／代理认证由 Main 进程的 `BrowserView` 接收 Chromium `login` 事件，并通过现有 Workbench 输入对话框收集用户名和密码。`src/ash/platform/encryption/common/encryptionService.ts` 定义加密契约，`electron-main/encryptionMainService.ts` 封装 Electron `safeStorage`；Main 启动时注册唯一 `IEncryptionMainService`，浏览器通过构造注入使用它。该服务只处理加解密，不保存业务凭据，也不替代 Rust profile `SecretStore`。
+
+用户明确勾选记住凭据、浏览器存储会话为 Global／Workspace 且系统加密可用时，Main 才把版本化密文写入应用存储。键按浏览器存储会话和认证保护域隔离；保护域包括目标协议、是否代理、主机、端口、认证方案和 realm，解密后的内容同时校验存储键。用户名和密码不进入浏览器事件、普通配置或日志，Renderer 不回读已保存的值。Linux `basic_text` 不视为浏览器可用的安全存储；不可用、解密或写入失败不降级保存明文，仍允许用户本次登录。
+
+临时会话不保存凭据；Agent 隔离会话拒绝认证挑战，不读取用户凭据。导航、关闭和超时取消待处理认证，迟到响应不生效。错误凭据的下一次挑战重新提示，并清理被拒绝的已保存值；损坏或无法解密的值保留，直到用户明确选择替换或清除。清除浏览器数据会取消共享此 Electron 分区的各窗口认证请求、删除该存储会话保存的凭据并清空 Chromium 认证缓存。
+
+网页表单密码由独立的 `BrowserPasswordMainService` 拥有，复用同一个加密服务与 application storage。记录按浏览器存储会话、精确来源及用户名绑定后整体加密，磁盘键只包含会话标识与摘要。Settings 的 Browser 页面提供账号搜索、编辑、删除及保存／填充开关；管理 IPC 只读取账号元数据，不提供已有密码回读。修改时需输入新密码。损坏记录保留并显示数量，明确清除时才删除。
+
+隔离 preload 仅接受用户交互后的顶层、可见、同源 POST 登录表单，跳过新密码字段、禁用自动完成及多密码表单。提交后表单消失才询问保存或更新；这是一种页面状态启发式，并不保证网站认证成功。填充仍需用户与表单交互，多账号时选择账号，且不覆盖用户已输入的密码。Main 在读取前后核对实际文档、来源、表单令牌与存储会话；导航、超时、关闭和清除取消待处理请求。Agent 与临时页面不保存或填充账号。网页主世界没有凭据桥接 API；填入网站的密码仍受该网站脚本控制。Cookie、站点存储及其持久化继续归 Electron `Session`，通用加密接口不会为全部站点数据额外加密。
+
 ## 6. 生命周期与一致性
 
 `ash-secrets` 不提供跨多个 key 的业务事务。领域 runtime 负责：

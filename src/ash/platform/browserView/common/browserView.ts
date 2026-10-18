@@ -160,6 +160,12 @@ export interface IBrowserViewState {
 }
 
 export type BrowserViewEvent =
+	| { readonly type: 'passwordSaveRequested'; readonly targetId: string; readonly requestId: string; readonly origin: string; readonly username: string; readonly update: boolean; }
+	| { readonly type: 'passwordFillRequested'; readonly targetId: string; readonly requestId: string; readonly origin: string; readonly accounts: readonly { readonly id: string; readonly username: string; }[]; }
+	| { readonly type: 'passwordRequestClosed'; readonly targetId: string; readonly requestId: string; }
+	| { readonly type: 'authenticationRequested'; readonly targetId: string; readonly requestId: string; readonly origin: string; readonly realm: string; readonly isProxy: boolean; readonly canRemember: boolean; readonly storageFailed: boolean; }
+	| { readonly type: 'authenticationRequestClosed'; readonly targetId: string; readonly requestId: string; }
+	| { readonly type: 'authenticationStorageFailed'; readonly targetId: string; }
 	| { readonly type: 'fileRequested'; readonly targetId: string; readonly requestId: string; readonly url: string; }
 	| { readonly type: 'keyDown'; readonly targetId: string; readonly event: IBrowserViewKeyDownEvent; }
 	| { readonly type: 'elementPicked'; readonly targetId: string; readonly data: IElementData; }
@@ -239,6 +245,9 @@ export interface IBrowserViewInfo {
  * serializable commands and state only.
  */
 export interface IBrowserViewService {
+	respondToPasswordSave(id: string, requestId: string, save: boolean): Promise<void>;
+	respondToPasswordFill(id: string, requestId: string, accountId: string | null): Promise<void>;
+	respondToAuthentication(id: string, requestId: string, credentials: { readonly username: string; readonly password: string; readonly remember: boolean; } | null): Promise<void>;
 	/** Defer rendering matching elements on one HTTPS or bundled-page origin; undefined restores page-owned styles. */
 	setContentVisibility(id: string, rule: IBrowserContentVisibilityRule | undefined): Promise<void>;
 	setPermissions(id: string, origin: string, grants: readonly IPermissionCategoryState[]): Promise<void>;

@@ -24,6 +24,75 @@
 	let markerItems: readonly { elementId: string; body: string; }[] = [];
 	const markers: HTMLButtonElement[] = [];
 	const send = (type: string, data?: unknown): void => ipcRenderer.send(channel, { frameToken, type, data });
+	// Passwords never cross the page's main-world bridge. Only top-level, visible, same-origin forms qualify.
+	const passwordForms = new Map<string, WeakRef<HTMLFormElement>>();
+	const passwordFormIds = new WeakMap<HTMLFormElement, string>();
+	let passwordFormSequence = 0;
+	let passwordGesture: { form: HTMLFormElement; at: number; } | undefined;
+	const visiblePasswordInput = (input: HTMLInputElement): boolean => input.isConnected && !input.disabled && !input.readOnly
+		&& input.getClientRects().length > 0 && input.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) && input.type !== 'hidden';
+	function passwordFields(form: HTMLFormElement): { username: HTMLInputElement; password: HTMLInputElement; } | undefined {
+		if (window !== window.top || form.method.toLowerCase() !== 'post' || new URL(form.action || location.href).origin !== location.origin) { return; }
+		const inputs = [...form.elements].filter((element): element is HTMLInputElement => element instanceof HTMLInputElement && visiblePasswordInput(element));
+		const passwords = inputs.filter(input => input.type === 'password');
+		const username = inputs.find(input => input.autocomplete === 'username') ?? inputs.filter(input => ['text', 'email'].includes(input.type)).at(-1);
+		if (!username || passwords.length !== 1 || passwords[0]!.autocomplete === 'new-password' || form.autocomplete === 'off' || passwords[0]!.autocomplete === 'off') { return; }
+		return { username, password: passwords[0]! };
+	}
+	let previousPasswordPageState: boolean | undefined;
+	function reportPasswordPageState(): void {
+		if (window !== window.top) { return; }
+		const hasPasswordForm = [...document.querySelectorAll<HTMLInputElement>('input[type="password"]')].some(input => visiblePasswordInput(input));
+		if (hasPasswordForm === previousPasswordPageState) { return; }
+		previousPasswordPageState = hasPasswordForm;
+		send('passwordPageState', { action: location.href, hasPasswordForm });
+	}
+	if (window === window.top) {
+		for (const eventName of ['pointerdown', 'keydown'] as const) {
+			document.addEventListener(eventName, event => {
+				if (!event.isTrusted || !(event.target instanceof Element)) { return; }
+				const form = event.target.closest('form');
+				if (form instanceof HTMLFormElement) { passwordGesture = { form, at: performance.now() }; }
+			}, true);
+		}
+		document.addEventListener('focusin', event => {
+			const target = event.target;
+			if (!event.isTrusted || !(target instanceof HTMLInputElement) || !target.form
+				|| passwordGesture?.form !== target.form || performance.now() - passwordGesture.at > 1500) { return; }
+			const fields = passwordFields(target.form);
+			if (!fields || fields.password.value || ![fields.username, fields.password].includes(target)) { return; }
+			let formId = passwordFormIds.get(target.form);
+			if (!formId) {
+				formId = frameToken + '-' + ++passwordFormSequence;
+				passwordFormIds.set(target.form, formId);
+				passwordForms.set(formId, new WeakRef(target.form));
+				if (passwordForms.size > 64) { passwordForms.delete(passwordForms.keys().next().value!); }
+			}
+			send('passwordFill', { formId, action: target.form.action, username: fields.username.value });
+		});
+		document.addEventListener('submit', event => {
+			const form = event.target;
+			if (!event.isTrusted || !(form instanceof HTMLFormElement) || passwordGesture?.form !== form || performance.now() - passwordGesture.at > 1500) { return; }
+			const fields = passwordFields(form);
+			if (!fields || !fields.username.value || !fields.password.value) { return; }
+			passwordGesture = undefined;
+			send('passwordSubmitted', { action: form.action, username: fields.username.value, password: fields.password.value });
+			queueMicrotask(reportPasswordPageState);
+		}, true);
+		const startPasswordObservation = (): void => {
+			reportPasswordPageState();
+			let pending = false;
+			const observer = new MutationObserver(() => {
+				if (pending) { return; }
+				pending = true;
+				requestAnimationFrame(() => { pending = false; reportPasswordPageState(); });
+			});
+			observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['type', 'hidden', 'style', 'class'] });
+			window.addEventListener('pagehide', () => { observer.disconnect(); passwordForms.clear(); passwordGesture = undefined; }, { once: true });
+		};
+		if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', startPasswordObservation, { once: true }); }
+		else { queueMicrotask(startPasswordObservation); }
+	}
 	let clearContentVisibility = (): void => { };
 
 	function configureContentVisibility(rule: import('../common/browserView.js').IBrowserContentVisibilityRule | undefined): void {
@@ -613,6 +682,20 @@
 	});
 	ipcRenderer.on(channel, (_event, message: { command: string; data?: any; }) => {
 		switch (message.command) {
+			case 'fillPassword': {
+				const data = message.data;
+				if (!data || data.token !== frameToken || data.origin !== location.origin) { break; }
+				const form = passwordForms.get(data.formId)?.deref();
+				const fields = form && passwordFields(form);
+				if (!fields || fields.password.value || fields.username.value && fields.username.value !== data.username) { break; }
+				const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+				for (const [input, value] of [[fields.username, data.username], [fields.password, data.password]] as const) {
+					setter.call(input, value);
+					input.dispatchEvent(new Event('input', { bubbles: true }));
+					input.dispatchEvent(new Event('change', { bubbles: true }));
+				}
+				break;
+			}
 			case 'contentVisibility':
 				configureContentVisibility(message.data);
 				break;

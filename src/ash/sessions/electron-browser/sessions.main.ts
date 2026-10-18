@@ -39,6 +39,7 @@ import { NativeHostColorSchemeService } from '../../workbench/services/themes/el
 import { showStartupError } from "../../workbench/browser/startupError.js";
 import { invoke, subscribe } from '../../platform/ipc/electron-browser/rendererIpc.js';
 import { ProxyChannel } from '../../base/parts/ipc/common/ipc.js';
+import { IBrowserPasswordService } from '../../platform/browserView/common/browserPasswordService.js';
 import { IBrowserViewService, ipcBrowserViewChannelName } from '../../platform/browserView/common/browserView.js';
 import { IMainProcessService } from '../../platform/ipc/common/mainProcessService.js';
 import { ServiceCollection } from '../../platform/instantiation/common/serviceCollection.js';
@@ -112,6 +113,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 		serviceCollection.set(IWorkbenchEnvironmentService, environment);
 		serviceCollection.set(IPolicyService, sessions.add(new PolicyChannelClient(mainProcessService.getChannel('policy'))));
 		serviceCollection.set(IPlaywrightService, playwrightService);
+		serviceCollection.set(IBrowserPasswordService, ProxyChannel.toService<IBrowserPasswordService>(mainProcessService.getChannel('browserPasswords')));
 		serviceCollection.set(IBrowserViewService, ProxyChannel.toService<IBrowserViewService>(mainProcessService.getChannel(ipcBrowserViewChannelName)));
 		logger = sessions.add(profileServices.createInstance(NativeLogService, 'agents'));
 		serviceCollection.set(ILoggerService, logger);

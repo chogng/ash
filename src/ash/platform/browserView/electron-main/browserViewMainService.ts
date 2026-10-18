@@ -313,11 +313,19 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 	}
 	async getState(id: string) { return this.target(id).getState(); }
 	async respondToFileRequest(id: string, requestId: string, data: string | null) { this.target(id).respondToFileRequest(requestId, data); }
+	async respondToAuthentication(id: string, requestId: string, credentials: { readonly username: string; readonly password: string; readonly remember: boolean; } | null) {
+		await this.target(id).respondToAuthentication(requestId, credentials);
+	}
+	async respondToPasswordSave(id: string, requestId: string, save: boolean) { await this.target(id).respondToPasswordSave(requestId, save); }
+	async respondToPasswordFill(id: string, requestId: string, accountId: string | null) { await this.target(id).respondToPasswordFill(requestId, accountId); }
 	async setBrowserZoomIndex(id: string, index: number) { this.target(id).setBrowserZoomIndex(index); }
 	async toggleDevTools(id: string) { this.target(id).toggleDevTools(); }
 	async setDeviceEmulation(id: string, device: IBrowserDeviceProfile | undefined) { this.target(id).setDeviceEmulation(device); }
 	async clearStorage(id: string) {
-		const session = this.target(id).session;
+		const view = this.target(id);
+		const session = view.session;
+		session.cancelAuthentication();
+		await view.clearAuthentication();
 		await session.electronSession.clearStorageData();
 		await session.electronSession.clearCache();
 		session.permissions.clear();

@@ -20,6 +20,9 @@ import { CommandsRegistry } from '../../../../../platform/commands/common/comman
 import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IBrowserViewWorkbenchService } from '../../common/browserView.js';
 import '../../electron-browser/features/browserTabManagementFeatures.js';
+import { DialogResult } from '../../../../../platform/dialogs/common/dialogs.js';
+import { readFile } from 'node:fs/promises';
+import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 
 const id = 'browser_target_123e4567-e89b-12d3-a456-426614174000';
 const info: IBrowserViewInfo = {
@@ -29,6 +32,36 @@ const info: IBrowserViewInfo = {
 
 suite('Browser Workbench page lifecycle', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('authentication uses translated masked inputs, defaults to no persistence and cancels retired requests', async () => {
+		const chinese = JSON.parse(await readFile('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8'));
+		try {
+			setNlsMessages('zh-CN', chinese);
+			using f = fixture(); await f.views.initialize();
+			const dialogs = f.services.get(IDialogsModel);
+			const answered = promiseWithResolvers<unknown>();
+			f.service.respondToAuthentication = async (...args) => { answered.resolve(args); };
+			const event = { type: 'authenticationRequested' as const, targetId: id, requestId: 'one', origin: 'https://private.test', realm: 'Private area', isProxy: false, canRemember: true, storageFailed: false };
+			f.events.fire(event);
+			const dialog = dialogs.dialogs[0]!;
+			assert.equal(dialog.request.kind, 'input');
+			if (dialog.request.kind !== 'input') { throw new Error('Expected input dialog'); }
+			assert.deepEqual([dialog.request.title, dialog.request.message, dialog.request.inputs, dialog.request.checkbox], [
+				'浏览器身份验证', '登录 https://private.test', [{ placeholder: '用户名' }, { type: 'password', placeholder: '密码' }],
+				{ label: '为此浏览器存储会话记住加密凭据', checked: false },
+			]);
+			dialog.close({ button: DialogResult.Primary, values: ['user', 'secret'], checkboxChecked: true });
+			assert.deepEqual(await answered.promise, [id, 'one', { username: 'user', password: 'secret', remember: true }]);
+			f.events.fire({ ...event, requestId: 'two', canRemember: false, storageFailed: true });
+			assert.equal(dialogs.dialogs[0]!.request.checkbox, undefined);
+			assert.match(dialogs.dialogs[0]!.request.detail!, /未加密/);
+			let lateResponses = 0;
+			f.service.respondToAuthentication = async () => { lateResponses++; };
+			f.events.fire({ type: 'authenticationRequestClosed', targetId: id, requestId: 'two' });
+			await Promise.resolve();
+			assert.deepEqual([dialogs.dialogs.length, lateResponses], [0, 0]);
+		} finally { resetNlsResolver(); }
+	});
 
 	test('new user pages resolve storage preferences, remote isolation and live backend trust', async () => {
 		using f = fixture();
@@ -270,7 +303,7 @@ function fixture() {
 	};
 	const service: IBrowserViewService = {
 		setContentVisibility: async () => { },
-		setPermissions: async () => { }, respondToFileRequest: async () => { },
+		respondToPasswordSave: async () => { }, respondToPasswordFill: async () => { }, respondToAuthentication: async () => { }, setPermissions: async () => { }, respondToFileRequest: async () => { },
 		toggleDevTools: async () => { }, clearStorage: async () => { }, setBrowserZoomIndex: async () => { }, setDeviceEmulation: async () => { },
 		updateWindowConfiguration: async () => { }, getConsoleLogs: async () => '', getSelectedText: async () => '', findInPage: async () => { }, stopFindInPage: async () => { },
 		toggleElementSelection: async () => { }, setElementComments: async () => { }, toggleAreaSelection: async () => { }, captureScreenshot: async () => { throw new Error('Unexpected screenshot'); },

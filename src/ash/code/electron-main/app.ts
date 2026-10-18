@@ -30,7 +30,10 @@ import { RendererWorkspaceHost } from "../../platform/workspaces/electron-main/r
 import { AppServerBrowserHost } from "../../platform/agentHost/electron-main/appServerBrowserHost.js";
 import { rendererSystemHostRoutes } from "../../platform/native/electron-main/rendererSystemHostRoutes.js";
 import { nativeImage, nativeTheme, shell } from "electron";
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain, screen, Menu, Tray, powerMonitor, type BrowserWindowConstructorOptions, type Event as ElectronEvent, type MenuItemConstructorOptions } from "electron/main";
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, screen, Menu, Tray, powerMonitor, safeStorage, type BrowserWindowConstructorOptions, type Event as ElectronEvent, type MenuItemConstructorOptions } from "electron/main";
+import { IEncryptionMainService } from '../../platform/encryption/common/encryptionService.js';
+import { IBrowserPasswordMainService, BrowserPasswordMainService, browserPasswordChannel } from '../../platform/browserView/electron-main/browserPasswordMainService.js';
+import { EncryptionMainService } from '../../platform/encryption/electron-main/encryptionMainService.js';
 
 import { basename, dirname, isAbsolute, join, parse } from "node:path";
 import { homedir } from 'node:os';
@@ -605,6 +608,10 @@ export class AshApplication extends Disposable {
 		}));
 		throwIfCancelled(token);
 		this.windowServices.registerInstance(IApplicationStorageMainService, storage);
+		this.windowServices.registerInstance(IEncryptionMainService, new EncryptionMainService(safeStorage));
+		const browserPasswords = this._register(this.windowServices.createInstance(BrowserPasswordMainService));
+		this.windowServices.registerInstance(IBrowserPasswordMainService, browserPasswords);
+		this.mainProcessIpcServer.registerChannel('browserPasswords', browserPasswordChannel(browserPasswords));
 		this.windowServices.registerInstance(ILogService, this.logService);
 		this.mainProcessIpcServer.registerChannel('storage', new StorageDatabaseChannel(storage));
 		const launchServices = this._register(new InstantiationService());

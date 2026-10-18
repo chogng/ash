@@ -1,3 +1,10 @@
+import { BrowserPasswordMainService, IBrowserPasswordMainService } from '../../electron-main/browserPasswordMainService.js';
+import { browserPasswordChannel } from '../../electron-main/browserPasswordMainService.js';
+import { IConfigurationService } from '../../../configuration/common/configuration.js';
+import { InMemoryConfigurationService } from '../../../configuration/common/inMemoryConfigurationService.js';
+import { createCipheriv, createDecipheriv } from 'node:crypto';
+import { EncryptionMainService } from '../../../encryption/electron-main/encryptionMainService.js';
+import { IEncryptionMainService } from '../../../encryption/common/encryptionService.js';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { readFile } from 'node:fs/promises';
@@ -18,11 +25,102 @@ import { Event } from '../../../../base/common/event.js';
 import { IApplicationStorageMainService } from '../../../storage/electron-main/storageMainService.js';
 import { ILogService, NullLoggerService } from '../../../log/common/log.js';
 import type { IStorageSnapshot } from '../../../storage/common/storageIpc.js';
-import { StorageScope } from '../../../storage/common/storage.js';
+import { StorageScope, StorageTarget } from '../../../storage/common/storage.js';
 import type { ContextMenuParams } from 'electron/main';
 import type { ElectronContextMenu } from '../../../../base/parts/contextmenu/electron-main/contextmenu.js';
 import type { INativeContextMenuRequest, INativeContextMenuResult } from '../../../../base/parts/contextmenu/common/contextmenu.js';
 import { IClipboardService } from '../../../clipboard/common/clipboardService.js';
+
+suite('Browser form passwords', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+	const application = { scope: StorageScope.APPLICATION, id: 'application' };
+	async function page(f: ReturnType<typeof fixture>, scope: BrowserViewStorageScope.Global | BrowserViewStorageScope.Workspace | BrowserViewStorageScope.Ephemeral = BrowserViewStorageScope.Global) {
+		await f.manager.getOrCreateBrowserView(id, { initialUrl: 'https://example.test/login', owner: { type: 'user' }, session: { scope } });
+		const sent: { command: string; data: unknown; }[] = [];
+		const frame = { detached: false, url: 'https://example.test/login', framesInSubtree: [] as unknown[], send: (_channel: string, message: typeof sent[number]) => sent.push(message) };
+		frame.framesInSubtree.push(frame);
+		Object.assign(f.contents, { mainFrame: frame });
+		const post = (type: string, data?: unknown, token = 'a'.repeat(32), sender = frame) => f.contents.emit('ipc-message', { senderFrame: sender }, 'ash:browserView:preload', { type, data, frameToken: token });
+		post('ready');
+		const vault = f.instantiation.get(IBrowserPasswordMainService);
+		return { frame, post, sent, vault, session: f.manager.tryGetBrowserView(id)!.session.id };
+	}
+	const settle = () => new Promise<void>(resolve => setImmediate(resolve));
+	const submitted = { action: 'https://example.test/login', username: 'synthetic-user', password: 'synthetic-password' };
+	const form = { action: submitted.action, username: '', formId: 'a'.repeat(32) + '-1' };
+
+	test('a submitted login is offered only after the form disappears, encrypted and updated without a password readback', async () => {
+		using f = fixture(); const p = await page(f);
+		p.post('passwordSubmitted', submitted); p.post('passwordPageState', { action: submitted.action, hasPasswordForm: true }); await settle();
+		assert.equal(f.events.some(event => event.type === 'passwordSaveRequested'), false);
+		for (const password of [submitted.password, 'replacement-password']) {
+			p.post('passwordSubmitted', { ...submitted, password });
+			p.post('passwordPageState', { action: submitted.action, hasPasswordForm: false }); await settle();
+			const request = [...f.events].reverse().find((event): event is Extract<BrowserViewEvent, { type: 'passwordSaveRequested'; }> => event.type === 'passwordSaveRequested')!;
+			assert.ok(request); assert.equal(request.update, password !== submitted.password);
+			assert.doesNotMatch(JSON.stringify(f.events), /synthetic-password|replacement-password/);
+			await f.manager.respondToPasswordSave(id, request.requestId, true);
+		}
+		const snapshot = await f.storage.getItems(application);
+		assert.doesNotMatch(JSON.stringify(snapshot), /synthetic-user|synthetic-password|replacement-password|example\.test/);
+		const state = await browserPasswordChannel(p.vault).call('window:1', 'readState', []) as Awaited<ReturnType<typeof p.vault.readState>>;
+		assert.equal(state.entries.length, 1); assert.equal(state.entries[0]!.username, submitted.username);
+		assert.equal('password' in state.entries[0]!, false);
+		p.post('passwordFill', form); await settle();
+		assert.equal(([...p.sent].reverse().find(message => message.command === 'fillPassword')!.data as { password: string; }).password, 'replacement-password');
+		await assert.rejects(browserPasswordChannel(p.vault).call('window:1', 'find', [p.session, 'https://example.test']), /Invalid password command/);
+		await assert.rejects(browserPasswordChannel(p.vault).call('window:1', 'update', [state.entries[0]!.id, 'user', 'bad\npassword']), /Invalid password command/);
+	});
+
+	test('fill binds the native top frame, document, exact origin and session; navigation cancels account selection', async () => {
+		using f = fixture(); const p = await page(f);
+		for (const username of ['first', 'second']) { await p.vault.save({ session: p.session, scope: 'global', origin: 'https://example.test', username, password: 'secret-' + username }); }
+		for (const [data, token, sender] of [[{ ...form, action: 'https://other.test' }, 'a'.repeat(32), p.frame], [form, 'stale', p.frame], [form, 'a'.repeat(32), { ...p.frame }]] as const) { p.post('passwordFill', data, token, sender); }
+		await settle(); assert.equal(p.sent.some(message => message.command === 'fillPassword'), false);
+		p.post('passwordFill', form); await settle();
+		const request = [...f.events].reverse().find((event): event is Extract<BrowserViewEvent, { type: 'passwordFillRequested'; }> => event.type === 'passwordFillRequested')!;
+		assert.equal(request.accounts.length, 2);
+		f.contents.emit('did-start-navigation', {}, 'https://other.test/', false, true);
+		p.frame.url = 'https://other.test/'; p.post('ready');
+		await f.manager.respondToPasswordFill(id, request.requestId, request.accounts[0]!.id);
+		assert.equal(p.sent.some(message => message.command === 'fillPassword'), false);
+		assert.deepEqual(await p.vault.find('b'.repeat(64), 'https://example.test'), []);
+		assert.deepEqual(await p.vault.find(p.session, 'https://example.test:444'), []);
+	});
+
+	test('settings mutations preserve corrupt records, reject account collisions and clear only the requested session', async () => {
+		using f = fixture(); const p = await page(f);
+		for (const username of ['first', 'second']) { await p.vault.save({ session: p.session, scope: 'global', origin: 'https://example.test', username, password: 'secret' }); }
+		await p.vault.save({ session: 'b'.repeat(64), scope: 'workspace', origin: 'https://example.test', username: 'other', password: 'secret' });
+		const first = (await p.vault.readState()).entries.find(value => value.username === 'first')!;
+		await assert.rejects(p.vault.update(first.id, 'second', 'new-secret'), /already exists/);
+		await p.vault.update(first.id, 'renamed', 'new-secret');
+		assert.equal((await p.vault.readState()).entries.some(value => value.id === first.id), false);
+		await f.storage.updateItems(application, first.id, { value: 'corrupt', target: StorageTarget.MACHINE });
+		assert.equal((await p.vault.readState()).corrupted, 1);
+		assert.equal((await f.storage.getItems(application)).entries[first.id]!.value, 'corrupt');
+		await p.vault.clearSession(p.session);
+		assert.deepEqual((await p.vault.readState()).entries.map(value => value.username), ['other']);
+		const entry = (await p.vault.readState()).entries[0]!; await p.vault.delete(entry.id);
+		assert.equal((await p.vault.readState()).entries.length, 0);
+	});
+
+	test('save and autofill preferences take effect in Main, and ephemeral pages cannot save', async () => {
+		using f = fixture(); const p = await page(f);
+		await f.passwordConfiguration.updateValue('workbench.browser.savePasswords', false);
+		p.post('passwordSubmitted', submitted); p.post('passwordPageState', { action: submitted.action, hasPasswordForm: false }); await settle();
+		assert.equal(f.events.some(event => event.type === 'passwordSaveRequested'), false);
+		await f.passwordConfiguration.updateValue('workbench.browser.savePasswords', true);
+		await p.vault.save({ ...submitted, origin: 'https://example.test', session: p.session, scope: 'global' });
+		await f.passwordConfiguration.updateValue('workbench.browser.autofillPasswords', false);
+		p.post('passwordFill', form); await settle(); assert.equal(p.sent.some(message => message.command === 'fillPassword'), false);
+		await f.manager.destroyBrowserView(id);
+		const ephemeral = await page(f, BrowserViewStorageScope.Ephemeral);
+		ephemeral.post('passwordSubmitted', submitted); ephemeral.post('passwordPageState', { action: submitted.action, hasPasswordForm: false }); await settle();
+		assert.equal(f.events.some(event => event.type === 'passwordSaveRequested'), false);
+		f.encryptionAvailable = false; assert.equal((await p.vault.readState()).available, false);
+	});
+});
 
 const id = 'browser_target_123e4567-e89b-12d3-a456-426614174000';
 const observation = { includeAccessibilityTree: false, includeDomSnapshot: false, includeScreenshot: false };
@@ -441,7 +539,7 @@ test('sharing grants only the chosen thread and revocation cancels its operation
 	assert.ok(f.manager.tryGetBrowserView(id));
 });
 
-export function fixture(storageOverride?: IApplicationStorageMainService) {
+export function fixture(storageOverride?: IApplicationStorageMainService, provideEncryption = true) {
 	const store = new DisposableStore();
 	const events: BrowserViewEvent[] = [];
 	const children = new Set<WebContentsView>();
@@ -458,7 +556,7 @@ export function fixture(storageOverride?: IApplicationStorageMainService) {
 		command: async (_method: string, _params?: unknown): Promise<unknown> => ({}),
 		load: async (url: string): Promise<void> => { f.url = url; },
 		capture: async () => ({ toPNG: () => Buffer.from('png') }),
-		remote: false,
+		remote: false, encryptionAvailable: true, authCacheClears: 0,
 		menuRequests: [] as INativeContextMenuRequest[],
 		popupMenu: async (_request: INativeContextMenuRequest): Promise<INativeContextMenuResult> => ({}),
 		menuCloses: 0,
@@ -493,8 +591,26 @@ export function fixture(storageOverride?: IApplicationStorageMainService) {
 		flush: async () => { }, close: async () => { }, dispose: () => { }, [Symbol.dispose]: () => { },
 	};
 	instantiation.registerInstance(IApplicationStorageMainService, storage);
+	// Deterministic OS facility replacement; the production service still owns encoding and failure policy.
+	const encryption = new EncryptionMainService({
+		isEncryptionAvailable: () => f.encryptionAvailable,
+		encryptString: value => {
+			const cipher = createCipheriv('aes-256-gcm', Buffer.alloc(32, 7), Buffer.alloc(12, 8));
+			return Buffer.concat([cipher.update(value, 'utf8'), cipher.final(), cipher.getAuthTag()]);
+		},
+		decryptString: bytes => {
+			const cipher = createDecipheriv('aes-256-gcm', Buffer.alloc(32, 7), Buffer.alloc(12, 8));
+			cipher.setAuthTag(bytes.subarray(-16));
+			return Buffer.concat([cipher.update(bytes.subarray(0, -16)), cipher.final()]).toString('utf8');
+		},
+	} as Electron.SafeStorage, 'win32');
+	if (provideEncryption) { instantiation.registerInstance(IEncryptionMainService, encryption); }
 	instantiation.registerInstance(ILogService, new NullLoggerService());
 	instantiation.registerInstance(IClipboardService, { writeText: async (text: string) => { f.clipboardWrites.push(text); } } as unknown as IClipboardService);
+	const passwordConfiguration = store.add(new InMemoryConfigurationService());
+	instantiation.registerInstance(IConfigurationService, passwordConfiguration);
+	// Construct the vault only when encryption is registered, preserving the missing-registration test.
+	if (provideEncryption) { instantiation.registerInstance(IBrowserPasswordMainService, store.add(instantiation.createInstance(BrowserPasswordMainService))); }
 	const manager = store.add(instantiation.createInstance(BrowserViewMainService, {
 		window, getWorkspaceId: () => 'workspace-one',
 		contextMenu: {
@@ -505,7 +621,7 @@ export function fixture(storageOverride?: IApplicationStorageMainService) {
 		getRemoteNetwork() { return f.remote ? { authority: 'ssh-remote+test', tunnels: { openProxy: () => f.proxy() } as unknown as import('../../../remote/electron-main/sshPortForwardingService.js').SshPortForwardingService } : undefined; }, createSession: (partition: string) => {
 			let session = partitions.get(partition);
 			if (!session) {
-				session = Object.assign(new EventEmitter(), { protocol: { handle: () => { }, unhandle: () => { } }, webRequest: { onBeforeRequest: () => { } }, setPermissionCheckHandler: () => { }, setPermissionRequestHandler: () => { }, setDevicePermissionHandler: () => { }, setProxy: async () => { }, closeAllConnections: async () => { }, clearStorageData: async () => { }, clearCache: async () => { } }) as unknown as Electron.Session;
+				session = Object.assign(new EventEmitter(), { protocol: { handle: () => { }, unhandle: () => { } }, webRequest: { onBeforeRequest: () => { } }, setPermissionCheckHandler: () => { }, setPermissionRequestHandler: () => { }, setDevicePermissionHandler: () => { }, setProxy: async () => { }, closeAllConnections: async () => { }, clearAuthCache: async () => { f.authCacheClears++; }, clearStorageData: async () => { }, clearCache: async () => { } }) as unknown as Electron.Session;
 				partitions.set(partition, session);
 			}
 			return session;
@@ -542,10 +658,178 @@ export function fixture(storageOverride?: IApplicationStorageMainService) {
 		disposeSession: async sessionId => { f.retired.push(sessionId); },
 	});
 	store.add(manager.onDidEvent(event => events.push(event)));
-	return Object.assign(f, { manager, instantiation, store, storage, createHost: () => instantiation.createInstance(AppServerBrowserHost), create: async () => { await manager.getOrCreateBrowserView(id, { initialUrl: 'https://example.test/', ...agent }); return manager.tryGetBrowserView(id)!; } });
+	return Object.assign(f, { manager, instantiation, store, storage, passwordConfiguration, createHost: () => instantiation.createInstance(AppServerBrowserHost), create: async () => { await manager.getOrCreateBrowserView(id, { initialUrl: 'https://example.test/', ...agent }); return manager.tryGetBrowserView(id)!; } });
 }
 
 import { browserViewChannel } from '../../electron-main/browserViewIpc.js';
+
+suite('Browser authentication', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+	const credentials = { username: 'private-user', password: 'private-password', remember: true };
+	const application = { scope: StorageScope.APPLICATION, id: 'application' };
+	const user = { owner: { type: 'user' as const }, session: { scope: BrowserViewStorageScope.Workspace as const } };
+	const create = (f: ReturnType<typeof fixture>, session = user.session) => f.manager.getOrCreateBrowserView(id, { initialUrl: 'https://example.test/', owner: user.owner, session });
+	const challenge = (f: ReturnType<typeof fixture>, firstAuthAttempt = true, overrides: Partial<Electron.AuthInfo> = {}) => {
+		const calls: Array<readonly [string | undefined, string | undefined]> = [];
+		let prevented = false;
+		f.contents.emit('login', { preventDefault: () => { prevented = true; } }, { url: 'https://example.test/private', firstAuthAttempt },
+			{ isProxy: false, host: 'example.test', port: 443, realm: 'private', scheme: 'basic', ...overrides },
+			(username?: string, password?: string) => calls.push([username, password]));
+		assert.equal(prevented, true);
+		return calls;
+	};
+	const prompt = async (f: ReturnType<typeof fixture>) => {
+		const find = () => [...f.events].reverse().find((event): event is Extract<BrowserViewEvent, { type: 'authenticationRequested'; }> => event.type === 'authenticationRequested');
+		if (find()) { return find()!; }
+		return new Promise<NonNullable<ReturnType<typeof find>>>(resolve => {
+			const listener = f.manager.onDidEvent(event => {
+				if (event.type === 'authenticationRequested') { listener.dispose(); resolve(event); }
+			});
+			f.store.add(listener);
+		});
+	};
+	const response = (f: ReturnType<typeof fixture>, requestId: string, value: typeof credentials | null) => browserViewChannel(f.manager, { call: async <T>() => null as T, listen: () => Event.None }).call('window:1', 'respondToAuthentication', [id, requestId, value]);
+
+	test('production page construction requires the Main encryption registration', async () => {
+		using f = fixture(undefined, false);
+		await assert.rejects(create(f), /Unknown service: encryptionMainService/);
+	});
+
+	test('unreadable encrypted credentials are preserved, and failed saving never blocks a one-time sign-in', async () => {
+		using f = fixture(); await create(f);
+		challenge(f); await response(f, (await prompt(f)).requestId, credentials);
+		const snapshot = await f.storage.getItems(application);
+		const key = Object.keys(snapshot.entries).find(key => key.startsWith('browser.credentials.'))!;
+		await f.storage.updateItems(application, key, { value: 'unreadable-ciphertext', target: StorageTarget.MACHINE });
+		await f.manager.destroyBrowserView(id); await create(f);
+		f.events.length = 0;
+		const calls = challenge(f);
+		const request = await prompt(f);
+		assert.equal(request.storageFailed, true);
+		assert.equal((await f.storage.getItems(application)).entries[key]!.value, 'unreadable-ciphertext');
+		const original = f.storage.updateItems;
+		f.storage.updateItems = async () => { throw new Error('OS error must not reach the page'); };
+		try { await response(f, request.requestId, credentials); }
+		finally { f.storage.updateItems = original; }
+		assert.deepEqual(calls, [[credentials.username, credentials.password]]);
+		assert.equal(f.events.some(event => event.type === 'authenticationStorageFailed'), true);
+		assert.doesNotMatch(JSON.stringify(f.events), /OS error|private-password/);
+	});
+
+	test('clearing a partition cancels an in-flight encrypted save before a late result can restore the credential', async () => {
+		using f = fixture(); await create(f);
+		const calls = challenge(f);
+		const request = await prompt(f);
+		const encryption = f.instantiation.get(IEncryptionMainService);
+		const original = encryption.encrypt.bind(encryption);
+		const started = promiseWithResolvers<void>();
+		const finish = promiseWithResolvers<void>();
+		encryption.encrypt = async value => { started.resolve(); await finish.promise; return original(value); };
+		const saving = response(f, request.requestId, credentials);
+		await started.promise;
+		try { await f.manager.clearStorage(id); }
+		finally { finish.resolve(); await saving; }
+		assert.deepEqual(calls, [[undefined, undefined]]);
+		assert.equal(Object.keys((await f.storage.getItems(application)).entries).some(key => key.startsWith('browser.credentials.')), false);
+	});
+
+	test('login reaches validated IPC, persists only ciphertext and reuses it after reopening the page', async () => {
+		using f = fixture(); await create(f);
+		const calls = challenge(f);
+		const request = await prompt(f);
+		assert.equal(request.canRemember, true);
+		await response(f, request.requestId, credentials);
+		assert.deepEqual(calls, [[credentials.username, credentials.password]]);
+		const snapshot = await f.storage.getItems(application);
+		assert.equal(Object.keys(snapshot.entries).filter(key => key.startsWith('browser.credentials.')).length, 1);
+		assert.doesNotMatch(JSON.stringify(snapshot), /private-user|private-password|example\.test|"private"/);
+		await f.manager.destroyBrowserView(id);
+		await create(f);
+		f.events.length = 0;
+		const restored = challenge(f);
+		await new Promise<void>(resolve => {
+			if (restored.length) { resolve(); return; }
+			const listener = f.manager.onDidEvent(event => { if (event.type === 'authenticationRequestClosed') { listener.dispose(); queueMicrotask(resolve); } });
+			f.store.add(listener);
+		});
+		assert.deepEqual(restored, [[credentials.username, credentials.password]]);
+		assert.equal(f.events.some(event => event.type === 'authenticationRequested'), false);
+		assert.doesNotMatch(JSON.stringify(f.events), /private-user|private-password/);
+	});
+
+	test('a rejected saved credential prompts again, removes the stale value and never loops automatic retries', async () => {
+		using f = fixture(); await create(f);
+		challenge(f); await response(f, (await prompt(f)).requestId, credentials);
+		f.events.length = 0;
+		const retry = challenge(f, false);
+		const request = await prompt(f);
+		assert.equal(Object.keys((await f.storage.getItems(application)).entries).some(key => key.startsWith('browser.credentials.')), false);
+		await response(f, request.requestId, null);
+		assert.deepEqual(retry, [[undefined, undefined]]);
+	});
+
+	test('protection spaces and browser storage sessions do not share credentials', async () => {
+		using f = fixture(); await create(f);
+		challenge(f); await response(f, (await prompt(f)).requestId, credentials);
+		for (const overrides of [{ realm: 'other' }, { isProxy: true }, { scheme: 'digest' }]) {
+			f.events.length = 0;
+			const calls = challenge(f, true, overrides);
+			const request = await prompt(f);
+			assert.deepEqual(calls, []);
+			await response(f, request.requestId, null);
+		}
+		await f.manager.destroyBrowserView(id);
+		await f.manager.getOrCreateBrowserView(id, { initialUrl: 'https://example.test/', owner: user.owner, session: { scope: BrowserViewStorageScope.Global } });
+		f.events.length = 0;
+		const calls = challenge(f);
+		await response(f, (await prompt(f)).requestId, null);
+		assert.deepEqual(calls, [[undefined, undefined]]);
+	});
+
+	test('unavailable encryption and ephemeral sessions permit one sign-in without saving; Agent pages are denied', async () => {
+		using f = fixture(); await create(f);
+		f.encryptionAvailable = false;
+		const calls = challenge(f);
+		const request = await prompt(f);
+		assert.deepEqual([request.canRemember, request.storageFailed], [false, true]);
+		await response(f, request.requestId, credentials);
+		assert.deepEqual(calls, [[credentials.username, credentials.password]]);
+		assert.equal(Object.keys((await f.storage.getItems(application)).entries).length, 0);
+		await f.manager.destroyBrowserView(id);
+		await f.manager.getOrCreateBrowserView(id, { initialUrl: 'https://example.test/', owner: user.owner, session: { scope: BrowserViewStorageScope.Ephemeral } });
+		f.events.length = 0; f.encryptionAvailable = true;
+		challenge(f);
+		const ephemeral = await prompt(f);
+		assert.equal(ephemeral.canRemember, false);
+		await response(f, ephemeral.requestId, credentials);
+		assert.equal(Object.keys((await f.storage.getItems(application)).entries).length, 0);
+		await f.manager.destroyBrowserView(id);
+		await f.create();
+		f.events.length = 0;
+		assert.deepEqual(challenge(f), [[undefined, undefined]]);
+		assert.equal(f.events.some(event => event.type === 'authenticationRequested'), false);
+	});
+
+	test('navigation cancels once, stale or malformed IPC cannot authenticate, and clearing data removes saved and cached authentication', async () => {
+		using f = fixture(); await create(f);
+		const calls = challenge(f);
+		const request = await prompt(f);
+		await assert.rejects(response(f, request.requestId, { ...credentials, password: 'bad\nheader' }), /Invalid browser authentication/);
+		f.contents.emit('did-start-navigation', {}, 'https://example.test/next', false, true);
+		await response(f, request.requestId, credentials);
+		assert.deepEqual(calls, [[undefined, undefined]]);
+		f.events.length = 0;
+		challenge(f); await response(f, (await prompt(f)).requestId, credentials);
+		f.events.length = 0;
+		const pending = challenge(f, true, { realm: 'another-realm' });
+		const pendingRequest = await prompt(f);
+		await f.manager.clearStorage(id);
+		await response(f, pendingRequest.requestId, credentials);
+		assert.deepEqual(pending, [[undefined, undefined]]);
+		assert.equal(f.authCacheClears, 1);
+		assert.equal(Object.keys((await f.storage.getItems(application)).entries).some(key => key.startsWith('browser.credentials.')), false);
+	});
+});
 
 suite('Browser webpage context menu', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();

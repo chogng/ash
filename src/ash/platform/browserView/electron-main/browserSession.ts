@@ -14,6 +14,18 @@ import { getMediaOrTextMime } from '../../../base/common/mime.js';
 
 /** Storage and permission policy have the Electron session's lifetime, independent of any page. */
 export class BrowserSession {
+	private readonly authenticationOwners = new Set<() => void>();
+
+	/** Clearing a partition also cancels authentication in other windows sharing that partition. */
+	public attachAuthentication(cancel: () => void): IDisposable {
+		this.authenticationOwners.add(cancel);
+		return toDisposable(() => this.authenticationOwners.delete(cancel));
+	}
+
+	public cancelAuthentication(): void {
+		for (const cancel of this.authenticationOwners) { cancel(); }
+	}
+
 	private readonly fileReaders = new Map<string, (url: string) => Promise<Uint8Array>>();
 	/** File bytes come from the renderer File Service, which retains Rust directory authorization. */
 	public attachFileReader(id: string, read: (url: string) => Promise<Uint8Array>): IDisposable {

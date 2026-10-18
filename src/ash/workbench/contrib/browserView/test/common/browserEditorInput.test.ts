@@ -155,7 +155,7 @@ function fixture() {
 		info: { id, host: { windowId: 1 }, owner: { type: 'user' }, session: data.session, state: { targetId: id, url: data.url, title: 'Live page', loading: false, visible: false, canGoBack: false, canGoForward: false } } as IBrowserViewInfo,
 	};
 	const service: BrowserService = {
-		setContentVisibility: async () => { }, setPermissions: async () => { }, respondToFileRequest: async () => { },
+		setContentVisibility: async () => { }, respondToPasswordSave: async () => { }, respondToPasswordFill: async () => { }, respondToAuthentication: async () => { }, setPermissions: async () => { }, respondToFileRequest: async () => { },
 		toggleDevTools: async () => { }, clearStorage: async () => { }, setBrowserZoomIndex: async () => { }, setDeviceEmulation: async () => { },
 		updateWindowConfiguration: async () => { }, getConsoleLogs: async () => '', getSelectedText: async () => '', findInPage: async () => { }, stopFindInPage: async () => { },
 		toggleElementSelection: async () => { }, setElementComments: async () => { }, toggleAreaSelection: async () => { }, captureScreenshot: async () => { throw new Error('Unexpected screenshot'); },

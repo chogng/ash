@@ -1,4 +1,5 @@
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import { BrowserPasswordSettingsRenderer } from './browserPasswordSettingsRenderer.js';
 import { ILanguageService } from '../../../../editor/common/languages/language.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
@@ -254,6 +255,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		const traceSettings = this._register(this.instantiationService.createInstance(TraceSettingsModel));
 		const sandboxSettings = this._register(this.instantiationService.createInstance(SandboxSettingsModel));
 		this.contents.push(
+			this._register(this.instantiationService.createInstance(BrowserPasswordSettingsRenderer, settingsContent)),
 			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, sandboxSettings, AccessibleViewProviderId.SandboxSettings, AccessibilityVerbositySettingId.SandboxSettings)),
 			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, traceSettings, AccessibleViewProviderId.TraceSettings, AccessibilityVerbositySettingId.TraceSettings)),
 			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, githubSettings, AccessibleViewProviderId.GitHubSettings, AccessibilityVerbositySettingId.GitHubSettings)),

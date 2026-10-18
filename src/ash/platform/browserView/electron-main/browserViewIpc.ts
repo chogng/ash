@@ -40,6 +40,23 @@ export function browserViewChannel(service: IBrowserViewService, sharing: IChann
 	]);
 	return {
 		call: async <T>(_context: string, command: string, arg: unknown): Promise<T> => {
+			if (command === 'respondToPasswordSave' || command === 'respondToPasswordFill') {
+				if (!Array.isArray(arg) || arg.length !== 3 || typeof arg[1] !== 'string' || !/^[a-f0-9-]{36}$/u.test(arg[1])) { throw new TypeError('Invalid password response'); }
+				const { targetId } = validateBrowserViewTargetRequest({ targetId: arg[0] });
+				if (command === 'respondToPasswordSave' && typeof arg[2] === 'boolean') { return await service.respondToPasswordSave(targetId, arg[1], arg[2]) as T; }
+				if (command === 'respondToPasswordFill' && (arg[2] === null || typeof arg[2] === 'string' && /^browser\.passwords\.[a-f0-9]{64}\.[a-f0-9]{64}$/u.test(arg[2]))) { return await service.respondToPasswordFill(targetId, arg[1], arg[2]) as T; }
+				throw new TypeError('Invalid password response');
+			}
+			if (command === 'respondToAuthentication') {
+				if (!Array.isArray(arg) || arg.length !== 3 || typeof arg[1] !== 'string' || !/^[a-f0-9-]{36}$/u.test(arg[1])) { throw new TypeError('Invalid browser authentication response'); }
+				const { targetId } = validateBrowserViewTargetRequest({ targetId: arg[0] });
+				const credentials = arg[2];
+				if (credentials !== null && (!isRecord(credentials) || Object.keys(credentials).some(key => !['username', 'password', 'remember'].includes(key))
+					|| typeof credentials.username !== 'string' || credentials.username.length > 4096 || /[\x00-\x1f\x7f]/u.test(credentials.username)
+					|| typeof credentials.password !== 'string' || credentials.password.length > 4096 || /[\x00\r\n]/u.test(credentials.password)
+					|| typeof credentials.remember !== 'boolean')) { throw new TypeError('Invalid browser authentication response'); }
+				return await service.respondToAuthentication(targetId, arg[1], credentials as { username: string; password: string; remember: boolean; } | null) as T;
+			}
 			if (command === 'setContentVisibility') {
 				if (!Array.isArray(arg) || arg.length !== 2) { throw new TypeError('Invalid browser rendering rule'); }
 				const { targetId } = validateBrowserViewTargetRequest({ targetId: arg[0] });

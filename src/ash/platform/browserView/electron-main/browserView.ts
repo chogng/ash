@@ -12,7 +12,13 @@ import type { IBrowserViewWindowConfiguration, IBrowserViewKeyDownEvent, IBrowse
 import { VSBuffer } from '../../../base/common/buffer.js';
 import { isRecord } from '../../../base/common/types.js';
 import { browserZoomFactors, browserZoomDefaultIndex, type IBrowserDeviceProfile } from '../common/browserView.js';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { IEncryptionMainService, KnownStorageProvider } from '../../encryption/common/encryptionService.js';
+import { IApplicationStorageMainService } from '../../storage/electron-main/storageMainService.js';
+import { StorageScope, StorageTarget } from '../../storage/common/storage.js';
+import { IBrowserPasswordMainService, type BrowserPasswordMainService } from './browserPasswordMainService.js';
+
+const authenticationStorage = { scope: StorageScope.APPLICATION, id: 'application' };
 
 export interface BrowserViewOptions {
 	readonly remoteAuthority?: string;
@@ -30,6 +36,184 @@ export interface BrowserViewOptions {
 
 /** Owns one page, its navigation resources and the ordered Chromium operations using it. */
 export class BrowserView extends Disposable {
+	private passwordSubmission: { origin: string; username: string; password: string; scope: 'global' | 'workspace'; } | undefined;
+	private passwordSave: { id: string; value: NonNullable<BrowserView['passwordSubmission']>; } | undefined;
+	private passwordChoice: { id: string; frame: WebFrameMain; token: string; formId: string; origin: string; accounts: readonly string[]; } | undefined;
+	private passwordTimer: ReturnType<typeof setTimeout> | undefined;
+	private passwordChoiceTimer: ReturnType<typeof setTimeout> | undefined;
+	private passwordFillVersion = 0;
+
+	private resetFormPasswords(): void {
+		this.passwordFillVersion++;
+		this.passwordSubmission = undefined;
+		clearTimeout(this.passwordTimer);
+		clearTimeout(this.passwordChoiceTimer);
+		for (const pending of [this.passwordSave, this.passwordChoice]) {
+			if (pending) { this.emit({ type: 'passwordRequestClosed', targetId: this.id, requestId: pending.id }); }
+		}
+		this.passwordSave = undefined; this.passwordChoice = undefined;
+	}
+
+	private passwordOrigin(frame: WebFrameMain, action: unknown): string | undefined {
+		if (this.creation.owner.type !== 'user' || !['global', 'workspace'].includes(this.session.storageScope) || frame !== this.webContents.mainFrame || frame.detached) { return undefined; }
+		try {
+			const origin = new URL(normalizeBrowserViewUrl(frame.url)).origin;
+			if (origin === 'null' || typeof action !== 'string' || action.length > 8192 || new URL(action, frame.url).origin !== origin) { return undefined; }
+			return origin;
+		} catch { return undefined; }
+	}
+
+	private async reviewPasswordSubmission(): Promise<void> {
+		const value = this.passwordSubmission;
+		if (!value || !this.passwords.saveEnabled) { return; }
+		if (!await this.passwords.canSave()) { this.resetFormPasswords(); return; }
+		const existing = (await this.passwords.find(this.session.id, value.origin)).find(entry => entry.username === value.username);
+		if (this.passwordSubmission !== value || this.isDisposed) { return; }
+		this.passwordSubmission = undefined;
+		if (existing?.password === value.password) { return; }
+		const id = randomUUID();
+		this.passwordSave = { id, value };
+		this.emit({ type: 'passwordSaveRequested', targetId: this.id, requestId: id, origin: value.origin, username: value.username, update: !!existing });
+	}
+
+	public async respondToPasswordSave(requestId: string, save: boolean): Promise<void> {
+		const pending = this.passwordSave;
+		if (pending?.id !== requestId) { return; }
+		this.passwordSave = undefined; clearTimeout(this.passwordTimer);
+		this.emit({ type: 'passwordRequestClosed', targetId: this.id, requestId });
+		if (save && this.passwords.saveEnabled) {
+			try { await this.passwords.save({ ...pending.value, session: this.session.id }); }
+			catch { this.emit({ type: 'authenticationStorageFailed', targetId: this.id }); }
+		}
+	}
+
+	private async offerPasswordFill(frame: WebFrameMain, token: string, formId: string, origin: string, username: string): Promise<void> {
+		if (!this.passwords.autofillEnabled) { return; }
+		const version = ++this.passwordFillVersion;
+		const accounts = (await this.passwords.find(this.session.id, origin)).filter(entry => !username || entry.username === username);
+		if (!accounts.length || version !== this.passwordFillVersion || this.preloadFrames.get(frame) !== token || this.passwordOrigin(frame, origin) !== origin) { return; }
+		const request = { id: randomUUID(), frame, token, formId, origin, accounts: accounts.map(account => account.id) };
+		if (this.passwordChoice) { this.emit({ type: 'passwordRequestClosed', targetId: this.id, requestId: this.passwordChoice.id }); }
+		clearTimeout(this.passwordChoiceTimer);
+		this.passwordChoice = request;
+		this.passwordChoiceTimer = setTimeout(() => { void this.respondToPasswordFill(request.id, null); }, 30_000);
+		if (accounts.length === 1) { await this.respondToPasswordFill(request.id, accounts[0]!.id); }
+		else { this.emit({ type: 'passwordFillRequested', targetId: this.id, requestId: request.id, origin, accounts: accounts.map(({ id, username }) => ({ id, username })) }); }
+	}
+
+	public async respondToPasswordFill(requestId: string, accountId: string | null): Promise<void> {
+		const request = this.passwordChoice;
+		if (request?.id !== requestId) { return; }
+		this.passwordChoice = undefined;
+		clearTimeout(this.passwordChoiceTimer);
+		this.emit({ type: 'passwordRequestClosed', targetId: this.id, requestId });
+		if (!accountId || !request.accounts.includes(accountId) || !this.passwords.autofillEnabled) { return; }
+		const version = this.passwordFillVersion;
+		const account = (await this.passwords.find(this.session.id, request.origin)).find(value => value.id === accountId);
+		if (!account || version !== this.passwordFillVersion || !this.passwords.autofillEnabled || this.preloadFrames.get(request.frame) !== request.token || this.passwordOrigin(request.frame, request.origin) !== request.origin) { return; }
+		this.sendPreload(request.frame, 'fillPassword', { token: request.token, formId: request.formId, origin: request.origin, username: account.username, password: account.password });
+	}
+	private readonly authenticationRequests = new Map<string, {
+		readonly key: string;
+		readonly canRemember: boolean;
+		responding: boolean;
+		finish(credentials?: { username: string; password: string; }): void;
+	}>();
+	private readonly attemptedAuthentication = new Set<string>();
+
+	/** Cancel before navigation, clearing data or closing; a late dialog cannot authenticate a new page. */
+	public cancelAuthentication(): void {
+		for (const request of this.authenticationRequests.values()) { request.finish(); }
+	}
+
+	public async clearAuthentication(): Promise<void> {
+		this.cancelAuthentication();
+		this.resetFormPasswords();
+		await this.passwords.clearSession(this.session.id);
+		const snapshot = await this.storage.getItems(authenticationStorage);
+		for (const key of Object.keys(snapshot.entries)) {
+			if (key.startsWith(this.authenticationPrefix)) { await this.storage.updateItems(authenticationStorage, key, null); }
+		}
+		await this.session.electronSession.clearAuthCache();
+		this.attemptedAuthentication.clear();
+	}
+
+	public async respondToAuthentication(requestId: string, credentials: { readonly username: string; readonly password: string; readonly remember: boolean; } | null): Promise<void> {
+		const request = this.authenticationRequests.get(requestId);
+		if (!request || request.responding) { return; }
+		request.responding = true;
+		if (!credentials) { request.finish(); return; }
+		if (request.canRemember && credentials.remember) {
+			try {
+				const value = await this.encryption.encrypt(JSON.stringify({ key: request.key, username: credentials.username, password: credentials.password }));
+				if (!this.authenticationRequests.has(requestId)) { return; }
+				await this.storage.updateItems(authenticationStorage, request.key, { value, target: StorageTarget.MACHINE });
+			} catch {
+				// A storage failure never writes plaintext; the user can still authenticate for this session.
+				if (this.authenticationRequests.has(requestId)) { this.emit({ type: 'authenticationStorageFailed', targetId: this.id }); }
+			}
+		}
+		if (this.authenticationRequests.has(requestId)) { request.finish(credentials); }
+	}
+
+	private get authenticationPrefix(): string { return `browser.credentials.${this.session.id}.`; }
+
+	private async authenticate(details: Electron.AuthenticationResponseDetails, auth: Electron.AuthInfo, callback: (username?: string, password?: string) => void): Promise<void> {
+		const deny = (): void => { try { callback(); } catch { /* Chromium may have already retired the request. */ } };
+		// Agent pages must not gain user credentials, including through Chromium's auth cache.
+		if (this.creation.owner.type !== 'user' || this.authenticationRequests.size >= 4) { deny(); return; }
+		let url: URL;
+		try { url = new URL(details.url); } catch { deny(); return; }
+		if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || details.url.length > 8192
+			|| typeof auth.host !== 'string' || !auth.host || auth.host.length > 255 || /[\s/@\\]/u.test(auth.host)
+			|| !Number.isInteger(auth.port) || auth.port < 1 || auth.port > 65535
+			|| typeof auth.realm !== 'string' || auth.realm.length > 1024 || /[\x00-\x1f\x7f]/u.test(auth.realm)
+			|| typeof auth.scheme !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/u.test(auth.scheme) || typeof auth.isProxy !== 'boolean') { deny(); return; }
+		let host: string;
+		try {
+			const authority = auth.host.includes(':') && !auth.host.startsWith('[') ? `[${auth.host}]` : auth.host;
+			host = new URL(`http://${authority}:${auth.port}`).hostname;
+		} catch { deny(); return; }
+		if (!auth.isProxy && (url.hostname !== host || Number(url.port || (url.protocol === 'https:' ? 443 : 80)) !== auth.port)) { deny(); return; }
+		const identity = JSON.stringify([url.protocol, auth.isProxy, host, auth.port, auth.scheme.toLowerCase(), auth.realm]);
+		const key = this.authenticationPrefix + createHash('sha256').update(identity).digest('hex');
+		if (this.attemptedAuthentication.size >= 64 && !this.attemptedAuthentication.has(key)) { deny(); return; }
+		if ([...this.authenticationRequests.values()].some(request => request.key === key)) { deny(); return; }
+		const requestId = randomUUID();
+		const persistent = this.session.storageScope === 'global' || this.session.storageScope === 'workspace';
+		let canRemember = false;
+		let storageFailed = false;
+		const finish = (credentials?: { username: string; password: string; }): void => {
+			if (!this.authenticationRequests.delete(requestId)) { return; }
+			clearTimeout(timer);
+			this.emit({ type: 'authenticationRequestClosed', targetId: this.id, requestId });
+			try { callback(credentials?.username, credentials?.password); } catch { /* Chromium retired the request. */ }
+		};
+		const timer = setTimeout(() => finish(), 120_000);
+		this.authenticationRequests.set(requestId, { key, get canRemember() { return canRemember; }, responding: false, finish });
+		const retry = this.attemptedAuthentication.has(key) || !details.firstAuthAttempt;
+		this.attemptedAuthentication.add(key);
+		if (persistent) {
+			try {
+				canRemember = await this.encryption.isEncryptionAvailable() && await this.encryption.getKeyStorageProvider() !== KnownStorageProvider.basicText;
+				if (!this.authenticationRequests.has(requestId)) { return; }
+				const snapshot = await this.storage.getItems(authenticationStorage);
+				const saved = snapshot.entries[key];
+				if (saved && !retry && canRemember) {
+					const decoded: unknown = JSON.parse(await this.encryption.decrypt(saved.value));
+					if (!isRecord(decoded) || decoded.key !== key || typeof decoded.username !== 'string' || decoded.username.length > 4096
+						|| typeof decoded.password !== 'string' || decoded.password.length > 4096) { throw new Error('Invalid stored browser credentials'); }
+					if (this.authenticationRequests.has(requestId)) { finish({ username: decoded.username, password: decoded.password }); }
+					return;
+				}
+				// Rejected saved credentials must not be silently replayed on the next visit.
+				if (saved && retry && this.authenticationRequests.has(requestId)) { await this.storage.updateItems(authenticationStorage, key, null); }
+			} catch { storageFailed = true; }
+		}
+		if (this.authenticationRequests.has(requestId)) {
+			this.emit({ type: 'authenticationRequested', targetId: this.id, requestId, origin: auth.isProxy ? `${auth.host}:${auth.port}` : url.origin, realm: auth.realm, isProxy: auth.isProxy, canRemember, storageFailed: storageFailed || persistent && !canRemember });
+		}
+	}
 	private readonly fileRequests = new Map<string, (data: string | null) => void>();
 	public respondToFileRequest(requestId: string, data: string | null): void { this.fileRequests.get(requestId)?.(data); }
 	private readFile(url: string): Promise<Uint8Array> {
@@ -296,7 +480,22 @@ export class BrowserView extends Disposable {
 			return;
 		}
 		const data = message.data;
-		if (message.type === 'selectedText') {
+		if (message.type === 'passwordSubmitted' || message.type === 'passwordFill' || message.type === 'passwordPageState') {
+			if (!isRecord(data)) { return; }
+			const origin = this.passwordOrigin(frame, data.action);
+			if (!origin) { return; }
+			if (message.type === 'passwordPageState') {
+				if (data.hasPasswordForm === false && this.passwordSubmission?.origin === origin) { void this.reviewPasswordSubmission().catch(() => { this.resetFormPasswords(); }); }
+			} else if (message.type === 'passwordSubmitted') {
+				if (!this.passwords.saveEnabled || typeof data.username !== 'string' || !data.username || data.username.length > 4096 || /[\x00-\x1f\x7f]/u.test(data.username)
+					|| typeof data.password !== 'string' || !data.password || data.password.length > 4096 || /[\x00\r\n]/u.test(data.password)) { return; }
+				this.resetFormPasswords();
+				this.passwordSubmission = { origin, username: data.username, password: data.password, scope: this.session.storageScope as 'global' | 'workspace' };
+				this.passwordTimer = setTimeout(() => this.resetFormPasswords(), 60_000);
+			} else if (typeof data.formId === 'string' && /^[a-f0-9]+-\d{1,6}$/u.test(data.formId) && typeof data.username === 'string' && data.username.length <= 4096) {
+				void this.offerPasswordFill(frame, message.frameToken, data.formId, origin, data.username).catch(() => { });
+			}
+		} else if (message.type === 'selectedText') {
 			if (isRecord(data) && typeof data.requestId === 'string' && typeof data.text === 'string' && data.text.length <= 65536) {
 				const request = this.selectedTextRequests.get(data.requestId);
 				if (request?.frame === frame) {
@@ -390,7 +589,11 @@ export class BrowserView extends Disposable {
 		}
 	}
 
-	constructor(options: BrowserViewOptions) {
+	constructor(options: BrowserViewOptions,
+		@IEncryptionMainService private readonly encryption: IEncryptionMainService,
+		@IApplicationStorageMainService private readonly storage: IApplicationStorageMainService,
+		@IBrowserPasswordMainService private readonly passwords: BrowserPasswordMainService,
+	) {
 		super();
 		this.id = options.id;
 		this.view = options.view;
@@ -407,6 +610,9 @@ export class BrowserView extends Disposable {
 		}
 		this.emitEvent = options.emitEvent;
 		this.openContextMenu = options.openContextMenu;
+		this._register(toDisposable(() => this.cancelAuthentication()));
+		this._register(toDisposable(() => this.resetFormPasswords()));
+		this._register(this.session.attachAuthentication(() => { this.cancelAuthentication(); this.attemptedAuthentication.clear(); this.resetFormPasswords(); }));
 		this._register(toDisposable(() => { for (const finish of this.fileRequests.values()) { finish(null); } }));
 	}
 
@@ -458,7 +664,7 @@ export class BrowserView extends Disposable {
 	goBack(): Promise<void> { return this.runOperation(this.signal, async () => { const h = this.webContents.navigationHistory; if (h.canGoBack()) { this.errorDescription = undefined; h.goBack(); } }); }
 	goForward(): Promise<void> { return this.runOperation(this.signal, async () => { const h = this.webContents.navigationHistory; if (h.canGoForward()) { this.errorDescription = undefined; h.goForward(); } }); }
 	reload(hard = false): Promise<void> { return this.runOperation(this.signal, async () => { this.errorDescription = undefined; if (hard) { this.webContents.reloadIgnoringCache(); } else { this.webContents.reload(); } }); }
-	stop(): void { this.webContents.stop(); }
+	stop(): void { this.cancelAuthentication(); this.webContents.stop(); }
 	focus(): void { if (this.visible) this.webContents.focus(); }
 
 	public runOperation<R>(requestSignal: AbortSignal, execute: (signal: AbortSignal) => Promise<R>, networkToken?: string | null): Promise<R> {
@@ -504,6 +710,16 @@ export class BrowserView extends Disposable {
 
 	private listen(): void {
 		const contents = this.view.webContents;
+		this.on(contents, 'login', (event: ElectronEvent, details: Electron.AuthenticationResponseDetails, auth: Electron.AuthInfo, callback: (username?: string, password?: string) => void) => {
+			event.preventDefault();
+			let settled = false;
+			const finish = (username?: string, password?: string): void => {
+				if (settled) { return; }
+				settled = true;
+				callback(username, password);
+			};
+			void this.authenticate(details, auth, finish).catch(() => { try { finish(); } catch { /* Request retired. */ } });
+		});
 		this.on(contents, 'context-menu', (_event: ElectronEvent, params: ContextMenuParams) => {
 			this.openContextMenu(this, params);
 		});
@@ -516,6 +732,11 @@ export class BrowserView extends Disposable {
 			if (channel === 'ash:browserView:preload') { this.acceptPreload(event, message); }
 		});
 		this.on(contents, 'did-start-navigation', (_event: ElectronEvent, _url: string, inPlace: boolean, mainFrame: boolean) => {
+			if (mainFrame && !inPlace) {
+				this.passwordFillVersion++;
+				try { if (!this.passwordSubmission || new URL(_url).origin !== this.passwordSubmission.origin) { this.resetFormPasswords(); } } catch { this.resetFormPasswords(); }
+			}
+			if (mainFrame && !inPlace) { this.cancelAuthentication(); this.attemptedAuthentication.clear(); }
 			if (mainFrame && !inPlace) {
 				this.consoleLogs.length = 0; this.consoleBytes = 0;
 				this.selectionMode = undefined; this.preloadFrames.clear();
@@ -579,6 +800,7 @@ export class BrowserView extends Disposable {
 			_event: ElectronEvent,
 			details: Electron.RenderProcessGoneDetails,
 		) => {
+			this.cancelAuthentication();
 			this.emit({
 				type: "renderProcessGone",
 				targetId: this.id,

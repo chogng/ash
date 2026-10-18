@@ -13,6 +13,124 @@ import { installMainChannelTestClient } from '../../../automation/mainProcessIpc
 import { createHash } from 'node:crypto';
 import type { Socket } from 'node:net';
 
+for (const locale of ['en', 'zh-CN'] as const) {
+	test.describe(`Browser authentication ${locale}`, () => {
+		test.use({ openWorkspace: false, electronUserSettings: { 'workbench.locale': locale } });
+		test(`browser HTTP authentication encrypts credentials, survives restart and clears them in ${locale}`, { tag: ['@electron-ui'] }, async ({ application: initialApplication, workbench: initialWorkbench, reloadWorkbench }, testInfo) => {
+			test.setTimeout(180_000);
+			let application = initialApplication;
+			let workbench = initialWorkbench;
+			const username = 'ash-auth-fixture-user';
+			const password = 'ash-auth-fixture-password';
+			const expected = 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64');
+			let accepted = 0;
+			let challenged = 0;
+			let proxyMode = false;
+			let proxyAuthenticated = false;
+			const server = createServer((request, response) => {
+				if (request.headers[proxyMode ? 'proxy-authorization' : 'authorization'] !== expected) {
+					challenged++;
+					response.writeHead(proxyMode ? 407 : 401, { [proxyMode ? 'Proxy-Authenticate' : 'WWW-Authenticate']: 'Basic realm="Ash fixture"' });
+					response.end('Authentication required');
+					return;
+				}
+				accepted++;
+				response.setHeader('Content-Type', 'text/html');
+				response.end(`<title>${proxyMode ? 'Authenticated proxy' : 'Authenticated fixture'}</title><p>Authenticated</p>`);
+			});
+			await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+			const endpoint = server.address();
+			if (!endpoint || typeof endpoint === 'string') { throw new Error('Missing authentication fixture'); }
+			const url = `http://127.0.0.1:${endpoint.port}/`;
+			const labels = locale === 'en'
+				? { title: 'Browser authentication', address: 'Browser address', username: 'Username', password: 'Password', signIn: 'Sign in', remember: 'Remember encrypted credentials for this browser session' }
+				: { title: '浏览器身份验证', address: '浏览器地址', username: '用户名', password: '密码', signIn: '登录', remember: '为此浏览器存储会话记住加密凭据' };
+			try {
+				// UI-only hosts have no backend trust observation; seed a persistent user partition through real IPC.
+				await installMainChannelTestClient(workbench.page);
+				await workbench.page.evaluate(async () => {
+					await globalThis.ashTestMainProcess.call('browserView', 'getOrCreateBrowserView', ['browser_target_' + crypto.randomUUID(), {
+						initialUrl: 'about:blank', owner: { type: 'user' }, session: { scope: 'global' },
+					}]);
+				});
+				let editor = workbench.page.locator('.ash-browser-editor');
+				let address = editor.getByRole('textbox', { name: labels.address, exact: true });
+				await address.fill(url); await address.press('Enter');
+				const dialog = workbench.page.getByRole('dialog', { name: labels.title, exact: true });
+				await expect(dialog).toBeVisible();
+				const userInput = dialog.getByRole('textbox', { name: labels.username, exact: true });
+				await expect(userInput).toBeFocused();
+				await userInput.fill(username);
+				await userInput.press('Tab');
+				const passwordInput = dialog.getByLabel(labels.password, { exact: true });
+				await expect(passwordInput).toBeFocused();
+				await expect(passwordInput).toHaveAttribute('type', 'password');
+				await passwordInput.fill(password);
+				await expect(dialog.getByRole('checkbox', { name: labels.remember, exact: true })).not.toBeChecked();
+				await dialog.getByRole('checkbox', { name: labels.remember, exact: true }).check();
+				await testInfo.attach(`browser-auth-${locale}`, { body: await workbench.page.screenshot(), contentType: 'image/png' });
+				await dialog.getByRole('button', { name: labels.signIn, exact: true }).press('Enter');
+				await expect(editor.getByRole('status')).toHaveText('Authenticated fixture');
+				const storagePath = await (application as ElectronApplication).evaluate(({ app }) => app.getPath('userData'));
+				const stored = await readFile(join(storagePath, 'workbench-state.json'), 'utf8');
+				expect(stored).toContain('ash-encrypted:1:');
+				expect(stored).not.toContain(username);
+				expect(stored).not.toContain(password);
+				const previousAccepted = accepted;
+				({ application, workbench } = await reloadWorkbench());
+				editor = workbench.page.locator('.ash-browser-editor');
+				await expect(editor.getByRole('status')).toHaveText('Authenticated fixture');
+				await expect(workbench.page.getByRole('dialog', { name: labels.title, exact: true })).toHaveCount(0);
+				await expect.poll(() => accepted).toBeGreaterThan(previousAccepted);
+				await installMainChannelTestClient(workbench.page);
+				await workbench.page.evaluate(async url => {
+					const views = await globalThis.ashTestMainProcess.call<IBrowserViewInfo[]>('browserView', 'getBrowserViews', []);
+					const view = views.find(view => view.state.url === url);
+					if (!view) { throw new Error('Missing authenticated page'); }
+					await globalThis.ashTestMainProcess.call('browserView', 'clearStorage', [view.id]);
+				}, url);
+				expect(await readFile(join(storagePath, 'workbench-state.json'), 'utf8')).not.toContain('browser.credentials.');
+				address = editor.getByRole('textbox', { name: labels.address, exact: true });
+				await address.fill(url); await address.press('Enter');
+				const cancelled = workbench.page.getByRole('dialog', { name: labels.title, exact: true });
+				await expect(cancelled).toBeVisible();
+				await cancelled.press('Escape');
+				await expect(cancelled).toHaveCount(0);
+
+				// Exercise Chromium's proxy challenge on this test-owned partition, without a system proxy change.
+				proxyMode = true;
+				await (application as ElectronApplication).evaluate(async ({ BrowserWindow }, port) => {
+					const view = BrowserWindow.getAllWindows().flatMap(window => window.contentView.children).find(child => 'webContents' in child) as Electron.WebContentsView;
+					await view.webContents.session.setProxy({ mode: 'fixed_servers', proxyRules: `http=127.0.0.1:${port}`, proxyBypassRules: '<-loopback>' });
+					await view.webContents.session.closeAllConnections();
+				}, endpoint.port);
+				await address.fill(url + 'proxied'); await address.press('Enter');
+				const proxyDialog = workbench.page.getByRole('dialog', { name: labels.title, exact: true });
+				await expect(proxyDialog).toContainText(locale === 'en' ? `Sign in to proxy 127.0.0.1:${endpoint.port}` : `登录代理 127.0.0.1:${endpoint.port}`);
+				await proxyDialog.getByRole('textbox', { name: labels.username, exact: true }).fill(username);
+				await proxyDialog.getByLabel(labels.password, { exact: true }).fill(password);
+				await proxyDialog.getByRole('button', { name: labels.signIn, exact: true }).press('Enter');
+				await expect(editor.getByRole('status')).toHaveText('Authenticated proxy');
+				proxyAuthenticated = true;
+				expect(await readFile(join(storagePath, 'workbench-state.json'), 'utf8')).not.toContain('browser.credentials.');
+				await (application as ElectronApplication).evaluate(async ({ BrowserWindow }) => {
+					const view = BrowserWindow.getAllWindows().flatMap(window => window.contentView.children).find(child => 'webContents' in child) as Electron.WebContentsView;
+					await view.webContents.session.setProxy({ mode: 'direct' });
+					await view.webContents.session.clearAuthCache();
+					await view.webContents.session.closeAllConnections();
+				});
+				await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
+				await expect(editor).toHaveCount(0);
+			} finally {
+				const countsPath = testInfo.outputPath('authentication-counts.json');
+				await writeFile(countsPath, JSON.stringify({ accepted, challenged, proxyAuthenticated }));
+				await testInfo.attach('authentication-counts', { path: countsPath, contentType: 'application/json' });
+				server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve()));
+			}
+		});
+	});
+}
+
 test.beforeEach(async ({ target, workbench }) => {
 	if (target.kind === 'electron') { await installMainChannelTestClient(workbench.page); }
 });

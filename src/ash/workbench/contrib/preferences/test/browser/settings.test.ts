@@ -1,3 +1,4 @@
+import { IBrowserPasswordService, UnavailableBrowserPasswordService } from '../../../../../platform/browserView/common/browserPasswordService.js';
 import { ILanguageService } from '../../../../../editor/common/languages/language.js';
 import { ScreenshotGlobalShortcutSetting } from '../../../screenshot/common/screenshot.js';
 import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
@@ -1777,6 +1778,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	services.registerInstance(IServerEventApi, { subscribe: listener => autoFetchChanged.event(() => listener({ method: 'config/changed', params: { revision: 1, generation: 1 } })) });
 	services.registerInstance(ChatServiceId, chatService);
 	services.registerInstance(ILanguageModelsService, chatService as unknown as ILanguageModelsService);
+	services.registerInstance(IBrowserPasswordService, UnavailableBrowserPasswordService);
 	services.registerInstance(ISecretStorageStatusService, { readState: async () => ({ status: 'available' }), authorizeAccess: async () => ({ status: 'available' }), setStorageMode: async mode => ({ status: 'available', mode }) });
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	const localTranscription = disposables.add(new NullLocalTranscriptionService());

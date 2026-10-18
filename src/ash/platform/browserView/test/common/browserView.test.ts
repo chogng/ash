@@ -95,7 +95,7 @@ test("browser view proxies preserve validated commands, subscriptions and backen
 	};
 	const service: Parameters<typeof browserViewChannel>[0] = {
 		setContentVisibility: async () => { },
-		setPermissions: async () => { }, respondToFileRequest: async () => { },
+		respondToPasswordSave: async () => { }, respondToPasswordFill: async () => { }, respondToAuthentication: async () => { }, setPermissions: async () => { }, respondToFileRequest: async () => { },
 		toggleDevTools: async () => { }, clearStorage: async () => { }, setBrowserZoomIndex: async () => { }, setDeviceEmulation: async () => { },
 		updateWindowConfiguration: async () => { }, getConsoleLogs: async () => '', getSelectedText: async () => '', findInPage: async () => { }, stopFindInPage: async () => { },
 		toggleElementSelection: async () => { }, setElementComments: async () => { }, toggleAreaSelection: async () => { }, captureScreenshot: async () => { throw new Error('Unexpected screenshot'); },

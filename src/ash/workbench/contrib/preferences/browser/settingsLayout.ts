@@ -194,7 +194,7 @@ export const SettingsNavigation = [
 						id: 'browser-controls',
 						label: localize({ bundle: 'ash.settings', key: 'categories.browser.label' }, 'Browser'),
 						description: localize({ bundle: 'ash.settings', key: 'browser.controls.description' }, 'Control page zoom, address bar search and reload on local file changes.'),
-						settings: ['workbench.browser.searchEngine', 'workbench.browser.pageZoom', 'workbench.browser.autoReloadOnFileChange', 'workbench.browser.dataStorage', 'workbench.browser.openLocalhostLinks'],
+						settings: ['workbench.browser.searchEngine', 'workbench.browser.pageZoom', 'workbench.browser.autoReloadOnFileChange', 'workbench.browser.dataStorage', 'workbench.browser.openLocalhostLinks', 'workbench.browser.savePasswords', 'workbench.browser.autofillPasswords'],
 					},
 					{
 						id: 'browser-agent',

@@ -11,6 +11,7 @@ import { SessionsPromptsService } from './agentHost/sessionsPromptsService.js';
 import { SessionsExecutionSettingsService } from './agentHost/sessionsExecutionSettingsService.js';
 import { sessionIdentity } from '../services/sessions/common/sessionIdentity.js';
 import { IDefaultLogLevelsService } from '../../workbench/services/log/common/defaultLogLevels.js';
+import { IBrowserPasswordService, UnavailableBrowserPasswordService } from '../../platform/browserView/common/browserPasswordService.js';
 import { IDocumentEditorTextModelService } from '../../workbench/services/documentEditor/common/documentTypes.js';
 import { DocumentEditorTextModelService } from '../../workbench/services/documentEditor/browser/documentEditorTextModelService.js';
 import { IChannelService } from "../../platform/collaboration/common/channelService.js";
@@ -451,6 +452,7 @@ export abstract class Workbench extends Disposable {
 			editUserConfiguration: options.api.editUserConfiguration,
 		}));
 		services.registerInstance(IWorkbenchHostService, workbenchWindow);
+		if (!services.has(IBrowserPasswordService)) { services.registerInstance(IBrowserPasswordService, UnavailableBrowserPasswordService); }
 		services.registerInstance(AppServerApiId, options.api.appServer);
 		services.registerInstance(IRendererHostService, options.api);
 		services.registerSingleton(IAgentHostConnectionsService, () => services.createInstance(AgentHostConnectionsService));

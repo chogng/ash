@@ -8,7 +8,7 @@ import { IEditorService, type EditorOpenOptions } from '../../../services/editor
 import { BrowserEditorInput, type IBrowserEditorInputData } from '../common/browserEditorInput.js';
 import { BrowserViewModel, type IBrowserViewContextualFilter, type IBrowserViewFilterContext, type IBrowserViewOpenHandler, type IBrowserViewWorkbenchService, type IBrowserViewWorkbenchCreateOptions } from '../common/browserView.js';
 import { IDialogsModel, type IDialogHandle } from '../../../common/dialogs.js';
-import { DialogResult } from '../../../../platform/dialogs/common/dialogs.js';
+import { DialogResult, DialogSeverity } from '../../../../platform/dialogs/common/dialogs.js';
 import { localize } from '../../../../nls.js';
 import { BrowserViewUri } from '../../../../platform/browserView/common/browserViewUri.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
@@ -35,6 +35,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 	private initialized = false;
 	private initialization: Promise<void> | undefined;
 	private readonly permissionDialogs = new Map<string, IDialogHandle>();
+	private readonly authenticationDialogs = new Map<string, IDialogHandle>();
 
 	constructor(
 		@IConfigurationService private readonly configuration: IConfigurationService,
@@ -183,7 +184,65 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 	}
 
 	private acceptEvent(event: BrowserViewEvent): void {
-		if (event.type === 'fileRequested') {
+		if (event.type === 'passwordSaveRequested' || event.type === 'passwordFillRequested') {
+			const handle = event.type === 'passwordSaveRequested' ? this.dialogs.show({
+				kind: 'confirmation',
+				title: event.update ? localize('browser.passwords.updateTitle', 'Update website password') : localize('browser.passwords.saveTitle', 'Save website password'),
+				message: localize('browser.passwords.saveMessage', 'Save the password for {0} on {1}?', event.username, event.origin),
+				detail: localize('browser.passwords.saveDetail', 'The password is encrypted on this device. Manage saved accounts in Settings > Workbench > Browser.'),
+				primaryButton: event.update ? localize('browser.passwords.update', 'Update password') : localize('browser.passwords.save', 'Save password'),
+				cancelButton: localize('browser.passwords.notNow', 'Not now'),
+			}) : this.dialogs.show({
+				kind: 'choice', title: localize('browser.passwords.chooseTitle', 'Choose a saved account'),
+				message: localize('browser.passwords.chooseMessage', 'Choose an account for {0}.', event.origin),
+				buttons: event.accounts.map(account => account.username), cancelButton: localize('browser.passwords.notNow', 'Not now'),
+			});
+			this.authenticationDialogs.set(event.requestId, handle);
+			void handle.result.then(async outcome => {
+				if (!this.authenticationDialogs.delete(event.requestId)) { return; }
+				if (event.type === 'passwordSaveRequested') { await this.service.respondToPasswordSave(event.targetId, event.requestId, outcome.button === DialogResult.Primary); }
+				else { await this.service.respondToPasswordFill(event.targetId, event.requestId, outcome.button === DialogResult.Cancel ? null : event.accounts[outcome.buttonIndex ?? 0]?.id ?? null); }
+			}).catch(() => { });
+		} else if (event.type === 'passwordRequestClosed') {
+			const handle = this.authenticationDialogs.get(event.requestId);
+			this.authenticationDialogs.delete(event.requestId); handle?.item.cancel();
+		} else if (event.type === 'authenticationRequested') {
+			const handle = this.dialogs.show({
+				kind: 'input',
+				title: localize({ bundle: 'ash.workbench', key: 'browser.auth.title' }, 'Browser authentication'),
+				message: event.isProxy
+					? localize({ bundle: 'ash.workbench', key: 'browser.auth.proxy' }, 'Sign in to proxy {0}', event.origin)
+					: localize({ bundle: 'ash.workbench', key: 'browser.auth.site' }, 'Sign in to {0}', event.origin),
+				detail: [event.realm, event.storageFailed ? localize({ bundle: 'ash.workbench', key: 'browser.auth.storageUnavailable' }, 'Saved credentials could not be accessed. You can sign in for this session; credentials are never saved without encryption.') : ''].filter(Boolean).join('\n'),
+				inputs: [
+					{ placeholder: localize({ bundle: 'ash.workbench', key: 'browser.auth.username' }, 'Username') },
+					{ type: 'password', placeholder: localize({ bundle: 'ash.workbench', key: 'browser.auth.password' }, 'Password') },
+				],
+				checkbox: event.canRemember ? { label: localize({ bundle: 'ash.workbench', key: 'browser.auth.remember' }, 'Remember encrypted credentials for this browser session'), checked: false } : undefined,
+				primaryButton: localize({ bundle: 'ash.workbench', key: 'browser.auth.signIn' }, 'Sign in'),
+			});
+			this.authenticationDialogs.set(event.requestId, handle);
+			void handle.result.then(async outcome => {
+				if (!this.authenticationDialogs.delete(event.requestId)) { return; }
+				const credentials = outcome.button === DialogResult.Primary && outcome.values?.length === 2
+					? { username: outcome.values[0]!, password: outcome.values[1]!, remember: event.canRemember && outcome.checkboxChecked === true }
+					: null;
+				await this.service.respondToAuthentication(event.targetId, event.requestId, credentials);
+			}).catch(async () => {
+				// Invalid input or a disconnected channel must not leave Chromium waiting for credentials.
+				try { await this.service.respondToAuthentication(event.targetId, event.requestId, null); } catch { /* Request retired. */ }
+			});
+		} else if (event.type === 'authenticationRequestClosed') {
+			const handle = this.authenticationDialogs.get(event.requestId);
+			this.authenticationDialogs.delete(event.requestId);
+			handle?.item.cancel();
+		} else if (event.type === 'authenticationStorageFailed') {
+			const handle = this.dialogs.show({
+				kind: 'message', severity: DialogSeverity.Warning,
+				message: localize({ bundle: 'ash.workbench', key: 'browser.auth.saveFailed' }, 'Credentials could not be saved securely. This sign-in will continue without saving them.'),
+			});
+			void handle.result.catch(() => { });
+		} else if (event.type === 'fileRequested') {
 			void (async () => {
 				let data: string | null = null;
 				try {
@@ -247,6 +306,8 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 		}
 	}
 	protected override disposeCore(): void {
+		for (const handle of this.authenticationDialogs.values()) { handle.item.cancel(); }
+		this.authenticationDialogs.clear();
 		for (const handle of this.permissionDialogs.values()) { handle.item.cancel(); }
 		this.permissionDialogs.clear();
 		this.filters.clear();

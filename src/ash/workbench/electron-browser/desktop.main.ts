@@ -65,6 +65,7 @@ import { ILoggerService } from '../../platform/log/common/log.js';
 import { IWorkbenchEnvironmentService } from '../services/environment/common/environmentService.js';
 import { ElectronWorkbenchEnvironmentService } from '../services/environment/electron-browser/environmentService.js';
 import { ProxyChannel } from '../../base/parts/ipc/common/ipc.js';
+import { IBrowserPasswordService } from '../../platform/browserView/common/browserPasswordService.js';
 import { IBrowserViewService, ipcBrowserViewChannelName } from '../../platform/browserView/common/browserView.js';
 import { IPlaywrightService } from '../../platform/browserView/common/playwrightService.js';
 import { registerAppServerBrowserHost } from '../../platform/agentHost/electron-browser/appServerBrowserHost.js';
@@ -145,6 +146,7 @@ export class DesktopMain extends Disposable {
 					[IWorkspaceEditingService, new SyncDescriptor(WorkspaceEditingService, [api.workspace])],
 					[ILoggerService, logger],
 					[IPolicyService, this._register(new PolicyChannelClient(mainProcessService.getChannel('policy')))],
+					[IBrowserPasswordService, ProxyChannel.toService<IBrowserPasswordService>(mainProcessService.getChannel('browserPasswords'))],
 					[IBrowserViewService, ProxyChannel.toService<IBrowserViewService>(mainProcessService.getChannel(ipcBrowserViewChannelName))],
 					[IMainProcessService, mainProcessService],
 					[ISecretStorageService, this._register(profileServices.createInstance(SecretStorageService))],
