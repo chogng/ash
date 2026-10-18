@@ -11,7 +11,7 @@ import { Event } from "../../../../../base/common/event.js";
 import { toDisposable } from "../../../../../base/common/lifecycle.js";
 import { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
-import type { ITaskService } from "../../../../../workbench/services/tasks/common/taskService.js";
+import type { ITaskService } from "../../../tasks/common/taskService.js";
 import type { ITerminalService } from "../../../../services/terminal/browser/terminal.js";
 import type { IViewsService } from "../../../../../workbench/services/views/common/viewsService.js";
 

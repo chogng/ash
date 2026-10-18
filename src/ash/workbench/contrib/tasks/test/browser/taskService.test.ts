@@ -1,12 +1,17 @@
+import { IViewsService } from '../../../../services/views/common/viewsService.js';
+import { RunAutomaticTasks } from '../../browser/runAutomaticTasks.js';
+import { IWorkspaceTrustManagementService } from '../../../../../platform/workspace/common/workspaceTrust.js';
+import { TerminalGroupService } from '../../../terminal/browser/terminalGroupService.js';
+import { ITerminalGroupService } from '../../../../services/terminal/browser/terminal.js';
 import { formatMessageForTerminal } from '../../../../../platform/terminal/common/terminalStrings.js';
 import { MergedEnvironmentVariableCollection } from '../../../../../platform/terminal/common/environmentVariableCollection.js';
-import { IEnvironmentVariableService } from '../../../../contrib/terminal/common/environmentVariable.js';
+import { IEnvironmentVariableService } from '../../../terminal/common/environmentVariable.js';
 import type { IQuickPick, IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
-import { ShellQuoting } from '../../common/taskService.js';
-import { ITerminalContributionService, ITerminalProfileResolverService, ITerminalProfileService } from '../../../terminal/common/terminal.js';
-import { TerminalProfileService } from '../../../../contrib/terminal/browser/terminalProfileService.js';
-import { BrowserTerminalProfileResolverService } from '../../../../contrib/terminal/browser/terminalProfileResolverService.js';
+import { ShellQuoting } from '../../common/tasks.js';
+import { ITerminalContributionService, ITerminalProfileResolverService, ITerminalProfileService } from '../../../../services/terminal/common/terminal.js';
+import { TerminalProfileService } from '../../../terminal/browser/terminalProfileService.js';
+import { BrowserTerminalProfileResolverService } from '../../../terminal/browser/terminalProfileResolverService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IFileSearchService, type FileSearchResult } from '../../../../../platform/search/common/fileSearch.js';
 import { BrowserFileSearchService } from '../../../../../platform/search/browser/browserFileSearchService.js';
@@ -15,20 +20,20 @@ import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } fr
 import { registerTestExtensionService } from '../../../../test/common/testExtensionServices.js';
 import { ExtensionResourceLoaderService } from '../../../../../platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import { TestConfigurationService as WorkbenchConfigurationService } from '../../../configuration/test/common/testServices.js';
+import { TestConfigurationService as WorkbenchConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
 import { createHash } from 'node:crypto';
-import { IExtensionService } from '../../../extensions/common/extensionService.js';
+import { IExtensionService } from '../../../../services/extensions/common/extensionService.js';
 import type { IExtensionApi } from '../../../../../platform/extensions/common/extensionApi.js';
 import { IPathService } from '../../../../../platform/path/common/pathService.js';
-import { BrowserPathService } from '../../../path/browser/pathService.js';
+import { BrowserPathService } from '../../../../services/path/browser/pathService.js';
 import { createDisconnectedRendererApi } from '../../../../browser/rendererApi.js';
 import { OperatingSystem } from '../../../../../base/common/platform.js';
 import { createExtensionHostTaskProvider } from '../../../../api/browser/extensionHostWorkflowBridge.js';
 import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
-import { CommandService } from '../../../commands/common/commandService.js';
-import { TestWorkspaceService } from '../../../configuration/test/common/testServices.js';
-import { ConfigurationResolverService } from '../../../configurationResolver/browser/configurationResolverService.js';
-import { IConfigurationResolverService } from '../../../configurationResolver/common/configurationResolver.js';
+import { CommandService } from '../../../../services/commands/common/commandService.js';
+import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
+import { ConfigurationResolverService } from '../../../../services/configurationResolver/browser/configurationResolverService.js';
+import { IConfigurationResolverService } from '../../../../services/configurationResolver/common/configurationResolver.js';
 import { SyncDescriptor } from '../../../../../platform/instantiation/common/descriptors.js';
 import { type IFileSystemProvider, type IFileWriteOptions, type IFileChangeEvent, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
 import { createTestFileService } from '../../../../test/common/testEditorServices.js';
@@ -37,7 +42,7 @@ import { ILogService, NullLoggerService } from '../../../../../platform/log/comm
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { registerTestTerminalLifecycleServices, registerTestWorkbenchInteractionServices, workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
 import { DisposableStore, type IDisposable } from '../../../../../base/common/lifecycle.js';
-import { IOutputService } from '../../../output/common/output.js';
+import { IOutputService } from '../../../../services/output/common/output.js';
 import assert from "node:assert/strict";
 import { suite, test } from 'mocha';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
@@ -45,18 +50,19 @@ import { DeferredPromise } from '../../../../../base/common/async.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { resetNlsResolver } from '../../../../../nls.js';
 import { ITerminalProcessService, type IShellLaunchConfig, type ITerminalProcessReadResult, type TerminalProcessExecution } from '../../../../../platform/terminal/common/terminal.js';
-import { TerminalService } from '../../../../contrib/terminal/browser/terminalService.js';
-import { initializeTestLocalization } from '../../../localization/test/common/localizationTestUtils.js';
+import { TerminalService } from '../../../terminal/browser/terminalService.js';
+import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import { Emitter, Event } from "../../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { FileKind, FileNotFoundError, type IFileBytes, IFileService, type IFileStat, type IFileWriteResult } from "../../../../../platform/files/common/files.js";
 import { IWorkspaceContextService } from "../../../../../platform/workspace/common/workspace.js";
-import { type ITerminalCommandStatusEvent, type ITerminalCreateOptions, type ITerminalDimensions, type ITerminalInstance, type ITerminalProfile, ITerminalService, type TerminalInstanceState } from "../../../terminal/browser/terminal.js";
-import { TaskService } from "../../../../contrib/tasks/browser/taskService.js";
-import '../../../../contrib/accessibilitySignals/browser/accessibilitySignal.contribution.js';
+import { type ITerminalCommandStatusEvent, type ITerminalCreateOptions, type ITerminalDimensions, type ITerminalInstance, type ITerminalProfile, ITerminalService, type TerminalInstanceState } from "../../../../services/terminal/browser/terminal.js";
+import { TaskService } from "../../browser/taskService.js";
+import '../../../accessibilitySignals/browser/accessibilitySignal.contribution.js';
 import { IAccessibilitySignalService } from '../../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
-import { ITaskService, type ITaskRun, type TaskProviderTask } from '../../common/taskService.js';
+import { ITaskService } from '../../common/taskService.js';
+import { type ITaskRun, type TaskProviderTask } from '../../common/tasks.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../common/contributions.js';
 import { mock } from 'node:test';
 
@@ -126,7 +132,7 @@ suite('Workspace task progress signals', () => {
 import { IMarkerService } from '../../../../../platform/markers/common/markers.js';
 import { MarkerService } from '../../../../../platform/markers/common/markerService.js';
 import { IModelService } from '../../../../../editor/common/services/model.js';
-import { waitForTask } from '../../common/taskService.js';
+import { waitForTask } from '../../common/tasks.js';
 import { JSDOM } from 'jsdom';
 import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
@@ -370,7 +376,7 @@ class FakeTerminalService extends Disposable implements ITerminalService {
 
 class FakeTerminalInstance extends Disposable implements ITerminalInstance {
 	async refreshProperty<T extends import("../../../../../platform/terminal/common/terminal.js").ProcessPropertyType>(_property: T): Promise<import("../../../../../platform/terminal/common/terminal.js").IProcessPropertyMap[T]> { throw new Error("No OS process in task fixture"); }
-	async serializeState(): Promise<import("../../../terminal/common/terminal.js").ITerminalSerializedState> { throw new Error("No process checkpoint in task fixture"); }
+	async serializeState(): Promise<import("../../../../services/terminal/common/terminal.js").ITerminalSerializedState> { throw new Error("No process checkpoint in task fixture"); }
 	private static nextInstanceId = 1;
 	readonly instanceId = FakeTerminalInstance.nextInstanceId++;
 	clearBuffer(): void { }
@@ -420,6 +426,7 @@ function testPathService(workspace: IWorkspaceContextService, os = OperatingSyst
 }
 
 function registerTaskProfiles(services: InstantiationService): void {
+	services.registerSingleton(ITerminalGroupService, () => services.createInstance(TerminalGroupService));
 	services.registerInstance(ITerminalContributionService, { terminalProfiles: [], onDidChangeTerminalProfiles: Event.None, ...Disposable.None });
 	services.registerSingleton(ITerminalProfileService, () => services.createInstance(TerminalProfileService));
 	services.registerInstance(IEnvironmentVariableService, { collections: new Map(), mergedCollection: new MergedEnvironmentVariableCollection(new Map()), onDidChangeCollections: Event.None, refreshCollections: async () => { }, set: () => { }, delete: () => { }, registerCollectionProvider: () => Disposable.None });
@@ -668,11 +675,17 @@ suite('Task shell profiles through execution owners', () => {
 		['wsl', '--exec', "--exec compiler 'two words' '$HOME'"],
 		['nu', '', "-c compiler 'two words' '$HOME'"],
 	] as const) {
-		test(`Windows ${shell} tasks preserve raw prefix ${JSON.stringify(prefix)} and command flags`, async () => {
+		test(`Windows ${shell} tasks ${shell === 'nu' || shell === 'wsl' ? 'reject unsupported structured quoting' : 'preserve raw prefix ' + JSON.stringify(prefix) + ' and command flags'}`, async () => {
 			using owner = new DisposableStore();
 			const { tasks, configuration, creations, finish } = assemble(owner, OperatingSystem.Windows);
 			await configuration.updateValue('terminal.integrated.automationProfile.windows', { path: `C:\\tools\\${shell}.exe`, args: prefix });
-			const run = await tasks.run((await tasks.refresh()).find(task => task.label === 'Shell')!);
+			const task = (await tasks.refresh()).find(task => task.label === 'Shell')!;
+			if (shell === 'nu' || shell === 'wsl') {
+				await assert.rejects(tasks.run(task), /cannot quote structured task arguments/);
+				assert.equal(creations.length, 0);
+				return;
+			}
+			const run = await tasks.run(task);
 			assert.deepEqual(creations[0].execution, { type: 'process', program: `C:\\tools\\${shell}.exe`, args: expected });
 			assert.equal(creations[0].profile.type, 'custom');
 			if (creations[0].profile.type === 'custom') assert.equal(creations[0].profile.args, prefix);
@@ -1271,8 +1284,8 @@ suite('TaskService configuration capabilities', () => {
 
 	for (const configuration of [
 		{ type: 'unregistered' },
-		{ presentation: { group: 'parallel' }, options: { env: { SECRET_MARKER: 'must-not-appear-in-logs' } } },
-		{ runOptions: { runOn: 'folderOpen' } },
+		{ type: 'process', options: { shell: { executable: '/bin/sh' }, env: { SECRET_MARKER: 'must-not-appear-in-logs' } } },
+		{ runOptions: { runOn: 'unknown' } },
 	] as const) {
 		test(`rejects unsupported ${JSON.stringify(configuration)} before opening a terminal and retries corrected configuration`, async () => {
 			using localization = toDisposable(resetNlsResolver);
@@ -1315,8 +1328,8 @@ suite('TaskService configuration capabilities', () => {
 		};
 		using service = taskServices(resources, new FakeFileService(root, contents), workspace, terminals).createInstance(TaskService);
 		const task = (await service.refresh())[0];
-		contents['.vscode/tasks.json'] = '{"version":"2.0.0","tasks":[{"label":"Check","command":"check","presentation":{"group":"parallel"}}]}';
-		await assert.rejects(service.run(task), /presentation/);
+		contents['.vscode/tasks.json'] = '{"version":"2.0.0","tasks":[{"label":"Check","command":"check","runOptions":{"runOn":"unknown"}}]}';
+		await assert.rejects(service.run(task), /runOptions.runOn/);
 		contents['.vscode/tasks.json'] = '{ invalid json';
 		await assert.rejects(service.refresh());
 		await assert.rejects(service.run(task));
@@ -2989,4 +3002,123 @@ test('multi-root shell tasks resolve profiles and configured environment in thei
 	assert.ok(routes.length > 0);
 	assert.ok(routes.every(id => id === 'two'));
 	await tasks.terminate(run);
+});
+
+
+suite('Configured task automatic launch and split groups', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	function assemble(owner: DisposableStore, definitions: object[]) {
+		const root = URI.file('/workspace');
+		const workspace = owner.add(new TestWorkspaceService({ id: 'workspace', uri: root }));
+		const terminals = owner.add(new FakeTerminalService());
+		const files = new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify({ version: '2.0.0', tasks: definitions }) });
+		const services = taskServices(owner, files, workspace, terminals);
+		const tasks = owner.add(services.createInstance(TaskService));
+		services.registerInstance(ITaskService, tasks);
+		return { services, tasks, terminals, workspace };
+	}
+
+	test('named groups join running and new task screens while reuse stays inside the configured group', async () => {
+		using owner = new DisposableStore();
+		const { services, tasks, terminals } = assemble(owner, [
+			{ label: 'First', command: 'first', presentation: { group: 'build' } },
+			{ label: 'Second', command: 'second', presentation: { group: 'build', panel: 'new' } },
+			{ label: 'Other', command: 'other', presentation: { group: 'test' } },
+			{ label: 'Ungrouped', command: 'ungrouped' },
+		]);
+		await tasks.refresh();
+		const find = (label: string) => tasks.tasks.find(task => task.label === label)!;
+		const first = await tasks.run(find('First'));
+		await tasks.run(find('Second'));
+		const groups = services.get(ITerminalGroupService);
+		assert.deepEqual(groups.groups.map(group => group.terminalInstances.map(instance => instance.id)), [['terminal-1', 'terminal-2']]);
+		terminals.instances[0].exit(0);
+		await first.completion;
+		await tasks.run(find('Other'));
+		await tasks.run(find('Ungrouped'));
+		assert.equal(terminals.instances.length, 4, 'a task cannot steal the idle screen of another configured group');
+		const rerun = await tasks.run(find('First'));
+		assert.equal(rerun.terminalId, first.terminalId);
+		assert.deepEqual(groups.groups.map(group => group.terminalInstances.length), [2, 1, 1]);
+		await tasks.terminate(rerun);
+	});
+
+	test('an unknown shell cannot interpret structured quoting as POSIX syntax', async () => {
+		using localization = toDisposable(resetNlsResolver);
+		initializeTestLocalization('zh-CN');
+		using owner = new DisposableStore();
+		const { tasks, terminals } = assemble(owner, [
+			{ label: 'Unsupported shell', command: 'compiler', args: [{ value: '$HOME', quoting: 'strong' }], options: { shell: { executable: '/bin/nu', args: ['-c'] } } },
+		]);
+		await tasks.refresh();
+		await assert.rejects(tasks.run(tasks.tasks[0]!), /nu/);
+		assert.deepEqual({ starts: tasks.runs.length, terminals: terminals.instances.length }, { starts: 0, terminals: 0 });
+	});
+
+	test('automatic tasks require the user policy and trust, then run once across catalog refreshes', async () => {
+		using owner = new DisposableStore();
+		const { services, tasks, terminals } = assemble(owner, [
+			{ label: 'Automatic', command: 'auto', runOptions: { runOn: 'folderOpen' } },
+			{ label: 'Manual', command: 'manual' },
+		]);
+		const changes = owner.add(new Emitter<void>());
+		let trusted = false;
+		services.registerInstance(IWorkspaceTrustManagementService, { onDidChangeTrust: changes.event, getUriTrustInfo: async uri => ({ uri, trusted, permissions: undefined }), getWorkspaceTrustInfo: async () => ({ isTrusted: trusted, isReadOnly: false }) });
+		owner.add(services.createInstance(RunAutomaticTasks));
+		await tasks.refresh();
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.equal(terminals.instances.length, 0, 'automatic tasks default to off');
+		await services.get(IConfigurationService).updateValue('task.allowAutomaticTasks', 'on');
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.equal(terminals.instances.length, 0, 'a user policy does not grant workspace trust');
+		const started = new DeferredPromise<ITaskRun>();
+		owner.add(tasks.onDidStartTask(run => { void started.complete(run); }));
+		trusted = true;
+		changes.fire();
+		assert.equal((await started.p).task.label, 'Automatic');
+		await tasks.refresh();
+		changes.fire();
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.equal(terminals.instances.length, 1, 'refresh and trust events do not rerun an automatic task');
+		assert.equal(tasks.activeRuns.length, 1);
+	});
+
+	test('policy refresh after start publication preserves a run while terminal reveal is pending', async () => {
+		using owner = new DisposableStore();
+		const { services, tasks, terminals } = assemble(owner, [{ label: 'Automatic', command: 'auto', runOptions: { runOn: 'folderOpen' } }]);
+		services.registerInstance(IWorkspaceTrustManagementService, { onDidChangeTrust: Event.None, getUriTrustInfo: async uri => ({ uri, trusted: true, permissions: undefined }), getWorkspaceTrustInfo: async () => ({ isTrusted: true, isReadOnly: false }) });
+		const entered = new DeferredPromise<void>();
+		const release = new DeferredPromise<undefined>();
+		services.registerInstance(IViewsService, { openView: async () => { void entered.complete(); return release.p; } } as unknown as IViewsService);
+		const configuration = services.get(IConfigurationService);
+		await configuration.updateValue('task.allowAutomaticTasks', 'on');
+		owner.add(services.createInstance(RunAutomaticTasks));
+		await entered.p;
+		assert.equal(tasks.activeRuns.length, 1);
+		await configuration.updateValue('task.allowAutomaticTasks', 'off');
+		await release.complete(undefined);
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.equal(tasks.activeRuns.length, 1, 'a published execution retains its normal task lifetime');
+		await configuration.updateValue('task.allowAutomaticTasks', 'on');
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.equal(terminals.instances.length, 1, 'refresh must not repeat a published launch');
+	});
+
+	test('revoking automatic launch during variable interaction cancels preparation before terminal creation', async () => {
+		using owner = new DisposableStore();
+		const { services, tasks, terminals } = assemble(owner, [{ label: 'Automatic', command: '${command:tasks.automatic.wait}', runOptions: { runOn: 'folderOpen' } }]);
+		const entered = new DeferredPromise<void>();
+		const result = new DeferredPromise<string>();
+		owner.add(CommandsRegistry.register('tasks.automatic.wait', () => { void entered.complete(); return result.p; }));
+		services.registerInstance(IWorkspaceTrustManagementService, { onDidChangeTrust: Event.None, getUriTrustInfo: async uri => ({ uri, trusted: true, permissions: undefined }), getWorkspaceTrustInfo: async () => ({ isTrusted: true, isReadOnly: false }) });
+		await services.get(IConfigurationService).updateValue('task.allowAutomaticTasks', 'on');
+		owner.add(services.createInstance(RunAutomaticTasks));
+		await entered.p;
+		await services.get(IConfigurationService).updateValue('task.allowAutomaticTasks', 'off');
+		await result.complete('must-not-run');
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.equal(terminals.instances.length, 0);
+		assert.equal(tasks.runs.length, 0);
+	});
 });

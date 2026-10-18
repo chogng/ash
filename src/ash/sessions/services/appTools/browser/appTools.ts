@@ -1,4 +1,4 @@
-import type { ITaskDescription, ITaskOutput, TaskRunStatus } from '../../../../workbench/services/tasks/common/taskService.js';
+import type { ITaskDescription, ITaskOutput, TaskRunStatus } from '../../../../workbench/contrib/tasks/common/tasks.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../base/common/uri.js';
 import type { UpdateCheckResult } from '../../../../platform/update/common/updateService.js';

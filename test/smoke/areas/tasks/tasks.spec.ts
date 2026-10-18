@@ -1,3 +1,5 @@
+import type { Workbench } from '../../../automation/workbench.js';
+import type { PlaywrightApplication } from '../../../automation/playwrightDriver.js';
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { basename, join, sep } from 'node:path';
 import { expect, test, writeEditorExtensionFixture } from '../../../automation/test.js';
@@ -17,7 +19,7 @@ test.beforeEach(async ({ target, testWorkspace }) => {
 	await writeFile(join(testWorkspace.directory, 'smoke-watch.cjs'), "console.log('ASH_TASK_WATCH_READY'); setInterval(() => {}, 1000);\n");
 });
 
-test('task discovery does not execute commands and explicit run and rerun use the workspace terminal', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
+test('task discovery does not execute commands and explicit run and rerun use the workspace terminal', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench, testWorkspace }) => {
 	await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
 	await expect(workbench.quickaccess.items.filter({ hasText: 'Smoke build' })).toBeVisible();
 	expect(await readFile(join(testWorkspace.directory, 'task-runs.txt'), 'utf8')).toBe('0');
@@ -27,17 +29,18 @@ test('task discovery does not execute commands and explicit run and rerun use th
 	await workbench.quickaccess.runCommand('workbench.action.tasks.reRunTask');
 	await expect.poll(() => readFile(join(testWorkspace.directory, 'task-runs.txt'), 'utf8')).toBe('2');
 	await expect(workbench.terminal.activeInstance).toContainText('ASH_TASK_RUN_2');
-	await workbench.page.getByRole('tab', { name: 'Tasks', exact: true }).click();
-	await expect(workbench.page.locator('.ash-task-run')).toContainText('Smoke build — succeeded (0)');
+	await openTasksView(application, workbench);
+	await expect(workbench.page.locator('.ash-task-run')).toContainText('Smoke build — Succeeded (exit code 0)');
 });
 
-test('terminating a running workspace task stops its terminal and records cancellation', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
+test('terminating a running workspace task stops its terminal and records cancellation', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench }) => {
 	await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
 	await workbench.quickaccess.select('Smoke watch');
 	await expect(workbench.terminal.activeInstance).toContainText('ASH_TASK_WATCH_READY');
 	await workbench.quickaccess.runCommand('workbench.action.tasks.terminate');
-	await workbench.page.getByRole('tab', { name: 'Tasks', exact: true }).click();
-	await expect(workbench.page.locator('.ash-task-run')).toContainText('Smoke watch — canceled');
+	await expect(workbench.terminal.instances).toHaveCount(0);
+	await openTasksView(application, workbench);
+	await expect(workbench.page.locator('.ash-task-run')).toContainText('Smoke watch — Canceled');
 });
 
 test('command-only tasks own their shell process and retain output and exit without terminal input echo', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench, testWorkspace }) => {
@@ -60,7 +63,7 @@ test('command-only tasks own their shell process and retain output and exit with
 		} else {
 			await workbench.menus.select(application, () => workbench.page.getByRole('tab', { name: 'Additional views', exact: true }).click(), ['Tasks']);
 		}
-		await expect(workbench.page.locator('.ash-task-run').filter({ hasText: `Command-only ${name}` })).toContainText(name === 'Success' ? 'succeeded (0)' : 'failed (7)');
+		await expect(workbench.page.locator('.ash-task-run').filter({ hasText: `Command-only ${name}` })).toContainText(name === 'Success' ? 'Succeeded (exit code 0)' : 'Failed (exit code 7)');
 	}
 	const executed: { pid: number; argument: string; }[] = (await readFile(log, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
 	expect(executed.map(value => value.argument)).toEqual(['ARGUMENT_SUCCESS', 'ARGUMENT_FAILURE']);
@@ -398,11 +401,17 @@ for (const panel of [undefined, 'shared', 'dedicated', 'new'] as const) {
 		expect(processes.map(({ name, cwd, value }) => ({ name, cwd, value }))).toEqual(['First', 'Second', 'First'].map(name => ({ name, cwd: join(directory, name), value: name })));
 		expect(new Set(processes.map(process => process.pid)).size).toBe(3);
 		if (panel !== 'new') {
-			await expect(workbench.terminal.activeInstance).toContainText('ASH_PANEL_First_1');
+			const input = workbench.terminal.activeInstance.locator('.xterm-helper-textarea');
+			await input.press('Alt+F2');
+			const buffer = workbench.page.getByRole('textbox', { name: 'Accessible View', exact: true });
+			await expect(buffer).toHaveValue(/ASH_PANEL_First_1/);
+			await buffer.press('Escape');
 			await configure(true);
 			await run('First', 4);
-			await expect(workbench.terminal.activeInstance).not.toContainText('ASH_PANEL_First_1');
-			await expect(workbench.terminal.activeInstance).not.toContainText('ASH_PANEL_First_3');
+			await input.press('Alt+F2');
+			await expect(buffer).not.toHaveValue(/ASH_PANEL_First_[13]/);
+			await expect(buffer).toHaveValue(/ASH_PANEL_First_4/);
+			await buffer.press('Escape');
 			await expect(tabs).toHaveCount(effectivePanel === 'shared' ? 1 : 2);
 		}
 		await firstScreen!.dispose();
@@ -499,7 +508,7 @@ test('task presentation preserves editor focus, reveals errors and closes only t
 	await expect(editor.input).toBeFocused();
 });
 
-test('task problem reveal policies prioritize diagnostics and wait for foreground completion or a background matcher', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
+test('task problem reveal policies prioritize diagnostics and wait for foreground completion or a background matcher', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench, testWorkspace }) => {
 	const directory = testWorkspace.directory;
 	const log = join(directory, 'problem-reveal.jsonl');
 	await writeFile(log, '');
@@ -535,7 +544,7 @@ if (['Always', 'Warning', 'Background'].includes(name)) {
 	await writeFile(join(directory, '.vscode', 'tasks.json'), JSON.stringify({ version: '2.0.0', tasks: definitions.map(task => ({ ...task, type: 'process', command: process.execPath, args: [join(directory, 'problem-reveal.cjs'), task.label], presentation: { panel: 'new', ...task.presentation } })) }));
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.togglePanel');
-	await page.getByRole('tab', { name: 'Tasks', exact: true }).click();
+	await openTasksView(application, workbench);
 	// The Parts owner detaches inactive composites; retain the real rendered list
 	// to observe completion without changing the panel whose reveal is under test.
 	const taskList = await page.locator('.ash-tasks-list').elementHandle();
@@ -565,36 +574,36 @@ if (['Always', 'Warning', 'Background'].includes(name)) {
 		await expect(workbench.terminal.activeInstance).toHaveCount(0);
 		await expect(editor.input).toBeFocused();
 		await writeFile(join(directory, 'Always.release'), 'release');
-		await finished('Always', 'succeeded');
+		await finished('Always', 'Succeeded (exit code 0)');
 		await hide();
 		await run('Warning');
-		await finished('Warning', 'running');
+		await finished('Warning', 'Running');
 		await expect(page.locator('.ash-workbench-panel')).toBeHidden();
 		await writeFile(join(directory, 'Warning.release'), 'release');
-		await finished('Warning', 'succeeded');
+		await finished('Warning', 'Succeeded (exit code 0)');
 		await expect(problems).toHaveAttribute('aria-selected', 'true');
 		await expect(page.locator('.ash-problems-results')).toContainText('Foreground warning');
 		await expect(editor.input).toBeFocused();
 		await hide();
 		for (const name of ['Success', 'Never']) {
 			await run(name);
-			await finished(name, 'succeeded');
+			await finished(name, 'Succeeded (exit code 0)');
 			await expect(page.locator('.ash-workbench-panel')).toBeHidden();
 		}
 		await run('Failure');
-		await finished('Failure', 'failed');
+		await finished('Failure', 'Failed (exit code 7)');
 		await expect(workbench.terminal.activeInstance).toContainText('ASH_REVEAL_Failure');
 		await expect(editor.input).toBeFocused();
 		await hide();
 		await run('Background');
-		await finished('Background', 'running');
+		await finished('Background', 'Running');
 		await expect(page.locator('.ash-workbench-panel')).toBeHidden();
 		await writeFile(join(directory, 'Background.release'), 'release');
 		await expect(problems).toHaveAttribute('aria-selected', 'true');
 		await expect(page.locator('.ash-problems-results')).toContainText('Background error');
 		await expect(editor.input).not.toBeFocused();
 		await workbench.quickaccess.runCommand('workbench.action.tasks.terminate');
-		await finished('Background', 'canceled');
+		await finished('Background', 'Canceled');
 		const records = (await readFile(log, 'utf8')).split('\n').filter(Boolean).map(line => JSON.parse(line) as { name: string; pid: number; });
 		const pid = records.find(record => record.name === 'Background')!.pid;
 		await expect.poll(() => { try { process.kill(pid, 0); return false; } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ESRCH') return true; throw error; } }).toBe(true);
@@ -603,7 +612,7 @@ if (['Always', 'Warning', 'Background'].includes(name)) {
 	}
 });
 
-test('workspace task progress signals play the bundled sound, reload policy, and stop on cancellation', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
+test('workspace task progress signals play the bundled sound, reload policy, and stop on cancellation', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench }) => {
 	test.setTimeout(90_000);
 	const page = workbench.page;
 	const audioState = { attempts: 0, played: 0, announcements: 0, audio: undefined as HTMLMediaElement | undefined };
@@ -626,10 +635,13 @@ test('workspace task progress signals play the bundled sound, reload policy, and
 		const state = (window as unknown as { ashTestProgressAudio: typeof audioState; }).ashTestProgressAudio;
 		return { attempts: state.attempts, played: state.played, announcements: state.announcements, volume: state.audio?.volume, duration: state.audio?.duration, error: state.audio?.error?.code, paused: state.audio?.paused };
 	});
-	try {
+	const openSignalSettings = async (): Promise<void> => {
 		await workbench.settingsEditor.openUserSettingsUI();
-		await workbench.settingsEditor.selectGroup('general');
-		await workbench.settingsEditor.selectCategory('general');
+		await workbench.settingsEditor.selectGroup('features');
+		await workbench.settingsEditor.selectCategory('accessibilitySignals');
+	};
+	try {
+		await openSignalSettings();
 		const settings = workbench.settingsEditor.element;
 		const progress = settings.locator('[data-configuration-key="accessibility.signals.progress"]');
 		const sound = progress.getByRole('textbox', { name: 'Mode 1', exact: true });
@@ -642,9 +654,11 @@ test('workspace task progress signals play the bundled sound, reload policy, and
 		await announcement.fill('auto');
 		await announcement.press('Tab');
 		await expect(announcement).toBeEnabled();
+		await workbench.settingsEditor.selectCategory('accessibility');
 		const reader = settings.locator('[data-configuration-key="editor.accessibilitySupport"]').getByRole('combobox');
 		await reader.click();
 		await page.getByRole('option', { name: 'On', exact: true }).click();
+		await workbench.settingsEditor.selectCategory('accessibilitySignals');
 		await settings.locator('.ash-modal-editor-close').click();
 
 		await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
@@ -656,7 +670,7 @@ test('workspace task progress signals play the bundled sound, reload policy, and
 		expect(first).toMatchObject({ volume: 0.7, error: undefined });
 		expect(first.duration).toBeGreaterThan(0);
 
-		await workbench.settingsEditor.openUserSettingsUI();
+		await openSignalSettings();
 		await sound.fill('off');
 		await sound.press('Tab');
 		await expect(sound).toBeEnabled();
@@ -669,15 +683,15 @@ test('workspace task progress signals play the bundled sound, reload policy, and
 		// Observe a full cue interval to prove policy reload suppresses playback during the same task.
 		await page.waitForTimeout(5500);
 		expect((await readAudio()).attempts).toBe(disabled.attempts);
-		await workbench.settingsEditor.openUserSettingsUI();
+		await openSignalSettings();
 		await sound.fill('on');
 		await sound.press('Tab');
 		await expect(sound).toBeEnabled();
 		await settings.locator('.ash-modal-editor-close').click();
 		await expect.poll(async () => (await readAudio()).played).toBeGreaterThan(disabled.played);
 		await workbench.quickaccess.runCommand('workbench.action.tasks.terminate');
-		await page.getByRole('tab', { name: 'Tasks', exact: true }).click();
-		await expect(page.locator('.ash-task-run')).toContainText('Smoke watch — canceled');
+		await openTasksView(application, workbench);
+		await expect(page.locator('.ash-task-run')).toContainText('Smoke watch — Canceled');
 		await expect.poll(async () => (await readAudio()).paused).toBe(true);
 		const stopped = await readAudio();
 		await page.waitForTimeout(5500);
@@ -692,7 +706,7 @@ test('workspace task progress signals play the bundled sound, reload policy, and
 });
 
 
-test('task outcome signals play once for success or failure without duplicating terminal results', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
+test('task outcome signals play once for success or failure without duplicating terminal results', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench, testWorkspace }) => {
 	test.setTimeout(60_000);
 	await writeFile(join(testWorkspace.directory, 'smoke-fail.cjs'), 'process.exit(7);\n');
 	await writeFile(join(testWorkspace.directory, '.vscode', 'tasks.json'), JSON.stringify({
@@ -718,8 +732,8 @@ test('task outcome signals play once for success or failure without duplicating 
 	const readCues = () => page.evaluate(() => (window as unknown as { ashTestOutcomeCues: { name: string; duration?: number; }[]; }).ashTestOutcomeCues);
 	try {
 		await workbench.settingsEditor.openUserSettingsUI();
-		await workbench.settingsEditor.selectGroup('general');
-		await workbench.settingsEditor.selectCategory('general');
+		await workbench.settingsEditor.selectGroup('features');
+		await workbench.settingsEditor.selectCategory('accessibilitySignals');
 		for (const name of ['taskCompleted', 'taskFailed', 'terminalCommandSucceeded', 'terminalCommandFailed']) {
 			const sound = workbench.settingsEditor.element.locator(`[data-configuration-key="accessibility.signals.${name}"]`).getByRole('textbox', { name: 'Mode 1', exact: true });
 			await sound.fill('on');
@@ -733,8 +747,9 @@ test('task outcome signals play once for success or failure without duplicating 
 		await expect.poll(async () => (await readCues()).filter(cue => cue.duration !== undefined).length).toBe(1);
 		await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
 		await workbench.quickaccess.select('Smoke fail');
-		await page.getByRole('tab', { name: 'Tasks', exact: true }).click();
-		await expect(page.locator('.ash-task-run').filter({ hasText: 'Smoke fail' })).toContainText('Smoke fail — failed (7)');
+		await expect(workbench.terminal.activeInstance).toContainText('process exited with code 7');
+		await openTasksView(application, workbench);
+		await expect(page.locator('.ash-task-run').filter({ hasText: 'Smoke fail' })).toContainText('Smoke fail — Failed (exit code 7)');
 		await expect.poll(async () => (await readCues()).filter(cue => cue.duration !== undefined).length).toBe(2);
 		const cues = await readCues();
 		expect(cues.map(cue => cue.name)).toEqual(['success', 'error']);
@@ -789,12 +804,7 @@ test('installed declarative extension matchers parse task diagnostics and retire
 	await installation.getByRole('textbox').fill('matcher-extension');
 	const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
 	expect(installed.message).toContain('Installed acme/matcher-smoke 1.0.0');
-	const manage = async (button: string): Promise<void> => {
-		await workbench.dialogs.confirm(application, 'Matcher smoke', button, async () => {
-			await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
-			await page.getByRole('option').filter({ has: page.getByText('Matcher smoke', { exact: true }) }).click();
-		});
-	};
+	const manage = (button: string): Promise<void> => manageTaskExtension(application, workbench, 'Matcher smoke', button);
 	await manage('Enable');
 	await manage('Grant permissions');
 	await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
@@ -818,13 +828,13 @@ test('installed declarative extension matchers parse task diagnostics and retire
 
 
 for (const locale of ['en', 'zh-CN']) {
-	test(`unsupported task configuration shows a clear error without starting a process and can be corrected (${locale})`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace, restartWorkbench }) => {
+	test(`unsupported task configuration shows a clear error without starting a process and can be corrected (${locale})`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench, testWorkspace, restartWorkbench }) => {
 		if (locale === 'zh-CN') {
 			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 			const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
 			await language.fill('简体中文');
 			await language.press('Enter');
-			({ workbench } = await restartWorkbench());
+			({ application, workbench } = await restartWorkbench());
 		}
 		// Opening the panel creates its interactive shell asynchronously. Establish
 		// that baseline before checking that rejected tasks create no terminal.
@@ -835,7 +845,7 @@ for (const locale of ['en', 'zh-CN']) {
 		const configurationPath = join(testWorkspace.directory, '.vscode', 'tasks.json');
 		await writeFile(configurationPath, JSON.stringify({
 			version: '2.0.0', tasks: [
-				{ label: 'Smoke configured', type: 'shell', command: 'node smoke-task.cjs', presentation: { group: 'parallel' }, options: { env: { MODE: 'test' } } },
+				{ label: 'Smoke configured', type: 'shell', command: 'node smoke-task.cjs', runOptions: { runOn: 'unknown' }, options: { env: { MODE: 'test' } } },
 			]
 		}));
 		await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
@@ -844,17 +854,15 @@ for (const locale of ['en', 'zh-CN']) {
 		expect(await readFile(join(testWorkspace.directory, 'task-runs.txt'), 'utf8')).toBe('0');
 		await expect(workbench.page.locator('.ash-task-run')).toHaveCount(0);
 		await expect(workbench.terminal.instances).toHaveCount(initialTerminalCount);
-		const tasksTab = workbench.page.getByRole('tab', { name: locale === 'zh-CN' ? '任务' : 'Tasks', exact: true });
-		if (!await tasksTab.isVisible()) await workbench.quickaccess.runCommand('workbench.action.togglePanel');
-		await tasksTab.click();
+		await openTasksView(application, workbench, locale === 'zh-CN' ? '任务' : 'Tasks');
 		await workbench.page.locator('.ash-tasks-run').filter({ hasText: 'Smoke configured' }).click();
 		await expect(workbench.page.locator('.ash-tasks-status')).toContainText(unsupportedMessage);
 		// Inactive panel views detach their widgets. Count terminal instances only
 		// while Terminal is visible, so hiding its DOM cannot satisfy the assertion.
-		await workbench.page.getByRole('tab', { name: locale === 'zh-CN' ? '终端' : 'Terminal', exact: true }).click();
+		await workbench.quickaccess.runCommand('workbench.action.terminal.focus');
 		await expect(workbench.terminal.instances).toHaveCount(initialTerminalCount);
 		expect(await readFile(join(testWorkspace.directory, 'task-runs.txt'), 'utf8')).toBe('0');
-		await tasksTab.click();
+		await openTasksView(application, workbench, locale === 'zh-CN' ? '任务' : 'Tasks');
 
 		await writeFile(configurationPath, JSON.stringify({
 			version: '2.0.0', tasks: [
@@ -865,8 +873,8 @@ for (const locale of ['en', 'zh-CN']) {
 		await workbench.quickaccess.select('Smoke process');
 		await expect.poll(() => readFile(join(testWorkspace.directory, 'task-runs.txt'), 'utf8')).toBe('1');
 		await expect(workbench.terminal.instances).toHaveCount(initialTerminalCount + 1);
-		await tasksTab.click();
-		await expect(workbench.page.locator('.ash-task-run')).toContainText('Smoke process — succeeded (0)');
+		await openTasksView(application, workbench, locale === 'zh-CN' ? '任务' : 'Tasks');
+		await expect(workbench.page.locator('.ash-task-run')).toContainText(locale === 'zh-CN' ? 'Smoke process — 成功（退出代码 0）' : 'Smoke process — Succeeded (exit code 0)');
 
 		await writeFile(configurationPath, JSON.stringify({
 			version: '2.0.0', tasks: [
@@ -882,15 +890,15 @@ for (const locale of ['en', 'zh-CN']) {
 		await workbench.quickaccess.select('Smoke configured');
 		await expect.poll(() => readFile(join(testWorkspace.directory, 'task-runs.txt'), 'utf8')).toBe('2');
 		await expect(workbench.terminal.activeInstance).toContainText('ASH_TASK_RUN_2');
-		await tasksTab.click();
+		await openTasksView(application, workbench, locale === 'zh-CN' ? '任务' : 'Tasks');
 		await expect(workbench.page.locator('.ash-tasks-status')).toHaveText('5 workspace tasks.');
-		await expect(workbench.page.locator('.ash-task-run')).toContainText('Smoke configured — succeeded (0)');
+		await expect(workbench.page.locator('.ash-task-run')).toContainText(locale === 'zh-CN' ? 'Smoke configured — 成功（退出代码 0）' : 'Smoke configured — Succeeded (exit code 0)');
 		expect(await readFile(join(testWorkspace.directory, 'task-runs.txt'), 'utf8')).toBe('2');
 	});
 }
 
 for (const reevaluate of [true, false]) {
-	test(`configured task inputs cancel before execution and reevaluate ${reevaluate} on rerun`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
+	test(`configured task inputs cancel before execution and reevaluate ${reevaluate} on rerun`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench, testWorkspace }) => {
 		const page = workbench.page;
 		const directory = testWorkspace.directory;
 		await writeFile(join(directory, 'smoke-input-task.cjs'), "require('node:fs').writeFileSync('task-inputs.json', JSON.stringify(process.argv.slice(2))); require('./smoke-task.cjs');\n");
@@ -914,10 +922,7 @@ for (const reevaluate of [true, false]) {
 		expect(await readFile(join(directory, 'task-runs.txt'), 'utf8')).toBe('0');
 		await expect(workbench.terminal.instances).toHaveCount(initialTerminals);
 		await expect(page.locator('.ash-notification-host').getByRole('alert')).toHaveCount(0);
-
-		const tasksTab = page.getByRole('tab', { name: 'Tasks', exact: true });
-		if (!await tasksTab.isVisible()) await workbench.quickaccess.runCommand('workbench.action.togglePanel');
-		await tasksTab.click();
+		await openTasksView(application, workbench);
 		await page.locator('.ash-tasks-run').filter({ hasText: 'Smoke inputs' }).click();
 		await expect(prompt).toBeFocused();
 		await prompt.press('Escape');
@@ -933,8 +938,8 @@ for (const reevaluate of [true, false]) {
 		await pick.press('Enter');
 		await expect.poll(() => readFile(join(directory, 'task-runs.txt'), 'utf8')).toBe('1');
 		expect(JSON.parse(await readFile(join(directory, 'task-inputs.json'), 'utf8'))).toEqual(['first', 'release', 'first']);
-		await tasksTab.click();
-		await expect(page.locator('.ash-task-run')).toContainText('Smoke inputs — succeeded (0)');
+		await openTasksView(application, workbench);
+		await expect(page.locator('.ash-task-run')).toContainText('Smoke inputs — Succeeded (exit code 0)');
 
 		await workbench.quickaccess.runCommand('workbench.action.tasks.reRunTask');
 		if (reevaluate) {
@@ -1051,7 +1056,7 @@ test('process task dependencies wait for background diagnostics and preserve cwd
 	await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
 	await workbench.quickaccess.select('Process with dependency');
 	await workbench.quickaccess.runCommand('workbench.action.togglePanel');
-	await workbench.page.getByRole('tab', { name: 'Terminal', exact: true }).click();
+	await workbench.quickaccess.runCommand('workbench.action.terminal.focus');
 	await expect(workbench.terminal.activeInstance).toContainText('ASH_COMPILER_WAITING');
 	await expect.poll(() => readFile(join(directory, 'process-result.json'), 'utf8').then(() => true, error => { if (error.code === 'ENOENT') return false; throw error; })).toBe(false);
 	await writeFile(join(directory, 'release-compiler'), 'ready');
@@ -1063,7 +1068,8 @@ test('process task dependencies wait for background diagnostics and preserve cwd
 	await expect.poll(() => { try { process.kill(pid, 0); return true; } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ESRCH') return false; throw error; } }).toBe(false);
 });
 
-test('first task discovery activates an installed dormant provider and disable retires its process tasks', { tag: ['@browser-app-server', '@electron-app-server', '@darwin'] }, async ({ application, workbench, testWorkspace }) => {
+// Product-host extension activation is deliberately unavailable to Browser connections.
+test('first task discovery activates an installed dormant provider and disable retires its process tasks', { tag: ['@electron-app-server', '@darwin'] }, async ({ application, workbench, testWorkspace }) => {
 	test.setTimeout(90_000);
 	const directory = testWorkspace.directory;
 	const root = join(directory, 'task-extension');
@@ -1103,12 +1109,7 @@ exports.activate = function(context) {
 	await installation.getByRole('textbox').fill('task-extension');
 	const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
 	expect(installed.message).toContain('Installed acme/lazy-task-smoke 1.0.0');
-	const manage = async (button: string): Promise<void> => {
-		await workbench.dialogs.confirm(application, 'Lazy task smoke', button, async () => {
-			await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
-			await page.getByRole('option').filter({ has: page.getByText('Lazy task smoke', { exact: true }) }).click();
-		});
-	};
+	const manage = (button: string): Promise<void> => manageTaskExtension(application, workbench, 'Lazy task smoke', button);
 	await manage('Enable');
 	await manage('Grant permissions');
 	await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
@@ -1142,7 +1143,7 @@ exports.activate = function(context) {
 	await manage('Uninstall');
 });
 
-test('a standard command-only extension starts the built-in build Task and receives a void result', { tag: ['@browser-app-server', '@electron-app-server', '@darwin'] }, async ({ application, workbench, testWorkspace }) => {
+test('a standard command-only extension starts the built-in build Task and receives a void result', { tag: ['@electron-app-server', '@darwin'] }, async ({ application, workbench, testWorkspace }) => {
 	const directory = testWorkspace.directory;
 	const root = join(directory, 'command-task-extension');
 	await mkdir(join(root, '.ash-plugin'), { recursive: true });
@@ -1161,12 +1162,7 @@ exports.activate = context => context.subscriptions.push(v.commands.registerComm
 	await installation.getByRole('textbox').fill('command-task-extension');
 	const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
 	expect(installed.message).toContain('Installed acme/command-task-smoke 1.0.0');
-	const manage = async (button: string): Promise<void> => {
-		await workbench.dialogs.confirm(application, 'Command task smoke', button, async () => {
-			await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
-			await page.getByRole('option').filter({ has: page.getByText('Command task smoke', { exact: true }) }).click();
-		});
-	};
+	const manage = (button: string): Promise<void> => manageTaskExtension(application, workbench, 'Command task smoke', button);
 	await manage('Enable');
 	await manage('Grant permissions');
 	await workbench.quickaccess.runCommand('acme.commandTask.build');
@@ -1179,7 +1175,7 @@ exports.activate = context => context.subscriptions.push(v.commands.registerComm
 	await manage('Uninstall');
 });
 
-test('standard Task command variables receive variable arrays once per process and shell run and cancel before execution', { tag: ['@browser-app-server', '@electron-app-server', '@darwin'] }, async ({ application, workbench, testWorkspace }) => {
+test('standard Task command variables receive variable arrays once per process and shell run and cancel before execution', { tag: ['@electron-app-server', '@darwin'] }, async ({ application, workbench, testWorkspace }) => {
 	const directory = testWorkspace.directory;
 	const root = join(directory, 'task-variable-map-extension');
 	await mkdir(join(root, '.ash-plugin'), { recursive: true });
@@ -1204,12 +1200,7 @@ exports.activate = context => context.subscriptions.push(
 	await installation.getByRole('textbox').fill('task-variable-map-extension');
 	const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
 	expect(installed.message).toContain('Installed acme/task-variable-map-smoke 1.0.0');
-	const manage = async (button: string): Promise<void> => {
-		await workbench.dialogs.confirm(application, 'Task variable map smoke', button, async () => {
-			await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
-			await page.getByRole('option').filter({ has: page.getByText('Task variable map smoke', { exact: true }) }).click();
-		});
-	};
+	const manage = (button: string): Promise<void> => manageTaskExtension(application, workbench, 'Task variable map smoke', button);
 	await manage('Enable');
 	await manage('Grant permissions');
 	for (const type of ['process', 'shell']) {
@@ -1234,7 +1225,7 @@ exports.activate = context => context.subscriptions.push(
 	await manage('Uninstall');
 });
 
-test('a standard CommonJS extension preserves configured problem reveal after repeated fetched Task edits', { tag: ['@browser-app-server', '@electron-app-server', '@darwin'] }, async ({ application, workbench, testWorkspace }) => {
+test('a standard CommonJS extension preserves configured problem reveal after repeated fetched Task edits', { tag: ['@electron-app-server', '@darwin'] }, async ({ application, workbench, testWorkspace }) => {
 	const directory = testWorkspace.directory;
 	const root = join(directory, 'fetched-task-extension');
 	await mkdir(join(root, '.ash-plugin'), { recursive: true });
@@ -1262,12 +1253,7 @@ exports.activate = context => context.subscriptions.push(v.commands.registerComm
 	await installation.getByRole('textbox').fill('fetched-task-extension');
 	const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
 	expect(installed.message).toContain('Installed acme/fetched-task-smoke 1.0.0');
-	const manage = async (button: string): Promise<void> => {
-		await workbench.dialogs.confirm(application, 'Fetched task smoke', button, async () => {
-			await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
-			await page.getByRole('option').filter({ has: page.getByText('Fetched task smoke', { exact: true }) }).click();
-		});
-	};
+	const manage = (button: string): Promise<void> => manageTaskExtension(application, workbench, 'Fetched task smoke', button);
 	await manage('Enable');
 	await manage('Grant permissions');
 	for (const edits of [1, 2]) {
@@ -1308,7 +1294,7 @@ exports.activate = context => context.subscriptions.push(v.commands.registerComm
 });
 
 
-test('a standard extension edits and copies fetched CustomExecution while releasing the original provider PTY', { tag: ['@browser-app-server', '@electron-app-server', '@darwin'] }, async ({ application, workbench, testWorkspace }) => {
+test('a standard extension edits and copies fetched CustomExecution while releasing the original provider PTY', { tag: ['@electron-app-server', '@darwin'] }, async ({ application, workbench, testWorkspace }) => {
 	test.setTimeout(90_000);
 	const directory = testWorkspace.directory;
 	const root = join(directory, 'fetched-custom-extension');
@@ -1365,12 +1351,7 @@ exports.activate = context => {
 	await installation.getByRole('textbox').fill('fetched-custom-extension');
 	const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
 	expect(installed.message).toContain('Installed acme/fetched-custom-smoke 1.0.0');
-	const manage = async (button: string): Promise<void> => {
-		await workbench.dialogs.confirm(application, 'Fetched custom smoke', button, async () => {
-			await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
-			await page.getByRole('option').filter({ has: page.getByText('Fetched custom smoke', { exact: true }) }).click();
-		});
-	};
+	const manage = (button: string): Promise<void> => manageTaskExtension(application, workbench, 'Fetched custom smoke', button);
 	await manage('Enable');
 	await manage('Grant permissions');
 	for (const edits of [1, 2, 3]) {
@@ -1388,7 +1369,7 @@ exports.activate = context => {
 	await manage('Uninstall');
 });
 
-test('installed task observer receives ordered process events after termination releases the process', { tag: ['@browser-app-server', '@electron-app-server', '@darwin'] }, async ({ application, workbench, testWorkspace }) => {
+test('installed task observer receives ordered process events after termination releases the process', { tag: ['@electron-app-server', '@darwin'] }, async ({ application, workbench, testWorkspace }) => {
 	test.setTimeout(90_000);
 	const directory = testWorkspace.directory;
 	const root = join(directory, 'task-events-extension');
@@ -1422,12 +1403,7 @@ exports.activate = function(context) {
 	await installation.getByRole('textbox').fill('task-events-extension');
 	const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
 	expect(installed.message).toContain('Installed acme/task-events-smoke 1.0.0');
-	const manage = async (button: string): Promise<void> => {
-		await workbench.dialogs.confirm(application, 'Task events smoke', button, async () => {
-			await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
-			await page.getByRole('option').filter({ has: page.getByText('Task events smoke', { exact: true }) }).click();
-		});
-	};
+	const manage = (button: string): Promise<void> => manageTaskExtension(application, workbench, 'Task events smoke', button);
 	await manage('Enable');
 	await manage('Grant permissions');
 	await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
@@ -1528,7 +1504,7 @@ test('configured task capacity policies replace the selected process, cancel the
 });
 
 
-test('superseding an extension task query delivers cancellation and retains the active provider', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, application, testWorkspace }) => {
+test('superseding an extension task query delivers cancellation and retains the active provider', { tag: ['@electron-app-server'] }, async ({ workbench, application, testWorkspace }) => {
 	const directory = testWorkspace.directory;
 	const root = join(directory, 'cancellation-extension');
 	await mkdir(join(root, '.ash-plugin'), { recursive: true });
@@ -1561,18 +1537,21 @@ exports.activate = function(context) {
 		}
 	}));
 }`);
+	// Commands whose titles equal their IDs stay out of the Command Palette.
+	const manifestPath = join(root, 'package.json');
+	const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+	manifest.contributes.commands = [
+		{ command: 'acme.taskCancellation.arm', title: 'Arm task query cancellation' },
+		{ command: 'acme.taskCancellation.probe', title: 'Inspect task query cancellation' },
+	];
+	await writeFile(manifestPath, JSON.stringify(manifest));
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('ash.extensions.installLocal');
 	const installation = page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
 	await installation.getByRole('textbox').fill('cancellation-extension');
 	const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
 	expect(installed.message).toContain('Installed acme/task-cancellation 1.0.0');
-	const manage = async (button: string): Promise<void> => {
-		await workbench.dialogs.confirm(application, 'Task cancellation smoke', button, async () => {
-			await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
-			await page.getByRole('option').filter({ has: page.getByText('Task cancellation smoke', { exact: true }) }).click();
-		});
-	};
+	const manage = (button: string): Promise<void> => manageTaskExtension(application, workbench, 'Task cancellation smoke', button);
 	await manage('Enable');
 	await manage('Grant permissions');
 	await workbench.quickaccess.runCommand('acme.taskCancellation.arm');
@@ -1746,3 +1725,122 @@ developerEnvironmentTest('developer environment reaches process and shell tasks 
 		await expect.poll(async () => JSON.parse(await readFile(join(directory, type + '.json'), 'utf8').catch(error => { if (error.code === 'ENOENT') return 'null'; throw error; }))).toEqual({ resolved: 'ash-synthetic-developer-key', credential: 'child credential', removed: true, privateExcluded: true });
 	}
 });
+
+test('task presentation groups keep live processes in adjacent panes and preserve keyboard navigation', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
+	const directory = testWorkspace.directory;
+	await writeFile(join(directory, 'group-watch.cjs'), "console.log(process.argv[2]); setInterval(() => {}, 1000);\n");
+	await writeFile(join(directory, '.vscode', 'tasks.json'), JSON.stringify({ version: '2.0.0', tasks: ['First', 'Second', 'Separate'].map(label => ({ label: `Grouped ${label}`, type: 'process', command: process.execPath, args: [join(directory, 'group-watch.cjs'), `GROUP_${label}`], presentation: { group: label === 'Separate' ? 'other' : 'build', panel: 'new', echo: false } })) }));
+	for (const label of ['First', 'Second']) {
+		await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
+		await workbench.quickaccess.select(`Grouped ${label}`);
+	}
+	const group = workbench.page.locator('.ash-terminal-group:visible');
+	const panes = group.locator('.ash-terminal-group-pane');
+	await expect(panes).toHaveCount(2);
+	await expect(panes.nth(0)).toContainText('GROUP_First');
+	await expect(panes.nth(1)).toContainText('GROUP_Second');
+	const first = await panes.nth(0).boundingBox();
+	const second = await panes.nth(1).boundingBox();
+	expect(first!.width).toBeGreaterThan(120);
+	expect(second!.x).toBeGreaterThanOrEqual(first!.x + first!.width);
+	await test.info().attach('tasks-split-group', { body: await workbench.page.screenshot(), contentType: 'image/png' });
+	await workbench.quickaccess.runCommand('workbench.action.terminal.focusPreviousPane');
+	await expect(panes.nth(0).locator('.xterm-helper-textarea')).toBeFocused();
+	await workbench.quickaccess.runCommand('workbench.action.terminal.focusNextPane');
+	await expect(panes.nth(1).locator('.xterm-helper-textarea')).toBeFocused();
+	await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
+	await workbench.quickaccess.select('Grouped Separate');
+	await expect(group.locator('.ash-terminal-group-pane')).toHaveCount(1);
+	for (const label of ['First', 'Second', 'Separate']) {
+		await workbench.quickaccess.runCommand('workbench.action.tasks.terminate');
+		if (label !== 'Separate') await workbench.quickaccess.select(`Grouped ${label}`);
+	}
+});
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`folder-open tasks require the user policy and run once per workspace entry (${locale})`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace, restartWorkbench, reloadWorkbench }) => {
+		if (locale === 'zh-CN') {
+			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+			const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
+			await language.fill('简体中文');
+			await language.press('Enter');
+			({ workbench } = await restartWorkbench());
+		}
+		const config = join(testWorkspace.directory, '.vscode', 'tasks.json');
+		const document = { version: '2.0.0', tasks: [{ label: 'Automatic build', command: 'node smoke-task.cjs', runOptions: { runOn: 'folderOpen' } }] };
+		await writeFile(config, JSON.stringify(document));
+		await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
+		await expect(workbench.quickaccess.items.filter({ hasText: 'Automatic build' })).toBeVisible();
+		await workbench.page.keyboard.press('Escape');
+		expect(await readFile(join(testWorkspace.directory, 'task-runs.txt'), 'utf8')).toBe('0');
+		await workbench.quickaccess.runCommand('workbench.action.tasks.manageAutomaticRunning');
+		await workbench.quickaccess.select(locale === 'en' ? 'Allow Automatic Tasks' : '允许自动任务');
+		await expect.poll(() => readFile(join(testWorkspace.directory, 'task-runs.txt'), 'utf8')).toBe('1');
+		await writeFile(config, JSON.stringify({ ...document, tasks: [{ ...document.tasks[0], detail: 'refreshed metadata' }] }));
+		await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
+		await expect(workbench.quickaccess.items.filter({ hasText: 'Automatic build' })).toBeVisible();
+		await workbench.page.keyboard.press('Escape');
+		expect(await readFile(join(testWorkspace.directory, 'task-runs.txt'), 'utf8')).toBe('1');
+		({ workbench } = await reloadWorkbench());
+		await expect.poll(() => readFile(join(testWorkspace.directory, 'task-runs.txt'), 'utf8')).toBe('2');
+		await workbench.quickaccess.runCommand('workbench.action.tasks.manageAutomaticRunning');
+		await workbench.quickaccess.select(locale === 'en' ? 'Disallow Automatic Tasks' : '禁止自动任务');
+		await expect(workbench.page.locator('.ash-notification-host').getByText(locale === 'en' ? 'Automatic tasks disabled.' : '自动任务已禁用。', { exact: true })).toBeVisible();
+		({ workbench } = await reloadWorkbench());
+		await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
+		await expect(workbench.quickaccess.items.filter({ hasText: 'Automatic build' })).toBeVisible();
+		await workbench.page.keyboard.press('Escape');
+		expect(await readFile(join(testWorkspace.directory, 'task-runs.txt'), 'utf8')).toBe('2');
+	});
+}
+
+test('Bash and Zsh task shells preserve explicit quoting and report nonzero process exits', { tag: ['@browser-app-server', '@electron-app-server', '@darwin'] }, async ({ application, workbench, testWorkspace }) => {
+	const directory = testWorkspace.directory;
+	await writeFile(join(directory, 'profile task.cjs'), "require('node:fs').writeFileSync(process.argv[2], JSON.stringify(process.argv.slice(3))); console.log('PROFILE_TASK_OUTPUT'); process.exitCode = 7;\n");
+	for (const shell of ['bash', 'zsh', 'sh']) {
+		const result = join(directory, `${shell}-result.json`);
+		await writeFile(join(directory, '.vscode', 'tasks.json'), JSON.stringify({
+			version: '2.0.0', tasks: [{
+				label: `Profile ${shell}`, type: 'shell', command: { value: process.execPath, quoting: 'strong' },
+				args: ['${workspaceFolder}/profile task.cjs', result, '', { value: '$HOME $(touch injected)', quoting: 'strong' }, { value: '$ASH_PROFILE_VALUE', quoting: 'weak' }, { value: 'two words', quoting: 'escape' }, { value: "one'two", quoting: 'strong' }],
+				options: { shell: { executable: `/bin/${shell}`, args: ['-c'] }, env: { ASH_PROFILE_VALUE: 'value $HOME' } }, presentation: { echo: false },
+			}]
+		}));
+		await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
+		await workbench.quickaccess.select(`Profile ${shell}`);
+		await expect.poll(async () => JSON.parse(await readFile(result, 'utf8').catch(error => { if (error.code === 'ENOENT') return 'null'; throw error; }))).toEqual(['', '$HOME $(touch injected)', 'value $HOME', 'two words', "one'two"]);
+		await openTasksView(application, workbench);
+		await expect(workbench.page.locator('.ash-task-run')).toContainText(`Profile ${shell} — Failed (exit code 7)`);
+	}
+	expect(await readFile(join(directory, 'injected'), 'utf8').then(() => true, error => { if (error.code === 'ENOENT') return false; throw error; })).toBe(false);
+});
+
+
+/** Uses the current Panel destination, including its system-menu overflow on Desktop. */
+async function openTasksView(application: PlaywrightApplication, workbench: Workbench, label = 'Tasks'): Promise<void> {
+	if (await workbench.page.locator('[data-part="auxiliarybar"]').isVisible()) await workbench.quickaccess.runCommand('workbench.action.closeAuxiliaryBar');
+	const panel = workbench.page.locator('[data-part="panel"]');
+	if (!await panel.isVisible()) await workbench.quickaccess.runCommand('workbench.action.focusPanel');
+	await workbench.waitForUiIdle();
+	const tab = panel.getByRole('tab', { name: label, exact: true });
+	if (await tab.isVisible()) await tab.click();
+	else await workbench.menus.select(application, () => panel.getByRole('tab', { name: label === '任务' ? '其他视图' : 'Additional views', exact: true }).click(), [label]);
+}
+
+/** Local packages are managed in their retained details editor. Only permission review and removal open dialogs. */
+async function manageTaskExtension(application: PlaywrightApplication, workbench: Workbench, label: string, action: string): Promise<void> {
+	const page = workbench.page;
+	await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
+	await page.getByRole('listbox', { name: 'Installed Extensions', exact: true }).getByRole('option').filter({ has: page.getByText(label, { exact: true }) }).click();
+	const editor = page.locator('.ash-extension-editor').filter({ has: page.getByRole('heading', { name: label, exact: true }) });
+	const click = () => editor.getByRole('button', { name: action, exact: true }).click();
+	if (action === 'Enable' || action === 'Disable') {
+		await click();
+		await expect(editor.getByRole('button', { name: action === 'Enable' ? 'Disable' : 'Enable', exact: true })).toBeEnabled();
+	} else {
+		await workbench.dialogs.confirm(application, action === 'Uninstall' ? 'Uninstall extension' : label, action, click);
+		if (action === 'Uninstall') await expect(editor.getByRole('status')).toHaveText('Uninstalled');
+		else if (action === 'Grant permissions') await expect(editor.getByRole('button', { name: 'Revoke permissions', exact: true })).toBeEnabled();
+		else await expect(editor.getByRole('button', { name: 'Grant permissions', exact: true })).toBeVisible();
+	}
+}

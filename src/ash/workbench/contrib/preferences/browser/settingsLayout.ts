@@ -67,7 +67,7 @@ export const SettingsNavigation = [
 						id: 'interaction',
 						label: 'Interaction',
 						description: 'Tune hover feedback and resize handles.',
-						settings: ['workbench.hover.*', 'workbench.sash.*', 'workbench.commandPalette.history', 'onboarding.enabled', 'output.smartScroll.enabled', 'chat.disableAIFeatures', 'sessions.automations.notifyOnSuccess'],
+						settings: ['workbench.hover.*', 'workbench.sash.*', 'workbench.commandPalette.history', 'onboarding.enabled', 'output.smartScroll.enabled', 'chat.disableAIFeatures', 'sessions.automations.notifyOnSuccess', 'task.allowAutomaticTasks'],
 					},
 				],
 			},
@@ -241,7 +241,7 @@ export const SettingsNavigation = [
 						id: 'display',
 						label: localize('settings.editor.display.label', 'Text display'),
 						description: localize('settings.editor.display.description', 'Configure line wrapping, guides, highlighting, and navigation aids.'),
-						settings: ['breadcrumbs.*', 'editor.wordWrap', 'editor.wrappingIndent', 'editor.renderWhitespace', 'editor.renderControlCharacters', 'editor.lineNumbers', 'editor.cursorStyle', 'editor.cursorBlinking', 'editor.cursorSmoothCaretAnimation', 'editor.cursorWidth', 'editor.cursorHeight', 'editor.guides.*', 'editor.matchBrackets', 'editor.bracketPairColorization.*', 'editor.stickyScroll.*', 'editor.renderLineHighlight', 'editor.renderLineHighlightOnlyWhenFocus', 'editor.unicodeHighlights'],
+						settings: ['breadcrumbs.*', 'editor.wordWrap', 'editor.wordWrapColumn', 'editor.wrappingIndent', 'editor.renderWhitespace', 'editor.renderControlCharacters', 'editor.lineNumbers', 'editor.cursorStyle', 'editor.cursorBlinking', 'editor.cursorSmoothCaretAnimation', 'editor.cursorWidth', 'editor.cursorHeight', 'editor.guides.*', 'editor.matchBrackets', 'editor.bracketPairColorization.*', 'editor.stickyScroll.*', 'editor.renderLineHighlight', 'editor.renderLineHighlightOnlyWhenFocus', 'editor.unicodeHighlights'],
 					},
 					{
 						id: 'minimap',

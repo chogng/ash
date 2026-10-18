@@ -1,3 +1,7 @@
+import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { RunAutomaticTasks, ManageAutomaticTaskRunning } from './runAutomaticTasks.js';
 import { SyncDescriptor } from "../../../../platform/instantiation/common/descriptors.js";
 import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../common/views.js";
 import { TASKS_VIEW_ID } from "../common/tasks.js";
@@ -24,3 +28,6 @@ export function registerTasksView(registry: WorkbenchViewRegistry = ViewsRegistr
 		ctorDescriptor: new SyncDescriptor(TasksViewPane),
 	}]);
 }
+
+registerWorkbenchContribution('workbench.contrib.runAutomaticTasks', WorkbenchPhase.AfterRestored, accessor => accessor.get(IInstantiationService).createInstance(RunAutomaticTasks));
+registerAction2(ManageAutomaticTaskRunning);

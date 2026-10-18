@@ -555,6 +555,15 @@ test('configuration expressions substitute keys and nested values regardless of 
 	assert.deepEqual([...expression.resolved()].map(([reference, data]) => [reference.inner, data.value]), [['input:value', '${env:NAME}'], ['input:key', 'ASH_${env:NAME}'], ['env:NAME', 'target']]);
 });
 
+test('selected editor text stays literal even when its variables also occur in configuration', () => {
+	const selectedText = 'chosen ${env:HOME} ${command:must-not-run}';
+	const expression = ConfigurationResolverExpression.parse({ argument: '${selectedText}', configured: '${env:HOME}' });
+	expression.resolve([...expression.unresolved()].find(reference => reference.name === 'selectedText')!, selectedText);
+	assert.deepEqual([...expression.unresolved()].map(reference => reference.inner), ['env:HOME']);
+	expression.resolve([...expression.unresolved()][0]!, '/home/developer');
+	assert.deepEqual(expression.toObject(), { argument: selectedText, configured: '/home/developer' });
+});
+
 test('configuration expressions retain a balanced outer variable argument and leave recursive references finite', () => {
 	const expression = ConfigurationResolverExpression.parse('${env:HOME${env:USER}}/${env:HOME}');
 	assert.deepEqual([...expression.unresolved()], [{ id: '${env:HOME${env:USER}}', inner: 'env:HOME${env:USER}', name: 'env', arg: 'HOME${env:USER}' }, { id: '${env:HOME}', inner: 'env:HOME', name: 'env', arg: 'HOME' }]);

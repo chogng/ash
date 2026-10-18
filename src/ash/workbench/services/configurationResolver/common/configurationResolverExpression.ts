@@ -48,7 +48,8 @@ export class ConfigurationResolverExpression<T> {
 		if (!this.replacements.has(replacement.id)) return;
 		const resolved = Object.freeze(typeof data === 'string' ? { value: data } : { ...data });
 		this.values.set(replacement.id, resolved);
-		if (resolved.value !== undefined) this.collect(resolved.value);
+		// Selected editor text is user data, even when it contains variable syntax.
+		if (resolved.value !== undefined && replacement.name !== 'selectedText') this.collect(resolved.value);
 	}
 
 	public toObject(): T {
@@ -88,7 +89,7 @@ export class ConfigurationResolverExpression<T> {
 		for (const reference of this.variables(value)) {
 			const replacement = this.values.get(reference.id)?.value;
 			// A cyclic reference remains visible instead of repeatedly calling its producer.
-			const resolved = replacement === undefined || trail.has(reference.id) ? reference.id : cache.get(reference.id) ?? this.substitute(replacement, new Set([...trail, reference.id]), cache);
+			const resolved = replacement === undefined || trail.has(reference.id) ? reference.id : reference.name === 'selectedText' ? replacement : cache.get(reference.id) ?? this.substitute(replacement, new Set([...trail, reference.id]), cache);
 			// Cache completed expansions; unresolved cycles depend on the current trail.
 			if (!resolved.includes('${')) cache.set(reference.id, resolved);
 			if (result.length + reference.start - position + resolved.length > 4 * 1024 * 1024) throw expansionLimitError();

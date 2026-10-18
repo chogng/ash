@@ -1,7 +1,7 @@
 import { type Event } from "../../../../base/common/event.js";
 import { type IDisposable } from "../../../../base/common/lifecycle.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
-import { type ITaskRun } from "../../tasks/common/taskService.js";
+import { type ITaskRun } from "../../../contrib/tasks/common/tasks.js";
 import type { URI } from '../../../../base/common/uri.js';
 import type { TestItem, TestResult } from '../../../../platform/testing/common/testExecutionService.js';
 

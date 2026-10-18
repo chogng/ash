@@ -208,7 +208,9 @@ class ExtensionsContent extends Disposable {
 		this.domNode.setAttribute('aria-busy', 'true');
 		try {
 			const installed = this.options.mode === 'builtIn' ? [] : await this.extensionManagement.listInstalled();
-			const policies = this.options.mode === 'builtIn' ? { extensions: [] } : await this.extensionManagement.listEditorExtensions();
+			// Package execution policy applies to marketplace installations. Local
+			// plugins have their own owner and remain manageable from a Web client.
+			const policies = installed.length ? await this.extensionManagement.listEditorExtensions() : { extensions: [] };
 			let items: ExtensionListItem[];
 			const builtInItems: ExtensionListItem[] = [];
 			if (!this.isPluginsPane && (this.options.mode === 'builtIn' || isInstalled)) {

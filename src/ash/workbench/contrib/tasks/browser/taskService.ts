@@ -19,11 +19,12 @@ import { ILogService } from "../../../../platform/log/common/log.js";
 import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { ITerminalService } from "../../../services/terminal/browser/terminal.js";
 import { ITerminalProfileResolverService } from '../../../services/terminal/common/terminal.js';
-import { readTaskOutput, type ITaskRun, type ITaskDescription, type TaskRunStatus, ITaskService, type IWorkspaceTask, type TaskProvider, type TaskProviderRegistration, type TaskProviderTask, waitForTask } from "../../../services/tasks/common/taskService.js";
+import { ITaskService } from "../common/taskService.js";
+import { readTaskOutput, type ITaskRun, type ITaskDescription, type TaskRunStatus, type IWorkspaceTask, type TaskProvider, type TaskProviderRegistration, type TaskProviderTask, waitForTask } from "../common/tasks.js";
 import { IMarkerService } from '../../../../platform/markers/common/markers.js';
 import { IModelService } from '../../../../editor/common/services/model.js';
 import { IOutputService, type IOutputChannel, type OutputEntrySeverity } from "../../../services/output/common/output.js";
-import { cargoWorkspaceTasks, parseShellExecution, parseTaskEnvironment, parseTaskRunOptions, parseTaskPresentationOptions, parsePackageTasks, parseWorkspaceTasks } from "../../../services/tasks/common/workspaceTasks.js";
+import { cargoWorkspaceTasks, parseShellExecution, parseTaskEnvironment, parseTaskRunOptions, parseTaskPresentationOptions, parsePackageTasks, parseWorkspaceTasks } from "../common/taskConfiguration.js";
 
 interface OwnedTaskProvider {
 	readonly owner: object;

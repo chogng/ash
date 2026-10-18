@@ -1,8 +1,8 @@
 import { type IDebugSession, type IDebugConfiguration, normalizeDebugAdapterDescriptor, type DebugAdapterFactory, DebugConfigurationProviderTriggerKind, type DebugConfiguration, type IDebugConfigurationProvider, type IDebugAdapterTracker, type IDebugAdapterTrackerFactory } from '../../contrib/debug/common/debug.js';
-import { parseShellExecution, parseTaskEnvironment, parseTaskRunOptions, parseTaskPresentationOptions } from '../../services/tasks/common/workspaceTasks.js';
+import { parseShellExecution, parseTaskEnvironment, parseTaskRunOptions, parseTaskPresentationOptions } from '../../contrib/tasks/common/taskConfiguration.js';
 import { encodeHex, VSBuffer } from "../../../base/common/buffer.js";
 import type { JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
-import type { IWorkspaceTask, TaskDefinition, TaskPseudoterminal, TaskProvider, TaskProviderTask, WorkspaceTaskGroup } from "../../services/tasks/common/taskService.js";
+import type { IWorkspaceTask, TaskDefinition, TaskPseudoterminal, TaskProvider, TaskProviderTask, WorkspaceTaskGroup } from "../../contrib/tasks/common/tasks.js";
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { DeferredPromise, TaskQueue } from '../../../base/common/async.js';
@@ -223,7 +223,7 @@ export function normalizeTaskResult(value: JsonValue, invoke: ExtensionHostProvi
 		const runOptions = input.runOptions === undefined ? undefined : object(input.runOptions, 'Extension Task runOptions');
 		if (runOptions) assertAllowedKeys(runOptions, 'Extension Task runOptions', ['reevaluateOnRerun'], []);
 		const presentation = input.presentation === undefined ? undefined : object(input.presentation, 'Extension Task presentation');
-		if (presentation) assertAllowedKeys(presentation, 'Extension Task presentation', ['echo', 'showReuseMessage', 'panel', 'clear', 'reveal', 'revealProblems', 'focus', 'close'], []);
+		if (presentation) assertAllowedKeys(presentation, 'Extension Task presentation', ['echo', 'showReuseMessage', 'panel', 'clear', 'reveal', 'revealProblems', 'focus', 'close', 'group'], []);
 		let execution: TaskProviderTask['execution'];
 		if (input.execution !== undefined) {
 			const descriptor = object(input.execution, 'Extension Task execution');

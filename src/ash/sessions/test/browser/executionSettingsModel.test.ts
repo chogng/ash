@@ -27,6 +27,7 @@ test('execution settings preserve an unsaved default while saving an aliased dir
 	let permissions: readonly WorkspaceTrustPermission[] = ['readFiles', 'loadInstructions', 'discoverSkills'];
 	let forgotten = false;
 	const directories: IWorkspaceTrustApi = {
+		readWorkspaceDirectory: async () => { throw new Error('Settings manage profile grants, not active directory permissions'); },
 		onDidChangeTrust: Event.None,
 		createGrant: async () => { throw new Error('Unexpected grant preparation'); },
 		persistGrant: async () => { throw new Error('Unexpected host grant write'); },
@@ -66,6 +67,7 @@ test('a directory revision conflict preserves the draft and never silently retri
 	const precise = Object.freeze(['readFiles', 'discoverSkills', 'useLanguageServices'] as const);
 	const writes: unknown[] = [];
 	const trust: IWorkspaceTrustApi = {
+		readWorkspaceDirectory: async () => { throw new Error('Settings manage profile grants, not active directory permissions'); },
 		onDidChangeTrust: Event.None,
 		readDirectory: async () => ({ dir: 'canonical', permissions: precise }),
 		listDirectories: async () => ({ revision: 7, entries: [{ dir: 'canonical', path: '/canonical', permissions: precise }] }),

@@ -3121,6 +3121,9 @@ impl AppServer {
                 self.browser_processor()
                     .set_sharing(connection, &request.params, cancellation)
             }
+            Some(ClientMethod::EnvDirRead) => {
+                self.environment_processor().env_dir_read(&request.params)
+            }
             Some(ClientMethod::EnvDirsSet) => self
                 .environment_processor()
                 .env_dirs_set(connection, &request.params),

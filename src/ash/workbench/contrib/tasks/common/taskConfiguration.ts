@@ -1,8 +1,8 @@
-import { isExecutionVariable } from '../../configurationResolver/common/configurationResolver.js';
+import { isExecutionVariable } from '../../../services/configurationResolver/common/configurationResolver.js';
 import { localize } from '../../../../nls.js';
 import { OperatingSystem } from '../../../../base/common/platform.js';
 import { parseJsonc } from "../../../../base/common/jsonc.js";
-import { ShellQuoting, type RunOptions, type TaskPresentationOptions, type ShellQuotedString, type TaskShellExecution, type IWorkspaceTask, type WorkspaceTaskGroup, type WorkspaceTaskSource } from "./taskService.js";
+import { ShellQuoting, type RunOptions, type TaskPresentationOptions, type ShellQuotedString, type TaskShellExecution, type IWorkspaceTask, type WorkspaceTaskGroup, type WorkspaceTaskSource } from "./tasks.js";
 
 const MAX_TASKS = 256;
 const MAX_COMMAND_LENGTH = 32_768;
@@ -155,14 +155,10 @@ function unsupportedExecution(input: Readonly<Record<string, unknown>>, type: st
 	if (type !== 'shell' && input.options !== undefined && record(input.options, 'options').shell !== undefined) unsupported.push('options.shell');
 	if (input.runOptions !== undefined) {
 		const options = record(input.runOptions, 'runOptions');
-		if (options.runOn !== undefined && options.runOn !== 'default') unsupported.push('runOptions.runOn');
+		if (options.runOn !== undefined && options.runOn !== 'default' && options.runOn !== 'folderOpen') unsupported.push('runOptions.runOn');
 	}
 	for (const key of ['windows', 'osx', 'linux']) {
 		if (input[key] !== undefined && Object.keys(record(input[key], key)).length > 0) unsupported.push(key);
-	}
-	if (input.presentation !== undefined) {
-		const presentation = record(input.presentation, 'presentation');
-		if (presentation.group !== undefined) unsupported.push('presentation');
 	}
 	return unsupported;
 }
@@ -170,13 +166,15 @@ function unsupportedExecution(input: Readonly<Record<string, unknown>>, type: st
 /** The configuration and provider boundary validates task screen reuse before process creation. */
 export function parseTaskPresentationOptions(value: unknown): TaskPresentationOptions {
 	const options = record(value, 'presentation');
-	if (options.panel !== undefined && !['shared', 'dedicated', 'new'].includes(options.panel as string)
+	if (options.group !== undefined && (typeof options.group !== 'string' || options.group.length > 256 || options.group.includes('\0'))
+		|| options.panel !== undefined && !['shared', 'dedicated', 'new'].includes(options.panel as string)
 		|| options.reveal !== undefined && !['always', 'silent', 'never'].includes(options.reveal as string)
 		|| options.revealProblems !== undefined && !['always', 'onProblem', 'never'].includes(options.revealProblems as string)
 		|| ['echo', 'showReuseMessage', 'clear', 'focus', 'close'].some(key => options[key] !== undefined && typeof options[key] !== 'boolean')) {
 		throw new TypeError(localize('tasks.invalidPresentation', 'Invalid task presentation options.'));
 	}
 	return Object.freeze({
+		...(options.group === undefined ? {} : { group: options.group as string }),
 		...(options.echo === undefined ? {} : { echo: options.echo as boolean }),
 		...(options.showReuseMessage === undefined ? {} : { showReuseMessage: options.showReuseMessage as boolean }),
 		...(options.reveal === undefined ? {} : { reveal: options.reveal as TaskPresentationOptions['reveal'] }),
@@ -201,6 +199,7 @@ export function parseTaskRunOptions(value: unknown): RunOptions {
 		throw new TypeError('runOptions.instancePolicy must be terminateNewest, terminateOldest, prompt, warn or silent');
 	}
 	return Object.freeze({
+		...(options.runOn === 'default' || options.runOn === 'folderOpen' ? { runOn: options.runOn } : {}),
 		...(options.reevaluateOnRerun === undefined ? {} : { reevaluateOnRerun: options.reevaluateOnRerun }),
 		...(options.instanceLimit === undefined ? {} : { instanceLimit: options.instanceLimit as number }),
 		...(options.instancePolicy === undefined ? {} : { instancePolicy: options.instancePolicy as RunOptions['instancePolicy'] }),

@@ -1,7 +1,8 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Disposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { ILogService } from "../../../../platform/log/common/log.js";
-import { type ITaskRun, ITaskService } from "../../tasks/common/taskService.js";
+import { ITaskService } from "../../../contrib/tasks/common/taskService.js";
+import { type ITaskRun } from "../../../contrib/tasks/common/tasks.js";
 import { type ITestCase, type ITestCaseResult, type ITestProfile, type ITestRun, type ITestingService, type TestProfileContribution, type TestProfileProvider, type TestProfileProviderRegistration, type TestRunStatus } from "../common/testingService.js";
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';

@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import { cargoWorkspaceTasks, parsePackageTasks, parseWorkspaceTasks } from "../../common/workspaceTasks.js";
+import { cargoWorkspaceTasks, parsePackageTasks, parseWorkspaceTasks } from "../../common/taskConfiguration.js";
 import { OperatingSystem } from '../../../../../base/common/platform.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { resetNlsResolver } from '../../../../../nls.js';
-import { initializeTestLocalization } from '../../../localization/test/common/localizationTestUtils.js';
+import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
 
 test("workspace tasks parse supported VS Code shell tasks and preserve explicit execution", () => {
 	const tasks = parseWorkspaceTasks(`{
@@ -132,7 +132,8 @@ test('empty task overrides do not discard inherited platform, presentation, or r
 			{ label: 'Inherited settings', command: 'build', linux: {}, presentation: {}, runOptions: {} },
 		]
 	}))[0];
-	assert.deepEqual(task.unsupportedFeatures, ['runOptions.runOn', 'linux']);
+	assert.deepEqual(task.unsupportedFeatures, ['linux']);
+	assert.deepEqual(task.runOptions, { runOn: 'folderOpen' });
 	assert.deepEqual(task.presentation, { reveal: 'never' });
 });
 
@@ -327,4 +328,21 @@ test('task shell argument limit is localized in Chinese', () => {
 	using localization = toDisposable(resetNlsResolver);
 	initializeTestLocalization('zh-CN');
 	assert.throws(() => parseWorkspaceTasks(JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Invalid', type: 'shell', command: 'compiler', options: { shell: { args: Array(257).fill('/c') } } }] }), OperatingSystem.Windows), { message: 'Shell 参数最多接受 256 个值。' });
+});
+
+
+test('task split groups and automatic launch survive configuration inheritance', () => {
+	const tasks = parseWorkspaceTasks(JSON.stringify({
+		version: '2.0.0', runOptions: { runOn: 'folderOpen' }, presentation: { group: 'build' }, tasks: [
+			{ label: 'Build', command: 'build', presentation: { panel: 'new' } },
+			{ label: 'Test', command: 'test', runOptions: { runOn: 'default' }, presentation: { group: 'test' } },
+		],
+	}));
+	assert.deepEqual(tasks.map(task => [task.runOptions, task.presentation, task.unsupportedFeatures]), [
+		[{ runOn: 'folderOpen' }, { group: 'build', panel: 'new' }, []],
+		[{ runOn: 'default' }, { group: 'test' }, []],
+	]);
+	for (const group of [42, true, null, 'bad\0group']) {
+		assert.throws(() => parseWorkspaceTasks(JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Bad', command: 'build', presentation: { group } }] })), /presentation/i);
+	}
 });

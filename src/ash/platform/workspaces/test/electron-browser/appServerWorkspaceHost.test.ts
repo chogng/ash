@@ -50,6 +50,7 @@ suite('workspace trust during directory opening', () => {
 			listDirectories: async () => { throw new Error('Unexpected directory management'); },
 			setDirectoryPermissions: async () => { throw new Error('Unexpected directory management'); },
 			forgetDirectory: async () => { throw new Error('Unexpected directory management'); },
+			readWorkspaceDirectory: async () => { throw new Error('Workspace host selects grants through the management owner'); },
 			readDirectory: async path => ({ dir: `canonical:${path}`, permissions: saved.get(path) }),
 			createGrant: async (_path, permissions) => {
 				grants.push([...permissions]);

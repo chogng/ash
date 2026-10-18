@@ -65,6 +65,14 @@ pub struct EnvDirSetEntry {
     pub grant: DirGrantDto,
 }
 
+/// Reads effective permissions for an already active environment directory.
+/// This does not discover paths or grant directory-management authority.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct EnvDirReadParams {
+    pub dir_id: String,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct EnvDirsSetParams {

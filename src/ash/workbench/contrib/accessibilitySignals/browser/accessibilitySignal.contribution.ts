@@ -4,7 +4,7 @@ import { AccessibilityProgressSignalScheduler } from '../../../../platform/acces
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
-import { ITaskService } from '../../../services/tasks/common/taskService.js';
+import { ITaskService } from '../../tasks/common/taskService.js';
 import { ITerminalService, type ITerminalInstance } from '../../../services/terminal/browser/terminal.js';
 import { IChatService } from '../../../services/chat/common/chatService.js';
 import { SaveAccessibilitySignal } from './saveAccessibilitySignal.js';

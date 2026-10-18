@@ -43,7 +43,7 @@ import { MarkerSeverity } from '../../../src/ash/platform/markers/common/markers
 import { MarkerService } from '../../../src/ash/platform/markers/common/markerService.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
-import { type ITaskService } from '../../../src/ash/workbench/services/tasks/common/taskService.js';
+import { type ITaskService } from '../../../src/ash/workbench/contrib/tasks/common/taskService.js';
 import { type IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
 import { type ITerminalService } from '../../../src/ash/workbench/services/terminal/browser/terminal.js';
 import { type ITunnelService } from '../../../src/ash/platform/tunnel/common/tunnel.js';

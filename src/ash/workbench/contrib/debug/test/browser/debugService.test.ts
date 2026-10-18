@@ -57,7 +57,7 @@ import { ContextKeyService, IContextKeyService } from '../../../../../platform/c
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
-import { ITaskService } from '../../../../services/tasks/common/taskService.js';
+import { ITaskService } from '../../../tasks/common/taskService.js';
 import assert from "node:assert/strict";
 import { suite, test } from "mocha";
 import { Emitter, Event } from "../../../../../base/common/event.js";
@@ -68,7 +68,7 @@ import { type IDebugAdapterProcessReadResult, IDebugAdapterProcessService } from
 import { FileKind, FileNotFoundError, type IFileBytes, IFileService, type IFileStat, type IFileWriteResult } from "../../../../../platform/files/common/files.js";
 import { IStorageService, type IStorageValueChangeEvent, type IWillSaveStateEvent, StorageScope, StorageTarget, type StorageValue, WillSaveStateReason } from "../../../../../platform/storage/common/storage.js";
 import { IWorkspaceContextService } from "../../../../../platform/workspace/common/workspace.js";
-import { type ITaskRun, type IWorkspaceTask, type TaskProvider, type TaskProviderRegistration, type TaskRunStatus } from "../../../../services/tasks/common/taskService.js";
+import { type ITaskRun, type IWorkspaceTask, type TaskProvider, type TaskProviderRegistration, type TaskRunStatus } from "../../../tasks/common/tasks.js";
 import { ITerminalService } from "../../../../services/terminal/browser/terminal.js";
 import { AdapterManager } from "../../browser/debugAdapterManager.js";
 import { DebugService } from "../../browser/debugService.js";

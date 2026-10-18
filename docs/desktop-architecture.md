@@ -510,6 +510,9 @@ Ash 的异步权限读取和只读状态是该契约的扩展，不能以信任�
 Renderer 的 `workspaceTrust` API 在 Workbench 和 Sessions 的服务容器中注册；打开目录时
 也使用同一 API，通过 `config/directoryGrants/list|read|set|forget` 与后端 config owner 对接，
 授权通过修订号和 command ID 提交，启动时仍由 `env/dirs/set` 原子应用所选授权。
+当前本地工作区的信任检查通过 `env/dir/read` 按已激活目录 ID 读取有效权限，
+不把 profile 中保存的授权当作当前运行时授权。该只读请求可供 Browser 使用，
+不提供路径发现、授权列表或修改能力；未知、已移除和已失效的目录被拒绝。
 设置中的目录授权列表、精确权限编辑和撤销使用 `IWorkspaceTrustApi`，设置模型只持有草稿、
 可见页快照和修订冲突状态，不保存另一份授权配置。目录别名以 Rust 返回的目录身份匹配，
 修改文件和命令能力时保留未编辑的发现与配置能力。

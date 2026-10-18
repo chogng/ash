@@ -1,6 +1,9 @@
-# Workbench tasks service
+# Workbench Tasks
 
-`workbench/services/tasks` owns the shared task contract and configuration parsing.
+`workbench/contrib/tasks/common/taskService.ts` owns the service contract and DI identity.
+`common/tasks.ts` owns task models and execution contracts, `common/taskConfiguration.ts`
+owns configuration parsing, and `common/problemMatcher.ts` owns matcher definitions and registrations.
+The former `workbench/services/tasks` owner has been removed; all consumers import the canonical contribution contracts directly.
 `workbench/contrib/tasks/browser/taskService.ts` owns discovery and installs the
 service through the Code-selected service registry. `TerminalTaskSystem` owns
 command resolution, run state, and Terminal execution. Both use constructor DI. The Terminal remains the
@@ -14,6 +17,11 @@ Standard extensions can start built-in Tasks commands through `commands.executeC
 The request reaches the initiating client's canonical CommandService and then the existing
 TaskService. Void command results return `undefined`; explicit JSON null and falsy values
 retain their meaning. Command completion does not imply that the task process has exited.
+
+The current product Node extension host is admitted only for trusted product-host
+connections. Its executable-extension UI scenarios run on Electron; Browser
+connections retain the backend's explicit activation restriction. Browser task
+configuration and declarative matcher scenarios do not require that authority.
 
 `MainThreadTask` exposes extension task queries and execution handles through the existing
 TaskService. `fetchTasks` filters version and definition type without execution;
@@ -48,7 +56,7 @@ from restoring a completed run. Process end is sent after the process owner ackn
 release, even when the UI records cancellation earlier. Retiring an extension observer aborts
 its queued callbacks; completion does not migrate to a replacement incarnation.
 Custom PTY completion waits for its brokered release acknowledgment and emits no process events.
-`workbench.action.tasks.build` and `workbench.action.tasks.test` use the current catalog. Configured `group.isDefault` globs match the active file relative to its workspace folder without case sensitivity and take priority over boolean defaults. A unique match or boolean default runs directly; multiple matches restrict the picker, and no match falls back to boolean defaults or the group. Folderless editors use the same fallback. Extension TaskGroup snapshots expose a glob as `isDefault: false`, preserving the public boolean contract. The picker follows catalog changes and Escape cancels selection. Presentation and automatic run policies remain incomplete.
+`workbench.action.tasks.build` and `workbench.action.tasks.test` use the current catalog. Configured `group.isDefault` globs match the active file relative to its workspace folder without case sensitivity and take priority over boolean defaults. A unique match or boolean default runs directly; multiple matches restrict the picker, and no match falls back to boolean defaults or the group. Folderless editors use the same fallback. Extension TaskGroup snapshots expose a glob as `isDefault: false`, preserving the public boolean contract. The picker follows catalog changes and Escape cancels selection. Presentation policies and folder-open automatic tasks use the same execution owner.
 
 ## Current contract
 
@@ -117,11 +125,13 @@ CustomExecution has no executable command to echo. `showReuseMessage` defaults t
 true. Shared/dedicated terminals display the reuse notice, new terminals display a
 close notice, and `close: true` suppresses both. Disabling the reuse notice retains
 the completed terminal's key-to-close behavior. Reuse replaces the exit policy.
-Terminal groups remain incomplete.
+A nonempty `presentation.group` joins task screens in split panes within the same workspace folder.
+The existing TerminalGroupService owns membership, layout, focus and keyboard navigation.
+Shared reuse also requires the same configured group; new panels still split into their named group.
+Removing a terminal or replacing the workspace retires its group eligibility.
 
 Known unsupported execution settings are listed on the task and rejected before
-creating a terminal: unavailable execution-host platform facts, other presentation
-settings, unsupported run policies,
+creating a terminal: unavailable execution-host platform facts, unsupported run policies,
 and unsupported host variables. `${env:NAME}`, `${workspaceFolder}` and `${workspaceFolderBasename}`
 and `${command:...}` / `${input:...}` in the command and environment keys and values are resolved by the shared configuration resolver before creating a terminal. `${config:...}` reads current scalar values from ConfigurationService; `${userHome}` requires execution-host home facts. `${cwd}` uses the selected folder, and `${pathSeparator}` / `${/}` use its filesystem rules. File paths and drive letters follow PathService’s execution-host facts, independently of the renderer’s operating system. Each command or input variable is evaluated once per invocation; a new run evaluates it again. Configured inputs are read through FileService from the selected folder’s `.vscode/tasks.json` at dispatch. `promptString` and `pickString` reuse Quick Input with defaults, labels, password masking and keyboard cancellation; command inputs pass their declared `args` to CommandService. Nested references in input results resolve from the same invocation cache. Invalid or duplicate referenced definitions fail before interaction; a workspace switch or resolver disposal closes its own prompt and cancels dispatch. Cancellation creates no terminal or run. Task command handlers receive the ordered array of requested variable strings after noninteractive substitution, matching standard Tasks resolution. Callback authority and absent internal execution fields do not cross the Host JSON boundary. The returned Map populates the existing execution expression and rerun snapshot; retained task metadata never invokes command variables.
 The shared resolver also implements `resolveWithEnvironment`, `resolveWithInteraction` and
@@ -156,12 +166,13 @@ block. Arguments replace their inherited array; cwd and environment values retai
 variable resolution. Inactive blocks do not affect execution. Original configuration metadata
 remains intact. If host OS facts are unavailable, platform-dependent tasks cannot start.
 
-`options.env` merges document defaults with task values; an empty task object retains inherited keys and null removes a key from the child environment. Variables resolve against the selected authorized execution host before terminal creation. Missing environment values become empty strings. Nested references in resolved values are evaluated once per variable; raw shell dollar syntax stays data. The backend applies overrides to a copy of its frozen terminal environment; a task cannot mutate later terminals. Terminal relaunch retains the original spawn environment snapshot. The backend continues to exclude unrelated process secrets from its inherited environment; this policy differs from VS Code's unrestricted process environment.
+`options.env` merges document defaults with task values; an empty task object retains inherited keys and null removes a key from the child environment. Variables resolve against the selected authorized execution host before terminal creation. Missing environment values become empty strings. Nested references in resolved values are evaluated once per variable; raw shell dollar syntax stays data. The backend applies overrides to a copy of its frozen terminal environment; a task cannot mutate later terminals. Terminal relaunch retains the original spawn environment snapshot. The backend inherits the frozen developer environment while excluding private host-control variables. Task overrides cannot restore those private variables.
 
 Active-file metadata, relative paths, containing workspace folder, selected text and cursor
 line/column are resolved from the canonical Editor and CodeEditor owners. The invocation
 captures that snapshot before environment reads, commands or prompts can change the active
-editor. Selected text uses the same variable resolution contract. Host path rules apply to file metadata;
+editor. Selected text is inserted verbatim, including variable-like syntax; it cannot introduce
+environment lookups or command execution. Host path rules apply to file metadata;
 `${workspaceRoot}` and `${workspaceRootFolderName}` retain the corresponding Workspace
 behavior for older configurations. Missing editor, selection or containing folder fails
 before process creation. Web and Electron process assertions cover the emitted arguments.
@@ -271,11 +282,32 @@ workspace and folder configuration targets remain incomplete.
 
 ## Full VS Code compatibility target
 
-| Contract area                 | Current behavior and remaining work                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Environment                   | Shared host lookup, configured/provider overrides and nested variable resolution are implemented; inherited values retain the backend allowlist.                                                                                                                                                                                                                                                                                                                         |
-| Task model and providers      | TaskDefinition, process/shell/custom execution and dispatch-time resolveTask are implemented. Folder/Workspace scope, version/type filters, public execution handles, edits and copies of fetched CustomExecution and ordered start/end/process events are implemented. Empty-window execution, direct opaque callback invocation, presentation and automatic task execution remain incomplete; configured instance limits and all five capacity policies are supported. |
-| Execution                     | Process argv, task cwd, structured shell quoting, explicit shell execution and custom PTY lifetimes are implemented. Platform overrides use the execution host OS; presentation policies remain incomplete; Windows shell behavior still needs host validation.                                                                                                                                                                                                          |
-| Orchestration and diagnostics | Dependency graphs, background readiness, bounded problem collection, contributed registries and scoped file-location search are implemented. History, persistent reconnection and automatic run policies remain incomplete.                                                                                                                                                                                                                                              |
+| Contract area                 | Current behavior and remaining work                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Environment                   | Shared host lookup, configured/provider overrides and nested variable resolution are implemented; inherited values retain the developer environment with private host-control variables excluded.                                                                                                                                                                                                                                                                                                     |
+| Task model and providers      | TaskDefinition, process/shell/custom execution and dispatch-time resolveTask are implemented. Folder/Workspace scope, version/type filters, public execution handles, edits and copies of fetched CustomExecution and ordered start/end/process events are implemented. Empty-window execution and direct opaque callback invocation remain incomplete; folder-open automatic tasks and presentation groups are implemented; configured instance limits and all five capacity policies are supported. |
+| Execution                     | Process argv, task cwd, structured shell quoting, explicit shell execution and custom PTY lifetimes are implemented. Platform overrides use the execution host OS; presentation policies are implemented; Windows shell behavior still needs host validation.                                                                                                                                                                                                                                         |
+| Orchestration and diagnostics | Dependency graphs, background readiness, bounded problem collection, contributed registries and scoped file-location search are implemented. Folder-open automatic launch is implemented. History and persistent reconnection remain incomplete.                                                                                                                                                                                                                                                      |
 
 These remaining areas must be implemented and validated through the same owner before claiming the complete VS Code Tasks API or arbitrary task extension compatibility.
+
+## Automatic tasks
+
+`browser/runAutomaticTasks.ts` is a window contribution created after restoration.
+`runOptions.runOn: "folderOpen"` selects automatic tasks. The application-scoped
+`task.allowAutomaticTasks` preference defaults to `"off"`; Manage Automatic Tasks
+changes it through the canonical user settings owner. Workspace files cannot enable it.
+No separate policy file or stored trust list is created. Existing Rust directory grants
+remain authoritative, and the contribution rereads WorkspaceTrustManagementService
+before dispatch. Turning the policy on in an open trusted workspace runs its automatic
+tasks once. Catalog refreshes and trust events do not repeat completed launches; a new
+workspace entry or window reload may run them again. Disabling the policy or retiring
+the window cancels pending preparation, while already published runs retain normal
+Task cancellation and process lifetimes. Missing trust fails closed. Local workspace trust reads the effective grant by active directory ID through `env/dir/read`; Browser never uses directory-grant management or receives `directoryGrantsHost` authority. Remote trust retains its existing canonical resolver path.
+
+Structured shell quoting is accepted only for recognized POSIX, Fish, PowerShell and
+Command Prompt shells. An unknown shell (including Nushell or the WSL launcher)
+is rejected before terminal creation instead of receiving assumed POSIX quoting.
+Explicit full shell command lines remain the selected shell's input language.
+Configured split groups, like problem reveal policies, remain outside the standard
+extension TaskPresentationOptions API and survive edits to fetched Tasks.

@@ -4,10 +4,11 @@ import { test } from 'mocha';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { DisposableStore, Disposable } from '../../../../../base/common/lifecycle.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import { ITerminalService } from '../../../terminal/browser/terminal.js';
-import { IViewsService } from '../../../views/common/viewsService.js';
-import { ITaskService, type IWorkspaceTask } from '../../common/taskService.js';
-import { TasksViewPane } from '../../../../contrib/tasks/browser/tasksViewPane.js';
+import { ITerminalService } from '../../../../services/terminal/browser/terminal.js';
+import { IViewsService } from '../../../../services/views/common/viewsService.js';
+import { ITaskService } from '../../common/taskService.js';
+import { type IWorkspaceTask } from '../../common/tasks.js';
+import { TasksViewPane } from '../../browser/tasksViewPane.js';
 
 test('Tasks view clears an execution error when external configuration updates its catalog', async () => {
 	using resources = new DisposableStore();

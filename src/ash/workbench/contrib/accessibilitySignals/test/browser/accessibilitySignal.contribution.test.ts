@@ -22,7 +22,8 @@ import { MarkerService } from '../../../../../platform/markers/common/markerServ
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
 import type { ICodeEditor } from '../../../../../editor/browser/editorBrowser.js';
 import { ITerminalService, type ITerminalInstance, type ITerminalCommandStatusEvent } from '../../../../services/terminal/browser/terminal.js';
-import { ITaskService, type ITaskRun } from '../../../../services/tasks/common/taskService.js';
+import { ITaskService } from '../../../tasks/common/taskService.js';
+import { type ITaskRun } from '../../../tasks/common/tasks.js';
 
 suite('Accessibility signal production contributions', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();

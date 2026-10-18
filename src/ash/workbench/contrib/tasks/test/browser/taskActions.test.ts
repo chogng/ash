@@ -14,7 +14,8 @@ import { INotificationService } from '../../../../../platform/notification/commo
 import { IQuickInputService, type IQuickPick, type IQuickPickItem, type IQuickPickSeparator } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { ITaskService, type IWorkspaceTask } from '../../../../services/tasks/common/taskService.js';
+import { ITaskService } from '../../common/taskService.js';
+import { type IWorkspaceTask } from '../../common/tasks.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';

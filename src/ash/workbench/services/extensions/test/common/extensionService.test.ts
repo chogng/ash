@@ -34,7 +34,7 @@ import { MainThreadLocalization } from '../../../../api/browser/mainThreadLocali
 import { ExtensionThemeRegistry, parseExtensionTheme } from "../../common/extensionTheme.js";
 import { ExtensionDebugAdapterRegistry } from "../../common/extensionDebugAdapter.js";
 
-import { parseProblemMatchers } from '../../../tasks/common/problemMatcher.js';
+import { parseProblemMatchers } from '../../../../contrib/tasks/common/problemMatcher.js';
 import { WatchingProblemCollector } from '../../../../contrib/tasks/common/problemCollectors.js';
 import { MarkerService } from '../../../../../platform/markers/common/markerService.js';
 import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../../../../editor/test/common/testLanguageFeaturesService.js';

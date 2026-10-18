@@ -121,6 +121,7 @@ export function createApi(configuration, initialization) {
 	// provider's callback or retaining the fetched Task.
 	const fetchedCustomExecutions = new WeakMap();
 	const taskProblemRevealModes = new WeakMap();
+	const taskTerminalGroups = new WeakMap();
 	const providedTaskIds = new WeakMap();
 	let providedTaskSequence = 0;
 	const providedCustomExecutions = new Map();
@@ -406,6 +407,8 @@ export function createApi(configuration, initialization) {
 		// when its catalog identity becomes an explicit execution identity.
 		const revealProblems = taskProblemRevealModes.get(task);
 		if (revealProblems !== undefined) presentation = { ...presentation, revealProblems };
+		const terminalGroup = taskTerminalGroups.get(task);
+		if (terminalGroup !== undefined) presentation = { ...presentation, group: terminalGroup };
 		const runOptions = task.runOptions;
 		if (runOptions !== undefined && (!runOptions || typeof runOptions !== 'object' || Array.isArray(runOptions) || Object.keys(runOptions).some(key => key !== 'reevaluateOnRerun') || runOptions.reevaluateOnRerun !== undefined && typeof runOptions.reevaluateOnRerun !== 'boolean')) {
 			throw new TypeError('Invalid Task runOptions');
@@ -464,7 +467,8 @@ export function createApi(configuration, initialization) {
 		if (value.presentation !== undefined) {
 			const presentation = value.presentation;
 			if (!presentation || typeof presentation !== 'object' || Array.isArray(presentation)
-				|| Object.keys(presentation).some(key => !['echo', 'showReuseMessage', 'panel', 'clear', 'reveal', 'revealProblems', 'focus', 'close'].includes(key))
+				|| Object.keys(presentation).some(key => !['echo', 'showReuseMessage', 'panel', 'clear', 'reveal', 'revealProblems', 'focus', 'close', 'group'].includes(key))
+				|| presentation.group !== undefined && (typeof presentation.group !== 'string' || presentation.group.length > 256 || presentation.group.includes('\0'))
 				|| presentation.panel !== undefined && !taskPanelNames.includes(presentation.panel)
 				|| presentation.reveal !== undefined && !taskRevealNames.includes(presentation.reveal)
 				|| presentation.revealProblems !== undefined && !['always', 'onProblem', 'never'].includes(presentation.revealProblems)
@@ -479,6 +483,7 @@ export function createApi(configuration, initialization) {
 				...(presentation.close === undefined ? {} : { close: presentation.close }),
 			};
 			if (presentation.revealProblems !== undefined) taskProblemRevealModes.set(task, presentation.revealProblems);
+			if (presentation.group !== undefined) taskTerminalGroups.set(task, presentation.group);
 		}
 		task.runOptions = value.runOptions === undefined ? {} : { ...value.runOptions };
 		task.isBackground = value.isBackground;

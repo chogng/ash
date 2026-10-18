@@ -10,7 +10,8 @@ import { Keybinding, logicalKey } from "../../../../base/common/keybindings.js";
 import { Action2, MenuId, MenusRegistry, registerAction2 } from "../../../../platform/actions/common/actions.js";
 import { type ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
 import { IQuickInputService, type IQuickPickItem } from "../../../../platform/quickinput/common/quickInput.js";
-import { ITaskService, type ITaskRun, type IWorkspaceTask } from "../../../services/tasks/common/taskService.js";
+import { ITaskService } from "../common/taskService.js";
+import { type ITaskRun, type IWorkspaceTask } from "../common/tasks.js";
 import { IViewsService } from "../../../services/views/common/viewsService.js";
 import { RERUN_LAST_TASK_COMMAND_ID, RUN_BUILD_TASK_COMMAND_ID, RUN_TEST_TASK_COMMAND_ID, RUN_TASK_COMMAND_ID, TASKS_VIEW_ID, TERMINATE_TASK_COMMAND_ID } from "../common/tasks.js";
 

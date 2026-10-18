@@ -10,7 +10,8 @@ import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { Emitter } from "../../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
-import { type ITaskRun, type ITaskService, type IWorkspaceTask, type TaskProvider, type TaskProviderRegistration, type TaskRunStatus } from "../../../../services/tasks/common/taskService.js";
+import { type ITaskService } from "../../../../contrib/tasks/common/taskService.js";
+import { type ITaskRun, type IWorkspaceTask, type TaskProvider, type TaskProviderRegistration, type TaskRunStatus } from "../../../../contrib/tasks/common/tasks.js";
 import type { ITerminalInstance } from "../../../terminal/browser/terminal.js";
 import { TestingService } from "../../browser/testingService.js";
 

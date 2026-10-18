@@ -12,7 +12,7 @@ import { ILogService } from "../../../platform/log/common/log.js";
 import { registerWorkbenchServiceContribution } from "../../browser/workbenchServiceContributions.js";
 import { ILanguageFeaturesService } from '../../../editor/common/services/languageFeatures.js';
 import { IOutputService } from "../../services/output/common/output.js";
-import { ITaskService } from "../../services/tasks/common/taskService.js";
+import { ITaskService } from "../../contrib/tasks/common/taskService.js";
 import { ITestingService } from "../../services/testing/common/testingService.js";
 import { IExtensionHostService } from "../../services/extensionHost/common/extensionHostService.js";
 import { AppServerExtensionHostService } from "../../services/extensionHost/browser/appServerExtensionHostService.js";

@@ -4337,3 +4337,80 @@ fn filesystem_resource_routes_are_independent_of_selection_and_never_grant_acces
     );
     assert!(!first.path.join("after-revoke.txt").exists());
 }
+
+#[test]
+fn environment_directory_read_exposes_only_current_effective_grants_without_management() {
+    use ash_file_access::Permission;
+    use ash_file_access::Permissions;
+    let dir = TestDir::new("effective-directory", "file.txt");
+    let server = server().with_local_env_host(None, host_policy()).unwrap();
+    let grant = Grant::for_environment(
+        dir.root(),
+        GrantSource::HostConfiguration,
+        Permissions::new([Permission::ReadFiles, Permission::BrowseFiles]),
+    );
+    server
+        .activate_local_dirs(vec![("workspace".into(), grant)])
+        .unwrap();
+    let mut connection = server.connection();
+    let next_request = AtomicUsize::new(1);
+    let rpc = |connection: &mut ConnectionState, method: &str, params: serde_json::Value| {
+        serde_json::from_str::<serde_json::Value>(
+            &server.handle_json(
+                connection,
+                &serde_json::json!({"jsonrpc":"2.0", "id":next_request.fetch_add(1, Ordering::Relaxed), "method":method, "params":params})
+                    .to_string(),
+            ),
+        )
+        .unwrap()
+    };
+    assert!(
+        rpc(
+            &mut connection,
+            "initialize",
+            serde_json::json!({"clientInfo":{"name":"browser","version":"1"}}),
+        )
+        .get("error")
+        .is_none()
+    );
+    let read = rpc(
+        &mut connection,
+        "env/dir/read",
+        serde_json::json!({"dirId":"workspace"}),
+    );
+    assert!(read.get("error").is_none(), "{read}");
+    assert_eq!(read["result"]["id"], "workspace");
+    assert_eq!(
+        read["result"]["path"],
+        serde_json::json!(dir.root().canonical_path())
+    );
+    assert_eq!(
+        read["result"]["permissions"],
+        serde_json::json!(["readFiles", "browseFiles"]),
+    );
+    for id in ["unregistered", dir.path.to_str().unwrap()] {
+        let denied = rpc(
+            &mut connection,
+            "env/dir/read",
+            serde_json::json!({"dirId":id}),
+        );
+        assert_eq!(denied["error"]["data"]["kind"], "PermissionRequired");
+    }
+    assert_eq!(
+        rpc(
+            &mut connection,
+            "config/directoryGrants/list",
+            serde_json::json!({})
+        )["error"]["data"]["kind"],
+        "PermissionRequired",
+    );
+    server.activate_local_dirs(Vec::new()).unwrap();
+    assert_eq!(
+        rpc(
+            &mut connection,
+            "env/dir/read",
+            serde_json::json!({"dirId":"workspace"})
+        )["error"]["data"]["kind"],
+        "PermissionRequired",
+    );
+}

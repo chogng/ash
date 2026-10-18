@@ -28,7 +28,8 @@ import { createExtensionHostInitialization } from '../../services/extensions/com
 import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type ExtensionHostLanguageRegistration, type ExtensionHostRegistration, type ExtensionHostRuntime } from '../../../platform/agentHost/common/extensionHostApi.js';
 import { normalizeExtensionHostPayload } from '../../../platform/agentHost/browser/extensionHostProtocol.js';
 import { ILanguageFeaturesService, type LanguageProviderBatch, type LanguageProviderBatchRegistration } from '../../../editor/common/services/languageFeatures.js';
-import { ITaskService, type TaskProvider, type TaskProviderRegistration } from '../../services/tasks/common/taskService.js';
+import { ITaskService } from '../../contrib/tasks/common/taskService.js';
+import { type TaskProvider, type TaskProviderRegistration } from '../../contrib/tasks/common/tasks.js';
 import { ITestingService, type TestProfileProvider, type TestProfileProviderRegistration } from '../../services/testing/common/testingService.js';
 import { IOutputService, OUTPUT_VIEW_ID, type IOutputChannel, type OutputEntrySeverity } from '../../services/output/common/output.js';
 import { createExtensionHostLanguageProviderBatch, extensionHostLanguageProviderId, unsupportedExtensionHostLanguageOperations, type ExtensionHostProviderInvoker } from './extensionHostLanguageBridge.js';

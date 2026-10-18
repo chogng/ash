@@ -1,3 +1,4 @@
+import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
 import { Event } from '../../../base/common/event.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
@@ -8,6 +9,7 @@ import type { IWorkspaceTrustApi, WorkspaceTrustCommandResult, WorkspaceTrustPer
 export function createDisconnectedWorkspaceTrustApi(unavailable: UnavailableOperation): IWorkspaceTrustApi {
 	return {
 		onDidChangeTrust: Event.None,
+		readWorkspaceDirectory: () => unavailable('workspaceTrust.readWorkspaceDirectory'),
 		readDirectory: () => unavailable('workspaceTrust.readDirectory'),
 		listDirectories: () => unavailable('workspaceTrust.listDirectories'),
 		setDirectoryPermissions: () => unavailable('workspaceTrust.setDirectoryPermissions'),
@@ -33,6 +35,15 @@ export function createAppServerWorkspaceTrustApi(connection: AppServerProtocolCl
 			if (Array.isArray(disposables)) { disposables.push(subscription); }
 			else { disposables?.add(subscription); }
 			return subscription;
+		},
+		readWorkspaceDirectory: async dirId => {
+			try {
+				const result = await appServerRequest(connection, 'env/dir/read', { dirId });
+				return result.permissions;
+			} catch (error) {
+				if (error instanceof AppServerRemoteError && error.errorName === 'PermissionRequired') return undefined;
+				throw error;
+			}
 		},
 		readDirectory: async path => {
 			const result = await appServerRequest(connection, 'config/directoryGrants/read', { path });

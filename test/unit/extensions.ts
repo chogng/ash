@@ -18,7 +18,7 @@ await runUnitTests([
 	'src/ash/workbench/contrib/debug/test/browser/debugConfigurationManager.test.js',
 	'src/ash/workbench/services/extensionHost/test/**/*.test.js',
 	'src/ash/workbench/services/language/test/common/languageFeaturesService.test.js',
-	'src/ash/workbench/services/tasks/test/browser/taskService.test.js',
+	'src/ash/workbench/contrib/tasks/test/browser/taskService.test.js',
 	'src/ash/workbench/services/testing/test/browser/testingService.test.js',
 	'src/ash/workbench/services/untitled/test/common/untitledTextEditorService.test.js',
 	'src/ash/workbench/test/browser/workbench-theme.test.js',

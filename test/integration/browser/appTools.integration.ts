@@ -14,7 +14,7 @@ import { IModelService } from '../../../src/ash/editor/common/services/model.js'
 import { IFileSearchService } from '../../../src/ash/platform/search/common/fileSearch.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
-import { ITaskService } from '../../../src/ash/workbench/services/tasks/common/taskService.js';
+import { ITaskService } from '../../../src/ash/workbench/contrib/tasks/common/taskService.js';
 import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
 import { AppServerProtocolClient } from '../../../src/ash/platform/agentHost/browser/appServerProtocolClient.js';
 import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION, type AppServerTransport } from '../../../src/ash/platform/agentHost/common/appServerTransport.js';

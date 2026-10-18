@@ -23,6 +23,11 @@
 连接建立、鉴权和消息队列由 `ash-app-server-transport` 负责。Core 契约和装配边界见
 [`Core 架构`](../../docs/core.md#7-依赖边界)。
 
+`env/dir/read` 只读取已激活目录 ID 对应的有效权限；返回同一 Environment owner
+持有的目录身份、路径与授权，不打开调用方指定的路径，不枚举 profile 中的其他授权。
+普通 Browser 连接可据此判断当前工作区是否受信任；目录配置的读取列表与所有修改
+仍要求 `directoryGrantsHost`。目录退出当前环境或授权失效后，读取返回 `PermissionRequired`。
+
 ## 请求执行与容量
 
 直接连接与 Agents 网关的本地请求共用 `server/request_dispatch.rs`。`server/request_processing.rs` 负责参数边界、取消登记和响应收尾；领域处理器负责 DTO 转换和调用所属领域服务。共享进程不要求全部操作使用同一种执行方式。

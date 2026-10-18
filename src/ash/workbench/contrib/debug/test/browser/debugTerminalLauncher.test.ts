@@ -1,3 +1,4 @@
+import { registerTestTerminalLifecycleServices } from '../../../../test/browser/workbenchTestServices.js';
 import { MergedEnvironmentVariableCollection } from '../../../../../platform/terminal/common/environmentVariableCollection.js';
 import { IEnvironmentVariableService } from '../../../terminal/common/environmentVariable.js';
 import { ITerminalContributionService, ITerminalProfileResolverService, ITerminalProfileService } from '../../../../services/terminal/common/terminal.js';
@@ -44,7 +45,7 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
-import { ITaskService } from '../../../../services/tasks/common/taskService.js';
+import { ITaskService } from '../../../tasks/common/taskService.js';
 import { ITerminalService } from '../../../../services/terminal/browser/terminal.js';
 import { DebugService } from '../../browser/debugService.js';
 import { AdapterManager } from '../../browser/debugAdapterManager.js';
@@ -95,6 +96,7 @@ suite('DAP terminal availability', () => {
 			};
 			const workspace = resources.add(new TestWorkspaceService({ id: 'test', uri: URI.file('/workspace') }));
 			const services = resources.add(new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], [ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
+			registerTestTerminalLifecycleServices(services);
 			const terminals = resources.add(services.createInstance(TerminalService));
 			let finished = false;
 			const pending = launchWithTerminalRequest(terminals, { kind: 'integrated', args: ['app'] }, { terminalProcesses: processes }).then(response => { finished = true; return response; });
@@ -133,6 +135,7 @@ suite('DAP terminal availability', () => {
 			};
 			const workspace = resources.add(new TestWorkspaceService({ id: 'test', uri: URI.file('/workspace') }));
 			const services = resources.add(new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], [ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
+			registerTestTerminalLifecycleServices(services);
 			const terminals = resources.add(services.createInstance(TerminalService));
 			const response = await launchWithTerminalRequest(terminals, { kind: 'integrated', args: ['app'] }, { terminalProcesses: processes });
 			assert.deepEqual({ success: response.success, message: response.message, calls, terminals: terminals.instances }, {
@@ -170,7 +173,8 @@ suite('DAP terminal launch policies through execution owners', () => {
 			write: async options => { writes.push(typeof options.data === 'string' ? options.data : new TextDecoder().decode(options.data)); },
 			resize: async () => { }, close: async options => { closes.push(options.terminalId); },
 		};
-		const services = owner.add(new InstantiationService(new ServiceCollection([ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
+		const services = owner.add(new InstantiationService(new ServiceCollection([IConfigurationService, configuration], [ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
+		registerTestTerminalLifecycleServices(services);
 		const terminals = owner.add(services.createInstance(TerminalService));
 		const disposalListener = owner.add(terminals.onDidDisposeInstance(() => {
 			disposalListener.dispose();

@@ -10,7 +10,7 @@ import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextke
 import { URI } from "../../../../base/common/uri.js";
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, type IConfigurationNode } from '../../../../platform/configuration/common/configurationRegistry.js';
-import { registerProblemMatcherContributions, type ProblemMatcherContributions } from '../../tasks/common/problemMatcher.js';
+import { registerProblemMatcherContributions, type ProblemMatcherContributions } from '../../../contrib/tasks/common/problemMatcher.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';

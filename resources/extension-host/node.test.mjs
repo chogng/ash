@@ -700,3 +700,22 @@ exports.activate = context => {
 	assert.equal(calls.filter(call => call.action === 'dispose').length, 2);
 	assert.equal(calls.some(call => call.text === 'ignored'), false);
 });
+
+test('fetched task terminal groups survive public edits without entering the public presentation API', { timeout: 15000 }, async t => {
+	const snapshot = { id: 'configured', name: 'Configured', source: 'Workspace', scope: 2, definition: { type: 'process' }, execution: { type: 'process', program: 'compiler', args: [] }, presentation: { group: 'build', reveal: 'never' }, options: {}, group: 'build', isBackground: false, problemMatchers: [], detail: null };
+	const executions = [];
+	const h = await host(t, `const v = require('vscode'); exports.activate = context => context.subscriptions.push(v.commands.registerCommand('test.node', async () => {
+ const [task] = await v.tasks.fetchTasks();
+ if ('group' in task.presentationOptions) throw Error('Configuration-only group leaked');
+ for (let i = 0; i < 2; i++) { task.name = 'Edited ' + i; task.presentationOptions = { panel: v.TaskPanelKind.New }; await v.tasks.executeTask(task); }
+ return 'retained';
+}));`, 'extension.cjs', ['command'], frame => {
+		if (frame.operation.operation === 'fetchTasks') return { result: 'tasks', sequence: 0, executions: [], tasks: [snapshot] };
+		assert.equal(frame.operation.operation, 'executeTask');
+		executions.push(frame.operation.task);
+		return { result: 'taskExecution', sequence: executions.length, execution: { id: `run-${executions.length}`, active: false, task: snapshot } };
+	});
+	const result = await h.invoke('test.node', []).result;
+	assert.equal(result.status, 'success', JSON.stringify(result));
+	assert.deepEqual(executions.map(task => task.presentation), [{ panel: 'new', group: 'build' }, { panel: 'new', group: 'build' }]);
+});

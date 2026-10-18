@@ -8,7 +8,7 @@ import { localize } from '../../../../nls.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { formatMessageForTerminal } from '../../../../platform/terminal/common/terminalStrings.js';
 import { escapeNonWindowsPath } from '../../../../platform/terminal/common/terminalEnvironment.js';
-import { GeneralShellType, PosixShellType } from '../../../../platform/terminal/common/terminal.js';
+import { TerminalLocation, GeneralShellType, PosixShellType } from '../../../../platform/terminal/common/terminal.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IMarkerService } from '../../../../platform/markers/common/markers.js';
 import { IFileSearchService } from '../../../../platform/search/common/fileSearch.js';
@@ -25,10 +25,10 @@ import type { IWorkspaceFolder } from '../../../../platform/workspace/common/wor
 import { IConfigurationResolverService } from '../../../services/configurationResolver/common/configurationResolver.js';
 import { ConfigurationResolverExpression, type Replacement, type IResolvedValue } from '../../../services/configurationResolver/common/configurationResolverExpression.js';
 import { type IOutputChannel, type OutputEntrySeverity } from '../../../services/output/common/output.js';
-import { readTaskOutput, ShellQuoting, type ITaskRun, type ITaskOutput, type IWorkspaceTask, type TaskRunStatus, type TaskPseudoterminal, type TaskShellExecution, type ShellQuotedString } from '../../../services/tasks/common/taskService.js';
-import { type ITerminalCreateOptions, type ITerminalCommandStatusEvent, type ITerminalInstance, type ITerminalProfileSelection, ITerminalService } from '../../../services/terminal/browser/terminal.js';
-import { parseShellExecution } from '../../../services/tasks/common/workspaceTasks.js';
-import { parseProblemMatchers, type ProblemMatcher } from '../../../services/tasks/common/problemMatcher.js';
+import { readTaskOutput, ShellQuoting, type ITaskRun, type ITaskOutput, type IWorkspaceTask, type TaskRunStatus, type TaskPseudoterminal, type TaskShellExecution, type ShellQuotedString } from '../common/tasks.js';
+import { type ITerminalCreateOptions, type ITerminalCommandStatusEvent, type ITerminalInstance, type ITerminalProfileSelection, ITerminalGroupService, ITerminalService } from '../../../services/terminal/browser/terminal.js';
+import { parseShellExecution } from '../common/taskConfiguration.js';
+import { parseProblemMatchers, type ProblemMatcher } from '../common/problemMatcher.js';
 import { WatchingProblemCollector } from '../common/problemCollectors.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { TERMINAL_VIEW_ID } from '../../terminal/common/terminal.js';
@@ -39,7 +39,8 @@ interface TaskTerminal {
 	readonly terminal: ITerminalInstance;
 	readonly folderId: string;
 	readonly taskId: string;
-	readonly panel: 'shared' | 'dedicated';
+	readonly panel: 'shared' | 'dedicated' | 'new';
+	readonly group: string | undefined;
 	idle: boolean;
 }
 
@@ -63,6 +64,7 @@ export class TerminalTaskSystem extends Disposable {
 	constructor(
 		private readonly output: IOutputChannel,
 		@ITerminalService private readonly terminals: ITerminalService,
+		@ITerminalGroupService private readonly groups: ITerminalGroupService,
 		@IConfigurationResolverService private readonly resolver: IConfigurationResolverService,
 		@ILogService private readonly logService: ILogService,
 		@IMarkerService private readonly markers: IMarkerService,
@@ -283,7 +285,7 @@ export class TerminalTaskSystem extends Disposable {
 		let terminal: ITerminalInstance;
 		// Reserving an idle instance synchronously keeps overlapping preparations from sharing a process.
 		const panel = task.presentation?.panel ?? 'shared';
-		const reusable = panel === 'new' ? undefined : [...this.taskTerminals.values()].find(slot => slot.idle && slot.folderId === folder.id && slot.panel === panel && (panel === 'shared' || slot.taskId === task.id) && this.terminals.instances.includes(slot.terminal));
+		const reusable = panel === 'new' ? undefined : [...this.taskTerminals.values()].find(slot => slot.idle && slot.folderId === folder.id && slot.panel === panel && slot.group === task.presentation?.group && slot.terminal.target !== TerminalLocation.Editor && (panel === 'shared' || slot.taskId === task.id) && this.terminals.instances.includes(slot.terminal));
 		if (reusable) reusable.idle = false;
 		try {
 			const options: ITerminalCreateOptions = pty ? {
@@ -331,6 +333,11 @@ export class TerminalTaskSystem extends Disposable {
 			// The returned handle must be closed before any command or run event is published.
 			assertCurrent();
 			this.assertNotDisposed();
+			const group = task.presentation?.group;
+			if (group && terminal.target !== TerminalLocation.Editor) {
+				const sibling = [...this.taskTerminals.values()].find(slot => slot.terminal !== terminal && slot.folderId === folder.id && slot.group === group && this.terminals.instances.includes(slot.terminal) && this.groups.getGroupForInstance(slot.terminal));
+				if (sibling) this.groups.joinInstances([sibling.terminal, terminal]);
+			}
 			if (terminal.state !== 'running' && !((resolved.execution || resolved.cwd) && terminal.state === 'exited')) {
 				throw new Error(localize('tasks.terminalUnavailable', 'The terminal is unavailable. The task was not started. Run the task again.'));
 			}
@@ -368,11 +375,8 @@ export class TerminalTaskSystem extends Disposable {
 			await this.closeTerminal(terminal);
 		}, executionId);
 		this.runs.set(terminal.id, run);
-		let slot: TaskTerminal | undefined;
-		if (panel !== 'new' && !task.presentation?.close) {
-			slot = { terminal, folderId: folder.id, taskId: task.id, panel, idle: false };
-			this.taskTerminals.set(terminal.id, slot);
-		}
+		const slot: TaskTerminal = { terminal, folderId: folder.id, taskId: task.id, panel, group: task.presentation?.group, idle: false };
+		this.taskTerminals.set(terminal.id, slot);
 		void run.completion.then(async () => {
 			if (this.isDisposed) return;
 			if (task.presentation?.revealProblems === 'onProblem' && !run.hasBackgroundMatcher && run.hasProblems) {
@@ -383,11 +387,11 @@ export class TerminalTaskSystem extends Disposable {
 			if (revealing) await revealing;
 			if (task.presentation?.close) await this.closeTerminal(terminal);
 			// Release and the run's final reveal must finish before another task can reserve this screen.
-			if (slot && this.taskTerminals.get(terminal.id) === slot) {
+			if (this.taskTerminals.get(terminal.id) === slot) {
 				if (run.status === 'canceled') this.taskTerminals.delete(terminal.id);
 				else slot.idle = true;
 			}
-		}, () => { if (slot && this.taskTerminals.get(terminal.id) === slot) this.taskTerminals.delete(terminal.id); });
+		}, () => { if (this.taskTerminals.get(terminal.id) === slot) this.taskTerminals.delete(terminal.id); });
 		this.variableSnapshots.set(run, [...expression.resolved()]);
 		onStarted?.(run);
 		this.startEmitter.fire(run);
@@ -639,6 +643,9 @@ function quoteWindowsArgument(value: string): string {
 
 function shellCommandLine(execution: TaskShellExecution, shellName: string): string {
 	if (execution.commandLine !== undefined) return execution.commandLine;
+	if (!['sh', 'bash', 'zsh', 'fish', 'dash', 'ksh', 'ash', 'powershell', 'windows-powershell', 'pwsh', 'cmd', 'command-prompt'].includes(shellName)) {
+		throw new Error(localize('tasks.unsupportedShellQuoting', "Ash cannot quote structured task arguments for shell '{0}'. Use a process task or an explicit shell command line.", shellName));
+	}
 	const powershell = ['powershell', 'windows-powershell', 'pwsh'].includes(shellName);
 	const commandPrompt = shellName === 'cmd' || shellName === 'command-prompt';
 	const supplied = execution.options?.shellQuoting;

@@ -1,3 +1,4 @@
+import { AppServerRemoteError } from '../../../agentHost/common/appServerError.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Emitter } from '../../../../base/common/event.js';
@@ -74,6 +75,7 @@ test('workspace trust config notifications respect listener scope and disposal',
 test('disconnected workspace trust cannot read or grant authorization', async () => {
 	const failure = new Error('Disconnected');
 	const api = createDisconnectedWorkspaceTrustApi(async () => { throw failure; });
+	await assert.rejects(api.readWorkspaceDirectory('workspace'), error => error === failure);
 	await assert.rejects(api.readDirectory('/workspace'), error => error === failure);
 	await assert.rejects(api.createGrant('/workspace', READ_DIR_PERMISSIONS), error => error === failure);
 	await assert.rejects(api.persistGrant('/workspace', { type: 'config' }), error => error === failure);
@@ -126,4 +128,26 @@ test('workspace trust lists partial grants and manages canonical identities with
 	await assert.rejects(api.setDirectoryPermissions('C:\\alias', precise, 4), error => error === failure);
 	await assert.rejects(api.forgetDirectory('dir-2', 4), error => error === failure);
 	assert.equal(requests.length, before + 2);
+});
+
+
+test('workspace trust reads active directory permissions through the bounded environment contract', async () => {
+	const requests: unknown[] = [];
+	const api = createAppServerWorkspaceTrustApi({
+		async request(definition: { method: string; }, params: unknown) {
+			requests.push({ method: definition.method, params });
+			return { id: 'workspace', path: '/workspace', permissions: READ_DIR_PERMISSIONS };
+		},
+	} as unknown as AppServerProtocolClient);
+	assert.deepEqual(await api.readWorkspaceDirectory('workspace'), READ_DIR_PERMISSIONS);
+	assert.deepEqual(requests, [{ method: 'env/dir/read', params: { dirId: 'workspace' } }]);
+});
+
+
+test('retired active directory permissions fail closed without hiding connection failures', async () => {
+	let failure: Error = new AppServerRemoteError(-32043, 'untranslated diagnostic', { kind: 'PermissionRequired' });
+	const api = createAppServerWorkspaceTrustApi({ request: async () => { throw failure; } } as unknown as AppServerProtocolClient);
+	assert.equal(await api.readWorkspaceDirectory('retired'), undefined);
+	failure = new Error('Connection closed');
+	await assert.rejects(api.readWorkspaceDirectory('retired'), error => error === failure);
 });

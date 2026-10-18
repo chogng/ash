@@ -847,6 +847,8 @@ use crate::protocol::environment::DirGrantDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::environment::EnvDirDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::environment::EnvDirReadParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::environment::EnvDirSetEntry;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::environment::EnvDirsSetParams;
@@ -3557,6 +3559,11 @@ client_methods! {
         response: BrowserNetworkAuthorizeResult,
         // Chromium must be able to ask while its originating tool awaits the host response.
         serialization: None,
+    },
+    EnvDirRead => "env/dir/read" {
+        params: EnvDirReadParams,
+        response: EnvDirDto,
+        serialization: GlobalSharedRead,
     },
     EnvDirsSet => "env/dirs/set" {
         params: EnvDirsSetParams,
@@ -6499,6 +6506,7 @@ typescript_bindings! {
     InitializeResult,
     DirGrantDto,
     EnvDirDto,
+    EnvDirReadParams,
     EnvDirSetEntry,
     EnvDirsSetParams,
     EnvDirsSetResult,

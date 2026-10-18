@@ -41,7 +41,10 @@ export class WorkspaceTrustManagementService extends Disposable implements IWork
 			return { uri, trusted: false, permissions: undefined };
 		}
 		const path = remote ? getRemoteWorkspacePath(canonical.with({ query: null, fragment: null })) : canonical.fsPath;
-		const { permissions } = await this.trust.readDirectory(path);
+		const folder = this.workspace.getWorkspace().folders.find(folder => folder.uri.toString() === uri.toString());
+		const permissions = folder && !remote
+			? await this.trust.readWorkspaceDirectory(folder.id)
+			: (await this.trust.readDirectory(path)).permissions;
 		return { uri: canonical, trusted: resolved?.options?.isTrusted !== false && hasDevelopmentPermissions(permissions), permissions };
 	}
 

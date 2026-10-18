@@ -38,6 +38,8 @@ export interface WorkspaceTrustCommandResult {
 /** Mechanical access to Rust authorization; it does not store a second trust list. */
 export interface IWorkspaceTrustApi {
 	readonly onDidChangeTrust: Event<void>;
+	/** Reads the effective grant of an existing workspace directory without management authority. */
+	readWorkspaceDirectory(dirId: string): Promise<readonly WorkspaceTrustPermission[] | undefined>;
 	readDirectory(path: string): Promise<{ readonly dir: string; readonly permissions: readonly WorkspaceTrustPermission[] | undefined; }>;
 	listDirectories(): Promise<WorkspaceTrustSnapshot>;
 	setDirectoryPermissions(path: string, permissions: readonly WorkspaceTrustPermission[], expectedRevision: number): Promise<WorkspaceTrustCommandResult>;

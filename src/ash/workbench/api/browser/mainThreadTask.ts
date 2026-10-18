@@ -6,7 +6,8 @@ import { IExtensionHostApi, type ExtensionClientSource, type ExtensionHostFleetS
 import { normalizeExtensionHostPayload } from '../../../platform/agentHost/browser/extensionHostProtocol.js';
 import { type ExtensionClientOperation, type ExtensionClientResult } from '../common/extHost.protocol.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
-import { ITaskService, type ITaskRun, type IWorkspaceTask } from '../../services/tasks/common/taskService.js';
+import { ITaskService } from '../../contrib/tasks/common/taskService.js';
+import { type ITaskRun, type IWorkspaceTask } from '../../contrib/tasks/common/tasks.js';
 
 /** Serializes the window's existing task objects; execution remains with TaskService. */
 export class MainThreadTask extends Disposable {

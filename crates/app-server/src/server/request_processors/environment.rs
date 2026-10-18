@@ -11,6 +11,7 @@ use super::result;
 use ash_app_server_protocol::protocol::environment::DirContributionsDto;
 use ash_app_server_protocol::protocol::environment::DirGrantDto;
 use ash_app_server_protocol::protocol::environment::EnvDirDto;
+use ash_app_server_protocol::protocol::environment::EnvDirReadParams;
 use ash_app_server_protocol::protocol::environment::EnvDirsSetParams;
 use ash_app_server_protocol::protocol::environment::EnvDirsSetResult;
 use ash_app_server_protocol::protocol::environment::SessionDirAddParams;
@@ -240,6 +241,29 @@ impl<'ctx, C: EnvironmentRequestProcessorContext + ?Sized> EnvironmentRequestPro
             mutation: session_dir_mutation(mutation),
             revision: snapshot.revision,
             dirs: session_dir_dtos(snapshot.dirs),
+        })
+    }
+
+    pub(super) fn env_dir_read(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: EnvDirReadParams = decode(params)?;
+        if params.dir_id.trim().is_empty() || params.dir_id.len() > 256 {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let runtime = self
+            .env_runtime
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        // The environment owner already selected these directories. Never open a
+        // client-supplied path or expose the profile's unrelated saved grants.
+        let directory = runtime
+            .dirs
+            .get(&params.dir_id)
+            .filter(|directory| directory.grant.is_active())
+            .ok_or_else(|| RpcError::new(-32043, AppServerErrorName::PermissionRequired))?;
+        result(&EnvDirDto {
+            id: params.dir_id,
+            path: directory.grant.dir().canonical_path().to_path_buf(),
+            permissions: permission_dtos(directory.grant.permissions()),
         })
     }
 
