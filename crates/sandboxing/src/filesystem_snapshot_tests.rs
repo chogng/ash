@@ -32,3 +32,18 @@ fn renamed_directory_cannot_authorize_its_replacement() {
     std::fs::create_dir(&path).unwrap();
     assert!(snapshot.validate().is_err());
 }
+
+#[test]
+fn extending_a_snapshot_does_not_authorize_replaced_prepared_objects() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("work");
+    std::fs::create_dir(&path).unwrap();
+    let mut snapshot = FilesystemSnapshot::capture([path.clone()]).unwrap();
+    std::fs::rename(&path, temp.path().join("old")).unwrap();
+    std::fs::create_dir(&path).unwrap();
+    snapshot.extend([path]).unwrap();
+    assert_eq!(
+        snapshot.validate().unwrap_err().kind(),
+        std::io::ErrorKind::PermissionDenied
+    );
+}

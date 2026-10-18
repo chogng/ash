@@ -2420,6 +2420,7 @@ dependencies = [
  "libtest-mimic",
  "log",
  "mxc-sdk",
+ "rustix 1.1.4",
  "serde",
  "serde_json",
  "tempfile",

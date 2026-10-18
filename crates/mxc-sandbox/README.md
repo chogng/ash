@@ -46,6 +46,8 @@ Windows 账户候选的 ACL 恢复由独立后端维护；异常退出仍需实�
 启动失败保留 SDK 错误类别、说明与扩展系统错误；PTY helper 传回实际启动和等待错误。所有启动失败均关闭本次执行，不重新选择后端。
 Linux 网络提供进程退出时，SDK 监控终止工作负载并报告网络丢失；监控与退出观察均不提前回收进程，进程树关闭后才释放 PID。Bubblewrap 在命令启动前安装禁止 `AF_VSOCK` 的 seccomp 过滤器，防止 WSL 可执行文件互操作绕过 Linux 文件与网络限制；这一约束由工作负载后代继承，适用于禁止和受管网络。
 
+Unix 受限进程的 Docker、SSH agent 和 GPG agent IPC 拒绝路径同时取自宿主环境与执行 owner 在 spawn 时提供的最终环境，后者不能移除前者的保护。GPG 覆盖 `GNUPGHOME`、默认 `HOME/.gnupg` 中的 agent socket，以及当前有效 UID 的标准 runtime `gnupg` IPC 目录；相对 home 按工作负载 cwd 解析，空值不代表 cwd，`XDG_RUNTIME_DIR` 只接受绝对路径，拒绝范围不扩展到整个用户 runtime 目录。新增路径追加身份检查，保留原有授权目录的准备时身份。[GnuPG 2.1 起已忽略 `GPG_AGENT_INFO`](https://gnupg.org/faq/whats-new-in-2.1.html)，不能仅靠该旧变量识别 agent。
+
 ### macOS 文件边界与 glob
 
 SDK 的 Seatbelt 策略固定可写根以及只读、拒绝路径的祖先目录，防止目录移动改变权限路径。受限文件策略拒绝 `F_MAKECOMPRESSED` 和 `F_TRANSFEREXTENTS`，因为这两种 `fcntl` 可以通过只读描述符修改文件；Ash 的持续路径限制也安装同一防护，包括带有 glob 限制的 `FullAccess`。
@@ -110,6 +112,45 @@ just test ash-mxc-sandbox --test network_matrix --locked -- --ignored --test-thr
 ```
 
 设置 `CARGO_TARGET_DIR` 时，相应替换探针目录。DNS 端点须同时支持 TCP／UDP；多个地址用逗号分隔，IPv6 写为 `[address]:53`。可用 `ASH_PUBLIC_IPV6_HTTP_ENDPOINT` 增加公网 IPv6 HTTP 检查，普通进程对照必须先可达；本地回环或受代理影响的 DNS 不证明外部出口。
+
+### Linux Docker 验证入口
+
+[`scripts/test-linux-sandbox.sh`](../../scripts/test-linux-sandbox.sh) 在同一个 Linux checkout 验证适配器、PTY、执行服务、真实 Docker／GPG socket 及网络矩阵。脚本创建空的临时 GPG home，退出时停止该 agent 并删除目录；Docker 对照只读取 daemon 的 `/_ping`。必须提供普通进程可达、同时支持 TCP／UDP 的 `ASH_DNS_SERVER`。
+
+在仓库根目录构建开发镜像后，可把当前 checkout 挂入容器运行。Linux Cargo 产物和 Python 环境分别放在命名卷，避免执行宿主 macOS／Windows 的缓存或解释器。`--privileged` 供 Bubblewrap 创建嵌套 user/network namespace；此容器仅用于受控验证。将 `ASH_DNS_SERVER` 替换为实际 Linux 容器可达的 resolver。Docker socket 的附加组应使用 daemon socket 的实际 GID，下面为 Docker Desktop 的 `0`，不修改 socket 权限。
+
+```sh
+docker build -t ash-devcontainer:sandbox -f .devcontainer/Dockerfile .
+docker run --rm --name ash-sandbox-linux --privileged --cpus 3 \
+  --user node --group-add 0 --entrypoint sh \
+  -v "$PWD:/workspaces/ash" \
+  -v ash-sandbox-cargo:/home/node/.cargo \
+  -v ash-sandbox-target:/ash-target \
+  --mount type=volume,source=ash-sandbox-python,target=/workspaces/ash/scripts/.venv,volume-nocopy \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -e CARGO_TARGET_DIR=/ash-target -e CARGO_BUILD_JOBS=3 \
+  -e ASH_DNS_SERVER="<resolver-ip>:53" \
+  ash-devcontainer:sandbox -c \
+  'sudo chown node:node /ash-target && sh scripts/test-linux-sandbox.sh'
+```
+
+独立 Linux 可在具备上述依赖的 checkout 直接运行脚本。Docker Desktop 的 LinuxKit 内核和 arm64 容器结果不等于独立发行版或物理 x64 宿主验收。x64 C 交叉工具链由镜像中的 `gcc-x86-64-linux-gnu` 和 `libc6-dev-amd64-cross` 提供；Rust 目标仍须 `rustup target add x86_64-unknown-linux-gnu`，交叉编译结果不能算 x64 运行结果。
+
+### 2026-10-18 Linux 验证记录
+
+本机 Docker Desktop 的 Debian 12 arm64 容器（LinuxKit 7.0.12、Rust 1.98.0、Bubblewrap 0.8.0、slirp4netns 1.2.0）在当前 checkout 运行上述脚本通过：`ash-sandboxing` 26 项、MXC 21 项单元与 6 项 PTY、执行服务 83 项单元与 18 项 RPC／PTY 集成测试，以及各包 check／全目标 warnings 均通过。另显式运行被默认忽略的 Linux Managed 代理、真实 Docker／GPG socket 四项和网络矩阵；socket 测试先通过 daemon `/_ping` 或 GPG `GETINFO version` 普通进程对照，再确认受限连接失败。GPG 分别覆盖旧变量、无旧变量及仅在最终 workload 环境提供 agent home。临时 agent 已清理，Docker socket 权限保持原值。
+
+该真实对照发现旧实现仅配置 `GPG_AGENT_INFO` 时才能阻止 GPG agent；取消该变量后，受限命令仍能访问真实 agent。宿主适配修复后四项 socket 测试通过，未改 SDK fork。原始失败记录为 `.build/mxc-linux-gpg-baseline.log`，最终完整记录为 `.build/mxc-linux-docker-acceptance-final.log`；macOS 的 `just verify ash-mxc-sandbox` 和 `just verify ash-sandboxing` 也通过。
+
+容器内安装 x64 Rust 目标后，以下全部测试目标编译检查通过，包含真实目标 C 工具链调用；记录为 `.build/mxc-linux-x64-check.log`。它没有执行 x64 测试程序，也没有编译完整 workspace。
+
+```sh
+rustup target add x86_64-unknown-linux-gnu
+CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=x86_64-linux-gnu-gcc \
+  just check ash-mxc-sandbox -p ash-exec-server --target x86_64-unknown-linux-gnu --all-targets --locked
+```
+
+`just dependencies` 通过，未新增依赖版本；`just test-python scripts` 运行 197 项（1 项按环境跳过）通过。全仓安全门禁仍因既有 zbus 生态停止维护公告失败，未添加例外。独立 Linux／物理 x64、Windows／WSL2、另一台 LAN 设备及公网 IPv6 仍在 [MXC TODO](../../MXC-TODO.md)。
 
 `ASH_WINDOWS_NETWORK_ENDPOINT` 和 `ASH_WINDOWS_DNS_ENDPOINT` 可增加 Windows 接收端，格式为逗号分隔的 socket 地址；链路本地 IPv6 的 scope ID 使用 Linux 接口编号。自建接收端可用 `ASH_WINDOWS_NETWORK_COUNTER` 提供原子发布的累计请求数；受限执行后计数增加即失败。共享接收端的测试须串行运行。
 

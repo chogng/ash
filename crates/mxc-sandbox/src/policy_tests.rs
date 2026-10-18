@@ -9,6 +9,68 @@ use ash_sandboxing::SandboxPathRule;
 use ash_sandboxing::SandboxScope;
 use std::path::Path;
 
+#[cfg(unix)]
+#[test]
+fn gpg_ipc_discovery_resolves_home_paths_without_widening_runtime_denials() {
+    let candidates = |values: &[(&str, &str)]| {
+        super::sensitive_ipc_candidates(
+            Path::new("/workspace"),
+            |key| {
+                values
+                    .iter()
+                    .find(|(name, _)| *name == key)
+                    .map(|(_, value)| (*value).into())
+            },
+            1234,
+        )
+    };
+    let paths = candidates(&[
+        ("HOME", "/home/test"),
+        ("GNUPGHOME", "keys"),
+        ("XDG_RUNTIME_DIR", "/runtime"),
+        ("GPG_AGENT_INFO", "/forward/agent:123:1"),
+        ("SSH_AUTH_SOCK", "ssh-agent"),
+    ]);
+    for path in [
+        "/home/test/.gnupg/S.gpg-agent",
+        "/home/test/.gnupg/S.gpg-agent.extra",
+        "/workspace/keys/S.gpg-agent",
+        "/workspace/keys/S.gpg-agent.ssh",
+        "/runtime/gnupg",
+        "/run/user/1234/gnupg",
+        "/var/run/user/1234/gnupg",
+        "/forward/agent",
+        "/workspace/ssh-agent",
+    ] {
+        assert!(paths.contains(&path.into()), "missing {path}: {paths:?}");
+    }
+    for path in [
+        "/runtime",
+        "/run/user/1234",
+        "/var/run/user/1234",
+        "/home/test/.gnupg",
+        "/workspace/keys",
+    ] {
+        assert!(
+            !paths.contains(&path.into()),
+            "overbroad IPC denial: {path}"
+        );
+    }
+    let empty = candidates(&[
+        ("HOME", ""),
+        ("GNUPGHOME", ""),
+        ("XDG_RUNTIME_DIR", "relative"),
+    ]);
+    assert_eq!(
+        empty.len(),
+        4,
+        "empty or invalid directories must not deny the workload cwd: {empty:?}"
+    );
+    let fallback = candidates(&[("HOME", "/home/test"), ("GNUPGHOME", "")]);
+    assert!(fallback.contains(&"/home/test/.gnupg/S.gpg-agent".into()));
+    assert!(!fallback.contains(&"/workspace/S.gpg-agent".into()));
+}
+
 #[cfg(windows)]
 #[test]
 fn windows_command_path_preserves_cmd_syntax_and_argument_slashes() {

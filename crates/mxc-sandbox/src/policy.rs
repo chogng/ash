@@ -19,7 +19,10 @@ pub(super) fn request(
         scope.resolve_filesystem_with_continuous_patterns(policy.file_system())?;
     #[cfg(not(target_os = "macos"))]
     let resolved_filesystem = scope.resolve_filesystem(policy.file_system())?;
-    let filesystem = with_sensitive_ipc_paths(filesystem_from_resolved(&resolved_filesystem)?);
+    let filesystem = with_sensitive_ipc_paths(
+        filesystem_from_resolved(&resolved_filesystem)?,
+        command.working_directory(),
+    );
     let argv = std::iter::once(command.program())
         .chain(command.arguments().iter().map(|arg| arg.as_os_str()))
         .map(|arg| {
@@ -148,38 +151,88 @@ fn text(path: &Path) -> Result<String, SandboxError> {
 }
 
 #[cfg(unix)]
-fn sensitive_ipc_paths() -> Vec<String> {
+fn sensitive_ipc_candidates(
+    cwd: &Path,
+    environment: impl Fn(&str) -> Option<std::ffi::OsString>,
+    uid: u32,
+) -> Vec<std::path::PathBuf> {
+    let directory = |key: &str| {
+        environment(key)
+            .filter(|value| !value.is_empty())
+            .map(|value| cwd.join(value))
+    };
     let mut paths = vec![
         std::path::PathBuf::from("/var/run/docker.sock"),
         std::path::PathBuf::from("/run/docker.sock"),
     ];
-    if let Some(path) = std::env::var_os("SSH_AUTH_SOCK") {
-        paths.push(path.into());
+    if let Some(path) = directory("SSH_AUTH_SOCK") {
+        paths.push(path);
     }
-    if let Ok(value) = std::env::var("GPG_AGENT_INFO")
-        && let Some(path) = value.split(':').next()
+    if let Some(value) = environment("GPG_AGENT_INFO")
+        && let Some(path) = value.to_str().and_then(|value| value.split(':').next())
         && !path.is_empty()
     {
-        paths.push(path.into());
+        paths.push(cwd.join(path));
     }
-    paths.sort();
-    paths.dedup();
-    paths
+    // GnuPG 2.1+ ignores GPG_AGENT_INFO. Protect both the default home and an
+    // explicitly configured home without denying ordinary public-key files.
+    let gpg_homes = directory("HOME")
+        .map(|home| home.join(".gnupg"))
         .into_iter()
-        .filter(|path| path.exists())
-        .filter_map(|path| std::fs::canonicalize(path).ok())
-        .filter_map(|path| path.to_str().map(str::to_owned))
-        .collect()
+        .chain(directory("GNUPGHOME"));
+    for home in gpg_homes {
+        for name in [
+            "S.gpg-agent",
+            "S.gpg-agent.extra",
+            "S.gpg-agent.browser",
+            "S.gpg-agent.ssh",
+        ] {
+            paths.push(home.join(name));
+        }
+    }
+    // Runtime gnupg directories contain IPC endpoints, including hashed
+    // custom-home subdirectories. Never deny the surrounding user runtime dir.
+    if let Some(runtime) = environment("XDG_RUNTIME_DIR")
+        .map(std::path::PathBuf::from)
+        .filter(|dir| dir.is_absolute())
+    {
+        paths.push(runtime.join("gnupg"));
+    }
+    for runtime in ["/run/user", "/var/run/user"] {
+        paths.push(
+            std::path::PathBuf::from(runtime)
+                .join(uid.to_string())
+                .join("gnupg"),
+        );
+    }
+    paths
 }
 
 #[cfg(unix)]
-fn with_sensitive_ipc_paths(mut filesystem: FilesystemPolicy) -> FilesystemPolicy {
-    filesystem.denied_paths.extend(sensitive_ipc_paths());
+pub(super) fn sensitive_ipc_paths(
+    cwd: &Path,
+    environment: impl Fn(&str) -> Option<std::ffi::OsString>,
+) -> Vec<String> {
+    let mut paths = sensitive_ipc_candidates(cwd, environment, rustix::process::geteuid().as_raw())
+        .into_iter()
+        .filter_map(|path| std::fs::canonicalize(path).ok())
+        .filter_map(|path| path.to_str().map(str::to_owned))
+        .collect::<Vec<_>>();
+    paths.sort();
+    paths.dedup();
+    paths
+}
+
+#[cfg(unix)]
+fn with_sensitive_ipc_paths(mut filesystem: FilesystemPolicy, cwd: &Path) -> FilesystemPolicy {
+    filesystem
+        .denied_paths
+        .extend(sensitive_ipc_paths(cwd, |key| std::env::var_os(key)));
     filesystem
 }
 
 #[cfg(not(unix))]
-fn with_sensitive_ipc_paths(filesystem: FilesystemPolicy) -> FilesystemPolicy {
+fn with_sensitive_ipc_paths(filesystem: FilesystemPolicy, _: &Path) -> FilesystemPolicy {
     filesystem
 }
 

@@ -6,10 +6,14 @@ RUN apt-get update && apt-get install --yes --no-install-recommends \
     ca-certificates \
     cmake \
     curl \
+    gcc-x86-64-linux-gnu \
     git \
     gnupg \
+    iproute2 \
+    iptables \
     libasound2-dev \
     libcap-dev \
+    libc6-dev-amd64-cross \
     libdbus-1-dev \
     libgtk-3-dev \
     libssl-dev \
@@ -21,6 +25,7 @@ RUN apt-get update && apt-get install --yes --no-install-recommends \
     pkg-config \
     python3 \
     python3-venv \
+    slirp4netns \
     sudo \
     && rm -rf /var/lib/apt/lists/*
 

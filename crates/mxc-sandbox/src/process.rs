@@ -22,7 +22,7 @@ impl SandboxLaunch for Launch {
         environment: &[(String, String)],
     ) -> Result<ProcessHandle, SandboxError> {
         crate::policy::validate_paths(&self.cwd, &self.scope)?;
-        self.request.set_env(environment);
+        self.request.set_env(environment)?;
         let prepared = self.request.prepare()?;
         let (inner, stdin, stdout, stderr) = match self.io {
             ash_sandboxing::ProcessIo::Pipes => {

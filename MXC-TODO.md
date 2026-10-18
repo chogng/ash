@@ -12,15 +12,16 @@
 ## Linux
 
 - [ ] 补独立 Linux 发行版和 x64 宿主运行范围；不能沿用旧版 WSL2 或交叉编译结果。
-- [ ] 补 Ash Linux x64 全测试目标编译所缺的 `x86_64-linux-gnu-gcc`。
+
+本机 Docker Linux arm64 的执行、网络与真实 socket，以及 Linux x64 的 MXC／执行服务全部测试目标编译检查已补齐；具体范围见 [Linux 验证记录](crates/mxc-sandbox/README.md#2026-10-18-linux-验证记录)。Docker Desktop LinuxKit 不作为独立发行版／物理 x64 宿主结果。
 
 ## 外部网络与 socket
 
-- [ ] 补另一台局域网设备、公网 IPv6 及真实 Docker／GPG socket；每个外部端点先完成普通进程可达性对照。受本机代理影响的 DNS 对照不能替代独立公网出口。
+- [ ] 补另一台局域网设备及公网 IPv6；每个外部端点先完成普通进程可达性对照。受本机代理影响的 DNS 对照不能替代独立公网出口。
 
 ## 依赖安全门禁
 
-- [ ] 处理 `zbus_names`、`zvariant`、`zvariant_derive` 的停止维护公告阻挡；诊断见 `.build/mxc-1.0.1-security.log`。
+- [ ] 处理 `zbus_names`、`zvariant`、`zvariant_derive` 的停止维护公告阻挡；2026-10-18 用固定 cargo-deny 0.20.2 重跑仍被 RUSTSEC-2026-0370／0371／0372 阻挡，licenses／sources 通过，未增加 ignore。现有来源包括 keyring 3.6.3／secret-service 的 zbus 4 与 sleep-inhibitor 的 zbus 5；诊断见 `.build/mxc-linux-security-final.log`。
 
 ## 退出兼容 fork 的条件
 

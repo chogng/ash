@@ -87,13 +87,40 @@ impl Request {
         })
     }
 
-    pub fn set_env(&mut self, environment: &[(String, String)]) {
+    pub fn set_env(&mut self, environment: &[(String, String)]) -> Result<(), SandboxError> {
+        #[cfg(unix)]
+        {
+            // The execution owner supplies the final environment at spawn.
+            // Keep prepare-time host denials and append this workload's IPC
+            // locations without refreshing previously authorized identities.
+            let paths = crate::policy::sensitive_ipc_paths(Path::new(&self.cwd), |key| {
+                environment
+                    .iter()
+                    .rev()
+                    .find(|(name, _)| name == key)
+                    .map(|(_, value)| value.into())
+            });
+            self.snapshot
+                .extend(
+                    paths
+                        .iter()
+                        .map(PathBuf::from)
+                        .map(snapshot_path)
+                        .collect::<std::io::Result<Vec<_>>>()
+                        .map_err(|error| unavailable(error.to_string()))?,
+                )
+                .map_err(|error| unavailable(error.to_string()))?;
+            self.denied_paths.extend(paths);
+            self.denied_paths.sort();
+            self.denied_paths.dedup();
+        }
         self.environment = Some(
             environment
                 .iter()
                 .map(|(key, value)| format!("{key}={value}"))
                 .collect(),
         );
+        Ok(())
     }
 
     pub fn set_bubblewrap_executable(&mut self, path: &Path) {

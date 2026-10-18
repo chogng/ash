@@ -82,7 +82,7 @@ impl SandboxLaunch for Launch {
         environment: &[(String, String)],
     ) -> Result<ProcessHandle, SandboxError> {
         crate::policy::validate_paths(&self.cwd, &self.scope)?;
-        self.request.set_env(environment);
+        self.request.set_env(environment)?;
         let encoded = serde_json::to_string(&self.request)
             .map_err(|_| crate::unavailable("cannot encode PTY launch"))?;
         let mut helper_env = HashMap::new();

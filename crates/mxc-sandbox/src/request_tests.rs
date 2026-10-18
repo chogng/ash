@@ -44,6 +44,38 @@ fn request(dir: &Dir) -> Request {
     .unwrap()
 }
 
+#[cfg(unix)]
+#[test]
+fn workload_environment_adds_socket_denials_without_refreshing_prepared_authority() {
+    let temp = tempfile::tempdir().unwrap();
+    let work = temp.path().join("work");
+    std::fs::create_dir(&work).unwrap();
+    let dir = Dir::open_local(&work).unwrap();
+    let mut prepared = request(&dir);
+    let home = work.join("keys");
+    std::fs::create_dir(&home).unwrap();
+    let socket = home.join("S.gpg-agent");
+    let _agent = std::os::unix::net::UnixListener::bind(&socket).unwrap();
+    prepared
+        .set_env(&[("GNUPGHOME".into(), "keys".into())])
+        .unwrap();
+    assert!(
+        prepared.denied_paths.contains(
+            &std::fs::canonicalize(socket)
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_owned()
+        )
+    );
+    std::fs::rename(&work, temp.path().join("old")).unwrap();
+    std::fs::create_dir(&work).unwrap();
+    assert!(
+        prepared.prepare().is_err(),
+        "new environment must not renew a replaced directory grant"
+    );
+}
+
 #[test]
 fn terminal_handoff_preserves_explicit_environment_and_filesystem_identity() {
     let temp = tempfile::tempdir().unwrap();
@@ -51,7 +83,9 @@ fn terminal_handoff_preserves_explicit_environment_and_filesystem_identity() {
     std::fs::create_dir(&work).unwrap();
     let dir = Dir::open_local(&work).unwrap();
     let mut prepared = request(&dir);
-    prepared.set_env(&[("ASH_TEST".into(), "a=b 中文".into())]);
+    prepared
+        .set_env(&[("ASH_TEST".into(), "a=b 中文".into())])
+        .unwrap();
     let encoded = serde_json::to_string(&prepared).unwrap();
     drop(dir);
     let decoded: Request = serde_json::from_str(&encoded).unwrap();
@@ -78,7 +112,7 @@ fn explicit_empty_environment_stays_empty_after_terminal_handoff() {
     let temp = tempfile::tempdir().unwrap();
     let dir = Dir::open_local(temp.path()).unwrap();
     let mut prepared = request(&dir);
-    prepared.set_env(&[]);
+    prepared.set_env(&[]).unwrap();
     let decoded: Request =
         serde_json::from_str(&serde_json::to_string(&prepared).unwrap()).unwrap();
     assert_eq!(decoded.environment, Some(Vec::new()));
@@ -96,7 +130,9 @@ fn chunked_terminal_handoff_keeps_large_environment_and_prepared_file_authority(
     let dir = Dir::open_local(temp.path()).unwrap();
     let mut prepared = request(&dir);
     let value = "🧊中文=\\\"".repeat(4000);
-    prepared.set_env(&[("WORKLOAD_VALUE".into(), value.clone())]);
+    prepared
+        .set_env(&[("WORKLOAD_VALUE".into(), value.clone())])
+        .unwrap();
     let mut helper_environment = std::collections::HashMap::new();
     crate::pty_transport::encode(
         &serde_json::to_string(&prepared).unwrap(),

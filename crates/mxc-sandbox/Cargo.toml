@@ -25,6 +25,9 @@ ash-file-access = { workspace = true }
 [target.'cfg(target_os = "macos")'.dependencies]
 globset = { workspace = true }
 
+[target.'cfg(unix)'.dependencies]
+rustix = { workspace = true, features = ["process"] }
+
 [dev-dependencies]
 test-binary-support = { workspace = true }
 libtest-mimic = { workspace = true }

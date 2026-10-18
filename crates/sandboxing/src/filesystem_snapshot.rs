@@ -15,15 +15,24 @@ pub struct FilesystemSnapshot {
 
 impl FilesystemSnapshot {
     pub fn capture(paths: impl IntoIterator<Item = PathBuf>) -> io::Result<Self> {
+        let mut snapshot = Self::default();
+        snapshot.extend(paths)?;
+        Ok(snapshot)
+    }
+
+    /// Add newly discovered objects without replacing identities captured earlier.
+    /// A replaced old path must still fail validation after the new capture.
+    pub fn extend(&mut self, paths: impl IntoIterator<Item = PathBuf>) -> io::Result<()> {
         let mut objects = Vec::new();
         for path in paths {
             let path = std::fs::canonicalize(path)?;
             let identity = FileInformation::from_path(&path)?;
             objects.push((path, identity));
         }
-        objects.sort_by(|left, right| left.0.cmp(&right.0));
-        objects.dedup();
-        Ok(Self { objects })
+        self.objects.extend(objects);
+        self.objects.sort_by(|left, right| left.0.cmp(&right.0));
+        self.objects.dedup();
+        Ok(())
     }
 
     pub fn paths(&self) -> impl Iterator<Item = &Path> {
