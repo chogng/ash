@@ -64,7 +64,6 @@
 - [ ] **验收 · 真实外部账号**：使用专用测试账号验收 Kimi Desktop/CLI 身份切换、同身份 token 轮换、旧结果隔离及临时发现失败，观察已打开的模型 picker。合成 scope/账号回归不能替代此结果。
 - [ ] **验收 · 系统休眠恢复**：在可中断的测试机器运行实际 OS sleep/wake，核对连接恢复、重新鉴权、订阅和工具权限；尚未在日常开发机器执行系统休眠。
 - [ ] **验收 · B2 TUI 与真实外部模型**：继续补真实外部账号的模型 picker 与 TUI 场景。本机已重新验证当前 CLI 缓存契约，并通过真实 Rust observer 的完整 10 分钟 Web Code／Cowork metadata 更新和失败保留场景；该合成账号结果不覆盖外部服务或真实 TUI，证据范围见 [AgentHost 台账](agenthost-todo.md)。
-- [ ] **集成 · Worker 装配**：将 Sessions common 入口和 Electron rendererApi 连接作用域的 `IWebWorkerService` 注册补丁随并发 Worker 模块整体提交；对应入口／作用域回归通过，真实本机启动已越过该错误。四个补丁路径为 `sessions.common.main.ts`、`activityBarPart.test.ts`、`rendererApi.ts` 和新增 `rendererApi.test.ts`；它们依赖当前未提交的 Worker 接口，不能单独形成缺依赖的提交。
 - [ ] **复核 · 旧隔离环境故障**：取得麦克风枚举失败与 `TerminalOperationFailed` 的准确步骤和底层诊断，分别沿音频设备、app-server terminal/environment owner 定位。原 2026-10-08 证据目录不在当前检出；不能凭通用错误码或普通终端测试关闭报告。
 
 ## Sessions · TODO
