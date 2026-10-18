@@ -121,6 +121,8 @@ Desktop 的 `enablePersistentSessions` 控制协调 reload。准备阶段等待�
 | 真实 Workbench、PTY 与焦点   | [terminal.spec.ts](../test/smoke/areas/windows/terminal.spec.ts)                                                                                                                                                                                                           |
 | 执行端进程、输出与释放       | [exec-server 终端实现及相邻测试](../crates/exec-server/src/terminal.rs)                                                                                                                                                                                                    |
 
+2026-10-18 在 Docker Linux ARM64、Bash 和启用 Chromium sandbox 的真实 Electron／App Server 上，6 项定向场景通过：字面路径执行与最近目录、英文／中文选中文本和当前行执行、文件链接鼠标／键盘打开、英文／中文 command 与页面 reload。reload 断言覆盖原 PTY／Shell PID、连续无缺口输出、分屏宽度、未提交输入、焦点、后续 Ctrl+C 与输入及 accessible view。默认编辑器剪贴板快捷键现限定编辑器文本焦点，避免 Linux Ctrl+C 在进入 PTY 前被全局 Copy 消费；菜单／直接命令与用户覆盖继续由原 owner 处理。日志 `.build/todo-linux-terminal-complete.log` 为 6 passed（59.3s），原生剪贴板补充场景为 2 passed。真实 OS 文件拖入、跨机器 SSH、Windows PowerShell 和应用退出后的 revive 不在该结果内。
+
 测试入口描述可重复检查的行为，不替代特定平台的实机结果。未完成动作与平台验收集中在 [Terminal TODO](../TODO.md#terminal--todo)，可选增强保留在[发展候选（未排期）](../TODO.md#发展候选未排期)。
 
 ```sh

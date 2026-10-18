@@ -6,18 +6,18 @@
 
 ## MXC · 跨平台验收
 
-- [ ] **验收** · 在支持 PSEC 的 Windows、WSL2 和独立 Linux／x64 运行当前 SDK pin `f1e8694b`，并补外部局域网／公网 IPv6、真实 Docker／GPG socket。Ash Windows／Linux x64 全测试目标交叉编译另缺目标 C 工具链；全仓依赖安全门禁被既有 zbus 生态停止维护公告阻挡。命令与验收边界见 [MXC 清单](MXC-TODO.md) 与 [适配器验证](crates/mxc-sandbox/README.md#验证)。
+- [ ] **验收** · 在支持 PSEC 的 Windows、WSL2 和独立 Linux／x64 运行当前 SDK pin `f1e8694b`，并补外部局域网／公网 IPv6。Ash Windows x64 全测试目标交叉编译仍缺目标 C 工具链；全仓依赖安全门禁仍被既有 zbus 生态停止维护公告阻挡。命令与验收边界见 [MXC 清单](MXC-TODO.md) 与 [适配器验证](crates/mxc-sandbox/README.md#验证)。
 
 ## Windows 开发实验资源清理
 
-- [ ] 清理实验资源暂存目录 `.build/desktop/dev/app-server/.staging-c8813138-4733-4acc-8ebe-05eee0827ccd`（bin 为空），以及 `.build/perf-win-edit-20261018/round4-cleanup.json` 记录的五个测量临时目录；此前删除被自动审批策略阻止，仍保留。
+- [ ] 定位并清理 Windows 测量的五个临时目录。本机复核时 `.build/desktop/dev/app-server/.staging-c8813138-4733-4acc-8ebe-05eee0827ccd` 已不存在；`.build/perf-win-edit-20261018/round4-cleanup.json` 也不在当前检出，缺少五个目录的准确路径，不能据此宣称其已清理。
 
 ## Remote / Browser 多根工作区 · TODO
 
 工作区契约见 `docs/desktop-architecture.md` §4.2。
 
-- [ ] **后端前置** · 实现连接 App Server 的 Web 多根支持，对齐 VS Code 工作区公开契约与职责。当前服务端仍为单根会话；先在 `crates/app-server-protocol/src/web.rs`、`crates/app-server/src/managed/web.rs` 和对应 transport owner 实现多目录授权／会话契约，再适配 `appServerWebWorkspaceClient.ts`；复用 `IWorkspaceEditingService.enterWorkspace`，不能把 Browser 提升为 `directoryGrantsHost`。
-- [ ] **后端前置** · 为上述 Web 模式实现工作区配置文件的独立访问生命周期：移除配置所在根后，仍能访问已授权的准确配置文件，不扩大父目录授权。接通 Browser Host／编辑器链，验证权限拒绝、脏文件、连接关闭和真实 Web App Server。
+- [ ] **验收** · Web 多目录授权、listener 独立运行域和 Apply／Finish 会话转换已实现，并复用原 WorkspaceEditingService／BrowserHost 链，Browser 不取得 `directoryGrantsHost`。后端工作区／撤权回归与前端 26 项定向测试通过；仍需在真实 Web 编辑器中经服务端可信逐根确认，验收新增、移除、脏文件拒绝和重载恢复。
+- [ ] **验收** · Web 准确配置文件的独立 read／atomic write／watch、只读与显式撤权、关闭和失败回滚已实现；ExactFS、授权上限和后端撤权测试通过。仍需真实 Web 编辑器移除配置所在根后保存同一配置文件，验证拒绝、脏文件与连接关闭流程；现有自动回归不替代这条完整交互链。
 - [ ] **后端前置** · 实现直接保存工作区配置到远端机器；当前 SSH 配置仍保存在 Desktop 本地，内容为远端 URI 根。
 - [ ] **验收** · 补 Windows／Linux 远端多根及真实系统文件选择器验证。现有多根 SSH 验证使用 macOS 同机隔离 OpenSSH fixture，选择器使用受控返回值；跨机器单独步骤通过不能替代多根场景验证。
 
@@ -47,9 +47,7 @@
 
 - [ ] **验收** · 在 macOS／Linux 验收真实系统 Policy 来源；用真实登录账户验证 GitHub managed settings 的读取、账户切换、撤回和失败保留。
 - [ ] **验收 · Preferences 上游窗口配对**：以本地 VS Code `a2acc8c864a` 对照用户／Workspace／Folder、`@lang:` 与 `@modified` 组合、重置、JSON 草稿、侧边／指定组和焦点语义。本地 VS Code 尚无可运行构建，源码／上游测试核对不能代替窗口配对。当前实现与证据范围见 [Preferences](docs/preferences-and-settings.md#已有验证与限制)。
-- [ ] **验收 · 快捷键跨平台**：补 Linux 的录制、JSONC 保存、立即重载、完整组合恰好执行一次、失败重试与 pending-close。
-
-当前存储、配置层和设置入口见 [Preferences 与 Configuration](docs/preferences-and-settings.md)。
+      当前存储、配置层和设置入口见 [Preferences 与 Configuration](docs/preferences-and-settings.md)。
 
 ## AgentHost · TODO
 
@@ -65,7 +63,8 @@
 - [ ] **验收 · 跨平台**：取得 Windows/Linux 当前实现的实际运行结果；新增 Desktop runtime acceptance 的 Windows/macOS MCP 进程回归步骤尚未在远端执行。
 - [ ] **验收 · 真实外部账号**：使用专用测试账号验收 Kimi Desktop/CLI 身份切换、同身份 token 轮换、旧结果隔离及临时发现失败，观察已打开的模型 picker。合成 scope/账号回归不能替代此结果。
 - [ ] **验收 · 系统休眠恢复**：在可中断的测试机器运行实际 OS sleep/wake，核对连接恢复、重新鉴权、订阅和工具权限；尚未在日常开发机器执行系统休眠。
-- [ ] **复核／验收 · B2 长周期与 TUI**：补当前版本五分钟真实观察周期及真实外部模型 picker 场景。`session-models.spec.ts` 的 `verifySubscriptionUpdates` 固定要求 `codex-cli 0.160.1`，本机为 `0.163.0-alpha.10.2`；先在隔离环境重新验证缓存身份／schema 契约，不能只改版本断言或触发真实远程发现。已有 observer 回归和 TUI subscription 测试只覆盖各自范围。
+- [ ] **验收 · B2 TUI 与真实外部模型**：继续补真实外部账号的模型 picker 与 TUI 场景。本机已重新验证当前 CLI 缓存契约，并通过真实 Rust observer 的完整 10 分钟 Web Code／Cowork metadata 更新和失败保留场景；该合成账号结果不覆盖外部服务或真实 TUI，证据范围见 [AgentHost 台账](agenthost-todo.md)。
+- [ ] **集成 · Worker 装配**：将 Sessions common 入口和 Electron rendererApi 连接作用域的 `IWebWorkerService` 注册补丁随并发 Worker 模块整体提交；对应入口／作用域回归通过，真实本机启动已越过该错误。四个补丁路径为 `sessions.common.main.ts`、`activityBarPart.test.ts`、`rendererApi.ts` 和新增 `rendererApi.test.ts`；它们依赖当前未提交的 Worker 接口，不能单独形成缺依赖的提交。
 - [ ] **复核 · 旧隔离环境故障**：取得麦克风枚举失败与 `TerminalOperationFailed` 的准确步骤和底层诊断，分别沿音频设备、app-server terminal/environment owner 定位。原 2026-10-08 证据目录不在当前检出；不能凭通用错误码或普通终端测试关闭报告。
 
 ## Sessions · TODO
@@ -79,10 +78,6 @@
 
 ## Chat / Speech · TODO
 
-- [ ] **复核 · 既有单测基线**：`Code owner offer received before subscribe survives hydration and retires on reconnect` 在重连后仍保留审批 offer；已在 `b4ea368dd` 原始源码复现，待独立定位。证据为 `.build/chat-requests-baseline-offer.log`。
-
-- [ ] **复核 · 全仓检查基线**：清理 GitHub 两个 TS 文件和 `automationDialog.css` 的格式问题、CSS 热更新监听失败，以及 `tsconfig.extensions-test.json` 对已迁移 Task 测试的旧路径引用。继续定位前端模型目录调度、热更新、Sessions 装配、生命周期和样式架构等失败，以及 Workspaces／DebugSession 在 Mocha 结束后不退出的问题；最近全量运行仍有 24 项失败（16 个文件）并以 143 结束。语言资源监听首次失败仍需复核。证据见 `.build/debug-gates-format-final.log`、`.build/debug-gates-test-main.log`、`.build/debug-gates-build-timing-retry.log` 和 `.build/debug-gates-frontend-unit.log`。
-
 - [ ] **后端前置** · Speech 动态注册：Host 当前 `sealActivation` 冻结注册，`host.mjs` 只允许 activating 期间 register。先为原 admitted registry 定义晚注册／注销与后端 fleet 更新端口，覆盖精确 registration／activation generation、退休清理和迟到事件；不用前端轮询或另一张 provider 表替代。
 - [ ] **后端前置** · 标准 Voice／hold 命令先闭合聚焦 Chat widget 与输入生命周期的 `IChatWidgetService` 调用链；PTT／audio／session-context 的完整 VoiceClient 仍缺兼容 producer。现有 Ash Call／VoiceAgent 验证不代表上游 API 对齐；远端自有 Voice/Core bridge 不继续扩展为本轮对齐任务。
 - [ ] **后端前置** · MCP App sampling、media context 与双向 App tools 按原 Core 权限和能力契约逐项补齐；现有 tools/call、资源、消息/context、CSP、导出、诊断和 fullscreen 保持回归，缺失 capability 不宣告。
@@ -95,7 +90,7 @@
 目标与所有权见 [调试系统](docs/debugging.md)。
 
 - [ ] **后端前置 · Rust manager 领域状态**：当前会话运行意图/绑定、Watch 求值及检查链已在 Rust。继续迁移可编辑工作区断点/Watch 定义及原 Memento 数据、实时异常过滤器配置、父子生命周期与结构化输出；核对 Testing/扩展 API 消费者，保留保存、配置回调、Tasks/Terminal 的原 owner。
-- [ ] **可做 / 后端前置 · Debug Console 对齐**：从 `debug.contribution.ts` → `debugConsoleViewPane.ts` → `common/replModel.ts` 的真实入口对齐 `repl.ts`、`replFilter.ts`、`replViewer.ts` 职责；先闭合选中会话/栈帧求值和过滤，再接就绪的结构化输出、分组/对象展开/源码链接、历史与补全。当前 REPL 未传 frameId，output 只保留文本；补 NLS、无障碍、焦点与窄布局验证。
+- [ ] **可做 / 后端前置 · Debug Console 对齐**：从 `debug.contribution.ts` → `debugConsoleViewPane.ts` → `common/replModel.ts` 的真实入口对齐 `repl.ts`、`replFilter.ts`、`replViewer.ts` 职责；继续实现过滤、就绪的结构化输出、分组/对象展开/源码链接、历史与补全。当前 output 只保留文本；补 NLS、无障碍、焦点与窄布局验证。选中暂停会话的栈帧求值已接通，Repl/DebugService 的 82 项定向测试通过，包含 frameId=0、会话范围及合并子控制台路由。
 - [ ] **后端前置 / 验收 · 检查视图与跨端回归**：manager 端口就绪后，逐段对齐 Variables、Watch、Call Stack、Breakpoints 和 ViewModel。补新架构的真实 Desktop、Remote 路径、真实 LLDB 程序、父子会话及扩展停用/取消/崩溃回归；本轮 Browser 与确定性 adapter 结果不替代这些验收，历史跨机器记录也不证明新架构已通过。
 
 ## Terminal · TODO
@@ -108,7 +103,7 @@
 - [ ] **后端前置 · 跨窗口转移**：独立定义进程租约、屏幕及输入交接并验收；现有 30 秒租约只闭合同一 Desktop 窗口 reload，Web 保持 connection-owned 生命周期。
 - [ ] **后端前置 · 应用退出后恢复输出、cwd 和布局**：有限 `TerminalRecorder` replay 与命令文本历史不等于完整终端恢复；缺少持久化缓冲、布局和重建 Shell 的入口。与保留原进程的 reload 分开验收；不承诺任意旧命令跨应用退出继续执行。
 - [ ] **复核 · 文件链接扩展**：补目录打开、工作区搜索型链接、外部 provider 与适用配置的实际入口，复用执行宿主 cwd／路径和文件服务授权，验收鼠标、键盘及异步关闭／重连。
-- [ ] **验收** · 补跨机器 SSH、Windows PTY／PowerShell，以及 Linux Desktop 的文件链接、reload、活动文件执行入口、OS 文件拖入和最近目录选择器；应用退出后的 revive 独立验收。场景与边界见 [Terminal](docs/terminal.md)。
+- [ ] **验收** · 补跨机器 SSH、Windows PTY／PowerShell，以及 Linux Desktop 的真实 OS 文件拖入；应用退出后的 revive 独立验收。Linux 文件链接、reload、活动文件／选中文本执行和最近目录选择器的 6 项真实 Desktop 场景已通过，范围见 [Terminal](docs/terminal.md)。
 
 高频交互验收同时观察原进程身份、待提交输入、选区和焦点；执行、权限和工具调度继续归 Rust。
 
