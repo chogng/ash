@@ -26,18 +26,18 @@ export class BrowserWorkspaceEditingService extends AbstractWorkspaceEditingServ
 		@IWorkspaceContextService workspace: IWorkspaceContextService,
 		@IFileDialogService dialogs: IFileDialogService,
 		@IWorkingCopyService workingCopies: IWorkingCopyService,
-		@IHostService private readonly host: IHostService,
+		@IHostService hostService: IHostService,
 		@IFileService private readonly files: IFileService,
 		@INotificationService notifications: INotificationService,
 	) {
-		super(workspace, dialogs, workingCopies);
+		super(workspace, dialogs, workingCopies, hostService);
 		const reload = this._register(new RunOnceScheduler(() => {
 			const current = workspace.getWorkspace();
 			if (!current.configuration) return;
 			void this.enqueue(async () => {
 				if (current !== workspace.getWorkspace()) return;
 				this.ensureConfigurationSaved();
-				await host.openWindow([{ workspaceUri: current.configuration! }], { forceReuseWindow: true });
+				await this.enterWorkspace(current.configuration!);
 			}).catch(error => notifications.error(localize('workspace.reloadFailed', 'Could not update workspace folders. The last accepted folders were kept. {0}', String(error))));
 		}, 100));
 		const watchConfiguration = () => {
@@ -68,7 +68,7 @@ export class BrowserWorkspaceEditingService extends AbstractWorkspaceEditingServ
 			this.validateFolders(unique.map(folder => folder.uri));
 			this.ensureConfigurationSaved();
 			if (!current.configuration && unique.length === 1) {
-				await this.host.openWindow([{ folderUri: unique[0]!.uri }], { forceReuseWindow: true });
+				await this.hostService.openWindow([{ folderUri: unique[0]!.uri }], { forceReuseWindow: true });
 				return;
 			}
 			const target = current.configuration ?? URI.from({ scheme: Schemas.vscodeUserData, path: `/workspaces/${crypto.randomUUID()}/workspace.ash-workspace` });
@@ -117,7 +117,7 @@ export class BrowserWorkspaceEditingService extends AbstractWorkspaceEditingServ
 		}
 		const written = await this.files.writeFile({ resource: target, content: output, expectedRevision: previous?.revision }, { create: true, overwrite: previous !== undefined });
 		try {
-			await this.host.openWindow([{ workspaceUri: target }], { forceReuseWindow: true });
+			await this.enterWorkspace(target);
 			if (this.workspace.getWorkspace().configuration?.toString() !== target.toString()) throw new CancellationError();
 		} catch (error) {
 			try {

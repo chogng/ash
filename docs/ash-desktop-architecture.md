@@ -578,6 +578,9 @@ App Server 连接并重新读取 Session/Thread；Renderer 不直接读写 SQLit
 | `services/workspaces/{browser,electron-browser}/workspacesService.ts` 与 `platform/workspaces/electron-main/workspacesHistoryMainService.ts` | `IWorkspacesService` 是最近项目的唯一领域入口。Browser 记录已接受的上下文并使用浏览器 profile；Desktop 由 Main 记录并持久化。Welcome 直接查询和订阅该入口，通过 host 打开记录，不再维护第二个 recent service。               |
 | `platform/workspaces/electron-main/workspacesManagementMainService.ts`                                                                       | 解析工作区文件，并串行持久化、检查修订、取得授权和提交后端目录；成功后更新 Main 窗口上下文。                                                                                                                                 |
 
+`IWorkspaceEditingService.enterWorkspace` 在共享编辑服务中检查脏配置，再通过当前 Host 进入已有工作区；
+Browser 保存后的进入与外部配置重载使用这个公开入口。Host 接受前不发布新的目录状态。
+
 用户已确认删除 `services/workspaces/browser/{workspaceContextService,workspaceOpenService,recentWorkspacesService}.ts`
 与 `services/workspaces/common/recentWorkspacesService.ts`。上述职责及其生产、测试调用方已迁回对应 owner；
 不保留兼容导出或转发壳。用户确认保留该目录唯一的 Ash 专属生产文件

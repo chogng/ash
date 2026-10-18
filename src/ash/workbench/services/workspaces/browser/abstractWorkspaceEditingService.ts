@@ -6,6 +6,7 @@ import { IWorkspaceContextService } from '../../../../platform/workspace/common/
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import type { IWorkspaceEditingService } from '../common/workspaceEditing.js';
 import { IWorkingCopyService } from '../../workingCopy/common/workingCopyService.js';
+import { IHostService } from '../../host/browser/host.js';
 
 /** Shared editing rules; runtime adapters submit operations to their host's single workspace owner. */
 export abstract class AbstractWorkspaceEditingService extends Disposable implements IWorkspaceEditingService {
@@ -13,6 +14,7 @@ export abstract class AbstractWorkspaceEditingService extends Disposable impleme
 		@IWorkspaceContextService protected readonly workspace: IWorkspaceContextService,
 		@IFileDialogService protected readonly dialogs: IFileDialogService,
 		@IWorkingCopyService protected readonly workingCopies: IWorkingCopyService,
+		@IHostService protected readonly hostService: IHostService,
 	) { super(); }
 
 	validateFolders(folders: readonly URI[]): void {
@@ -55,6 +57,12 @@ export abstract class AbstractWorkspaceEditingService extends Disposable impleme
 
 	abstract updateFolders(index: number, deleteCount?: number, foldersToAdd?: readonly { readonly uri: URI; readonly name?: string; }[]): Promise<void>;
 	abstract saveAndEnterWorkspace(path: URI): Promise<void>;
+
+	async enterWorkspace(path: URI): Promise<void> {
+		this.assertNotDisposed();
+		this.ensureConfigurationSaved();
+		await this.hostService.openWindow([{ workspaceUri: path }], { forceReuseWindow: true });
+	}
 
 	protected ensureConfigurationSaved(): void {
 		const configuration = this.workspace.getWorkspace().configuration;

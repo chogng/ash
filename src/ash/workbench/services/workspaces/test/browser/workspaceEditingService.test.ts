@@ -35,6 +35,7 @@ import { TestWorkspaceService } from '../../../configuration/test/common/testSer
 import { URI } from '../../../../../base/common/uri.js';
 import { IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import type { IWorkingCopyService } from '../../../workingCopy/common/workingCopyService.js';
+import type { IHostService } from '../../../host/browser/host.js';
 import { resetNlsResolver } from '../../../../../nls.js';
 
 let ariaRegion: import('../../../../../base/common/lifecycle.js').IDisposable;
@@ -60,7 +61,7 @@ test('folder validation keeps dirty files accessible until saved or reverted', a
 	using context = new TestWorkspaceService({ id: 'team', folders: [first, second], configuration: URI.file('/team.ash-workspace') });
 	let dirty = true;
 	const copies = { getAll: () => [{ resource: URI.file('/second/src/unsaved.ts'), isDirty: dirty }] } as unknown as IWorkingCopyService;
-	using editing = new WorkspaceEditingService({ getWorkspace: async () => ({}), onDidChange: () => ({ dispose() { } }) }, context, {} as IFileDialogService, copies);
+	using editing = new WorkspaceEditingService({ getWorkspace: async () => ({}), onDidChange: () => ({ dispose() { } }) }, context, {} as IFileDialogService, copies, {} as IHostService);
 	assert.throws(() => editing.validateFolders([first.uri]), /Save or revert/);
 	assert.doesNotThrow(() => editing.validateFolders([first.uri, second.uri]));
 	assert.throws(() => editing.validateFolders([URI.file('/')]), /Save or revert/);
@@ -72,6 +73,27 @@ test('folder validation keeps dirty files accessible until saved or reverted', a
 	assert.doesNotThrow(() => editing.validateFolders([first.uri]));
 });
 
+test('enterWorkspace waits for Desktop host acceptance and rejects a dirty current configuration', async () => {
+	const current = URI.file('/team.ash-workspace');
+	const target = URI.file('/other.code-workspace');
+	using context = new TestWorkspaceService({ id: 'team', configuration: current, folders: [] });
+	const accepted = new DeferredPromise<void>();
+	const opened: unknown[] = [];
+	let dirty = true;
+	const copies = { get: () => dirty ? [{ resource: current, isDirty: true }] : [] } as unknown as IWorkingCopyService;
+	const host = { openWindow: (...args: unknown[]) => { opened.push(args); return accepted.p; } } as unknown as IHostService;
+	using editing = new WorkspaceEditingService({ getWorkspace: async () => ({}), onDidChange: Event.None }, context, {} as IFileDialogService, copies, host);
+	await assert.rejects(editing.enterWorkspace(target), /Save or revert/);
+	assert.deepEqual(opened, []);
+	dirty = false;
+	const pending = editing.enterWorkspace(target);
+	assert.deepEqual(opened, [[[{ workspaceUri: target }], { forceReuseWindow: true }]]);
+	assert.equal(context.getWorkspace().configuration, current);
+	accepted.error(new Error('Workspace authorization denied'));
+	await assert.rejects(pending, /Workspace authorization denied/);
+	assert.equal(context.getWorkspace().configuration, current);
+});
+
 // Command tests use the actual desktop editing adapter. The fake host is the
 // process boundary, so assertions observe the submitted operation and accepted state.
 function commandServices(context: TestWorkspaceService, dialogs: Partial<IFileDialogService>, submitted: WorkspaceEditRequest[]) {
@@ -81,7 +103,7 @@ function commandServices(context: TestWorkspaceService, dialogs: Partial<IFileDi
 	services.registerSingleton(IWorkspaceEditingService, () => new WorkspaceEditingService({
 		getWorkspace: async () => ({}), onDidChange: Event.None,
 		editWorkspace: async request => { submitted.push(request); return {}; },
-	}, context, dialogs as IFileDialogService, { getAll: () => [], get: () => [] } as unknown as IWorkingCopyService));
+	}, context, dialogs as IFileDialogService, { getAll: () => [], get: () => [] } as unknown as IWorkingCopyService, {} as IHostService));
 	return services;
 }
 
@@ -229,6 +251,21 @@ async function browserWorkspaceFixture() {
 	const editing = resources.add(new BrowserWorkspaceEditingService(context, {} as IFileDialogService, copies, host, files, { error: (error: string) => errors.push(error) } as unknown as INotificationService));
 	return { resources, files, first, second, context, host, editing, errors, reject: () => { reject = true; }, setDirty: (uri: URI | undefined) => { dirty = uri; } };
 }
+
+test('enterWorkspace reads an existing Browser configuration without rewriting it', async () => {
+	const fixture = await browserWorkspaceFixture();
+	using resources = fixture.resources;
+	const target = URI.joinPath(fixture.first, 'existing.code-workspace');
+	const content = '// existing workspace\n' + JSON.stringify({ folders: [{ uri: fixture.second.toString(), name: 'Server' }], settings: { preserve: true } });
+	const original = await fixture.files.writeFile({ resource: target, content }, { create: true, overwrite: false });
+	await fixture.editing.enterWorkspace(target);
+	const workspace = fixture.context.getWorkspace();
+	assert.equal(workspace.configuration?.toString(), target.toString());
+	assert.deepEqual(workspace.folders.map(folder => ({ uri: folder.uri.toString(), name: folder.name })), [{ uri: fixture.second.toString(), name: 'Server' }]);
+	const stored = await fixture.files.readFile(target);
+	assert.equal(stored.content, content);
+	assert.equal(stored.revision, original.revision);
+});
 
 test('Browser multi-root editing writes metadata, preserves JSONC on save and removes only the selected root', async () => {
 	const fixture = await browserWorkspaceFixture();

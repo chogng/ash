@@ -5,6 +5,7 @@ import { IWorkspaceContextService } from '../../../../platform/workspace/common/
 import type { IWorkspaceContextApi, WorkspaceEditRequest } from '../../../../platform/workspace/common/workspaceIpc.js';
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IWorkingCopyService } from '../../workingCopy/common/workingCopyService.js';
+import { IHostService } from '../../host/browser/host.js';
 
 /** The host publishes accepted edits; the renderer never invents a folder list. */
 export class WorkspaceEditingService extends AbstractWorkspaceEditingService {
@@ -13,7 +14,8 @@ export class WorkspaceEditingService extends AbstractWorkspaceEditingService {
 		@IWorkspaceContextService workspace: IWorkspaceContextService,
 		@IFileDialogService dialogs: IFileDialogService,
 		@IWorkingCopyService workingCopies: IWorkingCopyService,
-	) { super(workspace, dialogs, workingCopies); }
+		@IHostService hostService: IHostService,
+	) { super(workspace, dialogs, workingCopies, hostService); }
 
 	updateFolders(index: number, deleteCount = 0, foldersToAdd: readonly { readonly uri: URI; readonly name?: string; }[] = []): Promise<void> {
 		return this.edit({ operation: 'folders', index, deleteCount, folders: foldersToAdd.map(folder => ({ uri: folder.uri.toString(), ...(folder.name === undefined ? {} : { name: folder.name }) })) });

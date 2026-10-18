@@ -6,7 +6,7 @@
 
 本地、SSH 与独立 Browser 目录句柄模式已实现并提交，职责与验证范围见 `docs/ash-desktop-architecture.md` §4.2。下列能力仍未完成：
 
-- [ ] 明确连接 App Server 的 Web 模式是否也要求多根工作区；当前仍是服务端单根会话。若纳入范围，先在 `crates/app-server-protocol/src/web.rs`、`crates/app-server/src/managed/web.rs` 和对应 transport owner 实现多目录授权／会话契约，再适配 `appServerWebWorkspaceClient.ts`；不能把 Browser 提升为 `directoryGrantsHost`。
+- [ ] 用户已确认纳入连接 App Server 的 Web 多根支持，并要求对齐 VS Code 的工作区公开契约与职责。已补齐 `IWorkspaceEditingService.enterWorkspace`，Browser 保存与外部配置重载已迁入这一共享入口；16 项工作区单测、Renderer 4,203 文件类型检查和真实 Chromium 目录句柄多根 smoke 均通过（日志 `.build/todo-workspace-entry-*.log`）。这不代表 App Server Web 多根已完成：当前仍是服务端单根会话；先在 `crates/app-server-protocol/src/web.rs`、`crates/app-server/src/managed/web.rs` 和对应 transport owner 实现多目录授权／会话契约，再适配 `appServerWebWorkspaceClient.ts`；不能把 Browser 提升为 `directoryGrantsHost`。
 - [ ] 为上述 Web 模式实现工作区配置文件的独立访问生命周期：移除配置所在根后，仍能访问已授权的准确配置文件，不扩大父目录授权。接通 Browser Host／编辑器链，验证权限拒绝、脏文件、连接关闭和真实 Web App Server。
 - [ ] 实现直接保存工作区配置到远端机器；当前 SSH 配置仍保存在 Desktop 本地，内容为远端 URI 根。
 - [ ] 补 Windows／Linux 远端多根及真实系统文件选择器验证。现有多根 SSH 验证使用 macOS 同机隔离 OpenSSH fixture，选择器使用受控返回值；跨机器单独步骤通过不能替代多根场景验证。
