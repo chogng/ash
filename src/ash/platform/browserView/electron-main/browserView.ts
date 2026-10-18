@@ -36,22 +36,41 @@ export interface BrowserViewOptions {
 
 /** Owns one page, its navigation resources and the ordered Chromium operations using it. */
 export class BrowserView extends Disposable {
+	// A username step belongs to this page, never to the shared session or the persisted vault.
+	private passwordIdentity: { origin: string; username: string; expires: number; } | undefined;
+	private passwordIdentityTimer: ReturnType<typeof setTimeout> | undefined;
 	private passwordSubmission: { origin: string; username: string; password: string; scope: 'global' | 'workspace'; } | undefined;
 	private passwordSave: { id: string; value: NonNullable<BrowserView['passwordSubmission']>; } | undefined;
-	private passwordChoice: { id: string; frame: WebFrameMain; token: string; formId: string; origin: string; accounts: readonly string[]; } | undefined;
+	private passwordChoice: { id: string; frame: WebFrameMain; token: string; formId: string; origin: string; field: 'username' | 'password'; accounts: readonly string[]; } | undefined;
 	private passwordTimer: ReturnType<typeof setTimeout> | undefined;
 	private passwordChoiceTimer: ReturnType<typeof setTimeout> | undefined;
 	private passwordFillVersion = 0;
 
-	private resetFormPasswords(): void {
+	private cancelPasswordChoice(): void {
 		this.passwordFillVersion++;
+		clearTimeout(this.passwordChoiceTimer);
+		if (this.passwordChoice) { this.emit({ type: 'passwordRequestClosed', targetId: this.id, requestId: this.passwordChoice.id }); }
+		this.passwordChoice = undefined;
+	}
+	private rememberPasswordIdentity(origin: string, username: string): void {
+		clearTimeout(this.passwordIdentityTimer);
+		this.passwordIdentity = { origin, username, expires: Date.now() + 120_000 };
+		this.passwordIdentityTimer = setTimeout(() => { this.passwordIdentity = undefined; this.cancelPasswordChoice(); }, 120_000);
+	}
+	private passwordUsername(origin: string, username: string): string {
+		return username || (this.passwordIdentity?.origin === origin && this.passwordIdentity.expires > Date.now() ? this.passwordIdentity.username : '');
+	}
+	private clearPasswordSubmission(): void {
 		this.passwordSubmission = undefined;
 		clearTimeout(this.passwordTimer);
-		clearTimeout(this.passwordChoiceTimer);
-		for (const pending of [this.passwordSave, this.passwordChoice]) {
-			if (pending) { this.emit({ type: 'passwordRequestClosed', targetId: this.id, requestId: pending.id }); }
-		}
-		this.passwordSave = undefined; this.passwordChoice = undefined;
+		if (this.passwordSave) { this.emit({ type: 'passwordRequestClosed', targetId: this.id, requestId: this.passwordSave.id }); }
+		this.passwordSave = undefined;
+	}
+	private resetFormPasswords(): void {
+		this.cancelPasswordChoice();
+		this.passwordIdentity = undefined;
+		clearTimeout(this.passwordIdentityTimer);
+		this.clearPasswordSubmission();
 	}
 
 	private passwordOrigin(frame: WebFrameMain, action: unknown): string | undefined {
@@ -87,12 +106,12 @@ export class BrowserView extends Disposable {
 		}
 	}
 
-	private async offerPasswordFill(frame: WebFrameMain, token: string, formId: string, origin: string, username: string): Promise<void> {
+	private async offerPasswordFill(frame: WebFrameMain, token: string, formId: string, origin: string, username: string, field: 'username' | 'password'): Promise<void> {
 		if (!this.passwords.autofillEnabled) { return; }
 		const version = ++this.passwordFillVersion;
 		const accounts = (await this.passwords.find(this.session.id, origin)).filter(entry => !username || entry.username === username);
 		if (!accounts.length || version !== this.passwordFillVersion || this.preloadFrames.get(frame) !== token || this.passwordOrigin(frame, origin) !== origin) { return; }
-		const request = { id: randomUUID(), frame, token, formId, origin, accounts: accounts.map(account => account.id) };
+		const request = { id: randomUUID(), frame, token, formId, origin, field, accounts: accounts.map(account => account.id) };
 		if (this.passwordChoice) { this.emit({ type: 'passwordRequestClosed', targetId: this.id, requestId: this.passwordChoice.id }); }
 		clearTimeout(this.passwordChoiceTimer);
 		this.passwordChoice = request;
@@ -111,7 +130,9 @@ export class BrowserView extends Disposable {
 		const version = this.passwordFillVersion;
 		const account = (await this.passwords.find(this.session.id, request.origin)).find(value => value.id === accountId);
 		if (!account || version !== this.passwordFillVersion || !this.passwords.autofillEnabled || this.preloadFrames.get(request.frame) !== request.token || this.passwordOrigin(request.frame, request.origin) !== request.origin) { return; }
-		this.sendPreload(request.frame, 'fillPassword', { token: request.token, formId: request.formId, origin: request.origin, username: account.username, password: account.password });
+		if (request.field === 'password') { this.rememberPasswordIdentity(request.origin, account.username); }
+		// The username step must never receive a password that it has no field for.
+		this.sendPreload(request.frame, 'fillPassword', { token: request.token, formId: request.formId, origin: request.origin, field: request.field, username: account.username, ...(request.field === 'password' ? { password: account.password } : {}) });
 	}
 	private readonly authenticationRequests = new Map<string, {
 		readonly key: string;
@@ -480,20 +501,29 @@ export class BrowserView extends Disposable {
 			return;
 		}
 		const data = message.data;
-		if (message.type === 'passwordSubmitted' || message.type === 'passwordFill' || message.type === 'passwordPageState') {
+		if (message.type === 'passwordSubmitted' || message.type === 'passwordIdentitySubmitted' || message.type === 'passwordFill' || message.type === 'passwordPageState') {
 			if (!isRecord(data)) { return; }
 			const origin = this.passwordOrigin(frame, data.action);
 			if (!origin) { return; }
 			if (message.type === 'passwordPageState') {
 				if (data.hasPasswordForm === false && this.passwordSubmission?.origin === origin) { void this.reviewPasswordSubmission().catch(() => { this.resetFormPasswords(); }); }
-			} else if (message.type === 'passwordSubmitted') {
-				if (!this.passwords.saveEnabled || typeof data.username !== 'string' || !data.username || data.username.length > 4096 || /[\x00-\x1f\x7f]/u.test(data.username)
-					|| typeof data.password !== 'string' || !data.password || data.password.length > 4096 || /[\x00\r\n]/u.test(data.password)) { return; }
-				this.resetFormPasswords();
-				this.passwordSubmission = { origin, username: data.username, password: data.password, scope: this.session.storageScope as 'global' | 'workspace' };
-				this.passwordTimer = setTimeout(() => this.resetFormPasswords(), 60_000);
-			} else if (typeof data.formId === 'string' && /^[a-f0-9]+-\d{1,6}$/u.test(data.formId) && typeof data.username === 'string' && data.username.length <= 4096) {
-				void this.offerPasswordFill(frame, message.frameToken, data.formId, origin, data.username).catch(() => { });
+			} else {
+				if (typeof data.username !== 'string' || data.username.length > 4096 || /[\x00-\x1f\x7f]/u.test(data.username)) { return; }
+				if (message.type === 'passwordIdentitySubmitted') {
+					if (!data.username) { return; }
+					this.resetFormPasswords(); this.rememberPasswordIdentity(origin, data.username);
+				} else if (message.type === 'passwordSubmitted') {
+					if (typeof data.hasUsername !== 'boolean') { return; }
+					const username = data.hasUsername ? data.username : this.passwordUsername(origin, data.username);
+					if (!this.passwords.saveEnabled || !username || typeof data.password !== 'string' || !data.password || data.password.length > 4096 || /[\x00\r\n]/u.test(data.password)) { return; }
+					this.resetFormPasswords();
+					this.rememberPasswordIdentity(origin, username);
+					this.passwordSubmission = { origin, username, password: data.password, scope: this.session.storageScope as 'global' | 'workspace' };
+					this.passwordTimer = setTimeout(() => this.clearPasswordSubmission(), 60_000);
+				} else if (typeof data.formId === 'string' && /^[a-f0-9]+-\d{1,6}$/u.test(data.formId) && typeof data.hasUsername === 'boolean' && (data.field === 'username' || data.field === 'password')) {
+					// An empty username in a complete form must offer all accounts, not reuse a previous login.
+					void this.offerPasswordFill(frame, message.frameToken, data.formId, origin, data.field === 'password' && !data.hasUsername ? this.passwordUsername(origin, data.username) : data.username, data.field).catch(() => { });
+				}
 			}
 		} else if (message.type === 'selectedText') {
 			if (isRecord(data) && typeof data.requestId === 'string' && typeof data.text === 'string' && data.text.length <= 65536) {
@@ -733,8 +763,15 @@ export class BrowserView extends Disposable {
 		});
 		this.on(contents, 'did-start-navigation', (_event: ElectronEvent, _url: string, inPlace: boolean, mainFrame: boolean) => {
 			if (mainFrame && !inPlace) {
-				this.passwordFillVersion++;
-				try { if (!this.passwordSubmission || new URL(_url).origin !== this.passwordSubmission.origin) { this.resetFormPasswords(); } } catch { this.resetFormPasswords(); }
+				this.cancelPasswordChoice();
+				if (this.passwordSave) {
+					this.emit({ type: 'passwordRequestClosed', targetId: this.id, requestId: this.passwordSave.id });
+					this.passwordSave = undefined; clearTimeout(this.passwordTimer);
+				}
+				try {
+					const origin = new URL(_url).origin;
+					if (this.passwordSubmission?.origin !== origin && !(this.passwordIdentity?.origin === origin && this.passwordIdentity.expires > Date.now())) { this.resetFormPasswords(); }
+				} catch { this.resetFormPasswords(); }
 			}
 			if (mainFrame && !inPlace) { this.cancelAuthentication(); this.attemptedAuthentication.clear(); }
 			if (mainFrame && !inPlace) {

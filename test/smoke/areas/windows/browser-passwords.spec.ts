@@ -24,7 +24,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 					if (data.get('password') !== currentPassword) { response.end(form(true)); return; }
 					accepted.push(data.get('username')!); response.writeHead(303, { Location: '/account' }); response.end(); return;
 				}
-				response.end(request.url === '/account' ? '<title>Account page</title><p>Signed in</p>' : request.url === '/new-password' ? form().replace('current-password', 'new-password') : request.url === '/hidden-password' ? form().replace('type="password"', 'type="password" style="opacity:0"') : request.url === '/cross-form' ? form().replace('action="/login"', 'action="https://other.example/login"') : form());
+				response.end(request.url === '/account' ? '<title>Account page</title><p>Signed in</p>' : request.url === '/new-password' ? form().replace('current-password', 'new-password') : request.url === '/hidden-password' ? form().replace('type="password"', 'type="password" style="opacity:0"') : request.url === '/cross-form' ? form().replace('action="/login"', 'action="https://other.example/login"') : request.url === '/invalid-action' ? form().replace('action="/login"', 'action="https://["') : request.url === '/cross-button' ? form().replace('<button>', '<button formaction="https://other.example/login">') : form());
 			});
 			await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
 			const endpoint = server.address(); if (!endpoint || typeof endpoint === 'string') { throw new Error('Missing login fixture'); }
@@ -108,8 +108,10 @@ for (const locale of ['en', 'zh-CN'] as const) {
 				await expect.poll(async () => (await state()).entries.length).toBe(2);
 				await navigate(); await workbench.dialogs.confirm(application, labels.choose, 'second-account', () => click('input[name=username]'));
 				await expect.poll(values).toEqual(['second-account', currentPassword]);
-				for (const excluded of ['/new-password', '/cross-form', '/hidden-password']) {
-					await navigate(origin + excluded); await enter('input[name=username]', 'second-account'); await click('input[name=password]'); await expect.poll(values).toEqual(['second-account', '']);
+				for (const excluded of ['/new-password', '/cross-form', '/cross-button', '/invalid-action', '/hidden-password']) {
+					await navigate(origin + excluded);
+					await enter('input[name=username]', 'second-account');
+					await click('input[name=password]'); await expect.poll(values).toEqual(['second-account', '']);
 				}
 
 				let panel = await settings(); await expect(panel.getByRole('listitem')).toHaveCount(2);
@@ -130,6 +132,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 				await setSwitch(labels.saveSetting, false);
 				const search = panel.getByRole('textbox', { name: labels.search, exact: true }); await search.focus(); await search.press('Alt+F1');
 				const help = workbench.page.getByRole('dialog', { name: labels.help, exact: true }); await expect(help.getByRole('textbox')).toHaveValue(locale === 'en' ? /existing passwords are never shown/ : /已有密码不会显示/);
+				await expect(help.getByRole('textbox')).toHaveValue(locale === 'en' ? /Username-first login.*two minutes/ : /用户名优先.*两分钟/);
 				await help.getByRole('button', { name: labels.close, exact: true }).click(); await expect(search).toBeFocused();
 				await closeSettings(); await navigate(); await workbench.dialogs.confirm(application, labels.choose, 'second-account', () => click('input[name=username]'));
 				await expect.poll(values).toEqual(['second-account', 'managed-new-password']);
@@ -148,6 +151,129 @@ for (const locale of ['en', 'zh-CN'] as const) {
 				await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
 			} finally {
 				await view?.dispose(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve()));
+			}
+		});
+
+		test('username-first GET and SPA Fetch/XHR logins preserve account binding and isolation', { tag: ['@electron-ui'] }, async ({ application: initialApplication, workbench: initialWorkbench, reloadWorkbench }) => {
+			test.setTimeout(180_000);
+			let application = initialApplication; let workbench = initialWorkbench;
+			let password = 'multi-step-password'; const username = 'multi@example.test';
+			let pendingLogin: Promise<void> | undefined; let releaseLogin: (() => void) | undefined;
+			let signedInUser = ''; const accepted: string[] = [];
+			const usernameStep = '<title>Username step</title><form action="/steps/password"><input name="username" type="email" autocomplete="username"><button>Next</button></form>';
+			const passwordStep = '<title>Password step</title><form method="post" action="/steps/login"><input name="password" type="password" autocomplete="current-password"><button>Sign in</button></form>';
+			const spa = (kind: string) => {
+				const fields = '<input name="username" autocomplete="username"><input name="password" type="password" autocomplete="current-password"><button type="' + (kind === 'form' ? 'submit' : 'button') + '">Sign in</button><p role="alert"></p>';
+				const panel = kind === 'steps' ? '<div id="login" role="form"><input name="username" autocomplete="username"><button type="button">Next</button></div>' : ['form', 'retarget'].includes(kind) ? '<form id="login">' + fields + '</form>' : '<div id="login">' + fields + '</div>';
+				return `<title>SPA login</title>${panel}<script>
+				const panel=document.getElementById('login'); let account='';
+				if(${JSON.stringify(kind)}==='retarget'){panel.querySelector('[name=username]').oninput=()=>{panel.action='https://other.example/login';};}
+				function complete(){history.pushState({},'', '/spa/account'); panel.innerHTML='<h1>Welcome</h1>'; document.title='SPA account';}
+				async function login(event){event.preventDefault(); const user=panel.querySelector('[name=username]'); if(user)account=user.value;
+				const data=JSON.stringify({username:account,password:panel.querySelector('[name=password]').value}); let result;
+				for(const input of panel.querySelectorAll('input'))input.disabled=true; const busy=document.createElement('p');busy.textContent='Signing in';panel.append(busy);document.title='Signing in';
+				if(${JSON.stringify(kind)}==='xhr'){result=await new Promise(resolve=>{const request=new XMLHttpRequest();request.open('POST','/api/login');request.onload=()=>resolve(JSON.parse(request.responseText));request.send(data);});}
+				else{result=await (await fetch('/api/login',{method:'POST',body:data})).json();}
+				if(!result.ok){for(const input of panel.querySelectorAll('input'))input.disabled=false;document.title='SPA rejected';return;}
+				if(${JSON.stringify(kind)}!=='steps'){complete();return;}
+				panel.innerHTML='<input name="code" type="password" autocomplete="one-time-code"><button type="button">Verify</button>';document.title='Verification step';
+				panel.querySelector('button').onclick=async()=>{const result=await (await fetch('/api/verify',{method:'POST',body:panel.querySelector('input').value})).json();if(result.ok)complete();};}
+				if(${JSON.stringify(kind)}==='steps'){panel.querySelector('button').onclick=()=>{account=panel.querySelector('input').value; panel.innerHTML='<input name="password" type="password" autocomplete="current-password"><button type="button">Sign in</button>';history.pushState({},'', '/spa/password');document.title='SPA password';panel.querySelector('button').onclick=login;};}
+				else if(${JSON.stringify(kind)}==='form'){panel.onsubmit=login;}else{panel.querySelector('button').onclick=login;}
+				</script>`;
+			};
+			const server = createServer(async (request, response) => {
+				const url = new URL(request.url!, 'http://fixture.test');
+				if (request.method === 'POST') {
+					const chunks: Buffer[] = []; for await (const chunk of request) { chunks.push(Buffer.from(chunk)); } const body = Buffer.concat(chunks).toString();
+					if (url.pathname === '/api/verify') { response.setHeader('Content-Type', 'application/json'); response.end(JSON.stringify({ ok: body === '123456' })); return; }
+					const data = url.pathname === '/steps/login' ? { username: signedInUser, password: new URLSearchParams(body).get('password') } : JSON.parse(body) as { username: string; password: string; };
+					const ok = data.username === username && data.password === password; if (ok) { accepted.push(url.pathname); }
+					if (url.pathname.startsWith('/api/')) { await pendingLogin; response.setHeader('Content-Type', 'application/json'); response.end(JSON.stringify({ ok })); return; }
+					if (!ok) { response.setHeader('Content-Type', 'text/html'); response.end(passwordStep.replace('Password step', 'Password rejected')); return; }
+					response.writeHead(303, { Location: '/account' }); response.end(); return;
+				}
+				response.setHeader('Content-Type', 'text/html');
+				if (url.pathname === '/steps/password' && url.searchParams.has('username')) { signedInUser = url.searchParams.get('username')!; }
+				response.end(url.pathname === '/steps/user' ? usernameStep : url.pathname === '/steps/password' ? passwordStep : url.pathname === '/account' ? '<title>Signed in</title><h1>Account</h1>' : spa(url.pathname.split('/').at(-1)!));
+			});
+			const other = createServer((_request, response) => { response.setHeader('Content-Type', 'text/html'); response.end(passwordStep); });
+			for (const service of [server, other]) { await new Promise<void>(resolve => service.listen(0, '127.0.0.1', resolve)); }
+			const endpoint = (service: typeof server) => { const address = service.address(); if (!address || typeof address === 'string') { throw new Error('Missing login endpoint'); } return `http://127.0.0.1:${address.port}`; };
+			const origin = endpoint(server); const otherOrigin = endpoint(other);
+			const addressLabel = locale === 'en' ? 'Browser address' : '浏览器地址';
+			const saveTitle = locale === 'en' ? 'Save website password' : '保存网站密码'; const updateTitle = locale === 'en' ? 'Update website password' : '更新网站密码';
+			const saveLabel = locale === 'en' ? 'Save password' : '保存密码'; const updateLabel = locale === 'en' ? 'Update password' : '更新密码';
+			type Capture = { unexpected: string[]; restore(): void; };
+			const capture = () => (application as ElectronApplication).evaluate(({ dialog }) => {
+				const original = dialog.showMessageBox; const state = globalThis as typeof globalThis & { passwordPrompts?: Capture; };
+				state.passwordPrompts = { unexpected: [], restore: () => { dialog.showMessageBox = original; delete state.passwordPrompts; } };
+				dialog.showMessageBox = ((...args: [Electron.MessageBoxOptions] | [Electron.BrowserWindow, Electron.MessageBoxOptions]) => {
+					const options = args.length === 1 ? args[0] : args[1]; state.passwordPrompts!.unexpected.push(options.title ?? ''); return Promise.resolve({ response: options.cancelId ?? 0, checkboxChecked: false });
+				}) as typeof dialog.showMessageBox;
+			});
+			const unexpected = () => (application as ElectronApplication).evaluate(() => (globalThis as typeof globalThis & { passwordPrompts?: Capture; }).passwordPrompts?.unexpected ?? []);
+			const editor = () => workbench.page.locator('.ash-browser-editor');
+			const acquire = (prefix = origin) => (application as ElectronApplication).evaluateHandle(({ BrowserWindow }, prefix) => BrowserWindow.getAllWindows().flatMap(window => window.contentView.children).find(child => 'webContents' in child && (child as Electron.WebContentsView).webContents.getURL().startsWith(prefix)) as Electron.WebContentsView, prefix);
+			let view: Awaited<ReturnType<typeof acquire>> | undefined;
+			const read = (selector: string) => view!.evaluate((view, selector) => view.webContents.executeJavaScript(`document.querySelector(${JSON.stringify(selector)})?.value`), selector);
+			const click = (selector: string) => view!.evaluate(async (view, selector) => {
+				const point = await view.webContents.executeJavaScript(`(()=>{const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return{x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)};})()`);
+				view.webContents.focus(); for (const type of ['mouseMove', 'mouseDown', 'mouseUp'] as const) { view.webContents.sendInputEvent({ type, ...point, button: 'left', clickCount: 1 }); }
+			}, selector);
+			const enter = async (selector: string, value: string) => {
+				await click(selector); await expect.poll(() => view!.evaluate((view, selector) => view.webContents.executeJavaScript(`document.activeElement.matches(${JSON.stringify(selector)})`), selector)).toBe(true);
+				await view!.evaluate(view => { const modifiers = [process.platform === 'darwin' ? 'meta' : 'control'] as ('meta' | 'control')[]; for (const type of ['keyDown', 'keyUp'] as const) { view.webContents.sendInputEvent({ type, keyCode: 'A', modifiers }); } });
+				await expect.poll(() => view!.evaluate(view => view.webContents.executeJavaScript('document.activeElement.selectionStart===null||(document.activeElement.selectionStart===0&&document.activeElement.selectionEnd===document.activeElement.value.length)'))).toBe(true);
+				await view!.evaluate((view, value) => view.webContents.insertText(value), value); await expect.poll(() => read(selector)).toBe(value);
+			};
+			const navigate = async (path: string, title: string, base = origin) => {
+				const previous = view && await view.evaluate(view => view.webContents.executeJavaScript('performance.timeOrigin'));
+				const address = editor().getByRole('textbox', { name: addressLabel, exact: true }); await address.fill(base + path); await address.press('Enter'); await expect(editor().getByRole('status')).toHaveText(title);
+				if (view) { await expect.poll(() => view!.evaluate(view => view.webContents.executeJavaScript('performance.timeOrigin'))).not.toBe(previous); }
+			};
+			const state = () => workbench.page.evaluate(() => globalThis.ashTestMainProcess.call<BrowserPasswordState>('browserPasswords', 'readState', []));
+			try {
+				await capture(); await installMainChannelTestClient(workbench.page);
+				await workbench.page.evaluate(() => globalThis.ashTestMainProcess.call('browserView', 'getOrCreateBrowserView', ['browser_target_' + crypto.randomUUID(), { initialUrl: 'about:blank', owner: { type: 'user' }, session: { scope: 'global' } }]));
+				await navigate('/steps/user', 'Username step'); view = await acquire(); await enter('[name=username]', username); await click('button'); await expect(editor().getByRole('status')).toHaveText('Password step');
+				await enter('[name=password]', 'rejected'); await click('button'); await expect(editor().getByRole('status')).toHaveText('Password rejected'); expect((await state()).entries).toHaveLength(0);
+				await enter('[name=password]', password); await workbench.dialogs.confirm(application, saveTitle, saveLabel, () => click('button')); await expect.poll(async () => (await state()).entries.length).toBe(1);
+				expect(await unexpected()).toEqual([]); await view.dispose(); view = undefined; ({ application, workbench } = await reloadWorkbench()); await capture(); await installMainChannelTestClient(workbench.page);
+				await navigate('/steps/user', 'Username step'); view = await acquire(); await click('[name=username]'); await expect.poll(() => read('[name=username]')).toBe(username);
+				await click('button'); await expect(editor().getByRole('status')).toHaveText('Password step'); await click('[name=password]'); await expect.poll(() => read('[name=password]')).toBe(password);
+
+				await navigate('/spa/form', 'SPA login'); await click('[name=username]'); await expect.poll(() => read('[name=password]')).toBe(password);
+				await enter('[name=password]', 'rejected'); await click('button'); await expect(editor().getByRole('status')).toHaveText('SPA rejected'); expect(await unexpected()).toEqual([]);
+				password = 'fetch-updated-password'; await enter('[name=password]', password);
+				pendingLogin = new Promise<void>(resolve => { releaseLogin = resolve; });
+				await workbench.dialogs.confirm(application, updateTitle, updateLabel, async () => {
+					try {
+						await click('button'); await expect(editor().getByRole('status')).toHaveText('Signing in');
+						await view!.evaluate(view => view.webContents.executeJavaScript('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))'));
+						expect(await (application as ElectronApplication).evaluate(() => (globalThis as typeof globalThis & { ashTestMessage?: { options?: unknown; }; }).ashTestMessage?.options)).toBeUndefined();
+					} finally { releaseLogin!(); pendingLogin = undefined; }
+				}); await expect(editor().getByRole('status')).toHaveText('SPA account');
+				await navigate('/spa/xhr', 'SPA login'); await click('[name=username]'); await expect.poll(() => read('[name=password]')).toBe(password); await click('button'); await expect(editor().getByRole('status')).toHaveText('SPA account');
+
+				await navigate('/spa/steps', 'SPA login'); await click('[name=username]'); await expect.poll(() => read('[name=username]')).toBe(username); await click('button'); await expect(editor().getByRole('status')).toHaveText('SPA password');
+				await click('[name=password]'); await expect.poll(() => read('[name=password]')).toBe(password); password = 'verification-updated-password'; await enter('[name=password]', password); await click('button'); await expect(editor().getByRole('status')).toHaveText('Verification step');
+				await click('[name=code]'); await expect.poll(() => read('[name=code]')).toBe(''); expect(await unexpected()).toEqual([]);
+				await enter('[name=code]', '123456'); await workbench.dialogs.confirm(application, updateTitle, updateLabel, () => click('button')); await expect(editor().getByRole('status')).toHaveText('SPA account');
+				await navigate('/spa/retarget', 'SPA login'); await click('[name=username]'); await expect.poll(() => read('[name=username]')).toBe(username); await expect.poll(() => read('[name=password]')).toBe('');
+				await navigate('/steps/password', 'Password step', otherOrigin); await click('[name=password]'); await expect.poll(() => read('[name=password]')).toBe('');
+
+				await view.dispose(); view = undefined;
+				const workspaceUrl = origin + '/steps/password?scope=workspace';
+				await workbench.page.evaluate(url => globalThis.ashTestMainProcess.call('browserView', 'getOrCreateBrowserView', ['browser_target_' + crypto.randomUUID(), { initialUrl: url, owner: { type: 'user' }, session: { scope: 'workspace' } }]), workspaceUrl);
+				await expect(editor().getByRole('status')).toHaveText('Password step'); view = await acquire(workspaceUrl); await click('[name=password]'); await expect.poll(() => read('[name=password]')).toBe('');
+				expect((await state()).entries.map(entry => [entry.username, entry.scope])).toEqual([[username, 'global']]); expect(await unexpected()).toEqual([]);
+				expect(accepted).toEqual(['/steps/login', '/api/login', '/api/login', '/api/login']);
+				await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
+			} finally {
+				releaseLogin?.();
+				await view?.dispose(); await (application as ElectronApplication).evaluate(() => (globalThis as typeof globalThis & { passwordPrompts?: Capture; }).passwordPrompts?.restore()).catch(() => { });
+				for (const service of [server, other]) { service.closeAllConnections(); await new Promise<void>(resolve => service.close(() => resolve())); }
 			}
 		});
 	});

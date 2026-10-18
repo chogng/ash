@@ -25,59 +25,104 @@
 	const markers: HTMLButtonElement[] = [];
 	const send = (type: string, data?: unknown): void => ipcRenderer.send(channel, { frameToken, type, data });
 	// Passwords never cross the page's main-world bridge. Only top-level, visible, same-origin forms qualify.
-	const passwordForms = new Map<string, WeakRef<HTMLFormElement>>();
-	const passwordFormIds = new WeakMap<HTMLFormElement, string>();
+	const passwordForms = new Map<string, WeakRef<HTMLElement>>();
+	const passwordFormIds = new WeakMap<HTMLElement, string>();
 	let passwordFormSequence = 0;
-	let passwordGesture: { form: HTMLFormElement; at: number; } | undefined;
-	const visiblePasswordInput = (input: HTMLInputElement): boolean => input.isConnected && !input.disabled && !input.readOnly
+	let passwordGesture: { root: HTMLElement; at: number; } | undefined;
+	const visiblePasswordInput = (input: HTMLInputElement): boolean => input.isConnected
 		&& input.getClientRects().length > 0 && input.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) && input.type !== 'hidden';
-	function passwordFields(form: HTMLFormElement): { username: HTMLInputElement; password: HTMLInputElement; } | undefined {
-		if (window !== window.top || form.method.toLowerCase() !== 'post' || new URL(form.action || location.href).origin !== location.origin) { return; }
-		const inputs = [...form.elements].filter((element): element is HTMLInputElement => element instanceof HTMLInputElement && visiblePasswordInput(element));
+	const passwordAction = (root: HTMLElement): string => root instanceof HTMLFormElement ? root.action : location.href;
+	const samePasswordOrigin = (action: string): boolean => {
+		try { return action.length <= 8192 && new URL(action, location.href).origin === location.origin; }
+		catch { return false; }
+	};
+	const autocomplete = (input: HTMLInputElement): string | undefined => input.autocomplete.split(/\s+/u).at(-1);
+	const verificationInput = (input: HTMLInputElement): boolean => autocomplete(input) === 'one-time-code' || /(?:^|[\s_-])(?:otp|totp|code|pin|verification)(?:$|[\s_-])/iu.test(input.name + ' ' + input.id);
+	function passwordFields(root: HTMLElement): { username?: HTMLInputElement; password?: HTMLInputElement; hasPasswordControl: boolean; } | undefined {
+		if (window !== window.top || !root.isConnected || !samePasswordOrigin(passwordAction(root))
+			|| root instanceof HTMLFormElement && root.autocomplete === 'off') { return; }
+		const controls = root instanceof HTMLFormElement ? [...root.elements] : [...root.querySelectorAll('input')];
+		// A submit button can override its form's destination, including after a controlled-input update.
+		if (controls.some(element => element.hasAttribute('formaction') && !samePasswordOrigin(element.getAttribute('formaction')!))) { return; }
+		const inputs = controls.filter((element): element is HTMLInputElement => element instanceof HTMLInputElement && !element.disabled && !element.readOnly && visiblePasswordInput(element));
 		const passwords = inputs.filter(input => input.type === 'password');
-		const username = inputs.find(input => input.autocomplete === 'username') ?? inputs.filter(input => ['text', 'email'].includes(input.type)).at(-1);
-		if (!username || passwords.length !== 1 || passwords[0]!.autocomplete === 'new-password' || form.autocomplete === 'off' || passwords[0]!.autocomplete === 'off') { return; }
-		return { username, password: passwords[0]! };
+		if (passwords.length > 1 || passwords.some(input => verificationInput(input) || ['new-password', 'off'].includes(autocomplete(input) ?? ''))) { return; }
+		const candidates = inputs.filter(input => ['text', 'email'].includes(input.type) && autocomplete(input) !== 'off' && autocomplete(input) !== 'one-time-code' && !/otp|code|token|search/iu.test(input.name + ' ' + input.id));
+		const identity = candidates.find(input => ['username', 'email'].includes(autocomplete(input) ?? '') || input.type === 'email' || /user|email|login|account/iu.test(input.name + ' ' + input.id));
+		const username = identity ?? (passwords.length === 1 && candidates.length === 1 ? candidates[0] : undefined);
+		if (!passwords.length && (!identity || candidates.length !== 1)) { return; }
+		return { username, password: passwords[0], hasPasswordControl: controls.some(element => element instanceof HTMLInputElement && element.type === 'password') };
+	}
+	function passwordRoot(element: Element): HTMLElement | undefined {
+		if ((element instanceof HTMLInputElement || element instanceof HTMLButtonElement) && element.form) { return element.form; }
+		const explicit = element.closest('form,[role="form"]');
+		if (explicit instanceof HTMLElement) { return explicit; }
+		// Custom SPA panels need a bounded common ancestor, rather than collecting inputs across the page.
+		let root = element.parentElement;
+		for (let depth = 0; root && root !== document.body && depth < 8; depth++, root = root.parentElement) {
+			if (root.querySelector('button,input[type="submit"],[role="button"]') && passwordFields(root)) { return root; }
+		}
+		return undefined;
 	}
 	let previousPasswordPageState: boolean | undefined;
 	function reportPasswordPageState(): void {
 		if (window !== window.top) { return; }
-		const hasPasswordForm = [...document.querySelectorAll<HTMLInputElement>('input[type="password"]')].some(input => visiblePasswordInput(input));
+		// Keep the submission pending while a site advances to a visible verification-code step.
+		const hasPasswordForm = [...document.querySelectorAll<HTMLInputElement>('input')].some(input => visiblePasswordInput(input)
+			&& (input.type === 'password' || verificationInput(input)));
 		if (hasPasswordForm === previousPasswordPageState) { return; }
 		previousPasswordPageState = hasPasswordForm;
 		send('passwordPageState', { action: location.href, hasPasswordForm });
+	}
+	function passwordSubmit(root: HTMLElement): void {
+		if (passwordGesture?.root !== root || performance.now() - passwordGesture.at > 1500) { return; }
+		const fields = passwordFields(root);
+		if (!fields || fields.password && !fields.password.value || !fields.password && !fields.username?.value) { return; }
+		passwordGesture = undefined;
+		if (fields.password) {
+			send('passwordSubmitted', { action: passwordAction(root), username: fields.username?.value ?? '', hasUsername: !!fields.username, password: fields.password.value });
+			// A SPA may add and remove the password step within the same animation frame.
+			previousPasswordPageState = undefined;
+			queueMicrotask(reportPasswordPageState);
+		} else { send('passwordIdentitySubmitted', { action: passwordAction(root), username: fields.username!.value }); }
 	}
 	if (window === window.top) {
 		for (const eventName of ['pointerdown', 'keydown'] as const) {
 			document.addEventListener(eventName, event => {
 				if (!event.isTrusted || !(event.target instanceof Element)) { return; }
-				const form = event.target.closest('form');
-				if (form instanceof HTMLFormElement) { passwordGesture = { form, at: performance.now() }; }
+				const root = passwordRoot(event.target);
+				if (root) {
+					passwordGesture = { root, at: performance.now() };
+					if (event instanceof KeyboardEvent && event.key === 'Enter' && !event.isComposing && event.target instanceof HTMLInputElement) { passwordSubmit(root); }
+				}
 			}, true);
 		}
 		document.addEventListener('focusin', event => {
 			const target = event.target;
-			if (!event.isTrusted || !(target instanceof HTMLInputElement) || !target.form
-				|| passwordGesture?.form !== target.form || performance.now() - passwordGesture.at > 1500) { return; }
-			const fields = passwordFields(target.form);
-			if (!fields || fields.password.value || ![fields.username, fields.password].includes(target)) { return; }
-			let formId = passwordFormIds.get(target.form);
+			if (!event.isTrusted || !(target instanceof HTMLInputElement)) { return; }
+			const root = passwordRoot(target);
+			if (!root || passwordGesture?.root !== root || performance.now() - passwordGesture.at > 1500) { return; }
+			const fields = passwordFields(root);
+			// A hidden or disabled password field is not a username-only step eligible for autofill.
+			if (fields && !fields.password && fields.hasPasswordControl) { return; }
+			if (!fields || fields.password?.value || !fields.password && fields.username?.value || ![fields.username, fields.password].includes(target)) { return; }
+			let formId = passwordFormIds.get(root);
 			if (!formId) {
 				formId = frameToken + '-' + ++passwordFormSequence;
-				passwordFormIds.set(target.form, formId);
-				passwordForms.set(formId, new WeakRef(target.form));
+				passwordFormIds.set(root, formId);
+				passwordForms.set(formId, new WeakRef(root));
 				if (passwordForms.size > 64) { passwordForms.delete(passwordForms.keys().next().value!); }
 			}
-			send('passwordFill', { formId, action: target.form.action, username: fields.username.value });
+			send('passwordFill', { formId, action: passwordAction(root), username: fields.username?.value ?? '', hasUsername: !!fields.username, field: fields.password ? 'password' : 'username' });
 		});
+		document.addEventListener('click', event => {
+			if (!event.isTrusted || event.button !== 0 || !(event.target instanceof Element)) { return; }
+			const control = event.target.closest('button,input[type="submit"],[role="button"]');
+			if (!control || control.getAttribute('type') === 'reset' || control.getAttribute('aria-disabled') === 'true') { return; }
+			const root = passwordRoot(control); if (root) { passwordSubmit(root); }
+		}, true);
 		document.addEventListener('submit', event => {
-			const form = event.target;
-			if (!event.isTrusted || !(form instanceof HTMLFormElement) || passwordGesture?.form !== form || performance.now() - passwordGesture.at > 1500) { return; }
-			const fields = passwordFields(form);
-			if (!fields || !fields.username.value || !fields.password.value) { return; }
-			passwordGesture = undefined;
-			send('passwordSubmitted', { action: form.action, username: fields.username.value, password: fields.password.value });
-			queueMicrotask(reportPasswordPageState);
+			if (event.isTrusted && event.target instanceof HTMLFormElement) { passwordSubmit(event.target); }
 		}, true);
 		const startPasswordObservation = (): void => {
 			reportPasswordPageState();
@@ -687,9 +732,12 @@
 				if (!data || data.token !== frameToken || data.origin !== location.origin) { break; }
 				const form = passwordForms.get(data.formId)?.deref();
 				const fields = form && passwordFields(form);
-				if (!fields || fields.password.value || fields.username.value && fields.username.value !== data.username) { break; }
+				if (!fields || (fields.password ? 'password' : 'username') !== data.field || fields.password?.value || fields.username?.value && fields.username.value !== data.username) { break; }
 				const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
 				for (const [input, value] of [[fields.username, data.username], [fields.password, data.password]] as const) {
+					if (!input || typeof value !== 'string') { continue; }
+					// Controlled inputs can replace or retarget the form in their username handler.
+					if (input === fields.password && (!form || passwordFields(form)?.password !== input || input.value)) { break; }
 					setter.call(input, value);
 					input.dispatchEvent(new Event('input', { bubbles: true }));
 					input.dispatchEvent(new Event('change', { bubbles: true }));

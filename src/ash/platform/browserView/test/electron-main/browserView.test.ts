@@ -6,6 +6,7 @@ import { createCipheriv, createDecipheriv } from 'node:crypto';
 import { EncryptionMainService } from '../../../encryption/electron-main/encryptionMainService.js';
 import { IEncryptionMainService } from '../../../encryption/common/encryptionService.js';
 import assert from 'node:assert/strict';
+import { mock } from 'node:test';
 import { EventEmitter } from 'node:events';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -46,8 +47,63 @@ suite('Browser form passwords', () => {
 		return { frame, post, sent, vault, session: f.manager.tryGetBrowserView(id)!.session.id };
 	}
 	const settle = () => new Promise<void>(resolve => setImmediate(resolve));
-	const submitted = { action: 'https://example.test/login', username: 'synthetic-user', password: 'synthetic-password' };
-	const form = { action: submitted.action, username: '', formId: 'a'.repeat(32) + '-1' };
+	const submitted = { action: 'https://example.test/login', hasUsername: true, username: 'synthetic-user', password: 'synthetic-password' };
+	const form = { action: submitted.action, hasUsername: true, username: '', field: 'password', formId: 'a'.repeat(32) + '-1' };
+
+	test('the username expires after two minutes while a password candidate expires independently', async () => {
+		mock.timers.enable({ apis: ['Date', 'setTimeout'] });
+		try {
+			using f = fixture(); const p = await page(f);
+			const identity = { action: submitted.action, username: submitted.username };
+			const submit = () => p.post('passwordSubmitted', { ...submitted, username: '', hasUsername: false });
+			const finish = () => p.post('passwordPageState', { action: submitted.action, hasPasswordForm: false });
+			p.post('passwordIdentitySubmitted', identity); mock.timers.tick(120_001); submit(); finish(); await settle();
+			assert.equal(f.events.some(event => event.type === 'passwordSaveRequested'), false);
+			p.post('passwordIdentitySubmitted', identity); submit(); mock.timers.tick(60_001); finish(); await settle();
+			assert.equal(f.events.some(event => event.type === 'passwordSaveRequested'), false);
+			submit(); finish(); await settle();
+			assert.equal(f.events.some(event => event.type === 'passwordSaveRequested'), true);
+		} finally { mock.timers.reset(); }
+	});
+
+	test('a username step sends no password and binds a later password-only document to the submitted account', async () => {
+		using f = fixture(); const p = await page(f);
+		await p.vault.save({ session: p.session, scope: 'global', origin: 'https://example.test', username: submitted.username, password: submitted.password });
+		p.post('passwordFill', { ...form, field: 'username' }); await settle();
+		const fill = p.sent.find(message => message.command === 'fillPassword')!;
+		assert.equal('password' in (fill.data as object), false);
+		p.post('passwordIdentitySubmitted', { action: submitted.action, username: submitted.username });
+		f.contents.emit('did-start-navigation', {}, 'https://example.test/password', false, true);
+		p.frame.url = 'https://example.test/password'; p.post('ready', undefined, 'b'.repeat(32));
+		p.post('passwordFill', { ...form, action: p.frame.url, hasUsername: false }, 'a'.repeat(32)); await settle();
+		assert.equal(p.sent.length, 1);
+		p.post('passwordFill', { ...form, action: p.frame.url, hasUsername: false }, 'b'.repeat(32)); await settle();
+		assert.equal((p.sent[1]!.data as { password: string; }).password, submitted.password);
+		// A rejected attempt must retain the account for a subsequent password-only retry.
+		for (const password of ['wrong-password', 'replacement-password']) { p.post('passwordSubmitted', { action: p.frame.url, username: '', hasUsername: false, password }, 'b'.repeat(32)); }
+		p.post('passwordPageState', { action: p.frame.url, hasPasswordForm: false }, 'b'.repeat(32)); await settle();
+		const request = f.events.find((event): event is Extract<BrowserViewEvent, { type: 'passwordSaveRequested'; }> => event.type === 'passwordSaveRequested')!;
+		assert.equal(request.username, submitted.username); assert.equal(request.update, true);
+		await f.manager.respondToPasswordSave(id, request.requestId, true);
+		assert.equal((await p.vault.find(p.session, 'https://example.test'))[0]!.password, 'replacement-password');
+	});
+
+	test('transient usernames never cross origins, page lifetimes or clearing, and are not persisted on their own', async () => {
+		using f = fixture(); let p = await page(f);
+		const identity = { action: submitted.action, username: submitted.username };
+		const submitWithoutIdentity = async () => {
+			p.post('passwordSubmitted', { ...submitted, username: '', hasUsername: false }); p.post('passwordPageState', { action: submitted.action, hasPasswordForm: false }); await settle();
+			assert.equal(f.events.some(event => event.type === 'passwordSaveRequested'), false);
+		};
+		p.post('passwordIdentitySubmitted', identity); assert.equal((await p.vault.readState()).entries.length, 0);
+		assert.doesNotMatch(JSON.stringify(await f.storage.getItems(application)), /synthetic-user/);
+		f.contents.emit('did-start-navigation', {}, 'https://other.test/', false, true); p.frame.url = 'https://other.test/'; p.post('ready');
+		p.post('passwordIdentitySubmitted', { ...identity, action: 'https://example.test/' });
+		f.contents.emit('did-start-navigation', {}, submitted.action, false, true); p.frame.url = submitted.action; p.post('ready'); await submitWithoutIdentity();
+		p.post('passwordIdentitySubmitted', identity); await f.manager.clearStorage(id); await submitWithoutIdentity();
+		p.post('passwordIdentitySubmitted', identity); await f.manager.destroyBrowserView(id); p = await page(f); await submitWithoutIdentity();
+		await f.manager.destroyBrowserView(id); p = await page(f, BrowserViewStorageScope.Ephemeral); p.post('passwordIdentitySubmitted', identity); await submitWithoutIdentity();
+	});
 
 	test('a submitted login is offered only after the form disappears, encrypted and updated without a password readback', async () => {
 		using f = fixture(); const p = await page(f);
@@ -77,6 +133,7 @@ suite('Browser form passwords', () => {
 		for (const username of ['first', 'second']) { await p.vault.save({ session: p.session, scope: 'global', origin: 'https://example.test', username, password: 'secret-' + username }); }
 		for (const [data, token, sender] of [[{ ...form, action: 'https://other.test' }, 'a'.repeat(32), p.frame], [form, 'stale', p.frame], [form, 'a'.repeat(32), { ...p.frame }]] as const) { p.post('passwordFill', data, token, sender); }
 		await settle(); assert.equal(p.sent.some(message => message.command === 'fillPassword'), false);
+		p.post('passwordIdentitySubmitted', { action: submitted.action, username: 'first' });
 		p.post('passwordFill', form); await settle();
 		const request = [...f.events].reverse().find((event): event is Extract<BrowserViewEvent, { type: 'passwordFillRequested'; }> => event.type === 'passwordFillRequested')!;
 		assert.equal(request.accounts.length, 2);
