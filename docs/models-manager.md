@@ -5,9 +5,9 @@
 > 当前状态：Phase 1 core、Ollama/ChatGPT/xAI/Kimi 及部分 API 连接的动态目录、按供应商分文件的持久缓存已实现；跨 provider 的 Agent 模型选择和完整 App Server snapshot API 尚未实现
 > Crate 实现说明：[`ash-models-manager` README](../crates/models-manager/README.md)
 > Canonical model contract：[`ash-protocol` model catalog](../crates/protocol/src/model/catalog.rs)
-> Provider wire adapter：[`ash-api.md`](ash-api.md)
+> Provider wire adapter：[`model-api.md`](model-api.md)
 > Provider runtime：[`model-provider.md`](model-provider.md)
-> Operation client：[`ash-client.md`](ash-client.md)
+> Operation client：[`model-client.md`](model-client.md)
 > 底层网络：[`ash-http-client` README](../crates/http-client/README.md)
 
 > 官方资料核对日期：2026-07-25。Provider API 与模型生命周期会持续变化，本文固定架构边界和

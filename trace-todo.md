@@ -277,7 +277,7 @@ Sessions 入口只取当前会话身份并切换 Code 布局；捕获、DOM、�
 - 在 App Server 启动前设置 `ASH_ROLLOUT_TRACE_ROOT=/absolute/local/directory` 开启正文记录；共享后端需要重启，未启用时仍可查看持久历史。
 - `ash exec --model provider/model --timeout-seconds N --trace-output PATH --changes-output PATH` 固定模型、预算并导出历史与该 Turn 的封存文件结果。
 - [评测 runner 与用例说明](test/agent-eval/README.md)：三个种子任务、独立 verifier、重复运行、基线比较及报告。
-- [执行入口文档](docs/exec.md)、[Trace 界面说明](docs/chat-session-inspector.md)、[读取协议](docs/ash-app-server-api.md)。
+- [执行入口文档](docs/exec.md)、[Trace 界面说明](docs/chat-session-inspector.md)、[读取协议](docs/app-server-api.md)。
 
 ## 验证记录（2026-10-07）
 

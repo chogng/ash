@@ -1,7 +1,7 @@
 # `<Capability / Domain>` API
 
 > 使用本模板前请先阅读
-> [Ash API 接口文档规范](ash-api-interface-requirements.md)。
+> [Ash API 接口文档规范](app-server-api-guidelines.md)。
 > 删除所有占位说明后再提交评审。
 
 ## 快速理解

@@ -142,7 +142,7 @@ crates/tui/src/sessions/details_tests.rs
 crates/tui/src/sessions/picker_tests.rs
 crates/tui/src/sessions/state_tests.rs
 crates/tui/src/thread/agent_switcher_tests.rs
-docs/ash-app-server-api.md
+docs/app-server-api.md
 localization/en/sessions.json
 localization/zh-CN/sessions.json
 src/ash/sessions/README.md

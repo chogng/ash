@@ -17,4 +17,4 @@
 - `target_tests.rs` 验证来源绑定、用途、头冲突与目标 Debug 脱敏。
 - `client_tests.rs` 覆盖普通、可取消与流式入口的错误分类和重试次数。
 - `operation_tests.rs` 验证实际请求发送前/后的取消、凭据绑定重定向限制和禁止重试策略；流消费者失败时检查 socket 关闭与调用方取消域仍然有效。使用通用字节请求，不引入后端业务类型。
-- 取消、重试和网络职责的详细边界见 [`docs/ash-client.md`](../../docs/ash-client.md)。
+- 取消、重试和网络职责的详细边界见 [`docs/model-client.md`](../../docs/model-client.md)。

@@ -1,4 +1,4 @@
-# Ash Agent 执行架构总体设计
+# Agent 运行时
 
 > 状态：Accepted（2026-08-03 整体重审修订，替代此前 Proposed 版本）
 > 审查基线：`0df46ca9ff870489b58ebe6a3cbd0b1b8192928a` 加当前工作树改动
@@ -14,7 +14,7 @@
 [`core-multi-agent.md`](core-multi-agent.md) 为准；canonical 产品契约以
 [`protocol.md`](protocol.md) 为准；**harness 产品策略**（提示词组织、工具面选择与注册时机、
 上下文裁剪/压缩策略、prompt cache）以
-[`agent-harness-design.md`](agent-harness-design.md) 为准；Agent 定义与启动策略以
+[`agent-harness.md`](agent-harness.md) 为准；Agent 定义与启动策略以
 [`agents.md`](agents.md) 为准；provider 无关的模型目录与候选选择以
 [`models-manager.md`](models-manager.md) 为准。本文拥有三件事：**跨层分层与依赖规则、重审后的
 关键决策、分阶段实施计划**。
@@ -170,7 +170,7 @@ Session 的不同语义必须区分（详见 [`protocol.md`](protocol.md)）：�
 （capability 生命周期）。三者不得混用命名或状态。
 
 提交顺序与恢复由 [`core.md`](core.md#4-提交与恢复) 维护。工具执行生命周期与授权由
-[`tools.md`](tools.md) 维护。
+[工具系统](tools/tools.md) 维护。
 
 ## 4. 修订决策详细设计
 
@@ -440,5 +440,5 @@ pnpm run test:main
 - [多 Agent 协作系统](core-multi-agent.md)
 - [产品协议](protocol.md)
 - [crates 产品内核与统一对外层](rust-architecture.md)
-- [Ash App Server API](ash-app-server-api.md)
+- [Ash App Server API](app-server-api.md)
 - [Pi session format snapshot](https://github.com/earendil-works/pi/blob/5bc1c2c0a6f07e00e8c240304182f213ab8d311f/packages/coding-agent/docs/session-format.md)

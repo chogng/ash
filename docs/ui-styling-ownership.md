@@ -2,8 +2,8 @@
 
 > 本文是 Ash Desktop Renderer 中组件、组合控件与 Workbench Part 样式边界的 canonical 文档。
 > 修改 browser UI 时同时遵守 scoped [`browser-ui.instructions.md`](../.github/instructions/browser-ui.instructions.md)；该 instruction 只保留任务期规则，详细 ownership 仍由本文唯一拥有。
-> 主题值与 token 注册仍以 [`design-tokens.md`](design-tokens.md) 为准；Desktop 的跨进程和产品所有权仍以 [`ash-desktop-architecture.md`](ash-desktop-architecture.md) 为准。
-> Pane-like Part 的标题层级、槽位、命名和 Composite 生命周期以 [`workbench-pane-composite-design.md`](workbench-pane-composite-design.md) 为准。
+> 主题值与 token 注册仍以 [`design-tokens.md`](design-tokens.md) 为准；Desktop 的跨进程和产品所有权仍以 [`desktop-architecture.md`](desktop-architecture.md) 为准。
+> Pane-like Part 的标题层级、槽位、命名和 Composite 生命周期以 [`pane-composites.md`](pane-composites.md) 为准。
 > Command、MenuId、Context Key 与菜单型 Toolbar 的组合语义以 [`menu-system.md`](menu-system.md) 为准；本文只拥有它们最终投影到控件后的视觉边界。
 
 ## 快速理解

@@ -2,7 +2,7 @@
 
 `sessions/` owns Ash Code's dedicated agent Workbench beside the regular
 `workbench/`. Its product and build boundary is canonical in
-[`docs/workbench-modes.md`](../../../docs/workbench-modes.md); this README
+[`docs/workbench.md`](../../../docs/workbench.md); this README
 is canonical for the renderer implementation and extension points.
 
 UI design and style boundaries are defined in [Sessions style](STYLE.md).

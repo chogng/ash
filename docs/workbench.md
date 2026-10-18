@@ -1,4 +1,4 @@
-# Ash Desktop 工作台与文档贡献
+# Workbench 装配与文档贡献
 
 > 本文描述当前实现。未来 Work / Code 设计见 [目标设计](design/work-code-workbench.md)，公开产品线见 [产品线说明](product-lines.md)。
 

@@ -1,13 +1,13 @@
-# Agent Harness 设计
+# Agent Harness
 
 > 状态：Accepted（2026-08-03）；评测与 Trace 状态最后核对于 2026-10-07。
 > 定位：回答"Core 的 agent loop 具体怎么搭起来"——一次模型调用长什么样、Turn 内循环与
 > 失败弹性、steering、提示词组织、工具选择与注册时机、上下文裁剪压缩、prompt cache、评测。
 >
 > 分工：执行内核（单写者、durable commit、恢复、取消）由
-> [`ash-agent-runtime-architecture.md`](ash-agent-runtime-architecture.md) 负责；上下文生命
+> [`agent-runtime.md`](agent-runtime.md) 负责；上下文生命
 > 周期抽象（ContextPlan/Manager/checkpoint）由 [`core-context.md`](core-context.md) 负责；
-> 工具三层契约（定义/绑定/执行接口）由 [`tools.md`](tools.md) 负责；**逐工具规格（schema、
+> 工具三层契约（定义/绑定/执行接口）由 [工具系统](tools/tools.md) 负责；**逐工具规格（schema、
 > 描述正文、错误文案）由
 > [`agent-tools-spec.md`](agent-tools-spec.md) 负责。本文负责 harness 的**行为策略**。
 
@@ -210,7 +210,7 @@ Profile 解析发生在 Turn 接受安全点：host 选择声明式 ToolProfile�
 2. MCP 聚合定义 ≤ 15 个工具且 ≤ 5k tokens 时平铺进冻结集；超阈值整体切检索式——注入
    `search_tools` + `call_mcp_tool` 两个元工具，被发现的定义以 reminder append 进历史
    （不改 tools 数组，保前缀）；
-3. 配置/MCP server 变化走 [`tools.md`](tools.md) §7 的 registry snapshot，只在 Turn 边界
+3. 配置/MCP server 变化走 [工具系统](tools/tools.md) §7 的 registry snapshot，只在 Turn 边界
    推进。
 
 ## 7. Turn 内循环与失败策略
@@ -467,7 +467,7 @@ Turn 变更；报告关联可导入 Sessions Trace 的历史、逐次模型 atte
 
 ## 15. 实现状态
 
-M0–M6 是本文行为规格的覆盖总账，不再充当阶段性构建计划。ChatGPT 订阅剩余兼容工作由 [ChatGPT 当前状态与待完成项](models/chatgpt.md#chatgpt-当前状态与待完成项) 维护；内置与自定义 Agent 的统一定义由 [`agents.md`](agents.md) 维护；运行时观测与发布门由 [§14.5](#145-运行时观测与发布门) 维护。
+M0–M6 是本文行为规格的覆盖总账，不再充当阶段性构建计划。ChatGPT 订阅剩余兼容工作由 [ChatGPT 验证范围](models/chatgpt.md#验证) 维护；内置与自定义 Agent 的统一定义由 [`agents.md`](agents.md) 维护；运行时观测与发布门由 [§14.5](#145-运行时观测与发布门) 维护。
 
 | 里程碑                        | 内容                                                                                                                                                                           | 关键改动点                                                                                                     | 前置接线                         |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- | -------------------------------- |
@@ -484,8 +484,8 @@ M0–M6 是本文行为规格的覆盖总账，不再充当阶段性构建计划
 ## 16. 参考
 
 - [`agent-tools-spec.md`](agent-tools-spec.md) — 逐工具规格与提示词正文
-- [`ash-agent-runtime-architecture.md`](ash-agent-runtime-architecture.md) — 执行内核与阶段计划
+- [`agent-runtime.md`](agent-runtime.md) — 执行内核与阶段计划
 - [`core-context.md`](core-context.md) — ContextPlan / checkpoint 机制
-- [`tools.md`](tools.md) — 工具三层契约与 registry snapshot
+- [工具系统](tools/tools.md) — 工具三层契约与 registry snapshot
 - [`skills.md`](skills.md) / [`slash-commands` crate](../crates/slash-commands) — 扩展来源
 - [`ash-prompts` README](../crates/prompts/README.md) — 共享提示词资产契约与分域 ownership

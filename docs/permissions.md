@@ -256,7 +256,7 @@ session/cache 的 `~/.claude.json` 也不会进入当前发现计划。Skill 中
 
 该导入入口仅由 Desktop 提供；TUI 可以消费 App Server 已发布的统一 Skill catalog，但不能创建
 或管理外部来源。完整产品边界见
-[`ash-desktop-architecture.md`](ash-desktop-architecture.md#22-外部-agent-配置导入仅限-desktop)
+[`desktop-architecture.md`](desktop-architecture.md#22-外部-agent-配置导入仅限-desktop)
 和 [`skills.md`](skills.md#151-外部-agent-skill-导入仅限-desktop)。
 
 ## 沙箱在权限系统中的位置

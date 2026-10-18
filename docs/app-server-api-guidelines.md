@@ -1,10 +1,10 @@
-# Ash API 接口文档规范
+# App Server API 契约规范
 
 > 本文规定 Desktop、CLI 或其他客户端提交 Ash App Server 产品 API 需求时必须包含的内容。  
 > crates 是已接受契约的 owner，并据此实现 Rust 协议、handler、typed client、生成类型和测试。
 
 当前已经接受的产品契约见
-[`ash-app-server-api.md`](ash-app-server-api.md)。
+[`app-server-api.md`](app-server-api.md)。
 
 ## 快速理解
 
@@ -287,7 +287,7 @@ API 被视为完成，必须同时具备：
 ## 15. 可复制模板
 
 建议从独立文件
-[`ash-api-interface-template.md`](ash-api-interface-template.md)
+[`app-server-api-template.md`](app-server-api-template.md)
 复制一份作为新接口文档。以下内容与该模板的要求一致：
 
 ````markdown

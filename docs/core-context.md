@@ -559,7 +559,7 @@ Core 为普通 Turn 请求写入 Session 级 prompt cache key，并在 `ContextP
 普通续写保持未变化内容的顺序与可复用前缀稳定，不为更新动态信息而无故重写历史前缀。
 rewind、压缩、指令更新或撤权仍按各自契约生效，缓存复用不能覆盖正确性。
 
-OpenAI 公开 Responses API 对支持模型将 Core 前缀终点映射为显式缓存断点；旧模型保持自动缓存。model-provider 按登录通道选择 `ApiEndpoint::ChatGptResponses`，由 ash-api 省略订阅接口不支持的断点，并将同一缓存 key 写入 `session-id` 请求头。续写、fork、消息恢复和认证重试共用这个协议入口，调用者请求和认证 target 不被改写。结构化工具结果和图片能力与断点支持分别处理。供应商行为见 [Prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching)，跨 provider 的请求头规则与验证见[模型 API 协议](ash-api.md#14-供应商配置档案验证矩阵)。
+OpenAI 公开 Responses API 对支持模型将 Core 前缀终点映射为显式缓存断点；旧模型保持自动缓存。model-provider 按登录通道选择 `ApiEndpoint::ChatGptResponses`，由 ash-api 省略订阅接口不支持的断点，并将同一缓存 key 写入 `session-id` 请求头。续写、fork、消息恢复和认证重试共用这个协议入口，调用者请求和认证 target 不被改写。结构化工具结果和图片能力与断点支持分别处理。供应商行为见 [Prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching)，跨 provider 的请求头规则与验证见[模型 API 协议](model-api.md#14-供应商配置档案验证矩阵)。
 
 Provider response ID、缓存命中和连接状态都不是恢复正确性的前提。
 
@@ -624,7 +624,7 @@ Memory 由 `ext/memories` 通过 `ContextContributor` 注册；`ContextEvidence`
 替换或移除 Codebase 不影响 Memory，各条材料保留独立来源、引用和 revision。
 来源失败会结束本次 Turn，取消继续传播，不能使用已经收集的
 部分内容继续调用模型。压缩或 token 计量导致准备重试时重新读取，避免保留已删除或撤销授权的材料。
-Codebase 自动召回由产品设置显式开启；Memory 自动读取由 [Memory API](ash-app-server-api.md#memory)
+Codebase 自动召回由产品设置显式开启；Memory 自动读取由 [Memory API](app-server-api.md#memory)
 按作用域独立授权，默认关闭。
 只有确有外部消费者时才从 `lib.rs` 导出窄 value/port，不能公开 cache、baseline、window mutable
 state 或 ContextManager 自身。

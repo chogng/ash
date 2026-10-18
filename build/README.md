@@ -462,7 +462,7 @@ public-key` with `ASH_UPDATE_SIGNING_KEY` present only in that process. Store th
 `ASH_UPDATE_PUBLIC_KEY`; do not commit the seed or place it in build arguments.
 
 System signing credentials and the reason they are separate from the Ed25519 update key are
-documented in `docs/product-update-architecture.md`. Missing macOS or Windows credentials stop a
+documented in `docs/product-updates.md`. Missing macOS or Windows credentials stop a
 Release before upload.
 
 Ash Code and Remote runtime `.tar.gz` writers share [`archive.py`](lib/archive.py),

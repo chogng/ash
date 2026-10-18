@@ -11,7 +11,7 @@
 
 诊断格式为 V2，外层 rollout 仍为 V3。`pendingRecords` 描述尚待写入的已接纳事件；`modelAttemptAccounted` 仅在实际账目提交成功后关联 invocation ID 与历史 sequence。队列丢失、存储不可用和未闭合 attempt 保留覆盖缺口。读取、导出和停止可使用有期限的 flush；普通 Turn 完成不等待诊断落盘。删除 Session 停用旧句柄并异步清理，迟到回调不能重新创建 capture。
 
-资源配额、Rust／TypeScript 分工、扩展边界和验证见[架构说明](../../docs/trace-design.md#已实现的资源和证据边界)。前端通过独立只读服务复用现有连接，按需加载；评测不要求桌面界面存在。
+资源配额、Rust／TypeScript 分工、扩展边界和验证见[架构说明](../../docs/trace.md#已实现的资源和证据边界)。前端通过独立只读服务复用现有连接，按需加载；评测不要求桌面界面存在。
 
 任务效果由[独立评测 runner](../../test/agent-eval/README.md)验收保存的成果；Trace 提供过程证据。
 [只读分析层](../../scripts/agent_eval_trace.py)消费导出的 V3 文件，保留指标覆盖、冻结指令选择、

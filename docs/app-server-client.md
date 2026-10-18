@@ -2,7 +2,7 @@
 
 > 物理位置：`crates/app-server-client/`
 > 主要消费者：`ash-exec` 非交互执行宿主、`ash-tui`、`app`
-> Wire contract：[`ash-app-server-api.md`](ash-app-server-api.md)
+> Wire contract：[`app-server-api.md`](app-server-api.md)
 > Canonical 产品模型：[`protocol.md`](protocol.md)
 > Headless 与远程调度：[`exec.md`](exec.md)
 > 当前 crate contract：[`crates/app-server-client/README.md`](../crates/app-server-client/README.md)
@@ -558,5 +558,5 @@ cargo test --manifest-path Cargo.toml -p ash-app-server-client
 ```
 
 修改 wire contract 时，还必须按
-[`ash-app-server-api.md`](ash-app-server-api.md#11-source-of-truth) 重新生成 schema 与
+[`app-server-api.md`](app-server-api.md#12-权威来源) 重新生成 schema 与
 TypeScript，并验证所有 consumer。

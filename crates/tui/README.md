@@ -2,12 +2,12 @@
 
 `code/` 拥有 `ash code` 的终端界面：输入、正文显示、页面布局、功能面板、终端模式与退出恢复。`cli/` 拥有用户命令、连接与启动；共享后端能力由 `crates/` 提供。
 
-| 阅读目的                                               | 文档                                                                                                     |
-| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
-| fullscreen / inline 的区域、历史、面板、鼠标和模式切换 | [LAYOUT.md](LAYOUT.md)                                                                                   |
-| 实现入口、提交与补全、功能接入、配置与主题、测试       | 本文                                                                                                     |
-| CLI 用法、远程连接、安装与更新                         | [CLI README](../../cli/README.md)                                                                        |
-| 跨客户端请求、通知与数据契约                           | [App Server API](../../docs/ash-app-server-api.md)、[App Server Client](../../docs/app-server-client.md) |
+| 阅读目的                                               | 文档                                                                                                 |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| fullscreen / inline 的区域、历史、面板、鼠标和模式切换 | [LAYOUT.md](LAYOUT.md)                                                                               |
+| 实现入口、提交与补全、功能接入、配置与主题、测试       | 本文                                                                                                 |
+| CLI 用法、远程连接、安装与更新                         | [CLI README](../../cli/README.md)                                                                    |
+| 跨客户端请求、通知与数据契约                           | [App Server API](../../docs/app-server-api.md)、[App Server Client](../../docs/app-server-client.md) |
 
 ```text
 ash-cli → crates/tui → ash-app-server-client → shared App Server crates
@@ -171,7 +171,7 @@ Connector 操作见 [request.rs](src/connectors/request.rs)：设备码复制到
 
 `issues::Manager` 管理页面、搜索和请求代次，`board` 合并 GitHub 页面与后端工作记录并维护分组、折叠和稳定选择；`assignment` 承载分配预览、仓库设置和工作详情。Sessions 与 Issues 共用 `widgets::grouped_list` 的可见范围与排版。
 
-列表刷新、工作概览与停止控制使用独立请求通道。关闭页面停止界面轮询，后端工作继续；迟到结果不能重开页面。缓存、领取、执行阶段、工作区、验收及 GitHub 同步由后端拥有，协议见 [Issue API](../../docs/ash-app-server-api.md#issue-浏览与-agent-session)。
+列表刷新、工作概览与停止控制使用独立请求通道。关闭页面停止界面轮询，后端工作继续；迟到结果不能重开页面。缓存、领取、执行阶段、工作区、验收及 GitHub 同步由后端拥有，协议见 [Issue API](../../docs/app-server-api.md#issue-浏览与-agent-session)。
 
 定向验证使用 `just test ash-tui issues`、`just test ash-tui session_manager` 和 `just test-tui issues:: -- --test-threads=1`。真实场景使用临时 Git 仓库与离线 GitHub fixture，覆盖分页、搜索、缓存、分配、暂停、组合验收和 PR 交付；不表示真实 GitHub 写入已联调。
 

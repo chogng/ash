@@ -1,14 +1,14 @@
 # Agent 工具规格
 
 > 状态：Accepted（2026-08-23）
-> 定位：[`agent-harness-design.md`](agent-harness-design.md) §5 工具面的实现规格：逐工具的
+> 定位：[`agent-harness.md`](agent-harness.md) §5 工具面的实现规格：逐工具的
 > JSON schema、**描述正文（模型可见的实际英文文本）**、参数校验规则、错误文案、输出格式与
 > 限幅、capability 注记。工具指导由各工具定义拥有，不复制到模型基础 instructions。
 >
-> 工具的三层契约（定义/绑定/执行接口）归 [`tools.md`](tools.md)；审批/沙箱/升级语义归
+> 工具的三层契约（定义/绑定/执行接口）归 [工具系统](tools/tools.md)；审批/沙箱/升级语义归
 > [`core.md`](core.md) §11。本文写"每个工具具体长什么样"。描述与错误文案是模型可见提示词
 > 的一部分：修改需要按模型可见契约 review，并跑
-> [`agent-harness-design.md` §14](agent-harness-design.md#14-评测) 的评测对比。
+> [`agent-harness.md` §14](agent-harness.md#14-评测) 的评测对比。
 
 ## 快速理解
 
@@ -464,7 +464,7 @@ Records or updates your durable plan for a multi-step task.
 `plan step must contain between 1 and 1000 characters: {step}`；explanation 超过 4000 字符时拒绝。
 成功输出 canonical plan、durable sequence 与本次更新是否改变状态；相同计划幂等返回 unchanged。
 
-## 10. MCP 元工具（检索式模式，[harness §6](agent-harness-design.md#6-工具注册时机)）
+## 10. MCP 元工具（检索式模式，[harness §6](agent-harness.md#6-工具注册时机)）
 
 聚合 MCP catalog 只有在工具数 >15 或稳定估算 `ceil(canonical JSON bytes / 4)` >5000 时才整体
 进入本模式；两个阈值都未超出时实际 MCP definitions 直接平铺。一次投影不能混合两种模式。
@@ -511,7 +511,7 @@ tools 数组。返回顺序由冻结 catalog 上的确定性 score/name 决定�
 
 digest 缺失/伪造或 catalog 已刷新时拒绝并要求重新 `search_tools`，同名新 definition 不能继承旧
 绑定。参数校验错误透传 MCP server 的 schema 错误；执行、审批与结果转换沿用
-[`tools.md`](tools.md) §10 的 MCP 适配器。
+[工具系统](tools/tools.md) §10 的 MCP 适配器。
 
 ## 11. Agent 委托工具
 
@@ -641,7 +641,7 @@ delegation result。Desktop Agent Sidebar 只消费该 projection；`session/thr
 
 1. 对应实现 crate 的 schema/文案常量与测试；
 2. 若模型基础 instructions 确实引用了该契约，同步 `ash-models-manager` 中对应资产与 revision；
-3. [`agent-harness-design.md` §14](agent-harness-design.md#14-评测) 的组装快照和行为测试；
+3. [`agent-harness.md` §14](agent-harness.md#14-评测) 的组装快照和行为测试；
 4. 运行对应的现有单元/集成测试；只有启用版本化模型 benchmark 时，才补充 T1/T2 对比。
 
 ## 既有开发 Task

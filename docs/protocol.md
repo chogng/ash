@@ -1,6 +1,6 @@
 # Ash 协议模型
 
-> 本文说明共享领域协议的长期边界。概念命名以 [`domain-model.md`](domain-model.md) 为准，App Server 的 JSON-RPC 方法以 [`ash-app-server-api.md`](ash-app-server-api.md) 为准。
+> 本文说明共享领域协议的长期边界。概念命名以 [`domain-model.md`](domain-model.md) 为准，App Server 的 JSON-RPC 方法以 [`app-server-api.md`](app-server-api.md) 为准。
 
 ## 1. 唯一事实源
 

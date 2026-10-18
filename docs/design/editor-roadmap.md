@@ -2,7 +2,7 @@
 
 本文把 Ash TypeScript 编辑器按依赖和用户行为分成九部分。每次只完成一项能从真实入口走到可观察结果的功能，再进入下一项；文件数量、同名 API 数量和单独的类型检查都不是完成标准。
 
-本文只维护实施顺序和验收边界。当前职责与已有实现分别见 [Editor 目录说明](../../src/ash/editor/README.md)、[文本内核](../../src/ash/editor/text-engine.md)、[富文档内核](../../src/ash/editor/document-engine.md) 和[跨系统边界](../editor-architecture.md)；VS Code 对应关系及未处理项由 [API 对齐台账](../../src/ash/editor/api-alignment-status.md)维护。
+本文维护分部依赖、行为契约和历史验收范围。当前未完成项统一见 [Stanza 编辑器 TODO](../../TODO.md#stanza-编辑器--todo)。当前职责与已有实现分别见 [Editor 目录说明](../../src/ash/editor/README.md)、[文本内核](../../src/ash/editor/text-engine.md)、[富文档内核](../../src/ash/editor/document-engine.md) 和[跨系统边界](../editor-architecture.md)；VS Code 对应关系及未处理项由 [API 对齐台账](../../src/ash/editor/api-alignment-status.md)维护。
 
 Work / Code 工作台与通用文档编辑器的目标行为见 [目标设计](work-code-workbench.md)；其中共享文档模型、共同编辑器注册及 Academic 模式退场已完成；Work 模式与普通文档流程仍未实施。本路线图中的 Academic 指论文文档能力。
 
@@ -173,9 +173,9 @@ Textarea 与 EditContext 都由当前输入节点处理复制、剪切和粘贴�
 
 一个模型行折成多条视图行时，行号只在首行出现，glyph marker 固定于对应模型行的起点，光标按当前模型列落在正确续行。相对行号以模型行而非视图行计算；光标移到下一模型行或首行内容缩短后，光标、行号和 marker 沿同一纵向布局更新，单纯移动光标不改变模型版本。Chromium 用例与既有光标、行号、glyph owner 测试覆盖这条链，本项不需要修改三个 Part 的生产实现。下一项是装饰与 View Zone。
 
-## 3.4 装饰与 View Zone（进行中）
+## 3.4 装饰与 View Zone（部分验收）
 
-2026-09-15 修复 View Zone 拒绝零高度的问题：`heightInPx: 0` 和 `heightInLines: 0` 都允许创建收起的区域，并通过 `layoutZone` 展开、移动和再次收起。区域沿用同一 DOM 节点，margin 同步隐藏与展开；空白区变化不修改文本版本。块装饰包含相邻区域的空白，区域展开时块装饰增高、文本光标下移，区域移到当前行之后时光标回到原位置。两个 Standalone Chromium 回归用例覆盖这条链及删除后的节点退出。软换行、隐藏行与滚动交叉场景继续分项验收，不能把收起区域的修复视为 3.4 全部完成。
+2026-09-15 修复 View Zone 拒绝零高度的问题：`heightInPx: 0` 和 `heightInLines: 0` 都允许创建收起的区域，并通过 `layoutZone` 展开、移动和再次收起。区域沿用同一 DOM 节点，margin 同步隐藏与展开；空白区变化不修改文本版本。块装饰包含相邻区域的空白，区域展开时块装饰增高、文本光标下移，区域移到当前行之后时光标回到原位置。两个 Standalone Chromium 回归用例覆盖这条链及删除后的节点退出。尚缺的交叉场景与平台验收统一见根 TODO，不能把收起区域修复视为 3.4 全部完成。
 
 同日补充修复折叠行坐标转换：隐藏行的列号不再用于折叠标题的换行计算，而是定位到已保留的标题末尾。此前 `showInHiddenAreas: true` 的区域在三条显示行的标题折叠后会错误插在第一条之后（20px），现在位于标题末尾（60px）。两条坐标回归测试覆盖短、长隐藏行以及换行开启与未发生换行的情况；Standalone Chromium 用例覆盖真实折叠按钮、滚动、展开、文本版本不变和节点释放。该用例尚未覆盖 Electron，3.4 保持进行中。
 

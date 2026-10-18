@@ -1,6 +1,6 @@
 # Rust 共享后端与统一对外层
 
-> 当前基线：[领域模型](domain-model.md)、[Core](core.md)、[协议](protocol.md)与 [App Server API](ash-app-server-api.md)。
+> 当前基线：[领域模型](domain-model.md)、[Core](core.md)、[协议](protocol.md)与 [App Server API](app-server-api.md)。
 > Agent 自定义对象与外部生态反腐化层见
 > [`agent-customizations.md`](agent-customizations.md)。
 > 各 crate 的当前 public/private interface、调用图与修改路径以对应 README 为准。

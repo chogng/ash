@@ -8,7 +8,7 @@
 > `tools/list_changed` rebuild、App Server/Core tools vertical slice、Connector disconnect dispatch fence、
 > 独立 Config MCP OAuth 编排、form elicitation 与只读 lifecycle projection 已实现
 > Core architecture：[`core.md`](core.md)
-> Agent runtime：[`ash-agent-runtime-architecture.md`](ash-agent-runtime-architecture.md)
+> Agent runtime：[`agent-runtime.md`](agent-runtime.md)
 > Tool shared contract 与纯转换：[`tools.md`](tools/tools.md)
 > Config authority 与 runtime snapshot 接入：[`config.md`](config.md)
 > Extensions package 入口：[`core-plugins.md`](../crates/docs/core-plugins.md)
@@ -24,7 +24,7 @@
 ## 快速理解
 
 MCP 客户端把外部 Server 的工具转换成 Ash 的工具目录。外部客户端控制 Ash 统一使用
-[`App Server API`](ash-app-server-api.md)，不提供第二套 MCP Agent 接口。
+[`App Server API`](app-server-api.md)，不提供第二套 MCP Agent 接口。
 
 大目录通过 `search_tools` 与 `call_mcp_tool` 发现和调用。两者的工具描述保持固定，目录与定义摘要通过搜索结果和调用参数传递；目录更新后，旧目录的绑定会被拒绝，调用方须重新搜索。目录身份不进入工具描述，避免目录更新改写模型的工具前缀。
 
@@ -88,7 +88,7 @@ server 启动，Connector connected 也不等于自动批准每次 Tool call。
 当前仓库已有低层 client、tools-only product runtime、配置面与启动时 tools vertical slice：
 
 - [`core.md`](core.md) 与
-  [`ash-agent-runtime-architecture.md`](ash-agent-runtime-architecture.md) 已将 MCP adapter
+  [`agent-runtime.md`](agent-runtime.md) 已将 MCP adapter
   放在 Core tool port 之外，并要求 HTTP/MCP cancellation 贯穿工具执行；
 - `ash-rmcp-client` 已用官方 RMCP SDK 实现单连接 initialize、tools list/call、
   progress/list-changed/elicitation host callback、caller cancellation、request deadline、有界
@@ -580,7 +580,7 @@ Resource、prompt、sampling 和 roots 也是数据出站面，不能只审计 `
 ## 13. Config、App Server 与持久化
 
 Config authority、Plugin contribution、MCP manager reconcile 与 Core safe point 的完整组合流程
-见 [`config.md`](config.md#6-pluginmcp-与-skill-接入流程)。
+见 [`config.md`](config.md#用户配置)。
 
 MCP ordinary config 属于 config/plugin authority，不属于 Thread event：
 

@@ -15,7 +15,7 @@
 > MCP client runtime：[`mcp.md`](../mcp.md)
 > Plugin authority：[`plugins.md`](../plugins.md)
 > Config 与 runtime snapshot：[`config.md`](../config.md)
-> Provider wire adapter：[`ash-api.md`](../ash-api.md)
+> Provider wire adapter：[`model-api.md`](../model-api.md)
 
 ## 快速理解
 

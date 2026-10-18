@@ -10,8 +10,8 @@
 >   capability 已落地，Responses WebSocket 和公共 Realtime GA 已提供显式 runtime 会话入口
 > - Crate 实现与 adapter 调用图：[`crates/model-provider/README.md`](../crates/model-provider/README.md)
 > - 声明配置层：[`model-provider-info.md`](model-provider-info.md)
-> - API 协议层：[`ash-api.md`](ash-api.md)
-> - Operation client：[`ash-client.md`](ash-client.md)
+> - API 协议层：[`model-api.md`](model-api.md)
+> - Operation client：[`model-client.md`](model-client.md)
 > - 底层网络：[`ash-http-client` README](../crates/http-client/README.md)
 > - WebSocket transport：[`ash-websocket-client` README](../crates/websocket-client/README.md)
 > - Secret persistence：[`secrets.md`](secrets.md)
@@ -276,7 +276,7 @@ let binding = ApiBinding::OpenAiChat {
 
 ### 5.4 OpenAI 服务接口面不是 OpenAI-compatible 配置档案
 
-OpenAI Platform API 与 ChatGPT 订阅服务都可能使用 `responses` 这样的相对 path，但它们的 base URL、credential、entitlement 和可用 operation 不能由 path 推断。详见 [`ash-api.md`](ash-api.md#45-openai-platform-与-chatgpt-订阅服务端点清单)。
+OpenAI Platform API 与 ChatGPT 订阅服务都可能使用 `responses` 这样的相对 path，但它们的 base URL、credential、entitlement 和可用 operation 不能由 path 推断。详见 [`model-api.md`](model-api.md#45-openai-platform-与-chatgpt-订阅服务端点清单)。
 
 因此 direct-provider runtime binding 包含如下事实：
 
@@ -546,7 +546,7 @@ projection 由 [`ash-login`](login.md) 提供；App Server 只读取该 redacted
 8. 建立 `ash-login` 与 `ash-chatgpt`，以 native ChatGPT OAuth 和本地 `TurnExecutor` 接入 subscription vertical slice；
 9. 实现 models manager 的 catalog source；
 10. 删除旧 Provider 级双重 dispatch。
-11. 已建立 Responses WebSocket 与 Realtime GA 会话及显式 runtime 工厂；每个调用者拥有连接，Responses 按精确前缀续接，失败不自动推理重放。详细能力和未覆盖项见[端点实现](ash-api.md#46-端点归属与-websocket-实现)。
+11. 已建立 Responses WebSocket 与 Realtime GA 会话及显式 runtime 工厂；每个调用者拥有连接，Responses 按精确前缀续接，失败不自动推理重放。详细能力和未覆盖项见[端点实现](model-api.md#46-端点归属与-websocket-实现)。
 
 迁移期间不创建空模块，也不同时保留两套长期 public facade。
 

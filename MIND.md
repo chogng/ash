@@ -131,7 +131,7 @@ Ash 当前由 `models-manager` 为准确 provider/model 选择完整基础正文
 
 因此，`core.md` 首先是共同规则的写作与评测基线，不能直接再叠到所有已有完整基础正文上。首轮接入应按这份基线修订适用模型的完整正文和默认正文，保留有证据的模型表达差异；界面与任务说明的选择、归属和预算需进入真实组装链路的验证。若以后改为共同核心加精简模型指导，需要单独修改组合契约并评测，不通过文本草案暗中完成迁移。
 
-本轮不修改现有运行时正文、模型 JSON、Role、模式或工具协议。新正文放在 `drafts/`，不从 Rust 导出、不自动加载、不放进当前编译模板目录。阅读入口放在 [Prompts README](crates/prompts/README.md)，现有架构事实继续由 [Agent Harness](docs/agent-harness-design.md) 和 [Agent 指令组合](crates/docs/agent-instructions.md) 维护。
+本轮不修改现有运行时正文、模型 JSON、Role、模式或工具协议。新正文放在 `drafts/`，不从 Rust 导出、不自动加载、不放进当前编译模板目录。阅读入口放在 [Prompts README](crates/prompts/README.md)，现有架构事实继续由 [Agent Harness](docs/agent-harness.md) 和 [Agent 指令组合](crates/docs/agent-instructions.md) 维护。
 
 ## 参考与采用理由
 
@@ -286,7 +286,7 @@ suite 摘要 V2 只冻结语义任务声明、实际文件、参考成果和评�
 
 Rust 实现后端与 TS 实现界面是职责分工，不自动要求新的插件类型。`crates/ext` 的 Agent 贡献与可安装的 TS/JS Editor Extension 采用不同契约；采集不需要额外工具或提示词。当前公共 SDK 没有 Trace API，仅搬目录不能完成扩展运行。本次已解除 Core／core-api 对具体 Trace 实现的生产依赖，使用中立观察契约，由 App Server 组合采集与只读查询；以后再以实际需求决定是否提取官方 TS 扩展。
 
-完整[Trace 架构与改造方案](docs/trace-design.md)记录设计依据、已实现的依赖、关闭与后台写入、生效时机、证据关联、界面与评测职责。采集现已使用有界非阻塞准入和后台序列化、摘要及存储；删除先停用句柄再清理，迟到结果不能复活捕获。TS 的独立 `ITraceService` 复用现有连接，编辑器和解析器按需加载，默认导航不显示 Trace。业务历史、Changes 的 fail-closed 边界、RPC 方法和外层 V3 格式保留。
+完整[Trace 架构与改造方案](docs/trace.md)记录设计依据、已实现的依赖、关闭与后台写入、生效时机、证据关联、界面与评测职责。采集现已使用有界非阻塞准入和后台序列化、摘要及存储；删除先停用句柄再清理，迟到结果不能复活捕获。TS 的独立 `ITraceService` 复用现有连接，编辑器和解析器按需加载，默认导航不显示 Trace。业务历史、Changes 的 fail-closed 边界、RPC 方法和外层 V3 格式保留。
 
 `modelAttemptAccounted` 来自真实提交后的 invocation ID 和历史序号，原因是数量相等或时间接近不能证明两条证据属于同一次调用。V2 诊断和分析保留待写数量、未关联 attempt 与未观察到账目的缺口；旧 V1 不补造关联。`--experiment` 明确假设、变体和允许变化的模型／产品／配置条件，未声明的变化拒绝比较；配置叶项仅记录语义哈希，评分设施失败单独计数。这样才能区分一次可复核实验与多项变化后的印象。真实模型质量集、独立元数据策略与公开 SDK 提取仍需后续证据。
 

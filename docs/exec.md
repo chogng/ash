@@ -4,7 +4,7 @@
 > 当前状态：阶段 1–2 已实现；远程进程/文件执行平面已实现；可靠自动化与远程 Agent worker 仍在计划中
 > 当前 crate 实现契约：[`crates/exec/README.md`](../crates/exec/README.md)
 > App Server Client：[`app-server-client.md`](app-server-client.md)
-> App Server contract：[`ash-app-server-api.md`](ash-app-server-api.md)
+> App Server contract：[`app-server-api.md`](app-server-api.md)
 > Canonical 产品模型：[`protocol.md`](protocol.md)
 
 ## 快速理解

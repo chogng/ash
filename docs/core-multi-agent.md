@@ -9,15 +9,15 @@
 > 上限继续收窄。Desktop 只消费 canonical tree 并可精确
 > 中断单个节点。S6 的 child failure、parent cancel、join timeout、any/quorum、恢复、预算耗尽与
 > mailbox isolation 矩阵已覆盖；late-result/UnknownOutcome 等更广故障注入仍按后续需求演进。原落地顺序分为契约冻结
-> （[阶段 D](ash-agent-runtime-architecture.md#阶段-d多-agent-契约冻结已完成)）与运行时
-> （[阶段 E](ash-agent-runtime-architecture.md#阶段-emultiagentcoordinator核心纵向切片已完成)）；理由见
-> [`ash-agent-runtime-architecture.md` R4](ash-agent-runtime-architecture.md#44-r4多-agent-契约冻结先行)。
+> （[阶段 D](agent-runtime.md#阶段-d多-agent-契约冻结已完成)）与运行时
+> （[阶段 E](agent-runtime.md#阶段-emultiagentcoordinator核心纵向切片已完成)）；理由见
+> [`agent-runtime.md` R4](agent-runtime.md#44-r4多-agent-契约冻结先行)。
 >
 > 跨任务的持久 Team：[`crates/docs/agent-teams.md`](../crates/docs/agent-teams.md)
 > Core 总体边界：[`core.md`](core.md)
 > Context 与 ContextManager：[`core-context.md`](core-context.md)
 > Canonical Session/Thread/Turn contract：[`protocol.md`](protocol.md)
-> 外部客户端与 Remote Ash 接入：[`ash-app-server-api.md`](ash-app-server-api.md)
+> 外部客户端与 Remote Ash 接入：[`app-server-api.md`](app-server-api.md)
 > 内置与自定义 Agent 的统一定义、专化职责、启动范围、模型和工具边界：[`agents.md`](agents.md)
 
 ## 快速理解
@@ -37,7 +37,7 @@
 | 多个 Agent 的代码结果如何避免互相破坏？            | 根 Agent 通过明确任务范围和依赖安排子 Agent；每个 Thread 使用自己的受管目录与 Turn ChangeSet，最终验证和提交仍走 Git/Turn Changes | [`chat-session-inspector.md`](chat-session-inspector.md) |
 | 专化职责的提示词、模型、工具和启动范围在哪里定义？ | 内置定义由产品资源维护，自定义定义来自 `.ash/agents`；会话、委托和工作流共用一种契约                                              | [`agents.md`](agents.md)                                 |
 | Team 与 Agent 树是什么关系？                       | Team 跨任务保存成员关系；每次 Team 工作关联一个 Session 内的协调 Thread 及其委托后代。当前 `/team` 只实现了一次任务内的协作       | [Agent Team](../crates/docs/agent-teams.md)              |
-| 多个独立 Session 如何协作？                        | 不建立隐式协作；需要共同目标时回到一个 Session 的 Agent tree                                                                      | [系统边界](#2-系统边界)                                  |
+| 多个独立 Session 如何协作？                        | 不建立隐式协作；需要共同目标时回到一个 Session 的 Agent tree                                                                      | [身份与聚合边界](#2-身份与聚合边界)                      |
 
 ## 1. 结论
 
@@ -599,7 +599,7 @@ projection，不公开 coordinator 内部状态机。
 ## 16. 落地顺序
 
 落地分两段执行；跨层阶段定义与完成条件由
-[`ash-agent-runtime-architecture.md` §7](ash-agent-runtime-architecture.md#7-分阶段实施计划)
+[`agent-runtime.md` §7](agent-runtime.md#7-分阶段实施计划)
 权威维护。
 
 **阶段 D｜契约冻结（已完成当前切片）：**

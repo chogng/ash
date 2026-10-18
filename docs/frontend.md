@@ -48,7 +48,7 @@ Sessions Web 使用 `pnpm dev:web:agents`，直接打开终端输出的 Sessions
 
 F5 配置见 [launch.json](../.vscode/launch.json)。完成 [环境初始化](build.md#初始化) 后，F5 和手动启动共用仓库的 Python 环境，macOS 无需额外的 `uv run` 包装。
 
-当前使用 Code 工作台，共同装配代码与 Academic 文档编辑器；打开论文不需要切换模式，旧 Academic 模式数据在启动时迁移，见 [工作台与文档贡献](workbench-modes.md)。停止开发启动器使用 `Ctrl+C`；退出 Web 启动器会撤销该入口的浏览器授权，不终止其他客户端正在使用的后端。
+当前使用 Code 工作台，共同装配代码与 Academic 文档编辑器；打开论文不需要切换模式，旧 Academic 模式数据在启动时迁移，见 [工作台与文档贡献](workbench.md)。停止开发启动器使用 `Ctrl+C`；退出 Web 启动器会撤销该入口的浏览器授权，不终止其他客户端正在使用的后端。
 
 ### 开发态热更新
 
@@ -104,7 +104,7 @@ Tasks、Debug 和 shell 配置解析均沿用各自选中的目录；`terminal.i
 这些路径已有无窗口回归，macOS arm64 开发构建的三项 Desktop E2E 已通过，覆盖目录编辑、保留与恢复根后的终端、
 重启后重开保存文件、中文命令，以及文件菜单和 Explorer 键盘／右键菜单的增删、取消、另存、关闭与重开。
 Browser 的真实文件夹选择与关闭流程、22 项 Chromium 集成测试也通过。系统打开／保存对话框在 Desktop 测试中使用受控返回路径；
-Windows／Linux 和真实系统文件选择器仍待验证。文件与职责映射见 [多根工作区对齐](ash-desktop-architecture.md#42-多根工作区文件与职责核对2026-10-17)。
+Windows／Linux 和真实系统文件选择器仍待验证。文件与职责映射见 [多根工作区对齐](desktop-architecture.md#42-多根工作区文件与职责核对2026-10-17)。
 
 SSH 窗口同样支持多根：增根时输入当前远端主机上的绝对目录并逐根授权；工作区配置保存到本地文件，根以远端 URI 持久化。不能混入本地根或其他远端主机的根。关闭工作区保留 SSH authority，之后可重开保存文件。
 
@@ -160,7 +160,7 @@ pnpm dev:web
 
 主窗口唯一的 preload 入口为 `base/parts/sandbox/electron-browser/preload.cts`，运行于 `sandbox: true` 和 `contextIsolation: true`，只加载 `electron`，通过 `ISandboxGlobals` 暴露限定的 IPC 和只读进程元数据。
 
-Renderer 通过 `createElectronRendererApi()` 适配桥接，由组合入口注册领域 Service；contrib 不直接持有聚合宿主 API。Main 校验消息发送者、主 frame、入口 URL 和参数。修改 preload、频道或 API 组装时，验证 `pnpm build` 与 `pnpm test:main`；职责见 [沙箱桥接与 Renderer API](ash-desktop-architecture.md#5-沙箱桥接与-renderer-api)。
+Renderer 通过 `createElectronRendererApi()` 适配桥接，由组合入口注册领域 Service；contrib 不直接持有聚合宿主 API。Main 校验消息发送者、主 frame、入口 URL 和参数。修改 preload、频道或 API 组装时，验证 `pnpm build` 与 `pnpm test:main`；职责见 [沙箱桥接与 Renderer API](desktop-architecture.md#5-沙箱桥接与-renderer-api)。
 
 ## 嵌入式浏览器边界
 
@@ -168,19 +168,19 @@ Renderer 通过 `createElectronRendererApi()` 适配桥接，由组合入口注�
 
 Agent 浏览器操作复用同一组目标：Rust 管理工具、批准、超时和资源权限，独立 Playwright 进程通过窗口 MessagePort 与 Thread Group CDP 操作 Main 的可见页面。产品协议不开放任意 CDP 调用，也不开放调试端口。关闭 Group 只解绑自动化，页面仍由 Main 持有。
 
-界面命令为 `Browser: Open Browser`，网页中用 F6 或 Ctrl+L 返回地址栏。Agent 创建的目标也显示为页签；Renderer 重载接回现存页面，应用重启恢复用户页签与工作区登录。页面分享、权限交互和远程 Session 网络策略尚未完成。详细边界见 [浏览器能力](ash-desktop-architecture.md#7-浏览器能力)。
+界面命令为 `Browser: Open Browser`，网页中用 F6 或 Ctrl+L 返回地址栏。Agent 创建的目标也显示为页签；Renderer 重载接回现存页面，应用重启恢复用户页签与工作区登录。页面分享、权限交互和远程 Session 网络策略尚未完成。详细边界见 [浏览器能力](desktop-architecture.md#7-浏览器能力)。
 
 ## iframe Webview
 
 `workbench/contrib/webview/browser/webview.ts` 提供统一的 `IWebviewService`，用于创建容器、登记存活实例和跟踪当前焦点；Markdown 预览、富文本编辑器和发布说明页共用该服务，创建者负责释放。内容在 `srcdoc` sandbox iframe 中运行，不包含 `allow-same-origin`；固定 CSP 禁止网络子资源、嵌套 frame 和表单提交。
 
-iframe 通过 `acquireAshWebviewApi().postMessage()` 通信，宿主校验来源窗口和每次文档独立的频道；宿主消息等待页面就绪再发送，替换页面或释放容器会取消未发送的消息，相同 HTML 保留页面状态。内容没有 Electron IPC 或 Node 能力。资源 URI 映射和持久化 webview state 尚未提供，见 [iframe Webview](ash-desktop-architecture.md#62-iframe-webview)。
+iframe 通过 `acquireAshWebviewApi().postMessage()` 通信，宿主校验来源窗口和每次文档独立的频道；宿主消息等待页面就绪再发送，替换页面或释放容器会取消未发送的消息，相同 HTML 保留页面状态。内容没有 Electron IPC 或 Node 能力。资源 URI 映射和持久化 webview state 尚未提供，见 [iframe Webview](desktop-architecture.md#62-iframe-webview)。
 
 ## Markdown
 
 短内容和文档预览共用 Marked 解析与 DOMPurify 清理。`base/browser/markdownRenderer.ts` 提供短内容渲染，`MarkdownDocumentView` 将完整预览适配到 Editor Part；解析器输出不能直接写入 DOM 或 iframe。
 
-渲染支持 GFM、流式未完成语法、提示块、主题图标以及调用方注入的解析扩展和代码块 renderer。HTML 始终清理，命令链接需明确授权，文件链接需资源上下文或完全信任，远程图片可由调用方策略限制。默认语法着色、Mermaid、KaTeX 尚未提供。详细边界见 [Markdown](ash-desktop-architecture.md#63-markdown)。
+渲染支持 GFM、流式未完成语法、提示块、主题图标以及调用方注入的解析扩展和代码块 renderer。HTML 始终清理，命令链接需明确授权，文件链接需资源上下文或完全信任，远程图片可由调用方策略限制。默认语法着色、Mermaid、KaTeX 尚未提供。详细边界见 [Markdown](desktop-architecture.md#63-markdown)。
 
 ## 常用命令
 
@@ -203,7 +203,7 @@ iframe 通过 `acquireAshWebviewApi().postMessage()` 通信，宿主校验来源
 
 测试入口会准备对应输入；完整 Web 测试不构建 Electron Main/Preload。Electron UI、Browser UI 和真实后端测试使用各自的 Playwright 项目，失败时查看报告和 trace。
 
-Academic 文件打开与保存已纳入 `pnpm test:desktop:app`，直接在 Code 工作台验证。旧模式迁移见 [工作台与文档贡献](workbench-modes.md)。
+Academic 文件打开与保存已纳入 `pnpm test:desktop:app`，直接在 Code 工作台验证。旧模式迁移见 [工作台与文档贡献](workbench.md)。
 
 Agent Task 闭环回归位于 [task-agent.spec.ts](../test/smoke/areas/tasks/task-agent.spec.ts)，分别覆盖 process 与 shell Task。仅模型 Responses 使用回环 HTTP mock；聊天输入、Agent Core、一次性审批、TaskService、exec-server、PTY 和 Tasks/Terminal 均为真实产品路径。测试读取 Core 工具记录，确认发现、单次启动、Run ID 状态与输出查询、取消、进程退出及保留输出，并覆盖审批拒绝、启动失败、审批期间与运行中的命令权限撤销、窗口关闭后的进程清理、依赖完成前主 Task 不启动、后台 ready 状态、UTF-16 输出分页、终端复用后的 Run 输出隔离、依赖失败阻止主 Task 启动、取消多层并行依赖链、后台始终未 ready 和输出截断后的游标恢复；模型不生成 Task 或直接执行命令，不需要模型账户或密钥。
 
@@ -239,15 +239,15 @@ pnpm dev
 
 ## 继续阅读
 
-| 内容                                     | 文档                                                 |
-| ---------------------------------------- | ---------------------------------------------------- |
-| 前端领域 Service、协议客户端与 Main 分工 | [前端连接边界](frontend-app-server-boundary.md)      |
-| Desktop 进程、窗口与 Renderer 架构       | [Desktop 架构](ash-desktop-architecture.md)          |
-| Workbench 模式和 contribution 装配       | [Workbench 模式](workbench-modes.md)                 |
-| DOM 与通用浏览器组件                     | [Browser foundation](browser-foundation.md)          |
-| 控件、Part 与 CSS 所有权                 | [UI 样式职责](ui-styling-ownership.md)               |
-| Pane、CompositeBar 与生命周期            | [Workbench 面板](workbench-pane-composite-design.md) |
-| Command、MenuId、Context Key 与 Toolbar  | [菜单系统](menu-system.md)                           |
+| 内容                                     | 文档                                            |
+| ---------------------------------------- | ----------------------------------------------- |
+| 前端领域 Service、协议客户端与 Main 分工 | [前端连接边界](frontend-app-server-boundary.md) |
+| Desktop 进程、窗口与 Renderer 架构       | [Desktop 架构](desktop-architecture.md)         |
+| Workbench 模式和 contribution 装配       | [Workbench 模式](workbench.md)                  |
+| DOM 与通用浏览器组件                     | [Browser foundation](browser-foundation.md)     |
+| 控件、Part 与 CSS 所有权                 | [UI 样式职责](ui-styling-ownership.md)          |
+| Pane、CompositeBar 与生命周期            | [Workbench 面板](pane-composites.md)            |
+| Command、MenuId、Context Key 与 Toolbar  | [菜单系统](menu-system.md)                      |
 
 ## 第三方许可证
 

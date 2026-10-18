@@ -8,7 +8,7 @@
 > - OS keyring adapter：[`crates/keyring-store/README.md`](../crates/keyring-store/README.md)
 > - Direct-provider credential：[`model-provider.md`](model-provider.md#6-供应商凭据边界)
 > - Interactive login control plane：[`login.md`](login.md)
-> - App Server 登录控制面：[`ash-app-server-api.md`](ash-app-server-api.md#11-account-与登录)
+> - App Server 登录控制面：[`app-server-api.md`](app-server-api.md#11-account-与登录)
 
 ## 快速理解
 
@@ -116,7 +116,7 @@ provider/kimi/current/oauth
 ```
 
 这里的 account segment 必须是 opaque ID，不能直接放 email、token 或 workspace name。
-ChatGPT 凭据按 [Codex 兼容约定](models/chatgpt.md#存储与首次登录) 保存于 Codex 用户存储。Ash 按 Codex 是否可发现选择只读复用或维护，不在 profile SecretStore 中保存 token 副本；SecretStore 仅保存 `provider/chatgpt-subscription/disconnected`，旧断开标记在读取时一次性迁移。
+ChatGPT 凭据按 [Codex 兼容约定](models/chatgpt.md#本机-codex-登录) 保存于 Codex 用户存储。Ash 按 Codex 是否可发现选择只读复用或维护，不在 profile SecretStore 中保存 token 副本；SecretStore 仅保存 `provider/chatgpt-subscription/disconnected`，旧断开标记在读取时一次性迁移。
 
 Kimi 的凭据和刷新由本机适配器及 profile SecretStore 负责。xAI 的 Ash 登录凭据也由其适配器保存在 profile SecretStore；只读复用 Grok 登录时，不复制其 token 到 Ash 存储，抓取的账户等级仅按当前令牌保留在内存中。各订阅的来源、等级和刷新规则见[订阅计划接入与额度](subscriptions.md#入口名称实际套餐与凭据归属)。
 MCP/Connector 使用自己的 namespace，不能把 Provider key schema 当成通用 credential schema。
@@ -221,7 +221,7 @@ crates/keyring-store/
 - “敏感”只改变传输、展示和记录规则，不自动授予工具、网络、账户或外部修改权限；
 - 只有明确的“保存凭据”流程才能把值交给对应领域的凭据 owner，再由该 owner 写入 `SecretStore`。
 
-ChatGPT 订阅的 `isSecret` 请求是首个明确消费者，完成门见 [ChatGPT 当前状态与待完成项](models/chatgpt.md#chatgpt-当前状态与待完成项)。
+ChatGPT 订阅的 `isSecret` 请求是首个明确消费者，完成门见 [ChatGPT 验证范围](models/chatgpt.md#验证)。
 
 ## 9. 依赖方向
 

@@ -1,7 +1,3 @@
----
-description: Ash TypeScript resource ownership and cancellation guidelines
----
-
 # Lifecycle
 
 Ash uses the ECMAScript explicit resource-management protocol as its foundation and exposes a small project facade for application code.

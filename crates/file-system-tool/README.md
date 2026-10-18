@@ -2,7 +2,7 @@
 
 > 本 README 是 model-visible filesystem adapter 的 canonical 实现文档。共享 filesystem
 > authority 见 [`../file-system/README.md`](../file-system/README.md)，跨客户端 ownership
-> 见 [`../../docs/ash-desktop-architecture.md`](../../docs/ash-desktop-architecture.md)。
+> 见 [`../../docs/desktop-architecture.md`](../../docs/desktop-architecture.md)。
 
 本 crate 只把 `ash-file-system` 适配为 model-visible `file-system` Tool。它拥有 Tool
 definition、binding 校验、UTF-8 text 解码和输出上限；不拥有宿主 filesystem access、

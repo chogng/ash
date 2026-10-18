@@ -2,7 +2,7 @@
 
 本文保存 2026-10-17 对本机 Codex/Owl 安装包、运行进程、事件循环、任务分配及大响应传输的调查结果，供 Ash 后续性能设计、测量和代码审查使用。核心发现是：Owl 把 Electron 风格的 Node 主环境放在 Chromium Browser 的 UI 线程上；大 JSON 解析、对象遍历、图像处理及同步系统调用仍可能阻塞这条线程。IPC 分片和消息队列预算只能覆盖各自所在的阶段。
 
-本文是特定版本的外部实现研究，不定义 Ash 的产品契约，也不表示 Ash 已有相同问题。Ash 的职责边界仍以 [Desktop 架构](ash-desktop-architecture.md)、[前端与 App Server 连接边界](frontend-app-server-boundary.md)和 [App Server API](ash-app-server-api.md)为准。
+本文是特定版本的外部实现研究，不定义 Ash 的产品契约，也不表示 Ash 已有相同问题。Ash 的职责边界仍以 [Desktop 架构](desktop-architecture.md)、[前端与 App Server 连接边界](frontend-app-server-boundary.md)和 [App Server API](app-server-api.md)为准。
 
 ## 1. 调查范围、版本与证据强度
 

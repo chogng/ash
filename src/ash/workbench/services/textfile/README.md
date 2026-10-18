@@ -206,4 +206,4 @@ standard-user session with UAC enabled to check credential elevation to another 
 An already elevated test process cannot establish the ordinary permission-failure precondition.
 
 For the Windows interactive checklist and PowerShell commands, see
-[Windows UAC 实测 TODO](../../../../../docs/windows-system-authorization-todo.md).
+[Windows UAC 保存验收手册](../../../../../docs/windows-system-authorization.md).

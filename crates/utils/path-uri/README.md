@@ -3,7 +3,7 @@
 > 本 README 是 Rust `file:` URI 实现契约的 canonical owner。Desktop 通用资源 URI identity
 > 由 [`src/ash/base/common/uri.ts`](../../../src/ash/base/common/uri.ts) 与
 > [`resources.ts`](../../../src/ash/base/common/resources.ts) 拥有；跨层 ownership 与
-> 当前状态见 [`docs/ash-desktop-architecture.md`](../../../docs/ash-desktop-architecture.md)；
+> 当前状态见 [`docs/desktop-architecture.md`](../../../docs/desktop-architecture.md)；
 > 本机 filesystem normalization 由 [`ash-utils-path`](../path-utils/README.md) 拥有。
 
 `ash-utils-path-uri` 提供可序列化、跨 host 检查的绝对 `file:` URI。它用于需要在进程、RPC 或

@@ -7,7 +7,7 @@
 - 自动读取按 Profile、Project、Dir 独立授权，默认关闭；显式写入不授予自动读取权限。
 - [Memories 扩展](../ext/memories/README.md) 负责首次调用的上下文贡献和模型搜索、引用读取、保存工具；本 crate 负责读写规则与授权校验。
 - `MemoryStore` 是持久化 port；SQLite 实现由 `ash-state` 提供，App Server 负责协议、任务身份和目录授权转换。
-- 用户增改与模型保存接收调用方的取消令牌；获得写事务后的检查是取消截止点，具体行为见 [Memory API](../../docs/ash-app-server-api.md#memory)。
+- 用户增改与模型保存接收调用方的取消令牌；获得写事务后的检查是取消截止点，具体行为见 [Memory API](../../docs/app-server-api.md#memory)。
 - Dir 使用稳定 `DirId`，不持久化路径；Project 关联不授予目录访问权。
 - `read_context_citation` 返回引用片段；`read_context_memory` 在核对当前任务作用域、读取授权、revision 与引用范围后返回完整正文；显式管理使用 `read_citation`。
 - 更新推进记录与 catalog revision，旧引用、旧分页失效；重放旧写命令不会恢复旧正文，记录已有后续版本时明确报冲突。
@@ -17,6 +17,6 @@
 - 自动召回的参考材料只进入 Turn 首次模型调用的用户级低信任上下文；不写入指令或 Thread 历史。重试准备上下文时重新读取，删除或撤销授权在后续读取中生效。
 - 删除后正文不再进入 live record、command receipt 或 tombstone；旧 add 命令不能恢复内容，旧授权命令重放不能重新开启读取。SQLite page、WAL 和外部备份的物理清理由存储维护策略负责。
 - 分页 cursor 绑定 catalog revision、作用域和查询；内容或授权变化后旧 cursor 明确失效。
-- 线上参数与错误见 [App Server Memory API](../../docs/ash-app-server-api.md#memory)。
+- 线上参数与错误见 [App Server Memory API](../../docs/app-server-api.md#memory)。
 - 产品入口：TUI `/memories`；TypeScript 桌面命令 “Open memories”；Rust 桌面 Settings → General → Manage memories。
 - 验证：`just test ash-memories`、`just test ash-memories-extension`、`just test ash-state memor`、`just test ash-app-server memor`。

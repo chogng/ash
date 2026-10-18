@@ -4,7 +4,7 @@
 > 实现契约。
 >
 > 产品交互与长期演进由
-> [`docs/ash-desktop-architecture.md`](../../docs/ash-desktop-architecture.md#22-外部-agent-配置导入仅限-desktop)
+> [`docs/desktop-architecture.md`](../../docs/desktop-architecture.md#22-外部-agent-配置导入仅限-desktop)
 > 拥有；Ash 原生 Instructions/Skills/Agents、`.ash` 命名空间和 Import/source registration
 > 边界由 [`docs/agent-customizations.md`](../../docs/agent-customizations.md) 拥有；Skill 来源与激活
 > 语义由 [`docs/skills.md`](../../docs/skills.md) 拥有。

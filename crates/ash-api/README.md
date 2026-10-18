@@ -1,7 +1,7 @@
 # `ash-api`
 
 > 本 README 解释 endpoint dispatch、wire codec 与 streaming event decoder 的实现边界。
-> Provider/runtime 的系统关系与演进见 [`docs/ash-api.md`](../../docs/ash-api.md)。
+> Provider/runtime 的系统关系与演进见 [`docs/model-api.md`](../../docs/model-api.md)。
 
 `ash-api` 负责模型 API 的端点协议：
 
@@ -206,6 +206,6 @@ operation framing、transport 四层分离。
 - JSON 请求统一发送 Content-Type；实际流式请求选择 SSE Accept，其余调用选择 JSON Accept。
 - 同名同值头合并，冲突值和非法字符在发送前拒绝，认证头和调用者 target 不被改写。
 - 结构化工具结果和图片能力与缓存断点支持分别处理。
-- 供应商审查、来源与验证方式见[模型 API 协议](../../docs/ash-api.md#14-供应商配置档案验证矩阵)。
+- 供应商审查、来源与验证方式见[模型 API 协议](../../docs/model-api.md#14-供应商配置档案验证矩阵)。
 
-端点物理归属、公开类型迁移、WebSocket 能力与测试见[端点归属与 WebSocket 实现](../../docs/ash-api.md#46-端点归属与-websocket-实现)。Responses 的路径／头／字段和 JSON 事件解码在 `endpoint/responses.rs` 与其子模块；Chat、Anthropic、计数和 semantic 分别有同级 owner。
+端点物理归属、公开类型迁移、WebSocket 能力与测试见[端点归属与 WebSocket 实现](../../docs/model-api.md#46-端点归属与-websocket-实现)。Responses 的路径／头／字段和 JSON 事件解码在 `endpoint/responses.rs` 与其子模块；Chat、Anthropic、计数和 semantic 分别有同级 owner。

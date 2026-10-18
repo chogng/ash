@@ -4,7 +4,7 @@
 > timeout 与失败细节以 [`crates/git/README.md`](../crates/git/README.md) 为准；
 > worktree 切换目标与 Codex 兼容归属以 [`crates/worktree/README.md`](../crates/worktree/README.md) 为准；
 > 能力划分与 Session 文件选择提交见 [`git-capabilities.md`](git-capabilities.md)；
-> external wire shape 以 [`ash-app-server-api.md`](ash-app-server-api.md) 为准。
+> external wire shape 以 [`app-server-api.md`](app-server-api.md) 为准。
 
 ## 快速理解
 
@@ -169,7 +169,7 @@ History 提交行的右侧使用浮层，包含分支标签（例如 `main`）�
 比较编辑器和各文件保留已解析的基准提交 ID，分支后续移动不会改变已打开的内容。菜单读取分支与
 catalog，不重启 `git/graph`，保留正在消费的分页。Git 命令、引用解析、路径过滤及写授权由 Rust Git
 服务执行；SCM 消费通用 history/ref 能力，Git contribution 注册 Git 操作。协议语义见
-[`ash-app-server-api.md` 的 Git SCM](ash-app-server-api.md#git-scm)。
+[`app-server-api.md` 的 Git SCM](app-server-api.md#git-scm)。
 
 ## SCM 与 Git 的分层决策
 
@@ -265,7 +265,7 @@ Git 操作的接入位置：
 | Electron 连接启动和透明转发  | [`daemon launcher`](../src/ash/platform/app-server-daemon/electron-main/appServerDaemonLauncher.ts)、[`relay`](../src/ash/platform/agentHost/electron-main/appServerConnectionRelay.ts)、[`MessagePort transport`](../src/ash/platform/agentHost/electron-browser/appServerMessagePortTransport.ts) |
 | 协议定义和生成边界           | [`Git protocol`](../crates/app-server-protocol/src/protocol/git.rs)、[`exporter`](../crates/app-server-protocol/src/export.rs)，生成的 request map 与 decoder 位于 `.build/protocol/typescript/`                                                                                                    |
 | Git 执行与部分 index 编辑    | [`references.rs`](../crates/git/src/references.rs)、[`index_edit.rs`](../crates/git/src/working_copy/index_edit.rs)                                                                                                                                                                                 |
-| Rust 调度与通知              | [`git_operations.rs`](../crates/app-server/src/server/git_operations.rs)、[`GitService`](../crates/app-server/src/git_service.rs)、[`GitRuntime`](../crates/app-server/src/server/git_runtime.rs)                                                                                                   |
+| Rust 调度与通知              | [`request_processors/git.rs`](../crates/app-server/src/server/request_processors/git.rs)、[`GitService`](../crates/app-server/src/git_service.rs)、[`GitRuntime`](../crates/app-server/src/server/git_runtime.rs)                                                                                   |
 
 这些入口复用已有协议与连接：每个 renderer 一条独立连接，共享 profile 的 app-server daemon。Git 扩展使用公共独立 Rust 宿主，每窗口 activation 绑定 SDK 回调和能力授权。命令先取得目标仓库 ID，后续查询、输入、确认和执行始终使用该 ID；退役取消旧调用。
 

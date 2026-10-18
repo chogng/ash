@@ -1,6 +1,6 @@
 # Work / Code 工作台与文档编辑器目标设计
 
-> 状态：目标设计，部分基础已完成。当前只有 Code 工作台，Academic 已通过文档贡献接入，共享模型、严格读取和旧存储迁移已完成。普通文档类型、Work 界面组合、Chat 主画布及 Agent 文档修改尚未实施。本文用于后续修改 Ash Desktop 的 Workbench 与 Stanza Editor；当前实现以 [Workbench 装配说明](../workbench-modes.md)、[Stanza 目录说明](../../src/ash/editor/README.md)和[富文档设计](../../src/ash/editor/document-engine.md)为准。本文不宣称 Work 界面组合已经存在。
+> 状态：目标设计，部分基础已完成。当前只有 Code 工作台，Academic 已通过文档贡献接入，共享模型、严格读取和旧存储迁移已完成。普通文档类型、Work 界面组合、Chat 主画布及 Agent 文档修改尚未实施。本文用于后续修改 Ash Desktop 的 Workbench 与 Stanza Editor；当前实现以 [Workbench 装配说明](../workbench.md)、[Stanza 目录说明](../../src/ash/editor/README.md)和[富文档设计](../../src/ash/editor/document-engine.md)为准。本文不宣称 Work 界面组合已经存在。
 
 ## 结论
 
@@ -84,46 +84,13 @@ Work 和 Code 是同一 Desktop 产品内的不同界面组合，不改变 [`ash
 
 新建和修改的所有可见文案进入现有本地化系统，至少用一种非默认语言验证。编辑区、工具栏、列表、表格和切换命令可由键盘完整操作；焦点切换有可见反馈，弹层关闭后恢复焦点。文档编辑器提供无障碍帮助，复杂视觉内容提供可阅读的文本视图，并让用户控制帮助提示的播报。状态变化使用适当的屏幕阅读器提示，避免同一事件重复播报。
 
-## 具体实施方案
+## 当前基础与实施入口
 
-整体属于**中高难度的 Workbench 改造**。编辑器内核和富文档控件已经存在，主要工作集中在文档格式、同一文件的模型归属、Chat 的主画布位置以及旧用户状态迁移。以下是依赖顺序；每一项都应连同对应测试形成可单独审查的改动，不能靠临时的第二套模型或界面专用文件格式完成界面演示。
+共同编辑器注册、严格结构化读取、共享资源模型和唯一工作副本已经接入。`DocumentEditorTextModelService` 按规范化资源持有 `TextModel`／`DocumentWorkingCopy`，多个视图用引用计数管理生命周期；冲突文档类型拒绝打开，关闭一个视图不销毁另一个视图。备份内容类型跟随所选文档类型，另存为必须转移资源与工作副本身份。
 
-### 1. 完成自描述文档类型与格式升级
+Academic 由扩展声明选择可信 factory，共享同一文档 pane；Code 共同装配代码与文档编辑器，代码匹配排除已注册结构化文档。旧 Academic 模式及中央模式注册表已经退场，`ash.academic.storage` 到 `ash.code.storage` 的逐 key 迁移保留冲突。上述基础不能视为普通文档、Work 界面或 Agent 结构化编辑已完成。
 
-- 在 [`documentSerialization.ts`](../../src/ash/editor/common/model/documentSerialization.ts) 定义磁盘文件的新版本包络：`format: "ash.document"`、`version: 2`、`type: "general" | "academic"`、`document`。解析时先验证包络和类型，再选对应结构规则；扩展名、内容类型与包络类型不一致时明确报错。只对既有 `.ash-academic` / `.ash-paper` 文件接受无类型的 v1 包络，下次实际保存时写 v2。协作传输与剪贴板片段各有用途和版本，更新调用方时不能把磁盘迁移规则套到它们身上。
-- 已完成：[`DocumentEditorTextModelService`](../../src/ash/workbench/services/documentEditor/browser/documentEditorTextModelService.ts) 是 Workbench 范围的资源服务：按规范化资源地址取得一个 `TextModel` 和一个 [`DocumentWorkingCopy`](../../src/ash/workbench/services/documentEditor/browser/documentWorkingCopy.ts)，由引用计数管理多个视图的释放；第二个视图请求不同文档类型时拒绝打开。备份内容类型随文档类型设置，撤销、保存、外部修改冲突都针对这一个模型。另存为时明确转移旧、新资源的引用与工作副本身份。
-- 已完成：结构化文件不再隐式按纯文本导入。未来格式升级验收：旧 Academic 文件可读并升级；错误类型或损坏 JSON 不会变成正文；同一文件在分栏中编辑只产生一份脏工作副本；关闭一个视图不会销毁另一个视图的内容。
-
-### 2. 保持共同编辑器注册（基础已完成）
-
-- [文档编辑器 profile](../../src/ash/workbench/contrib/documentEditor/browser/editorProfile.ts)组合共享 pane；Academic 可信 factory 由 `ash.academic` 扩展的声明选择。启用与停用同步注册或撤下 editor 和文件关联，已有工作副本由原 tab 保留。
-- [Workbench 共同入口](../../src/ash/workbench/workbench.common.main.ts)已装配代码与文档编辑器；未来 Work 使用同一装配契约，再增加自身工具。代码匹配规则排除已注册的结构化文档，包括通过内容类型指定的未命名文档。
-- 当前验收是 Code 中代码和论文在同一窗口打开；增加普通文档后再验证两种文档配置，增加 Work 后再验证不同界面组合下的恢复。
-
-### 3. 完成普通文档的创建与文件流程
-
-- 新增 `general` 文档配置、`.ash-doc` 扩展名和对应内容类型；“新建文档”创建唯一的未命名结构化资源，“新建文本文件”仍走纯文本流程。把新建、保存、另存为、回退、备份恢复、文件重命名和外部修改冲突接到现有 Workbench 文件与工作副本服务，不让文档 Pane 自行维护第二份磁盘状态。
-- 提供显式“转换为文档”命令：从 `.txt` 或 `.md` 读取源文件，生成新的 `.ash-doc`，原文件不变。Markdown 的标题、列表、强调、链接等已支持语义映射为文档节点；遇到无法表达的语义时报告具体位置并停止转换，不能静默丢弃内容。图片写入文档拥有的稳定资源，重开与另存为后仍能解析。
-- 验收：空白普通文档直接输入正文；格式、表格、图片、撤销历史与大纲在保存重开后保持一致；Academic 仍有标题、摘要、引用规则，普通文档没有这些强制字段。
-
-### 4. 打通 Agent 对文档的修改
-
-- 在 Workbench 文档服务提供按资源定位的结构化编辑入口，接收带预期版本的文档操作：已打开文档校验模型版本，未打开文档校验文件修订。校验文档类型、权限和结构规则后，由 `TextModel` 一次提交并形成一个可撤销步骤。App Server 的 Agent 能力通过协议请求此入口；Chat 只提交请求与展示结果，不直接改编辑器节点或写 `.ash-doc` JSON。当前面向纯文本的 Workspace Edit 不能直接应用到结构化文档。
-- 打开的文档沿用其脏工作副本；未打开的文档经相同资源服务加载、修改和保存。版本已变化或磁盘有冲突时向对话返回冲突，不覆盖用户修改。对话只聊天时无需绑定文档；用户明确指定资源后，同一对话可以继续修改该文档或切回代码任务。
-- 验收：Agent 修改打开和未打开的普通文档、Academic 文档后，界面、磁盘和对话结果一致；用户能撤销打开文档的一次 Agent 修改；过期版本被拒绝且文件内容不变。
-
-### 5. 增加 Work 界面组合
-
-- Academic 作为文档贡献使用，旧模式设置与链接不再影响启动。中央模式注册表与 Browser/Electron loader 已退出；未来 Work 的界面入口须复用现有贡献与生命周期，不恢复模式注册表。
-- profile 用户配置由 `settings.json` 拥有；旧 `configuration.json` 的一次性迁移使用现有配置迁移流程。不要再新增 Academic 模式迁移规则或第二份配置来源。
-- 明确 Code 与 Work 的打开资源、布局和会话恢复范围。工作副本备份按工作区身份保存，保持文档类型及未保存内容。当前 `ash.academic.storage` 到 `ash.code.storage` 的逐 key 迁移保留冲突，见 [当前说明](../workbench-modes.md)。
-- 验收：Code/Work 切换及重启后恢复文件与未保存内容，布局符合各自默认值，配置和状态冲突没有数据覆盖。
-
-### 6. 把 Chat 放到 Work 主画布
-
-- 现有 [`WorkbenchDefaultLayout`](../../src/ash/workbench/browser/layout.ts) 只能设置区域显隐，现有 [`ChatViewPane`](../../src/ash/sessions/browser/chatViewPane.ts) 位于辅助栏。将 Chat 的会话标签、选中对话和草稿状态提取为共享的界面模型，再让辅助栏视图和新的 Chat 编辑区 Pane 使用同一状态；显示位置变化不创建新的会话或另一份待发送草稿。实现已有的“Move Chat to Editor Area”命令入口。
-- Work 启动且没有打开资源时在编辑区展示 Chat；打开文档时文档成为主画布，Chat 可在辅助栏与文档并排。Code 保留代码优先的初始布局，也可打开同一 Chat。产品入口提供各自默认布局与空白页行为，共用 Workbench 布局机制；共享 Workbench 不写入 Work 专用摆放规则。
-- 验收：一段仅聊天的对话可在 Code 和 Work 找回；同一对话切换显示位置、界面和窗口重启后仍保留身份、消息、附件与草稿；文档和 Chat 并排时键盘焦点可往返且不会误发消息。
+具体剩余动作和依赖顺序统一维护在 [Work / 通用文档 TODO](../../TODO.md#work--通用文档--todo)：先升级自描述类型／格式，再闭合普通文档、Agent 编辑和 Work／Chat 界面流程。本文继续定义目标行为、所有权及验收要求。分页、`.docx` 和 PDF 输出分别另行设计与验收。
 
 ### 验证矩阵与完成标准
 
@@ -135,5 +102,3 @@ Work 和 Code 是同一 Desktop 产品内的不同界面组合，不改变 [`ash
 | 写作输入与可访问性 | 输入法、跨段选区、粘贴、表格、键盘、焦点、窄窗口、高对比度和非默认语言        | Web、Electron Playwright 行为断言与无障碍检查  |
 
 每一项改动运行受影响的单测与 TypeScript 类型检查；共同入口变化还要运行 Renderer 正常构建，用户流程用 Playwright 覆盖 Web 和 Electron。交互以内容、焦点、工作副本和持久状态断言，不用截图推断是否正确。最后核对本文件链接和构建警告。
-
-**建议下一步实施第 1 项的格式类型升级**：共享模型、唯一工作副本和严格读取已经完成，后续在此基础上增加自描述格式与普通文档类型。其余步骤建立在这一契约上。完成本设计时，用户应能在任一界面组合创建和编辑结构化文档、打开代码、与 Agent 对话并让 Agent 修改文档；界面改变及重启后能恢复文件和会话。`.md` 与 `.txt` 不会被静默改写为结构化 JSON。分页、`.docx` 和 PDF 导出分别另行设计与验收。

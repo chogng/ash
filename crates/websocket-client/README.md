@@ -13,4 +13,4 @@
 just test ash-websocket-client
 ```
 
-测试使用本地 WebSocket 和 HTTP CONNECT 代理，覆盖消息往返、握手拒绝、请求头校验与脱敏。协议和 Luna 实连测试见[模型 API 协议](../../docs/ash-api.md#46-端点归属与-websocket-实现)。
+测试使用本地 WebSocket 和 HTTP CONNECT 代理，覆盖消息往返、握手拒绝、请求头校验与脱敏。协议和 Luna 实连测试见[模型 API 协议](../../docs/model-api.md#46-端点归属与-websocket-实现)。

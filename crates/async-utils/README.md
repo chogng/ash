@@ -2,7 +2,7 @@
 
 > 本 README 解释 cancellation tree 的当前接口与 race semantics。跨 Agent、model、Tool 与 process
 > 的 cancellation 演进见
-> [`docs/ash-agent-runtime-architecture.md`](../../docs/ash-agent-runtime-architecture.md)。
+> [`docs/agent-runtime.md`](../../docs/agent-runtime.md)。
 
 `ash-async-utils` 默认仅提供依赖 `std` 的 cooperative cancellation。可选 `wait` feature
 增加共享截止等待和通知，使用不要求调用方持有 Tokio runtime 的计时器；不拥有任务启动、

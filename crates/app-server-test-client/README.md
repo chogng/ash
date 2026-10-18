@@ -49,7 +49,7 @@ python -B scripts/cargo.py run -p ash-app-server-test-client -- --url ws://127.0
 
 `ASH_APP_SERVER_BIN`、`ASH_APP_SERVER_URL` 分别对应 `--server-bin`、`--url`，两种连接方式互斥。
 令牌只用于 HTTP Authorization，不打印到帮助或通信输出。
-协议方法与参数见 [App Server API](../../docs/ash-app-server-api.md)。
+协议方法与参数见 [App Server API](../../docs/app-server-api.md)。
 
 ## 验证
 

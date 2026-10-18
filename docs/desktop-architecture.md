@@ -1,13 +1,13 @@
-# `ash` Electron Desktop 架构与协作边界
+# Desktop 架构与宿主边界
 
 > 负责人：Desktop 开发者
 > Rust 对接负责人：crates 开发者
-> 当前开发基线：[`ash-app-server-api.md`](ash-app-server-api.md)
-> Workbench 模式装配与切换边界：[`workbench-modes.md`](workbench-modes.md)
+> 当前开发基线：[`app-server-api.md`](app-server-api.md)
+> Workbench 装配与文档贡献：[`workbench.md`](workbench.md)
 > Renderer 控件、Workbench Part 与 CSS 状态所有权：[`ui-styling-ownership.md`](ui-styling-ownership.md)
-> Pane-like Part 的标题槽位、CompositeBar、命名与生命周期：[`workbench-pane-composite-design.md`](workbench-pane-composite-design.md)
+> Pane-like Part 的标题槽位、CompositeBar、命名与生命周期：[`pane-composites.md`](pane-composites.md)
 > Renderer Command、MenuId 与 UI Action 组合系统：[`menu-system.md`](menu-system.md)
-> Chat 内 Session Inspector 的信息架构与 Plan 演进：[`chat-session-inspector.md`](chat-session-inspector.md)
+> Chat 内 Session Inspector 与 Turn 变更账本：[`chat-session-inspector.md`](chat-session-inspector.md)
 > 外部 Agent Skill 来源与加载边界：[`skills.md`](skills.md)
 > Agent 自定义对象、`.ash` 与外部导入边界：[`agent-customizations.md`](agent-customizations.md)
 > 三条公开产品线与宿主边界：[`product-lines.md`](product-lines.md)
@@ -45,7 +45,7 @@ Renderer
 Desktop 禁止执行 `ash ask ...` 后解析终端输出，也禁止直接链接 `ash-core`。
 
 跨客户端的唯一外部门禁、进程内嵌规则和 Core 旁路禁止项以
-[`ash-app-server-api.md#唯一外部门禁`](ash-app-server-api.md#唯一外部门禁) 为准；本文件只补充
+[`app-server-api.md#唯一外部门禁`](app-server-api.md#唯一外部门禁) 为准；本文件只补充
 Electron 的 Renderer、Preload、Main 和可信 IPC 适配细节。
 
 ## 2. Desktop 所有权
@@ -219,7 +219,7 @@ Electron 自动化共用 `test/automation/playwrightElectron.ts` 的进程启动
 桌面锁定时直接报告环境错误，不把它当作窗口切换成功。进程退出后才停止测试 daemon，
 进程退出和 daemon 停止分别使用各自的期限。
 
-前端 adapter 和构建工具直接引用 `.build/protocol/typescript/` 的生成快照，不手写 wire DTO，也不生成消费副本。构建入口自动准备这份 Git 忽略的产物，输入和输出未变化时复用缓存；源码匹配的后端包也可恢复完整产物，无匹配缓存或包时需要 Rust 工具链，协议修改可通过 `pnpm protocol:generate` 更新；职责和验证见 [App Server 协议来源](ash-app-server-api.md#12-权威来源)。
+前端 adapter 和构建工具直接引用 `.build/protocol/typescript/` 的生成快照，不手写 wire DTO，也不生成消费副本。构建入口自动准备这份 Git 忽略的产物，输入和输出未变化时复用缓存；源码匹配的后端包也可恢复完整产物，无匹配缓存或包时需要 Rust 工具链，协议修改可通过 `pnpm protocol:generate` 更新；职责和验证见 [App Server 协议来源](app-server-api.md#12-权威来源)。
 生成的 `APP_SERVER_SCHEMA_HASH` 是 bundled Desktop 的 exact-schema 基线；Electron Main
 必须比较 initialize response，hash 不一致时不得创建业务窗口或进入 Ready。
 
@@ -730,7 +730,7 @@ Renderer 不复制 Rust 状态机。Session 没有 sequence；`session/changed` 
 
 ### 6.1 Editor 宿主
 
-`EditorParts` 是跨浏览器窗口的协调面，主窗口和每个辅助窗口各自拥有一个 `EditorPart`；每个 `EditorPart` 使用二维 `SerializableGrid` 管理稳定 ID 的 `EditorGroup`，每个 group 管理 tabs、preview/pinned、pane 生命周期、活动状态和 JSON-safe view state。`EditorInput` 表示待打开资源，`IEditorPane` 定义编辑器真正共享的创建、输入、取消、布局、可见性、聚焦与释放语义，`EditorPaneRegistry` 负责默认匹配、候选枚举和显式 `Reopen With` 选择。具体产品装配规则由 [`workbench-modes.md`](workbench-modes.md) 负责。
+`EditorParts` 是跨浏览器窗口的协调面，主窗口和每个辅助窗口各自拥有一个 `EditorPart`；每个 `EditorPart` 使用二维 `SerializableGrid` 管理稳定 ID 的 `EditorGroup`，每个 group 管理 tabs、preview/pinned、pane 生命周期、活动状态和 JSON-safe view state。`EditorInput` 表示待打开资源，`IEditorPane` 定义编辑器真正共享的创建、输入、取消、布局、可见性、聚焦与释放语义，`EditorPaneRegistry` 负责默认匹配、候选枚举和显式 `Reopen With` 选择。具体产品装配规则由 [`workbench.md`](workbench.md) 负责。
 
 跨编辑器联动滚动由 `workbench/contrib/scrollLocking` 的 `SyncScroll` 管理。`BrowserEditorService.visibleEditorPanes` 从 Editor Part 获取可见分组的活动 pane 和模态 pane；pane 通过 `IEditorPaneWithScrolling` 提供滚动事件与坐标读写。开启联动或可见集合变化时记录各 pane 的基准位置，后续滚动按双轴位移保留位置差，坐标与边界约束仍由各编辑器控件拥有。并排 pane 展开为两个参与者，Diff pane 通过 modified 控件参与，其内部同步仍由 Diff 拥有。按住快捷键的释放、失焦与服务释放由 `WorkbenchKeybindingService.enableKeybindingHoldMode` 管理；`SyncScroll` 恢复临时切换前的状态，并保留期间发生的显式切换。
 
@@ -920,7 +920,7 @@ container，再委托对应 Part 显示并激活该 composite。Primary Sidebar 
 `CompositeBar`；Auxiliary Bar 隐藏固定 Chat container 的冗余 bar 并投影 Chat 自有标题；Agent
 Sidebar 保留统一标题和 CompositeBar host，但过滤唯一冗余 container item，并在标题右侧
 `titleActions` 槽位投影收起动作。四者仍使用相同的 Composite 生命周期。该层级、命名和槽位契约以
-[`workbench-pane-composite-design.md`](workbench-pane-composite-design.md) 为准。
+[`pane-composites.md`](pane-composites.md) 为准。
 
 Chat 是独立 contrib，而不是 Auxiliary Bar 的内建内容：
 
@@ -1154,7 +1154,7 @@ PowerShell 使用 PSConsoleHostReadLine 在完整输入被接受后上报开始�
 创建、释放和移动均在列表、标题与活动项更新后发出 `onDidChangeInstances`。创建与重启开始读取前查询窗口当前连接状态，
 避免异步返回覆盖已发生的断线。Tasks 与 DAP 在发送命令前要求新实例处于 running；否则关闭自己创建的实例并报告启动失败，
 不在连接恢复后自动发送这次命令。
-platform 到 services 的装配缺口、对应目录与职责见 [Terminal 对齐台账](terminal-api-alignment-status.md)。
+platform 到 services 的装配缺口、对应目录与职责见 [Terminal 进程与屏幕契约](terminal.md)。
 
 ### 6.8 产品链接与 URL 回调
 
@@ -1317,7 +1317,7 @@ App Server 先检查当前 `network.allowedHosts`，再通过 Core 的网络审�
 ## 8. Desktop 提交 App Server 能力需求
 
 Desktop 开发者在实现前提交一份符合
-[`ash-api-interface-requirements.md`](ash-api-interface-requirements.md) 的产品接口需求。
+[`app-server-api-guidelines.md`](app-server-api-guidelines.md) 的产品接口需求。
 Desktop 是需求提出方；crates 是已接受 App Server 契约的 owner。接口必须同时评估 CLI、
 daemon 和远程客户端影响，不能定义为 Desktop 私有业务 API。
 
@@ -1335,7 +1335,7 @@ crates 开发者根据该文档实现 Rust DTO、dispatcher、typed client、han
 TypeScript 生成。进程内 CLI client 与 Desktop stdio client 必须经过同一个 dispatcher。
 
 当前已接受的方法、通知、错误码和前端可开发范围以
-[`ash-app-server-api.md`](ash-app-server-api.md) 为准。
+[`app-server-api.md`](app-server-api.md) 为准。
 
 ## 9. Rust 交付给 Desktop 的产物
 

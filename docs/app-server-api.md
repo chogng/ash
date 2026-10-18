@@ -269,7 +269,7 @@ App Server deadline 为 30 秒。Turn 取消或 deadline 到达时，Server 发�
 version 1 宿主同时声明 `observe + input`；最后一个完整宿主断开会移除该工具 port，Environment runtime 切换则重建对应 Tool generation。恢复条件后
 只影响后续 Tool generation，不恢复或重放旧调用。
 Desktop 当前实现和 Playwright 后续边界见
-[`ash-desktop-architecture.md#7-浏览器能力`](ash-desktop-architecture.md#7-浏览器能力)。
+[`desktop-architecture.md#7-浏览器能力`](desktop-architecture.md#7-浏览器能力)。
 
 ### Agents 窗口应用工具宿主
 

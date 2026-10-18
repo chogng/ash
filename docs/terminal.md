@@ -1,4 +1,4 @@
-# Terminal API 对齐状态
+# Terminal：进程、屏幕与恢复
 
 ## 职责边界
 
@@ -8,11 +8,11 @@ Agent loop 全部由 Rust 后端拥有。前端保留 Workbench 交互、屏幕�
 
 三个平台 Browser 适配器沿用既有确认，仅补当前调用方需要的端口和元数据映射；迁移、收敛和删除仍后置。
 
-## 按功能比较与优先级（2026-10-17）
+## 当前能力与验证范围
 
-本节比较当前 Ash 工作树与本地 VS Code `1e81fc75bb564738c29771d9b17c72e708a8211c` 的用户可观察能力。依据生产入口、配置消费者、状态 owner 和行为测试判断；同名文件存在不算完成，缺文件也不直接算缺功能。P1 是应先闭合的可靠性或日常工作路径，P2 是下一批效率与交互能力，P3 按实际需求选择。此处未对所有项目重新执行两端相同场景，不能作为完整兼容认证。
+本节比较当前 Ash 工作树与本地 VS Code `1e81fc75bb564738c29771d9b17c72e708a8211c` 的用户可观察能力。依据生产入口、配置消费者、状态 owner 和行为测试判断；同名文件存在不算完成，缺文件也不直接算缺功能。此处未对所有项目重新执行两端相同场景，不能作为完整兼容认证。
 
-### 已有能力，不再计为缺失
+### 已接通的用户能力
 
 | 能力                              | 当前范围与证据                                                                                                                                                                                                         |
 | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -29,37 +29,9 @@ Agent loop 全部由 Rust 后端拥有。前端保留 Workbench 交互、屏幕�
 | 窗口 reload 恢复                  | Desktop 本地与远程共用 reconnectable adapter；协调 reload 保存原进程身份、已提交屏幕、待提交输入、分屏比例和焦点，再 attach 原 PTY。macOS 英文 / 中文均通过命令重载与直接刷新连续两次恢复，详见下方实施切片。          |
 | 可取消的关闭保护                  | `confirmOnKill` / `confirmOnExit` 使用真实 OS 子进程状态；取消分屏或窗口关闭不停止进程、输出或输入，恢复原焦点。配置默认值与 VS Code 对应设置一致。                                                                    |
 
-### 真正缺失或只完成一部分的能力
+未完成能力按功能、优先级和验收范围统一维护在[Terminal TODO](../TODO.md#terminal--todo)。以下保留当前契约与已有验证。
 
-| 优先级          | 用户能力                                             | Ash 当前边界与实际缺口                                                                                                                                                                                                                 | 主要 owner / 依据                                                                                                                                                                                                                                                       |
-| --------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| P2              | **应用退出后恢复输出、cwd 和布局**                   | 有限 `TerminalRecorder` replay 与命令文本历史不等于完整终端恢复；缺少持久化缓冲、布局和重建 Shell 的入口。这与已完成的保留原进程 reload 语义分开实现和验收。VS Code 的 revive 也会重新创建进程，不保证旧的任意命令跨应用退出继续运行。 | [TerminalRecorder](../src/ash/platform/terminal/common/terminalRecorder.ts)、Rust 终端生命周期、Workbench 终端模型；VS Code `persistentSessionReviveProcess` 配置。                                                                                                     |
-| P2              | **把文件 / 文件夹拖入终端输入路径**                  | 当前屏幕没有文件 drop 输入链；标签 drop 只接受本地拖动的终端实例。需要执行宿主对应的路径、quoting 和远端映射。                                                                                                                         | [XtermTerminal](../src/ash/workbench/contrib/terminal/browser/xterm/xtermTerminal.ts)、[TerminalTabsList](../src/ash/workbench/contrib/terminal/browser/terminalTabsList.ts)、进程输入 owner。                                                                          |
-| P2              | **拖动合并分屏、跨组移动和组内重排**                 | 已有单标签排序、内部 `joinInstances` 和取消拆分；标签 drop 仅改全局实例顺序，没有形成组移动、拖入合并和窗格顺序变更。不能把组连接线显示算作这些交互已完成。                                                                            | [TerminalTabsList](../src/ash/workbench/contrib/terminal/browser/terminalTabsList.ts)、[TerminalGroupService](../src/ash/workbench/contrib/terminal/browser/terminalGroupService.ts)、[TerminalGroup](../src/ash/workbench/contrib/terminal/browser/terminalGroup.ts)。 |
-| P2              | **分屏方向与编辑区分屏**                             | 面板组目前固定左右排列；缺少随面板位置调整方向或手动切换方向。Split 命令明确跳过编辑区实例，缺少从编辑区终端创建相邻终端的行为。                                                                                                       | [TerminalGroup](../src/ash/workbench/contrib/terminal/browser/terminalGroup.ts)、[Split 命令](../src/ash/workbench/contrib/terminal/browser/terminalActions.ts)、TerminalEditorService。                                                                                |
-| P2              | **运行编辑器选区 / 当前文件**                        | `sendText` 已有，Tasks / Debug 启动也已有；未注册 VS Code 对应的 Run Selected Text / Run Active File 用户入口，也未找到等价的编辑器到活动终端行为链。                                                                                  | [终端命令](../src/ash/workbench/contrib/terminal/browser/terminalActions.ts)、编辑器选区与输入 owner。                                                                                                                                                                  |
-| P2              | **命令级复制输出、重跑与选区**                       | 命令 markers、状态、前后导航和输出范围已有；装饰当前只有显示 / hover，没有点击菜单里的复制命令、复制该命令输出、重跑、按命令范围选择等操作。普通文本选区复制不受此限制。                                                               | [DecorationAddon](../src/ash/workbench/contrib/terminal/browser/xterm/decorationAddon.ts)、[命令动作](../src/ash/workbench/contrib/terminal/browser/terminalActions.ts)。                                                                                               |
-| P2              | **最近目录与 Shell 历史导入**                        | Ash 自己记录的最近命令可选择重跑；缺少 Go To Recent Directory，以及读取 Shell 历史文件合并到终端历史选择器的链路。                                                                                                                     | [history contribution](../src/ash/workbench/contrib/terminalContrib/history/browser/terminal.history.contribution.ts)、cwd capability、宿主文件读取。                                                                                                                   |
-| P2              | **多行粘贴确认和鼠标剪贴板偏好**                     | 文本粘贴和 bracketed paste 已有；缺少适用条件下的多行确认、选中即复制、可配置右键复制 / 粘贴等行为。bracketed paste 不能代替确认策略；应覆盖菜单、快捷键和浏览器粘贴入口。                                                             | [Clipboard contribution](../src/ash/workbench/contrib/terminalContrib/clipboard/browser/terminal.clipboard.contribution.ts)、[TerminalInstance.sendText](../src/ash/workbench/contrib/terminal/browser/terminalInstance.ts)。                                           |
-| P2              | **Fish 的增强 Shell Integration**                    | Fish 可发现并启动，但当前归为 `ShellKind::Other`，没有自动注入命令生命周期、可信 cwd / env 等增强信息。Bash / Zsh / PowerShell 的集成已经存在。若 Fish 是首发支持范围，应随 P1 基础能力验证。                                          | [Profiles](../crates/exec-server/src/terminal/profiles.rs)、[Shell integration](../crates/exec-server/src/terminal/shell_integration.rs)。                                                                                                                              |
-| P2              | **终端 Suggest 补全 UI**                             | 没有命令 / 参数 / 路径候选列表、候选接收和 provider 接入。Shell 自身 Tab 补全仍正常走 PTY，不能把它算作缺失。                                                                                                                          | [产品加载入口](../src/ash/workbench/contrib/terminal/terminal.all.ts)、现有输入 / PromptInputModel；对照 VS Code Suggest 的公开配置与测试。                                                                                                                             |
-| P2              | **Sticky Scroll 与命令引导**                         | 有命令边界，缺少滚动时固定当前命令的顶部区域；也没有上游的命令范围引导交互。                                                                                                                                                           | [产品加载入口](../src/ash/workbench/contrib/terminal/terminal.all.ts)、屏幕 markers / viewport owner；对照 VS Code Sticky Scroll 配置。                                                                                                                                 |
-| P2              | **失败命令 Quick Fix**                               | 没有根据命令和输出展示修正动作及运行修正命令的链路，相关 provider 也未接入。现有错误标记仅展示状态。                                                                                                                                   | [产品加载入口](../src/ash/workbench/contrib/terminal/terminal.all.ts)、DecorationAddon、后端执行入口；对照 VS Code Quick Fix contribution / builtin actions。                                                                                                           |
-| P2 / 按扩展需求 | **终端 provider 扩展面**                             | Profile、环境变量、自定义 PTY 已有；链接、Quick Fix、补全 provider 和 VS Code Shell Execution 事件 API 尚未形成对应公开契约。按 Ash 实际扩展消费者决定范围，不为了兼容声明新增空 API。                                                 | [MainThreadTerminalService](../src/ash/workbench/api/browser/mainThreadTerminalService.ts)、扩展 SDK / Rust 扩展运行时、各能力 owner。                                                                                                                                  |
-| P3              | **通知、自动回复、远端本地回显、尺寸提示和独立缩放** | 上游对应贡献尚未加载，也未找到等价功能链。按完成通知、固定响应规则、远端输入延迟或显示需求分别选择；已有 bell signal 不等于命令完成通知。                                                                                              | [产品加载入口](../src/ash/workbench/contrib/terminal/terminal.all.ts)、[Xterm addon 加载](../src/ash/workbench/contrib/terminal/browser/xterm/xtermTerminal.ts)。                                                                                                       |
-| P3 / 先测量     | **渲染与显示增强**                                   | 未接入 GPU renderer、可选 Unicode / grapheme 宽度 addon 和图片协议 addon。现有中文输入、字符显示不能因此判为缺失；是否增加这些机制取决于真实字符兼容用例和性能测量。                                                                   | [XtermTerminal](../src/ash/workbench/contrib/terminal/browser/xterm/xtermTerminal.ts)、[XtermAddonImporter](../src/ash/workbench/contrib/terminal/browser/xterm/xtermAddonImporter.ts)。                                                                                |
-| P3 / 产品选择   | **终端内嵌 Chat**                                    | 附加终端到现有 Chat 已有；缺少直接覆盖在终端中的 inline Chat 交互。是否增加独立入口应由使用场景决定，不能把 Rust 拥有的 Agent 执行、审批和工具调度再搬回前端。                                                                         | [TerminalTabsChatEntry](../src/ash/workbench/contrib/terminal/browser/terminalTabsChatEntry.ts)、现有 Chat 与后端领域服务。                                                                                                                                             |
-
-### 建议实施顺序与验收
-
-1. **保留已闭合的 P1 生命周期回归。** reload 后原 shell / 子进程 PID、连续输出、组布局和焦点仍正确；关闭保护可取消且不破坏原会话，现已纳入中英文 Desktop 烟雾测试。应用彻底退出后的恢复另测缓冲 / cwd / 布局与新进程，不承诺旧命令续跑。
-2. **保留已闭合的导航与背压回归。** 文件与行列链接、慢消费者和突发输出已有本批验收。后续补真实 SSH、其他执行平台和更广泛的内存 / 吞吐测量，继续区分产品 scrollback 淘汰与传输 gap。
-3. **再补 P2 高频交互。** 文件拖入、拖动分组、方向、编辑器选区执行、按命令复制输出和历史目录；每次移动都验证进程身份、待提交输入、选区和焦点。Fish 若在目标支持范围内先补其集成，避免后续能力只在部分 Shell 生效。
-4. **最后扩展效率 UI。** Suggest、Sticky Scroll、Quick Fix 复用既有命令状态和屏幕边界；P3 按测量与用户需求选取，不以抹平目录差异为目标。
-
-本批最新回归：关闭 / reload 相关前端定向单测 136/136、Rust exec-server 库测试 82/82、app-server-protocol 库测试 148/148、终端 Desktop 烟雾 15/15。此前文件链接 / xterm / 原服务单测 101/101、终端 URL / 中文打开规则 1/1、文件链接英文和中文高对比度场景各 4/4 的证据继续保留。此前分屏 / resize / 关闭 / 隐藏恢复的证据继续保留。这些只证明覆盖到的 Ash 行为，不是全库、全平台或完整 VS Code 兼容认证。真实 SSH、Windows / Linux runtime、PowerShell / Fish 的运行覆盖仍有缺口，不能直接据此宣称对应平台不能启动终端。
-
-### 关闭保护与窗口 reload 实施切片（2026-10-17）
+## 关闭保护与窗口 reload
 
 关闭链：标题栏 / 标签 / 命令 / 编辑区关闭 → `safeDisposeTerminal` 或标准 editor close handler → Rust `terminal/processInfo.hasChildProcesses` → 原 DialogService。OS 无法确定子进程状态时保守确认，取消不停止原会话；窗口生命周期取消同时恢复原输入焦点。`terminal.integrated.confirmOnKill` 默认为 `editor`，可设 `never` / `editor` / `panel` / `always`；`confirmOnExit` 默认为 `never`，可设 `never` / `always` / `hasChildProcesses`。两项沿用窗口配置作用域；面板关闭保护需设为 `panel` 或 `always`。
 
@@ -69,7 +41,7 @@ Desktop `enablePersistentSessions` 默认开启。标准 Reload Window 命令和
 
 macOS Desktop 烟雾覆盖英文与简体中文：取消分屏关闭、取消窗口关闭；两个长命令与第三窗格待提交输入；拖动后的三窗格宽度；连续命令重载和直接刷新；原 shell / 子进程 PID 不变，全部编号输出无缺口 / 重复；恢复后的 Ctrl+C、后续命令、可访问输出与焦点，以及最终关闭清理。完整终端集 15/15 通过，最终英文 / 中文关闭与 reload 专项 4/4，已有文件草稿的两次 reload 与显式保存回归 1/1。前端定向单测 136/136、exec-server 82/82、app-server-protocol 148/148；中文语言包与构建通过。当前未把这组 macOS 结果替代真实 SSH、Windows / Linux 或应用退出后 revive 的验收。
 
-### 文件链接实施切片（2026-10-17）
+## 文件链接
 
 生产链：终端输出中的路径点击 / 打开检测到的链接命令 → `TerminalLinkContribution` → `terminalLinkParsing.detectLinks` → 原命令行 cwd 与 `IPathService` / `IFileService` → `IEditorService.openEditor` 的资源和 selection。xterm 继续拥有 buffer / cells / markers，贡献只借用它们，不创建第二份屏幕或进程状态。
 
@@ -81,7 +53,7 @@ macOS Desktop 烟雾覆盖英文与简体中文：取消分屏关闭、取消窗
 
 真实 Desktop 场景：英文 [report](../.build/ash-playwright-mcp/evidence/terminal-file-links-2026-10-17T18-06-53-688Z/report.html) 与中文高对比度 [report](../.build/ash-playwright-mcp/evidence/terminal-file-links-zh-2026-10-17T18-07-54-483Z/report.html) 各 **4/4**。截图已目视检查，均为独立合成工作区；保留原始 WebM 和 trace。当前缺少 ffmpeg / ffprobe，未生成字幕视频，也未独立探测视频编码与时长。
 
-## 输出背压实施切片（2026-10-17）
+## 输出背压
 
 唯一执行 owner 仍是 Rust `exec-server`，前端 `TerminalProcessManager` 仍拥有解析等待与消费游标。下一次读取的 `afterSequence` 确认先前屏幕写入已完成；返回一页输出本身不算确认，回读旧游标不能撤回确认。没有新增协议 method、传输 DTO 或另一份屏幕 / 进程状态。
 
@@ -170,18 +142,8 @@ macOS Desktop 烟雾覆盖英文与简体中文：取消分屏关闭、取消窗
 - 日志与请求：TerminalLogService 使用 host logger scope、level/event 与真实 flush；RequestStore 关联 extension profile 的领域 callback/deadline，不复制协议 pending map。超时或撤回取消 provider，迟到 PTY 经原关闭端口回收。
 - Tasks / Debug：共用原 Rust 进程启动、literal shell path quoting 与配置环境；Tasks 消费标准 ANSI 提示格式。客户端 PTY API 和 provider 对象留在其原 owner，Agent 工具调度不进入前端。
 
-## 待接入契约
+## 验证边界
 
-- 完整通用 process property、child-process/backend port 需按实际消费者补齐。`terminal/sendSignal` 已有 Interrupt Active Command → `instance.sendSignal('SIGINT')` → 本地 / 远程适配器 → Rust 的生产调用链；其他信号选择或通用属性仍按实际消费者补齐。
-- 同一 Desktop 窗口 reload 已接入原 PTY attach、VT 屏幕与布局恢复，本地 / 远程共用 30 秒租约。跨窗口转移、应用退出后的 revive 仍需独立实现；Web connection-owned 生命周期保持原约定。
-- 尚无消费者的通用 layout/process details、自动回复和其他公开端口不预建模块。后续新增消费者时先确认唯一 owner 与可观察结果，再补对应契约。
+2026-10-17 macOS 最近一轮关闭／reload 验证：前端定向单测 136 项、Rust exec-server 82 项、app-server-protocol 148 项、Desktop 烟雾 15 项通过。文件链接此前的 101 项单测和英文／中文高对比度各 4 项 Desktop 场景仍按各自源码范围保留。Common 迁移曾通过正常 unit runner 的 137 项测试，以及 Chromium 原终端 3 场景和诊断／编辑器 6 场景。
 
-## 已执行的迁移与验证
-
-平台环境合并算法已回到 `common/environmentVariableCollection.ts`；上游存在的 Workbench `common/terminalEnvironment.ts` 保留，继续拥有启动 override 解析。已确认的重连测试从 `test/electron-main/reconnectableTerminalMainService.test.ts` 迁至 `test/browser/reconnectableTerminalProcessService.test.ts`，旧测试路径退出。
-
-本轮 macOS 验证：正常 `pnpm test:unit` 选择 TerminalService / TerminalBackend / TerminalProcessExtHostProxy / TerminalConfigurationService 四文件，**137 项通过**；Common / Renderer 类型检查通过。正常准备入口通过，中文语言包生成无缺译。
-
-正常浏览器入口的全 fixture 类型检查已通过：diagnostic code fixture 提取领域标记的标量 code，SyntaxToken / folding / symbol / diagnostic fixture 使用原 SyntaxRange 的零基坐标。相关 Chromium **6 场景通过**，覆盖英文/中文诊断编辑、诊断日志、Rust syntax 与 symbol navigation、主题诊断颜色。原终端 Chromium **3 场景通过**：粘贴与原始键盘输入、重新附着只订阅一次、鼠标原始高字节。受影响 TS formatter、文档/NLS JSON Prettier 和 diff whitespace 检查通过。
-
-上述 Common 迁移批次未修改 Rust、协议、平台 Browser adapters 或视觉样式。后续关闭 / reload 切片的 Rust、协议与 macOS Electron 验证见前文；真实 SSH、Windows/Linux PTY 和 PowerShell runtime 尚未验收。
+这些是历史验证结果，不能替代当前 HEAD、真实 SSH、Windows／Linux PTY、PowerShell／Fish 或应用退出后 revive 的验收。尚无消费者的通用 layout/process details、自动回复和其他公开端口不预建模块；后续按真实消费者补齐唯一 owner 与可观察结果。

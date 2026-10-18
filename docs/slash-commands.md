@@ -4,7 +4,7 @@
 > [`ash-slash-commands` README](../crates/slash-commands/README.md) 拥有；通用斜杠启动面板
 > （Slash Launcher）的实现契约由
 > [`ash-slash-launcher` README](../crates/slash-launcher/README.md) 拥有；App Server wire snapshot
-> 由 [`ash-app-server-api.md`](ash-app-server-api.md) 拥有。Slash Command 与
+> 由 [`app-server-api.md`](app-server-api.md) 拥有。Slash Command 与
 > Instructions/Skills/Agents artifact 的关系由
 > [`agent-customizations.md`](agent-customizations.md) 统一定义。
 

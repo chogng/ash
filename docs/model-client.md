@@ -6,7 +6,7 @@
 > - 当前状态：typed unary request/response、安全 retry loop、增量 SSE framer 和 telemetry wrapper
 >   已实现；底层 HTTP port 与 production backend 已在 `ash-http-client`
 > - 底层网络：[`ash-http-client` README](../crates/http-client/README.md)
-> - API 协议层：[`ash-api.md`](ash-api.md)
+> - API 协议层：[`model-api.md`](model-api.md)
 > - Provider runtime：[`model-provider.md`](model-provider.md)
 
 > 标准依据：
@@ -351,7 +351,7 @@ provider.kind = openai | anthropic | custom
 
 禁止把 exact model ID、URL、header value、credential、prompt、tool arguments/output、reasoning、
 raw response body 或 stream payload 放进 operation log/label。底层完整规则以
-[`ash-http-client` README](../crates/http-client/README.md#telemetry) 为准。
+[`ash-http-client` README](../crates/http-client/README.md#遥测) 为准。
 
 ## 8. 错误
 

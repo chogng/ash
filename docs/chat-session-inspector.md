@@ -2,7 +2,7 @@
 
 > 状态：已实现。本文描述 Chat 内 Session Inspector、Thread 目录绑定、Turn ChangeSet 和异步提交的当前契约。
 > Session、Thread、Turn 的基础语义见 [`protocol.md`](protocol.md)，接口见
-> [`ash-app-server-api.md`](ash-app-server-api.md)，Git 行为见 [`git.md`](git.md)。
+> [`app-server-api.md`](app-server-api.md)，Git 行为见 [`git.md`](git.md)。
 
 ## 快速理解
 

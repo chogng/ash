@@ -88,7 +88,7 @@ Thread 订阅建立期间只缓冲该连接的更新，使用连接的通知字�
 交互投递按 Turn 保存版本游标，拒绝旧快照和迟到事件复活已结束的请求；动态工具原执行连接丢失后不重新分配。请求结束即清理投递归属，已提交响应的精确重试由 Core 的持久命令记录确认；未提交的响应仍要求当前连接拥有请求。过期请求不分配给新订阅者，Session 删除时清理投递游标。
 
 环境和目录授权语义见 [`docs/environment-access.md`](../../docs/environment-access.md)，wire contract 见
-[`docs/ash-app-server-api.md`](../../docs/ash-app-server-api.md)。
+[`docs/app-server-api.md`](../../docs/app-server-api.md)。
 
 ```text
 just test ash-app-server
@@ -133,7 +133,7 @@ Windows 的后台进程生命周期集成测试使用 `just test-processes ash-a
 - daemon 的连接和生命周期命令由 [`app-server-daemon`](../app-server-daemon/README.md) 提供。
 - 历史维护入口 `history-identity`、`history-import HOST`、`history-bind SESSION_ID ROOT`
   分别读取接收 Profile 身份、原子导入归档和显式绑定缺失的远端目录；导入及绑定前停止当前 Profile
-  后台。调用顺序与一次性停写约定见 [remote-server](../remote-server/README.md#history-ownership-transfer)。
+  后台。调用顺序与一次性停写约定见 [remote-server](../../remote-server/runtime.md#history-ownership-transfer)。
 
 验证：`just test ash-app-server --test stdio --test websocket --test worker`。
 

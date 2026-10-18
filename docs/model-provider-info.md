@@ -9,7 +9,7 @@
 > - Crate 实现与修改路径：[`crates/model-provider-info/README.md`](../crates/model-provider-info/README.md)
 > - 六家官方接口对照与字段提案：[通用模型声明规范](../crates/model-provider-info/docs/model-template.md)
 > - Provider runtime：[`model-provider.md`](model-provider.md)
-> - API 协议层：[`ash-api.md`](ash-api.md)
+> - API 协议层：[`model-api.md`](model-api.md)
 
 ## 快速理解
 
@@ -154,7 +154,7 @@ definition 声明 `OpenAiResponses`；xAI 的 definition 已使用 Responses HTT
 WebSocket profile，因此保持 `Unavailable`。Generic OpenAI-compatible 也始终默认 unavailable，不能从
 HTTP compatibility 推导 WebSocket。
 
-`RealtimeApiProfile::{Unavailable, OpenAiRealtime}` 独立声明公共 Realtime GA 协议。OpenAI 内置定义启用它，其他定义默认不可用；反序列化旧定义时缺少 `realtimeApiProfile` 也保持不可用。该声明表示协议可用性，不代表账户已经获得服务权限。运行时还需使用对应凭据与模型；Luna 等 ChatGPT 文本订阅不能用于公共 Realtime。实现及验证范围见[端点实现](ash-api.md#46-端点归属与-websocket-实现)。
+`RealtimeApiProfile::{Unavailable, OpenAiRealtime}` 独立声明公共 Realtime GA 协议。OpenAI 内置定义启用它，其他定义默认不可用；反序列化旧定义时缺少 `realtimeApiProfile` 也保持不可用。该声明表示协议可用性，不代表账户已经获得服务权限。运行时还需使用对应凭据与模型；Luna 等 ChatGPT 文本订阅不能用于公共 Realtime。实现及验证范围见[端点实现](model-api.md#46-端点归属与-websocket-实现)。
 
 `TranscriptionApiProfile::{Unavailable, OpenAiRealtime, XaiStt}` 单独声明流式语音转写协议。OpenAI 直接 API 接入使用 Realtime 转写，xAI 直接 API 接入使用 STT WebSocket；ChatGPT 和 Super Grok 订阅接入不提供这项能力。缺少 `transcriptionApiProfile` 的定义默认不可用。语音转写始终使用对应供应商的直接 API 凭据，与当前文字模型接入无关。
 

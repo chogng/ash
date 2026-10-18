@@ -1,7 +1,7 @@
 # `ash-http-client`
 
 > 本 README 解释当前同步 HTTP transport 的真实实现与内部接口。Operation retry、SSE framing 和
-> deadline 设计见 [`docs/ash-client.md`](../../docs/ash-client.md)。
+> deadline 设计见 [`docs/model-client.md`](../../docs/model-client.md)。
 
 `ash-http-client` 是 provider-neutral outbound HTTP substrate。它拥有 reusable backend、
 proxy route、TLS trust/mTLS、redirect、transport timeout、connection pool、bounded unary/streaming

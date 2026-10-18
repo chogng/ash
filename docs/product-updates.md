@@ -1,4 +1,4 @@
-# Ash 产品更新架构
+# 产品更新
 
 > 状态：Target architecture 与当前实现差距。本文拥有 Desktop 与 CLI/TUI的更新责任边界、共享契约、
 > 安装交接和演进顺序；产品线定义见 [`product-lines.md`](product-lines.md)，配置系统见

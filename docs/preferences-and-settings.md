@@ -1,4 +1,4 @@
-# Preferences 与 Settings 的职责
+# Preferences、Settings 与 Configuration
 
 > 适用范围：Ash TypeScript Workbench 的偏好入口和编辑页面。配置数据的存储边界见 [Browser foundation 的配置架构](browser-foundation.md#configuration-architecture)。
 
@@ -8,7 +8,7 @@
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
 | 偏好入口      | [`IPreferencesService`](../src/ash/workbench/services/preferences/common/preferences.ts) / [`PreferencesService`](../src/ash/workbench/services/preferences/browser/preferencesService.ts) 根据调用的方法打开对应资源                 | 绘制设置项或保存配置值         |
 | 图形设置页    | [`SettingsEditor`](../src/ash/workbench/contrib/preferences/browser/settingsEditor.ts) 显示搜索、分类和设置控件；[`settingsLayout.ts`](../src/ash/workbench/contrib/preferences/browser/settingsLayout.ts) 决定已注册设置放在哪个分类 | 保存配置源或管理普通文本模型   |
-| 用户设置 JSON | 普通文本编辑器打开 `ash-settings:/user/settings.json`；[`SettingsFileSystemProvider`](../src/ash/workbench/contrib/preferences/common/settingsFilesystemProvider.ts) 读写当前用户设置源                                               | 在图形设置页内部维护另一份配置 |
+| 用户设置 JSON | 普通文本编辑器打开当前 profile 的真实 `settings.json`；通用 `IFileService` 负责读写                                                                                                                                                   | 在图形设置页内部维护另一份配置 |
 | 键盘快捷键    | [`KeybindingsEditor`](../src/ash/workbench/contrib/preferences/browser/keybindingsEditor.ts) 通过输入取得模型；快捷键资源独立于普通配置键值                                                                                           | 充当设置页的子页面             |
 
 ## 设置内容与渲染
@@ -27,18 +27,18 @@ GitHub 设置页显示复用 Codex 登录和 Ash 的 GitHub 账号，检查指�
 
 ## 打开路径
 
-[`preferencesActions.ts`](../src/ash/workbench/contrib/preferences/browser/preferencesActions.ts) 注册四个打开命令。调用方通过 `IPreferencesService` 选择内容，服务再把相应的 `EditorInput` 交给 Workbench `EditorService`。`openSettings(options?: IOpenSettingsOptions)` 在 Workbench 和 Sessions 接受同一图形打开契约：`query` 指定搜索，`section` 指定 Ash 分类或区段，`target` 只接受 `USER`/`USER_LOCAL`。未知选项、错误参数类型及未实现的配置目标在改变现有页面前被拒绝：
+[`preferencesActions.ts`](../src/ash/workbench/contrib/preferences/browser/preferencesActions.ts) 注册四个打开命令。调用方通过 `IPreferencesService` 选择内容，服务再把相应的 `EditorInput` 交给 Workbench `EditorService`。`openSettings(options?: IOpenSettingsOptions)` 在 Workbench 和 Sessions 接受同一图形打开契约：`query` 指定搜索，`section` 指定 Ash 分类或区段，`jsonEditor` 选择 JSONC，`target` 只接受 `USER`/`USER_LOCAL`。未知选项、错误参数类型及未实现的配置目标在改变现有页面前被拒绝：
 
-| 调用                                  | 打开的内容                                                  | 呈现位置     |
-| ------------------------------------- | ----------------------------------------------------------- | ------------ |
-| `openSettings()`                      | `SettingsEditor`，由 `preferences.contribution.ts` 直接注册 | 模态编辑器组 |
-| `openUserSettings()`                  | 当前用户设置的 JSONC 资源，由普通文本编辑器处理             | 普通编辑器组 |
-| `openGlobalKeybindingSettings(false)` | `KeybindingsEditor`，由 `preferences.contribution.ts` 注册  | 普通编辑器组 |
-| `openGlobalKeybindingSettings(true)`  | 当前 profile 的 `keybindings.json` JSONC 资源               | 普通编辑器组 |
+| 调用                                     | 打开的内容                                                  | 呈现位置     |
+| ---------------------------------------- | ----------------------------------------------------------- | ------------ |
+| `openSettings()`                         | `SettingsEditor`，由 `preferences.contribution.ts` 直接注册 | 模态编辑器组 |
+| `openUserSettings({ jsonEditor: true })` | 当前用户设置的 JSONC 资源，由普通文本编辑器处理             | 普通编辑器组 |
+| `openGlobalKeybindingSettings(false)`    | `KeybindingsEditor`，由 `preferences.contribution.ts` 注册  | 普通编辑器组 |
+| `openGlobalKeybindingSettings(true)`     | 当前 profile 的 `keybindings.json` JSONC 资源               | 普通编辑器组 |
 
-`workbench.action.openSettings` 命令接受查询字符串或上述选项对象，例如 `"editor.fontFamily"` 或 `{ "query": "@modified" }`；现有区段入口使用 `{ section: "models" }`。Workbench Preferences 服务持有固定资源输入；当前 pane 注册打开选项委托，清空输入或销毁时释放委托。查询直接进入该页面的搜索框，复用已打开页面时更新筛选并聚焦搜索；显式空查询清除筛选。未传 query 时保留页面原有搜索状态，区段定位仍清除筛选并显示对应区段。普通搜索同时匹配设置 ID 和说明，可继续编辑结果并沿原有配置链保存。关闭后搜索值随页面释放，配置值按既有持久化资源恢复。JSONC 的键定位继续使用 `openUserSettings({ revealSetting: ... })`，不把图形查询作为 JSON 写入。
+`workbench.action.openSettings` 命令接受查询字符串或上述选项对象，例如 `"editor.fontFamily"` 或 `{ "query": "@modified" }`；现有区段入口使用 `{ section: "models" }`。Workbench Preferences 服务持有固定资源输入；当前 pane 注册打开选项委托，清空输入或销毁时释放委托。查询直接进入该页面的搜索框，复用已打开页面时更新筛选并聚焦搜索；显式空查询清除筛选。未传 query 时保留页面原有搜索状态，区段定位仍清除筛选并显示对应区段。普通搜索同时匹配设置 ID 和说明，可继续编辑结果并沿原有配置链保存。关闭后搜索值随页面释放，配置值按既有持久化资源恢复。JSONC 的键定位继续使用 `openUserSettings({ jsonEditor: true, revealSetting: ... })`，不把图形查询作为 JSON 写入。
 
-图形设置页从 Configuration Registry 取得可编辑设置，经 `SettingsEditorModel` 和 `settingsLayout.ts` 组成页面，再由设置控件读写配置服务。JSON 路径经 `SettingsFileSystemProvider` 读写同一份用户设置源。两种设置入口共享配置数据，不共享页面容器。
+图形设置页从 Configuration Registry 取得可编辑设置，经 `SettingsEditorModel` 和 `settingsLayout.ts` 组成页面，再由设置控件读写配置服务。JSON 路径直接经通用文件服务读写同一 profile 的设置文件。两种设置入口共享配置数据，不共享页面容器。
 
 “常规 → 显示语言”提供界面语言下拉框，列出内置语言和已安装语言包。设置页与“配置显示语言”命令共用语言服务，保存当前用户的 `workbench.locale`；重置设置会清除语言偏好。语言包列表变化时，下拉选项同步更新。设置搜索支持 `language`、`locale` 和“语言”。
 
@@ -50,9 +50,9 @@ Workbench 和 Sessions 图形设置共用 `@modified` 筛选：输入该标记�
 
 配置注册表驱动、没有自有 binding 的设置行显示“已配置”标记，判断依据是当前本地用户覆盖是否存在；显式保存默认值仍显示标记，语言覆盖块不会标记基础设置。设置行通过单一无障碍说明提供同样信息，标记不进入 Tab 顺序。鼠标悬停说明复用现有 Hover 控件与该设置页的 ContextView，按 `workbench.hover.delay` 的当前值延迟显示；移除覆盖或销毁设置页会关闭悬停。外部配置保存立即更新状态；重置失败保留实际已保存的标记。样式复用现有主题颜色，不新增配置状态 owner。
 
-配置注册表驱动的设置项菜单提供“在 JSON 中编辑”，复杂键值控件同时提供直接按钮。设置页调用 `openUserSettings({ target: USER_LOCAL, revealSetting: { key, edit: true } })`。Preferences 服务取得编辑器共享的文件模型，在现有 JSONC 中定位顶层键；缺失键以注册默认值插入未保存的模型，保留注释、尾随逗号和其他键。普通编辑器打开固定标签，选择对应值并取得焦点。已有脏模型复用，插入支持撤销，不在打开入口中保存。使用自有 binding 的设置不提供此入口。
+配置注册表驱动的设置项菜单提供“在 JSON 中编辑”，复杂键值控件同时提供直接按钮。设置页调用 `openUserSettings({ jsonEditor: true, target: USER_LOCAL, revealSetting: { key, edit: true } })`。Preferences 服务取得编辑器共享的文件模型，在现有 JSONC 中定位顶层键；缺失键以注册默认值插入未保存的模型，保留注释、尾随逗号和其他键。普通编辑器打开固定标签，选择对应值并取得焦点。已有脏模型复用，插入支持撤销，不在打开入口中保存。使用自有 binding 的设置不提供此入口。
 
-保存沿普通文本编辑器 → TextFileService → SettingsFileSystemProvider → ConfigurationResourceService → 配置 API 写入同一份用户配置。配置变更事件驱动主题和编辑器立即刷新；保存使用模型读取时的修订号，真实外部修改会进入现有保存冲突处理。无效 JSONC 或注册值被拒绝，已生效配置保持原值，未保存文本仍留在编辑器。当前只支持 `USER` 与 `USER_LOCAL`，工作区和远程用户目标尚未实现。Electron 持久化到当前 profile 的 `settings.json`，Web 持久化到现有 IndexedDB 配置存储。
+保存沿普通文本编辑器 → TextFileService／文本模型 save participant → 通用 `IFileService` → Disk／IndexedDB provider 写入当前 profile 的 `settings.json`。注册值 validator 属于 Preferences，通用文件 provider 不解释配置语义；非法值保留脏草稿和最后有效配置。文件 revision 与工作副本负责冲突和脏文件保护。配置服务的 Workspace／Folder 读写已接入，图形 Preferences 的打开目标仍只接受 `USER`／`USER_LOCAL`；两者是不同层的支持范围。Web 使用通用 IndexedDB 文件 provider，旧配置数据库只做一次性迁移。
 
 代码名也按职责区分：`preferencesActions.ts`、`PreferencesService` 负责跨页面入口；`settingsEditorInput.ts`、`settingsModels.ts`、`settingsSearch.ts`、`settingsWidgets.ts` 和 `settingsRenderers.ts` 只处理设置内容。快捷键编辑器保留独立名称和模型。
 
@@ -93,41 +93,53 @@ API key 输入框失焦即保存，清空即移除；成功保存不弹通知，
 
 `Add model` 添加 Model ID、上下文 token 数、可选上游 Model ID 与 1M 预设。上游 ID 映射只解析一次，由 Rust 在真正发送请求时使用；配置、开关和上下文绑定界面 ID。行内可编辑上下文和映射，也可删除手动声明；删除发现模型的手动上下文声明后，端点模型仍在表格中并关闭启用开关。Rust 的 models-manager 拥有发现与缓存，model-provider 拥有 HTTP 发现、分页和探测，成功发现的自定义模型进入聊天选择器。ChatService 只保留聊天、线程和 Advisor 配置操作。
 
-## 与 VS Code 的对照与待处理项
+## Configuration 的存储与配置层
 
-2026-10-07 对照本地 `../vscode` 的 `e7bc1cca4bc` 检查了 `workbench/services/preferences` 和 `workbench/contrib/preferences` 的生产文件、注册入口、配置 owner 和相关测试。以下是实现现状与差异，不是批量新增文件或照搬上游实现的计划。
+UI 的 `settings.json` 由 TypeScript 配置系统解释；Rust `config.toml` 由后端配置领域解释，其宿主编辑入口不属于通用设置模型。设置读写沿 profile 的真实资源 → 通用文件 provider → 文件失效通知 → `UserSettings`／不可变 `ConfigurationModel` → Workbench、Sessions 和 Main 消费。配置专用 IPC、revision envelope、虚拟设置 provider 和浏览器旧持久化链已退出生产装配。
 
-| 范围     | VS Code                                                                                                                                            | Ash 当前状态与影响                                                                                                                                                                                                                                                                    |
-| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 页面组织 | `openPreferences()` 打开已注册的 `PreferencesEditor`；pane registry 负责页签、共享搜索与子页面生命周期。`openSettings(options)` 另有图形/JSON 路径 | `SettingsEditor` 直接打开到模态组。没有对应容器和 pane registry；这是实际差异，不能断言上游容器没有职责或必然多余                                                                                                                                                                     |
-| 打开契约 | `IOpenSettingsOptions` 包含配置目标、query、JSON 选择、folder URI、焦点与编辑器组等选项                                                            | `openSettings(options)` 支持 query、区段及本地用户目标；`openUserSettings()` 支持用户目标和顶层键定位。JSON、folder、焦点模式及编辑器组选项仍未覆盖                                                                                                                                   |
-| 配置目标 | Application、Local User、Remote User、Workspace、Folder 及语言设置入口                                                                             | 当前持久化写入限于 `USER`/`USER_LOCAL`；用户 JSONC 支持合法的语言覆盖块。资源级写入、远程和工作区目标未实现，不能把枚举或空配置层当作能力完成                                                                                                                                         |
-| 设置目录 | 配置 schema 进入设置模型；模型支持变更事件，渲染根据目标与配置状态更新                                                                             | `DefaultSettings` 收集产品元数据及扩展标准 schema；注册表更新会刷新设置页。每个扩展有独立分类，复杂值通过共享 JSONC 编辑器修改；移除扩展保留已保存值。                                                                                                                                |
-| 搜索     | 支持配置状态、语言、扩展等语义过滤                                                                                                                 | 当前 `SettingsSearchQuery` 支持设置 ID、普通文本、`@id:` 和 `@modified`；`@lang:` 等仍会被当作普通文本。不能声明支持上游全部过滤条件                                                                                                                                                  |
-| 领域内容 | 配置系统保持配置语义，各领域保留业务状态                                                                                                           | GitHub 使用领域数据模型和共享 `SettingsSectionRenderer`；Hooks 用共享 renderer 提供管理入口，事件与声明由 Chat 的 Agent Customizations 编辑器呈现。Models、Skills 等仍以 `SettingsContent` 接入控件。Workbench 与 Sessions 共享部分 renderer 和内容实现，但 Sessions 仍手工组织设置项 |
+Main、听写和计量网络消费者读取 `IConfigurationService`。Preferences 首次打开缺失的设置文件时，以不覆盖方式创建普通 JSONC，竞争创建保留另一窗口内容。JSON 编辑取得编辑器共享的文件模型；定位或插入注册默认值只修改未保存模型，支持撤销，不在打开入口保存。外部非法 JSONC 保留最后有效快照；内容 revision 归文件服务，配置层不保存另一份文件版本。
 
-### 已修复缺陷
+| 负责方                                                        | 职责                                                                          |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| platform `configurationModels.ts`／`ConfigurationModelParser` | 值树、语言覆盖、模型合并与不可变快照；Workbench 复用 `parseRaw`               |
+| platform `configurationService.ts`／`UserSettings`            | 单资源读取、文件失效和父目录提示；Windows 比较按文件系统大小写规则            |
+| Workbench `configurationService.ts`                           | 组合各配置层，resource／folder 解析、inspection、keys、写入目标与资源定向事件 |
+| Workbench `configuration.ts`                                  | Workspace／Folder 的 JSONC 源文本、watch、条件写入和切换生命周期              |
+| Sessions `configurationService.ts`                            | 消费动态 registry 的窗口默认值和只读规则，不缓存第二套元数据                  |
+| profile／通用文件 provider／工作副本                          | 设置资源身份、存储、revision、脏模型、save／revert 与外部冲突                 |
 
-- **显式默认值可以从图形界面重置。** 配置 binding 通过 `inspect().userLocalValue` 判断是否存在用户覆盖；即使保存的标量或结构化值等于默认值，Reset 仍可用，执行后删除对应键并保留 JSONC 注释和其他设置。`SettingValueBinding.isDefault()` 是可选的，自有领域 binding 可提供自己的默认状态判断；未提供时保留原有值比较语义。显示语言与更新策略的配置 binding 也使用显式覆盖判断。该判断对应当前实际支持的用户配置目标，新增其他目标时须同步读取和重置目标。
-- **设置操作与状态文案已接入 NLS。** More actions、Reset、Copy Setting ID、搜索筛选菜单、保存状态及其无障碍标签、数字范围校验和操作失败的兜底文案使用 `ash.settings` 文案。中文回归覆盖菜单、保存中状态、输入禁用与恢复、校验反馈；后端或用户提供的错误信息保持原文。
+多根 Workspace 读工作区文件的 `settings` 对象；Folder 读所属根的 `.vscode/settings.json`；单目录窗口把后者解释为 Workspace 层。默认 → 用户 → Workspace → Folder 的普通值先组合，再应用语言覆盖，Policy 最后覆盖。单语言覆盖优先于组合语言覆盖；对象按成员合并，数组整体替换。保存的旧事件和快照不随后续更新改变。
 
-### 文件职责的对应关系
+Workspace 排除 application／machine 设置，Folder 进一步排除 window 设置；Sessions 固定值在用户、Workspace、Folder 和语言覆盖中均被过滤。动态贡献的注册、撤回和重注册即时重建默认值与只读规则。写入只修改目标属性，保留其他字段和注释；无显式目标时选已有最高层，删除时遍历已有层。脏工作副本先经原 owner save／revert；文件 revision 拒绝并发冲突。切换工作区立即撤回旧 watcher 和写入信号，迟到读取不能进入新选择。
 
-| 当前 Ash 文件                                                                                        | VS Code 对应职责                                                                    | 审查结论                                                                                           |
-| ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `services/preferences/common/settingsEditorInput.ts`、`settingsModels.ts`                            | `preferencesEditorInput.ts`、`preferencesModels.ts`                                 | 路径与公开契约存在差异；不能把所有差异都解释成内容命名选择                                         |
-| `contrib/preferences/browser/settingsEditor.ts`                                                      | `settingsEditor2.ts`；另有 `preferencesEditor.ts` 与 `preferencesEditorRegistry.ts` | 图形设置和偏好容器分别核对实际调用链，不能只补同名外壳                                             |
-| `settingsRenderers.ts`、`settingsSearch.ts`                                                          | `preferencesRenderers.ts`、`preferencesSearch.ts`                                   | 渲染与搜索能力尚未完全对齐                                                                         |
-| `keybindingsEditor.ts`、`media/keybindingsEditor.css`、`preferences.contribution.ts` 的快捷键注册    | 同路径 GUI 编辑器、样式和 `preferences.contribution.ts` 注册                        | GUI 注册已合并；上游 `keybindingsEditorContribution.ts` 属于 JSON 编辑器扩展，不是此注册的对应文件 |
-| `services/preferences/browser/keybindingsEditorInput.ts`、`keybindingsEditorModel.ts`                | 同路径 `KeybindingsEditorInput`、`KeybindingsEditorModel`                           | 输入持有模型；pane 借用模型，持久化仍由既有快捷键编辑服务负责                                      |
-| `settingsSectionRenderer.ts`、`networkSettingsContent.ts`、`agentCapabilitiesSettings.ts` 及自有样式 | 无同路径文件                                                                        | Ash 特有的数据呈现与管理内容；本次仅记录，不改名、移动或删除                                       |
+## Policy 来源
 
-配置源仍由配置 owner 管理。对齐页面与 API 时，不应将密钥、账号授权、模型发现、Hook 执行或临时 UI 状态改存为普通设置，也不应建立另一套持久化服务。
+Policy 的定义注册、值校验、最高优先级、写入限制和撤回均进入现有配置链。非法更新保留同一 setting／policy 身份的上次有效值；明确删除才撤回。系统来源和窗口组合来源分别归各自作用域的一个 policy service。
 
-扩展设置接入保留已确认的 Ash 图形设置职责：`settingsEditor.ts` 继续拥有页面，`settingsModels.ts` 继续将注册元数据转换成设置项；没有新增生产文件或并行配置 owner。对应上游的 `configurationRegistry.ts` 保留 `IConfigurationNode.extensionInfo` 与已注册项 `source` 的扩展身份语义；`settingsLayout.ts`、`tocTree.ts`、`settingsWidgets.ts` 在现有 Preferences 文件中承接动态分类与共用控件。扩展名称取本地化后的 manifest，配置值仍由原配置服务或扩展 binding 持有。
+| 系统    | Desktop Main 的来源                                   |
+| ------- | ----------------------------------------------------- |
+| Windows | `HKLM\SOFTWARE\Policies\Ash`，DWORD 0／1 对应 boolean |
+| macOS   | `/Library/Managed Preferences/com.ash.desktop.plist`  |
+| Linux   | `/etc/ash/policies.json`                              |
 
-### 本次验证范围
+Windows／macOS 的进程级 `SystemPolicyService` 每 2 秒检查变化，命令有 timeout、输出上限、退出取消及隐藏窗口；Linux 走文件 watcher。Workbench／Sessions 通过只读 `PolicyChannelClient` 消费 Main 的值，IPC 不开放任意路径或策略写入。策略定义不能在窗口间改变既有类型。`DesktopUpdateChannel` 映射 `update.policy` 的 `latest`／`stable`／`never`。
 
-初次审查时，27 个 Preferences 定向单元测试通过，并以实际 `WorkbenchConfigurationService → configurationSettingBinding → SettingModel` 链路复现了显式默认值的 Reset 缺陷。[Settings JSON Playwright 测试](../test/smoke/areas/windows/settings-json.spec.ts) 的 JSON 定位、保存与中文标签流程，以及无效值与保存冲突流程，在 Browser UI 和 Electron UI 各通过一次；当时 Web 和 Desktop 构建成功。
+账户来源沿 primary grant → `IGitHubService.readManagedSettings(accountId)` → 可取消 App Server 请求 → `github/account/managedSettings` → 该账户的 GitHub client → `/copilot_internal/managed_settings`。协议只收账户及 operation ID，不收凭据或自定义 URL。HTTP 404／空对象撤回；权限、网络和非法输入保留同一账户的最后有效快照。登录切换取消旧请求，退出清空，迟到结果不能恢复旧账户策略；当前账户每分钟刷新。
 
-修复后，Preferences 与 Sessions 配置相关的 34 个定向单元测试通过，新增覆盖显式标量和结构化默认值的重置、JSONC 保留、自有 binding、中文操作和保存状态。新增英文与中文 Browser UI 回归通过，验证重置菜单资格、键盘操作、焦点恢复、筛选菜单和 JSONC 保留；使用开发服务器运行当前源码。Renderer 类型检查和本地化完整性检查通过。当前 Desktop 构建被工作区并行协议改动产生的 `app-server-protocol` 包阻塞：500135 字节超过 500000 字节上限，因此新增 Electron 回归尚未运行。以上验证不表示已经完成上游运行时验证或全部能力对齐。
+`AccountPolicyService` 只解释 registry 声明的映射。`ChatDefaultModel` 将顶层 `model` 或旧 `permissions.model` 映射到 `chat.defaultModel`；顶层非空字符串优先，空白视为缺省。实际选择仍由模型目录和聊天偏好服务负责。`ChatAIDisabled` 仅为系统策略，不伪造 Copilot 字段。`MultiplexPolicyService` 组合系统优先、账户其次；映射函数留在 renderer，Main 只传类型声明和策略值。
+
+## 页面与公开契约的边界
+
+Ash 当前 `SettingsEditor` 直接在模态组打开，没有把上游 Preferences 容器、pane registry 和全部公开 API 视为已实现。Preferences 支持 query／section、本地用户目标、JSON 选择和键定位；folder、焦点模式、编辑器组选项等仍需实际调用链。配置服务已支持 Workspace／Folder 不等于这些图形入口已齐全。
+
+`SettingsSearchQuery` 支持普通文本、ID、`@id:` 和 `@modified`；其他过滤条件不宣称兼容。显式保存默认标量或对象仍是用户覆盖，Reset 删除对应键并保留其他 JSONC；自有 binding 可提供 `isDefault()`。设置操作、状态、无障碍标签和失败文案使用 NLS，英文／中文已有回归。
+
+`DefaultSettings` 收集产品和扩展 schema；registry 变化更新目录，扩展名称来自本地化 manifest。移除扩展保留已保存值。图形页、目录、控件继续归 Preferences；密钥、账号授权、模型发现和 Hook 执行保留各自领域 owner。剩余任务见 [Configuration / Preferences TODO](../TODO.md#configuration--preferences--todo)。
+
+## 已有验证与限制
+
+配置文件迁移曾覆盖 44 个单测文件约 977 项；最终提交前定向运行覆盖 159 个不同用例。旧链清理后模型、文件 IPC、Sessions、Settings JSONC 和层级边界 47 项通过；真实 Chromium 的旧 IndexedDB 迁移 6 项通过，覆盖冲突、非法输入、中断重试及无旧数据。Main、Renderer、生成协议、unit／browser／automation 源码类型检查及前端构建按原批次通过。英文／中文配置及本地化初始化有测试覆盖。
+
+Workspace／Folder／Policy 的定向 74 项覆盖 precedence、inspection、作用域、JSONC、切换与迟到读取、冲突和脏保护。系统与账户来源 12 项、GitHub HTTP 2 项、账户只读／取消协议 1 项通过，包括真实 Windows 固定路径只读探测。macOS／Linux 真实 OS 来源和真实登录账户尚未验收。
+
+端到端 smoke 的辅助 live 选区位置和 Appearance `ash-dark` 选项错误仍未闭合，影响外部更新、非法保存、脏草稿与冲突场景的最终 diagnostics。准备阶段还曾有 App Server 文件访问 API 编译阻塞；这些不能记为通过，也不能由更早的 Settings JSON Browser／Electron smoke 通过记录代替。后续以 TODO 的复核和完整重跑为准，本文不声称当前 HEAD 或全部上游契约通过。

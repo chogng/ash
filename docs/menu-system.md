@@ -4,7 +4,7 @@
 > Toolbar 组合关系的 canonical 文档。
 > Renderer 组件和 CSS 状态所有权以 [`ui-styling-ownership.md`](ui-styling-ownership.md)
 > 为准；Desktop 的进程与产品边界以
-> [`ash-desktop-architecture.md`](ash-desktop-architecture.md) 为准。
+> [`desktop-architecture.md`](desktop-architecture.md) 为准。
 
 ## 快速理解
 

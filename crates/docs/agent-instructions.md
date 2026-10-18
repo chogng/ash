@@ -410,7 +410,7 @@ App Server 默认使用 `ModelInstructionCatalog::built_in()`。`AppServer::with
 
 App Server 完整测试中的 `local::tests::custom_provider_catalog_fetch_is_explicit_and_feeds_model_selection` 在“刷新前不存在该 provider 条目”的断言失败，单独重跑仍失败。本轮未修改 `local.rs` 的模型目录读取实现或该测试，不通过更改其断言来掩盖结果。
 
-后续核对确认该断言已过时：[供应商配置规则](../../docs/ash-app-server-api.md)明确规定，自定义连接未填写模型 ID 时使用对应 API 类型的内置模型，远端刷新不自动改写配置模型选择。该测试已更新为 `custom_provider_discovery_preserves_configured_model_choices`，检查刷新成功、空响应、认证失败及恢复时完整列表与配置快照均保持不变，并验证显式保存远端模型 ID 后列表才切换。以上历史测试结果保留。
+后续核对确认该断言已过时：[供应商配置规则](../../docs/app-server-api.md)明确规定，自定义连接未填写模型 ID 时使用对应 API 类型的内置模型，远端刷新不自动改写配置模型选择。该测试已更新为 `custom_provider_discovery_preserves_configured_model_choices`，检查刷新成功、空响应、认证失败及恢复时完整列表与配置快照均保持不变，并验证显式保存远端模型 ID 后列表才切换。以上历史测试结果保留。
 
 桌面完整类型检查的剩余错误涉及聊天错误码、`referenceCost`、`threadRestored`，以及调试模块对编辑器的失效导入。本轮只更新会话适配层的 Default 参数，没有宣称整个桌面构建或 Playwright 场景已通过。
 

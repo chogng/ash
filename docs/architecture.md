@@ -84,14 +84,14 @@ flowchart TD
 
 ### 3.1 对话、上下文与运行时
 
-| 系统                   | 回答的核心问题                                           | 应当拥有                                                             | 重点审计边界                                                                      | 权威文档                                                                                                                                                                     |
-| ---------------------- | -------------------------------------------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Project 与工作组织系统 | 哪些本地/远程根和 Session 需要长期组织在一起？           | Project metadata、长期根目录表以及对 Session 的弱关联                | Project、Workspace、Environment 和 Grant 是否被误建成同一对象                     | [`domain-model.md`](domain-model.md)                                                                                                                                         |
-| Agent Team 系统        | 哪些 Agent 身份作为成员跨任务协作？                      | Team 成员关系、协调者、讨论及任务关联；当前为目标设计                | Team 是否复制 Session 执行状态或把角色定义当成成员身份                            | [Agent Team](../crates/docs/agent-teams.md)                                                                                                                                  |
-| 会话系统               | 一次工作如何被识别、恢复和持续保存？                     | Session、Thread、Turn、事件顺序与持久化事务                          | Session、Thread、Store 与 rollout 是否存在重复权威                                | [`core.md`](core.md)、[`protocol.md`](protocol.md)                                                                                                                           |
-| 上下文系统             | 当前模型究竟能看到什么？                                 | 上下文选择、预算、压缩、恢复和每个 Thread 的上下文状态               | 持久事实、模型输入和 UI 展示状态是否混为一体                                      | [`core-context.md`](core-context.md)                                                                                                                                         |
-| Agent 运行时           | 模型输出如何推进一次 Turn？                              | Agent 生命周期、模型回合、工具回合、取消与同 Session Agent tree 协调 | 单 Agent 执行、子 Agent tree 和持久化是否混为一个协调器                           | [`agent-harness-design.md`](agent-harness-design.md)、[`core-multi-agent.md`](core-multi-agent.md)、[`ash-agent-runtime-architecture.md`](ash-agent-runtime-architecture.md) |
-| Agent 自定义系统       | Agent 长期遵循什么、如何复用工作方法、使用哪种执行配置？ | Instructions、Skills、Agents、`.ash` 原生命名空间与外部导入边界      | Prompt/Task/Slash Command 是否被误建模为 artifact，外部格式是否污染原生 authority | [`agent-customizations.md`](agent-customizations.md)                                                                                                                         |
+| 系统                   | 回答的核心问题                                           | 应当拥有                                                             | 重点审计边界                                                                      | 权威文档                                                                                                                     |
+| ---------------------- | -------------------------------------------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Project 与工作组织系统 | 哪些本地/远程根和 Session 需要长期组织在一起？           | Project metadata、长期根目录表以及对 Session 的弱关联                | Project、Workspace、Environment 和 Grant 是否被误建成同一对象                     | [`domain-model.md`](domain-model.md)                                                                                         |
+| Agent Team 系统        | 哪些 Agent 身份作为成员跨任务协作？                      | Team 成员关系、协调者、讨论及任务关联；当前为目标设计                | Team 是否复制 Session 执行状态或把角色定义当成成员身份                            | [Agent Team](../crates/docs/agent-teams.md)                                                                                  |
+| 会话系统               | 一次工作如何被识别、恢复和持续保存？                     | Session、Thread、Turn、事件顺序与持久化事务                          | Session、Thread、Store 与 rollout 是否存在重复权威                                | [`core.md`](core.md)、[`protocol.md`](protocol.md)                                                                           |
+| 上下文系统             | 当前模型究竟能看到什么？                                 | 上下文选择、预算、压缩、恢复和每个 Thread 的上下文状态               | 持久事实、模型输入和 UI 展示状态是否混为一体                                      | [`core-context.md`](core-context.md)                                                                                         |
+| Agent 运行时           | 模型输出如何推进一次 Turn？                              | Agent 生命周期、模型回合、工具回合、取消与同 Session Agent tree 协调 | 单 Agent 执行、子 Agent tree 和持久化是否混为一个协调器                           | [`agent-harness.md`](agent-harness.md)、[`core-multi-agent.md`](core-multi-agent.md)、[`agent-runtime.md`](agent-runtime.md) |
+| Agent 自定义系统       | Agent 长期遵循什么、如何复用工作方法、使用哪种执行配置？ | Instructions、Skills、Agents、`.ash` 原生命名空间与外部导入边界      | Prompt/Task/Slash Command 是否被误建模为 artifact，外部格式是否污染原生 authority | [`agent-customizations.md`](agent-customizations.md)                                                                         |
 
 ### 3.2 能力、决策与执行
 
@@ -114,8 +114,8 @@ flowchart TD
 | ----------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 外部扩展系统      | TS/JS 与 Rust 能力如何被激活和撤销？ | `external-ext` 接入与监管、语言适配、统一 Host RPC、标准 TS/JS API 适配与 Rust 作者 SDK；各来源通过产品侧 adapter 接入 | 来源安装与运行授权是否分开，SDK 是否独立于产品实现           | [`editor-extensions.md`](editor-extensions.md)                                                                                                                  |
 | Plugin 与能力分发 | 集成 bundle 如何安装并交给各领域？   | Core Plugins 管理现有 Plugin package lifecycle；Plugin 定义 bundle，Connector 管账号，MCP 管协议，Skill 管指令         | 包状态是否唯一，来源是否侵入各领域运行实现                   | [`core-plugins.md`](../crates/docs/core-plugins.md)、[`plugins.md`](plugins.md)、[`connectors.md`](connectors.md)、[`skills.md`](skills.md)、[`mcp.md`](mcp.md) |
-| App Server 与协议 | 产品入口如何调用同一套权威能力？     | 唯一外部进入/输出边界、对外方法、DTO、事件、订阅、版本和客户端契约                                                     | 客户端是否绕过门禁，或协议层是否偷偷拥有产品决定或持久化规则 | [`ash-app-server-api.md`](ash-app-server-api.md)、[`app-server-client.md`](app-server-client.md)、[`protocol.md`](protocol.md)                                  |
-| 产品界面          | 用户如何观察和控制这些系统？         | Desktop、CLI、TUI 的交互、呈现和平台适配                                                                               | 界面是否复制 Core 状态或在本地发明业务规则                   | [`ash-desktop-architecture.md`](ash-desktop-architecture.md)、[`ash-code`](../crates/tui/README.md)                                                             |
+| App Server 与协议 | 产品入口如何调用同一套权威能力？     | 唯一外部进入/输出边界、对外方法、DTO、事件、订阅、版本和客户端契约                                                     | 客户端是否绕过门禁，或协议层是否偷偷拥有产品决定或持久化规则 | [`app-server-api.md`](app-server-api.md)、[`app-server-client.md`](app-server-client.md)、[`protocol.md`](protocol.md)                                          |
+| 产品界面          | 用户如何观察和控制这些系统？         | Desktop、CLI、TUI 的交互、呈现和平台适配                                                                               | 界面是否复制 Core 状态或在本地发明业务规则                   | [`desktop-architecture.md`](desktop-architecture.md)、[`ash-code`](../crates/tui/README.md)                                                                     |
 
 系统名称不是按照 crate 数量划分的。一个系统可以由多个 crate 实现，一个 crate 也可能只是某个
 系统的适配器。真正的边界由权威状态、最终决定、执行责任和失败语义决定。
@@ -184,7 +184,7 @@ flowchart TD
 
 当前已经具备用于继续审计和演进的基础，但“存在实现”不等于“边界已经验证清楚”。Agent 执行
 面的逐组件状态总账（已实现 / 部分 / 仅设计 / 推迟）与分阶段实施计划由
-[`ash-agent-runtime-architecture.md`](ash-agent-runtime-architecture.md#2-组件状态总账)
+[`agent-runtime.md`](agent-runtime.md#2-组件状态总账)
 权威维护：
 
 - **对话与持久化**：Session/Thread 归约器、Store、逻辑序列、写入租约、恢复事务和 rollout；

@@ -7,9 +7,9 @@
 >   unary codec、原生 HTTP/SSE invocation、canonical delta 与 terminal response assembly；独立
 >   Responses WebSocket、公共 Realtime GA、OpenAI 与 xAI 听写均有协议会话和显式 runtime 入口
 > - Crate codec 与 decoder 实现：[`crates/ash-api/README.md`](../crates/ash-api/README.md)
-> - Canonical contract：[`protocol.md`](protocol.md#6-provider-independent-model-contract)
+> - Canonical contract：[Canonical 契约](#7-canonical-契约)
 > - Provider runtime：[`model-provider.md`](model-provider.md)
-> - Operation client：[`ash-client.md`](ash-client.md)
+> - Operation client：[`model-client.md`](model-client.md)
 > - 底层网络：[`ash-http-client` README](../crates/http-client/README.md)
 > - WebSocket transport：[`ash-websocket-client` README](../crates/websocket-client/README.md)
 > - Provider credential：[`model-provider.md`](model-provider.md#6-供应商凭据边界)

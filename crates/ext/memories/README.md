@@ -9,6 +9,6 @@
 - `MemoryEventSink` 只发布已提交写入的范围与 catalog revision；重放不重复通知。
 - `MemoryScopeProvider` 由宿主实现，每次根据可信 Session、Thread 身份解析当前可访问范围；工具参数不能指定任务身份或扩大范围。
 - 搜索与引用读取都要求对应作用域开启 Memory 读取；默认关闭，撤销、删除和版本冲突在后续读取中生效。
-- `memories-save` 将 Turn 取消令牌传到存储写事务；取消截止点与已提交结果按 [Memory API](../../../docs/ash-app-server-api.md#memory) 处理。
+- `memories-save` 将 Turn 取消令牌传到存储写事务；取消截止点与已提交结果按 [Memory API](../../../docs/app-server-api.md#memory) 处理。
 - 依赖 `memories` 的领域契约与 `extension-api` 的扩展契约；不依赖 Core、App Server、产品 UI 或存储实现。SQLite 仅用于集成测试。
-- 工具参数和读取边界见 [Memory API](../../../docs/ash-app-server-api.md#memory)；验证使用 `just test ash-memories-extension`。
+- 工具参数和读取边界见 [Memory API](../../../docs/app-server-api.md#memory)；验证使用 `just test ash-memories-extension`。

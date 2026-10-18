@@ -65,7 +65,7 @@ mode = "date" # off / date / time；默认 date
 - `timeZone` 是明确的 IANA 标识，非法值拒绝写入；不把非法或不可用的时区替换成 UTC。
 - 配置时区标记为 `configured`；未配置时读取宿主时区并标记为 `host`。宿主可能是远端机器，不能声称它一定是用户所在地；需要用户时区时显式配置。
 - 默认 `date` 延续原来的日期环境能力并修复跨日不刷新问题。精确钟点需显式开启 `time`；这不是自然语言需求分类器。
-- 配置变更沿既有 Config revision/generation 生效于后续采样，不改变已保存输入的参照。`config/read` 与 `config/update` 的完整字段契约见 [App Server 配置接口](../../docs/ash-app-server-api.md#时间上下文配置)。
+- 配置变更沿既有 Config revision/generation 生效于后续采样，不改变已保存输入的参照。`config/read` 与 `config/update` 的完整字段契约见 [App Server 配置接口](../../docs/app-server-api.md#时间上下文配置)。
 
 ### 输入参照和当前快照
 

@@ -12,6 +12,6 @@ links 和 voice 仍属于部分实现，不能代表上游完整 provider 或 AP
 
 新增贡献之前必须确定下层公共能力、状态 owner 和释放边界。命令与配置由各自 `.contribution.ts` 注册；界面消费前端事件和类型，不导入 Rust DTO。命令检测中的屏幕位置归 xterm，Shell 命令完成状态归执行后端，不能让贡献自行从输出文字猜测 exit code 或重新执行命令。
 
-各目录的文件对应与后续能力见 [Terminal 对齐台账](../../../../../docs/terminal-api-alignment-status.md)。用户已批准将 `voice/browser/terminalVoice.css` 的样式迁回 `terminal/browser/media/terminalVoice.css`；听写会话仍在本目录。
+各目录的文件对应与后续能力见 [Terminal 进程与屏幕契约](../../../../../docs/terminal.md)。用户已批准将 `voice/browser/terminalVoice.css` 的样式迁回 `terminal/browser/media/terminalVoice.css`；听写会话仍在本目录。
 
 Clipboard 贡献按实例提供复制、复制并清除、粘贴命令；Linux 另提供 selection clipboard 粘贴。焦点选区键只影响终端复制快捷键，无选区 Ctrl+C 仍发送给 Shell。宿主剪贴板读取完成后再次检查实例、连接代次、活动项与屏幕可用性；切换回来也不会发送失效结果。粘贴使用 `sendText` 的换行、child paste mode 与输入确认，不复制输入队列。关闭实例释放监听和 DOM 上下文。HTML／资源粘贴、copy-on-selection、多行确认与 clipboard 配置仍未实现。

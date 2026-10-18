@@ -18,7 +18,7 @@
 浏览器宿主能力版本 3 的 `browser/create`、`browser/observe`、`browser/perform` 可携带工具调用的 `networkToken`。
 宿主通过 `browser/network/authorize` 提交 token、URL 和 HTTP 方法，结果为 `allowed`；token 绑定发起连接，在工具结束、取消或断线后失效。
 该请求不占用浏览器动作的串行作用域，否则等待网络授权的导航无法完成。HTTP(S) 逐请求评审，WebSocket 当前拒绝；共享用户页面只允许观察。
-当前宿主的检查范围是 HTTP(S)，不能作为完整网络沙箱；WebTransport 绕过 Electron 请求拦截，完整隔离仍需可撤销的后端代理，见 [桌面架构](../../docs/ash-desktop-architecture.md#71-当前实现)。
+当前宿主的检查范围是 HTTP(S)，不能作为完整网络沙箱；WebTransport 绕过 Electron 请求拦截，完整隔离仍需可撤销的后端代理，见 [桌面架构](../../docs/desktop-architecture.md#71-当前实现)。
 
 浏览器宿主能力版本 4 才可启用高级 CDP。`DOM.setFileInputFiles` 的每个路径在 Rust 中按当前 Thread/Turn 的 `ReadFiles` 授权、路径规则和撤销状态读取；`browser/perform.uploads` 仅携带文件名与 base64 内容，单次最多 16 个文件、合计 4 MiB。Main 用这些内容设置文件输入框，不把路径交给 Chromium 重新打开。整批任一路径失败则不发布任何文件。SSH/Provider 执行目标不能借用桌面宿主的本地文件权限。
 Main 对转发的页面方法使用审查清单，拒绝直接文件系统、磁盘路径拖拽、本地 URL 读取及未知方法，子会话同样受限。旧版 3 宿主仍可使用普通浏览器工具，高级 CDP 不可启用。

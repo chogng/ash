@@ -2,7 +2,7 @@
 
 > 本文拥有无渲染 Slash Commands 核心的实现契约。跨客户端产品语义见
 > [`docs/slash-commands.md`](../../docs/slash-commands.md)；wire snapshot 见
-> [`docs/ash-app-server-api.md`](../../docs/ash-app-server-api.md)。TUI、native 与 Desktop
+> [`docs/app-server-api.md`](../../docs/app-server-api.md)。TUI、native 与 Desktop
 > 分别拥有自己的渲染适配器。通用斜杠启动面板的多列表组合由
 > [`ash-slash-launcher`](../slash-launcher/README.md) 拥有。
 

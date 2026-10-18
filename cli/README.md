@@ -75,7 +75,7 @@
 
 ## 输出与生命周期
 
-- 账户、MCP、插件与会话管理的标准输出为 JSON，沿用 [App Server API](../docs/ash-app-server-api.md) 的字段。
+- 账户、MCP、插件与会话管理的标准输出为 JSON，沿用 [App Server API](../docs/app-server-api.md) 的字段。
 - 登录授权地址与设备码写入标准错误；标准输出只在成功后给出账户结果。等待中按 Ctrl-C 会取消本次登录。
 - API key 只从标准输入读取，不作为命令参数或输出返回。
 - 帮助、版本、语法错误不会打开用户配置或启动 App Server。
