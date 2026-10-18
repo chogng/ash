@@ -1,8 +1,19 @@
-# AgentHost 对齐实施清单
+# AgentHost 对齐实施记录
 
 建议先修复已存在的模型目录与会话模型一致性，再接通后台会话的被动状态显示，最后验证断线恢复和权限生命周期。保留 Ash 的 Rust 执行与持久化架构；VS Code 用来核对公开职责和可观察行为，不作为 Node runtime、私有类图或协议的移植模板。
 
-本文件保留原云端方案与历史验证。2026-10-08 接手集成已包含 B1 持久会话事实、B2 公开账号范围下的模型目录生命周期、picker 焦点保持和 B3 被动管理状态。首次账号快照缺口在本批修复：接受目录前通过现有账号服务建立范围，首个同账号或无关账号事件的失败重读保留有效目录，真实换账号及重连隔离迟到结果。当前验证与后续工作以 [接手 TODO](agenthost-handoff-todo.md) 为入口；下面明确标为历史的验证不代表本批重新执行。根目录位置保留原约定。
+本文件保留原云端方案与历史验证，不再作为当前执行清单。2026-10-08 接手集成已包含 B1 持久会话事实、B2 公开账号范围下的模型目录生命周期、picker 焦点保持和 B3 被动管理状态。首次账号快照缺口已修复：接受目录前通过现有账号服务建立范围，首个同账号或无关账号事件的失败重读保留有效目录，真实换账号及重连隔离迟到结果。当前待办统一由 [AgentHost TODO](TODO.md#agenthost--todo) 维护；下面历史验证不代表本次重新执行。
+
+### 2026-10-18 复核
+
+在 `/Users/lx/Desktop/ash` 确认记录既有修复的 `0fff2125f25ffe641b5a3393fc47034d39dc52ba` 是当前 HEAD 的祖先。旧交接的停工、红测、待集成步骤和 worktree 信息已过时，交接文件已退场。
+
+- 标准单测入口执行 `languageModels.test.ts`、`chatViewPane.test.ts`、`gitHubConnectionService.test.ts`：208 项通过，0 个失败文件。
+- 新增 [MCP 进程回归](crates/app-server/tests/mcp_restart.rs)：隔离 profile 持久禁用 MCP，临时连接完成真实 loopback HTTP 握手并发现工具；退出后新进程仍禁用、工具数为零且无新握手；第三个进程显式连接仍成功。
+- `just test ash-app-server --test mcp_restart` 和 `just test-processes ash-app-server --test mcp_restart --profile ci-test --locked` 各 1 项通过。回归接入 Desktop runtime acceptance 的 Windows/macOS matrix，远端 CI 尚未执行。
+- `just rust-warnings ash-app-server --profile ci-test` 全目标检查通过；`just test-python scripts` 执行 196 项、跳过 1 项，其余通过。
+
+命令、日志与文件哈希记录于 `.build/agenthost-evidence/recheck-20261018/validation.json`。真实账号、跨平台、系统休眠、长周期／TUI 与旧隔离故障复现仍未完成，详见根 TODO；不据此宣称整体验收通过。
 
 ### 2026-10-08 后续凭证范围修复
 
@@ -10,7 +21,7 @@
 2. **external `kimi-desktop` / `kimi-cli` 已接通后台观察和缓存快照。** `model/list` 同次捕获当前凭证范围与缓存发现行，读取不触发远程请求。共享观察器每 60 秒检查凭证身份，每 5 分钟刷新远程目录；身份变化先通知退役，刷新后校验身份，迟到结果不作为当前数据发布。外部来源不创建 `AccountDto`；通知 authority 使用外部 scope，正常订阅仍使用账户身份。
 3. **首次账户快照缺口已修复。** 模型 service 通过现有必需账号 service 建立权威范围，保留同账户失败语义，隔离换账户与重连的迟到结果。
 
-旧 `agenthost-catalog-epoch-plan.md` 未交付；本批按当前用户授权沿既有 Kimi、ModelsManager、subscription observer 和前端 service owner 实施，没有新增第二个持久 catalog 或假定缺失提案已获批准。验证与环境限制以 [接手 TODO](agenthost-handoff-todo.md) 为准。
+旧 `agenthost-catalog-epoch-plan.md` 未交付；实现沿既有 Kimi、ModelsManager、subscription observer 和前端 service owner 工作，没有新增第二个持久 catalog 或依赖缺失提案，因此不再将该文档列为待交付前置。剩余环境验收以 [AgentHost TODO](TODO.md#agenthost--todo) 为准。
 
 ### 第一批历史验证
 
@@ -176,7 +187,7 @@ Session.model 缺失仅表示目录没有模型事实，不能据此推断没有
 
 ## 第四批 验证恢复 权限 取消与历史
 
-2026-10-08 本批已运行协议/Renderer/Sessions 迟到与恢复回归、App Server 权限和 connection owner 测试，以及真实 Web/Electron 中英文 Stop、失败、草稿和 profile 重开。各项完整验收仍含未覆盖环境，复选框不整体勾选；具体通过数量和缺口见 [当前接手记录](agenthost-handoff-todo.md#当前验证)。
+2026-10-08 本批已运行协议/Renderer/Sessions 迟到与恢复回归、App Server 权限和 connection owner 测试，以及真实 Web/Electron 中英文 Stop、失败、草稿和 profile 重开。以下复选框保留原方案状态，不作为当前执行清单；剩余环境缺口由 [AgentHost TODO](TODO.md#agenthost--todo) 维护。
 
 这是定向验证与缺陷驱动批次，不是预先授权整目录重写。前述前三批通过后，先复用已有覆盖，只有观察到差异才登记具体修改路径。
 

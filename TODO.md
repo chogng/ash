@@ -62,6 +62,16 @@
 
 当前存储、配置层和设置入口见 [Preferences 与 Configuration](docs/preferences-and-settings.md)。
 
+## AgentHost · TODO
+
+实现与本机验证记录见 [AgentHost 实施记录](agenthost-todo.md#2026-10-18-复核)。首次账号快照与凭证范围修复已合入，禁用 MCP 跨进程重开回归已通过；以下仍缺实际证据。
+
+- [ ] **验收 · 跨平台**：取得 Windows/Linux 当前实现的实际运行结果；新增 Desktop runtime acceptance 的 Windows/macOS MCP 进程回归步骤尚未在远端执行。
+- [ ] **验收 · 真实外部账号**：使用专用测试账号验收 Kimi Desktop/CLI 身份切换、同身份 token 轮换、旧结果隔离及临时发现失败，观察已打开的模型 picker。合成 scope/账号回归不能替代此结果。
+- [ ] **验收 · 系统休眠恢复**：在可中断的测试机器运行实际 OS sleep/wake，核对连接恢复、重新鉴权、订阅和工具权限；尚未在日常开发机器执行系统休眠。
+- [ ] **复核／验收 · B2 长周期与 TUI**：补当前版本五分钟真实观察周期及真实外部模型 picker 场景。`session-models.spec.ts` 的 `verifySubscriptionUpdates` 固定要求 `codex-cli 0.160.1`，本机为 `0.163.0-alpha.10.2`；先在隔离环境重新验证缓存身份／schema 契约，不能只改版本断言或触发真实远程发现。已有 observer 回归和 TUI subscription 测试只覆盖各自范围。
+- [ ] **复核 · 旧隔离环境故障**：取得麦克风枚举失败与 `TerminalOperationFailed` 的准确步骤和底层诊断，分别沿音频设备、app-server terminal/environment owner 定位。原 2026-10-08 证据目录不在当前检出；不能凭通用错误码或普通终端测试关闭报告。
+
 ## Sessions · TODO
 
 - [ ] **验收** · 在有 Docker、官方 Dev Container CLI 和兼容 Remote runtime 的机器验证容器创建、实际执行、断线重连及 Stop／Remove。已有 SDK 进程测试使用受控 Docker／CLI，需补真实环境证据；见 [Docker Provider](extensions/dev-containers/README.md)。

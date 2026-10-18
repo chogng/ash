@@ -110,6 +110,8 @@ jobs:
         run: just test-processes ash-lsp-server-provider --test electron_runtime --profile ci-test --locked -- --ignored
       - name: Verify real Electron extensions retain separate window lifetimes
         run: just test ash-app-server --lib --profile ci-test --locked standard_extensions_keep_window_facts_callbacks_and_lifetimes_separate
+      - name: Verify disabled MCP stays disabled across process restart
+        run: just test-processes ash-app-server --test mcp_restart --profile ci-test --locked
       - name: Upload runtime and application diagnostics
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
