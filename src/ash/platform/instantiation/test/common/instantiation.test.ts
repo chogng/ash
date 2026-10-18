@@ -94,6 +94,33 @@ test('an unused delayed service is not constructed during scope disposal', () =>
 	assert.equal(created, 0);
 });
 
+test('delayed cyclic owners stay lazy during repeated lookup and dependency validation', () => {
+	const IFirst = createDecorator<First>('test.delayed.cycle.first');
+	const ISecond = createDecorator<Second>('test.delayed.cycle.second');
+	const constructed: string[] = [];
+	class First {
+		constructor(@ISecond readonly second: Second) { constructed.push('first'); }
+		read(): Second { return this.second; }
+	}
+	class Second {
+		constructor(@IFirst readonly first: First) { constructed.push('second'); }
+		read(): First { return this.first; }
+	}
+	class Consumer { constructor(@ISecond readonly second: Second) { } }
+	using services = new InstantiationService(new ServiceCollection(
+		[IFirst, new SyncDescriptor(First, [], true)],
+		[ISecond, new SyncDescriptor(Second, [], true)],
+	));
+	const first = services.get(IFirst);
+	assert.equal(services.get(IFirst), first);
+	const consumer = services.createInstance(Consumer);
+	assert.deepEqual(constructed, []);
+	assert.equal(first.read(), consumer.second);
+	assert.deepEqual(constructed, ['first']);
+	assert.equal(consumer.second.read(), first);
+	assert.deepEqual(constructed, ['first', 'second']);
+});
+
 test('missing transitive dependencies of delayed services fail before a consumer is constructed', () => {
 	const IMissing = createDecorator<object>('test.delayed.missing');
 	const IDependency = createDecorator<Dependency>('test.delayed.dependency');

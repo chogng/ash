@@ -1,5 +1,3 @@
-import { IEditorService } from '../../../services/editor/common/editorService.js';
-import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { TerminalEditingService } from './terminalEditingService.js';
 import { terminalStrings } from '../common/terminalStrings.js';
 import { registerEditorPane } from '../../../browser/editor.js';
@@ -24,15 +22,12 @@ import { ITerminalService, ITerminalGroupService, ITerminalEditorService, ITermi
 import { TerminalGroupService } from './terminalGroupService.js';
 import { setupTerminalCommands } from './terminalCommands.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
-import { ITerminalContributionService, ITerminalProfileService, ITerminalProfileResolverService } from '../common/terminal.js';
+import { ITerminalContributionService, ITerminalProfileService } from '../common/terminal.js';
 import { IExtensionService } from '../../../services/extensions/common/extensionService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { TerminalConfigurationService } from './terminalConfigurationService.js';
 import { TerminalProfileService } from './terminalProfileService.js';
 import { TerminalService } from './terminalService.js';
-import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
-import { ISecretStorageService } from '../../../../platform/secrets/common/secrets.js';
-import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { TerminalMainContribution } from './terminalMainContribution.js';
 import { AgentHostOutputChannel } from './agentHostOutputChannel.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -42,11 +37,9 @@ import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/c
 registerWorkbenchContribution(TerminalMainContribution.ID, WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(TerminalMainContribution));
 registerWorkbenchContribution(AgentHostOutputChannel.ID, WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(AgentHostOutputChannel));
 
-registerWorkbenchServiceContribution({
-	service: ITerminalService,
-	dependencies: [ITerminalProcessService, IWorkspaceContextService, IConfigurationService, IDialogService, ISecretStorageService, IStorageService, ITerminalProfileService, ITerminalProfileResolverService, IEditorService, ICommandService],
-	install: context => context.register(context.container.createInstance(TerminalService)),
-});
+// Register the owner before resolving its delayed group/editor services, which
+// depend on it in turn. Their constructors run only after the owner is available.
+registerSingleton(ITerminalService, TerminalService, InstantiationType.Delayed);
 
 registerWorkbenchServiceContribution({
 	service: ITerminalConfigurationService,

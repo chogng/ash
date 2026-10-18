@@ -16,6 +16,9 @@ export class InstantiationService extends Disposable implements IInstantiationSe
 	private readonly children = this._register(new DisposableStore());
 	private readonly factories = new Map<ServiceIdentifier<unknown>, FactoryRegistration>();
 	private readonly resolving: ServiceIdentifier<unknown>[] = [];
+	// Inspecting a delayed proxy's prototype initializes it. Keep its registration
+	// kind out of the proxy so dependency validation remains side-effect free.
+	private readonly delayedServices = new WeakSet<object>();
 	private parentLifetime: IDisposable | undefined;
 
 	constructor(
@@ -69,7 +72,7 @@ export class InstantiationService extends Disposable implements IInstantiationSe
 	public getOptional<T>(id: ServiceIdentifier<T>): T | undefined {
 		this.assertNotDisposed();
 		const value = this.services.get(id);
-		if (value instanceof SyncDescriptor) {
+		if (!this.delayedServices.has(value as object) && value instanceof SyncDescriptor) {
 			this.validateDependencies(value.ctor, new Set([id]));
 			return this.resolve(id, () => this.createInstance(value), false, value.supportsDelayedInstantiation) as T;
 		}
@@ -170,7 +173,7 @@ export class InstantiationService extends Disposable implements IInstantiationSe
 				throw new Error(`Unknown service: ${id}`);
 			}
 			const dependency = owner.services.get(id);
-			if (dependency instanceof SyncDescriptor) {
+			if (!owner.delayedServices.has(dependency as object) && dependency instanceof SyncDescriptor) {
 				owner.validateDependencies(dependency.ctor, visited);
 			}
 		}
@@ -195,6 +198,7 @@ export class InstantiationService extends Disposable implements IInstantiationSe
 			}
 		};
 		const value = delayed ? this.createDelayedService(construct) : construct();
+		if (delayed) this.delayedServices.add(value as object);
 		if (!transient) {
 			this.services.set(id, value);
 			this.factories.delete(id);
