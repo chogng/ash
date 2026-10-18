@@ -18,6 +18,7 @@ import { BrowserTerminalProfileResolverService } from '../../browser/terminalPro
 import { MainThreadTerminalService } from '../../../../api/browser/mainThreadTerminalService.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
+import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
@@ -727,11 +728,73 @@ suite('Terminal configuration and interactive profiles', () => {
 		Object.assign(services.get(IExtensionService), {
 			activateByEvent: async (event: string) => {
 				assert.equal(event, 'onTerminalProfile:first');
-				owner.add(profiles.registerTerminalProfileProvider('acme.extension', 'first', { createContributedTerminalProfile: async () => { calls++; } }));
+				owner.add(profiles.registerTerminalProfileProvider('acme.extension', 'first', { createContributedTerminalProfile: async () => { calls++; return undefined; } }));
 			}
 		});
 		await profiles.getContributedProfileProvider('acme.extension', 'first')!.createContributedTerminalProfile({});
 		assert.equal(calls, 1);
+	});
+
+	test('concurrent contributed profiles return and place their own instances despite focus changes', async () => {
+		using owner = new DisposableStore();
+		const opened: number[] = [];
+		const { services, profiles } = createServices(owner, true, async input => { opened.push((input as import('../../browser/terminalEditorInput.js').TerminalEditorInput).terminalInstance!.instanceId); });
+		const terminals = services.get(ITerminalService);
+		const created = [new DeferredPromise<number>(), new DeferredPromise<number>()];
+		const release = [new DeferredPromise<void>(), new DeferredPromise<void>()];
+		let calls = 0;
+		owner.add(profiles.registerInternalContributedProfile({ extensionIdentifier: 'acme.extension', id: 'concurrent', title: 'Concurrent' }));
+		owner.add(profiles.registerTerminalProfileProvider('acme.extension', 'concurrent', {
+			createContributedTerminalProfile: async () => {
+				const index = calls++;
+				const instance = await terminals.createTerminal({ profile: { type: 'default' }, deferStart: true });
+				await created[index]!.complete(instance.instanceId);
+				await release[index]!.p;
+				return instance.instanceId;
+			}
+		}));
+		const config = profiles.contributedProfiles[0]!;
+		const first = terminals.createTerminal({ config, location: TerminalLocation.Editor });
+		let second: ReturnType<typeof terminals.createTerminal> | undefined;
+		try {
+			const firstId = await created[0]!.p;
+			second = terminals.createTerminal({ config });
+			const secondId = await created[1]!.p;
+			terminals.setActiveInstance(terminals.instances.find(instance => instance.instanceId === firstId)!);
+			await release[1]!.complete();
+			assert.equal((await second).instanceId, secondId);
+			terminals.setActiveInstance(terminals.instances.find(instance => instance.instanceId === secondId)!);
+			await release[0]!.complete();
+			assert.equal((await first).instanceId, firstId);
+			assert.deepEqual(opened, [firstId]);
+			assert.deepEqual(terminals.instances.map(instance => instance.instanceId), [firstId, secondId]);
+		} finally {
+			for (const pending of release) await pending.complete();
+			await Promise.allSettled(second ? [first, second] : [first]);
+		}
+	});
+
+	for (const failure of ['workspace', 'wrongRoot'] as const) test(`contributed profile releases its created instance after ${failure} cancellation`, async () => {
+		using owner = new DisposableStore();
+		const { services, profiles, workspace } = createServices(owner, true);
+		const terminals = services.get(ITerminalService);
+		const folder = workspace.getWorkspace().folders[0]!;
+		workspace.updateWorkspace({ id: 'multi', configuration: URI.file('/team.ash-workspace'), folders: [folder, { id: 'other', index: 1, name: 'other', uri: URI.file('/other') }] });
+		const unrelated = await terminals.createTerminal({ profile: { type: 'default' }, dirId: folder.id, deferStart: true });
+		let createdId: number | undefined;
+		owner.add(profiles.registerInternalContributedProfile({ extensionIdentifier: 'acme.extension', id: 'cancel', title: 'Cancel' }));
+		owner.add(profiles.registerTerminalProfileProvider('acme.extension', 'cancel', {
+			createContributedTerminalProfile: async () => {
+				const instance = await terminals.createTerminal({ profile: { type: 'default' }, dirId: failure === 'wrongRoot' ? 'other' : folder.id, deferStart: true });
+				createdId = instance.instanceId;
+				terminals.setActiveInstance(unrelated);
+				if (failure === 'workspace') workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/elsewhere') });
+				return instance.instanceId;
+			}
+		}));
+		await assert.rejects(terminals.createTerminal({ config: profiles.contributedProfiles[0]!, dirId: folder.id }), isCancellationError);
+		assert.ok(createdId);
+		assert.deepEqual(terminals.instances.map(instance => instance.instanceId), [unrelated.instanceId]);
 	});
 
 	for (const custom of [false, true]) test(`extension profile bridge creates ${custom ? 'a live Pseudoterminal' : 'an execution-host shell'} and withdraws its registration`, async () => {
@@ -751,7 +814,7 @@ suite('Terminal configuration and interactive profiles', () => {
 					owner.add(child.onProcessData(data => { assert(typeof data === 'string'); writes.push(data); })); owner.add(child.onProcessExit(code => exits.push(code)));
 					await child.start();
 				}
-				return {};
+				return { instanceId: 73 };
 			}
 		});
 		const operations: string[] = [];
@@ -768,7 +831,7 @@ suite('Terminal configuration and interactive profiles', () => {
 		const descriptor = { runtimeId: 'runtime', packageDigest: digest, profileId: 'test', title: 'Extension test', invoke };
 		bridge.replaceProfiles([descriptor]);
 		bridge.replaceProfiles([descriptor]);
-		await profiles.getContributedProfileProvider('acme.extension', 'test')!.createContributedTerminalProfile({});
+		assert.equal(await profiles.getContributedProfileProvider('acme.extension', 'test')!.createContributedTerminalProfile({}), 73);
 		assert.equal(launches.length, 1);
 		if (custom) {
 			assert.deepEqual(writes, ['synchronous open output']);

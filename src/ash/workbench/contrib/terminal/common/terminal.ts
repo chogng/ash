@@ -104,7 +104,8 @@ export interface IRegisterContributedProfileArgs extends IExtensionTerminalProfi
 }
 
 export interface ITerminalProfileProvider {
-	createContributedTerminalProfile(options: ICreateContributedTerminalProfileOptions): Promise<void>;
+	/** Returns the created instance ID, or undefined when the provider cancels. */
+	createContributedTerminalProfile(options: ICreateContributedTerminalProfileOptions): Promise<number | undefined>;
 }
 
 export interface IShellLaunchConfigResolveOptions {

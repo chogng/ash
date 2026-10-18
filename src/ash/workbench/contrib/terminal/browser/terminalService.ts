@@ -135,10 +135,13 @@ export class TerminalService extends Disposable implements ITerminalService {
 				const provider = this.profiles.getContributedProfileProvider(contributed.extensionIdentifier, contributed.id);
 				if (!provider) throw new Error(localize('terminal.profile.providerUnavailable', 'Terminal profile provider is unavailable: {0}', contributed.title));
 				const previous = new Set(this.instances);
-				await provider.createContributedTerminalProfile({ ...contributed.options, cwd: options.cwd ?? parent?.cwd ?? parent?.initialCwd ?? folder.uri });
-				const created = this.activeInstance;
-				if (!created || previous.has(created) || created.dirId !== folder.id) throw new CancellationError();
-				return this.placeCreatedTerminal(created, location, parent, assertCurrent);
+				const instanceId = await provider.createContributedTerminalProfile({ ...contributed.options, cwd: options.cwd ?? parent?.cwd ?? parent?.initialCwd ?? folder.uri });
+				const created = this.instances.find(instance => instance.instanceId === instanceId);
+				if (!created || previous.has(created)) throw new CancellationError();
+				return this.placeCreatedTerminal(created, location, parent, () => {
+					assertCurrent();
+					if (created.dirId !== folder.id) throw new CancellationError();
+				});
 			}
 			const profile = config && 'profileName' in config ? config : !config && !parent?.shellLaunchConfig?.executable ? this.profiles.getDefaultProfile(undefined, folder.id) : undefined;
 			const shell: IShellLaunchConfig = profile ? { name: profile.profileName, executable: profile.path, args: profile.args, env: profile.env, icon: profile.icon, color: profile.color }

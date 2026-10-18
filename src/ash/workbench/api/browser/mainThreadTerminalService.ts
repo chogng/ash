@@ -149,7 +149,7 @@ export class MainThreadTerminalService extends Disposable {
 							if (result.pty !== undefined) await descriptor.invoke('closeTaskTerminal', { ptyId: text(record(result.pty).ptyId, 256) }, AbortSignal.timeout(5_000));
 							throw new CancellationError();
 						}
-						if (result.options === null) return;
+						if (result.options === null) return undefined;
 						const options = record(result.options, ['name', 'shellPath', 'shellArgs', 'cwd', 'env', 'strictEnv', 'icon', 'color']);
 						const name = text(options.name ?? descriptor.title, 256);
 						const icon = presentation.icon ?? (options.icon === undefined ? undefined : ThemeIcon.fromId(text(options.icon, 256)));
@@ -193,6 +193,7 @@ export class MainThreadTerminalService extends Disposable {
 							await this.terminals.closeTerminal(instance);
 							throw new CancellationError();
 						}
+						return instance.instanceId;
 					},
 				}));
 				this.registrations.set(key, lifetime);

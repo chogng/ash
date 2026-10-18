@@ -205,8 +205,9 @@ export class TerminalProfileService extends Disposable implements ITerminalProfi
 				if (this.isDisposed) throw new CancellationError();
 				const provider = this.providers.get(key);
 				if (!provider) throw new Error(localize('terminal.profile.providerUnavailable', 'Terminal profile provider is unavailable: {0}', key));
-				await provider.createContributedTerminalProfile(options);
-				if (this.isDisposed || this.providers.get(key) !== provider) throw new CancellationError();
+				// The provider owns cancellation and cleanup once creation begins. Preserve
+				// its result so the caller can place or release that exact instance.
+				return provider.createContributedTerminalProfile(options);
 			}
 		};
 	}
