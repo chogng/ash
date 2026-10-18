@@ -55,6 +55,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	}
 
 	get sessions(): readonly ISession[] { return this._sessions; }
+	get navigationRevision(): number { return this.selectionRevision; }
 	get active(): IActiveSessionThread | undefined { return this._active; }
 	get untitledSessions(): readonly IUntitledChatSession[] { return this._untitledSessions; }
 	get activeUntitledSession(): IUntitledChatSession | undefined { return this._untitledSessions.find(session => session.untitledSessionId === this._activeUntitledSessionId); }

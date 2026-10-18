@@ -124,3 +124,27 @@
 .ash-chat-message-actions > .ash-button[hidden] {
 	display: none;
 }
+
+.ash-chat-request-editor {
+	margin-top: var(--ash-spacing-size120);
+}
+.ash-chat-request-editor textarea {
+	box-sizing: border-box;
+	width: 100%;
+	resize: vertical;
+	padding: var(--ash-spacing-size80);
+	font: inherit;
+	color: var(--ash-input-foreground);
+	background: var(--ash-input-background);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-input-border, var(--ash-contrastBorder));
+	border-radius: var(--ash-cornerRadius-small);
+}
+.ash-chat-request-editor textarea:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+}
+.ash-chat-request-editor p {
+	margin: var(--ash-spacing-size80) 0;
+	color: var(--ash-description-foreground);
+}

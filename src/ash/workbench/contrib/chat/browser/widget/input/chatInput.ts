@@ -24,6 +24,8 @@ export interface ChatInputServerCommandInvocation {
 
 /** State required to render the input area for the selected Thread. */
 export interface ChatInputState {
+	/** Generation changes on navigation, but stays stable when first send materializes a draft. */
+	readonly draftIdentity?: { readonly id: string; readonly generation: number; };
 	readonly mode: ChatMode;
 	readonly activeMode?: ChatMode;
 	readonly queuedMessages: number;

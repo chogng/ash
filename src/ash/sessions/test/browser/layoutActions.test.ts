@@ -46,6 +46,7 @@ test('Sessions layout commands update menu state from their owners and release w
 	using layout = createLayout(browser.window.document.body, parts, { initialDimension: new Dimension(1_200, 800) });
 	let historyIndex = 1;
 	const sessions: ISessionsService = {
+		navigationRevision: 0,
 		getSelection() { return { visibleSelections: [], activeSelection: undefined }; },
 		async openThread() { },
 		onDidChange: changed.event,

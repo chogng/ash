@@ -470,3 +470,24 @@ suite('Chat message copy ownership', () => {
 		widget.element.remove();
 	});
 });
+
+test('message editing uses the accepted backend request identity and excludes steering and transient messages', () => {
+	const initial = { type: 'userMessage' as const, itemId: 'backend-initial', turnId: 'turn', text: 'Initial request' };
+	const steering = { ...initial, itemId: 'backend-steering', text: 'Later steering' };
+	const entries: ThreadTranscriptEntry[] = [
+		{ type: 'item', entryId: 'presentation-initial', turnId: 'turn', transient: false, item: initial },
+		{ type: 'item', entryId: 'presentation-steering', turnId: 'turn', transient: false, item: steering },
+		{ type: 'item', entryId: 'presentation-transient', turnId: 'turn', transient: true, item: initial },
+	];
+	const total = { reported: 0, complete: true };
+	const turn: import('../../../../services/chat/common/chatService.js').Turn = {
+		turnId: 'turn', kind: 'coding', status: 'completed', mode: 'agent', approvalMode: 'manual', items: [initial, steering],
+		usage: { modelInvocations: 0, inputTokens: total, outputTokens: total, cachedInputTokens: total, cacheWriteInputTokens: total, reasoningTokens: total },
+	};
+	const items = chatTranscriptListItems(entries, 'turn', [turn], { sessionId: 'session', threadId: 'thread' });
+	assert.deepEqual(items.map(item => ({ id: item.id, source: item.requestSource })), [
+		{ id: 'presentation-initial', source: { sessionId: 'session', threadId: 'thread', turnId: 'turn', itemId: 'backend-initial' } },
+		{ id: 'presentation-steering', source: undefined },
+		{ id: 'presentation-transient', source: undefined },
+	]);
+});

@@ -20,6 +20,8 @@ export type AgentInput =
 	| { readonly type: 'context'; readonly name: string; readonly content: string; }
 	| { readonly type: 'toolSelection'; readonly disabled: string[]; }
 	| { readonly type: 'image'; readonly url: string; }
+	| { readonly type: 'imageAttachment'; readonly attachment: ChatImageAttachment; }
+	| { readonly type: 'audioAttachment'; readonly attachment: ChatAudioAttachment; }
 	| { readonly type: 'instruction'; readonly path: string; }
 	| { readonly type: 'skill'; readonly skill: SkillReference; };
 
@@ -840,6 +842,17 @@ export interface AgentMcpAppTool extends Readonly<Record<string, unknown>> {
 }
 
 export interface IAgentThreadService {
+	fork(params: SessionMutationParams & {
+		readonly threadId: string;
+		readonly title: string;
+		readonly target: 'session' | 'thread';
+	}): Promise<{ readonly sessionId: string; readonly threadId: string; }>;
+	rewrite(params: SessionMutationParams & {
+		readonly threadId: string;
+		readonly beforeTurnId: string;
+		readonly title: string;
+		readonly input: readonly AgentInput[];
+	}): Promise<{ readonly sessionId: string; readonly threadId: string; }>;
 	rename(params: SessionMutationParams & { readonly threadId: string; readonly title: string; readonly source: 'manual' | 'automatic'; }): Promise<void>;
 	/** Delivery grants are independent of historical committed events. */
 	readonly onDidOfferInteraction: Event<AgentInteractionOffer>;

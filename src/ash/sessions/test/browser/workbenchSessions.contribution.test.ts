@@ -270,3 +270,30 @@ test('Conversation review cannot open after an A-B-A selection change', async ()
 	await opening;
 	assert.equal(opened, false);
 });
+
+test('conversation navigation focuses the opened result without focusing a later selection', async () => {
+	using services = new InstantiationService();
+	let active = { session: { sessionId: 'source' }, threadId: 'source-thread' };
+	let complete = Promise.resolve();
+	let selectResult = true;
+	let focused = 0;
+	services.registerInstance(ISessionsManagementService, {
+		get active() { return active; },
+		activeUntitledSession: undefined,
+		openThread: async (sessionId: string, threadId: string) => { await complete; if (selectResult) active = { session: { sessionId }, threadId }; },
+	} as unknown as ISessionsManagementService);
+	services.registerInstance(IViewsService, { focusView: async () => { focused++; return true; } } as unknown as IViewsService);
+	const descriptor = getSingletonServiceDescriptors().find(([id]) => id === IChatSessionNavigationService)![1];
+	services.registerSingleton(IChatSessionNavigationService, () => services.createInstance(descriptor));
+	const navigation = services.get(IChatSessionNavigationService);
+	await navigation.openConversation('result', 'result-thread');
+	assert.equal(focused, 1);
+	const pending = new DeferredPromise<void>();
+	complete = pending.p;
+	selectResult = false;
+	const opening = navigation.openConversation('old-result', 'old-thread');
+	active = { session: { sessionId: 'later' }, threadId: 'later-thread' };
+	await pending.complete();
+	await opening;
+	assert.equal(focused, 1);
+});

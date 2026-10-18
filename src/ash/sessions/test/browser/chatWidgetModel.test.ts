@@ -322,3 +322,31 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		assert.equal(f.model.error, undefined);
 	});
 }
+
+test('editing an accepted request retains its context and media without replaying later steering or output', async () => {
+	const f = fixture('Code'); using resources = f.resources;
+	const read = snapshot('A', 8, true);
+	const turn = read.thread.turns[0];
+	const image = { contentDigest: 'sha256:' + 'a'.repeat(64), mediaType: 'png' as const, encodedBytes: 128, width: 8, height: 8 };
+	const audio = { contentDigest: 'sha256:' + 'b'.repeat(64), mediaType: 'wav' as const, encodedBytes: 256, durationMs: 100 };
+	const items: typeof turn.items = [
+		{ type: 'userContext', itemId: 'context', turnId: turn.turnId, name: 'Original file', content: 'Accepted snapshot' },
+		{ type: 'userImageAttachment', itemId: 'image', turnId: turn.turnId, attachment: image },
+		{ type: 'userAudioAttachment', itemId: 'audio', turnId: turn.turnId, attachment: audio },
+		{ type: 'userMessage', itemId: 'original-input', turnId: turn.turnId, text: 'Original' },
+		{ type: 'agentMessage', itemId: 'reply', turnId: turn.turnId, text: 'Answer' },
+		{ type: 'userMessage', itemId: 'steer', turnId: turn.turnId, text: 'Later steer' },
+	];
+	f.threadApi.read = async () => ({ ...read, thread: { ...read.thread, turns: [{ ...turn, items }] } });
+	const rewrites: unknown[] = [];
+	f.threadApi.rewrite = async options => { rewrites.push(options); return { sessionId: options.sessionId, threadId: 'edited' }; };
+	assert.deepEqual(await f.chat.rewriteRequest({ sessionId: 'session', threadId: 'A', turnId: turn.turnId, itemId: 'original-input', text: 'Edited\nrequest', commandId: 'same-edit' }), { sessionId: 'session', threadId: 'edited' });
+	assert.deepEqual(rewrites, [{
+		sessionId: 'session', threadId: 'A', beforeTurnId: turn.turnId, commandId: 'same-edit', title: read.thread.title, input: [
+			{ type: 'context', name: 'Original file', content: 'Accepted snapshot' },
+			{ type: 'imageAttachment', attachment: image }, { type: 'audioAttachment', attachment: audio }, { type: 'text', text: 'Edited\nrequest' },
+		]
+	}]);
+	await assert.rejects(f.chat.rewriteRequest({ sessionId: 'session', threadId: 'A', turnId: turn.turnId, itemId: 'steer', text: 'Changed steering', commandId: 'invalid-edit' }), /no longer available/);
+	assert.equal(rewrites.length, 1);
+});

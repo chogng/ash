@@ -1,7 +1,7 @@
 import { sessionManagementLabel } from '../sessionManagementLabels.js';
 import { localize2, localize } from '../../../nls.js';
 import { DisposableStore } from "../../../base/common/lifecycle.js";
-import { Action2, registerAction2 } from "../../../platform/actions/common/actions.js";
+import { Action2, MenusRegistry, registerAction2 } from "../../../platform/actions/common/actions.js";
 import type { ServicesAccessor } from "../../../platform/instantiation/common/instantiation.js";
 import { IQuickInputService, type IQuickPickItem } from "../../../platform/quickinput/common/quickInput.js";
 import { NEW_CHAT_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID, OPEN_CHAT_PERMISSIONS_COMMAND_ID } from "../../../workbench/contrib/chat/common/chat.js";
@@ -11,9 +11,27 @@ import { ISessionsManagementService } from "../../services/sessions/common/sessi
 import { ISessionsService } from "../../services/sessions/browser/sessionsService.js";
 import { approvalModeDefinitions } from '../../../platform/agentHost/common/approvalModes.js';
 import type { IChatWidgetModel } from '../../../workbench/contrib/chat/browser/widget/chatWidget.js';
+import { ForkConversationAction } from '../../../workbench/contrib/chat/browser/actions/chatForkActions.js';
+import { Menus } from '../menus.js';
+
 import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import type { ModelReasoningEffort } from '../../../workbench/services/chat/common/modelCatalog.js';
+
+registerAction2(class extends ForkConversationAction {
+	protected override readonly target = 'thread' as const;
+});
+
+MenusRegistry.appendMenuItems([
+	{
+		id: Menus.SidebarSessionsHeader,
+		item: { command: { id: 'sessions.chatCompositeBar.addChat', title: localize2('chat.addToSession', 'New Chat in Session') }, group: 'navigation', order: 10 },
+	},
+	{
+		id: Menus.SidebarSessionsHeader,
+		item: { command: { id: 'workbench.action.chat.forkConversation', title: localize2('chat.forkConversation.label', 'Fork Conversation') }, group: 'navigation', order: 11 },
+	},
+]);
 
 
 registerAction2(class ChoosePermission extends Action2 {

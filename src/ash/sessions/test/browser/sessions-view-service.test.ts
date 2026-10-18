@@ -146,7 +146,9 @@ test('Custom View navigation supersedes a pending Thread open and survives autom
 	const gate = new DeferredPromise<void>();
 	sessions.openThread = async () => gate.p;
 	const pending = view.openThread('second', 'second-thread');
+	const revision = view.navigationRevision;
 	custom.showCustomView('automations');
+	assert.ok(view.navigationRevision > revision, 'Covered conversation identity must not hide explicit navigation');
 	await gate.complete();
 	await pending;
 	assert.equal(selectionId(view.activeSelection), 'session:first:first-thread');
@@ -534,6 +536,7 @@ test('an unavailable catalog restores local drafts and preserves unresolved conv
 });
 
 class FakeSessionService implements ISessionsManagementService {
+	readonly navigationRevision = 0;
 	private readonly _onDidChange = new Emitter<void>();
 	private _sessions: readonly ISession[];
 	private _active: IActiveSessionThread | undefined;

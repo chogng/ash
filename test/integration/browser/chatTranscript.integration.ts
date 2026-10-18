@@ -74,6 +74,7 @@ import { IVoiceCodeTranscriptionBackendService } from '../../../src/ash/platform
 import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 import { ILanguageModelsService } from '../../../src/ash/workbench/contrib/chat/common/languageModels.js';
 import { IChatSessionNavigationService } from '../../../src/ash/workbench/services/chat/common/chatSessionNavigationService.js';
+import { IChatService } from '../../../src/ash/workbench/services/chat/common/chatService.js';
 import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
 import type { ThreadTranscriptEntry } from '../../../src/ash/platform/agentHost/common/agentService.js';
 import { ChatListWidget } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatListWidget.js';
@@ -347,6 +348,9 @@ let failOlderHistory = false;
 let olderHistoryLoads = 0;
 const historyWires = new Map<string, string>();
 let historyDecodeTiming = { parseMs: 0, schemaMs: 0, bytes: 0 };
+let requestEditMode = false;
+const requestEdits: { readonly text: string; readonly commandId: string; readonly itemId: string; }[] = [];
+let completeRequestEdit: ((failure?: boolean) => void) | undefined;
 let lifecycleSessions: SessionsManagementService | undefined;
 let lifecycleCommands: CommandService | undefined;
 const lifecycleRequests: { readonly operation: string; readonly sessionId: string; }[] = [];
@@ -525,6 +529,9 @@ declare global {
 			refresh(): void;
 			imageReadCount(): number;
 			renderItems(items: readonly IChatListItem[]): void;
+			prepareRequestEditing(cowork: boolean): void;
+			requestEdits(): readonly { readonly text: string; readonly commandId: string; readonly itemId: string; }[];
+			finishRequestEdit(failure?: boolean): void;
 			readingState(): ReturnType<ChatListWidget['getViewState']>;
 			delayAttachments(value: boolean): void;
 			setTranscriptVisible(value: boolean): void;
@@ -648,6 +655,15 @@ window.ashChatTranscriptIntegration = {
 	},
 	imageReadCount: () => imageReads,
 	renderItems: items => { rendererItems = items; list.render(items); },
+	prepareRequestEditing: cowork => {
+		requestEditMode = true;
+		window.ashChatTranscriptIntegration.showChatApp(false, cowork);
+		requestEdits.length = 0;
+		appItems = [{ id: 'presentation-entry', type: 'userMessage', text: 'Original request', transient: false, requestSource: { sessionId: 'app-session', threadId: 'app-thread', turnId: 'original-turn', itemId: 'backend-request' } }];
+		chatChanges.fire();
+	},
+	requestEdits: () => requestEdits,
+	finishRequestEdit: failure => completeRequestEdit?.(failure),
 	readingState: () => list.getViewState(),
 	delayAttachments: value => { delayMedia = value; },
 	setTranscriptVisible: value => {
@@ -808,7 +824,21 @@ window.ashChatTranscriptIntegration = {
 		const chatServices = resources.add(services.createChild());
 		chatServices.registerInstance(IAccessibleViewService, accessibleView);
 		chatServices.registerInstance(ILanguageModelsService, { onDidChangeModels: Event.None, isModelVisible: () => true } as unknown as ILanguageModelsService);
-		chatServices.registerInstance(IChatSessionNavigationService, { openConversation: async () => { throw new Error('Unexpected conversation navigation'); } } as unknown as IChatSessionNavigationService);
+		chatServices.registerInstance(IChatSessionNavigationService, {
+			revision: 0,
+			getActiveConversation: () => ({ sessionId: 'app-session', threadId: 'app-thread' }),
+			openConversation: async () => { if (!requestEditMode) throw new Error('Unexpected conversation navigation'); },
+		} as unknown as IChatSessionNavigationService);
+		if (requestEditMode) {
+			chatServices.registerInstance(IChatService, {
+				rewriteRequest: async options => {
+					requestEdits.push(options);
+					await new Promise<void>((resolve, reject) => { completeRequestEdit = failure => failure ? reject(new Error('Synthetic edit failure')) : resolve(); });
+					return { sessionId: options.sessionId, threadId: 'edited-thread' };
+				}
+			} as IChatService);
+			chatServices.registerSingleton(ICommandService, () => chatServices.createInstance(StandaloneCommandService));
+		}
 		chatServices.registerInstance(IOpenerService, { open: async () => { throw new Error('Unexpected link opening'); } } as unknown as IOpenerService);
 		chatServices.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
 		chatServices.registerInstance(IAgentVoiceService, voice ? voiceFixture : undefined);
@@ -854,7 +884,7 @@ window.ashChatTranscriptIntegration = {
 			listAgents: async () => [], selectAgent() { }, selectMode() { }, selectApprovalMode() { }, resolveInteraction: async () => { }, retryFailedTurn: async () => { }, dispose() { }, [Symbol.dispose]() { },
 		};
 		const container = document.createElement('main');
-		container.style.cssText = 'height:700px;width:800px';
+		container.style.cssText = 'height:700px;width:800px;background:var(--ash-editor-background);color:var(--ash-foreground);font-family:system-ui';
 		document.body.append(container);
 		appChat = cowork ? resources.add(chatServices.createInstance(CoworkWidget, container, 'app-chat', model, () => { }, chatServices.get(ICommandService), undefined, undefined, undefined, (host: HTMLElement, delegate: ChatInputDelegate) => chatServices.createInstance(NewCoworkInputWidget, host, delegate, model))) : resources.add(chatServices.createInstance(ChatWidget, container, 'app-chat', model, () => { }, contextMenus, contextView, chatServices.get(ICommandService), accessibleView, chatServices.get(INotificationService), undefined, undefined, undefined, undefined));
 		appChat.setVisible(true);
@@ -952,6 +982,7 @@ window.ashChatTranscriptIntegration = {
 		await lifecycleSessions.initialize();
 		lifecycleServices.registerInstance(ISessionsManagementService, lifecycleSessions);
 		lifecycleServices.registerInstance(IChatSessionNavigationService, {
+			revision: 0,
 			getConversations: () => [], appendToActiveDraft: () => { }, captureActiveDraft: async () => undefined,
 			startVoiceConversation: async () => { throw new Error('Voice is unavailable in the session lifecycle fixture'); },
 			getActiveConversation: () => lifecycleSessions!.activeUntitledSession ? undefined : lifecycleSessions!.active && { sessionId: lifecycleSessions!.active!.session.sessionId, threadId: lifecycleSessions!.active!.threadId },

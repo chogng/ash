@@ -102,6 +102,8 @@ export interface ChatInputPartOptions {
 	readonly renderSecondaryToolbar?: boolean;
 	/** Sessions hosts bind their own paste/drop events while sharing preparation and pending state. */
 	readonly fileEvents?: 'input' | 'host';
+	/** Sessions composers already own persisted drafts; the regular input retains them in memory. */
+	readonly draftStorage?: 'input' | 'host';
 }
 
 /** Input operations consumed by a Chat pane, independent of its product's composer layout. */
@@ -141,6 +143,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private applyingHistory = false;
 	private historyInputRevision = 0;
 	private draftSkills: { readonly text: string; readonly references: readonly SkillReference[]; } | undefined;
+	private draftIdentity: ChatInputState['draftIdentity'];
+	private readonly conversationDrafts = new Map<string, InputHistoryDraft>();
 	private readonly inputChanges = this._register(new Emitter<void>());
 	protected readonly onDidChangeInput = this.inputChanges.event;
 	private readonly delegate: ChatInputDelegate;
@@ -370,6 +374,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.renderToolbarActions();
 		this._register(toDisposable(() => this.element.remove()));
 		this._register(toDisposable(() => this.inputLifecycle.abort()));
+		this._register(toDisposable(() => this.conversationDrafts.clear()));
 		this._register(toDisposable(() => { this.logDictationSample(false); void this.stopDictation(); }));
 	}
 
@@ -822,6 +827,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 
 	render(state: ChatInputState): void {
+		this.selectDraft(state.draftIdentity);
 		if (this.serverSlashCommands !== state.slashCommands) {
 			this.slashCommands.setServerCommands(state.slashCommands);
 			this.serverSlashCommands = state.slashCommands;
@@ -835,6 +841,28 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.renderStatus();
 		this.renderInteraction(state);
 		this.renderToolbar();
+	}
+
+	private selectDraft(identity: ChatInputState['draftIdentity']): void {
+		if (!identity || this.options.draftStorage === 'host') return;
+		const previous = this.draftIdentity;
+		this.draftIdentity = identity;
+		if (!previous || previous.id === identity.id || previous.generation === identity.generation) return;
+		// A retained Session composer lends its live input to one Thread at a time.
+		// Park user-owned references with their draft; live App context never follows navigation.
+		const snapshot = this.snapshotDraftReferences();
+		if (snapshot.text || snapshot.contexts.length) {
+			this.conversationDrafts.set(previous.id, { ...this.captureHistoryDraft(), text: snapshot.text, attachments: snapshot.contexts });
+		} else {
+			this.conversationDrafts.delete(previous.id);
+		}
+		this.invalidatePendingInput();
+		this.attachmentModel.clear();
+		const draft = this.conversationDrafts.get(identity.id);
+		this.conversationDrafts.delete(identity.id);
+		this.applyHistoryDraft(draft ?? { text: '', selection: { anchor: 0, active: 0 }, attachments: [], skills: [] });
+		this.draftRevision++;
+		this.inputChanges.fire();
 	}
 
 	/** Persistent tool configuration labels must not enable Send or obscure a leading slash command. */

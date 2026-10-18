@@ -74,6 +74,7 @@ async function fixture(wording: 'archive' | 'done', archived = false) {
 	services.registerInstance(ISessionsManagementService, sessions);
 	const opened: string[] = [];
 	services.registerInstance(IChatSessionNavigationService, {
+		revision: 0,
 		getConversations: () => [], appendToActiveDraft: () => { }, captureActiveDraft: async () => undefined,
 		startVoiceConversation: async () => { throw new Error('Voice is outside this archive fixture'); },
 		getActiveConversation: () => sessions.activeUntitledSession ? undefined : sessions.active && { sessionId: sessions.active.session.sessionId, threadId: sessions.active.threadId },

@@ -250,6 +250,7 @@ services.registerInstance(IInstructionService, {
 	},
 });
 services.registerInstance(IChatSessionNavigationService, {
+	revision: 0,
 	getActiveConversation: () => ({ sessionId: 'active-session', threadId: 'active-thread' }),
 	getConversations: () => [{ sessionId: 'active-session', threadId: 'active-thread', title: 'Current session' }, { sessionId: 'previous-session', threadId: 'previous-thread', title: 'Earlier design' }],
 	startVoiceConversation: async () => { throw new Error("Unexpected voice start"); },

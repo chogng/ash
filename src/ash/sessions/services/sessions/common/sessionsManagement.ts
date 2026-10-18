@@ -8,6 +8,8 @@ export type SessionsManagementState = "loading" | "ready" | "creating" | "stoppi
 
 /** Owns canonical Session management, active selection, and window-local untitled Chats. */
 export interface ISessionsManagementService {
+	/** Changes on explicit selection, including leaving and returning to the same Thread. */
+	readonly navigationRevision: number;
 	readonly onDidChange: Event<void>;
 	readonly sessions: readonly ISession[];
 	readonly active: IActiveSessionThread | undefined;

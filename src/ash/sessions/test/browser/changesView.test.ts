@@ -71,6 +71,7 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 		using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'sessions', flushInterval: 0 });
 		let selection = selected('old');
 		const sessions: ISessionsService = {
+			navigationRevision: 0,
 			onDidChange: changed.event, get activeSelection() { return selection; }, get visibleSelections() { return [selection]; },
 			canNavigateBack: false, canNavigateForward: false,
 			getSelection() { return { activeSelection: selection, visibleSelections: [selection] }; },

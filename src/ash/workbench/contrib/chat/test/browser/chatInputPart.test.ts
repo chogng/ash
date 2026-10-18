@@ -1112,3 +1112,22 @@ test('approval exposes only offered reusable decisions and renders exact argv as
 	}
 	assert.deepEqual(responses, [{ type: 'approval', response: { decision: 'approveForSession' } }, { type: 'approval', response: { decision: 'approveAndSaveRule' } }]);
 });
+
+test('peer-chat navigation isolates drafts and references while first-send materialization retains the live draft', async () => {
+	using part = inputPart(sharedNotifications);
+	const state: ChatInputState = { mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false };
+	part.render({ ...state, draftIdentity: { id: 'draft', generation: 0 } });
+	part.appendToDraft('Original draft');
+	part.addContext({ id: 'file', name: 'private.txt', kind: 'file', resolve: async () => ({ name: 'private.txt', content: 'Original file snapshot' }) });
+	const original = (await part.captureDraft())!.draft;
+	part.render({ ...state, draftIdentity: { id: 'root', generation: 0 } });
+	assert.deepEqual((await part.captureDraft())!.draft, original);
+	part.render({ ...state, draftIdentity: { id: 'peer', generation: 1 } });
+	assert.equal(await part.captureDraft(), undefined);
+	part.appendToDraft('Peer draft');
+	part.render({ ...state, draftIdentity: { id: 'root', generation: 2 } });
+	assert.deepEqual((await part.captureDraft())!.draft, original);
+	part.render({ ...state, draftIdentity: { id: 'peer', generation: 3 } });
+	assert.equal((await part.captureDraft())!.draft.text, 'Peer draft');
+	assert.deepEqual((await part.captureDraft())!.draft.contexts, []);
+});

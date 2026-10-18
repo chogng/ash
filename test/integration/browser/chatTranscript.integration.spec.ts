@@ -1,5 +1,52 @@
 import { expect, test } from '@playwright/test';
 
+for (const locale of ['en', 'zh-CN']) for (const cowork of [false, true]) for (const theme of ['dark', 'light', 'hc', 'hcLight'] as const) {
+	test(`Chat request editing preserves drafts and keyboard focus in ${cowork ? 'Cowork' : 'Code'} ${locale} ${theme}`, async ({ page }) => {
+		await page.goto(`/chatTranscript.html?locale=${locale}`);
+		await page.evaluate(({ cowork, theme }) => {
+			window.ashChatTranscriptIntegration.setTheme(theme);
+			window.ashChatTranscriptIntegration.prepareRequestEditing(cowork);
+		}, { cowork, theme });
+		const chat = page.locator('#app-chat');
+		const draft = chat.locator(cowork ? '.stanza-editor-input' : '.ash-chat-textarea-input');
+		if (cowork) { await draft.focus(); await page.keyboard.insertText('Unsent private draft'); }
+		else await draft.fill('Unsent private draft');
+		const edit = chat.getByRole('button', { name: locale === 'en' ? 'Edit message' : '编辑消息', exact: true });
+		await edit.focus();
+		await page.keyboard.press('Enter');
+		const input = chat.getByRole('textbox', { name: locale === 'en' ? 'Edit request' : '编辑请求', exact: true });
+		await expect(input).toBeFocused();
+		await expect(input).toHaveValue('Original request');
+		await input.fill('Cancelled change');
+		await page.keyboard.press('Escape');
+		await expect(input).toHaveCount(0);
+		await expect(edit).toBeFocused();
+		await edit.press('Space');
+		await input.fill('Edited\nrequest');
+		await chat.screenshot({ path: test.info().outputPath('request-editor.png') });
+		await expect(chat.locator('.ash-chat-request-editor')).toHaveJSProperty('scrollWidth', await chat.locator('.ash-chat-request-editor').evaluate(element => element.clientWidth));
+		await input.press('Control+Enter');
+		await expect(chat.locator('.ash-chat-request-editor')).toHaveAttribute('aria-busy', 'true');
+		const send = chat.getByRole('button', { name: locale === 'en' ? 'Send edited request' : '发送编辑后的请求', exact: true });
+		await expect(send).toBeDisabled();
+		await page.evaluate(() => window.ashChatTranscriptIntegration.finishRequestEdit(true));
+		await expect(chat.locator('.ash-chat-request-editor [role="status"]')).toContainText('Synthetic edit failure');
+		await expect(input).toBeFocused();
+		await expect(input).toHaveValue('Edited\nrequest');
+		await input.press('Control+Enter');
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.requestEdits().length)).toBe(2);
+		const edits = await page.evaluate(() => window.ashChatTranscriptIntegration.requestEdits());
+		expect(edits[0].itemId).toBe('backend-request');
+		expect(edits[0].commandId).toBe(edits[1].commandId);
+		await page.evaluate(() => window.ashChatTranscriptIntegration.finishRequestEdit());
+		await expect(input).toHaveCount(0);
+		await expect(edit).toBeFocused();
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft())).toBe('Unsent private draft');
+		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.chatMessages())).toEqual([]);
+		await chat.screenshot({ path: test.info().outputPath('request-editing.png') });
+	});
+}
+
 for (const locale of ['en', 'zh-CN']) for (const theme of ['dark', 'light', 'hc'] as const) {
 	test(`Chat bounded history pagination preserves keyboard focus, draft and reading position in ${locale} ${theme}`, async ({ page }) => {
 		await page.goto(`/chatTranscript.html?locale=${locale}`);

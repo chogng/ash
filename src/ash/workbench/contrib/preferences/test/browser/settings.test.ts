@@ -1854,6 +1854,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	});
 	const prompts: string[] = [];
 	services.registerInstance(IChatSessionNavigationService, {
+		revision: 0,
 		getActiveConversation: () => ({ sessionId: 'session-hooks', threadId: 'thread-hooks' }),
 		getConversations: () => [], captureActiveDraft: async () => undefined, openConversation: async () => { },
 		startVoiceConversation: async () => { throw new Error("Unexpected voice start"); },

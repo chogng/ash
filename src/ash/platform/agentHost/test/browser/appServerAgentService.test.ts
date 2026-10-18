@@ -577,3 +577,26 @@ test('naming and deletion preserve request identity and reject responses for ano
 	await assert.rejects(threads.rename({ sessionId: 'session', threadId: 'branch', commandId: 'wrong-thread', title: '命名', source: 'automatic' }));
 	await assert.rejects(sessions.delete({ sessionId: 'session', commandId: 'wrong-delete' }));
 });
+
+test('Fork and edit dispatch existing typed session operations and keep their returned identities', async () => {
+	const requests: unknown[] = [];
+	let wrongSession = false;
+	const service = createAppServerAgentThreadService({
+		async request(definition: { method: string; }, params: { request: { type: string; }; }) {
+			requests.push({ method: definition.method, params });
+			return { type: params.request.type === 'rewriteThread' ? 'rewrite' : 'thread', value: { session: { sessionId: wrongSession ? 'wrong' : params.request.type === 'forkSession' ? 'new-session' : 'source' }, threadId: 'new-thread', turn: { turnId: 'edited-turn', sequence: 1 } } };
+		},
+	} as unknown as AppServerProtocolClient);
+	const base = { sessionId: 'source', threadId: 'original', title: 'New history', commandId: 'command' };
+	assert.deepEqual(await service.fork({ ...base, target: 'session' }), { sessionId: 'new-session', threadId: 'new-thread' });
+	assert.deepEqual(await service.fork({ ...base, target: 'thread' }), { sessionId: 'source', threadId: 'new-thread' });
+	assert.deepEqual(await service.rewrite({ ...base, beforeTurnId: 'old-turn', input: [{ type: 'text', text: 'Edited' }] }), { sessionId: 'source', threadId: 'new-thread' });
+	assert.deepEqual(requests, [
+		{ method: 'session/request', params: { sessionId: 'source', commandId: 'command', request: { type: 'forkSession', parentThreadId: 'original', title: 'New history' } } },
+		{ method: 'session/request', params: { sessionId: 'source', commandId: 'command', request: { type: 'forkThread', parentThreadId: 'original', title: 'New history' } } },
+		{ method: 'session/request', params: { sessionId: 'source', commandId: 'command', request: { type: 'rewriteThread', parentThreadId: 'original', beforeTurnId: 'old-turn', title: 'New history', input: [{ type: 'text', text: 'Edited' }] } } },
+	]);
+	wrongSession = true;
+	await assert.rejects(service.fork({ ...base, target: 'thread' }), /different conversation/);
+	await assert.rejects(service.rewrite({ ...base, beforeTurnId: 'turn', input: [{ type: 'text', text: 'Edited' }] }), /different conversation/);
+});

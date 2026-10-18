@@ -3,6 +3,7 @@ import type { IOpenAgentsWindowOptions } from '../../../../platform/native/commo
 
 /** Conversation destinations exposed by the session owner to workbench contributions. */
 export interface IChatSessionNavigationService {
+	readonly revision: number;
 	getConversations(): readonly { readonly sessionId: string; readonly threadId: string; readonly title: string; }[];
 	/** Appends a feature handoff without sending or replacing the existing draft and attachments. */
 	appendToActiveDraft(text: string): void;

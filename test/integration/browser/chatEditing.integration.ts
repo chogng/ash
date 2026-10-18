@@ -121,6 +121,7 @@ let canRedo = false;
 const opened: string[] = [];
 const restoring = (parameters.has('restoreSlow') || parameters.has('historySlow')) ? new DeferredPromise<void>() : undefined;
 services.registerInstance(IChatSessionNavigationService, {
+	revision: 0,
 	getActiveConversation: () => activeChat,
 	getConversations: () => [], startVoiceConversation: async () => { throw new Error("Unexpected voice start"); }, appendToActiveDraft() { }, captureActiveDraft: async () => undefined,
 	openConversation: async (sessionId, threadId) => { activeChat = { sessionId, threadId }; opened.push(threadId); },

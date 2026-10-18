@@ -13,6 +13,8 @@ interface ChatTurnErrorListItemOptions {
 
 /** One render-ready committed or transient Thread item. */
 export interface IChatListItem {
+	/** Initial accepted request identity; presentation entry IDs are not backend item IDs. */
+	readonly requestSource?: { readonly sessionId: string; readonly threadId: string; readonly turnId: string; readonly itemId: string; };
 	readonly id: string;
 	readonly type: ThreadItem["type"] | "turnError" | "advisor" | 'hook' | 'voiceTranscript';
 	readonly content?: readonly ChatContentPart[];
@@ -59,6 +61,9 @@ function chatPlanUpdateListItem(turnId: string, plan: PlanUpdate): IChatListItem
 
 /** Associates backend tool evidence within a Turn while preserving transcript order. */
 export function chatTranscriptListItems(entries: readonly ThreadTranscriptEntry[], latestTurnId?: string, turns: readonly Turn[] = [], source?: { readonly sessionId: string; readonly threadId: string; }): readonly IChatListItem[] {
+	const editableRequests = new Map(turns
+		.filter(turn => !turn.kind || turn.kind === 'coding' || turn.kind === 'review')
+		.map(turn => [turn.turnId, turn.items.find(item => item.type === 'userMessage')?.itemId]));
 	// Call IDs are provider-owned and can be reused in another Turn. Keep presentation identity scoped.
 	const key = (turnId: string, toolCallId: string) => JSON.stringify([turnId, toolCallId]);
 	const toolCalls = new Map(entries.flatMap(entry => entry.type === 'item' && entry.item.type === 'toolCall' ? [[key(entry.turnId, entry.item.toolCallId), entry] as const] : []));
@@ -123,7 +128,12 @@ export function chatTranscriptListItems(entries: readonly ThreadTranscriptEntry[
 			].filter(Boolean).join(" · ");
 			return [{ id: entry.entryId, type: "advisor" as const, text: advice, transient: false, isError: item.isError, label: localize("chat.advisor.modelLabel", "Advisor · {0}", modelLabel), detail: details }];
 		}
-		const item = chatTranscriptListItem(entry, { actionsEnabled: entry.turnId === latestTurnId });
+		let item = chatTranscriptListItem(entry, { actionsEnabled: entry.turnId === latestTurnId });
+		if (source && entry.type === 'item' && entry.item.type === 'userMessage' && !entry.transient) {
+			if (editableRequests.get(entry.turnId) === entry.item.itemId) {
+				item = { ...item, requestSource: { ...source, turnId: entry.turnId, itemId: entry.item.itemId } };
+			}
+		}
 		return source && entry.type === 'item' && item.content?.some(part => part.type !== 'text')
 			? [{ ...item, attachmentSource: { ...source, itemId: entry.item.itemId, kind: entry.item.type === 'toolResult' ? 'toolResult' as const : 'item' as const } }] : [item];
 	});

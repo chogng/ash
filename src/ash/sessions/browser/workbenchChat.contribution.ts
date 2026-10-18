@@ -11,6 +11,8 @@ import { ISessionsManagementService } from '../services/sessions/common/sessions
 import { ChatViewPane } from './chatViewPane.js';
 import './actions/chatActions.js';
 import { ChatContextKeys } from '../../workbench/contrib/chat/common/actions/chatContextKeys.js';
+import { registerAction2 } from '../../platform/actions/common/actions.js';
+import { ForkConversationAction } from '../../workbench/contrib/chat/browser/actions/chatForkActions.js';
 import './actions/chatLayoutActions.js';
 import '../contrib/sessions/browser/views/sessionsViewActions.js';
 
@@ -19,6 +21,8 @@ class ChatSessionNavigationService implements IChatSessionNavigationServiceContr
 		@ISessionsManagementService private readonly sessions: ISessionsManagementService,
 		@IViewsService private readonly views: IViewsService,
 	) { }
+
+	get revision(): number { return this.sessions.navigationRevision; }
 
 	captureActiveDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void; } | undefined> {
 		const view = this.views.getViewWithId(CHAT_VIEW_ID);
@@ -49,8 +53,10 @@ class ChatSessionNavigationService implements IChatSessionNavigationServiceContr
 			})));
 	}
 
-	openConversation(sessionId: string, threadId: string): Promise<void> {
-		return this.sessions.openThread(sessionId, threadId);
+	async openConversation(sessionId: string, threadId: string): Promise<void> {
+		await this.sessions.openThread(sessionId, threadId);
+		const active = this.getActiveConversation();
+		if (active?.sessionId === sessionId && active.threadId === threadId) await this.views.focusView(CHAT_VIEW_ID);
 	}
 	async startVoiceConversation(): Promise<void> {
 		const view = await this.views.openView(CHAT_VIEW_ID);
@@ -82,4 +88,5 @@ export function registerChatViews(registry: WorkbenchViewRegistry = ViewsRegistr
 }
 
 registerSingleton(IChatSessionNavigationService, ChatSessionNavigationService, InstantiationType.Delayed);
+registerAction2(ForkConversationAction);
 registerChatViews();

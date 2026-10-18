@@ -228,7 +228,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		pickWorkspaceAndOpen: async () => { throw new Error('Unexpected workspace open'); },
 		showOpenDialog: async () => undefined, showSaveDialog: async () => undefined, pickFileToSave: async () => undefined, showSaveConfirm: async () => 2
 	});
-	services.registerInstance(IChatSessionNavigationService, { getActiveConversation: () => undefined, getConversations: () => [], captureActiveDraft: async () => undefined, openConversation: async () => { }, startVoiceConversation: async () => { throw new Error("Unexpected voice start"); }, appendToActiveDraft: () => { } });
+	services.registerInstance(IChatSessionNavigationService, { revision: 0, getActiveConversation: () => undefined, getConversations: () => [], captureActiveDraft: async () => undefined, openConversation: async () => { }, startVoiceConversation: async () => { throw new Error("Unexpected voice start"); }, appendToActiveDraft: () => { } });
 	const editorOpens: { resource: string; target: unknown; }[] = [];
 	services.registerInstance(IEditorService, {
 		openEditor: async (input, _options, target) => {

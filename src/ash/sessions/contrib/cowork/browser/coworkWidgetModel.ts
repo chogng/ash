@@ -133,6 +133,7 @@ export class CoworkWidgetModel extends Disposable {
 
 	get inputState(): ChatInputState {
 		return {
+			draftIdentity: { id: this.composerIdentity, generation: this.composerGeneration },
 			inputBlocked: this.configuration.getValue<boolean>(ChatAIDisabledSettingId),
 			aiDisabled: this.configuration.getValue<boolean>(ChatAIDisabledSettingId),
 			mode: this.mode,

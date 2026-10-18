@@ -47,6 +47,8 @@ const focusableSelector = 'button, a, summary, textarea, audio, [role="textbox"]
 const speechContextKeys = new Set([HasSpeechProvider.key, TextToSpeechInProgress.key]);
 
 class RenderedItem extends Disposable {
+	readonly edit = this._register(new MutableDisposable<DisposableStore>());
+	public editButton: Button | undefined;
 	public copyButton: Button | undefined;
 	public updateReadAloud: (() => void) | undefined;
 	public readonly reading = this._register(new MutableDisposable<IDisposable & { readonly source: CancellationTokenSource; readonly item: IChatListItem; }>());
@@ -150,7 +152,7 @@ export class ChatListWidget extends DomWidget {
 					const active = this.element.ownerDocument.activeElement as HTMLElement | null;
 					if (!active || !this.transcript.contains(active)) return undefined;
 					const provider = new AccessibleContentProvider(AccessibleViewProviderId.SessionsChat, { type }, () => {
-						if (type === AccessibleViewType.Help) return localize('chat.naming.help', 'New conversations take an initial name from the first message. Use Chat: Rename Conversation in the Command Palette to set a name. Enter saves it and Escape cancels. Manual names are kept when automatic naming finishes later.') + '\n' + localize('chat.history.paginationHelp', 'Chat initially shows recent messages. Use Tab to reach Load earlier messages, then Enter or Space to load another page. Loading preserves your draft, active approvals and reading position. If it fails, use Retry earlier messages. Live messages remain available while older history loads.') + '\n' + localize("chat.transcript.help", "Chat responses\nWith a Speech extension, use Read aloud on a completed response. The same button stops reading; Escape also stops it. Hiding or removing the response cancels reading. Use Stop reading aloud in the Command Palette after moving focus elsewhere. Use Tab and Shift+Tab to reach message copy actions, response links, code block actions and tool summaries. Copy message copies its current source text, including Markdown. Press Enter or Space on a tool summary to expand or collapse its input, source, execution target, output and result. Code block actions copy the complete source, insert it into the active editor, or open it in a new unsaved file. Use context summaries to inspect the exact text attached to a request. Use resource summaries to inspect returned data and Open resource for a read-only preview. Use Load image or Load audio to read a stored attachment. Open image or Open audio opens its original bytes in a read-only editor. Opening audio pauses the transcript player. Open interactive view loads a declared MCP App; use Tab or Shift+Tab to reach its controls and Close interactive view to return focus. Streaming updates and provider corrections keep code selections, keyboard focus and expansion. Reading older messages preserves the reading position; returning to the bottom follows new content. Failed calls show an error; a finished turn without a result is never shown as successful. Use <keybinding:editor.action.accessibleView> to read the transcript as plain text, including collapsed tool details. Closing this view returns focus to the response.");
+						if (type === AccessibleViewType.Help) return localize('chat.requests.help', 'Use Edit message on an accepted request to edit its text. Enter inserts a line; Ctrl or Command+Enter sends it into a new chat with its original context and attachments. Cancel edit or Escape keeps the original request and draft. Fork Conversation in Chat actions copies the current history without sending. New Chat in Session opens an empty chat in the same session. These actions preserve the original conversation.') + '\n' + localize('chat.naming.help', 'New conversations take an initial name from the first message. Use Chat: Rename Conversation in the Command Palette to set a name. Enter saves it and Escape cancels. Manual names are kept when automatic naming finishes later.') + '\n' + localize('chat.history.paginationHelp', 'Chat initially shows recent messages. Use Tab to reach Load earlier messages, then Enter or Space to load another page. Loading preserves your draft, active approvals and reading position. If it fails, use Retry earlier messages. Live messages remain available while older history loads.') + '\n' + localize("chat.transcript.help", "Chat responses\nWith a Speech extension, use Read aloud on a completed response. The same button stops reading; Escape also stops it. Hiding or removing the response cancels reading. Use Stop reading aloud in the Command Palette after moving focus elsewhere. Use Tab and Shift+Tab to reach message copy actions, response links, code block actions and tool summaries. Copy message copies its current source text, including Markdown. Press Enter or Space on a tool summary to expand or collapse its input, source, execution target, output and result. Code block actions copy the complete source, insert it into the active editor, or open it in a new unsaved file. Use context summaries to inspect the exact text attached to a request. Use resource summaries to inspect returned data and Open resource for a read-only preview. Use Load image or Load audio to read a stored attachment. Open image or Open audio opens its original bytes in a read-only editor. Opening audio pauses the transcript player. Open interactive view loads a declared MCP App; use Tab or Shift+Tab to reach its controls and Close interactive view to return focus. Streaming updates and provider corrections keep code selections, keyboard focus and expansion. Reading older messages preserves the reading position; returning to the bottom follows new content. Failed calls show an error; a finished turn without a result is never shown as successful. Use <keybinding:editor.action.accessibleView> to read the transcript as plain text, including collapsed tool details. Closing this view returns focus to the response.");
 						return [...this.renderedItems].map(([, row]) => row.toolPart || row.hookPart
 							? [...(row.toolPart?.domNode ?? row.hookPart!.domNode).children].map(child => child.textContent).filter(Boolean).join('\n\n')
 							: [itemLabel(row.item), row.item.text, row.item.contextText, row.item.detail].filter(Boolean).join('\n\n')).join('\n\n');
@@ -424,6 +426,85 @@ export class ChatListWidget extends DomWidget {
 			}).finally(() => { copying = false; if (!row.isDisposed) button.domNode.removeAttribute('aria-busy'); });
 		}));
 		if (row.item.type === 'agentMessage') this.renderReadAloudAction(row, actions, lifetime);
+		if (row.item.requestSource) this.renderEditAction(row, actions, lifetime);
+	}
+
+	private renderEditAction(row: RenderedItem, actions: HTMLElement, lifetime: DisposableStore): void {
+		const edit = lifetime.add(new Button(actions, {
+			...defaultButtonStyles, label: localize('chat.edit.label', 'Edit message'), presentation: 'quiet', size: 'small',
+		}));
+		row.editButton = edit;
+		lifetime.add(edit.onDidClick(() => {
+			if (row.edit.value || !row.item.requestSource || !this.visible) return;
+			const source = row.item.requestSource;
+			const store = new DisposableStore();
+			row.edit.value = store;
+			const editor = h(row.element.ownerDocument, 'div');
+			editor.className = 'ash-chat-request-editor';
+			const input = h(editor.ownerDocument, 'textarea');
+			input.setAttribute('aria-label', localize('chat.edit.input', 'Edit request'));
+			input.value = row.item.text;
+			input.rows = Math.min(12, Math.max(3, input.value.split('\n').length));
+			const explanation = h(editor.ownerDocument, 'p');
+			explanation.id = createUuid();
+			input.setAttribute('aria-describedby', explanation.id);
+			explanation.textContent = localize('chat.edit.description', 'Sending creates a new chat from before this request. Its context and attachments are kept; the original chat and draft stay available.');
+			const controls = h(editor.ownerDocument, 'div');
+			controls.className = 'ash-chat-message-actions';
+			const send = store.add(new Button(controls, { ...defaultButtonStyles, label: localize('chat.edit.resend', 'Send edited request'), size: 'small' }));
+			const cancel = store.add(new Button(controls, { ...defaultButtonStyles, label: localize('chat.edit.cancel', 'Cancel edit'), presentation: 'quiet', size: 'small' }));
+			const feedback = h(editor.ownerDocument, 'span');
+			feedback.setAttribute('role', 'status');
+			controls.append(feedback);
+			editor.append(input, explanation, controls);
+			row.element.append(editor);
+			edit.enabled = false;
+			store.add(toDisposable(() => { editor.remove(); edit.enabled = true; }));
+			const close = (): void => {
+				const restoreFocus = this.visible && editor.contains(editor.ownerDocument.activeElement);
+				row.edit.clear();
+				if (restoreFocus) edit.focus();
+				this.relayout.schedule();
+				this._onDidChangeContent.fire();
+			};
+			let pending = false;
+			let attempt: { text: string; commandId: string; } | undefined;
+			const submit = async (): Promise<void> => {
+				if (pending || !input.value.trim() || row.isDisposed || !this.visible) return;
+				if (attempt?.text !== input.value) attempt = { text: input.value, commandId: createUuid() };
+				pending = true;
+				input.readOnly = true;
+				send.enabled = cancel.enabled = false;
+				editor.setAttribute('aria-busy', 'true');
+				feedback.textContent = '';
+				try {
+					await this.commands.executeCommand('workbench.action.chat.resendRequest', { ...source, ...attempt });
+					if (!row.isDisposed) close();
+				} catch (error) {
+					if (!row.isDisposed) feedback.textContent = localize('chat.edit.failed', 'Could not send the edited request: {0}', String(error));
+				} finally {
+					pending = false;
+					if (!row.isDisposed && row.edit.value === store) {
+						input.readOnly = false;
+						send.enabled = !!input.value.trim();
+						cancel.enabled = true;
+						editor.removeAttribute('aria-busy');
+						const active = editor.ownerDocument.activeElement;
+						if (this.visible && (editor.contains(active) || active === editor.ownerDocument.body)) input.focus();
+					}
+				}
+			};
+			store.add(send.onDidClick(() => void submit()));
+			store.add(cancel.onDidClick(close));
+			store.add(addDisposableListener(input, 'input', () => { send.enabled = !!input.value.trim(); }));
+			store.add(addDisposableListener(editor, 'keydown', event => {
+				if (event.isComposing) return;
+				if (event.key === 'Escape' && !pending) { event.preventDefault(); event.stopPropagation(); close(); }
+				else if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !event.isComposing) { event.preventDefault(); void submit(); }
+			}));
+			input.focus();
+			this.relayout.schedule(); this._onDidChangeContent.fire();
+		}));
 	}
 
 	private renderReadAloudAction(row: RenderedItem, actions: HTMLElement, lifetime: DisposableStore): void {
@@ -590,6 +671,8 @@ export class ChatListWidget extends DomWidget {
 
 function sameItem(left: IChatListItem, right: IChatListItem): boolean {
 	return left.id === right.id && left.type === right.type && left.text === right.text && left.contextText === right.contextText
+		&& left.requestSource?.sessionId === right.requestSource?.sessionId && left.requestSource?.threadId === right.requestSource?.threadId
+		&& left.requestSource?.turnId === right.requestSource?.turnId && left.requestSource?.itemId === right.requestSource?.itemId
 		&& left.hookPart?.run === right.hookPart?.run
 		&& left.transient === right.transient && left.isError === right.isError
 		&& left.label === right.label && left.detail === right.detail && left.errorCode === right.errorCode

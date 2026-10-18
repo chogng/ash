@@ -96,6 +96,7 @@ test("opens a local Chat conversation before the backend session request settles
 	registerTestDictationOnboarding(services);
 	const chat = unavailableChatService();
 	services.registerInstance(IChatSessionNavigationService, {
+		revision: 0,
 		getConversations: () => [], getActiveConversation: () => undefined,
 		captureActiveDraft: async () => undefined, appendToActiveDraft: () => { },
 		startVoiceConversation: async () => { throw new Error('Voice is outside this startup fixture'); },
@@ -135,6 +136,7 @@ test("opens a local Chat conversation before the backend session request settles
 });
 
 class PendingSessionService implements ISessionsManagementService {
+	readonly navigationRevision = 0;
 	private readonly _onDidChange = new Emitter<void>();
 	private readonly pendingInitialization = new Promise<void>(() => { });
 	private _untitledSessions: readonly IUntitledChatSession[] = [];
@@ -215,6 +217,7 @@ function unavailableChatService(): IChatService & ILanguageModelsService {
 	const pending = new Promise<never>(() => { });
 	const neverEvent = <T>(): Event<T> => () => toDisposable(() => { });
 	return {
+		rewriteRequest: async () => { throw new Error('Unexpected request rewrite'); },
 		renameThread: async () => { throw new Error('Unexpected rename'); },
 		configureAdvisor: async () => { },
 		consultAdvisor: async () => { },

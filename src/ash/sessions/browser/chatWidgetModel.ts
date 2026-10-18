@@ -155,6 +155,7 @@ export class ChatWidgetModel extends Disposable {
 
 	get inputState(): ChatInputState {
 		return {
+			draftIdentity: { id: this.composerIdentity, generation: this.composerGeneration },
 			mode: this.mode,
 			activeMode: activeTurn(this._thread)?.mode,
 			queuedMessages: this.queuedMessages,

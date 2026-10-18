@@ -1,7 +1,7 @@
 import { IAgentExecutionSettingsService } from '../../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
-import type { ChatContextUsage, IChatRequestSubmittedEvent } from '../common/chatService.js';
+import type { ChatContextUsage, IChatRequestSubmittedEvent, RewriteChatRequestOptions } from '../common/chatService.js';
 import type { AgentInteractionOffer, AgentInput, ThreadRead, ThreadSnapshotHistory } from '../../../../platform/agentHost/common/agentService.js';
 import { localize } from '../../../../nls.js';
 import type { TurnChangeSetSummary as TurnChangeSetSummaryDto, TurnChangesReadResult as TurnChangesReadResultDto } from '../../../../../../.build/protocol/typescript/index.js';
@@ -178,6 +178,37 @@ export class ChatService extends Disposable implements IChatService {
 
 	async readHistoryState(sessionId: SessionId, threadId: ThreadId) {
 		return this.threadApi.readHistoryState({ sessionId, threadId });
+	}
+
+	async rewriteRequest(options: RewriteChatRequestOptions): Promise<{ readonly sessionId: SessionId; readonly threadId: ThreadId; }> {
+		this.assertAIEnabled();
+		const epoch = this.connectionEpoch;
+		const { thread } = await this.readThread(options.sessionId, options.threadId);
+		const turn = thread.turns.find(turn => turn.turnId === options.turnId);
+		const firstMessage = turn?.items.find(item => item.type === 'userMessage');
+		if (!turn || firstMessage?.itemId !== options.itemId) throw new Error(localize('chat.edit.unavailable', 'This request is no longer available for editing.'));
+		const input: AgentInput[] = [];
+		// Only the original submission belongs to the replacement. Later steering and tool output do not.
+		for (const item of turn.items) {
+			if (item.type === 'userMessage' && item.itemId !== options.itemId) break;
+			switch (item.type) {
+				case 'userMessage': input.push({ type: 'text', text: options.text }); break;
+				case 'userContext': input.push({ type: 'context', name: item.name, content: item.content }); break;
+				case 'userImage': input.push({ type: 'image', url: item.url }); break;
+				case 'userImageAttachment': input.push({ type: 'imageAttachment', attachment: item.attachment }); break;
+				case 'userAudioAttachment': input.push({ type: 'audioAttachment', attachment: item.attachment }); break;
+				default: break;
+			}
+			if (!item.type.startsWith('user')) break;
+		}
+		if (this.isDisposed || epoch !== this.connectionEpoch) throw canceled();
+		this.assertAIEnabled();
+		const result = await this.threadApi.rewrite({
+			sessionId: options.sessionId, threadId: options.threadId, beforeTurnId: options.turnId,
+			commandId: options.commandId, title: thread.title, input,
+		});
+		if (this.isDisposed || epoch !== this.connectionEpoch) throw canceled();
+		return result;
 	}
 
 	async moveHistory(options: { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly direction: 'undo' | 'redo'; }): Promise<void> {

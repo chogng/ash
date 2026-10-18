@@ -27,6 +27,8 @@ export interface ISessionsService {
 	getSelection(reader?: IReader): SessionsSelection;
 	readonly visibleSelections: readonly SessionsViewSelection[];
 	readonly activeSelection: SessionsViewSelection | undefined;
+	/** Changes for explicit conversation and covering Custom View navigation. */
+	readonly navigationRevision: number;
 	readonly canNavigateBack: boolean;
 	readonly canNavigateForward: boolean;
 	initialize(): Promise<void>;
@@ -53,7 +55,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 	private readonly sessionService: ISessionsManagementService;
 	private readonly _onDidChange = this._register(new Emitter<void>());
 	private readonly current = new SessionsViewState();
-	private navigationRevision = 0;
+	private _navigationRevision = 0;
 	private initialized = false;
 	private readonly storedState: StoredSessionsViewState | undefined;
 
@@ -77,12 +79,13 @@ export class SessionsService extends Disposable implements ISessionsService {
 			const opening = customViews.activeCustomViewOpen.read(reader);
 			if (!opening) return;
 			// A custom-view open supersedes an in-flight Thread open without changing the covered selection.
-			this.navigationRevision++;
+			this._navigationRevision++;
 			if (opening.source !== 'history' && (opening.source !== 'restore' || this.initialized)) this.record({ kind: 'customView', id: opening.descriptor.id }, this.current);
 			this._onDidChange.fire();
 		}));
 	}
 
+	get navigationRevision(): number { return this._navigationRevision; }
 	get visibleSelections(): readonly SessionsViewSelection[] { return this.current.visibleSelections.get(); }
 	get activeSelection(): SessionsViewSelection | undefined { return this.current.activeSelection.get(); }
 	get canNavigateBack(): boolean { return this.findNavigableIndex(this.current.historyIndex, -1) !== undefined; }
@@ -135,10 +138,10 @@ export class SessionsService extends Disposable implements ISessionsService {
 
 	openSession(sessionId: SessionId, threadId: ThreadId): void { this.activate({ kind: 'session', sessionId, threadId }); }
 	async openThread(sessionId: SessionId, threadId: ThreadId): Promise<void> {
-		const revision = ++this.navigationRevision;
+		const revision = ++this._navigationRevision;
 		await this.sessionService.openThread(sessionId, threadId);
 		if (this.isDisposed) throw canceled();
-		if (revision === this.navigationRevision) { this.activate({ kind: 'session', sessionId, threadId }); }
+		if (revision === this._navigationRevision) { this.activate({ kind: 'session', sessionId, threadId }); }
 	}
 	openUntitledSession(untitledSessionId: string): void { this.activate({ kind: 'untitled', untitledSessionId }); }
 	openNewSession(title = 'New chat', options?: { readonly sideBySide?: boolean; readonly source?: 'restore'; }): IUntitledChatSession {
@@ -152,7 +155,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 		const key = visibilityKey(referenceForSelection(selection));
 		const index = state.visibleReferences.findIndex(reference => visibilityKey(reference) === key);
 		if (index < 0) return;
-		this.navigationRevision++;
+		this._navigationRevision++;
 		const active = state.activeSelection.get();
 		const wasActive = active !== undefined && visibilityKey(referenceForSelection(active)) === key;
 		// Closing a sibling supersedes pending navigation even when the foreground identity stays the same.
@@ -226,7 +229,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 	}
 
 	private select(selection: SessionsViewSelection, state = this.current, mode: 'open' | 'focus' | 'add' = 'open', intent: 'explicit' | 'automatic' = 'explicit'): void {
-		this.navigationRevision++;
+		this._navigationRevision++;
 		const reference = referenceForSelection(selection);
 		const previous = state.activeSelection.get();
 		const covered = this.customViews.activeCustomView.get() !== undefined;

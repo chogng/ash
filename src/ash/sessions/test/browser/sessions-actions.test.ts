@@ -57,6 +57,7 @@ test("Sessions owns the local New Chat command without requiring regular Workben
 	const onDidChange = new Emitter<void>();
 	let created = 0;
 	const viewService: ISessionsService = {
+		navigationRevision: 0,
 		getSelection() { return { visibleSelections: [], activeSelection: undefined }; },
 		async openThread() { },
 		onDidChange: onDidChange.event,

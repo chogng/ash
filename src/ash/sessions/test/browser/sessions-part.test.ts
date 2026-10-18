@@ -88,6 +88,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	let nextUntitledSessionId = 0;
 	let activeUntitledSessionId: string | undefined;
 	const sessionService: ISessionsManagementService = {
+		navigationRevision: 0,
 		onDidChange: onDidChange.event,
 		materializedSessions: observableValue("materialized drafts", new Map()),
 		sessions: [],
@@ -154,6 +155,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	const transcriptUpdates = new Emitter<import("../../../workbench/services/chat/common/chatService.js").ThreadTranscriptUpdateEnvelope>();
 	const ready = new Emitter<void>();
 	const chatService: IChatService & ILanguageModelsService = {
+		rewriteRequest: async () => { throw new Error('Unexpected request rewrite'); },
 		renameThread: async () => { throw new Error('Unexpected rename'); },
 		configureAdvisor: async () => { },
 		consultAdvisor: async () => { },

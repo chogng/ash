@@ -28,6 +28,7 @@ const { resources, root, workspaceFiles, workspaceRoot, samples, storage, api, c
 // observe that empty scope without borrowing the enclosing product's history.
 const chatUnavailable = () => new Error(localize('themeEditor.previewChatUnavailable', 'Chat is unavailable in this preview.'));
 serviceCollection.set(IChatSessionNavigationService, {
+	revision: 0,
 	getConversations: () => [], getActiveConversation: () => undefined,
 	captureActiveDraft: async () => undefined,
 	appendToActiveDraft: () => { throw chatUnavailable(); },

@@ -254,7 +254,18 @@ export interface ChatInteractionOfferChange {
 	readonly offer?: AgentInteractionOffer;
 }
 
+export interface RewriteChatRequestOptions {
+	readonly sessionId: SessionId;
+	readonly threadId: ThreadId;
+	readonly turnId: string;
+	readonly itemId: string;
+	readonly text: string;
+	readonly commandId: string;
+}
+
 export interface IChatService {
+	/** Rewrites an initial user message while retaining its accepted context and attachments. */
+	rewriteRequest(options: RewriteChatRequestOptions): Promise<{ readonly sessionId: SessionId; readonly threadId: ThreadId; }>;
 	renameThread(sessionId: SessionId, threadId: ThreadId, title: string): Promise<void>;
 	/** Only accepted local submissions establish window activity; broadcasts never establish ownership. */
 	readonly onDidSubmitRequest: Event<IChatRequestSubmittedEvent>;

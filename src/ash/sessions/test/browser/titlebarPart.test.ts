@@ -64,6 +64,7 @@ test('Sessions titlebar initializes localized actions and closes the application
 		},
 	};
 	const sessions: ISessionsService = {
+		navigationRevision: 0,
 		getSelection() { return { visibleSelections: [], activeSelection: undefined }; },
 		async openThread() { },
 		onDidChange: changed.event,

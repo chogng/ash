@@ -12,6 +12,10 @@ Stanza 与 textarea 默认文本高度 40px，含工具栏默认总高 84px，�
 
 Profile 输入历史沿 `platform/messageHistory` 领域服务 → App Server → `SqliteMessageHistory`，普通 Workbench 与 Sessions 共用。仅主动提交文本追加历史；上下键导航、Ctrl+R 搜索／分页和确认只回填，Escape 恢复文本、光标、附件及 Skill 版本。远端 Thread 不改变本机 Profile 归属；取消、过期回包和连接替换不能改写新草稿，失败写入不自动重试。详见[输入历史](chat-input-history.md)。
 
+已接受请求的“编辑消息”沿 `ChatListWidget` → `workbench.action.chat.resendRequest` → `IChatService.rewriteRequest` → `RewriteThread`，从原请求前创建新聊天并提交修改后的文本，保留原上下文、图片和音频。Enter 换行，Ctrl／Command+Enter 发送，Escape 取消；失败保留编辑内容，同一内容重试复用命令身份。原聊天与未发送草稿仍可恢复，后续 steering 和工具输出不会重放。
+
+IDE 与 Agent Window 均提供 Fork Conversation 和 New Chat in Session。Fork 通过 `IAgentThreadService.fork` 复制当前历史，IDE 创建新 Session，Agent Window 在当前 Session 新建 Thread；新增聊天通过 `CreateThread` 创建同 Session 的空 Thread。后端拥有复制与执行，窗口导航修订阻止迟到结果抢回选择。IDE 输入在自身生命周期内按 Thread 保留草稿和附件，Agent Window 继续使用原持久草稿 owner。
+
 ### 截图
 
 截图沿 `browser/actions/chatContext.ts` → `IHostService.getScreenshot(rect?)` → 平台 Host → Electron Main 捕获，`browser/attachments/chatScreenshotContext.ts` 负责转换、框选、预览和确认。Host 返回 PNG `VSBuffer`；平台契约在 `platform/native/common/native.ts`，IPC 校验／字节适配和 Main 捕获各归原 owner。Renderer CSS 像素经窗口缩放转换为 DIP；Web 由浏览器选择共享画面。

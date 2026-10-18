@@ -779,6 +779,7 @@ export abstract class Workbench extends Disposable {
 		this._register(view.onDidChange(updateSessionsPart));
 		updateSessionsPart();
 		services.registerInstance(IChatSessionNavigationService, {
+			get revision() { return view.navigationRevision; },
 			getActiveConversation: () => {
 				const selected = view.activeSelection;
 				return selected?.kind === 'session' ? { sessionId: selected.active.session.sessionId, threadId: selected.active.threadId } : undefined;
@@ -791,7 +792,13 @@ export abstract class Workbench extends Disposable {
 				}).catch(error => notificationService.error(String(error)));
 			},
 			captureActiveDraft: () => sessionsPart!.captureActiveDraft(),
-			openConversation: async (sessionId, threadId) => { await this.showChat(); await view.openThread(sessionId, threadId); },
+			openConversation: async (sessionId, threadId) => {
+				// Visible Code and Cowork panes keep their current composition and draft owner.
+				if (!layout.isPartVisible('sessions')) await this.showChat();
+				await view.openThread(sessionId, threadId);
+				const selected = view.activeSelection;
+				if (selected?.kind === 'session' && selected.active.session.sessionId === sessionId && selected.active.threadId === threadId) sessionsPart!.focus();
+			},
 			startVoiceConversation: () => sessionsPart!.startVoiceConversation(),
 		});
 

@@ -74,6 +74,7 @@ const voice: AgentVoiceService = {
 services.registerInstance(IAgentVoiceService, voice);
 const navigations: string[] = [];
 services.registerInstance(IChatSessionNavigationService, {
+	revision: 0,
 	getConversations: () => [{ sessionId: 'session', threadId: 'thread', title: 'Original Chat' }, { sessionId: 'second', threadId: 'second-thread', title: 'Other Chat' }],
 	getActiveConversation: () => ({ sessionId: 'session', threadId: 'thread' }),
 	openConversation: async (session, thread) => { navigations.push(`${session}/${thread}`); },
