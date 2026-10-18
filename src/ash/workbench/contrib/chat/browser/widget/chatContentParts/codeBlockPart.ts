@@ -7,6 +7,7 @@ import { Disposable, MutableDisposable, toDisposable } from '../../../../../../b
 import type { URI } from '../../../../../../base/common/uri.js';
 import { CodeEditorWidget } from '../../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
 import { BareFontInfo, EDITOR_FONT_DEFAULTS } from '../../../../../../editor/common/config/fontInfo.js';
+import { Range } from '../../../../../../editor/common/core/range.js';
 import { TextModel } from '../../../../../../editor/common/model/textModel.js';
 import { ILanguageService } from '../../../../../../editor/common/languages/language.js';
 import { localize } from '../../../../../../nls.js';
@@ -162,9 +163,15 @@ export class CodeBlockPart extends Disposable {
 		} else {
 			// A completed language fence changes highlighting, not the response document's lifetime.
 			if (model.getLanguageId() !== languageId) model.setLanguage(languageId);
-			if (model.getValue() !== data.text) {
+			const previous = model.getValue();
+			if (previous !== data.text) {
 				const selections = this.editor.getSelections();
-				model.setValue(data.text);
+				if (model.getEOL() === '\n' && !data.text.includes('\r') && data.text.startsWith(previous)) {
+					// Streamed appends keep the existing buffer and invalidate only the added text.
+					// Reset corrections and other EOL inputs so the model still detects/normalizes their EOL.
+					const end = model.getPositionAt(previous.length);
+					model.applyEdits([{ range: Range.fromPositions(end), text: data.text.slice(previous.length) }]);
+				} else { model.setValue(data.text); }
 				if (selections) this.editor.setSelections(selections);
 			}
 		}

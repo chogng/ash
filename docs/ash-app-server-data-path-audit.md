@@ -4,7 +4,7 @@
 
 审计基线的结论：Ash Main 已经透明转发字节，避免了 Owl 在 Browser UI 线程完整解析 JSON 的问题。但 Renderer 的 framing 存在可复现的复制放大，完整帧还会重新 UTF-8 编码、同步解析和递归 schema 校验。聊天消费者没有使用后端已有的有界历史能力，进一步放大输入。背压能够限制传输中的字节块，不能等同于限制完整响应处理成本、总内存或控制消息延迟。
 
-**实施状态：三批链路 P1 与流式 Markdown 优化已实现。** 第 1～4 节保留 manifest 对应的优化前审计快照；固定页 framing、接收端副本与重复编码见第 7 节；Code Chat 的有界历史、翻页、回放与审批保护见第 8 节；大帧解析与 schema 校验的 Worker、顺序队列及异步 ACK 见第 9 节。第 15 节记录流式 Markdown 尾部更新，第 16～17 节记录 Worker 回传、领域堆与正文复用。其余链路测量见[数据链路性能 TODO](../TODO.md#数据链路性能--todo)。
+**实施状态：三批链路 P1 与流式 Markdown 优化已实现。** 第 1～4 节保留 manifest 对应的优化前审计快照；固定页 framing、接收端副本与重复编码见第 7 节；Code Chat 的有界历史、翻页、回放与审批保护见第 8 节；大帧解析与 schema 校验的 Worker、顺序队列及异步 ACK 见第 9 节。第 15 节记录流式 Markdown 尾部更新，第 16～17 节记录 Worker 回传、领域堆与正文复用，第 18 节记录围栏增量更新。其余链路测量见[数据链路性能 TODO](../TODO.md#数据链路性能--todo)。
 
 证据快照与文件 hash 见 [manifest.json](research/ash-app-server-data-path-2026-10-17/manifest.json)，实验脚本见 [probe.cjs](research/ash-app-server-data-path-2026-10-17/probe.cjs)。这是调查时的实现，不替代 [前端与 App Server 连接边界](frontend-app-server-boundary.md)或产品契约。工作区有并发开发活动；后续修改前应重新核对文件 hash。
 
@@ -1411,3 +1411,36 @@ node .build/investigations/worker-body-reuse-after-2026-10-18/run.mjs
 本地证据为 `.build/investigations/worker-body-reuse-{before,after}-2026-10-18/` 中的脚本、
 `results.json`、`summary.json`、产物 source map 与快照；原始源码、准入记录和前后对照 manifest 位于
 `.build/investigations/worker-body-reuse-2026-10-18/`。
+
+## 18. 已实施：代码围栏增量更新与巨大尾部成本（2026-10-18）
+
+沿已有 `ChatListWidget → ChatMarkdownContentPart → CodeBlockPart → TextModel / CodeEditorWidget` 浏览器组件场景分解同步成本。三个场景分别是 800 行围栏（30,234 UTF-8 字节）、8,000 行围栏（317,834 字节）、含链接／粗体／行内代码的单个长段落（10,103 字节）。每组128次累计更新、每8次等待一帧，以完整正文、代码模型全文和末次更新后两帧断言完成；每组1次预热、7次有效样本。GC在计时之外；配置、模型、布局和 Markdown/lexer计时存在嵌套，不能相加为总时间。这没有测App Server、Main IPC、Desktop整机收益。
+
+实现仅在已有只读代码模型收到**以当前模型全文为前缀**的新文本时追加增量，复用模型的现有PieceTree和内容变更链。只有当前模型为LF且新正文不含CR才追加；修改／缩短及CRLF／混合EOL继续reset，以保留原来的EOL探测和归一化。语言、选择、隐藏／重建、复制和释放由原owner负责。没有增加缓存、transport状态或新公共API。配置与布局是否优化按新测量数据决定；本批不因重复调用次数就增加配置缓存。
+
+最终结果为7次有效样本的中位数，阶段计时在同一进程内计算：
+
+| 场景         | 累计同步更新 ms，前 → 后 | 模型写入 ms，前 → 后 | 到末次更新后两帧 ms，前 → 后 | CDP TaskDuration ms，前 → 后 |
+| ------------ | -----------------------: | -------------------: | ---------------------------: | ---------------------------: |
+| 800 行围栏   |    87.3 → 54.8（−37.2%） |          71.3 → 39.3 |                150.0 → 150.1 |                 117.5 → 83.2 |
+| 8,000 行围栏 |  399.5 → 104.7（−73.8%） |         371.6 → 69.2 |      444.8 → 158.7（−64.3%） |                449.8 → 153.0 |
+| 单个长段落   |        2,776.5 → 2,765.1 |       不涉及代码模型 |            2,808.3 → 2,791.6 |            2,793.7 → 2,784.9 |
+
+模型写入前为`setValue`、后为`applyEdits`，均含其同步内容通知；配置／布局的中位总计分别只有0.8～1.2ms／2.0～2.4ms，因此不增加另一份配置缓存或布局调度。本次不是纯字符串复制微基准：实际生产模型、编辑器和列表执行了完整更新。
+
+围栏的127次全文替换变成127次末尾插入，800行累计模型输入字符1,946,334 → 29,970；8,000行20,494,289 → 315,323（−98.5%）。字符数按JS字符串长度（UTF-16 code units）计，只表示模型API实际输入，不代表底层物理复制字节。8,000行7样本中的≥50ms长任务合计3 → 0；800行前后均为0。小围栏可见完成时间受固定的逐帧投递节奏限制，不能把同步更新改善直接写成相同幅度的响应显示收益。
+
+单段落的累计lexer时间仍约2.46～2.49s，前后两组的7次样本各合计84个长任务、最长460～467ms；围栏优化没有改善它。8次连续更新形成的task会累积多个单次同步尾部操作。其准确后续是对巨大可变段落／列表／表格的分词与投递预算单独设计；仅减少围栏输入、Worker编码或重复配置调用不能解决。由于仍需保持链接／行内语义，不能用任意切段或降低输入上限掩盖成本。
+
+验证：原13项真实Chromium行为测试通过；补EOL门禁后两项追加／EOL回归通过（共14个不同用例），新EOL用例直接验证CodeBlockPart的空→CRLF、CRLF／混合EOL→LF、清空再填、归一化模型全文与原样复制，并断言模型真正dispose。其余测试覆盖追加变更范围、全文、修正／缩短、无undo历史、复制、隐藏更新／恢复及移除释放，也复跑逐字符Unicode／围栏／列表对照、选择和焦点、配置、英语／中文及四主题几何。baseline及最终after性能测试各通过1项（共42个有效计时样本）；EOL门禁前的中间after另留作开发记录，不混入最终统计；每次命令先通过浏览器integration TS检查。三文件格式与whitespace检查通过。浏览器worker及headless进程在末次完成后核查不存在。
+
+复现命令：
+
+```sh
+ASH_MARKDOWN_BENCHMARK_LABEL=after pnpm test:browser:integration:prepared chatTranscript.integration.spec.ts --project=chromium --grep 'streaming Markdown remaining consumer costs'
+pnpm test:browser:integration:prepared chatTranscript.integration.spec.ts --project=chromium --grep 'streaming code updates|streaming Markdown (retains|fences|corrections|block layout)|Response code blocks'
+```
+
+已完成原“大代码围栏setValue、配置／布局与巨大单块尾部预算”的测量，并实现有证据的围栏追加优化；巨大单块的后续治理仍应作为已量化的剩余项，不宣称整个数据链路完成。
+
+原始证据：`.build/investigations/data-consumer-costs-2026-10-18/`。早期161,303字节单段落未完成暖机，已中断；其孤儿renderer被发现并按准确进程身份清理。与孤儿CPU重叠的后续成功功能样本标为`background-cpu-invalid.*`，不用于最终统计。未修改产品输入上限。

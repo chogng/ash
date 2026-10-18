@@ -402,6 +402,76 @@ test('streaming Markdown controlled rendering comparison', async ({ page }, test
 	} finally { await cdp.detach(); }
 });
 
+test('streaming code updates append without replacing the prefix and reset corrections', async ({ page }) => {
+	await page.goto('/chatTranscript.html');
+	const values = ['initial 中文', 'initial 中文 😀', 'initial 中文 😀\nnext line', 'corrected', 'co', 'co appended'];
+	const result = await page.evaluate(values => window.ashChatTranscriptIntegration.inspectCodeUpdates(values), values);
+	expect(result.sameModel).toBe(true);
+	expect(result.canUndo).toBe(false);
+	expect(result.updates.map(update => update.text)).toEqual(values);
+	expect(result.updates.map(update => update.reason)).toEqual(['edit', 'edit', 'edit', 'reset', 'reset', 'edit']);
+	expect(result.updates.map(update => update.replacedCharacters)).toEqual([0, 0, 0, values[2].length, values[3].length, 0]);
+	await page.locator('.ash-chat-code-block').getByRole('button', { name: 'Copy', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().copied)).toBe(values.at(-1));
+	await page.evaluate(() => window.ashChatTranscriptIntegration.setTranscriptVisible(false));
+	expect(await page.evaluate(() => window.ashChatTranscriptIntegration.state().codeModelCount)).toBe(0);
+	await page.evaluate(() => window.ashChatTranscriptIntegration.stream('```typescript\nHidden update 😀', false));
+	await page.evaluate(() => window.ashChatTranscriptIntegration.setTranscriptVisible(true));
+	await page.locator('.ash-chat-code-block').getByRole('button', { name: 'Copy', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().copied)).toBe('Hidden update 😀');
+	await page.evaluate(() => window.ashChatTranscriptIntegration.remove());
+	expect(await page.evaluate(() => window.ashChatTranscriptIntegration.state().editorCount)).toBe(1);
+});
+
+test('streaming code updates preserve EOL detection, normalized model text and original copied source', async ({ page }) => {
+	await page.goto('/chatTranscript.html');
+	const cases = [
+		{ source: '', text: '', eol: '\n' },
+		{ source: 'first\r\nsecond', text: 'first\r\nsecond', eol: '\r\n' },
+		{ source: 'first\r\nsecond\r\nthird\nfourth', text: 'first\r\nsecond\r\nthird\r\nfourth', eol: '\r\n' },
+		{ source: 'first\nsecond\nthird\nfourth', text: 'first\nsecond\nthird\nfourth', eol: '\n' },
+		{ source: '', text: '', eol: '\n' },
+		{ source: 'first\r\nsecond', text: 'first\r\nsecond', eol: '\r\n' },
+		{ source: 'first\nsecond', text: 'first\nsecond', eol: '\n' },
+		{ source: 'first\nsecond\nthird', text: 'first\nsecond\nthird', eol: '\n' },
+	];
+	const count = await page.evaluate(() => window.ashChatTranscriptIntegration.state().editorCount);
+	const result = await page.evaluate(values => window.ashChatTranscriptIntegration.inspectRawCodeUpdates(values), cases.map(value => value.source));
+	expect(result.snapshots).toEqual(cases.map(value => ({ text: value.text, eol: value.eol, copied: value.source })));
+	expect(result.released).toBe(true);
+	expect(await page.evaluate(() => window.ashChatTranscriptIntegration.state().editorCount)).toBe(count);
+});
+
+test('streaming Markdown remaining consumer costs', async ({ page }, testInfo) => {
+	test.setTimeout(180_000);
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/chatTranscript.html');
+	const cdp = await page.context().newCDPSession(page);
+	await cdp.send('Performance.enable');
+	const samples: unknown[] = [];
+	try {
+		for (const kind of ['fence', 'largeFence', 'largeParagraph'] as const) {
+			await page.evaluate(kind => window.ashChatTranscriptIntegration.runMarkdownBenchmark(kind), kind);
+			for (let repetition = 0; repetition < 7; repetition++) {
+				await cdp.send('HeapProfiler.collectGarbage');
+				const before = await cdp.send('Performance.getMetrics');
+				const result = await page.evaluate(kind => window.ashChatTranscriptIntegration.runMarkdownBenchmark(kind), kind);
+				const after = await cdp.send('Performance.getMetrics');
+				expect(result.finalVisible).toBe(true);
+				expect(result.codeTextMatches).toBe(true);
+				expect(result.codeBlocks).toBe(kind === 'largeParagraph' ? 0 : 1);
+				const taskMs = (after.metrics.find(metric => metric.name === 'TaskDuration')!.value - before.metrics.find(metric => metric.name === 'TaskDuration')!.value) * 1000;
+				samples.push({ kind, repetition, ...result, taskMs });
+			}
+		}
+		await testInfo.attach('markdown-consumer-costs.json', {
+			body: JSON.stringify({ browser: page.context().browser()?.version(), label: process.env.ASH_MARKDOWN_BENCHMARK_LABEL ?? 'current', scope: 'Production ChatListWidget and Stanza; 128 updates, eight per animation frame, final content through two animation frames. One warmup and seven samples. GC outside intervals. Nested phase times must not be summed. Browser component only.', samples }, null, 2), contentType: 'application/json'
+		});
+		expect(errors).toEqual([]);
+	} finally { await cdp.detach(); }
+});
+
 test('streaming Markdown fences, lists and corrections match a complete render at every boundary', async ({ page }) => {
 	await page.goto('/chatTranscript.html');
 	const sources = [

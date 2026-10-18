@@ -137,7 +137,7 @@
 - [ ] **测量** · 量化 receive／assemble／decode／parse／schema／adapter／apply／paint 阶段、队列 bytes／elapsed 与真实 task yield；核对 ACK 跟随消费和跨进程时钟关系。
 - [ ] **复核** · 继续完善文件模型刷新、Chat Changes 摘要以外的过期只读 refresh，补齐传输取消、大内容按需资源读取及迟到响应清理；状态变更请求不得自动重放或合并。刷新与取消约束见[消费者刷新约束](docs/ash-app-server-data-path-audit.md#已接入的消费者刷新约束)。
 - [ ] **测量** · 把后端结果构造和 writer／producer 等待纳入资源准入测量，评估有界数据／控制输出契约与同连接队头阻塞；不靠降低既有文件上限掩盖成本。
-- [ ] **测量** · 先量化大代码围栏的完整 `TextModel.setValue`、配置／布局成本及巨大单块 Markdown 尾部预算，再决定增量编辑或更新合并；此前 Markdown 子阶段收益不能当作整条响应同幅度加速。
+- [ ] **可做** · 巨大单块 Markdown 尾部仍需有语义保护的分词／投递预算：10,103 字节单段落的 128 次更新仍累计约 2.8 秒、7 样本合计 84 个长任务。围栏追加已改增量，8,000 行同步成本下降约 74%；配置／布局约 1／2 ms 未改，不能据此关闭巨大尾部问题。测量见[消费端复测](docs/ash-app-server-data-path-audit.md)。
 
 ## 发展候选（未排期）
 

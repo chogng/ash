@@ -59,6 +59,7 @@ import { ILanguageService } from '../../../src/ash/editor/common/languages/langu
 import { IMarkerService } from '../../../src/ash/platform/markers/common/markers.js';
 import { TextModel } from '../../../src/ash/editor/common/model/textModel.js';
 import { CodeEditorWidget } from '../../../src/ash/editor/browser/widget/codeEditor/codeEditorWidget.js';
+import { CodeBlockPart } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatContentParts/codeBlockPart.js';
 import { ICodeEditorService } from '../../../src/ash/editor/browser/services/codeEditorService.js';
 import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { StandaloneCommandService } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
@@ -474,18 +475,21 @@ let toolEntries: ThreadTranscriptEntry[] = [];
 let text = 'Reply with `inline`.\n\n```typescript\nconst code = "<safe>";\nsecond line\n```';
 list.render([{ id: 'reply', type: 'agentMessage', text, transient: false }]);
 
-type MarkdownWorkload = 'prose' | 'mixed' | 'fence';
+type MarkdownWorkload = 'prose' | 'mixed' | 'fence' | 'largeFence' | 'largeParagraph';
 function markdownWorkload(kind: MarkdownWorkload): string {
 	const prose = 'Streaming **Markdown** with [a link](https://example.com) and `inline code`. 中文内容保持完整。 '.repeat(6);
+	if (kind === 'largeParagraph') return prose.repeat(16) + '\n\nFinal visible marker.';
 	if (kind === 'prose') return Array.from({ length: 96 }, (_, index) => `Paragraph ${index}: ${prose}\n\n`).join('') + 'Final visible marker.';
-	const code = Array.from({ length: kind === 'fence' ? 800 : 36 }, (_, index) => `const value${index} = "streamed code ${index}";`).join('\n');
-	if (kind === 'fence') return `Before code.\n\n\`\`\`typescript\n${code}\n\`\`\`\n\nFinal visible marker.`;
+	const code = Array.from({ length: kind === 'largeFence' ? 8000 : kind === 'fence' ? 800 : 36 }, (_, index) => `const value${index} = "streamed code ${index}";`).join('\n');
+	if (kind === 'fence' || kind === 'largeFence') return `Before code.\n\n\`\`\`typescript\n${code}\n\`\`\`\n\nFinal visible marker.`;
 	return Array.from({ length: 12 }, (_, index) => `Section ${index}: ${prose}\n\n\`\`\`typescript\n${code}\n\`\`\`\n\n`).join('') + 'Final visible marker.';
 }
 
 interface MarkdownBenchmarkResult {
 	readonly bytes: number;
 	readonly chunks: number;
+	readonly consumer: { readonly setValueMs: number; readonly setValueCalls: number; readonly setValueCharacters: number; readonly applyEditsMs: number; readonly applyEditsCalls: number; readonly applyEditsCharacters: number; readonly updateOptionsMs: number; readonly updateOptionsCalls: number; readonly layoutMs: number; readonly layoutCalls: number; readonly lexMs: number; };
+	readonly codeTextMatches: boolean;
 	readonly wallMs: number;
 	readonly updateMs: number;
 	readonly maxUpdateMs: number;
@@ -541,6 +545,8 @@ declare global {
 			recreateTranscript(): void;
 			stream(value: string, complete: boolean): void;
 			runMarkdownBenchmark(kind: MarkdownWorkload): Promise<MarkdownBenchmarkResult>;
+			inspectRawCodeUpdates(values: readonly string[]): Promise<{ readonly snapshots: readonly { readonly text: string; readonly eol: string; readonly copied: string; }[]; readonly released: boolean; }>;
+			inspectCodeUpdates(values: readonly string[]): { readonly updates: readonly { readonly text: string; readonly reason: string; readonly replacedCharacters: number; readonly insertedCharacters: number; }[]; readonly sameModel: boolean; readonly canUndo: boolean; };
 			compareStreamingMarkdown(value: string, complete: boolean, measureLayout?: boolean): { actual: string; expected: string; layoutError: number; layout: unknown[]; };
 			showLongCode(): string;
 			showTool(): void;
@@ -727,6 +733,38 @@ window.ashChatTranscriptIntegration = {
 		}
 		return { actual: copy.innerHTML, expected: expected.element.innerHTML, layoutError, layout };
 	},
+	inspectRawCodeUpdates: async values => {
+		const part = services.createInstance(CodeBlockPart, document);
+		document.body.append(part.element);
+		const snapshots: { text: string; eol: string; copied: string; }[] = [];
+		let model: TextModel | null = null;
+		try {
+			for (const value of values) {
+				part.render({ text: value, languageId: 'typescript', codeBlockIndex: 0, element: undefined, chatSessionResource: undefined }, 600);
+				model = part.editor.getModel()!;
+				clipboardText = '';
+				part.element.querySelector('button')!.click();
+				await new Promise<void>(resolve => setTimeout(resolve, 0));
+				snapshots.push({ text: model.getValue(), eol: model.getEOL(), copied: clipboardText });
+			}
+		} finally { part.dispose(); }
+		return { snapshots, released: model?.isDisposed() ?? true };
+	},
+	inspectCodeUpdates: values => {
+		list.render([{ id: 'stream', type: 'agentMessage', text: '```typescript\ninitial', transient: true }]);
+		const editor = services.get(ICodeEditorService).listCodeEditors().find(editor => editor !== file)!;
+		const model = editor.getModel()!;
+		const updates: { text: string; reason: string; replacedCharacters: number; insertedCharacters: number; }[] = [];
+		const listener = model.onDidChangeContent(change => updates.push({
+			text: model.getValue(), reason: change.reason,
+			replacedCharacters: change.changes.reduce((sum, edit) => sum + edit.rangeLength, 0),
+			insertedCharacters: change.changes.reduce((sum, edit) => sum + edit.text.length, 0),
+		}));
+		try {
+			for (const value of values) list.render([{ id: 'stream', type: 'agentMessage', text: '```typescript\n' + value, transient: true }]);
+			return { updates, sameModel: editor.getModel() === model, canUndo: model.canUndo() };
+		} finally { listener.dispose(); }
+	},
 	runMarkdownBenchmark: async kind => {
 		const source = markdownWorkload(kind);
 		const chunks = 128;
@@ -739,12 +777,40 @@ window.ashChatTranscriptIntegration = {
 		let lexCalls = 0;
 		let lexedCharacters = 0;
 		let removedNodes = 0;
+		const consumer = { setValueMs: 0, setValueCalls: 0, setValueCharacters: 0, applyEditsMs: 0, applyEditsCalls: 0, applyEditsCharacters: 0, updateOptionsMs: 0, updateOptionsCalls: 0, layoutMs: 0, layoutCalls: 0, lexMs: 0 };
+		const setValue = TextModel.prototype.setValue;
+		const applyEdits = TextModel.prototype.applyEdits;
+		const updateOptions = CodeEditorWidget.prototype.updateOptions;
+		const layout = CodeEditorWidget.prototype.layout;
+		TextModel.prototype.setValue = function (value) {
+			const start = performance.now();
+			consumer.setValueCalls++;
+			consumer.setValueCharacters += typeof value === 'string' ? value.length : 0;
+			try { return setValue.call(this, value); } finally { consumer.setValueMs += performance.now() - start; }
+		};
+		TextModel.prototype.applyEdits = function (this: TextModel, ...args: Parameters<typeof applyEdits>) {
+			const start = performance.now();
+			consumer.applyEditsCalls++;
+			consumer.applyEditsCharacters += args[0].reduce((sum, operation) => sum + (operation.text?.length ?? 0), 0);
+			try { return Reflect.apply(applyEdits, this, args); } finally { consumer.applyEditsMs += performance.now() - start; }
+		} as typeof applyEdits;
+		CodeEditorWidget.prototype.updateOptions = function (...args) {
+			const start = performance.now();
+			consumer.updateOptionsCalls++;
+			try { return updateOptions.apply(this, args); } finally { consumer.updateOptionsMs += performance.now() - start; }
+		};
+		CodeEditorWidget.prototype.layout = function (...args) {
+			const start = performance.now();
+			consumer.layoutCalls++;
+			try { return layout.apply(this, args); } finally { consumer.layoutMs += performance.now() - start; }
+		};
 		const original = ChatContentMarkdownRenderer.prototype.render;
 		const originalLex = Lexer.lex;
 		Lexer.lex = function (source, options) {
 			lexCalls++;
 			lexedCharacters += source.length;
-			return originalLex(source, options);
+			const start = performance.now();
+			try { return originalLex(source, options); } finally { consumer.lexMs += performance.now() - start; }
 		};
 		ChatContentMarkdownRenderer.prototype.render = function (markdown, ...args) {
 			const start = performance.now();
@@ -772,7 +838,10 @@ window.ashChatTranscriptIntegration = {
 				if ((index + 1) % 8 === 0) await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
 			}
 			await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+			const expectedCode = [...source.matchAll(/```typescript\n([\s\S]*?)\n```/gu)].map(match => match[1]);
+			const actualCode = services.get(ICodeEditorService).listCodeEditors().filter(editor => editor !== file && editor.getModel()).map(editor => editor.getModel()!.getValue());
 			return {
+				consumer, codeTextMatches: expectedCode.length === actualCode.length && expectedCode.every((code, index) => code === actualCode[index]),
 				bytes: new TextEncoder().encode(source).byteLength, chunks, wallMs: performance.now() - start,
 				updateMs, maxUpdateMs, markdownMs, renderedCharacters, renderCalls, lexCalls, lexedCharacters, removedNodes, longTasks,
 				codeBlocks: list.element.querySelectorAll('.ash-chat-code-block').length,
@@ -781,6 +850,10 @@ window.ashChatTranscriptIntegration = {
 		} finally {
 			ChatContentMarkdownRenderer.prototype.render = original;
 			Lexer.lex = originalLex;
+			TextModel.prototype.setValue = setValue;
+			TextModel.prototype.applyEdits = applyEdits;
+			CodeEditorWidget.prototype.updateOptions = updateOptions;
+			CodeEditorWidget.prototype.layout = layout;
 			mutations.disconnect();
 			observer.disconnect();
 		}
