@@ -5,7 +5,7 @@ import { CancellationTokenSource } from '../../../../../base/common/cancellation
 import { Event } from '../../../../../base/common/event.js';
 import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { DialogResult, IDialogService, type IConfirmationDialogOptions } from '../../../../../platform/dialogs/common/dialogs.js';
-import { INotificationService, type NotificationOptions } from '../../../../../platform/notification/common/notification.js';
+import { INotificationService, type INotification } from '../../../../../platform/notification/common/notification.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
@@ -17,7 +17,7 @@ suite('OnboardingTryoutService', () => {
 	function createServices() {
 		const services = new InstantiationService();
 		const commands = new CommandService(services);
-		const notifications: NotificationOptions[] = [];
+		const notifications: INotification[] = [];
 		let confirmed = false;
 		let shown = 0;
 		services.registerInstance(ICommandService, commands);
@@ -41,7 +41,7 @@ suite('OnboardingTryoutService', () => {
 			async prompt(): Promise<never> { throw new Error('Unexpected prompt'); },
 		});
 		services.registerSingleton(INotificationService, () => new class extends NotificationService {
-			override notify(options: NotificationOptions) {
+			override notify(options: INotification) {
 				notifications.push(options);
 				return super.notify(options);
 			}

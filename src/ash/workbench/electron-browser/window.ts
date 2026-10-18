@@ -49,7 +49,7 @@ export class ElectronWindow extends Disposable {
 		void this.updateTitleProperties().catch(error => {
 			if (this.isDisposed) { return; }
 			this.log.error('integrity', 'Desktop environment detection failed', error);
-			this.notifications.warning(localize('integrity.failed', 'Ash could not verify its desktop environment. See the logs for details.'));
+			this.notifications.warn(localize('integrity.failed', 'Ash could not verify its desktop environment. See the logs for details.'));
 		});
 	}
 
@@ -61,7 +61,7 @@ export class ElectronWindow extends Disposable {
 		if (this.isDisposed) { return; }
 		this.title.updateProperties({ isPure: result.isPure });
 		if (result.isPure === false) {
-			this.notifications.warning(localize('integrity.modified', 'Ash installation files have changed or are missing. Reinstall Ash to restore the published files.'));
+			this.notifications.warn(localize('integrity.modified', 'Ash installation files have changed or are missing. Reinstall Ash to restore the published files.'));
 		}
 	}
 

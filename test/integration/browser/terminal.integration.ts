@@ -311,7 +311,7 @@ if (new URLSearchParams(location.search).has('shortcuts')) {
 		registry: new KeybindingRegistry(),
 	}));
 	await keybindings.initialize();
-	window.ashTerminalBatchIntegration = { order, errors: () => notifications.getNotifications().map(item => item.message) };
+	window.ashTerminalBatchIntegration = { order, errors: () => notifications.model.getNotifications().map(item => item.message) };
 }
 
 declare global {
@@ -1153,7 +1153,7 @@ if (new URLSearchParams(location.search).has('input')) {
 		if (sequenceFixture) {
 			window.ashTerminalSequenceIntegration = {
 				command: args => commands.executeCommand('workbench.action.terminal.sendSequence', args),
-				errors: () => notifications.getNotifications().map(item => item.message),
+				errors: () => notifications.model.getNotifications().map(item => item.message),
 				help: async () => {
 					const { TerminalAccessibilityHelpProvider } = await import('../../../src/ash/workbench/contrib/terminalContrib/accessibility/browser/terminalAccessibilityHelp.js');
 					using provider = new TerminalAccessibilityHelpProvider(terminal);
@@ -1215,7 +1215,7 @@ if (new URLSearchParams(location.search).has('input')) {
 				return content;
 			},
 			theme: setTerminalTestTheme,
-			errors: () => notifications.getNotifications().map(item => item.message),
+			errors: () => notifications.model.getNotifications().map(item => item.message),
 		};
 	}
 	window.ashTerminalInputIntegration = {

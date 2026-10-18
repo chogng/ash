@@ -150,7 +150,7 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 		if (signal.aborted) throw new CancellationError();
 		const existing = this.activeRuns.filter(run => run.task.id === task.id);
 		if (existing.length >= (task.runOptions?.instanceLimit ?? 1) && ['silent', 'warn'].includes(task.runOptions?.instancePolicy ?? 'prompt')) {
-			if (task.runOptions?.instancePolicy === 'warn') this.notifications.warning(localize('tasks.instanceLimitReached', "Task '{0}' has reached its limit of {1} running instance(s).", task.label, task.runOptions?.instanceLimit ?? 1));
+			if (task.runOptions?.instancePolicy === 'warn') this.notifications.warn(localize('tasks.instanceLimitReached', "Task '{0}' has reached its limit of {1} running instance(s).", task.label, task.runOptions?.instanceLimit ?? 1));
 			return existing[0]!;
 		}
 		if (this.activeRuns.length >= 32) throw new Error(localize('tasks.agentRunLimit', 'This window already has 32 running tasks. Wait for a task to finish before starting another.'));
@@ -537,7 +537,7 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 						const policy = candidate.id === currentTask.id ? candidate.runOptions?.instancePolicy ?? 'prompt' : 'silent';
 						if (policy === 'silent' || policy === 'warn') {
 							if (expectedRevision !== undefined && candidate.id === currentTask.id) throw new Error(localize('tasks.agentAlreadyRunning', "Task '{0}' is already running. Use tasks_list to find and inspect its Run ID.", candidate.label));
-							if (policy === 'warn') this.notifications.warning(localize('tasks.instanceLimitReached', "Task '{0}' has reached its limit of {1} running instance(s).", candidate.label, candidate.runOptions?.instanceLimit ?? 1));
+							if (policy === 'warn') this.notifications.warn(localize('tasks.instanceLimitReached', "Task '{0}' has reached its limit of {1} running instance(s).", candidate.label, candidate.runOptions?.instanceLimit ?? 1));
 							// Joining another graph never transfers cancellation or rollback ownership.
 							const instance = instances.find(value => value.run?.status === 'running') ?? instances[0]!;
 							return { operation: instance.run ? Promise.resolve(instance.run) : raceCancellationError(instance.reservation!.operation, controller.signal) };

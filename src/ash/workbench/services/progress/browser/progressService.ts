@@ -1,7 +1,7 @@
 import { localize } from "../../../../nls.js";
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { ICommandService } from "../../../../platform/commands/common/commands.js";
-import { INotificationService, NotificationPriority, NotificationSeverity, type NotificationHandle } from "../../../../platform/notification/common/notification.js";
+import { INotificationService, NotificationPriority, Severity, type INotificationHandle } from "../../../../platform/notification/common/notification.js";
 import { ProgressLocation, type IProgress, type IProgressService, type IProgressOptions, type IProgressWindowOptions, type IProgressNotificationOptions, type IProgressStep } from "../../../../platform/progress/common/progress.js";
 import { IStatusbarService, StatusbarAlignment, type IStatusbarEntryAccessor } from "../../statusbar/browser/statusbar.js";
 
@@ -14,7 +14,7 @@ interface ProgressTask {
 	total?: number;
 	worked: number;
 	cancelled: boolean;
-	notification?: NotificationHandle;
+	notification?: INotificationHandle;
 }
 
 /** Routes producer-owned Promise lifetimes through the existing Workbench presentations. */
@@ -98,13 +98,15 @@ export class ProgressService extends Disposable implements IProgressService {
 		if (!this.tasks.has(record) || record.cancelled || this.isDisposed) return;
 		const { options } = record;
 		record.notification = this.notifications.notify({
-			severity: NotificationSeverity.Info,
+			severity: Severity.Info,
 			message: this.taskText(record) || localize('progress.running', "Working…"),
 			source: typeof options.source === 'string' ? options.source : options.source?.label,
 			priority: options.location === ProgressLocation.Window ? NotificationPriority.SILENT : (options as IProgressNotificationOptions).priority,
 			progress: record.total === undefined ? { infinite: true } : { total: record.total, worked: record.worked },
 			actions: options.cancellable ? {
 				primary: [{
+					tooltip: '',
+					enabled: true,
 					id: 'progress.cancel',
 					label: typeof options.cancellable === 'string' ? options.cancellable : localize('progress.cancel', "Cancel"),
 					run: () => record.cancel(),

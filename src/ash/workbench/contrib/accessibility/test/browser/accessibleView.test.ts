@@ -158,9 +158,9 @@ test('screen reader commands update policy, status and notification choices thro
 	assert.equal(fixture.accessibility.isScreenReaderOptimized(), true);
 	assert.equal(entry.id, 'status.editor.screenReaderMode');
 	await entry.entry.run!();
-	const notification = fixture.notifications.getNotifications()[0]!;
+	const notification = fixture.notifications.model.getNotifications()[0]!;
 	await notification.actions!.primary!.find(action => action.id === 'accessibility.screenReader.off')!.run();
-	assert.deepEqual({ optimized: fixture.accessibility.isScreenReaderOptimized(), entries: fixture.statusbar.getEntries(StatusbarAlignment.Right), notifications: fixture.notifications.getNotifications() }, {
+	assert.deepEqual({ optimized: fixture.accessibility.isScreenReaderOptimized(), entries: fixture.statusbar.getEntries(StatusbarAlignment.Right), notifications: fixture.notifications.model.getNotifications() }, {
 		optimized: false,
 		entries: [],
 		notifications: [],
@@ -172,10 +172,10 @@ test('automatic detection prompts once and releases the prompt and status when t
 	const contribution = fixture.services.createInstance(AccessibilityStatus);
 	try {
 		fixture.accessibility.setAccessibilitySupport(AccessibilitySupport.Enabled);
-		assert.equal(fixture.notifications.getNotifications().length, 1);
+		assert.equal(fixture.notifications.model.getNotifications().length, 1);
 		fixture.accessibility.setAccessibilitySupport(AccessibilitySupport.Disabled);
 		fixture.accessibility.setAccessibilitySupport(AccessibilitySupport.Enabled);
-		assert.equal(fixture.notifications.getNotifications().length, 0);
+		assert.equal(fixture.notifications.model.getNotifications().length, 0);
 		contribution.dispose();
 		assert.deepEqual(fixture.statusbar.getEntries(StatusbarAlignment.Right), []);
 		fixture.accessibility.setAccessibilitySupport(AccessibilitySupport.Disabled);
@@ -234,7 +234,7 @@ test('editor help reads the editor state and its focus hint respects verbosity a
 test('notification content remains live through nested help and the reading position survives updates', async () => {
 	using fixture = new AccessibleViewFixture();
 	let returned = 0;
-	fixture.services.registerInstance(INotificationsCenter, { show: () => { returned++; } } as INotificationsCenter);
+	fixture.services.registerInstance(INotificationsCenter, { model: fixture.notifications.model, show: () => { returned++; } } as INotificationsCenter);
 	fixture.contextKeys.setContext('notificationsFocus', true);
 	fixture.notifications.info('First notification');
 	await fixture.commands.executeCommand(AccessibilityCommandId.OpenAccessibleView);
@@ -246,7 +246,7 @@ test('notification content remains live through nested help and the reading posi
 	await fixture.commands.executeCommand(AccessibilityCommandId.OpenAccessibilityHelp);
 	assert.equal(fixture.browser.window.document.querySelectorAll('dialog').length, 2);
 	assert.equal(fixture.contextKeys.getValue('accessibilityHelpIsShown'), true);
-	fixture.notifications.clear();
+	fixture.notifications.model.clear();
 	assert.equal(view.value, 'No notifications');
 	fixture.browser.window.document.querySelectorAll('dialog')[1]!.close();
 	await Promise.resolve();
@@ -269,7 +269,7 @@ test('dimming configuration validates the supported opacity range at the setting
 test('closing the parent content view releases nested help and its keybinding listener', async () => {
 	using fixture = new AccessibleViewFixture();
 	let returned = 0;
-	fixture.services.registerInstance(INotificationsCenter, { show: () => { returned++; } } as INotificationsCenter);
+	fixture.services.registerInstance(INotificationsCenter, { model: fixture.notifications.model, show: () => { returned++; } } as INotificationsCenter);
 	fixture.contextKeys.createKey<boolean>('notificationsFocus', false).set(true);
 	fixture.notifications.info('Keep reading');
 	await fixture.commands.executeCommand(AccessibilityCommandId.OpenAccessibleView);

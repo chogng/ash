@@ -120,7 +120,7 @@ for (const retire of [false, true]) test(`backend cancellation retains its exact
 		void result.then(() => { settled = true; }, () => { settled = true; });
 		// Admission reads the product catalog before creating the existing progress surface.
 		await Promise.resolve(); await Promise.resolve();
-		const cancel = notifications.getNotifications()[0]?.actions?.primary?.[0];
+		const cancel = notifications.model.getNotifications()[0]?.actions?.primary?.[0];
 		assert.equal(cancel?.label, '取消');
 		if (retire) controller.abort('extension retired');
 		else await cancel!.run();
@@ -130,6 +130,6 @@ for (const retire of [false, true]) test(`backend cancellation retains its exact
 		await operation.error(new AppServerRemoteError(-32800, 'cancelled', { kind: 'RequestCancelled' }));
 		if (retire) await assert.rejects(result);
 		else assert.deepEqual(await result, { backendError: { name: 'RequestCancelled', message: 'cancelled' } });
-		assert.deepEqual(notifications.getNotifications(), []);
+		assert.deepEqual(notifications.model.getNotifications(), []);
 	} finally { resetNlsResolver(); }
 });

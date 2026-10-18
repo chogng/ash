@@ -380,7 +380,7 @@ test('malformed saved reviews are reported and preserved without touching files'
 	using reopened = await fixture({ backend });
 	await flushReviews(reopened);
 	assert.equal(reopened.editing.entries.length, 0);
-	assert.equal(reopened.notifications.getNotifications().length, 1);
+	assert.equal(reopened.notifications.model.getNotifications().length, 1);
 	assert.equal(reopened.storage.get('chatEditing.sessions', StorageScope.WORKSPACE), invalid);
 	await createReview(reopened, 'after-invalid.txt');
 	assert.equal(reopened.storage.get('chatEditing.sessions', StorageScope.WORKSPACE), invalid);

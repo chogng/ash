@@ -534,7 +534,7 @@ for (const disposed of [false, true]) {
 		const pending = promiseWithResolvers<void>();
 		const started = promiseWithResolvers<void>();
 		const reported = promiseWithResolvers<void>();
-		using listener = fixture.notifications.onDidAdd(() => reported.resolve());
+		using listener = fixture.notifications.model.onDidAdd(() => reported.resolve());
 		const selected = { ...menuAction('Selected'), run: () => { started.resolve(); return pending.promise; } };
 		fixture.show('Old', source.token, selected);
 		fixture.popups[0].finish({ selectedId: 'action-1' });
@@ -544,7 +544,7 @@ for (const disposed of [false, true]) {
 		pending.reject(new Error('Clipboard fixture failure'));
 		if (!disposed) await reported.promise;
 		else await pending.promise.catch(() => { });
-		assert.deepEqual(fixture.notifications.getNotifications().map(item => item.message), disposed ? [] : ['Clipboard fixture failure']);
+		assert.deepEqual(fixture.notifications.model.getNotifications().map(item => item.message), disposed ? [] : ['Clipboard fixture failure']);
 	});
 }
 
@@ -553,7 +553,7 @@ test('a synchronous system action failure is reported exactly once', async () =>
 	const ended = fixture.show('Failure', undefined, { ...menuAction('Failure'), run() { throw new Error('Synchronous fixture failure'); } });
 	fixture.popups[0].finish({ selectedId: 'action-1' });
 	await ended;
-	assert.deepEqual(fixture.notifications.getNotifications().map(item => item.message), ['Synchronous fixture failure']);
+	assert.deepEqual(fixture.notifications.model.getNotifications().map(item => item.message), ['Synchronous fixture failure']);
 });
 
 for (const ending of ['cancel', 'selected', 'dispose'] as const) {

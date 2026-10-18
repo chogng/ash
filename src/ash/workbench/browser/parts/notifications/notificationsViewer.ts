@@ -9,12 +9,13 @@ import { ProgressBar } from '../../../../base/browser/ui/progressbar/progressbar
 import { DropdownMenuActionViewItem } from '../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import type { IAction, IActionRunner } from '../../../../base/common/actions.js';
-import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
-import { NotificationSeverity, type NotificationItem } from '../../../../platform/notification/common/notification.js';
+import { Severity } from '../../../../platform/notification/common/notification.js';
+import type { NotificationItem } from '../../../common/notifications.js';
 import { ConfigureNotificationAction } from './notificationsActions.js';
 
 /** Renders one immutable record for either notification surface. */
@@ -31,9 +32,9 @@ export class NotificationTemplateRenderer extends Disposable {
 	) {
 		super();
 		this.domNode = h(container.ownerDocument, 'article');
-		this.domNode.className = presentation === 'toast' ? `ash-notification ash-notification-${item.severity}` : 'ash-notifications-row';
+		this.domNode.className = presentation === 'toast' ? `ash-notification ash-notification-${Severity[item.severity].toLowerCase()}` : 'ash-notifications-row';
 		this.domNode.dataset.notificationId = String(item.id);
-		this.domNode.dataset.severity = item.severity;
+		this.domNode.dataset.severity = Severity[item.severity].toLowerCase();
 		// The shared alert owner announces once, including arrivals while toasts are hidden.
 		this.domNode.setAttribute('role', presentation === 'center' ? 'listitem' : 'article');
 		if (presentation === 'center') {
@@ -42,15 +43,15 @@ export class NotificationTemplateRenderer extends Disposable {
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		const severity = h(container.ownerDocument, 'span');
-		severity.className = `ash-notification-severity ash-notification-severity-${item.severity}`;
+		severity.className = `ash-notification-severity ash-notification-severity-${Severity[item.severity].toLowerCase()}`;
 		severity.setAttribute('role', 'img');
-		const severityLabels = {
-			[NotificationSeverity.Info]: localize('notifications.info', 'Information'),
-			[NotificationSeverity.Warning]: localize('notifications.warning', 'Warning'),
-			[NotificationSeverity.Error]: localize('notifications.error', 'Error'),
+		const severityLabels: Partial<Record<Severity, string>> = {
+			[Severity.Info]: localize('notifications.info', 'Information'),
+			[Severity.Warning]: localize('notifications.warning', 'Warning'),
+			[Severity.Error]: localize('notifications.error', 'Error'),
 		};
-		severity.setAttribute('aria-label', severityLabels[item.severity]);
-		appendIcon(item.severity === NotificationSeverity.Error ? Lxicon.error : item.severity === NotificationSeverity.Warning ? Lxicon.warning : Lxicon.info, severity);
+		severity.setAttribute('aria-label', severityLabels[item.severity] ?? '');
+		appendIcon(item.severity === Severity.Error ? Lxicon.error : item.severity === Severity.Warning ? Lxicon.warning : Lxicon.info, severity);
 		this.domNode.append(severity);
 		const content = h(container.ownerDocument, 'div');
 		content.className = 'ash-notification-content';
@@ -59,14 +60,7 @@ export class NotificationTemplateRenderer extends Disposable {
 		message.textContent = item.message;
 		content.append(message);
 		const progress = this._register(new ProgressBar(content, defaultProgressBarStyles));
-		const update = (current: NotificationItem): void => {
-			message.textContent = current.message;
-			progress.element.hidden = current.progress === undefined;
-			progress.element.setAttribute('aria-label', current.message);
-			progress.value = current.progress?.total ? (current.progress.worked ?? 0) / current.progress.total : undefined;
-		};
-		update(item);
-		if (item.onDidChange) this._register(item.onDidChange(update));
+
 		const details = h(container.ownerDocument, 'div');
 		details.className = 'ash-notification-details';
 		if (item.source) {
@@ -75,23 +69,7 @@ export class NotificationTemplateRenderer extends Disposable {
 			source.textContent = localize('notifications.source', 'Source: {0}', item.source);
 			details.append(source);
 		}
-		if (item.actions?.primary?.length) {
-			const actions = h(container.ownerDocument, 'div');
-			actions.className = 'ash-notification-actions';
-			for (const [index, action] of item.actions.primary.entries()) {
-				const notificationAction: IAction = { id: action.id, label: action.label, tooltip: '', enabled: true, run: () => action.run() };
-				const button = this._register(new Button(actions, {
-					...defaultButtonStyles,
-					label: action.label,
-					title: action.label,
-					presentation: index === 0 ? 'primary' : 'secondary',
-					onClick: () => { void Promise.resolve().then(() => actionRunner.run(notificationAction)); },
-				}));
-				button.domNode.classList.add('ash-notification-action');
-			}
-			details.append(actions);
-		}
-		if (details.childElementCount) content.append(details);
+
 		this.domNode.append(content);
 		const toolbarContainer = h(container.ownerDocument, 'div');
 		toolbarContainer.className = 'ash-notification-toolbar';
@@ -106,11 +84,60 @@ export class NotificationTemplateRenderer extends Disposable {
 				return undefined;
 			},
 		}));
-		const secondaryActions = item.actions?.secondary?.map(action => ({
-			id: action.id, label: action.label, tooltip: '', enabled: true,
-			run: () => actionRunner.run({ id: action.id, label: action.label, tooltip: '', enabled: true, run: () => action.run() }),
-		}));
-		toolbar.setActions(secondaryActions?.length ? [new ConfigureNotificationAction(secondaryActions), close] : [close]);
+		const primaryResources = this._register(new DisposableStore());
+		let primaryContainer: HTMLElement | undefined;
+		let previousActions: NotificationItem['actions'];
+		// Read the contract explicitly: actions may expose getters on their prototype.
+		// Buttons invoke the producer's method with its receiver and no synthetic context.
+		const runnableAction = (action: IAction): IAction => ({
+			id: action.id, label: action.label, tooltip: action.tooltip,
+			enabled: action.enabled, checked: action.checked, icon: action.icon,
+			run: () => action.run(),
+		});
+		const update = (current: NotificationItem): void => {
+			const severityName = Severity[current.severity].toLowerCase();
+			this.domNode.dataset.severity = severityName;
+			if (presentation === 'toast') this.domNode.className = `ash-notification ash-notification-${severityName}`;
+			severity.className = `ash-notification-severity ash-notification-severity-${severityName}`;
+			severity.setAttribute('aria-label', severityLabels[current.severity] ?? '');
+			severity.replaceChildren();
+			appendIcon(current.severity === Severity.Error ? Lxicon.error : current.severity === Severity.Warning ? Lxicon.warning : Lxicon.info, severity);
+			message.textContent = current.message;
+			progress.element.hidden = current.progress === undefined;
+			progress.element.setAttribute('aria-label', current.message);
+			progress.value = current.progress?.total ? (current.progress.worked ?? 0) / current.progress.total : undefined;
+			if (current.actions === previousActions) return;
+			previousActions = current.actions;
+			primaryResources.clear();
+			primaryContainer?.remove();
+			primaryContainer = undefined;
+			if (current.actions?.primary?.length) {
+				primaryContainer = h(container.ownerDocument, 'div');
+				primaryContainer.className = 'ash-notification-actions';
+				for (const [index, action] of current.actions.primary.entries()) {
+					const runnable = runnableAction(action);
+					const button = primaryResources.add(new Button(primaryContainer, {
+						...defaultButtonStyles,
+						label: action.label,
+						title: action.tooltip || action.label,
+						presentation: index === 0 ? 'primary' : 'secondary',
+						onClick: () => { void Promise.resolve().then(() => actionRunner.run(runnable)); },
+					}));
+					button.enabled = action.enabled;
+					button.domNode.classList.add('ash-notification-action');
+				}
+				details.append(primaryContainer);
+			}
+			if (details.childElementCount) content.append(details);
+			else details.remove();
+			const secondaryActions = current.actions?.secondary?.map(action => {
+				const runnable = runnableAction(action);
+				return { ...runnable, run: () => actionRunner.run(runnable) };
+			});
+			toolbar.setActions(secondaryActions?.length ? [new ConfigureNotificationAction(secondaryActions), close] : [close]);
+		};
+		update(item);
+		this._register(item.onDidChange(update));
 	}
 }
 

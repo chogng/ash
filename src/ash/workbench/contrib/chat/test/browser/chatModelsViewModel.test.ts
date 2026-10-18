@@ -4,7 +4,7 @@ import { Event } from '../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import { INotificationService } from '../../../../../platform/notification/common/notification.js';
+import { INotificationService, Severity } from '../../../../../platform/notification/common/notification.js';
 import { NotificationService } from '../../../../services/notification/common/notificationService.js';
 import type { CustomModelProvider } from '../../../../../platform/agentHost/common/agentModels.js';
 import type { ModelCatalogEntry } from '../../../../services/chat/common/modelCatalog.js';
@@ -78,7 +78,7 @@ test('Test models discovers an empty table once, tests every row and reports one
 	assert.deepEqual(context.tests, ['available', 'rejected']);
 	assert.deepEqual(context.view.rows.map(row => [row.id, row.status]), [['available', 'passed'], ['rejected', 'failed']]);
 	assert.deepEqual([...context.enabled], []);
-	assert.deepEqual(context.notifications.getNotifications().map(item => [item.severity, item.message]), [['warning', 'Test gateway: 1 of 2 models passed.']]);
+	assert.deepEqual(context.notifications.model.getNotifications().map(item => [item.severity, item.message]), [[Severity.Warning, 'Test gateway: 1 of 2 models passed.']]);
 	await context.view.testModels(async () => { });
 	assert.equal(context.discoveryCalls, 1);
 	assert.deepEqual(context.tests, ['available', 'rejected', 'available', 'rejected']);
@@ -102,7 +102,7 @@ test('Refreshing and reopening retain discovered membership, context mappings an
 	const before = context.view.rows.map(row => row.id);
 	await context.view.refresh(async () => { });
 	assert.deepEqual(context.view.rows.map(row => row.id), before);
-	assert.match(context.notifications.getNotifications().at(-1)!.message, /Endpoint unavailable/);
+	assert.match(context.notifications.model.getNotifications().at(-1)!.message, /Endpoint unavailable/);
 });
 
 test('Manual-only IDs test without discovery and failed deletion preserves the declaration', async () => {
@@ -121,13 +121,13 @@ test('An empty successful response stays distinct from a discovery failure', asy
 	using resources = context.resources;
 	await context.view.refresh(async () => { });
 	assert.match(context.view.message, /returned no models/);
-	assert.equal(context.notifications.getNotifications().length, 0);
+	assert.equal(context.notifications.model.getNotifications().length, 0);
 	context.failDiscovery = true;
 	await context.view.testModels(async () => { });
 	assert.deepEqual(context.tests, []);
 	assert.equal(context.view.busy, false);
 	assert.match(context.view.message, /Endpoint unavailable/);
-	assert.equal(context.notifications.getNotifications().length, 1);
+	assert.equal(context.notifications.model.getNotifications().length, 1);
 });
 
 test('Disposing a testing card prevents its late response from announcing success', async () => {
@@ -141,5 +141,5 @@ test('Disposing a testing card prevents its late response from announcing succes
 	context.view.dispose();
 	pending.complete({ type: 'passed' });
 	await testing;
-	assert.deepEqual(context.notifications.getNotifications(), []);
+	assert.deepEqual(context.notifications.model.getNotifications(), []);
 });

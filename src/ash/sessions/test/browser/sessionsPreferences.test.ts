@@ -604,9 +604,9 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	assert.equal(preferenceOpens.length, callsBeforeCancel, 'cancelling Settings cannot open or edit a profile resource');
 	rejectShortcut = true;
 	await openCategoryAction('keyboard-shortcuts', 'Keyboard Shortcuts');
-	assert.equal(notifications.getNotifications().at(-1)?.message, 'Could not open preferences: Error: shortcut editor unavailable');
+	assert.equal(notifications.model.getNotifications().at(-1)?.message, 'Could not open preferences: Error: shortcut editor unavailable');
 	assert.equal(editorReveals, 7, 'a failed open cannot reveal an unrelated editor');
-	const notificationsBeforeShutdown = notifications.getNotifications().length;
+	const notificationsBeforeShutdown = notifications.model.getNotifications().length;
 	let rejectLateOpen!: (error: Error) => void;
 	pendingShortcut = new Promise<void>((_resolve, reject) => { rejectLateOpen = reject; });
 	await openCategoryAction('keyboard-shortcuts', 'Keyboard Shortcuts');
@@ -614,7 +614,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	rejectLateOpen(new Error('window closed while opening shortcuts'));
 	await pendingShortcut.catch(() => { });
 	await Promise.resolve();
-	assert.equal(notifications.getNotifications().length, notificationsBeforeShutdown, 'late opens cannot notify a retired window');
+	assert.equal(notifications.model.getNotifications().length, notificationsBeforeShutdown, 'late opens cannot notify a retired window');
 	assert.equal(editorReveals, 7);
 	changed.dispose();
 	browser.window.close();

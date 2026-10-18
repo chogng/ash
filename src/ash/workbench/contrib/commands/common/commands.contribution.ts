@@ -59,7 +59,7 @@ registerAction2(class RunCommands extends Action2 {
 			return;
 		}
 		if (args.commands.length === 0) {
-			notifications.warning(localize('runCommands.noCommandsToRun', "'runCommands' has not received commands to run. Did you forget to pass commands in the 'runCommands' argument?"));
+			notifications.warn(localize('runCommands.noCommandsToRun', "'runCommands' has not received commands to run. Did you forget to pass commands in the 'runCommands' argument?"));
 			return;
 		}
 

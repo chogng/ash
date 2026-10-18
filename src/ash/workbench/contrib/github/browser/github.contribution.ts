@@ -253,7 +253,7 @@ async function githubAccount(github: IGitHubService, quick: IQuickInputService, 
 /** Each query owns its cancellation source; obsolete replies never replace visible results. */
 async function githubRemote(github: IGitHubService, quick: IQuickInputService, accounts: IAccountService, account: GitHubAccount): Promise<GitHubRemoteRepository | undefined> {
 	const resources = new DisposableStore();
-	type RemotePick = IQuickPickItem & ({ repository: GitHubRemoteRepository } | { page: number });
+	type RemotePick = IQuickPickItem & ({ repository: GitHubRemoteRepository; } | { page: number; });
 	const picker = resources.add(quick.createQuickPick<RemotePick>());
 	picker.placeholder = localize('github.repository.search', 'Search GitHub repositories or paste a repository URL');
 	picker.ariaLabel = picker.placeholder;
@@ -307,7 +307,7 @@ async function githubRemote(github: IGitHubService, quick: IQuickInputService, a
 async function githubBranch(github: IGitHubService, quick: IQuickInputService, accounts: IAccountService, remote: GitHubRemoteRepository): Promise<{ readonly name?: string; } | undefined> {
 	const resources = new DisposableStore();
 	const source = new CancellationTokenSource();
-	type BranchPick = IQuickPickItem & ({ name: string } | { page: number });
+	type BranchPick = IQuickPickItem & ({ name: string; } | { page: number; });
 	const picker = resources.add(quick.createQuickPick<BranchPick>());
 	picker.ariaLabel = picker.placeholder = localize('github.repository.branch', 'Choose a branch to clone');
 	picker.sortByLabel = false;

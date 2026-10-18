@@ -64,11 +64,11 @@ test('desktop initialization reads privileges and installation proofs through in
 	using desktop = services.createInstance(ElectronWindow, ipc);
 	await desktop.initialize();
 	await development;
-	assert.deepEqual({ properties, warnings: notifications.getNotifications().length }, { properties: [{ isAdmin: true }, { isPure: undefined }], warnings: 0 });
+	assert.deepEqual({ properties, warnings: notifications.model.getNotifications().length }, { properties: [{ isAdmin: true }, { isPure: undefined }], warnings: 0 });
 
 	reply = { isBuilt: true, proof: [{ uri: URI.file('/installation/dist/main.js').toJSON(), expected: '0'.repeat(64), actual: null }] };
 	const warning = new Promise<string>(resolve => {
-		const subscription = notifications.onDidAdd(item => { subscription.dispose(); resolve(item.message); });
+		const subscription = notifications.model.onDidAdd(item => { subscription.dispose(); resolve(item.message); });
 	});
 	using packaged = services.createInstance(ElectronWindow, ipc);
 	await packaged.initialize();
@@ -80,14 +80,14 @@ test('desktop initialization reads privileges and installation proofs through in
 	initializeTestLocalization('zh-CN');
 	try {
 		const translated = new Promise<string>(resolve => {
-			const subscription = notifications.onDidAdd(item => { subscription.dispose(); resolve(item.message); });
+			const subscription = notifications.model.onDidAdd(item => { subscription.dispose(); resolve(item.message); });
 		});
 		using chinese = services.createInstance(ElectronWindow, ipc);
 		await chinese.initialize();
 		assert.equal(await translated, 'Ash 的安装文件已被修改或缺失，请重新安装 Ash 以恢复发布时的文件。');
 		reply = { isBuilt: true, proof: [] };
 		const failed = new Promise<string>(resolve => {
-			const subscription = notifications.onDidAdd(item => { subscription.dispose(); resolve(item.message); });
+			const subscription = notifications.model.onDidAdd(item => { subscription.dispose(); resolve(item.message); });
 		});
 		using invalid = services.createInstance(ElectronWindow, ipc);
 		await invalid.initialize();
@@ -118,7 +118,7 @@ test('desktop disposal prevents pending environment reads from updating titles',
 	desktop.dispose();
 	finish(true);
 	await new Promise<void>(resolve => setImmediate(resolve));
-	assert.equal(notifications.getNotifications().length, 0);
+	assert.equal(notifications.model.getNotifications().length, 0);
 });
 
 test('desktop zoom follows the profile setting and persists a shared window zoom change', async () => {

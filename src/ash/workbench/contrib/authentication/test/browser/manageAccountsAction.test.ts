@@ -205,7 +205,7 @@ class AccountActionEnvironment extends Disposable {
 		};
 		services.registerInstance(IGitHubConnectionService, this.github);
 		services.registerInstance(INotificationService, {
-			error: (message: string) => { this.errors.push(message); return { close() { } }; },
+			error: (message: string) => { this.errors.push(message); return; },
 		} as INotificationService);
 		this.commands = this._register(new CommandService(services));
 		services.registerInstance(ICommandService, this.commands);

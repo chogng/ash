@@ -1,3 +1,4 @@
+import type { NotificationItem } from '../../../../common/notifications.js';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { suite, test } from 'mocha';
@@ -7,7 +8,7 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { InstantiationType } from '../../../../../platform/instantiation/common/extensions.js';
 import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
-import { INotificationService, type NotificationItem } from '../../../../../platform/notification/common/notification.js';
+import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IOpenerService, type OpenOptions } from '../../../../../platform/opener/common/opener.js';
 import { resetNlsResolver } from '../../../../../nls.js';
 import { initializeTestLocalization } from '../../../localization/test/common/localizationTestUtils.js';
@@ -19,13 +20,13 @@ suite('Workbench browser clipboard', () => {
 		using fixture = new ClipboardFixture({ readText: async () => { throw new Error('Denied'); } });
 		await fixture.clipboard.writeText('selected', 'selection');
 		assert.equal(await fixture.clipboard.readText('selection'), 'selected');
-		assert.deepEqual(fixture.notifications.getNotifications(), []);
+		assert.deepEqual(fixture.notifications.model.getNotifications(), []);
 	});
 	test('reads and writes through the owning window without prompting', async () => {
 		let text = 'initial';
 		using fixture = new ClipboardFixture({ readText: async () => text, writeText: async value => { text = value; } });
 		await fixture.clipboard.writeText('updated');
-		assert.deepEqual([await fixture.clipboard.readText(), fixture.notifications.getNotifications()], ['updated', []]);
+		assert.deepEqual([await fixture.clipboard.readText(), fixture.notifications.model.getNotifications()], ['updated', []]);
 	});
 
 	test('retries denied reads and keeps permission help separate from the pending read', async () => {
@@ -43,7 +44,7 @@ suite('Workbench browser clipboard', () => {
 		assert.deepEqual(fixture.opened, [['https://support.google.com/chrome/answer/114662', { openExternal: true }]]);
 		assert.equal(attempts, 1);
 		await prompt.actions!.primary![0]!.run();
-		assert.deepEqual([await reading, attempts, fixture.notifications.getNotifications()], ['recovered', 2, []]);
+		assert.deepEqual([await reading, attempts, fixture.notifications.model.getNotifications()], ['recovered', 2, []]);
 	});
 
 	test('a failed retry prompts again and dismissal completes with empty text', async () => {
@@ -55,8 +56,8 @@ suite('Workbench browser clipboard', () => {
 		await first.actions!.primary![0]!.run();
 		const second = await secondAdded;
 		assert.notEqual(second.id, first.id);
-		fixture.notifications.remove(second.id);
-		assert.deepEqual([await reading, fixture.notifications.getNotifications()], ['', []]);
+		fixture.notifications.model.remove(second.id);
+		assert.deepEqual([await reading, fixture.notifications.model.getNotifications()], ['', []]);
 	});
 
 	test('disposing the service scope closes all outstanding reads and prompts', async () => {
@@ -67,7 +68,7 @@ suite('Workbench browser clipboard', () => {
 		await added;
 		await Promise.resolve();
 		fixture.services.dispose();
-		assert.deepEqual([await first, await second, fixture.notifications.getNotifications()], ['', '', []]);
+		assert.deepEqual([await first, await second, fixture.notifications.model.getNotifications()], ['', '', []]);
 	});
 
 	test('a late read failure after scope disposal does not create a prompt', async () => {
@@ -76,7 +77,7 @@ suite('Workbench browser clipboard', () => {
 		const reading = fixture.clipboard.readText();
 		fixture.services.dispose();
 		reject(new Error('late denial'));
-		assert.deepEqual([await reading, fixture.notifications.getNotifications()], ['', []]);
+		assert.deepEqual([await reading, fixture.notifications.model.getNotifications()], ['', []]);
 	});
 
 	test('permission recovery uses the Chinese catalog', async () => {
@@ -87,7 +88,7 @@ suite('Workbench browser clipboard', () => {
 			const reading = fixture.clipboard.readText();
 			const prompt = await added;
 			assert.deepEqual([prompt.message, prompt.actions!.primary!.map(action => action.label)], ['无法读取剪贴板。请允许此网站访问剪贴板，然后重试。', ['重试', '了解详情']]);
-			fixture.notifications.remove(prompt.id);
+			fixture.notifications.model.remove(prompt.id);
 			assert.equal(await reading, '');
 		} finally {
 			resetNlsResolver();
@@ -107,7 +108,7 @@ suite('Workbench browser clipboard', () => {
 		const reading = fixture.clipboard.read();
 		const prompt = await added;
 		await prompt.actions!.primary![0]!.run();
-		assert.deepEqual([await reading, attempts, fixture.notifications.getNotifications()], [
+		assert.deepEqual([await reading, attempts, fixture.notifications.model.getNotifications()], [
 			[{ type: 'text/html', data: new TextEncoder().encode('<b>recovered</b>') }], 2, [],
 		]);
 	});
@@ -118,9 +119,9 @@ suite('Workbench browser clipboard', () => {
 			const added = fixture.nextNotification();
 			const reading = fixture.clipboard.read();
 			const prompt = await added;
-			if (close === 'dismiss') fixture.notifications.remove(prompt.id);
+			if (close === 'dismiss') fixture.notifications.model.remove(prompt.id);
 			else fixture.services.dispose();
-			assert.deepEqual([await reading, fixture.notifications.getNotifications()], [[], []]);
+			assert.deepEqual([await reading, fixture.notifications.model.getNotifications()], [[], []]);
 		});
 	}
 
@@ -156,7 +157,7 @@ class ClipboardFixture extends Disposable {
 
 	public nextNotification(): Promise<NotificationItem> {
 		return new Promise(resolve => {
-			const listener = this._register(this.notifications.onDidAdd(item => {
+			const listener = this._register(this.notifications.model.onDidAdd(item => {
 				listener.dispose();
 				resolve(item);
 			}));

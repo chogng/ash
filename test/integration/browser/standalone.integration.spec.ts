@@ -1242,11 +1242,13 @@ test.describe('contribution lifecycle', () => {
 		await expect(toggle).toBeFocused();
 		await page.keyboard.press('Enter');
 		await expect(page.locator('#caller .stanza-editor-sticky-scroll-item')).toHaveCount(0);
-		expect(await page.evaluate(() => window.ashStandaloneIntegration.readStickyMenu())).toEqual({ callerEnabled: false, ownedEnabled: true, inChordMode: false, errors: [] });
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readStickyMenu())).toEqual({ callerEnabled: false, ownedEnabled: true, inChordMode: false });
 		expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).focused).toBe(true);
 	});
 
 	test('sticky scroll menu uses the active theme, reports action errors and dispatches registered chords', async ({ page }) => {
+		const notificationErrors: string[] = [];
+		page.on('console', message => { if (message.type() === 'error') notificationErrors.push(message.text()); });
 		await page.goto('/standalone.html');
 		await page.evaluate(() => {
 			window.ashStandaloneIntegration.prepareStickyHeaders();
@@ -1269,7 +1271,7 @@ test.describe('contribution lifecycle', () => {
 		}
 		await header.click({ button: 'right' });
 		await page.getByRole('menuitem', { name: 'Fail sticky command' }).click();
-		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readStickyMenu().errors)).toEqual(['Sticky command failed']);
+		await expect.poll(() => notificationErrors).toContain('Sticky command failed');
 		await page.evaluate(() => window.ashStandaloneIntegration.runStickyCommand('editor.action.selectEditor'));
 		await page.keyboard.press('F9');
 		expect((await page.evaluate(() => window.ashStandaloneIntegration.readStickyMenu())).inChordMode).toBe(true);

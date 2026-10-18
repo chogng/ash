@@ -642,7 +642,7 @@ export abstract class Workbench extends Disposable {
 			keyboardLayoutService,
 		}));
 		services.registerInstance(IKeybindingService, keybindings);
-		const keybindingsReady = keybindings.initialize().catch(error => { notificationService.warning(localize({ bundle: 'ash', key: 'keybindings.invalid' }, 'Could not load keybindings.json: {0}', String(error))); });
+		const keybindingsReady = keybindings.initialize().catch(error => { notificationService.warn(localize({ bundle: 'ash', key: 'keybindings.invalid' }, 'Could not load keybindings.json: {0}', String(error))); });
 		services.registerInstance(IKeyboardShortcutTroubleshootingService, keybindings);
 		const menus = new MenuService(commandService, contextKeys);
 		services.registerInstance(IMenuService, menus);
@@ -651,7 +651,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IChatContextPickService, new ChatContextPickService());
 		const contextMenus = this._register(options.createContextMenuService(services));
 		services.registerInstance(IContextMenuService, contextMenus);
-		const notificationsCenter = this._register(services.createInstance(NotificationsCenter, this.domNode, feedbackHost, notificationActionRunner, undefined, () => services.get(IAccessibleViewService).getOpenAriaHint(AccessibilityVerbositySettingId.Notifications)));
+		const notificationsCenter = this._register(services.createInstance(NotificationsCenter, this.domNode, notificationService.model, feedbackHost, notificationActionRunner, undefined, () => services.get(IAccessibleViewService).getOpenAriaHint(AccessibilityVerbositySettingId.Notifications)));
 		services.registerInstance(INotificationsCenter, notificationsCenter);
 		services.registerInstance(IFileDialogService, options.createFileDialogService(services));
 		const hoverService = this._register(new HoverService(configurationService, contextViews, contextMenus));

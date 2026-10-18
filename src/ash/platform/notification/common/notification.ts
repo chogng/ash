@@ -1,12 +1,11 @@
 import { type Event } from "../../../base/common/event.js";
+import type { IAction } from "../../../base/common/actions.js";
+import Severity from "../../../base/common/severity.js";
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
 
-/** Severity used by user-visible notifications. */
-export enum NotificationSeverity {
-	Info = "info",
-	Warning = "warning",
-	Error = "error",
-}
+export { Severity };
+
+export type NotificationMessage = string | Error;
 
 export enum NotificationPriority {
 	DEFAULT,
@@ -32,60 +31,40 @@ export interface INotificationProgress {
 	done(): void;
 }
 
-/** An action presented with a notification. */
-export interface NotificationAction {
-	readonly id: string;
-	readonly label: string;
-	run(): void | Promise<void>;
-}
-
 /** Primary actions are buttons; secondary actions appear in the notification menu. */
 export interface INotificationActions {
-	readonly primary?: readonly NotificationAction[];
-	readonly secondary?: readonly NotificationAction[];
+	readonly primary?: readonly IAction[];
+	readonly secondary?: readonly IAction[];
 }
 
 /** Input for one user-visible notification. */
-export interface NotificationOptions {
-	/** Called when a presentation creates a visible row. Consumers handle repeated presentation; history insertion is insufficient. */
-	readonly onDidShow?: () => void;
-	readonly severity: NotificationSeverity;
-	readonly message: string;
-	readonly source?: string;
+export interface INotification {
+	readonly severity: Severity;
+	readonly message: NotificationMessage;
+	readonly source?: string | INotificationSource;
 	readonly priority?: NotificationPriority;
 	readonly progress?: INotificationProgressProperties;
 	readonly actions?: INotificationActions;
 }
 
-/** Immutable notification state published by the service. */
-export interface NotificationItem extends NotificationOptions {
-	readonly id: number;
-	readonly createdAt: number;
-	readonly onDidChange?: Event<NotificationItem>;
-}
-
 /** Handle used by the creator to close one notification. */
-export interface NotificationHandle {
-	readonly item: NotificationItem;
+export interface INotificationHandle {
+	readonly visible?: boolean;
 	readonly onDidClose: Event<void>;
+	readonly onDidChangeVisibility: Event<boolean>;
 	readonly progress: INotificationProgress;
-	updateMessage(message: string): void;
+	updateSeverity(severity: Severity): void;
+	updateMessage(message: NotificationMessage): void;
+	updateActions(actions?: INotificationActions): void;
 	close(): void;
 }
 
 /** Window-scoped notification service. */
 export interface INotificationService {
-	readonly onDidAdd: Event<NotificationItem>;
-	readonly onDidRemove: Event<NotificationItem>;
-
-	notify(options: NotificationOptions): NotificationHandle;
-	info(message: string, actions?: readonly NotificationAction[]): NotificationHandle;
-	warning(message: string, actions?: readonly NotificationAction[]): NotificationHandle;
-	error(message: string, actions?: readonly NotificationAction[]): NotificationHandle;
-
-	getNotifications(): readonly NotificationItem[];
-	remove(id: number): boolean;
-	clear(): void;
+	notify(options: INotification): INotificationHandle;
+	info(message: NotificationMessage | NotificationMessage[]): void;
+	warn(message: NotificationMessage | NotificationMessage[]): void;
+	error(message: NotificationMessage | NotificationMessage[]): void;
 }
 
 export const INotificationService = createServiceIdentifier<INotificationService>("notificationService");

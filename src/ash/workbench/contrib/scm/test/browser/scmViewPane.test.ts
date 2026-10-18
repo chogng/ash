@@ -1099,7 +1099,7 @@ test('SCM history opens a commit multi-diff from its inline action and context m
 		assert.ok(input.items[0].original.resource.path.includes(parentId));
 		assert.deepEqual(opened[0].options, { pinned: true });
 		assert.equal(input.items[4].binary, true);
-		assert.deepEqual(notifications.getNotifications(), []);
+		assert.deepEqual(notifications.model.getNotifications(), []);
 		assert.equal(requests.length, 6);
 		assert.ok(requests.every(request => request.id === objectId && request.repository === 'repo-1'));
 		const historyItem = (await history.viewService.activeRepository!.provider.historyProvider!.provideHistoryItems({ limit: 1 }))![0];

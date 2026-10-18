@@ -36,7 +36,7 @@ import { IAccessibleViewService } from '../../../../../platform/accessibility/br
 import { IVoiceCodeTranscriptionBackendService } from '../../../../../platform/renderer/common/dictation.js';
 import { Event as AshEvent, Emitter } from '../../../../../base/common/event.js';
 import { ILocalTranscriptionModelService, ILocalTranscriptionService, DictationModelState, type ILocalTranscriptionModelSnapshot } from '../../../../../platform/localTranscription/common/localTranscription.js';
-import { NotificationSeverity } from '../../../../../platform/notification/common/notification.js';
+import { Severity } from '../../../../../platform/notification/common/notification.js';
 import { NotificationService } from '../../../../services/notification/common/notificationService.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
@@ -418,11 +418,11 @@ test('Chat dictation startup failure appears in notifications and leaves input s
 	using notifications = new NotificationService();
 	using part = inputPart(notifications, { start: async () => { throw new Error('HTTP 403'); } });
 	const failure = new DeferredPromise<void>();
-	using notification = notifications.onDidAdd(() => { void failure.complete(); });
+	using notification = notifications.model.onDidAdd(() => { void failure.complete(); });
 	part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')?.click();
 	await failure.p;
-	assert.deepEqual(notifications.getNotifications().map(item => ({ severity: item.severity, message: item.message })), [
-		{ severity: NotificationSeverity.Error, message: 'Dictation failed: Error: HTTP 403' },
+	assert.deepEqual(notifications.model.getNotifications().map(item => ({ severity: item.severity, message: item.message })), [
+		{ severity: Severity.Error, message: 'Dictation failed: Error: HTTP 403' },
 	]);
 	assert.equal(part.element.querySelector('.ash-chat-status-summary')?.textContent, 'Loading chat…');
 	assert.equal(part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')?.disabled, false);
@@ -494,11 +494,11 @@ test('Chat dictation session failure appears in notifications and releases the m
 	await new Promise(resolve => setTimeout(resolve, 0));
 	assert.equal(part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')?.getAttribute('aria-pressed'), 'true');
 	const failed = new DeferredPromise<void>();
-	using notificationAdded = notifications.onDidAdd(() => { void failed.complete(); });
+	using notificationAdded = notifications.model.onDidAdd(() => { void failed.complete(); });
 	endSession?.('HTTP 403');
 	await failed.p;
-	assert.deepEqual(notifications.getNotifications().map(item => ({ severity: item.severity, message: item.message })), [
-		{ severity: NotificationSeverity.Error, message: 'Dictation failed: Error: HTTP 403' },
+	assert.deepEqual(notifications.model.getNotifications().map(item => ({ severity: item.severity, message: item.message })), [
+		{ severity: Severity.Error, message: 'Dictation failed: Error: HTTP 403' },
 	]);
 	assert.equal(part.element.querySelector('.ash-chat-status-summary')?.textContent, 'Loading chat…');
 	assert.notEqual(part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')?.getAttribute('aria-pressed'), 'true');
@@ -601,7 +601,7 @@ test('Shared dictation only changes its owning input and returns the complete tr
 	assert.equal(stops, 0);
 	assert.equal(await speech.stopAndTranscribe(), 'first second');
 	assert.deepEqual([first.element.querySelector('textarea')!.value, second.element.querySelector('textarea')!.value, stops], ['first second', '', 1]);
-	assert.deepEqual([firstNotifications.getNotifications(), secondNotifications.getNotifications()], [[], []]);
+	assert.deepEqual([firstNotifications.model.getNotifications(), secondNotifications.model.getNotifications()], [[], []]);
 });
 
 test('Hiding the recording input discards stop-time text and permits another input to record', async () => {
@@ -672,11 +672,11 @@ test('A failed shared session notifies its window once without notifying unrelat
 	first.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')!.click();
 	await started;
 	const notified = new DeferredPromise<void>();
-	using notificationAdded = windowNotifications.onDidAdd(() => { void notified.complete(); });
+	using notificationAdded = windowNotifications.model.onDidAdd(() => { void notified.complete(); });
 	ended('capture lost');
 	await notified.p;
-	assert.deepEqual(windowNotifications.getNotifications().map(item => item.message), ['Dictation failed: Error: capture lost']);
-	assert.deepEqual([firstNotifications.getNotifications(), secondNotifications.getNotifications()], [[], []]);
+	assert.deepEqual(windowNotifications.model.getNotifications().map(item => item.message), ['Dictation failed: Error: capture lost']);
+	assert.deepEqual([firstNotifications.model.getNotifications(), secondNotifications.model.getNotifications()], [[], []]);
 	assert.equal(speech.state, ChatSpeechToTextState.Idle);
 });
 
@@ -785,7 +785,7 @@ test('Failed file preparation blocks the waiting send and notifies once while pr
 	using globals = installEditorTestGlobals({ FileReader: browserEnvironment.window.FileReader });
 	using notifications = new NotificationService();
 	const messages: string[] = [];
-	using listener = notifications.onDidAdd(message => messages.push(message.message));
+	using listener = notifications.model.onDidAdd(message => messages.push(message.message));
 	let sends = 0;
 	using part = inputPart(notifications, undefined, 'agent', { send: async () => { sends++; } });
 	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
@@ -802,7 +802,7 @@ test('Hiding an input cancels pending file preparation without sending or notify
 	using globals = installEditorTestGlobals({ FileReader: browserEnvironment.window.FileReader });
 	using notifications = new NotificationService();
 	let errors = 0;
-	using listener = notifications.onDidAdd(() => { errors++; });
+	using listener = notifications.model.onDidAdd(() => { errors++; });
 	let sends = 0;
 	using part = inputPart(notifications, undefined, 'agent', { send: async () => { sends++; } });
 	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
@@ -853,7 +853,7 @@ test('Disposing an input during preparation cancels sending without creating new
 	await Promise.all([attaching, rejected]);
 	assert.equal(sends, 0);
 	assert.equal(part.element.isConnected, false);
-	assert.deepEqual(notifications.getNotifications(), []);
+	assert.deepEqual(notifications.model.getNotifications(), []);
 });
 
 

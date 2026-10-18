@@ -6,7 +6,8 @@ import { DeferredPromise } from '../../../src/ash/base/common/async.js';
 import { h } from '../../../src/ash/base/browser/dom.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
 import translations from '../../../extensions/language-pack-zh-cn/translations/chat.json' with { type: 'json' };
-import { IAgentVoiceService, type IAgentVoiceService as AgentVoiceService, type AgentVoiceSessionState, type ThreadTranscriptSnapshot, type ThreadTranscriptUpdateEnvelope } from '../../../src/ash/platform/agentHost/common/agentService.js';
+import { IAgentVoiceService, type IAgentVoiceService as AgentVoiceService } from '../../../src/ash/platform/agentHost/common/agentService.js';
+import { type AgentVoiceSessionState, type ThreadTranscriptSnapshot, type ThreadTranscriptUpdateEnvelope } from '../../../src/ash/platform/agentHost/common/agent.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../src/ash/platform/instantiation/common/serviceCollection.js';
 import { getSingletonServiceDescriptors } from '../../../src/ash/platform/instantiation/common/extensions.js';
@@ -139,6 +140,6 @@ window.ashAgentsVoice = {
 			view: providers.find(provider => provider.type === AccessibleViewType.View)?.getProvider(services)?.provideContent() ?? '',
 		};
 	},
-	notifications: () => notifications.getNotifications().map(notification => notification.message),
+	notifications: () => notifications.model.getNotifications().map(notification => notification.message),
 };
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });

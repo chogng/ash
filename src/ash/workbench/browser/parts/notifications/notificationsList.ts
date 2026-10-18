@@ -4,7 +4,7 @@ import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, DisposableMap, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import type { NotificationItem } from '../../../../platform/notification/common/notification.js';
+import type { NotificationItem } from '../../../common/notifications.js';
 import { NotificationTemplateRenderer } from './notificationsViewer.js';
 
 /** Owns retained notification rows and their controls, never the shared history. */
@@ -14,7 +14,8 @@ export class NotificationsList extends Disposable {
 	private readonly removeEmitter = this._register(new Emitter<number>());
 	public readonly onDidRequestRemove = this.removeEmitter.event;
 	private readonly items: NotificationItem[] = [];
-	private readonly shown = new Set<number>();
+	private readonly itemsById = new Map<number, NotificationItem>();
+	private readonly visible = new Set<number>();
 	private readonly emptyDomNode: HTMLElement;
 
 	constructor(
@@ -31,7 +32,12 @@ export class NotificationsList extends Disposable {
 			this.domNode.setAttribute('aria-label', localize('notifications.toasts', 'Notifications'));
 		}
 		container.append(this.domNode);
-		this._register(toDisposable(() => this.domNode.remove()));
+		this._register(toDisposable(() => {
+			for (const id of this.visible) this.itemsById.get(id)?.updateVisibility(false);
+			this.visible.clear();
+			this.itemsById.clear();
+			this.domNode.remove();
+		}));
 		this.emptyDomNode = h(container.ownerDocument, 'p');
 		this.emptyDomNode.className = 'ash-notifications-empty';
 		this.emptyDomNode.textContent = localize('notifications.empty', 'No notifications');
@@ -42,7 +48,8 @@ export class NotificationsList extends Disposable {
 		for (const [id] of this.renderers) {
 			if (!this.items.some(item => item.id === id)) {
 				this.renderers.deleteAndDispose(id);
-				this.shown.delete(id);
+				if (this.visible.delete(id)) this.itemsById.get(id)?.updateVisibility(false);
+				this.itemsById.delete(id);
 			}
 		}
 		this.emptyDomNode.remove();
@@ -62,9 +69,12 @@ export class NotificationsList extends Disposable {
 			if (position !== renderer.domNode) {
 				this.domNode.insertBefore(renderer.domNode, position ?? null);
 			}
-			if (item.onDidShow && !this.shown.has(item.id) && renderer.domNode.isConnected && renderer.domNode.checkVisibility({ checkVisibilityCSS: true })) {
-				this.shown.add(item.id);
-				item.onDidShow?.();
+			this.itemsById.set(item.id, item);
+			const visible = renderer.domNode.isConnected && renderer.domNode.checkVisibility?.({ checkVisibilityCSS: true }) === true;
+			if (visible !== this.visible.has(item.id)) {
+				if (visible) this.visible.add(item.id);
+				else this.visible.delete(item.id);
+				item.updateVisibility(visible);
 			}
 		}
 		if (this.presentation === 'center' && !this.items.length) {

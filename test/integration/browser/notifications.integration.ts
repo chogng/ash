@@ -22,7 +22,7 @@ import { BrowserContextMenuService } from '../../../src/ash/platform/contextview
 import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
-import { INotificationService, NotificationSeverity } from '../../../src/ash/platform/notification/common/notification.js';
+import { INotificationService, Severity } from '../../../src/ash/platform/notification/common/notification.js';
 import { bindTestColorTheme } from './themeFixture.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
@@ -77,7 +77,7 @@ const runner = resources.add(services.createInstance(NotificationActionRunner));
 const themes = resources.add(new TestThemeService(lightColorTheme));
 resources.add(bindTestColorTheme(themes, root));
 const statusbar = resources.add(new StatusbarService());
-const center = resources.add(services.createInstance(NotificationsCenter, root, feedback, runner, statusbar, undefined));
+const center = resources.add(services.createInstance(NotificationsCenter, root, notifications.model, feedback, runner, statusbar, undefined));
 services.registerInstance(IExtensionApi, { list: async () => ({ generation: 1, diagnostics: [], extensions: [{ id: 'fixture.git', displayName: 'Git' }] }) } as unknown as import('../../../src/ash/platform/extensions/common/extensionApi.js').IExtensionApi);
 const extensionMessages = resources.add(services.createInstance(MainThreadMessageService));
 let managed: unknown;
@@ -124,8 +124,13 @@ const fixture = {
 	get openRequests() { return openRequests; },
 	acknowledgeHandoff: () => acknowledgeHandoff?.(),
 	presented: () => [...presented],
-	notify(message: string, severity: NotificationSeverity = NotificationSeverity.Info, trackPresentation = false): number {
-		return notifications.notify({ severity, message, onDidShow: trackPresentation ? () => { presented.push(message); } : undefined, source: 'Fixture', actions: { primary: [{ id: 'fixture.action', label: 'Run action', run: () => { actionRuns++; } }] } }).item.id;
+	notify(message: string, severity: Severity = Severity.Info, trackPresentation = false): number {
+		const handle = notifications.notify({ severity, message, source: 'Fixture', actions: { primary: [{ id: 'fixture.action', label: 'Run action', tooltip: '', enabled: true, run: () => { actionRuns++; } }] } });
+		if (trackPresentation) {
+			resources.add(handle.onDidChangeVisibility(visible => { if (visible) presented.push(message); }));
+			if (handle.visible) presented.push(message);
+		}
+		return notifications.model.getNotifications().at(-1)!.id;
 	},
 	extensionMessage(items: readonly string[]): void {
 		selection = undefined;
@@ -138,9 +143,9 @@ const fixture = {
 	show: () => center.show(),
 	hide: () => center.hide(),
 	clear: () => center.clearAll(),
-	remove: (id: number) => notifications.remove(id),
+	remove: (id: number) => notifications.model.remove(id),
 	get actionRuns() { return actionRuns; },
-	history: () => notifications.getNotifications().map(item => item.id),
+	history: () => notifications.model.getNotifications().map(item => item.id),
 	theme(index: number): void { themes.setColorTheme([lightColorTheme, darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme][index]); },
 };
 

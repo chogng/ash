@@ -6,7 +6,7 @@ import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
-import { INotificationService, NotificationSeverity } from '../../../../../platform/notification/common/notification.js';
+import { INotificationService, Severity } from '../../../../../platform/notification/common/notification.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { NotificationService } from '../../../../services/notification/common/notificationService.js';
@@ -38,7 +38,7 @@ suite('runCommands', () => {
 			await execution;
 		}
 		assert.deepEqual(order, ['first started', 'first finished', 'second']);
-		assert.deepEqual(environment.notifications.getNotifications(), []);
+		assert.deepEqual(environment.notifications.model.getNotifications(), []);
 	});
 
 	test('forwards arrays as positional arguments and other values as a single argument', async () => {
@@ -70,13 +70,13 @@ suite('runCommands', () => {
 			await environment.commands.executeCommand('runCommands', args);
 		}
 		assert.equal(calls, 0);
-		assert.deepEqual(environment.notifications.getNotifications().map(item => item.severity), invalid.map(() => NotificationSeverity.Error));
+		assert.deepEqual(environment.notifications.model.getNotifications().map(item => item.severity), invalid.map(() => Severity.Error));
 	});
 
 	test('warns when the command list is empty', async () => {
 		using environment = new CommandEnvironment();
 		await environment.commands.executeCommand('runCommands', { commands: [] });
-		assert.deepEqual(environment.notifications.getNotifications().map(item => item.severity), [NotificationSeverity.Warning]);
+		assert.deepEqual(environment.notifications.model.getNotifications().map(item => item.severity), [Severity.Warning]);
 	});
 
 	for (const failure of ['synchronous', 'asynchronous', 'unknown']) {
@@ -93,7 +93,7 @@ suite('runCommands', () => {
 			await environment.commands.executeCommand('runCommands', { commands: ['test.batch.before', failedCommand, 'test.batch.after'] });
 			assert.deepEqual(order, ['before']);
 			const expected = { synchronous: 'Synchronous failure', asynchronous: 'Asynchronous failure', unknown: 'Unknown command: test.batch.missing' }[failure];
-			assert.deepEqual(environment.notifications.getNotifications().map(item => ({ severity: item.severity, message: item.message })), [{ severity: NotificationSeverity.Error, message: expected }]);
+			assert.deepEqual(environment.notifications.model.getNotifications().map(item => ({ severity: item.severity, message: item.message })), [{ severity: Severity.Error, message: expected }]);
 		});
 	}
 
@@ -104,7 +104,7 @@ suite('runCommands', () => {
 			setNlsMessages(catalog.locale, catalog.bundles);
 			await environment.commands.executeCommand('runCommands', null);
 			await environment.commands.executeCommand('runCommands', { commands: [] });
-			assert.deepEqual(environment.notifications.getNotifications().map(item => item.message), [
+			assert.deepEqual(environment.notifications.model.getNotifications().map(item => item.message), [
 				'“runCommands” 收到的参数类型不正确。请检查传给该命令的参数。',
 				'“runCommands” 没有收到要运行的命令。请在参数的 “commands” 中添加命令。',
 			]);

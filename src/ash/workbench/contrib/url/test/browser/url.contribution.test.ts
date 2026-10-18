@@ -1,3 +1,6 @@
+import { IHostService } from '../../../../services/host/browser/host.js';
+import { IPathService } from '../../../../../platform/path/common/pathService.js';
+import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { quickInputServiceTestControls } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
@@ -14,7 +17,7 @@ import { IClipboardService } from '../../../../../platform/clipboard/common/clip
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
-import { DialogResult, IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+import { DialogResult, IDialogService, IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { FileService } from '../../../../../platform/files/common/fileService.js';
 import { FileRevisionConflictError, IFileService } from '../../../../../platform/files/common/files.js';
 import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
@@ -129,7 +132,7 @@ suite('Workbench external link trust', () => {
 		assert.equal(fixture.trustedDomains.content, source);
 		fixture.storage.store('http.linkProtectionTrustedDomains', 'invalid', StorageScope.APPLICATION, StorageTarget.USER);
 		assert.equal(fixture.trustedDomains.isValid(URI.parse('https://persisted.test')), false);
-		assert.equal(fixture.notifications.getNotifications().length, 1);
+		assert.equal(fixture.notifications.model.getNotifications().length, 1);
 	});
 
 	test('complete-value limits and external storage edits do not broaden prior trust', async () => {
@@ -193,6 +196,11 @@ suite('Workbench external link trust', () => {
 	test('extension openExternal requests pass through the contribution before the host opens them', async () => {
 		using fixture = new URLFixture();
 		// Other editor operations are outside this host request and must remain unused.
+		fixture.services.registerInstance(IFileDialogService, {} as IFileDialogService);
+		fixture.services.registerInstance(IHostService, {} as IHostService);
+		fixture.services.registerInstance(IPathService, {} as IPathService);
+		using contexts = new ContextKeyService();
+		fixture.services.registerInstance(IContextKeyService, contexts);
 		fixture.services.registerInstance(IEditorPart, {} as IEditorPart);
 		fixture.services.registerInstance(IWorkingCopyService, {} as IWorkingCopyService);
 		fixture.services.registerInstance(ITextFileService, {} as ITextFileService);

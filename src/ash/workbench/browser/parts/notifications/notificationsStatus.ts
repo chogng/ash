@@ -1,9 +1,9 @@
+import type { NotificationsModel } from '../../../common/notifications.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
-import type { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { StatusbarAlignment, type IStatusbarEntry, type IStatusbarEntryAccessor, type IStatusbarService } from '../../../services/statusbar/browser/statusbar.js';
 
 /** Owns the window's history indicator and the status-bar-free Sessions control. */
@@ -12,7 +12,7 @@ export class NotificationsStatus extends Disposable {
 	private readonly bell: IStatusbarEntryAccessor | undefined;
 	private centerVisible = false;
 
-	constructor(root: HTMLElement, private readonly model: INotificationService, statusbar: IStatusbarService | undefined, private readonly toggle: () => void) {
+	constructor(root: HTMLElement, private readonly model: NotificationsModel, statusbar: IStatusbarService | undefined, private readonly toggle: () => void) {
 		super();
 		if (statusbar) {
 			this.bell = this._register(statusbar.addEntry(this.entry(), { id: 'ash.status.notifications', alignment: StatusbarAlignment.Right, priority: 500 }));

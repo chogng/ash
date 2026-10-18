@@ -91,14 +91,14 @@ suite('Desktop Agents invitation', () => {
 				if (action === 'lateClaim') {
 					fixture.state.update(undefined, { kind: 'request', resource: buildOpenSessionLinkUri('session', 'thread', 'local').toJSON(), isNewSession: false, requestSequence: 2 });
 					await fixture.claimGate!.complete(); await setImmediate();
-					assert.equal(fixture.notifications.getNotifications().length, 0);
+					assert.equal(fixture.notifications.model.getNotifications().length, 0);
 					assert.equal(fixture.state.getState().lastShown, undefined);
 					return;
 				}
-				const notification = fixture.notifications.getNotifications()[0]!;
+				const notification = fixture.notifications.model.getNotifications()[0]!;
 				assert.ok(notification);
 				assert.equal(fixture.state.getState().lastShown, undefined, 'inserting notification history is not an impression');
-				notification.onDidShow!(); notification.onDidShow!();
+				notification.updateVisibility(true); notification.updateVisibility(true);
 				assert.deepEqual(fixture.state.getState().lastShown, { timestamp: 86_400_000, editorSessionCount: 1 });
 				if (action === 'ack' || action === 'failure') {
 					const acknowledged = new DeferredPromise<void>(); fixture.handoff = acknowledged.p;
@@ -107,22 +107,22 @@ suite('Desktop Agents invitation', () => {
 					assert.deepEqual(fixture.opened, [{ conversation: { sessionId: 'session', threadId: 'thread' }, draft: { mode: 'agent', text: 'Unsent draft', contexts: [] } }]);
 					assert.equal(fixture.cleared, 0);
 					if (action === 'ack') { await acknowledged.complete(); await opening; assert.equal(fixture.cleared, 1); }
-					else { const rejection = assert.rejects(opening, /Controlled handoff failure/); await acknowledged.error(new Error('Controlled handoff failure')); await rejection; assert.equal(fixture.cleared, 0); assert.equal(fixture.notifications.getNotifications().length, 1); return; }
-				} else if (action === 'dismiss') fixture.notifications.remove(notification.id);
+					else { const rejection = assert.rejects(opening, /Controlled handoff failure/); await acknowledged.error(new Error('Controlled handoff failure')); await rejection; assert.equal(fixture.cleared, 0); assert.equal(fixture.notifications.model.getNotifications().length, 1); return; }
+				} else if (action === 'dismiss') fixture.notifications.model.remove(notification.id);
 				else if (action === 'transfer') fixture.state.update(undefined, { kind: 'request', resource: buildOpenSessionLinkUri('session', 'thread', 'local').toJSON(), isNewSession: false, requestSequence: 2 });
 				else if (action === 'disable') await fixture.configuration.updateValue(ChatAIDisabledSettingId, true);
 				else if (action === 'blur') { fixture.focused = false; fixture.focus.fire(false); }
 				else { fixture.active = { sessionId: 'different', threadId: 'different' }; await notification.actions!.primary![0]!.run(); assert.deepEqual(fixture.opened, []); }
 				await setImmediate();
 				assert.equal(fixture.state.getState().invitation, undefined);
-				assert.equal(fixture.notifications.getNotifications().length, 0);
+				assert.equal(fixture.notifications.model.getNotifications().length, 0);
 			} finally { mock.timers.reset(); }
 		});
 	}
 	for (const status of ['completed', 'waitingForApproval', 'waitingForUserInput', 'waitingForCapability']) {
 		test(`no invitation for ${status}`, async () => {
 			mock.timers.enable({ apis: ['setTimeout'] });
-			try { using fixture = new Fixture(); fixture.status = status; await fixture.show(); assert.deepEqual(fixture.notifications.getNotifications(), []); assert.equal(fixture.state.getState().invitation, undefined); }
+			try { using fixture = new Fixture(); fixture.status = status; await fixture.show(); assert.deepEqual(fixture.notifications.model.getNotifications(), []); assert.equal(fixture.state.getState().invitation, undefined); }
 			finally { mock.timers.reset(); }
 		});
 	}
@@ -144,7 +144,7 @@ suite('Desktop Agents invitation', () => {
 	});
 	test('a retired connection cancels pending activity and delayed invitations', async () => {
 		mock.timers.enable({ apis: ['setTimeout'] });
-		try { using fixture = new Fixture(); await fixture.submit(); fixture.connection.fire('stopped'); await setImmediate(); mock.timers.tick(30_000); await setImmediate(); assert.deepEqual(fixture.notifications.getNotifications(), []); assert.equal(fixture.state.getState().sessions[0]?.inProgress, false); }
+		try { using fixture = new Fixture(); await fixture.submit(); fixture.connection.fire('stopped'); await setImmediate(); mock.timers.tick(30_000); await setImmediate(); assert.deepEqual(fixture.notifications.model.getNotifications(), []); assert.equal(fixture.state.getState().sessions[0]?.inProgress, false); }
 		finally { mock.timers.reset(); }
 	});
 });

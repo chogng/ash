@@ -129,7 +129,7 @@ class LanguageActionEnvironment extends Disposable {
 		services.registerInstance(INotificationService, {
 			error: (message: string) => {
 				this.errors.push(message);
-				return { close() { } };
+				return;
 			},
 		} as INotificationService);
 		this.commands = new CommandService(services);

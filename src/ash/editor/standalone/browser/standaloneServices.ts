@@ -63,7 +63,7 @@ import { IContextMenuService, IContextViewService } from '../../../platform/cont
 import { HoverService, IHoverService } from '../../../platform/hover/browser/hoverService.js';
 import { IKeybindingService, KeybindingContextKeys, type KeybindingsSchemaContribution } from '../../../platform/keybinding/common/keybinding.js';
 import { KeybindingResolver, KeybindingResolveKind } from '../../../platform/keybinding/common/keybindingResolver.js';
-import { INotificationService, NotificationSeverity, type NotificationAction, type NotificationHandle, type NotificationItem, type NotificationOptions } from '../../../platform/notification/common/notification.js';
+import { INotificationService, Severity, type INotificationHandle, type INotification, type NotificationMessage } from '../../../platform/notification/common/notification.js';
 import { IAccessibilityService } from '../../../platform/accessibility/common/accessibility.js';
 import { AccessibilitySignalService, IAccessibilitySignalService } from '../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 import { AccessibilityService } from '../../../platform/accessibility/browser/accessibilityService.js';
@@ -375,90 +375,55 @@ export class StandaloneKeybindingService extends Disposable implements IKeybindi
 	}
 }
 
-/** Standalone notifications are observable and reported to the embedding page's console. */
+/** Standalone notifications are reported to the embedding page's console. */
 export class StandaloneNotificationService extends Disposable implements INotificationService {
-	private readonly added = this._register(new Emitter<NotificationItem>());
-	private readonly updated = this._register(new Emitter<NotificationItem>());
-	private readonly removed = this._register(new Emitter<NotificationItem>());
-	private readonly items = new Map<number, NotificationItem>();
-	private nextId = 1;
-	readonly onDidAdd = this.added.event;
-	readonly onDidRemove = this.removed.event;
+	private readonly handles = new Set<() => void>();
 
-	notify(options: NotificationOptions): NotificationHandle {
-		const id = this.nextId++;
-		const item: NotificationItem = Object.freeze({
-			...options, id, createdAt: Date.now(),
-			onDidChange: ((listener, thisArgs, disposables) => this.updated.event(current => {
-				if (current.id === id) listener.call(thisArgs, current);
-			}, undefined, disposables)) as Event<NotificationItem>,
-		});
-		this.items.set(item.id, item);
-		this.added.fire(item);
-		switch (item.severity) {
-			case NotificationSeverity.Error:
-				console.error(item.message);
-				break;
-			case NotificationSeverity.Warning:
-				console.warn(item.message);
-				break;
-			case NotificationSeverity.Info:
-				console.info(item.message);
-				break;
-		}
-		const update = (changes: Partial<Pick<NotificationItem, 'message' | 'progress'>>): void => {
-			const current = this.items.get(item.id);
-			if (!current) return;
-			const next = Object.freeze({ ...current, ...changes });
-			this.items.set(item.id, next);
-			this.updated.fire(next);
+	notify(options: INotification): INotificationHandle {
+		this.assertNotDisposed();
+		let severity = options.severity;
+		let message = options.message;
+		let closed = false;
+		const closeEmitter = new Emitter<void>();
+		const log = (): void => {
+			if (closed) return;
+			if (severity === Severity.Error) console.error(message);
+			else if (severity === Severity.Warning) console.warn(message);
+			else console.info(message);
 		};
-		const items = this.items;
+		const close = (): void => {
+			if (closed) return;
+			closed = true;
+			this.handles.delete(close);
+			closeEmitter.fire();
+			closeEmitter.dispose();
+		};
+		this.handles.add(close);
+		log();
 		return {
-			get item() { return items.get(item.id) ?? item; },
-			onDidClose: Event.once((listener, thisArgs, disposables) => this.removed.event(removed => {
-				if (removed.id === item.id) listener.call(thisArgs, undefined);
-			}, undefined, disposables)),
-			updateMessage: message => update({ message }),
-			progress: {
-				infinite: () => update({ progress: { infinite: true } }),
-				total: total => update({ progress: { total, worked: 0 } }),
-				worked: value => {
-					const progress = this.items.get(item.id)?.progress;
-					update({ progress: { total: progress?.total, worked: (progress?.worked ?? 0) + value } });
-				},
-				done: () => update({ progress: undefined }),
-			},
-			close: () => { this.remove(item.id); },
+			visible: false,
+			onDidClose: closeEmitter.event,
+			onDidChangeVisibility: Event.None,
+			updateSeverity: value => { severity = value; },
+			updateMessage: value => { message = value; log(); },
+			updateActions: () => { },
+			progress: { infinite() { }, total() { }, worked() { }, done() { } },
+			close,
 		};
 	}
 
-	info(message: string, actions?: readonly NotificationAction[]): NotificationHandle {
-		return this.notify({ severity: NotificationSeverity.Info, message, actions: { primary: actions } });
+	info(message: NotificationMessage | NotificationMessage[]): void {
+		for (const entry of Array.isArray(message) ? message : [message]) this.notify({ severity: Severity.Info, message: entry }).close();
 	}
-	warning(message: string, actions?: readonly NotificationAction[]): NotificationHandle {
-		return this.notify({ severity: NotificationSeverity.Warning, message, actions: { primary: actions } });
+	warn(message: NotificationMessage | NotificationMessage[]): void {
+		for (const entry of Array.isArray(message) ? message : [message]) this.notify({ severity: Severity.Warning, message: entry }).close();
 	}
-	error(message: string, actions?: readonly NotificationAction[]): NotificationHandle {
-		return this.notify({ severity: NotificationSeverity.Error, message, actions: { primary: actions } });
+	error(message: NotificationMessage | NotificationMessage[]): void {
+		for (const entry of Array.isArray(message) ? message : [message]) this.notify({ severity: Severity.Error, message: entry }).close();
 	}
-	getNotifications(): readonly NotificationItem[] { return [...this.items.values()]; }
-	remove(id: number): boolean {
-		const item = this.items.get(id);
-		if (!item) {
-			return false;
-		}
-		this.items.delete(id);
-		this.removed.fire(item);
-		return true;
-	}
-	clear(): void {
-		for (const id of this.items.keys()) {
-			this.remove(id);
-		}
-	}
+
 	protected override disposeCore(): void {
-		this.clear();
+		for (const close of this.handles) close();
 		super.disposeCore();
 	}
 }

@@ -11,7 +11,8 @@ import { observableValue } from '../../../../../base/common/observable.js';
 import type { Automation, AutomationDefinition, AutomationRun, IAutomationBackendService } from '../../../../../platform/agentHost/common/automation.js';
 import { IRendererHostService, type IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import { INotificationService, NotificationSeverity } from '../../../../../platform/notification/common/notification.js';
+import { INotificationService, Severity } from '../../../../../platform/notification/common/notification.js';
+import { NotificationService } from '../../../../../workbench/services/notification/common/notificationService.js';
 import { IAutomationService } from '../../../../../workbench/contrib/chat/common/automations/automationService.js';
 import { SessionsProvidersService, ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
 import type { ISessionsProvider } from '../../../../services/sessions/common/sessionsProvider.js';
@@ -48,12 +49,11 @@ function fixture() {
 	const facade = resources.add(services.createInstance(ProviderAutomationService));
 	services.registerInstance(IAutomationService, facade);
 	const errors: string[] = [];
-	services.registerInstance(INotificationService, {
-		error: (message: string) => {
-			errors.push(message);
-			return { item: { id: errors.length, createdAt: Date.now(), severity: NotificationSeverity.Error, message }, close() { } };
-		}
-	} as unknown as INotificationService);
+	const notifications = resources.add(new NotificationService());
+	resources.add(notifications.model.onDidAdd(item => {
+		if (item.severity === Severity.Error) errors.push(String(item.message));
+	}));
+	services.registerInstance(INotificationService, notifications);
 	function host(id: string) {
 		const changed = resources.add(new Emitter<void>());
 		const connection = observableValue<'connecting' | 'connected' | 'disconnected'>(id, 'connected');

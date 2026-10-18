@@ -83,12 +83,12 @@ test('failed menubar updates retain the last installed revision', async () => {
 
 	commandFailure = new Error('Save or revert unsaved files before changing their workspace folder.');
 	selections.fire({ revision: 1, id: firstItem.id });
-	await waitFor(() => notifications.getNotifications().length === 1);
-	assert.equal(notifications.getNotifications()[0]!.message, commandFailure.message);
+	await waitFor(() => notifications.model.getNotifications().length === 1);
+	assert.equal(notifications.model.getNotifications()[0]!.message, commandFailure.message);
 	commandFailure = new CancellationError();
 	selections.fire({ revision: 1, id: firstItem.id });
 	await new Promise(resolve => setTimeout(resolve, 0));
-	assert.equal(notifications.getNotifications().length, 1, 'cancellation is silent');
+	assert.equal(notifications.model.getNotifications().length, 1, 'cancellation is silent');
 
 	changes.dispose();
 	selections.dispose();

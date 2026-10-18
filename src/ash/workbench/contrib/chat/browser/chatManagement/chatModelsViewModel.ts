@@ -173,7 +173,7 @@ export class ChatModelsViewModel extends Disposable {
 			}
 			this._message = localize('models.provider.summary', '{0}: {1} of {2} models passed.', provider.name, passed, rows.length);
 			this._error = passed !== rows.length;
-			if (this._error) { this.notifications.warning(this._message); }
+			if (this._error) { this.notifications.warn(this._message); }
 			else { this.notifications.info(this._message); }
 		});
 	}

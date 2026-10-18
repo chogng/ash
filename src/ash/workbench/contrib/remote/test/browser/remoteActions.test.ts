@@ -211,24 +211,24 @@ for (const locale of ['en', 'zh-CN']) {
 			services.registerInstance(IContextKeyService, contexts);
 			using contribution = WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['workbench.contrib.appServerRecovery']);
 			contribution.advance(WorkbenchPhase.BlockRestore);
-			const notice = notifications.getNotifications()[0]!;
-			assert.equal(notifications.getNotifications().length, 1);
+			const notice = notifications.model.getNotifications()[0]!;
+			assert.equal(notifications.model.getNotifications().length, 1);
 			assert.equal(notice.actions?.primary?.[0]?.label, locale === 'zh-CN' ? '重新连接' : 'Reconnect');
 			assert.equal(notice.message, locale === 'zh-CN' ? '无法重新连接到 Agent Host。请检查连接后重试。' : 'Could not reconnect to the Agent Host. Check the connection and try again.');
 			assert.equal(contexts.contextMatchesRules(AppServerRecoveryAvailableContext.isEqualTo(true)), true);
 			await notice.actions!.primary![0]!.run();
 			assert.equal(retries, 1);
-			assert.equal(notifications.getNotifications().length, 0);
+			assert.equal(notifications.model.getNotifications().length, 0);
 			await CommandsRegistry.getCommand(ReconnectAppServerCommandId)!(services);
 			assert.equal(retries, 2);
 			recovery.status = 'unavailable'; changed.fire();
-			assert.equal(notifications.getNotifications().length, 1);
-			assert.equal(notifications.getNotifications()[0]!.actions?.primary?.length ?? 0, 0);
+			assert.equal(notifications.model.getNotifications().length, 1);
+			assert.equal(notifications.model.getNotifications()[0]!.actions?.primary?.length ?? 0, 0);
 			assert.equal(contexts.contextMatchesRules(AppServerRecoveryAvailableContext.isEqualTo(true)), false);
 			contribution.dispose();
-			assert.equal(notifications.getNotifications().length, 0);
+			assert.equal(notifications.model.getNotifications().length, 0);
 			recovery.status = 'failed'; changed.fire();
-			assert.equal(notifications.getNotifications().length, 0);
+			assert.equal(notifications.model.getNotifications().length, 0);
 		} finally { resetNlsResolver(); }
 	});
 }

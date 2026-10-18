@@ -1,9 +1,10 @@
+import type { NotificationsModel } from '../../../common/notifications.js';
 import "./media/notificationsToasts.css";
 import { addDisposableListener } from "../../../../base/browser/dom.js";
 import type { IActionRunner } from "../../../../base/common/actions.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
-import { NotificationPriority, type INotificationService } from "../../../../platform/notification/common/notification.js";
+import { NotificationPriority } from "../../../../platform/notification/common/notification.js";
 
 import { NotificationsList } from "./notificationsList.js";
 import { PendingNotificationToasts } from "./pendingNotificationToasts.js";
@@ -17,20 +18,20 @@ export class NotificationsToasts extends Disposable {
 	private hidden = false;
 	private previousFocus: HTMLElement | undefined;
 
-	constructor(container: HTMLElement, private readonly service: INotificationService, actionRunner: IActionRunner, @IInstantiationService instantiationService: IInstantiationService) {
+	constructor(container: HTMLElement, private readonly model: NotificationsModel, actionRunner: IActionRunner, @IInstantiationService instantiationService: IInstantiationService) {
 		super();
 		const document = container.ownerDocument;
 		this.list = this._register(instantiationService.createInstance(NotificationsList, container, "toast", actionRunner));
 		this.element = this.list.domNode;
 		this.pending = this._register(new PendingNotificationToasts<number>(
-			id => !this.hidden && service.getNotifications().some(current => current.id === id),
+			id => !this.hidden && model.getNotifications().some(current => current.id === id),
 			callback => {
 				const window = this.element.ownerDocument.defaultView!;
 				const frame = window.requestAnimationFrame(callback);
 				return toDisposable(() => window.cancelAnimationFrame(frame));
 			},
 		));
-		this._register(service.onDidAdd(item => {
+		this._register(model.onDidAdd(item => {
 			if (this.hidden || item.priority === NotificationPriority.SILENT) return;
 			this.pending.add(item.id, (id, resources) => {
 				try {
@@ -40,7 +41,7 @@ export class NotificationsToasts extends Disposable {
 				} finally { resources.dispose(); }
 			});
 		}));
-		this._register(service.onDidRemove(item => { this.pending.remove(item.id); this.visible.delete(item.id); this.render(); }));
+		this._register(model.onDidRemove(item => { this.pending.remove(item.id); this.visible.delete(item.id); this.render(); }));
 		this._register(addDisposableListener(this.element, "focusin", event => {
 			const HTMLElement = document.defaultView?.HTMLElement;
 			const target = event.relatedTarget;
@@ -69,7 +70,7 @@ export class NotificationsToasts extends Disposable {
 			const button = this.element.querySelector<HTMLButtonElement>(`[data-notification-close="${id}"]`);
 			const buttons = [...this.element.querySelectorAll<HTMLButtonElement>("[data-notification-close]")];
 			const focusedIndex = document.activeElement === button ? buttons.indexOf(button!) : -1;
-			service.remove(id);
+			model.remove(id);
 			// Removal listeners can open the center, move focus, or dispose this owner.
 			if (focusedIndex >= 0 && !this.hidden && !this.isDisposed && this.element.isConnected && document.activeElement === document.body) {
 				const remaining = this.element.querySelectorAll<HTMLButtonElement>("[data-notification-close]");
@@ -77,7 +78,7 @@ export class NotificationsToasts extends Disposable {
 				if (nextFocus?.isConnected) nextFocus.focus();
 			}
 		}));
-		for (const item of service.getNotifications().filter(item => item.priority !== NotificationPriority.SILENT).slice(-3)) this.visible.add(item.id);
+		for (const item of model.getNotifications().filter(item => item.priority !== NotificationPriority.SILENT).slice(-3)) this.visible.add(item.id);
 		this.render();
 	}
 
@@ -89,7 +90,7 @@ export class NotificationsToasts extends Disposable {
 
 	private render(): void {
 		if (this.isDisposed) return;
-		const items = this.hidden ? [] : this.service.getNotifications().filter(item => this.visible.has(item.id));
+		const items = this.hidden ? [] : this.model.getNotifications().filter(item => this.visible.has(item.id));
 		this.list.updateNotificationsList(0, this.element.children.length, items);
 	}
 }

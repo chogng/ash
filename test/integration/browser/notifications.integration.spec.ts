@@ -99,8 +99,8 @@ test('severity icons and source/menu labels use the Chinese catalog and fit narr
 	await page.setViewportSize({ width: 360, height: 640 });
 	await page.goto('/notifications.html?zh');
 	await page.evaluate(() => {
-		window.ashNotificationsIntegration.notify('信息消息', 'info' as import('../../../src/ash/platform/notification/common/notification.js').NotificationSeverity);
-		window.ashNotificationsIntegration.notify('警告消息', 'warning' as import('../../../src/ash/platform/notification/common/notification.js').NotificationSeverity);
+		window.ashNotificationsIntegration.notify('信息消息', 1);
+		window.ashNotificationsIntegration.notify('警告消息', 2);
 		window.ashNotificationsIntegration.extensionMessage(['显示 Git 输出']);
 	});
 	const toasts = page.locator('.ash-notification');

@@ -118,7 +118,7 @@ declare global {
 window.ashCollaboration = {
 	setRole: role => channelService.setRole(role), revoke: () => channelService.revoke(), clipboard: () => clipboard,
 	operations: () => operations,
-	notifications: () => notifications.getNotifications().map(notification => notification.message),
+	notifications: () => notifications.model.getNotifications().map(notification => notification.message),
 	accessible: type => AccessibleViewRegistry.getImplementations().find(provider => provider.name === `collaboration${type}` && provider.type === (type === 'help' ? AccessibleViewType.Help : AccessibleViewType.View))!.getProvider(services)!.provideContent(),
 	verbosity: value => configuration.updateValue('accessibility.verbosity.collaboration', value),
 };

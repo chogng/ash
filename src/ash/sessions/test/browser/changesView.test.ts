@@ -172,7 +172,7 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 		tree.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
 		await settle();
 		assert.equal(opened.length, 3);
-		assert.match(notifications.getNotifications()[0]!.message, locale === 'zh-CN' ? /过大/u : /too large/u);
+		assert.match(notifications.model.getNotifications()[0]!.message, locale === 'zh-CN' ? /过大/u : /too large/u);
 		assert.equal(selection.kind, 'session');
 		if (selection.kind === 'session') await assert.rejects(createTurnMultiDiffEditorInput(chat, selection.active, 'currentTurn'), locale === 'zh-CN' ? /过大/u : /too large/u);
 		view.element.querySelector<HTMLElement>('[role=treeitem]')!.click();
@@ -351,7 +351,7 @@ suite('Changes visibility lifecycle', () => {
 		await pendingFile.complete({ path: 'main.ts', binary: false, truncated: false, before: 'before', after: 'after' });
 		await settle();
 		assert.equal(opened.length, revision === 1 ? 1 : 0);
-		if (revision === 3) { assert.match(notifications.getNotifications()[0]!.message, /Turn capture changed/u); }
+		if (revision === 3) { assert.match(notifications.model.getNotifications()[0]!.message, /Turn capture changed/u); }
 	});
 
 	test('hidden views stop ledger reads, ignore late operations and restore live accessibility content', async () => {

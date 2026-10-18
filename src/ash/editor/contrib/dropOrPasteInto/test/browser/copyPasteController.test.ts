@@ -808,9 +808,13 @@ test('command Paste As ends quietly when its clipboard read returns empty', asyn
 	using services = new InstantiationService();
 	using clipboard = new BrowserClipboardService({ read: async () => [] } as unknown as Clipboard);
 	services.registerInstance(IClipboardService, clipboard);
+	const unexpectedNotification = (): never => assert.fail('An empty clipboard must not produce a notification');
+	services.registerInstance(INotificationService, {
+		notify: unexpectedNotification, info: unexpectedNotification, warn: unexpectedNotification, error: unexpectedNotification,
+	});
 	registerCodeEditorServices(services);
 	using model = new TextModel('old');
 	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, instantiationService: services, model });
 	await editor.getAction('editor.action.pasteAs')!.run();
-	assert.deepEqual({ text: model.getText(), notifications: services.get(INotificationService).getNotifications() }, { text: 'old', notifications: [] });
+	assert.equal(model.getText(), 'old');
 });

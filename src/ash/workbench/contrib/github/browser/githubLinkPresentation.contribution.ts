@@ -12,7 +12,7 @@ import { GitHubError, GitHubErrorCode, IGitHubService } from '../../../../platfo
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
-import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import { Severity, INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
@@ -59,9 +59,15 @@ export class GitHubLinkPresentationContribution extends Disposable {
 			this.log.warn('github', 'Could not load GitHub link details', error);
 			if (error instanceof GitHubError && error.code === GitHubErrorCode.AuthenticationRequired && !authenticationShown) {
 				authenticationShown = true;
-				const notification = this.notifications.info(localize('github.authenticationRequired', 'Sign in to GitHub to load link details.'), [{
-					id: 'github.signIn', label: localize('github.signIn', 'Sign in'), run: () => this.connection.connect(),
-				}]);
+				const notification = this.notifications.notify({
+					severity: Severity.Info, message: localize('github.authenticationRequired', 'Sign in to GitHub to load link details.'), actions: {
+						primary: [{
+							tooltip: '',
+							enabled: true,
+							id: 'github.signIn', label: localize('github.signIn', 'Sign in'), run: () => this.connection.connect(),
+						}]
+					}
+				});
 				store.add(toDisposable(() => notification.close()));
 			}
 		};

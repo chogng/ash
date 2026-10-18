@@ -154,7 +154,7 @@ const fixture = {
 	setUpdate(value: typeof response): void { response = value; },
 	check: () => updateCommands.executeCommand('update.checkForUpdate'),
 	vetoReload: (value: boolean) => { veto = value; },
-	state: () => ({ checks, shutdowns, actionRuns, build: document.querySelector<HTMLMetaElement>('meta[name="ash-web-build"]')?.content, supported: updateServices.get(IContextKeyService).getContext().getValue('update.providerAvailable'), installed: isStandalone(window), height: titlebar.minimumHeight, overlayListeners: controls.listeners, notifications: notifications.getNotifications().map(item => item.message) }),
+	state: () => ({ checks, shutdowns, actionRuns, build: document.querySelector<HTMLMetaElement>('meta[name="ash-web-build"]')?.content, supported: updateServices.get(IContextKeyService).getContext().getValue('update.providerAvailable'), installed: isStandalone(window), height: titlebar.minimumHeight, overlayListeners: controls.listeners, notifications: notifications.model.getNotifications().map(item => item.message) }),
 	disposeTitlebar: () => titlebar.dispose(),
 	disposeUpdate: () => contribution.dispose(),
 };

@@ -74,7 +74,7 @@ test('Sessions remote download preserves selected file bytes and reports read fa
 	const remote = ['first.bin', 'second.bin'].map(name => URI.from({ scheme: ASH_REMOTE_SCHEME, authority: 'host', path: `/project/${name}` }));
 	const inputs = [...remote, URI.file('/local.txt')].map(resource => new FileEditorInput(resource));
 	const group = {
-		id: 'group', inputs, selectedInputs: inputs, activeInput: inputs[0],
+		id: 1, inputs, selectedInputs: inputs, activeInput: inputs[0],
 		editors: inputs.map(input => ({ input })),
 	} as unknown as IEditorGroup;
 	using services = new InstantiationService();
@@ -114,7 +114,7 @@ test('Sessions remote download preserves selected file bytes and reports read fa
 		}
 		fail = true;
 		await assert.rejects(commands.executeCommand(DownloadRemoteFileAction.ID, { groupId: group.id }), /Remote file unavailable/);
-		assert.deepEqual(notifications.getNotifications().map(item => item.message), ['Remote file unavailable']);
+		assert.deepEqual(notifications.model.getNotifications().map(item => item.message), ['Remote file unavailable']);
 	} finally {
 		browser.window.URL.createObjectURL = previousCreate;
 		browser.window.URL.revokeObjectURL = previousRevoke;

@@ -2,7 +2,7 @@ import { readWorkspaceChanges } from '../../../../../workbench/contrib/chat/brow
 import { AgentsVoiceWidget } from '../../../../../workbench/contrib/agentsVoice/browser/agentsVoiceWidget.js';
 import { generateUuid } from '../../../../../base/common/uuid.js';
 import { VoiceSessionController, pickVoiceConversation } from '../../../../../workbench/contrib/chat/browser/voiceClient/voiceSessionController.js';
-import type { AgentVoiceTaskRequest } from '../../../../../platform/agentHost/common/agentService.js';
+import type { AgentVoiceTaskRequest } from '../../../../../platform/agentHost/common/agent.js';
 import { canceled, isCancellationError } from '../../../../../base/common/errors.js';
 import { localize } from '../../../../../nls.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';

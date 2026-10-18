@@ -57,7 +57,7 @@ import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import type { ModelRef, QueueEnqueueParams, ServerNotification, Session as SessionDto, SessionCreateParams, Thread, ThreadTranscriptSnapshot } from "../../../../../.build/protocol/typescript/index.js";
-import type { SessionMutationParams, SessionOperationInput, ThreadTranscriptEntry } from "../../../platform/agentHost/common/agentService.js";
+import type { SessionMutationParams, SessionOperationInput, ThreadTranscriptEntry } from "../../../platform/agentHost/common/agent.js";
 import type { IRendererHost } from "../../../platform/renderer/common/rendererHost.js";
 import type { IAction } from "../../../base/common/actions.js";
 import { Emitter, Event } from "../../../base/common/event.js";
@@ -958,8 +958,8 @@ test('Sessions composer retains corrupt storage through visibility changes until
 	input.setVisible(false);
 	input.setVisible(true);
 	assert.equal(storage.get(`sessions.inputDraft:${identity}`, StorageScope.WORKSPACE), raw);
-	assert.equal(notices.getNotifications().length, 1);
-	assert.match(notices.getNotifications()[0]!.message, /Could not restore the Chat draft/u);
+	assert.equal(notices.model.getNotifications().length, 1);
+	assert.match(notices.model.getNotifications()[0]!.message, /Could not restore the Chat draft/u);
 	input.appendToDraft('A new draft');
 	assert.deepEqual(readNewChatDraftState(storage, identity), { mode: 'agent', text: 'A new draft', contexts: [] });
 });
@@ -968,7 +968,7 @@ test('Chinese Sessions draft recovery and accessibility help use the product lan
 	initializeTestLocalization('zh-CN');
 	try {
 		using fixture = await sessionsInputFixture(undefined, '{unfinished');
-		assert.match(fixture.notices.getNotifications()[0]!.message, /^无法恢复聊天草稿：/u);
+		assert.match(fixture.notices.model.getNotifications()[0]!.message, /^无法恢复聊天草稿：/u);
 		fixture.input.focus();
 		const help = new SessionsChatAccessibilityHelp(fixture.input.element, () => fixture.input.focus()).getProvider();
 		assert.ok(help);
@@ -992,7 +992,7 @@ test('a removed Sessions attachment cannot report a stale draft persistence erro
 	const rejected = assert.rejects(capture, /Source unavailable/u);
 	await source.error(new Error('Source unavailable'));
 	await rejected;
-	assert.deepEqual(fixture.notices.getNotifications(), []);
+	assert.deepEqual(fixture.notices.model.getNotifications(), []);
 	assert.deepEqual(readNewChatDraftState(fixture.storage, fixture.identity), { mode: 'agent', text: 'Keep this task  ', contexts: [] });
 });
 
@@ -1027,7 +1027,7 @@ test('Sessions composer cancellation keeps the text and prevents a late file fro
 	fixture.input.setVisible(true);
 	assert.equal(sends, 0);
 	assert.deepEqual((await fixture.input.captureDraft())?.draft, { mode: 'agent', text: 'Keep this task', contexts: [] });
-	assert.deepEqual(fixture.notices.getNotifications(), []);
+	assert.deepEqual(fixture.notices.model.getNotifications(), []);
 });
 
 test('sending from one session preserves a later draft during first-session creation', async () => {
@@ -3570,7 +3570,7 @@ function transcript(value: Thread): ThreadTranscriptSnapshot {
 /** A paged server fixture with independent snapshot and transcript cursors. */
 function pagedChatFixture(initialCount = 65) {
 	let count = initialCount;
-	const requests: { type: 'read' | 'subscribe'; history?: import('../../../platform/agentHost/common/agentService.js').ThreadSnapshotHistory; afterSequence?: number; }[] = [];
+	const requests: { type: 'read' | 'subscribe'; history?: import('../../../platform/agentHost/common/agent.js').ThreadSnapshotHistory; afterSequence?: number; }[] = [];
 	const full = () => ({
 		...thread(), sequence: count,
 		turns: Array.from({ length: count }, (_, index) => {
@@ -3578,7 +3578,7 @@ function pagedChatFixture(initialCount = 65) {
 			return { ...thread('fixture').turns[0]!, turnId, items: [{ type: 'agentMessage' as const, itemId: `answer-${index + 1}`, turnId, text: `Answer ${index + 1}` }] };
 		}),
 	});
-	const page = (history?: import('../../../platform/agentHost/common/agentService.js').ThreadSnapshotHistory): import('../../../platform/agentHost/common/agentService.js').ThreadRead => {
+	const page = (history?: import('../../../platform/agentHost/common/agent.js').ThreadSnapshotHistory): import('../../../platform/agentHost/common/agent.js').ThreadRead => {
 		const value = full();
 		const end = history?.type === 'before' ? value.turns.findIndex(turn => turn.turnId === history.turnId) : count;
 		assert.ok(end >= 0, 'the requested cursor must exist');
@@ -4448,7 +4448,7 @@ test('An unavailable model leaves backend defaults and Auto intact with the gene
 });
 
 
-function navigationThreadSnapshot(threadId: string): import('../../../platform/agentHost/common/agentService.js').ThreadRead {
+function navigationThreadSnapshot(threadId: string): import('../../../platform/agentHost/common/agent.js').ThreadRead {
 	return {
 		thread: { advisor: { type: 'default' }, agentId: 'agent-1', origin: { type: 'root' }, sessionId: 'session-1', threadId, title: 'Navigation fixture', status: 'active', sequence: 1, usage: emptyUsage(), turns: [] },
 		transcript: { sessionId: 'session-1', threadId, durableSequence: 1, revision: 1, entries: [] },
@@ -4506,7 +4506,7 @@ for (const locale of ['en', 'zh-CN']) {
 		initializeTestLocalization(locale);
 		try {
 			let subscriptions = 0;
-			const pending = new DeferredPromise<import('../../../platform/agentHost/common/agentService.js').ThreadSubscription>();
+			const pending = new DeferredPromise<import('../../../platform/agentHost/common/agent.js').ThreadSubscription>();
 			const fixture = await createNavigationInputPane('{}', undefined, {
 				subscribe: async () => {
 					subscriptions++;
@@ -4552,7 +4552,7 @@ test('Chat history recovery actions expire across A-B-A selection and pane dispo
 	const fake = fakeApi({ sessions: [activeSession] });
 	const requested: string[] = [];
 	const released: string[] = [];
-	let pending: DeferredPromise<import('../../../platform/agentHost/common/agentService.js').ThreadSubscription> | undefined;
+	let pending: DeferredPromise<import('../../../platform/agentHost/common/agent.js').ThreadSubscription> | undefined;
 	using chat = createChatService({
 		...fake.api, thread: {
 			...fake.api.thread,

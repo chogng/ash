@@ -1,6 +1,7 @@
 import { IRendererHostService } from '../../../../../platform/renderer/common/rendererHost.js';
 import { ILabelService } from '../../../../../platform/label/common/label.js';
 import { LabelService } from '../../../../services/label/common/labelService.js';
+import type { NotificationService } from '../../../../services/notification/common/notificationService.js';
 import { InstantiationType } from '../../../../../platform/instantiation/common/extensions.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { RunAutomaticTasks } from '../../browser/runAutomaticTasks.js';
@@ -2641,7 +2642,7 @@ suite('Task instance policies through the execution owners', () => {
 			const task = (await tasks.refresh())[0];
 			const run = await tasks.run(task);
 			assert.equal(await tasks.run(task), run);
-			assert.deepEqual({ created: peer.creations, closed: peer.closed, messages: services.get(INotificationService).getNotifications().map(item => item.message) }, { created: 1, closed: [], messages: instancePolicy === 'warn' ? ['任务“Policy”已达到同时运行 1 个实例的上限。'] : [] });
+			assert.deepEqual({ created: peer.creations, closed: peer.closed, messages: (services.get(INotificationService) as NotificationService).model.getNotifications().map(item => item.message) }, { created: 1, closed: [], messages: instancePolicy === 'warn' ? ['任务“Policy”已达到同时运行 1 个实例的上限。'] : [] });
 			await tasks.terminate(run);
 		});
 	}

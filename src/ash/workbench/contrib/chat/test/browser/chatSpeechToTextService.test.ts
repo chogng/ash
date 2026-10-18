@@ -224,7 +224,7 @@ suite('Builtin dictation ownership', () => {
 			return { stop: async () => { }, cancel: async () => { } };
 		});
 		await assert.rejects(fixture.speech.start(captureWindow), isCancellationError);
-		assert.equal(fixture.notifications.getNotifications().length, 1);
+		assert.equal(fixture.notifications.model.getNotifications().length, 1);
 		assert.deepEqual(fixture.audio.requests, []);
 		assert.equal(fixture.speech.isBusy, false);
 	});
@@ -348,11 +348,11 @@ suite('Builtin dictation ownership', () => {
 		const updates: IChatDictationTranscript[] = [];
 		owner.add(fixture.speech.onDidUpdateTranscript(event => updates.push(event)));
 		const notified = new DeferredPromise<void>();
-		owner.add(fixture.notifications.onDidAdd(() => { void notified.complete(); }));
+		owner.add(fixture.notifications.model.onDidAdd(() => { void notified.complete(); }));
 		await fixture.speech.start(captureWindow); transcript('early', false); ended('connection lost');
 		await notified.p; ended('late');
 		assert.deepEqual(updates, [{ text: 'early', finalizedText: '' }]);
-		assert.deepEqual(fixture.notifications.getNotifications().map(item => item.message), ['Dictation failed: Error: connection lost']);
+		assert.deepEqual(fixture.notifications.model.getNotifications().map(item => item.message), ['Dictation failed: Error: connection lost']);
 		assert.equal(fixture.speech.isBusy, false);
 	});
 

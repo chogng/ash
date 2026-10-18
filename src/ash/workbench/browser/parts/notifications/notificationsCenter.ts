@@ -10,7 +10,7 @@ import { createServiceIdentifier, IInstantiationService } from "../../../../plat
 import { IContextKeyService, RawContextKey } from "../../../../platform/contextkey/common/contextkey.js";
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { localize } from "../../../../nls.js";
-import { INotificationService } from "../../../../platform/notification/common/notification.js";
+import type { NotificationsModel } from '../../../common/notifications.js';
 import type { IStatusbarService } from "../../../services/statusbar/browser/statusbar.js";
 import { NotificationsToasts } from "./notificationsToasts.js";
 import { StatusbarHeight } from "../workbenchPartDimensions.js";
@@ -20,6 +20,7 @@ import { NotificationsList } from "./notificationsList.js";
 import { CopyNotificationMessageAction } from './notificationsActions.js';
 
 export interface INotificationsCenter {
+	readonly model: NotificationsModel;
 	show(): void;
 	hide(): void;
 	toggle(): void;
@@ -43,11 +44,11 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 
 	constructor(
 		root: HTMLElement,
+		readonly model: NotificationsModel,
 		toastContainer: HTMLElement,
 		actionRunner: IActionRunner,
 		statusbar: IStatusbarService | undefined,
 		getHelpHint: (() => string | undefined) | undefined,
-		@INotificationService private readonly service: INotificationService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IContextMenuService private readonly contextMenuService: IContextMenuService,
 		@IInstantiationService instantiationService: IInstantiationService,
@@ -55,8 +56,8 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 		super();
 		this.copyAction = instantiationService.createInstance(CopyNotificationMessageAction, CopyNotificationMessageAction.ID, CopyNotificationMessageAction.LABEL);
 		const document = root.ownerDocument;
-		const toasts = this._register(instantiationService.createInstance(NotificationsToasts, toastContainer, service, actionRunner));
-		this._register(instantiationService.createInstance(NotificationsAlerts, service));
+		const toasts = this._register(instantiationService.createInstance(NotificationsToasts, toastContainer, this.model, actionRunner));
+		this._register(instantiationService.createInstance(NotificationsAlerts, this.model));
 		this.panel = h(document, "section"); this.panel.className = "ash-notifications-center";
 		this.panel.tabIndex = -1;
 		this.panel.style.setProperty("--ash-feedback-statusbar-height", `${statusbar ? StatusbarHeight : 0}px`);
@@ -96,11 +97,11 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 			if (!this.panel.contains(event.relatedTarget as Node | null)) focused.reset();
 		}));
 		this._register(toDisposable(() => focused.reset()));
-		this._register(this.notificationList.onDidRequestRemove(id => service.remove(id)));
-		this._register(service.onDidAdd(() => this.render()));
-		this._register(service.onDidRemove(() => {
+		this._register(this.notificationList.onDidRequestRemove(id => model.remove(id)));
+		this._register(model.onDidAdd(() => this.render()));
+		this._register(model.onDidRemove(() => {
 			// Close before replacing focused rows; an explicitly opened empty center stays open.
-			if (this.open && service.getNotifications().length === 0) this.hide();
+			if (this.open && model.getNotifications().length === 0) this.hide();
 			this.render();
 		}));
 		this._register(addDisposableListener(this.panel, "keydown", event => {
@@ -108,7 +109,7 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 			if (event.key === "Delete") {
 				const target = event.target as HTMLElement;
 				const row = target.closest<HTMLElement>("[data-notification-id]");
-				if (row) { event.preventDefault(); service.remove(Number(row.dataset.notificationId)); }
+				if (row) { event.preventDefault(); model.remove(Number(row.dataset.notificationId)); }
 			}
 		}));
 		this._register(addDisposableListener(this.list, 'contextmenu', event => this.showCopyMenu(event)));
@@ -125,7 +126,7 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 		};
 		document.addEventListener("keydown", onEscape, true);
 		this._register(toDisposable(() => document.removeEventListener("keydown", onEscape, true)));
-		this.status = this._register(new NotificationsStatus(root, service, statusbar, () => this.toggle()));
+		this.status = this._register(new NotificationsStatus(root, model, statusbar, () => this.toggle()));
 		this.toasts = toasts;
 		this.render();
 	}
@@ -147,7 +148,9 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 		const restoreFocus = this.panel.contains(document.activeElement);
 		const previousFocus = this.previousFocus;
 		this.previousFocus = null;
-		this.open = false; this.panel.hidden = true; this.toasts.setHidden(false); this.status.update(false);
+		this.open = false; this.panel.hidden = true;
+		this.render();
+		this.toasts.setHidden(false); this.status.update(false);
 		if (restoreFocus && previousFocus instanceof document.defaultView!.HTMLElement && previousFocus.isConnected) previousFocus.focus();
 	}
 
@@ -156,9 +159,9 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 	clearAll(): void {
 		if (this.isDisposed) return;
 		// Focus and removal callbacks can add records or reopen the center during this operation.
-		const items = this.service.getNotifications();
+		const items = this.model.getNotifications();
 		this.hide();
-		for (const item of items) this.service.remove(item.id);
+		for (const item of items) this.model.remove(item.id);
 	}
 
 	protected override disposeCore(): void {
@@ -174,7 +177,7 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 		const document = this.panel.ownerDocument;
 		const focusedRow = document.activeElement?.closest<HTMLElement>("[data-notification-id]");
 		const focusedId = this.list.contains(focusedRow ?? null) ? focusedRow?.dataset.notificationId : undefined;
-		const items = this.service.getNotifications().slice().reverse();
+		const items = this.model.getNotifications().slice().reverse();
 		this.clearButton.enabled = items.length > 0;
 		this.notificationList.updateNotificationsList(0, this.list.children.length, items);
 		if (focusedId && this.open) {
@@ -189,7 +192,7 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 		if (!Element || !(event.target instanceof Element)) return;
 		const row = event.target.closest<HTMLElement>('[data-notification-id]');
 		if (!row || !this.list.contains(row)) return;
-		const item = this.service.getNotifications().find(item => item.id === Number(row.dataset.notificationId));
+		const item = this.model.getNotifications().find(item => item.id === Number(row.dataset.notificationId));
 		if (!item) return;
 		event.preventDefault();
 		event.stopPropagation();

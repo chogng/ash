@@ -185,7 +185,7 @@ suite('OpenAgentsWindowSystemWideKeybindingContribution', () => {
 		await fixture.resource.updateKeybindings(fixture.resource.bindings);
 		mock.timers.tick(100);
 		await flush();
-		assert.deepEqual({ attempts: fixture.payloads.length, messages: fixture.notifications.getNotifications().length }, { attempts: 2, messages: 1 });
+		assert.deepEqual({ attempts: fixture.payloads.length, messages: fixture.notifications.model.getNotifications().length }, { attempts: 2, messages: 1 });
 		fixture.result = { failed: [] };
 		await fixture.resource.updateKeybindings([]);
 		mock.timers.tick(100);
@@ -220,7 +220,7 @@ suite('OpenAgentsWindowSystemWideKeybindingContribution', () => {
 		result.resolve({ failed: ['ctrl+shift+a'] });
 		mock.timers.tick(100);
 		await flush();
-		assert.deepEqual({ attempts: fixture.payloads.length, messages: fixture.notifications.getNotifications().length }, { attempts: 1, messages: 0 });
+		assert.deepEqual({ attempts: fixture.payloads.length, messages: fixture.notifications.model.getNotifications().length }, { attempts: 1, messages: 0 });
 	});
 
 	test('Sessions command forwards options without adding palette or default keybinding entries', async () => {

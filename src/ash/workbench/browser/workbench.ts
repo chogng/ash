@@ -140,8 +140,8 @@ import {
 	type IDialogHandler,
 } from "../../platform/dialogs/common/dialogs.js";
 import {
-	AppServerFileSystemProvider,
-} from "../../platform/agentHost/browser/appServerFileSystemProvider.js";
+	AgentHostFileSystemProvider,
+} from "../../platform/agentHost/common/agentHostFileSystemProvider.js";
 import { FileService } from "../../platform/files/common/fileService.js";
 import { IQuickInputService } from "../../platform/quickinput/common/quickInput.js";
 import type { HTMLFileSystemProvider } from '../../platform/files/browser/htmlFileSystemProvider.js';
@@ -685,7 +685,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IWorkspaceTrustApi, api.workspaceTrust);
 		const workspaceTrustService = this._register(services.createInstance(WorkspaceTrustManagementService));
 		services.registerInstance(IWorkspaceTrustManagementService, workspaceTrustService);
-		const workspaceFileService = new AppServerFileSystemProvider({
+		const workspaceFileService = new AgentHostFileSystemProvider({
 			configurationFiles: api.workspaceConfigurationFiles,
 			configuration: () => workspaceContext.getWorkspace().configuration,
 			api: api.fs,
@@ -956,7 +956,7 @@ export class Workbench extends Disposable {
 			statusbarService,
 		}));
 		services.registerInstance(IKeybindingService, keybindings);
-		const keybindingsReady = keybindings.initialize().catch(error => { notificationService.warning(localize({ bundle: 'ash', key: 'keybindings.invalid' }, 'Could not load keybindings.json: {0}', getErrorMessage(error))); });
+		const keybindingsReady = keybindings.initialize().catch(error => { notificationService.warn(localize({ bundle: 'ash', key: 'keybindings.invalid' }, 'Could not load keybindings.json: {0}', getErrorMessage(error))); });
 		services.registerInstance(IKeyboardShortcutTroubleshootingService, keybindings);
 		const menus = new MenuService(commandService, contextKeys);
 		services.registerInstance(IMenuService, menus);
@@ -982,7 +982,7 @@ export class Workbench extends Disposable {
 				configurationService: configuration,
 			}));
 		services.registerInstance(IAccessibilityService, accessibilityService);
-		const notificationsCenter = this._register(services.createInstance(NotificationsCenter, workbenchRoot, feedbackHost, notificationActionRunner, statusbarService, () => services.get(IAccessibleViewService).getOpenAriaHint(AccessibilityVerbositySettingId.Notifications)));
+		const notificationsCenter = this._register(services.createInstance(NotificationsCenter, workbenchRoot, notificationService.model, feedbackHost, notificationActionRunner, statusbarService, () => services.get(IAccessibleViewService).getOpenAriaHint(AccessibilityVerbositySettingId.Notifications)));
 		services.registerInstance(INotificationsCenter, notificationsCenter);
 		services.registerInstance(IGitHubConnectionService, this._register(services.createInstance(GitHubConnectionService)));
 		const viewDescriptors = this._register(services.createInstance(ViewDescriptorService, {}));

@@ -67,7 +67,7 @@ import {
 import type {
 	IKeyboardLayoutService,
 } from "../../../../platform/keyboardLayout/common/keyboardLayout.js";
-import { INotificationService } from "../../../../platform/notification/common/notification.js";
+import { Severity, INotificationService } from "../../../../platform/notification/common/notification.js";
 import type {
 	IStatusbarEntryAccessor,
 	IStatusbarService,
@@ -178,7 +178,7 @@ export class WorkbenchKeybindingService
 		this._register(jsonRegistry.registerSchemaAssociation('ash://schemas/keybindings', profiles.currentProfile.keybindingsResource.toString()));
 		this._register(files.onDidChangeFiles(event => {
 			if (!event.resources || event.resources.some(resource => extUri.isEqual(resource, profiles.currentProfile.keybindingsResource))) {
-				void this.initialize().catch(error => notificationService.warning(localize({ bundle: 'ash', key: 'keybindings.invalid' }, 'Could not load keybindings.json: {0}', getErrorMessage(error))));
+				void this.initialize().catch(error => notificationService.notify({ severity: Severity.Warning, message: localize({ bundle: 'ash', key: 'keybindings.invalid' }, 'Could not load keybindings.json: {0}', getErrorMessage(error)) }));
 			}
 		}));
 		this._register(toDisposable(() => {
@@ -542,7 +542,7 @@ export class WorkbenchKeybindingService
 					void this.commandService.executeCommand(result.command, ...result.args)
 						.catch((error: unknown) => {
 							if (this.holdMode?.event === browserEvent) this.finishHoldMode();
-							this.notificationService.warning(getErrorMessage(error));
+							this.notificationService.warn(getErrorMessage(error));
 						});
 				} finally {
 					this.currentDispatch = previousDispatch;

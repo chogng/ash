@@ -5,12 +5,12 @@ import { BrowserClipboardService as BaseBrowserClipboardService } from '../../..
 import type { IClipboardItem } from '../../../../platform/clipboard/common/clipboardService.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
-import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import { Severity, INotificationService, type INotificationHandle } from '../../../../platform/notification/common/notification.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 
 /** Adds window-scoped permission recovery to the browser clipboard adapter. */
 export class BrowserClipboardService extends BaseBrowserClipboardService {
-	private readonly pendingReads = this._register(new DisposableMap<number>());
+	private readonly pendingReads = this._register(new DisposableMap<INotificationHandle>());
 
 	constructor(
 		@INotificationService private readonly notificationService: INotificationService,
@@ -49,40 +49,40 @@ export class BrowserClipboardService extends BaseBrowserClipboardService {
 
 	private waitForRetry(): Promise<boolean> {
 		return new Promise(resolve => {
-			const handle = this.notificationService.error(
-				localize('clipboard.readError', 'Unable to read the clipboard. Allow this website to access your clipboard, then retry.'),
-				[
-					{
-						id: 'clipboard.retry',
-						label: localize('clipboard.retry', 'Retry'),
-						run: () => {
-							resolve(true);
-							this.pendingReads.deleteAndDispose(handle.item.id);
+			const handle = this.notificationService.notify({
+				severity: Severity.Error, message: localize('clipboard.readError', 'Unable to read the clipboard. Allow this website to access your clipboard, then retry.'), actions: {
+					primary: [
+						{
+							tooltip: '',
+							enabled: true,
+							id: 'clipboard.retry',
+							label: localize('clipboard.retry', 'Retry'),
+							run: () => {
+								resolve(true);
+								this.pendingReads.deleteAndDispose(handle);
+							},
 						},
-					},
-					{
-						id: 'clipboard.learnMore',
-						label: localize('clipboard.learnMore', 'Learn More'),
-						run: async () => {
-							await this.openerService.open('https://support.google.com/chrome/answer/114662', { openExternal: true });
+						{
+							tooltip: '',
+							enabled: true,
+							id: 'clipboard.learnMore',
+							label: localize('clipboard.learnMore', 'Learn More'),
+							run: async () => {
+								await this.openerService.open('https://support.google.com/chrome/answer/114662', { openExternal: true });
+							},
 						},
-					},
-				],
-			);
-			const listener = this.notificationService.onDidRemove(item => {
-				if (item.id === handle.item.id) {
-					this.pendingReads.deleteAndDispose(item.id);
+					]
 				}
 			});
+
+			let listener: { dispose(): void; } | undefined;
 			// Closing the prompt or disposing its window completes the waiting paste.
-			this.pendingReads.set(handle.item.id, toDisposable(() => {
-				listener.dispose();
+			this.pendingReads.set(handle, toDisposable(() => {
+				listener?.dispose();
 				handle.close();
 				resolve(false);
 			}));
-			if (!this.notificationService.getNotifications().some(item => item.id === handle.item.id)) {
-				this.pendingReads.deleteAndDispose(handle.item.id);
-			}
+			listener = handle.onDidClose(() => this.pendingReads.deleteAndDispose(handle));
 		});
 	}
 }

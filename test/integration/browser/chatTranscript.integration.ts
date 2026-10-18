@@ -1,3 +1,4 @@
+import type { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { IRendererHostService } from '../../../src/ash/platform/renderer/common/rendererHost.js';
 import { createTestLanguageModelToolsService } from '../../../src/ash/workbench/contrib/chat/test/common/tools/testLanguageModelToolsService.js';
@@ -25,7 +26,8 @@ import { IDialogsModel } from '../../../src/ash/workbench/common/dialogs.js';
 import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
 import { BrowserDialogHandler } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.js';
 import { DialogHandlerContribution } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.web.contribution.js';
-import { IAgentVoiceService, type AgentVoiceSessionState, type AgentVoiceTaskRequest, type AgentVoiceSelection } from '../../../src/ash/platform/agentHost/common/agentService.js';
+import { IAgentVoiceService } from '../../../src/ash/platform/agentHost/common/agentService.js';
+import { type AgentVoiceSessionState, type AgentVoiceTaskRequest, type AgentVoiceSelection } from '../../../src/ash/platform/agentHost/common/agent.js';
 import { IWebviewService } from '../../../src/ash/workbench/contrib/webview/browser/webview.js';
 import '../../../src/ash/workbench/contrib/webview/browser/webview.contribution.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
@@ -39,7 +41,7 @@ import { IAgentThreadService } from '../../../src/ash/platform/agentHost/common/
 import toneWav from '../../../crates/utils/audio/tests/fixtures/tone.wav?url';
 import type { AppServerProtocolClient } from '../../../src/ash/platform/agentHost/browser/appServerProtocolClient.js';
 import type { ThreadTranscriptUpdateEnvelope as TranscriptDto, ServerNotification } from '../../../.build/protocol/typescript/index.js';
-import type { ThreadTranscriptUpdateEnvelope } from '../../../src/ash/platform/agentHost/common/agentService.js';
+import type { ThreadTranscriptUpdateEnvelope } from '../../../src/ash/platform/agentHost/common/agent.js';
 import { BrowserLayoutService, ILayoutService } from '../../../src/ash/platform/layout/browser/layoutService.js';
 import { AccessibleViewType, IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewService } from '../../../src/ash/workbench/contrib/accessibility/browser/accessibleView.js';
@@ -76,7 +78,7 @@ import { ILanguageModelsService } from '../../../src/ash/workbench/contrib/chat/
 import { IChatSessionNavigationService } from '../../../src/ash/workbench/services/chat/common/chatSessionNavigationService.js';
 import { IChatService } from '../../../src/ash/workbench/services/chat/common/chatService.js';
 import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
-import type { ThreadTranscriptEntry } from '../../../src/ash/platform/agentHost/common/agentService.js';
+import type { ThreadTranscriptEntry } from '../../../src/ash/platform/agentHost/common/agent.js';
 import { ChatListWidget } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatListWidget.js';
 import { ChatContentMarkdownRenderer } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatContentMarkdownRenderer.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../src/ash/workbench/common/contributions.js';
@@ -108,7 +110,8 @@ import { decodeAppServerResponse } from '../../../.build/protocol/typescript/App
 import type { SessionThreadReadResult } from '../../../.build/protocol/typescript/index.js';
 import { ChatSessionArchiveActionWordingSettingId } from '../../../src/ash/platform/chat/common/sessionArchiveActions.js';
 import { createDisconnectedRendererApi } from '../../../src/ash/workbench/browser/rendererApi.js';
-import { IAgentSessionService, IAgentTurnService, type AgentSession } from '../../../src/ash/platform/agentHost/common/agentService.js';
+import { IAgentSessionService, IAgentTurnService } from '../../../src/ash/platform/agentHost/common/agentService.js';
+import { type AgentSession } from '../../../src/ash/platform/agentHost/common/agent.js';
 import { IAgentModelsService } from '../../../src/ash/platform/agentHost/common/agentModels.js';
 import { IAppServerApi, IServerEventApi } from '../../../src/ash/platform/agentHost/common/appServerApi.js';
 import { AppServerSessionsProvider } from '../../../src/ash/sessions/contrib/providers/agentHost/browser/appServerSessionsProvider.js';
@@ -632,7 +635,7 @@ window.ashChatTranscriptIntegration = {
 		editorCount: services.get(ICodeEditorService).listCodeEditors().length,
 		codeModelCount: services.get(ICodeEditorService).listCodeEditors().filter(editor => editor !== file && editor.getModel()).length,
 		selection: services.get(ICodeEditorService).listCodeEditors().find(editor => editor !== file)?.getSelection(),
-		notifications: services.get(INotificationService).getNotifications().map(item => item.message),
+		notifications: (services.get(INotificationService) as NotificationService).model.getNotifications().map(item => item.message),
 	}),
 	openSkill: async () => {
 		const [skill] = await prompts.findAgentSkills(CancellationToken.None, 'reference-session');

@@ -1,4 +1,4 @@
-import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { RunOnceScheduler } from '../../../../../base/common/async.js';
 import { localize } from '../../../../../nls.js';
@@ -7,7 +7,7 @@ import { IAppServerApi } from '../../../../../platform/agentHost/common/appServe
 import { getAgentHostEditorActivity, hasAgentsWindowInvitationSessionCooldownElapsed, type IAgentHostEditorState, type IAgentsWindowInvitation, type IAgentHostEditorSession } from '../../../../../platform/chat/common/agentsWindowInvitation.js';
 import { ChatAIDisabledSettingId } from '../../../../../platform/chat/common/chatSettings.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import { INotificationService, NotificationSeverity, type NotificationHandle } from '../../../../../platform/notification/common/notification.js';
+import { INotificationService, Severity, type INotificationHandle } from '../../../../../platform/notification/common/notification.js';
 import { INativeHostService } from '../../../../common/services.js';
 import type { INativeHostApi } from '../../../../../platform/native/common/nativeHost.js';
 import { IChatService } from '../../../../services/chat/common/chatService.js';
@@ -20,7 +20,7 @@ export class AgentsWindowInvitationContribution extends Disposable {
 	private state: IAgentHostEditorState | undefined;
 	private readonly activity = new Map<string, Omit<IAgentHostEditorSession, 'windowId'>>();
 	private candidate: URI | undefined;
-	private presentation: { readonly invitation: IAgentsWindowInvitation; readonly notification: NotificationHandle; } | undefined;
+	private presentation: { readonly invitation: IAgentsWindowInvitation; readonly notification: INotificationHandle; readonly lifetime: DisposableStore; } | undefined;
 	private queue: Promise<void> = Promise.resolve();
 	private readonly pendingRefreshes = new Map<string, { dirty: boolean; }>();
 	private connectionEpoch = 0;
@@ -88,9 +88,7 @@ export class AgentsWindowInvitationContribution extends Disposable {
 			if (!this.enabled) { this.delay.cancel(); this.closePresentation(); }
 			else this.schedule();
 		}));
-		this._register(notifications.onDidRemove(item => {
-			if (this.presentation?.notification.item.id === item.id) this.closePresentation();
-		}));
+
 		this._register(toDisposable(() => {
 			this.closePresentation();
 			void this.host.updateAgentHostEditorState({ kind: 'sessions', sessions: [] }).catch(() => { });
@@ -197,16 +195,20 @@ export class AgentsWindowInvitationContribution extends Disposable {
 			}
 			const claimed = invitation;
 			const notification = this.notifications.notify({
-				severity: NotificationSeverity.Info,
+				severity: Severity.Info,
 				message: localize('agentsWindowInvitation.message', 'Continue in the Agents Window to keep track of your agent conversations across projects.'),
-				onDidShow: () => {
-					if (!this.isDisposed && this.isCurrent(candidate)) {
-						void this.host.markAgentsWindowInvitationShown(claimed.id).catch(error => console.error('Could not record Agents invitation', error));
-					}
-				},
-				actions: { primary: [{ id: 'agentsWindowInvitation.open', label: localize('agentsWindowInvitation.open', 'Continue in Agents Window'), run: () => this.open(claimed) }] },
+				actions: { primary: [{ tooltip: '', enabled: true, id: 'agentsWindowInvitation.open', label: localize('agentsWindowInvitation.open', 'Continue in Agents Window'), run: () => this.open(claimed) }] },
 			});
-			this.presentation = { invitation: claimed, notification };
+			const lifetime = new DisposableStore();
+			this.presentation = { invitation: claimed, notification, lifetime };
+			const recordShown = (visible: boolean): void => {
+				if (visible && !this.isDisposed && this.isCurrent(candidate)) {
+					void this.host.markAgentsWindowInvitationShown(claimed.id).catch(error => console.error('Could not record Agents invitation', error));
+				}
+			};
+			lifetime.add(notification.onDidChangeVisibility(recordShown));
+			lifetime.add(notification.onDidClose(() => this.closePresentation()));
+			recordShown(notification.visible === true);
 		} catch (error) {
 			if (invitation) await this.host.releaseAgentsWindowInvitation(invitation.id);
 			throw error;
@@ -229,6 +231,7 @@ export class AgentsWindowInvitationContribution extends Disposable {
 		const current = this.presentation;
 		this.presentation = undefined;
 		if (!current) return;
+		current.lifetime.dispose();
 		current.notification.close();
 		void this.host.releaseAgentsWindowInvitation(current.invitation.id).catch(() => { });
 	}

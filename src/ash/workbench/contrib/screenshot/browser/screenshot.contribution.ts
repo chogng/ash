@@ -1,5 +1,5 @@
 import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import { Severity, INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IPreferencesService } from '../../../services/preferences/common/preferences.js';
 import { IScreenshotService, ScreenshotCommandId, ScreenshotGlobalShortcutSetting } from '../common/screenshot.js';
 import { localize } from '../../../../nls.js';
@@ -99,11 +99,17 @@ export class ScreenshotShortcutContribution extends Disposable {
 		this.warningMessage = message;
 		this.warning.clear();
 		if (!message) return;
-		const warning = this.notifications.warning(message, [{
-			id: 'screenshot.changeShortcut',
-			label: localize('screenshot.shortcut.changeKeybinding', 'Change Shortcut'),
-			run: () => this.preferences.openGlobalKeybindingSettings(false, { query: `@command:${ScreenshotCommandId}` })
-		}]);
+		const warning = this.notifications.notify({
+			severity: Severity.Warning, message: message, actions: {
+				primary: [{
+					tooltip: '',
+					enabled: true,
+					id: 'screenshot.changeShortcut',
+					label: localize('screenshot.shortcut.changeKeybinding', 'Change Shortcut'),
+					run: () => this.preferences.openGlobalKeybindingSettings(false, { query: `@command:${ScreenshotCommandId}` })
+				}]
+			}
+		});
 		this.warning.value = toDisposable(() => warning.close());
 	}
 }

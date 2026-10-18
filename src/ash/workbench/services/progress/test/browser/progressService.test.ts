@@ -28,12 +28,12 @@ test("notification progress updates the owning model and follows task completion
 		progress.report({ increment: 1, message: "Reading files" });
 		return completion.p;
 	});
-	const notification = fixture.notifications.getNotifications()[0]!;
+	const notification = fixture.notifications.model.getNotifications()[0]!;
 	assert.equal(notification.message, "Indexing: Reading files");
 	assert.deepEqual(notification.progress, { total: 3, worked: 1 });
 	await completion.complete("done");
 	assert.equal(await pending, "done");
-	assert.deepEqual(fixture.notifications.getNotifications(), []);
+	assert.deepEqual(fixture.notifications.model.getNotifications(), []);
 });
 
 test("notification cancellation requests once while the producer's Promise stays pending", async () => {
@@ -43,13 +43,13 @@ test("notification cancellation requests once while the producer's Promise stays
 	let settled = false;
 	const pending = fixture.progress.withProgress({ location: ProgressLocation.Notification, title: "Git", cancellable: "Stop" }, () => completion.p, () => { cancellations++; });
 	void pending.then(() => { settled = true; });
-	const action = fixture.notifications.getNotifications()[0]!.actions!.primary![0]!;
+	const action = fixture.notifications.model.getNotifications()[0]!.actions!.primary![0]!;
 	assert.equal(action.label, "Stop");
 	await action.run();
 	await action.run();
 	assert.equal(cancellations, 1);
 	assert.equal(settled, false);
-	assert.deepEqual(fixture.notifications.getNotifications(), []);
+	assert.deepEqual(fixture.notifications.model.getNotifications(), []);
 	await completion.complete("cancelled by backend");
 	assert.equal(await pending, "cancelled by backend");
 });
@@ -72,7 +72,7 @@ test("window progress activates its command and resumes earlier work after the l
 	assert.equal(entry.entry.ariaLabel, entry.entry.text);
 	await entry.entry.run?.();
 	assert.equal(reveals, 1);
-	assert.deepEqual(fixture.notifications.getNotifications(), []);
+	assert.deepEqual(fixture.notifications.model.getNotifications(), []);
 	const pendingSecond = fixture.progress.withProgress({ location: ProgressLocation.Window, title: "typescript-language-server", command: "test.log" }, progress => {
 		progress.report({ message: "Loading project" });
 		return second.p;
@@ -92,7 +92,7 @@ test("silent notification progress retains history without acquiring a window en
 	using fixture = new ProgressFixture();
 	const completion = new DeferredPromise<void>();
 	const pending = fixture.progress.withProgress({ location: ProgressLocation.Notification, title: "Silent task", priority: NotificationPriority.SILENT }, () => completion.p);
-	assert.equal(fixture.notifications.getNotifications()[0]?.priority, NotificationPriority.SILENT);
+	assert.equal(fixture.notifications.model.getNotifications()[0]?.priority, NotificationPriority.SILENT);
 	assert.deepEqual(fixture.statusbar.getEntries(StatusbarAlignment.Right), []);
 	await completion.complete(undefined);
 	await pending;
@@ -101,14 +101,14 @@ test("silent notification progress retains history without acquiring a window en
 test("task failure and service disposal release presentations without settling the producer", async () => {
 	using fixture = new ProgressFixture();
 	await assert.rejects(fixture.progress.withProgress({ location: ProgressLocation.Notification, title: "Loading" }, () => Promise.reject(new Error("operation failed"))), /operation failed/);
-	assert.deepEqual(fixture.notifications.getNotifications(), []);
+	assert.deepEqual(fixture.notifications.model.getNotifications(), []);
 	const completion = new DeferredPromise<void>();
 	let cancellations = 0;
 	const pending = fixture.progress.withProgress({ location: ProgressLocation.Notification, title: "Indexing", cancellable: true }, () => completion.p, () => { cancellations++; });
 	fixture.progress.dispose();
 	assert.equal(cancellations, 1);
 	assert.equal(completion.isSettled, false);
-	assert.deepEqual(fixture.notifications.getNotifications(), []);
+	assert.deepEqual(fixture.notifications.model.getNotifications(), []);
 	await completion.complete(undefined);
 	await pending;
 });
@@ -127,7 +127,7 @@ test("a failing cancellation callback does not retain other progress presentatio
 	const pendingSecond = fixture.progress.withProgress({ location: ProgressLocation.Notification, title: 'Second' }, () => second.p, () => { cancellations++; });
 	assert.throws(() => fixture.progress.dispose(), AggregateError);
 	assert.equal(cancellations, 1);
-	assert.deepEqual(fixture.notifications.getNotifications(), []);
+	assert.deepEqual(fixture.notifications.model.getNotifications(), []);
 	await first.complete(undefined);
 	await second.complete(undefined);
 	await Promise.all([pendingFirst, pendingSecond]);
@@ -142,25 +142,25 @@ for (const early of [false, true]) test(`commandless Window progress ${early ? '
 		using command = fixture.registry.register('notifications.showList', () => { opens++; });
 		const completion = new DeferredPromise<void>();
 		const pending = fixture.progress.withProgress({ location: ProgressLocation.Window, title: 'Loading workspace' }, () => completion.p);
-		assert.deepEqual(fixture.notifications.getNotifications(), []);
+		assert.deepEqual(fixture.notifications.model.getNotifications(), []);
 		if (early) {
 			await completion.complete(undefined);
 			await pending;
 		}
 		mock.timers.tick(149);
-		assert.deepEqual(fixture.notifications.getNotifications(), []);
+		assert.deepEqual(fixture.notifications.model.getNotifications(), []);
 		assert.deepEqual(fixture.statusbar.getEntries(StatusbarAlignment.Right), []);
 		mock.timers.tick(1);
 		if (early) {
-			assert.deepEqual(fixture.notifications.getNotifications(), []);
+			assert.deepEqual(fixture.notifications.model.getNotifications(), []);
 			assert.deepEqual(fixture.statusbar.getEntries(StatusbarAlignment.Right), []);
 		} else {
-			assert.equal(fixture.notifications.getNotifications()[0]?.priority, NotificationPriority.SILENT);
+			assert.equal(fixture.notifications.model.getNotifications()[0]?.priority, NotificationPriority.SILENT);
 			await fixture.statusbar.getEntries(StatusbarAlignment.Right)[0]?.entry.run?.();
 			assert.equal(opens, 1);
 			await completion.complete(undefined);
 			await pending;
-			assert.deepEqual(fixture.notifications.getNotifications(), []);
+			assert.deepEqual(fixture.notifications.model.getNotifications(), []);
 		}
 	} finally { mock.timers.reset(); }
 });

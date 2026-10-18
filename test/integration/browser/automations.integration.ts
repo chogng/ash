@@ -1,3 +1,4 @@
+import type { IAction } from '../../../src/ash/base/common/actions.js';
 import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
 import '../../../src/ash/base/browser/ui/styles.css';
 import '../../../src/ash/workbench/browser/media/style.css';
@@ -20,7 +21,7 @@ import { AccessibleViewType } from '../../../src/ash/platform/accessibility/brow
 import { ILogService, NullLoggerService } from '../../../src/ash/platform/log/common/log.js';
 import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
 import { ILayoutService } from '../../../src/ash/platform/layout/browser/layoutService.js';
-import { INotificationService, NotificationSeverity, type NotificationAction, type NotificationHandle } from '../../../src/ash/platform/notification/common/notification.js';
+import { INotificationService, Severity, type INotificationHandle, type INotification } from '../../../src/ash/platform/notification/common/notification.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { bindTestColorTheme } from './themeFixture.js';
 import { lightColorTheme, darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
@@ -86,14 +87,19 @@ services.registerInstance(IConfigurationService, resources.add(new InMemoryConfi
 
 const errors: string[] = [];
 const notificationService = resources.add(new NotificationService());
-const notices: { message: string; actions: readonly NotificationAction[]; closed: boolean; }[] = [];
-const notify = (message: string, actions: readonly NotificationAction[] = []): NotificationHandle => {
+const notices: { message: string; actions: readonly IAction[]; closed: boolean; }[] = [];
+const notify = (message: string, actions: readonly IAction[] = []): INotificationHandle => {
 	const item = { message, actions, closed: false };
 	notices.push(item);
-	const handle = notificationService.info(message, actions);
+	const handle = notificationService.notify({ severity: Severity.Info, message: message, actions: { primary: actions } });
 	return { ...handle, close: () => { item.closed = true; handle.close(); } };
 };
-services.registerInstance(INotificationService, { error: (message: string, actions?: readonly NotificationAction[]) => { errors.push(message); return notify(message, actions); }, warning: notify, info: notify } as unknown as INotificationService);
+services.registerInstance(INotificationService, {
+	error: (message: string, actions?: readonly IAction[]) => { errors.push(message); return notify(message, actions); }, warn: notify, info: notify, notify: (options: INotification) => {
+		if (options.severity === Severity.Error) errors.push(String(options.message));
+		return notify(String(options.message), options.actions?.primary);
+	}
+} as unknown as INotificationService);
 
 let directory = '/captured';
 

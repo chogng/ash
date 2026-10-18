@@ -85,7 +85,7 @@ const { createDesignEditorContributions } = await import('../../contrib/creator/
 const services = new InstantiationService();
 const notifications = new NotificationService();
 services.registerInstance(INotificationService, notifications);
-setup(() => notifications.clear());
+setup(() => notifications.model.clear());
 suiteTeardown(() => notifications.dispose());
 services.registerSingleton(IUriIdentityService, () => services.createInstance(UriIdentityService));
 const colorContextView = new ContextView(browser.window.document.body);
@@ -2365,7 +2365,7 @@ test('Design retains failed edits, refuses to close on failure and retries witho
 	assert.equal(await document.flushAutoSave(), false);
 	assert.equal(await document.confirmDiscard(), true);
 	assert.equal(document.needsSaveRetry, true);
-	assert.ok(notifications.getNotifications().some(notification => notification.message === document.saveStatus));
+	assert.ok(notifications.model.getNotifications().some(notification => notification.message === document.saveStatus));
 	assert.equal(document.isDirty, true);
 	assert.equal(document.model.value.shapes.length, 1);
 	fixture.beforeWrite = undefined;

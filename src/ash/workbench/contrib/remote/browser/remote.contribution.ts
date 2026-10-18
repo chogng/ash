@@ -1,7 +1,7 @@
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { IAppServerApi } from '../../../../platform/agentHost/common/appServerApi.js';
-import { INotificationService, type NotificationHandle } from '../../../../platform/notification/common/notification.js';
+import { Severity, INotificationService, type INotificationHandle } from '../../../../platform/notification/common/notification.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { AppServerRecoveryAvailableContext, ReconnectAppServerCommandId } from './remoteActions.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/contributions.js";
@@ -59,7 +59,7 @@ registerWorkbenchContribution(RemoteExtensionRecoveryContribution.ID, WorkbenchP
 
 /** Presents recovery owned by this window's active connection, using ordinary notifications. */
 class AppServerRecoveryContribution extends Disposable {
-	private notification: NotificationHandle | undefined;
+	private notification: INotificationHandle | undefined;
 
 	constructor(
 		@IAppServerApi api: IAppServerApi,
@@ -76,13 +76,19 @@ class AppServerRecoveryContribution extends Disposable {
 			this.notification?.close();
 			this.notification = undefined;
 			if (recovery.status === 'failed') {
-				this.notification = notifications.error(localize('appServer.recoveryFailed', 'Could not reconnect to the Agent Host. Check the connection and try again.'), [{
-					id: ReconnectAppServerCommandId,
-					label: localize('appServer.reconnect', 'Reconnect'),
-					run: () => recovery.reconnect().catch(() => { }),
-				}]);
+				this.notification = notifications.notify({
+					severity: Severity.Error, message: localize('appServer.recoveryFailed', 'Could not reconnect to the Agent Host. Check the connection and try again.'), actions: {
+						primary: [{
+							tooltip: '',
+							enabled: true,
+							id: ReconnectAppServerCommandId,
+							label: localize('appServer.reconnect', 'Reconnect'),
+							run: () => recovery.reconnect().catch(() => { }),
+						}]
+					}
+				});
 			} else if (recovery.status === 'unavailable') {
-				this.notification = notifications.error(localize('appServer.recoveryUnavailable', 'The Agent Host connection cannot be restored. {0}', recovery.error ?? ''));
+				this.notification = notifications.notify({ severity: Severity.Error, message: localize('appServer.recoveryUnavailable', 'The Agent Host connection cannot be restored. {0}', recovery.error ?? '') });
 			}
 		};
 		this._register(recovery.onDidChange(update));

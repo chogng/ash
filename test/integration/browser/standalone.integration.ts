@@ -54,7 +54,6 @@ import { IMenuService, MenusRegistry, MenuId } from '../../../src/ash/platform/a
 import { KeybindingsRegistry } from '../../../src/ash/platform/keybinding/common/keybindingsRegistry.js';
 import { Keybinding, logicalKey } from '../../../src/ash/base/common/keybindings.js';
 import { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
-import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
 import { FontMeasurements } from '../../../src/ash/editor/browser/config/fontMeasurements.js';
 import { AccessibilitySupport, IAccessibilityService } from '../../../src/ash/platform/accessibility/common/accessibility.js';
 import { StandaloneEditor } from '../../../src/ash/editor/standalone/browser/standaloneCodeEditor.js';
@@ -264,7 +263,7 @@ interface StandaloneHarness {
 	readLanguageRequests(): { languageId: string; aborted: boolean; }[];
 	readDefinitionPosition(): { lineNumber: number; column: number; } | null;
 	prepareStickyMenu(): void;
-	readStickyMenu(): { callerEnabled: boolean; ownedEnabled: boolean; inChordMode: boolean; errors: string[]; };
+	readStickyMenu(): { callerEnabled: boolean; ownedEnabled: boolean; inChordMode: boolean; };
 	finishLanguageRequest(index: number): Promise<void>;
 	changeLanguageRequest(reason: LanguageRequestChange): void;
 	prepareParameterHints(enabled?: boolean, cycle?: boolean, triggers?: readonly string[], retriggers?: readonly string[]): void;
@@ -1247,7 +1246,6 @@ window.ashStandaloneIntegration = {
 		callerEnabled: callerEditor.getOption(EditorOption.stickyScroll).enabled,
 		ownedEnabled: ownedEditor.getOption(EditorOption.stickyScroll).enabled,
 		inChordMode: StandaloneServices.get(IKeybindingService).inChordMode,
-		errors: StandaloneServices.get(INotificationService).getNotifications().map(item => item.message),
 	}),
 	finishLanguageRequest: async index => {
 		languageRequests[index]!.finish();

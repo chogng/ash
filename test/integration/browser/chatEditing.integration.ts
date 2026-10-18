@@ -105,7 +105,7 @@ services.registerInstance(ILifecycleService, lifecycle);
 services.registerInstance(IAccessibilitySignalService, { playSignal: async () => { }, playSignalLoop: () => Disposable.None });
 const notifications = resources.add(new NotificationService());
 services.registerInstance(INotificationService, notifications);
-resources.add(notifications.onDidAdd(item => { document.querySelector('#error')!.textContent = item.message; }));
+resources.add(notifications.model.onDidAdd(item => { document.querySelector('#error')!.textContent = item.message; }));
 services.registerInstance(IEditorPartsService, { activePane: undefined } as unknown as IEditorPartsService);
 services.registerSingleton(ICodeEditorService, () => services.createInstance(CodeEditorService));
 const contexts = resources.add(new ContextKeyService());

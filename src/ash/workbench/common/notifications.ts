@@ -1,6 +1,17 @@
 import { Emitter, Event } from "../../base/common/event.js";
-import { Disposable } from "../../base/common/lifecycle.js";
-import type { NotificationItem, NotificationOptions } from "../../platform/notification/common/notification.js";
+import { Disposable, DisposableStore } from "../../base/common/lifecycle.js";
+import type { INotification, INotificationActions, INotificationHandle } from "../../platform/notification/common/notification.js";
+
+/** Window history and presentation state stay in the Workbench, outside the producer contract. */
+export interface NotificationItem extends Omit<INotification, 'message' | 'source'> {
+	readonly id: number;
+	readonly createdAt: number;
+	readonly message: string;
+	readonly source?: string;
+	readonly visible: boolean;
+	readonly onDidChange: Event<NotificationItem>;
+	updateVisibility(visible: boolean): void;
+}
 
 /** The notification history shared by every notification surface in one window. */
 export class NotificationsModel extends Disposable {
@@ -9,33 +20,77 @@ export class NotificationsModel extends Disposable {
 	private readonly _onDidRemove = this._register(new Emitter<NotificationItem>());
 	private readonly _onDidChange = this._register(new Emitter<NotificationItem>());
 	private nextId = 1;
+	private readonly closeCallbacks = new Map<number, (visible: boolean) => void>();
 
 	readonly onDidAdd: Event<NotificationItem> = this._onDidAdd.event;
 	readonly onDidRemove: Event<NotificationItem> = this._onDidRemove.event;
 
-	add(options: NotificationOptions): NotificationItem {
+	addNotification(options: INotification): INotificationHandle {
 		const id = this.nextId++;
+		const resources = new DisposableStore();
+		const closedEmitter = resources.add(new Emitter<void>());
+		const visibilityEmitter = resources.add(new Emitter<boolean>());
+		let closed = false;
+		const updateVisibility = (visible: boolean): void => {
+			if (closed || this.items.get(id)?.visible === visible) return;
+			this.update(id, { visible });
+			visibilityEmitter.fire(visible);
+		};
 		const item: NotificationItem = Object.freeze({
 			...options,
 			id,
+			message: options.message instanceof Error ? options.message.message : options.message,
+			source: typeof options.source === 'string' ? options.source : options.source?.label,
+			visible: false,
+			updateVisibility,
 			onDidChange: ((listener, thisArgs, disposables) => this._onDidChange.event(current => {
 				if (current.id === id) listener.call(thisArgs, current);
 			}, undefined, disposables)) as Event<NotificationItem>,
 			createdAt: Date.now(),
-			actions: Object.freeze({
-				primary: Object.freeze([...(options.actions?.primary ?? [])]),
-				secondary: Object.freeze([...(options.actions?.secondary ?? [])]),
-			}),
+			actions: freezeActions(options.actions),
+		});
+		const model = this;
+		const handle: INotificationHandle = {
+			get visible() { return !closed && model.get(id)?.visible === true; },
+			// A producer may receive its handle after a synchronous arrival listener removed it.
+			// Replay that close on subscription so pending choices and clipboard reads can settle.
+			onDidClose: (listener, thisArgs, disposables) => {
+				if (closed) {
+					listener.call(thisArgs, undefined);
+					return Disposable.None;
+				}
+				return closedEmitter.event(listener, thisArgs, disposables);
+			},
+			onDidChangeVisibility: visibilityEmitter.event,
+			updateSeverity: severity => this.update(id, { severity }),
+			updateMessage: message => this.update(id, { message: message instanceof Error ? message.message : message }),
+			updateActions: actions => this.update(id, { actions: freezeActions(actions) }),
+			progress: {
+				infinite: () => this.update(id, { progress: { infinite: true } }),
+				total: total => this.update(id, { progress: { total, worked: 0 } }),
+				worked: value => {
+					const progress = this.get(id)?.progress;
+					this.update(id, { progress: { total: progress?.total, worked: (progress?.worked ?? 0) + value } });
+				},
+				done: () => this.update(id, { progress: undefined }),
+			},
+			close: () => { this.remove(id); },
+		};
+		this.closeCallbacks.set(id, visible => {
+			closed = true;
+			if (visible) visibilityEmitter.fire(false);
+			closedEmitter.fire();
+			resources.dispose();
 		});
 		this.items.set(item.id, item);
 		this._onDidAdd.fire(item);
-		return item;
+		return handle;
 	}
 
 	getNotifications(): readonly NotificationItem[] { return [...this.items.values()]; }
 	get(id: number): NotificationItem | undefined { return this.items.get(id); }
 
-	update(id: number, changes: Partial<Pick<NotificationOptions, 'message' | 'progress'>>): void {
+	private update(id: number, changes: Partial<Pick<NotificationItem, 'severity' | 'message' | 'actions' | 'progress' | 'visible'>>): void {
 		const current = this.items.get(id);
 		if (!current) return;
 		const item = Object.freeze({ ...current, ...changes });
@@ -46,7 +101,10 @@ export class NotificationsModel extends Disposable {
 	remove(id: number): boolean {
 		const item = this.items.get(id);
 		if (!item) return false;
+		const close = this.closeCallbacks.get(id);
+		this.closeCallbacks.delete(id);
 		this.items.delete(id);
+		close?.(item.visible);
 		this._onDidRemove.fire(item);
 		return true;
 	}
@@ -59,4 +117,11 @@ export class NotificationsModel extends Disposable {
 		this.clear();
 		super.disposeCore();
 	}
+}
+
+function freezeActions(actions: INotificationActions | undefined): INotificationActions {
+	return Object.freeze({
+		primary: Object.freeze([...(actions?.primary ?? [])]),
+		secondary: Object.freeze([...(actions?.secondary ?? [])]),
+	});
 }

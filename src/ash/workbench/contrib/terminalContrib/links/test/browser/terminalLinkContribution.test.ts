@@ -76,7 +76,7 @@ function fixture(lifetime: DisposableStore, root = URI.file('/project'), cwd = '
 	const urls: string[] = [];
 	services.registerInstance(IOpenerService, { open: async url => { urls.push(String(url)); return true; } } as IOpenerService);
 	const warnings: string[] = [];
-	services.registerInstance(INotificationService, { warning: (message: string) => { warnings.push(message); } } as unknown as INotificationService);
+	services.registerInstance(INotificationService, { warn: (message: string) => { warnings.push(message); } } as unknown as INotificationService);
 	let pick: IQuickPick<IQuickPickItem> | undefined;
 	const accepted = lifetime.add(new Emitter<void>());
 	const hidden = lifetime.add(new Emitter<void>());

@@ -21,7 +21,7 @@ import { AccessibilityVerbositySettingId } from '../../../../../platform/accessi
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
-import { INotificationService, type NotificationHandle } from '../../../../../platform/notification/common/notification.js';
+import { Severity, INotificationService, type INotificationHandle } from '../../../../../platform/notification/common/notification.js';
 import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
 import type { IAutomationDescriptor, IAutomationRun, IAutomationSchedule } from '../../../../../workbench/contrib/chat/common/automations/automation.js';
 import { IAutomationService } from '../../../../../workbench/contrib/chat/common/automations/automationService.js';
@@ -747,7 +747,7 @@ export class AutomationsCustomViewContribution extends Disposable {
 		}));
 		const previous = new Map<string, IAutomationRun['status']>();
 		const knownProviders = new Set<string>();
-		const notices = new Map<string, NotificationHandle>();
+		const notices = new Map<string, INotificationHandle>();
 		this._register(toDisposable(() => { for (const notice of notices.values()) notice.close(); }));
 		this._register(autorun(reader => {
 			const runs = automations.runs.read(reader);
@@ -767,18 +767,24 @@ export class AutomationsCustomViewContribution extends Disposable {
 				notices.delete(run.id);
 				// The first history snapshot stays in the page; later status changes produce a toast once.
 				if (!knownProviders.has(run.providerId)) continue;
-				const notify = run.status === 'failed' ? notifications.error.bind(notifications)
-					: run.status === 'needsInput' ? notifications.warning.bind(notifications)
-						: run.status === 'completed' && configuration.getValue<boolean>('sessions.automations.notifyOnSuccess') === true ? notifications.info.bind(notifications) : undefined;
-				if (!notify) continue;
+				const severity = run.status === 'failed' ? Severity.Error
+					: run.status === 'needsInput' ? Severity.Warning
+						: run.status === 'completed' && configuration.getValue<boolean>('sessions.automations.notifyOnSuccess') === true ? Severity.Info : undefined;
+				if (severity === undefined) continue;
 				const message = localize('automations.runFailed', 'Automation {0}: {1}', run.definition.name, run.message ?? automationRunStatusLabel(run.status));
-				const notice = notify(message, [{
-					id: 'sessions.automations.viewResult', label: localize('automations.viewResult', 'View result'),
-					run: async () => {
-						views.showCustomView(AUTOMATIONS_CUSTOM_VIEW_ID);
-						await commands.executeCommand('sessions.automations.openRun', run.id);
+				const notice = notifications.notify({
+					severity, message, actions: {
+						primary: [{
+							tooltip: '',
+							enabled: true,
+							id: 'sessions.automations.viewResult', label: localize('automations.viewResult', 'View result'),
+							run: async () => {
+								views.showCustomView(AUTOMATIONS_CUSTOM_VIEW_ID);
+								await commands.executeCommand('sessions.automations.openRun', run.id);
+							}
+						}]
 					}
-				}]);
+				});
 				notices.set(run.id, notice);
 			}
 			for (const provider of ready) knownProviders.add(provider);

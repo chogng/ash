@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Emitter } from '../../../../../base/common/event.js';
 import { resetNlsResolver } from '../../../../../nls.js';
-import { NotificationSeverity } from '../../../../../platform/notification/common/notification.js';
+import { Severity } from '../../../../../platform/notification/common/notification.js';
 import { NotificationService } from '../../../../services/notification/common/notificationService.js';
 import type { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
 import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
@@ -28,44 +28,44 @@ test('global screenshot conflicts notify once, retain the previous binding, and 
 	};
 	using contribution = new ScreenshotShortcutContribution(screenshot, notifications, preferences);
 	assert.equal(checks, 1);
-	assert.deepEqual(notifications.getNotifications(), [], 'Local-only shortcuts do not report system registration conflicts');
+	assert.deepEqual(notifications.model.getNotifications(), [], 'Local-only shortcuts do not report system registration conflicts');
 
 	status = { ...status, global: true, activeLabel: 'Control+Command+A' };
 	changes.fire();
-	const warning = notifications.getNotifications()[0]!;
-	assert.equal(notifications.getNotifications().length, 1);
-	assert.equal(warning.severity, NotificationSeverity.Warning);
+	const warning = notifications.model.getNotifications()[0]!;
+	assert.equal(notifications.model.getNotifications().length, 1);
+	assert.equal(warning.severity, Severity.Warning);
 	assert.match(warning.message, /previous shortcut still works: Control\+Command\+A/);
 	assert.equal(warning.actions?.primary?.[0]?.label, 'Change Shortcut');
 	await warning.actions!.primary![0].run();
 	assert.deepEqual(queries, [[false, { query: `@command:${ScreenshotCommandId}` }]]);
 	changes.fire();
-	assert.equal(notifications.getNotifications()[0], warning, 'Repeated checks preserve the same notification');
+	assert.equal(notifications.model.getNotifications()[0], warning, 'Repeated checks preserve the same notification');
 
-	notifications.remove(warning.id);
+	notifications.model.remove(warning.id);
 	changes.fire();
-	assert.deepEqual(notifications.getNotifications(), [], 'Dismissing an unchanged conflict keeps it quiet');
+	assert.deepEqual(notifications.model.getNotifications(), [], 'Dismissing an unchanged conflict keeps it quiet');
 	status = { ...status, activeLabel: 'Control+Command+B' };
 	changes.fire();
-	assert.equal(notifications.getNotifications().length, 1);
-	assert.match(notifications.getNotifications()[0]!.message, /Control\+Command\+B/);
-	assert.doesNotMatch(notifications.getNotifications()[0]!.message, /Control\+Command\+A/);
+	assert.equal(notifications.model.getNotifications().length, 1);
+	assert.match(notifications.model.getNotifications()[0]!.message, /Control\+Command\+B/);
+	assert.doesNotMatch(notifications.model.getNotifications()[0]!.message, /Control\+Command\+A/);
 
 	status = { ...status, availability: 'available' };
 	changes.fire();
-	assert.deepEqual(notifications.getNotifications(), []);
+	assert.deepEqual(notifications.model.getNotifications(), []);
 	status = { ...status, availability: 'unavailable' };
 	changes.fire();
-	assert.equal(notifications.getNotifications().length, 1, 'A new conflict after recovery is reported');
+	assert.equal(notifications.model.getNotifications().length, 1, 'A new conflict after recovery is reported');
 	status = { ...status, global: false };
 	changes.fire();
-	assert.deepEqual(notifications.getNotifications(), []);
+	assert.deepEqual(notifications.model.getNotifications(), []);
 	status = { ...status, global: true };
 	changes.fire();
 	contribution.dispose();
-	assert.deepEqual(notifications.getNotifications(), []);
+	assert.deepEqual(notifications.model.getNotifications(), []);
 	changes.fire();
-	assert.deepEqual(notifications.getNotifications(), [], 'Disposal releases the shortcut listener');
+	assert.deepEqual(notifications.model.getNotifications(), [], 'Disposal releases the shortcut listener');
 });
 
 test('global screenshot registration failures and their edit action use the Chinese catalog', () => {
@@ -83,7 +83,7 @@ test('global screenshot registration failures and their edit action use the Chin
 		using contribution = new ScreenshotShortcutContribution(screenshot, notifications, {
 			openSettings: async () => { }, openUserSettings: async () => { }, openGlobalKeybindingSettings: async () => { },
 		});
-		assert.deepEqual(notifications.getNotifications(), []);
+		assert.deepEqual(notifications.model.getNotifications(), []);
 		const failures = [
 			['unavailable', '无法注册全局截图快捷键'],
 			['unsupported', '此截图快捷键无法全局使用'],
@@ -93,8 +93,8 @@ test('global screenshot registration failures and their edit action use the Chin
 		for (const [availability, message] of failures) {
 			status = { ...status, availability, activeLabel: '⌃⌘A' };
 			changes.fire();
-			assert.equal(notifications.getNotifications().length, 1);
-			const warning = notifications.getNotifications()[0]!;
+			assert.equal(notifications.model.getNotifications().length, 1);
+			const warning = notifications.model.getNotifications()[0]!;
 			assert.ok(warning.message.includes(message));
 			assert.match(warning.message, /之前的快捷键仍可使用：⌃⌘A。/);
 			assert.equal(warning.actions?.primary?.[0]?.label, '修改快捷键');

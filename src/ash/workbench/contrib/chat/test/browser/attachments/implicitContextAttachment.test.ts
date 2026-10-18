@@ -110,7 +110,7 @@ test('A pending suggested file keeps its clicked identity and ignores completion
 test('An unreadable suggested file reports failure and leaves the draft and suggestion available', async () => {
 	using resources = new DisposableStore();
 	const { widget, attachments, notifications } = setup(resources, async () => { throw new Error('File unavailable'); });
-	const failed = new Promise<string>(resolve => resources.add(notifications.onDidAdd(item => resolve(item.message))));
+	const failed = new Promise<string>(resolve => resources.add(notifications.model.onDidAdd(item => resolve(item.message))));
 	widget.domNode.querySelector('button')!.click();
 	assert.match(await failed, /File unavailable/);
 	assert.equal(attachments.size, 0);
@@ -166,7 +166,7 @@ test('Suggested context joins the pending submission and cannot reenter a cleare
 	await result.complete('late file contents');
 	await Promise.resolve();
 	assert.equal(attachments.size, 0);
-	assert.deepEqual(notifications.getNotifications(), []);
+	assert.deepEqual(notifications.model.getNotifications(), []);
 });
 
 test('Disposing a suggested-context widget cancels its borrowed draft preparation', async () => {
@@ -184,5 +184,5 @@ test('Disposing a suggested-context widget cancels its borrowed draft preparatio
 	await Promise.resolve();
 	assert.equal(attachments.size, 0);
 	assert.equal(attachments.hasPendingContext, false);
-	assert.deepEqual(notifications.getNotifications(), []);
+	assert.deepEqual(notifications.model.getNotifications(), []);
 });

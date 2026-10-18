@@ -60,7 +60,7 @@ for (const cancellation of ['Escape', 'toggle', 'dispose'] as const) {
 			{ getActiveConversation: () => undefined } as unknown as IChatSessionNavigationService, notifications));
 		anchor.focus();
 		const running = action.run(anchor);
-		await Promise.race([shown.p, running.then(() => { throw new Error(`Picker did not open: ${notifications.getNotifications().map(item => item.message).join('; ')}`); })]);
+		await Promise.race([shown.p, running.then(() => { throw new Error(`Picker did not open: ${notifications.model.getNotifications().map(item => item.message).join('; ')}`); })]);
 		assert.notEqual(document.activeElement, anchor);
 		if (cancellation === 'Escape') {
 			document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
@@ -70,7 +70,7 @@ for (const cancellation of ['Escape', 'toggle', 'dispose'] as const) {
 			action.dispose();
 		}
 		await running;
-		assert.deepEqual({ focused, acquired, notifications: notifications.getNotifications(), expanded: anchor.getAttribute('aria-expanded') }, {
+		assert.deepEqual({ focused, acquired, notifications: notifications.model.getNotifications(), expanded: anchor.getAttribute('aria-expanded') }, {
 			focused: cancellation === 'dispose' ? 0 : 1,
 			acquired: 0,
 			notifications: [],

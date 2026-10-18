@@ -154,7 +154,7 @@ document.body.append(commandHost);
 services.registerInstance(ILogService, new NullLoggerService());
 const commandNotifications = resources.add(new NotificationService());
 services.registerInstance(INotificationService, commandNotifications);
-resources.add(commandNotifications.onDidAdd(item => {
+resources.add(commandNotifications.model.onDidAdd(item => {
 	const notice = document.createElement('div');
 	notice.setAttribute('role', 'alert');
 	notice.textContent = item.message;

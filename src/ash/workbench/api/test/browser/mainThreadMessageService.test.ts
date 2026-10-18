@@ -5,7 +5,7 @@ import { ICommandService, CommandsRegistry } from '../../../../platform/commands
 import { OPEN_EXTENSIONS_COMMAND_ID } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { IExtensionApi } from '../../../../platform/extensions/common/extensionApi.js';
 import { InstantiationService } from '../../../../platform/instantiation/common/instantiationService.js';
-import { INotificationService, NotificationSeverity } from '../../../../platform/notification/common/notification.js';
+import { INotificationService, Severity } from '../../../../platform/notification/common/notification.js';
 import { CommandService } from '../../../services/commands/common/commandService.js';
 import { NotificationService } from '../../../services/notification/common/notificationService.js';
 import { MainThreadMessageService } from '../../browser/mainThreadMessageService.js';
@@ -23,43 +23,43 @@ function createServices(): InstantiationService {
 test('extension message identity comes from its authenticated caller, and secondary management preserves its primary choice', async () => {
 	using services = createServices();
 	using messages = services.createInstance(MainThreadMessageService);
-	const notifications = services.get(INotificationService);
+	const notifications = services.get(INotificationService) as NotificationService;
 	const added = promiseWithResolvers<void>();
-	using listener = notifications.onDidAdd(() => added.resolve());
+	using listener = notifications.model.onDidAdd(() => added.resolve());
 	let managed: unknown;
 	using command = CommandsRegistry.register(OPEN_EXTENSIONS_COMMAND_ID, (_accessor, options) => { managed = options; });
 	const result = messages.handle({ operation: 'showMessage', message: 'Git failed', severity: 'error', items: ['Output', 'Retry'] }, 'fixture.git', new AbortController().signal);
 	await added.promise;
-	const item = notifications.getNotifications()[0];
+	const item = notifications.model.getNotifications()[0];
 	assert.deepEqual({ source: item.source, severity: item.severity, primary: item.actions?.primary?.map(action => action.label), secondary: item.actions?.secondary?.map(action => action.label) }, {
-		source: 'Git', severity: NotificationSeverity.Error, primary: ['Output', 'Retry'], secondary: ['Manage Extension'],
+		source: 'Git', severity: Severity.Error, primary: ['Output', 'Retry'], secondary: ['Manage Extension'],
 	});
 	await item.actions!.secondary![0].run();
 	assert.deepEqual(managed, { query: 'fixture.git' });
-	assert.deepEqual(notifications.getNotifications(), [item]);
+	assert.deepEqual(notifications.model.getNotifications(), [item]);
 	await item.actions!.primary![1].run();
 	assert.deepEqual(await result, { result: 'selection', index: 1 });
-	assert.deepEqual(notifications.getNotifications(), []);
+	assert.deepEqual(notifications.model.getNotifications(), []);
 });
 
 for (const dismissal of ['remove', 'abort', 'dispose', 'removeOnArrival'] as const) {
 	test(`extension message ${dismissal} settles its choice and releases its notification`, async () => {
 		using services = createServices();
 		using messages = services.createInstance(MainThreadMessageService);
-		const notifications = services.get(INotificationService);
+		const notifications = services.get(INotificationService) as NotificationService;
 		const added = promiseWithResolvers<void>();
-		using listener = notifications.onDidAdd(item => {
-			if (dismissal === 'removeOnArrival') notifications.remove(item.id);
+		using listener = notifications.model.onDidAdd(item => {
+			if (dismissal === 'removeOnArrival') notifications.model.remove(item.id);
 			added.resolve();
 		});
 		const controller = new AbortController();
 		const result = messages.handle({ operation: 'showMessage', message: 'Choose', severity: 'warning', items: ['Continue'] }, 'fixture.git', controller.signal);
 		await added.promise;
-		if (dismissal === 'remove') notifications.clear();
+		if (dismissal === 'remove') notifications.model.clear();
 		else if (dismissal === 'abort') controller.abort();
 		else if (dismissal === 'dispose') messages.dispose();
 		assert.deepEqual(await result, { result: 'selection', index: null });
-		assert.deepEqual(notifications.getNotifications(), []);
+		assert.deepEqual(notifications.model.getNotifications(), []);
 	});
 }
 
@@ -68,7 +68,7 @@ test('an extension message without choices completes immediately with an identit
 	services.get(IExtensionApi).list = async () => { throw new Error('Catalog unavailable'); };
 	using messages = services.createInstance(MainThreadMessageService);
 	assert.deepEqual(await messages.handle({ operation: 'showMessage', message: 'Hello', severity: 'information' }, 'fixture.unknown', new AbortController().signal), { result: 'done' });
-	assert.equal(services.get(INotificationService).getNotifications()[0].source, 'fixture.unknown');
+	assert.equal((services.get(INotificationService) as NotificationService).model.getNotifications()[0].source, 'fixture.unknown');
 	await assert.rejects(messages.handle({ operation: 'showMessage', message: 'Invalid', severity: 'error', items: [''] }, 'fixture.unknown', new AbortController().signal), /button labels/);
-	assert.equal(services.get(INotificationService).getNotifications().length, 1);
+	assert.equal((services.get(INotificationService) as NotificationService).model.getNotifications().length, 1);
 });

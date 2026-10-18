@@ -3,7 +3,7 @@ import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { IAccessibilityService } from "../../../../../platform/accessibility/common/accessibility.js";
 import { AccessibilityService } from "../../../../../platform/accessibility/browser/accessibilityService.js";
-import { INotificationService, NotificationPriority, NotificationSeverity, type NotificationAction } from "../../../../../platform/notification/common/notification.js";
+import { INotificationService, NotificationPriority, Severity } from "../../../../../platform/notification/common/notification.js";
 import { AccessibleViewRegistry } from "../../../../../platform/accessibility/browser/accessibleViewRegistry.js";
 import type { IAction, IRunEvent } from "../../../../../base/common/actions.js";
 import { CancellationError } from "../../../../../base/common/errors.js";
@@ -55,26 +55,28 @@ test("clearing a toast removes only its shared record from the notification cent
 		assert.equal(toggle.hidden, true);
 		let actionRuns = 0;
 		const removed: number[] = [];
-		service.onDidRemove(item => removed.push(item.id));
-		const handle = service.notify({ severity: NotificationSeverity.Warning, message: "Workspace needs attention", source: "fixture", actions: { primary: [{ id: "open", label: "Open", run: () => { actionRuns++; } }] } });
+		service.model.onDidRemove(item => removed.push(item.id));
+		const handle = service.notify({ severity: Severity.Warning, message: "Workspace needs attention", source: "fixture", actions: { primary: [{ tooltip: '', enabled: true, id: "open", label: "Open", run: () => { actionRuns++; } }] } });
+		const handleItem = service.model.getNotifications().at(-1)!;
 		assert.equal(toggle.hidden, false);
 		assert.equal(root.querySelectorAll(".ash-notification").length, 1);
 		const completed = new Promise<void>(resolve => runner.onDidRun(() => resolve()));
 		root.querySelector<HTMLButtonElement>(".ash-notification-action")!.click();
 		await completed;
 		assert.equal(actionRuns, 1);
-		const retained = service.info("Keep this notification");
+		const retained = service.notify({ severity: Severity.Info, message: "Keep this notification" });
+		const retainedItem = service.model.getNotifications().at(-1)!;
 		root.querySelector<HTMLButtonElement>(".ash-notification-close")!.click();
 		handle.close(); handle.close();
 		assert.equal(root.querySelectorAll(".ash-notification").length, 1);
-		assert.deepEqual(service.getNotifications().map(item => item.id), [retained.item.id]);
-		assert.deepEqual(removed, [handle.item.id]);
+		assert.deepEqual(service.model.getNotifications().map(item => item.id), [retainedItem.id]);
+		assert.deepEqual(removed, [handleItem.id]);
 		center.show();
 		assert.equal(root.querySelectorAll(".ash-notifications-row").length, 1);
 		assert.equal(root.querySelector(".ash-notifications-row .ash-notification-message")?.textContent, "Keep this notification");
 		root.querySelector<HTMLButtonElement>(".ash-notifications-clear")!.click();
-		assert.deepEqual(removed, [handle.item.id, retained.item.id]);
-		assert.equal(service.getNotifications().length, 0);
+		assert.deepEqual(removed, [handleItem.id, retainedItem.id]);
+		assert.equal(service.model.getNotifications().length, 0);
 		assert.equal(toggle.hidden, true);
 		assert.equal(root.querySelector<HTMLElement>(".ash-notifications-center")?.hidden, true);
 		center.show();
@@ -96,8 +98,9 @@ test("clearing focused toasts moves to adjacent actions and returns to the previ
 		const document = browser.window.document;
 		using presentation = new NotificationsPresentation(document.body, document.body, service, runner);
 		const center = presentation.center;
-		const handles = [service.info("First"), service.info("Second"), service.info("Third")];
-		const close = (index: number) => document.querySelector<HTMLButtonElement>(`[data-notification-close="${handles[index].item.id}"]`)!;
+		const handles = [service.notify({ severity: Severity.Info, message: "First" }), service.notify({ severity: Severity.Info, message: "Second" }), service.notify({ severity: Severity.Info, message: "Third" })];
+		const handleItems = service.model.getNotifications();
+		const close = (index: number) => document.querySelector<HTMLButtonElement>(`[data-notification-close="${handleItems[index].id}"]`)!;
 		const origin = document.querySelector<HTMLButtonElement>("#origin")!;
 		origin.focus();
 		close(1).focus();
@@ -107,7 +110,7 @@ test("clearing focused toasts moves to adjacent actions and returns to the previ
 		assert.equal(document.activeElement, close(0));
 		close(0).click();
 		assert.equal(document.activeElement, origin);
-		assert.deepEqual(service.getNotifications(), []);
+		assert.deepEqual(service.model.getNotifications(), []);
 	} finally { browser.window.close(); }
 });
 
@@ -120,12 +123,12 @@ test("toasts cap at three while history retains every notification", () => {
 		const center = presentation.center;
 		for (let index = 0; index < 4; index++) service.info(`Message ${index}`);
 		assert.equal(browser.window.document.querySelectorAll(".ash-notification").length, 3);
-		assert.equal(service.getNotifications().length, 4);
+		assert.equal(service.model.getNotifications().length, 4);
 		center.show();
 		assert.equal(browser.window.document.querySelectorAll(".ash-notifications-row").length, 4);
 		center.hide();
 		assert.equal(browser.window.document.querySelectorAll(".ash-notification").length, 0);
-		assert.equal(service.getNotifications().length, 4);
+		assert.equal(service.model.getNotifications().length, 4);
 	} finally { browser.window.close(); }
 });
 
@@ -134,55 +137,66 @@ for (const control of ["action", "remove"] as const) {
 		test(`a retained toast ${control} keeps focus when another record changes by ${change}`, () => {
 			using fixture = new NotificationsFixture();
 			const { document, service } = fixture;
-			const retained = service.info("Retained", [
-				{ id: "first", label: "Same label", run() { } },
-				{ id: "second", label: "Same label", run() { } },
-			]);
-			const other = service.info("Other");
-			toastControl(document, retained.item.id, control)!.focus();
+			const retained = service.notify({
+				severity: Severity.Info, message: "Retained", actions: {
+					primary: [
+						{ tooltip: '', enabled: true, id: "first", label: "Same label", run() { } },
+						{ tooltip: '', enabled: true, id: "second", label: "Same label", run() { } },
+					]
+				}
+			});
+			const retainedItem = service.model.getNotifications().at(-1)!;
+			const other = service.notify({ severity: Severity.Info, message: "Other" });
+			const otherItem = service.model.getNotifications().at(-1)!;
+			toastControl(document, retainedItem.id, control)!.focus();
 			if (change === "add") service.info("Added");
 			else other.close();
-			assert.equal(document.activeElement, toastControl(document, retained.item.id, control));
-			assert.equal(service.getNotifications().includes(retained.item), true);
+			assert.equal(document.activeElement, toastControl(document, retainedItem.id, control));
+			assert.equal(service.model.getNotifications().includes(retainedItem), true);
 		});
 	}
 	for (const retained of [false, true]) {
 		test(`the three-toast limit ${retained ? "preserves retained" : "does not restore evicted"} ${control} focus`, () => {
 			using fixture = new NotificationsFixture();
 			const { document, service } = fixture;
-			const handles = ["First", "Second", "Third"].map(message => service.info(message, [{ id: "action", label: "Action", run() { } }]));
+			const handles = ["First", "Second", "Third"].map(message => service.notify({ severity: Severity.Info, message: message, actions: { primary: [{ tooltip: '', enabled: true, id: "action", label: "Action", run() { } }] } }));
+			const handleItems = service.model.getNotifications();
 			const focused = handles[retained ? 1 : 0];
-			toastControl(document, focused.item.id, control)!.focus();
-			const last = service.info("Fourth");
-			assert.equal(document.activeElement, retained ? toastControl(document, focused.item.id, control) : document.body);
-			assert.equal(toastControl(document, handles[0].item.id, "remove"), undefined);
-			assert.deepEqual([...document.querySelectorAll<HTMLElement>("[data-notification-close]")].map(element => Number(element.dataset.notificationClose)), [handles[1].item.id, handles[2].item.id, last.item.id]);
-			assert.deepEqual(service.getNotifications().map(item => item.id), [...handles.map(handle => handle.item.id), last.item.id]);
+			const focusedItem = handleItems[retained ? 1 : 0];
+			toastControl(document, focusedItem.id, control)!.focus();
+			const last = service.notify({ severity: Severity.Info, message: "Fourth" });
+			const lastItem = service.model.getNotifications().at(-1)!;
+			assert.equal(document.activeElement, retained ? toastControl(document, focusedItem.id, control) : document.body);
+			assert.equal(toastControl(document, handleItems[0].id, "remove"), undefined);
+			assert.deepEqual([...document.querySelectorAll<HTMLElement>("[data-notification-close]")].map(element => Number(element.dataset.notificationClose)), [handleItems[1].id, handleItems[2].id, lastItem.id]);
+			assert.deepEqual(service.model.getNotifications().map(item => item.id), [...handleItems.map(item => item.id), lastItem.id]);
 		});
 	}
 	test(`closing a focused toast ${control} through its handle does not select a different control`, () => {
 		using fixture = new NotificationsFixture();
 		const { document, service } = fixture;
-		const focused = service.info("Removed", [{ id: "action", label: "Action", run() { } }]);
+		const focused = service.notify({ severity: Severity.Info, message: "Removed", actions: { primary: [{ tooltip: '', enabled: true, id: "action", label: "Action", run() { } }] } });
+		const focusedItem = service.model.getNotifications().at(-1)!;
 		service.info("Other");
-		toastControl(document, focused.item.id, control)!.focus();
+		toastControl(document, focusedItem.id, control)!.focus();
 		focused.close();
 		assert.equal(document.activeElement, document.body);
-		assert.equal(toastControl(document, focused.item.id, control), undefined);
+		assert.equal(toastControl(document, focusedItem.id, control), undefined);
 	});
 }
 
 test("toast record changes leave outside focus alone and disposal releases focus ownership", () => {
 	using fixture = new NotificationsFixture();
 	const { document, service, center, outside } = fixture;
-	const first = service.info("First");
+	const first = service.notify({ severity: Severity.Info, message: "First" });
+	const firstItem = service.model.getNotifications().at(-1)!;
 	outside.focus();
 	service.info("Second");
 	first.close();
 	assert.equal(document.activeElement, outside);
 	center.dispose();
 	service.info("After disposal");
-	service.clear();
+	service.model.clear();
 	assert.equal(document.activeElement, outside);
 	assert.equal(document.querySelector(".ash-notification-host"), null);
 });
@@ -190,26 +204,29 @@ test("toast record changes leave outside focus alone and disposal releases focus
 test("activating another toast removal preserves the still-focused action", () => {
 	using fixture = new NotificationsFixture();
 	const { document, service } = fixture;
-	const retained = service.info("Retained", [{ id: "action", label: "Action", run() { } }]);
-	const other = service.info("Removed");
-	toastControl(document, retained.item.id, "action")!.focus();
-	toastControl(document, other.item.id, "remove")!.click();
-	assert.equal(document.activeElement, toastControl(document, retained.item.id, "action"));
+	const retained = service.notify({ severity: Severity.Info, message: "Retained", actions: { primary: [{ tooltip: '', enabled: true, id: "action", label: "Action", run() { } }] } });
+	const retainedItem = service.model.getNotifications().at(-1)!;
+	const other = service.notify({ severity: Severity.Info, message: "Removed" });
+	const otherItem = service.model.getNotifications().at(-1)!;
+	toastControl(document, retainedItem.id, "action")!.focus();
+	toastControl(document, otherItem.id, "remove")!.click();
+	assert.equal(document.activeElement, toastControl(document, retainedItem.id, "action"));
 });
 
 for (const dispose of [false, true]) {
 	test(`toast removal does not steal focus after a reentrant ${dispose ? "disposal" : "center open"}`, () => {
 		using fixture = new NotificationsFixture();
 		const { document, service, center, outside, panel, origin } = fixture;
-		const first = service.info("Removed");
+		const first = service.notify({ severity: Severity.Info, message: "Removed" });
+		const firstItem = service.model.getNotifications().at(-1)!;
 		service.info("Retained");
 		origin.focus();
-		toastControl(document, first.item.id, "remove")!.focus();
-		using listener = service.onDidRemove(() => {
+		toastControl(document, firstItem.id, "remove")!.focus();
+		using listener = service.model.onDidRemove(() => {
 			if (dispose) { center.dispose(); outside.focus(); }
 			else center.show();
 		});
-		toastControl(document, first.item.id, "remove")!.click();
+		toastControl(document, firstItem.id, "remove")!.click();
 		assert.equal(document.activeElement, dispose ? outside : panel);
 		assert.equal(document.querySelectorAll(".ash-notification-host .ash-notification").length, 0);
 	});
@@ -218,9 +235,10 @@ for (const dispose of [false, true]) {
 test("a center opened during notification arrival keeps focus and hides every toast", () => {
 	using fixture = new NotificationsFixture();
 	const { document, service, center, panel } = fixture;
-	const retained = service.info("Retained", [{ id: "action", label: "Action", run() { } }]);
-	toastControl(document, retained.item.id, "action")!.focus();
-	using listener = service.onDidAdd(() => center.show());
+	const retained = service.notify({ severity: Severity.Info, message: "Retained", actions: { primary: [{ tooltip: '', enabled: true, id: "action", label: "Action", run() { } }] } });
+	const retainedItem = service.model.getNotifications().at(-1)!;
+	toastControl(document, retainedItem.id, "action")!.focus();
+	using listener = service.model.onDidAdd(() => center.show());
 	service.info("Added");
 	assert.equal(document.activeElement, panel);
 	assert.equal(document.querySelectorAll(".ash-notification-host .ash-notification").length, 0);
@@ -240,24 +258,27 @@ for (const control of ["action", "remove"] as const) {
 		// jsdom has no layout. Real visibility and keyboard input are covered in smoke tests.
 		origin.checkVisibility = () => true;
 		let actionRuns = 0;
-		const first = service.info("First", [{ id: "action", label: "Action", run() { actionRuns++; } }]);
-		const second = service.info("Second");
+		const first = service.notify({ severity: Severity.Info, message: "First", actions: { primary: [{ tooltip: '', enabled: true, id: "action", label: "Action", run() { actionRuns++; } }] } });
+		const firstItem = service.model.getNotifications().at(-1)!;
+		const second = service.notify({ severity: Severity.Info, message: "Second" });
+		const secondItem = service.model.getNotifications().at(-1)!;
 		let removals = 0;
-		using listener = service.onDidRemove(() => removals++);
+		using listener = service.model.onDidRemove(() => removals++);
 		origin.focus();
-		const target = toastControl(document, first.item.id, control)!;
+		const target = toastControl(document, firstItem.id, control)!;
 		target.focus();
 		const escape = new document.defaultView!.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
 		target.dispatchEvent(escape);
 		assert.deepEqual({
 			toasts: document.querySelectorAll(".ash-notification-host .ash-notification").length,
-			history: service.getNotifications(), removals, actionRuns,
+			history: service.model.getNotifications(), removals, actionRuns,
 			controlFocused: document.activeElement === (control === "remove" ? origin : target), consumed: escape.defaultPrevented,
-		}, { toasts: control === "remove" ? 0 : 2, history: [first.item, second.item], removals: 0, actionRuns: 0, controlFocused: true, consumed: control === "remove" });
-		const next = service.info("Next");
-		assert.deepEqual([...document.querySelectorAll<HTMLElement>(".ash-notification-host [data-notification-id]")].map(item => Number(item.dataset.notificationId)), control === "remove" ? [next.item.id] : [first.item.id, second.item.id, next.item.id]);
+		}, { toasts: control === "remove" ? 0 : 2, history: [firstItem, secondItem], removals: 0, actionRuns: 0, controlFocused: true, consumed: control === "remove" });
+		const next = service.notify({ severity: Severity.Info, message: "Next" });
+		const nextItem = service.model.getNotifications().at(-1)!;
+		assert.deepEqual([...document.querySelectorAll<HTMLElement>(".ash-notification-host [data-notification-id]")].map(item => Number(item.dataset.notificationId)), control === "remove" ? [nextItem.id] : [firstItem.id, secondItem.id, nextItem.id]);
 		center.show();
-		assert.deepEqual([...panel.querySelectorAll<HTMLElement>("[data-notification-id]")].map(item => Number(item.dataset.notificationId)), [next.item.id, second.item.id, first.item.id]);
+		assert.deepEqual([...panel.querySelectorAll<HTMLElement>("[data-notification-id]")].map(item => Number(item.dataset.notificationId)), [nextItem.id, secondItem.id, firstItem.id]);
 		center.hide();
 		assert.equal(document.querySelectorAll(".ash-notification-host .ash-notification").length, 0);
 	});
@@ -265,9 +286,10 @@ for (const control of ["action", "remove"] as const) {
 	test(`toast Escape from a focused ${control} leaves consumed, modified, and composing input to its owner`, () => {
 		using fixture = new NotificationsFixture();
 		const { document, service, origin } = fixture;
-		const handle = service.info("Retained", [{ id: "action", label: "Action", run() { assert.fail("Escape must not run an action"); } }]);
+		const handle = service.notify({ severity: Severity.Info, message: "Retained", actions: { primary: [{ tooltip: '', enabled: true, id: "action", label: "Action", run() { assert.fail("Escape must not run an action"); } }] } });
+		const handleItem = service.model.getNotifications().at(-1)!;
 		origin.focus();
-		const target = toastControl(document, handle.item.id, control)!;
+		const target = toastControl(document, handleItem.id, control)!;
 		target.focus();
 		for (const options of [{ key: "Enter" }, { altKey: true }, { ctrlKey: true }, { metaKey: true }, { shiftKey: true }, { isComposing: true }, { consumed: true }]) {
 			const escape = new document.defaultView!.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true, ...options });
@@ -275,7 +297,7 @@ for (const control of ["action", "remove"] as const) {
 			target.dispatchEvent(escape);
 			assert.equal(document.activeElement, target);
 			assert.equal(document.querySelectorAll(".ash-notification-host .ash-notification").length, 1);
-			assert.deepEqual(service.getNotifications(), [handle.item]);
+			assert.deepEqual(service.model.getNotifications(), [handleItem]);
 			assert.equal(escape.defaultPrevented, "consumed" in options);
 		}
 	});
@@ -286,9 +308,10 @@ for (const unavailable of ["removed", "hidden", "hidden ancestor", "inert", "dis
 		using fixture = new NotificationsFixture();
 		const { document, service, origin } = fixture;
 		origin.checkVisibility = () => unavailable !== "no visible layout";
-		const handle = service.info("Retained");
+		const handle = service.notify({ severity: Severity.Info, message: "Retained" });
+		const handleItem = service.model.getNotifications().at(-1)!;
 		origin.focus();
-		const target = toastControl(document, handle.item.id, "remove")!;
+		const target = toastControl(document, handleItem.id, "remove")!;
 		target.focus();
 		if (unavailable === "removed") origin.remove();
 		if (unavailable === "hidden") origin.hidden = true;
@@ -304,7 +327,7 @@ for (const unavailable of ["removed", "hidden", "hidden ancestor", "inert", "dis
 		target.dispatchEvent(new document.defaultView!.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
 		assert.equal(document.querySelectorAll(".ash-notification-host .ash-notification").length, 0);
 		assert.equal(document.activeElement, document.body);
-		assert.deepEqual(service.getNotifications(), [handle.item]);
+		assert.deepEqual(service.model.getNotifications(), [handleItem]);
 	});
 }
 
@@ -313,9 +336,10 @@ for (const transition of ["outside", "center", "dispose"] as const) {
 		using fixture = new NotificationsFixture();
 		const { document, service, center, panel, origin, outside } = fixture;
 		origin.checkVisibility = () => true;
-		const handle = service.info("Retained");
+		const handle = service.notify({ severity: Severity.Info, message: "Retained" });
+		const handleItem = service.model.getNotifications().at(-1)!;
 		origin.focus();
-		const target = toastControl(document, handle.item.id, "remove")!;
+		const target = toastControl(document, handleItem.id, "remove")!;
 		target.focus();
 		using listener = addDisposableListener(target, "keydown", () => {
 			if (transition === "center") center.show();
@@ -325,16 +349,17 @@ for (const transition of ["outside", "center", "dispose"] as const) {
 		target.dispatchEvent(escape);
 		assert.equal(document.activeElement, transition === "center" ? panel : outside);
 		assert.equal(escape.defaultPrevented, false);
-		assert.deepEqual(service.getNotifications(), [handle.item]);
+		assert.deepEqual(service.model.getNotifications(), [handleItem]);
 	});
 
 	test(`toast Escape does not reclaim focus when ${transition} takes ownership during DOM removal`, () => {
 		using fixture = new NotificationsFixture();
 		const { document, service, center, panel, origin, outside } = fixture;
 		origin.checkVisibility = () => true;
-		const handle = service.info("Retained");
+		const handle = service.notify({ severity: Severity.Info, message: "Retained" });
+		const handleItem = service.model.getNotifications().at(-1)!;
 		origin.focus();
-		const target = toastControl(document, handle.item.id, "remove")!;
+		const target = toastControl(document, handleItem.id, "remove")!;
 		target.focus();
 		const toast = target.closest<HTMLElement>("article")!;
 		const remove = toast.remove.bind(toast);
@@ -348,15 +373,16 @@ for (const transition of ["outside", "center", "dispose"] as const) {
 		assert.equal(transitions, 1);
 		assert.equal(document.activeElement, transition === "center" ? panel : outside);
 		assert.equal(document.querySelectorAll(".ash-notification-host .ash-notification").length, 0);
-		assert.deepEqual(service.getNotifications(), [handle.item]);
+		assert.deepEqual(service.model.getNotifications(), [handleItem]);
 	});
 }
 
 test("toast Escape applies only to a currently focused toast control", () => {
 	using fixture = new NotificationsFixture();
 	const { document, service, outside } = fixture;
-	const handle = service.info("Retained");
-	const target = toastControl(document, handle.item.id, "remove")!;
+	const handle = service.notify({ severity: Severity.Info, message: "Retained" });
+	const handleItem = service.model.getNotifications().at(-1)!;
+	const target = toastControl(document, handleItem.id, "remove")!;
 	outside.focus();
 	const staleInput = new document.defaultView!.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
 	target.dispatchEvent(staleInput);
@@ -365,8 +391,8 @@ test("toast Escape applies only to a currently focused toast control", () => {
 	content.focus();
 	const contentInput = new document.defaultView!.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
 	content.dispatchEvent(contentInput);
-	assert.deepEqual({ consumed: [staleInput.defaultPrevented, contentInput.defaultPrevented], toasts: document.querySelectorAll(".ash-notification-host .ash-notification").length, history: service.getNotifications() }, {
-		consumed: [false, false], toasts: 1, history: [handle.item],
+	assert.deepEqual({ consumed: [staleInput.defaultPrevented, contentInput.defaultPrevented], toasts: document.querySelectorAll(".ash-notification-host .ash-notification").length, history: service.model.getNotifications() }, {
+		consumed: [false, false], toasts: 1, history: [handleItem],
 	});
 });
 
@@ -384,18 +410,19 @@ test("notification accessibility help explains toast Escape and retained history
 test("notification handle removes its record once", () => {
 	using service = new NotificationService();
 	let removals = 0;
-	service.onDidRemove(() => removals++);
-	const handle = service.info("Saved");
+	service.model.onDidRemove(() => removals++);
+	const handle = service.notify({ severity: Severity.Info, message: "Saved" });
+	const handleItem = service.model.getNotifications().at(-1)!;
 	handle.close(); handle.close();
 	assert.equal(removals, 1);
-	assert.equal(service.getNotifications().length, 0);
+	assert.equal(service.model.getNotifications().length, 0);
 });
 
 test('notification arrivals are announced once even while the center hides toasts', () => {
 	using fixture = new NotificationsFixture();
 	fixture.service.info('Initial information');
 	fixture.center.show();
-	fixture.service.warning('Warning while the center is open');
+	fixture.service.warn('Warning while the center is open');
 	fixture.service.error('Error while the center is open');
 	assert.deepEqual(fixture.presentation.statuses, ['Initial information']);
 	assert.deepEqual(fixture.presentation.alerts, ['Warning while the center is open', 'Error while the center is open']);
@@ -416,7 +443,8 @@ test("status bell reflects retained notification history", () => {
 		const center = presentation.center;
 		const bell = () => statusbar.getEntries(StatusbarAlignment.Right).find(item => item.id === "ash.status.notifications")?.entry.icon;
 		assert.equal(bell(), Lxicon.bell);
-		const handle = service.info("Saved");
+		const handle = service.notify({ severity: Severity.Info, message: "Saved" });
+		const handleItem = service.model.getNotifications().at(-1)!;
 		assert.equal(bell(), Lxicon.bellDot);
 		handle.close();
 		assert.equal(bell(), Lxicon.bell);
@@ -426,20 +454,22 @@ test("status bell reflects retained notification history", () => {
 test("removing center rows keeps remaining records open and restores focus after the last keyboard removal", () => {
 	using fixture = new NotificationsFixture();
 	const { document, service, center, panel, origin } = fixture;
-	const first = service.info("First");
-	const second = service.info("Second");
+	const first = service.notify({ severity: Severity.Info, message: "First" });
+	const firstItem = service.model.getNotifications().at(-1)!;
+	const second = service.notify({ severity: Severity.Info, message: "Second" });
+	const secondItem = service.model.getNotifications().at(-1)!;
 	origin.focus();
 	center.show();
 	const row = (id: number) => panel.querySelector<HTMLElement>(`[data-notification-id="${id}"]`)!;
-	row(second.item.id).focus();
-	row(second.item.id).dispatchEvent(new document.defaultView!.KeyboardEvent("keydown", { key: "Delete", bubbles: true }));
+	row(secondItem.id).focus();
+	row(secondItem.id).dispatchEvent(new document.defaultView!.KeyboardEvent("keydown", { key: "Delete", bubbles: true }));
 	assert.equal(panel.hidden, false);
-	assert.deepEqual(service.getNotifications().map(item => item.id), [first.item.id]);
-	assert.equal(document.activeElement, row(first.item.id));
-	row(first.item.id).dispatchEvent(new document.defaultView!.KeyboardEvent("keydown", { key: "Delete", bubbles: true }));
+	assert.deepEqual(service.model.getNotifications().map(item => item.id), [firstItem.id]);
+	assert.equal(document.activeElement, row(firstItem.id));
+	row(firstItem.id).dispatchEvent(new document.defaultView!.KeyboardEvent("keydown", { key: "Delete", bubbles: true }));
 	assert.equal(panel.hidden, true);
 	assert.equal(document.activeElement, origin);
-	assert.deepEqual(service.getNotifications(), []);
+	assert.deepEqual(service.model.getNotifications(), []);
 	first.close(); second.close(); center.hide();
 	assert.equal(document.activeElement, origin);
 });
@@ -448,7 +478,8 @@ for (const focusOutside of [false, true]) {
 	test(`programmatic final removal ${focusOutside ? "preserves outside focus" : "restores center focus"}`, () => {
 		using fixture = new NotificationsFixture();
 		const { document, service, center, panel, origin, outside } = fixture;
-		const handle = service.info("Task completed");
+		const handle = service.notify({ severity: Severity.Info, message: "Task completed" });
+		const handleItem = service.model.getNotifications().at(-1)!;
 		origin.focus();
 		center.show();
 		panel.querySelector<HTMLButtonElement>("[data-notification-remove]")!.focus();
@@ -469,9 +500,10 @@ for (const useCommand of [false, true]) {
 		using services = new InstantiationService();
 		services.registerInstance(INotificationsCenter, center);
 		using commands = new CommandService(services);
-		const handles = [service.info("First"), service.info("Second")];
+		const handles = [service.notify({ severity: Severity.Info, message: "First" }), service.notify({ severity: Severity.Info, message: "Second" })];
+		const handleItems = service.model.getNotifications();
 		const removed: number[] = [];
-		using listener = service.onDidRemove(item => removed.push(item.id));
+		using listener = service.model.onDidRemove(item => removed.push(item.id));
 		origin.focus();
 		center.show();
 		const clear = panel.querySelector<HTMLButtonElement>(".ash-notifications-clear")!;
@@ -479,10 +511,10 @@ for (const useCommand of [false, true]) {
 		if (useCommand) await commands.executeCommand("notifications.clearAll"); else clear.click();
 		assert.equal(panel.hidden, true);
 		assert.equal(document.activeElement, origin);
-		assert.deepEqual(removed, handles.map(handle => handle.item.id));
-		assert.deepEqual(service.getNotifications(), []);
+		assert.deepEqual(removed, handleItems.map(item => item.id));
+		assert.deepEqual(service.model.getNotifications(), []);
 		if (useCommand) await commands.executeCommand("notifications.clearAll"); else clear.click();
-		assert.deepEqual(removed, handles.map(handle => handle.item.id));
+		assert.deepEqual(removed, handleItems.map(item => item.id));
 		assert.equal(document.activeElement, origin);
 	});
 }
@@ -495,21 +527,22 @@ test("an explicitly opened empty center stays open when a new notification arriv
 	assert.equal(panel.hidden, false);
 	assert.equal(panel.querySelector(".ash-notifications-empty")?.textContent, "No notifications");
 	assert.equal(panel.querySelector<HTMLButtonElement>(".ash-notifications-clear")?.disabled, true);
-	const handle = service.info("Arrived while open");
+	const handle = service.notify({ severity: Severity.Info, message: "Arrived while open" });
+	const handleItem = service.model.getNotifications().at(-1)!;
 	assert.equal(panel.hidden, false);
-	assert.equal(panel.querySelector("[data-notification-id]")?.getAttribute("data-notification-id"), String(handle.item.id));
+	assert.equal(panel.querySelector("[data-notification-id]")?.getAttribute("data-notification-id"), String(handleItem.id));
 	assert.equal(document.querySelectorAll(".ash-notification").length, 0);
 	assert.equal(document.activeElement, panel);
 	center.hide();
 	assert.equal(document.activeElement, origin);
-	assert.deepEqual(service.getNotifications().map(item => item.id), [handle.item.id]);
+	assert.deepEqual(service.model.getNotifications().map(item => item.id), [handleItem.id]);
 });
 
 for (const addOnFocus of [false, true]) {
 	test(`Clear All keeps notifications added during ${addOnFocus ? "focus restoration" : "removal callbacks"} and a reopened center`, () => {
 		using fixture = new NotificationsFixture();
 		const { document, service, center, panel, origin } = fixture;
-		const handles = [service.info("First"), service.info("Second")];
+		const handles = [service.notify({ severity: Severity.Info, message: "First" }), service.notify({ severity: Severity.Info, message: "Second" })];
 		origin.focus();
 		center.show();
 		let added = false;
@@ -519,9 +552,9 @@ for (const addOnFocus of [false, true]) {
 			service.info("Arrived during clear");
 			center.show();
 		};
-		using listener = addOnFocus ? addDisposableListener(origin, "focus", addNotification) : service.onDidRemove(addNotification);
+		using listener = addOnFocus ? addDisposableListener(origin, "focus", addNotification) : service.model.onDidRemove(addNotification);
 		center.clearAll();
-		assert.deepEqual(service.getNotifications().map(item => item.message), ["Arrived during clear"]);
+		assert.deepEqual(service.model.getNotifications().map(item => item.message), ["Arrived during clear"]);
 		assert.equal(panel.hidden, false);
 		assert.equal(document.activeElement, panel);
 		assert.equal(panel.querySelectorAll("[data-notification-id]").length, 1);
@@ -535,7 +568,8 @@ for (const addOnFocus of [false, true]) {
 test("a removed focus origin does not prevent final center removal", () => {
 	using fixture = new NotificationsFixture();
 	const { document, service, center, panel, origin } = fixture;
-	const handle = service.info("Finished");
+	const handle = service.notify({ severity: Severity.Info, message: "Finished" });
+	const handleItem = service.model.getNotifications().at(-1)!;
 	origin.focus();
 	center.show();
 	origin.remove();
@@ -553,7 +587,7 @@ test("a removed toast focus origin does not prevent clearing the last toast in i
 	remove.focus();
 	origin.remove();
 	assert.doesNotThrow(() => remove.click());
-	assert.deepEqual(service.getNotifications(), []);
+	assert.deepEqual(service.model.getNotifications(), []);
 	assert.notEqual(document.activeElement, origin);
 });
 
@@ -582,13 +616,14 @@ for (const clearAll of [false, true]) {
 		using part = services.createInstance(StatusbarPart, document.body, statusbar);
 		document.body.append(part.domNode);
 		const origin = part.domNode.querySelector<HTMLElement>('[data-statusbar-item-id="ash.status.notifications"] .ash-statusbar-item-label')!;
-		const handle = service.info("Finished");
+		const handle = service.notify({ severity: Severity.Info, message: "Finished" });
+		const handleItem = service.model.getNotifications().at(-1)!;
 		if (clearAll) service.info("Also finished");
 		origin.focus();
 		center.show();
 		if (clearAll) center.clearAll(); else handle.close();
 		assert.equal(panel.hidden, true);
-		assert.deepEqual(service.getNotifications(), []);
+		assert.deepEqual(service.model.getNotifications(), []);
 		assert.equal(part.domNode.querySelector('[data-statusbar-item-id="ash.status.notifications"] .ash-statusbar-item-label'), origin);
 		assert.equal(document.activeElement, origin);
 	});
@@ -600,7 +635,8 @@ test("disposing the center leaves records owned by the service and ignores late 
 	using services = new InstantiationService();
 	services.registerInstance(INotificationsCenter, center);
 	using commands = new CommandService(services);
-	const handle = service.info("Owned by the service");
+	const handle = service.notify({ severity: Severity.Info, message: "Owned by the service" });
+	const handleItem = service.model.getNotifications().at(-1)!;
 	origin.focus();
 	center.show();
 	const clear = panel.querySelector<HTMLButtonElement>(".ash-notifications-clear")!;
@@ -610,12 +646,13 @@ test("disposing the center leaves records owned by the service and ignores late 
 	clear.click(); remove.click();
 	center.show(); center.hide(); center.toggle(); center.clearAll();
 	await commands.executeCommand("notifications.clearAll");
-	const late = service.info("Arrived after disposal");
+	const late = service.notify({ severity: Severity.Info, message: "Arrived after disposal" });
+	const lateItem = service.model.getNotifications().at(-1)!;
 	handle.close();
 	assert.equal(panel.isConnected, false);
 	assert.equal(document.querySelectorAll(".ash-notifications-center, .ash-notification-host, .ash-notifications-toggle").length, 0);
 	assert.equal(document.activeElement, outside);
-	assert.deepEqual(service.getNotifications().map(item => item.id), [late.item.id]);
+	assert.deepEqual(service.model.getNotifications().map(item => item.id), [lateItem.id]);
 });
 
 class NotificationsFixture extends Disposable {
@@ -691,7 +728,7 @@ class NotificationsPresentation extends Disposable {
 		}
 		this.menus = this._register(systemMenu ? this.services.createInstance(ElectronContextMenuService, systemMenu) : this.services.createInstance(BrowserContextMenuService));
 		this.services.registerInstance(IContextMenuService, this.menus);
-		this.center = this._register(this.services.createInstance(NotificationsCenter, root, toastContainer, runner, statusbar, undefined));
+		this.center = this._register(this.services.createInstance(NotificationsCenter, root, service.model, toastContainer, runner, statusbar, undefined));
 	}
 }
 
@@ -718,39 +755,41 @@ test('notification copying requires the clipboard registration and the center re
 	using services = new InstantiationService();
 	assert.throws(() => services.createInstance(CopyNotificationMessageAction, CopyNotificationMessageAction.ID, CopyNotificationMessageAction.LABEL), /Unknown service: clipboardService/);
 	using fixture = new NotificationsFixture();
-	assert.throws(() => services.createInstance(NotificationsCenter, fixture.document.body, fixture.document.body, fixture.runner, undefined, undefined), /Unknown service: notificationService/);
+	assert.throws(() => services.createInstance(NotificationsCenter, fixture.document.body, fixture.service.model, fixture.document.body, fixture.runner, undefined, undefined), /Unknown service: contextKeyService/);
 	using incomplete = new InstantiationService();
 	incomplete.registerInstance(INotificationService, fixture.service);
 	incomplete.registerInstance(IContextKeyService, fixture.presentation.services.get(IContextKeyService));
-	assert.throws(() => incomplete.createInstance(NotificationsCenter, fixture.document.body, fixture.document.body, fixture.runner, undefined, undefined), /Unknown service: contextMenuService/);
+	assert.throws(() => incomplete.createInstance(NotificationsCenter, fixture.document.body, fixture.service.model, fixture.document.body, fixture.runner, undefined, undefined), /Unknown service: contextMenuService/);
 });
 
 for (const input of ['mouse', 'ContextMenu', 'Shift+F10'] as const) {
 	test(`notification ${input} copies the raw message without source, actions, or presentation text`, async () => {
 		using fixture = new NotificationsFixture();
 		const message = 'First line\n[链接](https://example.test) <b>literal</b>\n第二行\t🙂';
-		const handle = fixture.service.notify({ severity: NotificationSeverity.Warning, message, source: 'Excluded source', actions: { primary: [{ id: 'primary', label: 'Excluded action', run() { } }] } });
+		const handle = fixture.service.notify({ severity: Severity.Warning, message, source: 'Excluded source', actions: { primary: [{ tooltip: '', enabled: true, id: 'primary', label: 'Excluded action', run() { } }] } });
+		const handleItem = fixture.service.model.getNotifications().at(-1)!;
 		const copied = promiseWithResolvers<void>();
 		fixture.presentation.writeText = async value => { fixture.presentation.writes.push(value); copied.resolve(); };
-		const row = openCopyMenu(fixture, handle.item.id, input);
+		const row = openCopyMenu(fixture, handleItem.id, input);
 		const menuItem = fixture.document.querySelector<HTMLElement>('[role="menuitem"]')!;
 		assert.equal(menuItem.textContent, 'Copy Text');
 		menuItem.click();
 		await copied.promise;
-		assert.deepEqual({ writes: fixture.presentation.writes, history: fixture.service.getNotifications(), centerHidden: fixture.panel.hidden, focused: fixture.document.activeElement }, {
-			writes: [message], history: [handle.item], centerHidden: false, focused: row,
+		assert.deepEqual({ writes: fixture.presentation.writes, history: fixture.service.model.getNotifications(), centerHidden: fixture.panel.hidden, focused: fixture.document.activeElement }, {
+			writes: [message], history: [handleItem], centerHidden: false, focused: row,
 		});
 	});
 }
 
 test('Escape dismisses only the copy menu, returns to its row, and then closes the center', () => {
 	using fixture = new NotificationsFixture();
-	const handle = fixture.service.info('Retained after cancel');
+	const handle = fixture.service.notify({ severity: Severity.Info, message: 'Retained after cancel' });
+	const handleItem = fixture.service.model.getNotifications().at(-1)!;
 	fixture.origin.focus();
-	const row = openCopyMenu(fixture, handle.item.id);
+	const row = openCopyMenu(fixture, handleItem.id);
 	fixture.document.activeElement!.dispatchEvent(new fixture.document.defaultView!.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
-	assert.deepEqual({ menu: fixture.document.querySelector('[role="menu"]'), centerHidden: fixture.panel.hidden, focused: fixture.document.activeElement, writes: fixture.presentation.writes, history: fixture.service.getNotifications() }, {
-		menu: null, centerHidden: false, focused: row, writes: [], history: [handle.item],
+	assert.deepEqual({ menu: fixture.document.querySelector('[role="menu"]'), centerHidden: fixture.panel.hidden, focused: fixture.document.activeElement, writes: fixture.presentation.writes, history: fixture.service.model.getNotifications() }, {
+		menu: null, centerHidden: false, focused: row, writes: [], history: [handleItem],
 	});
 	row.dispatchEvent(new fixture.document.defaultView!.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
 	assert.equal(fixture.panel.hidden, true);
@@ -760,8 +799,9 @@ test('Escape dismisses only the copy menu, returns to its row, and then closes t
 for (const change of ['add', 'remove', 'hide', 'clear', 'dispose'] as const) {
 	test(`center ${change} invalidates its browser copy menu and prevents an old menu item from writing`, async () => {
 		using fixture = new NotificationsFixture();
-		const handle = fixture.service.info('Original');
-		openCopyMenu(fixture, handle.item.id);
+		const handle = fixture.service.notify({ severity: Severity.Info, message: 'Original' });
+		const handleItem = fixture.service.model.getNotifications().at(-1)!;
+		openCopyMenu(fixture, handleItem.id);
 		const menuItem = fixture.document.querySelector<HTMLElement>('[role="menuitem"]')!;
 		if (change === 'add') fixture.service.info('Next');
 		else if (change === 'remove') handle.close();
@@ -776,8 +816,9 @@ for (const change of ['add', 'remove', 'hide', 'clear', 'dispose'] as const) {
 
 test('a replaced notification menu cannot close another owner menu when the center renders or hides', () => {
 	using fixture = new NotificationsFixture();
-	const handle = fixture.service.info('Original');
-	openCopyMenu(fixture, handle.item.id);
+	const handle = fixture.service.notify({ severity: Severity.Info, message: 'Original' });
+	const handleItem = fixture.service.model.getNotifications().at(-1)!;
+	openCopyMenu(fixture, handleItem.id);
 	fixture.presentation.menus.showContextMenu({ getAnchor: () => fixture.outside, getActions: () => [{ id: 'other', label: 'Other menu', tooltip: '', enabled: true, run() { } }] });
 	fixture.service.info('Rerender');
 	fixture.center.hide();
@@ -786,8 +827,9 @@ test('a replaced notification menu cannot close another owner menu when the cent
 
 test('copy menu cancellation preserves focus owned by a different dialog', () => {
 	using fixture = new NotificationsFixture();
-	const handle = fixture.service.info('Original');
-	openCopyMenu(fixture, handle.item.id);
+	const handle = fixture.service.notify({ severity: Severity.Info, message: 'Original' });
+	const handleItem = fixture.service.model.getNotifications().at(-1)!;
+	openCopyMenu(fixture, handleItem.id);
 	const dialog = fixture.document.createElement('section');
 	dialog.setAttribute('role', 'dialog');
 	dialog.tabIndex = 0;
@@ -801,47 +843,51 @@ test('copy menu cancellation preserves focus owned by a different dialog', () =>
 test('window-scoped notification menus and clipboard targets remain independent', async () => {
 	using first = new NotificationsFixture();
 	using second = new NotificationsFixture();
-	const firstItem = first.service.info('First window');
-	const secondItem = second.service.info('Second window');
-	openCopyMenu(first, firstItem.item.id);
-	openCopyMenu(second, secondItem.item.id);
+	const firstItem = first.service.notify({ severity: Severity.Info, message: 'First window' });
+	const firstItemItem = first.service.model.getNotifications().at(-1)!;
+	const secondItem = second.service.notify({ severity: Severity.Info, message: 'Second window' });
+	const secondItemItem = second.service.model.getNotifications().at(-1)!;
+	openCopyMenu(first, firstItemItem.id);
+	openCopyMenu(second, secondItemItem.id);
 	first.center.clearAll();
 	second.document.querySelector<HTMLElement>('[role="menuitem"]')!.click();
 	await new Promise<void>(resolve => setImmediate(resolve));
-	assert.deepEqual({ first: first.presentation.writes, second: second.presentation.writes, history: second.service.getNotifications() }, { first: [], second: ['Second window'], history: [secondItem.item] });
+	assert.deepEqual({ first: first.presentation.writes, second: second.presentation.writes, history: second.service.model.getNotifications() }, { first: [], second: ['Second window'], history: [secondItemItem] });
 });
 
 test('menu selection keeps an in-flight clipboard failure observable once after the center hides', async () => {
 	using fixture = new NotificationsFixture();
-	const handle = fixture.service.info('Original');
+	const handle = fixture.service.notify({ severity: Severity.Info, message: 'Original' });
+	const handleItem = fixture.service.model.getNotifications().at(-1)!;
 	const started = promiseWithResolvers<void>();
 	const write = promiseWithResolvers<void>();
 	const reported = promiseWithResolvers<void>();
 	fixture.presentation.writeText = async value => { fixture.presentation.writes.push(value); started.resolve(); await write.promise; };
-	fixture.service.onDidAdd(item => { if (item.severity === NotificationSeverity.Error) reported.resolve(); });
-	openCopyMenu(fixture, handle.item.id);
+	fixture.service.model.onDidAdd(item => { if (item.severity === Severity.Error) reported.resolve(); });
+	openCopyMenu(fixture, handleItem.id);
 	fixture.document.querySelector<HTMLElement>('[role="menuitem"]')!.click();
 	await started.promise;
 	fixture.center.hide();
 	handle.close();
 	write.reject(new Error('Clipboard permission denied'));
 	await reported.promise;
-	assert.deepEqual({ writes: fixture.presentation.writes, messages: fixture.service.getNotifications().map(item => item.message) }, { writes: ['Original'], messages: ['Clipboard permission denied'] });
+	assert.deepEqual({ writes: fixture.presentation.writes, messages: fixture.service.model.getNotifications().map(item => item.message) }, { writes: ['Original'], messages: ['Clipboard permission denied'] });
 });
 
 test('window menu disposal suppresses late clipboard failure feedback without canceling the write', async () => {
 	using fixture = new NotificationsFixture();
-	const handle = fixture.service.info('Original');
+	const handle = fixture.service.notify({ severity: Severity.Info, message: 'Original' });
+	const handleItem = fixture.service.model.getNotifications().at(-1)!;
 	const started = promiseWithResolvers<void>();
 	const write = promiseWithResolvers<void>();
 	fixture.presentation.writeText = async value => { fixture.presentation.writes.push(value); started.resolve(); await write.promise; };
-	openCopyMenu(fixture, handle.item.id);
+	openCopyMenu(fixture, handleItem.id);
 	fixture.document.querySelector<HTMLElement>('[role="menuitem"]')!.click();
 	await started.promise;
 	fixture.presentation.dispose();
 	write.reject(new Error('Late clipboard failure'));
 	await new Promise<void>(resolve => setImmediate(resolve));
-	assert.deepEqual({ writes: fixture.presentation.writes, history: fixture.service.getNotifications() }, { writes: ['Original'], history: [handle.item] });
+	assert.deepEqual({ writes: fixture.presentation.writes, history: fixture.service.model.getNotifications() }, { writes: ['Original'], history: [handleItem] });
 });
 
 for (const change of ['add', 'remove', 'hide', 'clear', 'dispose'] as const) {
@@ -850,8 +896,9 @@ for (const change of ['add', 'remove', 'hide', 'clear', 'dispose'] as const) {
 		const requests: INativeContextMenuRequest[] = [];
 		let closed = 0;
 		using fixture = new NotificationsFixture(undefined, { popup: request => { requests.push(request); return popup.promise; }, async close() { closed++; } });
-		const handle = fixture.service.info('Original');
-		openCopyMenu(fixture, handle.item.id);
+		const handle = fixture.service.notify({ severity: Severity.Info, message: 'Original' });
+		const handleItem = fixture.service.model.getNotifications().at(-1)!;
+		openCopyMenu(fixture, handleItem.id);
 		if (change === 'add') fixture.service.info('Next');
 		else if (change === 'remove') handle.close();
 		else if (change === 'hide') fixture.center.hide();
@@ -870,16 +917,17 @@ test('system selection copies through the same action and reports a clipboard de
 	const popup = promiseWithResolvers<INativeContextMenuResult>();
 	const request = promiseWithResolvers<INativeContextMenuRequest>();
 	using fixture = new NotificationsFixture(undefined, { popup: value => { request.resolve(value); return popup.promise; }, async close() { } });
-	const handle = fixture.service.info('System message\n第二行');
+	const handle = fixture.service.notify({ severity: Severity.Info, message: 'System message\n第二行' });
+	const handleItem = fixture.service.model.getNotifications().at(-1)!;
 	const reported = promiseWithResolvers<void>();
 	fixture.presentation.writeText = async value => { fixture.presentation.writes.push(value); throw new Error('System clipboard denied'); };
-	fixture.service.onDidAdd(item => { if (item.severity === NotificationSeverity.Error) reported.resolve(); });
-	openCopyMenu(fixture, handle.item.id);
+	fixture.service.model.onDidAdd(item => { if (item.severity === Severity.Error) reported.resolve(); });
+	openCopyMenu(fixture, handleItem.id);
 	const action = (await request.promise).items[0];
 	assert.ok(action.type === 'action');
 	popup.resolve({ selectedId: action.id });
 	await reported.promise;
-	assert.deepEqual({ writes: fixture.presentation.writes, messages: fixture.service.getNotifications().map(item => item.message) }, { writes: ['System message\n第二行'], messages: ['System message\n第二行', 'System clipboard denied'] });
+	assert.deepEqual({ writes: fixture.presentation.writes, messages: fixture.service.model.getNotifications().map(item => item.message) }, { writes: ['System message\n第二行'], messages: ['System message\n第二行', 'System clipboard denied'] });
 });
 
 test('system Copy Text releases its presentation before starting the selected write without canceling it', async () => {
@@ -887,12 +935,13 @@ test('system Copy Text releases its presentation before starting the selected wr
 	let request: INativeContextMenuRequest | undefined;
 	let closeRequests = 0;
 	using fixture = new NotificationsFixture(undefined, { popup: value => { request = value; return popup.promise; }, async close() { closeRequests++; } });
-	const handle = fixture.service.info('Selected system message\n第二行');
+	const handle = fixture.service.notify({ severity: Severity.Info, message: 'Selected system message\n第二行' });
+	const handleItem = fixture.service.model.getNotifications().at(-1)!;
 	const order: string[] = [];
 	const write = promiseWithResolvers<void>();
 	using hidden = fixture.presentation.menus.onDidHideContextMenu(() => order.push('hide'));
 	fixture.presentation.writeText = async value => { order.push('write'); fixture.presentation.writes.push(value); await write.promise; };
-	openCopyMenu(fixture, handle.item.id);
+	openCopyMenu(fixture, handleItem.id);
 	const selected = request!.items[0];
 	assert.ok(selected.type === 'action');
 	popup.resolve({ selectedId: selected.id });
@@ -900,7 +949,7 @@ test('system Copy Text releases its presentation before starting the selected wr
 		await new Promise<void>(resolve => setImmediate(resolve));
 		assert.deepEqual({ order, writes: fixture.presentation.writes, closeRequests }, { order: ['hide', 'write'], writes: ['Selected system message\n第二行'], closeRequests: 0 });
 		fixture.center.hide();
-		assert.deepEqual({ writes: fixture.presentation.writes, closeRequests, messages: fixture.service.getNotifications().map(item => item.message) }, { writes: ['Selected system message\n第二行'], closeRequests: 0, messages: ['Selected system message\n第二行'] });
+		assert.deepEqual({ writes: fixture.presentation.writes, closeRequests, messages: fixture.service.model.getNotifications().map(item => item.message) }, { writes: ['Selected system message\n第二行'], closeRequests: 0, messages: ['Selected system message\n第二行'] });
 	} finally { write.resolve(); }
 });
 
@@ -940,12 +989,12 @@ for (const asynchronous of [false, true]) {
 				}
 			};
 			runner.onWillRun(event => { events.push(event); order.push("will"); });
-			service.onDidAdd(() => order.push("error"));
+			service.model.onDidAdd(() => order.push("error"));
 			runner.onDidRun(event => { events.push(event); order.push("did"); });
 			await runner.run(action, context);
-			assert.deepEqual({ order, events, notifications: service.getNotifications().map(item => ({ severity: item.severity, message: item.message })) }, {
+			assert.deepEqual({ order, events, notifications: service.model.getNotifications().map(item => ({ severity: item.severity, message: item.message })) }, {
 				order: ["will", "run", "error", "did"], events: [{ action, context }, { action, context, error: undefined }],
-				notifications: [{ severity: NotificationSeverity.Error, message: failure instanceof Error ? failure.message : failure ?? "Error" }],
+				notifications: [{ severity: Severity.Error, message: failure instanceof Error ? failure.message : failure ?? "Error" }],
 			});
 		});
 	}
@@ -967,7 +1016,7 @@ for (const asynchronous of [false, true]) {
 				}
 			};
 			await runner.run(action);
-			assert.deepEqual({ completed, messages: service.getNotifications().map(item => item.message) }, { completed: 1, messages: handled ? ["Producer recovered"] : [] });
+			assert.deepEqual({ completed, messages: service.model.getNotifications().map(item => item.message) }, { completed: 1, messages: handled ? ["Producer recovered"] : [] });
 		});
 	}
 }
@@ -981,7 +1030,7 @@ test("a disposed notification runner skips new actions", async () => {
 	runner.onDidRun(() => events++);
 	runner.dispose();
 	await runner.run({ id: "late", label: "Late", tooltip: "", enabled: true, run() { calls++; throw new Error("Late failure"); } });
-	assert.deepEqual({ calls, events, notifications: service.getNotifications() }, { calls: 0, events: 0, notifications: [] });
+	assert.deepEqual({ calls, events, notifications: service.model.getNotifications() }, { calls: 0, events: 0, notifications: [] });
 });
 
 test("window disposal suppresses late notification feedback while the producer owns its pending task", async () => {
@@ -998,7 +1047,7 @@ test("window disposal suppresses late notification feedback while the producer o
 	runner.dispose();
 	reject(new Error("Finished after disposal"));
 	await pending;
-	assert.deepEqual({ completed, notifications: service.getNotifications() }, { completed: 0, notifications: [] });
+	assert.deepEqual({ completed, notifications: service.model.getNotifications() }, { completed: 0, notifications: [] });
 });
 
 for (const useCenter of [false, true]) {
@@ -1008,7 +1057,9 @@ for (const useCenter of [false, true]) {
 			using fixture = new NotificationsFixture(statusbar);
 			const { document, service, runner, center } = fixture;
 			let calls = 0;
-			const action: NotificationAction = {
+			const action: IAction = {
+				tooltip: '',
+				enabled: true,
 				id: "failed", label: "Try action", run(...args: unknown[]) {
 					assert.equal(this, action);
 					assert.deepEqual(args, []);
@@ -1018,16 +1069,17 @@ for (const useCenter of [false, true]) {
 					throw failure;
 				}
 			};
-			const original = service.info("Original notification", [action]);
+			const original = service.notify({ severity: Severity.Info, message: "Original notification", actions: { primary: [action] } });
+			const originalItem = service.model.getNotifications().at(-1)!;
 			if (useCenter) center.show();
 			const completed = new Promise<void>(resolve => runner.onDidRun(() => resolve()));
 			document.querySelector<HTMLButtonElement>(`${useCenter ? ".ash-notifications-center" : ".ash-notification-host"} .ash-notification-action`)!.click();
 			assert.equal(calls, 0);
 			await completed;
-			assert.deepEqual({ calls, items: service.getNotifications().map(item => ({ severity: item.severity, message: item.message })) }, {
-				calls: 1, items: [{ severity: NotificationSeverity.Info, message: "Original notification" }, { severity: NotificationSeverity.Error, message: "Visible action failure" }],
+			assert.deepEqual({ calls, items: service.model.getNotifications().map(item => ({ severity: item.severity, message: item.message })) }, {
+				calls: 1, items: [{ severity: Severity.Info, message: "Original notification" }, { severity: Severity.Error, message: "Visible action failure" }],
 			});
-			assert.equal(service.getNotifications()[0], original.item);
+			assert.equal(service.model.getNotifications()[0], originalItem);
 			assert.equal(statusbar.getEntries(StatusbarAlignment.Right).find(item => item.id === "ash.status.notifications")?.entry.icon, Lxicon.bellDot);
 			if (!useCenter) assert.equal(document.querySelector('.ash-notification-error .ash-notification-message')?.textContent, "Visible action failure");
 			center.show();
@@ -1040,7 +1092,8 @@ for (const useCenter of [false, true]) {
 		const completion = new Promise<void>((_resolve, rejectCompletion) => { reject = rejectCompletion; });
 		let entered!: () => void;
 		const started = new Promise<void>(resolve => { entered = resolve; });
-		const original = fixture.service.info("Pending task", [{ id: "pending", label: "Start", run() { entered(); return completion; } }]);
+		const original = fixture.service.notify({ severity: Severity.Info, message: "Pending task", actions: { primary: [{ tooltip: '', enabled: true, id: "pending", label: "Start", run() { entered(); return completion; } }] } });
+		const originalItem = fixture.service.model.getNotifications().at(-1)!;
 		if (useCenter) fixture.center.show();
 		const completed = new Promise<void>(resolve => fixture.runner.onDidRun(() => resolve()));
 		fixture.document.querySelector<HTMLButtonElement>(`${useCenter ? ".ash-notifications-center" : ".ash-notification-host"} .ash-notification-action`)!.click();
@@ -1048,27 +1101,29 @@ for (const useCenter of [false, true]) {
 		original.close();
 		reject(new Error("Failure after original removal"));
 		await completed;
-		assert.deepEqual(fixture.service.getNotifications().map(item => ({ severity: item.severity, message: item.message })), [
-			{ severity: NotificationSeverity.Error, message: "Failure after original removal" },
+		assert.deepEqual(fixture.service.model.getNotifications().map(item => ({ severity: item.severity, message: item.message })), [
+			{ severity: Severity.Error, message: "Failure after original removal" },
 		]);
 		assert.equal(fixture.document.querySelector('.ash-notification-error .ash-notification-message')?.textContent, "Failure after original removal");
 	});
 	test(`${useCenter ? "center" : "toast"} successful actions let the producer close its notification without error feedback`, async () => {
 		using fixture = new NotificationsFixture();
 		let calls = 0;
-		const handle = fixture.service.info("Complete task", [{ id: "complete", label: "Complete", async run() { calls++; handle.close(); } }]);
+		const handle = fixture.service.notify({ severity: Severity.Info, message: "Complete task", actions: { primary: [{ tooltip: '', enabled: true, id: "complete", label: "Complete", async run() { calls++; handle.close(); } }] } });
+		const handleItem = fixture.service.model.getNotifications().at(-1)!;
 		if (useCenter) fixture.center.show();
 		const completed = new Promise<void>(resolve => fixture.runner.onDidRun(() => resolve()));
 		fixture.document.querySelector<HTMLButtonElement>(`${useCenter ? ".ash-notifications-center" : ".ash-notification-host"} .ash-notification-action`)!.click();
 		await completed;
-		assert.deepEqual({ calls, notifications: fixture.service.getNotifications() }, { calls: 1, notifications: [] });
+		assert.deepEqual({ calls, notifications: fixture.service.model.getNotifications() }, { calls: 1, notifications: [] });
 	});
 }
 
 
 test("progress updates retain the notification row and its focused action", () => {
 	using fixture = new NotificationsFixture();
-	const handle = fixture.service.notify({ severity: NotificationSeverity.Info, message: "Indexing", progress: { infinite: true }, actions: { primary: [{ id: 'cancel', label: 'Cancel', run() { } }] } });
+	const handle = fixture.service.notify({ severity: Severity.Info, message: "Indexing", progress: { infinite: true }, actions: { primary: [{ tooltip: '', enabled: true, id: 'cancel', label: 'Cancel', run() { } }] } });
+	const handleItem = fixture.service.model.getNotifications().at(-1)!;
 	const button = fixture.document.querySelector<HTMLButtonElement>('.ash-notification-action')!;
 	button.focus();
 	let closed = 0;
@@ -1083,22 +1138,108 @@ test("progress updates retain the notification row and its focused action", () =
 	assert.equal(progress.getAttribute('aria-label'), "Indexing files");
 	assert.equal(fixture.document.activeElement, button);
 	assert.equal(fixture.document.querySelector('.ash-notification-action'), button);
-	assert.equal(handle.item.message, "Indexing files");
+	assert.equal(fixture.service.model.get(handleItem.id)?.message, "Indexing files");
 	fixture.center.show();
 	assert.equal(fixture.panel.querySelector('.ash-notification-message')?.textContent, "Indexing files");
 	handle.close();
 	handle.close();
 	handle.updateMessage("Late update");
 	assert.equal(closed, 1);
-	assert.deepEqual(fixture.service.getNotifications(), []);
+	assert.deepEqual(fixture.service.model.getNotifications(), []);
 });
 
 test("silent progress is retained in the center without a toast or arrival announcement", () => {
 	using fixture = new NotificationsFixture();
-	const handle = fixture.service.notify({ severity: NotificationSeverity.Info, message: "Loading workspace", priority: NotificationPriority.SILENT, progress: { infinite: true } });
+	const handle = fixture.service.notify({ severity: Severity.Info, message: "Loading workspace", priority: NotificationPriority.SILENT, progress: { infinite: true } });
+	const handleItem = fixture.service.model.getNotifications().at(-1)!;
 	assert.equal(fixture.document.querySelector('.ash-notification'), null);
 	assert.deepEqual(fixture.presentation.statuses, []);
-	assert.equal(fixture.service.getNotifications().length, 1);
+	assert.equal(fixture.service.model.getNotifications().length, 1);
 	fixture.center.show();
-	assert.equal(fixture.panel.querySelector('.ash-notification-message')?.textContent, handle.item.message);
+	assert.equal(fixture.panel.querySelector('.ash-notification-message')?.textContent, handleItem.message);
+});
+
+test('standard notification shortcuts accept errors and arrays without exposing history to producers', () => {
+	using service = new NotificationService();
+	assert.equal(service.info(['First', new Error('Second')]), undefined);
+	assert.equal(service.warn(new Error('Warning')), undefined);
+	assert.equal(service.error(['Failure']), undefined);
+	assert.deepEqual(service.model.getNotifications().map(({ severity, message }) => ({ severity, message })), [
+		{ severity: Severity.Info, message: 'First' },
+		{ severity: Severity.Info, message: 'Second' },
+		{ severity: Severity.Warning, message: 'Warning' },
+		{ severity: Severity.Error, message: 'Failure' },
+	]);
+});
+
+test('a producer handle updates severity, message and actions on the existing row', async () => {
+	using fixture = new NotificationsFixture();
+	const handle = fixture.service.notify({ severity: Severity.Info, message: 'Starting', source: { id: 'fixture', label: 'Fixture' } });
+	const row = fixture.document.querySelector<HTMLElement>('.ash-notification')!;
+	handle.updateSeverity(Severity.Error);
+	handle.updateMessage(new Error('Failed'));
+	let runs = 0;
+	handle.updateActions({ primary: [{ id: 'retry', label: 'Retry', tooltip: 'Retry task', enabled: false, run() { runs++; } }] });
+	assert.equal(fixture.document.querySelector('.ash-notification'), row);
+	assert.equal(row.dataset.severity, 'error');
+	assert.equal(row.querySelector('.ash-notification-severity')?.getAttribute('aria-label'), 'Error');
+	assert.equal(row.querySelector('.ash-notification-message')?.textContent, 'Failed');
+	assert.equal(row.querySelector('.ash-notification-source')?.textContent, 'Source: Fixture');
+	const disabled = row.querySelector<HTMLButtonElement>('.ash-notification-action')!;
+	assert.equal(disabled.disabled, true);
+	disabled.click();
+	assert.equal(runs, 0);
+	handle.updateActions({ primary: [{ id: 'retry', label: 'Retry', tooltip: '', enabled: true, run() { runs++; } }] });
+	row.querySelector<HTMLButtonElement>('.ash-notification-action')!.click();
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.equal(runs, 1);
+	handle.updateActions();
+	assert.equal(row.querySelector('.ash-notification-action'), null);
+});
+
+test('producer visibility follows presentation changes and close remains observable after removal during arrival', () => {
+	using service = new NotificationService();
+	const handle = service.notify({ severity: Severity.Info, message: 'Visible later' });
+	const item = service.model.getNotifications()[0]!;
+	const visibility: boolean[] = [];
+	using listener = handle.onDidChangeVisibility(visible => visibility.push(visible));
+	let closes = 0;
+	using closeListener = handle.onDidClose(() => { closes++; });
+	assert.equal(handle.visible, false);
+	item.updateVisibility(true);
+	item.updateVisibility(true);
+	assert.equal(handle.visible, true);
+	handle.close();
+	handle.close();
+	item.updateVisibility(true);
+	assert.deepEqual(visibility, [true, false]);
+	assert.equal(handle.visible, false);
+	assert.equal(closes, 1);
+	using removeOnArrival = service.model.onDidAdd(item => service.model.remove(item.id));
+	const removed = service.notify({ severity: Severity.Info, message: 'Removed on arrival' });
+	using lateListener = removed.onDidClose(() => { closes++; });
+	assert.equal(closes, 2);
+	assert.deepEqual(service.model.getNotifications(), []);
+});
+
+test('the accessible notification history observes handle updates through its Workbench model', () => {
+	using fixture = new NotificationsFixture();
+	const handle = fixture.service.notify({ severity: Severity.Info, message: 'Starting' });
+	using services = new InstantiationService();
+	services.registerInstance(INotificationsCenter, fixture.center);
+	const implementation = AccessibleViewRegistry.getImplementations().find(item => item.name === 'notificationsView')!;
+	using provider = implementation.getProvider(services)!;
+	assert.equal(provider.provideContent(), 'info: Starting');
+	let updates = 0;
+	using listener = provider.onDidChangeContent!(() => { updates++; });
+	handle.updateSeverity(Severity.Error);
+	handle.updateMessage('Failed');
+	assert.equal(provider.provideContent(), 'error: Failed');
+	assert.equal(updates, 2);
+	handle.close();
+	assert.equal(provider.provideContent(), 'No notifications');
+	assert.equal(updates, 3);
+	listener.dispose();
+	fixture.service.info('After subscription disposal');
+	assert.equal(updates, 3);
 });

@@ -217,7 +217,7 @@ export class TerminalLinkContribution extends Disposable implements ITerminalCon
 		const resource = await this.resolveFile(candidate);
 		if (!this.isCurrent(generation, processId)) return;
 		if (!resource) {
-			this.notifications.warning(localize('terminal.links.fileUnavailable', 'Could not open the terminal file: {0}', candidate.file?.path.text ?? candidate.label));
+			this.notifications.warn(localize('terminal.links.fileUnavailable', 'Could not open the terminal file: {0}', candidate.file?.path.text ?? candidate.label));
 			return;
 		}
 		const row = candidate.file?.suffix?.row ?? 1;

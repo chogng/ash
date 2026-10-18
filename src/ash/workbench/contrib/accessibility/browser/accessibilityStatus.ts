@@ -5,7 +5,7 @@ import { Action2, registerAction2 } from '../../../../platform/actions/common/ac
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import { INotificationService, type NotificationHandle } from '../../../../platform/notification/common/notification.js';
+import { Severity, INotificationService, type INotificationHandle } from '../../../../platform/notification/common/notification.js';
 import type { IWorkbenchContribution } from '../../../common/contributions.js';
 import { IStatusbarService, StatusbarAlignment, type IStatusbarEntryAccessor } from '../../../services/statusbar/browser/statusbar.js';
 
@@ -55,24 +55,34 @@ export class AccessibilityStatus extends Disposable implements IWorkbenchContrib
 	}
 }
 
-function showScreenReaderNotification(configuration: IConfigurationService, notifications: INotificationService): NotificationHandle {
-	const notification = notifications.info(localize('accessibility.screenReaderPrompt', 'Choose how Ash enables screen reader optimization.'), [
-		{
-			id: 'accessibility.screenReader.auto',
-			label: localize('accessibility.screenReaderAuto', 'Follow System Detection'),
-			run: async () => { await configuration.updateValue('editor.accessibilitySupport', 'auto'); notification.close(); },
-		},
-		{
-			id: 'accessibility.screenReader.on',
-			label: localize('accessibility.screenReaderAlwaysOn', 'Always Enable'),
-			run: async () => { await configuration.updateValue('editor.accessibilitySupport', 'on'); notification.close(); },
-		},
-		{
-			id: 'accessibility.screenReader.off',
-			label: localize('accessibility.screenReaderAlwaysOff', 'Disable'),
-			run: async () => { await configuration.updateValue('editor.accessibilitySupport', 'off'); notification.close(); },
-		},
-	]);
+function showScreenReaderNotification(configuration: IConfigurationService, notifications: INotificationService): INotificationHandle {
+	const notification = notifications.notify({
+		severity: Severity.Info, message: localize('accessibility.screenReaderPrompt', 'Choose how Ash enables screen reader optimization.'), actions: {
+			primary: [
+				{
+					tooltip: '',
+					enabled: true,
+					id: 'accessibility.screenReader.auto',
+					label: localize('accessibility.screenReaderAuto', 'Follow System Detection'),
+					run: async () => { await configuration.updateValue('editor.accessibilitySupport', 'auto'); notification.close(); },
+				},
+				{
+					tooltip: '',
+					enabled: true,
+					id: 'accessibility.screenReader.on',
+					label: localize('accessibility.screenReaderAlwaysOn', 'Always Enable'),
+					run: async () => { await configuration.updateValue('editor.accessibilitySupport', 'on'); notification.close(); },
+				},
+				{
+					tooltip: '',
+					enabled: true,
+					id: 'accessibility.screenReader.off',
+					label: localize('accessibility.screenReaderAlwaysOff', 'Disable'),
+					run: async () => { await configuration.updateValue('editor.accessibilitySupport', 'off'); notification.close(); },
+				},
+			]
+		}
+	});
 	return notification;
 }
 

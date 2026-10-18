@@ -509,7 +509,7 @@ document.body.append(submission);
 const errorOutput = document.createElement('output');
 errorOutput.setAttribute('aria-label', 'Context error');
 document.body.append(errorOutput);
-resources.add(notifications.onDidAdd(item => { errorOutput.textContent = item.message; }));
+resources.add(notifications.model.onDidAdd(item => { errorOutput.textContent = item.message; }));
 
 if (new URLSearchParams(location.search).has('contextHover')) {
 	const hover = resources.add(new HoverService(services.get(IConfigurationService), services.get(IContextViewService), {

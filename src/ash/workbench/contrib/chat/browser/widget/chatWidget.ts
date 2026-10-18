@@ -46,7 +46,7 @@ import type { INotificationService } from '../../../../../platform/notification/
 import type { IOpenAgentsWindowOptions } from '../../../../../platform/native/common/nativeHost.js';
 import type { IChatMcpAppDelegate } from './chatContentParts/toolInvocationParts/chatMcpAppSubPart.js';
 import { VoiceSessionController, pickVoiceConversation } from '../voiceClient/voiceSessionController.js';
-import type { AgentVoiceTaskRequest } from '../../../../../platform/agentHost/common/agentService.js';
+import type { AgentVoiceTaskRequest } from '../../../../../platform/agentHost/common/agent.js';
 
 /** The presentation consumes one conversation model owned by its product. */
 export interface IChatWidgetModel extends IDisposable {

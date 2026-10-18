@@ -57,8 +57,8 @@ test('production contribution registers the four GitHub link kinds and prompts o
 	const first = resources.add(links.createLinkPresentationWatcher(rule.id, uri)!);
 	const second = resources.add(links.createLinkPresentationWatcher(rule.id, uri)!);
 	await Promise.all([settled(resources, first), settled(resources, second)]);
-	assert.equal(notifications.getNotifications().length, 1);
-	await notifications.getNotifications()[0].actions!.primary![0].run();
+	assert.equal(notifications.model.getNotifications().length, 1);
+	await notifications.model.getNotifications()[0].actions!.primary![0].run();
 	assert.deepEqual(signIns, ['github']);
 	assert.equal(links.getLinkPresentationRule(URI.parse('https://enterprise.test/team/repo')), undefined);
 });

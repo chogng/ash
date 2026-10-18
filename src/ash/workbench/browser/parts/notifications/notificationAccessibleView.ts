@@ -1,9 +1,11 @@
 import { localize } from "../../../../nls.js";
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from "../../../../platform/accessibility/browser/accessibleView.js";
 import { AccessibleViewRegistry } from "../../../../platform/accessibility/browser/accessibleViewRegistry.js";
-import { INotificationService } from "../../../../platform/notification/common/notification.js";
+
 import { INotificationsCenter, NotificationsFocusedContext } from "./notificationsCenter.js";
-import { DisposableStore } from '../../../../base/common/lifecycle.js';
+import { DisposableMap, DisposableStore } from '../../../../base/common/lifecycle.js';
+import { Severity } from '../../../../platform/notification/common/notification.js';
+import type { NotificationItem } from '../../../common/notifications.js';
 
 AccessibleViewRegistry.register({
 	type: AccessibleViewType.Help,
@@ -25,18 +27,25 @@ AccessibleViewRegistry.register({
 	name: "notificationsView",
 	when: NotificationsFocusedContext.isEqualTo(true),
 	getProvider: accessor => {
-		const notifications = accessor.get(INotificationService);
+		const notifications = accessor.get(INotificationsCenter).model;
 		const provider = new AccessibleContentProvider(
 			AccessibleViewProviderId.Notifications,
 			{ type: AccessibleViewType.View },
-			() => notifications.getNotifications().map(item => `${item.severity}: ${item.message}`).join('\n') || localize('notifications.empty', 'No notifications'),
+			() => notifications.getNotifications().map(item => `${Severity[item.severity].toLowerCase()}: ${item.message}`).join('\n') || localize('notifications.empty', 'No notifications'),
 			() => accessor.get(INotificationsCenter).show(),
 			AccessibilityVerbositySettingId.Notifications,
 		);
 		provider.onDidChangeContent = (listener, thisArgs, disposables) => {
 			const lifetime = new DisposableStore();
-			lifetime.add(notifications.onDidAdd(() => listener.call(thisArgs), undefined, disposables));
-			lifetime.add(notifications.onDidRemove(() => listener.call(thisArgs), undefined, disposables));
+			const items = lifetime.add(new DisposableMap<number>());
+			const observe = (item: NotificationItem): void => {
+				items.set(item.id, item.onDidChange(() => listener.call(thisArgs)));
+			};
+			for (const item of notifications.getNotifications()) observe(item);
+			lifetime.add(notifications.onDidAdd(item => { observe(item); listener.call(thisArgs); }));
+			lifetime.add(notifications.onDidRemove(item => { items.deleteAndDispose(item.id); listener.call(thisArgs); }));
+			if (Array.isArray(disposables)) disposables.push(lifetime);
+			else disposables?.add(lifetime);
 			return lifetime;
 		};
 		return provider;

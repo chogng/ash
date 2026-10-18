@@ -1,7 +1,7 @@
 import { SubmenuAction, type IAction } from '../../../../base/common/actions.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
-import type { NotificationItem } from '../../../../platform/notification/common/notification.js';
+import type { NotificationItem } from '../../../common/notifications.js';
 import { localize } from '../../../../nls.js';
 
 /** The notification's producer owns the operations exposed by this menu. */

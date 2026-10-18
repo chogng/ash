@@ -1,7 +1,7 @@
 import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
-import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import { Severity, INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import type { OnboardingOutcome } from '../common/onboardingScenario.js';
 import { IOnboardingScenarioService } from '../common/onboardingScenarioService.js';
@@ -28,11 +28,17 @@ export class OnboardingTryoutService implements IOnboardingTryoutService {
 		if (!await this.isAvailable(id, token)) {
 			if (token.isCancellationRequested) return 'cancelled';
 			if (tryout.setup) {
-				this.notifications.info(tryout.unavailableMessage ?? localize('onboarding.tryoutUnavailable', 'This example is unavailable.'), [{
-					id: `onboarding.setup.${id}`,
-					label: tryout.setup.label,
-					run: () => this.commands.executeCommand(tryout.setup!.commandId),
-				}]);
+				this.notifications.notify({
+					severity: Severity.Info, message: tryout.unavailableMessage ?? localize('onboarding.tryoutUnavailable', 'This example is unavailable.'), actions: {
+						primary: [{
+							tooltip: '',
+							enabled: true,
+							id: `onboarding.setup.${id}`,
+							label: tryout.setup.label,
+							run: () => this.commands.executeCommand(tryout.setup!.commandId),
+						}]
+					}
+				});
 			}
 			return 'unavailable';
 		}

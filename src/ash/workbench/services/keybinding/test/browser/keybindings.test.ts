@@ -44,7 +44,7 @@ import { NotificationsAlerts } from "../../../../browser/parts/notifications/not
 import { AccessibilityService } from "../../../../../platform/accessibility/browser/accessibilityService.js";
 import { InMemoryConfigurationService } from "../../../../../platform/configuration/common/inMemoryConfigurationService.js";
 import { ConfigurationRegistry } from "../../../../../platform/configuration/common/configurationRegistry.js";
-import { INotificationService, NotificationSeverity } from "../../../../../platform/notification/common/notification.js";
+import { INotificationService, Severity } from "../../../../../platform/notification/common/notification.js";
 import {
 	KeybindingResolveKind,
 	KeybindingResolver,
@@ -403,7 +403,7 @@ test('failed keyboard command appears as a warning notification', async () => {
 		contextKeyService: contexts,
 		configurationService: resources.add(new InMemoryConfigurationService(new ConfigurationRegistry())),
 	}));
-	resources.add(new NotificationsAlerts(notifications, accessibility));
+	resources.add(new NotificationsAlerts(notifications.model, accessibility));
 	const keybindings = resources.add(services.createInstance(WorkbenchKeybindingService, {
 		ownerDocument: dom.window.document,
 		commandService: resources.add(new CommandService(services, commands)),
@@ -414,8 +414,8 @@ test('failed keyboard command appears as a warning notification', async () => {
 
 	assert.equal(keybindings.dispatchEvent(keyboardEvent().event), true);
 	await Promise.resolve();
-	assert.deepEqual(notifications.getNotifications().map(item => ({ severity: item.severity, message: item.message })), [
-		{ severity: NotificationSeverity.Warning, message: 'Shortcut failed' },
+	assert.deepEqual(notifications.model.getNotifications().map(item => ({ severity: item.severity, message: item.message })), [
+		{ severity: Severity.Warning, message: 'Shortcut failed' },
 	]);
 	assert.equal(frames.size, 1);
 	for (const callback of [...frames.values()]) { callback(0); }

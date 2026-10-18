@@ -3,7 +3,8 @@ import { getActiveWindow, isHTMLElement } from '../../../../base/browser/dom.js'
 import { Emitter } from '../../../../base/common/event.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
-import { IAgentVoiceService, type AgentVoiceSource, type ThreadTranscriptEntry, type ThreadTranscriptSnapshot, type ThreadTranscriptUpdateEnvelope } from '../../../../platform/agentHost/common/agentService.js';
+import { IAgentVoiceService } from '../../../../platform/agentHost/common/agentService.js';
+import { type AgentVoiceSource, type ThreadTranscriptEntry, type ThreadTranscriptSnapshot, type ThreadTranscriptUpdateEnvelope } from '../../../../platform/agentHost/common/agent.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IAuxiliaryWindowService, type IAuxiliaryWindow } from '../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js';

@@ -101,7 +101,7 @@ const backendNotifications = lifetime.add(new NotificationService());
 const progressCommands = lifetime.add(new CommandService(services));
 const toastServices = lifetime.add(new InstantiationService());
 toastServices.registerInstance(IContextMenuService, { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() { throw new Error('Unexpected notification menu'); }, hideContextMenu() { } } satisfies IContextMenuService);
-lifetime.add(toastServices.createInstance(NotificationsToasts, document.body, backendNotifications, lifetime.add(new NotificationActionRunner(backendNotifications))));
+lifetime.add(toastServices.createInstance(NotificationsToasts, document.body, backendNotifications.model, lifetime.add(new NotificationActionRunner(backendNotifications))));
 const workspace = lifetime.add(new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') }));
 const gitConfigurationRegistry = new ConfigurationRegistry();
 gitConfigurationRegistry.updateConfigurations({ add: [...parseExtensionManifest(JSON.stringify(gitManifest), { id: 'ash.git', name: 'git', publisher: 'ash', version: '0.1.0' }).contributes.configuration], remove: [] });
