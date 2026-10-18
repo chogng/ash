@@ -41,14 +41,8 @@ export class EditorGroupModel {
 	private locked = false;
 
 	constructor(id?: EditorGroupId, public readonly editorLimit?: 1, private readonly resourceIdentity: IExtUri = extUri) {
-		this.id = id ?? `editor-group-${++editorGroupId}`;
-		const match = /^editor-group-(\d+)$/u.exec(this.id);
-		if (match) {
-			const value = Number(match[1]);
-			if (Number.isSafeInteger(value)) {
-				editorGroupId = Math.max(editorGroupId, value);
-			}
-		}
+		this.id = id ?? ++editorGroupId;
+		editorGroupId = Math.max(editorGroupId, this.id);
 	}
 
 	public get entries(): readonly IEditorGroupModelEntry[] {

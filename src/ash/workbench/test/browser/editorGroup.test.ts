@@ -130,7 +130,7 @@ test("EditorGroupView selects a range of tabs and resolves close-command targets
 			assert.equal(tab("first").getAttribute("aria-selected"), "true");
 			assert.equal(tab("second").getAttribute("aria-selected"), "true");
 			assert.equal(tab("third").getAttribute("aria-selected"), "false");
-			const context = resolveCommandsContext([{ groupId: group.id, editorIndex: 0 }], { groups: [group], getGroup: (id: string) => id === group.id ? group : undefined } as unknown as IEditorGroupsService);
+			const context = resolveCommandsContext([{ groupId: group.id, editorIndex: 0 }], { groups: [group], getGroup: (id: number) => id === group.id ? group : undefined } as unknown as IEditorGroupsService);
 			assert.deepEqual(context.groupedEditors[0]?.editors, [first, second]);
 			for (const editor of context.groupedEditors[0]!.editors) await group.closeEditor(editor);
 			assert.deepEqual(group.inputs, [third]);

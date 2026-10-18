@@ -10,7 +10,7 @@ import { ISessionChangesService } from '../../../changes/common/sessionChangesSe
 
 /** Only settled session/reveal transitions seed tabs; ordinary closes never recreate defaults. */
 export class DesktopDockedTabsCoordinator extends Disposable {
-	constructor(private readonly pageGroupId: string, @IEditorPart private readonly editor: IEditorPart, @IEditorService private readonly editors: IEditorService, @ISessionChangesService private readonly changes: ISessionChangesService, @ISessionsService private readonly sessions: ISessionsService) { super(); }
+	constructor(private readonly pageGroupId: number, @IEditorPart private readonly editor: IEditorPart, @IEditorService private readonly editors: IEditorService, @ISessionChangesService private readonly changes: ISessionChangesService, @ISessionsService private readonly sessions: ISessionsService) { super(); }
 
 	private get documentGroups() { return this.editor.groups.filter(group => group.id !== this.pageGroupId); }
 

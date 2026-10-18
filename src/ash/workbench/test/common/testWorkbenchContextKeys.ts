@@ -34,7 +34,7 @@ export function createTestWorkbenchContextKeysHandler(contextKeyService: IContex
 	);
 }
 
-const emptyGroupState: EditorGroupState = Object.freeze({ id: 'test-group', editors: Object.freeze([]), activeEditorInstanceId: undefined });
+const emptyGroupState: EditorGroupState = Object.freeze({ id: 1, editors: Object.freeze([]), activeEditorInstanceId: undefined });
 const emptyGroup: IEditorGroup = Object.freeze({
 	createEditorActions: () => ({ actions: { primary: [], secondary: [] }, onDidChange: Event.None }),
 	...emptyGroupState,
@@ -64,7 +64,7 @@ const emptyWorkspaceContextService: IWorkspaceContextService = Object.freeze({
 	getWorkspaceFolder: () => null,
 });
 
-const emptyEditorGroupsService: IEditorGroupsService = Object.freeze({
+export const emptyEditorGroupsService: IEditorGroupsService = Object.freeze({
 	whenReady: Promise.resolve(),
 	onDidChangeGroups: Event.None,
 	onDidAddGroup: Event.None,
@@ -73,7 +73,7 @@ const emptyEditorGroupsService: IEditorGroupsService = Object.freeze({
 	groups: Object.freeze([emptyGroup]),
 	activeGroup: emptyGroup,
 	count: 1,
-	getGroup: (id: string) => id === emptyGroup.id ? emptyGroup : undefined,
+	getGroup: (id: number) => id === emptyGroup.id ? emptyGroup : undefined,
 	findGroup: () => undefined,
 });
 

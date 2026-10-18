@@ -5,7 +5,7 @@ import { getActiveDocument } from "../../../../base/browser/dom.js";
 import { extUri } from "../../../../base/common/resources.js";
 
 export interface IEditorCommandsContext {
-	readonly groupId: string;
+	readonly groupId: number;
 	readonly editorIndex?: number;
 	readonly preserveFocus?: boolean;
 }
@@ -76,7 +76,7 @@ function isEditorCommandsContext(value: unknown): value is IEditorCommandsContex
 		return false;
 	}
 	const context = value as Partial<IEditorCommandsContext>;
-	return typeof context.groupId === "string"
+	return typeof context.groupId === "number" && Number.isSafeInteger(context.groupId) && context.groupId >= 0
 		&& (context.editorIndex === undefined || Number.isInteger(context.editorIndex) && context.editorIndex >= 0)
 		&& (context.preserveFocus === undefined || typeof context.preserveFocus === "boolean");
 }

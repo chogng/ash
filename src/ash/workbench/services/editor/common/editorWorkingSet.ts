@@ -16,7 +16,7 @@ export interface EditorWorkingSetEntry {
 
 export interface EditorGroupWorkingSet {
 	/** Stable identity used by the serialized two-dimensional layout tree. */
-	readonly id?: string;
+	readonly id?: number;
 	readonly locked?: boolean;
 	readonly editors: readonly EditorWorkingSetEntry[];
 	readonly activeEditorIndex: number;
@@ -27,7 +27,7 @@ export interface EditorGroupWorkingSet {
 export type EditorWorkingSetLayout =
 	| {
 		readonly type: 'leaf';
-		readonly data: { readonly groupId: string; };
+		readonly data: { readonly groupId: number; };
 		readonly size: number;
 		readonly visible: boolean;
 		readonly priority: 'low' | 'normal' | 'high';
@@ -41,8 +41,8 @@ export type EditorWorkingSetLayout =
 	};
 
 /** Validates the whole saved geometry before any live group or pane is moved. */
-export function parseEditorWorkingSetLayout(value: unknown, groupIds: ReadonlySet<string>): EditorWorkingSetLayout {
-	const seen = new Set<string>();
+export function parseEditorWorkingSetLayout(value: unknown, groupIds: ReadonlySet<number>): EditorWorkingSetLayout {
+	const seen = new Set<number>();
 	const visit = (candidate: unknown, parentOrientation: 'horizontal' | 'vertical' | undefined, depth: number): void => {
 		if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate) || depth > 64) throw new TypeError('Invalid Editor Grid layout node');
 		const node = candidate as Record<string, unknown>;
@@ -51,7 +51,7 @@ export function parseEditorWorkingSetLayout(value: unknown, groupIds: ReadonlySe
 		}
 		if (node.type === 'leaf') {
 			const data = node.data as Record<string, unknown> | undefined;
-			if (typeof node.visible !== 'boolean' || !data || typeof data.groupId !== 'string' || !groupIds.has(data.groupId) || seen.has(data.groupId)) {
+			if (typeof node.visible !== 'boolean' || !data || typeof data.groupId !== 'number' || !groupIds.has(data.groupId) || seen.has(data.groupId)) {
 				throw new TypeError('Invalid Editor Grid group reference');
 			}
 			seen.add(data.groupId);
@@ -83,5 +83,5 @@ export interface ApplyEditorWorkingSetOptions {
 	/** Session restoration omits empty groups before creating their Grid views. */
 	readonly excludeEmptyGroups?: boolean;
 	/** Retained groups stay alive while the remaining groups restore their document working set. */
-	readonly preserveGroups?: readonly string[];
+	readonly preserveGroups?: readonly number[];
 }

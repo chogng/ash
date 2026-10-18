@@ -266,7 +266,10 @@ export class MainThreadEditors extends Disposable {
 			}
 			case 'activeEditor': {
 				const context = request.context == null ? undefined : record(request.context);
-				const group = typeof context?.groupId === 'string' ? this.part.groups.find(group => group.id === context.groupId) : this.part.activeGroup;
+				if (context?.groupId !== undefined && (typeof context.groupId !== 'number' || !Number.isSafeInteger(context.groupId) || context.groupId < 0)) {
+					throw new TypeError('Invalid editor group ID');
+				}
+				const group = typeof context?.groupId === 'number' ? this.part.groups.find(group => group.id === context.groupId) : this.part.activeGroup;
 				const index = context?.editorIndex;
 				if (index != null && (typeof index !== 'number' || !Number.isSafeInteger(index) || index < 0)) {
 					throw new TypeError('Invalid editor index');

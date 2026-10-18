@@ -461,10 +461,20 @@ test('Sessions product page group survives legacy document group restoration', a
 	using services = createTestEditorServices();
 	using editor = registerTestComponentServices(services).createInstance(EditorPart, browserEnvironment.window.document.body, {});
 	const pages = editor.groups.find(group => group.id === editor.pageGroupId)!;
-	await editor.applyWorkingSet({ id: 'legacy', activeGroupIndex: 1, groups: [1, 2].map(id => ({ id: 'editor-group-' + id, editors: [], activeEditorIndex: -1, size: 0.5 })) }, { preserveGroups: [pages.id] });
+	await editor.applyWorkingSet({ id: 'legacy', activeGroupIndex: 1, groups: [1, 2].map(id => ({ id: 'editor-group-' + id, editors: [], activeEditorIndex: -1, size: 0.5 })) } as unknown as import('../../../workbench/services/editor/common/editorWorkingSet.js').EditorWorkingSet, { preserveGroups: [pages.id] });
 	assert.equal(editor.groups.find(group => group.id === pages.id), pages);
 	assert.equal(editor.isGroupVisible(pages.id), false);
-	assert.equal(editor.activeGroup.id, 'editor-group-2');
+	assert.equal(typeof editor.activeGroup.id, 'number');
+	assert.notEqual(editor.activeGroup.id, pages.id);
+	const documents = editor.saveWorkingSet('numeric-documents', [pages.id]);
+	const firstId = documents.groups[0]!.id;
+	const collision = JSON.parse(JSON.stringify(documents, (key, value) =>
+		(key === 'id' || key === 'groupId') && value === firstId ? pages.id : value)) as typeof documents;
+	await editor.applyWorkingSet(collision, { preserveGroups: [pages.id] });
+	assert.equal(editor.groups.find(group => group.id === pages.id), pages);
+	assert.equal(new Set(editor.groups.map(group => group.id)).size, editor.groups.length);
+	assert.notEqual(editor.activeGroup.id, pages.id);
+
 	assert.equal(editor.groups.length, 3);
 });
 

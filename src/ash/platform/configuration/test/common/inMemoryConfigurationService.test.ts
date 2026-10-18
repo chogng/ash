@@ -110,13 +110,17 @@ test('in-memory configuration rejects unsupported owners and compares effective 
 	let affectsTypeScript: boolean | undefined;
 	let affectsJavaScript: boolean | undefined;
 	using listener = service.onDidChangeConfiguration(event => {
-		affectsTypeScript = event.affectsConfiguration(tabSize, { overrideIdentifier: 'typescript' });
+		affectsTypeScript = event.affectsConfiguration(tabSize, { overrideIdentifier: 'typescript', resource: URI.file('/workspace/file.ts') });
 		affectsJavaScript = event.affectsConfiguration(tabSize, { overrideIdentifier: 'javascript' });
 	});
 	await service.updateValue(tabSize, 6, ConfigurationTarget.MEMORY);
 
 	assert.equal(affectsTypeScript, false);
 	assert.equal(affectsJavaScript, true);
+	const address = { resource: URI.file('/workspace/file.ts'), overrideIdentifier: 'typescript' };
+	assert.equal(service.getValue(tabSize, address), 8);
+	assert.equal(service.inspect(tabSize, address).memoryValue, 8);
+
 	await assert.rejects(service.updateValue(tabSize, 2, ConfigurationTarget.USER), /Unable to write editor\.tabSize to target 2/u);
 	await assert.rejects(service.updateValue(tabSize, 2, 99 as ConfigurationTarget), /target is invalid/u);
 	await assert.rejects(

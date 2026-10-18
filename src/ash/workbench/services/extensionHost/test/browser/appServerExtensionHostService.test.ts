@@ -439,7 +439,7 @@ test('extension editor menus capture the clicked input and reject malformed repl
 	using languages = new LanguageFeaturesService();
 	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
 	const inputs = [{ resource: URI.file('/notes/clicked.md') }, { resource: URI.file('/notes/active.md') }];
-	const group = { id: 'clicked-group', inputs, activeInput: inputs[1] };
+	const group = { id: 1, inputs, activeInput: inputs[1] };
 	Object.assign(services.get(IEditorPart), { groups: [group], activeGroup: group });
 	using service = services.createInstance(AppServerExtensionHostService, commands, 1_000);
 	await service.start();
@@ -1313,7 +1313,7 @@ test('first-use editor commands retain their originating input across asynchrono
 	using languages = new LanguageFeaturesService();
 	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
 	const inputs = [{ resource: URI.file('/notes/origin.md') }, { resource: URI.file('/notes/later.md') }];
-	const group = { id: 'origin-group', inputs, activeInput: inputs[0] };
+	const group = { id: 1, inputs, activeInput: inputs[0] };
 	Object.assign(services.get(IEditorPart), { groups: [group], activeGroup: group });
 	using service = services.createInstance(AppServerExtensionHostService, commands, 1_000);
 	await service.start();

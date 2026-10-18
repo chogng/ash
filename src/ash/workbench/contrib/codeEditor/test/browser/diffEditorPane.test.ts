@@ -95,12 +95,12 @@ test('Diff commands navigate and focus the active comparison through the Workben
 	await Promise.resolve();
 	const opened: unknown[] = [];
 	const closed: unknown[] = [];
-	const activatedGroups: string[] = [];
+	const activatedGroups: number[] = [];
 	container.registerInstance(IEditorPart, {
 		activeInput: input,
 		activePane: pane,
 		closeEditor: async (editor: unknown) => { closed.push(editor); return true; },
-		activateGroup: (id: string) => activatedGroups.push(id),
+		activateGroup: (id: number) => activatedGroups.push(id),
 	} as never);
 	container.registerInstance(IEditorService, { openEditor: async (next: unknown) => { opened.push(next); } } as never);
 	container.registerSingleton(IDiffEditorCommandsService, () => container.createInstance(DiffEditorCommandsService));
@@ -109,7 +109,7 @@ test('Diff commands navigate and focus the active comparison through the Workben
 	menuContext.setContext(ActiveEditorContext.key, pane.id);
 	const menus = container.get(IMenuService);
 	const runMenuAction = async (menu: MenuId, id: string): Promise<void> => {
-		const action = menus.getMenuActions(menu, { arg: { groupId: 'review-group' } }).flatMap(([, actions]) => actions).find(action => action.id === id);
+		const action = menus.getMenuActions(menu, { arg: { groupId: 1 } }).flatMap(([, actions]) => actions).find(action => action.id === id);
 		assert.ok(action?.enabled);
 		await action.run();
 	};
@@ -129,9 +129,9 @@ test('Diff commands navigate and focus the active comparison through the Workben
 	})), Array(2).fill({ family: 'Arial', size: 18, lineHeight: 28, ligatures: '"liga" on, "calt" on' }));
 	await fontConfiguration.updateValue(CodeEditorConfiguration.fontSize, undefined);
 	await fontConfiguration.updateValue(CodeEditorConfiguration.lineHeight, undefined);
-	await commands.executeCommand(GOTO_NEXT_CHANGE, { groupId: 'review-group' });
+	await commands.executeCommand(GOTO_NEXT_CHANGE, { groupId: 1 });
 	assert.ok(widget.currentChangeRow >= 0);
-	assert.deepEqual(activatedGroups, ['review-group']);
+	assert.deepEqual(activatedGroups, [1]);
 	await runMenuAction(MenuId.DiffEditorViewSubmenu, SET_DIFF_VIEW_MODE_INLINE);
 	assert.equal(widget.viewMode, 'inline');
 	assert.equal(parent.querySelector('.stanza-diff-inline-original-line')?.textContent, 'before');
@@ -191,7 +191,7 @@ test('Diff commands navigate and focus the active comparison through the Workben
 	assert.ok(isDiffEditorInput(swapped));
 	assert.equal(swapped.original.resource.toString(), input.modified.resource.toString());
 	assert.deepEqual(closed, [input]);
-	assert.deepEqual(activatedGroups, Array(6).fill('review-group'));
+	assert.deepEqual(activatedGroups, Array(6).fill(1));
 	pane.dispose();
 	dom.window.close();
 });

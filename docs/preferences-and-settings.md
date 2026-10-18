@@ -2,7 +2,7 @@
 
 > 适用范围：Ash TypeScript Workbench 与 Sessions 的偏好入口和编辑页面。配置存储背景见 [Browser foundation](browser-foundation.md#configuration-architecture)，设置接入规则见 [Preferences README](../src/ash/workbench/contrib/preferences/README.md)。
 
-Preferences 负责打开偏好资源，Settings 是其中一种内容。配置读写、用户设置 JSONC 和快捷键独立资源的主链已接通；图形设置的目标与语言覆盖入口和部分真实环境验收仍未完成。具体动作统一维护在 [Configuration / Preferences TODO](../TODO.md#configuration--preferences--todo)。本文描述当前架构，不作为全部 VS Code 契约已对齐或当前 HEAD 验收通过的声明。
+Preferences 负责打开偏好资源，Settings 是其中一种内容。配置读写、用户设置 JSONC 和快捷键独立资源的主链已接通；图形设置已接通用户、Workspace / Folder 目标与语言覆盖入口；编辑器组选项和部分真实环境验收仍未完成。具体动作统一维护在 [Configuration / Preferences TODO](../TODO.md#configuration--preferences--todo)。本文描述当前架构，不作为全部 VS Code 契约已对齐或当前 HEAD 验收通过的声明。
 
 ## 打开路径
 
@@ -10,7 +10,7 @@ Preferences 负责打开偏好资源，Settings 是其中一种内容。配置�
 flowchart TD
     C["命令与调用方"] --> P["IPreferencesService / PreferencesService"]
     P --> S["SettingsEditorInput → SettingsEditor"]
-    P --> J["当前 profile 的 settings.json → 普通文本编辑器"]
+    P --> J["目标 settings.json / 工作区文件 → 普通文本编辑器"]
     P --> K["KeybindingsEditorInput → KeybindingsEditor"]
     P --> R["当前 profile 的 keybindings.json → 普通文本编辑器"]
     S --> M["Workbench 模态编辑器组"]
@@ -28,9 +28,9 @@ flowchart TD
 | `openUserSettings({ jsonEditor: true })`     | 本次明确打开用户设置 JSONC                        |
 | `openGlobalKeybindingSettings(false / true)` | 分别打开快捷键图形编辑器 / JSONC                  |
 
-`IOpenSettingsOptions` 支持 `query`、Ash 分类或区段 `section`、`jsonEditor`、`revealSetting` 和本地用户目标 `USER` / `USER_LOCAL`。[validateSettingsEditorOptions](../src/ash/workbench/services/preferences/common/preferences.ts) 在改变页面前拒绝错误类型、未知选项与未支持目标。`jsonEditor` 只覆盖本次打开，不修改默认编辑器。
+`IOpenSettingsOptions` 支持 `query`、Ash 分类或区段 `section`、`jsonEditor`、`revealSetting`、`focusSearch`、`openToSide`、数字 `groupId` 和 `USER` / `USER_LOCAL` / `WORKSPACE` / `WORKSPACE_FOLDER` 目标；Folder 使用当前工作区根的 `folderUri`。单目录窗口将 Folder 请求归到 Workspace 层。[validateSettingsEditorOptions](../src/ash/workbench/services/preferences/common/preferences.ts) 在改变页面前拒绝错误类型、未知选项与未支持目标。`jsonEditor` 只覆盖本次打开，不修改默认编辑器。
 
-`workbench.action.openSettings` 接受查询字符串或选项对象，例如 `"editor.fontFamily"`、`{ "query": "@modified" }`、`{ "section": "models" }`。图形页查询更新并聚焦当前搜索框；显式空查询清除筛选，未传查询保留原搜索，区段定位清除筛选。Workbench 服务持有固定 Settings 输入，pane 注册打开选项委托并在清空输入或销毁时释放。搜索值随页面释放，不写入配置。
+`workbench.action.openSettings` 接受查询字符串或选项对象，例如 `"editor.fontFamily"`、`{ "query": "@modified" }`、`{ "section": "models" }`。图形页查询更新并默认聚焦当前搜索框；`focusSearch: false` 保留现有焦点，`true` 明确聚焦搜索框。显式空查询清除筛选，未传查询保留原搜索，区段定位清除筛选。Workbench 服务持有只读的固定 Settings 输入；编辑器 host 将打开选项交给目标 pane 的 `setOptions`。各 pane 独立拥有搜索、配置目标与控件生命周期，搜索值随页面释放，不写入配置。
 
 ## 设置内容与渲染
 
@@ -58,15 +58,15 @@ Preferences 负责搜索、分类、导航、控件、布局、主题、键盘�
 
 ### 搜索与设置操作
 
-| 行为            | 当前契约                                                                                                                                                                                                        |
-| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 搜索            | 普通文本匹配 ID、标题、说明、关键词和标签；支持 `@id:`、`@modified`、多项 `@tag:` 和排除 experimental / preview 的 `@stable`，可组合使用。`@lang:` 尚未接通                                                     |
-| 已修改与已配置  | 按配置服务已接受的本地用户覆盖判断，显式默认值、false、0、空字符串均算覆盖；语言覆盖块不标记基础设置，服务状态不进入已修改结果。成功保存、外部更新和重置同步刷新内容与目录，失败保留实际状态                    |
-| 重置            | 删除对应覆盖并保留其他 JSONC；自有 binding 可提供 `isDefault()`                                                                                                                                                 |
-| 复制设置为 JSON | 注册表驱动且无自有 binding 的行复制 `"键": 值`，不带外层花括号；执行时读本地用户值，无覆盖时读窗口默认值。标准 JSON 序列化、两空格缩进，本操作不保存配置                                                        |
-| 在 JSON 中编辑  | 同类设置行的菜单及复杂值按钮调用 `openUserSettings({ jsonEditor: true, target: USER_LOCAL, revealSetting: { key, edit: true } })`；复用脏模型，缺失键以默认值插入未保存模型，保留注释和其他键，支持撤销并选中值 |
-| UI / JSON 切换  | 精确注册 ID 查询可定位 JSON 已有键，不创建覆盖；显式 `revealSetting.edit` 才插入缺失键。查询不成为配置内容，切换不丢弃未保存 JSON 草稿                                                                          |
-| 显示语言        | 常规页与配置显示语言命令共用语言服务，写入 `workbench.locale`；内置语言、已安装语言包及后续列表变化进入下拉框，重置清除偏好。搜索支持 language、locale 和“语言”                                                 |
+| 行为            | 当前契约                                                                                                                                                                                                                                                               |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 搜索            | 普通文本匹配 ID、标题、说明、关键词和标签；支持 `@id:`、`@modified`、多项 `@tag:` 和排除 experimental / preview 的 `@stable`，可组合使用。`@lang:<语言 ID>` 选择已注册语言，只显示 registry 声明为 `LANGUAGE_OVERRIDABLE` 的设置；逗号分隔时使用首项，未知语言没有结果 |
+| 已修改与已配置  | 按配置服务已接受的所选目标与语言覆盖判断，显式默认值、false、0、空字符串均算覆盖；未选择语言时，语言覆盖块不标记基础设置，服务状态不进入已修改结果。成功保存、外部更新和重置同步刷新内容与目录，失败保留实际状态                                                       |
+| 重置            | 删除对应覆盖并保留其他 JSONC；自有 binding 可提供 `isDefault()`                                                                                                                                                                                                        |
+| 复制设置为 JSON | 注册表驱动且无自有 binding 的行复制 `"键": 值`，不带外层花括号；执行时读所选目标与语言的值，无覆盖时读窗口默认值。标准 JSON 序列化、两空格缩进，本操作不保存配置                                                                                                       |
+| 在 JSON 中编辑  | 同类设置行的菜单及复杂值按钮打开所选目标的 JSONC；Workspace 文件在 `settings` 对象内定位或插入。复用脏模型，缺失键以默认值插入未保存模型，保留注释和其他键，支持撤销并选中值；语言行定位已有语言块，不插入基础用户覆盖                                                 |
+| UI / JSON 切换  | 精确注册 ID 查询可定位 JSON 已有键，不创建覆盖；显式 `revealSetting.edit` 才插入缺失键。查询不成为配置内容，切换不丢弃未保存 JSON 草稿                                                                                                                                 |
+| 显示语言        | 常规页与配置显示语言命令共用语言服务，写入 `workbench.locale`；内置语言、已安装语言包及后续列表变化进入下拉框，重置清除偏好。搜索支持 language、locale 和“语言”                                                                                                        |
 
 Sessions 菜单使用对话框内的 ContextView，关闭时释放菜单与服务，执行或取消后焦点回到对应的更多操作按钮。已配置标记不进入 Tab 顺序，通过单一无障碍说明提供状态；悬停复用 Hover、当前 ContextView 和 `workbench.hover.delay`，移除覆盖或销毁页面时关闭。操作与失败反馈使用 NLS，剪贴板失败沿设置状态反馈。
 
@@ -175,11 +175,23 @@ Windows／macOS 的进程级 `SystemPolicyService` 每 2 秒检查变化，命�
 
 ## 页面与公开契约的边界
 
-底层配置服务已有 Workspace / Folder 读写及语言覆盖，不表示图形 Preferences 已支持这些目标。当前图形打开目标仍仅为本地用户；Workspace / Folder 目标切换、`@lang:`、folder 定位、焦点模式和编辑器组选项须沿实际消费者闭合，不能只增加筛选 token 而继续写基础用户值。Ash 直接打开 SettingsEditor，尚未采用上游全部 Preferences 容器、pane registry 和公开 API。
+SettingsEditor 持有所选目标与搜索语言；目标按钮使用现有 ContextMenu 切换用户、工作区及多根工作区中的 Folder。普通控件的 binding 固定该次创建时的目标、资源与语言，读取该层和默认值，修改与重置显式传入相同地址。上下文变化释放旧控件；已开始的写入沿旧地址完成，工作区发生替换时由配置 owner 拒绝迟到写入。注册表仍是作用域的唯一来源，不用配置键前缀猜测语言能力。
+
+Sessions 保留其产品设置宿主；Workspace / Folder、语言查询以及侧边／指定组请求交给共享 Workbench SettingsEditor。显式编辑器组请求显示文档宿主，默认的图形设置请求继续使用现有弹窗。普通资源编辑器的字号和字体名按当前 model 的资源与语言读取，并随配置或语言变化更新；其他设置仍须由各自消费者遵守声明的作用域。
+
+`openToSide: true` 优先按当前侧边方向打开，并避开隐藏或锁定的组；数字 `groupId` 选择现有组，组已关闭则回到活动组。两种选项适用于图形页与 JSON；默认图形入口保留 Ash 的 modal 宿主。图形页内的目标菜单、JSON 按钮和 JSON 标题栏的返回按钮均携带来源组，避免操作跳到其他组。`preserveFocus: true` 可以更新另一组的查询并保留当前焦点。重开同组复用原 pane，另一组的搜索与目标保持独立。
+
+EditorGroupModel 是数字组 ID 的分配 owner；组操作、命令上下文、扩展边界和 Sessions 文档布局消费同一身份。旧工作集的字符串 ID 在 EditorPart 恢复边界验证并转换，保存只输出数字；嵌套布局、标签顺序和活动组随同恢复，与保留的 Sessions 产品页组冲突时重新分配文档组身份。Ash 尚未采用上游全部 Preferences 容器和公开 API。
 
 已确认缺口、真实环境验收和待复核场景统一见 [TODO](../TODO.md#configuration--preferences--todo)；registry / schema、typed parse / serialize、`ashBinding` 等额外契约按真实消费者决定，见 TODO 的发展候选，不按上游成员表整体补齐。
 
 ## 已有验证与限制
+
+2026-10-18 的目标／语言入口批次通过 161 项定向单测（9 文件）、5 项 Browser smoke、3 项 macOS Desktop UI smoke 和 2 项 macOS Desktop App Server smoke：中英文查询复用、用户／Workspace／多根 Folder 的语言覆盖读写和重置、原始文件隔离、重载、键盘目标菜单、高对比度焦点与窄窗口布局。真实编辑器按语言显示已保存字号，另一根修改不改变当前文件字号；单测另覆盖字体名、语言切换、工作区替换取消、JSON 草稿和嵌套字段保护。Browser 覆盖多根 Folder；Desktop App Server 覆盖单目录 Workspace 的真实文件链。日志位于 `.build/todo-preferences/` 的 `unit.log`、`browser.log`、`desktop-ui.log` 和 `desktop-scopes.log`。这些 Ash 结果不代替本地 VS Code 的窗口配对，也不覆盖其他内置设置尚未声明或尚未消费的作用域。
+
+编辑器组批次另覆盖指定组重开、侧边优先级、独立查询、保留焦点、关闭后重开、旧工作集嵌套布局转换与数字 ID 冲突，以及扩展请求边界。Browser 的中英文组切换和目标／语言场景共 6 项、Sessions 侧边入口 1 项，以及 macOS Desktop UI 的中英文组切换／查询和 Sessions 侧边入口 5 项均通过。日志在 `.build/preferences-groups/` 的 `browser-windows-final.log`、`browser-sessions.log` 和 `desktop-final.log`；下方验收限制仍然适用。
+
+Web / Desktop 构建、Renderer 与自动化类型检查、formatter 和定向 CSS 检查通过。额外的 Bun 全量测试类型检查仍被未修改的 `terminalConfigurationService.test.ts:469` 中既有 `undefined → ThemeIcon` 断言阻塞；标准测试编译与上述定向测试通过，不能据此宣告整条全仓检查通过。
 
 存储迁移与跨平台验收的历史范围如下；设置渲染的检查范围另列于表后：
 

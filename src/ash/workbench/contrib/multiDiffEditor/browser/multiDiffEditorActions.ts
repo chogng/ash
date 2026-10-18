@@ -136,7 +136,7 @@ export class MultiDiffToggleCollapseUnchangedRegionsAction extends Action2 {
 
 function activeMultiDiffPane(accessor: ServicesAccessor, context?: unknown): MultiDiffEditor | undefined {
 	const part = accessor.get(IEditorPart);
-	if (typeof context === 'object' && context !== null && 'groupId' in context && typeof context.groupId === 'string') {
+	if (typeof context === 'object' && context !== null && 'groupId' in context && typeof context.groupId === 'number') {
 		part.activateGroup(context.groupId);
 	}
 	const pane = part.activePane;

@@ -1,3 +1,4 @@
+import { EditorOpenSource, type IEditorOptions } from '../../../../platform/editor/common/editor.js';
 import type { IEditorPane } from '../../../common/editor.js';
 import { ConfigurationTarget } from '../../../../platform/configuration/common/configuration.js';
 import type { Event } from '../../../../base/common/event.js';
@@ -5,6 +6,7 @@ import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import type { IRegisteredConfiguration } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { localize } from '../../../../nls.js';
+import { URI } from '../../../../base/common/uri.js';
 
 export type SettingValueType = 'boolean' | 'number' | 'select' | 'text' | 'stringMap' | 'complex';
 export type SettingsPresentation = 'editor' | 'general';
@@ -109,9 +111,13 @@ export interface ISettingsEditorModel extends IDisposable {
 	readonly reportStatus: (message: string, isError: boolean) => void;
 }
 
-/** Opening options for the supported local user Settings surfaces. */
-export interface IOpenSettingsOptions {
+/** Opening options shared by the Settings hosts. */
+export interface IOpenSettingsOptions extends IEditorOptions {
+	readonly openToSide?: boolean;
+	readonly groupId?: number;
 	readonly target?: ConfigurationTarget;
+	readonly folderUri?: URI;
+	readonly focusSearch?: boolean;
 	/** Overrides the default settings editor for this opening request only. */
 	readonly jsonEditor?: boolean;
 	/** Initial search; JSON reveals an exact registered setting ID when supplied. */
@@ -127,7 +133,11 @@ export function validateSettingsEditorOptions(options: IOpenSettingsOptions = {}
 	if (typeof options !== 'object' || options === null || Array.isArray(options)) {
 		throw new TypeError(localize({ bundle: 'ash.settings', key: 'open.invalidOptions' }, 'Settings opening options must be an object.'));
 	}
-	const unsupported = Object.keys(options).find(key => key !== 'query' && key !== 'section' && key !== 'target' && key !== 'jsonEditor' && key !== 'revealSetting');
+	const supported = [
+		'query', 'section', 'target', 'folderUri', 'focusSearch', 'jsonEditor', 'revealSetting', 'openToSide', 'groupId',
+		'pinned', 'preserveFocus', 'forceReload', 'revealIfOpened', 'ignoreError', 'source',
+	];
+	const unsupported = Object.keys(options).find(key => !supported.includes(key));
 	if (unsupported !== undefined) {
 		throw new TypeError(localize({ bundle: 'ash.settings', key: 'open.unsupportedOption' }, 'Settings opening option {0} is not supported.', unsupported));
 	}
@@ -136,6 +146,26 @@ export function validateSettingsEditorOptions(options: IOpenSettingsOptions = {}
 	}
 	if (options.jsonEditor !== undefined && typeof options.jsonEditor !== 'boolean') {
 		throw new TypeError(localize({ bundle: 'ash.settings', key: 'open.invalidEditor' }, 'The JSON editor option must be true or false.'));
+	}
+	if (options.openToSide !== undefined && typeof options.openToSide !== 'boolean') {
+		throw new TypeError(localize({ bundle: 'ash.settings', key: 'open.invalidSide' }, 'The side editor option must be true or false.'));
+	}
+	if (options.groupId !== undefined && (!Number.isSafeInteger(options.groupId) || options.groupId < 0)) {
+		throw new TypeError(localize({ bundle: 'ash.settings', key: 'open.invalidGroup' }, 'The editor group ID must be a non-negative integer.'));
+	}
+	for (const key of ['pinned', 'preserveFocus', 'forceReload', 'revealIfOpened', 'ignoreError'] as const) {
+		if (options[key] !== undefined && typeof options[key] !== 'boolean') {
+			throw new TypeError(localize({ bundle: 'ash.settings', key: 'open.invalidEditorOption' }, 'Editor option {0} must be true or false.', key));
+		}
+	}
+	if (options.source !== undefined && options.source !== EditorOpenSource.API && options.source !== EditorOpenSource.USER) {
+		throw new TypeError(localize({ bundle: 'ash.settings', key: 'open.unsupportedOption' }, 'Settings opening option {0} is not supported.', 'source'));
+	}
+	if (options.focusSearch !== undefined && typeof options.focusSearch !== 'boolean') {
+		throw new TypeError(localize({ bundle: 'ash.settings', key: 'open.invalidFocus' }, 'The search focus option must be true or false.'));
+	}
+	if (options.folderUri !== undefined && !URI.isUri(options.folderUri)) {
+		throw new TypeError(localize({ bundle: 'ash.settings', key: 'open.invalidFolder' }, 'The Settings folder must be a URI.'));
 	}
 	if (options.revealSetting !== undefined) {
 		const reveal = options.revealSetting;
@@ -149,8 +179,11 @@ export function validateSettingsEditorOptions(options: IOpenSettingsOptions = {}
 	if (options.section !== undefined && (typeof options.section !== 'string' || options.section.trim().length === 0)) {
 		throw new TypeError(localize({ bundle: 'ash.settings', key: 'open.invalidSection' }, 'The Settings section must be a non-empty string.'));
 	}
-	if (options.target !== undefined && options.target !== ConfigurationTarget.USER && options.target !== ConfigurationTarget.USER_LOCAL) {
-		throw new Error(localize({ bundle: 'ash.settings', key: 'open.unsupportedTarget' }, 'This Settings editor supports only local user settings.'));
+	if (options.target !== undefined && ![ConfigurationTarget.USER, ConfigurationTarget.USER_LOCAL, ConfigurationTarget.WORKSPACE, ConfigurationTarget.WORKSPACE_FOLDER].includes(options.target)) {
+		throw new Error(localize({ bundle: 'ash.settings', key: 'open.unsupportedTarget' }, 'This Settings editor supports local user, workspace and folder settings.'));
+	}
+	if (options.target === ConfigurationTarget.WORKSPACE_FOLDER && !options.folderUri) {
+		throw new Error(localize({ bundle: 'ash.settings', key: 'open.missingFolder' }, 'Choose a workspace folder to open its settings.'));
 	}
 	return options;
 }

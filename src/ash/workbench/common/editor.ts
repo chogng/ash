@@ -1,3 +1,5 @@
+import type { IEditorGroup } from '../services/editor/common/editorGroupsService.js';
+import type { IEditorOptions } from '../../platform/editor/common/editor.js';
 import type { ThemeIcon } from '../../base/common/themables.js';
 import type { Event } from '../../base/common/event.js';
 import type { Range } from '../../editor/common/core/range.js';
@@ -18,6 +20,7 @@ export interface IEditorControl extends ICompositeControl { }
 /** One retained editor implementation; its host owns creation, visibility and disposal. */
 export interface IEditorPane extends IComposite, IDisposable {
 	readonly id: string;
+	readonly group?: IEditorGroup;
 	/** Tools with their own document controls can omit the group header when they are its only editor. */
 	readonly prefersEditorTitleHidden?: boolean;
 	/** Tools can omit their auxiliary window's status bar while active. */
@@ -32,6 +35,7 @@ export interface IEditorPane extends IComposite, IDisposable {
 	readonly onDidChangeWorkingCopies?: Event<void>;
 	getControl(): IEditorControl | undefined;
 	setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void>;
+	setOptions?(options: IEditorOptions): void;
 	clearInput(): void;
 	layout(dimension: ISize): void;
 	setVisible(visible: boolean): void;
@@ -99,7 +103,7 @@ export interface ISaveOptions {
 
 export interface IEditorIdentifier {
 	readonly editor: IResourceEditorInput;
-	readonly groupId: string;
+	readonly groupId: number;
 }
 
 /** A resource requested through the Workbench editor service. */
@@ -109,7 +113,7 @@ export interface IResourceEditorInput {
 	readonly editorId?: string;
 	toUntyped?(): IResourceEditorInput;
 	/** A custom editor can veto transfers before its source window is closed. */
-	canMove?(sourceGroup: string, targetGroup: string): true | string;
+	canMove?(sourceGroup: number, targetGroup: number): true | string;
 	readonly capabilities?: EditorInputCapabilities;
 	readonly resource: URI;
 	/** Resource used for labels and navigation while resource retains content identity. */

@@ -19,6 +19,7 @@ test('Sessions Settings command queries reuse search and restore saved values af
 		{ key: 'ctrl+alt+u', command: 'workbench.action.openSettings', args: { query: '@id:sessions.activityBar.compact', target: 3 } },
 		{ key: 'ctrl+alt+i', command: 'workbench.action.openSettings', args: { query: '' } },
 		{ key: 'ctrl+alt+o', command: 'workbench.action.openSettings', args: { section: 'models' } },
+		{ key: 'ctrl+alt+p', command: 'workbench.action.openSettings', args: { openToSide: true, query: '@id:editor.fontSize' } },
 	]));
 	await group.editor.input.press('ControlOrMeta+S');
 	await expect(group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
@@ -69,6 +70,25 @@ test('Sessions Settings command queries reuse search and restore saved values af
 	await expect(settings.locator('[data-settings-item-id="sessions.activityBar.compact"]').getByRole('switch')).toBeChecked();
 	await expect.poll(readSaved).toBe(true);
 	await settings.evaluate(element => (element as HTMLDialogElement).requestClose());
+	await openQuery();
+	await sessionsPage.getByRole('dialog', { name: 'Sessions Settings' }).getByRole('searchbox').fill('@lang:plaintext @id:editor.fontSize');
+	await expect(sessionsPage.getByRole('dialog', { name: 'Sessions Settings' })).toHaveCount(0);
+	const sharedSettings = sessionsPage.getByRole('dialog').filter({ has: sessionsPage.locator('.ash-settings-editor') });
+	await expect(sharedSettings.getByRole('searchbox')).toHaveValue('@lang:plaintext @id:editor.fontSize');
+	const languageSize = sharedSettings.locator('[data-settings-item-id="editor.fontSize"]').getByRole('spinbutton');
+	await languageSize.fill('24');
+	await languageSize.press('Tab');
+	await expect.poll(async () => JSON.parse((await readUserSettings(sessionsPage)).content)['[plaintext]']?.['editor.fontSize']).toBe(24);
+	expect(JSON.parse((await readUserSettings(sessionsPage)).content)['editor.fontSize']).toBeUndefined();
+	await sharedSettings.locator('.ash-modal-editor-close').click();
+	await sessionsPage.locator('[data-part="activitybar"] .ash-sessions-activity-bottom button').last().focus();
+	await sessionsPage.keyboard.press('Control+Alt+P');
+	const groupedSettings = sessionsPage.locator('.ash-editor-group .ash-settings-editor');
+	await expect(groupedSettings).toBeVisible();
+	await expect(groupedSettings.getByRole('searchbox')).toHaveValue('@id:editor.fontSize');
+	await expect(groupedSettings.getByRole('searchbox')).toBeFocused();
+	await expect(sessionsPage.getByRole('dialog', { name: 'Sessions Settings' })).toHaveCount(0);
+
 	await testInfo.attach('sessions-settings-query-diagnostics', { body: JSON.stringify(runningApplication.diagnostics), contentType: 'application/json' });
 	expect(runningApplication.diagnostics.errors).toEqual([]);
 });

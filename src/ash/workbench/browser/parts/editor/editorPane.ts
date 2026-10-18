@@ -1,3 +1,4 @@
+import type { IEditorGroup } from '../../../services/editor/common/editorGroupsService.js';
 import type { IEditorPane, IResourceEditorInput } from '../../../common/editor.js';
 import { Composite } from '../../composite.js';
 import type { IBulkEditOptions } from '../../../../editor/browser/services/bulkEditService.js';
@@ -29,6 +30,8 @@ import type { TextResourceLanguageResolver } from '../../../../platform/language
  * disposes it after hiding it.
  */
 export abstract class EditorPane extends Composite implements IEditorPane {
+	/** Assigned by the group host before the pane creates its content. Modal panes have no document group. */
+	public group: IEditorGroup | undefined;
 	public abstract setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void>;
 	public abstract clearInput(): void;
 	public abstract layout(dimension: IDimension): void;

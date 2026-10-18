@@ -51,9 +51,9 @@ suite('Session browser page policy', () => {
 		const model = await foreground.resolve();
 		f.groupInputs.length = 0;
 		f.editorEvents.fire({
-			kind: 'groupChanged', groupId: 'documents', event: {
+			kind: 'groupChanged', groupId: 1, event: {
 				kind: 'editorClosed', reason: 'reset', editor: {
-					input: foreground, groupId: 'documents', instanceId: 'browser', paneId: 'browser', index: 0,
+					input: foreground, groupId: 1, instanceId: 'browser', paneId: 'browser', index: 0,
 					isActive: true, isPreview: false, isSticky: false, isDirty: false, canRevert: false, hasExternalChange: false,
 				},
 			}

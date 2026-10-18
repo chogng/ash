@@ -5,7 +5,7 @@ import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.j
 import { extUriBiasedIgnorePathCase, extUriIgnorePathCase } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
 import { equals } from '../../../../base/common/objects.js';
-import { isCancellationError } from '../../../../base/common/errors.js';
+import { CancellationError, isCancellationError } from '../../../../base/common/errors.js';
 import { ConfigurationModel, ConfigurationModelParser, UserSettings } from '../../../../platform/configuration/common/configurationModels.js';
 import { ConfigurationTarget, isConfigurationOverrides, isConfigurationUpdateOverrides, type IConfigurationChange, type IConfigurationChangeEvent, type IConfigurationData, type IConfigurationModel, type IConfigurationOverrides, type IConfigurationService, type IConfigurationUpdateOptions, type IConfigurationUpdateOverrides, type IConfigurationValue } from '../../../../platform/configuration/common/configuration.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, type IRegisteredConfiguration, ConfigurationScope, keyFromOverrideIdentifiers, overrideIdentifiersFromKey } from '../../../../platform/configuration/common/configurationRegistry.js';
@@ -233,6 +233,7 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 	updateValue(key: string, value: unknown, overrides: IConfigurationOverrides | IConfigurationUpdateOverrides): Promise<void>;
 	updateValue(key: string, value: unknown, overrides: IConfigurationOverrides | IConfigurationUpdateOverrides, target: ConfigurationTarget, options?: IConfigurationUpdateOptions): Promise<void>;
 	async updateValue(key: string, value: unknown, arg3?: unknown, arg4?: unknown, _options?: IConfigurationUpdateOptions): Promise<void> {
+		const workspace = this.workspace;
 		const configuration = this.requireConfiguration(key);
 		if (this.isReadOnly(key)) throw new Error(localize('configuration.readOnly', 'Setting {0} is read-only in this window.', key));
 		const { identifiers, overrides, target } = parseUpdateArguments(arg3, arg4);
@@ -248,6 +249,8 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 		let serialized = parsed === undefined ? undefined : configuration.serialize(parsed);
 		if (serialized === undefined && value !== undefined) throw new TypeError(`Configuration key '${key}' did not serialize to JSON`);
 		await this.reloadUserConfiguration();
+		// Target resolution happens after asynchronous reads. Do not retarget a queued workspace write after a switch.
+		if (workspace !== this.workspace && target !== ConfigurationTarget.USER && target !== ConfigurationTarget.USER_LOCAL) throw new CancellationError();
 		const inspection = this.inspect(key, { resource: overrides?.resource, overrideIdentifier: identifiers[0] });
 		const defined = [
 			...(inspection.workspaceFolderValue === undefined ? [] : [ConfigurationTarget.WORKSPACE_FOLDER]),

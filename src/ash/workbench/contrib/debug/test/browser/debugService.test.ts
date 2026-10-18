@@ -587,11 +587,11 @@ test('DebugService saveBeforeStart policies select files and active untitled Sav
 			saveAll: async () => { calls.push('files'); return { success: true, editors: [] }; },
 			save: async editor => { calls.push(editor); return { success: policy !== 'cancelUntitled', editors: [] }; },
 		};
-		using service = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters, undefined, undefined, undefined, { editor: editors, configuration, groups: { activeGroup: { id: 'active-group' } } as IEditorGroupsService });
+		using service = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters, undefined, undefined, undefined, { editor: editors, configuration, groups: { activeGroup: { id: 1 } } as IEditorGroupsService });
 		const launch = service.startDebugging({ id: policy, name: policy, type: 'example', request: 'launch', adapter: { program: 'adapter', arguments: [] }, arguments: {} });
 		if (policy === 'cancelUntitled') { await assert.rejects(launch, isCancellationError); assert.equal(processes.started.length, 0); }
 		else { await service.stop(await launch); }
-		assert.deepEqual(calls, policy === 'none' ? [] : policy === 'nonUntitledEditorsInActiveGroup' ? ['files'] : ['files', { editor: activeEditor, groupId: 'active-group' }]);
+		assert.deepEqual(calls, policy === 'none' ? [] : policy === 'nonUntitledEditorsInActiveGroup' ? ['files'] : ['files', { editor: activeEditor, groupId: 1 }]);
 	}
 });
 

@@ -11,6 +11,7 @@ export class SettingsSearchQuery {
 	public readonly text: string;
 	public readonly key: string;
 	public readonly hasModifiedFilter: boolean;
+	public readonly languageFilter: string | undefined;
 	private readonly idFilter: string | undefined;
 	private readonly terms: readonly string[];
 	private readonly tagFilters: readonly string[];
@@ -22,8 +23,13 @@ export class SettingsSearchQuery {
 		let hasModifiedFilter = false;
 		const tagFilters = new Set<string>();
 		let stableOnly = false;
+		let languageFilter: string | undefined;
 		for (const token of value.trim().split(/\s+/u).filter(Boolean)) {
 			const normalized = token.toLocaleLowerCase();
+			if (normalized.startsWith('@lang:')) {
+				languageFilter ??= token.slice(6).replaceAll('"', '').split(',')[0] || undefined;
+				continue;
+			}
 			if (normalized.startsWith('@tag:') && normalized.length > 5) {
 				tagFilters.add(normalized.slice(5));
 				continue;
@@ -52,11 +58,12 @@ export class SettingsSearchQuery {
 		this.hasModifiedFilter = hasModifiedFilter;
 		this.tagFilters = [...tagFilters].sort();
 		this.stableOnly = stableOnly;
-		this.key = JSON.stringify([this.text, idFilter, hasModifiedFilter, this.tagFilters, stableOnly]);
+		this.languageFilter = languageFilter;
+		this.key = JSON.stringify([this.text, idFilter, hasModifiedFilter, this.tagFilters, stableOnly, languageFilter]);
 	}
 
 	public get isEmpty(): boolean {
-		return this.terms.length === 0 && !this.idFilter && !this.hasModifiedFilter && !this.tagFilters.length && !this.stableOnly;
+		return this.terms.length === 0 && !this.idFilter && !this.hasModifiedFilter && !this.tagFilters.length && !this.stableOnly && !this.languageFilter;
 	}
 
 	public matches(target: SettingsSearchTarget): boolean {

@@ -1,4 +1,7 @@
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import { ILanguageService } from '../../../../editor/common/languages/language.js';
+import type { URI } from '../../../../base/common/uri.js';
+import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { ExtensionSettingBinding } from './extensionSettingBinding.js';
 import { GitHubSettingsModel } from '../../github/browser/githubSettingsModel.js';
 import { TraceSettingsModel } from '../../trace/browser/traceSettingsModel.js';
@@ -19,15 +22,15 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import type { IDimension } from '../../../../base/browser/dom.js';
 import type { IContextViewProvider } from '../../../../base/browser/ui/contextview/contextview.js';
 import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
-import { DisposableMap, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableMap, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IWorkspaceTrustApi } from '../../../../platform/workspace/common/workspaceTrust.js';
 import { IAgentCapabilitiesService } from '../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
-import { ConfigurationTarget, IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { ConfigurationTarget, IConfigurationService, type IConfigurationOverrides } from '../../../../platform/configuration/common/configuration.js';
 import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILanguagePackService } from '../../../../platform/languagePacks/common/languagePacks.js';
 import type { IRegisteredConfiguration } from '../../../../platform/configuration/common/configurationRegistry.js';
-import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationScope, Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { DESKTOP_UPDATE_POLICY_SETTING, type DesktopUpdatePolicy } from '../../../../platform/update/common/updateService.js';
 import { localize } from '../../../../nls.js';
@@ -37,8 +40,9 @@ import { ILocalizationService } from '../../../services/localization/common/loca
 import { ILocaleService, LocalizationConfiguration } from '../../../services/localization/common/locale.js';
 import { IPreferencesService } from '../../../services/preferences/common/preferences.js';
 import type { IOpenSettingsOptions, ISelectSetting, ISetting } from '../../../services/preferences/common/preferences.js';
-import { SettingsEditorInput, isSettingsEditorInput } from '../../../services/preferences/common/settingsEditorInput.js';
-import { DefaultSettings, SettingsEditorModel } from '../../../services/preferences/common/settingsModels.js';
+import { isSettingsEditorInput } from '../../../services/preferences/common/settingsEditorInput.js';
+import { configurationSettingBinding, DefaultSettings, SettingsEditorModel } from '../../../services/preferences/common/settingsModels.js';
+import type { SettingWidgetOptions } from './settingsWidgets.js';
 import { SettingsRenderer, SettingsPageRenderer } from './settingsRenderers.js';
 import { Event } from '../../../../base/common/event.js';
 import { AICustomizationManagementEditorInput } from '../../chat/browser/aiCustomization/aiCustomizationManagementEditorInput.js';
@@ -88,8 +92,19 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 	private rootDomNode: HTMLDivElement | undefined;
 	private searchWidget: SettingsSearchWidget | undefined;
 	private visible = false;
-	private readonly inputOptions = this._register(new MutableDisposable());
 	private sectionToReveal: string | undefined;
+	private target = ConfigurationTarget.USER_LOCAL;
+	private folderUri: URI | undefined;
+	private targetButton: Button | undefined;
+	private readonly widgetOptions: SettingWidgetOptions & {
+		configurationTarget: ConfigurationTarget;
+		configurationOverrides: IConfigurationOverrides;
+	} = {
+			configurationTarget: ConfigurationTarget.USER_LOCAL,
+			configurationOverrides: {},
+			onStatus: (message, isError) => this.settingsModel.reportStatus(message, isError),
+			onOpenSettings: key => this.openSettingsJson(key),
+		};
 
 	constructor(
 		@IConfigurationService configurationService: IConfigurationService,
@@ -106,6 +121,8 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
+		@ILanguageService private readonly languageService: ILanguageService,
+		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 	) {
 		super(SettingsEditorId, themeService, storageService);
 		this.configurationService = configurationService;
@@ -119,15 +136,14 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		if (this.rootDomNode) throw new Error('Settings editor has already been created');
 		this.settingsLayout = createSettingsLayout(this.settingsModel.settings);
 		const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
-		this.treeModel = this._register(new SettingsTreeModel<ISetting | SettingsSectionReference>(id =>
-			// Service-owned rows have no user configuration key; explicit defaults still count as configured.
-			configurationRegistry.getConfiguration(id) !== undefined && this.configurationService.inspect(id).userLocalValue !== undefined,
-		));
-		this.treeModel.setChildren(settingsRootNodes(this.settingsLayout));
-		const settingsRenderer = this._register(this.instantiationService.createInstance(SettingsRenderer, container, {
-			onStatus: this.settingsModel.reportStatus,
-			onOpenSettings: (key: string) => this.preferencesService.openUserSettings({ jsonEditor: true, target: ConfigurationTarget.USER_LOCAL, revealSetting: { key, edit: true } }),
+		this.treeModel = this._register(new SettingsTreeModel<ISetting | SettingsSectionReference>(id => {
+			const configuration = configurationRegistry.getConfiguration(id);
+			// Service-owned rows have no configuration key; explicit defaults still count as configured.
+			if (!configuration) return false;
+			return !configurationSettingBinding(this.configurationService, configuration, this.widgetOptions.configurationOverrides, this.target).isDefault!();
 		}));
+		this.treeModel.setChildren(settingsRootNodes(this.settingsLayout));
+		const settingsRenderer = this._register(this.instantiationService.createInstance(SettingsRenderer, container, this.widgetOptions));
 
 		const ownerDocument = container.ownerDocument;
 		const rootDomNode = h(ownerDocument, 'div');
@@ -138,6 +154,17 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 			contextMenuProvider: this.contextMenuProvider,
 			localizationService: this.localizationService,
 		}));
+		this.targetButton = this._register(new Button(this.searchWidget.domNode, {
+			...defaultButtonStyles,
+			label: this.localized('target.user', 'User'),
+			ariaLabel: this.localized('target.choose', 'Settings target'),
+			onClick: () => this.showTargetMenu(),
+		}));
+		this.targetButton.domNode.classList.add('ash-settings-target');
+		this.targetButton.domNode.setAttribute('aria-haspopup', 'menu');
+		this.targetButton.domNode.setAttribute('aria-expanded', 'false');
+		this.targetButton.domNode.setAttribute('aria-description', this.localized('target.help', 'Choose User, Workspace or a workspace folder. Type @lang: followed by a language ID to edit language-specific settings. Modified filters, changes and resets use the selected target and language.'));
+		this.searchWidget.domNode.prepend(this.targetButton.domNode);
 		const openJsonLabel = localize({ bundle: 'ash.settings', key: 'editor.openJSON' }, 'Open Settings (JSON)');
 		const openJson = this._register(new Button(this.searchWidget.domNode, {
 			...defaultButtonStyles,
@@ -147,11 +174,11 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 			iconOnly: true,
 			size: 'small',
 			onClick: () => {
-				void this.preferencesService.openUserSettings({ jsonEditor: true, query: this.searchWidget?.value }).catch(error => this.settingsModel.reportStatus(String(error), true));
+				void this.openSettingsJson().catch(error => this.settingsModel.reportStatus(String(error), true));
 			},
 		}));
 		openJson.domNode.classList.add('ash-settings-open-json');
-		openJson.domNode.setAttribute('aria-description', localize({ bundle: 'ash.settings', key: 'editor.switchHelp' }, 'Switch between Settings UI and JSON without changing the default settings editor. Unsaved JSON edits remain in the editor.'));
+		openJson.domNode.setAttribute('aria-description', localize({ bundle: 'ash.settings', key: 'editor.groupSwitchHelp' }, 'Switch between Settings UI and JSON in this editor group without changing the default settings editor. Unsaved JSON edits remain in the editor.'));
 		this._register(this.searchWidget.onDidChange(value => this.search(value)));
 		this._register(this.searchWidget.onDidRequestFocusResults(() => this.focusResults()));
 		this.element = h(ownerDocument, 'div');
@@ -285,6 +312,18 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		this._register(this.configurationService.onDidChangeConfiguration(() => {
 			if (new SettingsSearchQuery(this.searchWidget?.value ?? '').hasModifiedFilter) this.rebuildContent();
 		}));
+		this._register(this.workspace.onDidChangeWorkspace(() => {
+			const current = this.workspace.getWorkspace();
+			if (this.target !== ConfigurationTarget.USER_LOCAL) this.treeModel.setChildren([]);
+			if (this.target === ConfigurationTarget.WORKSPACE_FOLDER && (!this.folderUri || !this.workspace.getWorkspaceFolder(this.folderUri))) {
+				this.target = current.configuration || current.folders.length ? ConfigurationTarget.WORKSPACE : ConfigurationTarget.USER_LOCAL;
+				this.folderUri = undefined;
+			} else if (this.target === ConfigurationTarget.WORKSPACE && !current.configuration && !current.folders.length) {
+				this.target = ConfigurationTarget.USER_LOCAL;
+			}
+			this.search(this.searchWidget?.value ?? '');
+		}));
+		this._register(this.languageService.onDidChange(() => this.search(this.searchWidget?.value ?? '')));
 
 		const updateLanguageSetting = (): void => {
 			// Recompute descriptors while the keyed renderer retains controls and keyboard focus.
@@ -314,16 +353,79 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		if (signal.aborted) throw signal.reason;
 		this.languageServerSettings.setInput(input);
 		this.search(this.searchWidget?.value ?? '');
-		this.inputOptions.clear();
-		if (input instanceof SettingsEditorInput) {
-			this.inputOptions.value = input.attachOptionsHandler(options => this.applyOptions(options));
-		} else {
-			const parameters = new URLSearchParams(input.resource.query);
-			this.applyOptions({ section: parameters.get('target') ?? undefined, query: parameters.get('query') ?? undefined });
+		const parameters = new URLSearchParams(input.resource.query);
+		this.setOptions({ section: parameters.get('target') ?? undefined, query: parameters.get('query') ?? undefined });
+	}
+
+	private openSettingsJson(key?: string): Promise<void> {
+		const language = this.widgetOptions.configurationOverrides.overrideIdentifier;
+		return this.preferencesService.openSettings({
+			jsonEditor: true,
+			groupId: this.group?.id,
+			target: this.target,
+			folderUri: this.folderUri,
+			query: key ? undefined : this.searchWidget?.value,
+			// Revealing an absent language block must not insert a base-user override.
+			revealSetting: key ? { key: language ? `[${language}]` : key, edit: !language } : undefined,
+		});
+	}
+
+	private showTargetMenu(): void {
+		const workspace = this.workspace.getWorkspace();
+		const choices: { label: string; target: ConfigurationTarget; folderUri?: URI; }[] = [{
+			label: this.localized('target.user', 'User'),
+			target: ConfigurationTarget.USER_LOCAL,
+		}];
+		if (workspace.configuration || workspace.folders.length) {
+			choices.push({ label: this.localized('target.workspace', 'Workspace'), target: ConfigurationTarget.WORKSPACE });
+		}
+		if (workspace.configuration) {
+			for (const folder of workspace.folders) {
+				choices.push({ label: folder.name, target: ConfigurationTarget.WORKSPACE_FOLDER, folderUri: folder.uri });
+			}
+		}
+		if (this.targetButton!.domNode.getAttribute('aria-expanded') === 'true') return;
+		this.targetButton!.domNode.setAttribute('aria-expanded', 'true');
+		try {
+			this.contextMenuProvider.showContextMenu({
+				getAnchor: () => this.targetButton!.domNode,
+				getCheckedActionsRepresentation: () => 'radio',
+				onHide: () => this.targetButton!.domNode.setAttribute('aria-expanded', 'false'),
+				getActions: () => choices.map((choice, index) => ({
+					id: `settings.target.${index}`,
+					label: choice.label,
+					tooltip: choice.folderUri?.toString() ?? choice.label,
+					enabled: true,
+					checked: this.target === choice.target && this.folderUri?.toString() === choice.folderUri?.toString(),
+					run: async () => {
+						try {
+							await this.preferencesService.openSettings({
+								target: choice.target,
+								groupId: this.group?.id,
+								folderUri: choice.folderUri,
+								jsonEditor: false,
+								query: this.searchWidget?.value,
+							});
+						} catch (error) {
+							this.settingsModel.reportStatus(String(error), true);
+						}
+					},
+				})),
+			});
+		} catch (error) {
+			this.targetButton!.domNode.setAttribute('aria-expanded', 'false');
+			throw error;
 		}
 	}
 
-	private applyOptions(options: IOpenSettingsOptions): void {
+	public setOptions(options: IOpenSettingsOptions): void {
+		const target = options.target === ConfigurationTarget.USER ? ConfigurationTarget.USER_LOCAL : options.target ?? this.target;
+		const folderUri = target === ConfigurationTarget.WORKSPACE_FOLDER ? options.folderUri ?? this.folderUri : undefined;
+		if (target !== this.target || folderUri?.toString() !== this.folderUri?.toString()) {
+			this.target = target;
+			this.folderUri = folderUri;
+			this.search(this.searchWidget?.value ?? '');
+		}
 		const targetId = options.section;
 		if (targetId) {
 			// The content model owns section identities and their containing page.
@@ -340,12 +442,12 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		}
 		if (options.query !== undefined) {
 			this.searchWidget!.value = options.query;
-			this.focus();
+			if (!options.preserveFocus && options.focusSearch !== false) this.focus();
 		}
+		if (!options.preserveFocus && options.focusSearch === true) this.focus();
 	}
 
 	public override clearInput(): void {
-		this.inputOptions.clear();
 		if (this.searchWidget) this.searchWidget.value = '';
 	}
 
@@ -378,9 +480,25 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 
 	private search(text: string): void {
 		const query = new SettingsSearchQuery(text);
+		const overrides = { resource: this.folderUri, overrideIdentifier: query.languageFilter };
+		if (this.widgetOptions.configurationTarget !== this.target
+			|| this.widgetOptions.configurationOverrides.resource?.toString() !== overrides.resource?.toString()
+			|| this.widgetOptions.configurationOverrides.overrideIdentifier !== overrides.overrideIdentifier) {
+			// Releasing old controls preserves their write address while new controls use the new context.
+			this.treeModel.setChildren([]);
+			this.widgetOptions.configurationTarget = this.target;
+			this.widgetOptions.configurationOverrides = overrides;
+		}
+		this.element.dataset.settingsTarget = String(this.target);
+		this.element.dataset.settingsLanguage = query.languageFilter ?? '';
+		const label = this.target === ConfigurationTarget.WORKSPACE_FOLDER
+			? this.workspace.getWorkspaceFolder(this.folderUri!)?.name ?? this.localized('target.folder', 'Folder')
+			: this.target === ConfigurationTarget.WORKSPACE ? this.localized('target.workspace', 'Workspace') : this.localized('target.user', 'User');
+		this.targetButton!.label = query.languageFilter ? localize({ bundle: 'ash.settings', key: 'target.language' }, '{0} · {1}', label, this.languageService.getLanguageName(query.languageFilter) ?? query.languageFilter) : label;
+		this.targetButton!.setTitle(this.targetButton!.label);
 		this.treeModel.setQuery(query);
-		this.settingsTree.setNavigationTarget(query.isEmpty ? this.activeCategory.id : undefined);
 		this.rebuildContent();
+		this.settingsTree.setNavigationTarget(query.isEmpty && this.treeModel.has(this.activeCategory.id) ? this.activeCategory.id : undefined);
 		this.updateContentVisibility();
 		this.agentCapabilitiesSettings.setView(query.isEmpty && this.activeCategory.id === 'sandbox' ? this.activeCategory.id : undefined);
 		this.navigationScrollable.scrollTo(0, 0);
@@ -417,12 +535,22 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 	private rebuildContent(): void {
 		const query = new SettingsSearchQuery(this.searchWidget?.value ?? '');
 		const ownedSettings = new Set(this.contents.flatMap(content => content.settingIds ?? []));
-		this.settingsLayout = createSettingsLayout(this.settingsModel.settings);
+		const scoped = this.target !== ConfigurationTarget.USER_LOCAL || !!query.languageFilter;
+		const settings = this.settingsModel.settings.filter(setting => {
+			if (!scoped) return true;
+			if (setting.binding || setting.configuration.extensionBinding || setting.configuration.agentsWindow?.readOnly) return false;
+			const scope = setting.configuration.scope ?? ConfigurationScope.WINDOW;
+			if (query.languageFilter && (!this.languageService.isRegisteredLanguageId(query.languageFilter) || scope !== ConfigurationScope.LANGUAGE_OVERRIDABLE)) return false;
+			if (this.target === ConfigurationTarget.USER_LOCAL) return true;
+			return scope === ConfigurationScope.RESOURCE || scope === ConfigurationScope.LANGUAGE_OVERRIDABLE
+				|| scope === ConfigurationScope.MACHINE_OVERRIDABLE || this.target === ConfigurationTarget.WORKSPACE && scope === ConfigurationScope.WINDOW;
+		});
+		this.settingsLayout = createSettingsLayout(settings);
 		const nodes: readonly SettingsTreeNode<ISetting | SettingsSectionReference>[] = settingsRootNodes(this.settingsLayout).map(root => ({
 			...root,
 			children: [
-				...(root.children ?? []).map(group => ({ ...group, children: group.children?.filter(item => !ownedSettings.has(item.element.id)) })).filter(group => (group.children?.length ?? 0) > 0),
-				...this.contents.filter(content => content.categoryId === root.element.id).flatMap(content => content.getNodes(query)),
+				...(root.children ?? []).map(group => ({ ...group, children: group.children?.filter(item => (scoped || !ownedSettings.has(item.element.id))) })).filter(group => (group.children?.length ?? 0) > 0),
+				...this.contents.filter(content => !scoped && content.categoryId === root.element.id).flatMap(content => content.getNodes(query)),
 			],
 		}));
 		this.treeModel.setChildren(nodes);
@@ -437,7 +565,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		const query = new SettingsSearchQuery(this.searchWidget?.value ?? '');
 		// A global query loads each catalog so model names and Hook commands can become searchable.
 		for (const content of this.contents) {
-			content.setVisible(this.visible && (!query.isEmpty || content.categoryId === this.activeCategory.id));
+			content.setVisible(this.visible && this.target === ConfigurationTarget.USER_LOCAL && !query.languageFilter && (!query.isEmpty || content.categoryId === this.activeCategory.id));
 		}
 	}
 

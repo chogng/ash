@@ -168,6 +168,8 @@ test('Policy overrides user, workspace, folder and language values, blocks write
 	using cleanup = host.disposables;
 	const { configuration, roots } = host;
 	const overrides = { resource: roots[0], overrideIdentifier: 'typescript' };
+	const binding = configurationSettingBinding(configuration, host.registry.getConfiguration('editor.layer')!, overrides, ConfigurationTarget.WORKSPACE_FOLDER);
+	assert.equal(binding.getValue(), 'managed', 'the Settings control displays policy above the selected layer');
 	assert.deepEqual([configuration.getValue('editor.layer', overrides), configuration.inspect('editor.layer', overrides).policyValue, configuration.keys().policy], ['managed', 'managed', ['editor.layer']]);
 	assert.deepEqual(policies.policyDefinitions, { EditorLayer: { type: 'string' } });
 	await assert.rejects(configuration.updateValue('editor.layer', 'new', overrides, ConfigurationTarget.WORKSPACE_FOLDER), /administrator policy/);
@@ -183,6 +185,7 @@ test('Policy overrides user, workspace, folder and language values, blocks write
 	policies.values.delete('EditorLayer');
 	policies.changes.fire(['EditorLayer']);
 	assert.deepEqual([configuration.getValue('editor.layer', overrides), configuration.inspect('editor.layer').policyValue], ['folder-ts', undefined]);
+	assert.equal(binding.getValue(), 'folder-ts');
 	await configuration.updateValue('editor.layer', 'unlocked', overrides, ConfigurationTarget.WORKSPACE_FOLDER);
 	assert.equal(configuration.getValue('editor.layer', overrides), 'unlocked');
 });

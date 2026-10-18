@@ -138,7 +138,7 @@ export class OpenEditorsView extends ViewPane {
 		this.tree.element.hidden = !this.emptyDomNode.hidden;
 	}
 
-	private editorRow(editor: EditorInstanceState, groupId: string): OpenEditorsRow {
+	private editorRow(editor: EditorInstanceState, groupId: number): OpenEditorsRow {
 		return { kind: 'editor', id: `editor:${groupId}:${editor.instanceId}`, editor, isActive: this.editorPart.activeGroup.id === groupId && editor.isActive };
 	}
 

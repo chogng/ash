@@ -593,8 +593,8 @@ export class MainThreadExtensionApi extends Disposable {
 
 	private commandEditorContext(accessor: ServicesAccessor, args: readonly unknown[]) {
 		const part = accessor.get(IEditorPart);
-		const context = args[0] as { groupId?: string; editorIndex?: number; } | undefined;
-		const group = typeof context?.groupId === 'string' ? part.groups.find(group => group.id === context.groupId) : part.activeGroup;
+		const context = args[0] as { groupId?: number; editorIndex?: number; } | undefined;
+		const group = typeof context?.groupId === 'number' ? part.groups.find(group => group.id === context.groupId) : part.activeGroup;
 		const input = typeof context?.editorIndex === 'number' ? group?.inputs[context.editorIndex] : group?.activeInput;
 		return input ? { resource: input.resource.toJSON(), groupId: group!.id, editorIndex: group!.inputs.indexOf(input) } : null;
 	}

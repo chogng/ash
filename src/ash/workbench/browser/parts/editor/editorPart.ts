@@ -194,7 +194,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	private readonly fileDialogService: IFileDialogService | undefined;
 	private readonly beforeCloseEditor: IEditorPartOptions['beforeCloseEditor'];
 	private readonly editorsObserver: EditorsObserver;
-	private readonly openingIdentities = new Map<string, AbortController>();
+	private readonly openingIdentities = new Map<string | EditorGroupId, AbortController>();
 
 	override get minimumWidth(): number { return Math.max(120, this.editorGrid.minimumWidth); }
 	override get minimumHeight(): number { return 119; }
@@ -328,11 +328,11 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	}
 
 	public getSize(group: IEditorGroupView | EditorGroupId): IDimension {
-		return this.editorGrid.getViewSize(this.groupHosts.get(typeof group === 'string' ? group : group.id)!.view);
+		return this.editorGrid.getViewSize(this.groupHosts.get(typeof group === 'number' ? group : group.id)!.view);
 	}
 
 	public setSize(group: IEditorGroupView | EditorGroupId, size: IDimension): void {
-		this.editorGrid.resizeView(this.groupHosts.get(typeof group === 'string' ? group : group.id)!.view, size);
+		this.editorGrid.resizeView(this.groupHosts.get(typeof group === 'number' ? group : group.id)!.view, size);
 	}
 
 	/** Ash extension: expose the same Grid state used by working sets without serializing editor inputs. */
@@ -368,8 +368,8 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	}
 
 	public moveGroup(group: IEditorGroupView | EditorGroupId, location: IEditorGroupView | EditorGroupId, direction: GroupDirection): IEditorGroupView {
-		const source = this.groupHosts.get(typeof group === 'string' ? group : group.id)!;
-		const target = this.groupHosts.get(typeof location === 'string' ? location : location.id)!;
+		const source = this.groupHosts.get(typeof group === 'number' ? group : group.id)!;
+		const target = this.groupHosts.get(typeof location === 'number' ? location : location.id)!;
 		if (source === target) return source.group;
 		const directions = { [GroupDirection.LEFT]: Direction.Left, [GroupDirection.RIGHT]: Direction.Right, [GroupDirection.UP]: Direction.Up, [GroupDirection.DOWN]: Direction.Down };
 		this.preserveFocus(() => this.editorGrid.moveView(source.view, Sizing.Split, target.view, directions[direction]));
@@ -380,7 +380,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	}
 
 	public async removeGroup(group: IEditorGroupView | EditorGroupId): Promise<boolean> {
-		const host = this.groupHosts.get(typeof group === 'string' ? group : group.id);
+		const host = this.groupHosts.get(typeof group === 'number' ? group : group.id);
 		if (!host || this._groups.length === 1) return true;
 		// Layout-only owners can replace this group synchronously in the same turn.
 		if (!this.beforeCloseEditor && host.group.editors.every(editor => !editor.isDirty && !editor.input.closeHandler?.showConfirm())) {
@@ -431,7 +431,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	hasMaximizedGroup(): boolean { return this.maximizedGroup !== undefined; }
 
 	toggleMaximizeGroup(group: IEditorGroup | EditorGroupId = this.activeGroup): void {
-		const id = typeof group === 'string' ? group : group.id;
+		const id = typeof group === 'number' ? group : group.id;
 		const host = this.groupHosts.get(id);
 		if (!host) return;
 		const restoring = this.maximizedGroup?.id === id;
@@ -492,7 +492,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	}
 
 	async openEditor(input: IResourceEditorInput, options: EditorOpenOptions = {}, target?: EditorOpenTarget): Promise<IEditorPane> {
-		const sideGroup = target === 'sideGroup' ? this._groups[this.groupIndex(this._activeGroup) + 1]?.group : undefined;
+		const sideGroup = target === 'sideGroup' ? this.findSideGroup(this._activeGroup)?.group : undefined;
 		const destination = typeof target === 'object' ? target.groupId : target === 'modalGroup' ? 'modalGroup' : target === 'sideGroup' ? sideGroup?.id ?? `sideGroup:${this._activeGroup.id}` : this._activeGroup.id;
 		const controller = new AbortController();
 		this.openingIdentities.get(destination)?.abort();
@@ -533,7 +533,8 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			}
 		}
 		if (typeof target === 'object') {
-			const group = this.groupHosts.get(target.groupId)!.group;
+			const group = this.groupHosts.get(target.groupId)?.group;
+			if (!group) throw new RangeError(`Editor group is not open: ${target.groupId}`);
 			const pane = await group.openEditor(input, options);
 			if (!options.preserveFocus) this.setActiveGroup(group);
 			return pane;
@@ -877,7 +878,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 
 	private async confirmEditorClose(group: IEditorGroupView | undefined, input: IResourceEditorInput, pane: IEditorPane, closingGroups: readonly EditorGroupId[] = []): Promise<boolean> {
 		if (input.closeHandler?.showConfirm()) {
-			return await input.closeHandler.confirm([{ editor: input, groupId: group?.id ?? '' }]) !== ConfirmResult.CANCEL;
+			return await input.closeHandler.confirm([{ editor: input, groupId: group?.id ?? -1 }]) !== ConfirmResult.CANCEL;
 		}
 		const copies = getEditorWorkingCopies(pane);
 		if (this.beforeCloseEditor) {
@@ -928,7 +929,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		let group: EditorGroupView;
 		group = this.instantiationService.createInstance(EditorGroupView, this.contentDomNode, {
 			...this.groupOptions,
-			...(id ? { id } : {}),
+			...(id !== undefined ? { id } : {}),
 			onDidActivate: () => {
 				this.setActiveGroup(group);
 			},
@@ -952,9 +953,14 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		return host;
 	}
 
+	private findSideGroup(source: EditorGroupView): EditorGroupHost | undefined {
+		// Locked and hidden hosts may retain product pages; implicit side opens belong to document groups.
+		return this._groups.slice(this.groupIndex(source) + 1).find(host =>
+			!host.group.isLocked && this.isGroupVisible(host.group.id));
+	}
+
 	private resolveSideGroup(source: EditorGroupView): { readonly host: EditorGroupHost; readonly created: boolean; } {
-		const sourceIndex = this.groupIndex(source);
-		const existing = this._groups[sourceIndex + 1];
+		const existing = this.findSideGroup(source);
 		if (existing) return { host: existing, created: false };
 		const direction = this.groupOptions.configurationService?.getValue<string>(EditorOpenSideBySideDirectionConfiguration) === 'down' ? Direction.Down : Direction.Right;
 		return { host: this.insertGroup(source, direction), created: true };
@@ -1083,7 +1089,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	}
 
 	async applyWorkingSet(workingSet: EditorWorkingSetTarget, options: ApplyEditorWorkingSetOptions = {}): Promise<void> {
-		const target = workingSet === "empty" ? emptyWorkingSet() : validateWorkingSet(workingSet);
+		const target = workingSet === "empty" ? emptyWorkingSet() : validateWorkingSet(workingSet, Math.max(...this._groups.map(host => host.group.id)));
 		this.restoreMaximizedGroup();
 		const restoredGroups = target.groups.map(group => {
 			const restored = group.editors.flatMap((editor, index) => {
@@ -1147,7 +1153,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	}
 
 	private rebuildGroups(
-		groups: readonly { readonly id?: string; readonly size: number; }[],
+		groups: readonly { readonly id?: EditorGroupId; readonly size: number; }[],
 		layout: EditorWorkingSetLayout | undefined,
 		activeGroupIndex: number,
 		retained: readonly EditorGroupHost[] = [],
@@ -1160,7 +1166,15 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			this.editorChangeEmitter.fire(Object.freeze({ kind: "groupRemoved", groupId: host.group.id }));
 			this.groupHosts.deleteAndDispose(host.group.id);
 		}
-		const hosts = groups.map(group => this.createGroup(group.id));
+		const hosts = groups.map(group => {
+			const id = group.id !== undefined && !this.groupHosts.has(group.id) ? group.id : undefined;
+			return this.createGroup(id);
+		});
+		// A retained product group can already own an ID from a previous process's document snapshot.
+		if (layout) {
+			const mapping = new Map(groups.map((group, index) => [group.id!, hosts[index]!.group.id]));
+			layout = remapWorkingSetLayout(layout, mapping);
+		}
 		this._groups.push(...retained, ...hosts);
 		const hostById = new Map(this._groups.map(host => [host.group.id, host]));
 		const documentLayout = layout ?? { type: 'branch' as const, orientation: 'horizontal' as const, priority: 'normal' as const, size: this.dimension.width, children: hosts.map((host, index) => ({ type: 'leaf' as const, data: { groupId: host.group.id }, size: groups[index]!.size * this.dimension.width, visible: true, priority: 'normal' as const })) };
@@ -1226,7 +1240,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 }
 
 /** Pruning a working set preserves the exact geometry of the selected group subtree. */
-function filterWorkingSetLayout(layout: EditorWorkingSetLayout, groups: ReadonlySet<string>): EditorWorkingSetLayout | undefined {
+function filterWorkingSetLayout(layout: EditorWorkingSetLayout, groups: ReadonlySet<EditorGroupId>): EditorWorkingSetLayout | undefined {
 	if (layout.type === 'leaf') return groups.has(layout.data.groupId) ? layout : undefined;
 	const children = layout.children.map(child => filterWorkingSetLayout(child, groups)).filter((child): child is EditorWorkingSetLayout => child !== undefined).flatMap(child => child.type === 'branch' && child.orientation === layout.orientation ? child.children : [child]);
 	if (children.length === 0) return undefined;
@@ -1234,7 +1248,7 @@ function filterWorkingSetLayout(layout: EditorWorkingSetLayout, groups: Readonly
 	return { ...layout, children };
 }
 
-function remapWorkingSetLayout(layout: EditorWorkingSetLayout, groups: ReadonlyMap<string, string>): EditorWorkingSetLayout {
+function remapWorkingSetLayout(layout: EditorWorkingSetLayout, groups: ReadonlyMap<EditorGroupId, EditorGroupId>): EditorWorkingSetLayout {
 	if (layout.type === 'leaf') return { ...layout, data: { groupId: groups.get(layout.data.groupId)! } };
 	return { ...layout, children: layout.children.map(child => remapWorkingSetLayout(child, groups)) };
 }
@@ -1247,15 +1261,16 @@ function emptyWorkingSet(): EditorWorkingSet {
 	});
 }
 
-function validateWorkingSet(value: EditorWorkingSet): EditorWorkingSet {
+function validateWorkingSet(value: EditorWorkingSet, lastGroupId: number): EditorWorkingSet {
 	if (!value || typeof value !== "object" || typeof value.id !== "string" || !value.id.trim()) {
 		throw new TypeError("Invalid editor working set");
 	}
 	if (!isNonEmptyArray(value.groups) || !Number.isInteger(value.activeGroupIndex) || value.activeGroupIndex < 0 || value.activeGroupIndex >= value.groups.length) {
 		throw new TypeError("Invalid editor working set groups");
 	}
+	value = migrateWorkingSetGroupIds(value, lastGroupId);
 	let sizeTotal = 0;
-	const groupIds = new Set<string>();
+	const groupIds = new Set<EditorGroupId>();
 	for (const group of value.groups) {
 		if (!group || typeof group !== "object" || !Array.isArray(group.editors) || !Number.isInteger(group.activeEditorIndex) || group.activeEditorIndex < -1 || group.activeEditorIndex >= group.editors.length || (group.locked !== undefined && typeof group.locked !== "boolean") || !Number.isFinite(group.size) || group.size < 0) {
 			throw new TypeError("Invalid editor group working set");
@@ -1285,11 +1300,37 @@ function validateWorkingSet(value: EditorWorkingSet): EditorWorkingSet {
 	return value;
 }
 
-function isEditorGroupId(value: unknown): value is string {
-	return typeof value === "string" && value.length > 0 && value.length <= 128;
+/** Old snapshots name groups with strings. Resolve those names once before restoring live groups. */
+function migrateWorkingSetGroupIds(value: EditorWorkingSet, lastGroupId: number): EditorWorkingSet {
+	if (!value.groups.some(group => group && typeof group.id === 'string')) return value;
+	const ids = new Map<string, number>();
+	let nextId = Math.max(lastGroupId, ...value.groups.map(group => isEditorGroupId(group?.id) ? group.id : 0));
+	const groups = value.groups.map(group => {
+		const id: unknown = group?.id;
+		if (typeof id !== 'string') return group;
+		if (!id.length || id.length > 128 || ids.has(id) || !Number.isSafeInteger(nextId + 1)) throw new TypeError('Invalid legacy editor group ID');
+		ids.set(id, ++nextId);
+		return { ...group, id: nextId };
+	});
+	const migrateLayout = (node: EditorWorkingSetLayout, depth = 0): EditorWorkingSetLayout => {
+		if (!node || typeof node !== 'object' || depth > 64) throw new TypeError('Invalid Editor Grid layout node');
+		if (node.type === 'leaf') {
+			const id: unknown = node.data?.groupId;
+			const groupId = typeof id === 'string' ? ids.get(id) : id;
+			if (!isEditorGroupId(groupId)) throw new TypeError('Invalid Editor Grid group reference');
+			return { ...node, data: { groupId } };
+		}
+		if (node.type !== 'branch' || !Array.isArray(node.children)) throw new TypeError('Invalid Editor Grid branch');
+		return { ...node, children: node.children.map(child => migrateLayout(child, depth + 1)) };
+	};
+	return { ...value, groups, ...(value.layout ? { layout: migrateLayout(value.layout) } : {}) };
 }
 
-function editorGroupIdFromGridData(value: unknown): string {
+function isEditorGroupId(value: unknown): value is EditorGroupId {
+	return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+function editorGroupIdFromGridData(value: unknown): EditorGroupId {
 	if (!value || typeof value !== "object" || Array.isArray(value) || !("groupId" in value) || !isEditorGroupId(value.groupId)) {
 		throw new TypeError("Invalid Editor Grid group data");
 	}

@@ -501,6 +501,31 @@ test("EditorPart applies diff editor associations to the modified resource", asy
 	dom.window.close();
 });
 
+for (const hidden of [false, true]) {
+	test(`EditorPart side opens preserve a locked ${hidden ? 'hidden' : 'visible'} group`, async () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			using registry = new EditorPaneRegistry();
+			using registration = registry.registerEditorPane(descriptor('test.side', '.ts', () => new TestEditorPane('test.side')));
+			using editor = createEditorPart(dom.window.document.body, { registry });
+			await editor.openEditor(input('/first.ts'));
+			const first = editor.activeGroup;
+			const retained = editor.addGroup(first.id, Direction.Right);
+			retained.setLocked(true);
+			if (hidden) editor.setGroupVisible(retained.id, false);
+			const pane = await editor.openEditor(input('/side.ts'), {}, 'sideGroup');
+			assert.notEqual(editor.activeGroup, retained);
+			assert.notEqual(editor.activeGroup, first);
+			assert.equal(pane.group, editor.activeGroup);
+			assert.equal(editor.isGroupVisible(editor.activeGroup.id), true);
+			assert.deepEqual(retained.inputs, []);
+			assert.equal(editor.isGroupVisible(retained.id), !hidden);
+		} finally {
+			dom.window.close();
+		}
+	});
+}
+
 test("EditorPart routes implicit opens away from automatically locked groups", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
@@ -1822,7 +1847,7 @@ test('EditorPart restoration notifies active group subscribers and rebinds the r
 		services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, _key, fallback) => fallback });
 		using editor = createEditorPart(dom.window.document.body, { registry }, services);
 		using title = services.createInstance(WindowTitle, dom.window as unknown as Window, 'Ash', editor);
-		const activated: string[] = [];
+		const activated: number[] = [];
 		using listener = editor.onDidChangeActiveGroup(group => activated.push(group.id));
 		await editor.openEditor(input('/project/first.ts'));
 		const previousGroup = editor.activeGroup;
@@ -2734,6 +2759,17 @@ test("EditorPart restores nested horizontal and vertical Grid layouts", async ()
 	assert.equal(restored.layout?.type, "branch");
 	assert.equal(restored.layout?.orientation, "horizontal");
 	assert.equal(restored.layout?.type === "branch" && restored.layout.children[1]?.type === "branch" && restored.layout.children[1].orientation, "vertical");
+
+	const legacy = JSON.parse(JSON.stringify(saved, (key, value) =>
+		(key === 'id' || key === 'groupId') && typeof value === 'number' ? `legacy-${value}` : value)) as typeof saved;
+	await editor.applyWorkingSet(legacy, { preserveFocus: true });
+	const migrated = editor.saveWorkingSet('migrated');
+	assert.ok(migrated.groups.every(group => typeof group.id === 'number'));
+	assert.equal(new Set(migrated.groups.map(group => group.id)).size, 3);
+	assert.deepEqual(migrated.groups.map(group => group.editors), saved.groups.map(group => group.editors));
+	assert.equal(editor.domNode.querySelectorAll('.ash-split-view-separator-border').length, 2);
+	await editor.applyWorkingSet(migrated, { preserveFocus: true });
+	assert.deepEqual(editor.saveWorkingSet('round-trip').layout, migrated.layout);
 
 	editor.dispose();
 	dom.window.close();

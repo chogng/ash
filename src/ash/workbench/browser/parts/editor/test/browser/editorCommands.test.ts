@@ -49,7 +49,7 @@ test('Configure Editors menu opens filtered settings and is hidden in the modal 
 	assert.ok(configure);
 	assert.equal(configure.label, 'Configure Editors');
 	assert.equal(editorActions().some(action => action.id === 'workbench.action.openSettings'), false);
-	await configure.run({ groupId: 'source' });
+	await configure.run({ groupId: 1 });
 	assert.deepEqual(opened, [{ query: 'workbench.editor' }]);
 	context.setContext('isAuxiliaryWindow', true);
 	assert.equal(editorActions().some(action => action.id === 'workbench.action.toggleEditorGroupLock'), false);
@@ -80,12 +80,12 @@ test('new window tab menus resolve the clicked tab, multiselection and invalid t
 	await import('../../editor.contribution.js');
 	const { MoveEditorToNewWindowCommandId, CopyEditorToNewWindowCommandId } = await import('../../editorActions.js');
 	const inputs = ['first', 'clicked', 'active'].map(name => ({ resource: URI.file(`/project/${name}.ts`) }));
-	const editors = inputs.map((input, index) => ({ input, groupId: 'source', instanceId: `editor-${index}`, paneId: 'test.editor' }));
-	const group = { id: 'source', inputs, editors, activeInput: inputs[2], selectedInputs: [inputs[2]] } as unknown as IEditorGroup;
+	const editors = inputs.map((input, index) => ({ input, groupId: 1, instanceId: `editor-${index}`, paneId: 'test.editor' }));
+	const group = { id: 1, inputs, editors, activeInput: inputs[2], selectedInputs: [inputs[2]] } as unknown as IEditorGroup;
 	const opened: { editors: readonly EditorIdentifier[]; mode: string; }[] = [];
 	using services = new InstantiationService();
 	services.registerInstance(IEditorGroupsService, {
-		groups: [group], activeGroup: group, getGroup: (id: string) => id === group.id ? group : undefined,
+		groups: [group], activeGroup: group, getGroup: (id: number) => id === group.id ? group : undefined,
 	} as unknown as IEditorGroupsService);
 	services.registerInstance(IEditorPartsService, {
 		openEditorsInNewWindow: async (editors, mode) => { opened.push({ editors, mode }); return undefined; },
@@ -128,7 +128,7 @@ test('new window tab menus resolve the clicked tab, multiselection and invalid t
 	Object.assign(group, { selectedInputs: [inputs[2]] });
 	await commands.executeCommand(CopyEditorToNewWindowCommandId);
 	assert.deepEqual(opened.at(-1), { editors: [editors[2]], mode: 'copy' });
-	await commands.executeCommand(MoveEditorToNewWindowCommandId, { groupId: 'closed', editorIndex: 1 });
+	await commands.executeCommand(MoveEditorToNewWindowCommandId, { groupId: 999, editorIndex: 1 });
 	assert.deepEqual(opened.at(-1), { editors: [], mode: 'move' });
 });
 
@@ -143,7 +143,7 @@ test('tab close and split menus operate on the clicked group and selected editor
 	let reopened = 0;
 	let cancelled = false;
 	const group = {
-		id: 'clicked-group', inputs, selectedInputs: [inputs[2]], activeInput: inputs[2],
+		id: 1, inputs, selectedInputs: [inputs[2]], activeInput: inputs[2],
 		editors: inputs.map((input, index) => ({ input, index, isSticky: index === 0, isDirty: index === 2 })),
 		isSticky: (input: unknown) => input === inputs[0],
 		closeEditor: async (input: unknown) => { closed.push(input); return !cancelled; },
@@ -282,15 +282,17 @@ test("editor commands close the active tab and reopen it with a chosen editor", 
 		let cancelClose = false;
 		const activeGroup = {
 			openEditor: async (_input: unknown, options: { preferredEditorId: string; }) => { chosen = options.preferredEditorId; },
-			id: "main",
+			id: 1,
 			inputs: [activeInput],
 			selectedInputs: [activeInput],
 			editors: [{ input: activeInput }],
 			activeInput,
 			closeEditor: async (input: typeof activeInput) => { closed = input; closedInputs.push(input); return !cancelClose; },
 		};
+		let reopenedOtherGroup = false;
 		const otherGroup = {
-			id: "other",
+			id: 0,
+			openEditor: async () => { reopenedOtherGroup = true; },
 			inputs: [otherInput],
 			selectedInputs: [otherInput],
 			editors: [{ input: otherInput }],
@@ -323,14 +325,14 @@ test("editor commands close the active tab and reopen it with a chosen editor", 
 		using contextKeys = new ContextKeyService();
 		services.registerInstance(IContextKeyService, contextKeys);
 		services.registerInstance(IEditorPart, editorPart);
-		services.registerInstance(IEditorGroupsService, { groups: [activeGroup, otherGroup], activeGroup, getGroup: (id: string) => [activeGroup, otherGroup].find(group => group.id === id) } as unknown as import("../../../../../services/editor/common/editorGroupsService.js").IEditorGroupsService);
+		services.registerInstance(IEditorGroupsService, { groups: [activeGroup, otherGroup], activeGroup, getGroup: (id: number) => [activeGroup, otherGroup].find(group => group.id === id) } as unknown as import("../../../../../services/editor/common/editorGroupsService.js").IEditorGroupsService);
 		using quickInput = new TestQuickInputService({ instantiationService: services, container: dom.window.document.body, contextKeyService: contextKeys });
 		services.registerInstance(IQuickInputService, quickInput);
 		using commands = new CommandService(services);
 
 		await commands.executeCommand(CLOSE_EDITOR_COMMAND_ID);
 		assert.equal(closed, activeInput);
-		await commands.executeCommand(CLOSE_EDITOR_COMMAND_ID, { groupId: "other", editorIndex: 0, preserveFocus: true });
+		await commands.executeCommand(CLOSE_EDITOR_COMMAND_ID, { groupId: 0, editorIndex: 0, preserveFocus: true });
 		assert.equal(closed, otherInput);
 		await commands.executeCommand(CLOSE_EDITOR_COMMAND_ID, activeInput.resource);
 		assert.equal(closed, activeInput);
@@ -356,6 +358,12 @@ test("editor commands close the active tab and reopen it with a chosen editor", 
 		assert.equal(chosen, "ash.editor.binary");
 		assert.equal(dom.window.document.querySelector(".ash-quick-pick"), null);
 
+		const otherReopening = commands.executeCommand(REOPEN_WITH_COMMAND_ID, { groupId: 0, editorIndex: 0 });
+		dom.window.document.querySelector<HTMLInputElement>('.ash-quick-pick input')!.dispatchEvent(new dom.window.KeyboardEvent('keydown', {
+			bubbles: true, cancelable: true, key: 'Enter',
+		}));
+		await otherReopening;
+		assert.equal(reopenedOtherGroup, true, 'zero is a valid group identity');
 		editorTypes.pop();
 		await commands.executeCommand(REOPEN_WITH_COMMAND_ID);
 		assert.equal(dom.window.document.querySelector(".ash-quick-pick"), null);
@@ -372,8 +380,8 @@ test("editor commands close the active tab and reopen it with a chosen editor", 
 test('empty editor windows and whole-group commands use the shared coordinator and preserve lock state', async () => {
 	using services = new InstantiationService();
 	const inputs = [URI.file('/a.ts'), URI.file('/b.ts')].map(resource => ({ resource }));
-	const editors = inputs.map((input, index) => ({ input, groupId: 'source', instanceId: `group-editor-${index}`, paneId: 'test.editor' }));
-	const source = { id: 'source', inputs, editors, activeInput: inputs[1], selectedInputs: [inputs[1]], isLocked: true } as unknown as IEditorGroup;
+	const editors = inputs.map((input, index) => ({ input, groupId: 1, instanceId: `group-editor-${index}`, paneId: 'test.editor' }));
+	const source = { id: 1, inputs, editors, activeInput: inputs[1], selectedInputs: [inputs[1]], isLocked: true } as unknown as IEditorGroup;
 	const calls: unknown[] = [];
 	const target = { activeGroup: { focus: () => calls.push('focus'), setLocked: (locked: boolean) => calls.push(['locked', locked]) } };
 	services.registerInstance(IEditorGroupsService, { groups: [source], activeGroup: source, getGroup: () => source } as unknown as IEditorGroupsService);

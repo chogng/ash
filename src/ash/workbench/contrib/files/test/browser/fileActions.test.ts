@@ -733,12 +733,12 @@ test('tab copy actions copy clicked and selected file paths without changing the
 	const active = new FileEditorInput(URI.file('/project/active.ts'));
 	const clicked = new FileEditorInput(URI.file('/project/src/clicked.ts'));
 	const second = new FileEditorInput(URI.file('/project/src/second.ts'));
-	const group = { id: 'main', inputs: [active, clicked, second], selectedInputs: [active], editors: [active, clicked, second].map(input => ({ input })), activeInput: active };
+	const group = { id: 1, inputs: [active, clicked, second], selectedInputs: [active], editors: [active, clicked, second].map(input => ({ input })), activeInput: active };
 	const copied: string[] = [];
 	using workspace = new TestWorkspaceService({ id: 'project', uri: URI.file('/project') });
 	using services = createFileActionServices();
 	services.registerInstance(IWorkspaceContextService, workspace);
-	services.registerInstance(IEditorGroupsService, { getGroup: (id: string) => id === group.id ? group : undefined } as unknown as IEditorGroupsService);
+	services.registerInstance(IEditorGroupsService, { getGroup: (id: number) => id === group.id ? group : undefined } as unknown as IEditorGroupsService);
 	services.registerInstance(IEditorService, { activeEditor: active } as unknown as EditorServiceContract);
 	services.registerInstance(IClipboardService, { writeText: async text => { copied.push(text); } } as IClipboardService);
 	using commands = new CommandService(services);
@@ -770,7 +770,7 @@ test('Reveal tab menu groups both destinations and targets the clicked inactive 
 	await import('../../../../browser/parts/editor/editor.contribution.js');
 	const active = new FileEditorInput(URI.file('/project/active.ts'));
 	const clicked = new FileEditorInput(URI.file('/project/src/clicked.ts'));
-	const group = { id: 'main', inputs: [active, clicked], selectedInputs: [active], editors: [{ input: active }, { input: clicked }], activeInput: active };
+	const group = { id: 1, inputs: [active, clicked], selectedInputs: [active], editors: [{ input: active }, { input: clicked }], activeInput: active };
 	const effects: unknown[] = [];
 	using workspace = new TestWorkspaceService({ id: 'project', uri: URI.file('/project') });
 	using explorer = createExplorerService(workspace);
@@ -785,7 +785,7 @@ test('Reveal tab menu groups both destinations and targets the clicked inactive 
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IExplorerService, explorer);
 	services.registerInstance(IEditorService, { activeEditor: active } as unknown as EditorServiceContract);
-	services.registerInstance(IEditorGroupsService, { getGroup: (id: string) => id === group.id ? group : undefined } as unknown as IEditorGroupsService);
+	services.registerInstance(IEditorGroupsService, { getGroup: (id: number) => id === group.id ? group : undefined } as unknown as IEditorGroupsService);
 	services.registerInstance(INativeHostService, { revealFile: async path => { effects.push(['finder', path]); } } as INativeHostApi);
 	services.registerInstance(IViewsService, {
 		openView: async (id: string) => {

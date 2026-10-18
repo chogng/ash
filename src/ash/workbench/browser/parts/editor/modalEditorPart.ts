@@ -175,6 +175,7 @@ export class ModalEditorPart extends Disposable {
 			this.currentEntry = { input, instance: this.currentEntry.instance };
 			this.updateTitle(input);
 			this.show(openOptions.preserveFocus === true);
+			this.currentEntry.instance.pane.setOptions?.(openOptions);
 			return this.currentEntry.instance.pane;
 		}
 
@@ -208,6 +209,7 @@ export class ModalEditorPart extends Disposable {
 		this.contentDomNode.replaceChildren(committed.domNode);
 		this.updateTitle(input);
 		this.show(openOptions.preserveFocus === true);
+		pane.setOptions?.(openOptions);
 		return pane;
 	}
 

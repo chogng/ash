@@ -1,3 +1,5 @@
+import { resolveCommandsContext } from '../../../browser/parts/editor/editorCommandsContext.js';
+import { IEditorGroupsService } from '../../../services/editor/common/editorGroupsService.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { URI } from '../../../../base/common/uri.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
@@ -93,8 +95,11 @@ registerAction2(class OpenSettingsUIAction extends Action2 {
 		});
 	}
 
-	override run(accessor: ServicesAccessor): Promise<void> {
-		return accessor.get(IPreferencesService).openSettings({ jsonEditor: false });
+	override run(accessor: ServicesAccessor, ...args: unknown[]): Promise<void> {
+		const groupId = args.length
+			? resolveCommandsContext(args, accessor.get(IEditorGroupsService)).groupedEditors[0]?.group.id
+			: undefined;
+		return accessor.get(IPreferencesService).openSettings({ jsonEditor: false, groupId });
 	}
 });
 

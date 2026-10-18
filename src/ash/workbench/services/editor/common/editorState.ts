@@ -1,7 +1,7 @@
 import type { IResourceEditorInput } from '../../../common/editor.js';
 import type { Event } from '../../../../base/common/event.js';
 
-export type EditorGroupId = string;
+export type EditorGroupId = number;
 export type EditorInstanceId = string;
 
 /** One concrete editor instance hosted by one Workbench editor group. */

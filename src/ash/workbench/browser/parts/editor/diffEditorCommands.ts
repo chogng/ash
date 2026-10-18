@@ -148,7 +148,7 @@ export function registerDiffEditorCommands(): void {
 }
 
 function activateEditorGroup(accessor: ServicesAccessor, context: unknown): void {
-	if (typeof context === 'object' && context !== null && 'groupId' in context && typeof context.groupId === 'string') {
+	if (typeof context === 'object' && context !== null && 'groupId' in context && typeof context.groupId === 'number') {
 		accessor.get(IEditorPart).activateGroup(context.groupId);
 	}
 }

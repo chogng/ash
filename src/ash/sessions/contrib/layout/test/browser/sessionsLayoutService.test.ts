@@ -113,7 +113,7 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		await fixture.service.runOperation(async () => { });
 		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), chatEntry.restoreCommand);
 		assert.equal(fixture.partChanges.length, before);
-		fixture.editorChanged.fire({ kind: 'activeGroupChanged', groupId: 'documents' });
+		fixture.editorChanged.fire({ kind: 'activeGroupChanged', groupId: 1 });
 		await fixture.service.runOperation(async () => { });
 		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), documentEntry.restoreCommand);
 	});
@@ -135,7 +135,7 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		assert.equal(fixture.focused, undefined);
 		assert.equal(fixture.contextKeys.getContext().getValue('sessions.activity.codeSelected'), false);
 		fixture.activeInput = { resource: URI.file('/background.ts') };
-		fixture.editorChanged.fire({ kind: 'activeGroupChanged', groupId: 'documents' });
+		fixture.editorChanged.fire({ kind: 'activeGroupChanged', groupId: 1 });
 		await fixture.service.runOperation(async () => { });
 		assert.equal(fixture.customViews.activeCustomView.get()?.id, 'automations');
 		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), documentEntry.restoreCommand);

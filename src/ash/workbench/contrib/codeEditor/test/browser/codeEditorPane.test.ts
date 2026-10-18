@@ -1,3 +1,4 @@
+import { ILanguageService } from '../../../../../editor/common/languages/language.js';
 import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
@@ -39,7 +40,7 @@ import { ILanguageFeaturesService } from '../../../../../editor/common/services/
 import { ILanguageFeatureDebounceService, LanguageFeatureDebounceService } from '../../../../../editor/common/services/languageFeatureDebounce.js';
 import { ILanguageConfigurationService } from '../../../../../editor/common/languages/languageConfigurationRegistry.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
-import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { ConfigurationTarget, IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { EditorOption } from '../../../../../editor/common/config/editorOptions.js';
 import { EditorMinimapConfiguration } from '../../../../../editor/common/config/editorConfigurationSchema.js';
@@ -278,6 +279,37 @@ test('open code editor applies live view settings and actions without replacing 
 	await services.get(ICommandService).executeCommand('editor.action.toggleMinimap');
 	assert.equal(configuration.getValue(EditorMinimapConfiguration.enabled), true);
 	assert.equal(control.getOption(EditorOption.minimap).enabled, true);
+});
+
+test('font settings follow resource language on open, updates and language changes without replacing the control', async () => {
+	const dom = createTestDom('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using closeWindow = toDisposable(() => dom.window.close());
+	const resourceStore = new BrowserTextResourceStore(new ImmediateTextFiles('font scope'));
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
+	using parentServices = paneServices(models);
+	using services = parentServices.createChild();
+	using configuration = new WorkbenchConfigurationService({ source: '{ "editor.fontSize": 17, "[plaintext]": { "editor.fontSize": 23, "editor.fontFamily": "Arial" }, "[settings-font-other]": { "editor.fontSize": 29 } }' });
+	services.registerInstance(IConfigurationService, configuration);
+	using language = services.get(ILanguageService).registerLanguage({ id: 'settings-font-other' });
+	using pane = createPane(services, resourceStore, {});
+	pane.create(dom.window.document.querySelector<HTMLElement>('main')!);
+	await pane.setInput({ resource: URI.file('/project/scoped-font.txt'), languageId: 'plaintext' }, new AbortController().signal);
+	const control = pane.getControl();
+	assert.ok(control instanceof CodeEditorWidget);
+	assert.deepEqual([control.getOption(EditorOption.fontSize), control.getOption(EditorOption.fontFamily)], [23, 'Arial']);
+	await configuration.updateValue('editor.fontSize', 26, { overrideIdentifier: 'plaintext' }, ConfigurationTarget.USER_LOCAL);
+	assert.equal(control.getOption(EditorOption.fontSize), 26);
+	control.getModel()!.setLanguage('settings-font-other');
+	assert.equal(control.getOption(EditorOption.fontSize), 29);
+	await configuration.updateValue('editor.fontSize', 28, { overrideIdentifier: 'plaintext' }, ConfigurationTarget.USER_LOCAL);
+	assert.equal(control.getOption(EditorOption.fontSize), 29, 'an unrelated language cannot update this control');
+	control.getModel()!.setLanguage('plaintext');
+	assert.equal(control.getOption(EditorOption.fontSize), 28);
+	assert.equal(pane.getControl(), control);
+	pane.clearInput();
+	await configuration.updateValue('editor.fontSize', 30, { overrideIdentifier: 'plaintext' }, ConfigurationTarget.USER_LOCAL);
+	assert.equal(pane.getControl(), undefined);
 });
 
 test('Workbench Go to Line command opens colon Quick Access and commits the active editor position', async () => {

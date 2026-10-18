@@ -245,7 +245,10 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	let pendingShortcut: Promise<void> | undefined;
 	services.registerInstance(IPreferencesService, {
 		openSettings: options => preferences.open(options),
-		openUserSettings: async options => { preferenceOpens.push({ user: options }); },
+		openUserSettings: async options => {
+			if (options?.groupId !== undefined || options?.openToSide) assert.equal(editorRevealing, false, 'document layout settles before the group opens');
+			preferenceOpens.push({ user: options });
+		},
 		openGlobalKeybindingSettings: async textual => {
 			assert.equal(window.document.querySelector('dialog[open]'), null);
 			if (pendingShortcut) await pendingShortcut;
@@ -263,7 +266,13 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService({ isAvailable: true, read: async () => ({ sourceGroups: [], tools: [{ name: 'read_file', description: 'Read authorized files', source: 'local', sourceDetails: ['Ash'], exposure: 'direct', authority: 'directoryRead' }] }) }));
 	services.registerInstance(IWorkspaceTrustApi, { onDidChangeTrust: Event.None } as import('../../../platform/workspace/common/workspaceTrust.js').IWorkspaceTrustApi);
 	let editorReveals = 0;
-	using preferences = services.createInstance(SessionsPreferences, window.document.body, () => { editorReveals++; });
+	let editorRevealing = false;
+	using preferences = services.createInstance(SessionsPreferences, window.document.body, async () => {
+		editorRevealing = true;
+		await Promise.resolve();
+		editorRevealing = false;
+		editorReveals++;
+	});
 	await configuration.updateValue('sessions.activityBar.compact', true);
 	const opened = preferences.open();
 	await Promise.race([opened, Promise.resolve()]);
@@ -322,7 +331,8 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		const menu = dialog.querySelector<HTMLElement>('[role="menu"]')!;
 		assert.ok(menu);
 		menu.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'End', bubbles: true }));
-		assert.equal(window.document.activeElement?.textContent, copyLabel, 'Copy Setting as JSON is the last ordinary setting action');
+		menu.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
+		assert.equal(window.document.activeElement?.textContent, copyLabel, 'Copy Setting as JSON remains keyboard reachable before Edit in settings.json');
 		const copy = [...menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(button => button.textContent === copyLabel)!;
 		assert.ok(copy);
 		assert.equal(window.document.activeElement, copy);
@@ -397,7 +407,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	assert.equal(modelSearch.value, 'sessions.activityBar.compact');
 	assert.equal(window.document.activeElement, modelSearch);
 	assert.equal(window.document.querySelectorAll('.ash-sessions-settings-content-tree [data-settings-item-id]').length, 1);
-	await assert.rejects(commands.executeCommand('workbench.action.openSettings', { query: 'changed', target: 5 }));
+	await assert.rejects(commands.executeCommand('workbench.action.openSettings', { query: 'changed', target: 4 }));
 	assert.equal(modelSearch.value, 'sessions.activityBar.compact');
 	await commands.executeCommand('workbench.action.openSettings', { query: '' });
 	assert.equal(modelSearch.value, '');
@@ -488,7 +498,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		assert.equal(reopenedSearch.value, 'sessions.activityBar.compact');
 		assert.equal(window.document.activeElement, reopenedSearch);
 		await assert.rejects(commands.executeCommand('workbench.action.openSettings', { query: 1 }), /设置查询必须是字符串/u);
-		await assert.rejects(commands.executeCommand('workbench.action.openSettings', { target: 5 }), /此设置编辑器仅支持本地用户设置/u);
+		await assert.rejects(commands.executeCommand('workbench.action.openSettings', { target: 4 }), /此设置编辑器支持本地用户、工作区和文件夹设置/u);
 		assert.equal(reopenedSearch.value, 'sessions.activityBar.compact');
 		assert.equal(window.document.querySelector('.ash-settings-search-filter')?.getAttribute('aria-label'), '筛选设置');
 		const reopenedMenu = openCopyMenu('外观', '复制设置为 JSON');
@@ -559,7 +569,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	const editSettingOpen = preferences.open({ section: 'appearance' });
 	const editSettingMenu = openCopyMenu();
 	const editSetting = [...editSettingMenu.menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(button => button.textContent === 'Edit in settings.json');
-	assert.equal(editSetting, undefined, 'ordinary settings use the shared JSON entry');
+	assert.ok(editSetting, 'ordinary settings expose the shared JSON entry');
 	editSettingMenu.menu.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 	const jsonSwitch = window.document.querySelector<HTMLButtonElement>('.ash-settings-open-json')!;
 	assert.equal(jsonSwitch.getAttribute('aria-label'), 'Open Settings (JSON)');
@@ -576,6 +586,16 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	window.document.querySelector<HTMLDialogElement>('dialog[open]')!.close();
 	await explicitUI;
 	await configuration.updateValue('workbench.settings.editor', 'ui');
+	await preferences.open({ target: 5, query: '@lang:plaintext @id:editor.fontSize', jsonEditor: false });
+	assert.deepEqual(preferenceOpens.at(-1), { user: { target: 5, query: '@lang:plaintext @id:editor.fontSize', jsonEditor: false } });
+	assert.equal(window.document.querySelector('dialog[open]'), null, 'scoped settings use the shared Workbench pane');
+	assert.equal(editorReveals, 5);
+	await preferences.open({ groupId: 7, query: '@id:editor.fontSize', jsonEditor: false });
+	assert.deepEqual(preferenceOpens.at(-1), { user: { groupId: 7, query: '@id:editor.fontSize', jsonEditor: false } });
+	assert.equal(editorReveals, 6, 'explicit group requests reveal the document host');
+	await preferences.open({ openToSide: true, query: '@id:editor.fontFamily', jsonEditor: false });
+	assert.deepEqual(preferenceOpens.at(-1), { user: { openToSide: true, query: '@id:editor.fontFamily', jsonEditor: false } });
+	assert.equal(editorReveals, 7);
 	const cancelledOpen = preferences.open({ section: 'keyboard-shortcuts' });
 	const callsBeforeCancel = preferenceOpens.length;
 	window.document.querySelector<HTMLDialogElement>('dialog')!.dispatchEvent(new window.Event('cancel', { cancelable: true }));
@@ -585,7 +605,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	rejectShortcut = true;
 	await openCategoryAction('keyboard-shortcuts', 'Keyboard Shortcuts');
 	assert.equal(notifications.getNotifications().at(-1)?.message, 'Could not open preferences: Error: shortcut editor unavailable');
-	assert.equal(editorReveals, 5, 'a failed open cannot reveal an unrelated editor');
+	assert.equal(editorReveals, 7, 'a failed open cannot reveal an unrelated editor');
 	const notificationsBeforeShutdown = notifications.getNotifications().length;
 	let rejectLateOpen!: (error: Error) => void;
 	pendingShortcut = new Promise<void>((_resolve, reject) => { rejectLateOpen = reject; });
@@ -595,7 +615,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	await pendingShortcut.catch(() => { });
 	await Promise.resolve();
 	assert.equal(notifications.getNotifications().length, notificationsBeforeShutdown, 'late opens cannot notify a retired window');
-	assert.equal(editorReveals, 5);
+	assert.equal(editorReveals, 7);
 	changed.dispose();
 	browser.window.close();
 	assert.deepEqual(unexpectedErrors, [], 'Preferences interactions must not leave a stale UI after a listener error');

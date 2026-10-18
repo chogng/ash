@@ -7,7 +7,7 @@ import { MarkerSeverity } from '../../../../platform/markers/common/markers.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../nls.js';
 import { MainThreadEditors } from '../../browser/mainThreadEditors.js';
 import type { ExtensionHostFleetSnapshot } from '../../../../platform/agentHost/common/extensionHostApi.js';
-import type { IActionPromptOptions, IActionPromptResult } from '../../../../platform/dialogs/common/dialogs.js';
+import type { IActionPromptOptions, IActionPromptResult, IOpenDialogOptions } from '../../../../platform/dialogs/common/dialogs.js';
 
 interface Copy {
 	resource: URI;
@@ -15,18 +15,47 @@ interface Copy {
 	save(signal: AbortSignal): Promise<void>;
 }
 
-function bridge(copies: readonly Copy[], confirm: () => Promise<{ confirmed: boolean; }>, markers: readonly unknown[] = [], codeEditors: unknown = {}, models: unknown = { getModels: () => [], onModelAdded: Event.None, onModelRemoved: Event.None }, prompt?: (options: IActionPromptOptions<number>) => Promise<IActionPromptResult<number>>, folderPicker?: { pickFolder(defaultPath?: string): Promise<string | undefined>; fileURI(path: string): Promise<URI>; }): MainThreadEditors {
+function bridge(
+	copies: readonly Copy[],
+	confirm: () => Promise<{ confirmed: boolean; }>,
+	markers: readonly unknown[] = [],
+	codeEditors: unknown = {},
+	models: unknown = { getModels: () => [], onModelAdded: Event.None, onModelRemoved: Event.None },
+	prompt?: (options: IActionPromptOptions<number>) => Promise<IActionPromptResult<number>>,
+	folderPicker?: {
+		showOpenDialog(options: IOpenDialogOptions): Promise<URI[] | undefined>;
+		fileURI(path: string): Promise<URI>;
+	},
+	part: unknown = { groups: [] },
+): MainThreadEditors {
 	// Only client-owned services used by these boundary scenarios are supplied.
 	const services = [
-		{}, { groups: [] }, {}, { confirm, prompt }, folderPicker ?? {},
-		{ getAll: () => copies },
+		{}, part, {}, { confirm, prompt }, folderPicker ?? {}, {}, {},
+		{ getAll: () => copies, get: (resource: URI) => copies.filter(copy => copy.resource.toString() === resource.toString()) },
 		{ invokeFunction: (callback: (accessor: { get(): unknown; }) => unknown) => callback({ get: () => ({ read: () => markers }) }) },
 		{}, {}, codeEditors, {}, models, folderPicker ?? {},
 	] as unknown as ConstructorParameters<typeof MainThreadEditors>;
 	return new MainThreadEditors(...services);
 }
 
-test('folder selection crosses the extension boundary as a host-resolved URI and honors cancellation', async () => {
+test('active editor requests resolve numeric group context without reading a different group', async () => {
+	const first = { id: 1, inputs: [{ resource: URI.file('/first.ts') }], activeInput: { resource: URI.file('/active.ts') } };
+	const second = { id: 2, inputs: [{ resource: URI.file('/second.ts') }] };
+	using api = bridge(
+		[], async () => ({ confirmed: true }), [], { listCodeEditors: () => [] },
+		undefined, undefined, undefined, { groups: [first, second], activeGroup: first },
+	);
+	const signal = new AbortController().signal;
+	const result = await api.handle({ method: 'activeEditor', context: { groupId: 2, editorIndex: 0 } }, signal) as { input: { resource: string; }; };
+	assert.equal(result.input.resource, second.inputs[0]!.resource.toString());
+	const missing = await api.handle({ method: 'activeEditor', context: { groupId: 999, editorIndex: 0 } }, signal) as { input: null; };
+	assert.equal(missing.input, null);
+	for (const groupId of ['2', -1, 1.5]) {
+		await assert.rejects(api.handle({ method: 'activeEditor', context: { groupId } }, signal), /Invalid editor group ID/u);
+	}
+});
+
+test('folder selection preserves host-resolved URIs and honors cancellation', async () => {
 	for (const [path, uri] of [
 		['C:\\中文 space\\100%', 'file:///C:/中文%20space/100%25'],
 		['\\\\server\\share\\folder', 'file://server/share/folder'],
@@ -36,17 +65,21 @@ test('folder selection crosses the extension boundary as a host-resolved URI and
 		let conversions = 0;
 		const controller = new AbortController();
 		using api = bridge([], async () => ({ confirmed: true }), [], {}, undefined, undefined, {
-			pickFolder: async defaultPath => { assert.equal(defaultPath, 'configured folder'); return selected; },
-			fileURI: async value => { assert.equal(value, path); conversions++; return URI.parse(uri); },
+			showOpenDialog: async options => {
+				assert.equal(options.defaultUri?.toString(), URI.file('/configured').toString());
+				assert.equal(options.canSelectFolders, true);
+				return selected ? [URI.parse(uri)] : undefined;
+			},
+			fileURI: async value => { assert.equal(value, 'configured folder'); conversions++; return URI.file('/configured'); },
 		});
 		const request = { method: 'pickFolder', defaultPath: 'configured folder' };
 		assert.equal(await api.handle(request, controller.signal), URI.parse(uri).toString());
 		selected = undefined;
 		assert.equal(await api.handle(request, controller.signal), null);
-		assert.equal(conversions, 1);
+		assert.equal(conversions, 2);
 		controller.abort();
 		await assert.rejects(api.handle(request, controller.signal), /aborted/i);
-		assert.equal(conversions, 1);
+		assert.equal(conversions, 2);
 	}
 });
 

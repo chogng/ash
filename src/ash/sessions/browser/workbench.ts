@@ -659,7 +659,11 @@ export abstract class Workbench extends Disposable {
 		const accessibleViewService = this._register(services.createInstance(AccessibleViewService));
 		services.registerInstance(IAccessibleViewService, accessibleViewService);
 		this._register(registerExtensionManagementActions());
-		const preferences = this._register(services.createInstance(SessionsPreferences, this.domNode, () => { void commandService.executeCommand('sessions.open.code').catch(error => notificationService.error(String(error))); }));
+		const preferences = this._register(services.createInstance(SessionsPreferences, this.domNode, async () => {
+			await commandService.executeCommand('sessions.open.code');
+			// Code may start with only its tab strip. An explicit Preferences handoff needs visible editor content.
+			layout.showPart('editor');
+		}));
 		this._register(registerExtensionsViewContainer(SessionsViewRegistry, ViewContainerLocation.Sidebar));
 		const openExtensions = async (options: ExtensionsOpenOptions): Promise<void> => {
 			await commandService.executeCommand('sessions.open.code');
@@ -814,13 +818,13 @@ export abstract class Workbench extends Disposable {
 		this._register(new EditorContextKeyController(contextKeys, editor, EditorPanes, languageService));
 		const editors = this._register(new BrowserEditorService(editor));
 		services.registerInstance(IEditorService, editors);
+		services.registerInstance(IEditorGroupsService, editors);
 		const workbenchPreferences = this._register(services.createInstance(PreferencesService));
 		services.registerInstance(IPreferencesService, {
 			openSettings: options => preferences.open(options),
 			openUserSettings: options => workbenchPreferences.openUserSettings(options),
 			openGlobalKeybindingSettings: textual => workbenchPreferences.openGlobalKeybindingSettings(textual),
 		});
-		services.registerInstance(IEditorGroupsService, editors);
 		this._register(new WorkbenchEditorContextKeysHandler(contextKeys, editors, editors));
 		services.registerInstance(IHistoryService, this._register(services.createInstance(HistoryService)));
 		this._register(services.createInstance(TextFileEditorTracker, ownerWindow));

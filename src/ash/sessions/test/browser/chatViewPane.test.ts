@@ -1,3 +1,5 @@
+import { emptyEditorGroupsService } from '../../../workbench/test/common/testWorkbenchContextKeys.js';
+import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { IRendererHostService } from '../../../platform/renderer/common/rendererHost.js';
 import { setARIAContainer } from '../../../base/browser/ui/aria/aria.js';
@@ -382,7 +384,7 @@ test("Chat title and history switching retain conversations and drafts", async (
 		...emptyEditorServiceState,
 		openEditor: async (_input, _options, target) => { preferencesEditorTarget = target; },
 		focusActiveEditor() { },
-	}, editorServices.get(IFileTextModelService), keybindingFiles.files, keybindingFiles.profiles, editorServices, editorServices.get(IConfigurationService));
+	}, editorServices.get(IFileTextModelService), keybindingFiles.files, keybindingFiles.profiles, editorServices, editorServices.get(IConfigurationService), editorServices.get(IWorkspaceContextService), emptyEditorGroupsService);
 	services.registerInstance(IPreferencesService, preferences);
 	services.registerInstance(IChatService, chat);
 	services.registerInstance(ISessionsManagementService, sessions);
@@ -3980,7 +3982,7 @@ test("Chat Settings toggles Advisor while keeping its selected model", async () 
 		...emptyEditorServiceState,
 		openEditor: async () => undefined,
 		focusActiveEditor() { },
-	}, editorServices.get(IFileTextModelService), keybindingFiles.files, keybindingFiles.profiles, editorServices, editorServices.get(IConfigurationService));
+	}, editorServices.get(IFileTextModelService), keybindingFiles.files, keybindingFiles.profiles, editorServices, editorServices.get(IConfigurationService), editorServices.get(IWorkspaceContextService), emptyEditorGroupsService);
 	services.registerInstance(IPreferencesService, preferences);
 	using commands = new CommandService(services);
 	for (const enabled of [false, true]) {
@@ -4027,7 +4029,7 @@ test('Chat Settings saves a masked provider key through the model API and refres
 		...emptyEditorServiceState,
 		openEditor: async () => undefined,
 		focusActiveEditor() { },
-	}, editorServices.get(IFileTextModelService), keybindingFiles.files, keybindingFiles.profiles, editorServices, editorServices.get(IConfigurationService));
+	}, editorServices.get(IFileTextModelService), keybindingFiles.files, keybindingFiles.profiles, editorServices, editorServices.get(IConfigurationService), editorServices.get(IWorkspaceContextService), emptyEditorGroupsService);
 	services.registerInstance(IPreferencesService, preferences);
 	using commands = new CommandService(services);
 

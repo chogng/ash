@@ -20,7 +20,7 @@ export class SettingsTreeIndicatorsLabel extends Disposable {
 	private readonly hover: Hover;
 	private readonly maturityDomNode: HTMLSpanElement;
 
-	constructor(container: HTMLElement, contextViewProvider: IContextViewProvider, hoverDelay: () => number) {
+	constructor(container: HTMLElement, contextViewProvider: IContextViewProvider, hoverDelay: () => number, configuredText = configuredLabel()) {
 		super();
 		this.domNode = h(container.ownerDocument, 'span');
 		this.domNode.className = 'ash-settings-indicators';
@@ -39,7 +39,7 @@ export class SettingsTreeIndicatorsLabel extends Disposable {
 		this.configuredDescription = h(container.ownerDocument, 'span');
 		this.configuredDescription.id = `ash-settings-configured-${++indicatorId}`;
 		this.configuredDescription.className = 'ash-settings-configured-description';
-		this.configuredDescription.textContent = configuredLabel();
+		this.configuredDescription.textContent = configuredText;
 		container.append(this.configuredDescription);
 		this._register(toDisposable(() => this.configuredDescription.remove()));
 		this.markerDomNode = h(container.ownerDocument, 'span');
@@ -48,7 +48,7 @@ export class SettingsTreeIndicatorsLabel extends Disposable {
 		container.append(this.markerDomNode);
 		this._register(toDisposable(() => this.markerDomNode.remove()));
 		// Sessions supplies its modal ContextView; a window hover would be outside the dialog's top layer.
-		this.hover = this._register(new Hover({ target: this.markerDomNode, content: configuredLabel(), contextViewProvider, delayMs: hoverDelay, enabled: () => !this.markerDomNode.hidden }));
+		this.hover = this._register(new Hover({ target: this.markerDomNode, content: configuredText, contextViewProvider, delayMs: hoverDelay, enabled: () => !this.markerDomNode.hidden }));
 	}
 
 	public get configuredDescriptionId(): string {

@@ -29,7 +29,10 @@ interface OverrideBlock {
 	readonly values: Map<string, unknown>;
 }
 
-/** Mutable, process-local configuration used by standalone compositions without persisted settings. */
+/**
+ * Process-local configuration for standalone compositions. Read resources identify
+ * consumers but do not add workspace layers; resource-targeted writes remain unsupported.
+ */
 export class InMemoryConfigurationService extends Disposable implements IConfigurationService {
 	public readonly _serviceBrand = undefined;
 
@@ -52,7 +55,7 @@ export class InMemoryConfigurationService extends Disposable implements IConfigu
 		const section = typeof arg1 === 'string' ? arg1 : undefined;
 		const overrides = typeof arg1 === 'string' ? arg2 : arg1;
 		if (overrides !== undefined && !isConfigurationOverrides(overrides)) throw new TypeError('Configuration overrides are invalid');
-		assertNoResourceOverride(overrides, 'In-memory configuration');
+
 		return this.getSectionValue(this.currentState(), section, overrides?.overrideIdentifier) as T;
 	}
 
@@ -101,7 +104,6 @@ export class InMemoryConfigurationService extends Disposable implements IConfigu
 	public inspect<T>(key: string, overrides: IConfigurationOverrides = {}): IConfigurationValue<Readonly<T>> {
 		this.assertNotDisposed();
 		if (!isConfigurationOverrides(overrides)) throw new TypeError('Configuration overrides are invalid');
-		assertNoResourceOverride(overrides, 'In-memory configuration');
 		const configuration = this.getRegisteredConfiguration(key);
 		const identifier = overrides.overrideIdentifier;
 		const hasBaseValue = this.values.has(key);
@@ -256,7 +258,6 @@ export class InMemoryConfigurationService extends Disposable implements IConfigu
 			change,
 			affectsConfiguration: (section, overrides) => {
 				if (overrides !== undefined && !isConfigurationOverrides(overrides)) throw new TypeError('Configuration overrides are invalid');
-				assertNoResourceOverride(overrides, 'In-memory configuration');
 				if (![...affectedKeys].some(key => key === section || key.startsWith(`${section}.`))) return false;
 				if (!overrides) return true;
 				const before = this.getSectionValue(previous, section, overrides.overrideIdentifier);

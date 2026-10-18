@@ -185,6 +185,9 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 		this._register(this.configurationService.onDidChangeConfiguration(event => {
 			const part = this.part.value;
 			if (!part) return;
+			const model = part.getModel();
+			const fontOverrides = model ? { resource: model.uri, overrideIdentifier: model.getLanguageId() } : {};
+
 			const update: {
 				fontFamily?: IEditorOptions['fontFamily'];
 				fontSize?: IEditorOptions['fontSize'];
@@ -198,11 +201,11 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 				selectionClipboard?: IEditorOptions['selectionClipboard'];
 				find?: IEditorOptions['find'];
 			} = {};
-			if (this.options.fontFamily === undefined && event.affectsConfiguration('editor.fontFamily')) {
-				update.fontFamily = this.configurationService.getValue<string>('editor.fontFamily') || undefined;
+			if (this.options.fontFamily === undefined && event.affectsConfiguration('editor.fontFamily', fontOverrides)) {
+				update.fontFamily = this.configurationService.getValue<string>('editor.fontFamily', fontOverrides) || undefined;
 			}
-			if (this.options.fontSize === undefined && event.affectsConfiguration('editor.fontSize')) {
-				update.fontSize = this.configurationService.getValue('editor.fontSize');
+			if (this.options.fontSize === undefined && event.affectsConfiguration('editor.fontSize', fontOverrides)) {
+				update.fontSize = this.configurationService.getValue('editor.fontSize', fontOverrides);
 			}
 			if (this.options.lineHeight === undefined && event.affectsConfiguration('editor.lineHeight')) {
 				update.lineHeight = this.configurationService.getValue('editor.lineHeight');
@@ -295,6 +298,7 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 			throwIfCancelled(signal, "Code editor input loading was cancelled");
 			if (!(model instanceof TextModel)) throw new TypeError('Text resource editor requires a TextModel');
 			resolvedModel = model;
+			const fontOverrides = { resource: model.uri, overrideIdentifier: model.getLanguageId() };
 			part = this.createPart({
 				container,
 				model: resolvedModel,
@@ -304,8 +308,8 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 				accessibilityService: this.options.accessibilityService,
 				lineWrapping: this.options.lineWrapping ?? this.configurationService.getValue(wordWrapConfiguration),
 				wrappingIndent: this.options.wrappingIndent,
-				fontFamily: this.options.fontFamily ?? (this.configurationService.getValue<string>('editor.fontFamily') || undefined),
-				fontSize: this.options.fontSize ?? this.configurationService.getValue<number>('editor.fontSize'),
+				fontFamily: this.options.fontFamily ?? (this.configurationService.getValue<string>('editor.fontFamily', fontOverrides) || undefined),
+				fontSize: this.options.fontSize ?? this.configurationService.getValue<number>('editor.fontSize', fontOverrides),
 				lineHeight: this.options.lineHeight ?? this.configurationService.getValue<number>('editor.lineHeight'),
 				fontLigatures: this.options.fontLigatures ?? this.configurationService.getValue<boolean>('editor.fontLigatures'),
 				experimentalGpuAcceleration: this.options.experimentalGpuAcceleration,
@@ -378,6 +382,11 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 		// Declarative language registration can finish after a file has opened.
 		statusListeners.add(resolvedModel.onDidChangeLanguage(() => {
 			this.languageId = resolvedModel.getLanguageId();
+			const fontOverrides = { resource: resolvedModel.uri, overrideIdentifier: this.languageId };
+			part.updateOptions({
+				fontFamily: this.options.fontFamily ?? (this.configurationService.getValue<string>('editor.fontFamily', fontOverrides) || undefined),
+				fontSize: this.options.fontSize ?? this.configurationService.getValue<number>('editor.fontSize', fontOverrides),
+			});
 			this.statusChangeEmitter.fire();
 		}));
 		statusListeners.add(part.onDidChangeCursorSelection(event => {

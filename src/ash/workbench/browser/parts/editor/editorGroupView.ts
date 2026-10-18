@@ -602,6 +602,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			throw new EditorOpenSupersededError(input);
 		}
 		createdPane = pane;
+		pane.group = this;
 		if (pane.id !== descriptor.id) {
 			pane.dispose();
 			const error = new TypeError(
@@ -1007,6 +1008,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 }
 
 function applyEditorOpenOptions(pane: IEditorPane, options: EditorOpenOptions): void {
+	pane.setOptions?.(options);
 	if (options.viewState && isEditorPaneWithViewState(pane)) { pane.restoreViewState(options.viewState); }
 	if (!options.selection) return;
 	if (isEditorPaneWithSelection(pane)) {

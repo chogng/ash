@@ -1,7 +1,8 @@
+import { isObject } from '../../../../base/common/types.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, type IConfigurationSettingSchema, type IRegisteredConfiguration } from '../../../../platform/configuration/common/configurationRegistry.js';
-import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { ConfigurationTarget, getConfigValueInTarget, merge, type IConfigurationOverrides, type IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import type { IBooleanSetting, INumberSetting, ISelectSetting, ISetting, ISettingsEditorModel, ITextSetting, SettingReference, SettingsStatus, SettingValueBinding } from './preferences.js';
 
@@ -94,18 +95,43 @@ export class SettingModel<T> extends Disposable implements SettingReference {
 	}
 }
 
-export function configurationSettingBinding<T>(configurationService: IConfigurationService, configuration: IRegisteredConfiguration<T>): SettingValueBinding<T> {
+export function configurationSettingBinding<T>(
+	configurationService: IConfigurationService,
+	configuration: IRegisteredConfiguration<T>,
+	overrides: IConfigurationOverrides = {},
+	target = ConfigurationTarget.USER_LOCAL,
+): SettingValueBinding<T> {
+	// Each control owns an immutable address. A late save must not follow a pane's new target.
+	const address = { ...overrides };
+	const inspect = () => configurationService.inspect<T>(configuration.key, address);
+	const configuredValue = (): Readonly<T> | undefined => {
+		const value = inspect();
+		if (!address.overrideIdentifier) return getConfigValueInTarget(value, target);
+		const layer = target === ConfigurationTarget.WORKSPACE_FOLDER ? value.workspaceFolder
+			: target === ConfigurationTarget.WORKSPACE ? value.workspace : value.userLocal;
+		return layer?.override;
+	};
 	return {
 		id: configuration.key,
-		defaultValue: configurationService.inspect<T>(configuration.key).defaultValue!,
+		defaultValue: inspect().defaultValue! as T,
 		onDidChange: listener => configurationService.onDidChangeConfiguration(event => {
 			// Catalog withdrawal can notify configuration consumers before the editor releases controls.
 			if (event.affectsConfiguration(configuration.key) && configurationService.keys().default.includes(configuration.key)) listener();
 		}),
-		getValue: () => configurationService.getValue<T>(configuration.key),
-		isDefault: () => configurationService.inspect<T>(configuration.key).userLocalValue === undefined,
-		updateValue: value => configurationService.updateValue(configuration.key, value),
-		resetValue: () => configurationService.updateValue(configuration.key, undefined),
+		getValue: () => {
+			const value = inspect();
+			if (value.policyValue !== undefined) return value.policyValue as T;
+			const selected = configuredValue() === undefined ? undefined : getConfigValueInTarget(value, target);
+			if (isObject(value.defaultValue) && isObject(selected)) {
+				const combined = structuredClone(value.defaultValue) as Record<string, unknown>;
+				merge(combined, selected as Record<string, unknown>, true);
+				return combined as T;
+			}
+			return (selected === undefined ? value.defaultValue : selected) as T;
+		},
+		isDefault: () => configuredValue() === undefined,
+		updateValue: value => configurationService.updateValue(configuration.key, value, address, target),
+		resetValue: () => configurationService.updateValue(configuration.key, undefined, address, target),
 	};
 }
 

@@ -256,18 +256,18 @@ test('packaged Markdown extension activates Chinese labels and renders the suppl
 	assert.match(result.update.html, /<h1 id="unsaved" tabindex="-1">Unsaved<\/h1>/u);
 	assert.match(result.update.html, /<strong>bold<\/strong>/u);
 	assert.doesNotMatch(result.update.html, /alert\(1\)/u);
-	const activeEditor = { resource: URI.file('/notes/draft.md').toJSON(), groupId: 'source-group', editorIndex: 2 };
+	const activeEditor = { resource: URI.file('/notes/draft.md').toJSON(), groupId: 1, editorIndex: 2 };
 	for (const command of ['markdown.showPreview', 'markdown.showPreviewToSide', 'markdown.showSource', 'markdown.reopenAsPreview', 'markdown.reopenAsSource', 'markdown.showRichEditor', 'markdown.reopenAsRichEditor']) {
 		await handlers.get(command)!('execute', normalizeExtensionHostPayload({ activeEditor, arguments: [] }), signal);
 	}
 	assert.deepEqual(JSON.parse(JSON.stringify(commands)), [
-		['_workbench.openWith', activeEditor.resource, 'vscode.markdown.preview.editor', [-1], 'source-group'],
-		['_workbench.openWith', activeEditor.resource, 'vscode.markdown.preview.editor', [-2], 'source-group'],
-		['_workbench.openWith', activeEditor.resource, 'default', [-1], 'source-group'],
-		['reopenActiveEditorWith', 'vscode.markdown.preview.editor', { groupId: 'source-group', editorIndex: 2 }],
-		['reopenActiveEditorWith', 'default', { groupId: 'source-group', editorIndex: 2 }],
-		['_workbench.openWith', activeEditor.resource, 'vscode.markdown.editor', [-1], 'source-group'],
-		['reopenActiveEditorWith', 'vscode.markdown.editor', { groupId: 'source-group', editorIndex: 2 }],
+		['_workbench.openWith', activeEditor.resource, 'vscode.markdown.preview.editor', [-1], 1],
+		['_workbench.openWith', activeEditor.resource, 'vscode.markdown.preview.editor', [-2], 1],
+		['_workbench.openWith', activeEditor.resource, 'default', [-1], 1],
+		['reopenActiveEditorWith', 'vscode.markdown.preview.editor', { groupId: 1, editorIndex: 2 }],
+		['reopenActiveEditorWith', 'default', { groupId: 1, editorIndex: 2 }],
+		['_workbench.openWith', activeEditor.resource, 'vscode.markdown.editor', [-1], 1],
+		['reopenActiveEditorWith', 'vscode.markdown.editor', { groupId: 1, editorIndex: 2 }],
 	]);
 });
 

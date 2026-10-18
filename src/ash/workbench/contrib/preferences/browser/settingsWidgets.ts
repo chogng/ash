@@ -21,7 +21,7 @@ import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
-import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { IConfigurationService, type IConfigurationOverrides, ConfigurationTarget, getConfigValueInTarget } from '../../../../platform/configuration/common/configuration.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import { HoverConfiguration } from '../../../../platform/hover/common/hoverService.js';
@@ -112,6 +112,8 @@ export class SettingsSearchWidget extends Disposable {
 }
 
 export interface SettingWidgetOptions {
+	readonly configurationOverrides?: IConfigurationOverrides;
+	readonly configurationTarget?: ConfigurationTarget;
 	readonly onStatus: (message: string, isError: boolean) => void;
 	readonly onOpenSettings?: (key: string) => Promise<void>;
 }
@@ -257,7 +259,11 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 		this.titleDomNode.className = `ash-configuration-setting-title ash-${this.presentation}-setting-title`;
 		this.descriptionDomNode = h(document, 'span');
 		this.descriptionDomNode.className = `ash-configuration-setting-description ash-${this.presentation}-setting-description`;
-		this.indicators = this._register(new SettingsTreeIndicatorsLabel(this.copyDomNode, contextViewProvider, () => configurationService.getValue<number>(HoverConfiguration.delay)));
+		const configuredText = options.configurationOverrides?.overrideIdentifier
+			? localize({ bundle: 'ash.settings', key: 'status.configuredLanguage' }, 'Configured for {0} in the selected target.', options.configurationOverrides.overrideIdentifier)
+			: options.configurationTarget === ConfigurationTarget.WORKSPACE || options.configurationTarget === ConfigurationTarget.WORKSPACE_FOLDER
+				? localize({ bundle: 'ash.settings', key: 'status.configuredTarget' }, 'Configured in the selected target.') : undefined;
+		this.indicators = this._register(new SettingsTreeIndicatorsLabel(this.copyDomNode, contextViewProvider, () => configurationService.getValue<number>(HoverConfiguration.delay), configuredText));
 		this.copyDomNode.prepend(this.titleDomNode, this.descriptionDomNode);
 		this.updateCopy(descriptor);
 
@@ -270,12 +276,11 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 					reset: () => this.resetSetting(),
 				},
 				editInJSON: descriptor.binding || !options.onOpenSettings ? undefined : () => options.onOpenSettings!(this.descriptor.id),
-				onError: (error: unknown) => options.onStatus(settingErrorMessage(error, localize({ bundle: 'ash.settings', key: 'actions.failed' }, 'Unable to run the setting action.')), true),
+				onError: (error: unknown) => this.reportStatus(settingErrorMessage(error, localize({ bundle: 'ash.settings', key: 'actions.failed' }, 'Unable to run the setting action.')), true),
 				copySettingAsJSON: descriptor.binding ? undefined : () => {
-					// The current Settings target is local user, without a language override.
 					const setting = this.descriptor.configuration;
-					const inspected = configurationService.inspect<TValue>(setting.key);
-					const value = inspected.userLocalValue === undefined ? inspected.defaultValue : inspected.userLocalValue;
+					const inspected = configurationService.inspect(setting.key, options.configurationOverrides);
+					const value = binding.isDefault?.() ? binding.defaultValue : getConfigValueInTarget(inspected, options.configurationTarget ?? ConfigurationTarget.USER_LOCAL);
 					return `${JSON.stringify(setting.key)}: ${JSON.stringify(value, null, 2)}`;
 				},
 			}));
@@ -323,6 +328,7 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 	}
 
 	protected reportStatus(message: string, isError: boolean): void {
+		if (this.isDisposed) return;
 		this.options.onStatus(message, isError);
 	}
 
@@ -370,7 +376,7 @@ class BooleanSettingWidget extends AbstractSettingWidget<IBooleanSetting, boolea
 		@IContextViewService contextViewProvider: IContextViewService,
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
-		super(container, descriptor, descriptor.binding ?? configurationSettingBinding(configurationService, descriptor.configuration), options, configurationService, contextViewProvider, instantiationService, 'toggle');
+		super(container, descriptor, descriptor.binding ?? configurationSettingBinding(configurationService, descriptor.configuration, options.configurationOverrides, options.configurationTarget), options, configurationService, contextViewProvider, instantiationService, 'toggle');
 		this.toggle = this._register(new Switch(this.domNode, {
 			...defaultToggleStyles,
 			ariaLabel: descriptor.title,
@@ -400,7 +406,7 @@ class NumberSettingWidget extends AbstractSettingWidget<INumberSetting, number> 
 		@IContextViewService contextViewProvider: IContextViewService,
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
-		super(container, descriptor, descriptor.binding ?? configurationSettingBinding(configurationService, descriptor.configuration), options, configurationService, contextViewProvider, instantiationService);
+		super(container, descriptor, descriptor.binding ?? configurationSettingBinding(configurationService, descriptor.configuration, options.configurationOverrides, options.configurationTarget), options, configurationService, contextViewProvider, instantiationService);
 		this.domNode.append(this.copyDomNode);
 		if (this.presentation === 'editor') {
 			this.inputBox = this._register(new InputBox(this.domNode, {
@@ -456,7 +462,7 @@ class SelectSettingWidget extends AbstractSettingWidget<ISelectSetting, string |
 		@IContextViewService contextViewProvider: IContextViewService,
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
-		super(container, descriptor, descriptor.binding ?? configurationSettingBinding(configurationService, descriptor.configuration), options, configurationService, contextViewProvider, instantiationService, 'select');
+		super(container, descriptor, descriptor.binding ?? configurationSettingBinding(configurationService, descriptor.configuration, options.configurationOverrides, options.configurationTarget), options, configurationService, contextViewProvider, instantiationService, 'select');
 		this.select = this._register(new SelectBox(this.domNode, {
 			options: descriptor.options.map(option => ({ value: String(option.value), label: option.label })),
 			ariaLabel: descriptor.title,
@@ -511,7 +517,7 @@ class TextSettingWidget extends AbstractSettingWidget<ITextSetting, string> {
 		@IContextViewService contextViewProvider: IContextViewService,
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
-		super(container, descriptor, descriptor.binding ?? configurationSettingBinding(configurationService, descriptor.configuration), options, configurationService, contextViewProvider, instantiationService);
+		super(container, descriptor, descriptor.binding ?? configurationSettingBinding(configurationService, descriptor.configuration, options.configurationOverrides, options.configurationTarget), options, configurationService, contextViewProvider, instantiationService);
 		this.input = h(this.domNode.ownerDocument, 'input');
 		this.input.className = `ash-${this.presentation}-setting-text`;
 		this.input.type = 'text';
@@ -678,10 +684,10 @@ class ExcludeSettingWidget extends AbstractSettingWidget<IStringMapSetting, Reco
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IHoverService private readonly hoverService: IHoverService,
 	) {
-		const binding = configurationSettingBinding(configurationService, descriptor.configuration);
+		const binding = configurationSettingBinding(configurationService, descriptor.configuration, options.configurationOverrides, options.configurationTarget);
 		super(container, descriptor, {
 			...binding,
-			updateValue: value => configurationService.updateValue(descriptor.id, Object.keys(value).length ? value : undefined),
+			updateValue: value => Object.keys(value).length ? binding.updateValue(value) : binding.resetValue(),
 		}, options, configurationService, contextViewProvider, instantiationService);
 		this.conditional = ['files.exclude', 'search.exclude', 'explorer.autoRevealExclude'].includes(descriptor.id);
 		this.domNode.classList.add('ash-pattern-setting');
@@ -892,7 +898,7 @@ class StringMapSettingWidget extends AbstractSettingWidget<IStringMapSetting, Re
 		@IContextViewService contextViewProvider: IContextViewService,
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
-		super(container, descriptor, descriptor.binding ?? configurationSettingBinding(configurationService, descriptor.configuration), options, configurationService, contextViewProvider, instantiationService);
+		super(container, descriptor, descriptor.binding ?? configurationSettingBinding(configurationService, descriptor.configuration, options.configurationOverrides, options.configurationTarget), options, configurationService, contextViewProvider, instantiationService);
 		this.contextViewProvider = contextViewProvider;
 		this.domNode.classList.add('ash-string-map-setting');
 		this.domNode.dataset.configurationKey = descriptor.configuration.key;
@@ -1062,7 +1068,7 @@ class ComplexSettingWidget extends AbstractSettingWidget<IComplexSetting, unknow
 		@IContextViewService contextViewProvider: IContextViewService,
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
-		super(container, descriptor, configurationSettingBinding(configurationService, descriptor.configuration), options, configurationService, contextViewProvider, instantiationService);
+		super(container, descriptor, configurationSettingBinding(configurationService, descriptor.configuration, options.configurationOverrides, options.configurationTarget), options, configurationService, contextViewProvider, instantiationService);
 		this.domNode.dataset.configurationKey = descriptor.id;
 		const button = this._register(new Button(this.domNode, {
 			...defaultButtonStyles,

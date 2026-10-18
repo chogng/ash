@@ -83,10 +83,10 @@ registerAction2(class ReopenWithAction extends Action2 {
 	}
 
 	override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
-		const groupId = typeof context === 'object' && context !== null && 'groupId' in context && typeof context.groupId === 'string' ? context.groupId : undefined;
+		const groupId = typeof context === 'object' && context !== null && 'groupId' in context && typeof context.groupId === 'number' ? context.groupId : undefined;
 		const editorIndex = typeof context === 'object' && context !== null && 'editorIndex' in context && typeof context.editorIndex === 'number' ? context.editorIndex : undefined;
 		const part = accessor.get(IEditorPart);
-		const group = groupId ? part.groups.find(group => group.id === groupId) : part.activeGroup;
+		const group = groupId !== undefined ? part.groups.find(group => group.id === groupId) : part.activeGroup;
 		const input = editorIndex === undefined ? group?.activeInput : group?.inputs[editorIndex];
 		if (!group || !input) return;
 
@@ -115,7 +115,7 @@ CommandsRegistry.register(API_OPEN_WITH_EDITOR_COMMAND_ID, async (accessor, reso
 	if (typeof id !== 'string' || typeof resource !== 'object' || resource === null) throw new TypeError('Open With requires a URI and editor ID');
 	const uri = URI.from(resource as UriComponents);
 	const part = accessor.get(IEditorPart);
-	const source = typeof sourceGroupId === 'string' ? part.groups.find(group => group.id === sourceGroupId) : part.activeGroup;
+	const source = typeof sourceGroupId === 'number' ? part.groups.find(group => group.id === sourceGroupId) : part.activeGroup;
 	if (!source) return;
 	const matching = source.inputs.filter(input => input.resource.toString() === uri.toString());
 	const input = matching.find(input => !input.editorId) ?? matching[0]?.toUntyped?.() ?? { resource: uri };

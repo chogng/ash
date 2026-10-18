@@ -33,9 +33,9 @@ test('Open Editors follows editor groups, dirty state, activation, and close', a
 	using windowLifetime = getWindowById(getWindowId(browser.window as unknown as Window)!)!.disposables;
 	using changes = new Emitter<EditorPartChangeEvent>();
 	using configuration = new InMemoryConfigurationService();
-	const first = editor('group-a', 'first', 'first.ts', false);
-	const second = editor('group-b', 'second', 'second.ts', false);
-	let groups = [group('group-a', [first])];
+	const first = editor(1, 'first', 'first.ts', false);
+	const second = editor(2, 'second', 'second.ts', false);
+	let groups = [group(1, [first])];
 	let activated: string | undefined;
 	let closed: string | undefined;
 	const editorPart = {
@@ -77,8 +77,8 @@ test('Open Editors follows editor groups, dirty state, activation, and close', a
 		decorationProvider.dispose();
 		assert.equal(label.getAttribute('aria-label'), 'first.ts');
 		const dirtyFirst = { ...first, isDirty: true };
-		groups = [group('group-a', [dirtyFirst]), group('group-b', [second])];
-		changes.fire({ kind: 'groupAdded', group: { id: 'group-b', editors: [second], activeEditorInstanceId: second.instanceId } });
+		groups = [group(1, [dirtyFirst]), group(2, [second])];
+		changes.fire({ kind: 'groupAdded', group: { id: 2, editors: [second], activeEditorInstanceId: second.instanceId } });
 		assert.deepEqual([...view.element.querySelectorAll('.ash-open-editors-row')].map(row => row.textContent?.trim()), [
 			'Group 1', 'first.tsUnsaved changes', 'Group 2', 'second.ts',
 		]);
@@ -163,7 +163,7 @@ test('Dirty file activity follows working copy registration and dirty state', ()
 	assert.equal(activeBadge, undefined);
 });
 
-function editor(groupId: string, instanceId: string, label: string, isDirty: boolean): EditorInstanceState {
+function editor(groupId: number, instanceId: string, label: string, isDirty: boolean): EditorInstanceState {
 	return {
 		groupId,
 		instanceId,
@@ -179,7 +179,7 @@ function editor(groupId: string, instanceId: string, label: string, isDirty: boo
 	};
 }
 
-function group(id: string, editors: readonly EditorInstanceState[]): IEditorGroup {
+function group(id: number, editors: readonly EditorInstanceState[]): IEditorGroup {
 	return { id, editors } as IEditorGroup;
 }
 

@@ -16,7 +16,7 @@ export interface EditorOpenOptions extends IMultiDiffEditorOptions {
 }
 
 /** The editor group selected by a resource-navigation request. */
-export type EditorOpenTarget = "activeGroup" | "sideGroup" | "modalGroup" | { readonly groupId: string; };
+export type EditorOpenTarget = "activeGroup" | "sideGroup" | "modalGroup" | { readonly groupId: number; };
 
 export interface ISaveEditorsOptions extends ISaveOptions {
 	readonly saveAs?: boolean;

@@ -1,3 +1,5 @@
+import { emptyEditorGroupsService } from '../../../../test/common/testWorkbenchContextKeys.js';
+import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { KeybindingTestServices } from '../../../../services/keybinding/test/browser/keybindingTestServices.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IKeyboardLayoutService } from '../../../../../platform/keyboardLayout/common/keyboardLayout.js';
@@ -121,7 +123,7 @@ test('Keyboard Shortcuts reuses one modal and reconciles resource rows across ed
 		keyboardLayoutService: keyboardLayout,
 	}));
 	const editorService = new BrowserEditorService(editor);
-	const preferences = disposables.add(new PreferencesService(editorService, editorServices.get(IFileTextModelService), resources.files, resources.profiles, editorServices, editorServices.get(IConfigurationService)));
+	const preferences = disposables.add(new PreferencesService(editorService, editorServices.get(IFileTextModelService), resources.files, resources.profiles, editorServices, editorServices.get(IConfigurationService), editorServices.get(IWorkspaceContextService), editorService));
 	await preferences.openSettings();
 	const modalHost = ownerDocument.querySelector<HTMLElement>('.ash-modal-editor-host');
 	assert.ok(modalHost);
@@ -372,7 +374,7 @@ for (const cancelled of [false, true]) {
 				throw failure;
 			},
 			focusActiveEditor() { },
-		}, resources.models, resources.files, resources.profiles, resources.services, disposables.add(new InMemoryConfigurationService())));
+		}, resources.models, resources.files, resources.profiles, resources.services, disposables.add(new InMemoryConfigurationService()), disposables.add(createTestEditorServices()).get(IWorkspaceContextService), emptyEditorGroupsService));
 		await assert.rejects(preferences.openGlobalKeybindingSettings(false), error => error === failure);
 		assert.deepEqual([openedInputs[0]?.isDisposed, disposed], [true, 1]);
 		await assert.rejects(preferences.openGlobalKeybindingSettings(false), error => error === failure);

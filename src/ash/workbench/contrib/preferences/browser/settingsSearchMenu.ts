@@ -42,7 +42,7 @@ export class SettingsSearchMenu extends Disposable {
 			{
 				id: 'settings.search.modified',
 				label: localize({ bundle: 'ash.settings', key: 'search.modified' }, 'Modified'),
-				tooltip: localize({ bundle: 'ash.settings', key: 'search.modifiedTooltip' }, 'Show settings configured in local user settings'),
+				tooltip: localize({ bundle: 'ash.settings', key: 'search.modifiedTooltip' }, 'Show settings configured in the selected target and language'),
 				enabled: true,
 				run: () => this.updateTokens([...tokens.filter(token => token.toLocaleLowerCase() !== '@modified'), '@modified']),
 			},

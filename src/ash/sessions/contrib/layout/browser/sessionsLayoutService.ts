@@ -53,7 +53,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 	private readonly visibility = new Map<string, EntryVisibility>();
 	private readonly editorEntries = new Map<string, ISessionsEntry>();
 	private readonly activityKeys = new Map<string, IContextKey<boolean>>();
-	private readonly pageGroupId: string;
+	private readonly pageGroupId: number;
 	private navigationQueue = Promise.resolve();
 	public isChangingContent = false;
 	public get isSessionContent(): boolean { return !this.customViews.activeCustomView.get() && this.activeEntry.get()?.content !== 'editor'; }

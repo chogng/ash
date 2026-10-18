@@ -37,7 +37,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 	private readonly detailPanel: DesktopDetailPanelCoordinator;
 	private closedProfile = { documents: true, details: true };
 
-	constructor(private readonly pageGroupId: string, private readonly context: IDesktopLayoutContext,
+	constructor(private readonly pageGroupId: number, private readonly context: IDesktopLayoutContext,
 		@IPaneCompositePartService panes: IPaneCompositePartService,
 		@ISessionsService sessions: ISessionsService,
 		@ISessionsManagementService management: ISessionsManagementService,

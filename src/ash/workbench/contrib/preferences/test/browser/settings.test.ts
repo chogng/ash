@@ -1,3 +1,4 @@
+import { ILanguageService } from '../../../../../editor/common/languages/language.js';
 import { ScreenshotGlobalShortcutSetting } from '../../../screenshot/common/screenshot.js';
 import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
 import { resolveKeybinding } from '../../../../../base/common/keybindings.js';
@@ -1872,7 +1873,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	editorServices.registerInstance(IEditorPart, editor);
 	editorServices.registerInstance(ICommandService, disposables.add(new CommandService(editorServices)));
 	editorServices.registerInstance(IEditorService, disposables.add(new BrowserEditorService(editor)));
-	const preferences = disposables.add(new PreferencesService(editorServices.get(IEditorService), editorServices.get(IFileTextModelService), keybindingProfile.files, keybindingProfile.profiles, editorServices, configuration));
+	const preferences = disposables.add(new PreferencesService(editorServices.get(IEditorService), editorServices.get(IFileTextModelService), keybindingProfile.files, keybindingProfile.profiles, editorServices, configuration, configuration, editorServices.get(IEditorService) as InstanceType<typeof BrowserEditorService>));
 	services.registerInstance(IPreferencesService, preferences);
 	services.registerInstance(IOpenerService, { open: async () => true } as unknown as IOpenerService);
 	services.registerInstance(IAccountService, { onDidChangeAccounts: Event.None, onDidCompleteLogin: Event.None, read: async () => ({ revision: 1n, accounts: [] }), startLogin: async () => { throw new Error('Not used'); }, cancelLogin: async () => { }, logout: async () => { } });
@@ -2468,6 +2469,12 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	await commands.executeCommand('workbench.action.openSettings', { query: '@id:editor.fontSize' });
 	assert.equal(search.value, '@id:editor.fontSize');
 	assert.equal(root.querySelectorAll('.ash-settings-content-tree [data-settings-item-id]').length, 1);
+	const focusedSize = root.querySelector<HTMLInputElement>('[data-configuration-key="editor.fontSize"]')!;
+	focusedSize.focus();
+	await commands.executeCommand('workbench.action.openSettings', { query: '@id:editor.fontSize', focusSearch: false });
+	assert.equal(ownerDocument.activeElement, focusedSize, 'opening options can retain focus on the current control');
+	await preferences.openSettings({ focusSearch: true });
+	assert.equal(ownerDocument.activeElement, search);
 	await assert.rejects(commands.executeCommand('workbench.action.openSettings', { query: 'changed', target: 5 }));
 	assert.equal(search.value, '@id:editor.fontSize');
 	await preferences.openSettings();
@@ -2479,12 +2486,63 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	await preferences.openSettings({ section: 'models' });
 	assert.equal(root.querySelector<HTMLElement>('[data-settings-container]')?.dataset.activeSettingsCategory, 'models');
 
+	using language = editorServices.get(ILanguageService).registerLanguage({ id: 'settings-test-language' });
+	await commands.executeCommand('workbench.action.openSettings', { query: '@lang:settings-test-language @id:editor.fontSize' });
+	const languageSize = root.querySelector<HTMLInputElement>('[data-configuration-key="editor.fontSize"]');
+	assert.ok(languageSize, 'language search shows language-overridable settings');
+	languageSize.value = '29';
+	languageSize.dispatchEvent(new browserEnvironment.window.Event('change', { bubbles: true }));
+	await nextTurn();
+	assert.equal(configuration.inspect<number>('editor.fontSize', { overrideIdentifier: 'settings-test-language' }).userLocal?.override, 29);
+	assert.equal(configuration.inspect('editor.fontSize').userLocalValue, undefined, 'language editing leaves the base user setting absent');
+	await preferences.openSettings({ query: '@lang:settings-test-language @modified @id:editor.fontSize' });
+	assert.ok(root.querySelector('[data-settings-item-id="editor.fontSize"]'));
+	await preferences.openSettings({ query: '@lang:settings-test-language @id:window.title' });
+	assert.equal(root.querySelector('[data-settings-item-id="window.title"]'), null, 'non-overridable settings are excluded');
+	await preferences.openSettings({ query: '@lang:unregistered @id:editor.fontSize' });
+	assert.equal(root.querySelector('[data-settings-item-id="editor.fontSize"]'), null);
+	await preferences.openSettings({ query: '@modified @id:editor.fontSize' });
+	assert.equal(root.querySelector('[data-settings-item-id="editor.fontSize"]'), null, 'base modified filter excludes a language-only override');
+	await preferences.openSettings({ query: '@id:editor.fontSize' });
+	assert.notEqual(root.querySelector<HTMLInputElement>('[data-configuration-key="editor.fontSize"]')?.value, '29');
+
+
 	root.querySelector<HTMLButtonElement>('.ash-modal-editor-close')?.click();
 	await nextTurn();
 	assert.equal(host.hidden, true);
 	assert.equal(ownerDocument.activeElement, trigger);
 	await configuration.updateValue(CodeEditorConfiguration.fontFamily, 'After close');
 	assert.equal(root.querySelector(`[data-settings-item-id="${CodeEditorConfiguration.fontFamily}"]`), null);
+	const firstGroup = editor.activeGroup;
+	await commands.executeCommand('workbench.action.openSettings', { groupId: firstGroup.id, query: '@id:editor.fontFamily' });
+	const firstSearch = firstGroup.domNode.querySelector<HTMLInputElement>('.ash-settings-search input')!;
+	const firstPane = firstGroup.activePane!;
+	assert.equal(firstPane.group, firstGroup);
+	assert.equal(firstSearch.value, '@id:editor.fontFamily');
+	await commands.executeCommand('workbench.action.openSettings', { openToSide: true, groupId: firstGroup.id, query: '@id:editor.fontSize' });
+	const secondGroup = editor.activeGroup;
+	const secondSearch = secondGroup.domNode.querySelector<HTMLInputElement>('.ash-settings-search input')!;
+	assert.notEqual(secondGroup, firstGroup, 'side opening takes precedence over an explicit group');
+	assert.equal(firstGroup.activePane, firstPane);
+	assert.notEqual(secondGroup.activePane, firstPane);
+	assert.equal(firstSearch.value, '@id:editor.fontFamily');
+	assert.equal(secondSearch.value, '@id:editor.fontSize');
+	assert.equal(ownerDocument.activeElement, secondSearch);
+	await commands.executeCommand('workbench.action.openSettings', { groupId: firstGroup.id, query: '@modified', preserveFocus: true });
+	assert.equal(firstSearch.value, '@modified');
+	assert.equal(secondSearch.value, '@id:editor.fontSize');
+	assert.equal(editor.activeGroup, secondGroup);
+	assert.equal(ownerDocument.activeElement, secondSearch);
+	await commands.executeCommand('workbench.action.openSettings', { groupId: firstGroup.id, query: '@id:editor.fontSize' });
+	assert.equal(ownerDocument.activeElement, firstSearch);
+	assert.equal(firstGroup.activePane, firstPane, 'reopening a group reuses its pane');
+	await secondGroup.closeEditor(secondGroup.activeInput!);
+	await nextTurn();
+	assert.equal(firstGroup.activePane, firstPane, 'closing the other pane does not retire this pane');
+	await commands.executeCommand('workbench.action.openSettings', { openToSide: true, query: '@id:editor.fontFamily' });
+	assert.notEqual(editor.activeGroup, firstGroup);
+	assert.equal(firstSearch.value, '@id:editor.fontSize');
+	assert.equal(editor.activeGroup.domNode.querySelector<HTMLInputElement>('.ash-settings-search input')?.value, '@id:editor.fontFamily');
 });
 
 function findSettingCategory(layout: ReturnType<typeof createSettingsLayout>, settingId: string): string | undefined {

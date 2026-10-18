@@ -98,9 +98,9 @@ class TabsFixture extends Disposable {
 	public readonly replaceStarted = new DeferredPromise<void>();
 	public openGate: Promise<void> | undefined;
 	public replaceGate: Promise<void> | undefined;
-	public readonly opened: { input: IResourceEditorInput; target: string | undefined; }[] = [];
-	public readonly documents = this.group('documents');
-	public readonly pages = this.group('pages');
+	public readonly opened: { input: IResourceEditorInput; target: number | undefined; }[] = [];
+	public readonly documents = this.group(1);
+	public readonly pages = this.group(3);
 	public groups = [this.documents, this.pages];
 	public readonly coordinator: DesktopDockedTabsCoordinator;
 	constructor() {
@@ -124,7 +124,7 @@ class TabsFixture extends Disposable {
 		this.services.registerInstance(ISessionsService, { get activeSelection() { return fixture.selection; } } as ISessionsService);
 		this.coordinator = this._register(this.services.createInstance(DesktopDockedTabsCoordinator, this.pages.id));
 	}
-	private group(id: string) {
+	private group(id: number) {
 		const inputs: IResourceEditorInput[] = [];
 		return {
 			id, inputs,

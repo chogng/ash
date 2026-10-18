@@ -10,7 +10,7 @@ import { getInstanceFromResource } from './terminalUri.js';
 
 /** Coordinates editor membership while leaving terminal state with its original owner. */
 export class TerminalEditorService extends Disposable implements ITerminalEditorService {
-	private readonly groups = this._register(new DisposableMap<string, DisposableStore>());
+	private readonly groups = this._register(new DisposableMap<number, DisposableStore>());
 
 	constructor(
 		@ITerminalService private readonly terminals: ITerminalService,

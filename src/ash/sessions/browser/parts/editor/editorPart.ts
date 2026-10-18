@@ -11,7 +11,7 @@ import type { EditorOpenOptions, EditorOpenTarget } from '../../../../workbench/
 
 /** Sessions keeps product pages alive independently of per-session document restoration. */
 export class EditorPart extends WorkbenchEditorPart {
-	public readonly pageGroupId: string;
+	public readonly pageGroupId: number;
 	private readonly revealActiveEditor = this._register(new Emitter<void>());
 	public readonly onDidRevealActiveEditor = this.revealActiveEditor.event;
 
@@ -24,8 +24,8 @@ export class EditorPart extends WorkbenchEditorPart {
 		@IUriIdentityService uriIdentity: IUriIdentityService,
 	) {
 		super(container, options, instantiation, themeService, storageService, uriIdentity);
-		// A separate identity cannot collide with document group IDs restored from an older session.
-		const pages = this.insertGroup(this.activeGroup, Direction.Right, 'sessions-product-pages').group;
+		// The retained page group participates in the same window-local ID allocator.
+		const pages = this.insertGroup(this.activeGroup, Direction.Right).group;
 		this.pageGroupId = pages.id;
 		pages.setLocked(true);
 		this.setGroupVisible(pages.id, false);

@@ -101,7 +101,7 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 	toggleActiveGroupLock(): boolean { return this._activePart.toggleActiveGroupLock(); }
 	hasMaximizedGroup(): boolean { return this._activePart.hasMaximizedGroup(); }
 	toggleMaximizeGroup(group: IEditorGroup | EditorGroupId = this.activeGroup): void {
-		const id = typeof group === 'string' ? group : group.id;
+		const id = typeof group === 'number' ? group : group.id;
 		this.parts.find(part => part.groups.some(candidate => candidate.id === id))?.toggleMaximizeGroup(group);
 	}
 	get activeInput(): IResourceEditorInput | undefined { return this._activePart.activeInput; }
@@ -287,7 +287,7 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		return this.parts.find(part => part.groups.some(group => group.id === reference))!.addGroup(reference, direction);
 	}
 	public removeGroup(group: IEditorGroupView | EditorGroupId): Promise<boolean> {
-		const id = typeof group === 'string' ? group : group.id;
+		const id = typeof group === 'number' ? group : group.id;
 		return this.parts.find(part => part.groups.some(group => group.id === id))?.removeGroup(id) ?? Promise.resolve(true);
 	}
 	public activateGroup(id: EditorGroupId): void {

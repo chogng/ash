@@ -1,4 +1,4 @@
-import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../../../platform/configuration/common/configurationRegistry.js";
+import { ConfigurationScope, Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../../../platform/configuration/common/configurationRegistry.js";
 import { Registry } from "../../../../platform/registry/common/platform.js";
 import { EditorIndentationKind } from "../../../../editor/common/core/misc/indentation.js";
 import { EditorLineWrapping, type IEditorOptions } from "../../../../editor/common/config/editorOptions.js";
@@ -21,6 +21,7 @@ const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationE
 export const CodeEditorConfiguration = Object.freeze({
 	fontFamily: configurationRegistry.registerConfiguration<string>({
 		key: "editor.fontFamily",
+		scope: ConfigurationScope.LANGUAGE_OVERRIDABLE,
 		defaultValue: "",
 		parse(value: unknown): string {
 			if (typeof value === "string" && value.length <= 256 && !/[\r\n\0]/u.test(value)) return value;
@@ -35,6 +36,7 @@ export const CodeEditorConfiguration = Object.freeze({
 	}),
 	fontSize: configurationRegistry.registerConfiguration<number>({
 		key: "editor.fontSize",
+		scope: ConfigurationScope.LANGUAGE_OVERRIDABLE,
 		defaultValue: EDITOR_FONT_DEFAULTS.fontSize,
 		parse(value: unknown): number {
 			if (Number.isSafeInteger(value) && (value as number) >= 8 && (value as number) <= 40) return value as number;

@@ -1,6 +1,6 @@
 import { parseJsonc } from '../../../../src/ash/base/common/jsonc.js';
 import { readUserSettings, writeUserSettings } from '../../../automation/settings.js';
-import { readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Locator, Page } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
@@ -87,7 +87,12 @@ for (const locale of ['en', 'zh-CN']) {
 		const readSaved = async (): Promise<unknown> => {
 			if ('windows' in application) {
 				const profile = await application.evaluate(() => process.env.ASH_HOME!);
-				return JSON.parse(await readFile(join(profile, 'settings.json'), 'utf8'))['editor.fontSize'];
+				try {
+					return JSON.parse(await readFile(join(profile, 'settings.json'), 'utf8'))['editor.fontSize'];
+				} catch (error) {
+					if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+					throw error;
+				}
 			}
 			return (async () => { const snapshot = await readUserSettings(workbench.page); return JSON.parse(snapshot.content)['editor.fontSize']; })();
 		};
@@ -111,6 +116,58 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect(settings.getByRole('searchbox')).toHaveValue('');
 		await settings.locator('.ash-modal-editor-close').click();
 		await testInfo.attach('settings-query-diagnostics', { body: JSON.stringify(runningApplication.diagnostics), contentType: 'application/json' });
+		expect(runningApplication.diagnostics.errors).toEqual([]);
+	});
+
+	test(`Settings editor groups retain independent queries and switch JSON in the source group (${locale})`, async ({ workbench, restartWorkbench, runningApplication }) => {
+		const chinese = locale === 'zh-CN';
+		if (chinese) {
+			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+			const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
+			await picker.getByRole('combobox').fill('简体中文');
+			await picker.getByRole('combobox').press('Enter');
+			({ workbench } = await restartWorkbench());
+		}
+		await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
+		const first = workbench.editors.groupAt(0);
+		await first.editor.input.press('ControlOrMeta+A');
+		await pasteJson(first.editor.input, JSON.stringify([
+			{ key: 'ctrl+alt+y', command: 'workbench.action.openSettings', args: { groupId: 0, query: '@id:editor.fontFamily' } },
+			{ key: 'ctrl+alt+u', command: 'workbench.action.openSettings', args: { openToSide: true, query: '@id:editor.fontSize' } },
+		]));
+		await first.editor.input.press('ControlOrMeta+S');
+		await expect(first.tabs.filter({ hasText: chinese ? '键盘快捷方式（JSON）' : 'Keyboard Shortcuts (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
+		await workbench.page.keyboard.press('Control+Alt+Y');
+		const firstSearch = first.content.getByRole('searchbox');
+		await expect(firstSearch).toHaveValue('@id:editor.fontFamily');
+		await expect(firstSearch).toBeFocused();
+		await firstSearch.evaluate(element => element.setAttribute('data-group-query-owner', 'first'));
+		await firstSearch.press('Control+Alt+U');
+		await expect(workbench.editors.groups).toHaveCount(2);
+		const second = workbench.editors.groupAt(1);
+		const secondSearch = second.content.getByRole('searchbox');
+		await expect(secondSearch).toHaveValue('@id:editor.fontSize');
+		await expect(secondSearch).toBeFocused();
+		await expect(firstSearch).toHaveValue('@id:editor.fontFamily');
+		await secondSearch.evaluate(element => element.setAttribute('data-group-query-owner', 'second'));
+		const firstBounds = await first.element.boundingBox();
+		const secondBounds = await second.element.boundingBox();
+		expect(secondBounds!.x).toBeGreaterThanOrEqual(firstBounds!.x + firstBounds!.width - 2);
+		await second.content.getByRole('button', { name: chinese ? '打开设置（JSON）' : 'Open Settings (JSON)', exact: true }).press('Enter');
+		await expect(second.editor.input).toBeVisible();
+		await expect(second.tabs.filter({ hasText: chinese ? '用户设置（JSON）' : 'User Settings (JSON)' })).toHaveCount(1);
+		await expect(firstSearch).toHaveValue('@id:editor.fontFamily');
+		await second.title.getByRole('button', { name: chinese ? '打开设置（图形界面）' : 'Open Settings (UI)', exact: true }).press('Enter');
+		await expect(secondSearch).toHaveAttribute('data-group-query-owner', 'second');
+		await expect(secondSearch).toHaveValue('@id:editor.fontSize');
+		await expect(secondSearch).toBeFocused();
+		await expect(workbench.page.locator('.ash-modal-editor-host')).toBeHidden();
+		await firstSearch.click();
+		await firstSearch.press('Control+Alt+U');
+		await expect(workbench.editors.groups).toHaveCount(2);
+		await expect(secondSearch).toHaveAttribute('data-group-query-owner', 'second');
+		await expect(firstSearch).toHaveAttribute('data-group-query-owner', 'first');
+		await expect(firstSearch).toHaveValue('@id:editor.fontFamily');
 		expect(runningApplication.diagnostics.errors).toEqual([]);
 	});
 
@@ -913,5 +970,156 @@ test('Electron keeps a completed shutdown sealed after its close token expires a
 			});
 			await application.evaluate(() => (globalThis as typeof globalThis & { backupCloseDeadline: { restore(): void; }; }).backupCloseDeadline.restore());
 		}
+	}
+});
+
+
+test.describe('Settings configuration scopes', () => {
+	test.use({ electronUserSettings: { 'window.menuStyle': 'custom' } });
+	for (const locale of ['en', 'zh-CN']) {
+		test(`Settings targets and language overrides save and reset independently (${locale})`, { tag: ['@browser-ui', '@electron-app-server'] }, async ({ target, workbench, restartWorkbench, reloadWorkbench, runningApplication, testWorkspace }, testInfo) => {
+			const chinese = locale === 'zh-CN';
+			if (chinese) {
+				await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+				const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
+				await picker.getByRole('combobox').fill('简体中文');
+				await picker.getByRole('combobox').press('Enter');
+				({ workbench } = await restartWorkbench());
+			}
+			let page = workbench.page;
+			const workspaceSettings = { 'editor.fontSize': 21, '[plaintext]': { 'editor.fontSize': 22 } };
+			let folderName: string | undefined;
+			if (target.kind === 'browser') {
+				folderName = await page.evaluate(async source => {
+					const storage = await navigator.storage.getDirectory();
+					const root = await storage.getDirectoryHandle(`ash-settings-${crypto.randomUUID()}`, { create: true });
+					const settings = await root.getDirectoryHandle('.vscode', { create: true });
+					const writer = await (await settings.getFileHandle('settings.json', { create: true })).createWritable();
+					await writer.write(source);
+					await writer.close();
+					const note = await (await root.getFileHandle('scope.txt', { create: true })).createWritable();
+					await note.write('scoped font');
+					await note.close();
+					Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => root });
+					return root.name;
+				}, JSON.stringify(workspaceSettings));
+				await workbench.quickaccess.runCommand('workbench.action.files.openFolderViaWorkspace');
+				const entry = page.locator('.ash-explorer').getByRole('treeitem', { name: '.vscode', exact: true });
+				await expect(entry).toBeVisible();
+				await entry.click();
+			} else {
+				await mkdir(join(testWorkspace.directory, '.vscode'), { recursive: true });
+				await writeFile(join(testWorkspace.directory, '.vscode', 'settings.json'), JSON.stringify(workspaceSettings));
+			}
+			const readWorkspace = async (): Promise<unknown> => target.kind === 'browser' ? page.evaluate(async name => {
+				const root = await (await navigator.storage.getDirectory()).getDirectoryHandle(name!);
+				const file = await (await root.getDirectoryHandle('.vscode')).getFileHandle('settings.json');
+				return JSON.parse(await (await file.getFile()).text());
+			}, folderName) : JSON.parse(await readFile(join(testWorkspace.directory, '.vscode', 'settings.json'), 'utf8'));
+			await workbench.settingsEditor.openUserSettingsUI();
+			let settings = workbench.settingsEditor.element;
+			let search = settings.getByRole('searchbox');
+			const targetLabel = chinese ? '设置目标' : 'Settings target';
+			const switchTarget = async (label: string): Promise<void> => {
+				await settings.getByRole('button', { name: targetLabel, exact: true }).press('Enter');
+				await expect(settings.getByRole('button', { name: targetLabel, exact: true })).toHaveAttribute('aria-expanded', 'true');
+				await page.getByRole('menuitemradio', { name: label, exact: true }).press('Enter');
+				await expect(search).toBeFocused();
+				await expect(settings.getByRole('button', { name: targetLabel, exact: true })).toHaveAttribute('aria-expanded', 'false');
+			};
+			await search.fill('@lang:plaintext @id:editor.fontSize');
+			let size = settings.locator('[data-settings-item-id="editor.fontSize"]').getByRole('spinbutton');
+			await size.fill('23');
+			await size.press('Tab');
+			await expect.poll(async () => JSON.parse((await readUserSettings(page)).content)['[plaintext]']?.['editor.fontSize']).toBe(23);
+			expect(JSON.parse((await readUserSettings(page)).content)['editor.fontSize']).toBeUndefined();
+			await switchTarget(chinese ? '工作区' : 'Workspace');
+			await expect(size).toHaveValue('22');
+			await size.fill('27');
+			await size.press('Tab');
+			await expect.poll(readWorkspace).toEqual({ ...workspaceSettings, '[plaintext]': { 'editor.fontSize': 27 } });
+			await search.fill('@lang:plaintext @modified @id:editor.fontSize');
+			await expect(settings.locator('.ash-settings-configured-description')).toContainText('plaintext');
+			await settings.getByRole('button', { name: chinese ? /的更多操作$/u : /^More actions for /u }).press('Enter');
+			await page.getByRole('menuitem', { name: chinese ? '重置设置' : 'Reset Setting', exact: true }).press('Enter');
+			await expect(settings.locator('[data-settings-item-id="editor.fontSize"]')).toHaveCount(0);
+			await expect.poll(readWorkspace).toEqual({ 'editor.fontSize': 21 });
+			await search.fill('@id:editor.fontSize');
+			await expect(size).toHaveValue('21');
+			await switchTarget(chinese ? '用户' : 'User');
+			await search.fill('@lang:unregistered-language @id:editor.fontSize');
+			await expect(settings.locator('[data-settings-item-id="editor.fontSize"]')).toHaveCount(0);
+			await search.fill('@lang:plaintext @id:editor.fontSize');
+			await expect(size).toHaveValue('23');
+			const geometry = await settings.locator('.ash-settings-target').evaluate(element => {
+				const bounds = element.getBoundingClientRect();
+				const parent = element.parentElement!.getBoundingClientRect();
+				return { visible: bounds.width > 0 && bounds.left >= parent.left && bounds.right <= parent.right, maxWidth: getComputedStyle(element).maxWidth };
+			});
+			expect(geometry).toEqual({ visible: true, maxWidth: '30%' });
+			if (target.kind === 'browser') {
+				await page.emulateMedia({ colorScheme: 'dark', forcedColors: 'active' });
+				await expect(workbench.element).toHaveAttribute('data-color-theme', 'ash-high-contrast-dark');
+				await settings.getByRole('button', { name: targetLabel, exact: true }).focus();
+				await expect(settings.getByRole('button', { name: targetLabel, exact: true })).toHaveCSS('outline-style', 'solid');
+				await page.setViewportSize({ width: 720, height: 900 });
+				await expect(settings.getByRole('searchbox')).toBeVisible();
+				await expect(settings.locator('.ash-settings-target')).toBeVisible();
+			}
+
+			await settings.locator('.ash-modal-editor-close').click();
+			({ workbench } = await reloadWorkbench());
+			page = workbench.page;
+			await workbench.settingsEditor.openUserSettingsUI();
+			settings = workbench.settingsEditor.element;
+			search = settings.getByRole('searchbox');
+			await search.fill('@lang:plaintext @modified @id:editor.fontSize');
+			size = settings.locator('[data-settings-item-id="editor.fontSize"]').getByRole('spinbutton');
+			await expect(size).toHaveValue('23');
+			if (target.kind === 'browser') {
+				await settings.locator('.ash-modal-editor-close').click();
+				await page.locator('.ash-explorer').getByRole('treeitem', { name: 'scope.txt', exact: true }).dblclick();
+				await expect(workbench.editors.groupAt(0).editor.lines.first()).toHaveCSS('font-size', '23px');
+				const secondName = await page.evaluate(async () => {
+					const root = await (await navigator.storage.getDirectory()).getDirectoryHandle(`ash-settings-second-${crypto.randomUUID()}`, { create: true });
+					const directory = await root.getDirectoryHandle('.vscode', { create: true });
+					const writer = await (await directory.getFileHandle('settings.json', { create: true })).createWritable();
+					await writer.write(JSON.stringify({ 'editor.fontSize': 32, '[plaintext]': { 'editor.fontSize': 33 } }));
+					await writer.close();
+					Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => root });
+					return root.name;
+				});
+				await workbench.quickaccess.runCommand('workbench.action.addRootFolder');
+				await page.getByRole('button', { name: chinese ? '完成' : 'Done', exact: true }).click();
+				const secondRoot = page.locator('.ash-explorer').getByRole('treeitem', { name: secondName, exact: true });
+				await expect(secondRoot).toBeVisible();
+				await secondRoot.click();
+				await workbench.settingsEditor.openUserSettingsUI();
+				settings = workbench.settingsEditor.element;
+				search = settings.getByRole('searchbox');
+				await search.fill('@lang:plaintext @id:editor.fontSize');
+				await switchTarget(secondName);
+				size = settings.locator('[data-settings-item-id="editor.fontSize"]').getByRole('spinbutton');
+				await expect(size).toHaveValue('33');
+				await size.fill('35');
+				await size.press('Tab');
+				const readSecond = () => page.evaluate(async name => {
+					const root = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
+					const file = await (await root.getDirectoryHandle('.vscode')).getFileHandle('settings.json');
+					return JSON.parse(await (await file.getFile()).text());
+				}, secondName);
+				await expect.poll(readSecond).toEqual({ 'editor.fontSize': 32, '[plaintext]': { 'editor.fontSize': 35 } });
+				await expect.poll(readWorkspace).toEqual({ 'editor.fontSize': 21 });
+				expect(JSON.parse((await readUserSettings(page)).content)['[plaintext]']['editor.fontSize']).toBe(23);
+				await expect(workbench.editors.groupAt(0).editor.lines.first()).toHaveCSS('font-size', '23px');
+				await search.fill('@lang:plaintext @modified @id:editor.fontSize');
+				await settings.getByRole('button', { name: chinese ? /的更多操作$/u : /^More actions for /u }).press('Enter');
+				await page.getByRole('menuitem', { name: chinese ? '重置设置' : 'Reset Setting', exact: true }).press('Enter');
+				await expect.poll(readSecond).toEqual({ 'editor.fontSize': 32 });
+				await expect(settings.locator('[data-settings-item-id="editor.fontSize"]')).toHaveCount(0);
+			}
+			await testInfo.attach('settings-target-language', { body: await page.screenshot(), contentType: 'image/png' });
+			expect(runningApplication.diagnostics.errors).toEqual([]);
+		});
 	}
 });
