@@ -3,8 +3,12 @@ fn main() {
     if std::env::var_os("CARGO_FEATURE_EXPORT").is_some() {
         return;
     }
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../.build/protocol/metadata.json");
+    // Shared Cargo caches can reuse the build-script executable across source roots.
+    // Read Cargo's invocation directory at runtime instead of embedding the compiling root.
+    let path = std::path::PathBuf::from(
+        std::env::var_os("CARGO_MANIFEST_DIR").expect("Cargo must provide the manifest directory"),
+    )
+    .join("../../.build/protocol/metadata.json");
     println!("cargo:rerun-if-changed={}", path.display());
     let source = std::fs::read_to_string(path).expect(
         "protocol metadata is missing; run just generate-protocol before direct Cargo builds",

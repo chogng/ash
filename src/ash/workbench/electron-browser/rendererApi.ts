@@ -167,7 +167,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 					close: id => invoke('ash:oauth-callback:close', { id }),
 				},
 				clipboardService: new ElectronRendererClipboardService(),
-			}, contributions.map(contribution => (client, appServer) => contribution(client, appServer, localClient)), connection.recovery);
+			}, contributions.map(contribution => (client, appServer) => contribution(client, appServer, localClient)), remoteConnection.kind === 'ssh' ? remoteConnection.host : undefined, connection.recovery);
 			resources.add(backend.mcpServerManagement);
 			resources.add(registerAppServerWorkspaceHost(client, () => connection.whenConnected(), workspaceTrust, backend.workspaceTrust, folders => workspaceApi.validateFolders(folders), path => remoteConnection.kind === 'ssh' ? createSshRemoteWorkspaceUri(remoteConnection.host, path) : URI.file(path)));
 			// Editor recovery belongs to this Desktop profile, including SSH workspaces.

@@ -22,6 +22,53 @@ fn buffered_messages_advance_only_through_the_returned_page() {
 }
 
 #[test]
+fn adapter_cwd_uses_the_authorized_directory_canonical_form() {
+    use super::DebugAdapterCommand;
+    use super::DebugAdapterError;
+    use super::DebugAdapterService;
+    use ash_file_access::Dir;
+    use ash_file_access::Grant;
+    use ash_file_access::GrantSource;
+    use ash_file_access::Permission;
+    use ash_file_access::Permissions;
+    use std::path::PathBuf;
+
+    let root = std::env::temp_dir();
+    let authorization = |permission| {
+        Grant::for_environment(
+            Dir::open_local(&root).unwrap(),
+            GrantSource::HostConfiguration,
+            Permissions::new([permission]),
+        )
+        .authorize(permission)
+        .unwrap()
+    };
+    let service = DebugAdapterService::new(
+        authorization(Permission::LoadConfig),
+        authorization(Permission::ExecuteCommands),
+        std::env::vars().collect(),
+    )
+    .unwrap();
+    let command = |cwd| {
+        DebugAdapterCommand::new(
+            std::env::current_exe().unwrap().to_string_lossy(),
+            vec!["--list".into()],
+        )
+        .unwrap()
+        .with_options(Some(cwd), Default::default())
+        .unwrap()
+    };
+    for cwd in [root.clone(), PathBuf::from(".")] {
+        let id = service.start(command(cwd)).unwrap();
+        service.close(&id).unwrap();
+    }
+    assert!(matches!(
+        service.start(command(root.parent().unwrap().to_path_buf())),
+        Err(DebugAdapterError::InvalidCommand)
+    ));
+}
+
+#[test]
 fn connection_reader_reports_eof_and_frame_errors_without_inventing_exit_codes() {
     use super::DebugAdapterConnection;
     use super::DebugAdapterService;

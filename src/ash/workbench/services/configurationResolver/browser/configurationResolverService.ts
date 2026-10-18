@@ -7,6 +7,7 @@ import type { IPath } from '../../../../base/common/path.js';
 import { CancellationError, isCancellationError } from '../../../../base/common/errors.js';
 import { Schemas } from '../../../../base/common/network.js';
 import { URI } from '../../../../base/common/uri.js';
+import { getRemoteWorkspacePath } from '../../../../platform/remote/common/remote.js';
 import { OperatingSystem } from '../../../../base/common/platform.js';
 import { basename, dirname } from '../../../../base/common/resources.js';
 import { CancellationTokenSource, type CancellationToken } from '../../../../base/common/cancellation.js';
@@ -427,7 +428,8 @@ registerSingleton(IConfigurationResolverService, ConfigurationResolverService, I
 /** URI.fsPath follows the renderer OS; execution paths follow the resource owner. */
 function executionPath(resource: URI, path: IPath | undefined): string {
 	if (!path) throw new Error(localize('configurationResolver.missingPathPlatform', 'The execution host path platform is unavailable.'));
-	let value = resource.authority && resource.scheme === Schemas.file ? `//${resource.authority}${resource.path}` : resource.path;
+	let value = resource.scheme === Schemas.ashRemote ? getRemoteWorkspacePath(resource)
+		: resource.authority && resource.scheme === Schemas.file ? `//${resource.authority}${resource.path}` : resource.path;
 	if (resource.scheme === Schemas.file && /^\/[a-z]:/i.test(value)) value = (path.sep === '\\' ? value[1]!.toUpperCase() : value[1]!.toLowerCase()) + value.slice(2);
 	return path.sep === '\\' ? value.replaceAll('/', '\\') : value;
 }

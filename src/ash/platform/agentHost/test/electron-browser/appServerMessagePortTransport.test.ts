@@ -48,6 +48,25 @@ suite('App Server MessagePort transport', () => {
 		assert.equal(await ready, false);
 	});
 
+	test('cold SSH validation uses its connection budget instead of the local ten-second deadline', async () => {
+		mock.timers.enable({ apis: ['setTimeout'] });
+		try {
+			using transport = new Transport(() => { }, 'workspace', 180_000);
+			let settled = false;
+			const ready = transport.acquire().finally(() => { settled = true; });
+			const rejected = assert.rejects(ready, /App Server port acquisition timed out/);
+			mock.timers.tick(10_001);
+			await Promise.resolve();
+			assert.equal(settled, false);
+			assert.equal(registrations.size, 1);
+			mock.timers.tick(169_999);
+			await rejected;
+			assert.equal(registrations.size, 0);
+			requests[0].resolve({ enabled: true, byteStream: true });
+			await Promise.resolve();
+		} finally { mock.timers.reset(); }
+	});
+
 	test('host acquisition failure preserves its error and releases the pending registration', async () => {
 		using transport = new Transport(() => { });
 		const ready = transport.acquire();

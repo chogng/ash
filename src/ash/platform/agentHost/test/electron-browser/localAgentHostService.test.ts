@@ -151,6 +151,31 @@ suite('Local Agent Host connection service', () => {
 		assert.equal(initialized, 0);
 	});
 
+	test('cold connection acquisition retains the configured initialization budget', async () => {
+		mock.timers.enable({ apis: ['setTimeout'] });
+		try {
+			let release!: () => void;
+			let entered!: () => void;
+			const acquiring = new Promise<void>(resolve => { entered = resolve; });
+			pendingAcquisition = () => new Promise(resolve => { release = resolve; entered(); });
+			enabled = false;
+			using services = new InstantiationService();
+			using logger = new LogService({ sinks: [] });
+			services.registerInstance(ILogService, logger);
+			services.registerSingleton(IRemoteSocketFactoryService, () => services.createInstance(RemoteSocketFactoryService));
+			using service = services.createInstance(Service, { clientName: 'cold-ssh', initializeTimeoutMs: 180_000 });
+			let settled = false;
+			const ready = service.connect().finally(() => { settled = true; });
+			await acquiring;
+			mock.timers.tick(15_000);
+			await Promise.resolve();
+			assert.equal(settled, false);
+			release();
+			assert.equal(await ready, false);
+			assert.equal(acquisitions, 1);
+		} finally { mock.timers.reset(); }
+	});
+
 	test('restart replaces the local lease once and preserves the protocol client for consumers', async () => {
 		using services = new InstantiationService();
 		using logger = new LogService({ sinks: [] });

@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
 import { createSshRemoteWorkspaceUri } from "../../../../platform/remote/common/remote.js";
-import { getRemoteWorkspacePath } from "../../../../platform/remote/common/remote.js";
+import { getRemoteWorkspacePath, withRemoteWorkspacePath } from "../../../../platform/remote/common/remote.js";
 import { URI } from '../../../../base/common/uri.js';
 
 test('Windows drive and UNC workspaces round-trip independently of the client OS', () => {
@@ -24,6 +24,18 @@ test("Remote Workspace URIs preserve legal POSIX backslashes", () => {
 
 	assert.equal(resource.toString(), "ash-remote://ssh+build-linux/srv/project%5Carchive");
 	assert.equal(getRemoteWorkspacePath(resource), "/srv/project\\archive");
+});
+
+test('adapter paths retain Remote ownership and canonical Windows drive spelling', () => {
+	for (const owner of [createSshRemoteWorkspaceUri('windows-dev', 'C:/workspace'), URI.from({ scheme: 'ash-remote', authority: 'team+build', path: '/C:/workspace' })]) {
+		for (const path of ['c:\\workspace\\源文件.ts', '\\\\server\\share\\源文件.ts']) {
+			const resource = withRemoteWorkspacePath(owner, path);
+			assert.equal(resource.authority, owner.authority);
+			assert.equal(getRemoteWorkspacePath(resource), path.startsWith('c:') ? 'C:/workspace/源文件.ts' : '//server/share/源文件.ts');
+		}
+		assert.throws(() => withRemoteWorkspacePath(owner, 'C:relative'));
+	}
+	assert.throws(() => withRemoteWorkspacePath(URI.file('/workspace'), '/other'));
 });
 
 test("Remote Workspace URIs reject non-canonical POSIX paths instead of rewriting them", () => {

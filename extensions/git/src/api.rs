@@ -750,18 +750,18 @@ impl Api {
     pub fn clone_repository(
         &self,
         url: &str,
-        parent: &ash_utils_path_uri::PathUri,
+        parent: &crate::paths::ResourceUri,
         reference: Option<&str>,
         account: Option<&str>,
         configuration: &Configuration,
         token: &CancellationToken,
-    ) -> Result<ash_utils_path_uri::PathUri, ExtensionError> {
+    ) -> Result<crate::paths::ResourceUri, ExtensionError> {
         #[derive(serde::Deserialize)]
         #[serde(rename_all = "camelCase")]
         struct Response {
             repository_path: String,
         }
-        let result: Response = decode(self.request("clone", json!({"url":url,"parentPath":parent.inferred_native_path_string(),"reference":reference,"credentialAccountId":account}), configuration, Some(token))?)?;
+        let result: Response = decode(self.request("clone", json!({"url":url,"parentPath":parent.execution_path(),"reference":reference,"credentialAccountId":account}), configuration, Some(token))?)?;
         crate::paths::target_path(parent, &result.repository_path)
     }
     pub fn create_worktree(
@@ -769,7 +769,7 @@ impl Api {
         repository: &Repository,
         name: &str,
         token: &CancellationToken,
-    ) -> Result<ash_utils_path_uri::PathUri, ExtensionError> {
+    ) -> Result<crate::paths::ResourceUri, ExtensionError> {
         #[derive(serde::Deserialize)]
         struct Response {
             path: String,
@@ -780,9 +780,9 @@ impl Api {
     pub fn resolve_worktree(
         &self,
         repository: &Repository,
-        checkout: &ash_utils_path_uri::PathUri,
+        checkout: &crate::paths::ResourceUri,
         token: &CancellationToken,
-    ) -> Result<ash_utils_path_uri::PathUri, ExtensionError> {
+    ) -> Result<crate::paths::ResourceUri, ExtensionError> {
         #[derive(serde::Deserialize)]
         struct Response {
             path: String,
@@ -790,7 +790,7 @@ impl Api {
         let result: Response = decode(self.repository_request(
             repository,
             "resolveWorktree",
-            json!({"checkoutRoot":checkout.inferred_native_path_string()}),
+            json!({"checkoutRoot":checkout.execution_path()}),
             token,
         )?)?;
         crate::paths::target_path(&repository.root_uri, &result.path)
@@ -808,10 +808,10 @@ impl Api {
     pub fn delete_worktree(
         &self,
         repository: &Repository,
-        checkout: &ash_utils_path_uri::PathUri,
+        checkout: &crate::paths::ResourceUri,
         token: &CancellationToken,
     ) -> Result<Vec<model::Worktree>, ExtensionError> {
-        decode_worktrees(&repository.root_uri, self.repository_request(repository, "deleteWorktree", json!({"commandId":crate::commands::random_id()?,"checkoutRoot":checkout.inferred_native_path_string(),"mode":"unbound"}), token)?)
+        decode_worktrees(&repository.root_uri, self.repository_request(repository, "deleteWorktree", json!({"commandId":crate::commands::random_id()?,"checkoutRoot":checkout.execution_path(),"mode":"unbound"}), token)?)
     }
     pub fn confirm(
         &self,
@@ -871,7 +871,7 @@ pub fn decode<T: DeserializeOwned>(value: Value) -> Result<T, ExtensionError> {
     })
 }
 pub fn file_uri(
-    root: &ash_utils_path_uri::PathUri,
+    root: &crate::paths::ResourceUri,
     path: &crate::paths::RepoPath,
 ) -> Result<String, ExtensionError> {
     path.resolve(root).map(|uri| uri.to_string())
@@ -881,7 +881,7 @@ pub fn invalid(message: &str) -> ExtensionError {
 }
 
 fn decode_worktrees(
-    root: &ash_utils_path_uri::PathUri,
+    root: &crate::paths::ResourceUri,
     response: Value,
 ) -> Result<Vec<model::Worktree>, ExtensionError> {
     #[derive(serde::Deserialize)]

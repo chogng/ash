@@ -2009,7 +2009,7 @@ impl GitRuntime {
             return Ok(Value::Null);
         }
         let parent =
-            ash_utils_path_uri::PathUri::parse(parent.as_str().expect("checked folder selection"))
+            crate::paths::ResourceUri::parse(parent.as_str().expect("checked folder selection"))
                 .map_err(|_| invalid("Invalid clone destination"))?;
         let cloned = self.api.clone_repository(
             url.trim(),
@@ -2019,7 +2019,7 @@ impl GitRuntime {
             &config,
             token,
         )?;
-        let path = cloned.inferred_native_path_string();
+        let path = cloned.execution_path();
         let policy = config.text("openAfterClone", "prompt");
         let open = matches!(policy, "always" | "alwaysNewWindow")
             || policy == "whenNoFolderOpen" && self.lock().folders.is_empty()
@@ -2093,7 +2093,7 @@ impl GitRuntime {
                 break value;
             };
             let path = self.api.create_worktree(repository, name.trim(), token)?;
-            let result = json!({"path":path.inferred_native_path_string()});
+            let result = json!({"path":path.execution_path()});
             if self.api.editor(json!({"method":"confirm", "title":self.api.text("git.openWorktreeCommandTitle", &[]), "message":self.api.text("git.openWorktreeConfirm", &[result["path"].as_str().unwrap_or_default()]), "primaryButton":self.api.text("git.openWorktreeButton", &[])}), Some(token))?["confirmed"] == true {
                 self.api.editor(
                     json!({"method":"openWorkspace","path":result["path"]}),
@@ -2121,11 +2121,11 @@ impl GitRuntime {
         if command == "git.openWorktree" {
             let path = self.api.resolve_worktree(repository, checkout, token)?;
             self.api.editor(
-                json!({"method":"openWorkspace","path":path.inferred_native_path_string()}),
+                json!({"method":"openWorkspace","path":path.execution_path()}),
                 Some(token),
             )
         } else {
-            if self.api.editor(json!({"method":"confirm", "title":self.api.text("git.deleteWorktreeCommandTitle", &[]), "message":self.api.text("git.deleteWorktreeConfirm", &[&checkout.inferred_native_path_string()]), "detail":self.api.text("git.deleteWorktreeDetail", &[]), "primaryButton":self.api.text("git.deleteWorktreeButton", &[])}), Some(token))?["confirmed"] != true {
+            if self.api.editor(json!({"method":"confirm", "title":self.api.text("git.deleteWorktreeCommandTitle", &[]), "message":self.api.text("git.deleteWorktreeConfirm", &[&checkout.execution_path()]), "detail":self.api.text("git.deleteWorktreeDetail", &[]), "primaryButton":self.api.text("git.deleteWorktreeButton", &[])}), Some(token))?["confirmed"] != true {
                 return Ok(Value::Null);
             }
             let result = self.api.delete_worktree(repository, checkout, token).map(|worktrees| json!({"worktrees":worktrees.iter().map(worktree_value).collect::<Vec<_>>()}));
@@ -2225,5 +2225,5 @@ fn credential_account(value: Option<&Value>) -> Result<Option<&str>, ExtensionEr
 }
 
 fn worktree_value(worktree: &crate::model::Worktree) -> Value {
-    json!({"checkoutRoot":worktree.checkout_root.inferred_native_path_string(),"path":worktree.path.inferred_native_path_string(),"branch":worktree.branch,"head":worktree.head,"current":worktree.current,"state":worktree.state})
+    json!({"checkoutRoot":worktree.checkout_root.execution_path(),"path":worktree.path.execution_path(),"branch":worktree.branch,"head":worktree.head,"current":worktree.current,"state":worktree.state})
 }

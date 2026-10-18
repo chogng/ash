@@ -75,7 +75,7 @@ export async function connectWebRendererApi(transport: AppServerTransport, conne
 		const calls = connection.capabilities?.contracts.calls?.version === 1 ? new AppServerCallService(connection, false) : undefined;
 		const symphony = connection.capabilities?.contracts.symphony?.version === 1 ? new AppServerSymphonyService(connection) : undefined;
 		const automation = connection.capabilities?.contracts.automation?.version === 1 ? new AppServerAutomationService(connection) : undefined;
-		const api = { ...createRendererHost(connection, connectorHostServices, contributions, recovery), channels, calls, automation, symphony, memoryDiagnostics, memories };
+		const api = { ...createRendererHost(connection, connectorHostServices, contributions, undefined, recovery), channels, calls, automation, symphony, memoryDiagnostics, memories };
 		return {
 			api,
 			metadata: metadata!,
@@ -88,8 +88,11 @@ export async function connectWebRendererApi(transport: AppServerTransport, conne
 	}
 }
 
-/** Workbench composes domain adapters; the supplied client remains the connection owner. */
-export function createRendererHost(connection: AppServerProtocolClient, connectorHostServices: BrowserConnectorHostServices, contributions: readonly RendererCapabilityContribution[], recovery?: IAppServerConnectionRecovery): IRendererHost {
+/**
+ * Workbench composes domain adapters; the supplied client remains the connection owner.
+ * For a host-bound SSH client, domain paths retain that host while the wire uses server-local paths.
+ */
+export function createRendererHost(connection: AppServerProtocolClient, connectorHostServices: BrowserConnectorHostServices, contributions: readonly RendererCapabilityContribution[], sshHost?: string, recovery?: IAppServerConnectionRecovery): IRendererHost {
 	const appServer = createAppServerAppServerApi(connection, recovery);
 	const resource = createAppServerResourceApi(connection);
 	const capabilities = mergeRendererHostCapabilities(contributions.map(contribution => contribution(connection, appServer)));
@@ -99,11 +102,11 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 		messageHistory: connection.capabilities?.contracts.messageHistory?.version === 1 ? new AppServerMessageHistoryService(connection) : undefined,
 		approvalEnvironment: connection.capabilities?.approvalEnvironment ? new AppServerApprovalEnvironmentService(connection) : undefined,
 		accounts: createAppServerAccountApi(connection, connectorHostServices),
-		session: createAppServerAgentSessionService(connection),
+		session: createAppServerAgentSessionService(connection, sshHost),
 		teams: createAppServerTeamApi(connection),
 		model: createAppServerAgentModelsService(connection),
 		secretStorage: createAppServerSecretStorageStatusService(connection),
-		thread: createAppServerAgentThreadService(connection),
+		thread: createAppServerAgentThreadService(connection, sshHost),
 		turn: createAppServerAgentTurnService(connection),
 		turnChanges: createAppServerTurnChangesApi(connection),
 		skills: createAppServerSkillOperations(connection),

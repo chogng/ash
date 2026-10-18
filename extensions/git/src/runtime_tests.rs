@@ -29,7 +29,7 @@ fn repository(initial_status: Option<Status>) -> Repository {
             dir_id: None,
             parent_path: None,
         },
-        root_uri: ash_utils_path_uri::PathUri::parse("file:///workspace").unwrap(),
+        root_uri: crate::paths::ResourceUri::parse("file:///workspace").unwrap(),
         configuration: Configuration::default(),
         status: initial_status,
         catalog: None,
@@ -53,7 +53,7 @@ fn resource_paths_decode_without_host_filesystem_path_rules() {
         "file:///C:/workspace",
         "file://server/share/workspace",
     ] {
-        repository.root_uri = ash_utils_path_uri::PathUri::parse(root).unwrap();
+        repository.root_uri = crate::paths::ResourceUri::parse(root).unwrap();
         for (encoded, expected) in [
             ("image.bin", "image.bin"),
             ("src/nested/file.txt", "src/nested/file.txt"),

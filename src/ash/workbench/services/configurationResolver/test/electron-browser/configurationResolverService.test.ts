@@ -137,6 +137,8 @@ suite('ConfigurationResolverService', () => {
 		{ resource: URI.from({ scheme: Schemas.file, path: '/c:/work/project folder' }), os: OperatingSystem.Windows, path: 'C:\\work\\project folder' },
 		{ resource: URI.from({ scheme: Schemas.file, authority: 'build', path: '/share/project folder' }), os: OperatingSystem.Windows, path: '\\\\build\\share\\project folder' },
 		{ resource: createSshRemoteWorkspaceUri('build', '/srv/project folder'), os: OperatingSystem.Linux, path: '/srv/project folder' },
+		{ resource: createSshRemoteWorkspaceUri('build', 'C:/work/project folder'), os: OperatingSystem.Windows, path: 'C:\\work\\project folder' },
+		{ resource: createSshRemoteWorkspaceUri('build', '//build/share/project folder'), os: OperatingSystem.Macintosh, path: '\\\\build\\share\\project folder' },
 	]) {
 		test(`resolves nested execution data without mutating configuration for ${resource.scheme}:${resource.path}`, async () => {
 			using workspace = new TestWorkspaceService({ id: 'test', uri: resource });

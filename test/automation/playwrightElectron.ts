@@ -128,7 +128,10 @@ export async function launchElectron(options: ElectronLaunchOptions, onMilestone
 	const pendingRequests = new Set<Request>();
 	const failedRequests: string[] = [];
 	const start = async (): Promise<ElectronLaunchResult> => {
-		const page = application.windows()[0] ?? await application.waitForEvent("window", { timeout: 30_000 });
+		const page = application.windows()[0] ?? await application.waitForEvent("window", { timeout: Math.max(1, startupDeadline - Date.now()) });
+		// Cold Remote initialization can defer trust and Workbench UI past ordinary action deadlines.
+		page.setDefaultTimeout(Math.max(1, startupDeadline - Date.now()));
+		startupResources.add(toDisposable(() => page.setDefaultTimeout(30_000)));
 		const videoStartedAt = options.recordVideo ? Date.now() : undefined;
 		onMilestone?.('first-window');
 		if (options.recordVideo) {

@@ -866,7 +866,7 @@ pub(crate) fn relative_resource(
     repository: &Repository,
     resource: &str,
 ) -> Option<crate::paths::RepoPath> {
-    let resource = ash_utils_path_uri::PathUri::parse(resource).ok()?;
+    let resource = crate::paths::ResourceUri::parse(resource).ok()?;
     crate::paths::RepoPath::from_resource(&repository.root_uri, &resource)
 }
 fn percent_decode_path(path: &str) -> Result<String, ExtensionError> {

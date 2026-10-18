@@ -21,6 +21,7 @@ export interface ApplicationLaunchOptions {
 	readonly extraArgs?: readonly string[];
 	readonly externalCodexHome?: string;
 	readonly profileFixturePath?: string;
+	readonly startupTimeout?: number;
 }
 
 export interface RunningApplication {
@@ -86,10 +87,11 @@ export class ApplicationService {
 				userDataDirectory,
 				workspaceDirectory: options.workspacePath,
 				workspacePermissions: options.workspacePath ? 'development' : undefined,
+				startupTimeout: options.startupTimeout,
 				extraArgs: options.extraArgs,
 				externalCodexHome: options.externalCodexHome,
 				recordVideo: { directory: videoDirectory, size: videoSize },
-				desktopDirectory: join(repositoryRoot, '.'),
+				desktopDirectory: process.env.ASH_SMOKE_DESKTOP_DIRECTORY ?? join(repositoryRoot, '.'),
 			});
 			return createRunningApplication({
 				application: launched.application,
@@ -107,6 +109,7 @@ export class ApplicationService {
 
 	private async startWeb(options: ApplicationLaunchOptions, videoDirectory: string): Promise<RunningApplication> {
 		if (options.profileFixturePath) throw new Error('Profile fixtures require a Desktop scenario.');
+		if (options.startupTimeout !== undefined) throw new Error('Startup timeouts require a Desktop scenario.');
 		if (options.userSettings) {
 			throw new Error('Web scenarios do not yet support pre-seeding user settings.');
 		}

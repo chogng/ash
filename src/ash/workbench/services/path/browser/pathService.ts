@@ -4,6 +4,7 @@ import { Schemas } from '../../../../base/common/network.js';
 import { operatingSystem, OperatingSystem } from '../../../../base/common/platform.js';
 import { basename, dirname } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
+import { getRemoteWorkspacePath, isWindowsRemotePath } from '../../../../platform/remote/common/remote.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { IPathService } from '../../../../platform/path/common/pathService.js';
 import { IRendererHostService, type IRendererHost } from '../../../../platform/renderer/common/rendererHost.js';
@@ -43,7 +44,10 @@ export class BrowserPathService implements IPathService {
 	}
 
 	public async getPath(resource: URI): Promise<IPath | undefined> {
-		if (resource.scheme === Schemas.ashRemote || resource.scheme === Schemas.file && resource.path.startsWith('/@browser/')) {
+		if (resource.scheme === Schemas.ashRemote) {
+			return isWindowsRemotePath(getRemoteWorkspacePath(resource)) ? win32 : posix;
+		}
+		if (resource.scheme === Schemas.file && resource.path.startsWith('/@browser/')) {
 			return posix;
 		}
 		return resource.scheme !== Schemas.file || this.hostOperatingSystem === undefined ? undefined : this.path;
@@ -66,6 +70,8 @@ export class BrowserPathService implements IPathService {
 	}
 
 	public async getOperatingSystem(resource: URI): Promise<OperatingSystem | undefined> {
+		// Canonical Remote drive and UNC syntax identifies Windows independently of this connection.
+		if (resource.scheme === Schemas.ashRemote) return isWindowsRemotePath(getRemoteWorkspacePath(resource)) ? OperatingSystem.Windows : undefined;
 		return resource.scheme === Schemas.file && !resource.path.startsWith('/@browser/') ? this.hostOperatingSystem : undefined;
 	}
 
@@ -79,8 +85,8 @@ export class BrowserPathService implements IPathService {
 
 	private validateName(resource: URI, name: string, os: OperatingSystem | undefined): boolean {
 		if (resource.scheme === Schemas.ashRemote) {
-			// SSH resources currently have a POSIX contract; this does not identify a particular OS.
-			return isValidBasename(name, false);
+			// POSIX Remote paths still allow literal backslashes; drive and UNC paths use Windows names.
+			return isValidBasename(name, os === OperatingSystem.Windows);
 		}
 		if (resource.scheme === Schemas.file && resource.path.startsWith('/@browser/')) {
 			// FileSystemHandle names forbid both separators, including inside browser-owned storage.

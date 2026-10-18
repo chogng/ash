@@ -122,3 +122,17 @@ test('PathService uses POSIX operations for SSH resources and browser handles in
 	]);
 	assert.deepEqual(results.map(path => path?.normalize('/work/part\\name/../notes')), ['/work/notes', '/work/notes', '\\work\\part\\notes', undefined]);
 });
+
+
+test('PathService recognizes Windows drive and UNC Remote resources independently of the current host', async () => {
+	using services = createServices(() => OperatingSystem.Macintosh);
+	const paths = services.get(IPathService);
+	for (const root of ['C:/work/project', '//build/share/project']) {
+		const resource = createSshRemoteWorkspaceUri('windows', root);
+		assert.equal((await paths.getPath(resource))?.sep, '\\');
+		assert.equal(await paths.getOperatingSystem(resource), OperatingSystem.Windows);
+		assert.equal(await paths.hasValidBasename(resource, 'CON.txt'), false);
+		assert.equal(await paths.hasValidBasename(resource, 'part\\name.txt'), false);
+		assert.equal(await paths.hasValidBasename(resource, 'notes.txt'), true);
+	}
+});

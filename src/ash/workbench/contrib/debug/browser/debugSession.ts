@@ -9,7 +9,7 @@ import { URI } from "../../../../base/common/uri.js";
 import { Schemas } from '../../../../base/common/network.js';
 import { localize } from "../../../../nls.js";
 import { type IDebugAdapterProcessService } from "../../../../platform/debug/common/debugAdapterProcessService.js";
-import { isRemoteResource } from "../../../../platform/remote/common/remote.js";
+import { getRemoteWorkspacePath, isRemoteResource, withRemoteWorkspacePath } from "../../../../platform/remote/common/remote.js";
 
 interface DapRequest { readonly seq: number; readonly type: "request"; readonly command: string; readonly arguments?: unknown; }
 interface DapResponse { readonly seq: number; readonly type: "response"; readonly request_seq: number; readonly success: boolean; readonly command: string; readonly message?: string; readonly body?: unknown; }
@@ -414,7 +414,8 @@ export class DebugSession extends Disposable implements IDebugSession {
 			return { key: resource.toString(), source: { sourceReference: Number(reference) } };
 		}
 		if (resource.scheme !== 'file' && !isRemoteResource(resource)) return undefined;
-		const path = resource.scheme === 'file' ? resource.fsPath : resource.path;
+		// DAP consumes execution paths; a Remote URI adds a slash before a Windows drive.
+		const path = resource.scheme === 'file' ? resource.fsPath : getRemoteWorkspacePath(resource);
 		return { key: path, source: { path } };
 	}
 
@@ -891,10 +892,9 @@ function sourceResource(workspace: URI | undefined, adapterPath: string): URI | 
 		} catch { return undefined; }
 	}
 	if (!isRemoteResource(workspace)) return undefined;
-	if (!adapterPath.startsWith("/") || adapterPath.includes("\0")) return undefined;
-	const segments = adapterPath.split("/");
-	if (adapterPath !== "/" && (adapterPath.endsWith("/") || segments.slice(1).some(segment => segment.length === 0 || segment === "." || segment === ".."))) return undefined;
-	return workspace.with({ path: adapterPath });
+	try {
+		return withRemoteWorkspacePath(workspace, adapterPath);
+	} catch { return undefined; }
 }
 
 

@@ -34,10 +34,11 @@ export class LocalAgentHostServiceClient extends Disposable {
 	) {
 		super();
 		this.channelPrefix = options.connection === 'local' ? 'ash:app-server:local' : 'ash:app-server';
+		// Main validates the runtime before transferring the port, including cold SSH deployment.
 		this.carrier = this._register(new AppServerMessagePortTransport(() => {
 			// Recovery owns rejection reporting and the bounded retry budget.
 			void this.connect().catch(() => { });
-		}, options.connection));
+		}, options.connection, options.initializeTimeoutMs));
 		const transport = this._register(instantiationService.createInstance(AppServerSocketTransport, {
 			getAddress: async () => ({ connectTo: new ManagedRemoteConnection(this.connectionId), connectionToken: undefined }),
 			getMetadata: () => this.connectionMetadata,

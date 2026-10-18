@@ -59,13 +59,24 @@ export function getRemoteWorkspacePath(resource: URI): string {
 	const path = normalizeRemoteWorkspacePath(/^\/[a-zA-Z]:\//u.test(resource.path) ? resource.path.slice(1) : resource.path);
 	// Provider-independent resource paths must also work for extension-resolved hosts.
 	// SSH identities still pass through the stricter credential-free alias validator.
-	const canonical = authority.startsWith(SSH_AUTHORITY_PREFIX)
-		? createSshRemoteWorkspaceUri(authority.slice(SSH_AUTHORITY_PREFIX.length), path)
-		: URI.from({ scheme: ASH_REMOTE_SCHEME, authority, path: remoteUriPath(path) });
+	const canonical = remoteResourceUri(authority, path);
 	if (canonical.toString() !== resource.toString()) {
 		throw new Error("Remote workspace URI must use its canonical resource identity");
 	}
 	return path;
+}
+
+/** Keeps the resource owner and canonical URI spelling when an adapter returns an OS path. */
+export function withRemoteWorkspacePath(resource: URI, path: string): URI {
+	const authority = getResourceRemoteAuthority(resource);
+	if (!authority) throw new Error("Resource is not a Remote workspace URI");
+	return remoteResourceUri(authority, normalizeRemoteWorkspacePath(path));
+}
+
+function remoteResourceUri(authority: string, path: string): URI {
+	return authority.startsWith(SSH_AUTHORITY_PREFIX)
+		? createSshRemoteWorkspaceUri(authority.slice(SSH_AUTHORITY_PREFIX.length), path)
+		: URI.from({ scheme: ASH_REMOTE_SCHEME, authority, path: remoteUriPath(path) });
 }
 
 export function isRemoteResource(resource: URI): boolean {

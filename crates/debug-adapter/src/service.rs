@@ -9,6 +9,7 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
 use ash_file_access::Authorization;
+use ash_file_access::Dir;
 use serde_json::Value;
 use std::time::Duration;
 use tokio::io::AsyncRead;
@@ -240,11 +241,12 @@ impl DebugAdapterService {
         let root = self.process_execution.dir().canonical_path();
         let cwd = match command.cwd {
             Some(path) => {
-                let path = root
-                    .join(path)
-                    .canonicalize()
+                // Match the authorization owner's canonical spelling. std::fs adds
+                // a verbatim Windows prefix that would make this containment check fail.
+                let directory = Dir::open_local(root.join(path))
                     .map_err(|_| DebugAdapterError::InvalidCommand)?;
-                if !path.is_dir() || !path.starts_with(root) {
+                let path = directory.canonical_path().to_path_buf();
+                if !path.starts_with(root) {
                     return Err(DebugAdapterError::InvalidCommand);
                 }
                 path

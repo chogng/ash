@@ -18,7 +18,7 @@ export class AppServerMessagePortTransport extends Disposable {
 	private enabled: boolean | undefined;
 	private readonly acquisition = this._register(new MutableDisposable<IDisposable>());
 
-	constructor(private readonly restart: () => void, private readonly connection: 'workspace' | 'local' = 'workspace') {
+	constructor(private readonly restart: () => void, private readonly connection: 'workspace' | 'local' = 'workspace', private readonly acquisitionTimeoutMs = 10_000) {
 		super();
 		this._register(toDisposable(() => this.close()));
 		const subscription = subscribe(`${this.channelPrefix}:restart`, restart);
@@ -61,7 +61,7 @@ export class AppServerMessagePortTransport extends Disposable {
 				// Reject with the timeout before closing cancels the pending port acquisition.
 				reject(error);
 				if (this.nonce === nonce) { this.close(); }
-			}, 10_000);
+			}, this.acquisitionTimeoutMs);
 		});
 		const acquisition = invoke<unknown>(`${this.channelPrefix}:acquire`, { nonce }).then(result => {
 			if (this.nonce !== nonce) { throw new CancellationError(); }

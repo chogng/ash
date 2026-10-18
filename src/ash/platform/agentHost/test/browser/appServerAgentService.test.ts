@@ -141,6 +141,63 @@ test('Session catalog and subscriptions share the Agent domain snapshot boundary
 	assert.deepEqual(requests, ['session/read', 'session/list', 'session/catalog/subscribe', 'session/subscribe']);
 });
 
+test('SSH-bound Session requests use server-local paths and retain host identity on every snapshot', async () => {
+	const root = "C:/workspace 中文/O'Brien";
+	const local = { type: 'local' as const, root };
+	const remote = { type: 'ssh' as const, host: 'windows-dev', root };
+	const session = { sessionId: 'session', title: 'Remote task', status: 'active' as const, executionTarget: local, manager: { status: 'idle' as const, statusChangedAtUnixMs: 0 }, threads: [] };
+	const requests: { method: string; params: unknown; }[] = [];
+	const connection = {
+		async request(definition: { method: string; }, params: unknown): Promise<unknown> {
+			requests.push({ method: definition.method, params });
+			if (definition.method === 'session/list' || definition.method === 'session/catalog/subscribe') return { sessions: [session] };
+			const value = { session, agentTree: { roots: [] }, threadProjections: [] };
+			if (definition.method === 'session/request') return { type: 'session', value };
+			return value;
+		},
+	} as unknown as AppServerProtocolClient;
+	const service = createAppServerAgentSessionService(connection, remote.host);
+	const params = { commandId: 'create', title: 'Remote task', executionTarget: remote, agent: { type: 'default' as const } };
+	assert.deepEqual((await service.create(params)).session.executionTarget, remote);
+	assert.deepEqual(requests[0], { method: 'session/create', params: { ...params, executionTarget: local } });
+	assert.deepEqual(params.executionTarget, remote);
+	assert.deepEqual(session.executionTarget, local);
+	assert.deepEqual((await service.read({ sessionId: 'session' })).session.executionTarget, remote);
+	assert.deepEqual((await service.readCatalog({ sessionId: 'session' })).session?.executionTarget, remote);
+	assert.deepEqual((await service.list()).sessions[0]?.executionTarget, remote);
+	assert.deepEqual((await service.subscribeCatalog()).sessions[0]?.executionTarget, remote);
+	assert.deepEqual((await service.subscribe({ sessionId: 'session' })).session.executionTarget, remote);
+	for (const operation of ['archive', 'restore', 'stop'] as const) {
+		assert.deepEqual((await service[operation]({ sessionId: 'session', commandId: operation })).session.executionTarget, remote);
+	}
+	// Another authority must remain explicit so the server can reject or route it.
+	await service.create({ ...params, executionTarget: { ...remote, host: 'other-host' } });
+	assert.deepEqual(requests.at(-1)?.params, { ...params, executionTarget: { ...remote, host: 'other-host' } });
+	await service.create({ ...params, executionTarget: null });
+	assert.deepEqual(requests.at(-1)?.params, { ...params, executionTarget: null });
+	assert.deepEqual((await createAppServerAgentSessionService(connection).read({ sessionId: 'session' })).session.executionTarget, local);
+});
+
+test('SSH-bound Thread reads and subscriptions qualify remote directory paths', async () => {
+	const directory = { type: 'local' as const, root: 'C:/workspace' };
+	const thread = { origin: { type: 'root' }, usage: {}, turns: [] };
+	const snapshot = { thread, directory, transcript: { entries: [] }, updates: [] };
+	const session = { sessionId: 'session', title: 'Remote', status: 'active', manager: {}, threads: [] };
+	const connection = {
+		async request(definition: { method: string; }): Promise<unknown> {
+			return definition.method === 'session/subscribe' ? { session, agentTree: { roots: [] }, threadProjections: [snapshot] } : snapshot;
+		},
+	} as unknown as AppServerProtocolClient;
+	const expected = { type: 'ssh', host: 'windows-dev', root: directory.root };
+	const service = createAppServerAgentThreadService(connection, 'windows-dev');
+	const params = { sessionId: 'session', threadId: 'thread' };
+	assert.deepEqual((await service.read(params)).directory, expected);
+	assert.deepEqual((await service.subscribe({ ...params, afterSequence: 0 })).directory, expected);
+	assert.deepEqual((await createAppServerAgentSessionService(connection, 'windows-dev').subscribe({ sessionId: 'session' })).threadSnapshots[0]?.directory, expected);
+	assert.deepEqual((await createAppServerAgentThreadService(connection).read(params)).directory, directory);
+	assert.deepEqual(directory, { type: 'local', root: 'C:/workspace' });
+});
+
 test('Session restoration uses the existing typed lifecycle request', async () => {
 	const session = { sessionId: 'session', title: 'Restored', status: 'active' as const, manager: { status: 'idle' as const, statusChangedAtUnixMs: 0 }, threads: [{ threadId: 'session', title: 'Root', status: 'active' as const }] };
 	const requests: { method: string; params: unknown; }[] = [];

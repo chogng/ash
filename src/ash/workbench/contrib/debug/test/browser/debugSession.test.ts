@@ -231,6 +231,23 @@ test("DebugSession keeps Remote adapter paths on the Remote Workspace authority"
 	await session.disconnect();
 });
 
+for (const root of ['C:/workspace', '//server/share/workspace']) {
+	test(`DebugSession sends Windows Remote breakpoint paths without URI drive prefixes (${root})`, async () => {
+		const source = `${root}/src/main file.ts`;
+		using processes = new FakeDebugAdapterProcessService(source.replaceAll('/', '\\'));
+		const workspace = createSshRemoteWorkspaceUri('work-server', root);
+		const point: IDebugBreakpoint = { id: 'remote:4', resource: createSshRemoteWorkspaceUri('work-server', source), lineNumber: 4, enabled: true, verified: false };
+		const session = await startSession({ configuration: { ...configuration(), adapter: { program: 'adapter', arguments: [] }, arguments: {} }, processService: processes, breakpoints: () => [point], workspace });
+		try {
+			assert.deepEqual(processes.request('setBreakpoints').arguments, { source: { path: source }, breakpoints: [{ line: 4 }] });
+			const frame = (await session.stackTrace())[0];
+			assert.equal(frame?.source?.resource?.toString(), point.resource.toString());
+		} finally {
+			await session.disconnect();
+		}
+	});
+}
+
 test("DebugSession gates mutations on adapter capability and validates adapter replies", async () => {
 	using unsupported = new FakeDebugAdapterProcessService(undefined, false);
 	const unsupportedSession = await startSession({ configuration: configuration(), processService: unsupported, breakpoints: () => [], workspace: URI.file('/workspace') });

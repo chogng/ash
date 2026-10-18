@@ -1,5 +1,5 @@
 use crate::paths::RepoPath;
-use ash_utils_path_uri::PathUri;
+use crate::paths::ResourceUri;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
@@ -97,7 +97,7 @@ pub struct RepositoryDescriptor {
 pub struct WorkspaceFolder {
     pub id: String,
     pub name: String,
-    pub uri: PathUri,
+    pub uri: ResourceUri,
 }
 
 #[derive(Serialize)]
@@ -168,7 +168,7 @@ impl Configuration {
 #[derive(Clone)]
 pub struct Repository {
     pub descriptor: RepositoryDescriptor,
-    pub root_uri: PathUri,
+    pub root_uri: ResourceUri,
     pub configuration: Configuration,
     pub status: Option<Status>,
     pub catalog: Option<Catalog>,
@@ -833,8 +833,8 @@ pub struct SettingsUpdated {
 /// Backend checkout facts retain absolute resource paths independently of the
 /// machine running the presenter. Only the API adapter accepts legacy path text.
 pub struct Worktree {
-    pub checkout_root: PathUri,
-    pub path: PathUri,
+    pub checkout_root: ResourceUri,
+    pub path: ResourceUri,
     pub branch: Option<String>,
     pub head: String,
     pub current: bool,

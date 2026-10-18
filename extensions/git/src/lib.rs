@@ -442,7 +442,7 @@ impl GitRuntime {
                 for editor in &editor_resources {
                     let Some(path) = editor
                         .as_str()
-                        .and_then(|value| ash_utils_path_uri::PathUri::parse(value).ok())
+                        .and_then(|value| crate::paths::ResourceUri::parse(value).ok())
                         .and_then(|uri| paths::RepoPath::from_resource(&folder.uri, &uri))
                     else {
                         continue;

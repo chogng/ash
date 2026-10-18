@@ -2,7 +2,7 @@ use super::decode;
 use super::decode_worktrees;
 use crate::model::RepositoryCommand;
 use crate::model::Status;
-use ash_utils_path_uri::PathUri;
+use crate::paths::ResourceUri;
 use serde_json::json;
 
 #[test]
@@ -22,14 +22,11 @@ fn checkout_paths_use_the_repository_convention_not_the_presenter_host() {
         ),
         ("file:///source", "/worktrees/中文 space"),
     ] {
-        let root = PathUri::parse(root).unwrap();
+        let root = ResourceUri::parse(root).unwrap();
         let worktrees = decode_worktrees(&root, json!({"worktrees":[{
             "checkoutRoot":checkout,"path":checkout,"branch":null,"head":"abc","current":false,"state":"ready"
         }]})).unwrap();
-        assert_eq!(
-            worktrees[0].checkout_root.inferred_native_path_string(),
-            checkout
-        );
+        assert_eq!(worktrees[0].checkout_root.execution_path(), checkout);
         assert!(decode_worktrees(&root, json!({"worktrees":[{
             "checkoutRoot":"relative/path","path":checkout,"branch":null,"head":"abc","current":false,"state":"ready"
         }]})).is_err());

@@ -34,6 +34,8 @@ export interface Scenario {
 	readonly extraArgs?: readonly string[];
 	readonly externalCodexHome?: string;
 	readonly profileFixturePath?: string;
+	/** Cold Remote startup includes installing the target host's complete runtime package. */
+	readonly startupTimeout?: number;
 	readonly stepPauseMs?: number;
 	readonly steps: readonly ScenarioStep[];
 }
@@ -58,7 +60,7 @@ export async function runScenario(scenario: Scenario): Promise<{ readonly runPat
 	validateScenario(scenario);
 	const applications = new ApplicationService(options);
 	const evidence = new EvidenceService(applications);
-	const runPath = await evidence.start(scenario.id, scenario.title, scenario.source, scenario.scenarioPath, scenario.workspacePath, scenario.userSettings, scenario.extraArgs, scenario.externalCodexHome, scenario.profileFixturePath);
+	const runPath = await evidence.start(scenario.id, scenario.title, scenario.source, scenario.scenarioPath, scenario.workspacePath, scenario.userSettings, scenario.extraArgs, scenario.externalCodexHome, scenario.profileFixturePath, scenario.startupTimeout);
 	console.log(`Evidence run: ${runPath}`);
 	const blockers: ScenarioBlocker[] = [];
 	let outcome: 'passed' | 'failed' | 'aborted' = 'passed';
@@ -117,6 +119,9 @@ export async function runScenario(scenario: Scenario): Promise<{ readonly runPat
 function validateScenario(scenario: Scenario): void {
 	if (!scenario || typeof scenario !== 'object') throw new Error('The scenario module did not export a scenario object.');
 	if (!scenario.id || !scenario.title) throw new Error("A scenario must declare non-empty 'id' and 'title' fields.");
+	if (scenario.startupTimeout !== undefined && (!Number.isSafeInteger(scenario.startupTimeout) || scenario.startupTimeout <= 0)) {
+		throw new Error('Scenario startupTimeout must be a positive integer in milliseconds.');
+	}
 	if (!Array.isArray(scenario.steps) || !scenario.steps.length) throw new Error('A scenario must declare at least one step.');
 	const ids = new Set<string>();
 	for (const step of scenario.steps) {
