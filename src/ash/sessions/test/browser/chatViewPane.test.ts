@@ -5169,3 +5169,17 @@ test('Chat accepted-request notifications follow backend success and exclude rej
 	await pending;
 	assert.equal(submissions.length, 4);
 });
+
+
+test('initial naming is scoped to the accepted Thread and cannot turn a naming failure into a resend', async () => {
+	const fake = fakeApi();
+	const names: Parameters<import('../../../platform/agentHost/common/agentService.js').IAgentThreadService['rename']>[0][] = [];
+	fake.api.thread.rename = params => { names.push(params); throw new Error('Synthetic naming failure'); };
+	using service = createChatService(fake.api);
+	await service.startTurn({ sessionId: 'session-1', threadId: 'thread-1', expectedSequence: 1, mode: 'agent', text: '  修复  parser\nnow ', isNewSession: true });
+	await Promise.resolve();
+	assert.equal(fake.turnStartRequests.length, 1);
+	assert.deepEqual(names.map(({ sessionId, threadId, title, source }) => ({ sessionId, threadId, title, source })), [{ sessionId: 'session-1', threadId: 'thread-1', title: '修复 parser now', source: 'automatic' }]);
+	await assert.rejects(service.renameThread('session-1', 'thread-2', 'Manual branch name'), /Synthetic naming failure/);
+	assert.deepEqual(names.slice(1).map(({ threadId, title, source }) => ({ threadId, title, source })), [{ threadId: 'thread-2', title: 'Manual branch name', source: 'manual' }]);
+});

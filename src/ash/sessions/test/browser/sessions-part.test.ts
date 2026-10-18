@@ -144,6 +144,8 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 		async archiveSession() {
 			throw new Error("Session archiving is unavailable");
 		},
+		async renameSession() { throw new Error('Unexpected rename'); },
+		async deleteSession() { throw new Error('Unexpected deletion'); },
 		async restoreSession() {
 			throw new Error("Session restoration is unavailable");
 		},
@@ -152,6 +154,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	const transcriptUpdates = new Emitter<import("../../../workbench/services/chat/common/chatService.js").ThreadTranscriptUpdateEnvelope>();
 	const ready = new Emitter<void>();
 	const chatService: IChatService & ILanguageModelsService = {
+		renameThread: async () => { throw new Error('Unexpected rename'); },
 		configureAdvisor: async () => { },
 		consultAdvisor: async () => { },
 		readContextUsage: async () => { throw new Error('No active Thread'); },

@@ -21,7 +21,9 @@ Workbench 拥有跨领域的 Renderer 服务装配：`browser/webRendererApi.ts`
 
 桌面连接职责落在 VS Code 已有的对应路径：`platform/agentHost/electron-browser/localAgentHostService.ts` 取得本地 MessagePort、注册单次 socket lease，并在协议不兼容时请求宿主修复运行包；`platform/agentHost/browser/remoteAgentHostServiceImpl.ts` 连接扩展解析的远端端点，并在本地连接恢复后重新初始化远端扩展。每个服务拥有自己的协议客户端，领域消费者在重连后继续使用同一对象。Workbench 只传入窗口能力、远端解析与扩展初始化回调，不持有重试定时器或连接错误处理。
 
-`appServerProtocolClient.ts` 中的 `AppServerConnectionRecovery` 统一串行化连接操作、按 100/500/2000 ms 最多重试三次，并将关闭原因与恢复失败交给连接服务注入的 `ILogService` 记录。协议状态及代次仍由 `AppServerProtocolClient` 唯一拥有；恢复调度器只拥有当前任务、定时器和重试次数。初次启动失败返回调用方；成功连接后的失败才自动重试，释放服务会取消定时器和状态订阅。这些连接接口与原有 App Server 传输保留 Ash 协议语义，不实现 VS Code 的 AHP 服务契约。
+`appServerProtocolClient.ts` 中的 `AppServerConnectionRecovery` 统一串行化连接操作、按 100/500/2000 ms 最多重试三次，并将关闭原因与恢复失败交给连接服务注入的 `ILogService` 记录。协议状态及代次仍由 `AppServerProtocolClient` 唯一拥有；恢复调度器只拥有当前任务、定时器和重试次数。初次启动失败返回调用方；成功连接后的失败才自动重试，释放服务会取消定时器和状态订阅。恢复状态通过 `IAppServerApi.recovery` 提供给 Workbench：耗尽后显示一次可键盘操作的“重新连接”通知，重试和恢复成功会关闭它；命令面板提供同一恢复操作。Main 的 powerMonitor channel 按窗口订阅转发 suspend/resume，连接调度器在休眠时暂停重试，唤醒后保留健康连接或恢复已断开的连接，关闭窗口释放 OS 事件订阅。Web 复用同一调度器并保留原五分钟指数退避；授权撤销和工作区范围变化进入不可自动恢复状态，提示重新打开授权链接。恢复只更换连接并由既有消费者重新订阅，不重放结果未知的业务请求。这些连接接口与原有 App Server 传输保留 Ash 协议语义，不实现 VS Code 的 AHP 服务契约。
+
+会话命名经现有 Session/Thread 领域 API 进入 Core 的 Thread title 事件，Session 标题由后端根 Thread 派生。首次提交接受后，Chat 用首条文本的空白归一化结果（最多 80 个字符）请求初始名称；此操作失败不影响已接受的请求，也不重放消息。手动命名和自动命名都带命令收据，Core 在持久化边界阻止迟到的自动名称覆盖手动名称。命令面板中的“重命名会话”和“重命名对话”分别操作根 Thread 和捕获的当前 Thread，目录订阅负责跨窗口更新。归档会话的永久删除使用现有 Session Delete 清理流程；前端先选择归档会话并确认，再更新目录代次，避免迟到的读取重新插入已删除会话。
 
 ## 目录按职责选择
 

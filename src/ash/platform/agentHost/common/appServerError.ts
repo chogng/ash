@@ -11,3 +11,6 @@ export class AppServerRemoteError extends Error {
 		this.errorName = data.kind;
 	}
 }
+
+/** The peer withdrew authorization or changed scope; a fresh launch is required. */
+export class AppServerConnectionStoppedError extends Error { }

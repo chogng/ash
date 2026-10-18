@@ -5,4 +5,4 @@
 - Store 校验与追加属于 `ash-thread-store`，SQLite 映射属于 `ash-state`，reducer 与恢复属于 `ash-core`。
 - 定义带摘要校验的不可变原事件前缀；嵌套引用保持原 Thread、sequence 与 event identity。
 
-当前写入 schema 18：用户文本输入的时间参照保存在 envelope 的可选 `timeContext` 中；模型请求的当前时间快照进入调用记录。旧版本保持可读，缺失参照不会补成现在。语义和恢复规则见 [Agent 时间与等待](../docs/agent-wait.md)。
+当前写入 schema 27：新增 Thread 标题变更事实与命令回执，保留自动和手动来源；已有手动命名会拒绝迟到的自动命名。schema 18 引入的用户文本输入的时间参照保存在 envelope 的可选 `timeContext` 中；模型请求的当前时间快照进入调用记录。旧版本保持可读，缺失参照不会补成现在。语义和恢复规则见 [Agent 时间与等待](../docs/agent-wait.md)。

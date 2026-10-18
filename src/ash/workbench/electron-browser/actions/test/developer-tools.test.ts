@@ -173,6 +173,8 @@ test("desktop commands are available from the command palette", async () => {
 	const services = new InstantiationService();
 	let toggles = 0;
 	services.registerInstance(INativeHostService, {
+		onDidSuspendOS: () => ({ dispose() { } }),
+		onDidResumeOS: () => ({ dispose() { } }),
 		getScreenshot: async () => { throw new Error('Unused screenshot capability'); },
 		getAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },
 		updateAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },

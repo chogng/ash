@@ -1,6 +1,6 @@
 import { createSshRemoteWorkspaceUri } from '../../platform/remote/common/remote.js';
 import { AppServerChannelService } from "../../platform/collaboration/browser/appServerChannelService.js";
-import type { AppServerProtocolClient } from '../../platform/agentHost/browser/appServerProtocolClient.js';
+import type { AppServerConnectionRecovery, AppServerProtocolClient } from '../../platform/agentHost/browser/appServerProtocolClient.js';
 import type { IExtensionHostApi } from '../../platform/agentHost/common/extensionHostApi.js';
 import { createAppServerExtensionHostApi } from '../../platform/agentHost/browser/extensionHostApi.js';
 import type { IAddress } from '../../platform/remote/common/remoteAgentConnection.js';
@@ -63,6 +63,12 @@ export async function createElectronRendererApi(contributions: readonly Electron
 	performance.mark('ash.rendererApi.start');
 	const resources = new DisposableStore();
 	const workspaceApi = createWorkspaceContextApi();
+	const nativeHost = createNativeHostApi(mainProcessService);
+	const observePower = (recovery: AppServerConnectionRecovery): void => {
+		const suspend = nativeHost.onDidSuspendOS(() => recovery.suspend());
+		const resume = nativeHost.onDidResumeOS(() => recovery.resume());
+		resources.add(toDisposable(() => { suspend.dispose(); resume.dispose(); }));
+	};
 	const remoteConnection = await createRemoteAgentApi().getConnection();
 	const connectionServices = resources.add(new InstantiationService());
 	connectionServices.registerInstance(IMainProcessService, mainProcessService);
@@ -83,6 +89,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			directoryGrantsHost: { version: 1 },
 		},
 	} satisfies ConstructorParameters<typeof LocalAgentHostServiceClient>[0]));
+	observePower(localConnection.recovery);
 	const localClient = localConnection.client;
 	let client = localClient;
 	let connection: LocalAgentHostServiceClient | RemoteAgentHostService = localConnection;
@@ -117,6 +124,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 						...(hostCapabilities.appTools ? { appTools: { version: 1, agents: true, desktop: true } } : {}),
 					},
 				}));
+				observePower(workspaceConnection.recovery);
 				await workspaceConnection.connect();
 				connection = workspaceConnection;
 				client = workspaceConnection.client;
@@ -148,6 +156,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 				} satisfies ConstructorParameters<typeof RemoteAgentHostService>[0]));
 				connection = remote;
 				client = remote.client;
+				observePower(remote.recovery);
 				await remote.connect();
 			}
 			backend = createRendererHost(client, {
@@ -158,7 +167,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 					close: id => invoke('ash:oauth-callback:close', { id }),
 				},
 				clipboardService: new ElectronRendererClipboardService(),
-			}, contributions.map(contribution => (client, appServer) => contribution(client, appServer, localClient)));
+			}, contributions.map(contribution => (client, appServer) => contribution(client, appServer, localClient)), connection.recovery);
 			resources.add(backend.mcpServerManagement);
 			resources.add(registerAppServerWorkspaceHost(client, () => connection.whenConnected(), workspaceTrust, backend.workspaceTrust, folders => workspaceApi.validateFolders(folders), path => remoteConnection.kind === 'ssh' ? createSshRemoteWorkspaceUri(remoteConnection.host, path) : URI.file(path)));
 			// Editor recovery belongs to this Desktop profile, including SSH workspaces.
@@ -198,7 +207,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			keyboardLayout: createNativeKeyboardLayoutApi(mainProcessService),
 			userKeyboardLayout: createUserKeyboardLayoutApi(mainProcessService),
 			nativeContextMenu: { popup: popupContextMenu, close: closeContextMenu },
-			nativeHost: createNativeHostApi(mainProcessService),
+			nativeHost,
 			nativeMenubar: createNativeMenubarApi(),
 			editUserConfiguration: () => invoke<void>(EDIT_USER_CONFIGURATION_CHANNEL),
 			localFiles,

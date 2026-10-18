@@ -26,6 +26,8 @@ export type AgentInput =
 interface SessionOperations {
 	readonly createThread: { readonly title: string; };
 	readonly archive: {};
+	readonly rename: { readonly title: string; };
+	readonly delete: {};
 	readonly restore: {};
 	readonly stop: {};
 	readonly configureAdvisor: {
@@ -598,6 +600,7 @@ export type ThreadCommittedEvent =
 	| {
 		readonly type:
 		| 'threadCreated'
+		| 'threadTitleChanged'
 		| 'advisorConfigured'
 		| 'modelProvidersMigrated'
 		| 'threadArchived'
@@ -775,6 +778,8 @@ export interface IAgentSessionService {
 	unsubscribe(params: SessionReadParams): Promise<void>;
 	createThread(params: SessionOperationInput<'createThread'>): Promise<SessionThreadResult>;
 	archive(params: SessionOperationInput<'archive'>): Promise<SessionResult>;
+	rename(params: SessionOperationInput<'rename'>): Promise<SessionResult>;
+	delete(params: SessionOperationInput<'delete'>): Promise<void>;
 	restore(params: SessionOperationInput<'restore'>): Promise<SessionResult>;
 	stop(params: SessionOperationInput<'stop'>): Promise<SessionResult>;
 }
@@ -835,6 +840,7 @@ export interface AgentMcpAppTool extends Readonly<Record<string, unknown>> {
 }
 
 export interface IAgentThreadService {
+	rename(params: SessionMutationParams & { readonly threadId: string; readonly title: string; readonly source: 'manual' | 'automatic'; }): Promise<void>;
 	/** Delivery grants are independent of historical committed events. */
 	readonly onDidOfferInteraction: Event<AgentInteractionOffer>;
 	readonly onDidChangeConnection: Event<void>;

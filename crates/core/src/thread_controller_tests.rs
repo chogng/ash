@@ -3497,3 +3497,79 @@ fn speech_committed_during_a_model_request_does_not_supersede_the_original_respo
     assert_eq!(completed.voice_transcripts[0].text, "I am still speaking");
     assert!(completed.items.iter().any(|item| matches!(item, ThreadItem::AgentMessage { text, .. } if text == "The original answer")));
 }
+
+#[test]
+fn thread_names_are_retry_safe_and_manual_names_win_after_recovery() {
+    let store = Arc::new(InMemoryThreadStore::default());
+    let controller = ThreadController::with_store(store.clone());
+    let id = create_thread(&controller, "New Chat");
+    let seed = CommandId::new("initial-title").unwrap();
+    let sequence = controller
+        .rename_thread(
+            &id,
+            seed.clone(),
+            "Fix the parser".into(),
+            ash_protocol::ThreadTitleSource::Automatic,
+        )
+        .unwrap();
+    assert_eq!(
+        controller
+            .rename_thread(
+                &id,
+                seed.clone(),
+                "Fix the parser".into(),
+                ash_protocol::ThreadTitleSource::Automatic
+            )
+            .unwrap(),
+        sequence
+    );
+    assert_eq!(
+        controller.rename_thread(
+            &id,
+            seed,
+            "Changed input".into(),
+            ash_protocol::ThreadTitleSource::Automatic
+        ),
+        Err(CoreError::CommandConflict)
+    );
+    // Marking the same visible title as manual still changes future authority.
+    controller
+        .rename_thread(
+            &id,
+            CommandId::new("manual-title").unwrap(),
+            "Fix the parser".into(),
+            ash_protocol::ThreadTitleSource::Manual,
+        )
+        .unwrap();
+    let reopened = ThreadController::with_store(store);
+    assert_eq!(
+        reopened.rename_thread(
+            &id,
+            CommandId::new("late-title").unwrap(),
+            "Stale automatic name".into(),
+            ash_protocol::ThreadTitleSource::Automatic
+        ),
+        Err(CoreError::CommandConflict)
+    );
+    let snapshot = reopened.read_thread(&id).unwrap();
+    assert_eq!(snapshot.title, "Fix the parser");
+    assert!(snapshot.turns.is_empty());
+    assert_eq!(
+        reopened
+            .read_session_catalog(&snapshot.session_id)
+            .unwrap()
+            .unwrap()
+            .title,
+        "Fix the parser"
+    );
+    assert!(
+        reopened
+            .rename_thread(
+                &id,
+                CommandId::new("empty-title").unwrap(),
+                "  ".into(),
+                ash_protocol::ThreadTitleSource::Manual
+            )
+            .is_err()
+    );
+}

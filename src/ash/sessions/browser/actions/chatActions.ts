@@ -101,7 +101,7 @@ registerAction2(class ShowChatHistoryAction extends Action2 {
 					sessionId: session.sessionId,
 					threadId: thread.threadId,
 					label: session.title.trim() || localize('chat.title.default', 'Chat'),
-					description: [threads.length > 1 ? localize('sessions.history.thread', 'Thread {0}', index + 1) : undefined, sessionManagementLabel(thread.management)].filter(Boolean).join(' · ') || undefined,
+					description: [threads.length > 1 ? localize('sessions.history.thread', 'Thread {0}', index + 1) : undefined, thread.origin.type !== 'root' && thread.title?.trim() !== session.title.trim() ? thread.title?.trim() : undefined, sessionManagementLabel(thread.management)].filter(Boolean).join(' · ') || undefined,
 					detail: thread.management?.activity?.text ?? thread.management?.summary ?? undefined,
 				}));
 			})];

@@ -286,6 +286,7 @@ pub use thread::ThreadGoalStatus;
 pub use thread::ThreadHistoryCheckpoint;
 pub use thread::ThreadHistoryState;
 pub use thread::ThreadStatus;
+pub use thread::ThreadTitleSource;
 pub use thread::ThreadUpdate;
 pub use thread::ThreadUpdateEnvelope;
 pub use thread::ToolExecutionAuthority;

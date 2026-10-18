@@ -3,12 +3,13 @@ import { APP_SERVER_METHODS, type AppServerMethod, type AppServerMethodDefinitio
 import { VSBuffer } from "../../../base/common/buffer.js";
 import { canceled, isCancellationError, toError } from "../../../base/common/errors.js";
 import { isRecord } from "../../../base/common/types.js";
-import type { AppServerConnectionState } from "../common/appServerApi.js";
-import { AppServerRemoteError } from "../common/appServerError.js";
+import type { AppServerConnectionState, IAppServerConnectionRecovery } from "../common/appServerApi.js";
+import { AppServerConnectionStoppedError, AppServerRemoteError } from "../common/appServerError.js";
 import type { DisposableHandle } from "../../ipc/common/ipc.js";
 import { checkAppServerInitializeCompatibility } from "../common/appServerProtocolCompatibility.js";
 import type { AppServerServerRequestDefinition, AppServerServerRequestMethod, ClientCapabilities, JsonRpcId, ServerRequestParams, ServerRequestResult } from '../../../../../.build/protocol/typescript/index.js';
 import { decodeAppServerServerRequestResult } from '../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
+import { Emitter } from '../../../base/common/event.js';
 import { Disposable, type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { OperatingSystem } from '../../../base/common/platform.js';
 import { AppServerFrameDecoder } from './appServerFrameDecoder.js';
@@ -353,7 +354,7 @@ export class AppServerProtocolClient {
 		const message = isRecord(payload) && typeof payload.message === "string" && payload.message.trim()
 			? payload.message
 			: fallback;
-		if (intentional) { this.shutdown(new Error(message), 'stopped'); return; }
+		if (intentional) { this.shutdown(new AppServerConnectionStoppedError(message), 'stopped'); return; }
 		this.fail(new Error(message));
 	};
 
@@ -501,7 +502,7 @@ export class AppServerProtocolClient {
 			this.isClosing = false;
 			// Recovery observers may immediately connect again. Publish only after
 			// the old transport has closed so cleanup cannot tear down their new lease.
-			this.setState(this.disposed ? 'stopped' : state, state === 'crashed' ? error : undefined);
+			this.setState(this.disposed ? 'stopped' : state, state === 'crashed' || error instanceof AppServerConnectionStoppedError ? error : undefined);
 		}
 	}
 
@@ -524,37 +525,78 @@ export class AppServerProtocolClient {
 }
 
 /** Serializes connection replacement and owns the retry budget, never protocol state. */
-export class AppServerConnectionRecovery extends Disposable {
+export class AppServerConnectionRecovery extends Disposable implements IAppServerConnectionRecovery {
+	private readonly changed = this._register(new Emitter<void>());
+	public readonly onDidChange = this.changed.event;
+	private _status: IAppServerConnectionRecovery['status'] = 'idle';
+	private failure: Error | undefined;
 	private task: Promise<void> | undefined;
 	private latest: Promise<void> = Promise.resolve();
 	private timer: ReturnType<typeof setTimeout> | undefined;
 	private attempts = 0;
 	private isActive = false;
-	private static readonly retryDelays = [100, 500, 2000];
+	private suspended = false;
+	private startedAt = 0;
+	private suspendedAt = 0;
 
 	constructor(
 		private readonly client: AppServerProtocolClient,
 		private readonly open: () => Promise<void>,
 		private readonly onFailure: (message: string, error: unknown) => void,
+		private readonly policy?: { readonly delay: (attempt: number) => number | undefined; readonly maxElapsedTimeMs: number; },
 	) {
 		super();
 		this._register(client.onStateChange((state, error) => {
-			if (state === 'crashed') {
+			if (error instanceof AppServerConnectionStoppedError) {
+				this.failure = error;
+				this.clearTimer();
+				this.publish('unavailable');
+			} else if (state === 'crashed') {
+				this.failure = error;
 				this.onFailure('Renderer connection failed', error);
+				if (!this.startedAt) this.startedAt = Date.now();
 				this.schedule();
 			}
 		}));
 	}
 
-	public connect(): Promise<void> {
+	public get status(): IAppServerConnectionRecovery['status'] { return this._status; }
+	public get error(): string | undefined { return this.failure?.message; }
+
+	public connect(): Promise<void> { return this.reconnect(); }
+
+	public reconnect(): Promise<void> {
 		this.assertNotDisposed();
 		if (this.task) { return this.task; }
+		if (this.suspended) { return Promise.reject(canceled()); }
 		this.attempts = 0;
+		this.failure = undefined;
+		this.startedAt = Date.now();
 		return this.run();
 	}
 
-	public whenConnected(): Promise<void> {
-		return this.latest;
+	public whenConnected(): Promise<void> { return this.latest; }
+
+	/** A sleeping OS must not consume retries or display an exhausted-recovery notification. */
+	public suspend(): void {
+		if (this.isDisposed || this.suspended) return;
+		this.suspended = true;
+		this.suspendedAt = Date.now();
+		this.clearTimer();
+		if (this.isActive && this.status !== 'unavailable') this.publish('suspended');
+	}
+
+	public resume(): void {
+		if (this.isDisposed || !this.suspended) return;
+		this.suspended = false;
+		if (this.startedAt) this.startedAt += Date.now() - this.suspendedAt;
+		if (!this.isActive || this.status === 'unavailable') return;
+		if (this.client.state === 'ready' && !this.task) { this.publish('idle'); return; }
+		// Reset after a real wake, including a previously exhausted connection. An
+		// in-flight attempt retains ownership and schedules its successor on failure.
+		this.attempts = 0;
+		this.startedAt = Date.now();
+		if (!this.task) void this.run().catch(() => { });
 	}
 
 	protected override disposeCore(): void {
@@ -564,37 +606,62 @@ export class AppServerConnectionRecovery extends Disposable {
 
 	private run(): Promise<void> {
 		this.clearTimer();
-		// Defer entry until the task is published: synchronous state events and
-		// restart notifications must join this attempt rather than start another.
+		// Publish the task before notifying observers, which may request another retry.
 		const operation = Promise.resolve().then(() => {
 			this.assertNotDisposed();
+			if (this.suspended) throw canceled();
 			return this.open();
+		}).then(() => {
+			if (this.status === 'unavailable' && this.failure) throw this.failure;
+		}, error => {
+			// A peer can withdraw authorization after transport acquisition but before
+			// the handshake continuation observes it. Keep that cause over cancellation.
+			throw this.status === 'unavailable' && this.failure ? this.failure : error;
 		});
 		this.task = this.latest = operation;
+		this.publish('recovering');
 		void operation.then(() => {
 			this.task = undefined;
+			if (this.isDisposed) return;
 			this.isActive = true;
+			// A peer may close between the handshake resolving and this continuation.
+			if (this.client.state === 'crashed') { this.schedule(); return; }
 			this.attempts = 0;
-			if (this.client.state === 'crashed') { this.schedule(); }
+			this.startedAt = 0;
+			this.failure = undefined;
+			this.publish(this.suspended ? 'suspended' : 'idle');
 		}, error => {
 			this.task = undefined;
-			if (this.isDisposed) { return; }
+			if (this.isDisposed) return;
+			this.failure = toError(error);
 			this.onFailure('App Server connection recovery failed', error);
-			// Acquisition or extension initialization may fail with a stopped or
-			// ready client. Retry the failed operation, not just crashed clients.
-			this.schedule();
+			if (error instanceof AppServerConnectionStoppedError) this.publish('unavailable');
+			else if (!this.isActive) this.publish('failed');
+			else this.schedule();
 		});
 		return operation;
 	}
 
 	private schedule(): void {
-		if (this.isDisposed || !this.isActive || this.task || this.timer !== undefined
-			|| this.attempts >= AppServerConnectionRecovery.retryDelays.length) { return; }
+		if (this.isDisposed || !this.isActive || this.task || this.timer !== undefined || this.status === 'unavailable') return;
+		if (this.suspended) { this.publish('suspended'); return; }
+		const delay = this.policy ? this.policy.delay(this.attempts) : [100, 500, 2000][this.attempts];
+		if (delay === undefined || this.policy && Date.now() - this.startedAt >= this.policy.maxElapsedTimeMs) {
+			this.publish('failed');
+			return;
+		}
 		this.timer = setTimeout(() => {
 			this.timer = undefined;
 			this.attempts++;
 			void this.run().catch(() => { });
-		}, AppServerConnectionRecovery.retryDelays[this.attempts]);
+		}, delay);
+		this.publish('recovering');
+	}
+
+	private publish(status: IAppServerConnectionRecovery['status']): void {
+		if (this.isDisposed || this._status === status) return;
+		this._status = status;
+		this.changed.fire();
 	}
 
 	private clearTimer(): void {

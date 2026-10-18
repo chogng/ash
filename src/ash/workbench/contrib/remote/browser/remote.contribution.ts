@@ -1,3 +1,9 @@
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { localize } from '../../../../nls.js';
+import { IAppServerApi } from '../../../../platform/agentHost/common/appServerApi.js';
+import { INotificationService, type NotificationHandle } from '../../../../platform/notification/common/notification.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { AppServerRecoveryAvailableContext, ReconnectAppServerCommandId } from './remoteActions.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/contributions.js";
 import { ICommandService } from "../../../../platform/commands/common/commands.js";
 import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
@@ -50,3 +56,38 @@ registerWorkbenchContribution(RemoteExtensionRecoveryContribution.ID, WorkbenchP
 	extensionService: accessor.get(IExtensionService),
 	remoteAgentService: accessor.get(IAppServerRemoteAgentService),
 }));
+
+/** Presents recovery owned by this window's active connection, using ordinary notifications. */
+class AppServerRecoveryContribution extends Disposable {
+	private notification: NotificationHandle | undefined;
+
+	constructor(
+		@IAppServerApi api: IAppServerApi,
+		@INotificationService notifications: INotificationService,
+		@IContextKeyService contextKeys: IContextKeyService,
+	) {
+		super();
+		const available = AppServerRecoveryAvailableContext.bindTo(contextKeys);
+		this._register(toDisposable(() => { this.notification?.close(); available.reset(); }));
+		const recovery = api.recovery;
+		if (!recovery) return;
+		const update = (): void => {
+			available.set(recovery.status === 'failed' || recovery.status === 'recovering');
+			this.notification?.close();
+			this.notification = undefined;
+			if (recovery.status === 'failed') {
+				this.notification = notifications.error(localize('appServer.recoveryFailed', 'Could not reconnect to the Agent Host. Check the connection and try again.'), [{
+					id: ReconnectAppServerCommandId,
+					label: localize('appServer.reconnect', 'Reconnect'),
+					run: () => recovery.reconnect().catch(() => { }),
+				}]);
+			} else if (recovery.status === 'unavailable') {
+				this.notification = notifications.error(localize('appServer.recoveryUnavailable', 'The Agent Host connection cannot be restored. {0}', recovery.error ?? ''));
+			}
+		};
+		this._register(recovery.onDidChange(update));
+		update();
+	}
+}
+
+registerWorkbenchContribution('workbench.contrib.appServerRecovery', WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(AppServerRecoveryContribution));

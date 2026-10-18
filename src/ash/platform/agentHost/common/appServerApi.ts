@@ -6,8 +6,17 @@ import type { OperatingSystem } from '../../../base/common/platform.js';
 
 export type AppServerConnectionState = "stopped" | "starting" | "initializing" | "ready" | "stopping" | "crashed" | "restarting";
 
+/** Recovery scheduling belongs to the connection owner, independently of protocol state. */
+export interface IAppServerConnectionRecovery {
+	readonly status: 'idle' | 'recovering' | 'failed' | 'suspended' | 'unavailable';
+	readonly error: string | undefined;
+	readonly onDidChange: Event<void>;
+	reconnect(): Promise<void>;
+}
+
 /** App Server connection lifecycle visible to a renderer host. */
 export interface IAppServerApi {
+	readonly recovery?: IAppServerConnectionRecovery;
 	/** Changes when the protocol client starts a replacement connection. */
 	readonly connectionGeneration: number;
 	/** Initialized server process OS; absent before readiness and after connection closure. */

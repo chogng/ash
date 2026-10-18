@@ -2799,6 +2799,8 @@ use ash_protocol::ThreadSequenceRange;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ThreadStatus;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::ThreadTitleSource;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::ThreadUpdate;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::TimeContext;
@@ -6648,6 +6650,7 @@ typescript_bindings! {
     StableTurnErrorCode,
     StableTurnError,
     ThreadStatus,
+    ThreadTitleSource,
     ThreadArchiveReason,
     TurnStatus,
     MessagePhase,

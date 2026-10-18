@@ -1471,6 +1471,7 @@ fn event_changes_agent_tree(event: &ThreadEvent) -> bool {
             | ThreadEvent::ThreadHistoryMoved { .. }
             | ThreadEvent::ThreadArchived { .. }
             | ThreadEvent::ThreadRestored { .. }
+            | ThreadEvent::ThreadTitleChanged { .. }
             | ThreadEvent::HistoryImported { .. }
             | ThreadEvent::ForkHistoryImported { .. }
             | ThreadEvent::ForkTurnImported { .. }

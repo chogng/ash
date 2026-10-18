@@ -786,3 +786,174 @@ test('directory grant clients reject a different schema before sending domain re
 	assert.notEqual(client.state, 'ready');
 	assert.ok(transport.frames.every(frame => frame.method === 'initialize'));
 });
+
+
+test('recovery publishes exhaustion once, retries manually and never replays an uncertain mutation', async () => {
+	mock.timers.enable({ apis: ['setTimeout'] });
+	try {
+		const transport = new ProtocolTransport();
+		const client = new AppServerProtocolClient(transport);
+		using cleanup = toDisposable(() => client.dispose());
+		let fail = false;
+		using recovery = new AppServerConnectionRecovery(client, async () => {
+			client.disconnect();
+			if (fail) throw new Error('synthetic offline');
+			await client.connect();
+		}, () => { });
+		const states: string[] = [];
+		using listener = recovery.onDidChange(() => states.push(recovery.status));
+		await recovery.connect();
+		const write = assert.rejects(appServerRequest(client, 'session/request', { commandId: 'uncertain', sessionId: '00000000-0000-4000-8000-000000000001', request: { type: 'archive' } }), /lost/);
+		fail = true;
+		transport.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: 'lost' });
+		await write;
+		for (const delay of [100, 500, 2000]) {
+			mock.timers.tick(delay);
+			await assert.rejects(recovery.whenConnected(), /synthetic offline/);
+		}
+		assert.equal(recovery.status, 'failed');
+		assert.equal(recovery.error, 'synthetic offline');
+		mock.timers.tick(100_000);
+		assert.equal(states.filter(state => state === 'failed').length, 1);
+		fail = false;
+		const manual = recovery.reconnect();
+		assert.equal(recovery.reconnect(), manual);
+		await manual;
+		assert.equal(recovery.status, 'idle');
+		assert.equal(recovery.error, undefined);
+		assert.equal(transport.frames.filter(frame => frame.method === 'session/request').length, 1);
+	} finally { mock.timers.reset(); }
+});
+
+test('OS sleep pauses retries and wake restores an exhausted connection without replacing a healthy lease', async () => {
+	mock.timers.enable({ apis: ['setTimeout'] });
+	try {
+		const transport = new ProtocolTransport();
+		const client = new AppServerProtocolClient(transport);
+		using cleanup = toDisposable(() => client.dispose());
+		let fail = false;
+		let opens = 0;
+		using recovery = new AppServerConnectionRecovery(client, async () => {
+			opens++;
+			client.disconnect();
+			if (fail) throw new Error('offline after wake');
+			await client.connect();
+		}, () => { });
+		await recovery.connect();
+		recovery.suspend();
+		recovery.resume();
+		assert.equal(opens, 1);
+		transport.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: 'lost' });
+		recovery.suspend();
+		mock.timers.tick(3_600_000);
+		assert.equal(opens, 1);
+		assert.equal(recovery.status, 'suspended');
+		fail = true;
+		recovery.resume();
+		await assert.rejects(recovery.whenConnected(), /offline after wake/);
+		for (const delay of [100, 500, 2000]) {
+			mock.timers.tick(delay);
+			await assert.rejects(recovery.whenConnected(), /offline after wake/);
+		}
+		assert.equal(recovery.status, 'failed');
+		recovery.suspend();
+		fail = false;
+		recovery.resume();
+		await recovery.whenConnected();
+		assert.equal(recovery.status, 'idle');
+		assert.equal(client.state, 'ready');
+		recovery.suspend();
+		recovery.dispose();
+		recovery.resume();
+		mock.timers.tick(10_000);
+		assert.equal(opens, 6);
+	} finally { mock.timers.reset(); }
+});
+
+test('authorization withdrawal during a recovery attempt is terminal across OS wake', async () => {
+	mock.timers.enable({ apis: ['setTimeout'] });
+	try {
+		const transport = new ProtocolTransport();
+		const client = new AppServerProtocolClient(transport);
+		using cleanup = toDisposable(() => client.dispose());
+		let revoked = false;
+		let opens = 0;
+		using recovery = new AppServerConnectionRecovery(client, async () => {
+			opens++;
+			client.disconnect();
+			const connecting = client.connect();
+			if (revoked) transport.emit(WEB_APP_SERVER_CLOSED_EVENT, { intentional: true, message: 'Authorization revoked' });
+			await connecting;
+		}, () => { });
+		await recovery.connect();
+		revoked = true;
+		transport.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: 'lost' });
+		mock.timers.tick(100);
+		await assert.rejects(recovery.whenConnected(), /Authorization revoked/);
+		assert.equal(recovery.status, 'unavailable');
+		recovery.suspend();
+		recovery.resume();
+		mock.timers.tick(1_000_000);
+		assert.equal(opens, 2);
+		assert.equal(recovery.status, 'unavailable');
+	} finally { mock.timers.reset(); }
+});
+
+test('a recovery observer can retry synchronously without leaving a second timer', async () => {
+	mock.timers.enable({ apis: ['setTimeout'] });
+	try {
+		const transport = new ProtocolTransport();
+		const client = new AppServerProtocolClient(transport);
+		using cleanup = toDisposable(() => client.dispose());
+		let opens = 0;
+		using recovery = new AppServerConnectionRecovery(client, async () => {
+			opens++;
+			client.disconnect();
+			await client.connect();
+		}, () => { });
+		await recovery.connect();
+		using listener = recovery.onDidChange(() => {
+			if (recovery.status === 'recovering') void recovery.reconnect();
+		});
+		transport.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: 'lost' });
+		await recovery.whenConnected();
+		mock.timers.tick(10_000);
+		assert.equal(opens, 2);
+	} finally { mock.timers.reset(); }
+});
+
+
+test('Web recovery retains its elapsed budget across attempts and excludes reported OS sleep', async () => {
+	mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 10_000 });
+	try {
+		const transport = new ProtocolTransport();
+		const client = new AppServerProtocolClient(transport);
+		using cleanup = toDisposable(() => client.dispose());
+		let offline = false;
+		let opens = 0;
+		using recovery = new AppServerConnectionRecovery(client, async () => {
+			opens++;
+			client.disconnect();
+			if (offline) throw new Error('Web offline');
+			await client.connect();
+		}, () => { }, { delay: () => 500, maxElapsedTimeMs: 1_000 });
+		await recovery.connect();
+		offline = true;
+		transport.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: 'lost' });
+		mock.timers.tick(500);
+		await assert.rejects(recovery.whenConnected(), /Web offline/);
+		mock.timers.tick(500);
+		await assert.rejects(recovery.whenConnected(), /Web offline/);
+		assert.equal(recovery.status, 'failed');
+		assert.equal(opens, 3);
+		recovery.suspend();
+		mock.timers.tick(3_600_000);
+		recovery.resume();
+		await assert.rejects(recovery.whenConnected(), /Web offline/);
+		assert.equal(recovery.status, 'recovering');
+		offline = false;
+		mock.timers.tick(500);
+		await recovery.whenConnected();
+		assert.equal(recovery.status, 'idle');
+	} finally { mock.timers.reset(); }
+});

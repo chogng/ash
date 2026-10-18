@@ -1,3 +1,5 @@
+import type { EventEmitter } from 'node:events';
+import { toDisposable } from '../../../base/common/lifecycle.js';
 import type { OpenDialogOptions, OpenDialogReturnValue, SaveDialogOptions, SaveDialogReturnValue } from '../../../base/parts/sandbox/common/electronTypes.js';
 import type { Event } from '../../../base/common/event.js';
 import type { IServerChannel } from '../../../base/parts/ipc/common/ipc.js';
@@ -220,4 +222,25 @@ export function windowSplashIpcRoutes(service: IThemeMainService, scope: () => s
 			},
 		},
 	];
+}
+
+/** Subscriptions are owned by the window IPC connection, including listener cleanup. */
+export function powerMonitorChannel(monitor: Pick<EventEmitter, 'on' | 'removeListener'>): IServerChannel {
+	return {
+		async call(): Promise<never> { throw new TypeError('Power monitor accepts subscriptions only'); },
+		listen<T>(_context: string, event: string, arg?: unknown): Event<T> {
+			if (arg !== undefined || event !== 'onDidSuspendOS' && event !== 'onDidResumeOS') {
+				throw new TypeError('Invalid power monitor subscription');
+			}
+			return (listener, thisArgs, disposables) => {
+				const name = event === 'onDidSuspendOS' ? 'suspend' : 'resume';
+				const callback = () => listener.call(thisArgs, undefined as T);
+				monitor.on(name, callback);
+				const subscription = toDisposable(() => monitor.removeListener(name, callback));
+				if (Array.isArray(disposables)) disposables.push(subscription);
+				else disposables?.add(subscription);
+				return subscription;
+			};
+		},
+	};
 }

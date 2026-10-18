@@ -181,6 +181,15 @@ pub struct SessionDeleted {
     rename_all_fields = "camelCase"
 )]
 pub enum SessionRequest {
+    RenameSession {
+        title: String,
+    },
+    RenameThread {
+        thread_id: ThreadId,
+        title: String,
+        #[serde(default)]
+        source: ash_protocol::ThreadTitleSource,
+    },
     Archive,
     Restore,
     Delete,

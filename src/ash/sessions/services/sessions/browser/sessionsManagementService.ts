@@ -256,6 +256,30 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		}
 	}
 
+	async renameSession(sessionId: SessionId, title: string): Promise<void> {
+		await this.initialize();
+		const session = this._sessions.find(candidate => candidate.sessionId === sessionId);
+		if (!session) throw new Error(localize('chatSession.rename.missing', 'Open a session before renaming it.'));
+		const generation = this.catalogGeneration;
+		const renamed = await this.provider.renameSession(session, title);
+		if (this.isDisposed || generation !== this.catalogGeneration) return;
+		this.replaceSession(renamed);
+		if (this._active?.session.sessionId === sessionId) this._active = { session: renamed, threadId: this._active.threadId };
+		this._onDidChange.fire();
+	}
+
+	async deleteSession(sessionId: SessionId): Promise<void> {
+		await this.initialize();
+		const session = this._sessions.find(candidate => candidate.sessionId === sessionId && candidate.status === 'archived');
+		if (!session) throw new Error(localize('chatSession.archived.missing', 'Archived session is unavailable: {0}', sessionId));
+		await this.provider.deleteSession(session);
+		if (this.isDisposed) return;
+		// A fresh catalog generation retires reads that began before the deletion,
+		// so a delayed notification response cannot reinsert the removed Session.
+		this._sessions = this._sessions.filter(candidate => candidate.sessionId !== sessionId);
+		await this.loadSessions();
+	}
+
 	async setModel(model: ModelRef): Promise<void> {
 		await this.initialize();
 		await this.provider.setModel(model);

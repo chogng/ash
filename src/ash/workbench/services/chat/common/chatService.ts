@@ -255,6 +255,7 @@ export interface ChatInteractionOfferChange {
 }
 
 export interface IChatService {
+	renameThread(sessionId: SessionId, threadId: ThreadId, title: string): Promise<void>;
 	/** Only accepted local submissions establish window activity; broadcasts never establish ownership. */
 	readonly onDidSubmitRequest: Event<IChatRequestSubmittedEvent>;
 	/** Current connection delivery authority; committed history does not grant this lease. */

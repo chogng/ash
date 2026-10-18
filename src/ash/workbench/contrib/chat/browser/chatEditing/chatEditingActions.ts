@@ -109,3 +109,24 @@ for (const direction of ['undo', 'redo'] as const) {
 		}
 	});
 }
+
+
+registerAction2(class RenameChatAction extends Action2 {
+	constructor() {
+		super({ id: 'workbench.action.chat.rename', title: localize2('chat.rename.label', 'Chat: Rename Conversation'), f1: true });
+	}
+
+	public override async run(accessor: ServicesAccessor): Promise<void> {
+		const source = accessor.get(IChatSessionNavigationService).getActiveConversation();
+		if (!source) return;
+		const chat = accessor.get(IChatService);
+		const current = await chat.readThread(source.sessionId, source.threadId, { type: 'latest', turnLimit: 1 });
+		const title = await accessor.get(IQuickInputService).input({
+			title: localize('chat.rename.prompt', 'Conversation name'), value: current.thread.title,
+			validateInput: async value => !value.trim() || Array.from(value.trim()).length > 256 ? localize('chat.rename.invalid', 'Enter a name with 1 to 256 characters.') : undefined,
+		});
+		if (title === undefined) return;
+		await chat.renameThread(source.sessionId, source.threadId, title.trim());
+		status(localize('chat.rename.done', 'Conversation renamed.'));
+	}
+});

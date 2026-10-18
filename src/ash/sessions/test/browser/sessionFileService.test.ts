@@ -127,6 +127,8 @@ class MemoryProvider extends Disposable implements ISessionsProvider {
 	currentWorkspace() { return { type: 'current' as const }; }
 	async create(): Promise<never> { throw new Error('This test uses durable sessions'); }
 	async setModel() { }
+	async renameSession(): Promise<never> { throw new Error('Unexpected rename'); }
+	async deleteSession(): Promise<void> { throw new Error('Unexpected deletion'); }
 	async archive(session: ISession): Promise<ISession> { return { ...session, status: 'archived' }; }
 	async restore(session: ISession): Promise<ISession> { return { ...session, status: 'active' }; }
 	async stop(session: ISession) { return session; }

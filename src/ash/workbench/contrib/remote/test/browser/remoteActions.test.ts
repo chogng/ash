@@ -1,3 +1,14 @@
+import { readFileSync } from 'node:fs';
+import { setNlsMessages, resetNlsResolver } from '../../../../../nls.js';
+import { IAppServerApi, type IAppServerConnectionRecovery } from '../../../../../platform/agentHost/common/appServerApi.js';
+import { INotificationService } from '../../../../../platform/notification/common/notification.js';
+import { NotificationService } from '../../../../services/notification/common/notificationService.js';
+import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../common/contributions.js';
+import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
+import { ReconnectAppServerCommandId, AppServerRecoveryAvailableContext } from '../../browser/remoteActions.js';
+import '../../browser/remote.contribution.js';
 import { quickInputServiceTestControls } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { QuickInputType, type IQuickPickDidAcceptEvent } from '../../../../../platform/quickinput/common/quickInput.js';
 import { Event as QuickPickTestEvent } from '../../../../../base/common/event.js';
@@ -179,4 +190,45 @@ async function waitUntil(predicate: () => boolean): Promise<void> {
 		await new Promise<void>(resolve => setImmediate(resolve));
 	}
 	assert.fail("condition did not become true");
+}
+
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`Agent Host recovery notification and command use the same owner and disappear on recovery (${locale})`, async () => {
+		if (locale === 'zh-CN') setNlsMessages(locale, JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')));
+		try {
+			using services = new InstantiationService();
+			using notifications = new NotificationService();
+			using contexts = new ContextKeyService();
+			using changed = new Emitter<void>();
+			let retries = 0;
+			const recovery: IAppServerConnectionRecovery & { status: IAppServerConnectionRecovery['status']; } = {
+				status: 'failed', error: 'fixture offline', onDidChange: changed.event,
+				reconnect: async () => { retries++; recovery.status = 'recovering'; changed.fire(); },
+			};
+			services.registerInstance(IAppServerApi, { connectionGeneration: 1, getConnectionState: async () => 'stopped', getSlashCommands: async () => [], onConnectionState: () => ({ dispose() { } }), recovery });
+			services.registerInstance(INotificationService, notifications);
+			services.registerInstance(IContextKeyService, contexts);
+			using contribution = WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['workbench.contrib.appServerRecovery']);
+			contribution.advance(WorkbenchPhase.BlockRestore);
+			const notice = notifications.getNotifications()[0]!;
+			assert.equal(notifications.getNotifications().length, 1);
+			assert.equal(notice.actions?.primary?.[0]?.label, locale === 'zh-CN' ? '重新连接' : 'Reconnect');
+			assert.equal(notice.message, locale === 'zh-CN' ? '无法重新连接到 Agent Host。请检查连接后重试。' : 'Could not reconnect to the Agent Host. Check the connection and try again.');
+			assert.equal(contexts.contextMatchesRules(AppServerRecoveryAvailableContext.isEqualTo(true)), true);
+			await notice.actions!.primary![0]!.run();
+			assert.equal(retries, 1);
+			assert.equal(notifications.getNotifications().length, 0);
+			await CommandsRegistry.getCommand(ReconnectAppServerCommandId)!(services);
+			assert.equal(retries, 2);
+			recovery.status = 'unavailable'; changed.fire();
+			assert.equal(notifications.getNotifications().length, 1);
+			assert.equal(notifications.getNotifications()[0]!.actions?.primary?.length ?? 0, 0);
+			assert.equal(contexts.contextMatchesRules(AppServerRecoveryAvailableContext.isEqualTo(true)), false);
+			contribution.dispose();
+			assert.equal(notifications.getNotifications().length, 0);
+			recovery.status = 'failed'; changed.fire();
+			assert.equal(notifications.getNotifications().length, 0);
+		} finally { resetNlsResolver(); }
+	});
 }

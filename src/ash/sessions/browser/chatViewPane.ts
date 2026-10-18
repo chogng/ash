@@ -324,7 +324,9 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 			} else {
 				void pane.model.selectThread(selection);
 			}
-			entries.push({ label: session.title.trim() || localize('chat.title.default', 'Chat'), pane });
+			const selectedThread = session.chats.find(chat => chat.threadId === selection.threadId);
+			const threadTitle = selectedThread?.origin.type !== 'root' ? selectedThread?.title : undefined;
+			entries.push({ label: threadTitle?.trim() || session.title.trim() || localize('chat.title.default', 'Chat'), pane });
 		}
 		for (const [paneId, pane] of this.panes) {
 			if (retainedPaneIds.has(paneId)) continue;

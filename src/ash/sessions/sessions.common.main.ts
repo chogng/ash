@@ -1,3 +1,4 @@
+import '../workbench/contrib/remote/browser/remote.contribution.js';
 import '../workbench/contrib/debug/browser/debugService.js';
 import '../workbench/services/testing/browser/testingServiceRegistration.js';
 import '../workbench/api/browser/extensionHost.contribution.js';

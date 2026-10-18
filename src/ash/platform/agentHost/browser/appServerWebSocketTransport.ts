@@ -1,3 +1,4 @@
+import { localize } from '../../../nls.js';
 import { AbstractDisposable } from '../../../base/common/lifecycle.js';
 import { isRecord } from '../../../base/common/types.js';
 import { decodeWebSessionInfo } from '../../../../../.build/protocol/typescript/WebProtocolDecoder.js';
@@ -79,14 +80,14 @@ export class AppServerWebSocketTransport extends AbstractDisposable implements A
 				});
 				if (response.status === 401 || response.status === 403) {
 					this.closed = true;
-					this.emit(WEB_APP_SERVER_CLOSED_EVENT, { intentional: true, message: 'Web authorization expired or was revoked. Open a new authenticated link.' });
+					this.emit(WEB_APP_SERVER_CLOSED_EVENT, { intentional: true, message: localize('appServer.webAuthorizationExpired', 'Web authorization expired or was revoked. Open a new authenticated link.') });
 					return;
 				}
 				if (!response.ok) { throw new Error('Web App Server is unavailable'); }
 				const session = decodeWebSessionInfo(await response.json());
 				if (session.workspaceId !== this.session.workspaceId || session.workspaceRoot !== this.session.workspaceRoot) {
 					this.closed = true;
-					this.emit(WEB_APP_SERVER_CLOSED_EVENT, { intentional: true, message: 'Web workspace changed. Open a new authenticated link.' });
+					this.emit(WEB_APP_SERVER_CLOSED_EVENT, { intentional: true, message: localize('appServer.webWorkspaceChanged', 'Web workspace changed. Open a new authenticated link.') });
 					return;
 				}
 			}

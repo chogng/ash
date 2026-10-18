@@ -262,6 +262,14 @@ pub trait AgentRuntime {
         command_id: &CommandId,
         selection: &ash_protocol::AdvisorSelection,
     ) -> Result<Option<u64>, CoreError>;
+    /// Updates the title through the Thread journal; manual names supersede automatic suggestions.
+    fn rename_thread(
+        &self,
+        thread_id: &ThreadId,
+        command_id: CommandId,
+        title: String,
+        source: ash_protocol::ThreadTitleSource,
+    ) -> Result<u64, CoreError>;
     fn configure_advisor(
         &self,
         thread_id: &ThreadId,

@@ -76,6 +76,11 @@ pub enum ToolExecutionAuthority {
     rename_all_fields = "camelCase"
 )]
 pub enum ThreadEvent {
+    ThreadTitleChanged {
+        thread_id: ThreadId,
+        title: String,
+        source: crate::ThreadTitleSource,
+    },
     TurnPermissionPolicyChanged {
         thread_id: ThreadId,
         turn_id: TurnId,
@@ -432,6 +437,7 @@ impl ThreadEvent {
             Self::TurnPermissionPolicyChanged { .. } => "turn.permission_policy_changed",
             Self::HookRunUpdated { .. } => "hook.run_updated",
             Self::ThreadCreated { .. } => "thread.created",
+            Self::ThreadTitleChanged { .. } => "thread.title_changed",
             Self::AdvisorConfigured { .. } => "advisor.configured",
             Self::ModelProvidersMigrated { .. } => "model.providers_migrated",
             Self::ThreadArchived { .. } => "thread.archived",
@@ -493,6 +499,7 @@ impl ThreadEvent {
             Self::ThreadCreated { thread_id, .. }
             | Self::ModelProvidersMigrated { thread_id, .. }
             | Self::AdvisorConfigured { thread_id, .. }
+            | Self::ThreadTitleChanged { thread_id, .. }
             | Self::ThreadArchived { thread_id, .. }
             | Self::ThreadRestored { thread_id }
             | Self::GoalCreated { thread_id, .. }

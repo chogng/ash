@@ -45,6 +45,15 @@ pub use update::ThreadUpdate;
 pub use update::ThreadUpdateEnvelope;
 pub use update::ToolOutputStream;
 
+/// Explicit user names are authoritative over delayed automatic title suggestions.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ThreadTitleSource {
+    Automatic,
+    #[default]
+    Manual,
+}
+
 /// Canonical readable state for one independently ordered Agent execution branch.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]

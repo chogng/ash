@@ -1,3 +1,5 @@
+import { IAppServerApi } from '../../../../platform/agentHost/common/appServerApi.js';
+import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { localize2 } from '../../../../nls.js';
 import { DisposableStore } from "../../../../base/common/lifecycle.js";
 import { Action2, registerAction2 } from "../../../../platform/actions/common/actions.js";
@@ -169,3 +171,17 @@ function showConnectionError(dialogs: IDialogService, message: string, error: un
 		detail: error instanceof Error ? error.message : String(error),
 	});
 }
+
+export const AppServerRecoveryAvailableContext = new RawContextKey<boolean>('appServerRecoveryAvailable', false);
+export const ReconnectAppServerCommandId = 'workbench.action.agentHost.reconnect';
+
+registerAction2(class ReconnectAppServerAction extends Action2 {
+	constructor() {
+		super({ id: ReconnectAppServerCommandId, title: localize2('appServer.reconnectCommand', 'Agent Host: Reconnect'), f1: true, precondition: AppServerRecoveryAvailableContext.isEqualTo(true) });
+	}
+
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		// The connection owner logs failures and publishes the next recovery state.
+		await accessor.get(IAppServerApi).recovery?.reconnect().catch(() => { });
+	}
+});

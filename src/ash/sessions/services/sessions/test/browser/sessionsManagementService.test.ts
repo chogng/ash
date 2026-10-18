@@ -881,6 +881,8 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection, work
 	let listCount = 0;
 	let readCatalogCount = 0;
 	const api: IAgentSessionService = {
+		async rename({ sessionId, title }) { const index = sessions.findIndex(candidate => candidate.sessionId === sessionId); sessions[index] = { ...sessions[index]!, title }; return { session: sessions[index]!, agentTree }; },
+		async delete({ sessionId }) { const index = sessions.findIndex(candidate => candidate.sessionId === sessionId); if (index >= 0) sessions.splice(index, 1); },
 		async create() { throw new Error("Not used"); },
 		async listAgents() { return { agents: [] }; },
 		async read({ sessionId }) { return { session: sessions.find(candidate => candidate.sessionId === sessionId)!, agentTree }; },

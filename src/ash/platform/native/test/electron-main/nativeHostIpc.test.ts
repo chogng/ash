@@ -1,3 +1,5 @@
+import { EventEmitter } from 'node:events';
+import { powerMonitorChannel } from '../../electron-main/nativeHostIpc.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Emitter } from '../../../../base/common/event.js';
@@ -287,4 +289,25 @@ test('workspace IPC preserves the new-window policy and validates legacy and str
 		assert.throws(() => route.validate(value), /Invalid workspace request/);
 	}
 	assert.equal(opened.length, 2);
+});
+
+
+test('power monitor IPC observes only OS events and releases listeners with its subscription', async () => {
+	const monitor = new EventEmitter();
+	const channel = powerMonitorChannel(monitor);
+	await assert.rejects(channel.call('window:1', 'suspend'), /subscriptions only/);
+	assert.throws(() => channel.listen('window:1', 'resume'), /Invalid power monitor/);
+	assert.throws(() => channel.listen('window:1', 'onDidResumeOS', { windowId: 2 }), /Invalid power monitor/);
+	const received: string[] = [];
+	using suspend = channel.listen<void>('window:1', 'onDidSuspendOS')(() => received.push('sleep'));
+	using resume = channel.listen<void>('window:1', 'onDidResumeOS')(() => received.push('wake'));
+	monitor.emit('suspend', { ignored: true });
+	monitor.emit('resume', { ignored: true });
+	assert.deepEqual(received, ['sleep', 'wake']);
+	suspend.dispose();
+	resume.dispose();
+	assert.equal(monitor.listenerCount('suspend'), 0);
+	assert.equal(monitor.listenerCount('resume'), 0);
+	monitor.emit('resume');
+	assert.deepEqual(received, ['sleep', 'wake']);
 });

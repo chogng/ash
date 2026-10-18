@@ -183,3 +183,57 @@ for (const wording of [ChatSessionArchiveActionWording.Archive, ChatSessionArchi
 		if (id !== archiveAllId) MenusRegistry.appendMenuItem(MenuId.ChatTitle, { command: { id, title: action.title, icon: action.icon }, when, group: 'sessionLifecycle' });
 	}
 }
+
+
+registerAction2(class RenameSessionAction extends Action2 {
+	constructor() { super({ id: 'agentSession.rename', title: localize2('chatSession.rename', 'Chat: Rename Session'), f1: true }); }
+
+	override async run(accessor: ServicesAccessor, argument?: unknown): Promise<void> {
+		const requested = sessionTarget(argument);
+		const sessions = accessor.get(ISessionsManagementService);
+		const id = requested ?? accessor.get(IChatSessionNavigationService).getActiveConversation()?.sessionId;
+		await sessions.initialize();
+		const session = sessions.sessions.find(candidate => candidate.sessionId === id);
+		if (!session) throw new Error(localize('chatSession.rename.missing', 'Open a session before renaming it.'));
+		const title = await accessor.get(IQuickInputService).input({
+			title: localize('chatSession.rename.prompt', 'Session name'), value: session.title,
+			validateInput: async value => !value.trim() || Array.from(value.trim()).length > 256 ? localize('chat.rename.invalid', 'Enter a name with 1 to 256 characters.') : undefined,
+		});
+		if (title !== undefined) await sessions.renameSession(session.sessionId, title.trim());
+	}
+});
+
+registerAction2(class DeleteArchivedSessionAction extends Action2 {
+	constructor() { super({ id: 'agentSession.delete', title: localize2('chatSession.delete', 'Chat: Delete Archived Session'), f1: true }); }
+
+	override async run(accessor: ServicesAccessor, argument?: unknown): Promise<void> {
+		const requested = sessionTarget(argument);
+		const sessions = accessor.get(ISessionsManagementService);
+		const input = accessor.get(IQuickInputService);
+		const dialogs = accessor.get(IDialogService);
+		await sessions.initialize();
+		const archived = sessions.sessions.filter(session => session.status === 'archived');
+		let id = requested;
+		if (!id) {
+			if (!archived.length) throw new Error(localize('chatSession.archived.none', 'No archived sessions are available.'));
+			using resources = new DisposableStore();
+			const picker = resources.add(input.createQuickPick<IQuickPickItem & { sessionId: string; }>());
+			picker.ariaLabel = picker.placeholder = localize('chatSession.delete.pick', 'Choose an archived session to delete');
+			picker.items = archived.map(session => ({ label: session.title, sessionId: session.sessionId }));
+			id = await new Promise<string | undefined>(resolve => {
+				resources.add(picker.onDidAccept(() => { const item = picker.selectedItems[0]; if (item) { resolve(item.sessionId); picker.hide(); } }));
+				resources.add(picker.onDidHide(() => resolve(undefined)));
+				picker.show();
+			});
+		}
+		if (!id) return;
+		const session = archived.find(candidate => candidate.sessionId === id);
+		if (!session) throw new Error(localize('chatSession.archived.missing', 'Archived session is unavailable: {0}', id));
+		const confirmation = await dialogs.confirm({
+			message: localize('chatSession.delete.confirm', 'Permanently delete {0}?', session.title),
+			detail: localize('chatSession.delete.detail', 'This removes the session and its conversation history and cannot be undone. Any resumed work in this session will be stopped. Other sessions and unsent drafts are kept.'),
+			primaryButton: localize('chatSession.delete.button', 'Delete permanently'),
+		});
+		if (confirmation.confirmed) await sessions.deleteSession(session.sessionId);
+	}
+});

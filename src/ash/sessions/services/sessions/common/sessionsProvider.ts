@@ -29,6 +29,8 @@ export interface ISessionsProvider extends IDisposable {
 	create(title: string, workspace: SessionWorkspaceSelection, agent?: ChatAgent, creationId?: string): Promise<IActiveSessionThread>;
 	setModel(model: ModelRef): Promise<void>;
 	archive(session: ISession): Promise<ISession>;
+	deleteSession(session: ISession): Promise<void>;
+	renameSession(session: ISession, title: string): Promise<ISession>;
 	restore(session: ISession): Promise<ISession>;
 	stop(session: ISession): Promise<ISession>;
 	interrupt(session: ISession, threadId: ThreadId): Promise<void>;

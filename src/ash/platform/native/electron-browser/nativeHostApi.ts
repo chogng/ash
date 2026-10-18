@@ -44,7 +44,10 @@ import {
 
 export function createNativeHostApi(mainProcessService: IMainProcessService): INativeHostApi {
 	const colors = mainProcessService.getChannel('colorScheme');
+	const power = mainProcessService.getChannel('powerMonitor');
 	return {
+		onDidSuspendOS: listener => power.listen<void>('onDidSuspendOS')(listener),
+		onDidResumeOS: listener => power.listen<void>('onDidResumeOS')(listener),
 		async getScreenshot(rect) {
 			const value = await invoke<unknown>('ash:host:screenshot', rect);
 			if (value === undefined) return undefined;

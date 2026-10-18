@@ -70,6 +70,8 @@ export function createDisconnectedAgentSessionService(unavailable: UnavailableOp
 		unsubscribe: () => unavailable('session.unsubscribe'),
 		createThread: () => unavailable('session.createThread'),
 		archive: () => unavailable('session.archive'),
+		rename: () => unavailable('session.rename'),
+		delete: () => unavailable('session.delete'),
 		restore: () => unavailable('session.restore'),
 		stop: () => unavailable('session.stop')
 	};
@@ -77,6 +79,7 @@ export function createDisconnectedAgentSessionService(unavailable: UnavailableOp
 
 export function createDisconnectedAgentThreadService(unavailable: UnavailableOperation): IAgentThreadService {
 	return {
+		rename: () => unavailable('thread.rename'),
 		onDidOfferInteraction: Event.None,
 		onDidChangeConnection: Event.None,
 		onDidUpdateThread: Event.None,
@@ -183,6 +186,15 @@ export function createAppServerAgentSessionService(connection: AppServerProtocol
 			)
 				.then(sessionThreadResult)
 				.then((result) => ({ session: toAgentSession(result.session), threadId: result.threadId })),
+		rename: async params => {
+			const result = sessionResult(await appServerRequest(connection, 'session/request', sessionRequest(params, { type: 'renameSession', title: params.title })));
+			if (result.session.sessionId !== params.sessionId) throw new Error(localize('chat.rename.wrongIdentity', 'The server returned a different conversation while renaming. Refresh and try again.'));
+			return toSessionResult(result);
+		},
+		delete: async params => {
+			const result = await appServerRequest(connection, 'session/request', sessionRequest(params, { type: 'delete' }));
+			if (result.type !== 'deleted' || result.value !== params.sessionId) throw new Error(localize('chatSession.delete.wrongIdentity', 'The server returned a different session while deleting. Refresh before trying again.'));
+		},
 		archive: (params) =>
 			appServerRequest(connection, 'session/request', sessionRequest(params, { type: 'archive' }))
 				.then(sessionResult)
@@ -221,6 +233,10 @@ async function readToolResource(connection: AppServerProtocolClient, source: Par
 
 export function createAppServerAgentThreadService(connection: AppServerProtocolClient): IAgentThreadService {
 	return {
+		rename: async params => {
+			const result = sessionResult(await appServerRequest(connection, 'session/request', sessionRequest(params, { type: 'renameThread', threadId: params.threadId, title: params.title, source: params.source })));
+			if (result.session.sessionId !== params.sessionId) throw new Error(localize('chat.rename.wrongIdentity', 'The server returned a different conversation while renaming. Refresh and try again.'));
+		},
 		onDidOfferInteraction: Event.any<AgentInteractionOffer>((listener, thisArgs) => connection.onNotification(event => {
 			if (event.method === 'agent/request') listener.call(thisArgs, {
 				connectionGeneration: connection.generation,

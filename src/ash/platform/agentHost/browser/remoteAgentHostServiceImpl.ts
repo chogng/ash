@@ -19,7 +19,7 @@ interface RemoteAgentHostConnectionOptions {
 export class RemoteAgentHostService extends Disposable {
 
 	public readonly client: AppServerProtocolClient;
-	private readonly recovery: AppServerConnectionRecovery;
+	public readonly recovery: AppServerConnectionRecovery;
 
 	constructor(
 		private readonly options: RemoteAgentHostConnectionOptions,

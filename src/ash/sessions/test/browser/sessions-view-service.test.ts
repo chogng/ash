@@ -620,6 +620,8 @@ class FakeSessionService implements ISessionsManagementService {
 	async startNewSession(): Promise<IActiveSessionThread> { this.startNewSessionCalls++; throw new Error("Not implemented"); }
 	async stopSession(): Promise<void> { }
 	async archiveSession(): Promise<void> { }
+	async renameSession(): Promise<never> { throw new Error('Unexpected rename'); }
+	async deleteSession(): Promise<void> { throw new Error('Unexpected deletion'); }
 	async restoreSession(): Promise<void> { }
 	async setModel(): Promise<void> { }
 	async setNextApprovalMode(_sessionId: SessionId, _approvalMode: ApprovalMode): Promise<void> { }

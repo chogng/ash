@@ -127,7 +127,7 @@ interface SessionsHistoryQuickPickItem extends IQuickPickItem {
 
 registerAction2(class ShowSessionsChatHistoryAction extends Action2 {
 	constructor() {
-		super({ id: SHOW_CHAT_HISTORY_COMMAND_ID, title: localize2({ bundle: 'ash.sessions', key: 'command.ShowSessionsChatHistoryAction' }, "Show Session History") });
+		super({ id: SHOW_CHAT_HISTORY_COMMAND_ID, f1: true, title: localize2({ bundle: 'ash.sessions', key: 'command.ShowSessionsChatHistoryAction' }, "Show Session History") });
 	}
 
 	override run(accessor: ServicesAccessor): void {
@@ -144,7 +144,7 @@ registerAction2(class ShowSessionsChatHistoryAction extends Action2 {
 				sessionId: session.sessionId,
 				threadId: thread.threadId,
 				label: session.title.trim() || "Session",
-				description: [session.application?.label, threads.length > 1 ? localize('sessions.history.thread', 'Thread {0}', index + 1) : undefined, sessionManagementLabel(thread.management)].filter(Boolean).join(' · ') || undefined,
+				description: [session.application?.label, threads.length > 1 ? localize('sessions.history.thread', 'Thread {0}', index + 1) : undefined, thread.origin.type !== 'root' && thread.title?.trim() !== session.title.trim() ? thread.title?.trim() : undefined, sessionManagementLabel(thread.management)].filter(Boolean).join(' · ') || undefined,
 				detail: thread.management?.activity?.text ?? thread.management?.summary ?? undefined,
 			}));
 		});

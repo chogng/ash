@@ -385,6 +385,7 @@ pub struct ThreadCommandSnapshot {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ThreadCommandResult {
+    Renamed,
     HistoryMoved,
     AdvisorConfigured,
     TurnAccepted {
@@ -763,6 +764,42 @@ pub(crate) fn reduce_thread_event_with_prefix(
                 ));
             }
             migrate_model_providers(&mut snapshot, providers);
+        }
+        ThreadEvent::ThreadTitleChanged { title, source, .. } => {
+            let receipt = envelope.command.clone().ok_or_else(|| {
+                CoreError::Journal("Thread naming requires a command receipt".into())
+            })?;
+            if envelope.schema_version < 27
+                || title.trim().is_empty()
+                || title.chars().count() > 256
+                || receipt.command
+                    != (ThreadCommand::Rename {
+                        title: title.clone(),
+                        source: *source,
+                    })
+                || snapshot
+                    .commands
+                    .iter()
+                    .any(|entry| entry.receipt.command_id == receipt.command_id)
+                || *source == ash_protocol::ThreadTitleSource::Automatic
+                    && snapshot.commands.iter().any(|entry| {
+                        matches!(
+                            entry.receipt.command,
+                            ThreadCommand::Rename {
+                                source: ash_protocol::ThreadTitleSource::Manual,
+                                ..
+                            }
+                        )
+                    })
+            {
+                return Err(CoreError::Journal("invalid Thread title change".into()));
+            }
+            snapshot.title = title.clone();
+            snapshot.commands.push(ThreadCommandSnapshot {
+                receipt,
+                result: ThreadCommandResult::Renamed,
+                response_sequence: envelope.sequence,
+            });
         }
         ThreadEvent::AdvisorConfigured { selection, .. } => {
             if let ash_protocol::AdvisorSelection::Model { config } = selection {

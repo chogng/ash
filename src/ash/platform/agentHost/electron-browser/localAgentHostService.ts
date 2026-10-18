@@ -20,7 +20,7 @@ export class LocalAgentHostServiceClient extends Disposable {
 	private readonly reconnected = this._register(new Emitter<void>());
 	public readonly onDidReconnect = this.reconnected.event;
 	public readonly client: AppServerProtocolClient;
-	private readonly recovery: AppServerConnectionRecovery;
+	public readonly recovery: AppServerConnectionRecovery;
 	private connectionId = 0;
 	private isEnabled = false;
 	private readonly channelPrefix: string;

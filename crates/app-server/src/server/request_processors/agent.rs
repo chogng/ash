@@ -551,6 +551,39 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
         };
 
         match request {
+            SessionRequest::RenameSession { title } => {
+                // The backend's Session identity is owned by its root Thread. Keep
+                // this relationship here rather than asking UI providers to infer it.
+                let thread_id = ash_protocol::ThreadId::new(session_id.to_string())
+                    .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+                self.read_session_thread(&session_id, &thread_id)?;
+                self.context
+                    .agent_runtime()
+                    .rename_thread(
+                        &thread_id,
+                        command_id,
+                        title,
+                        ash_protocol::ThreadTitleSource::Manual,
+                    )
+                    .map_err(core_error)?;
+                result(&SessionRequestResult::Session(
+                    self.session_result(&session_id)?,
+                ))
+            }
+            SessionRequest::RenameThread {
+                thread_id,
+                title,
+                source,
+            } => {
+                self.read_session_thread(&session_id, &thread_id)?;
+                self.context
+                    .agent_runtime()
+                    .rename_thread(&thread_id, command_id, title, source)
+                    .map_err(core_error)?;
+                result(&SessionRequestResult::Session(
+                    self.session_result(&session_id)?,
+                ))
+            }
             SessionRequest::Archive => result(&SessionRequestResult::Session(
                 self.context.archive_session_request(mutation)?,
             )),

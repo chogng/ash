@@ -493,3 +493,30 @@ test('Agent App catalogs retain original tool contracts and retire with their so
 		assert.deepEqual(requested, source);
 	}
 });
+
+
+test('naming and deletion preserve request identity and reject responses for another Session', async () => {
+	const requests: unknown[] = [];
+	let returnedId = 'session';
+	const connection = {
+		async request(definition: { method: string; }, params: { request: { type: string; }; }): Promise<unknown> {
+			requests.push({ method: definition.method, params });
+			if (params.request.type === 'delete') return { type: 'deleted', value: returnedId };
+			return { type: 'session', value: { session: { sessionId: returnedId, title: '命名', status: 'active', manager: { status: 'idle', statusChangedAtUnixMs: 0 }, threads: [] }, agentTree: { roots: [] } } };
+		},
+	} as unknown as AppServerProtocolClient;
+	const sessions = createAppServerAgentSessionService(connection);
+	const threads = createAppServerAgentThreadService(connection);
+	await sessions.rename({ sessionId: 'session', commandId: 'session-name', title: '命名' });
+	await threads.rename({ sessionId: 'session', threadId: 'branch', commandId: 'thread-name', title: '命名', source: 'manual' });
+	await sessions.delete({ sessionId: 'session', commandId: 'delete-session' });
+	assert.deepEqual(requests, [
+		{ method: 'session/request', params: { sessionId: 'session', commandId: 'session-name', request: { type: 'renameSession', title: '命名' } } },
+		{ method: 'session/request', params: { sessionId: 'session', commandId: 'thread-name', request: { type: 'renameThread', threadId: 'branch', title: '命名', source: 'manual' } } },
+		{ method: 'session/request', params: { sessionId: 'session', commandId: 'delete-session', request: { type: 'delete' } } },
+	]);
+	returnedId = 'other-session';
+	await assert.rejects(sessions.rename({ sessionId: 'session', commandId: 'wrong-name', title: '命名' }));
+	await assert.rejects(threads.rename({ sessionId: 'session', threadId: 'branch', commandId: 'wrong-thread', title: '命名', source: 'automatic' }));
+	await assert.rejects(sessions.delete({ sessionId: 'session', commandId: 'wrong-delete' }));
+});

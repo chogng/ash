@@ -25,7 +25,7 @@ import { RendererWorkspaceHost } from "../../platform/workspaces/electron-main/r
 import { AppServerBrowserHost } from "../../platform/agentHost/electron-main/appServerBrowserHost.js";
 import { rendererSystemHostRoutes } from "../../platform/native/electron-main/rendererSystemHostRoutes.js";
 import { nativeImage, nativeTheme, shell } from "electron";
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain, screen, Menu, Tray, type BrowserWindowConstructorOptions, type Event as ElectronEvent, type MenuItemConstructorOptions } from "electron/main";
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, screen, Menu, Tray, powerMonitor, type BrowserWindowConstructorOptions, type Event as ElectronEvent, type MenuItemConstructorOptions } from "electron/main";
 
 import { basename, dirname, isAbsolute, join, parse } from "node:path";
 import { homedir } from 'node:os';
@@ -76,7 +76,7 @@ import { NativeKeyboardLayoutMainService, keyboardLayoutChannel } from "../../pl
 import { UserKeyboardLayoutMainService, userKeyboardLayoutChannel } from "../../platform/keyboardLayout/electron-main/userKeyboardLayoutMainService.js";
 import { NativeMenubarMainService, nativeMenubarIpcRoutes } from "../../platform/menubar/electron-main/menubarMainService.js";
 import { clearElectronApplicationMenu, createElectronMenubarHost, Menubar } from "../../platform/menubar/electron-main/menubar.js";
-import { colorSchemeChannel, windowSplashIpcRoutes, nativeHostIpcRoutes, type INativeHostMainService } from "../../platform/native/electron-main/nativeHostIpc.js";
+import { powerMonitorChannel, colorSchemeChannel, windowSplashIpcRoutes, nativeHostIpcRoutes, type INativeHostMainService } from "../../platform/native/electron-main/nativeHostIpc.js";
 import { UpdateMainService } from '../../platform/update/electron-main/updateMainService.js';
 import { UpdateChannel } from '../../platform/update/common/updateIpc.js';
 import { NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL, validateOpenAgentsWindow, type INativeSystemWideKeybinding, type IOpenAgentsWindowOptions } from "../../platform/native/common/nativeHost.js";
@@ -592,6 +592,7 @@ export class AshApplication extends Disposable {
 		}
 		this.themeMainService = this._register(new ThemeMainService(nativeTheme, this.services.state));
 		this.mainProcessIpcServer.registerChannel('colorScheme', colorSchemeChannel(this.themeMainService));
+		this.mainProcessIpcServer.registerChannel('powerMonitor', powerMonitorChannel(powerMonitor));
 		this.mainProcessIpcServer.registerChannel('checksum', checksumChannel(app.getAppPath(), app.isPackaged, new ChecksumService()));
 		const wasUpdated = this.lifecycleMainService.wasRestarted;
 		const workspaces = new WorkspacesManagementMainService();

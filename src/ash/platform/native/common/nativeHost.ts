@@ -148,6 +148,8 @@ export interface IOpenAgentsWindowOptions {
 
 /** Window-scoped native capabilities exposed to an Electron renderer. */
 export interface INativeHostApi extends ICommonNativeHostService {
+	onDidSuspendOS(listener: () => void): DisposableHandle;
+	onDidResumeOS(listener: () => void): DisposableHandle;
 	/** The frame style used to create this window, independently of saved settings. */
 	getTitleBarStyle(): Promise<TitleBarStyleConfiguration>;
 	isAdmin(): Promise<boolean>;

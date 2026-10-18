@@ -1648,3 +1648,101 @@ fn thread_read_and_subscribe_keep_transients_within_the_visible_running_history(
         );
     }
 }
+
+#[test]
+fn thread_naming_updates_the_durable_catalog_and_other_windows_without_opening_details() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("titles.sqlite3");
+    let store = Arc::new(ash_state::SqliteThreadStore::open(&path).unwrap());
+    let threads = Arc::new(ThreadController::with_store(store));
+    threads
+        .create_thread(ash_core::CreateThreadRequest {
+            agent_id: ash_protocol::AgentId::new("title-agent").unwrap(),
+            origin: ash_protocol::ThreadOrigin::Root,
+            agent: None,
+            session_id: ash_protocol::SessionId::new("title-session").unwrap(),
+            thread_id: ThreadId::new("title-session").unwrap(),
+            title: "New Chat".into(),
+            execution_target: None,
+        })
+        .unwrap();
+    let (sender, _) = mpsc::channel();
+    let server = AppServer::new(threads, Arc::new(CaptureModel(sender)));
+    let mut first = server.connection();
+    let mut second = server.connection();
+    for connection in [&mut first, &mut second] {
+        call(
+            &server,
+            connection,
+            "initialize",
+            serde_json::json!({"clientInfo":{"name":"titles","version":"1"}}),
+        );
+        call(
+            &server,
+            connection,
+            "session/catalog/subscribe",
+            serde_json::json!({}),
+        );
+    }
+    second.outbound_notifications.drain();
+    let request = serde_json::json!({"sessionId":"title-session","commandId":"rename-title","request":{"type":"renameThread","threadId":"title-session","title":"修复解析器","source":"manual"}});
+    let renamed = call(&server, &mut first, "session/request", request.clone());
+    assert_eq!(
+        renamed["result"]["value"]["session"]["title"], "修复解析器",
+        "{renamed}"
+    );
+    let notifications = second.outbound_notifications.drain();
+    assert!(
+        notifications
+            .iter()
+            .any(|notification| notification["method"] == "session/changed"
+                && notification["params"]["sessionId"] == "title-session"),
+        "{notifications:?}"
+    );
+    let catalog = call(
+        &server,
+        &mut second,
+        "session/catalog/read",
+        serde_json::json!({"sessionId":"title-session"}),
+    );
+    assert_eq!(catalog["result"]["session"]["title"], "修复解析器");
+    assert!(
+        call(&server, &mut first, "session/request", request)
+            .get("error")
+            .is_none()
+    );
+    let foreign = call(
+        &server,
+        &mut first,
+        "session/request",
+        serde_json::json!({"sessionId":"title-session","commandId":"foreign-name","request":{"type":"renameThread","threadId":"foreign-thread","title":"Wrong owner"}}),
+    );
+    assert!(foreign.get("error").is_some());
+    let renamed_session = call(
+        &server,
+        &mut first,
+        "session/request",
+        serde_json::json!({"sessionId":"title-session","commandId":"rename-session","request":{"type":"renameSession","title":"会话最终名"}}),
+    );
+    assert_eq!(
+        renamed_session["result"]["value"]["session"]["title"],
+        "会话最终名"
+    );
+    let late_automatic = call(
+        &server,
+        &mut first,
+        "session/request",
+        serde_json::json!({"sessionId":"title-session","commandId":"late-name","request":{"type":"renameThread","threadId":"title-session","title":"Late automatic","source":"automatic"}}),
+    );
+    assert!(late_automatic.get("error").is_some());
+    drop(server);
+    let reopened = ash_state::SqliteThreadStore::open(path).unwrap();
+    assert_eq!(
+        ThreadController::with_store(Arc::new(reopened))
+            .read_session_catalog(&ash_protocol::SessionId::new("title-session").unwrap())
+            .unwrap()
+            .unwrap()
+            .title,
+        "会话最终名"
+    );
+}

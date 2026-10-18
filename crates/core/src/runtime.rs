@@ -565,6 +565,21 @@ impl AgentRuntime for Runtime<'_> {
         Ok(Some(entry.response_sequence))
     }
 
+    fn rename_thread(
+        &self,
+        thread_id: &ThreadId,
+        command_id: CommandId,
+        title: String,
+        source: ash_protocol::ThreadTitleSource,
+    ) -> Result<u64, CoreError> {
+        let before = self.threads.read_thread(thread_id)?.sequence;
+        let sequence = self
+            .threads
+            .rename_thread(thread_id, command_id, title, source)?;
+        self.publish(thread_id, before)?;
+        Ok(sequence)
+    }
+
     fn configure_advisor(
         &self,
         thread_id: &ThreadId,

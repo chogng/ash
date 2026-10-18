@@ -40,6 +40,9 @@ class Provider extends Disposable implements ISessionsProvider {
 	currentWorkspace() { return { type: 'current' as const }; }
 	async create(): Promise<IActiveSessionThread> { throw new Error('The fixture starts with durable sessions'); }
 	async setModel() { }
+	async renameSession(value: ISession, title: string): Promise<ISession> { const renamed = { ...value, title }; this.items = this.items.map(item => item.sessionId === value.sessionId ? renamed : item); return renamed; }
+	async deleteSession(value: ISession): Promise<void> { this.items = this.items.filter(item => item.sessionId !== value.sessionId); }
+
 	async archive(value: ISession): Promise<ISession> {
 		this.archived.push(value.sessionId);
 		return this.replace({ ...value, status: 'archived', chats: value.chats.map(chat => ({ ...chat, status: 'archived' })) });
@@ -173,4 +176,64 @@ test('Session action wording rejects unsupported persisted values', async () => 
 	using current = await fixture('done');
 	await assert.rejects(current.configuration.updateValue(ChatSessionArchiveActionWordingSettingId, 'invalid'), /Choose Archive or Mark as Done/u);
 	assert.equal(current.configuration.getValue(ChatSessionArchiveActionWordingSettingId), 'done');
+});
+
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`archived deletion captures its target, requires confirmation and preserves other sessions and drafts (${locale})`, async () => {
+		initializeTestLocalization(locale);
+		try {
+			using current = await fixture('archive', true);
+			const draft = current.sessions.createUntitledSession('Unsent work');
+			let confirmed = false;
+			let calls = 0;
+			current.services.registerInstance(IDialogService, {
+				confirm: async (options: { primaryButton: string; }) => {
+					calls++;
+					assert.equal(options.primaryButton, locale === 'zh-CN' ? '永久删除' : 'Delete permanently');
+					return { confirmed };
+				}
+			} as unknown as IDialogService);
+			await current.commands.executeCommand('agentSession.delete', 'first');
+			assert.deepEqual(current.provider.items.map(session => session.sessionId), ['first', 'second']);
+			confirmed = true;
+			await current.commands.executeCommand('agentSession.delete', 'first');
+			assert.deepEqual(current.sessions.sessions.map(session => session.sessionId), ['second']);
+			assert.deepEqual(current.sessions.untitledSessions.map(session => session.untitledSessionId), [draft.untitledSessionId]);
+			assert.equal(current.sessions.activeUntitledSession?.untitledSessionId, draft.untitledSessionId);
+			assert.equal(calls, 2);
+			await assert.rejects(current.commands.executeCommand('agentSession.delete', 'second'));
+			assert.equal(calls, 2, 'an active Session cannot enter deletion confirmation');
+		} finally { resetNlsResolver(); }
+	});
+}
+
+test('closing the archived-deletion picker keeps the catalog and never opens a confirmation', async () => {
+	using current = await fixture('archive', true);
+	current.services.registerInstance(IDialogService, { confirm: async () => { throw new Error('Unexpected confirmation'); } } as unknown as IDialogService);
+	const deletion = current.commands.executeCommand('agentSession.delete');
+	const picker = await pickerFor(current.quickInput);
+	assert.deepEqual(picker.items.map(item => item.label), ['first']);
+	picker.hide();
+	await deletion;
+	assert.deepEqual(current.sessions.sessions.map(session => session.sessionId), ['first', 'second']);
+});
+
+
+test('Session naming retains its captured Session across navigation and cancellation writes nothing', async () => {
+	using current = await fixture('archive');
+	const pending = new DeferredPromise<string | undefined>();
+	let requested = false;
+	current.quickInput.input = async options => { requested = true; assert.equal(options?.value, 'first'); return pending.p; };
+	const naming = current.commands.executeCommand('agentSession.rename', 'first');
+	for (let attempt = 0; !requested && attempt < 100; attempt++) await new Promise<void>(resolve => setTimeout(resolve, 0));
+	assert.equal(requested, true);
+	current.sessions.selectThread('second', 'second-root');
+	pending.complete('A deliberate name');
+	await naming;
+	assert.deepEqual(current.sessions.sessions.map(session => [session.sessionId, session.title]), [['first', 'A deliberate name'], ['second', 'second']]);
+	assert.equal(current.sessions.active?.session.sessionId, 'second');
+	current.quickInput.input = async () => undefined;
+	await current.commands.executeCommand('agentSession.rename', 'first');
+	assert.equal(current.sessions.sessions[0]?.title, 'A deliberate name');
 });

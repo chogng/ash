@@ -289,6 +289,24 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		return toSession(result.session, [], session);
 	}
 
+	async renameSession(session: ISession, title: string): Promise<ISession> {
+		this.assertNotDisposed();
+		const generation = this.appServer.connectionGeneration;
+		const epoch = this.connectionEpoch;
+		const result = await this.sessionApi.rename({ commandId: commandId('rename-session'), sessionId: session.sessionId, title });
+		this.assertCurrentConnection(generation, epoch);
+		return toSession(result.session, [], session, result.agentTree.roots);
+	}
+
+	async deleteSession(session: ISession): Promise<void> {
+		this.assertNotDisposed();
+		const generation = this.appServer.connectionGeneration;
+		const epoch = this.connectionEpoch;
+		await this.sessionApi.delete({ commandId: commandId('delete-session'), sessionId: session.sessionId });
+		this.assertCurrentConnection(generation, epoch);
+		await this.unsubscribe(session.sessionId);
+	}
+
 	async restore(session: ISession): Promise<ISession> {
 		this.assertNotDisposed();
 		const generation = this.appServer.connectionGeneration;

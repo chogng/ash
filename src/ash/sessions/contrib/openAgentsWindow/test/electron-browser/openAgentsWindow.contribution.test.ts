@@ -61,6 +61,8 @@ class Fixture extends Disposable {
 		super();
 		this.resource.bindings = bindings;
 		const host: INativeHostApi = {
+			onDidSuspendOS: () => ({ dispose() { } }),
+			onDidResumeOS: () => ({ dispose() { } }),
 			getScreenshot: async () => { throw new Error('Unused screenshot capability'); },
 			getAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },
 			updateAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },

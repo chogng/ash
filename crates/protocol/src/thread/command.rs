@@ -25,6 +25,10 @@ use ts_rs::TS;
     rename_all_fields = "camelCase"
 )]
 pub enum ThreadCommand {
+    Rename {
+        title: String,
+        source: crate::ThreadTitleSource,
+    },
     MoveHistory {
         direction: crate::HistoryDirection,
         #[ts(type = "number")]

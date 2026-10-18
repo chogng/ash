@@ -1,4 +1,4 @@
-import type { IAppServerApi, IAppServerSkillApi, IAppServerHookApi, IResourceApi, IServerEventApi, SkillCatalog, SkillDescriptor, ResourceMetadataResult } from '../common/appServerApi.js';
+import type { IAppServerApi, IAppServerConnectionRecovery, IAppServerSkillApi, IAppServerHookApi, IResourceApi, IServerEventApi, SkillCatalog, SkillDescriptor, ResourceMetadataResult } from '../common/appServerApi.js';
 import { Event } from '../../../base/common/event.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { decodeBase64, VSBuffer } from '../../../base/common/buffer.js';
@@ -29,9 +29,10 @@ export function createDisconnectedServerEventApi(): IServerEventApi {
 	return { subscribe: inertSubscription };
 }
 
-export function createAppServerAppServerApi(connection: AppServerProtocolClient): IAppServerApi {
+export function createAppServerAppServerApi(connection: AppServerProtocolClient, recovery?: IAppServerConnectionRecovery): IAppServerApi {
 	return {
 		get connectionGeneration() { return connection.generation; },
+		recovery,
 		get operatingSystem() { return connection.operatingSystem; },
 		get userHome() { return connection.userHome; },
 		getConnectionState: () => Promise.resolve(connection.state),

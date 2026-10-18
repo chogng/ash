@@ -12,6 +12,8 @@ test('a system event wins over an older startup read and disposed windows ignore
 	const pending: ((value: IColorScheme) => void)[] = [];
 	const unexpected = (): never => { throw new Error('Unexpected window capability in appearance test'); };
 	const host: INativeHostApi = {
+		onDidSuspendOS: () => ({ dispose() { } }),
+		onDidResumeOS: () => ({ dispose() { } }),
 		getScreenshot: async () => { throw new Error('Unused screenshot capability'); },
 		getAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },
 		updateAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },

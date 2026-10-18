@@ -172,6 +172,10 @@ export class ChatService extends Disposable implements IChatService {
 		return this.threadApi.checkpoints({ sessionId, threadId });
 	}
 
+	async renameThread(sessionId: SessionId, threadId: ThreadId, title: string): Promise<void> {
+		await this.threadApi.rename({ sessionId, threadId, title, source: 'manual', commandId: createUuid() });
+	}
+
 	async readHistoryState(sessionId: SessionId, threadId: ThreadId) {
 		return this.threadApi.readHistoryState({ sessionId, threadId });
 	}
@@ -265,7 +269,18 @@ export class ChatService extends Disposable implements IChatService {
 		this.requireSubmissionOwner(options);
 		const epoch = this.connectionEpoch;
 		const input = turnInput(options);
-		await this.turnApi.start({ commandId: options.commandId ?? commandId("turn"), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, mode: options.mode, approvalMode: options.approvalMode, model: options.model, reasoningEffort: options.reasoningEffort, input });
+		const started = await this.turnApi.start({ commandId: options.commandId ?? commandId("turn"), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, mode: options.mode, approvalMode: options.approvalMode, model: options.model, reasoningEffort: options.reasoningEffort, input });
+		if (options.isNewSession && !this.isDisposed && epoch === this.connectionEpoch) {
+			const title = Array.from(options.text.trim().replace(/\s+/gu, ' ')).slice(0, 80).join('');
+			if (title) {
+				// Initial naming is best effort after admission. Core arbitrates a racing
+				// manual name, and a failed title write must never resend the Turn.
+				void Promise.resolve().then(() => {
+					if (this.isDisposed || epoch !== this.connectionEpoch) return;
+					return this.threadApi.rename({ sessionId: options.sessionId, threadId: options.threadId, title, source: 'automatic', commandId: `initial-title-${started.turnId}` });
+				}).catch(() => { });
+			}
+		}
 		if (!this.isDisposed && epoch === this.connectionEpoch) this.submitted.fire({ sessionId: options.sessionId, threadId: options.threadId, isNewSession: options.isNewSession === true, requestSequence: options.expectedSequence });
 	}
 

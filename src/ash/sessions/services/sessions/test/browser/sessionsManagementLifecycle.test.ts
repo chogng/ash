@@ -7,7 +7,7 @@ import { SessionsService } from '../../browser/sessionsService.js';
 import { CustomViewService } from '../../../customView/browser/customViewService.js';
 import { NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
-import { Event } from '../../../../../base/common/event.js';
+import { Emitter, Event } from '../../../../../base/common/event.js';
 import { canceled, isCancellationError } from '../../../../../base/common/errors.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
@@ -40,6 +40,9 @@ class Provider extends Disposable implements ISessionsProvider {
 		return { session: created, threadId: created.chats[0]!.threadId };
 	}
 	async setModel(): Promise<void> { }
+	async renameSession(value: ISession, title: string): Promise<ISession> { const renamed = { ...value, title }; this.items = this.items.map(item => item.sessionId === value.sessionId ? renamed : item); return renamed; }
+	async deleteSession(value: ISession): Promise<void> { this.items = this.items.filter(item => item.sessionId !== value.sessionId); }
+
 	async archive(value: ISession): Promise<ISession> { return { ...value, status: 'archived', agentTree: undefined }; }
 	async restore(value: ISession): Promise<ISession> { return { ...value, status: 'active', agentTree: undefined }; }
 	async stop(value: ISession): Promise<ISession> { return this.archive(value); }
@@ -243,4 +246,33 @@ test('graduated draft lookup reads the canonical Session after catalog facts cha
 	const lookedUp = await management.materializeUntitledSession(draft.untitledSessionId);
 	assert.deepEqual({ title: lookedUp.session.title, thread: lookedUp.threadId, creates: provider.createCount }, { title: 'Renamed by another window', thread: created.threadId, creates: 1 });
 	assert.equal(lookedUp.session, management.sessions.find(value => value.sessionId === created.session.sessionId));
+});
+
+
+test('deletion retires an older catalog read without losing another Session or an unsent draft', async () => {
+	using changes = new Emitter<{ sessionId: string; detailChanged: boolean; }>();
+	const started = new DeferredPromise<void>();
+	const gate = new DeferredPromise<void>();
+	let hold = false;
+	class DelayedProvider extends Provider {
+		override readonly onDidChangeSession = changes.event;
+		override async readCatalog(id: string): Promise<ISession | undefined> {
+			const snapshot = this.items.find(session => session.sessionId === id);
+			if (hold && id === 'first') { started.complete(); await gate.p; }
+			return snapshot;
+		}
+	}
+	using provider = new DelayedProvider();
+	provider.items[0] = { ...provider.items[0]!, status: 'archived' };
+	using management = new SessionsManagementService(provider);
+	await management.initialize();
+	const draft = management.createUntitledSession('Keep this draft');
+	hold = true;
+	changes.fire({ sessionId: 'first', detailChanged: false });
+	await started.p;
+	await management.deleteSession('first');
+	gate.complete();
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.deepEqual(management.sessions.map(session => session.sessionId), ['second']);
+	assert.equal(management.activeUntitledSession?.untitledSessionId, draft.untitledSessionId);
 });

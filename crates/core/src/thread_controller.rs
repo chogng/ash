@@ -1428,6 +1428,73 @@ impl ThreadController {
         Ok(())
     }
 
+    /// Renames the existing aggregate without changing its identity or conversation history.
+    pub fn rename_thread(
+        &self,
+        thread_id: &ThreadId,
+        command_id: CommandId,
+        title: String,
+        source: ash_protocol::ThreadTitleSource,
+    ) -> Result<u64, CoreError> {
+        validate_thread_title(&command_id, &title)?;
+        if title.chars().count() > 256 {
+            return Err(CoreError::InvalidInput(
+                "Thread title exceeds 256 characters".into(),
+            ));
+        }
+        let command = ThreadCommand::Rename {
+            title: title.clone(),
+            source,
+        };
+        self.mutate_thread(thread_id, |snapshot| {
+            if let Some(entry) = snapshot
+                .commands
+                .iter()
+                .find(|entry| entry.receipt.command_id == command_id)
+            {
+                return if entry.receipt.command == command {
+                    Ok(entry.response_sequence)
+                } else {
+                    Err(CoreError::CommandConflict)
+                };
+            }
+            // A late automatic result must not overwrite an explicit name, even when
+            // that name happens to equal an earlier automatic title.
+            if source == ash_protocol::ThreadTitleSource::Automatic
+                && snapshot.commands.iter().any(|entry| {
+                    matches!(
+                        entry.receipt.command,
+                        ThreadCommand::Rename {
+                            source: ash_protocol::ThreadTitleSource::Manual,
+                            ..
+                        }
+                    )
+                })
+            {
+                return Err(CoreError::CommandConflict);
+            }
+            let (next, batch) = self.project_batch(
+                Some(snapshot.clone()),
+                thread_id,
+                vec![ThreadEvent::ThreadTitleChanged {
+                    thread_id: thread_id.clone(),
+                    title,
+                    source,
+                }],
+                BatchCommand::AtEvent {
+                    index: 0,
+                    receipt: ThreadCommandReceipt {
+                        command_id,
+                        command,
+                    },
+                },
+            )?;
+            self.commit_batch(&batch)?;
+            *snapshot = next;
+            Ok(snapshot.sequence)
+        })
+    }
+
     pub fn configure_advisor(
         &self,
         thread_id: &ThreadId,

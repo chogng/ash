@@ -135,7 +135,7 @@ test('Session History shows each branch management state in Chinese before openi
 			sessionId: 'branch-session', title: 'Branch session', status: 'active', nextApprovalMode: 'manual',
 			chats: [
 				{ threadId: 'root', origin: { type: 'root' }, status: 'active', management: { status: 'readyForReview', statusChangedAtUnixMs: 10 } },
-				{ threadId: 'fork', origin: { type: 'fork', parentThreadId: 'root', parentSequence: 1 }, status: 'active', management: { status: 'needsInput', statusChangedAtUnixMs: 20, activity: { type: 'question', text: 'Choose a path' } } },
+				{ threadId: 'fork', title: '独立分支名称', origin: { type: 'fork', parentThreadId: 'root', parentSequence: 1 }, status: 'active', management: { status: 'needsInput', statusChangedAtUnixMs: 20, activity: { type: 'question', text: 'Choose a path' } } },
 			],
 		}], onDidChange: Event.None
 	} as unknown as ISessionsManagementService);
@@ -146,7 +146,7 @@ test('Session History shows each branch management state in Chinese before openi
 		await commands.executeCommand(SHOW_CHAT_HISTORY_COMMAND_ID);
 		assert.deepEqual(quickInput.picker?.items.map(item => ({ label: item.label, description: item.description, detail: item.detail })), [
 			{ label: 'Branch session', description: '分支 1 · 待审阅', detail: undefined },
-			{ label: 'Branch session', description: '分支 2 · 需要回应', detail: 'Choose a path' },
+			{ label: 'Branch session', description: '分支 2 · 独立分支名称 · 需要回应', detail: 'Choose a path' },
 		]);
 		assert.deepEqual(opened, []);
 		quickInput.picker?.hide();
