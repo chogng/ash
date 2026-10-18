@@ -74,6 +74,9 @@ import '../../../src/ash/workbench/contrib/commands/common/commands.contribution
 import { URI } from '../../../src/ash/base/common/uri.js';
 import '../../../src/ash/workbench/contrib/terminalContrib/voice/browser/terminal.voice.contribution.js';
 import { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
+import { IExplorerService } from '../../../src/ash/workbench/contrib/files/browser/files.js';
+import { ExplorerService } from '../../../src/ash/workbench/contrib/files/browser/explorerService.js';
+import { TERMINAL_VIEW_ID } from '../../../src/ash/workbench/contrib/terminal/common/terminal.js';
 import { IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { ITerminalService, type ITerminalDimensions, type ITerminalInstance } from '../../../src/ash/workbench/contrib/terminal/browser/terminal.js';
@@ -128,6 +131,16 @@ function setupTerminalFixtureServices(services: import('../../../src/ash/platfor
 	const api = createDisconnectedRendererApi();
 	services.registerInstance(IRendererHostService, { ...api, hasAppServer: true, appServer: { ...api.appServer, operatingSystem: OperatingSystem.Linux, userHome: '/home/test' } });
 	if (!services.has(IWorkspaceContextService)) services.registerInstance(IWorkspaceContextService, lifetime.add(new TestWorkspaceService({ id: 'terminal-paths', folders: [] })));
+	if (!services.has(IViewsService)) services.registerInstance(IViewsService, {
+		onDidChangeViewContainerVisibility: Event.None, onDidChangeViewVisibility: Event.None, onDidChangeFocusedView: Event.None,
+		isViewContainerVisible: () => false, isViewContainerActive: () => false,
+		openViewContainer: async () => null, closeViewContainer: () => { },
+		getVisibleViewContainer: () => null, getActiveViewPaneContainerWithId: () => null,
+		getFocusedView: () => null, getFocusedViewName: () => '',
+		isViewVisible: () => false, openView: async () => null, closeView: () => { },
+		getActiveViewWithId: () => null, getViewWithId: () => null, focusView: async () => false,
+	});
+	if (!services.has(IExplorerService)) services.registerSingleton(IExplorerService, () => services.createInstance(ExplorerService), { instantiation: InstantiationType.Delayed });
 	services.registerSingleton(IPathService, () => services.createInstance(BrowserPathService));
 	services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
 	if (fallbackProcess && !services.has(ITerminalProcessService)) services.registerInstance(ITerminalProcessService, { getEnvironment: async () => ({ HOME: '/home/test' }) } as unknown as ITerminalProcessService);
@@ -747,9 +760,6 @@ if (new URLSearchParams(location.search).has('embedder')) {
 		[IWorkspaceContextService, workspace],
 		[ITerminalProcessService, { getEnvironment: async () => ({}), listProfiles: rejectBackend, create: rejectBackend, write: rejectBackend, resize: rejectBackend, read: rejectBackend, getProcessInfo: rejectBackend, close: rejectBackend, getConnectionState: async () => 'crashed', onConnectionState: Event.None }],
 	)));
-	setupTerminalFixtureServices(services, store);
-	installWorkbenchServiceContributions({ container: services, register: value => store.add(value), blockRestorationUntil: () => { } });
-	const terminals = services.get(ITerminalService);
 	let hostWidget: import('../../../src/ash/workbench/contrib/terminal/browser/terminal.js').IXtermTerminal;
 	let completeHost!: () => void;
 	const hostReady = new Promise<void>(resolve => { completeHost = resolve; });
@@ -766,6 +776,9 @@ if (new URLSearchParams(location.search).has('embedder')) {
 			return null;
 		},
 	} as IViewsService);
+	setupTerminalFixtureServices(services, store);
+	installWorkbenchServiceContributions({ container: services, register: value => store.add(value), blockRestorationUntil: () => { } });
+	const terminals = services.get(ITerminalService);
 	const hostOutput = store.add(new Emitter<string>());
 	const hostExit = store.add(new Emitter<void | number>());
 	const hostName = store.add(new Emitter<string>());
@@ -1028,6 +1041,17 @@ if (new URLSearchParams(location.search).has('input')) {
 	let currentDirectory: string | undefined;
 	const workspace = store.add(new TestWorkspaceService({ id: 'input', uri: URI.file('/workspace') }));
 	const services = store.add(widgetServices.createChild(new ServiceCollection([ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
+	let groupPane: import('../../../src/ash/workbench/contrib/terminal/browser/terminalView.js').TerminalViewPane | undefined;
+	// Contributions are constructed with the first instance, before the optional pane.
+	services.registerInstance(IViewsService, {
+		openView: async (id: string) => {
+			if (id !== TERMINAL_VIEW_ID) return null;
+			groupPane?.setVisible(true);
+			groupPane?.focus();
+			return groupPane ?? null;
+		},
+		getViewWithId: (id: string) => id === TERMINAL_VIEW_ID ? groupPane ?? null : null,
+	} as unknown as IViewsService);
 	setupTerminalFixtureServices(services, store);
 	if (clipboardFixture) {
 		const dialogs = services.get(IDialogService) as DialogService;
@@ -1050,11 +1074,6 @@ if (new URLSearchParams(location.search).has('input')) {
 		TerminalHasActiveInstanceContext.bindTo(services.get(IContextKeyService)).set(true);
 		const commands = store.add(new CommandService(services));
 		services.registerInstance(ICommandService, commands);
-		let groupPane: import('../../../src/ash/workbench/contrib/terminal/browser/terminalView.js').TerminalViewPane | undefined;
-		services.registerInstance(IViewsService, {
-			openView: async () => { groupPane?.setVisible(true); groupPane?.focus(); return groupPane ?? null; },
-			getViewWithId: () => groupPane ?? null,
-		} as unknown as IViewsService);
 		services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 		services.registerInstance(ILogService, new NullLoggerService());
 		const notifications = store.add(new NotificationService());
@@ -1125,6 +1144,15 @@ if (new URLSearchParams(location.search).has('input')) {
 					import('../../../src/ash/workbench/contrib/terminal/browser/terminalEditorService.js'),
 				]);
 				window.ashTerminalEditorIntegration = {
+					createBackground: async () => {
+						const instance = await terminals.createTerminal({ profile: { type: 'default' }, location: { preserveFocus: true } });
+						return instance.id;
+					},
+					revealBackground: async (id: string) => {
+						const instance = terminals.instances.find(instance => instance.id === id);
+						if (!instance) throw new Error('Background terminal is unavailable');
+						await services.get(ITerminalEditorService).openEditor(instance, { preserveFocus: true });
+					},
 					groups: () => editors.groups.map(group => ({ id: group.id, resources: group.inputs.map(input => input.resource.toString()) })),
 					state: () => ({ instances: terminals.instances.length, created: nextTerminal, editorTabs: editors.groups.flatMap(group => group.inputs).length, originalScreen: terminal.xterm === screen, target: terminal.target }),
 					disconnect: () => connectionChanged.fire('stopped'),
@@ -1285,6 +1313,8 @@ declare global {
 			errors(): readonly string[];
 		};
 		ashTerminalEditorIntegration: {
+			createBackground(): Promise<string>;
+			revealBackground(id: string): Promise<void>;
 			groups(): { id: number; resources: string[]; }[];
 			disconnect(): void;
 			state(): { instances: number; created: number; editorTabs: number; originalScreen: boolean; target: number | undefined; };

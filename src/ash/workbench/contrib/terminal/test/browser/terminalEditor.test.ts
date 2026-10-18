@@ -48,6 +48,29 @@ suite('Terminal editor resource boundary', () => {
 
 
 suite('Terminal editor destination', () => {
+	test('a background open keeps the original input target through editor selection notifications', async () => {
+		using changed = new Emitter<void>();
+		const original = { resource: getTerminalUri('session', 1), target: TerminalLocation.Panel } as ITerminalInstance;
+		const background = { resource: getTerminalUri('session', 2), target: TerminalLocation.Panel } as ITerminalInstance;
+		let active = original;
+		let selected: TerminalEditorInput | undefined;
+		const terminals = {
+			instances: [original, background], onDidDisposeInstance: Event.None, onDidChangeInstances: Event.None,
+			setActiveInstance: (instance: ITerminalInstance) => { active = instance; },
+		} as unknown as ITerminalService;
+		const editors = {
+			onDidActiveEditorChange: changed.event,
+			get activeEditor() { return selected; },
+			openEditor: async (input: TerminalEditorInput) => { selected = input; changed.fire(); },
+		} as unknown as IEditorService;
+		const groups = { groups: [], onDidChangeGroups: Event.None } as unknown as IEditorGroupsService;
+		using service = new TerminalEditorService(terminals, editors, groups);
+		await service.openEditor(background, { preserveFocus: true });
+		assert.equal(active, original);
+		await service.openEditor(background);
+		assert.equal(active, background);
+	});
+
 	test('the captured auxiliary group receives the same instance even when another group is active', async () => {
 		const instance = { resource: getTerminalUri('session', 1), target: TerminalLocation.Panel } as ITerminalInstance;
 		const requests: unknown[] = [];

@@ -38,12 +38,32 @@ import { createSshRemoteWorkspaceUri } from '../../../../../platform/remote/comm
 import { IPathService } from '../../../../../platform/path/common/pathService.js';
 import { AhpTerminalCommandSource } from '../../browser/ahpTerminalCommandSource.js';
 import { CancellationToken } from '../../../../../base/common/cancellation.js';
+import { Event } from '../../../../../base/common/event.js';
+import { IEditorGroupsService } from '../../../../services/editor/common/editorGroupsService.js';
 
 const DEFAULT_PROFILE = {
 	profileId: "command-prompt",
 	title: "Command Prompt",
 	isDefault: true,
 } as const;
+
+test('creating an editor terminal with preserveFocus never changes the selected input target', async () => {
+	const processes = new TestTerminalProcessService([]);
+	using workspace = folderWorkspaceContext();
+	using services = terminalServices(processes, workspace);
+	services.registerInstance(IEditorGroupsService, { groups: [], onDidChangeGroups: Event.None } as unknown as IEditorGroupsService);
+	const terminals = services.get(ITerminalService);
+	const original = await terminals.createTerminal({ profile: { type: 'default' } });
+	const changes: (ITerminalInstance | undefined)[] = [];
+	using listener = terminals.onDidChangeActiveInstance(instance => changes.push(instance));
+	const background = await terminals.createTerminal({ profile: { type: 'default' }, location: { preserveFocus: true } });
+	assert.equal(background.target, TerminalLocation.Editor);
+	assert.equal(terminals.activeInstance, original);
+	assert.deepEqual(changes, []);
+	const foreground = await terminals.createTerminal({ profile: { type: 'default' }, location: TerminalLocation.Editor });
+	assert.equal(terminals.activeInstance, foreground);
+	assert.deepEqual(changes, [foreground]);
+});
 
 test('the interrupt command reaches the Rust process port and preserves the terminal', async () => {
 	const processes = new TestTerminalProcessService([]);

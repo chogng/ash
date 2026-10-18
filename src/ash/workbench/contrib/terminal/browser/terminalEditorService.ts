@@ -11,6 +11,7 @@ import { getInstanceFromResource } from './terminalUri.js';
 /** Coordinates editor membership while leaving terminal state with its original owner. */
 export class TerminalEditorService extends Disposable implements ITerminalEditorService {
 	private readonly groups = this._register(new DisposableMap<number, DisposableStore>());
+	private readonly backgroundOpens = new Map<ITerminalInstance, number>();
 
 	constructor(
 		@ITerminalService private readonly terminals: ITerminalService,
@@ -24,7 +25,7 @@ export class TerminalEditorService extends Disposable implements ITerminalEditor
 			const input = editors.activeEditor;
 			if (input instanceof TerminalEditorInput) {
 				const instance = this.getInstanceFromResource(input.resource);
-				if (instance) terminals.setActiveInstance(instance);
+				if (instance && !this.backgroundOpens.has(instance)) terminals.setActiveInstance(instance);
 			}
 		}));
 		this._register(terminals.onDidDisposeInstance(instance => { void this.detachInstance(instance).catch(onUnexpectedError); }));
@@ -36,12 +37,23 @@ export class TerminalEditorService extends Disposable implements ITerminalEditor
 		if (!this.terminals.instances.includes(instance) || !instance.resource) return;
 		const previousTarget = instance.target;
 		instance.target = TerminalLocation.Editor;
+		if (editorOptions?.preserveFocus) {
+			// Opening in the current group can change its selected editor while the
+			// keyboard remains in the panel. That notification must not redirect input.
+			this.backgroundOpens.set(instance, (this.backgroundOpens.get(instance) ?? 0) + 1);
+		}
 		try {
 			await this.editors.openEditor(new TerminalEditorInput(instance.resource, instance, this.terminals.onDidChangeInstances), { pinned: true, ignoreError: true, preserveFocus: editorOptions?.preserveFocus }, editorOptions?.viewColumn === undefined ? undefined : { groupId: editorOptions.viewColumn });
-			if (this.terminals.instances.includes(instance)) this.terminals.setActiveInstance(instance);
+			if (!editorOptions?.preserveFocus && this.terminals.instances.includes(instance)) this.terminals.setActiveInstance(instance);
 		} catch (error) {
 			if (this.terminals.instances.includes(instance)) instance.target = previousTarget;
 			throw error;
+		} finally {
+			if (editorOptions?.preserveFocus) {
+				const pending = this.backgroundOpens.get(instance)! - 1;
+				if (pending) this.backgroundOpens.set(instance, pending);
+				else this.backgroundOpens.delete(instance);
+			}
 		}
 	}
 

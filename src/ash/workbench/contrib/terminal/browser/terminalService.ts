@@ -168,7 +168,8 @@ export class TerminalService extends Disposable implements ITerminalService {
 			};
 		}
 		assertCurrent();
-		const instance = await this.createTerminalCore(launch, isEditorLocation(location) ? TerminalLocation.Editor : undefined);
+		const preserveFocus = isEditorLocation(location) && typeof location === 'object' && location.preserveFocus;
+		const instance = await this.createTerminalCore(launch, isEditorLocation(location) ? TerminalLocation.Editor : undefined, !preserveFocus);
 		return this.placeCreatedTerminal(instance, location, parent, assertCurrent);
 	}
 
@@ -220,7 +221,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 		this.setActiveInstance(this._instances.find(instance => instance.instanceId === state.activeId));
 	}
 
-	private async createTerminalCore(options: ITerminalCreateOptions, target?: TerminalLocation): Promise<ITerminalInstance> {
+	private async createTerminalCore(options: ITerminalCreateOptions, target?: TerminalLocation, activate = true): Promise<ITerminalInstance> {
 		if (this.isDisposed) throw new CancellationError();
 		const instance = await this.instanceFactory.createInstance(options, {
 			getConnectionState: () => this.connectionState,
@@ -235,7 +236,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 		if (options.deferStart && this.connectionState !== 'ready') instance.loseConnection();
 		this._onDidCreateInstance.fire(instance);
 		if (this.isDisposed || !this._instances.includes(instance)) throw new CancellationError();
-		this.setActiveInstance(instance);
+		if (activate) this.setActiveInstance(instance);
 		if (!options.deferStart) instance.start();
 		this._onDidChangeInstances.fire();
 		return instance;

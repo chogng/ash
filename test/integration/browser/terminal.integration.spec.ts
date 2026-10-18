@@ -1854,6 +1854,31 @@ for (const locale of ['en', 'zh-CN']) {
 	});
 }
 
+test('background terminal editor creation and reveal preserve panel focus and input destination', async ({ page }) => {
+	await page.goto('/terminal.html?input&groups&editor');
+	await page.waitForFunction(() => Boolean(window.ashTerminalEditorIntegration));
+	const panelInput = page.locator('.ash-terminal-widgets .xterm-helper-textarea');
+	await panelInput.focus();
+	const original = await page.evaluate(() => window.ashTerminalGroupsIntegration.active());
+	const background = await page.evaluate(() => window.ashTerminalEditorIntegration.createBackground());
+	expect(background).not.toBe(original);
+	await expect(page.locator('.ash-terminal-editor .xterm-helper-textarea')).toHaveCount(1);
+	await expect(panelInput).toBeFocused();
+	expect(await page.evaluate(() => window.ashTerminalGroupsIntegration.active())).toBe(original);
+	await panelInput.press('a');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.writes().filter(write => write.data === 'a'))).toEqual([{ terminalId: 'input-shell-1', data: 'a' }]);
+	await page.evaluate(id => window.ashTerminalEditorIntegration.revealBackground(id), background);
+	await expect(panelInput).toBeFocused();
+	expect(await page.evaluate(() => window.ashTerminalGroupsIntegration.active())).toBe(original);
+	await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.sendSequence', { text: 'panel-target' }));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.writes().filter(write => write.data === 'panel-target'))).toEqual([{ terminalId: 'input-shell-1', data: 'panel-target' }]);
+	await page.locator('.ash-terminal-editor .xterm-helper-textarea').focus();
+	expect(await page.evaluate(() => window.ashTerminalGroupsIntegration.active())).toBe(background);
+	await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.sendSequence', { text: 'editor-target' }));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.writes().filter(write => write.data === 'editor-target'))).toEqual([{ terminalId: 'input-shell-2', data: 'editor-target' }]);
+	await page.evaluate(() => window.ashTerminalGroupsIntegration.dispose());
+});
+
 test('terminal editor restoration displays an unavailable resource without starting a shell', async ({ page }) => {
 	await page.goto('/terminal.html?input&groups&editor&locale=zh-CN');
 	await expect.poll(() => page.evaluate(() => Boolean(window.ashTerminalEditorIntegration))).toBe(true);
