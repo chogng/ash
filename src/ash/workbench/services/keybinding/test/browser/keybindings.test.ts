@@ -656,6 +656,30 @@ test("AltGr can opt into Ctrl+Alt dispatch without changing physical key identit
 	assert.equal(event.chords[0].altKey, true);
 });
 
+test("native control-key placeholders cannot override immutable key labels", () => {
+	for (const operatingSystem of [OperatingSystem.Linux, OperatingSystem.Macintosh]) {
+		using service = new BrowserKeyboardLayoutService({
+			navigator: fakeNavigator(),
+			operatingSystem,
+			layout: keyboardLayout({
+				Enter: mappingEntry("<CR>", "<CR>"),
+				Escape: mappingEntry("<ESC>", "<ESC>"),
+				Tab: mappingEntry("<TAB>", "<TAB>"),
+				KeyQ: mappingEntry("a", "A"),
+			}),
+		});
+		const mapper = service.getKeyboardMapper();
+		for (const key of ["Enter", "Escape", "Tab"]) {
+			const recorded = mapper.resolveKeyboardEvent({ ...keyEventData(), key, code: key });
+			const configured = mapper.resolveKeybinding(Keybinding.single(logicalKey(key, { ctrlKey: true })))[0];
+			assert.equal(recorded.chords[0].label, key);
+			assert.equal(configured.chords[0].label, key);
+		}
+		const printable = mapper.resolveKeyboardEvent({ ...keyEventData(), key: "a", code: "KeyQ" });
+		assert.equal(printable.chords[0].label, "a");
+	}
+});
+
 test("mapper labels AltGr states and macOS combining dead keys", () => {
 	using service = new BrowserKeyboardLayoutService({
 		navigator: fakeNavigator(),

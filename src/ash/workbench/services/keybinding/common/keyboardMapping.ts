@@ -129,6 +129,12 @@ export function getKeyboardMappingLabel(
 	modifiers: Pick<ResolvedKeybindingChord, 'ctrlKey' | 'shiftKey' | 'altKey'>,
 	mapAltGrToCtrlAlt: boolean,
 ): string | undefined {
+	// Native layouts can describe control keys as <CR> or <ESC>; their names
+	// belong to the fixed scan-code mapping, not the layout's printable output.
+	const immutableKeyCode = IMMUTABLE_CODE_TO_KEY_CODE[ScanCodeUtils.toEnum(code)];
+	if (immutableKeyCode !== undefined && immutableKeyCode !== KeyCode.DependsOnKeyboardLayout) {
+		return immutableKeyLabel(immutableKeyCode);
+	}
 	const value = getKeyboardMappingValue(entry, modifiers, mapAltGrToCtrlAlt) || entry?.value;
 	if (value) {
 		return isCombiningCharacter(value) ? spacingAccent(value) : value;
@@ -138,10 +144,6 @@ export function getKeyboardMappingLabel(
 	}
 	if (/^Digit[0-9]$/.test(code)) {
 		return code.slice(5);
-	}
-	const immutableKeyCode = IMMUTABLE_CODE_TO_KEY_CODE[ScanCodeUtils.toEnum(code)];
-	if (immutableKeyCode !== undefined && immutableKeyCode !== KeyCode.DependsOnKeyboardLayout) {
-		return immutableKeyLabel(immutableKeyCode);
 	}
 	return undefined;
 }
