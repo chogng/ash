@@ -72,6 +72,7 @@ registerAction2(class GoToRecentDirectoryAction extends Action2 {
 		const terminals = accessor.get(ITerminalService);
 		const instance = terminals.activeInstance;
 		if (!instance || instance.isReadOnly || instance.state !== 'running') return;
+		const processId = instance.processId;
 		const workspace = accessor.get(IWorkspaceContextService);
 		const scope = directoryScope(workspace, instance);
 		const shell = instance.shellType;
@@ -90,8 +91,13 @@ registerAction2(class GoToRecentDirectoryAction extends Action2 {
 		let retired = false;
 		const retire = (): void => { retired = true; picker.hide(); };
 		lifetime.add(instance.onDidChangeState(retire));
+		lifetime.add(instance.onDidExit(retire));
 		lifetime.add(terminals.onDidChangeActiveInstance(retire));
-		lifetime.add(workspace.onDidChangeWorkspaceFolders(retire));
+		lifetime.add(terminals.onDidDisposeInstance(disposed => { if (disposed === instance) retire(); }));
+		lifetime.add(workspace.onDidChangeWorkspace(retire));
+		const canSend = (): boolean => !retired && terminals.activeInstance === instance && terminals.instances.includes(instance)
+			&& instance.processId === processId && instance.state === 'running' && !instance.isReadOnly
+			&& instance.shellType === shell && directoryScope(workspace, instance) === scope;
 		let selected: IQuickPickItem | undefined;
 		const directory = await new Promise<IQuickPickItem | undefined>(resolve => {
 			lifetime.add(picker.onDidAccept(() => { selected = picker.selectedItems[0]; picker.hide(); }));
@@ -99,11 +105,10 @@ registerAction2(class GoToRecentDirectoryAction extends Action2 {
 			lifetime.add(toDisposable(() => resolve(undefined)));
 			picker.show();
 		});
-		if (!directory || retired || terminals.activeInstance !== instance || !terminals.instances.includes(instance)
-			|| instance.state !== 'running' || instance.shellType !== shell || directoryScope(workspace, instance) !== scope) return;
+		if (!directory || !canSend()) return;
 		const command = shell === GeneralShellType.PowerShell ? 'Set-Location -LiteralPath ' : 'cd -- ';
 		await instance.sendText(command + escapeNonWindowsPath(directory.label, shell), true);
-		instance.xterm?.focus();
+		if (canSend()) instance.xterm?.focus();
 	}
 });
 
@@ -141,6 +146,8 @@ registerAction2(class RunRecentCommandAction extends Action2 {
 		if (!instance || instance.isReadOnly || instance.state !== 'running') return;
 
 		const shellId = instance.profile.profileId;
+		const processId = instance.processId;
+		const workspace = accessor.get(IWorkspaceContextService);
 		const history = new TerminalCommandHistory(accessor.get(IConfigurationService), accessor.get(IStorageService));
 		const items = history.getCommands(shellId).map(({ command }) => ({
 			label: command.replace(/\s+/g, ' ').slice(0, 160),
@@ -155,6 +162,14 @@ registerAction2(class RunRecentCommandAction extends Action2 {
 				? localize('terminal.history.pickPlaceholder', 'Select a recent command to run in this terminal')
 				: localize('terminal.history.empty', 'No saved commands for this terminal profile');
 			picker.items = items;
+			// Returning to the same terminal or shell state cannot revive an old choice.
+			let retired = false;
+			const retire = (): void => { retired = true; picker.hide(); };
+			pickerLifetime.add(instance.onDidChangeState(retire));
+			pickerLifetime.add(instance.onDidExit(retire));
+			pickerLifetime.add(terminals.onDidChangeActiveInstance(retire));
+			pickerLifetime.add(terminals.onDidDisposeInstance(disposed => { if (disposed === instance) retire(); }));
+			pickerLifetime.add(workspace.onDidChangeWorkspace(retire));
 			let selected: CommandHistoryPick | undefined;
 			const command = await new Promise<CommandHistoryPick | undefined>(resolve => {
 				pickerLifetime.add(picker.onDidAccept(() => {
@@ -169,8 +184,8 @@ registerAction2(class RunRecentCommandAction extends Action2 {
 				pickerLifetime.add(toDisposable(() => resolve(undefined)));
 				picker.show();
 			});
-			if (!command || terminals.activeInstance !== instance || !terminals.instances.includes(instance) || instance.isReadOnly || instance.state !== 'running'
-				|| instance.profile.profileId !== command.shellId) return;
+			if (!command || retired || terminals.activeInstance !== instance || !terminals.instances.includes(instance)
+				|| instance.processId !== processId || instance.isReadOnly || instance.state !== 'running' || instance.profile.profileId !== command.shellId) return;
 			await instance.sendText(command.command, true);
 		} finally {
 			pickerLifetime.dispose();
