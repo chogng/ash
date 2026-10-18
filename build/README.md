@@ -188,6 +188,21 @@ Run the existing `Frontend` workflow separately for product build and test
 acceptance. Cold installation does not establish a cold filesystem cache for
 the checker measurements.
 
+The regular `Frontend` workflow also requires the `Windows setup lifecycle`
+job. Run it locally on Windows after provisioning the pinned host tools with
+`python -B build/setup_acceptance.py --output .build/benchmarks/windows-setup`.
+It snapshots the current Git-visible sources into a temporary checkout outside
+the repository, with its own Python environment, empty pnpm store and browser
+cache. The same workspace must pass a frozen first install, an offline repeat
+install, two complete rebuilds and the normal Git browser integration entrypoint
+in English and Chinese. It then switches to a local source revision and repeats
+that entrypoint, requiring regenerated protocol output and a changed input
+fingerprint. `setup.json` and per-command logs retain the results; `--resume`
+can retry a failed stage after a source fix without replacing installed state.
+Dependency changes or source changes after the baseline test require a fresh
+run. This verifies checkout setup with existing host tools, rather than
+provisioning an empty Windows installation.
+
 - [x] CI runner comparison completed on 2026-10-12 at `81e60027d` in
       [Bun CI acceptance](https://github.com/chogng/ash/actions/runs/38196463913).
       All four jobs and the report passed with Bun 1.4.3 and TS7 7.0.2. Each

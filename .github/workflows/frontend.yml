@@ -13,6 +13,13 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  windows-setup:
+    name: Windows setup lifecycle
+    uses: ./.github/workflows/bun-benchmark.yml
+    with:
+      runner: windows-latest
+      phase: setup
+
   contracts:
     name: Frontend contracts and units
     runs-on: ubuntu-24.04

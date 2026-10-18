@@ -45,8 +45,13 @@ export async function attachRustGit(page: Page): Promise<() => Promise<void>> {
 		if (method === 'start') {
 			await stop();
 			incarnation++; requestId = 0; stderr = '';
-			const executable = resolve('.build/cargo/ci-test', `ash-git-extension${process.platform === 'win32' ? '.exe' : ''}`);
+			const executable = process.env.ASH_TEST_GIT_EXTENSION ?? resolve(process.env.CARGO_TARGET_DIR?.trim() || '.build/cargo', 'ci-test', `ash-git-extension${process.platform === 'win32' ? '.exe' : ''}`);
 			const current = child = spawn(executable, [], { stdio: ['pipe', 'pipe', 'pipe'] });
+			current.once('error', error => {
+				if (child === current) child = undefined;
+				for (const job of pending.values()) { clearTimeout(job.timer); job.reject(error); }
+				pending.clear();
+			});
 			current.stderr.on('data', value => { stderr = (stderr + String(value)).slice(-8192); });
 			current.stdin.on('error', error => {
 				if (child !== current || stopping) return;

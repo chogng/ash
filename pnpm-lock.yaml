@@ -167,6 +167,7 @@ overrides:
 
 patchedDependencies:
   '@vscode/tree-sitter-wasm@0.3.1': db89542b8b2621108d0481133f35856d6d703ac84f0714bf86a745bffc68b1d9
+  bun@1.4.3: c44c19ee21e5b3173628bec365abee1f8b5bc80e2c88f50b3c34021fe7b464fa
 
 importers:
 
@@ -250,7 +251,7 @@ importers:
         version: 2.1.0(playwright@1.61.1)
       bun:
         specifier: 1.4.3
-        version: 1.4.3
+        version: 1.4.3(patch_hash=c44c19ee21e5b3173628bec365abee1f8b5bc80e2c88f50b3c34021fe7b464fa)
       concurrently:
         specifier: ^10.0.4
         version: 10.0.4
@@ -2929,7 +2930,7 @@ snapshots:
   buffer-from@1.1.2:
     optional: true
 
-  bun@1.4.3:
+  bun@1.4.3(patch_hash=c44c19ee21e5b3173628bec365abee1f8b5bc80e2c88f50b3c34021fe7b464fa):
     optionalDependencies:
       '@oven/bun-darwin-aarch64': 1.4.3
       '@oven/bun-darwin-x64': 1.4.3

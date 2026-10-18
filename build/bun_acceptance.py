@@ -59,7 +59,16 @@ def windows_memory_reader():
     return peak
 
 
-def run(command: list[str], directory: Path, label: str, measure=False) -> dict:
+def run(
+    command: list[str],
+    directory: Path,
+    label: str,
+    measure=False,
+    *,
+    cwd: Path | None = None,
+    environment: dict[str, str] | None = None,
+    timeout: int = 1200,
+) -> dict:
     log = directory / f"{label}.log"
     memory = directory / f"{label}.memory"
     measured = command
@@ -72,10 +81,12 @@ def run(command: list[str], directory: Path, label: str, measure=False) -> dict:
     )
     started = time.perf_counter()
     peak = 0
+    print(f"{label}: starting", flush=True)
     with log.open("wb") as output:
         process = subprocess.Popen(
             measured,
-            cwd=ROOT,
+            cwd=cwd or ROOT,
+            env={**os.environ, **(environment or {})},
             stdin=subprocess.DEVNULL,
             stdout=output,
             stderr=subprocess.STDOUT,
@@ -90,13 +101,19 @@ def run(command: list[str], directory: Path, label: str, measure=False) -> dict:
                     code = process.wait(timeout=0.01)
                     break
                 except subprocess.TimeoutExpired:
-                    if time.perf_counter() - started > (180 if measure else 1200):
+                    if time.perf_counter() - started > (180 if measure else timeout):
                         raise TimeoutError(f"{label} timed out")
             if read_memory:
                 peak = max(peak, read_memory(process))
         except BaseException:
             if sys.platform == "win32":
-                process.kill()
+                subprocess.run(
+                    ["taskkill", "/T", "/F", "/PID", str(process.pid)],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    check=False,
+                    creationflags=subprocess.CREATE_NO_WINDOW,
+                )
             else:
                 os.killpg(process.pid, signal.SIGKILL)
             process.wait()
@@ -112,6 +129,7 @@ def run(command: list[str], directory: Path, label: str, measure=False) -> dict:
         "exitCode": code,
         "elapsedMs": elapsed,
         "log": log.name,
+        "cwd": str(cwd or ROOT),
     }
     if measure:
         result["peakMemoryBytes"] = peak

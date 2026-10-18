@@ -15,8 +15,9 @@ permissions:
 
 jobs:
   benchmark:
+    name: ${{ inputs.phase == 'setup' && 'Windows setup lifecycle' || 'benchmark' }}
     runs-on: ${{ inputs.runner }}
-    timeout-minutes: 30
+    timeout-minutes: ${{ inputs.phase == 'setup' && 45 || 30 }}
     defaults:
       run:
         shell: bash
@@ -43,6 +44,7 @@ jobs:
       - name: Sync locked Python tools
         run: python -B scripts/install_python_tools.py
       - name: Select an isolated dependency store
+        if: inputs.phase != 'setup'
         id: store
         run: |
           ci_store="$RUNNER_TEMP/bun-ci-store"
@@ -57,17 +59,25 @@ jobs:
           key: bun-ci-${{ inputs.runner }}-${{ github.run_id }}-${{ github.run_attempt }}
           fail-on-cache-miss: true
       - name: Measure dependency installation
+        if: inputs.phase != 'setup'
         env:
           PYTHON: ${{ steps.python.outputs.python-path }}
           PHASE: ${{ inputs.phase }}
           OUTPUT: .build/benchmarks/bun-ci/${{ inputs.runner }}/${{ inputs.phase }}
         run: python -B build/bun_acceptance.py install --phase "$PHASE" --output "$OUTPUT"
       - name: Prepare identical generated inputs
+        if: inputs.phase != 'setup'
         run: pnpm run prepare:generated
       - name: Compare checkers and injected-error diagnostics
+        if: inputs.phase != 'setup'
         env:
           OUTPUT: .build/benchmarks/bun-ci/${{ inputs.runner }}/${{ inputs.phase }}
         run: python -B build/bun_acceptance.py benchmark --output "$OUTPUT"
+      - name: Exercise Windows setup and source switching
+        if: inputs.phase == 'setup'
+        env:
+          OUTPUT: .build/benchmarks/bun-ci/${{ inputs.runner }}/${{ inputs.phase }}
+        run: python -B build/setup_acceptance.py --output "$OUTPUT"
       - name: Save cold dependencies for the fresh warm runner
         if: inputs.phase == 'cold'
         uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684

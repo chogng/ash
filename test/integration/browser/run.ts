@@ -1,5 +1,6 @@
 import { withProcessRun } from '../../../build/processes.ts';
 import { collectTests, playwrightArguments } from '../../../build/playwright.ts';
+import { pythonCommand } from '../../../build/python.ts';
 import { constants, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
 import { createServer, type Server } from 'node:http';
@@ -23,6 +24,19 @@ await withProcessRun(desktopDirectory, async (run, environment) => {
 	};
 	if (!await collectTests(run, testArgs, playwrightArgs, testEnv)) return;
 	const files = playwrightArgs.filter(argument => /\.spec\.[jt]s$/u.test(argument));
+	let gitExecutable: string | undefined;
+	if (!editorOnly && (files.length === 0 || files.some(file => /gitExtension\.integration\.spec\.[jt]s$/u.test(file)))) {
+		// A fresh checkout has no SDK executable. Use Cargo's reported artifact so
+		// custom target directories and source changes follow the same build owner.
+		const { command, args } = pythonCommand(['-B', 'scripts/cargo.py', 'build', '-p', 'ash-git-extension', '--bin', 'ash-git-extension', '--profile', 'ci-test', '--locked', '--message-format=json-render-diagnostics']);
+		const prepared = await run.command(command, args, testEnv, true);
+		if (prepared.code !== 0) { process.exitCode = prepared.code; return; }
+		for (const line of prepared.output.trim().split(/\r?\n/u)) {
+			const artifact = JSON.parse(line) as { reason: string; target?: { name: string; }; executable?: unknown; };
+			if (artifact.reason === 'compiler-artifact' && artifact.target?.name === 'ash-git-extension' && typeof artifact.executable === 'string') gitExecutable = artifact.executable;
+		}
+		if (!gitExecutable) throw new Error('Cargo did not report the Git extension test executable');
+	}
 	let backendPackageRoot: string | undefined;
 	if (files.length === 0 || files.some(file => /(?:treeSitter|tokenization|themes|textModel|markdownEditor|chatgptweb)\.integration\.spec\.[jt]s$/u.test(file))) {
 		const prepared = await run.command('pnpm', ['run', 'prepare:backend'], testEnv);
@@ -67,6 +81,7 @@ await withProcessRun(desktopDirectory, async (run, environment) => {
 	Browser integration results: ${resultsDirectory}`);
 			exitCode = (await run.command(process.execPath, testArgs, {
 				...testEnv,
+				...(gitExecutable ? { ASH_TEST_GIT_EXTENSION: gitExecutable } : {}),
 				...(syntaxExecutable ? { ASH_TEST_SYNTAX_APP_SERVER: syntaxExecutable } : {}),
 				...(runtimeDirectory ? { ASH_TEST_MARKDOWN_EXTENSION_DIR: resolve(runtimeDirectory, 'bin') } : {}),
 				ASH_EDITOR_BROWSER_BASE_URL: serverUrl,

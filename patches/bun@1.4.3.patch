@@ -1,0 +1,57 @@
+diff --git a/install.js b/install.js
+index 7dd40bcf0d7b4142ac23e20ebd847b2d6af3d6b6..10608acca19cf37042f81a501378225aef283b7c 100644
+--- a/install.js
++++ b/install.js
+@@ -431,9 +431,9 @@ __name(importBun, "importBun");
+ function requireBun(platform) {
+   return __async(this, null, function* () {
+     let module2 = `@oven/${platform.bin}`;
+-    function resolveBun() {
+-      let exe = require.resolve(join(module2, platform.exe)), { exitCode, stderr, stdout } = spawn(exe, ["--version"]);
+-      if (exitCode === 0)
++    function resolveBun(exe = require.resolve(join(module2, platform.exe))) {
++      let { exitCode, stderr, stdout } = spawn(exe, ["--version"]);
++      if (exitCode === 0 && stdout.trim() === "1.4.3")
+         return exe;
+       throw new Error(stderr || stdout);
+     }
+@@ -441,7 +441,14 @@ function requireBun(platform) {
+     try {
+       return resolveBun();
+     } catch (cause) {
+-      debug("resolveBun failed", cause), error(
++      debug("resolveBun failed", cause);
++      try {
++        // Older installs moved the platform binary here. Reuse only this package's version.
++        return resolveBun(join(__dirname, "bin", "bun.exe"));
++      } catch (installedCause) {
++        debug("installed Bun unavailable", installedCause);
++      }
++      error(
+         `Failed to find package "${module2}".`,
+         'You may have used the "--no-optional" flag when running "npm install".'
+       );
+@@ -476,7 +483,9 @@ function installBun(platform, dst) {
+         })
+       }
+     );
+-    exitCode === 0 && rename(join(cwd, "node_modules", module2), dst);
++    if (exitCode !== 0)
++      throw new Error(`npm install failed with exit code ${exitCode}`);
++    rename(join(cwd, "node_modules", module2), dst);
+   } finally {
+     try {
+       rm(cwd);
+@@ -518,7 +527,11 @@ __name(downloadBun, "downloadBun");
+ function optimizeBun(path2) {
+   let installScript = os2 === "win32" ? 'powershell -c "irm bun.sh/install.ps1 | iex"' : "curl -fsSL https://bun.com/install | bash";
+   try {
+-    rename(path2, join(__dirname, "bin", "bun.exe")), link(join(__dirname, "bin", "bun.exe"), join(__dirname, "bin", "bunx.exe"));
++    let executable = join(__dirname, "bin", "bun.exe");
++    // Keep the platform package intact so postinstall remains safe to run again.
++    if (path2 !== executable)
++      import_fs.default.copyFileSync(path2, executable);
++    link(executable, join(__dirname, "bin", "bunx.exe"));
+     return;
+   } catch (error2) {
+     debug("optimizeBun failed", error2);
