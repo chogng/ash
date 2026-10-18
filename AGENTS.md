@@ -25,6 +25,7 @@ If need, read the local refers: `../mxc`, `../tgrep`, `../vscode`, `../codex`, `
 - In `AGENTS.md`, instructions and skills, keep concrete actions, prohibitions and necessary exceptions in one place. Delete duplicated rules, skill triggers or documentation indexes, and prose that adds no constraint.
 - Do not keep competing copies of business state; update it through its owning model or service.
 - Product consumers use domain contracts, not generated transport DTOs.
+- TypeScript frontend service construction, registration and scope ownership must follow the [Dependency Injection contract](.github/instructions/typescript-services.instructions.md#dependency-injection).
 - Do not add placeholder modules or public APIs without a caller. Export only symbols used by another module or an external contract.
 - Do not split Rust files solely to reduce line count.
 - Validate inputs at user, configuration, plugin, persistence, process, worker, IPC, RPC and network boundaries. Do not revalidate typed same-process values already normalized by their owning boundary.

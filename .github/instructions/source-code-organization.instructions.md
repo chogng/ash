@@ -19,6 +19,8 @@ Modules may import their own layer and lower layers; they must not import, refer
 | `server` | Remote development server entrypoint. |
 | `sessions` | Agent Sessions window; may import `workbench` and below, but `workbench` must never import `sessions`. |
 
+`src/ash/nls.ts` is the shared root NLS entrypoint and may depend only on `base`. Layer checks must allow that entrypoint and check its dependencies; do not move it into `base/common` merely to satisfy a path assertion.
+
 ## Target Environments
 
 Pure helpers may stay beside browser feature orchestration; absence of DOM access does not require moving them to `common`.
@@ -50,4 +52,4 @@ Pure helpers may stay beside browser feature orchestration; absence of DOM acces
 
 Register shared dependencies in `workbench.common.main.ts`, desktop-only dependencies in `workbench.desktop.main.ts`, and web-only dependencies in `workbench.web.main.ts`.
 
-Service assembly rules: [Dependency Injection](frontend-architecture.instructions.md#dependency-injection).
+Service assembly rules: [Dependency Injection](typescript-services.instructions.md#dependency-injection).
