@@ -15,6 +15,38 @@ test('App Server extension resources require a published catalog before opening 
 	assert.equal(requests, 0);
 });
 
+test('concurrent cached extension reads share one request while refresh stays queued', async () => {
+	const cached = new DeferredPromise<{ generation: number; extensions: []; diagnostics: []; }>();
+	const refreshed = new DeferredPromise<{ generation: number; extensions: []; diagnostics: []; }>();
+	const requests: string[] = [];
+	const connection = {
+		request: async (_definition: unknown, params: { reload: string; }) => {
+			requests.push(params.reload);
+			return requests.length === 1 ? cached.p : refreshed.p;
+		},
+	} as unknown as AppServerProtocolClient;
+	const api = createAppServerExtensionApi(connection, resourceApi({}));
+
+	const first = api.list('cached');
+	const second = api.list('cached');
+	const refresh = api.list('refresh');
+	const duplicateRefresh = api.list('refresh');
+	const cachedDuringRefresh = api.list('cached');
+	assert.deepEqual(requests, ['cached']);
+
+	cached.complete({ generation: 17, extensions: [], diagnostics: [] });
+	const firstCatalog = await first;
+	assert.strictEqual(await second, firstCatalog);
+	assert.deepEqual(requests, ['cached', 'refresh']);
+
+	refreshed.complete({ generation: 18, extensions: [], diagnostics: [] });
+	const refreshedCatalog = await refresh;
+	assert.strictEqual(await duplicateRefresh, refreshedCatalog);
+	assert.strictEqual(await cachedDuringRefresh, refreshedCatalog);
+	assert.equal(refreshedCatalog.generation, firstCatalog.generation + 1);
+	assert.deepEqual(requests, ['cached', 'refresh']);
+});
+
 test("Vite extension resources reject oversized open metadata before reading", async () => {
 	let reads = 0;
 	let releases = 0;

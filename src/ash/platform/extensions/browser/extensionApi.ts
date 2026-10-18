@@ -2,7 +2,7 @@ import { Event } from '../../../base/common/event.js';
 import { LRUCache } from '../../../base/common/map.js';
 import type { IExtensionManagementService } from '../../extensionManagement/common/extensionManagementService.js';
 import type { IGlobalExtensionEnablementService } from '../../extensionManagement/common/extensionManagement.js';
-import type { ExtensionCatalog, ExtensionResourceRequest, IExtensionApi } from '../common/extensionApi.js';
+import type { ExtensionCatalog, ExtensionCatalogReload, ExtensionResourceRequest, IExtensionApi } from '../common/extensionApi.js';
 import { normalizeExtensionCatalog, MAX_EXTENSION_RESOURCE_BYTES } from '../common/extensionApi.js';
 import { readAppServerResource } from '../../agentHost/browser/appServerApi.js';
 import type { IResourceApi } from '../../agentHost/common/appServerApi.js';
@@ -47,7 +47,7 @@ export function withEnabledBuiltInExtensions(packages: IExtensionApi, enablement
 export function createAppServerExtensionApi(connection: AppServerProtocolClient, resourceApi: IResourceApi): IExtensionApi {
 	let published: { connectionGeneration: number; backendGeneration: number; catalog: ExtensionCatalog; } | undefined;
 	let generation = 0;
-	let pending: Promise<ExtensionCatalog> | undefined;
+	let pending: { readonly reload: ExtensionCatalogReload; readonly promise: Promise<ExtensionCatalog>; } | undefined;
 	// Small immutable resources are shared by theme, declaration and executable loaders.
 	// Bound retained bytes to 64 × 128 KiB; large browser bundles remain uncached.
 	const resources = new LRUCache<string, Promise<Uint8Array>>(64);
@@ -58,6 +58,9 @@ export function createAppServerExtensionApi(connection: AppServerProtocolClient,
 			if (state === 'ready') { listener.call(thisArgs); }
 		}),
 		list(reload) {
+			// Workbench startup has several consumers of one immutable catalog. Share
+			// cached reads instead of serializing duplicate scans past the RPC deadline.
+			if (pending && (reload === 'cached' || pending.reload === 'refresh')) return pending.promise;
 			const load = async () => {
 				const incarnation = resourceApi.connectionGeneration;
 				const catalog = normalizeExtensionCatalog(await appServerRequest(connection, 'extensions/list', { reload }));
@@ -68,11 +71,13 @@ export function createAppServerExtensionApi(connection: AppServerProtocolClient,
 				published = { connectionGeneration: incarnation, backendGeneration: catalog.generation, catalog: exposed };
 				return exposed;
 			};
-			// Dispatch the idle queue synchronously: callers may construct the entire
-			// Workbench before yielding, while the backend can already load its catalog.
-			const next = pending ? pending.then(load, load) : load();
-			pending = next;
-			const settled = () => { if (pending === next) pending = undefined; };
+			// A refresh still follows an in-flight cached read, but duplicate callers
+			// share the queued result above. Start idle work before yielding so the
+			// backend can load the catalog while the Workbench is being constructed.
+			const next = pending ? pending.promise.then(load, load) : load();
+			const operation = { reload, promise: next };
+			pending = operation;
+			const settled = () => { if (pending === operation) pending = undefined; };
 			void next.then(settled, settled);
 			return next;
 		},
