@@ -1,10 +1,11 @@
-"""Build missing release executables in one Cargo invocation."""
+"""Build selected executables with isolated Cargo feature groups."""
 
 import os
 import stat
 import subprocess
 import sys
 from pathlib import Path
+from collections.abc import Callable
 from typing import Dict, Mapping, Optional
 
 from build.lib.cargo import cargo_artifact_executable
@@ -77,7 +78,13 @@ def build_binaries(
     cargo_profile: str,
     host_build: bool = False,
     protocol_prepared: bool = False,
+    on_rebuilt_binary: Callable[[str, Path], None] | None = None,
 ) -> Dict[str, Path]:
+    """Notify rebuilt executables after each successful group, before the next.
+
+    Callers own any asynchronous work started by on_rebuilt_binary. Fresh Cargo
+    artifacts and caller-supplied executables do not trigger that callback.
+    """
     if (
         any(
             name in inputs
@@ -95,38 +102,48 @@ def build_binaries(
     if not missing:
         return outputs
 
-    # Cargo unifies features within one invocation. Keep local device/inference
-    # implementations out of the App Server and Remote executable graphs.
-    local_hosts = {"ash-livekit-client", "ash-realtime-voice", "ash-voice-host"}
-    if len(missing) > 1 and local_hosts.intersection(missing):
-        core = {name: None for name in missing if name not in local_hosts}
-        if core:
-            outputs.update(
-                build_binaries(
-                    repository_root,
-                    spec,
-                    core,
-                    cargo=cargo,
-                    cargo_profile=cargo_profile,
-                    host_build=host_build,
-                    protocol_prepared=protocol_prepared,
-                )
-            )
-        for name in missing:
-            if name in local_hosts:
-                outputs.update(
-                    build_binaries(
-                        repository_root,
-                        spec,
-                        {name: None},
-                        cargo=cargo,
-                        cargo_profile=cargo_profile,
-                        host_build=host_build,
-                        protocol_prepared=protocol_prepared,
-                    )
-                )
-        return outputs
+    # Inspect the union only to prepare external inputs once. Compilation still
+    # separates local hosts: Cargo must not unify their device/inference features
+    # into the App Server or Remote executable graphs.
+    command = _build_command(
+        repository_root, spec, missing, cargo, cargo_profile, host_build
+    )
+    packages = cargo_command_packages(cargo, command[1:], repository_root)
+    if not protocol_prepared and "ash-app-server-protocol" in packages:
+        generate_protocol(root=repository_root, cargo=cargo)
+    environment = cargo_environment(spec, packages)
+    if cargo_profile == "release" and "apple-darwin" in spec.target:
+        environment["CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO"] = "packed"
 
+    local_hosts = {"ash-livekit-client", "ash-realtime-voice", "ash-voice-host"}
+    core = [name for name in missing if name not in local_hosts]
+    groups = ([core] if core else []) + [
+        [name] for name in missing if name in local_hosts
+    ]
+    for group in groups:
+        outputs.update(
+            _build_group(
+                repository_root,
+                spec,
+                group,
+                cargo,
+                cargo_profile,
+                host_build,
+                environment,
+                on_rebuilt_binary,
+            )
+        )
+    return outputs
+
+
+def _build_command(
+    repository_root: Path,
+    spec: TargetSpec,
+    missing: list[str],
+    cargo: str,
+    cargo_profile: str,
+    host_build: bool,
+) -> list[str]:
     command = [
         cargo,
         "build",
@@ -156,14 +173,23 @@ def build_binaries(
     for name in ("ash-livekit-client", "ash-realtime-voice"):
         if name in missing:
             command.extend(["--features", f"{name}/host"])
-    packages = cargo_command_packages(cargo, command[1:], repository_root)
-    # Watchers prepare protocol changes before this call and serialize subsequent
-    # saves. Direct builds still own preparation when no caller has done it.
-    if not protocol_prepared and "ash-app-server-protocol" in packages:
-        generate_protocol(root=repository_root, cargo=cargo)
-    environment = cargo_environment(spec, packages)
-    if cargo_profile == "release" and "apple-darwin" in spec.target:
-        environment["CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO"] = "packed"
+    return command
+
+
+def _build_group(
+    repository_root: Path,
+    spec: TargetSpec,
+    missing: list[str],
+    cargo: str,
+    cargo_profile: str,
+    host_build: bool,
+    environment: dict[str, str],
+    on_rebuilt_binary: Callable[[str, Path], None] | None,
+) -> dict[str, Path]:
+    command = _build_command(
+        repository_root, spec, missing, cargo, cargo_profile, host_build
+    )
+    target = spec.target if not host_build or spec.is_windows else None
     with leased_cache(
         repository_root,
         profile="debug" if cargo_profile == "dev" else cargo_profile,
@@ -195,12 +221,19 @@ def build_binaries(
             if executable is not None:
                 executables[name] = Path(executable)
     result.check_returncode()
+    outputs = {}
     for name in missing:
         if name not in executables:
             raise RuntimeError(f"Cargo did not report an executable for {name}")
         outputs[name] = validate_input_binary(
             executables[name], name, cargo, spec.is_windows
         )
+        if on_rebuilt_binary is not None and any(
+            artifact.get("fresh") is False
+            and cargo_artifact_executable(artifact, name) is not None
+            for artifact in artifacts
+        ):
+            on_rebuilt_binary(name, outputs[name])
     if cargo_profile == "release" and environment.get("ASH_SYMBOLS_DIR"):
         from build.release.symbols import SymbolStore
 

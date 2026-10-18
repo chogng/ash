@@ -92,7 +92,12 @@ impl Read for LocalStream {
                     #[cfg(unix)]
                     self.wait(rustix::event::PollFlags::IN)?;
                     #[cfg(windows)]
-                    std::thread::sleep(std::time::Duration::from_millis(25));
+                    ash_uds::wait_for_socket_activity(
+                        None,
+                        &[&self.stream],
+                        &[],
+                        std::time::Duration::from_millis(25),
+                    )?;
                 }
                 Err(error) => {
                     self.close();
@@ -118,7 +123,12 @@ impl std::io::Write for LocalStream {
                     #[cfg(unix)]
                     self.wait(rustix::event::PollFlags::OUT)?;
                     #[cfg(windows)]
-                    std::thread::sleep(std::time::Duration::from_millis(25));
+                    ash_uds::wait_for_socket_activity(
+                        None,
+                        &[],
+                        &[&self.stream],
+                        std::time::Duration::from_millis(25),
+                    )?;
                 }
                 Err(error) => {
                     self.close();
@@ -161,8 +171,7 @@ impl PollingLocalListener {
     }
 
     /// Waits for the listener or a pending handshake to become ready, up to the
-    /// owner's next maintenance deadline. Unix readiness interrupts the wait;
-    /// Windows retains bounded polling until its socket adapter supports readiness.
+    /// owner's next maintenance deadline. Socket readiness interrupts the wait.
     pub fn wait_for_activity(
         &self,
         readers: &[&UnixStream],
@@ -198,9 +207,7 @@ impl PollingLocalListener {
         }
         #[cfg(windows)]
         {
-            let _ = (readers, writers);
-            std::thread::sleep(timeout);
-            Ok(())
+            ash_uds::wait_for_socket_activity(Some(&self.listener), readers, writers, timeout)
         }
     }
 

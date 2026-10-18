@@ -4,6 +4,11 @@ target-dir = ".build/cargo"
 [target.'cfg(all(windows, target_env = "msvc"))']
 rustflags = ["-C", "link-arg=/STACK:8388608", "-C", "target-feature=+crt-static"]
 
+# Use Rust's bundled LLD for the measured Windows x64 edit/link improvement.
+# Keep the shared MSVC stack and static CRT flags above.
+[target.x86_64-pc-windows-msvc]
+linker = "rust-lld"
+
 # Cargo merges these flags with the MSVC flags above, which supply the stack size and static CRT.
 # LLVM may emit code that triggers the Cortex-A53 erratum #843419 warning.
 # Windows ARM64 does not support that processor, so suppress the warning.

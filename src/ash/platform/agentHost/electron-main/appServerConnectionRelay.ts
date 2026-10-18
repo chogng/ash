@@ -27,6 +27,7 @@ export class AppServerConnectionRelay extends Disposable {
 	private nonce: string | undefined;
 	private readonly connectionOperations = new TaskQueue();
 	private pendingAcquisitions = 0;
+	private acquisitionRevision = 0;
 	private navigationGeneration = 0;
 	private acquiredNavigation = -1;
 	private startPromise: CancelablePromise<void> | undefined;
@@ -154,6 +155,7 @@ export class AppServerConnectionRelay extends Disposable {
 			},
 			invoke: async nonce => {
 				const navigationGeneration = this.navigationGeneration;
+				const acquisitionRevision = ++this.acquisitionRevision;
 				this.pendingAcquisitions++;
 				try {
 					this.assertNotDisposed();
@@ -162,11 +164,12 @@ export class AppServerConnectionRelay extends Disposable {
 					await launcher.validate();
 					return await this.connectionOperations.schedule(async () => {
 						this.assertNotDisposed();
-						// A delayed request from a replaced document must not detach its successor.
-						if (this.navigationGeneration !== navigationGeneration || processLauncher() !== launcher) { throw new CancellationError(); }
+						// Validation can outlive a document or a Renderer acquisition timeout.
+						// Only the latest request may attach a port or stop its predecessor.
+						if (this.acquisitionRevision !== acquisitionRevision || this.navigationGeneration !== navigationGeneration || processLauncher() !== launcher) { throw new CancellationError(); }
 						if (this.nonce !== undefined) { await this.stopConnection(); }
 						this.assertNotDisposed();
-						if (this.navigationGeneration !== navigationGeneration || processLauncher() !== launcher) { throw new CancellationError(); }
+						if (this.acquisitionRevision !== acquisitionRevision || this.navigationGeneration !== navigationGeneration || processLauncher() !== launcher) { throw new CancellationError(); }
 						let transport = this.transport.value;
 						if (!transport) {
 							transport = new ChildProcessJsonlTransport(launcher.launch(), { stdoutMode: 'bytes' });

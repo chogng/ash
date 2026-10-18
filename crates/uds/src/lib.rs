@@ -44,6 +44,18 @@ pub use uds_windows::UnixListener;
 #[cfg(windows)]
 pub use uds_windows::UnixStream;
 
+/// Waits for Windows local sockets to become readable or writable, or for the timeout.
+/// The borrowed sockets stay open throughout the wait; callers retry IO after a wakeup.
+#[cfg(windows)]
+pub fn wait_for_socket_activity(
+    listener: Option<&UnixListener>,
+    readers: &[&UnixStream],
+    writers: &[&UnixStream],
+    timeout: std::time::Duration,
+) -> std::io::Result<()> {
+    windows::wait_for_socket_activity(listener, readers, writers, timeout)
+}
+
 #[cfg(test)]
 #[path = "lib_tests.rs"]
 mod tests;

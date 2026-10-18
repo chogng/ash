@@ -124,7 +124,6 @@ fn partial_prelude_is_resumed_without_losing_buffered_rpc_bytes() {
     assert_eq!(messages, "first RPC\nsecond RPC\n");
 }
 
-#[cfg(unix)]
 #[test]
 fn pending_handshake_wakes_the_endpoint_and_preserves_its_buffered_prefix() {
     let profile = tempfile::tempdir().unwrap();

@@ -5,6 +5,7 @@ import json
 import os
 import re
 import shutil
+import time
 import uuid
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
@@ -14,7 +15,59 @@ from build.lib.file_lock import exclusive_lock as _exclusive_lock
 from build.lib.file_lock import shared_lock
 
 
+@contextmanager
+def frozen_binary(binary: Path, directory: Path):
+    """Pin one immutable executable across early loading and generation publication.
+
+    The private hard link protects its object from collection without linking Cargo's
+    mutable output. Publication reuses the object, so Windows loads the same file.
+    """
+    if os.name == "nt":
+        directory = Path("\\\\?\\" + str(directory.resolve()).removeprefix("\\\\?\\"))
+    directory.mkdir(parents=True, exist_ok=True)
+    digest = sha256(binary)
+    pin = directory / f".loading-{uuid.uuid4()}"
+    try:
+        with ExitStack() as lifetime:
+            with _exclusive_lock(directory / "publish.lock", create=True):
+                objects = directory / "objects"
+                objects.mkdir(exist_ok=True)
+                immutable = objects / digest
+                if not immutable.exists():
+                    temporary = objects / f".{uuid.uuid4()}.tmp"
+                    try:
+                        shutil.copy2(binary, temporary)
+                        temporary.replace(immutable)
+                    finally:
+                        temporary.unlink(missing_ok=True)
+                pin.mkdir()
+                lifetime.enter_context(shared_lock(pin / ".lease", create=True))
+                frozen = pin / binary.name
+                os.link(immutable, frozen)
+            yield frozen
+    finally:
+        with _exclusive_lock(directory / "publish.lock", create=True):
+            if pin.exists():
+                shutil.rmtree(pin)
+
+
 def _cleanup_generations(directory: Path, current: str) -> None:
+    # A killed builder cannot run its context cleanup. Its OS lease is released,
+    # so the next serialized publisher can reclaim the abandoned pin and object.
+    for pin in directory.glob(".loading-*"):
+        if re.fullmatch(r"\.loading-[a-f0-9-]{36}", pin.name) is None:
+            continue
+        try:
+            if not (pin / ".lease").exists():
+                shutil.rmtree(pin)
+            else:
+                with _exclusive_lock(pin / ".lease", blocking=False) as acquired:
+                    if acquired:
+                        shutil.rmtree(pin)
+        except (FileNotFoundError, PermissionError):
+            # A terminating Windows version probe may still have the image open.
+            # Retain that pin until a later publication can remove it.
+            continue
     for runtime in (directory / "generations").iterdir():
         if (
             runtime.name == current
@@ -144,7 +197,7 @@ def _publish_files(
             )
             (staging / ".lease").touch()
             runtime.parent.mkdir(exist_ok=True)
-            staging.rename(runtime)
+            _rename_generation(staging, runtime)
         finally:
             if staging.exists():
                 shutil.rmtree(staging)
@@ -155,3 +208,19 @@ def _publish_files(
     finally:
         next_pointer.unlink(missing_ok=True)
     return True, generation
+
+
+def _rename_generation(staging: Path, runtime: Path) -> None:
+    # Windows scanners can briefly hold new resource files without delete sharing.
+    # Keep the old pointer selected until the complete directory can be renamed.
+    delays = (0.01, 0.02, 0.04, 0.08, 0.16, 0.25)
+    for attempt in range(len(delays) + 1):
+        try:
+            staging.rename(runtime)
+            return
+        except OSError as error:
+            if getattr(error, "winerror", None) not in {5, 32, 33} or attempt == len(
+                delays
+            ):
+                raise
+            time.sleep(delays[attempt])

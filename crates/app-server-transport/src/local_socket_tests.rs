@@ -122,7 +122,6 @@ fn polling_listener_returns_blocking_connections() -> io::Result<()> {
     Ok(())
 }
 
-#[cfg(unix)]
 #[test]
 fn listener_activity_wakes_before_the_maintenance_timeout() -> io::Result<()> {
     let directory = tempfile::tempdir()?;
@@ -142,7 +141,6 @@ fn listener_activity_wakes_before_the_maintenance_timeout() -> io::Result<()> {
     Ok(())
 }
 
-#[cfg(unix)]
 #[test]
 fn pending_peer_activity_wakes_without_a_new_listener_connection() -> io::Result<()> {
     let directory = tempfile::tempdir()?;

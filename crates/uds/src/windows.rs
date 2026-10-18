@@ -3,10 +3,12 @@
 
 mod directory;
 mod peer;
+mod readiness;
 mod security;
 
 pub(super) use directory::open_private_directory;
 pub(super) use directory::validate_socket;
+pub(super) use readiness::wait_for_socket_activity;
 pub(super) use security::create_private_directory;
 
 pub(super) fn peer_identity(stream: &crate::UnixStream) -> std::io::Result<crate::PeerIdentity> {

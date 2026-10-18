@@ -579,7 +579,6 @@ export abstract class Workbench extends Disposable {
 		this._register(logger.registerSink(systemOutput, true));
 		if (!services.has(IStatusbarService)) services.registerInstance(IStatusbarService, this._register(new StatusbarService()));
 		this._register(new AppServerLanguageServerStatusService(options.api.events, dialogs, output, services.get(IStatusbarService), workspace));
-		services.registerInstance(ILocaleService, this._register(services.createInstance(WorkbenchLocaleService)));
 		this._register(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(this.domNode)));
 
 		let sessionsPart: SessionsPart | undefined;
@@ -614,6 +613,8 @@ export abstract class Workbench extends Disposable {
 		workspaceFolderCount.set(workspace.getWorkspace().folders.length);
 		this._register(workspace.onDidChangeWorkspace(() => workspaceFolderCount.set(workspace.getWorkspace().folders.length)));
 		services.registerInstance(IContextKeyService, contextKeys);
+		// Locale changes resolve the host, which uses this window's context keys.
+		services.registerInstance(ILocaleService, this._register(services.createInstance(WorkbenchLocaleService)));
 		services.registerInstance(IAccessibilityService, this._register(options.nativeHostApi
 			? services.createInstance(NativeAccessibilityService, this.domNode)
 			: new AccessibilityService({

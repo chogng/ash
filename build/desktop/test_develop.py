@@ -6,6 +6,8 @@ import os
 import shutil
 import tempfile
 import unittest
+import threading
+import uuid
 from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import patch
@@ -85,6 +87,150 @@ def prepared_package(root: Path) -> Path:
 
 
 class DevelopTests(unittest.TestCase):
+    def test_publication_collects_an_abandoned_image_pin_and_its_unreferenced_object(
+        self,
+    ):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package = prepared_package(root)
+            directory = root / "development"
+            development_store.publish_generation(package, {}, directory)
+            binary = root / "unused-image"
+            binary.write_text("abandoned executable")
+            digest = development_store.sha256(binary)
+            immutable = directory / "objects" / digest
+            shutil.copy2(binary, immutable)
+            pin = directory / f".loading-{uuid.uuid4()}"
+            pin.mkdir()
+            (pin / ".lease").touch()
+            os.link(immutable, pin / binary.name)
+            development_store.publish_generation(package, {}, directory)
+            self.assertFalse(pin.exists())
+            self.assertFalse(immutable.exists())
+
+    def test_windows_image_loading_overlaps_remaining_build_and_publication(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package = prepared_package(root)
+            binary = root / "ash-app-server.exe"
+            binary.write_text("compiled image")
+            entered = threading.Event()
+            published = threading.Event()
+
+            def load(executable):
+                self.assertEqual(binary.name, executable.name)
+                self.assertEqual("compiled image", executable.read_text())
+                self.assertNotEqual(binary, executable)
+                entered.set()
+                self.assertTrue(
+                    published.wait(5), "version loading blocked publication"
+                )
+
+            def build(*args, on_rebuilt_binary, **kwargs):
+                on_rebuilt_binary("ash-app-server", binary)
+                self.assertTrue(
+                    entered.wait(5), "image loading did not start during the build"
+                )
+                return {"ash-app-server": binary}
+
+            def publish(*args):
+                self.assertTrue(entered.is_set())
+                self.assertEqual(
+                    "compiled image", args[1]["ash-app-server"].read_text()
+                )
+                published.set()
+                return True, "generation"
+
+            with (
+                patch.object(
+                    develop, "default_target", return_value="x86_64-pc-windows-msvc"
+                ),
+                patch.object(develop, "current_package", return_value=package),
+                patch.object(develop, "_load_app_server", side_effect=load),
+                patch.object(develop, "build_binaries", side_effect=build),
+                patch.object(develop, "publish_generation", side_effect=publish),
+            ):
+                self.assertEqual(
+                    (True, "generation"), develop.build_development_server(root=root)
+                )
+
+    def test_frozen_image_survives_collection_and_is_reused_without_copying_cargo(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package = prepared_package(root)
+            directory = root / "development"
+            binary = root / "ash-app-server"
+            binary.write_text("compiled image")
+            with development_store.frozen_binary(binary, directory) as frozen:
+                binary.write_text("next Cargo write")
+                self.assertEqual("compiled image", frozen.read_text())
+                development_store.publish_generation(package, {}, directory)
+                self.assertTrue(frozen.exists(), "collection removed a pinned image")
+                _, generation = development_store.publish_generation(
+                    package, {"ash-app-server": frozen}, directory
+                )
+                selected = directory / "generations" / generation / "bin/ash-app-server"
+                self.assertTrue(os.path.samefile(frozen, selected))
+            self.assertEqual("compiled image", selected.read_text())
+            self.assertEqual([], list(directory.glob(".loading-*")))
+
+    def test_publication_retries_a_transient_windows_directory_lock(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package = prepared_package(root)
+            directory = root / "development"
+            original = Path.rename
+            attempts = []
+
+            def rename(source, target):
+                if source.name.startswith(".staging-"):
+                    attempts.append(source)
+                    if len(attempts) == 1:
+                        error = PermissionError("sharing conflict")
+                        error.winerror = 5
+                        raise error
+                return original(source, target)
+
+            with (
+                patch.object(Path, "rename", rename),
+                patch.object(development_store.time, "sleep") as sleep,
+            ):
+                changed, generation = development_store.publish_generation(
+                    package, {}, directory
+                )
+            self.assertTrue(changed)
+            self.assertEqual(2, len(attempts))
+            sleep.assert_called_once_with(0.01)
+            self.assertEqual(
+                f"generations/{generation}",
+                json.loads((directory / "current.json").read_text())["runtime"],
+            )
+            self.assertEqual([], list(directory.glob(".staging-*")))
+
+    def test_permanent_windows_directory_lock_keeps_the_selected_generation(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package = prepared_package(root)
+            directory = root / "development"
+            development_store.publish_generation(package, {}, directory)
+            pointer = (directory / "current.json").read_bytes()
+            binary = root / "changed"
+            binary.write_text("changed")
+            error = PermissionError("permanent access denial")
+            error.winerror = 5
+            with (
+                patch.object(Path, "rename", side_effect=error) as rename,
+                patch.object(development_store.time, "sleep") as sleep,
+            ):
+                with self.assertRaises(PermissionError):
+                    development_store.publish_generation(
+                        package, {"ash-app-server": binary}, directory
+                    )
+            self.assertEqual(7, rename.call_count)
+            self.assertEqual(6, sleep.call_count)
+            self.assertEqual(pointer, (directory / "current.json").read_bytes())
+            self.assertEqual([], list(directory.glob(".staging-*")))
+
     def test_generations_keep_declarative_resources_readable_as_single_link_files(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

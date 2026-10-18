@@ -36,9 +36,16 @@ function countCatalogSubscriptions(): void {
 	(globalThis as CatalogProbeGlobal).catalogSubscriptions = 0;
 	const post = MessagePort.prototype.postMessage;
 	// Observe outgoing product requests without replacing the connection or backend replies.
-	MessagePort.prototype.postMessage = function (message: { frame?: string; }, options?: Transferable[] | StructuredSerializeOptions): void {
-		if (message.frame && JSON.parse(message.frame).method === 'session/catalog/subscribe') {
-			(globalThis as CatalogProbeGlobal).catalogSubscriptions++;
+	MessagePort.prototype.postMessage = function (message: { data?: Uint8Array; }, options?: Transferable[] | StructuredSerializeOptions): void {
+		// The Desktop carrier writes complete JSONL frames as bytes.
+		if (message.data instanceof Uint8Array) {
+			for (const frame of new TextDecoder().decode(message.data).split('\n')) {
+				try {
+					if (frame && JSON.parse(frame).method === 'session/catalog/subscribe') {
+						(globalThis as CatalogProbeGlobal).catalogSubscriptions++;
+					}
+				} catch { /* Other MessagePorts can carry binary messages. */ }
+			}
 		}
 		post.call(this, message, Array.isArray(options) ? { transfer: options } : options);
 	};
@@ -57,11 +64,15 @@ test('Rust publication reconnects Workbench and Agents once while keeping both w
 	const output = (chunk: Buffer): void => { processOutput += chunk.toString(); };
 	try {
 		const first = await publish(source, directory, 'first');
+		await writeFile(join(testWorkspace.directory, 'rebuild-ready.txt'), 'rust_rebuild_workspace_before\n');
 		process.env.ASH_DEV_APP_SERVER_RELOAD = '1';
 		process.env.ASH_DEV_APP_SERVER_GENERATION = generationFile;
 		desktop = await launchElectron({ appServerMode: 'required', userDataDirectory, workspaceDirectory: testWorkspace.directory, workspacePermissions: 'development' });
 		desktop.application.process().stdout?.on('data', output);
 		const workbench = desktop.driver.workbench.page;
+		await desktop.driver.workbench.search.open();
+		await desktop.driver.workbench.search.search('rust_rebuild_workspace_before');
+		await expect(desktop.driver.workbench.search.status).toHaveText('1 results');
 		await workbench.evaluate(countCatalogSubscriptions);
 		await desktop.application.context().addInitScript(countCatalogSubscriptions);
 		const opened = desktop.application.waitForEvent('window');
@@ -79,6 +90,7 @@ test('Rust publication reconnects Workbench and Agents once while keeping both w
 		const environment = { ...process.env, ASH_HOME: join(userDataDirectory, 'profile') };
 		const beforePid = JSON.parse((await execFileAsync(daemon, ['version'], { env: environment, windowsHide: true })).stdout).pid;
 
+		await writeFile(join(testWorkspace.directory, 'rebuild-ready.txt'), 'rust_rebuild_workspace_after\n');
 		const second = await publish(source, directory, 'second');
 		await expect.poll(async () => (await connection(workbench)).generation).toBe(beforeWorkbench.generation + 1);
 		await expect.poll(async () => (await connection(agents)).generation).toBe(beforeAgents.generation + 1);
@@ -92,6 +104,13 @@ test('Rust publication reconnects Workbench and Agents once while keeping both w
 		await expect(desktop.driver.workbench.element).toBeVisible();
 		await expect(agents.locator('.ash-sessions-window')).toBeVisible();
 		await expect(agents.getByRole('heading', { name: 'Unable to start Ash' })).toHaveCount(0);
+		// A protocol handshake alone does not restore the new connection's directory grants.
+		await expect(desktop.driver.workbench.search.element).toBeVisible();
+		await expect.poll(async () => {
+			await desktop!.driver.workbench.search.search('rust_rebuild_workspace_after');
+			return desktop!.driver.workbench.search.status.textContent();
+		}, { timeout: 30_000 }).toBe('1 results');
+		await expect(desktop.driver.workbench.search.element.locator('.ash-search-preview mark')).toHaveText('rust_rebuild_workspace_after');
 
 		await expect.poll(async () => {
 			await publish(source, directory, 'second');

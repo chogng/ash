@@ -2,6 +2,7 @@ import { createSshRemoteWorkspaceUri } from '../../../remote/common/remote.js';
 import assert from 'node:assert/strict';
 import { suite, suiteSetup, suiteTeardown, test } from 'mocha';
 import { Event } from '../../../../base/common/event.js';
+import { URI } from '../../../../base/common/uri.js';
 import type { ISandboxGlobals } from '../../../../base/parts/sandbox/electron-browser/sandboxTypes.js';
 import type { AppServerProtocolClient } from '../../../agentHost/browser/appServerProtocolClient.js';
 import type { IWorkspaceContextApi } from '../../../workspace/common/workspaceIpc.js';
@@ -39,19 +40,20 @@ suite('workspace trust during directory opening', () => {
 
 	function workspace(paths: readonly string[]): IWorkspaceContextApi {
 		return {
-			getWorkspace: async () => ({ id: 'workspace', folders: paths.map((path, index) => ({ id: `folder-${index}`, uri: `file://${path}`, name: `folder-${index}`, index })) }),
+			getWorkspace: async () => ({ id: 'workspace', folders: paths.map((path, index) => ({ id: `folder-${index}`, uri: URI.file(path).toString(), name: `folder-${index}`, index })) }),
 			onDidChange: Event.None,
 		};
 	}
 
 	function trustApi(saved: ReadonlyMap<string, readonly WorkspaceTrustPermission[]>, grants: WorkspaceTrustPermission[][]): IWorkspaceTrustApi {
+		const permissionsByPath = new Map([...saved].map(([path, permissions]) => [URI.file(path).fsPath, permissions]));
 		return {
 			onDidChangeTrust: Event.None,
 			listDirectories: async () => { throw new Error('Unexpected directory management'); },
 			setDirectoryPermissions: async () => { throw new Error('Unexpected directory management'); },
 			forgetDirectory: async () => { throw new Error('Unexpected directory management'); },
 			readWorkspaceDirectory: async () => { throw new Error('Workspace host selects grants through the management owner'); },
-			readDirectory: async path => ({ dir: `canonical:${path}`, permissions: saved.get(path) }),
+			readDirectory: async path => ({ dir: `canonical:${path}`, permissions: permissionsByPath.get(URI.file(path).fsPath) }),
 			createGrant: async (_path, permissions) => {
 				grants.push([...permissions]);
 				return { type: 'user', commandId: 'command', expectedRevision: 7, permissions: [...permissions] };
@@ -70,8 +72,8 @@ suite('workspace trust during directory opening', () => {
 		assert.deepEqual(requests, [{
 			method: 'env/dirs/set', params: {
 				dirs: [
-					{ id: 'folder-0', path: '/partial', grant: { type: 'config' } },
-					{ id: 'folder-1', path: '/empty', grant: { type: 'config' } },
+					{ id: 'folder-0', path: URI.file('/partial').fsPath, grant: { type: 'config' } },
+					{ id: 'folder-1', path: URI.file('/empty').fsPath, grant: { type: 'config' } },
 				]
 			}
 		}]);
@@ -85,11 +87,11 @@ suite('workspace trust during directory opening', () => {
 			const client = { request: async (_method: unknown, params: unknown) => { requests.push(params); return { dirs: [] }; } } as unknown as AppServerProtocolClient;
 			await host.initializeWorkspace(client, { requestWorkspaceTrust: async path => { prompts.push(path); return choice; } }, trustApi(new Map(), grants), workspace(['/new']));
 			const permissions = choice === 'readOnly' ? READ_DIR_PERMISSIONS : DEVELOPMENT_DIR_PERMISSIONS;
-			assert.deepEqual(prompts, ['/new']);
+			assert.deepEqual(prompts, [URI.file('/new').fsPath]);
 			assert.deepEqual(grants, [permissions]);
 			assert.deepEqual(requests, [
-				{ dirs: [{ id: 'folder-0', path: '/new', grant: { type: 'user', commandId: 'command', expectedRevision: 7, permissions } }] },
-				{ dirs: [{ id: 'folder-0', path: '/new', grant: { type: 'config' } }] },
+				{ dirs: [{ id: 'folder-0', path: URI.file('/new').fsPath, grant: { type: 'user', commandId: 'command', expectedRevision: 7, permissions } }] },
+				{ dirs: [{ id: 'folder-0', path: URI.file('/new').fsPath, grant: { type: 'config' } }] },
 			]);
 		});
 	}
@@ -159,7 +161,7 @@ suite('workspace trust during directory opening', () => {
 	test('folder validation asks the editor owner without sending a backend directory mutation', async () => {
 		const client = { request: async () => { throw new Error('must not mutate directories'); } } as unknown as AppServerProtocolClient;
 		using registration = host.registerAppServerWorkspaceHost(client, async () => { }, { requestWorkspaceTrust: async () => 'cancel' }, trustApi(new Map(), []), folders => {
-			assert.equal(folders[0]?.fsPath, '/first');
+			assert.equal(folders[0]?.fsPath, URI.file('/first').fsPath);
 			throw new Error('unsaved files');
 		});
 		const completion = new Promise<unknown>(resolve => { reply = resolve; });
