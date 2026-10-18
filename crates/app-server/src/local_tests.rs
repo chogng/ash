@@ -2026,20 +2026,19 @@ fn shared_profile_runtime_shares_sessions_across_env_hosts() {
         assert!(initialized.contains("\"result\""));
     }
 
+    // Windows canonicalize may add a verbatim prefix. Session requests accept that spelling,
+    // but return the canonical path owned by the selected directory runtime.
+    let requested_root = first_dir.path().canonicalize().unwrap();
+    let expected_dir = Dir::open_local(first_dir.path()).unwrap();
     let created: serde_json::Value = serde_json::from_str(&first.handle_json(
         &mut first_connection,
-        &serde_json::json!({"jsonrpc":"2.0","id":2,"method":"session/create","params":{"commandId":"create-shared","title":"Shared task","executionTarget":{"type":"local","root":first_dir.path()}}}).to_string(),
+        &serde_json::json!({"jsonrpc":"2.0","id":2,"method":"session/create","params":{"commandId":"create-shared","title":"Shared task","executionTarget":{"type":"local","root":requested_root}}}).to_string(),
     ))
     .unwrap();
     let session_id = created["result"]["session"]["sessionId"].as_str().unwrap();
     assert_eq!(
         created["result"]["session"]["executionTarget"]["root"],
-        first_dir
-            .path()
-            .canonicalize()
-            .unwrap()
-            .to_string_lossy()
-            .as_ref()
+        expected_dir.canonical_path().to_string_lossy().as_ref()
     );
 
     let listed: serde_json::Value = serde_json::from_str(&second.handle_json(
@@ -4663,6 +4662,9 @@ fn deleting_a_managed_worktree_deletes_its_session_and_discards_checkout_content
     let git_dir = run_local_git(&checkout, &["rev-parse", "--absolute-git-dir"]);
     let marker = std::path::Path::new(git_dir.trim()).join("tgrep-view-v1.json");
     assert!(marker.exists());
+    // The search service drains its own capability during deletion; release the test's extra
+    // directory handle too, otherwise Windows correctly refuses to remove the checkout.
+    drop(search_dir);
     let inventory = local_call(
         &server,
         &mut connection,

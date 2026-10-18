@@ -80,6 +80,7 @@ impl ManagementError {
                 "view-not-loaded"
                     | "view-not-ready"
                     | "view-input-pending"
+                    | "query-input-changed"
                     | "checkpoint-not-current"
                     | "view-has-no-published-pin"
             )

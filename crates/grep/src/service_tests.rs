@@ -922,18 +922,15 @@ fn linked_worktrees_share_storage_until_the_last_registration_is_released() {
         ash_state::ClearOutcome::InUse
     );
     assert!(!worktree.canonical_path().join(".git").is_dir());
+    // The test's directory capability also pins the Windows checkout independently of tgrep.
+    let checkout_root = worktree.canonical_path().to_path_buf();
+    drop(worktree);
     git(
         temporary.path(),
-        &[
-            "worktree",
-            "remove",
-            worktree.canonical_path().to_str().unwrap(),
-        ],
+        &["worktree", "remove", checkout_root.to_str().unwrap()],
     );
     // Cleanup retries must not reopen a checkout already removed by the preceding attempt.
-    service
-        .release_directory(worktree.canonical_path(), &token)
-        .unwrap();
+    service.release_directory(&checkout_root, &token).unwrap();
     assert_eq!(
         service
             .search(&root, &query("base_marker"), &token)

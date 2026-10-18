@@ -238,12 +238,13 @@ impl Server {
             command
                 .arg("--index-path")
                 .arg(index)
-                .arg("--no-require-git");
+                .arg("--no-require-git")
+                .arg("--ash-parent");
             index.join("serve.json")
         };
         let child = command
             .stdin(
-                if identity.revision.is_some() && runtime == Runtime::Managed {
+                if identity.revision.is_none() || runtime == Runtime::Managed {
                     Stdio::piped()
                 } else {
                     Stdio::null()

@@ -100,7 +100,12 @@ fn normal_host_exit_reaps_servers_even_when_sessions_are_retained() {
         .unwrap();
     assert!(status.success());
     let address = std::fs::read_to_string(temporary.path().join("address")).unwrap();
-    assert!(TcpStream::connect(address).is_err());
+    // EOF supervision is asynchronous; the server must observe the pipe closure and exit.
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while TcpStream::connect(&address).is_ok() {
+        assert!(Instant::now() < deadline, "server survived its host's exit");
+        thread::sleep(POLL);
+    }
 }
 
 #[test]
@@ -204,6 +209,7 @@ fn managed_protocol_authenticates_and_rejects_wrong_identity_and_untyped_errors(
         (success, "success"),
         (wrong_identity, "identity"),
         (failure("busy", "view-not-ready"), "readiness"),
+        (failure("busy", "query-input-changed"), "readiness"),
         (failure("busy", "query-limit"), "typed"),
         (failure("corrupt-metadata", "view-not-ready"), "typed"),
         (
