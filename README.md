@@ -44,6 +44,8 @@ a desktop installation outside the standard locations.
 
 ## Getting started
 
+On macOS, Ash supports Apple Silicon (ARM64) only. Intel Macs are not supported.
+
 1. Open your project in Ash, or start Ash Code in its directory.
 2. Configure a model provider and select a model. Requests require valid
    credentials for the provider you choose.

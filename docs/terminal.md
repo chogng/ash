@@ -48,8 +48,6 @@ xterm 的文本和原始字节输入经实例进入同一进程输入 owner。`s
 
 `terminal.integrated.enableMultiLinePasteWarning` 由 TypeScript 窗口配置解释，沿现有 `settings.json` 的用户／工作区层解析，默认 `auto`。`auto` 在 bracketed paste 模式下放行，其他情况下移除单条命令末尾的换行及空白，对其余多行文本确认；`always` 对 LF、CRLF 和 CR 换行均确认，即使 Shell 启用了 bracketed paste；`never` 关闭确认。对话框仅展示有界开头预览，接受后发送原文；Escape 取消且恢复有效原实例的焦点。
 
-2026-10-18 验证：终端创建、分组、编辑区 Split、装饰菜单、剪贴板与层级边界共 149 项单测通过；整份终端 Chromium 集成 113 项通过，覆盖原进程／屏幕保留、拖拽与键盘重排、精确复制／选择、可信与未可信命令重跑、取消、失效代次、监听释放及中英文交互。Renderer 4,211 文件及 Browser 集成 4,183 文件类型检查通过。日志位于 `.build/todo-local-baselines/terminal-round2-unit-standard.log` 与 `terminal-round2-browser-verified.log`；不代表 Windows／Linux 系统剪贴板或真实 PTY 实机验收。
-
 最近命令选择器从终端历史 owner 读取按 Profile 保存的命令，只在用户明确接受后重跑。听写文字进入原实例输入链，由用户按 Enter 执行；切换实例、退出或隐藏面板取消录音。
 
 ### 运行编辑器选区
@@ -69,8 +67,6 @@ xterm 的文本和原始字节输入经实例进入同一进程输入 owner。`s
 将文件、目录或编辑器标签拖到屏幕只插入第一个资源的引用路径，不追加 Enter；没有宿主路径的浏览器 File 不会上传或变成猜测路径。实例继续拥有同一屏幕、输入和释放流程。
 
 `workbench.action.terminal.goToRecentDirectory` 使用原历史 owner 和已提交的 CwdDetection 能力，按工作区与执行宿主保存有界目录历史。输出中的每个 cwd 边界按屏幕提交序列发布，最终快照不再抹掉两次读取之间经过的目录。选择器支持方向键、Enter 与 Escape，后续历史更新会进入已打开的列表；切换实例、连接状态或目录根时取消。Bash／Zsh 使用引用后的 `cd --`，PowerShell 使用 `Set-Location -LiteralPath`。历史上限为零或 Shell 禁用历史时不保存新目录；清除以前的会话历史记录同时清理目录。
-
-本轮验证记录位于 `.build/todo-terminal-*`：相关七个文件 289 项单测、两份架构文件 16 项测试、整份终端 Chromium 115 项、协议生成和类型检查、执行端与协议／客户端 Rust 验证通过；中英文浏览器场景覆盖路径拖入、晚到目录、键盘确认与取消。真实 macOS Electron 和连接 App Server 的 Web 使用含空格／引号的可执行文件与目录验证路径执行、原文件保留和目录切换。Windows PowerShell、Linux、真实 OS 文件拖入及跨机器 SSH 仍须按 TODO 补实机验收。
 
 ## 输出与命令状态
 
@@ -126,3 +122,8 @@ Desktop 的 `enablePersistentSessions` 控制协调 reload。准备阶段等待�
 | 执行端进程、输出与释放       | [exec-server 终端实现及相邻测试](../crates/exec-server/src/terminal.rs)                                                                                                                                                                                                    |
 
 测试入口描述可重复检查的行为，不替代特定平台的实机结果。未完成动作与平台验收集中在 [Terminal TODO](../TODO.md#terminal--todo)，可选增强保留在[发展候选（未排期）](../TODO.md#发展候选未排期)。
+
+```sh
+just verify ash-exec-server --lib
+just test ash-app-server-runtime --lib terminal
+```

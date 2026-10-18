@@ -19,6 +19,8 @@
 
 ### macOS 与 Linux 开发环境
 
+macOS 架构支持范围见 [Getting started](../README.md#getting-started)。
+
 安装 Rust、Just、仓库要求的 uv 和 Python 3.11 及以上版本。首次初始化使用 PATH 中的 `python3`；确认 `python3 -c 'import tomllib'` 成功。macOS 自带 Python 可能不满足要求，可用 `uv run --python 3.12 just install` 初始化；Apple Silicon 上的 Homebrew Python 3.12 也可将 `/opt/homebrew/opt/python@3.12/libexec/bin` 放在 PATH 前部。初始化后，Just 和前端构建入口优先复用 `scripts/.venv`，日常启动无需再包装 `uv run`。
 
 准备完整后端包时，macOS 还需要 Go 1.26 和系统 C/C++ 工具链来构建 LiveKit Server，见 [LiveKit Server](../third_party/livekit/README.md)。Linux 的完整后端构建需要 ALSA 开发库；沙箱构建需要 C 编译器和 libcap，见 [共享包构建](../build/README.md)。
@@ -340,7 +342,7 @@ strip = false
 
 | 平台                     | 符号产物         | 匹配身份                        | 提取与检查                                                                              |
 | ------------------------ | ---------------- | ------------------------------- | --------------------------------------------------------------------------------------- |
-| macOS arm64/x64          | `<binary>.dSYM`  | Mach-O UUID 与架构              | Cargo 的 packed dSYM；检查程序和 dSYM UUID 一致，使用 `atos`/LLDB 解析                  |
+| macOS arm64              | `<binary>.dSYM`  | Mach-O UUID 与架构              | Cargo 的 packed dSYM；检查程序和 dSYM UUID 一致，使用 `atos`/LLDB 解析                  |
 | Linux GNU/musl arm64/x64 | `<binary>.debug` | ELF GNU build-id 与架构         | `llvm-objcopy --only-keep-debug`，剥离 staging 后写 debuglink；检查 ID 和 debuglink CRC |
 | Windows MSVC arm64/x64   | PDB              | PE CodeView 与 PDB 的 GUID、Age | 从 PE 引用定位 PDB，校验签名；不能只按文件名猜测或选择最新 PDB                          |
 

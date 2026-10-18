@@ -511,9 +511,12 @@ fn terminal_reports_shell_pid_and_real_cwd_after_cd() {
     let root = tempfile::tempdir().unwrap();
     std::fs::create_dir(root.path().join("changed")).unwrap();
     let service = terminal_service_for(root.path());
-    let created = service
-        .create(1, terminal_request(TerminalLifecycle::ConnectionOwned))
-        .unwrap();
+    // Cwd metadata requires shell integration; the user's default may be sh or fish.
+    let mut request = terminal_request(TerminalLifecycle::ConnectionOwned);
+    request.profile = TerminalProfileSelection::Profile {
+        profile_id: "bash".into(),
+    };
+    let created = service.create(1, request).unwrap();
     service
         .write(
             1,

@@ -19,7 +19,7 @@ Code 可以从 `.vscode/launch.json` 启动或附加到一个调试目标，并�
 | 适配器发现                  | 声明式 `contributes.debuggers`、动态配置 provider 与 descriptor factory，仍可显式写 `debugAdapter`                                                                                      | 发现类型不调用工厂或启动适配器；Rust 与 JS 扩展按各自宿主执行                |
 | 完整 VS Code Debug 扩展 API | 对齐目标，尚未完成                                                                                                                                                                      | 已有会话 API 子集、tracker 和多种传输；完整 namespace 与部分会话选项仍待补齐 |
 
-## 已接入的迁移切片
+## 当前执行链
 
 `DebugSession` 通过上游同职责的 `browser/rawDebugSession.ts` 访问 Rust 请求 client，已退出 TS 请求编号、pending response table 和请求超时实现。`ash-debug-manager` 组合 `ash-debug-client` 与既有 `ash-debug-adapter`，App Server 只增加连接与目录绑定。每个会话只有一个请求配对 owner；stdio、TCP、pipe 和 inline 使用同一 client。tracker 从有界、双向、有序的观察日志取消息，其回调可重入请求而不阻塞协议配对；关闭前先收取观察记录，再按原生命周期释放 tracker 与 transport。
 
@@ -31,11 +31,11 @@ Rust 同时使在途 stackTrace/scopes/variables/setVariable 在恢复执行、�
 
 `inspection.rs` 已拥有 threads → stack、scopes → variables、子变量和批量 Watch 求值。每次查询携带显式线程/帧及 inspectionRevision，Rust 在发送前拒绝旧暂停代次，并使迟到的中间步骤和终态失效。Watch 单个表达式、scope 单个变量请求失败不会抹掉其他结果；任务数量、期限与结果内存都有界，终态只消费一次。`DebugViewPane` 不再编排这些 DAP 链，只请求结果、处理 URI、选择、源码打开和展示。共享 [debug-contract](../crates/debug-contract/README.md) 定义领域值，RPC/生成 decoder 仍归 App Server protocol。
 
-这还不是完整的 Rust manager：可编辑工作区目录、断点和 Watch 定义的 Memento 持久化、REPL 模型及父子会话协调仍在 TS；本轮不能把会话运行意图迁移表述为工作区持久目录已经迁走。`rawDebugSession.ts` 仅保留产品请求调用、inline IO 桥接和取消后的释放，不在前端配对 DAP 响应。协议端口与逐次完成结果见 [App Server DAP 会话](app-server-api.md#dap-会话与请求调度)。
+这还不是完整的 Rust manager：可编辑工作区目录、断点和 Watch 定义的 Memento 持久化、REPL 模型及父子会话协调仍在 TS；会话运行意图与工作区持久目录是不同的状态。`rawDebugSession.ts` 仅保留产品请求调用、inline IO 桥接和取消后的释放，不在前端配对 DAP 响应。协议端口与逐次完成结果见 [App Server DAP 会话](app-server-api.md#dap-会话与请求调度)。
 
-## 已确认的目标分层
+## 目标分层
 
-2026-10-18 确认：参考 LSP 的协议客户端、运行管理与具体工具提供者分层，把通用调试后端迁入 Rust；Workbench 的公开契约与交互继续对齐 VS Code。Zed 的 DAP client、会话协调和 adapter 注册可作职责参考，其 GPUI 对象不进入 Ash 后端。下面描述完整目标；实际完成范围以上述首个切片为准。
+参考 LSP 的协议客户端、运行管理与具体工具提供者分层，把通用调试后端迁入 Rust；Workbench 的公开契约与交互继续对齐 VS Code。Zed 的 DAP client、会话协调和 adapter 注册可作职责参考，其 GPUI 对象不进入 Ash 后端。下面描述完整目标；当前执行链与状态归属见上一节。
 
 ```mermaid
 flowchart LR
@@ -66,7 +66,7 @@ Workbench 发送明确的会话与栈帧身份执行求值，不把某窗口的�
 
 对齐的是公开 API、文件职责、生产调用与可观察行为，Rust 后端不照搬 VS Code 的 TS 实现。`common/debug.ts` 和 `browser/debugService.ts` 保留 Workbench 领域入口，`browser/debugSession.ts` 的 DAP 执行职责逐段迁走；不能为维持同名而保留第二套协议客户端。配置解析继续使用现有 ConfigurationResolver、Editor、Tasks 和扩展注册 owner。
 
-本轮已修改的对应文件如下。这里对齐职责和生产入口，协议执行使用 Ash 的 Rust owner，不复制上游内部实现：
+以下文件对齐职责和生产入口，协议执行使用 Ash 的 Rust owner，不复制上游内部实现：
 
 | Ash 文件                         | VS Code 对应关系                 | 当前职责                                                                                                 |
 | -------------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------- |

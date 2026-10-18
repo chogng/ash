@@ -33,12 +33,23 @@ select `ASH_DEV_CONTAINER_PROVIDER_PATH`; `ASH_DEVCONTAINER_CLI` and `ASH_DOCKER
 select trusted tool paths. Internal App Server credentials and model keys are excluded from
 the Provider environment. Docker still owns its own configuration and credentials.
 
-Validate with `just test ash-dev-container-provider`, `just test ash-app-server managed::gateway`
-and the Sessions/renderer unit suites. The actual SDK process test covers registration,
-invocation, unavailable tools/configuration, cancellation and disablement. This checkout's
-host has no Docker, so a real-container smoke test remains unverified: start a configured
-container, send a Session request, edit/read a file, run a terminal command, close/reopen the
-window, then exercise Stop and Remove. Automatic installation requires a product with an
-authenticated Remote catalog and the POSIX prerequisites checked by the shared installer
-(including tar and SHA-256). An image with a compatible installed runtime also works.
-The Provider does not copy host executables across operating systems.
+## Validation
+
+```sh
+just verify ash-dev-container-provider
+just test ash-app-server-runtime --lib managed::gateway
+```
+
+For a real-container check, use the official Dev Container CLI and a compatible Linux Remote
+runtime. The container needs Git 2.40 or newer to create Sessions.
+Check file/PTY execution, a completed Session turn, connection/Provider reopen with durable
+Sessions and terminal reattachment, then Stop and Remove. Docker's running state and labels
+provide the independent lifecycle check, including after the source configuration is removed.
+
+The SDK process tests cover registration, invocation, missing tools/configuration, cancellation
+and disablement. They do not exercise the Agents UI, host gateway admission/persisted inventory
+or authenticated catalog bootstrap.
+
+Automatic installation requires an authenticated Remote catalog and the POSIX prerequisites
+checked by the shared installer, including tar and SHA-256. An image with a compatible installed
+runtime also works. The Provider does not copy host executables across operating systems.

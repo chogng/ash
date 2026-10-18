@@ -40,7 +40,7 @@ Core / action-policy → tool-executor → exec-server → sandboxing
 | 完全文件访问＋允许网络       | 显式授权的普通进程，使用通用进程实现                                                                            |
 
 App Server 的固定沙箱配置允许策略范围内的宿主 ACL 改动，命令参数不能更改此要求。
-本轮账户原型及 `mxc-user.exe` 已退出源码和产品包。适配器不配置账户或持久网络规则。
+适配器不配置账户或持久网络规则。
 Windows 账户候选的 ACL 恢复由独立后端维护；异常退出仍需实机验收。
 子进程退出码不再经过私有运行器重映射。输出中的权限错误只产生“可能已有副作用”的诊断，不能证明进程未启动或授权重跑。
 启动失败保留 SDK 错误类别、说明与扩展系统错误；PTY helper 传回实际启动和等待错误。所有启动失败均关闭本次执行，不重新选择后端。
@@ -52,7 +52,7 @@ SDK 的 Seatbelt 策略固定可写根以及只读、拒绝路径的祖先目录
 
 `tests/macos.rs` 的 `fcntl` 回归复用自身测试可执行文件的子进程入口，直接调用 Darwin syscall，分别检查普通进程对照及只读、目录写入、持续只读路径限制。生产库仍禁止 `unsafe`；只有该测试目标中的 syscall 模块允许经过注释说明的 FFI。测试不依赖 Python 或 Xcode 启动器。
 
-同一目标另直接运行 `/usr/bin/python3`、`/usr/bin/git` 和 `/usr/bin/xcrun`，验证关闭的标准输入、Python 输入数据、退出码和预期输出，不提前替换启动器路径。宿主对照和每个受限执行均保留 5 秒预算及进程树清理；`getconf DARWIN_USER_CACHE_DIR` 另检查启动器依赖的系统目录查询。2026-10-10 的 [Intel 与 ARM64 CI](https://github.com/chogng/ash/actions/runs/38035662838) 各通过 36 项库测试、2 项 macOS 集成测试及 7 项 PTY 测试；需要指定局域网地址的用例未运行。
+同一目标另直接运行 `/usr/bin/python3`、`/usr/bin/git` 和 `/usr/bin/xcrun`，验证关闭的标准输入、Python 输入数据、退出码和预期输出，不提前替换启动器路径。宿主对照和每个受限执行均保留 5 秒预算及进程树清理；`getconf DARWIN_USER_CACHE_DIR` 另检查启动器依赖的系统目录查询。
 
 Seatbelt 基础策略允许查询 `com.apple.bsd.dirhelper`。缺少此服务时，`confstr(DARWIN_USER_CACHE_DIR)` 失败，Xcode 回退到重复初始化运行时，Intel runner 的真实启动超过 5 秒；仅扩大 LaunchServices 查询不能解决这个问题。该修复允许系统目录发现，文件写入和 IPC 路径仍由现有策略限制，执行专属 `TMPDIR` 的生命周期归 `exec-server`。
 
@@ -86,110 +86,55 @@ just test ash-mxc-sandbox --test macos --locked -- --test-threads=1 --nocapture
 
 ## 验证
 
-2026-10-18 升级为 SDK 1.0.1，固定兼容提交 `f1e8694b75dea05ebb3dc8050039d04fe304236f`。在 macOS 27.0.1（26A434）ARM64、Rust 1.98.0 上：`just verify ash-mxc-sandbox` 的 36 项库测试、2 项 macOS 集成测试和 7 项真实 PTY 场景通过；默认忽略局域网场景及仅由父测试调用的 `fcntl` 子进程入口。显式运行 `network_tests` 的 3 项用例通过，包含本机局域网地址 `10.52.62.90` 的正向对照、直连拒绝、代理批准／拒绝及私有 IPC／模拟 SSH socket 边界。SDK 全部库测试 1,792 项通过、1 项忽略。执行服务 83 项库测试和 18 项真实 RPC 集成测试通过。
-
-`tests/network_matrix.rs` 现同时覆盖 Linux 和 macOS。macOS 显式运行 1 项真实网络矩阵通过：IPv4／IPv6 回环、HTTP／CONNECT／SOCKS 批准与拒绝、直连拒绝、TCP／UDP DNS 的 A／AAAA 查询及后代继承。计数的本地 DNS fixture 和实际端点 `114.114.114.114:53` 均先通过普通进程往返；该端点是本机网络可达对照，不证明到公共递归解析器的独立公网出口。没有运行另一台局域网设备、公网 IPv6、真实 Docker／GPG socket 或 Intel Mac 场景。
-
 ```sh
-python3 -B scripts/cargo.py build -p ash-network-proxy --example matrix --locked
-export ASH_NETWORK_MATRIX_PROBE="$PWD/.build/cargo/debug/examples/matrix"
-export ASH_DNS_SERVER="<resolver-ip>:53" # 必须同时支持 TCP／UDP 往返
-just test ash-mxc-sandbox --test network_matrix --locked -- --ignored --nocapture
+just verify ash-mxc-sandbox
+just verify ash-exec-server
 ```
 
-Windows x64 MSVC 的适配器／账户后端库和 Linux x64 的适配器库交叉编译通过；SDK 两个平台的测试目标编译通过，Windows SDK all-targets warning 门禁通过。Ash 全部测试目标交叉编译分别受缺少 Windows C 头文件和 `x86_64-linux-gnu-gcc` 阻挡；没有使用假头文件或宿主库代替目标库。当前 SDK 仍缺 Windows／WSL／Linux 实机结果，旧 pin 的通过记录不能替代。
+平台能力必须通过实际执行验证；交叉编译不能证明隔离生效。各测试先检查普通进程可达性，再验证受限行为、退出码和进程树回收。剩余平台与外部端点验收见 [MXC TODO](../../MXC-TODO.md)。
 
-工具执行器 15 项、`sandboxing` 25 项库测试通过。远程固定源码的 `just verify ash-mxc-sandbox`、新增网络矩阵、`just dependencies`（218 members、87 个已审查重复版本组）和 Bazel 构建及 `--lockfile_mode=error` 复查通过。Bazel 首轮被既有重复 `sherpa-onnx-sys` 注解阻挡，已合并到唯一注解，保留原字段语义。Cargo 仅变更 SDK 包版本／来源；解析器同时归一化了若干既有 Windows 依赖边，没有新增其他包版本或修改版本审查策略。
+### Linux 网络
 
-`just dependency-security --deny .build/mxc-security-tools/cargo-deny-0.20.2-aarch64-apple-darwin/cargo-deny` 的 licenses／sources 通过，advisories 未通过：`zbus_names` 3.0.0／4.3.4、`zvariant` 和 `zvariant_derive` 4.2.0／5.15.0 命中停止维护公告 RUSTSEC-2026-0371／0370／0372。这些版本与本轮前 HEAD 一致，不由 MXC 引入；本轮没有新增豁免或调整其消费者。工具从官方 0.20.2 release 下载并核对 SHA-256，仅保存在 `.build/mxc-security-tools/`。
+受管网络需要 `bwrap`、`slirp4netns`、`unshare`、`nsenter`、iptables/ip6tables 及其 restore 工具，以及用户命名空间和内核网络功能；缺少依赖时拒绝启动。产品包只携带 Bubblewrap。
 
-本轮原始日志在 `.build/mxc-1.0.1-*.log`，兼容源码 checkout 在 `.build/mxc-1.0.1/`。下面保留旧版本的历史证据。
-
-2026-10-11 退出 vendor 后，macOS ARM64 的 `just verify ash-mxc-sandbox` 通过：36 项库测试、2 项 macOS 集成测试和 7 项真实 PTY 场景通过，局域网用例与 `fcntl` 子进程入口按原条件忽略。远程固定 SDK 的 Cargo 正常编译、warning 门禁及 Bazel 适配器库构建通过；SDK 严格准备、Seatbelt profile 与退出观察的筛选组分别通过 8、89、2 项。Linux ARM64 与 Windows x64 MSVC 的适配器测试目标交叉编译通过。执行服务的 54 项库测试和 16 项真实 RPC 集成测试通过，覆盖重连、受限终端、取消、退出输出和回收。依赖结构、安全来源/许可证/漏洞检查通过，Python 工具回归 167 项（1 项按平台条件跳过）通过。以下较早的 Windows/WSL 运行结果属于原 pin，当前兼容 fork 尚未在这些平台重新运行验收。
-
-2026-10-10 升级至 `c6f301d5` 后，在 Windows 11 23H2 x64（build `22631.6199`）及 WSL2 `AshAcceptance` x64（kernel `6.18.40.1-microsoft-standard-WSL2`）执行以下验证：
-
-| 平台           | 命令或入口                                                                                                                                                          | 结果                                                                             |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Windows x64    | `just test ash-mxc-sandbox --lib --test windows --test pty --locked`                                                                                                | 22 项通过，默认忽略 12 项需要指定平台能力的测试                                  |
-| Windows x64    | `just test ash-windows-sandbox --lib --locked`                                                                                                                      | 38 项通过，2 项已安装账户测试未运行                                              |
-| Windows x64    | `just test ash-exec-server --lib --test execution --locked -- --test-threads=1`                                                                                     | 46 项库测试通过，5 项 PSEC 集成用例默认未运行                                    |
-| Windows x64    | 显式运行适配器 `missing_psec_is_reported_before_execution` 和执行服务 `windows::rpc_strict_sandbox_refuses_missing_psec_before_execution`，使用 `--ignored --exact` | 两项均通过，确认缺少 PSEC 时不启动命令                                           |
-| Windows x64    | `just test mxc-sdk --manifest-path crates/vendor/mxc/Cargo.toml --lib base_container_runner --locked`；同入口的 `profile_builder` 组                                | PSEC 策略及诊断 59 项、Seatbelt 策略生成 83 项通过                               |
-| WSL2 Linux x64 | `just test ash-mxc-sandbox --lib --test linux --test pty --locked`；构建 `ash-network-proxy --example probe` 后显式运行 `--test linux -- --ignored`                 | 库 19 项、实际 PTY 6 项及受管代理 1 项通过                                       |
-| WSL2 Linux x64 | `just test ash-mxc-sandbox --test wsl --locked -- --ignored --test-threads=1`，分别使用 `/tmp` 和 Windows 挂载上的 `TMPDIR`                                         | 每轮 3 项通过，覆盖文件权限、元数据、退出码、取消、后代回收及 Windows 互操作拒绝 |
-| WSL2 Linux x64 | `just test mxc-sdk --manifest-path crates/vendor/mxc/Cargo.toml --lib bwrap_runner --locked`；同入口的 `bwrap_command` 组                                           | 运行器 26 项、命令生成 56 项通过                                                 |
-
-Windows 适配器、账户沙箱及执行服务的 all-targets warning 门禁通过，Linux 适配器的 tests check 与 warning 门禁通过。`scripts/cargo.py build -p ash-exec-server -p ash-windows-sandbox --locked` 的 Windows 普通构建、`bazel build //crates/mxc-sandbox:mxc-sandbox --lockfile_mode=error`、`just dependencies` 和当前 pin 的 vendor 补丁校验通过。SDK 命令生成组首次有 4 项旧断言失败：只读挂载应匹配 Ash 的 `--ro-bind-try`，代理绕过变量应各出现一次且值为空；同步断言后 56 项全部通过。Bazel 仍报告已有的 3 条辅助程序资源指令不受支持，本次库构建不验证这些辅助程序。
-
-`just check ash-mxc-sandbox --target aarch64-apple-darwin --tests --locked` 通过，仅代表编译。新增精确路径及执行期间新建 glob 匹配文件的元数据拒绝用例已接入 [Platform checks](../../.github/workflows/platform-checks.yml) 的独立 `sandbox-macos` 任务，在 `macos-26` ARM64 和 `macos-26-intel` 运行适配器库与实际 PTY 测试。本机不能验证 macOS 的实际 Seatbelt 行为；首次 Platform checks 在旧 `check` 任务引用不存在的 `app` crate 时失败，沙箱测试改为独立任务以避免受该旧入口阻塞。新 pin 的 PSEC 成功执行、ConPTY 及 RPC 用例仍需 [PSEC 工作流](../../.github/workflows/psec.yml) 的 `windows-11-arm` 或支持 PSEC 的自托管机器运行，10 月 7 日的结果不作为新 pin 的通过证据。
-
-2026-10-07 的 Codex 对照修改在 macOS ARM64 上通过适配器 34 项库测试和 7 项实际 PTY 测试，1 项需要显式局域网地址的用例未运行；执行服务库及 15 项执行集成回归串行通过，PowerShell 路径分类定向回归通过。两 crate 的 Windows ARM64/x64 全部测试目标通过编译及 warning 门禁。新 pin 在 Windows 11 25H2 ARM64 CI 实际通过 7 项 PSEC 适配器执行、3 项 ConPTY 和 4 项产品执行服务 RPC 用例；目录别名 fixture 修复后也通过原有只读与拒绝断言。两个 Server x64 的适配器与产品 RPC 缺能力拒绝用例通过；三个 PSEC 任务全部成功，具体提交、原始失败与覆盖范围见 [终端与 RPC 验收](../../docs/windows-sandbox-acceptance-runbook.md#2026-10-07-psec-终端与执行服务-rpc-验收)。
-
-本轮执行服务普通 Cargo 构建和 Bazel 适配器库构建通过。Bazel 的固定 SDK 裁剪清单已补入 MXC 进程回收所需的 `libproc`，此前失败的 PTY 测试与执行服务可执行目标已成功构建；Bazel 运行的 7 项 PTY 测试通过，执行服务实际启动及 SIGTERM 退出验证通过。首次并发执行服务回归停在既有延迟输出测试，单独及串行复测通过，该逻辑未修改。
-
-2026-10-06 在 macOS 27.0.1（build 26A434）ARM64 上实测：适配器库 27 项、PTY 7 项、`sandboxing` 库 20 项及 SDK Seatbelt 策略生成 89 项测试通过，前端已有 glob 的 3 项测试通过。新增用例通过真实 SDK 子进程验证祖先目录移动、未创建的元数据、执行后新文件的拒绝/只读规则、Unicode 字面量与受限 `fcntl`，PTY 另覆盖同一持续路径策略。新版 macOS 的基础文件与终端行为已有实机证据；网络流量矩阵、私有 IPC 完整矩阵与 Intel Mac 仍待验收。
-
-同机执行器库 14 项、执行服务 `execution` 集成测试 15 项通过；适配器、`sandboxing`、SDK 的普通 check 与 all-targets warning 门禁通过，适配器的 Linux ARM64、Windows ARM64 测试目标交叉编译通过。依赖检查、固定 pin 的 vendor 补丁校验及 Bazel 适配器库构建通过。Bazel 仍输出已有的第三方 crate 系统库注解建议；本次不修改这些无关依赖设置。
-
-2026-10-07 升级至 `c45e7d5a` 后，Windows 适配器 13 项单元测试、文件身份 11 项测试、文件快照 2 项测试、账户文件策略 8 项测试、SDK ACL 35 项测试与继承 2 项测试、PSEC 诊断 2 项测试通过。WSL2 中 Linux 适配器 11 项单元测试和文件快照 2 项测试通过，官方 PTY 的 6 项实机测试通过，覆盖前台作业中断后 shell 继续运行；文件/退出码、后代回收和 Windows 程序互操作绕过的 3 项回归通过。Linux SDK 的退出观察测试和 Seatbelt 策略生成 84 项测试通过；后者不代表 macOS 实际执行验证。
-
-Windows/Linux warning 门禁、Windows 执行服务 Cargo 构建、适配器 Bazel 构建及依赖检查通过。Bazel 会提示官方构建脚本的 3 条 `cargo:rustc-link-arg-bin` 指令不受支持：这些指令给 SDK 的辅助程序添加资源，本次 Ash 库目标不构建这些程序。该提示仍存在，不能据此宣布辅助程序已完成 Bazel 验证。Windows PSEC 成功执行与 PTY 的当前 ARM64 证据见上方 2026-10-07 记录，其他 Windows 客户端系统仍需分别验收。
-
-2026-10-02 在 Windows 11 23H2（build 22631）完成适配器、执行器、执行服务与账户后端的活动测试、执行服务 Cargo 构建、依赖检查和 warning 门禁。另显式运行 PSEC 不可用用例，确认执行前拒绝。同机 WSL2 的 Ubuntu 24.04.5 x64 已实际验证 Bubblewrap：NAT 和 mirrored 模式下，Linux 文件系统及 `/mnt/c` 上的目录权限、隐藏路径与别名、元数据保护、退出码、后代回收和 Windows 可执行文件互操作回归均通过，受管代理用例分别通过。正常构建、适配器及 SDK 的 check 和 warning 门禁通过；SDK 运行器测试 39 项通过。Windows 11 25H2 ARM64 CI 另有 7 项 PSEC 成功路径证据；它不能证明本机 x64 支持。截至该次验收，macOS ARM64 只有测试目标编译结果，Bazel 打包未验证；当前文件与终端实测见上方 2026-10-06 记录。具体环境、原始失败及范围见 [WSL 验收记录](../../docs/windows-sandbox-acceptance-runbook.md#2026-10-02-wsl2-实机验收) 与 [补充验收](../../docs/windows-sandbox-acceptance-runbook.md#2026-10-02-psecwslc-与网络补充验收)。
+Bubblewrap 无法满足 Ash `Allowed` 的全部入站要求，因此拒绝该模式；这不构成允许网络的成功验收。以下入口验证 Denied／Managed 的 HTTP、CONNECT、SOCKS、IPv4／IPv6、TCP／UDP DNS、直连拒绝和后代继承；网络矩阵也适用于 macOS。
 
 ```sh
-just test ash-mxc-sandbox
-just test ash-mxc-sandbox --test pty
-just test ash-tool-executor
-just check ash-mxc-sandbox --target x86_64-pc-windows-msvc --tests
-just check ash-mxc-sandbox --target x86_64-unknown-linux-gnu --tests
-just check ash-mxc-sandbox --target aarch64-apple-darwin --tests
+python3 -B scripts/cargo.py build -p ash-network-proxy --example probe --example matrix --profile ci-test --locked
+export ASH_BWRAP_PATH=/usr/bin/bwrap
+export ASH_NETWORK_PROBE="$PWD/.build/cargo/ci-test/examples/probe"
+export ASH_NETWORK_MATRIX_PROBE="$PWD/.build/cargo/ci-test/examples/matrix"
+export ASH_DNS_SERVER="<resolver-ip>:53"
+just test ash-mxc-sandbox --test linux --locked -- --ignored
+just test ash-mxc-sandbox --test network_matrix --locked -- --ignored --test-threads=1
 ```
 
-Linux 受管网络由 SDK 使用 `bwrap`、`slirp4netns`、`unshare`、`nsenter`、iptables/ip6tables 及其 restore 工具实施。
-需要相应用户命名空间和内核网络功能；缺少依赖时拒绝启动。产品包只携带 Bubblewrap，不再携带 Ash namespace helper。
+设置 `CARGO_TARGET_DIR` 时，相应替换探针目录。DNS 端点须同时支持 TCP／UDP；多个地址用逗号分隔，IPv6 写为 `[address]:53`。可用 `ASH_PUBLIC_IPV6_HTTP_ENDPOINT` 增加公网 IPv6 HTTP 检查，普通进程对照必须先可达；本地回环或受代理影响的 DNS 不证明外部出口。
 
-```sh
-python3 -B scripts/cargo.py build -p ash-network-proxy --example probe
-export ASH_NETWORK_PROBE="$PWD/.build/cargo/debug/examples/probe"
-just test ash-mxc-sandbox --test linux -- --ignored
-```
+`ASH_WINDOWS_NETWORK_ENDPOINT` 和 `ASH_WINDOWS_DNS_ENDPOINT` 可增加 Windows 接收端，格式为逗号分隔的 socket 地址；链路本地 IPv6 的 scope ID 使用 Linux 接口编号。自建接收端可用 `ASH_WINDOWS_NETWORK_COUNTER` 提供原子发布的累计请求数；受限执行后计数增加即失败。共享接收端的测试须串行运行。
 
-WSL2 的跨系统回归入口为 `tests/wsl.rs`。在可正常使用 Windows 可执行文件互操作的 WSL 发行版内运行，先验证 Linux 文件系统，再将 `TMPDIR` 指向 Windows 挂载上的测试目录；下例假定仓库位于 `/mnt/c`。关闭宿主互操作不能作为通过依据，测试在每轮受限执行前验证普通进程能启动 Windows 程序。
+### WSL2
+
+`tests/wsl.rs` 检查文件／元数据、退出／取消后代回收和 Windows 互操作边界。分别在 Linux 文件系统与 Windows 挂载目录运行；不能通过关闭宿主互操作让拒绝测试通过。测试会先确认普通进程能够启动 Windows 程序。
 
 ```sh
 export ASH_BWRAP_PATH=/usr/bin/bwrap
 export ASH_WSL_WINDOWS_PROGRAM=/mnt/c/Windows/System32/cmd.exe
 TMPDIR=/tmp just test ash-mxc-sandbox --test wsl --locked -- --ignored --test-threads=1
-mkdir -p .build/acceptance/wsl/fixtures
-TMPDIR="$PWD/.build/acceptance/wsl/fixtures" just test ash-mxc-sandbox --test wsl --locked -- --ignored --test-threads=1
 ```
 
-Bubblewrap 当前拒绝 Ash `Allowed` 所要求的全部入站权限；不能把该请求的拒绝当作允许网络的执行验收。`tests/network_matrix.rs` 另通过 CommandExecutor 验证 Denied/Managed：IPv4/IPv6 HTTP、CONNECT、SOCKS 的地址和域名授权、未获批目标拒绝、直接 TCP 与 TCP/UDP DNS 的 A/AAAA、实际接收计数和后代继承。NAT/mirrored 实机均通过；两种模式还通过临时隧道出口的公网 IPv6 HTTP 与 TCP/UDP DNS 验证。NAT 覆盖可达的 Windows IPv6 链路本地端口 53，mirrored 覆盖 Windows IPv4 回环；mirrored 的 Windows IPv6 宿主目标仍没有可达性对照。具体出口与清理证据见 [ACL 与 IPv6 复测](../../docs/windows-sandbox-acceptance-runbook.md#2026-10-02-acl-恢复与公网-ipv6-复测)。独立 WSLC SDK 已实测但一次性清理报错，Ash 未接入它。
+第二轮将 `TMPDIR` 设为 Windows 挂载上预先创建的测试目录，用相同命令重跑。
 
-```sh
-python3 -B scripts/cargo.py build -p ash-network-proxy --example matrix
-export ASH_NETWORK_MATRIX_PROBE="$PWD/.build/cargo/debug/examples/matrix"
-# 使用宿主实际可达、支持 TCP/UDP DNS 的端点；可逗号分隔，IPv6 写为 [address]:53。
-export ASH_DNS_SERVER="10.255.255.254:53"
-# 有可达公网 IPv6 出口时，增加真实 HTTP 往返与沙箱拒绝检查。
-export ASH_PUBLIC_IPV6_HTTP_ENDPOINT="[2606:4700:4700::1111]:80"
-just test ash-mxc-sandbox --test network_matrix --locked -- --ignored --nocapture
-```
+### macOS 局域网与 Unix socket
 
-设置了 `CARGO_TARGET_DIR` 时，探针路径使用该目录的 `debug/examples/matrix`。可提供 `ASH_WINDOWS_NETWORK_ENDPOINT` 和 `ASH_WINDOWS_DNS_ENDPOINT`，向同一矩阵增加 Windows 接收端；格式为逗号分隔的 socket 地址，链路本地 IPv6 的 scope ID 使用 Linux 接口编号。所有端点必须先通过普通进程的可达性检查。自建接收端可通过 `ASH_WINDOWS_NETWORK_COUNTER` 提供原子发布的累计请求数文件；对照后若计数增加，受限执行即失败。共享接收端的测试须串行运行。
-
-Windows 实机步骤见 [验收手册](../../docs/windows-sandbox-acceptance-runbook.md)。
-
-macOS 的局域网验收使用本机可达的私有 IPv4 地址，接收端由测试创建，不需要公网。
-下面的定向测试先验证普通进程可达，再验证 Denied 直连拒绝、Managed 直连拒绝、
-显式授权目标的代理 HTTP 成功及未授权目标拒绝；另验证私有 IPC 目录内的创建与连接例外、目录外拒绝及 SSH socket 拒绝。
-私有 IPC 目录必须是与命令目录不重叠的独立授权目录。
+接收端由测试创建，`ASH_SANDBOX_LAN_IP` 使用本机可达的私有 IPv4 地址。测试覆盖直连拒绝、代理批准／拒绝、私有 IPC 目录内创建与连接、目录外 socket 及 SSH agent socket 拒绝。私有 IPC 目录必须与命令目录分开授权。
 
 ```sh
 ASH_SANDBOX_LAN_IP="$(/usr/sbin/ipconfig getifaddr en0)" just test ash-mxc-sandbox --lib network_tests --locked -- --include-ignored
 ```
 
-接口不叫 `en0` 时，改用该 Mac 实际可达的局域网接口地址。此入口只覆盖 IPv4 HTTP 与
-Unix socket；IPv6、CONNECT、SOCKS、DNS 和远端局域网接收端仍需各自验收。
+接口名按实际环境替换。此入口只覆盖 IPv4 HTTP 与 Unix socket；IPv6、CONNECT、SOCKS 和 DNS 使用网络矩阵。
+
+### Windows
+
+PSEC 能力、管理员账户、ConPTY 和执行服务 RPC 的环境准备及命令见 [Windows 验收手册](../../docs/windows-sandbox-acceptance-runbook.md)。

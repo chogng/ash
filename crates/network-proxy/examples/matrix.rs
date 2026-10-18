@@ -1,4 +1,7 @@
 //! Wire-level acceptance: every denied destination is checked by the host first.
+#[path = "support/proxy.rs"]
+mod proxy;
+
 use std::io::Read;
 use std::io::Write;
 use std::net::IpAddr;
@@ -176,16 +179,8 @@ fn main() {
         println!("{mode}: public IPv6 HTTP {address} checked");
     }
     if mode == "managed" {
-        let endpoint = |name: &str, prefix: &str| {
-            std::env::var(name)
-                .unwrap()
-                .strip_prefix(prefix)
-                .unwrap()
-                .parse::<SocketAddr>()
-                .unwrap()
-        };
-        let proxy = endpoint("HTTP_PROXY", "http://");
-        let socks_proxy = endpoint("ALL_PROXY", "socks5h://");
+        let proxy = proxy::endpoint(&std::env::var("HTTP_PROXY").unwrap(), "http");
+        let socks_proxy = proxy::endpoint(&std::env::var("ALL_PROXY").unwrap(), "socks5h");
         for authority in [
             v4.to_string(),
             v6.to_string(),

@@ -1,4 +1,7 @@
 //! Platform acceptance probe. Built explicitly by the Linux/Windows integration scenarios.
+#[path = "support/proxy.rs"]
+mod proxy;
+
 use std::io::Read;
 use std::io::Write;
 use std::net::Ipv4Addr;
@@ -32,12 +35,8 @@ fn main() {
     let forbidden: u16 = arguments[1].parse().unwrap();
     let foreign: u16 = arguments[2].parse().unwrap();
     let udp_target: u16 = arguments[3].parse().unwrap();
-    let endpoint = |name: &str, scheme: &str| -> SocketAddr {
-        let value = std::env::var(name).unwrap();
-        value.strip_prefix(scheme).unwrap().parse().unwrap()
-    };
-    let proxy = endpoint("HTTP_PROXY", "http://");
-    let socks = endpoint("ALL_PROXY", "socks5h://");
+    let proxy = proxy::endpoint(&std::env::var("HTTP_PROXY").unwrap(), "http");
+    let socks = proxy::endpoint(&std::env::var("ALL_PROXY").unwrap(), "socks5h");
     assert_eq!(std::env::var("NO_PROXY").unwrap(), "");
     let mut http = connect_address(proxy).unwrap();
     write!(http, "GET http://127.0.0.1:{target}/ HTTP/1.1\r\nHost: 127.0.0.1:{target}\r\nConnection: close\r\n\r\n").unwrap();
