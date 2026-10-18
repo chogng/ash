@@ -2,6 +2,8 @@ import { expect, test, type Page } from '@playwright/test';
 import { startMarkdownExtension } from '../../fixtures/markdownExtension.js';
 import { createLargeMarkdownDocument } from './markdownLargeDocument.js';
 import { createHash } from 'node:crypto';
+import { trackDocumentStyles } from './documentStyles.js';
+import { captureDocumentStyles } from '../../fixtures/documentStyles.js';
 
 let parser: Awaited<ReturnType<typeof startMarkdownExtension>>;
 let chinese: Awaited<ReturnType<typeof startMarkdownExtension>>;
@@ -70,6 +72,70 @@ async function openHost(page: Page, locale = 'en', view = 'vscode.markdown.edito
 	await expect(frame.getByRole('heading', { name: '标题', exact: true })).toBeVisible();
 	return frame;
 }
+
+test('Markdown rich editor formula updates preserve document styles', async ({ page }) => {
+	await page.goto('/markdownEditor.html');
+	await expect(page.locator('.katex')).toHaveCount(2);
+	await page.evaluate(() => document.fonts.ready);
+	await using styles = await trackDocumentStyles(page.locator('html'));
+	for (let version = 2; version <= 4; version++) {
+		await page.evaluate(version => window.postMessage({ type: 'document', version, text: `# Update ${version}\n\n$E=mc^2$\n`, readOnly: true }, location.origin), version);
+		await expect(page.getByRole('heading', { name: `Update ${version}`, exact: true })).toBeVisible();
+		await expect(page.locator('.katex')).toHaveCount(1);
+		await styles.assertUnchanged();
+	}
+});
+
+for (const view of ['vscode.markdown.editor', 'vscode.markdown.preview.editor']) {
+	test(`Markdown ${view} preserves sandbox styles and restores host styles on disposal`, async ({ page }) => {
+		const frame = await openHost(page, 'en', view);
+		await using outer = await trackDocumentStyles(page.locator('html'));
+		// The first update transfers theme variables from the bootstrap stylesheet
+		// to the sandbox root's inline style. Compare later updates in that state.
+		await page.evaluate(() => window.ashMarkdownHost.edit(0, window.ashMarkdownHost.text.length, '# Update 1\n\n$E=mc^2$\n'));
+		await expect(frame.getByRole('heading', { name: 'Update 1', exact: true })).toBeVisible();
+		await expect(frame.locator('.katex')).toHaveCount(1);
+		await outer.assertUnchanged();
+		// Release frame handles before disposal removes their execution context.
+		{
+			await using inner = await trackDocumentStyles(frame.locator('html'));
+			for (let version = 2; version <= 4; version++) {
+				await page.evaluate(version => window.ashMarkdownHost.edit(0, window.ashMarkdownHost.text.length, `# Update ${version}\n\n$E=mc^2$\n`), version);
+				await expect(frame.getByRole('heading', { name: `Update ${version}`, exact: true })).toBeVisible();
+				await expect(frame.locator('.katex')).toHaveCount(1);
+				await inner.assertUnchanged();
+				await outer.assertUnchanged();
+			}
+		}
+		await page.evaluate(() => window.ashMarkdownHost.disable());
+		await outer.assertUnchanged();
+		// The fixture owns the view lifetime through pagehide, including its iframe.
+		await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide')));
+		await expect(page.locator('#editor iframe')).toHaveCount(0);
+		await outer.assertUnchanged();
+	});
+}
+
+test('Markdown style isolation guard rejects a cross-origin stylesheet', async ({ page }) => {
+	await page.route('https://stylesheet.audit.invalid/katex.css', route => route.fulfill({ contentType: 'text/css', body: '.katex { color: red; }' }));
+	await page.goto('/markdownEditor.html');
+	await expect(page.locator('.katex')).toHaveCount(2);
+	await using styles = await trackDocumentStyles(page.locator('html'));
+	try {
+		await page.evaluate(() => {
+			const link = document.createElement('link');
+			link.id = 'test-cross-origin-style';
+			link.rel = 'stylesheet';
+			link.href = 'https://stylesheet.audit.invalid/katex.css';
+			document.head.append(link);
+		});
+		await expect.poll(() => page.locator('#test-cross-origin-style').evaluate((element: HTMLLinkElement) => element.sheet !== null)).toBe(true);
+		await expect(page.locator('html').evaluateHandle(captureDocumentStyles)).rejects.toThrow(/SecurityError/);
+	} finally {
+		await page.locator('#test-cross-origin-style').evaluate(element => element.remove());
+	}
+	await styles.assertUnchanged();
+});
 
 test('rich updates retain unchanged blocks and send only versioned range edits', async ({ page }) => {
 	const frame = await openHost(page);

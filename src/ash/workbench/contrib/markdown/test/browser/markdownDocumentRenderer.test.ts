@@ -2,6 +2,7 @@ import '../../../../../editor/test/browser/testEditorDom.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
+import { ensureNoStylesAreLeakedInTestSuite } from '../../../../../../../test/unit/documentStyles.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { MarkdownString } from '../../../../../base/common/htmlContent.js';
 import {
@@ -18,6 +19,8 @@ import { createTestComponentServices, getWebviewHtml } from '../../../../test/co
 import {
 	MarkdownDocumentView,
 } from "../../../../../workbench/contrib/markdown/browser/markdownDocumentRenderer.js";
+
+ensureNoStylesAreLeakedInTestSuite();
 
 function createDom(): JSDOM {
 	return new JSDOM("<!DOCTYPE html><body></body>", {

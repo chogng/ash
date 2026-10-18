@@ -3,8 +3,10 @@ import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { renderAsPlaintext, renderMarkdown } from '../../browser/markdownRenderer.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../common/utils.js';
+import { ensureNoStylesAreLeakedInTestSuite } from '../../../../../test/unit/documentStyles.js';
 
 suite('Shared Markdown content preservation', () => {
+	ensureNoStylesAreLeakedInTestSuite();
 	ensureNoDisposablesAreLeakedInTestSuite();
 
 	test('preserves unsupported HTML as literal text when requested before sanitization', () => {

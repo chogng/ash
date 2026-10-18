@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { suite, test, suiteSetup, suiteTeardown } from 'mocha';
 import { startMarkdownMathExtension } from '../../../../../../../../test/fixtures/markdownExtension.js';
+import { ensureNoStylesAreLeakedInTestSuite } from '../../../../../../../../test/unit/documentStyles.js';
 import { Emitter, Event } from '../../../../../../base/common/event.js';
 import { DeferredPromise } from '../../../../../../base/common/async.js';
 import type { IMarkdownString } from '../../../../../../base/common/htmlContent.js';
@@ -58,6 +59,7 @@ function fragmentContents(element: HTMLElement): string {
 }
 
 suite('Shared chat Markdown rendering', () => {
+	ensureNoStylesAreLeakedInTestSuite();
 	ensureNoDisposablesAreLeakedInTestSuite();
 	suiteSetup(async function () { this.timeout(600000); math = await startMarkdownMathExtension(); });
 	suiteTeardown(async () => { await math?.dispose(); });

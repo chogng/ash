@@ -9,8 +9,10 @@ import { getSingletonServiceDescriptors } from '../../../instantiation/common/ex
 import { ServiceCollection } from '../../../instantiation/common/serviceCollection.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { IMarkdownRendererService, MarkdownRendererService, openLinkFromMarkdown } from '../../browser/markdownRenderer.js';
+import { ensureNoStylesAreLeakedInTestSuite } from '../../../../../../test/unit/documentStyles.js';
 
 suite('Markdown renderer service', () => {
+	ensureNoStylesAreLeakedInTestSuite();
 	ensureNoDisposablesAreLeakedInTestSuite();
 
 	function createServices(open: IOpenerService['open']): InstantiationService {

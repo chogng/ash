@@ -1,4 +1,23 @@
 import { expect, test } from '@playwright/test';
+import { trackDocumentStyles } from './documentStyles.js';
+
+test('Markdown chat code editor disposal restores document styles', async ({ page }) => {
+	await page.goto('/markdown.html');
+	await expect(page.locator('#default .ash-markdown')).toBeVisible();
+	await using styles = await trackDocumentStyles(page.locator('html'));
+	try {
+		for (let version = 1; version <= 3; version++) {
+			await page.evaluate(version => window.ashMarkdownIntegration.streamChat(`\x60\x60\x60typescript\nconst value = ${version};\n\x60\x60\x60`, true), version);
+			await expect(page.locator('#service-chat .stanza-editor')).toHaveCount(1);
+			await page.evaluate(() => window.ashMarkdownIntegration.streamChat('Plain text', true));
+			await expect(page.locator('#service-chat .stanza-editor')).toHaveCount(0);
+			await styles.assertUnchanged();
+		}
+	} finally {
+		await page.evaluate(() => window.ashMarkdownIntegration.dispose());
+	}
+	await styles.assertUnchanged();
+});
 
 test('Markdown service preserves chat code editors, text selection and focus during streaming', async ({ page }) => {
 	const errors: string[] = [];
