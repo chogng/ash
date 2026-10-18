@@ -202,7 +202,9 @@ Ash 的 `SessionsProvidersService` 现已接入独立 SSH Provider，Automation 
 - `just test ash-app-server --test mcp_restart` 和 `just test-processes ash-app-server --test mcp_restart --profile ci-test --locked` 各 1 项通过。回归接入 Desktop runtime acceptance 的 Windows/macOS matrix，远端 CI 尚未执行。
 - `just rust-warnings ash-app-server --profile ci-test` 全目标检查通过；`just test-python scripts` 执行 196 项、跳过 1 项，其余通过。
 
-命令、日志与文件哈希记录于 `.build/agenthost-evidence/recheck-20261018/validation.json`。真实账号、跨平台、系统休眠、长周期／TUI 与旧隔离故障复现仍未完成，详见根 TODO；不据此宣称整体验收通过。
+命令、日志与文件哈希记录于 `.build/agenthost-evidence/recheck-20261018/validation.json`。真实账号、跨平台、系统休眠、TUI 与旧隔离故障复现仍未完成，详见根 TODO；不据此宣称整体验收通过。
+
+2026-10-18 本机补验 B2 GUI 长周期：先在隔离 HOME、OS 拒绝出站网络的环境验证已安装 `codex-cli 0.163.0-alpha.10.2` 的缓存身份与 schema，再用真实 Rust observer 和认证 Web App Server 驱动已打开的 Code／Cowork picker。正常五分钟调度的 metadata 更新和下一周期 invalidResponse 均通过，目录重读、账号范围不变、手动选择／Code Auto、推理级别及失败保留断言全部成立；完整 smoke 为 1 passed（10.2m），日志 `.build/todo-subscription-browser-final.log`。Electron 字节流 observer 现按端口处理 UTF-8／换行分片；headless Browser 的合成 key 通过产品确认切换到隔离 profile 的文件存储。该结果使用合成账号与版本校验的本地缓存，不代表真实外部账号或 TUI 验收。此前桌面交互干扰和 Browser 启动／存储失败证据单独保留。
 
 ### 2026-10-08 后续凭证范围修复
 

@@ -26,6 +26,24 @@ interface ModelTraffic {
 // Every recorded connection belongs to this scenario's isolated profile.
 function observeModels(): void {
 	const watched = new Map<EventTarget, { methods: Map<string | number, string>; incoming: EventListener; }>();
+	// Electron carries a newline-delimited UTF-8 byte stream. A MessagePort
+	// delivery may split a JSON frame or a multibyte character, unlike WebSocket.
+	const frameReader = (): ((value: unknown) => string[]) => {
+		const decoder = new TextDecoder();
+		let pending = '';
+		return value => {
+			if (typeof value === 'string') return [value];
+			if (!value || typeof value !== 'object') return [];
+			const envelope = value as { frame?: unknown; data?: unknown; };
+			if (typeof envelope.frame === 'string') return [envelope.frame];
+			if (!(envelope.data instanceof Uint8Array)) return [];
+			pending += decoder.decode(envelope.data, { stream: true });
+			const frames = pending.split('\n');
+			pending = frames.pop()!;
+			return frames.filter(frame => frame.trim().length > 0);
+		};
+	};
+	const outgoingReaders = new WeakMap<MessagePort, ReturnType<typeof frameReader>>();
 	const send = WebSocket.prototype.send;
 	const post = MessagePort.prototype.postMessage;
 	const traffic: ModelTraffic = {
@@ -42,14 +60,15 @@ function observeModels(): void {
 		if (!channel) {
 			// Request IDs are local to one socket or port, including the fixture connection.
 			const methods = new Map<string | number, string>();
+			const read = frameReader();
 			const incoming = ((event: MessageEvent): void => {
-				const frame = typeof event.data === 'string' ? event.data : event.data?.frame;
-				if (typeof frame !== 'string') return;
-				const message = JSON.parse(frame);
-				if (methods.get(message.id) === 'session/catalog/read' && message.result?.session) {
-					traffic.catalogReplies.push({ sessionId: message.result.session.sessionId, model: message.result.session.model });
+				for (const frame of read(event.data)) {
+					const message = JSON.parse(frame);
+					if (methods.get(message.id) === 'session/catalog/read' && message.result?.session) {
+						traffic.catalogReplies.push({ sessionId: message.result.session.sessionId, model: message.result.session.model });
+					}
+					if (message.id !== undefined && !message.method) methods.delete(message.id);
 				}
-				if (message.id !== undefined && !message.method) methods.delete(message.id);
 			}) as EventListener;
 			channel = { methods, incoming }; watched.set(target, channel); target.addEventListener('message', incoming);
 		}
@@ -65,7 +84,9 @@ function observeModels(): void {
 		send.call(this, data);
 	};
 	MessagePort.prototype.postMessage = function (message, options?: Transferable[] | StructuredSerializeOptions): void {
-		if (typeof message?.frame === 'string') outgoing(this, message.frame);
+		let read = outgoingReaders.get(this);
+		if (!read) { read = frameReader(); outgoingReaders.set(this, read); }
+		for (const frame of read(message)) outgoing(this, frame);
 		post.call(this, message, Array.isArray(options) ? { transfer: options } : options);
 	};
 }
@@ -110,6 +131,17 @@ for (const scenario of [
 		await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
 		let connection: Awaited<ReturnType<typeof connectProfile>> | undefined;
 		try {
+			if (target.kind === 'browser') {
+				// The isolated headless profile has no interactive system keyring. Use
+				// the supported storage choice before installing the synthetic API key.
+				await workbench.settingsEditor.openUserSettingsUI();
+				await workbench.settingsEditor.selectGroup('agents');
+				await workbench.settingsEditor.selectCategory('models');
+				await workbench.page.getByRole('button', { name: 'Use file storage', exact: true }).click();
+				await workbench.page.getByRole('button', { name: 'Use file storage', exact: true }).last().click();
+				await expect(workbench.page.getByRole('button', { name: 'Use encrypted storage', exact: true })).toBeVisible();
+				await workbench.page.keyboard.press('Escape');
+			}
 			connection = await connectProfile(application, webAppServer, testWorkspace.directory, workbench.page);
 			const { client } = connection;
 			const address = server.address();
@@ -264,19 +296,23 @@ for (const scenario of [
 /** Only writes the launcher-owned HOME; the real Codex source validates cache identity. */
 async function verifySubscriptionUpdates(application: PlaywrightApplication, web: WebLaunchResult | undefined, client: AppServerProtocolClient, source: Page, sourceChat: ReturnType<Page['locator']>, cowork: Page, coworkChat: ReturnType<Page['locator']>, profileModel: ModelRef, testInfo: TestInfo): Promise<void> {
 	const cli = '/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex';
-	expect(execFileSync(cli, ['--version'], { encoding: 'utf8' }).trim()).toBe('codex-cli 0.160.1');
+	const cliVersion = '0.163.0-alpha.10.2';
+	const cacheVersion = '0.163.0';
+	expect(execFileSync(cli, ['--version'], { encoding: 'utf8' }).trim()).toBe(`codex-cli ${cliVersion}`);
 	const home = web ? web.profileDirectory : 'evaluate' in application ? await application.evaluate(() => process.env.HOME) : undefined;
 	if (!home) throw new Error('Expected the fixture launcher-owned HOME');
 	const directory = join(home, '.codex');
 	await mkdir(directory, { recursive: true });
-	// This identity was verified against the installed CLI with outbound network
-	// denied. The version check prevents a changed cache schema from using a remote fallback.
+	// This schema and identity returned the synthetic row from the installed CLI
+	// with OS-level outbound network denial and an isolated HOME. Prereleases keep
+	// the full version in the identity header, but use its whole version for cache eligibility.
+	// Keep the exact binary guard so a new schema cannot silently fall back to discovery.
 	const digest = createHash('sha256');
 	const count = (value: number): Buffer => { const buffer = Buffer.alloc(8); buffer.writeBigUInt64LE(BigInt(value)); return buffer; };
 	for (const value of [
 		Buffer.from('models-cache-v1'), Buffer.from('OpenAI'), Buffer.from('https://chatgpt.com/backend-api/codex'), count(0), Buffer.from([1]), Buffer.from([0]),
 		Buffer.from('Some(Chatgpt)'), Buffer.from('Some("catalog-fixture-account")'), Buffer.from('Some("catalog-fixture-user")'), Buffer.from('Some("catalog-fixture@example.invalid")'),
-		Buffer.from('Some(Plus)'), Buffer.from('Some("plus")'), Buffer.from([0]), count(1), Buffer.from('version'), Buffer.from('0.160.1'),
+		Buffer.from('Some(Plus)'), Buffer.from('Some("plus")'), Buffer.from([0]), count(1), Buffer.from('version'), Buffer.from(cliVersion),
 	]) { digest.update(count(value.length)); digest.update(value); }
 	const identity = digest.digest('hex');
 	const writeCache = async (name: string, effort: 'medium' | 'high', invalid: boolean): Promise<void> => {
@@ -292,7 +328,7 @@ async function verifySubscriptionUpdates(application: PlaywrightApplication, web
 		// Atomic renewal keeps the source fresh through the real five-minute tick;
 		// metadata and account identity stay fixed while waiting for the notification.
 		const temporary = join(directory, 'models_cache.fixture.json');
-		await writeFile(temporary, JSON.stringify({ fetched_at: new Date().toISOString(), client_version: '0.160.1', identity, models: [model] }));
+		await writeFile(temporary, JSON.stringify({ fetched_at: new Date().toISOString(), client_version: cacheVersion, identity, models: [model] }));
 		await rename(temporary, join(directory, 'models_cache.json'));
 	};
 	const updates: { at: string; value: ProviderModelsUpdated; }[] = [];
@@ -423,7 +459,7 @@ async function verifySubscriptionUpdates(application: PlaywrightApplication, web
 	const final = await client.request(APP_SERVER_METHODS['config/read'], {});
 	expect({ model: final.model, gui: final.gui }).toEqual({ model: after.model, gui: config.gui });
 	expect((await client.request(APP_SERVER_METHODS['model/list'], {})).models.find(entry => entry.model.provider === 'openai' && entry.model.model === 'gpt-6.1-sol')).toEqual(metadata);
-	await attachJson(testInfo, 'subscription-model-notifications', { updates, account, accountUpdates: accountCount, cacheIdentity: identity, cliVersion: '0.160.1', beforeMetadataReads, beforeFailureReads, finalReads: await Promise.all([reads(source), reads(cowork)]) });
+	await attachJson(testInfo, 'subscription-model-notifications', { updates, account, accountUpdates: accountCount, cacheIdentity: identity, cliVersion, cacheVersion, beforeMetadataReads, beforeFailureReads, finalReads: await Promise.all([reads(source), reads(cowork)]) });
 }
 
 
