@@ -13,7 +13,7 @@ import { FileKind } from '../../../platform/files/common/files.js';
 import { NullLoggerService } from '../../../platform/log/common/log.js';
 import type { IDecorationData } from '../../services/decorations/common/decorations.js';
 import { operatingSystem, OperatingSystem } from '../../../base/common/platform.js';
-import { LabelService } from '../../../platform/label/common/labelService.js';
+import { LabelService } from '../../services/label/common/labelService.js';
 import { TestWorkspaceService } from '../../services/configuration/test/common/testServices.js';
 import { DecorationsService } from '../../services/decorations/browser/decorationsService.js';
 import { DEFAULT_LABELS_CONTAINER, IResourceLabelService, ResourceLabels, type IResourceIconRenderer } from '../../browser/labels.js';
@@ -80,13 +80,14 @@ test('ResourceLabels formats files and reacts to icon and decoration changes', (
 	assert.equal(label.element.getAttribute('aria-label'), 'main.ts, Added');
 
 
+	label.setFile(URI.file('C:/external/main.ts'));
 	using formatter = labelService.registerFormatter({
 		scheme: 'file',
-		format: candidate => `formatted:${candidate.path}`,
+		formatting: { label: 'formatted:${path}', separator: '/' },
 	});
-	assert.equal(label.element.querySelector('.ash-icon-label-description')?.textContent, 'formatted:/C:/project/src/');
+	assert.equal(label.element.querySelector('.ash-icon-label-description')?.textContent, 'formatted:/C:/external');
 	formatter.dispose();
-	assert.equal(label.element.querySelector('.ash-icon-label-description')?.textContent, 'src');
+	assert.equal(label.element.querySelector('.ash-icon-label-description')?.textContent, '/C:/external');
 
 	iconThemeChange.fire();
 	assert.equal(label.element.querySelector('.test-file-icon')?.textContent, 'T');

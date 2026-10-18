@@ -315,6 +315,7 @@ fn duplicate_source_does_not_leave_an_unowned_active_lease() {
 }
 
 #[test]
+#[cfg(unix)]
 fn explicitly_granting_a_replacement_retires_the_previous_binding() {
     let parent = tempfile::tempdir().unwrap();
     let path = parent.path().join("root");
@@ -346,4 +347,41 @@ fn explicitly_granting_a_replacement_retires_the_previous_binding() {
             .authorize(&replacement, Permission::ReadFiles)
             .is_ok()
     );
+}
+
+#[test]
+#[cfg(windows)]
+fn blocked_directory_replacement_preserves_the_existing_access_grant() {
+    let parent = tempfile::tempdir().unwrap();
+    let path = parent.path().join("root");
+    let old = parent.path().join("old");
+    std::fs::create_dir(&path).unwrap();
+    let first = Dir::open_local(&path).unwrap();
+    let previous = grant(first.clone(), file_permissions());
+    let mut access = Access::new(previous.subject().clone());
+    access
+        .add(previous.clone(), DirSource::SessionRequest)
+        .unwrap();
+    let authorization = access.authorize(&first, Permission::ReadFiles).unwrap();
+
+    let error = std::fs::rename(&path, &old).unwrap_err();
+    assert_eq!(error.raw_os_error(), Some(32)); // ERROR_SHARING_VIOLATION
+    assert!(!old.exists());
+    let reopened = Dir::open_local(&path).unwrap();
+    assert_eq!(reopened, first);
+    assert_eq!(
+        access
+            .add(
+                grant(reopened.clone(), file_permissions()),
+                DirSource::SessionRequest
+            )
+            .unwrap(),
+        Mutation::AlreadyPresent
+    );
+    assert_eq!(access.revision().get(), 1);
+    assert!(previous.is_active());
+    assert!(authorization.ensure_active().is_ok());
+    assert_eq!(access.dirs().len(), 1);
+    assert_eq!(access.find(first.env(), &path), Some(first.clone()));
+    assert!(access.authorize(&reopened, Permission::ReadFiles).is_ok());
 }

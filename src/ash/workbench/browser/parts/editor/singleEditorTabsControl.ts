@@ -9,7 +9,7 @@ import { IResourceLabelService } from "../../labels.js";
 import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
 import type { EditorGroupModel } from '../../../common/editor/editorGroupModel.js';
-import { ILabelService } from '../../../../platform/label/common/labelService.js';
+import { ILabelService } from '../../../../platform/label/common/label.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 
 /** Presents only the active editor while retaining the normal tab interactions. */

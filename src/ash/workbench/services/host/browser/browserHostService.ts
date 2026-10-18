@@ -4,7 +4,6 @@ import { IFileService, FileKind } from '../../../../platform/files/common/files.
 import { parseStoredWorkspaceFolders, toWorkspaceFolders } from '../../../../platform/workspaces/common/workspaces.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IPathService } from '../../../../platform/path/common/pathService.js';
-import { OperatingSystem } from '../../../../base/common/platform.js';
 import { localize } from '../../../../nls.js';
 import type { HTMLFileSystemProvider } from '../../../../platform/files/browser/htmlFileSystemProvider.js';
 import { workspaceFromIdentifier, type IWorkspace } from '../../../../platform/workspace/common/workspace.js';
@@ -168,8 +167,8 @@ export class BrowserHostService extends Disposable implements IHostService {
 			return;
 		}
 		const resource = target.folderUri;
-		const path = resource.authority ? `//${resource.authority}${resource.path}` : resource.path;
-		const hostPath = await this.paths.getOperatingSystem(resource) === OperatingSystem.Windows ? path.replace(/^\/(?=[a-z]:\/)/i, '').replaceAll('/', '\\') : path;
+		const hostPath = await this.paths.getHostPath(resource);
+		if (hostPath === undefined) throw new TypeError(localize('path.platformUnavailable', 'Resource path platform is unavailable'));
 		const selected = await provider.client.list(hostPath);
 		const approved = await this.dialogs.confirm({
 			title: localize({ bundle: 'ash', key: 'workbench.serverFolderAuthorizeTitle' }, 'Authorize Server Folder'),

@@ -1,3 +1,6 @@
+import { IRendererHostService } from '../../../src/ash/platform/renderer/common/rendererHost.js';
+import { ILabelService } from '../../../src/ash/platform/label/common/label.js';
+import { LabelService } from '../../../src/ash/workbench/services/label/common/labelService.js';
 import { InstantiationType } from '../../../src/ash/platform/instantiation/common/extensions.js';
 import { ITerminalEditorService, ITerminalGroupService } from '../../../src/ash/workbench/contrib/terminal/browser/terminal.js';
 import { TerminalEditorService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalEditorService.js';
@@ -183,6 +186,8 @@ const terminalProcesses: ITerminalProcessService = {
 	resize: async () => { }, close: async options => { closedTerminals.push(options.terminalId); },
 };
 const renderer = createDisconnectedRendererApi();
+services.registerInstance(IRendererHostService, { ...renderer, hasAppServer: true, appServer: { ...renderer.appServer, operatingSystem: executionOS } });
+services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
 services.registerInstance(IPathService, new BrowserPathService({ ...renderer, hasAppServer: true, appServer: { ...renderer.appServer, operatingSystem: executionOS } }, workspace));
 services.registerInstance(IWorkspaceContextService, workspace);
 services.registerInstance(IConfigurationService, configuration);

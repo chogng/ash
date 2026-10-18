@@ -191,7 +191,8 @@ import type { DialogService } from "../services/dialogs/common/dialogService.js"
 import { WorkbenchContextKeysHandler } from './contextkeys.js';
 import { WorkbenchThemeService } from "../services/themes/browser/workbenchThemeService.js";
 import { IResourceIconRenderer, IResourceLabelService, ResourceLabelService } from "./labels.js";
-import { ILabelService, LabelService } from "../../platform/label/common/labelService.js";
+import { ILabelService } from "../../platform/label/common/label.js";
+import "../services/label/common/labelService.js";
 import { WorkbenchLayout, type WorkbenchDefaultLayout } from "./layout.js";
 import { IWorkbenchLayoutService, type WorkbenchPartId } from "../services/layout/browser/layoutService.js";
 import type { BrowserStorageServiceOptions } from "../services/storage/browser/storageService.js";
@@ -678,8 +679,7 @@ export class Workbench extends Disposable {
 				workspaceRoot: () => services.get(IWorkspaceContextService).getWorkspace().folders[0]?.uri,
 			}, () => services.get(IDialogService)));
 		}
-		const labelService = this._register(services.createInstance(LabelService));
-		services.registerInstance(ILabelService, labelService);
+		const labelService = services.get(ILabelService);
 		services.registerInstance(IDecorationsService, this._register(services.createInstance(DecorationsService, workbenchRoot.ownerDocument)));
 		services.registerInstance(ServerEventApiId, api.events);
 		services.registerInstance(IWorkspaceTrustApi, api.workspaceTrust);

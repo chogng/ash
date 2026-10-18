@@ -1,5 +1,29 @@
 import { expect, test } from '@playwright/test';
 
+for (const scenario of [
+	{ name: 'Windows relative', rootUri: 'file:///C:/work', os: 'windows', failure: 'src\\lib.rs', expected: 'file:///C:/work/src/lib.rs' },
+	{ name: 'Windows verbatim absolute', rootUri: 'file:///C:/work', os: 'windows', failure: '\\\\?\\D:\\other\\lib.rs', expected: 'file:///D:/other/lib.rs' },
+	{ name: 'Windows UNC absolute', rootUri: 'file:///C:/work', os: 'windows', failure: '\\\\build\\share\\lib.rs', expected: 'file://build/share/lib.rs' },
+	{ name: 'Windows remote from Mac', remote: 'windows', root: 'C:/work', failure: 'D:\\other\\lib.rs', expected: 'ash-remote://ssh+windows/D%3A/other/lib.rs' },
+	{ name: 'UNC remote from Mac', remote: 'windows', root: '//build/share/work', failure: '..\\lib.rs', expected: 'ash-remote://ssh+windows//build/share/lib.rs' },
+	{ name: 'POSIX remote from Windows', remote: 'linux', root: '/work', os: 'windows', failure: 'part\\name #1.rs ', expected: 'ash-remote://ssh+linux/work/part%5Cname%20%231.rs%20' },
+]) {
+	test(`failure navigation preserves ${scenario.name} resource ownership`, async ({ page }) => {
+		const query = new URLSearchParams(Object.entries(scenario).filter(([key]) => key !== 'name' && key !== 'expected'));
+		await page.goto('/testing.html?' + query);
+		const tree = page.getByRole('tree', { name: 'Tests' });
+		await expect(tree).toContainText('checks::fails');
+		await tree.getByRole('treeitem').filter({ has: page.locator('.ash-testing-row', { hasText: 'checks::fails' }) }).click();
+		await page.getByRole('button', { name: 'Run Selected', exact: true }).click();
+		await expect(page.getByRole('status')).toContainText('1 failed');
+		const openedBefore = await page.evaluate(() => window.ashTestingIntegration.opened.length);
+		const open = page.getByRole('button', { name: 'Open Failure Location', exact: true });
+		await open.focus();
+		await open.press('Enter');
+		await expect.poll(() => page.evaluate(before => window.ashTestingIntegration.opened.slice(before).map(({ uri, line }) => ({ uri, line })), openedBefore)).toEqual([{ uri: scenario.expected, line: 4 }]);
+	});
+}
+
 test('Testing keeps its tree and script controls reachable at the pane minimum', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
@@ -40,7 +64,7 @@ test('test tree runs exact selection, reports failures and keeps script tasks se
 	expect(await page.evaluate(() => window.ashTestingIntegration.runs())).toEqual([['fixture:lib:fixture:checks::fails']]);
 	await expect(page.getByRole('region', { name: 'Test result' })).toContainText('fixture failure');
 	await page.getByRole('button', { name: 'Open Failure Location', exact: true }).click();
-	expect(await page.evaluate(() => window.ashTestingIntegration.opened)).toContainEqual({ path: '/workspace/src/lib.rs', line: 4 });
+	expect(await page.evaluate(() => window.ashTestingIntegration.opened)).toContainEqual({ path: '/workspace/src/lib.rs', line: 4, uri: 'file:///workspace/src/lib.rs' });
 	await page.getByRole('button', { name: 'Rerun Failed', exact: true }).click();
 	await expect.poll(() => page.evaluate(() => window.ashTestingIntegration.runs().length)).toBe(2);
 	await expect(page.getByRole('button', { name: 'Run All Tests', exact: true })).toBeEnabled();

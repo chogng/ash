@@ -1,7 +1,6 @@
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { basename, dirname, extUri } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
-import { OperatingSystem } from '../../../../base/common/platform.js';
 import { localize } from '../../../../nls.js';
 import {
 	DialogSeverity,
@@ -302,13 +301,7 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 		let path = '';
 		const initial = options.defaultUri ?? (this.paths.resolvedUserHome ? await this.paths.userHome() : undefined);
 		if (initial) {
-			const os = await this.paths.getOperatingSystem(initial);
-			if (os !== undefined) {
-				path = initial.authority ? `//${initial.authority}${initial.path}` : initial.path;
-				if (os === OperatingSystem.Windows) {
-					path = path.replace(/^\/(?=[a-z]:\/)/i, '').replaceAll('/', '\\');
-				}
-			}
+			path = await this.paths.getHostPath(initial) ?? '';
 		}
 		const selected = new Set<string>();
 		for (; ;) {

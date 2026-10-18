@@ -86,8 +86,12 @@ export function isRemoteResource(resource: URI): boolean {
 /** Normalizes Windows separators while preserving literal POSIX backslashes. */
 export function normalizeRemoteWorkspacePath(path: string): string {
 	if (/[\x00-\x1f\x7f-\x9f]/u.test(path)) throw new Error("Remote workspace path contains control characters");
+	if (/^\\\\[?.]\\UNC\\/i.test(path)) path = '\\\\' + path.slice(8);
+	else if (/^\\\\[?.]\\[a-z]:[\\/]/i.test(path)) path = path.slice(4);
 	if (isWindowsRemotePath(path)) {
 		let normalized = path.replaceAll("\\", "/");
+		// The URI contract spells a UNC share root without a trailing separator.
+		if (/^\/\/[^/]+\/[^/]+\/$/.test(normalized)) normalized = normalized.slice(0, -1);
 		const drive = /^[a-zA-Z]:/u.test(normalized);
 		if (drive) normalized = normalized[0]!.toUpperCase() + normalized.slice(1);
 		const rest = normalized.slice(drive ? 3 : 2);
@@ -95,7 +99,8 @@ export function normalizeRemoteWorkspacePath(path: string): string {
 		if (!(drive && rest.length === 0) && rest.split("/").some(segment => !segment || /[. ]$/u.test(segment) || /[<>:"|?*]/u.test(segment) || /^(?:CON|PRN|AUX|NUL|CONIN\$|CONOUT\$|COM[1-9¹²³]|LPT[1-9¹²³])[ ]*(?:\.|$)/iu.test(segment))) throw new Error("Remote workspace path must be canonical");
 		return normalized;
 	}
-	const normalized = path.trim();
+	// This is a filesystem identity, including legitimate spaces in the final POSIX name.
+	const normalized = path;
 	if (!normalized || !normalized.startsWith("/")) {
 		throw new Error("Remote workspace path must be absolute");
 	}

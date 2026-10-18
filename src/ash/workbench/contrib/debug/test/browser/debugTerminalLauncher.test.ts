@@ -1,3 +1,5 @@
+import { ILabelService } from '../../../../../platform/label/common/label.js';
+import { LabelService } from '../../../../services/label/common/labelService.js';
 import { registerTestTerminalCreationServices } from '../../../../test/browser/workbenchTestServices.js';
 import { MergedEnvironmentVariableCollection } from '../../../../../platform/terminal/common/environmentVariableCollection.js';
 import { IEnvironmentVariableService } from '../../../terminal/common/environmentVariable.js';
@@ -307,7 +309,7 @@ async function launchWithTerminalRequest(terminals: ITerminalService, argumentsV
 	const services = resources.add(new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, options.configuration ?? new SyncDescriptor(WorkbenchConfigurationService)],
 		[IFileService, new SyncDescriptor(FileService)],
 		[IUriIdentityService, new SyncDescriptor(UriIdentityService)],
-		[ITerminalProcessService, terminalProcesses], [IWorkspaceContextService, workspace], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)],
+		[ITerminalProcessService, terminalProcesses], [IWorkspaceContextService, workspace], [ILabelService, new SyncDescriptor(LabelService)], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)],
 		[IStorageService, storage],
 		[IDebugAdapterProcessService, processes],
 		[ITerminalService, terminals],

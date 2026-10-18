@@ -6,7 +6,7 @@ import { Emitter, Event } from '../../../../base/common/event.js';
 import { URI } from '../../../../base/common/uri.js';
 import { operatingSystem, OperatingSystem } from '../../../../base/common/platform.js';
 import { WorkbenchState, type IWorkspaceContextService } from '../../../workspace/common/workspace.js';
-import { LabelService } from '../../common/labelService.js';
+import { LabelService } from '../../../../workbench/services/label/common/labelService.js';
 
 test('LabelService formats workspace paths and invalidates registered formatters', () => {
 	const root = URI.file('/workspace');
@@ -24,16 +24,17 @@ test('LabelService formats workspace paths and invalidates registered formatters
 
 	assert.equal(labels.getUriLabel(resource, { relative: true }), 'src/main.ts');
 	assert.equal(labels.getUriBasenameLabel(resource), 'main.ts');
-	assert.equal(labels.getSeparator(resource), '/');
+	assert.equal(labels.getSeparator(resource.scheme, resource.authority), '/');
 
 	const changes: string[] = [];
 	using listener = labels.onDidChangeFormatters(event => changes.push(event.scheme));
 	using formatter = labels.registerFormatter({
 		scheme: 'file',
-		priority: 10,
-		format: candidate => `formatted:${candidate.path}`,
+		priority: true,
+		formatting: { label: 'formatted:${path}', separator: '/' },
 	});
 	assert.equal(labels.getUriLabel(resource), 'formatted:/workspace/src/main.ts');
+	assert.equal(labels.getUriLabel(resource, { relative: true }), 'src/main.ts');
 	assert.deepEqual(changes, ['file']);
 	formatter.dispose();
 	assert.equal(labels.getUriLabel(resource, { relative: true }), 'src/main.ts');
@@ -90,6 +91,7 @@ test('LabelService reads connection home for each label and invalidates labels o
 	using labels = new LabelService(workspace, new BrowserPathService(host, workspace), host);
 	const resource = URI.parse('file:///home/remote/notes.txt');
 	const values = [labels.getUriLabel(resource)];
+	assert.equal(labels.getUriLabel(resource, { noPrefix: true }), '/home/remote/notes.txt');
 	let invalidations = 0;
 	using listener = labels.onDidChangeFormatters(() => invalidations++);
 	home = '/home/other';
@@ -106,4 +108,23 @@ test('LabelService reads connection home for each label and invalidates labels o
 	assert.deepEqual({ values, invalidations }, { values: ['~/notes.txt', '/home/remote/notes.txt', 'C:\\Users\\remote\\notes.txt', '/home/remote/notes.txt'], invalidations: 3 });
 	labels.dispose();
 	assert.equal(changes.hasListeners(), false);
+});
+
+test('LabelService formats remote drive and UNC paths independently of the App Server OS', () => {
+	const root = URI.parse('ash-remote://ssh+build/C%3A/work');
+	const workspace = {
+		onDidChangeWorkspace: Event.None, onDidChangeWorkspaceFolders: Event.None,
+		onDidChangeWorkbenchState: Event.None, onDidChangeWorkspaceName: Event.None,
+		getWorkspace: () => ({ id: 'remote-labels', folders: [{ id: 'root', uri: root, name: 'work', index: 0 }] }),
+		getWorkbenchState: () => WorkbenchState.FOLDER, getWorkspaceFolder: () => null,
+	};
+	using labels = createTestLabelService(workspace, OperatingSystem.Macintosh);
+	assert.equal(labels.getUriLabel(root, { noPrefix: true }), 'C:\\work');
+	assert.equal(labels.getSeparator(root.scheme, root.authority), '\\');
+	assert.equal(labels.getUriLabel(URI.parse('ash-remote://ssh+build//server/share/file.ts')), '\\\\server\\share\\file.ts');
+	assert.equal(labels.getUriLabel(URI.parse('ash-remote://ssh+posix/work/part%5Cname.ts%20')), '/work/part\\name.ts ');
+	using formatter = labels.registerFormatter({ scheme: 'virtual', formatting: { label: '${path}/END', separator: '\\', normalizeDriveLetter: true } });
+	const virtual = URI.parse('virtual:/c:/code/main.ts');
+	assert.equal(labels.getUriLabel(virtual), 'C:\\code\\main.ts\\END');
+	assert.equal(labels.getUriBasenameLabel(virtual), 'END');
 });

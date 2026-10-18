@@ -3,6 +3,9 @@ import { createHash } from 'node:crypto';
 import { ExtensionResourceLoaderService } from '../../../../../platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import { TestExtensionService } from '../../../../test/common/testExtensionServices.js';
 import { IExtensionService } from '../../../extensions/common/extensionService.js';
+import { IEditorService } from '../../../editor/common/editorService.js';
+import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
+import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
 import { ConfigurationResolverExpression } from '../../common/configurationResolverExpression.js';
 import { SyncDescriptor } from '../../../../../platform/instantiation/common/descriptors.js';
 import { OperatingSystem } from '../../../../../base/common/platform.js';
@@ -47,6 +50,29 @@ function testRendererHost(os = OperatingSystem.Linux): IRendererHost {
 }
 
 suite('ConfigurationResolverService', () => {
+	for (const { root, os, child, file, relative } of [
+		{ root: URI.parse('file:///C:/work'), os: OperatingSystem.Windows, child: 'src/main.ts', file: 'C:\\work\\src\\main.ts', relative: 'src\\main.ts' },
+		{ root: URI.parse('file:///C:/work'), os: OperatingSystem.Linux, child: 'part\\name.ts ', file: '/C:/work/part\\name.ts ', relative: 'part\\name.ts ' },
+		{ root: createSshRemoteWorkspaceUri('windows', '//build/share/work'), os: OperatingSystem.Macintosh, child: 'src/main.ts', file: '\\\\build\\share\\work\\src\\main.ts', relative: 'src\\main.ts' },
+		{ root: createSshRemoteWorkspaceUri('posix', '/home/execution/work'), os: OperatingSystem.Windows, child: 'part\\name.ts ', file: '/home/execution/work/part\\name.ts ', relative: 'part\\name.ts ' },
+	]) {
+		test(`editor path variables follow the Label owner and target path rules for ${root}`, async () => {
+			using workspace = new TestWorkspaceService({ id: 'editor-paths', uri: root });
+			using services = new InstantiationService(new ServiceCollection(...getSingletonServiceDescriptors(),
+				[IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, testRendererHost(os)],
+				[IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], [IWorkspaceContextService, workspace],
+				[ITerminalProcessService, { getEnvironment: async () => ({}) }],
+			));
+			services.registerSingleton(ICommandService, () => new CommandService(services));
+			services.registerInstance(IEditorService, { ...emptyEditorServiceState, activeEditor: { resource: root.withEncodedPath(root.toEncodedComponents().path + '/' + child.split('/').map(encodeURIComponent).join('/')) } } as unknown as IEditorService);
+			services.registerInstance(ICodeEditorService, { getActiveCodeEditor: () => undefined } as unknown as ICodeEditorService);
+			const resolver = services.get(IConfigurationResolverService);
+			assert.deepEqual(await resolver.resolveAsync(workspace.getWorkspace().folders[0], ['${file}', '${relativeFile}', '${relativeFileDirname}', '${fileDirname}']), [
+				file, relative, child.includes('/') ? 'src' : '.', child.includes('/') ? file.slice(0, -8) : file.slice(0, -child.length - 1),
+			]);
+		});
+	}
+
 	test('named environment lookup retains a single Session directory grant', async () => {
 		const scope = 'session:thread%3Aone:%2Fsession-workspace';
 		using workspace = new TestWorkspaceService({ id: 'session', folders: [{ id: scope, uri: URI.file('/session-workspace'), name: 'session', index: 0 }] });

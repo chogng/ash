@@ -9,6 +9,9 @@ test('Windows drive and UNC workspaces round-trip independently of the client OS
 		['c:\\Users\\开发者\\Ash project', 'C:/Users/开发者/Ash project'],
 		['\\\\server\\share\\project', '//server/share/project'],
 		['C:/', 'C:/'],
+		['\\\\?\\C:\\work\\file.ts', 'C:/work/file.ts'],
+		['\\\\?\\UNC\\server\\share\\file.ts', '//server/share/file.ts'],
+		['\\\\server\\share\\', '//server/share'],
 	]) {
 		const uri = createSshRemoteWorkspaceUri('windows-dev', input!);
 		assert.equal(getRemoteWorkspacePath(uri), expected);
@@ -24,6 +27,13 @@ test("Remote Workspace URIs preserve legal POSIX backslashes", () => {
 
 	assert.equal(resource.toString(), "ash-remote://ssh+build-linux/srv/project%5Carchive");
 	assert.equal(getRemoteWorkspacePath(resource), "/srv/project\\archive");
+});
+
+test('Remote POSIX resource names preserve trailing spaces across adapter round trips', () => {
+	const owner = createSshRemoteWorkspaceUri('build-linux', '/srv/project');
+	const resource = withRemoteWorkspacePath(owner, '/srv/project/part\\name #1.rs ');
+	assert.equal(resource.toString(), 'ash-remote://ssh+build-linux/srv/project/part%5Cname%20%231.rs%20');
+	assert.equal(getRemoteWorkspacePath(resource), '/srv/project/part\\name #1.rs ');
 });
 
 test('adapter paths retain Remote ownership and canonical Windows drive spelling', () => {

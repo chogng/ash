@@ -4,7 +4,7 @@ import { Range } from '../../../../editor/common/core/range.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import { ILabelService } from '../../../../platform/label/common/labelService.js';
+import { ILabelService } from '../../../../platform/label/common/label.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { localize2 } from '../../../../nls.js';

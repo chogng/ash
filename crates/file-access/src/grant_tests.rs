@@ -1,6 +1,91 @@
 use super::*;
 
 #[test]
+fn observed_read_paths_require_existing_containment_policy_and_a_live_read_proof() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = Dir::open_local(directory.path()).unwrap();
+    let allowed = root.canonical_path().join("lib.rs");
+    let denied = root.canonical_path().join(".env");
+    std::fs::write(&allowed, "code").unwrap();
+    std::fs::write(&denied, "private").unwrap();
+    let grant = Grant::for_environment(
+        root.clone(),
+        GrantSource::ExplicitUser,
+        Permissions::new([Permission::ReadFiles, Permission::WriteFiles]),
+    )
+    .with_path_policy(
+        crate::PathAccessPolicy::new(
+            crate::PathAccess::ReadOnly,
+            vec![crate::PathAccessRule {
+                pattern: ".env".into(),
+                access: crate::PathAccess::Denied,
+            }],
+        )
+        .unwrap(),
+    );
+    let read = grant.authorize(Permission::ReadFiles).unwrap();
+    let outside = tempfile::NamedTempFile::new().unwrap();
+    assert!(read.allows_read_path(&allowed));
+    // On Windows std canonicalization supplies the verbatim spelling; both must work.
+    assert!(read.allows_read_path(allowed.canonicalize().unwrap()));
+    for path in [
+        &denied,
+        &denied.canonicalize().unwrap(),
+        outside.path(),
+        &root.canonical_path().join("missing.rs"),
+    ] {
+        assert!(!read.allows_read_path(path), "{path:?}");
+    }
+    assert!(!read.allows_read_path("lib.rs"));
+    assert!(
+        !grant
+            .authorize(Permission::WriteFiles)
+            .unwrap()
+            .allows_read_path(&allowed)
+    );
+    grant.revoke();
+    assert!(!read.allows_read_path(allowed));
+}
+
+#[test]
+#[cfg(unix)]
+fn observed_read_paths_check_symlink_names_and_targets() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = Dir::open_local(directory.path()).unwrap();
+    let allowed = root.canonical_path().join("lib.rs");
+    let denied = root.canonical_path().join(".env");
+    std::fs::write(&allowed, "code").unwrap();
+    std::fs::write(&denied, "private").unwrap();
+    let denied_name = root.canonical_path().join("secret");
+    let denied_target = root.canonical_path().join("alias.rs");
+    let escaped = root.canonical_path().join("outside.rs");
+    let outside = tempfile::NamedTempFile::new().unwrap();
+    std::os::unix::fs::symlink(&allowed, &denied_name).unwrap();
+    std::os::unix::fs::symlink(&denied, &denied_target).unwrap();
+    std::os::unix::fs::symlink(outside.path(), &escaped).unwrap();
+    let grant = Grant::for_environment(
+        root,
+        GrantSource::ExplicitUser,
+        Permissions::new([Permission::ReadFiles]),
+    )
+    .with_path_policy(
+        crate::PathAccessPolicy::new(
+            crate::PathAccess::ReadOnly,
+            vec![crate::PathAccessRule {
+                pattern: "{.env,secret}".into(),
+                access: crate::PathAccess::Denied,
+            }],
+        )
+        .unwrap(),
+    );
+    let read = grant.authorize(Permission::ReadFiles).unwrap();
+    assert!(read.allows_read_path(allowed));
+    for path in [denied_name, denied_target, escaped] {
+        assert!(!read.allows_read_path(&path), "{path:?}");
+    }
+}
+
+#[test]
 fn grant_issues_only_explicit_permissions() {
     let directory = tempfile::tempdir().unwrap();
     let dir = Dir::open_local(directory.path()).unwrap();

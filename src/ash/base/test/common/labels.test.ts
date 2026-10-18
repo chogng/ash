@@ -29,7 +29,7 @@ test('absolute path labels normalize Windows drive letters without changing URI 
 		getPathLabel(resource, { os: OperatingSystem.Linux }),
 		getPathLabel(networkResource, { os: OperatingSystem.Windows }),
 		resource.path,
-	], ['E:\\workspace\\a.ts', 'e:/workspace/a.ts', 'e:/workspace/a.ts', '\\\\build-host\\e:\\workspace\\a.ts', '/e:/workspace/a.ts']);
+	], ['E:\\workspace\\a.ts', '/e:/workspace/a.ts', '/e:/workspace/a.ts', '\\\\build-host\\e:\\workspace\\a.ts', '/e:/workspace/a.ts']);
 });
 
 test('tildify is case-sensitive on Linux and case-insensitive on macOS', () => {

@@ -1,3 +1,6 @@
+import { TerminalLinkResolver } from './terminalLinkResolver.js';
+import { isWindowsRemotePath } from '../../../../../platform/remote/common/remote.js';
+import { ITerminalProcessService } from '../../../../../platform/terminal/common/terminal.js';
 import type { IBuffer, IBufferRange, ILink, IViewportRange } from '@xterm/xterm';
 import { onUnexpectedError } from '../../../../../base/common/errors.js';
 import { timeout } from '../../../../../base/common/async.js';
@@ -7,13 +10,12 @@ import { URI } from '../../../../../base/common/uri.js';
 import { localize } from '../../../../../nls.js';
 import { Range } from '../../../../../editor/common/core/range.js';
 import { computeLinks } from '../../../../../editor/common/languages/linkComputer.js';
-import { IFileService } from '../../../../../platform/files/common/files.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IPathService } from '../../../../../platform/path/common/pathService.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
-import { IWorkspaceContextService, type IWorkspaceFolder } from '../../../../../platform/workspace/common/workspace.js';
+import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { TerminalCapability } from '../../../../../platform/terminal/common/capabilities/capabilities.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import type { ITerminalContribution, ITerminalInstance, IXtermTerminal } from '../../../terminal/browser/terminal.js';
@@ -34,6 +36,7 @@ interface LinkCandidate extends IQuickPickItem {
 export class TerminalLinkContribution extends Disposable implements ITerminalContribution {
 	static readonly ID = 'terminal.link';
 	private screen: IXtermTerminal | undefined;
+	private readonly resolver: TerminalLinkResolver;
 	private generation = 0;
 	private readonly hover = this._register(new MutableDisposable());
 	private readonly picker = this._register(new MutableDisposable<DisposableStore>());
@@ -44,7 +47,7 @@ export class TerminalLinkContribution extends Disposable implements ITerminalCon
 
 	constructor(
 		private readonly context: ITerminalContributionContext,
-		@IFileService private readonly files: IFileService,
+		@ITerminalProcessService private readonly processes: ITerminalProcessService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@IEditorService private readonly editors: IEditorService,
 		@IOpenerService private readonly opener: IOpenerService,
@@ -55,6 +58,7 @@ export class TerminalLinkContribution extends Disposable implements ITerminalCon
 		@ITerminalConfigurationService private readonly configuration: ITerminalConfigurationService,
 	) {
 		super();
+		this.resolver = instantiation.createInstance(TerminalLinkResolver);
 		const invalidate = (): void => { this.generation++; this.hover.clear(); this.picker.clear(); };
 		this._register(context.instance.onDidChangeState(invalidate));
 		this._register(workspace.onDidChangeWorkspace(invalidate));
@@ -164,7 +168,7 @@ export class TerminalLinkContribution extends Disposable implements ITerminalCon
 			return a && b ? { start: { x: a.x, y: a.y }, end: { x: b.x + b.width - 1, y: b.y } } : undefined;
 		};
 		const result: LinkCandidate[] = [];
-		for (const file of detectLinks(text, /^[A-Za-z]:[\\/]/u.test(this.context.instance.initialCwd) ? OperatingSystem.Windows : OperatingSystem.Linux)) {
+		for (const file of detectLinks(text, isWindowsRemotePath(this.context.instance.initialCwd) ? OperatingSystem.Windows : OperatingSystem.Linux)) {
 			const end = file.suffix ? file.suffix.suffix.index + file.suffix.suffix.text.length : file.path.index + file.path.text.length;
 			const bufferRange = mode === 'picker' ? undefined : range(file.path.index, end);
 			const cwd = this.context.instance.capabilities?.get(TerminalCapability.CommandDetection)?.getCwdForLine(first)
@@ -187,31 +191,24 @@ export class TerminalLinkContribution extends Disposable implements ITerminalCon
 		const instance = this.context.instance;
 		const folder = this.workspace.getWorkspace().folders.find(folder => folder.id === instance.dirId);
 		if (!folder) return undefined;
-		const cwd = candidate.cwd ?? instance.initialCwd;
-		const resource = await this.fileResource(path, cwd, folder);
-		if (!resource) return undefined;
-		try { return (await this.files.stat(resource)).kind === 'file' ? resource : undefined; }
-		catch { return undefined; }
-	}
-
-	private async fileResource(path: string, cwd: string, folder: IWorkspaceFolder): Promise<URI | undefined> {
-		if (path.startsWith('file://')) {
+		const rules = await this.paths.getPath(folder.uri);
+		if (!rules) return undefined;
+		const windows = rules.sep === '\\';
+		let userHome: string | undefined;
+		if (path.startsWith('~/') || windows && path.startsWith('~\\')) {
+			// Resolve home through the selected directory's execution grant, not the ambient App Server.
 			try {
-				const uri = URI.parse(path);
-				if (uri.query || uri.fragment) return undefined;
-				return folder.uri.scheme === 'file' ? uri : folder.uri.with({ path: uri.path });
+				const environment = await this.processes.getEnvironment([windows ? 'USERPROFILE' : 'HOME'], instance.dirId);
+				userHome = environment[windows ? 'USERPROFILE' : 'HOME'];
 			} catch { return undefined; }
 		}
-		const paths = await this.paths.getPath(folder.uri);
-		if (!paths) return undefined;
-		if (/^~[\\/]/u.test(path)) {
-			const home = this.paths.resolvedUserHome;
-			if (!home) return undefined;
-			path = `${home.path}${paths.sep}${path.slice(2)}`;
-			if (paths.sep === '\\') path = path.replace(/^\/(?=[A-Za-z]:)/u, '');
-		}
-		const absolute = paths.normalize(paths.isAbsolute(path) ? path : `${cwd}${paths.sep}${path}`);
-		return folder.uri.scheme === 'file' ? this.paths.fileURI(absolute) : folder.uri.with({ path: absolute });
+		const result = await this.resolver.resolveLink({
+			initialCwd: candidate.cwd ?? instance.initialCwd,
+			os: windows ? OperatingSystem.Windows : OperatingSystem.Linux,
+			remoteAuthority: folder.uri.scheme === 'ash-remote' ? folder.uri.authority : undefined,
+			userHome,
+		}, path, path.startsWith('file://') ? URI.parse(path) : undefined);
+		return result && !result.isDirectory ? result.uri : undefined;
 	}
 
 	private async open(candidate: LinkCandidate, generation: number, processId: number): Promise<void> {

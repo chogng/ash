@@ -128,7 +128,7 @@ export class DebugService extends Disposable implements IDebugService {
 		@IAdapterManager private readonly adapters: IAdapterManager,
 		@ILogService private readonly logService: ILogService,
 		@IContextKeyService contextKeys: IContextKeyService,
-		@IInstantiationService instantiationService: IInstantiationService,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IExtensionService private readonly extensions: IExtensionService,
 		@IUriIdentityService private readonly uriIdentity: IUriIdentityService,
 		@ICommandService private readonly commands: ICommandService,
@@ -519,7 +519,6 @@ export class DebugService extends Disposable implements IDebugService {
 		const session = await DebugSession.start({
 			configuration: current, sessionOptions,
 			resolvedConfiguration: factory?.createDebugAdapterDescriptor ? { ...resolvedConfiguration, adapter: undefined } : resolvedConfiguration,
-			processService: this.processes,
 			workspace: root, breakpoints: () => this.currentBreakpoints,
 			additionalBreakpoints: () => [...this.currentFunctionBreakpoints, ...this.currentDataBreakpoints, ...this.currentInstructionBreakpoints],
 			runInTerminal: value => {
@@ -578,7 +577,7 @@ export class DebugService extends Disposable implements IDebugService {
 					return adapter;
 				} finally { this.pendingDescriptors.delete(controller); this.descriptorControllers.delete(session.id); this.descriptorOwners.delete(controller); }
 			} : undefined,
-		}).catch(async error => {
+		}, this.instantiationService).catch(async error => {
 			if (initializingSession) {
 				this.preparingSessions.delete(initializingSession.id);
 				await this.stopChildSessions(initializingSession);

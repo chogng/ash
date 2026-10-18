@@ -5,3 +5,4 @@
 - `Access::authorize` 只裁决目标目录；贡献由业务所有者持有效授权加载。
 - `Authorization::execute` 校验主体、目录和动作，并持有租约直到操作完成。撤销等待已开始操作结束，之后拒绝旧凭证。
 - `Authorization` 可复制和重复校验，不是一次性凭证。长期契约见 [环境与目录访问](../../docs/environment-access.md)。
+- `Authorization::allows_read_path` 检查 IDE 等外部观察者提供的已有文件路径；通过目录 owner 解析普通／verbatim 写法，并同时检查请求名与链接目标的读策略。它只裁决已有内容能否分享，后续文件 I/O 仍使用 `execute`。

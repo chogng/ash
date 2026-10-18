@@ -15,6 +15,8 @@ export interface IPathService {
 	getPath(resource: URI): Promise<IPath | undefined>;
 	/** Converts an absolute App Server path without applying the renderer's separator rules. */
 	fileURI(path: string): Promise<URI>;
+	/** Returns the owning host's path; virtual/browser resources or unknown host rules have no host path. */
+	getHostPath(resource: URI): Promise<string | undefined>;
 	/** Unknown schemes and browser-owned handles do not identify a host operating system. */
 	getOperatingSystem(resource: URI): Promise<OperatingSystem | undefined>;
 	hasValidBasename(resource: URI, basename?: string): Promise<boolean>;

@@ -1,3 +1,5 @@
+import { Schemas } from '../../../../base/common/network.js';
+import { withRemoteWorkspacePath } from '../../../../platform/remote/common/remote.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { h } from '../../../../base/browser/dom.js';
@@ -5,7 +7,6 @@ import { getHoverDelegate } from '../../../../base/browser/ui/hover/hoverDelegat
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { type ObjectTreeElement } from '../../../../base/browser/ui/tree/objectTreeModel.js';
 import { DisposableMap, DisposableStore, type IDisposable } from '../../../../base/common/lifecycle.js';
-import { URI } from '../../../../base/common/uri.js';
 import { listRowHeight } from '../../../../base/common/uiSizes.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { localize } from '../../../../nls.js';
@@ -13,6 +14,7 @@ import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../.
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { WorkbenchObjectTree } from '../../../../platform/list/browser/listService.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { IPathService } from '../../../../platform/path/common/pathService.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { type ITestCase, type ITestCaseResult, type ITestProfile, type ITestRun, ITestingService } from '../../../services/testing/common/testingService.js';
 import { ITerminalService } from '../../terminal/browser/terminal.js';
@@ -59,6 +61,7 @@ export class TestingViewPane extends ViewPane {
 		@IConfigurationService configuration: IConfigurationService,
 		@IAccessibleViewService accessibleView: IAccessibleViewService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
+		@IPathService private readonly paths: IPathService,
 	) {
 		super(container, options);
 		const document = container.ownerDocument;
@@ -251,15 +254,23 @@ export class TestingViewPane extends ViewPane {
 		}
 	}
 
-	private openSelectedFailure(): Promise<void> {
+	private async openSelectedFailure(): Promise<void> {
 		const test = this.selected[0]?.test;
 		const result = test ? this.resultsByKey.get(test.key) : undefined;
-		if (!test || !result?.failurePath || !result.failureLine) { return Promise.resolve(); }
-		const folder = this.workspace.getWorkspace().folders.find(folder => folder.id === test.dirId)!;
-		const failure = result.failurePath;
-		const absolute = /^(?:\/|[A-Za-z]:[\\/]|\\\\)/.test(failure);
-		const path = absolute ? URI.file(failure).path : folder.uri.path.replace(/\/$/, '') + '/' + failure.replaceAll('\\', '/');
-		return this.editors.openEditor({ resource: URI.from({ scheme: folder.uri.scheme, authority: folder.uri.authority, path }) }, { selection: new Range(result.failureLine, 1, result.failureLine, 1) });
+		if (!test || !result?.failurePath || !result.failureLine) { return; }
+		const folder = this.workspace.getWorkspace().folders.find(folder => folder.id === test.dirId);
+		if (!folder) { return; }
+		const rules = await this.paths.getPath(folder.uri);
+		const base = await this.paths.getHostPath(folder.uri) ?? (folder.uri.path.startsWith('/@browser/') ? folder.uri.path : undefined);
+		if (!rules || base === undefined) { return; }
+		if (rules.sep === '\\' && /^[a-z]:(?![\\/])/i.test(result.failurePath)) { return; }
+		const resolved = rules.resolve(base, result.failurePath);
+		const resource = folder.uri.scheme === Schemas.ashRemote
+			? withRemoteWorkspacePath(folder.uri, resolved)
+			: folder.uri.path.startsWith('/@browser/') ? folder.uri.with({ path: resolved }) : await this.paths.fileURI(resolved);
+		// A workspace may be replaced while the owning host's path rules are being resolved.
+		if (this.isDisposed || !this.workspace.getWorkspace().folders.some(current => current.id === folder.id && current.uri.toString() === folder.uri.toString())) { return; }
+		return this.editors.openEditor({ resource }, { selection: new Range(result.failureLine, 1, result.failureLine, 1) });
 	}
 
 	getAccessibleContent(): string {

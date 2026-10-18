@@ -25,10 +25,10 @@ export class DebugContentProvider extends Disposable implements IWorkbenchContri
 
 	provideTextContent(resource: URI): Promise<ITextModel> {
 		this.assertNotDisposed();
-		const address = /^session=([A-Za-z0-9._-]{1,256})&ref=([1-9]\d{0,15})$/.exec(resource.query);
+		const address = /^session=([A-Za-z0-9._-]{1,256})&ref=(0|[1-9]\d{0,15})$/.exec(resource.query);
 		const sessionId = address?.[1];
 		const sourceReference = Number(address?.[2]);
-		if (resource.scheme !== 'debug' || !sessionId || !Number.isSafeInteger(sourceReference) || sourceReference < 1) {
+		if (resource.scheme !== 'debug' || !sessionId || !Number.isSafeInteger(sourceReference) || sourceReference < 0 || sourceReference === 0 && !resource.path) {
 			return Promise.reject(new TypeError(localize('debug.invalidSource', 'The debug source needs a path or a source reference and a live session.')));
 		}
 		const session = this.debug.getSession(sessionId);

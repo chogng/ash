@@ -26,7 +26,8 @@ import { LanguageService } from '../../../editor/common/services/languageService
 import { IFileTextModelService } from '../../services/textmodelResolver/common/textModelResourceService.js';
 import { BrowserTextModelService } from '../../services/textmodelResolver/browser/browserTextModelService.js';
 import { noFileIconTheme, IThemeService } from '../../../platform/theme/common/themeService.js';
-import { ILabelService, LabelService } from '../../../platform/label/common/labelService.js';
+import { ILabelService } from '../../../platform/label/common/label.js';
+import { LabelService } from '../../services/label/common/labelService.js';
 import { IUntitledTextEditorService, UntitledTextEditorService } from '../../services/untitled/common/untitledTextEditorService.js';
 import { IWorkingCopyService } from '../../services/workingCopy/common/workingCopyService.js';
 import { BrowserWorkingCopyService } from '../../services/workingCopy/browser/browserWorkingCopyService.js';

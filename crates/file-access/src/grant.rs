@@ -290,6 +290,30 @@ impl Authorization {
         self
     }
 
+    /// Checks whether an existing observed host path may contribute already-read content.
+    /// Both its requested name and resolved target must satisfy the read policy, so a symlink
+    /// cannot hide a denied name or destination. This check does not hold a lease for later I/O;
+    /// filesystem operations must still use [`Self::execute`].
+    pub fn allows_read_path(&self, path: impl AsRef<std::path::Path>) -> bool {
+        if self.permission != Permission::ReadFiles || !self.is_active() {
+            return false;
+        }
+        let Some(relative) = self.dir.project_observed_path(path) else {
+            return false;
+        };
+        if !self
+            .path_policy
+            .allows(&relative, crate::PathOperation::Read)
+        {
+            return false;
+        }
+        self.dir.resolve_existing(&relative).is_ok_and(|resolved| {
+            self.dir
+                .project_observed_path(resolved)
+                .is_some_and(|target| self.path_policy.allows(&target, crate::PathOperation::Read))
+        })
+    }
+
     /// Validates the full operation binding, then holds the lease until I/O completes.
     /// Revocation waits for operations already admitted; later operations are denied.
     pub fn execute<T>(

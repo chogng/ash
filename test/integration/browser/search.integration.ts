@@ -67,7 +67,8 @@ import { SearchCommandIds } from '../../../src/ash/workbench/contrib/search/comm
 import { SearchAccessibilityHelp } from '../../../src/ash/workbench/contrib/search/browser/searchAccessibilityHelp.js';
 import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
 import { BrowserClipboardService } from '../../../src/ash/platform/clipboard/browser/clipboardService.js';
-import { ILabelService, LabelService } from '../../../src/ash/platform/label/common/labelService.js';
+import { ILabelService } from '../../../src/ash/platform/label/common/label.js';
+import { LabelService } from '../../../src/ash/workbench/services/label/common/labelService.js';
 import { BrowserContextMenuService } from '../../../src/ash/platform/contextview/browser/contextMenuService.js';
 import { IContextViewService } from '../../../src/ash/platform/contextview/browser/contextView.js';
 import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';

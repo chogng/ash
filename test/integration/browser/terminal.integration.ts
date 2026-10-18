@@ -1,3 +1,5 @@
+import { ILabelService } from '../../../src/ash/platform/label/common/label.js';
+import { LabelService } from '../../../src/ash/workbench/services/label/common/labelService.js';
 import { InstantiationType } from '../../../src/ash/platform/instantiation/common/extensions.js';
 import { TerminalService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalService.js';
 import { TerminalEditorService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalEditorService.js';
@@ -31,7 +33,10 @@ import { IExtensionService } from '../../../src/ash/workbench/services/extension
 import { IConfigurationResolverService } from '../../../src/ash/workbench/services/configurationResolver/common/configurationResolver.js';
 import { ConfigurationResolverService } from '../../../src/ash/workbench/services/configurationResolver/browser/configurationResolverService.js';
 import { IPathService } from '../../../src/ash/platform/path/common/pathService.js';
-import { posix } from '../../../src/ash/base/common/path.js';
+import { BrowserPathService } from '../../../src/ash/workbench/services/path/browser/pathService.js';
+import { IRendererHostService } from '../../../src/ash/platform/renderer/common/rendererHost.js';
+import { createDisconnectedRendererApi } from '../../../src/ash/workbench/browser/rendererApi.js';
+import { TestWorkspaceService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { ITerminalContributionService, ITerminalProfileResolverService, ITerminalProfileService } from '../../../src/ash/workbench/contrib/terminal/common/terminal.js';
 import { BrowserTerminalProfileResolverService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalProfileResolverService.js';
 import { MainThreadTerminalService } from '../../../src/ash/workbench/api/browser/mainThreadTerminalService.js';
@@ -107,6 +112,7 @@ if (new URLSearchParams(location.search).has('workbench')) {
 store.add(installTestDictationAudio(window));
 setIconResolver(document, icon => getIconDefinition(icon));
 function setupTerminalFixtureServices(services: import('../../../src/ash/platform/instantiation/common/instantiationService.js').InstantiationService, lifetime: DisposableStore): void {
+	if (!services.has(ITerminalService)) services.registerSingleton(ITerminalService, () => services.createInstance(TerminalService), { instantiation: InstantiationType.Delayed });
 	if (!services.has(IDialogService)) services.registerSingleton(IDialogService, () => services.createInstance(DialogService));
 	if (!services.has(ISecretStorageService)) services.registerInstance(ISecretStorageService, lifetime.add(new BaseSecretStorageService()));
 	if (!services.has(ITerminalGroupService)) services.registerSingleton(ITerminalGroupService, () => services.createInstance(TerminalGroupService), { instantiation: InstantiationType.Delayed });
@@ -116,7 +122,12 @@ function setupTerminalFixtureServices(services: import('../../../src/ash/platfor
 	if (!services.has(IHoverService)) services.registerInstance(IHoverService, lifetime.add(new HoverService(services.get(IConfigurationService), lifetime.add(new BrowserContextViewService(document.body)), { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu: () => { }, hideContextMenu: () => { } })));
 	services.registerInstance(ITerminalContributionService, { terminalProfiles: [], onDidChangeTerminalProfiles: Event.None, ...Disposable.None });
 	services.registerInstance(IExtensionService, { getExtensionPointContributions: () => [], currentCatalog: { generation: 0, extensions: [], diagnostics: [] }, onDidChange: Event.None, activateByEvent: async () => { } } as unknown as IExtensionService);
-	services.registerInstance(IPathService, { path: Promise.resolve(posix), resolvedUserHome: URI.file('/home/test'), userHome: async () => URI.file('/home/test'), getPath: async () => posix, getOperatingSystem: async () => OperatingSystem.Linux, fileURI: async (path: string) => URI.file(path) } as unknown as IPathService);
+	const api = createDisconnectedRendererApi();
+	services.registerInstance(IRendererHostService, { ...api, hasAppServer: true, appServer: { ...api.appServer, operatingSystem: OperatingSystem.Linux, userHome: '/home/test' } });
+	if (!services.has(IWorkspaceContextService)) services.registerInstance(IWorkspaceContextService, lifetime.add(new TestWorkspaceService({ id: 'terminal-paths', folders: [] })));
+	services.registerSingleton(IPathService, () => services.createInstance(BrowserPathService));
+	services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
+	if (!services.has(ITerminalProcessService)) services.registerInstance(ITerminalProcessService, { getEnvironment: async () => ({ HOME: '/home/test' }) } as unknown as ITerminalProcessService);
 	services.registerInstance(IConfigurationResolverService, lifetime.add(services.createInstance(ConfigurationResolverService)));
 }
 

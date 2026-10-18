@@ -8,7 +8,7 @@ import { WorkbenchConfiguration } from '../../../common/configuration.js';
 import { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import type { ITitleProperties, ITitleVariable } from './titlebarPart.js';
 import { Emitter } from '../../../../base/common/event.js';
-import { ILabelService } from '../../../../platform/label/common/labelService.js';
+import { ILabelService } from '../../../../platform/label/common/label.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import type { IEditorGroupsContainer } from '../../../services/editor/common/editorGroupsService.js';
 import { IWorkingCopyService } from '../../../services/workingCopy/common/workingCopyService.js';

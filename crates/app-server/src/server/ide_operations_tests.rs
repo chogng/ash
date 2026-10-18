@@ -7,13 +7,7 @@ fn ide_context_rejects_escaped_paths_invalid_ranges_and_large_selections() {
     let root = tempfile::tempdir().unwrap();
     let file = root.path().join("lib.rs");
     std::fs::write(&file, "disk").unwrap();
-    let roots = vec![
-        ash_file_access::Dir::open_local(root.path())
-            .unwrap()
-            .canonical_path()
-            .to_string_lossy()
-            .into_owned(),
-    ];
+    let roots = vec![ash_file_access::Dir::open_local(root.path()).unwrap()];
     let mut context = IdeContext {
         active_file: Some(IdeActiveFile {
             path: file.to_string_lossy().into_owned(),
@@ -51,7 +45,7 @@ fn ide_context_accepts_regular_and_verbatim_file_paths_with_directory_roots() {
     let root = ash_file_access::Dir::open_local(directory.path()).unwrap();
     let file = root.canonical_path().join("lib.rs");
     std::fs::write(&file, "disk").unwrap();
-    let roots = vec![root.canonical_path().to_string_lossy().into_owned()];
+    let roots = vec![root];
     for path in [&file, &file.canonicalize().unwrap()] {
         let path = path.to_string_lossy().into_owned();
         let context = IdeContext {
@@ -91,11 +85,7 @@ fn ide_context_rejects_symlinks_that_escape_directory_grants() {
     assert!(
         validate_context(
             &context,
-            &[ash_file_access::Dir::open_local(root.path())
-                .unwrap()
-                .canonical_path()
-                .to_string_lossy()
-                .into_owned()]
+            &[ash_file_access::Dir::open_local(root.path()).unwrap()]
         )
         .is_err()
     );

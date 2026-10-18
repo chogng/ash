@@ -77,7 +77,8 @@ const { IWorkingCopyService } = await import('../../../../../services/workingCop
 const { BrowserWorkingCopyService } = await import('../../../../../services/workingCopy/browser/browserWorkingCopyService.js');
 const { IWorkspaceContextService } = await import('../../../../../../platform/workspace/common/workspace.js');
 const { TestWorkspaceService } = await import('../../../../../services/configuration/test/common/testServices.js');
-const { ILabelService, LabelService } = await import('../../../../../../platform/label/common/labelService.js');
+const { ILabelService } = await import('../../../../../../platform/label/common/label.js');
+const { LabelService } = await import('../../../../../services/label/common/labelService.js');
 const { ILocalizationService: LocalizationServiceId } = await import('../../../../../services/localization/common/localizationService.js');
 const { IConfigurationService } = await import('../../../../../../platform/configuration/common/configuration.js');
 const { InMemoryConfigurationService } = await import('../../../../../../platform/configuration/common/inMemoryConfigurationService.js');
@@ -608,7 +609,7 @@ test("browser titlebar hosts the application menu in an ActionBar", () => {
 	);
 });
 
-function createTestLabelService(workspace: ConstructorParameters<typeof LabelService>[0], os: OperatingSystem = operatingSystem): import('../../../../../../platform/label/common/labelService.js').LabelService {
+function createTestLabelService(workspace: ConstructorParameters<typeof LabelService>[0], os: OperatingSystem = operatingSystem): import('../../../../../services/label/common/labelService.js').LabelService {
 	const api = createDisconnectedRendererApi();
 	const host = { ...api, hasAppServer: true, appServer: { ...api.appServer, operatingSystem: os } };
 	return new LabelService(workspace, new BrowserPathService(host, workspace), host);

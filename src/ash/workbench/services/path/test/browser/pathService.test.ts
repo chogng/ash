@@ -12,8 +12,71 @@ import { IPathService } from '../../../../../platform/path/common/pathService.js
 import { createSshRemoteWorkspaceUri } from '../../../../../platform/remote/common/remote.js';
 import { IRendererHostService } from '../../../../../platform/renderer/common/rendererHost.js';
 import '../../browser/pathService.js';
+import { initializeTestLocalization } from '../../../localization/test/common/localizationTestUtils.js';
+import { resetNlsResolver } from '../../../../../nls.js';
 
 suite('PathService', () => {
+	test('reports path boundary failures using the selected non-default language', async () => {
+		using services = createServices(() => OperatingSystem.Windows);
+		initializeTestLocalization('zh-CN');
+		try {
+			await assert.rejects(services.get(IPathService).fileURI('relative'), { message: '文件路径必须为绝对路径' });
+		} finally { resetNlsResolver(); }
+	});
+	for (const { label, os, root, input, expected, hostPath } of [
+		{
+			label: 'Windows drive', os: OperatingSystem.Windows, root: URI.parse('file:///C:/work'), input: 'src\\notes #1.rs',
+			expected: URI.parse('file:///C:/work/src/notes%20%231.rs'), hostPath: 'C:\\work\\src\\notes #1.rs',
+		},
+		{
+			label: 'Windows UNC', os: OperatingSystem.Windows, root: URI.parse('file://build/share/work'), input: '..\\notes.rs',
+			expected: URI.parse('file://build/share/notes.rs'), hostPath: '\\\\build\\share\\notes.rs',
+		},
+		{
+			label: 'verbatim drive', os: OperatingSystem.Windows, root: URI.parse('file:///C:/work'), input: '\\\\?\\D:\\code\\notes.rs',
+			expected: URI.parse('file:///D:/code/notes.rs'), hostPath: 'D:\\code\\notes.rs',
+		},
+		{
+			label: 'verbatim UNC', os: OperatingSystem.Windows, root: URI.parse('file:///C:/work'), input: '\\\\?\\UNC\\build\\share\\notes.rs',
+			expected: URI.parse('file://build/share/notes.rs'), hostPath: '\\\\build\\share\\notes.rs',
+		},
+		{
+			label: 'POSIX literal backslash', os: OperatingSystem.Linux, root: URI.parse('file:///work'), input: 'part\\name.rs ',
+			expected: URI.parse('file:///work/part%5Cname.rs%20'), hostPath: '/work/part\\name.rs ',
+		},
+		{
+			label: 'Windows remote on Mac', os: OperatingSystem.Macintosh, root: createSshRemoteWorkspaceUri('windows', 'C:/work'), input: 'src\\notes #1.rs',
+			expected: createSshRemoteWorkspaceUri('windows', 'C:/work/src/notes #1.rs'), hostPath: 'C:\\work\\src\\notes #1.rs',
+		},
+		{
+			label: 'remote UNC on Mac', os: OperatingSystem.Macintosh, root: createSshRemoteWorkspaceUri('windows', '//build/share/work'), input: '\\\\build\\other\\notes.rs',
+			expected: createSshRemoteWorkspaceUri('windows', '//build/other/notes.rs'), hostPath: '\\\\build\\other\\notes.rs',
+		},
+		{
+			label: 'POSIX remote on Windows', os: OperatingSystem.Windows, root: createSshRemoteWorkspaceUri('linux', '/work'), input: 'part\\name.rs',
+			expected: createSshRemoteWorkspaceUri('linux', '/work/part\\name.rs'), hostPath: '/work/part\\name.rs',
+		},
+	]) {
+		test(`renders ${label} paths through their resource owner`, async () => {
+			using services = createServices(() => os);
+			const paths = services.get(IPathService);
+			if (root.scheme === 'file') {
+				assert.deepEqual(await paths.fileURI(label.startsWith('verbatim') ? input : hostPath), expected);
+			}
+			assert.equal(await paths.getHostPath(expected), hostPath);
+		});
+	}
+
+	test('does not invent host paths for virtual storage or ambiguous drive-relative input', async () => {
+		using services = createServices(() => OperatingSystem.Windows);
+		const paths = services.get(IPathService);
+		for (const resource of [URI.parse('mem:/work'), URI.parse('file:///@browser/id/work')]) {
+			assert.equal(await paths.getHostPath(resource), undefined);
+		}
+		await assert.rejects(paths.fileURI('\\\\?\\GLOBALROOT\\Device'), /namespace/);
+		assert.deepEqual(await paths.fileURI('\\\\?\\UNC\\build\\share\\notes.rs'), URI.parse('file://build/share/notes.rs'));
+	});
+
 	test('uses server facts for disk resources and keeps browser and SSH rules distinct', async () => {
 		using services = createServices(() => OperatingSystem.Windows);
 		const paths = services.get(IPathService);

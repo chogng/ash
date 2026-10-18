@@ -14,6 +14,7 @@ export class TestExecutionService extends Disposable implements ITestExecutionSe
 	readonly runs: { id: string; tests: readonly string[]; }[] = [];
 	pendingDiscovery: Promise<void> | undefined;
 	holdRuns = false;
+	failurePath = 'src/lib.rs';
 	items: readonly TestItem[] = [
 		{ id: 'fixture:lib:fixture:checks::passes', package: 'fixture', target: 'fixture', targetKind: 'library', name: 'checks::passes', source: { path: 'src/lib.rs', line: 3 }, debuggable: true },
 		{ id: 'fixture:lib:fixture:checks::fails', package: 'fixture', target: 'fixture', targetKind: 'library', name: 'checks::fails', source: { path: 'src/lib.rs', line: 4 }, debuggable: true },
@@ -38,7 +39,7 @@ export class TestExecutionService extends Disposable implements ITestExecutionSe
 	finish(id: string): void {
 		for (const testId of this.runs.find(run => run.id === id)!.tests) {
 			const failed = testId.endsWith('fails');
-			this.update(id, { result: { testId, state: failed ? 'failed' : 'passed', durationMs: 12, output: failed ? 'fixture failure' : '1 passed', outputTruncated: false, failurePath: failed ? 'src/lib.rs' : null, failureLine: failed ? 4 : null } });
+			this.update(id, { result: { testId, state: failed ? 'failed' : 'passed', durationMs: 12, output: failed ? 'fixture failure' : '1 passed', outputTruncated: false, failurePath: failed ? this.failurePath : null, failureLine: failed ? 4 : null } });
 		}
 		this.update(id, { status: 'completed' });
 	}

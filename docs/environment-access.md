@@ -41,6 +41,19 @@ Turn overrides?
 
 ## 2. 路径、目录与 cwd
 
+前端的词法运算由 Base `IPath` 承担；`resolve` 使用调用方提供的绝对基准，不读取 Renderer
+工作目录或 Windows 每盘工作目录。`IPathService` 选择资源所属宿主的规则，并通过 `fileURI` /
+`getHostPath` 转换宿主路径；虚拟资源和浏览器目录句柄没有宿主路径。上一轮的服务级
+`resolvePath` 已撤除，Remote URI 的 authority 和规范编码继续由 Remote owner 保持。
+
+Label 的契约在 `platform/label/common/label.ts`，唯一实现位于
+`workbench/services/label/common/labelService.ts`。配置变量通过 `getUriLabel(..., { noPrefix: true })`
+获取未缩写的路径，再使用目标 `IPath.relative` 计算相对路径。终端链接由 `TerminalLinkResolver`
+按该进程的 cwd、home 和 authority 解析；home 通过选中目录的执行授权查询。Debug 的源 URI
+统一经 `debugSource`，相对源与引用型源属于会话，远端物理路径保留执行 authority。
+这些转换不解析符号链接、不授予文件权限；目录级身份继续由文件服务和 URI Identity 提供，
+真实目录边界继续归下述 Rust owner。
+
 裸路径不能跨环境定位资源。`Dir` 至少冻结：
 
 ```rust

@@ -1,15 +1,13 @@
+import { ILabelService } from '../../../../platform/label/common/label.js';
+import '../../label/common/labelService.js';
 import { IExtensionService } from '../../extensions/common/extensionService.js';
 import { IPathService } from '../../../../platform/path/common/pathService.js';
 import { IEditorService } from '../../editor/common/editorService.js';
 import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
 import { ConfigurationTarget, getConfigValueInTarget, IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import type { IPath } from '../../../../base/common/path.js';
 import { CancellationError, isCancellationError } from '../../../../base/common/errors.js';
-import { Schemas } from '../../../../base/common/network.js';
 import { URI } from '../../../../base/common/uri.js';
-import { getRemoteWorkspacePath } from '../../../../platform/remote/common/remote.js';
 import { OperatingSystem } from '../../../../base/common/platform.js';
-import { basename, dirname } from '../../../../base/common/resources.js';
 import { CancellationTokenSource, type CancellationToken } from '../../../../base/common/cancellation.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { parseJsonc } from '../../../../base/common/jsonc.js';
@@ -39,6 +37,7 @@ export class ConfigurationResolverService extends Disposable implements IConfigu
 		@ITerminalProcessService private readonly processes: ITerminalProcessService,
 		@IPathService private readonly paths: IPathService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
+		@ILabelService private readonly labels: ILabelService,
 	) {
 		super();
 		this._register(workspace.onDidChangeWorkspace(() => this.workspaceGeneration++));
@@ -151,24 +150,24 @@ export class ConfigurationResolverService extends Disposable implements IConfigu
 					values.set(reference, String(value));
 				} else {
 					const rules = await this.paths.getPath(editor.resource);
-					const file = executionPath(editor.resource, rules);
-					const directoryResource = dirname(editor.resource);
-					const directory = executionPath(directoryResource, rules);
-					const filename = basename(editor.resource);
-					const extension = rules!.extname(file);
+					if (!rules) throw new Error(localize('configurationResolver.missingPathPlatform', 'The execution host path platform is unavailable.'));
+					const file = this.labels.getUriLabel(editor.resource, { noPrefix: true });
+					const directory = rules.dirname(file);
+					const filename = rules.basename(file);
+					const extension = rules.extname(file);
 					if (variable === 'relativeFile' || variable === 'relativeFileDirname') {
 						const base = name === undefined ? folder : folders.find(candidate => candidate.name === name);
 						if (name !== undefined && !base) throw new Error(localize('configurationResolver.missingFolder', "Cannot resolve '{0}': open or select the referenced workspace folder.", reference));
 						const target = variable === 'relativeFile' ? file : directory;
-						const value = base ? relativeExecutionPath(executionPath(base.uri, rules), target, rules!) : target;
+						const value = base ? rules.relative(this.labels.getUriLabel(base.uri, { noPrefix: true }), target) : target;
 						values.set(reference, variable === 'relativeFileDirname' && !value ? '.' : value);
 					} else if (variable === 'fileWorkspaceFolder' || variable === 'fileWorkspaceFolderBasename') {
 						const containing = this.workspace.getWorkspaceFolder(editor.resource);
 						if (!containing) throw new Error(localize('configurationResolver.missingFileFolder', "Cannot resolve '{0}': the active file does not belong to an open workspace folder.", reference));
-						const path = executionPath(containing.uri, rules);
-						values.set(reference, variable === 'fileWorkspaceFolder' ? path : basename(containing.uri));
+						const path = this.labels.getUriLabel(containing.uri, { noPrefix: true });
+						values.set(reference, variable === 'fileWorkspaceFolder' ? path : rules.basename(path));
 					} else {
-						values.set(reference, variable === 'file' ? file : variable === 'fileDirname' ? directory : variable === 'fileDirnameBasename' ? basename(directoryResource) : variable === 'fileExtname' ? extension : variable === 'fileBasename' ? filename : filename.slice(0, filename.length - extension.length));
+						values.set(reference, variable === 'file' ? file : variable === 'fileDirname' ? directory : variable === 'fileDirnameBasename' ? rules.basename(directory) : variable === 'fileExtname' ? extension : variable === 'fileBasename' ? filename : rules.basename(file, extension));
 					}
 				}
 			} else if (variable === 'extensionInstallFolder') {
@@ -180,7 +179,7 @@ export class ConfigurationResolverService extends Disposable implements IConfigu
 			} else if (variable === 'userHome') {
 				const home = this.paths.resolvedUserHome;
 				if (!home) throw new Error(localize('configurationResolver.missingHome', 'The execution host user home is unavailable.'));
-				values.set(reference, executionPath(home, await this.paths.getPath(home)));
+				values.set(reference, this.labels.getUriLabel(home, { noPrefix: true }));
 			} else if (variable === 'pathSeparator' || variable === '/') {
 				const path = folder ? await this.paths.getPath(folder.uri) : await this.paths.path;
 				if (!path) throw new Error(localize('configurationResolver.missingPathPlatform', 'The execution host path platform is unavailable.'));
@@ -189,8 +188,9 @@ export class ConfigurationResolverService extends Disposable implements IConfigu
 				const selectedFolder = name === undefined ? folder : folders.find(candidate => candidate.name === name);
 				if (!selectedFolder) throw new Error(localize('configurationResolver.missingFolder', "Cannot resolve '{0}': open or select the referenced workspace folder.", reference));
 				const rules = await this.paths.getPath(selectedFolder.uri);
-				const path = executionPath(selectedFolder.uri, rules);
-				values.set(reference, variable === 'workspaceFolderBasename' || variable === 'workspaceRootFolderName' ? path.replace(rules!.sep === '\\' ? /[\\/]+$/ : /\/+$/, '').split(rules!.sep === '\\' ? /[\\/]/ : '/').at(-1) ?? '' : path);
+				if (!rules) throw new Error(localize('configurationResolver.missingPathPlatform', 'The execution host path platform is unavailable.'));
+				const path = this.labels.getUriLabel(selectedFolder.uri, { noPrefix: true });
+				values.set(reference, variable === 'workspaceFolderBasename' || variable === 'workspaceRootFolderName' ? rules.basename(path) : path);
 			}
 		}
 		this.assertNotDisposed();
@@ -296,13 +296,13 @@ export class ConfigurationResolverService extends Disposable implements IConfigu
 class ExtensionInstallFolderResolver {
 	constructor(
 		@IExtensionService private readonly extensions: IExtensionService,
-		@IPathService private readonly paths: IPathService,
+		@ILabelService private readonly labels: ILabelService,
 	) { }
 
 	public async resolve(id: string): Promise<string> {
 		const extension = id ? await this.extensions.getExtension(id) : undefined;
 		if (!extension?.extensionLocation) throw new Error(localize('configurationResolver.missingExtension', "Cannot resolve extension '{0}': its installation folder is unavailable.", id));
-		return executionPath(extension.extensionLocation, await this.paths.getPath(extension.extensionLocation));
+		return this.labels.getUriLabel(extension.extensionLocation, { noPrefix: true });
 	}
 }
 
@@ -423,29 +423,3 @@ function commandResultError(command: string): Error {
 }
 
 registerSingleton(IConfigurationResolverService, ConfigurationResolverService, InstantiationType.Delayed);
-
-
-/** URI.fsPath follows the renderer OS; execution paths follow the resource owner. */
-function executionPath(resource: URI, path: IPath | undefined): string {
-	if (!path) throw new Error(localize('configurationResolver.missingPathPlatform', 'The execution host path platform is unavailable.'));
-	let value = resource.scheme === Schemas.ashRemote ? getRemoteWorkspacePath(resource)
-		: resource.authority && resource.scheme === Schemas.file ? `//${resource.authority}${resource.path}` : resource.path;
-	if (resource.scheme === Schemas.file && /^\/[a-z]:/i.test(value)) value = (path.sep === '\\' ? value[1]!.toUpperCase() : value[1]!.toLowerCase()) + value.slice(2);
-	return path.sep === '\\' ? value.replaceAll('/', '\\') : value;
-}
-
-/** Both inputs are absolute paths obtained from canonical resources on the execution host. */
-function relativeExecutionPath(from: string, to: string, rules: IPath): string {
-	const windows = rules.sep === '\\';
-	const normalize = (value: string): string => rules.normalize(value).replaceAll(rules.sep, '/').replace(/\/+$/, '');
-	const base = normalize(from);
-	const target = normalize(to);
-	const root = (value: string): string => windows ? (/^\/\/[^/]+\/[^/]+/.exec(value)?.[0] ?? /^[a-z]:/i.exec(value)?.[0] ?? '/') : '/';
-	const equal = (left: string, right: string): boolean => windows ? left.toLowerCase() === right.toLowerCase() : left === right;
-	if (!equal(root(base), root(target))) return to;
-	const left = base.split('/').filter(Boolean);
-	const right = target.split('/').filter(Boolean);
-	let shared = 0;
-	while (shared < left.length && shared < right.length && equal(left[shared]!, right[shared]!)) shared++;
-	return [...left.slice(shared).map(() => '..'), ...right.slice(shared)].join(rules.sep);
-}

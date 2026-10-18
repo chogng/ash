@@ -1,3 +1,5 @@
+import { ILabelService } from '../../../../../../platform/label/common/label.js';
+import { LabelService } from '../../../../../services/label/common/labelService.js';
 import { ILanguageService } from '../../../../../../editor/common/languages/language.js';
 import { getKeybindingLabel } from '../../../../../../base/common/keybindingLabels.js';
 import { LanguageService } from '../../../../../../editor/common/services/languageService.js';
@@ -4427,6 +4429,7 @@ for (const scenario of [
 			));
 			executionServices.registerSingleton(IPathService, () => executionServices.createInstance(BrowserPathService));
 			executionServices.registerSingleton(ICommandService, () => new CommandService(executionServices));
+			executionServices.registerSingleton(ILabelService, () => executionServices.createInstance(LabelService));
 			executionServices.registerSingleton(IConfigurationResolverService, () => executionServices.createInstance(ConfigurationResolverService));
 			const resolver = executionServices.get(IConfigurationResolverService);
 			using localization = toDisposable(resetNlsResolver);

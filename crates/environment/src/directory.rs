@@ -40,6 +40,9 @@ impl LocalFileDriver {
 /// and Git APIs report `/private/var`. That alias is lexically normalized so observed paths can be
 /// matched by prefix, while canonicalization runs on the caller's original spelling so `..` after
 /// a symlinked component keeps operating-system semantics.
+///
+/// On Windows, cap-std holds the root without `FILE_SHARE_DELETE` to protect its path-based
+/// directory operations. Renaming or deleting that root is blocked until all handles are dropped.
 #[derive(Clone, Debug)]
 pub struct Directory {
     handle: Arc<cap_std::fs::Dir>,
@@ -209,7 +212,9 @@ impl Directory {
     /// not canonicalize the observed path because removal events commonly refer to paths that no
     /// longer exist.
     pub fn project_observed_path(&self, path: impl AsRef<Path>) -> Option<PathBuf> {
-        let path = path.as_ref();
+        // Watchers and external editors can report either ordinary or verbatim Windows paths.
+        // Simplify only the namespace alias; do not fold `..` or follow links in an observation.
+        let path = dunce::simplified(path.as_ref());
         path.strip_prefix(&self.requested)
             .or_else(|_| path.strip_prefix(&self.canonical))
             .ok()

@@ -11,6 +11,22 @@ fn opens_a_directory_with_absolute_namespaces() {
 }
 
 #[test]
+#[cfg(windows)]
+fn projects_regular_and_verbatim_windows_observations_without_requiring_the_leaf() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = Dir::open_local(directory.path()).unwrap();
+    let missing = root.canonical_path().join("removed.txt");
+    let verbatim = directory.path().canonicalize().unwrap().join("removed.txt");
+    for path in [&missing, &verbatim] {
+        assert_eq!(root.project_observed_path(path), Some("removed.txt".into()));
+    }
+    assert_eq!(
+        root.project_observed_path(directory.path().with_extension("sibling")),
+        None
+    );
+}
+
+#[test]
 fn normalizes_parent_segments_in_the_requested_namespace() {
     let directory = tempfile::tempdir().unwrap();
     let nested = directory.path().join("nested");

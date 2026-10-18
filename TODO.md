@@ -101,6 +101,8 @@
 
 ## Terminal · TODO
 
+- [ ] **复核历史启动抖动** · 上轮终端首次 `page.goto` 曾出现 HTTP 文档请求挂起／ERR_ABORTED，trace 未加载产品代码；该历史原因尚未定位。本轮已修复终端 fixture 的 Label 作用域与延迟终端服务注册，当前 14 项 Chromium 回归全过（含 3 项终端悬浮、Windows／UNC／远端失败导航及中文测试面板），日志 `.build/path-owner-browser-validation-final.log`。本轮未再复现首次 HTTP 挂起；若再次出现，按原 trace 调查服务器首次连接，不延长断言。原日志 `.build/path-owner-browser-final.log`、`.build/path-owner-terminal-retry-prepared.log`，原 trace `.build/desktop/playwright/editor-browser-PCDyWW/results/`。
+
 当前进程、屏幕、关闭保护、reload 与输出背压已接通，见 [Terminal](docs/terminal.md)。以下按现有调用链分批推进；未排期的独立增强见文末发展候选。上游行为参照 `terminalActions.ts`、`terminalTabsList.ts`、`terminalContrib/clipboard` 与 `terminalContrib/history`，不以文件数衡量对齐。
 
 - [ ] **可做 · 多行粘贴确认**：`TerminalClipboardContribution` 已拥有菜单／快捷键粘贴，浏览器原始粘贴还须核对 xterm 输入入口。统一适用条件、确认和取消行为；bracketed paste 不能替代确认。保留既有异步读取期间的实例身份与 generation 校验。参照上游 `terminalClipboard.test.ts` 的换行和 bracketed-paste 场景。

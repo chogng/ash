@@ -10,7 +10,7 @@ import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { SessionChangesEditor } from './sessionChangesEditor.js';
 import { getChangesEditorLabels } from './changesEditorLabels.js';
-import { ILabelService } from '../../../../platform/label/common/labelService.js';
+import { ILabelService } from '../../../../platform/label/common/label.js';
 import { ISessionChangesService } from '../common/sessionChangesService.js';
 import { SessionChangesetOperationStatus } from '../../../services/sessions/common/session.js';
 

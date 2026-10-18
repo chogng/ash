@@ -46,7 +46,8 @@ import type { SearchView } from "../../browser/searchView.js";
 import { SEARCH_VIEW_ID, SearchCommandIds } from "../../common/constants.js";
 import { IClipboardService } from "../../../../../platform/clipboard/common/clipboardService.js";
 import { BrowserClipboardService } from "../../../../../platform/clipboard/browser/clipboardService.js";
-import { ILabelService, LabelService } from "../../../../../platform/label/common/labelService.js";
+import { ILabelService } from "../../../../../platform/label/common/label.js";
+import { LabelService } from "../../../../services/label/common/labelService.js";
 import { isWindows, operatingSystem, OperatingSystem } from "../../../../../base/common/platform.js";
 import type { IContextMenuDelegate } from "../../../../../base/browser/contextmenu.js";
 import { MenuId } from "../../../../../platform/actions/common/actions.js";
@@ -1422,7 +1423,7 @@ test('Copy Path uses only the first selected file while explicit detached files 
 		await commands.executeCommand(SearchCommandIds.CopyPathCommandId, folder);
 		assert.deepEqual(written.slice(3), ['/workspace/src/main.ts', '/workspace']);
 		assert.equal(view.searchResult.count, 0);
-		using formatter = services.get(ILabelService).registerFormatter({ scheme: 'file', format: resource => 'formatted:' + resource.path });
+		using formatter = services.get(ILabelService).registerFormatter({ scheme: 'file', formatting: { label: 'formatted:${path}', separator: '/' } });
 		await commands.executeCommand(SearchCommandIds.CopyPathCommandId, file);
 		assert.equal(written.at(-1), 'formatted:/workspace/src/main.ts');
 	} finally {

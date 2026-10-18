@@ -1,3 +1,5 @@
+import { ITerminalProcessService } from '../../../../../../platform/terminal/common/terminal.js';
+import { TerminalLinkResolver } from '../../browser/terminalLinkResolver.js';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { test } from 'mocha';
@@ -7,7 +9,10 @@ import { DeferredPromise } from '../../../../../../base/common/async.js';
 import { Emitter, Event } from '../../../../../../base/common/event.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../../base/common/uri.js';
-import { posix, win32 } from '../../../../../../base/common/path.js';
+import { OperatingSystem } from '../../../../../../base/common/platform.js';
+import { IRendererHostService } from '../../../../../../platform/renderer/common/rendererHost.js';
+import { createDisconnectedRendererApi } from '../../../../../browser/rendererApi.js';
+import { BrowserPathService } from '../../../../../services/path/browser/pathService.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/test/common/utils.js';
 import type { IRange } from '../../../../../../editor/common/core/range.js';
 import { FileKind, IFileService, type IFileStat } from '../../../../../../platform/files/common/files.js';
@@ -27,7 +32,7 @@ import { TerminalLinkContribution } from '../../browser/terminalLinkContribution
 const { Terminal } = createRequire(import.meta.url)('@xterm/xterm') as typeof import('@xterm/xterm');
 ensureNoDisposablesAreLeakedInTestSuite();
 
-function fixture(lifetime: DisposableStore, root = URI.file('/project'), cwd = '/project', historicalCwd?: string) {
+function fixture(lifetime: DisposableStore, root = URI.file('/project'), cwd = '/project', historicalCwd?: string, environment: Readonly<Record<string, string>> = { HOME: '/home/fixture' }) {
 	const dom = new JSDOM('<main></main>');
 	lifetime.add(toDisposable(() => dom.window.close()));
 	const raw = new Terminal({ cols: 24, rows: 5, allowProposedApi: true });
@@ -43,11 +48,19 @@ function fixture(lifetime: DisposableStore, root = URI.file('/project'), cwd = '
 	const services = lifetime.add(new InstantiationService());
 	const workspace = lifetime.add(new TestWorkspaceService({ id: 'project', uri: root }));
 	services.registerInstance(IWorkspaceContextService, workspace);
-	services.registerInstance(IPathService, {
-		getPath: async () => cwd.startsWith('C:') ? win32 : posix,
-		fileURI: async (path: string) => URI.from({ scheme: 'file', path: path.replaceAll('\\', '/') }),
-		resolvedUserHome: URI.file('/home/fixture'),
-	} as unknown as IPathService);
+	const api = createDisconnectedRendererApi();
+	services.registerInstance(IRendererHostService, {
+		...api, hasAppServer: true,
+		appServer: { ...api.appServer, operatingSystem: cwd.startsWith('C:') && root.scheme === 'file' ? OperatingSystem.Windows : OperatingSystem.Linux, userHome: '/home/fixture' },
+	});
+	services.registerSingleton(IPathService, () => services.createInstance(BrowserPathService));
+	const environmentQueries: { names: readonly string[]; dirId: string | undefined; }[] = [];
+	services.registerInstance(ITerminalProcessService, {
+		getEnvironment: async (names: readonly string[], dirId: string | undefined) => {
+			environmentQueries.push({ names, dirId });
+			return environment;
+		},
+	} as unknown as ITerminalProcessService);
 	const states = lifetime.add(new Emitter<ITerminalInstance['state']>());
 	const paths: string[] = [];
 	let stat: (resource: URI) => Promise<IFileStat> = async resource => ({ resource, kind: FileKind.File, sizeBytes: 40, readonly: false, modifiedAtMillis: undefined });
@@ -88,7 +101,7 @@ function fixture(lifetime: DisposableStore, root = URI.file('/project'), cwd = '
 	raw.options.linkHandler = originalLinkHandler;
 	contribution.xtermReady(screen);
 	return {
-		raw, contribution, opened, didOpen, paths, urls, states, warnings, originalLinkHandler,
+		raw, contribution, opened, didOpen, paths, urls, states, warnings, originalLinkHandler, environmentQueries,
 		get providerDisposed() { return providerDisposed; }, get focuses() { return focuses; },
 		setStat(value: typeof stat) { stat = value; },
 		write(text: string) { return new Promise<void>(resolve => raw.write(text, resolve)); },
@@ -128,6 +141,8 @@ test('Terminal remote file links retain their execution authority and Windows li
 	for (const { root, cwd, output, expected } of [
 		{ root: URI.parse('ash-remote://ssh+build/project'), cwd: '/project/sub', output: '../src/main.rs:7:2', expected: 'ash-remote://ssh+build/project/src/main.rs' },
 		{ root: URI.parse('file:///C:/project'), cwd: 'C:\\project', output: '"C:\\my files\\main.cs":5:3', expected: 'file:///C:/my%20files/main.cs' },
+		{ root: URI.parse('ash-remote://ssh+windows/C%3A/project'), cwd: 'C:\\project', output: 'src\\main.rs:7:2', expected: 'ash-remote://ssh+windows/C%3A/project/src/main.rs' },
+		{ root: URI.parse('ash-remote://ssh+windows/C%3A/project'), cwd: 'C:\\project', output: 'file://build/share/main.rs:7:2', expected: 'ash-remote://ssh+windows//build/share/main.rs' },
 	]) {
 		using lifetime = new DisposableStore();
 		const f = fixture(lifetime, root, cwd);
@@ -203,6 +218,43 @@ test('Terminal file links use the execution home and decode file URI paths', asy
 		await selected;
 		assert.deepEqual(f.opened, [{ resource, selection: { startLineNumber: 4, startColumn: 2, endLineNumber: 4, endColumn: 2 } }]);
 	}
+});
+
+test('remote terminal home lookup uses the selected directory grant and never the ambient home', async () => {
+	using lifetime = new DisposableStore();
+	const root = URI.parse('ash-remote://ssh+windows/C%3A/project');
+	const f = fixture(lifetime, root, 'C:\\project', undefined, { USERPROFILE: 'D:\\Users\\Remote' });
+	await f.write('~\\src\\main.ts:4:2');
+	const selected = f.contribution.showLinkQuickpick();
+	f.accept(0);
+	await selected;
+	assert.equal(f.opened[0]?.resource, 'ash-remote://ssh+windows/D%3A/Users/Remote/src/main.ts');
+	assert.deepEqual(f.environmentQueries, [{ names: ['USERPROFILE'], dirId: 'project' }]);
+});
+
+test('terminal resolver keeps drive, UNC and literal POSIX paths on their execution owner', async () => {
+	using lifetime = new DisposableStore();
+	const services = lifetime.add(new InstantiationService());
+	const resources: string[] = [];
+	services.registerInstance(IFileService, { stat: async (resource: URI) => { resources.push(resource.toString()); return { kind: FileKind.File }; } } as unknown as IFileService);
+	const resolver = services.createInstance(TerminalLinkResolver);
+	for (const { cwd, link, remoteAuthority, expected } of [
+		{ cwd: 'C:\\work', link: '\\\\?\\D:\\src\\main.ts', remoteAuthority: 'ssh+build', expected: 'ash-remote://ssh+build/D%3A/src/main.ts' },
+		{ cwd: 'C:\\work', link: '\\\\?\\UNC\\build\\share\\main.ts', remoteAuthority: undefined, expected: 'file://build/share/main.ts' },
+		{ cwd: 'C:\\work', link: '\\src\\main.ts', remoteAuthority: 'ssh+build', expected: 'ash-remote://ssh+build/C%3A/src/main.ts' },
+		{ cwd: '\\\\build\\share\\work', link: '..\\..\\main.ts', remoteAuthority: 'ssh+build', expected: 'ash-remote://ssh+build//build/share/main.ts' },
+		{ cwd: 'C:\\work', link: 'file://build/share/main.ts', remoteAuthority: 'ssh+build', expected: 'ash-remote://ssh+build//build/share/main.ts' },
+		{ cwd: '/work', link: 'part\\name.ts ', remoteAuthority: 'ssh+posix', expected: 'ash-remote://ssh+posix/work/part%5Cname.ts%20' },
+	]) {
+		const result = await resolver.resolveLink({ initialCwd: cwd, os: cwd.startsWith('/') ? OperatingSystem.Linux : OperatingSystem.Windows, remoteAuthority }, link, link.startsWith('file:') ? URI.parse(link) : undefined);
+		assert.equal(result?.uri.toString(), expected, link);
+	}
+	const count = resources.length;
+	for (const link of ['D:relative.ts', '\\\\?\\GLOBALROOT\\Device', '~/missing-home.ts']) {
+		assert.equal(await resolver.resolveLink({ initialCwd: 'C:\\work', os: OperatingSystem.Windows }, link), null);
+	}
+	assert.equal(await resolver.resolveLink({ initialCwd: 'C:\\work', os: OperatingSystem.Windows }, 'file:///C:/work/file.ts#fragment', URI.parse('file:///C:/work/file.ts#fragment')), null);
+	assert.equal(resources.length, count, 'Invalid or unavailable paths must not reach the file provider');
 });
 
 test('Terminal links preserve a real space at a wrap boundary and omit wide-glyph padding', async () => {

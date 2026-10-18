@@ -15,7 +15,7 @@ import { createServiceIdentifier } from '../../platform/instantiation/common/ins
 import type { IFileIconTheme } from '../../platform/theme/common/themeService.js';
 import type { ThemeIcon } from '../../base/common/themables.js';
 import { FileKind } from '../../platform/files/common/files.js';
-import { ILabelService } from '../../platform/label/common/labelService.js';
+import { ILabelService } from '../../platform/label/common/label.js';
 import { IWorkspaceContextService } from '../../platform/workspace/common/workspace.js';
 import { IUntitledTextEditorService } from '../services/untitled/common/untitledTextEditorService.js';
 import { IDecorationsService, type IDecoration, type IResourceDecorationChangeEvent } from '../services/decorations/common/decorations.js';

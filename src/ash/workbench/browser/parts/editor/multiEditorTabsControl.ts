@@ -14,7 +14,7 @@ import { DisposableStore, toDisposable } from "../../../../base/common/lifecycle
 import { IContextKeyService, type IScopedContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { ActiveEditorPinnedContext, ActiveEditorStickyContext, EditorTabsFocusContext } from "../../../common/contextkeys.js";
 import { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
-import { ILabelService } from '../../../../platform/label/common/labelService.js';
+import { ILabelService } from '../../../../platform/label/common/label.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { basename, dirname } from '../../../../base/common/resources.js';
 import { shorten } from '../../../../base/common/labels.js';
@@ -168,7 +168,7 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 					if (new Set(descriptions).size !== descriptions.length) {
 						descriptions = peers.map((peer, index) => `${peer.input.resource.authority} • ${descriptions[index]}`);
 					}
-					label.description = shorten(descriptions, this.labelService.getSeparator(editor.input.resource))[peers.findIndex(peer => peer.input === editor.input)];
+					label.description = shorten(descriptions, this.labelService.getSeparator(editor.input.resource?.scheme ?? '', editor.input.resource?.authority))[peers.findIndex(peer => peer.input === editor.input)];
 				}
 			}
 			return [editor.input, label] as const;

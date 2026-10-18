@@ -13,7 +13,7 @@ import { localize } from '../../../../../nls.js';
 import { FileKind, FileNotFoundError, FileSystemProviderCapabilities, IFileService } from '../../../../../platform/files/common/files.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IHoverService } from '../../../../../platform/hover/browser/hoverService.js';
-import { ILabelService } from '../../../../../platform/label/common/labelService.js';
+import { ILabelService } from '../../../../../platform/label/common/label.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IDecorationsService } from '../../../../services/decorations/common/decorations.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';

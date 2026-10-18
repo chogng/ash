@@ -183,7 +183,8 @@ import type { DialogService } from '../../workbench/services/dialogs/common/dial
 import { IDialogsModel } from '../../workbench/common/dialogs.js';
 import { BrowserDialogHandler } from '../../workbench/browser/parts/dialogs/dialog.js';
 import { DialogHandlerContribution } from '../../workbench/browser/parts/dialogs/dialog.web.contribution.js';
-import { ILabelService, LabelService } from '../../platform/label/common/labelService.js';
+import { ILabelService } from '../../platform/label/common/label.js';
+import { LabelService } from '../../workbench/services/label/common/labelService.js';
 import { IResourceIconRenderer, IResourceLabelService, ResourceLabelService } from '../../workbench/browser/labels.js';
 import { IDecorationsService } from '../../workbench/services/decorations/common/decorations.js';
 import { DecorationsService } from '../../workbench/services/decorations/browser/decorationsService.js';

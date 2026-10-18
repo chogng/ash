@@ -9,6 +9,12 @@ import '../../../src/ash/workbench/contrib/testing/browser/media/testing.css';
 import { Event } from '../../../src/ash/base/common/event.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
+import { OperatingSystem } from '../../../src/ash/base/common/platform.js';
+import { createSshRemoteWorkspaceUri } from '../../../src/ash/platform/remote/common/remote.js';
+import { BrowserPathService } from '../../../src/ash/workbench/services/path/browser/pathService.js';
+import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
+import { IRendererHostService } from '../../../src/ash/platform/renderer/common/rendererHost.js';
+import { createDisconnectedRendererApi } from '../../../src/ash/workbench/browser/rendererApi.js';
 import { NullLoggerService } from '../../../src/ash/platform/log/common/log.js';
 import { InMemoryConfigurationService } from '../../../src/ash/platform/configuration/common/inMemoryConfigurationService.js';
 import { type IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
@@ -35,7 +41,18 @@ if (new URLSearchParams(location.search).get('locale') === 'zh-cn') {
 const store = new DisposableStore();
 const uriIdentityServices = store.add(new TestUriIdentityServices());
 const backend = store.add(new TestExecutionService());
-const workspace = store.add(new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') }));
+const parameters = new URLSearchParams(location.search);
+const rootPath = parameters.get('root') ?? '/workspace';
+const root = parameters.has('remote') ? createSshRemoteWorkspaceUri(parameters.get('remote')!, rootPath) : URI.parse(parameters.get('rootUri') ?? 'file:///workspace');
+const workspace = store.add(new TestWorkspaceService({ id: 'workspace', uri: root }));
+const api = createDisconnectedRendererApi();
+uriIdentityServices.registerInstance(IWorkspaceContextService, workspace);
+uriIdentityServices.registerInstance(IRendererHostService, {
+	...api, hasAppServer: true,
+	appServer: { ...api.appServer, operatingSystem: parameters.get('os') === 'windows' ? OperatingSystem.Windows : OperatingSystem.Macintosh },
+});
+const paths = uriIdentityServices.createInstance(BrowserPathService);
+backend.failurePath = parameters.get('failure') ?? backend.failurePath;
 const copies = store.add(uriIdentityServices.createInstance(BrowserWorkingCopyService));
 let scriptRuns = 0;
 const tasks: ITaskService = {
@@ -54,12 +71,12 @@ const tasks: ITaskService = {
 };
 const debug = store.add(new TestDebugService());
 const service = store.add(new TestingService(tasks, backend, workspace, copies, new NullLoggerService(), debug.service));
-const opened: { path: string; line: number | undefined; }[] = [];
+const opened: { path: string; line: number | undefined; uri: string; }[] = [];
 const editors: IEditorService = {
 	save: async () => { throw new Error('Saving is outside this fixture'); },
 	saveAll: async () => { throw new Error('Saving is outside this fixture'); },
 	onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [], activeEditorPane: undefined, visibleEditorPanes: [],
-	openEditor: async (input, options?: EditorOpenOptions) => { opened.push({ path: input.resource.path, line: options?.selection?.startLineNumber }); },
+	openEditor: async (input, options?: EditorOpenOptions) => { opened.push({ path: input.resource.path, line: options?.selection?.startLineNumber, uri: input.resource.toString() }); },
 	focusActiveEditor: () => { },
 };
 const pane = store.add(new TestingViewPane(document.querySelector<HTMLElement>('#testing')!, { id: 'ash.testing.view', title: 'Testing' }, service,
@@ -67,7 +84,7 @@ const pane = store.add(new TestingViewPane(document.querySelector<HTMLElement>('
 	{ focusView: () => true } as unknown as IViewsService,
 	editors, store.add(new InMemoryConfigurationService()),
 	{ getOpenAriaHint: () => 'Press Alt+F1 for help.' } as unknown as IAccessibleViewService,
-	workspace));
+	workspace, paths));
 pane.setVisible(true);
 if (new URLSearchParams(location.search).has('paneLayout')) {
 	await import('../../../src/ash/base/browser/ui/styles.css');
@@ -103,7 +120,7 @@ declare global {
 	interface Window {
 		ashTestingIntegration: {
 			debugLaunches(): readonly import('../../../src/ash/workbench/contrib/debug/common/debug.js').IDebugConfiguration[];
-			readonly opened: readonly { path: string; line: number | undefined; }[];
+			readonly opened: readonly { path: string; line: number | undefined; uri: string; }[];
 			runs(): readonly (readonly string[])[]; scriptRuns(): number;
 			addCases(): Promise<void>; hold(): void; disconnect(): void; edit(): void; refresh(): Promise<void>; accessible(): string; dispose(): void;
 		};

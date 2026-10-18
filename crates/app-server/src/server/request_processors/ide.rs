@@ -305,14 +305,25 @@ impl<'ctx, C: IdeRequestProcessorContext + ?Sized> IdeRequestProcessor<'ctx, C> 
                             .context
                             .display_read_authorizations(&session_id, &thread_id)
                             .map_err(core_error)?;
+                        let workspaces = target
+                            .window
+                            .roots
+                            .iter()
+                            .map(ash_file_access::Dir::open_local)
+                            .collect::<Result<Vec<_>, _>>()
+                            .map_err(|_| invalid())?;
                         let mut allowed = authorizations
                             .iter()
                             .flat_map(|authorization| {
                                 let root = authorization.dir().canonical_path();
-                                target.window.roots.iter().filter_map(move |workspace| {
-                                    if root.starts_with(workspace) {
-                                        Some(root.to_string_lossy().into_owned())
-                                    } else if Path::new(workspace).starts_with(root) {
+                                workspaces.iter().filter_map(move |workspace| {
+                                    if workspace.project_observed_path(root).is_some() {
+                                        Some(authorization.dir().clone())
+                                    } else if authorization
+                                        .dir()
+                                        .project_observed_path(workspace.canonical_path())
+                                        .is_some()
+                                    {
                                         Some(workspace.clone())
                                     } else {
                                         None
@@ -320,7 +331,9 @@ impl<'ctx, C: IdeRequestProcessorContext + ?Sized> IdeRequestProcessor<'ctx, C> 
                                 })
                             })
                             .collect::<Vec<_>>();
-                        allowed.sort();
+                        allowed.sort_by(|left, right| {
+                            left.canonical_path().cmp(right.canonical_path())
+                        });
                         allowed.dedup();
                         if allowed.is_empty() {
                             // An integrated terminal can cd outside its editor workspace. Keep the
@@ -333,7 +346,12 @@ impl<'ctx, C: IdeRequestProcessorContext + ?Sized> IdeRequestProcessor<'ctx, C> 
                         let IdeHostResult::Context { mut context } = target
                             .request(
                                 &IdeHostRequest::Context {
-                                    roots: allowed.clone(),
+                                    roots: allowed
+                                        .iter()
+                                        .map(|dir| {
+                                            dir.canonical_path().to_string_lossy().into_owned()
+                                        })
+                                        .collect(),
                                 },
                                 cancellation,
                             )
@@ -348,25 +366,9 @@ impl<'ctx, C: IdeRequestProcessorContext + ?Sized> IdeRequestProcessor<'ctx, C> 
                         }
                         validate_context(&context, &allowed)?;
                         let readable = |path: &String| {
-                            // Match Dir's canonical namespace, including Windows verbatim paths.
-                            // Keep the lexical name too: resolving it must not bypass a deny rule.
-                            dunce::canonicalize(path).is_ok_and(|canonical| {
-                                authorizations.iter().any(|authorization| {
-                                    let root = authorization.dir().canonical_path();
-                                    canonical.strip_prefix(root).is_ok_and(|relative| {
-                                        authorization
-                                            .path_policy()
-                                            .allows(relative, ash_file_access::PathOperation::Read)
-                                    }) && dunce::simplified(Path::new(path))
-                                        .strip_prefix(root)
-                                        .is_ok_and(|relative| {
-                                            authorization.path_policy().allows(
-                                                relative,
-                                                ash_file_access::PathOperation::Read,
-                                            )
-                                        })
-                                })
-                            })
+                            authorizations
+                                .iter()
+                                .any(|authorization| authorization.allows_read_path(path))
                         };
                         // An IDE may have a denied file open (for example a secret). Omit it
                         // without preventing an otherwise valid terminal message from being sent.
@@ -414,13 +416,14 @@ fn ide_error(error: crate::client_host::ClientHostError) -> RpcError {
 
 // The editor response is a process boundary. Never accept unbounded selections or paths
 // from outside the caller's directory grants, even when the window declares a matching root.
-fn validate_context(context: &IdeContext, roots: &[String]) -> Result<(), RpcError> {
+fn validate_context(context: &IdeContext, roots: &[ash_file_access::Dir]) -> Result<(), RpcError> {
     let path_allowed = |path: &str| {
         Path::new(path).is_absolute()
             && path.len() <= 4096
-            // Registration and directory grants already use Dir's dunce canonicalization.
-            && dunce::canonicalize(path)
-                .is_ok_and(|path| roots.iter().any(|root| path.starts_with(root)))
+            && roots.iter().any(|root| {
+                root.project_observed_path(path)
+                    .is_some_and(|relative| root.resolve_existing(relative).is_ok())
+            })
     };
     if context.open_tabs.len() > 100
         || context.dirty_files.len() > 100

@@ -1,6 +1,7 @@
 import { isMacintosh, isWindows, OperatingSystem } from "./platform.js";
 import { basename } from "./resources.js";
 import { URI } from "./uri.js";
+import { posix, win32 } from './path.js';
 
 /** Inputs used to format a resource as a user-facing path label. */
 export interface IPathLabelFormatting {
@@ -58,7 +59,7 @@ function getRelativePathLabel(resource: URI, provider: IRelativePathProvider, os
 
 function resourcePath(resource: URI, os: OperatingSystem): string {
 	let path = resource.authority && resource.scheme === 'file' ? `//${resource.authority}${resource.path}` : resource.path;
-	if (resource.scheme === 'file' && !resource.authority && /^\/[a-z]:/i.test(path)) {
+	if (os === OperatingSystem.Windows && (resource.scheme !== 'file' || !resource.authority) && /^\/[a-z]:/i.test(path)) {
 		path = `${path[1].toLowerCase()}${path.slice(2)}`;
 	}
 	return os === OperatingSystem.Windows ? path.replaceAll('/', '\\') : path;
@@ -273,25 +274,9 @@ function pathSeparator(os: OperatingSystem): "\\" | "/" {
 }
 
 function normalizePath(path: string, os: OperatingSystem): string {
-	const separator = pathSeparator(os);
-	const normalized = os === OperatingSystem.Windows ? path.replaceAll("/", "\\") : path;
-	const drive = os === OperatingSystem.Windows ? /^([A-Za-z]:)([\\/]?)/u.exec(normalized) : undefined;
-	const unc = os === OperatingSystem.Windows && normalized.startsWith("\\\\");
-	const absolute = normalized.startsWith(separator) || Boolean(drive) || unc;
-	const prefix = drive ? `${drive[1]}${drive[2] ? separator : ""}` : unc ? "\\\\" : normalized.startsWith(separator) ? separator : "";
-	const segments = normalized.slice(prefix.length).split(separator);
-	const result: string[] = [];
-	for (const segment of segments) {
-		if (!segment || segment === ".") continue;
-		if (segment === ".." && result.length > 0 && result.at(-1) !== "..") {
-			result.pop();
-			continue;
-		}
-		if (segment !== ".." || absolute === false) result.push(segment);
-	}
-	const body = result.join(separator);
-	if (prefix) return `${prefix}${body}` || prefix;
-	return body || (absolute ? separator : ".");
+	const rules = os === OperatingSystem.Windows ? win32 : posix;
+	const normalized = rules.normalize(path);
+	return rules.dirname(normalized) === normalized ? normalized : normalized.replace(os === OperatingSystem.Windows ? /[\\/]+$/ : /\/+$/, '');
 }
 
 function trimTrailingSeparators(path: string): string {

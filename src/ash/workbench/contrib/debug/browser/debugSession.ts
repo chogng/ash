@@ -1,3 +1,7 @@
+import { IUriIdentityService } from '../../../../platform/uriIdentity/common/uriIdentity.js';
+import { ILogService } from '../../../../platform/log/common/log.js';
+import type { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { getUriFromSource } from '../common/debugSource.js';
 import type { InlineDebugAdapter, DebugBreakpoint, DebugEvaluateContext, DebugSessionState, DebugSteppingGranularity, IDisassembledInstruction, IBaseBreakpoint, IDataBreakpointInfoResponse, DataBreakpointAccessType, IDebugBreakpoint, IDebugConfiguration, IDebugEvaluateResult, IDebugExceptionBreakpointFilter, IDebugScope, IDebugSession, IDebugSessionOptions, IDebugSessionCapabilities, IDebugSource, IDebugSourceContent, IDebugStackFrame, IDebugThread, IDebugVariable, IDebugAdapterTracker } from '../common/debug.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { TaskQueue, timeout } from "../../../../base/common/async.js";
@@ -6,10 +10,9 @@ import { CancellationError, getErrorMessage } from "../../../../base/common/erro
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Disposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { URI } from "../../../../base/common/uri.js";
-import { Schemas } from '../../../../base/common/network.js';
 import { localize } from "../../../../nls.js";
-import { type IDebugAdapterProcessService } from "../../../../platform/debug/common/debugAdapterProcessService.js";
-import { getRemoteWorkspacePath, isRemoteResource, withRemoteWorkspacePath } from "../../../../platform/remote/common/remote.js";
+import { IDebugAdapterProcessService } from "../../../../platform/debug/common/debugAdapterProcessService.js";
+import { getRemoteWorkspacePath, isWindowsRemotePath, isRemoteResource, withRemoteWorkspacePath } from "../../../../platform/remote/common/remote.js";
 
 interface DapRequest { readonly seq: number; readonly type: "request"; readonly command: string; readonly arguments?: unknown; }
 interface DapResponse { readonly seq: number; readonly type: "response"; readonly request_seq: number; readonly success: boolean; readonly command: string; readonly message?: string; readonly body?: unknown; }
@@ -28,7 +31,6 @@ export interface DebugSessionStartOptions {
 	readonly onWillStart?: (session: IDebugSession) => void;
 	/** Execution data is resolved by DebugService; the source configuration remains available for restart. */
 	readonly resolvedConfiguration: Pick<IDebugConfiguration, 'adapter' | 'arguments'>;
-	readonly processService: IDebugAdapterProcessService;
 	readonly breakpoints: () => readonly IDebugBreakpoint[];
 	readonly additionalBreakpoints?: () => readonly Exclude<DebugBreakpoint, IDebugBreakpoint>[];
 	readonly workspace?: URI;
@@ -125,7 +127,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 	}
 	get output(): string { return this.retainedOutput; }
 
-	private constructor(
+	constructor(
 		readonly configuration: IDebugConfiguration,
 		readonly id: string,
 		private readonly breakpoints: () => readonly IDebugBreakpoint[],
@@ -139,6 +141,9 @@ export class DebugSession extends Disposable implements IDebugSession {
 		private readonly additionalBreakpoints: DebugSessionStartOptions["additionalBreakpoints"],
 		resolvedConfiguration: DebugSessionStartOptions["resolvedConfiguration"],
 		readonly sessionOptions: IDebugSessionOptions,
+		@IDebugAdapterProcessService private readonly processService: IDebugAdapterProcessService,
+		@IUriIdentityService private readonly uriIdentity: IUriIdentityService,
+		@ILogService private readonly log: ILogService,
 	) {
 		super();
 		this._resolvedConfiguration = Object.freeze({ ...configuration, ...resolvedConfiguration });
@@ -159,8 +164,8 @@ export class DebugSession extends Disposable implements IDebugSession {
 		}));
 	}
 
-	static async start(options: DebugSessionStartOptions): Promise<DebugSession> {
-		const session = new DebugSession(
+	static async start(options: DebugSessionStartOptions, instantiation: IInstantiationService): Promise<DebugSession> {
+		const session = instantiation.createInstance(DebugSession,
 			options.configuration, options.id ?? generateUuid(), options.breakpoints,
 			options.workspace, options.runInTerminal, options.startDebugging, options.updateBreakpoints, options.addBreakpoint, options.removeBreakpoint,
 			options.exceptionBreakpoints, options.additionalBreakpoints, options.resolvedConfiguration, Object.freeze({ ...options.sessionOptions }),
@@ -186,11 +191,11 @@ export class DebugSession extends Disposable implements IDebugSession {
 			await session.callTrackers(tracker => tracker.onWillStartSession?.());
 			if (session.isDisposed) { throw new CancellationError(); }
 			if (!adapter.inline) {
-				const id = await options.processService.start({ ...adapter, ...(options.configuration.dirId ? { dirId: options.configuration.dirId } : {}) });
+				const id = await session.processService.start({ ...adapter, ...(options.configuration.dirId ? { dirId: options.configuration.dirId } : {}) });
 				session.transport = {
-					send: message => options.processService.send(id, message),
-					read: (afterSequence, maxMessages) => options.processService.read(id, afterSequence, maxMessages),
-					close: () => options.processService.close(id),
+					send: message => session.processService.send(id, message),
+					read: (afterSequence, maxMessages) => session.processService.read(id, afterSequence, maxMessages),
+					close: () => session.processService.close(id),
 				};
 			}
 			if (session.isDisposed) { throw new CancellationError(); }
@@ -246,7 +251,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 		const selectedThreadId = threadId === undefined ? await this.requireThreadId() : integer(threadId, "threadId");
 		this.setSelectedThread(selectedThreadId);
 		const body = record((await this.request("stackTrace", { threadId: selectedThreadId, startFrame: 0, levels: 100 })).body, "stackTrace body");
-		return array(body.stackFrames, "stackFrames").map((value, index) => ({ ...stackFrame(value, index, this.workspace), threadId: selectedThreadId }));
+		return array(body.stackFrames, "stackFrames").map((value, index) => ({ ...stackFrame(value, index, (value, path) => this.sourceFromAdapter(value, path)), threadId: selectedThreadId }));
 	}
 
 	async scopes(frameId: number): Promise<readonly IDebugScope[]> {
@@ -281,9 +286,45 @@ export class DebugSession extends Disposable implements IDebugSession {
 		return Object.freeze({ result: string(body.result, "evaluate result"), variablesReference: positiveInteger(body.variablesReference, "evaluate variablesReference", true), ...(typeof body.type === "string" ? { type: body.type } : {}) });
 	}
 
+	private sourceFromAdapter(value: unknown, path: string): IDebugSource {
+		const input = record(value, path);
+		const raw: IDebugSource = {
+			...(typeof input.name === 'string' ? { name: input.name } : {}),
+			...(typeof input.path === 'string' ? { path: input.path } : {}),
+			...(Number.isSafeInteger(input.sourceReference) ? { sourceReference: input.sourceReference as number } : {}),
+		};
+		if (!raw.path && !(raw.sourceReference && raw.sourceReference > 0)) return raw;
+		let sourcePath = raw.path;
+		// Only physical paths are rebound to the selected execution authority. URI and
+		// reference-backed sources retain their own identity in the shared source owner.
+		if (sourcePath && !raw.sourceReference && this.workspace && isRemoteResource(this.workspace)) {
+			try {
+				let physicalPath = sourcePath;
+				if (sourcePath.startsWith('file:')) {
+					const uri = URI.parse(sourcePath);
+					if (uri.query || uri.fragment || /%2f/i.test(uri.toEncodedComponents().path)) throw new TypeError(localize('debug.invalidSource', 'The debug source needs a path or a source reference and a live session.'));
+					const windows = isWindowsRemotePath(getRemoteWorkspacePath(this.workspace));
+					if (!windows && uri.authority) throw new TypeError(localize('debug.invalidSource', 'The debug source needs a path or a source reference and a live session.'));
+					physicalPath = uri.authority ? `//${uri.authority}${uri.path}` : windows ? uri.path.replace(/^\/(?=[a-z]:\/)/i, '') : uri.path;
+				}
+				sourcePath = withRemoteWorkspacePath(this.workspace, physicalPath).toString();
+			} catch (error) {
+				if (sourcePath.startsWith('file:') || /^(?:\/|[a-z]:[\\/]|\\\\)/i.test(sourcePath)) throw error;
+				// Relative adapter sources stay session-owned; other URI schemes keep their identity.
+			}
+		}
+
+		return { ...raw, resource: getUriFromSource(raw, sourcePath, this.id, this.uriIdentity, this.log) };
+	}
+
 	async source(sourceValue: IDebugSource): Promise<IDebugSourceContent> {
-		const sourceReference = positiveInteger(sourceValue.sourceReference, "sourceReference");
-		const body = record((await this.request("source", { source: sourceValue, sourceReference })).body, "source body");
+		const sourceReference = positiveInteger(sourceValue.sourceReference ?? 0, "sourceReference", true);
+		const source = {
+			...(sourceValue.name === undefined ? {} : { name: sourceValue.name }),
+			...(sourceValue.path === undefined ? {} : { path: sourceValue.path }),
+			sourceReference,
+		};
+		const body = record((await this.request("source", { source, sourceReference })).body, "source body");
 		return Object.freeze({ content: string(body.content, "source content"), ...(typeof body.mimeType === "string" ? { mimeType: body.mimeType } : {}) });
 	}
 
@@ -336,7 +377,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 			if (item.instructionBytes !== undefined) { instruction.instructionBytes = string(item.instructionBytes, "instructionBytes"); }
 			if (item.symbol !== undefined) { instruction.symbol = string(item.symbol, "symbol"); }
 			// DAP permits the source to be omitted when adjacent instructions share a file.
-			if (item.location !== undefined) { location = source(item.location, "instruction location", this.workspace); }
+			if (item.location !== undefined) { location = this.sourceFromAdapter(item.location, "instruction location"); }
 			if (location) { instruction.location = location; }
 			if (item.line !== undefined) { instruction.line = positiveInteger(item.line, "instruction line", true); }
 			if (item.column !== undefined) { instruction.column = positiveInteger(item.column, "instruction column", true); }
@@ -727,7 +768,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 			if (!matched && body.reason === 'new' && point.source && typeof point.source === 'object' && !Array.isArray(point.source)
 				&& Number.isSafeInteger(point.line) && (point.line as number) > 0
 				&& (point.column === undefined || Number.isSafeInteger(point.column) && (point.column as number) > 0)) {
-				const location = source(point.source, 'breakpoint source', this.workspace);
+				const location = this.sourceFromAdapter(point.source, 'breakpoint source');
 				if (!location?.resource && !(location?.sourceReference && location.sourceReference > 0)) return;
 				const added = this.addBreakpoint?.(location, point.line as number, point.column as number | undefined);
 				if (added) {
@@ -802,21 +843,14 @@ function event(value: Record<string, unknown>): DapEvent {
 	return { seq: positiveInteger(value.seq, "event seq", true), type: "event", event: string(value.event, "event name"), ...(value.body === undefined ? {} : { body: value.body }) };
 }
 
-function stackFrame(value: unknown, index: number, workspace: URI | undefined): IDebugStackFrame {
+function stackFrame(value: unknown, index: number, resolveSource: (value: unknown, path: string) => IDebugSource): IDebugStackFrame {
 	const frame = record(value, `stackFrames[${index}]`);
-	return { id: integer(frame.id, `stackFrames[${index}].id`), name: string(frame.name, `stackFrames[${index}].name`), lineNumber: positiveInteger(frame.line, `stackFrames[${index}].line`, true), columnNumber: positiveInteger(frame.column, `stackFrames[${index}].column`, true), ...(frame.source === undefined ? {} : { source: source(frame.source, `stackFrames[${index}].source`, workspace) }), ...(frame.instructionPointerReference === undefined ? {} : { instructionPointerReference: string(frame.instructionPointerReference, "instructionPointerReference") }) };
+	return { id: integer(frame.id, `stackFrames[${index}].id`), name: string(frame.name, `stackFrames[${index}].name`), lineNumber: positiveInteger(frame.line, `stackFrames[${index}].line`, true), columnNumber: positiveInteger(frame.column, `stackFrames[${index}].column`, true), ...(frame.source === undefined ? {} : { source: resolveSource(frame.source, `stackFrames[${index}].source`) }), ...(frame.instructionPointerReference === undefined ? {} : { instructionPointerReference: string(frame.instructionPointerReference, "instructionPointerReference") }) };
 }
 
 function thread(value: unknown, index: number): IDebugThread {
 	const input = record(value, `threads[${index}]`);
 	return Object.freeze({ id: integer(input.id, `threads[${index}].id`), name: string(input.name, `threads[${index}].name`) });
-}
-
-function source(value: unknown, path: string, workspace: URI | undefined): IDebugStackFrame["source"] {
-	const input = record(value, path);
-	const adapterPath = typeof input.path === "string" ? input.path : undefined;
-	const resource = adapterPath ? sourceResource(workspace, adapterPath) : undefined;
-	return { ...(typeof input.name === "string" ? { name: input.name } : {}), ...(adapterPath ? { path: adapterPath } : {}), ...(resource ? { resource } : {}), ...(Number.isSafeInteger(input.sourceReference) ? { sourceReference: input.sourceReference as number } : {}) };
 }
 
 function scope(value: unknown, index: number): IDebugScope {
@@ -882,21 +916,6 @@ function boolean(value: unknown, path: string): boolean { if (typeof value !== "
 function positiveInteger(value: unknown, path: string, allowZero = false): number { if (!Number.isSafeInteger(value) || (allowZero ? (value as number) < 0 : (value as number) <= 0)) throw new TypeError(`${path} must be ${allowZero ? "non-negative" : "positive"}`); return value as number; }
 function integer(value: unknown, path: string): number { if (!Number.isSafeInteger(value)) throw new TypeError(localize('debug.invalidIdentifier', '{0} must be an integer.', path)); return value as number; }
 function withTimeout<T>(promise: Promise<T>, milliseconds: number, timeoutMessage: string): Promise<T> { return new Promise((resolve, reject) => { const timeout = setTimeout(() => reject(new Error(timeoutMessage)), milliseconds); promise.then(value => { clearTimeout(timeout); resolve(value); }, error => { clearTimeout(timeout); reject(error); }); }); }
-
-function sourceResource(workspace: URI | undefined, adapterPath: string): URI | undefined {
-	if (!workspace || workspace.scheme === "file") {
-		try {
-			return adapterPath.startsWith('/') && !adapterPath.startsWith('//')
-				? URI.from({ scheme: Schemas.file, path: adapterPath })
-				: URI.file(/^(?:[a-z]:[\\/]|\\\\)/i.test(adapterPath) ? adapterPath.replaceAll('\\', '/') : adapterPath);
-		} catch { return undefined; }
-	}
-	if (!isRemoteResource(workspace)) return undefined;
-	try {
-		return withRemoteWorkspacePath(workspace, adapterPath);
-	} catch { return undefined; }
-}
-
 
 function breakpointSignature(point: IBaseBreakpoint): string {
 	const { verified: _verified, message: _message, ...configuration } = point;
