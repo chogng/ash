@@ -4,10 +4,6 @@
 
 任务标签：**可做**表示已能定位现有入口与 owner，可选择一个行为切片实施；**后端前置**表示须先闭合领域或宿主契约；**复核**表示还需确认具体消费者或复现旧问题；**验收**表示缺真实环境证据；**测量**表示先取得数据；**Ash 产品**表示独立产品需求，不能按 VS Code 是否存在来删除。可选增强统一放在文末的[发展候选（未排期）](#发展候选未排期)，不计入当前交付待办。
 
-## 发布符号工具 · TODO
-
-- [ ] **验收** · 在 macOS 实机运行共用的 `just check-build-tools` 和 `just test-python build scripts`，确认 Xcode 工具、LLDB Python、dSYM 收集／剥离及 `atos` 回退；记录宿主架构、工具版本和结果。Windows 已通过真实工具预检及 23 项相关测试（2 项按平台跳过）；2026-10-18，WSL2 `AshBuild`（Ubuntu 24.04、x86_64、Rust 1.98.0、LLVM 18）在同一检出执行 `just --set python python3 check-build-tools` 和 `just --set python python3 test-python build scripts`，构建 248 项（跳过 3 项）、脚本 196 项（跳过 4 项）均通过，包含真实 ELF/DWARF 符号处理；这些结果不能替代 macOS 验收。
-
 ## Windows Rust 开发循环
 
 - 保存 Rust 到 App 可用的 15 秒目标尚未达到。已保留第二轮实测 42.15 → 29.10 秒的改进；后续候选均未证明完整流程收益并已撤回。完整数据、验证与公开项目实践核对见 `docs/build.md` 第三轮记录。
@@ -92,7 +88,6 @@
 输入、渲染、工具与语音职责及历史验证范围见 [Chat](docs/chat.md)。
 
 ## Terminal · TODO
-
 
 当前进程、屏幕、关闭保护、reload 与输出背压已接通，见 [Terminal](docs/terminal.md)。以下按现有调用链分批推进；未排期的独立增强见文末发展候选。上游行为参照 `terminalActions.ts`、`terminalTabsList.ts`、`terminalContrib/clipboard` 与 `terminalContrib/history`，不以文件数衡量对齐。
 

@@ -191,7 +191,8 @@ class BinaryIsolationTests(unittest.TestCase):
                         cargo="cargo",
                         cargo_profile=profile,
                     )
-                self.assertEqual(result, {"ash-app-server": executable})
+                # Input validation returns the physical path, including macOS /var aliases.
+                self.assertEqual(result, {"ash-app-server": executable.resolve()})
                 command = run.call_args.args[0]
                 if optimized:
                     self.assertEqual(

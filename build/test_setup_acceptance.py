@@ -123,7 +123,7 @@ class SetupAcceptanceTests(unittest.TestCase):
             self.assertEqual(result["exitCode"], 0)
             self.assertEqual(
                 (root / "environment.log").read_text().splitlines(),
-                [str(root), "isolated"],
+                [str(root.resolve()), "isolated"],
             )
             self.assertEqual(os.environ.get("ASH_SETUP_TEST"), previous)
 

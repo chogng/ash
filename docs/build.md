@@ -261,6 +261,14 @@ Electron 主进程/preload、单元测试与扩展测试的 JavaScript 编译，
 
 第一阶段已接入 Cargo 发布组包、符号归档和离线工具。符号接入时，release 仅增加 `line-tables-only`、`split-debuginfo = off`、`strip = false`；macOS 发布入口覆盖为 `packed`，当时未调整优化、LTO、codegen units、开发和测试 profile。后续 Windows x64 组包优化见下文历史测量。本机已验证 macOS arm64 的真实 release 程序、内联源码行、离线 Mach-O core 加载及栈展开；Linux/Windows 与正式签名、上传流程须由发布 CI 验证。统一 panic 采集、Electron 和 JavaScript 符号属于后续阶段。
 
+### 宿主工具验收
+
+2026-10-18，在 macOS 27.0.1（26A434）、arm64 实机执行 `just check-build-tools` 和 `just test-python build scripts` 通过：构建测试 249 项、脚本测试 196 项，各跳过 1 项。跳过项分别要求 Windows 长路径边界和显式构建的 Agent eval 产品程序；12 项发布符号回归均执行通过。宿主使用 Xcode Command Line Tools 26.2、Apple LLVM 17.0.0、LLDB 1703.0.236.21（Python scripting 可用）、Rust 1.98.0 和 Python 3.12.14。未安装 `llvm-symbolizer`，因此真实源码行与内联帧解析走 `/usr/bin/atos`，没有用 mock 代替平台符号工具。
+
+本次覆盖真实优化 Rust 测试程序的 dSYM 收集与 staging 剥离、UUID／摘要核对、Cargo dSYM 符号链接归档、ASLR 地址转换及错误构建拒绝，并通过真实 LLDB 加载确定的离线 Mach-O core、展开第一方栈帧并保留未解析的外部帧。初次完整入口因两个测试把 `/var` 别名当作物理路径而失败，修正预期为解析后的路径后重跑通过；构建参数和环境隔离断言保留。工具、源码指纹、红绿日志与结果见 `.build/macos-symbol-acceptance-20261018/validation.json`。这些是宿主工具与测试程序验收，不代表本次执行了正式产品签名、系统崩溃采集或发布上传。
+
+此前已有 Windows 真实工具预检及 23 项相关测试记录（跳过 2 项）。2026-10-18，WSL2 `AshBuild`（Ubuntu 24.04、x86_64、Rust 1.98.0、LLVM 18）执行 `just --set python python3 check-build-tools` 和 `just --set python python3 test-python build scripts`，构建 248 项（跳过 3 项）、脚本 196 项（跳过 4 项）通过，包含真实 ELF/DWARF 符号处理；这两组是既有平台证据，本次未重跑。
+
 ### 第一阶段使用
 
 本地发布前设置编译身份和符号目录；`ASH_BUILD_ID` 必须为这次编译的新身份，不能在编译结束后才注入。Python 使用仓库虚拟环境的 3.11+ 解释器；先运行 `just check-build-tools` 验证宿主符号工具，各平台安装要求与 `ASH_LLVM_BIN` 用法见[初始化](#初始化)。dump 导入另外需要支持 Python 的 LLDB。
