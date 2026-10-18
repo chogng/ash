@@ -88,7 +88,7 @@ ShellIntegrationAddon 消费已提交事件；`CwdDetectionCapability` 持有已
 
 编辑区 Split 捕获原终端所在组，通过编辑器组服务调用现有 EditorPart 的相邻组操作。新终端的创建同时携带原实例和准确的目标组，继续使用 TerminalService 的 cwd／Profile 解析；原 PTY 与屏幕不变。父实例代次失效时关闭迟到的新进程；创建失败只清理本次仍为空的目标组。Panel 位置与方向切换仍须由布局服务提供契约，不能从窗口宽高推断。
 
-文件链接的点击和键盘选择共用 `TerminalLinkContribution` 与路径解析。解析器只产生候选，贡献使用命令所在行的 cwd、执行宿主的 `IPathService` 与原文件服务确认资源，再通过编辑器服务打开文件和行列位置。远端资源保留所属目录的 authority；文本位置从真实 buffer cells 换算，处理宽字符与自动换行。状态、工作区或实例失效会撤回过期打开结果。
+文件链接的点击和键盘选择共用 `TerminalLinkContribution` 与路径解析。解析器只产生候选，贡献使用命令所在行的 cwd、执行宿主的 `IPathService` 与原文件服务确认资源，再通过编辑器服务打开文件和行列位置。已确认的目录必须属于该终端 `dirId` 对应的工作区根，再通过原 Explorer View 和选择服务显示目录并接收焦点；链接不会添加工作区根或自动打开其他窗口。远端资源保留所属目录的 authority；文本位置从真实 buffer cells 换算，处理宽字符与自动换行。状态、工作区或实例失效会撤回尚在路径确认、View 打开阶段的结果，目录选择已经交给 Explorer 后由其原 owner 管理；终端不会在失效后追加焦点操作。
 
 附加终端到 Chat 时捕获已解析输出、选区及 Shell 元数据，交给原 draft。只读预览显示接受时的快照，源终端关闭或再次选择不改写已接受内容；预览没有 PTY 或输入目的地。
 
@@ -122,6 +122,10 @@ Desktop 的 `enablePersistentSessions` 控制协调 reload。准备阶段等待�
 | 执行端进程、输出与释放       | [exec-server 终端实现及相邻测试](../crates/exec-server/src/terminal.rs)                                                                                                                                                                                                    |
 
 2026-10-18 在 Docker Linux ARM64、Bash 和启用 Chromium sandbox 的真实 Electron／App Server 上，6 项定向场景通过：字面路径执行与最近目录、英文／中文选中文本和当前行执行、文件链接鼠标／键盘打开、英文／中文 command 与页面 reload。reload 断言覆盖原 PTY／Shell PID、连续无缺口输出、分屏宽度、未提交输入、焦点、后续 Ctrl+C 与输入及 accessible view。默认编辑器剪贴板快捷键现限定编辑器文本焦点，避免 Linux Ctrl+C 在进入 PTY 前被全局 Copy 消费；菜单／直接命令与用户覆盖继续由原 owner 处理。日志 `.build/todo-linux-terminal-complete.log` 为 6 passed（59.3s），原生剪贴板补充场景为 2 passed。真实 OS 文件拖入、跨机器 SSH、Windows PowerShell 和应用退出后的 revive 不在该结果内。
+
+2026-10-18 本机 macOS Electron／App Server 的文件与目录链接场景通过 1 项（总计 14.4s），验证鼠标打开文件行列及工作区目录、键盘接受带空格路径、Explorer 目录选中与焦点、编辑器标签数量不增加，以及同一个终端实例继续执行命令；日志 `.build/todo-round2-terminal-electron.log`。链接单元测试 21 项通过，覆盖本地与远端资源的原 cwd／authority、目录边界和拒绝访问、关闭或重连时迟到 stat／View 结果、中文选择器与错误；日志 `.build/todo-round2-unit.log`。目录入口复用已有显式路径候选，不搜索普通输出单词，也不添加工作区外目录、搜索型链接或外部 provider；远端测试使用确定性服务，不能代替真实跨机器验收。
+
+目录行为同步写入现有终端无障碍帮助；英文／中文帮助与原输入同步、buffer tracker 共 4 项回归通过，日志 `.build/todo-round2-terminal-accessibility.log`。
 
 测试入口描述可重复检查的行为，不替代特定平台的实机结果。未完成动作与平台验收集中在 [Terminal TODO](../TODO.md#terminal--todo)，可选增强保留在[发展候选（未排期）](../TODO.md#发展候选未排期)。
 

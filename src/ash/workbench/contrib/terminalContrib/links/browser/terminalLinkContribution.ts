@@ -18,6 +18,9 @@ import { IQuickInputService, type IQuickPickItem } from '../../../../../platform
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { TerminalCapability } from '../../../../../platform/terminal/common/capabilities/capabilities.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
+import { IViewsService } from '../../../../services/views/common/viewsService.js';
+import { IExplorerService } from '../../../files/browser/files.js';
+import { VIEW_ID as EXPLORER_VIEW_ID } from '../../../files/common/files.js';
 import type { ITerminalContribution, ITerminalInstance, IXtermTerminal } from '../../../terminal/browser/terminal.js';
 import type { ITerminalContributionContext } from '../../../terminal/browser/terminalExtensions.js';
 import { ITerminalConfigurationService } from '../../../terminal/browser/terminal.js';
@@ -56,6 +59,8 @@ export class TerminalLinkContribution extends Disposable implements ITerminalCon
 		@IQuickInputService private readonly quickInput: IQuickInputService,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@ITerminalConfigurationService private readonly configuration: ITerminalConfigurationService,
+		@IViewsService private readonly views: IViewsService,
+		@IExplorerService private readonly explorer: IExplorerService,
 	) {
 		super();
 		this.resolver = instantiation.createInstance(TerminalLinkResolver);
@@ -77,7 +82,7 @@ export class TerminalLinkContribution extends Disposable implements ITerminalCon
 				const processId = this.context.instance.processId;
 				void Promise.all(candidates.slice(0, 16).map(async candidate => {
 					if (!candidate.range) return undefined;
-					if (candidate.file && !await this.resolveFile(candidate)) return undefined;
+					if (candidate.file && !await this.resolvePath(candidate)) return undefined;
 					return {
 						text: candidate.text, range: candidate.range,
 						activate: () => { void this.open(candidate, generation, processId).catch(onUnexpectedError); },
@@ -120,7 +125,7 @@ export class TerminalLinkContribution extends Disposable implements ITerminalCon
 				session.add(toDisposable(() => resolve(undefined)));
 				const pick = session.add(this.quickInput.createQuickPick<LinkCandidate>());
 				pick.ariaLabel = localize('terminal.links.choose', 'Open a terminal link');
-				pick.placeholder = localize('terminal.links.select', 'Select a terminal file or URL to open');
+				pick.placeholder = localize('terminal.links.select', 'Select a terminal file, folder or URL to open');
 				pick.items = [...items.values()];
 				session.add(pick.onDidAccept(() => { if (pick.selectedItems[0]) resolve(pick.selectedItems[0]); }));
 				session.add(pick.onDidHide(() => resolve(undefined)));
@@ -185,7 +190,7 @@ export class TerminalLinkContribution extends Disposable implements ITerminalCon
 		return result;
 	}
 
-	private async resolveFile(candidate: LinkCandidate): Promise<URI | undefined> {
+	private async resolvePath(candidate: LinkCandidate): Promise<Awaited<ReturnType<TerminalLinkResolver['resolveLink']>> | undefined> {
 		const path = candidate.file?.path.text;
 		if (!path) return undefined;
 		const instance = this.context.instance;
@@ -208,21 +213,31 @@ export class TerminalLinkContribution extends Disposable implements ITerminalCon
 			remoteAuthority: folder.uri.scheme === 'ash-remote' ? folder.uri.authority : undefined,
 			userHome,
 		}, path, path.startsWith('file://') ? URI.parse(path) : undefined);
-		return result && !result.isDirectory ? result.uri : undefined;
+		// Directory links reveal paths inside their workspace root; terminal output cannot
+		// add a root or use another directory's grant to open a new window.
+		if (result?.isDirectory && this.workspace.getWorkspaceFolder(result.uri)?.id !== instance.dirId) return undefined;
+		return result;
 	}
 
 	private async open(candidate: LinkCandidate, generation: number, processId: number): Promise<void> {
 		if (!this.isCurrent(generation, processId)) return;
 		if (candidate.url) { await this.openUrl(candidate.url); return; }
-		const resource = await this.resolveFile(candidate);
+		const resolved = await this.resolvePath(candidate);
 		if (!this.isCurrent(generation, processId)) return;
-		if (!resource) {
-			this.notifications.warn(localize('terminal.links.fileUnavailable', 'Could not open the terminal file: {0}', candidate.file?.path.text ?? candidate.label));
+		if (!resolved) {
+			this.notifications.warn(localize('terminal.links.fileUnavailable', 'Could not open the terminal path: {0}', candidate.file?.path.text ?? candidate.label));
+			return;
+		}
+		if (resolved.isDirectory) {
+			const view = await this.views.openView(EXPLORER_VIEW_ID);
+			if (!view || !this.isCurrent(generation, processId)) return;
+			await this.explorer.select(resolved.uri, 'force');
+			if (this.isCurrent(generation, processId)) view.focus();
 			return;
 		}
 		const row = candidate.file?.suffix?.row ?? 1;
 		const col = candidate.file?.suffix?.col ?? 1;
-		await this.editors.openEditor({ resource }, { selection: new Range(row, col, row, col) });
+		await this.editors.openEditor({ resource: resolved.uri }, { selection: new Range(row, col, row, col) });
 	}
 
 	private async openUrl(url: string): Promise<void> {

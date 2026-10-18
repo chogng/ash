@@ -99,7 +99,7 @@
 - [ ] **布局前置 · 面板分屏方向**：先闭合布局 owner 的真实 Panel 位置契约：当前 `IWorkbenchLayoutService` 没有 `getPanelPosition`，Part 也未提供移动 Panel 位置的操作。不能按宽高猜位置或在 Terminal 自建第二份 Panel 状态；再让组按方向保留相对尺寸和焦点。
 - [ ] **后端前置 · 跨窗口转移**：独立定义进程租约、屏幕及输入交接并验收；现有 30 秒租约只闭合同一 Desktop 窗口 reload，Web 保持 connection-owned 生命周期。
 - [ ] **后端前置 · 应用退出后恢复输出、cwd 和布局**：有限 `TerminalRecorder` replay 与命令文本历史不等于完整终端恢复；缺少持久化缓冲、布局和重建 Shell 的入口。与保留原进程的 reload 分开验收；不承诺任意旧命令跨应用退出继续执行。
-- [ ] **复核 · 文件链接扩展**：补目录打开、工作区搜索型链接、外部 provider 与适用配置的实际入口，复用执行宿主 cwd／路径和文件服务授权，验收鼠标、键盘及异步关闭／重连。
+- [ ] **复核 · 文件链接扩展**：补工作区搜索型链接、外部 provider 与适用配置的实际入口；工作区外目录打开另需沿原窗口／工作区授权契约处理。工作区内显式目录路径的鼠标／键盘定位已完成，范围与关闭／重连验证见 [Terminal](docs/terminal.md)。
 - [ ] **验收** · 补跨机器 SSH、Windows PTY／PowerShell，以及 Linux Desktop 的真实 OS 文件拖入；应用退出后的 revive 独立验收。Linux 文件链接、reload、活动文件／选中文本执行和最近目录选择器的 6 项真实 Desktop 场景已通过，范围见 [Terminal](docs/terminal.md)。
 
 高频交互验收同时观察原进程身份、待提交输入、选区和焦点；执行、权限和工具调度继续归 Rust。

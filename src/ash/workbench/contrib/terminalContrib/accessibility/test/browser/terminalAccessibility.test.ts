@@ -10,9 +10,29 @@ import type { ICommandDetectionCapability } from '../../../../../../platform/ter
 import { TerminalCapabilityStore } from '../../../../../../platform/terminal/common/capabilities/terminalCapabilityStore.js';
 import { TextAreaSyncAddon } from '../../browser/textAreaSyncAddon.js';
 import { BufferContentTracker } from '../../browser/bufferContentTracker.js';
+import { TerminalAccessibilityHelpProvider } from '../../browser/terminalAccessibilityHelp.js';
+import type { ITerminalInstance } from '../../../../terminal/browser/terminal.js';
+import { initializeTestLocalization } from '../../../../../services/localization/test/common/localizationTestUtils.js';
 
 suite('Terminal accessibility owners', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	for (const [locale, folderHelp] of [
+		['en', 'Folders inside this terminal’s workspace root are selected in Explorer.'],
+		['zh-CN', '位于此终端所属工作区根目录内的文件夹会在资源管理器中选中。'],
+	] as const) {
+		test(`documents workspace directory links in accessibility help (${locale})`, () => {
+			initializeTestLocalization(locale);
+			try {
+				using provider = new TerminalAccessibilityHelpProvider({} as ITerminalInstance);
+				const content = provider.provideContent();
+				assert.ok(content.includes(folderHelp));
+				assert.ok(content.includes('<keybinding:workbench.action.terminal.openDetectedLink>'));
+			} finally {
+				initializeTestLocalization('en');
+			}
+		});
+	}
 
 	test('joins wrapped rows into one text line and replaces the snapshot after a clear', () => {
 		let rows = [{ value: 'wide ', wrapped: false }, { value: 'line', wrapped: true }, { value: 'next', wrapped: false }];

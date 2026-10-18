@@ -24,6 +24,9 @@ import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../
 import { IWorkspaceContextService } from '../../../../../../platform/workspace/common/workspace.js';
 import { TerminalCapability } from '../../../../../../platform/terminal/common/capabilities/capabilities.js';
 import { IEditorService } from '../../../../../services/editor/common/editorService.js';
+import { IViewsService } from '../../../../../services/views/common/viewsService.js';
+import { IExplorerService } from '../../../../files/browser/files.js';
+import { initializeTestLocalization } from '../../../../../services/localization/test/common/localizationTestUtils.js';
 import { TestWorkspaceService } from '../../../../../services/configuration/test/common/testServices.js';
 import type { ITerminalInstance, IXtermTerminal } from '../../../../terminal/browser/terminal.js';
 import { ITerminalConfigurationService } from '../../../../terminal/browser/terminal.js';
@@ -73,6 +76,20 @@ function fixture(lifetime: DisposableStore, root = URI.file('/project'), cwd = '
 			await didOpen.complete();
 		}
 	} as IEditorService);
+	const revealed: { resource: string; reveal: boolean | string | undefined; }[] = [];
+	const openedViews: string[] = [];
+	let explorerFocuses = 0;
+	const didFocusExplorer = new DeferredPromise<void>();
+	const view = { focus() { explorerFocuses++; void didFocusExplorer.complete(); } };
+	let openView = async () => view;
+	services.registerInstance(IViewsService, {
+		openView: async (id: string) => { openedViews.push(id); return openView(); },
+	} as unknown as IViewsService);
+	services.registerInstance(IExplorerService, {
+		select: async (resource: URI, reveal?: boolean | string) => {
+			revealed.push({ resource: resource.toString(), reveal });
+		},
+	} as unknown as IExplorerService);
 	const urls: string[] = [];
 	services.registerInstance(IOpenerService, { open: async url => { urls.push(String(url)); return true; } } as IOpenerService);
 	const warnings: string[] = [];
@@ -101,14 +118,17 @@ function fixture(lifetime: DisposableStore, root = URI.file('/project'), cwd = '
 	raw.options.linkHandler = originalLinkHandler;
 	contribution.xtermReady(screen);
 	return {
-		raw, contribution, opened, didOpen, paths, urls, states, warnings, originalLinkHandler, environmentQueries,
+		raw, contribution, opened, didOpen, paths, urls, states, warnings, originalLinkHandler, environmentQueries, revealed, openedViews, view, didFocusExplorer,
 		get providerDisposed() { return providerDisposed; }, get focuses() { return focuses; },
+		get explorerFocuses() { return explorerFocuses; },
+		setOpenView(value: typeof openView) { openView = value; },
 		setStat(value: typeof stat) { stat = value; },
 		write(text: string) { return new Promise<void>(resolve => raw.write(text, resolve)); },
 		links(line = 1) { return new Promise<ILink[] | undefined>(resolve => provider!.provideLinks(line, resolve)); },
 		accept(index: number) { pick!.selectedItems = [pick!.items[index] as IQuickPickItem]; accepted.fire(); },
 		cancel() { hidden.fire(); },
 		get items() { return pick!.items; },
+		get placeholder() { return pick!.placeholder; },
 	};
 }
 
@@ -121,6 +141,114 @@ test('Terminal file link click uses the command cwd and opens its line and colum
 	links![0]!.activate({} as MouseEvent, links![0]!.text);
 	await f.didOpen.p;
 	assert.deepEqual(f.opened, [{ resource: 'file:///project/original/src/main.ts', selection: { startLineNumber: 42, startColumn: 3, endLineNumber: 42, endColumn: 3 } }]);
+});
+
+test('Terminal directory links reveal the command directory through the existing Explorer from pointer and keyboard', async () => {
+	for (const root of [URI.file('/project'), URI.parse('ash-remote://ssh+build/project')]) {
+		using lifetime = new DisposableStore();
+		const f = fixture(lifetime, root, '/project/later', '/project/original');
+		f.setStat(async resource => ({ resource, kind: FileKind.Directory, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined }));
+		await f.write('src/');
+		const links = await f.links();
+		assert.equal(links?.length, 1);
+		links![0]!.activate({} as MouseEvent, links![0]!.text);
+		await f.didFocusExplorer.p;
+		assert.deepEqual(f.revealed, [{ resource: root.with({ path: '/project/original/src' }).toString(), reveal: 'force' }]);
+		assert.deepEqual(f.openedViews, ['ash.explorer']);
+		assert.equal(f.explorerFocuses, 1);
+		assert.deepEqual(f.opened, []);
+		const canceled = f.contribution.showLinkQuickpick();
+		f.cancel();
+		await canceled;
+		assert.equal(f.focuses, 1);
+		assert.equal(f.revealed.length, 1);
+		const selected = f.contribution.showLinkQuickpick();
+		f.accept(0);
+		await selected;
+		assert.deepEqual(f.revealed, [
+			{ resource: root.with({ path: '/project/original/src' }).toString(), reveal: 'force' },
+			{ resource: root.with({ path: '/project/original/src' }).toString(), reveal: 'force' },
+		]);
+		assert.equal(f.explorerFocuses, 2);
+		assert.deepEqual(f.opened, []);
+	}
+});
+
+test('Terminal directory links cannot open a directory outside their workspace grant or bypass a denied stat', async () => {
+	using lifetime = new DisposableStore();
+	const f = fixture(lifetime);
+	await f.write('../outside/');
+	f.setStat(async resource => ({ resource, kind: FileKind.Directory, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined }));
+	assert.deepEqual(await f.links(), []);
+	const selected = f.contribution.showLinkQuickpick();
+	f.accept(0);
+	await selected;
+	assert.equal(f.warnings.length, 1);
+	assert.deepEqual(f.openedViews, []);
+	assert.deepEqual(f.revealed, []);
+	f.setStat(async () => { throw new Error('Access denied'); });
+	assert.deepEqual(await f.links(), []);
+	assert.deepEqual(f.opened, []);
+});
+
+for (const retire of ['dispose', 'reconnect'] as const) {
+	test(`Terminal directory pointer activation drops a delayed stat after ${retire}`, async () => {
+		using lifetime = new DisposableStore();
+		const f = fixture(lifetime);
+		const resource = URI.file('/project/src');
+		const directory = { resource, kind: FileKind.Directory, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined };
+		f.setStat(async () => directory);
+		await f.write('src/');
+		const links = await f.links();
+		const started = new DeferredPromise<void>();
+		const stat = new DeferredPromise<IFileStat>();
+		f.setStat(() => { void started.complete(); return stat.p; });
+		links![0]!.activate({} as MouseEvent, links![0]!.text);
+		await started.p;
+		if (retire === 'dispose') f.contribution.dispose();
+		else f.states.fire('reconnecting');
+		await stat.complete(directory);
+		// Advance one event-loop turn after resolving the stat so the pointer
+		// activation's promise chain retires before checking the absent effects.
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.deepEqual(f.openedViews, []);
+		assert.deepEqual(f.revealed, []);
+		assert.equal(f.explorerFocuses, 0);
+	});
+
+	test(`Terminal directory keyboard activation drops a delayed Explorer view after ${retire}`, async () => {
+		using lifetime = new DisposableStore();
+		const f = fixture(lifetime);
+		f.setStat(async resource => ({ resource, kind: FileKind.Directory, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined }));
+		await f.write('src/');
+		const started = new DeferredPromise<void>();
+		const view = new DeferredPromise<typeof f.view>();
+		f.setOpenView(() => { void started.complete(); return view.p; });
+		const selected = f.contribution.showLinkQuickpick();
+		f.accept(0);
+		await started.p;
+		if (retire === 'dispose') f.contribution.dispose();
+		else f.states.fire('reconnecting');
+		await view.complete(f.view);
+		await selected;
+		assert.deepEqual(f.openedViews, ['ash.explorer']);
+		assert.deepEqual(f.revealed, []);
+		assert.equal(f.explorerFocuses, 0);
+	});
+}
+
+test('Terminal directory picker and unavailable path warning use the active Chinese translations', async () => {
+	using lifetime = new DisposableStore();
+	lifetime.add(toDisposable(() => initializeTestLocalization('en')));
+	initializeTestLocalization('zh-CN');
+	const f = fixture(lifetime);
+	await f.write('src/');
+	f.setStat(async () => { throw new Error('Access denied'); });
+	const selected = f.contribution.showLinkQuickpick();
+	assert.equal(f.placeholder, '选择要打开的终端文件、文件夹或网址');
+	f.accept(0);
+	await selected;
+	assert.deepEqual(f.warnings, ['无法打开终端中的路径：src/']);
 });
 
 test('Terminal wrapped wide-character output keeps the file link on its actual cells', async () => {

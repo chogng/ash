@@ -89,14 +89,18 @@ for (const locale of ['en', 'zh-CN'] as const) test.describe(`terminal run selec
 	});
 });
 
-test('terminal file links open compiler locations by click and keyboard without losing the shell', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
+test('terminal file links open compiler locations and directory links reveal Explorer by mouse and keyboard', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
 	const page = workbench.page;
 	const terminal = workbench.terminal;
 	const relative = 'terminal-link-fixture.ts';
 	const spaced = 'terminal link fixture.ts';
+	const pointerDirectory = 'terminal-link-folder';
+	const keyboardDirectory = 'terminal link keyboard folder';
 	const contents = Array.from({ length: 60 }, (_, index) => `// synthetic terminal link row ${index + 1}`).join('\n');
 	await writeFile(join(testWorkspace.directory, relative), contents);
 	await writeFile(join(testWorkspace.directory, spaced), contents);
+	await mkdir(join(testWorkspace.directory, pointerDirectory));
+	await mkdir(join(testWorkspace.directory, keyboardDirectory));
 	await terminal.show();
 	const pane = page.locator('.ash-terminal-group-pane:visible');
 	const instanceId = await pane.getAttribute('data-instance-id');
@@ -123,7 +127,7 @@ test('terminal file links open compiler locations by click and keyboard without 
 	await expect.poll(async () => (await terminal.activeInstance.locator('.xterm-rows').textContent())?.replace(/\s/gu, '')).toContain(spacedLocation.replace(/\s/gu, ''));
 	await terminal.activeInstance.locator('.xterm-helper-textarea').press('ControlOrMeta+Shift+o');
 	const picker = page.getByRole('dialog', { name: 'Open a terminal link', exact: true });
-	await expect(picker.getByRole('combobox')).toHaveAttribute('placeholder', 'Select a terminal file or URL to open');
+	await expect(picker.getByRole('combobox')).toHaveAttribute('placeholder', 'Select a terminal file, folder or URL to open');
 	await picker.getByRole('combobox').press('Escape');
 	await expect(terminal.activeInstance.locator('.xterm-helper-textarea')).toBeFocused();
 	await terminal.activeInstance.locator('.xterm-helper-textarea').press('ControlOrMeta+Shift+o');
@@ -131,6 +135,26 @@ test('terminal file links open compiler locations by click and keyboard without 
 	await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: spaced })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Ln 18, Col 7', exact: true })).toBeVisible();
 	await expect(workbench.editors.groupAt(0).editor.input).toBeFocused();
+	await expect(pane).toHaveAttribute('data-instance-id', instanceId!);
+	const tabsBeforeDirectories = await workbench.editors.groupAt(0).tabs.count();
+	const explorer = page.locator('.ash-explorer');
+	await print(`${pointerDirectory}/`);
+	const directoryRow = terminal.activeInstance.locator('.xterm-rows > div').filter({ hasText: `${pointerDirectory}/` }).last();
+	await expect(directoryRow).toBeVisible();
+	const directoryBounds = await directoryRow.boundingBox();
+	if (!directoryBounds) throw new Error('The terminal directory link is not visible');
+	await page.mouse.move(directoryBounds.x + 12, directoryBounds.y + directoryBounds.height / 2);
+	await expect(terminal.activeInstance.locator('.ash-terminal-link-hover-target')).toHaveCount(1);
+	await page.mouse.click(directoryBounds.x + 12, directoryBounds.y + directoryBounds.height / 2);
+	await expect(explorer.getByRole('treeitem', { name: pointerDirectory, exact: true })).toHaveAttribute('aria-selected', 'true');
+	await expect(explorer.locator('.ash-tree')).toBeFocused();
+	await print(`"${keyboardDirectory}/"`);
+	await expect.poll(async () => (await terminal.activeInstance.locator('.xterm-rows').textContent())?.replace(/\s/gu, '')).toContain(keyboardDirectory.replace(/\s/gu, '') + '/');
+	await terminal.activeInstance.locator('.xterm-helper-textarea').press('ControlOrMeta+Shift+o');
+	await workbench.quickaccess.select(`${keyboardDirectory}/`);
+	await expect(explorer.getByRole('treeitem', { name: keyboardDirectory, exact: true })).toHaveAttribute('aria-selected', 'true');
+	await expect(explorer.locator('.ash-tree')).toBeFocused();
+	await expect(workbench.editors.groupAt(0).tabs).toHaveCount(tabsBeforeDirectories);
 	await expect(pane).toHaveAttribute('data-instance-id', instanceId!);
 	await print('terminal-link-shell-alive');
 	await expect(terminal.activeInstance.locator('.xterm-rows')).toContainText('terminal-link-shell-alive');
