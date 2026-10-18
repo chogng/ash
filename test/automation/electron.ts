@@ -52,6 +52,9 @@ export function resolveElectronConfiguration(options: ElectronLaunchOptions): El
 		: resolveDevelopmentElectronExecutable(desktopDirectory);
 	const environment = createTestEnvironment(options.userDataDirectory, options.environment ?? process.env, options.externalCodexHome);
 	if (process.platform === 'win32') {
+		// Known-folder APIs verify this directory exists before returning LocalAppData
+		// to backend services such as the cross-process Git operation lock.
+		mkdirSync(join(options.userDataDirectory, 'AppData', 'Local'), { recursive: true });
 		// Windows cannot begin a Jump List transaction without its destination stores
 		// beneath the isolated USERPROFILE. Keep Shell data inside the test home too.
 		for (const store of ['AutomaticDestinations', 'CustomDestinations']) {

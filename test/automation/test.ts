@@ -234,8 +234,11 @@ export const test = base.extend<PlaywrightFixtures>({
 						const closed = current.application.waitForEvent('close');
 						await expect.poll(async () => current.application.evaluate(() => Boolean((globalThis as RestartDialogGlobal).ashTestRestartDialog))).toBe(true);
 						await current.application.evaluate(() => (globalThis as RestartDialogGlobal).ashTestRestartDialog!.respond(0));
-						await closed;
 						await exited;
+						// The daemon can retain inherited pipes after Main exits on Windows.
+						// Release the old fixture before awaiting Playwright's pipe-close event.
+						await current.close();
+						await closed;
 						const relaunched = await readFile(marker, 'utf8').catch(() => 'missing');
 						if (relaunched !== 'relaunch') throw new Error(`Desktop shutdown did not request relaunch. Exit ${childProcess.exitCode}; ${processOutput}`);
 						current = await launchElectron(options);

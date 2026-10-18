@@ -25,8 +25,8 @@ export class Dialogs {
 		return this.respond(application, title, open, undefined, timeout);
 	}
 
-	async confirm(application: PlaywrightApplication, title: string, button: string, open: () => Promise<unknown>): Promise<DialogMessage> {
-		return this.respond(application, title, open, button);
+	async confirm(application: PlaywrightApplication, title: string, button: string, open: () => Promise<unknown>, timeout?: number): Promise<DialogMessage> {
+		return this.respond(application, title, open, button, timeout);
 	}
 
 	private async respond(application: PlaywrightApplication, title: string, open: () => Promise<unknown>, button?: string, timeout?: number): Promise<DialogMessage> {

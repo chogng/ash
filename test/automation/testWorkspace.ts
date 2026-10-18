@@ -43,6 +43,8 @@ export async function createTestWorkspace(options: TestWorkspaceOptions = {}): P
 	await writeFile(pdfFile, createPdfDocument());
 	if (options.gitRepository) {
 		await run('git', ['init', '-b', 'main'], { cwd: directory });
+		// Restores and worktrees must retain the fixture's LF bytes on every host.
+		await run('git', ['config', 'core.autocrlf', 'false'], { cwd: directory });
 		await run('git', ['config', 'commit.gpgsign', 'false'], { cwd: directory });
 		await run('git', ['config', 'user.name', 'Ash Test'], { cwd: directory });
 		await run('git', ['config', 'user.email', 'ash-test@example.invalid'], { cwd: directory });
