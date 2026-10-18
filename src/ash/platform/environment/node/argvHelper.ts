@@ -3,6 +3,8 @@ import { fileURLToPath } from 'node:url';
 
 /** Keeps file requests separate from the single project target. */
 export function parseLaunchArguments(args: readonly string[]): IParsedLaunchArguments {
+	const log: string[] = [];
+	let verbose = false;
 	const paths: string[] = [];
 	const urls: string[] = [];
 	const workspaceArgs: string[] = [];
@@ -56,6 +58,12 @@ export function parseLaunchArguments(args: readonly string[]): IParsedLaunchArgu
 			return value;
 		};
 		switch (name) {
+			case '--log':
+				log.push(takeValue());
+				break;
+			case '--verbose':
+				verbose = true;
+				break;
 			case '--new-window':
 			case '-n':
 				newWindow = true;
@@ -105,7 +113,7 @@ export function parseLaunchArguments(args: readonly string[]): IParsedLaunchArgu
 		}
 		workspaceArgs.push('--folder', paths.pop()!);
 	}
-	return { paths, urls, workspace: parseWorkspaceLaunchArguments(workspaceArgs), newWindow, reuseWindow, goto, wait, waitMarkerFilePath };
+	return { ...(log.length ? { log } : {}), ...(verbose ? { verbose } : {}), paths, urls, workspace: parseWorkspaceLaunchArguments(workspaceArgs), newWindow, reuseWindow, goto, wait, waitMarkerFilePath };
 }
 
 /** Parses one project target from desktop launch arguments. */
@@ -203,6 +211,11 @@ export function parseMainProcessArgv(options: MainProcessArgumentsOptions): stri
 	let hasApplicationEntry = options.packaging === 'packaged';
 	for (let index = 0; index < executableArguments.length; index += 1) {
 		const argument = executableArguments[index]!;
+		if (argument === '--log') {
+			workspaceArguments.push(argument);
+			if (executableArguments[index + 1] !== undefined) workspaceArguments.push(executableArguments[++index]!);
+			continue;
+		}
 		if (argument.startsWith("--user-data-dir=")) continue;
 		if (argument === "--user-data-dir") {
 			index += 1;

@@ -1,3 +1,5 @@
+import { IDefaultLogLevelsService } from '../../services/log/common/defaultLogLevels.js';
+import { DEFAULT_LOG_LEVEL } from '../../../platform/log/common/log.js';
 import { emptyEditorServiceState } from '../common/testEditorService.js';
 import { ICommandService } from '../../../platform/commands/common/commands.js';
 import { CommandService } from '../../services/commands/common/commandService.js';
@@ -123,6 +125,11 @@ export function workbenchInstantiationService(owner?: Pick<DisposableStore, 'add
 		storage = resources.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'test', backend: browser.window.localStorage, flushInterval: 0 }));
 	}
 	services.registerInstance(IStorageService, storage);
+	services.registerInstance(IDefaultLogLevelsService, {
+		defaultLogLevels: { default: DEFAULT_LOG_LEVEL, extensions: [] }, onDidChangeDefaultLogLevels: Event.None,
+		getDefaultLogLevel: () => DEFAULT_LOG_LEVEL,
+		setDefaultLogLevel: async () => { throw new Error('Default log persistence is outside this fixture'); },
+	});
 	if (overrides.dialogService) services.registerInstance(IDialogService, overrides.dialogService);
 	registerTestTerminalLifecycleServices(services);
 	const fileModels = resources.add(uriIdentityServices.createInstance(BrowserTextModelService, overrides.fileResources ?? {

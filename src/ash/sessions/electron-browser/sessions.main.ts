@@ -48,7 +48,7 @@ import { createWorkspaceContextApi } from '../../platform/workspace/electron-bro
 import { parseWorkspace } from '../../platform/workspace/common/workspace.js';
 import { selectionFromWorkspace } from '../browser/workspaceSelection.js';
 import { NativeWorkbenchStorageService } from '../../workbench/services/storage/electron-browser/storageService.js';
-import { LoggerChannelClient } from '../../platform/log/common/logIpc.js';
+import { NativeLogService } from '../../workbench/services/log/electron-browser/logService.js';
 import { IPlaywrightService } from '../../platform/browserView/common/playwrightService.js';
 import { registerAppServerBrowserHost } from '../../platform/agentHost/electron-browser/appServerBrowserHost.js';
 import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
@@ -96,7 +96,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 		...getSingletonServiceDescriptors().filter(([id]) => id === IPlaywrightService),
 	)));
 	const serviceCollection = new ServiceCollection([IWorkbenchEnvironmentService, new ElectronWorkbenchEnvironmentService()]);
-	let logger: LoggerChannelClient;
+	let logger: NativeLogService;
 	let api: Awaited<ReturnType<typeof createElectronRendererApi>>;
 	let documentClient: AppServerProtocolClient | undefined;
 	try {
@@ -105,12 +105,15 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 		// Release automation dependencies before their Main IPC connection during window shutdown.
 		profileServices.registerSingleton(IMainProcessService, () => profileServices.createInstance(ElectronIPCMainProcessService, windowId as number));
 		const mainProcessService = profileServices.get(IMainProcessService);
+		const environment = new ElectronWorkbenchEnvironmentService(await mainProcessService.getChannel('logger').call('getDefaultLogLevels'));
+		profileServices.registerInstance(IWorkbenchEnvironmentService, environment);
 		const playwrightService = profileServices.get(IPlaywrightService);
 		serviceCollection.set(IMainProcessService, mainProcessService);
+		serviceCollection.set(IWorkbenchEnvironmentService, environment);
 		serviceCollection.set(IPolicyService, sessions.add(new PolicyChannelClient(mainProcessService.getChannel('policy'))));
 		serviceCollection.set(IPlaywrightService, playwrightService);
 		serviceCollection.set(IBrowserViewService, ProxyChannel.toService<IBrowserViewService>(mainProcessService.getChannel(ipcBrowserViewChannelName)));
-		logger = sessions.add(profileServices.createInstance(LoggerChannelClient));
+		logger = sessions.add(profileServices.createInstance(NativeLogService, 'agents'));
 		serviceCollection.set(ILoggerService, logger);
 		api = await createElectronRendererApi([client => { documentClient = client; return {}; }, (_client, _appServer, localClient) => registerLocalTranscriptionService(transcriptionServices, localClient)], { browser: true, textDocuments: true, appTools: true, agentHosts: true }, permissionDialog, mainProcessService);
 	}
@@ -187,7 +190,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 				'workbench.contrib.speechAccessibilitySignal',
 				'workbench.contrib.saveAccessibilitySignals',
 			],
-			createLogService: () => logger.createLogger('agents', { hidden: true }),
+			createLogService: () => logger,
 			createStorageService: async options => {
 				const storage = profileServices.createInstance(NativeWorkbenchStorageService, options);
 				try { await storage.initialize(); return storage; }

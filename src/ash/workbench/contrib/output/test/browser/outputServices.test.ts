@@ -6,6 +6,7 @@ import { StorageScope, StorageTarget } from '../../../../../platform/storage/com
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
+import { windowLogId } from '../../../../services/log/common/logConstants.js';
 import { BrowserStorageService } from "../../../../services/storage/browser/storageService.js";
 
 test("OutputService registers, updates, reveals, and removes independent channels", () => {
@@ -133,20 +134,20 @@ test("OutputFilterState combines include, exclude, severity, and category filter
 	using filterResources = new DisposableStore();
 	const filters = workbenchInstantiationService(filterResources).get(IOutputService).filters;
 	filters.setText('server restart,!failed');
-	assert.equal(filters.matches(entry, 'window'), true);
+	assert.equal(filters.matches(entry, windowLogId), true);
 	filters.setText("server,!scheduled");
-	assert.equal(filters.matches(entry, 'window'), false);
+	assert.equal(filters.matches(entry, windowLogId), false);
 	filters.setText("");
 	filters.setSeverityVisible("warning", false);
-	assert.equal(filters.matches(entry, 'window'), false);
+	assert.equal(filters.matches(entry, windowLogId), false);
 	filters.setSeverityVisible("warning", true);
-	filters.setCategoryVisible("lifecycle", false, 'window');
-	assert.equal(filters.matches(entry, 'window'), false);
+	filters.setCategoryVisible("lifecycle", false, windowLogId);
+	assert.equal(filters.matches(entry, windowLogId), false);
 	filters.reset();
-	assert.equal(filters.matches(entry, 'window'), true);
+	assert.equal(filters.matches(entry, windowLogId), true);
 	filters.setMinimumSeverity("error");
-	assert.equal(filters.matches(entry, 'window'), false);
-	assert.equal(filters.matches({ ...entry, severity: "error" }, 'window'), true);
+	assert.equal(filters.matches(entry, windowLogId), false);
+	assert.equal(filters.matches({ ...entry, severity: "error" }, windowLogId), true);
 });
 
 test("OutputFilterState restores workspace-local filter choices", () => {
@@ -182,7 +183,7 @@ for (const syntaxVersion of [undefined, 1, 2]) {
 		const raw = JSON.stringify({ ...(syntaxVersion === undefined ? {} : { syntaxVersion }), text: '', hiddenSeverities: [], hiddenCategories: ['lifecycle', 'build'] });
 		const storage = filterStorage(resources, raw);
 		const filters = workbenchInstantiationService(resources, storage).get(IOutputService).filters;
-		assert.deepEqual({ first: filters.matches(entry, 'window'), second: filters.matches(entry, 'extension-host'), build: filters.matches({ ...entry, category: 'build' }, 'extension-host'), stored: storage.get('output.filterState', StorageScope.WORKSPACE) }, {
+		assert.deepEqual({ first: filters.matches(entry, windowLogId), second: filters.matches(entry, 'extension-host'), build: filters.matches({ ...entry, category: 'build' }, 'extension-host'), stored: storage.get('output.filterState', StorageScope.WORKSPACE) }, {
 			first: false, second: false, build: false, stored: raw,
 		});
 	});
@@ -198,8 +199,8 @@ for (const visible of [false, true]) {
 			const filters = workbenchInstantiationService(resources, storage).get(IOutputService).filters;
 			let changes = 0;
 			using migrationListener = filters.onDidChange(() => changes++);
-			filters.setCategoryVisible('lifecycle', visible, 'window');
-			assert.deepEqual({ first: filters.matches(entry, 'window'), second: filters.matches(entry, 'extension-host'), firstBuild: filters.matches({ ...entry, category: 'build' }, 'window'), secondBuild: filters.matches({ ...entry, category: 'build' }, 'extension-host'), changes }, {
+			filters.setCategoryVisible('lifecycle', visible, windowLogId);
+			assert.deepEqual({ first: filters.matches(entry, windowLogId), second: filters.matches(entry, 'extension-host'), firstBuild: filters.matches({ ...entry, category: 'build' }, windowLogId), secondBuild: filters.matches({ ...entry, category: 'build' }, 'extension-host'), changes }, {
 				first: visible, second: true, firstBuild: false, secondBuild: false, changes: 1,
 			});
 			const stored = JSON.parse(storage.get('output.filterState', StorageScope.WORKSPACE)!);
@@ -209,9 +210,9 @@ for (const visible of [false, true]) {
 		{
 			using resources = new DisposableStore();
 			const filters = workbenchInstantiationService(resources, storage).get(IOutputService).filters;
-			assert.deepEqual({ first: filters.matches(entry, 'window'), second: filters.matches(entry, 'extension-host'), build: filters.matches({ ...entry, category: 'build' }, 'extension-host') }, { first: visible, second: true, build: false });
+			assert.deepEqual({ first: filters.matches(entry, windowLogId), second: filters.matches(entry, 'extension-host'), build: filters.matches({ ...entry, category: 'build' }, 'extension-host') }, { first: visible, second: true, build: false });
 			filters.setCategoryVisible('lifecycle', !visible, 'extension-host');
-			assert.deepEqual({ first: filters.matches(entry, 'window'), second: filters.matches(entry, 'extension-host'), build: filters.matches({ ...entry, category: 'build' }, 'window') }, { first: visible, second: !visible, build: false });
+			assert.deepEqual({ first: filters.matches(entry, windowLogId), second: filters.matches(entry, 'extension-host'), build: filters.matches({ ...entry, category: 'build' }, windowLogId) }, { first: visible, second: !visible, build: false });
 		}
 	});
 }
@@ -234,7 +235,7 @@ for (const category of ['["window","lifecycle"]', String.raw`\0["window","lifecy
 		{
 			using resources = new DisposableStore();
 			const output = workbenchInstantiationService(resources, storage).get(IOutputService);
-			using first = output.createChannel({ id: 'window', label: 'Window', kind: 'log' });
+			using first = output.createChannel({ id: windowLogId, label: 'Window', kind: 'log' });
 			using second = output.createChannel({ id: 'extension-host', label: 'Extension Host', kind: 'log' });
 			for (const channel of [first, second]) {
 				channel.appendLine({ category, text: 'Literal category' });
@@ -252,7 +253,7 @@ for (const category of ['["window","lifecycle"]', String.raw`\0["window","lifecy
 		{
 			using resources = new DisposableStore();
 			const filters = workbenchInstantiationService(resources, storage).get(IOutputService).filters;
-			assert.deepEqual({ firstLiteral: filters.matches({ ...entry, category }, 'window'), secondLiteral: filters.matches({ ...entry, category }, 'extension-host'), actualLifecycle: filters.matches(entry, 'window') }, {
+			assert.deepEqual({ firstLiteral: filters.matches({ ...entry, category }, windowLogId), secondLiteral: filters.matches({ ...entry, category }, 'extension-host'), actualLifecycle: filters.matches(entry, windowLogId) }, {
 				firstLiteral: false, secondLiteral: true, actualLifecycle: true,
 			});
 		}
@@ -265,7 +266,7 @@ test('Output category identities reject null bytes and survive unrelated saved-f
 	{
 		using resources = new DisposableStore();
 		const filters = workbenchInstantiationService(resources, storage).get(IOutputService).filters;
-		assert.throws(() => filters.setCategoryVisible('lifecycle\0', false, 'window'), /null bytes/);
+		assert.throws(() => filters.setCategoryVisible('lifecycle\0', false, windowLogId), /null bytes/);
 		assert.throws(() => filters.setCategoryVisible('lifecycle', false, 'window\0'), /null bytes/);
 		filters.setCategoryVisible('["window","lifecycle"]', false, 'a:b');
 		filters.setText('server');
@@ -274,7 +275,7 @@ test('Output category identities reject null bytes and survive unrelated saved-f
 	{
 		using resources = new DisposableStore();
 		const filters = workbenchInstantiationService(resources, storage).get(IOutputService).filters;
-		assert.deepEqual({ selected: filters.matches({ ...entry, category: '["window","lifecycle"]' }, 'a:b'), other: filters.matches({ ...entry, category: '["window","lifecycle"]' }, 'a'), original: filters.matches(entry, 'window'), severity: filters.isSeverityVisible('trace'), text: filters.text }, {
+		assert.deepEqual({ selected: filters.matches({ ...entry, category: '["window","lifecycle"]' }, 'a:b'), other: filters.matches({ ...entry, category: '["window","lifecycle"]' }, 'a'), original: filters.matches(entry, windowLogId), severity: filters.isSeverityVisible('trace'), text: filters.text }, {
 			selected: false, other: true, original: true, severity: false, text: 'server',
 		});
 	}
@@ -285,10 +286,10 @@ test('Output channel category changes remain unsaved when a future schema owns s
 	const raw = JSON.stringify({ syntaxVersion: 3, text: 'future', hiddenCategories: ['lifecycle'], future: { retained: true } });
 	const storage = filterStorage(resources, raw);
 	const filters = workbenchInstantiationService(resources, storage).get(IOutputService).filters;
-	filters.setCategoryVisible('lifecycle', false, 'window');
-	assert.deepEqual({ first: filters.matches(entry, 'window'), second: filters.matches(entry, 'extension-host'), stored: storage.get('output.filterState', StorageScope.WORKSPACE) }, { first: false, second: true, stored: raw });
+	filters.setCategoryVisible('lifecycle', false, windowLogId);
+	assert.deepEqual({ first: filters.matches(entry, windowLogId), second: filters.matches(entry, 'extension-host'), stored: storage.get('output.filterState', StorageScope.WORKSPACE) }, { first: false, second: true, stored: raw });
 	filters.reset();
-	assert.deepEqual({ first: filters.matches(entry, 'window'), second: filters.matches(entry, 'extension-host'), stored: storage.get('output.filterState', StorageScope.WORKSPACE) }, { first: true, second: true, stored: raw });
+	assert.deepEqual({ first: filters.matches(entry, windowLogId), second: filters.matches(entry, 'extension-host'), stored: storage.get('output.filterState', StorageScope.WORKSPACE) }, { first: true, second: true, stored: raw });
 });
 
 test('Output text queries match comma alternatives with exclusions taking precedence', () => {
@@ -303,7 +304,7 @@ test('Output text queries match comma alternatives with exclusions taking preced
 	];
 	for (const scenario of scenarios) {
 		filters.setText(scenario.query);
-		assert.deepEqual(lines.filter(text => filters.matches({ ...entry, text }, 'window')), scenario.expected, scenario.query);
+		assert.deepEqual(lines.filter(text => filters.matches({ ...entry, text }, windowLogId)), scenario.expected, scenario.query);
 	}
 });
 
@@ -320,7 +321,7 @@ test('Output text queries keep spaces, minus and protected quotes literal', () =
 	];
 	for (const scenario of scenarios) {
 		filters.setText(scenario.query);
-		assert.deepEqual(scenario.lines.filter(text => filters.matches({ ...entry, text }, 'window')), scenario.expected, scenario.query);
+		assert.deepEqual(scenario.lines.filter(text => filters.matches({ ...entry, text }, windowLogId)), scenario.expected, scenario.query);
 	}
 });
 
@@ -328,13 +329,13 @@ test('Output text queries search content while category filtering remains indepe
 	using resources = new DisposableStore();
 	const filters = workbenchInstantiationService(resources).get(IOutputService).filters;
 	filters.setText('lifecycle');
-	assert.equal(filters.matches(entry, 'window'), false);
+	assert.equal(filters.matches(entry, windowLogId), false);
 	filters.setText('server');
-	assert.equal(filters.matches(entry, 'window'), true);
-	filters.setCategoryVisible('lifecycle', false, 'window');
-	assert.equal(filters.matches(entry, 'window'), false);
+	assert.equal(filters.matches(entry, windowLogId), true);
+	filters.setCategoryVisible('lifecycle', false, windowLogId);
+	assert.equal(filters.matches(entry, windowLogId), false);
 	filters.reset();
-	assert.equal(filters.matches(entry, 'window'), true);
+	assert.equal(filters.matches(entry, windowLogId), true);
 });
 
 test('Output restores saved queries unchanged and adopts current syntax on identical explicit input', () => {
@@ -351,7 +352,7 @@ test('Output restores saved queries unchanged and adopts current syntax on ident
 		const raw = JSON.stringify({ text: scenario.query, hiddenSeverities: [], hiddenCategories: [], ignored: 'not owned' });
 		const storage = filterStorage(resources, raw);
 		const filters = workbenchInstantiationService(resources, storage).get(IOutputService).filters;
-		const matches = (): string[] => lines.filter(text => filters.matches({ ...entry, text }, 'window'));
+		const matches = (): string[] => lines.filter(text => filters.matches({ ...entry, text }, windowLogId));
 		assert.deepEqual({ text: filters.text, notice: filters.textFilterNotice, matches: matches(), stored: storage.get('output.filterState', StorageScope.WORKSPACE) }, {
 			text: scenario.query, notice: 'restored', matches: scenario.restored, stored: raw,
 		});
@@ -374,24 +375,24 @@ test('Output metadata changes preserve restored syntax through reload until clea
 			using resources = new DisposableStore();
 			const filters = workbenchInstantiationService(resources, storage).get(IOutputService).filters;
 			filters.setMinimumSeverity('debug');
-			filters.setCategoryVisible('hidden', false, 'window');
-			assert.deepEqual({ notice: filters.textFilterNotice, matches: filters.matches(entry, 'window'), stored: JSON.parse(storage.get('output.filterState', StorageScope.WORKSPACE)!) }, {
-				notice: 'restored', matches: true, stored: { syntaxVersion: 1, text: query, hiddenSeverities: ['trace'], hiddenCategories: ['\0["window","hidden"]'] },
+			filters.setCategoryVisible('hidden', false, windowLogId);
+			assert.deepEqual({ notice: filters.textFilterNotice, matches: filters.matches(entry, windowLogId), stored: JSON.parse(storage.get('output.filterState', StorageScope.WORKSPACE)!) }, {
+				notice: 'restored', matches: true, stored: { syntaxVersion: 1, text: query, hiddenSeverities: ['trace'], hiddenCategories: ['\0' + JSON.stringify([windowLogId, 'hidden'])] },
 			});
 		}
 		{
 			using resources = new DisposableStore();
 			const filters = workbenchInstantiationService(resources, storage).get(IOutputService).filters;
-			assert.deepEqual({ text: filters.text, notice: filters.textFilterNotice, matches: filters.matches(entry, 'window') }, { text: query, notice: 'restored', matches: true });
+			assert.deepEqual({ text: filters.text, notice: filters.textFilterNotice, matches: filters.matches(entry, windowLogId) }, { text: query, notice: 'restored', matches: true });
 			if (action === 'clear') { filters.setText(''); }
 			else { filters.reset(); }
 			const stored = JSON.parse(storage.get('output.filterState', StorageScope.WORKSPACE)!);
-			assert.deepEqual(stored, { syntaxVersion: 2, text: '', hiddenSeverities: action === 'clear' ? ['trace'] : [], hiddenCategories: action === 'clear' ? ['\0["window","hidden"]'] : [] });
+			assert.deepEqual(stored, { syntaxVersion: 2, text: '', hiddenSeverities: action === 'clear' ? ['trace'] : [], hiddenCategories: action === 'clear' ? ['\0' + JSON.stringify([windowLogId, 'hidden'])] : [] });
 		}
 		{
 			using resources = new DisposableStore();
 			const filters = workbenchInstantiationService(resources, storage).get(IOutputService).filters;
-			assert.deepEqual({ text: filters.text, notice: filters.textFilterNotice, matches: filters.matches(entry, 'window') }, { text: '', notice: undefined, matches: true });
+			assert.deepEqual({ text: filters.text, notice: filters.textFilterNotice, matches: filters.matches(entry, windowLogId) }, { text: '', notice: undefined, matches: true });
 		}
 	}
 });
@@ -405,7 +406,7 @@ test('Output does not show a migration notice for empty or current-version saved
 		assert.equal(filters.textFilterNotice, undefined);
 		assert.equal(storage.get('output.filterState', StorageScope.WORKSPACE), raw);
 		filters.setText('server,restart');
-		assert.equal(filters.matches({ ...entry, text: 'restart server' }, 'window'), true);
+		assert.equal(filters.matches({ ...entry, text: 'restart server' }, windowLogId), true);
 	}
 });
 
@@ -415,13 +416,13 @@ test('Output preserves unknown saved versions and applies only unsaved current-w
 		const raw = JSON.stringify({ syntaxVersion, text: 'unknown', hiddenSeverities: ['warning'], hiddenCategories: ['lifecycle'], future: { query: 'untouched' } });
 		const storage = filterStorage(resources, raw);
 		const filters = workbenchInstantiationService(resources, storage).get(IOutputService).filters;
-		assert.deepEqual({ text: filters.text, notice: filters.textFilterNotice, matches: filters.matches(entry, 'window') }, { text: '', notice: 'unsupported', matches: true });
+		assert.deepEqual({ text: filters.text, notice: filters.textFilterNotice, matches: filters.matches(entry, windowLogId) }, { text: '', notice: 'unsupported', matches: true });
 		filters.setText('server,restart');
 		filters.setSeverityVisible('warning', false);
-		assert.equal(filters.matches(entry, 'window'), false);
-		filters.setCategoryVisible('lifecycle', false, 'window');
+		assert.equal(filters.matches(entry, windowLogId), false);
+		filters.setCategoryVisible('lifecycle', false, windowLogId);
 		filters.reset();
-		assert.deepEqual({ text: filters.text, notice: filters.textFilterNotice, matches: filters.matches(entry, 'window'), stored: storage.get('output.filterState', StorageScope.WORKSPACE) }, { text: '', notice: 'unsupported', matches: true, stored: raw });
+		assert.deepEqual({ text: filters.text, notice: filters.textFilterNotice, matches: filters.matches(entry, windowLogId), stored: storage.get('output.filterState', StorageScope.WORKSPACE) }, { text: '', notice: 'unsupported', matches: true, stored: raw });
 	}
 });
 
@@ -434,7 +435,7 @@ test('Output does not overwrite a newer saved schema published after the window 
 	storage.store('output.filterState', raw, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	filters.setSeverityVisible('trace', false);
 	filters.setText('restart');
-	assert.deepEqual({ text: filters.text, notice: filters.textFilterNotice, matches: filters.matches(entry, 'window'), stored: storage.get('output.filterState', StorageScope.WORKSPACE) }, { text: 'restart', notice: 'unsupported', matches: true, stored: raw });
+	assert.deepEqual({ text: filters.text, notice: filters.textFilterNotice, matches: filters.matches(entry, windowLogId), stored: storage.get('output.filterState', StorageScope.WORKSPACE) }, { text: 'restart', notice: 'unsupported', matches: true, stored: raw });
 });
 
 
@@ -451,7 +452,7 @@ for (const action of ['empty-input', 'same-input', 'empty-reset']) {
 		using listener = filters.onDidChange(() => changes++);
 		const apply = (): void => action === 'empty-reset' ? filters.reset() : filters.setText(query);
 		apply();
-		assert.deepEqual({ text: filters.text, notice: filters.textFilterNotice, matches: filters.matches(entry, 'window'), stored: storage.get('output.filterState', StorageScope.WORKSPACE), changes }, {
+		assert.deepEqual({ text: filters.text, notice: filters.textFilterNotice, matches: filters.matches(entry, windowLogId), stored: storage.get('output.filterState', StorageScope.WORKSPACE), changes }, {
 			text: query, notice: 'unsupported', matches: true, stored: raw, changes: 1,
 		});
 		apply();
@@ -459,3 +460,47 @@ for (const action of ['empty-input', 'same-input', 'empty-reset']) {
 		assert.equal(storage.get('output.filterState', StorageScope.WORKSPACE), raw);
 	});
 }
+
+for (const syntaxVersion of [undefined, 1, 2, 999]) {
+	test(`Window log identity migrates saved selection and supported category state (syntax ${syntaxVersion})`, () => {
+		const browser = new JSDOM('', { url: 'http://localhost' });
+		try {
+			using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'window-log-migration', flushInterval: 0 });
+			storage.store('output.activeChannel', 'window', StorageScope.WORKSPACE, StorageTarget.USER);
+			const original = JSON.stringify({ syntaxVersion, text: 'restart', hiddenSeverities: ['trace'], hiddenCategories: ['\0' + JSON.stringify(['window', 'lifecycle']), 'global', '\0["tasks","build"]'] });
+			storage.store('output.filterState', original, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+			for (let reopen = 0; reopen < 2; reopen++) {
+				using resources = new DisposableStore();
+				const output = workbenchInstantiationService(resources, storage).get(IOutputService);
+				using task = output.createChannel({ id: 'tasks', label: 'Tasks' });
+				using window = output.createChannel({ id: windowLogId, label: 'Window', kind: 'log' });
+				assert.equal(output.activeChannel, window);
+				assert.equal(storage.get('output.activeChannel', StorageScope.WORKSPACE), windowLogId);
+				if (syntaxVersion === 999) {
+					assert.equal(storage.get('output.filterState', StorageScope.WORKSPACE), original);
+					assert.equal(output.filters.textFilterNotice, 'unsupported');
+				} else {
+					assert.equal(output.filters.isCategoryVisible('lifecycle', windowLogId), false);
+					assert.equal(output.filters.isCategoryVisible('lifecycle', 'tasks'), true);
+					assert.deepEqual(JSON.parse(storage.get('output.filterState', StorageScope.WORKSPACE)!), {
+						...(syntaxVersion === undefined ? {} : { syntaxVersion }), text: 'restart', hiddenSeverities: ['trace'],
+						hiddenCategories: ['\0' + JSON.stringify([windowLogId, 'lifecycle']), 'global', '\0["tasks","build"]'],
+					});
+				}
+			}
+		} finally { browser.window.close(); }
+	});
+}
+
+test('Window filter migration leaves the saved source intact when persistence fails', () => {
+	using resources = new DisposableStore();
+	const raw = JSON.stringify({ syntaxVersion: 2, text: '', hiddenSeverities: [], hiddenCategories: ['\0["window","build"]'] });
+	const storage = filterStorage(resources, raw);
+	const store = storage.store.bind(storage);
+	storage.store = (key, ...args) => {
+		if (key === 'output.filterState') throw new Error('state write failed');
+		store(key, ...args);
+	};
+	assert.throws(() => workbenchInstantiationService(resources, storage).get(IOutputService), /state write failed/);
+	assert.equal(storage.get('output.filterState', StorageScope.WORKSPACE), raw);
+});

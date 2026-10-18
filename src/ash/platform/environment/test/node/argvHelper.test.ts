@@ -39,3 +39,16 @@ for (const packaging of ['development', 'packaged'] as const) {
 		}), ['--folder=/project', '/project/main.ts']);
 	});
 }
+
+test('launch log flags consume their values without becoming file requests', async () => {
+	const { parseLaunchArguments } = await import('../../node/argvHelper.js');
+	const result = parseLaunchArguments(['--log', 'debug', '--log=Publisher.Extension=trace', '--verbose', '/project']);
+	assert.deepEqual(result.log, ['debug', 'Publisher.Extension=trace']);
+	assert.equal(result.verbose, true);
+	assert.deepEqual(result.paths, ['/project']);
+	assert.throws(() => parseLaunchArguments(['--log']), /requires a value/);
+});
+
+test('development startup preserves a log value before the application entry', () => {
+	assert.deepEqual(parseMainProcessArgv({ arguments: ['/electron', '--log', 'debug', '/repo', '/project'], packaging: 'development', appPath: '/repo' }), ['--log', 'debug', '/project']);
+});

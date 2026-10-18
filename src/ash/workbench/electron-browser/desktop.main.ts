@@ -60,8 +60,9 @@ import { DirectoryPermissionDialog } from './parts/dialogs/directoryPermissionDi
 import { ElectronWindow } from './window.js';
 import { registerLocalTranscriptionService } from '../services/localTranscription/electron-browser/localTranscriptionService.js';
 import { NativeWorkbenchStorageService } from '../services/storage/electron-browser/storageService.js';
-import { LoggerChannelClient } from '../../platform/log/common/logIpc.js';
+import { NativeLogService } from '../services/log/electron-browser/logService.js';
 import { ILoggerService } from '../../platform/log/common/log.js';
+import { IWorkbenchEnvironmentService } from '../services/environment/common/environmentService.js';
 import { ElectronWorkbenchEnvironmentService } from '../services/environment/electron-browser/environmentService.js';
 import { ProxyChannel } from '../../base/parts/ipc/common/ipc.js';
 import { IBrowserViewService, ipcBrowserViewChannelName } from '../../platform/browserView/common/browserView.js';
@@ -99,7 +100,9 @@ export class DesktopMain extends Disposable {
 			// The scope releases its dependent services before closing their Main connection.
 			profileServices.registerSingleton(IMainProcessService, () => profileServices.createInstance(ElectronIPCMainProcessService, windowId as number));
 			const mainProcessService = profileServices.get(IMainProcessService);
-			const logger = this._register(profileServices.createInstance(LoggerChannelClient));
+			const environment = new ElectronWorkbenchEnvironmentService(await mainProcessService.getChannel('logger').call('getDefaultLogLevels'));
+			profileServices.registerInstance(IWorkbenchEnvironmentService, environment);
+			const logger = this._register(profileServices.createInstance(NativeLogService, 'workbench'));
 			const playwrightService = profileServices.get(IPlaywrightService);
 			const resolver = this._register(profileServices.createInstance(RemoteAuthorityResolverService));
 			profileServices.registerInstance(IRemoteAuthorityResolverService, resolver);
@@ -148,7 +151,7 @@ export class DesktopMain extends Disposable {
 					[IRemoteAuthorityResolverService, resolver],
 					[IPlaywrightService, playwrightService],
 				),
-				environmentService: new ElectronWorkbenchEnvironmentService(),
+				environmentService: environment,
 				createURLService: services => {
 					return services.createInstance(RelayURLService, windowId as number);
 				},
@@ -167,7 +170,7 @@ export class DesktopMain extends Disposable {
 					return hosts;
 				} : undefined,
 				createBrowserHost: documentClient ? services => registerAppServerBrowserHost(documentClient!, playwrightService, mainProcessService, services.get(IConfigurationService)) : undefined,
-				createLogService: () => logger.createLogger('workbench', { hidden: true }),
+				createLogService: () => logger,
 				createWorkingCopyBackupService: (services, workspaceId) => {
 					if (!api.backup) return new IndexedDbWorkingCopyBackupService(workspaceId);
 					return services.createChild(new ServiceCollection([IBackupService, api.backup])).createInstance(WorkingCopyBackupService);

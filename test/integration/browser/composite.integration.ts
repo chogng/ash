@@ -1,3 +1,12 @@
+import { FileService } from '../../../src/ash/platform/files/common/fileService.js';
+import { IndexedDBFileSystemProvider } from '../../../src/ash/platform/files/browser/indexedDBFileSystemProvider.js';
+import { ILogService, ILoggerService, LogLevel } from '../../../src/ash/platform/log/common/log.js';
+import { LogService } from '../../../src/ash/platform/log/common/logServiceImpl.js';
+import { IWorkbenchEnvironmentService } from '../../../src/ash/workbench/services/environment/common/environmentService.js';
+import { ElectronWorkbenchEnvironmentService } from '../../../src/ash/workbench/services/environment/electron-browser/environmentService.js';
+import { BrowserWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/browser/browserWorkingCopyService.js';
+import { IWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/common/workingCopyService.js';
+import { IDefaultLogLevelsService, DefaultLogLevelsService, readDefaultLogLevels, type DefaultLogLevels } from '../../../src/ash/workbench/services/log/common/defaultLogLevels.js';
 import '../../../src/ash/workbench/browser/parts/activitybar/media/activitybarpart.css';
 import '../../../src/ash/workbench/browser/parts/activitybar/media/activityaction.css';
 import { IActivityService } from '../../../src/ash/workbench/services/activity/common/activity.js';
@@ -98,7 +107,7 @@ import type { IEditorPane } from '../../../src/ash/workbench/common/editor.js';
 import '../../../src/ash/sessions/browser/parts/media/sessionsPart.css';
 import { SessionGridLayout } from '../../../src/ash/sessions/browser/parts/sessionGridLayout.js';
 import type { IView } from '../../../src/ash/base/browser/ui/grid/grid.js';
-import { IFileService } from '../../../src/ash/platform/files/common/files.js';
+import { IFileService, FileSystemProviderErrorCode, toFileSystemProviderErrorCode } from '../../../src/ash/platform/files/common/files.js';
 import { IUriIdentityService } from '../../../src/ash/platform/uriIdentity/common/uriIdentity.js';
 import { AgentHostFileSystemProvider } from '../../../src/ash/platform/agentHost/common/agentHostFileSystemProvider.js';
 import { createDisconnectedFileApi } from '../../../src/ash/platform/files/browser/fileApi.js';
@@ -150,6 +159,7 @@ declare global {
 			readonly events: readonly string[];
 			readonly copiedProblems: readonly string[];
 			outputState(): { text: string; filter: string; };
+			logDefaultsState(): Promise<{ file: string; defaultLevel: string; recordingLevel: string; }>;
 			appendOutput(text: string): void;
 			showAgentOutput(): void;
 			changeAgentSession(id: string): void;
@@ -236,6 +246,8 @@ services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), 
 services.registerInstance(IViewDescriptorService, resources.add(services.createInstance(ViewDescriptorService, { registry })));
 services.registerSingleton(IActivityService, () => services.createInstance(ActivityService));
 const commands = resources.add(new CommandService(services));
+let logFiles: FileService | undefined;
+let windowLogger: LogService | undefined;
 const openedAgentEvents: unknown[] = [];
 const agentSession = observableValue<SessionsViewSelection | undefined>('agentSession', undefined);
 const agentEvents = [{ eventId: 'event-1', sequence: 1, recordedAt: 1, event: { type: 'turnStarted', threadId: 'root', turnId: 'turn' } }];
@@ -268,10 +280,50 @@ if (new URLSearchParams(location.search).has('output')) {
 		});
 		agentSession.set({ kind: 'session', active: { session: { sessionId: 'first', title: 'Agent output fixture' }, threadId: 'root' } } as SessionsViewSelection, undefined);
 	}
+	let initialLogLevels: DefaultLogLevels | undefined;
+	if (new URLSearchParams(location.search).has('logDefaults')) {
+		services.registerSingleton(IDefaultLogLevelsService, () => services.createInstance(DefaultLogLevelsService, initialLogLevels));
+	} else {
+		services.registerInstance(IDefaultLogLevelsService, {
+			defaultLogLevels: { default: LogLevel.Info, extensions: [] }, onDidChangeDefaultLogLevels: Event.None,
+			getDefaultLogLevel: () => LogLevel.Info, setDefaultLogLevel: async () => { throw new Error('Unexpected default log persistence'); },
+		});
+	}
+	if (new URLSearchParams(location.search).has('logDefaults')) {
+		const files = logFiles = resources.add(new FileService());
+		const environment = new ElectronWorkbenchEnvironmentService();
+		const provider = resources.add(await IndexedDBFileSystemProvider.create(indexedDB, environment.argvResource.scheme));
+		resources.add(files.registerProvider(environment.argvResource.scheme, provider));
+		const logger = windowLogger = resources.add(new LogService());
+		services.registerInstance(IFileService, files);
+		services.registerInstance(IWorkbenchEnvironmentService, environment);
+		services.registerInstance(ILogService, logger);
+		services.registerInstance(ILoggerService, logger);
+		services.registerInstance(IUriIdentityService, uriIdentityServices.get(IUriIdentityService));
+		services.registerInstance(IWorkingCopyService, resources.add(services.createInstance(BrowserWorkingCopyService)));
+		const models = resources.add(uriIdentityServices.createInstance(BrowserTextModelService, {
+			onDidChange: files.onDidChangeFiles,
+			resolve: async (request: Parameters<ITextResourceStore['resolve']>[0]) => {
+				if (request.bootstrapText !== undefined) return { resource: request.resource, text: request.bootstrapText, revision: undefined };
+				const file = await files.readFile(request.resource);
+				return { resource: request.resource, text: file.content, revision: file.revision };
+			},
+			save: async (request: Parameters<ITextResourceStore['save']>[0]) => ({ revision: (await files.writeFile({ resource: request.resource, content: request.text, expectedRevision: request.expectedRevision }, { create: true, overwrite: request.expectedRevision !== undefined })).revision }),
+		}, {}));
+		services.registerInstance(IFileTextModelService, models);
+		const levels = await readDefaultLogLevels(files, environment, logger);
+		logger.setLevel(levels.default);
+		initialLogLevels = levels;
+	}
 	registerCodeEditorServices(services);
+	if (new URLSearchParams(location.search).has('logDefaults')) {
+		await import('../../../src/ash/workbench/browser/media/style.css');
+		resources.add(bindTestColorTheme(services.get(IThemeService), document.documentElement));
+	}
 	services.registerInstance(IAccessibleViewService, { ...toDisposable(() => { }), show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { } });
 	const output = services.get(IOutputService);
-	const channel = resources.add(output.createChannel({ id: 'window', label: 'Window', kind: 'log' }));
+	if (windowLogger) services.get(IDefaultLogLevelsService).getDefaultLogLevel();
+	const channel = resources.add(output.createChannel({ id: 'window', label: 'Window', kind: 'log', logger: windowLogger ? { label: 'Workbench', control: windowLogger } : undefined }));
 	channel.appendLine({ text: 'unavailable', severity: 'error', category: 'application' });
 	channel.appendLine({ text: 'Workbench restored', severity: 'information', category: 'lifecycle' });
 }
@@ -590,6 +642,12 @@ window.ashCompositeIntegration = {
 	outputState: () => {
 		const output = services.get(IOutputService);
 		return { text: output.activeChannel?.getText() ?? '', filter: output.filters.text };
+	},
+	logDefaultsState: async () => {
+		let file = '';
+		try { file = (await logFiles!.readFile(services.get(IWorkbenchEnvironmentService).argvResource)).content; }
+		catch (error) { if (toFileSystemProviderErrorCode(error as Error) !== FileSystemProviderErrorCode.FileNotFound) throw error; }
+		return { file, defaultLevel: services.get(IDefaultLogLevelsService).getDefaultLogLevel(), recordingLevel: windowLogger!.getLevel() };
 	},
 	appendOutput: text => services.get(IOutputService).activeChannel?.appendLine({ text }),
 	showAgentOutput: () => agentOutput!.showCurrent(),

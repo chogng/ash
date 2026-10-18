@@ -1027,3 +1027,37 @@ for (const locale of ['en', 'zh-CN']) {
 		expect(errors).toEqual([]);
 	});
 }
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`Output saves its recording level as default and restores it after reload (${locale})`, async ({ page }, testInfo) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await page.goto(`/composite.html?output&logDefaults&locale=${locale}`);
+		await page.waitForFunction(() => !!window.ashCompositeIntegration);
+		await page.evaluate(() => window.ashCompositeIntegration.open('ash.panel.output'));
+		const openLevels = async () => {
+			await page.locator('[data-action-id="ash.output.more"] button').click();
+			await page.locator('[data-action-id="ash.output.recordingLevel"]').getByRole('menuitem').focus();
+			await page.keyboard.press('ArrowRight');
+		};
+		await openLevels();
+		await page.locator('[data-action-id="ash.output.recordingLevel.trace"]').click();
+		await openLevels();
+		const save = page.getByRole('menuitem', { name: locale === 'en' ? 'Set As Default' : '设为默认', exact: true });
+		await expect(save).toBeEnabled();
+		await save.focus();
+		await page.keyboard.press('Enter');
+		await expect.poll(async () => (await page.evaluate(() => window.ashCompositeIntegration.logDefaultsState())).defaultLevel).toBe('trace');
+		const saved = await page.evaluate(() => window.ashCompositeIntegration.logDefaultsState());
+		expect(JSON.parse(saved.file)['log-level']).toEqual(['trace']);
+		await page.reload();
+		await page.waitForFunction(() => !!window.ashCompositeIntegration);
+		await page.evaluate(() => window.ashCompositeIntegration.open('ash.panel.output'));
+		const restored = await page.evaluate(() => window.ashCompositeIntegration.logDefaultsState());
+		expect([restored.defaultLevel, restored.recordingLevel]).toEqual(['trace', 'trace']);
+		await openLevels();
+		await expect(save).toBeDisabled();
+		await page.screenshot({ path: testInfo.outputPath(`default-log-level-${locale}.png`) });
+		expect(errors).toEqual([]);
+	});
+}

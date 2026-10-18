@@ -55,6 +55,8 @@ export interface ILoggerService {
 }
 
 export interface ILoggerOptions {
+	readonly extensionId?: string;
+	readonly logLevel?: LogLevel;
 	readonly name?: string;
 	readonly hidden?: boolean;
 }
@@ -82,6 +84,7 @@ export abstract class AbstractLoggerService<T extends ILogger = ILogger> extends
 		const existing = this.loggers.get(id);
 		if (existing) return existing.logger;
 		const logger = this.doCreateLogger(id);
+		if (options.logLevel !== undefined) logger.setLevel(options.logLevel);
 		const info = Object.freeze({ ...options, id });
 		const subscription = logger.onDidDispose(() => {
 			const current = this.loggers.get(id)!;
@@ -147,6 +150,23 @@ export interface ILogger extends ILogServiceHost, IDisposable {
 
 export function isLogLevel(value: unknown): value is LogLevel {
 	return typeof value === "string" && Object.values(LogLevel).includes(value as LogLevel);
+}
+
+/** The startup resource uses the standard short spellings, independently of entry severity names. */
+export function parseLogLevel(value: string): LogLevel | undefined {
+	switch (value.toLowerCase()) {
+		case 'trace': return LogLevel.Trace;
+		case 'debug': return LogLevel.Debug;
+		case 'info': case 'information': return LogLevel.Info;
+		case 'warn': case 'warning': return LogLevel.Warning;
+		case 'error': return LogLevel.Error;
+		case 'off': return LogLevel.Off;
+		default: return undefined;
+	}
+}
+
+export function LogLevelToString(level: LogLevel): string {
+	return level === LogLevel.Info ? 'info' : level === LogLevel.Warning ? 'warn' : level;
 }
 
 export function canLog(loggerLevel: LogLevel, messageLevel: LogLevel): boolean {

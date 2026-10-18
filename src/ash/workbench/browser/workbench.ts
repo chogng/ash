@@ -1,3 +1,5 @@
+import { readDefaultLogLevels, DefaultLogLevelsService, IDefaultLogLevelsService } from '../services/log/common/defaultLogLevels.js';
+import '../services/configuration/common/jsonEditingService.js';
 import { IWorkspaceEditingService } from '../services/workspaces/common/workspaceEditing.js';
 import { IWorkspacesService } from '../../platform/workspaces/common/workspaces.js';
 import { IChannelService } from "../../platform/collaboration/common/channelService.js";
@@ -422,6 +424,14 @@ export async function startWorkbench({
 		if (!ownerWindow) { throw new Error('Workbench requires an owner window'); }
 		storage = await createStorageService({ ownerWindow, workspaceId: workspace.id });
 		userDataFiles = await createUserDataFileSystemProvider();
+		{
+			using startupFiles = new FileService();
+			using registration = startupFiles.registerProvider(Schemas.vscodeUserData, userDataFiles);
+			const levels = await readDefaultLogLevels(startupFiles, environmentService, logger);
+			logger.setLevel(levels.default);
+			serviceCollection ??= new ServiceCollection();
+			serviceCollection.set(IDefaultLogLevelsService, new SyncDescriptor(DefaultLogLevelsService, [levels]));
+		}
 		if (!initialConfiguration) {
 			using profileFiles = new FileService();
 			using registration = profileFiles.registerProvider(Schemas.vscodeUserData, userDataFiles);
@@ -915,6 +925,7 @@ export class Workbench extends Disposable {
 			if (reason !== 'pageHide') workingCopyBackupTracker.cancelShutdown();
 		}));
 		const outputService = services.get(IOutputService);
+		services.get(IDefaultLogLevelsService);
 		const systemOutputService = this._register(new SystemOutputService(outputService, api.appServer, logService, services.get(ILoggerService).files));
 		this._register(logService.registerSink(systemOutputService, true));
 		const serviceContributionReady: Promise<void>[] = [];

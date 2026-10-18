@@ -7,6 +7,7 @@ import type { AppServerConnectionState, IAppServerApi } from "../../../../../pla
 import { SystemOutputService, openLogOutput } from "../../browser/systemOutputService.js";
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { promiseWithResolvers } from '../../../../../base/common/async.js';
+import { windowLogId } from '../../../log/common/logConstants.js';
 import { LogService } from '../../../../../platform/log/common/logServiceImpl.js';
 import type { ILogFileReadResult, ILogFileCursor, ILogFileService } from '../../../../../platform/log/common/log.js';
 
@@ -33,7 +34,7 @@ test('system Output preserves producer time, severity, category and error contex
 	const output = workbenchInstantiationService(resources).get(IOutputService);
 	using service = new SystemOutputService(output, { connectionGeneration: 0, getConnectionState: async () => 'stopped', getSlashCommands: async () => [], onConnectionState: () => ({ dispose() { } }) });
 	service.log({ timestampMillis: 42, level: 'warning', category: 'workspace/read', message: 'unavailable', error: new Error('permission denied') });
-	const entry = output.getChannel('window')!.entries[0]!;
+	const entry = output.getChannel(windowLogId)!.entries[0]!;
 	assert.deepEqual([entry.timestamp, entry.severity, entry.category], [42, 'warning', 'workspace/read']);
 	assert.match(entry.text, /^1970-01-01T00:00:00.042Z \[warning\] \[workspace\/read\] unavailable\nError: permission denied/);
 });
@@ -88,7 +89,7 @@ test('recording level is producer-owned while Output filtering preserves retaine
 	using sink = logger.registerSink(service);
 	logger.trace('hidden at source');
 	logger.info('retained');
-	const window = output.getChannel('window')!;
+	const window = output.getChannel(windowLogId)!;
 	assert.equal(window.descriptor.logger?.control, logger);
 	output.filters.setMinimumSeverity('error');
 	assert.equal(logger.getLevel(), 'information');

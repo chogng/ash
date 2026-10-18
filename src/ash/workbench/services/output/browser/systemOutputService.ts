@@ -3,6 +3,7 @@ import { RunOnceScheduler } from '../../../../base/common/async.js';
 import type { IAppServerApi } from "../../../../platform/agentHost/common/appServerApi.js";
 import type { ILogger, ILogSink, LogEntry, ILogFile, ILogFileCursor, ILogFileService } from "../../../../platform/log/common/log.js";
 import { validateLogEntry } from '../../../../platform/log/common/logIpc.js';
+import { windowLogGroup, windowLogId } from '../../log/common/logConstants.js';
 import { localize } from '../../../../nls.js';
 import type { IOutputChannel, IOutputService, IOutputEntryInput } from "../common/output.js";
 
@@ -16,7 +17,7 @@ export class SystemOutputService extends Disposable implements ILogSink {
 		super();
 		this.savedWindow = Boolean(files);
 		this.windowChannel = this._register(output.createChannel({
-			id: 'window', label: localize('output.window', 'Window'), kind: 'log', source: 'core',
+			id: windowLogId, label: windowLogGroup.name, kind: 'log', source: 'core',
 			logger: logger ? { label: localize('output.workbenchLogger', 'Workbench'), control: logger } : undefined,
 		}));
 		this.appServerChannel = this._register(output.createChannel({
@@ -71,7 +72,7 @@ export class SystemOutputService extends Disposable implements ILogSink {
 
 /** A file is authoritative; the channel is only a bounded read cache. */
 export function openLogOutput(output: IOutputService, files: ILogFileService, source: ILogFile, existing?: IOutputChannel): IOutputChannel {
-	const id = source.currentWindow ? 'window' : source.live && source.source === 'app-server' ? 'app-server' : `saved-log.${encodeURIComponent(source.id)}`;
+	const id = source.currentWindow ? windowLogId : source.live && source.source === 'app-server' ? 'app-server' : `saved-log.${encodeURIComponent(source.id)}`;
 	const present = existing ?? output.getChannel(id);
 	if (present && !existing) return present;
 	// Raw files are streams, so text filters match model lines rather than an
@@ -84,7 +85,7 @@ export function openLogOutput(output: IOutputService, files: ILogFileService, so
 
 export function savedLogLabel(source: ILogFile): string {
 	let label = source.source;
-	if (source.currentWindow) label = localize('output.window', 'Window');
+	if (source.currentWindow) label = windowLogGroup.name;
 	else if (source.source === 'main') label = localize('output.main', 'Main');
 	else if (source.source === 'app-server') label = localize('output.localAppServer', 'Local App Server');
 	else if (/^window-\d+$/u.test(source.source)) label = localize('output.windowNumber', 'Window {0}', source.source.slice('window-'.length));

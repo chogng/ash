@@ -1,3 +1,5 @@
+import { Schemas } from '../../../../../base/common/network.js';
+import { URI } from '../../../../../base/common/uri.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Event } from '../../../../../base/common/event.js';
@@ -9,7 +11,7 @@ import { BrowserUpdateService, type IUpdateProvider, type IUpdate } from '../../
 
 function createServices(provider?: IUpdateProvider, restart = async (): Promise<void> => { }): InstantiationService {
 	const services = new InstantiationService();
-	services.registerInstance(IBrowserWorkbenchEnvironmentService, { webviewExternalEndpoint: 'https://{{uuid}}.example.test', options: { updateProvider: provider } });
+	services.registerInstance(IBrowserWorkbenchEnvironmentService, { argvResource: URI.from({ scheme: Schemas.vscodeUserData, path: '/user/argv.json' }), webviewExternalEndpoint: 'https://{{uuid}}.example.test', options: { updateProvider: provider } });
 	services.registerInstance(IHostService, { reload: async () => { throw new Error("Unexpected reload in this fixture"); }, hasFocus: true, onDidChangeFocus: Event.None, restart, async openWindow() { }, async getScreenshot() { return undefined; } });
 	return services;
 }
@@ -66,6 +68,6 @@ test('Web updates without a provider stay quiet and late checks cannot revive a 
 test('Web update creation requires the registered environment and lifecycle host', () => {
 	using services = new InstantiationService();
 	assert.throws(() => services.createInstance(BrowserUpdateService), /Unknown service/);
-	services.registerInstance(IBrowserWorkbenchEnvironmentService, { webviewExternalEndpoint: '', options: {} });
+	services.registerInstance(IBrowserWorkbenchEnvironmentService, { argvResource: URI.from({ scheme: Schemas.vscodeUserData, path: '/user/argv.json' }), webviewExternalEndpoint: '', options: {} });
 	assert.throws(() => services.createInstance(BrowserUpdateService), /Unknown service: hostService/);
 });

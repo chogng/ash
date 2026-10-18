@@ -37,6 +37,8 @@ export class OutputAccessibilityHelp implements IAccessibleViewImplementation {
 					content.push(localize('output.filterUnsupported', 'A newer saved filter is preserved. Changes in this window are not saved.'));
 				}
 				content.push(
+					localize('output.help.defaultLevel', 'In Set Recording Level, Set As Default saves the current level for future windows. For extension logs it applies only to that extension. Loggers with a manually selected level keep that selection.'),
+					localize('output.help.windowLog', 'Run Show Window Log from the Command Palette to select and focus the current Window log.'),
 					localize('output.help.savedLogs', 'In desktop windows, Open Saved Logs opens current or retained log files. Live logs continue updating after reload. Clear Output clears this view from the current reading point and does not delete saved log files. The Set Recording Level menu is available only for producers that support it; it changes newly recorded messages, while display filters only hide existing messages.'),
 					localize('output.help.links', 'Place the cursor on a file location and run <keybinding:editor.action.openLink>, or click it while holding Ctrl or Command. Workspace file locations open at their reported line and column.'),
 					localize('output.help.smartScroll', 'With output.smartScroll.enabled, moving the primary cursor to an earlier line pauses Auto Scroll; moving it to the last line resumes it. Changing the setting affects the next cursor movement.'),

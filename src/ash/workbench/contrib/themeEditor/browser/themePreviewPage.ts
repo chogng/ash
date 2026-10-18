@@ -1,3 +1,4 @@
+import { Schemas } from '../../../../base/common/network.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { Emitter, Event } from '../../../../base/common/event.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -67,7 +68,7 @@ const workbench = resources.add(await startWorkbench({
 	],
 	initialConfiguration: { "contents": { "workbench": { "startupEditor": "none" } }, "keys": ["workbench.startupEditor"], "overrides": [] },
 	// Webviews are not part of the sample. The disconnected host supplies no remote resources.
-	environmentService: { webviewExternalEndpoint: 'https://{{uuid}}.invalid' },
+	environmentService: { webviewExternalEndpoint: 'https://{{uuid}}.invalid', argvResource: URI.from({ scheme: Schemas.vscodeUserData, path: '/user/argv.json' }) },
 	clipboardService: clipboard,
 	createStorageService: async () => storage,
 	createUserDataFileSystemProvider: async () => new InMemoryFileSystemProvider(),

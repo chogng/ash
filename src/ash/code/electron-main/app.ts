@@ -1,3 +1,6 @@
+import { parseJsonc } from '../../base/common/jsonc.js';
+import { parseDefaultLogLevels } from '../../workbench/services/log/common/defaultLogLevels.js';
+import { LogLevelToString } from '../../platform/log/common/log.js';
 import type { AppServerConnectionTarget } from '../../platform/agentHost/common/appServerTransport.js';
 import { RemoteAgentHostConnectionPool } from '../../platform/remote/electron-main/remoteConnectionIpc.js';
 import { ScreenshotMainService } from '../../workbench/contrib/screenshot/electron-main/screenshotMainService.js';
@@ -61,7 +64,7 @@ import { UtilityProcess } from '../../platform/utilityProcess/electron-main/util
 import { BrowserViewGroupMainService } from '../../platform/browserView/electron-main/browserViewGroupMainService.js';
 import { IPlaywrightService } from '../../platform/browserView/common/playwrightService.js';
 import { WebContentsView, session as electronSession } from 'electron/main';
-import { formatNlsMessage, localize2, setNlsMessages } from '../../nls.js';
+import { formatNlsMessage, localize, localize2, setNlsMessages } from '../../nls.js';
 import { ConfigurationService } from '../../platform/configuration/common/configurationService.js';
 import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
 import { IPolicyService } from '../../platform/policy/common/policy.js';
@@ -454,7 +457,27 @@ export class AshApplication extends Disposable {
 
 		await this.loggerService.initialize();
 		throwIfCancelled(token);
-		this.mainProcessIpcServer.registerChannel('logger', new LoggerChannel(this.loggerService));
+		let savedLevels: unknown;
+		try {
+			const document = parseJsonc(await readFile(join(this.profileRoot, 'argv.json'), 'utf8'), 'argv.json');
+			if (!isRecord(document)) throw new TypeError(localize('logs.invalidArgv', 'The startup configuration must be a JSON object.'));
+			savedLevels = document['log-level'];
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code !== 'ENOENT') this.logService.error('logs', localize('logs.readFailed', 'Could not read startup log levels.'), error);
+		}
+		const launch = parseLaunchArguments(this.workspaceLaunchArguments(process.argv));
+		let defaults = parseDefaultLogLevels(undefined);
+		try { defaults = parseDefaultLogLevels(savedLevels); }
+		catch (error) { this.logService.error('logs', localize('logs.parseFailed', 'Could not parse startup log levels.'), error); }
+		const startupOverrides = [...(launch.verbose ? ['trace'] : []), ...(launch.log ?? [])];
+		const commandLevels = parseDefaultLogLevels(startupOverrides);
+		defaults = parseDefaultLogLevels(startupOverrides, defaults);
+		this.logService.setLevel(defaults.default);
+		this.mainProcessIpcServer.registerChannel('logger', new LoggerChannel(this.loggerService, {
+			logLevel: startupOverrides.some(value => !value.includes('=')) ? LogLevelToString(commandLevels.default) : undefined,
+			initialLogLevel: defaults.default,
+			extensionLogLevel: commandLevels.extensions.map(([id, level]) => [id, LogLevelToString(level)]),
+		}));
 		this.mainProcessIpcServer.registerChannel('secretStorage', {
 			call: <T>(context: string, command: string, arg: unknown) => {
 				const channel = this.secretChannels.get(context);

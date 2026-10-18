@@ -1,3 +1,5 @@
+import { URI } from '../../../../base/common/uri.js';
+import { Schemas } from '../../../../base/common/network.js';
 import { IWorkbenchEnvironmentService } from '../common/environmentService.js';
 import { refineServiceDecorator } from '../../../../platform/instantiation/common/instantiation.js';
 import type { IWebWorkbenchConstructionOptions } from '../../../browser/web.api.js';
@@ -9,6 +11,7 @@ export interface IBrowserWorkbenchEnvironmentService extends IWorkbenchEnvironme
 export const IBrowserWorkbenchEnvironmentService = refineServiceDecorator<IWorkbenchEnvironmentService, IBrowserWorkbenchEnvironmentService>(IWorkbenchEnvironmentService);
 
 export class BrowserWorkbenchEnvironmentService implements IBrowserWorkbenchEnvironmentService {
+	readonly argvResource = URI.from({ scheme: Schemas.vscodeUserData, path: '/user/argv.json' });
 	public readonly webviewExternalEndpoint: string;
 
 	constructor(location: Location, webviewEndpoint?: string, public readonly options: Pick<IWebWorkbenchConstructionOptions, 'updateProvider'> = {}) {

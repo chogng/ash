@@ -1,3 +1,5 @@
+import { IDefaultLogLevelsService } from '../../../services/log/common/defaultLogLevels.js';
+import '../../../services/configuration/common/jsonEditingService.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
@@ -26,6 +28,17 @@ import { openLogOutput, savedLogLabel } from '../../../services/output/browser/s
 interface OutputChannelQuickPickItem extends IQuickPickItem {
 	readonly channel: IOutputChannel;
 }
+
+registerAction2(class SetOutputLogLevelDefaultAction extends Action2 {
+	constructor() {
+		super({ id: 'workbench.action.output.activeOutputLogLevelDefault', title: localize2('logLevelDefault.label', 'Set As Default') });
+	}
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		const channel = accessor.get(IOutputService).activeChannel;
+		const logger = channel?.descriptor.logger?.control;
+		if (channel && logger) await accessor.get(IDefaultLogLevelsService).setDefaultLogLevel(logger.getLevel(), channel.descriptor.extensionId);
+	}
+});
 
 registerAction2(class OpenSavedLogsAction extends Action2 {
 	constructor() {

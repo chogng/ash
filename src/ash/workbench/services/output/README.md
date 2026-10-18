@@ -90,8 +90,8 @@ reconstructs the view from the retained file tail. Display filters only affect
 the view. A descriptor may expose a named producer's logger control; Window's
 recording-level menu controls the Workbench logger, while independently owned
 loggers in the same file retain their own levels. Historical and raw-file sources
-do not advertise recording-level control. Loggers default to Info unless their
-owner explicitly requests another level.
+do not advertise recording-level control. Loggers without saved or launch defaults use Info; producers may still select
+independent recording levels.
 
 Both Workbench and Agents windows install the shared MainThread extension API
 bridge and its domain services, along with `SystemOutputService`,
@@ -101,8 +101,16 @@ identity and recording levels stay with the logger service. Each logger retains
 at most 2,000 entries / 512 Ki characters for late subscribers; Output borrows its
 sink and never replays that history after Clear. Desktop persistence still uses
 the authenticated host log files, rather than accepting arbitrary logger paths.
-Window-owned root loggers are hidden from the generic registry view because
-`SystemOutputService` already owns their file-backed channel.
+`services/log/electron-browser/logService.ts` owns Desktop Window logging for
+both Workbench and Agents. `NativeLogService` uses the platform recorder for
+filtering, bounded replay and child logger lifetime, and owns its Console and
+Main IPC sinks. Its root is not a named child logger in the registry;
+`SystemOutputService` owns its file-backed `rendererLog` channel. The shared
+Window identity and localized label live in `services/log/common/logConstants.ts`.
+Output migrates the old `window` selection and tagged category keys once in its
+workspace state; unknown filter schema versions remain untouched. The Logs
+contribution registers `workbench.action.showWindowLog` to select and focus that
+same channel in Desktop and Browser hosts.
 Both editors acquire documents through `AppServerLanguageDiagnosticsService`,
 so opening a supported file starts the owning language service and its real
 messages reach Output through the shared status service.
@@ -114,3 +122,22 @@ producer bridge and notifies the exact extension incarnation through its
 `outputEvents` registration. Display filters never change that recording level.
 Hide closes Output only when the calling channel is active; disposal removes
 that producer's channel, logger, pending callbacks and level subscriptions.
+
+`services/log/common/defaultLogLevels.ts` owns persistent default recording levels.
+Both renderer hosts read the local UI profile's JSONC `argv.json` before startup
+(`ash-userdata:/user/argv.json`; Desktop maps it to its UI profile directory).
+`log-level` accepts a level string or an array, for example
+`["info", "publisher.extension=debug"]`. Writers use the short names `info` and
+`warn`, preserve comments and unrelated fields, and normalize extension identities
+to lowercase. Desktop `--log` values and `--verbose` override saved values at
+startup; launch overrides remain separate from the initial recorder snapshot so
+new windows reread later saved defaults.
+
+Output's **Set Recording Level → Set As Default** persists the selected level
+globally, or only for the channel's extension. Existing loggers that still match
+the old default follow the new value; explicit producer options and differing
+manual levels remain intact. New producers use the current default. External
+file edits reload the default model; invalid input keeps the last valid snapshot.
+The shared JSON editing service edits and saves the existing file model, refuses
+unsaved or invalid documents, and uses the model owner's revision checks. A failed
+save retains the model edits and does not publish a new default.

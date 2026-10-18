@@ -1,4 +1,7 @@
-import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { localize2 } from '../../../../nls.js';
+import { showWindowLogActionId, windowLogId } from '../../../services/log/common/logConstants.js';
+import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { Disposable, DisposableMap, DisposableStore } from '../../../../base/common/lifecycle.js';
 import { ILoggerService, type ILoggerResource } from '../../../../platform/log/common/log.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
@@ -10,6 +13,14 @@ class LogsContribution extends Disposable {
 
 	constructor(@ILoggerService loggers: ILoggerService, @IOutputService output: IOutputService) {
 		super();
+		this._register(registerAction2(class ShowWindowLogAction extends Action2 {
+			constructor() {
+				super({ id: showWindowLogActionId, title: localize2('show window log', 'Developer: Show Window Log'), f1: true });
+			}
+			override run(accessor: ServicesAccessor): void {
+				accessor.get(IOutputService).showChannel(windowLogId);
+			}
+		}));
 		const add = (info: ILoggerResource): void => {
 			if (info.hidden || this.channels.has(info.id)) return;
 			const logger = loggers.getLogger(info.id);
@@ -17,7 +28,7 @@ class LogsContribution extends Disposable {
 			const lifetime = new DisposableStore();
 			const label = info.name ?? info.id;
 			const channel = lifetime.add(output.createChannel({
-				id: `logger.${encodeURIComponent(info.id)}`, label, kind: 'log', source: 'core',
+				id: `logger.${encodeURIComponent(info.id)}`, label, kind: 'log', source: 'core', extensionId: info.extensionId,
 				logger: { label, control: logger },
 			}));
 			lifetime.add(logger.registerSink({

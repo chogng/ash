@@ -1,3 +1,9 @@
+import { IWorkbenchEnvironmentService } from '../../workbench/services/environment/common/environmentService.js';
+import { IDefaultLogLevelsService, DefaultLogLevelsService, readDefaultLogLevels } from '../../workbench/services/log/common/defaultLogLevels.js';
+import { InstantiationService } from '../../platform/instantiation/common/instantiationService.js';
+import { ServiceCollection } from '../../platform/instantiation/common/serviceCollection.js';
+import { SyncDescriptor } from '../../platform/instantiation/common/descriptors.js';
+import '../../workbench/services/configuration/common/jsonEditingService.js';
 import { FileService } from '../../platform/files/common/fileService.js';
 import { UserSettings } from '../../platform/configuration/common/configurationModels.js';
 import { URI } from '../../base/common/uri.js';
@@ -22,6 +28,18 @@ export async function createSessionsWorkbench(options: IWorkbenchOptions): Promi
 		if (!ownerWindow) { throw new Error('Sessions renderer requires an owner window'); }
 		storage = await options.createStorageService({ ownerWindow, workspaceId: 'sessions', profileId: options.profile.id });
 		userDataFiles = await options.createUserDataFileSystemProvider();
+		{
+			using startupFiles = new FileService();
+			using registration = startupFiles.registerProvider(Schemas.vscodeUserData, userDataFiles);
+			const collection = options.serviceCollection ?? new ServiceCollection();
+			using startupServices = new InstantiationService(new ServiceCollection(...collection.entries()));
+			const environment = startupServices.get(IWorkbenchEnvironmentService);
+			collection.set(IWorkbenchEnvironmentService, environment);
+			const levels = await readDefaultLogLevels(startupFiles, environment, logger);
+			logger.setLevel(levels.default);
+			collection.set(IDefaultLogLevelsService, new SyncDescriptor(DefaultLogLevelsService, [levels]));
+			options = { ...options, serviceCollection: collection };
+		}
 		if (!options.initialConfiguration) {
 			using files = new FileService();
 			using registration = files.registerProvider(Schemas.vscodeUserData, userDataFiles);

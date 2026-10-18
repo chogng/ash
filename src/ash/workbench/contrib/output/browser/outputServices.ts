@@ -10,6 +10,7 @@ import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { IStorageService } from "../../../../platform/storage/common/storage.js";
 import { StorageScope, StorageTarget } from "../../../../platform/storage/common/storage.js";
 import { OUTPUT_MODE_ID, LOG_MODE_ID, OutputSeverities, type IOutputViewFilters, type IOutputEntry, type OutputEntrySeverity, type IOutputChannel, type IOutputChannelDescriptor, type IOutputChannelRevealOptions, type IOutputChannelRevealRequest, type IOutputEntryInput, IOutputService, type OutputChannelKind } from "../../../services/output/common/output.js";
+import { windowLogId } from '../../../services/log/common/logConstants.js';
 import { InMemoryOutputChannelModel } from "../common/outputChannelModel.js";
 
 const ActiveChannelStorageKey = "output.activeChannel";
@@ -39,6 +40,10 @@ export class OutputService extends Disposable implements IOutputService {
 		this._register(languageService.registerLanguage({ id: OUTPUT_MODE_ID, mimetypes: ['text/x-code-output'] }));
 		this._register(languageService.registerLanguage({ id: LOG_MODE_ID, mimetypes: ['text/x-code-log-output'] }));
 		this.preferredChannelId = storageService.get(ActiveChannelStorageKey, StorageScope.WORKSPACE);
+		if (this.preferredChannelId === 'window') {
+			this.preferredChannelId = windowLogId;
+			storageService.store(ActiveChannelStorageKey, windowLogId, StorageScope.WORKSPACE, StorageTarget.USER);
+		}
 		this.filters = this._register(new OutputFilterState(storageService));
 		this._register(instantiationService.createInstance(OutputLinkProvider));
 		this._register(textModelService.registerTextModelContentProvider('output', {
@@ -283,6 +288,7 @@ class OutputFilterState extends Disposable implements IOutputViewFilters {
 	private restore(): void {
 		const raw = this.storageService.get(OutputFilterStorageKey, StorageScope.WORKSPACE);
 		if (!raw) return;
+		let migratedState: string | undefined;
 		try {
 			const stored = JSON.parse(raw) as Partial<StoredOutputFilterState>;
 			if (hasUnknownTextSyntaxVersion(stored)) {
@@ -299,10 +305,34 @@ class OutputFilterState extends Disposable implements IOutputViewFilters {
 				for (const severity of stored.hiddenSeverities) if (OutputSeverities.includes(severity)) this.hiddenSeverities.add(severity);
 			}
 			if (Array.isArray(stored.hiddenCategories)) {
-				for (const category of stored.hiddenCategories) if (typeof category === "string" && category.trim()) this.hiddenCategories.add(category.trim());
+				let migrated = false;
+				for (const category of stored.hiddenCategories) {
+					if (typeof category !== 'string' || !category.trim()) continue;
+					let key = category.trim();
+					// Only tagged channel/category tuples carry a channel identity.
+					// Untagged legacy categories must retain their global meaning.
+					if (key.startsWith('\0')) {
+						try {
+							const tuple: unknown = JSON.parse(key.slice(1));
+							if (Array.isArray(tuple) && tuple.length === 2 && tuple[0] === 'window' && typeof tuple[1] === 'string') {
+								key = channelCategoryKey(tuple[1], windowLogId);
+								migrated = true;
+							}
+						} catch { /* Leave unrelated category keys intact. */ }
+					}
+					this.hiddenCategories.add(key);
+				}
+				if (migrated) {
+					migratedState = JSON.stringify({ ...stored, hiddenCategories: [...this.hiddenCategories] });
+				}
 			}
 		} catch {
 			this.storageService.remove(OutputFilterStorageKey, StorageScope.WORKSPACE);
+			return;
+		}
+		// A failed write must not be mistaken for malformed persisted input.
+		if (migratedState !== undefined) {
+			this.storageService.store(OutputFilterStorageKey, migratedState, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		}
 	}
 

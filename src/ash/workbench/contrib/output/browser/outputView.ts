@@ -1,3 +1,4 @@
+import { IDefaultLogLevelsService } from '../../../services/log/common/defaultLogLevels.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { CodeEditorWidget } from '../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
 import { TextModel } from '../../../../editor/common/model/textModel.js';
@@ -73,10 +74,12 @@ export class OutputViewPane extends ViewPane {
 		@IContextKeyService private readonly contextKeys: IContextKeyService,
 		@IAccessibleViewService accessibleView: IAccessibleViewService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
+		@IDefaultLogLevelsService private readonly defaultLogLevels: IDefaultLogLevelsService,
 	) {
 		super(container, options);
 		this.contentElement.classList.add("ash-output");
 		this.filters = outputService.filters;
+		this._register(defaultLogLevels.onDidChangeDefaultLogLevels(() => this.renderScheduler.schedule()));
 		this.autoScroll = storageService.getBoolean(AutoScrollStorageKey, StorageScope.WORKSPACE, true);
 		this.titleControls = h(container.ownerDocument, "div");
 		this.titleControls.className = "ash-output-title-actions";
@@ -233,7 +236,7 @@ export class OutputViewPane extends ViewPane {
 	private renderContent(): void {
 		const active = this.outputService.activeChannel;
 		const categories = active ? categoriesOf(active.entries) : [];
-		const titleStateKey = [this.outputService.channels.map(channel => channel.id).join("\0"), active?.id ?? "", (active?.entries.length ?? 0) > 0, this.autoScroll, active?.descriptor.logger?.control.getLevel() ?? "", this.filters.text, ...OutputSeverities.map(severity => this.filters.isSeverityVisible(severity)), ...categories.map(category => `${category}:${this.filters.isCategoryVisible(category, active!.id)}`)].join("\u0001");
+		const titleStateKey = [this.outputService.channels.map(channel => channel.id).join("\0"), active?.id ?? "", (active?.entries.length ?? 0) > 0, this.autoScroll, active?.descriptor.logger?.control.getLevel() ?? "", this.filters.text, this.defaultLogLevels.getDefaultLogLevel(active?.descriptor.extensionId), ...OutputSeverities.map(severity => this.filters.isSeverityVisible(severity)), ...categories.map(category => `${category}:${this.filters.isCategoryVisible(category, active!.id)}`)].join("\u0001");
 		if (titleStateKey !== this.titleStateKey) {
 			this.titleStateKey = titleStateKey;
 			this.titleActions.updateActions(this.createTitleActions(active));
@@ -328,7 +331,10 @@ export class OutputViewPane extends ViewPane {
 			undefined, true, logger.control.getLevel() === level, () => logger.control.setLevel(level),
 		)) : [];
 		return [
-			...(logger ? [new SubmenuAction('ash.output.recordingLevel', localize('output.recordingLevel', 'Set {0} Recording Level', logger.label), recordingLevels)] : []),
+			...(logger ? [new SubmenuAction('ash.output.recordingLevel', localize('output.recordingLevel', 'Set {0} Recording Level', logger.label), [
+				...recordingLevels, new Separator(),
+				this.action('workbench.action.output.activeOutputLogLevelDefault', localize('logLevelDefault.label', 'Set As Default'), localize('output.defaultLevelTooltip', 'Save this recording level for future windows and loggers'), undefined, logger.control.getLevel() !== this.defaultLogLevels.getDefaultLogLevel(active.descriptor.extensionId), undefined, () => this.commands.executeCommand('workbench.action.output.activeOutputLogLevelDefault')),
+			])] : []),
 			this.action("ash.output.openInEditor", localize('output.openEditor', 'Open Output in Editor'), localize('output.openChannel', 'Open {0} in Editor', active.label), Lxicon.linkExternal, true, undefined, () => this.commands.executeCommand(OPEN_OUTPUT_IN_EDITOR_COMMAND_ID)),
 			this.action("ash.output.export", localize('output.export', 'Export Output…'), localize('output.exportChannel', 'Export {0}', active.label), Lxicon.download, true, undefined, () => this.commands.executeCommand(EXPORT_OUTPUT_COMMAND_ID)),
 			...(this.contextKeys.getValue<boolean>(CONTEXT_SAVED_LOGS_AVAILABLE.key) ? [this.action(OPEN_SAVED_LOGS_COMMAND_ID, localize('output.openSavedLogs', 'Open Saved Logs…'), localize('output.openSavedLogs', 'Open Saved Logs…'), undefined, true, undefined, () => this.commands.executeCommand(OPEN_SAVED_LOGS_COMMAND_ID))] : []),

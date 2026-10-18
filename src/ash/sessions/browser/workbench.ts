@@ -1,3 +1,4 @@
+import { IDefaultLogLevelsService } from '../../workbench/services/log/common/defaultLogLevels.js';
 import { IDocumentEditorTextModelService } from '../../workbench/services/documentEditor/common/documentTypes.js';
 import { DocumentEditorTextModelService } from '../../workbench/services/documentEditor/browser/documentEditorTextModelService.js';
 import { IChannelService } from "../../platform/collaboration/common/channelService.js";
@@ -571,6 +572,7 @@ export abstract class Workbench extends Disposable {
 		const dialogs = services.get(IDialogService) as DialogService;
 		services.registerInstance(IDialogsModel, dialogs.model);
 		const output = services.get(IOutputService);
+		services.get(IDefaultLogLevelsService);
 		const systemOutput = this._register(new SystemOutputService(output, options.api.appServer, logger, services.get(ILoggerService).files));
 		this._register(logger.registerSink(systemOutput, true));
 		if (!services.has(IStatusbarService)) services.registerInstance(IStatusbarService, this._register(new StatusbarService()));

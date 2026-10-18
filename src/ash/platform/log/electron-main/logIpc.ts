@@ -1,3 +1,4 @@
+import { DEFAULT_LOG_LEVEL, type LogLevel } from '../common/log.js';
 import type { Event } from '../../../base/common/event.js';
 import type { IServerChannel } from '../../../base/parts/ipc/common/ipc.js';
 import { validateLogEntry } from '../common/logIpc.js';
@@ -5,10 +6,11 @@ import { isRecord } from '../../../base/common/types.js';
 import type { LoggerService } from '../node/loggerService.js';
 
 export class LoggerChannel implements IServerChannel {
-	constructor(private readonly loggerService: LoggerService) { }
+	constructor(private readonly loggerService: LoggerService, private readonly startupLevels: { logLevel?: string; extensionLogLevel: [string, string][]; initialLogLevel: LogLevel; } = { extensionLogLevel: [], initialLogLevel: DEFAULT_LOG_LEVEL }) { }
 
 	public async call<T>(context: string, command: string, arg: unknown): Promise<T> {
 		if (!/^window:[1-9]\d*$/.test(context)) { throw new TypeError('Invalid logger window'); }
+		if (command === 'getDefaultLogLevels' && arg === undefined) return this.startupLevels as T;
 		if (command === 'log') {
 			await this.loggerService.log(context.replace(':', '-'), validateLogEntry(arg));
 			return undefined as T;
