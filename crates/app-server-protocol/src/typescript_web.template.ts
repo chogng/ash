@@ -2,6 +2,7 @@
 import type { RemoteTunnelHostInfo } from './RemoteTunnelHostInfo.js';
 import type { WebListenInfo } from './WebListenInfo.js';
 import type { WebSessionInfo } from './WebSessionInfo.js';
+import type { WebWorkspaceState } from './WebWorkspaceState.js';
 import type { WebWorkspaceListResult } from './WebWorkspaceListResult.js';
 
 export function decodeWebListenInfo(value: unknown): WebListenInfo {
@@ -19,9 +20,9 @@ export function decodeRemoteTunnelHostInfo(value: unknown): RemoteTunnelHostInfo
 }
 
 export function decodeWebSessionInfo(value: unknown): WebSessionInfo {
-	const info = record(value, ['token', 'workspaceId', 'workspaceRoot']);
+	const info = record(value, ['token', 'workspaceId', 'workspaceRoot', 'workspace']);
 	if (typeof info.token !== 'string' || !/^[a-f0-9]{64}$/.test(info.token) || typeof info.workspaceId !== 'string' || !info.workspaceId || typeof info.workspaceRoot !== 'string' || !info.workspaceRoot) { throw new Error('Invalid Web session record'); }
-	return { token: info.token, workspaceId: info.workspaceId, workspaceRoot: info.workspaceRoot };
+	return { token: info.token, workspaceId: info.workspaceId, workspaceRoot: info.workspaceRoot, workspace: decodeWebWorkspaceState(info.workspace) };
 }
 
 export function decodeWebWorkspaceListResult(value: unknown): WebWorkspaceListResult {
@@ -33,6 +34,17 @@ export function decodeWebWorkspaceListResult(value: unknown): WebWorkspaceListRe
 		return { name: directory.name, path: directory.path };
 	});
 	return { path: result.path, parent: result.parent as string | null, directories };
+}
+
+export function decodeWebWorkspaceState(value: unknown): WebWorkspaceState {
+    const result = record(value, ['id', 'configuration', 'folders']);
+    if (typeof result.id !== 'string' || !result.id || (result.configuration !== null && typeof result.configuration !== 'string') || !Array.isArray(result.folders) || result.folders.length > 256) throw new Error('Invalid Web workspace');
+    const folders = result.folders.map(value => {
+        const folder = record(value, ['id', 'path', 'name']);
+        if (typeof folder.id !== 'string' || !folder.id || typeof folder.path !== 'string' || !folder.path || (folder.name !== null && typeof folder.name !== 'string')) throw new Error('Invalid Web workspace folder');
+        return { id: folder.id, path: folder.path, name: folder.name as string | null };
+    });
+    return { id: result.id, configuration: result.configuration as string | null, folders };
 }
 
 function record(value: unknown, keys: readonly string[]): Record<string, unknown> {

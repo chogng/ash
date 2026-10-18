@@ -43,6 +43,11 @@ pub(crate) trait SessionDirFileChangeSink: Send + Sync {
 
 enum FileSystemWatcherObservers {
     None,
+    ExactFile {
+        relative: PathBuf,
+        grant: ash_file_access::Grant,
+        authority: Option<Arc<ash_config::ConfigStore>>,
+    },
     EnvRuntime {
         codebase: Arc<CodebaseRuntime>,
         symbol_index: Arc<SymbolIndexRuntime>,
@@ -213,6 +218,26 @@ impl FileSystemWatcher {
         Self::start_inner(dir, updates, Some(dir_id), FileSystemWatcherObservers::None)
     }
 
+    /// Observes atomic replacement of one authorized metadata file without publishing siblings.
+    pub(super) fn start_for_file(
+        grant: ash_file_access::Grant,
+        updates: Arc<UpdateBroker>,
+        dir_id: String,
+        relative: PathBuf,
+        authority: Option<Arc<ash_config::ConfigStore>>,
+    ) -> Result<Self, FileSystemWatcherError> {
+        Self::start_inner(
+            grant.dir().clone(),
+            updates,
+            Some(dir_id),
+            FileSystemWatcherObservers::ExactFile {
+                relative,
+                grant,
+                authority,
+            },
+        )
+    }
+
     pub(super) fn start_with_observers(
         dir: Dir,
         updates: Arc<UpdateBroker>,
@@ -317,8 +342,18 @@ fn watch_dir(
     mut shutdown: tokio::sync::oneshot::Receiver<()>,
     startup: std::sync::mpsc::SyncSender<Result<(), String>>,
 ) {
+    let exact_file = match &observers {
+        FileSystemWatcherObservers::ExactFile {
+            relative,
+            grant,
+            authority,
+        } => Some((relative.clone(), grant.clone(), authority.clone())),
+        _ => None,
+    };
     let (codebase, symbol_index, codebase_semantic, changes, session_changes) = match observers {
-        FileSystemWatcherObservers::None => (None, None, None, None, None),
+        FileSystemWatcherObservers::None | FileSystemWatcherObservers::ExactFile { .. } => {
+            (None, None, None, None, None)
+        }
         FileSystemWatcherObservers::EnvRuntime {
             codebase,
             symbol_index,
@@ -356,7 +391,9 @@ fn watch_dir(
         };
         let file_watcher = Arc::new(file_watcher);
         let (subscriber, receiver) = file_watcher.add_subscriber();
-        let registration = subscriber.register_paths(vec![
+        let paths = if let Some((relative, _, _)) = &exact_file {
+            vec![WatchPath { path: dir.canonical_path().join(relative).parent().expect("relative file has a parent").to_path_buf(), recursive: false }]
+        } else { vec![
             WatchPath {
                 path: dir.requested_path().to_path_buf(),
                 recursive: true,
@@ -365,7 +402,8 @@ fn watch_dir(
                 path: dir.canonical_path().to_path_buf(),
                 recursive: true,
             },
-        ]);
+        ] };
+        let registration = subscriber.register_paths(paths);
         let _registration = match registration {
             Ok(registration) => registration,
             Err(error) => {
@@ -424,7 +462,13 @@ fn watch_dir(
                     if let Some(codebase_worker) = &codebase_worker {
                         codebase_worker.schedule(event.clone());
                     }
-                    if let Some(changed) = project_event(&dir, dir_id.as_deref(), event) {
+                    if let Some(mut changed) = project_event(&dir, dir_id.as_deref(), event) {
+                        if let Some((relative, grant, authority)) = &exact_file {
+                            let allowed = authority.as_ref().is_none_or(|store| grant.source() != ash_file_access::GrantSource::ExplicitUser || store.read_snapshot().is_ok_and(|snapshot| snapshot.values.directory_grants.explicit_permissions_for(&grant.dir().id()).cloned().unwrap_or_else(super::environment_runtime::inspection_permissions).allows(ash_file_access::Permission::WatchFiles)));
+                            if !grant.is_active() || !allowed { continue; }
+                            let Some(filtered) = project_exact_file_event(relative, changed) else { continue; };
+                            changed = filtered;
+                        }
                         if let Some(changes) = &changes {
                             changes.files_changed(&changed);
                         }
@@ -438,6 +482,22 @@ fn watch_dir(
             }
         }
     });
+}
+
+fn project_exact_file_event(relative: &std::path::Path, changed: FsChanged) -> Option<FsChanged> {
+    match changed {
+        FsChanged::PathsChanged { dir_id, paths } if paths.iter().any(|path| path == relative) => {
+            Some(FsChanged::PathsChanged {
+                dir_id,
+                paths: vec![relative.to_path_buf()],
+            })
+        }
+        FsChanged::RescanRequired { dir_id } => Some(FsChanged::PathsChanged {
+            dir_id,
+            paths: vec![relative.to_path_buf()],
+        }),
+        FsChanged::PathsChanged { .. } => None,
+    }
 }
 
 fn watcher_backend(dir: &Dir) -> FileWatcherBackend {

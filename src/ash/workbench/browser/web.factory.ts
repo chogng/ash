@@ -62,7 +62,7 @@ export async function createWebWorkbench(
 	try {
 		await migrateLegacyBrowserSettings(ownerWindow.indexedDB, userFiles, URI.from({ scheme: Schemas.vscodeUserData, path: '/user/settings.json' }));
 		const identifier = options.workspace ?? (options.browserFileSystemProvider ? getBrowserWorkspaceIdentifier(ownerWindow) : getEmptyWorkspaceIdentifier());
-		let workspace = workspaceFromIdentifier(identifier);
+		let workspace = options.webWorkspaceClient?.getInitialWorkspace?.() ?? workspaceFromIdentifier(identifier);
 		if (workspace.configuration && options.browserFileSystemProvider) {
 			const resource = workspace.configuration;
 			const provider = resource.scheme === Schemas.vscodeUserData ? userFiles : options.browserFileSystemProvider;
@@ -85,7 +85,7 @@ export async function createWebWorkbench(
 			api: options.api,
 			webWorkspaceClient: options.webWorkspaceClient,
 			browserFileSystemProvider: options.browserFileSystemProvider,
-			createWindow: options.browserFileSystemProvider ? services => {
+			createWindow: options.browserFileSystemProvider || options.webWorkspaceClient?.updateWorkspace ? services => {
 				const lifetime = new DisposableStore();
 				const support = EnterMultiRootWorkspaceSupportContext.bindTo(services.get(IContextKeyService));
 				support.set(true);

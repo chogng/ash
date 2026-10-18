@@ -9,7 +9,7 @@ test('Web launch decoder rejects remote endpoints and authority injected into me
 		assert.throws(() => decodeWebListenInfo({ ...info, endpoint }));
 	}
 	assert.throws(() => decodeWebListenInfo({ ...info, ticket: 'short' }));
-	const session = { token: 'b'.repeat(64), workspaceId: 'workspace', workspaceRoot: '/workspace' };
+	const session = { token: 'b'.repeat(64), workspaceId: 'workspace', workspaceRoot: '/workspace', workspace: { id: 'workspace', configuration: null, folders: [{ id: 'workspace', path: '/workspace', name: null }] } };
 	assert.deepEqual(decodeWebSessionInfo(session), session);
 	for (const name of ['directoryGrantsHost', 'dirPermissionsHost']) {
 		assert.throws(() => decodeWebSessionInfo({ ...session, [name]: true }));

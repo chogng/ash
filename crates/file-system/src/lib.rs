@@ -2,6 +2,7 @@
 
 mod elevated;
 mod error;
+mod exact_file;
 mod find_up;
 mod local;
 mod path_case_sensitivity;
@@ -15,6 +16,7 @@ mod types;
 pub use elevated::ELEVATED_FILE_WRITE_ARGUMENT;
 pub use elevated::run_elevated_file_helper;
 pub use error::FileSystemError;
+pub use exact_file::ExactFileSystem;
 pub use find_up::{FindUpErrorPolicy, find_nearest_ancestor_with_markers};
 pub use local::FileReadSnapshot;
 pub use local::LocalFileSystem;

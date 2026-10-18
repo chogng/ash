@@ -358,3 +358,113 @@ test('Browser index edits cannot overwrite an external folder change awaiting it
 	await assert.rejects(fixture.editing.removeFolders([fixture.first]), /Workspace file changed during editing/);
 	assert.equal((await fixture.files.readFile(resource)).content, external);
 });
+
+
+test('server enterWorkspace validates dirty folder ownership before publishing authenticated roots', async () => {
+	using resources = new DisposableStore();
+	const files = resources.add(new FileService());
+	const provider = resources.add(new InMemoryFileSystemProvider());
+	resources.add(files.registerProvider('file', provider));
+	const first = URI.file('/server/first');
+	const second = URI.file('/server/second');
+	const target = URI.joinPath(first, 'team.ash-workspace');
+	await files.createDirectory(first);
+	await files.createDirectory(second);
+	await files.writeFile({ resource: target, content: JSON.stringify({ folders: [{ path: '../second', name: 'Server' }] }) }, { create: true, overwrite: false });
+	const context = resources.add(new TestWorkspaceService({ id: 'first', uri: first }));
+	let published = 0;
+	let dirty = true;
+	let editing: BrowserWorkspaceEditingService;
+	const host = resources.add(new BrowserHostService({
+		workspaceProvider: {
+			kind: 'server',
+			client: {
+				list: async () => { throw new Error('No directory picker expected'); },
+				authorize: async () => { throw new Error('No folder navigation expected'); },
+				updateWorkspace: async (configuration, folders) => {
+					published++;
+					assert.deepEqual(folders, [{ path: second.fsPath, name: 'Server' }]);
+					return { workspace: { id: configuration.toString(), configuration, folders: [{ id: 'server-second', uri: second, name: 'Server', index: 0 }] }, complete: async (accepted: boolean) => { assert.equal(accepted, true); } };
+				},
+			},
+			validateFolders: folders => editing.validateFolders(folders),
+			prepareSwitch: async () => true,
+			updateWorkspace: async workspace => { context.updateWorkspace(workspace); },
+		}
+	}, {} as ILifecycleService, {} as IDialogService, { getHostPath: async (resource: URI) => resource.fsPath } as IPathService, files));
+	const copies = { getAll: () => dirty ? [{ resource: URI.joinPath(first, 'unsaved.ts'), isDirty: true }] : [], get: () => [] } as unknown as IWorkingCopyService;
+	editing = resources.add(new BrowserWorkspaceEditingService(context, {} as IFileDialogService, copies, host, files, { error: () => undefined } as unknown as INotificationService));
+	await assert.rejects(editing.enterWorkspace(target), /Save or revert/);
+	assert.equal(published, 0);
+	assert.equal(context.getWorkspace().id, 'first');
+	dirty = false;
+	await editing.enterWorkspace(target);
+	assert.equal(published, 1);
+	assert.equal(context.getWorkspace().configuration?.toString(), target.toString());
+	assert.equal(context.getWorkspace().folders[0]?.id, 'server-second');
+});
+
+for (const failure of ['beforePublication', 'afterPublication', 'confirmation'] as const) {
+	test(`server workspace ${failure} failure keeps UI, authorization outcome and metadata consistent`, async () => {
+		const { WorkspaceTransitionCommittedError } = await import('../../common/workspaceEditing.js');
+		using resources = new DisposableStore();
+		const files = resources.add(new FileService());
+		const provider = resources.add(new InMemoryFileSystemProvider());
+		resources.add(files.registerProvider('file', provider));
+		const first = URI.file('/server/first');
+		const target = URI.joinPath(first, 'team.ash-workspace');
+		await files.createDirectory(first);
+		const context = resources.add(new TestWorkspaceService({ id: 'first', uri: first }));
+		const outcomes: boolean[] = [];
+		let editing: BrowserWorkspaceEditingService;
+		const host = resources.add(new BrowserHostService({
+			workspaceProvider: {
+				kind: 'server',
+				client: {
+					list: async () => { throw new Error('No picker expected'); },
+					authorize: async () => { throw new Error('No navigation expected'); },
+					updateWorkspace: async configuration => ({
+						workspace: { id: configuration.toString(), configuration, folders: [{ id: 'first', uri: first, name: 'first', index: 0 }] },
+						complete: async accepted => { outcomes.push(accepted); if (failure === 'confirmation') throw new Error('Finish response lost'); },
+					}),
+				},
+				validateFolders: folders => editing.validateFolders(folders),
+				prepareSwitch: async () => true,
+				updateWorkspace: async workspace => {
+					if (failure === 'beforePublication') throw new Error('storage preparation failed');
+					context.updateWorkspace(workspace);
+					if (failure === 'afterPublication') throw new WorkspaceTransitionCommittedError('post-publication state restore failed', new Error('backup flush failed'));
+				},
+			}
+		}, {} as ILifecycleService, {} as IDialogService, { getHostPath: async (resource: URI) => resource.fsPath } as IPathService, files));
+		editing = resources.add(new BrowserWorkspaceEditingService(context, {} as IFileDialogService, { getAll: () => [], get: () => [] } as unknown as IWorkingCopyService, host, files, { error: () => undefined } as unknown as INotificationService));
+		await assert.rejects(editing.saveAndEnterWorkspace(target));
+		if (failure === 'beforePublication') {
+			assert.deepEqual(outcomes, [false]);
+			assert.equal(context.getWorkspace().configuration, undefined);
+			await assert.rejects(files.readFile(target));
+		} else {
+			assert.deepEqual(outcomes, [true]);
+			assert.equal(context.getWorkspace().configuration?.toString(), target.toString());
+			assert.match((await files.readFile(target)).content, /folders/);
+		}
+	});
+}
+
+test('existing workspace configuration can be edited again after its containing directory becomes inaccessible', async () => {
+	const fixture = await browserWorkspaceFixture();
+	using resources = fixture.resources;
+	const target = URI.joinPath(fixture.first, 'team.ash-workspace');
+	await fixture.editing.saveAndEnterWorkspace(target);
+	await fixture.editing.addFolders([{ uri: fixture.second }]);
+	await fixture.editing.removeFolders([fixture.first]);
+	const stat = fixture.files.stat.bind(fixture.files);
+	fixture.files.stat = resource => {
+		if (resource.toString() === fixture.first.toString()) throw new Error('Parent directory authorization denied');
+		return stat(resource);
+	};
+	await fixture.editing.updateFolders(0, 1, [{ uri: fixture.second, name: 'Renamed Server' }]);
+	await fixture.editing.saveAndEnterWorkspace(target);
+	assert.deepEqual(fixture.context.getWorkspace().folders.map(folder => folder.uri.toString()), [fixture.second.toString()]);
+	assert.match((await fixture.files.readFile(target)).content, /server/);
+});

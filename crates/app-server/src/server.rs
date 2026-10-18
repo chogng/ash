@@ -86,6 +86,8 @@ mod backup_processor;
 mod browser_file_access;
 #[path = "server/request_processors/browser.rs"]
 mod browser_processor;
+mod browser_workspace;
+pub(crate) use browser_workspace::WebWorkspaceRollback;
 
 mod call_adapters;
 #[path = "server/request_processors/calls.rs"]
@@ -282,6 +284,7 @@ use crate::mcp_runtime::McpRuntimeIntents;
 pub(crate) use environment_runtime::DirGrantPolicy;
 use environment_runtime::EnvRuntime;
 pub(crate) use environment_runtime::EnvRuntimeControl;
+pub(crate) use environment_runtime::EnvRuntimeError;
 pub(crate) use environment_runtime::EnvToolPorts;
 use environment_runtime::LocalEnvHost;
 use notification_queue::NotificationListener;
@@ -372,6 +375,7 @@ pub struct AppServer {
     glm_accounts: std::collections::BTreeMap<String, Arc<ash_glm::GlmOAuth>>,
     pub(super) env_runtime_gate: Arc<Mutex<()>>,
     env_runtime: Arc<RwLock<EnvRuntime>>,
+    web_configuration: Arc<RwLock<Option<browser_workspace::ConfigurationFile>>>,
     turn_backend: Arc<turn_backend_router::TurnBackendHandle>,
     local_env_host: Option<LocalEnvHost>,
     dynamic_tool_port: Option<crate::tool_composition::ToolPort>,
@@ -1333,6 +1337,7 @@ impl AppServer {
             glm_accounts: std::collections::BTreeMap::new(),
             env_runtime_gate,
             env_runtime,
+            web_configuration: Arc::new(RwLock::new(None)),
             turn_backend,
             local_env_host: None,
             dynamic_tool_port: None,

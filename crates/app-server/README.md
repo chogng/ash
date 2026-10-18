@@ -35,6 +35,10 @@
 普通 Browser 连接可据此判断当前工作区是否受信任；目录配置的读取列表与所有修改
 仍要求 `directoryGrantsHost`。目录退出当前环境或授权失效后，读取返回 `PermissionRequired`。
 
+认证 Web listener 通过 `/ash/workspace/update` 的 `apply` / `finish` 控制操作更新自己的目录运行域；它不使用 root 缓存中的 Desktop 运行域，也不授予 Browser `directoryGrantsHost`。每个新增目录在执行宿主确认后绑定物理身份，晚到审批不能越过已关闭的启动租约。窗口拒绝时，原 owner 用保留的窄权限 proof 恢复；用户配置授权若已撤销，恢复不会重新扩大权限。会话元数据只在 `finish(accepted: true)` 后发布。重复完成同一结果幂等，互相冲突的完成结果拒绝。
+
+工作区配置文件采用独立 revocable proof，继承原目录权限与路径限制，再限制到准确相对文件。`ExactFileSystem` 只提供文件 stat/read/atomic write；即使文件被换成目录，也不能递归删除、列举或移动它。watch 只发布该准确文件，overflow 也不暴露父目录或兄弟名称。关闭 Web 启动租约撤销这些 proof；页面恢复先完成 sessionStorage 中记录的操作结果，再启动编辑器。权限和会话 proof 不跨 App Server 进程退出持久化。
+
 ## 请求执行与容量
 
 直接连接与 Agents 网关的本地请求共用 `server/request_dispatch.rs`。`server/request_processing.rs` 负责参数边界、取消登记和响应收尾；领域处理器负责 DTO 转换和调用所属领域服务。共享进程不要求全部操作使用同一种执行方式。

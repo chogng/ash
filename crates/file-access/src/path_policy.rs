@@ -6,6 +6,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::path::Component;
 use std::path::Path;
+use std::path::PathBuf;
 
 /// Visibility outside explicitly granted roots, consumed by process isolation owners.
 #[derive(
@@ -75,6 +76,7 @@ pub struct PathAccessPolicy {
     baseline: PathAccess,
     host_read: HostReadAccess,
     rules: Vec<(PathAccessRule, GlobMatcher)>,
+    exact_files: Vec<PathBuf>,
 }
 
 impl Default for PathAccessPolicy {
@@ -83,6 +85,7 @@ impl Default for PathAccessPolicy {
             baseline: PathAccess::ReadWrite,
             host_read: HostReadAccess::Host,
             rules: Vec::new(),
+            exact_files: Vec::new(),
         }
     }
 }
@@ -91,6 +94,7 @@ impl PartialEq for PathAccessPolicy {
     fn eq(&self, other: &Self) -> bool {
         self.baseline == other.baseline
             && self.host_read == other.host_read
+            && self.exact_files == other.exact_files
             && self
                 .rules
                 .iter()
@@ -119,6 +123,24 @@ impl PathAccessPolicy {
             baseline,
             host_read: HostReadAccess::Host,
             rules,
+            exact_files: Vec::new(),
+        })
+    }
+
+    /// Restricts a directory proof to one relative file, including its resolved target.
+    /// This ceiling cannot authorize siblings, parent listing, or a symlink to another file.
+    pub fn for_exact_file(path: &Path) -> Result<Self, String> {
+        if path.as_os_str().is_empty()
+            || path
+                .components()
+                .any(|part| !matches!(part, Component::Normal(_)))
+        {
+            return Err("exact file scope must be a non-empty relative file path".into());
+        }
+        Ok(Self {
+            host_read: HostReadAccess::GrantedRoots,
+            exact_files: vec![path.to_path_buf()],
+            ..Self::default()
         })
     }
 
@@ -157,10 +179,17 @@ impl PathAccessPolicy {
                 rules.push(rule.clone());
             }
         }
+        let mut exact_files = self.exact_files.clone();
+        for file in &other.exact_files {
+            if !exact_files.contains(file) {
+                exact_files.push(file.clone());
+            }
+        }
         Self {
             baseline,
             host_read,
             rules,
+            exact_files,
         }
     }
 
@@ -170,7 +199,8 @@ impl PathAccessPolicy {
             matches!(access, PathAccess::ReadWrite)
                 || operation == PathOperation::Read && access == PathAccess::ReadOnly
         };
-        permitted(self.baseline)
+        self.exact_files.iter().all(|file| relative == file)
+            && permitted(self.baseline)
             && self.rules.iter().all(|(rule, matcher)| {
                 !relative.ancestors().any(|path| matcher.is_match(path)) || permitted(rule.access)
             })

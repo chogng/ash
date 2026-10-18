@@ -160,3 +160,38 @@ fn codebase_rescan_initializes_missing_vectors_without_republishing_cached_sourc
         initial.generation
     );
 }
+
+#[test]
+fn browser_workspace_exact_configuration_watcher_never_publishes_sibling_names_or_directory_rescans()
+ {
+    let path = PathBuf::from("team.ash-workspace");
+    let dir_id = Some("configuration".into());
+    assert_eq!(
+        project_exact_file_event(
+            &path,
+            FsChanged::PathsChanged {
+                dir_id: dir_id.clone(),
+                paths: vec!["secret.txt".into()]
+            }
+        ),
+        None
+    );
+    let expected = Some(FsChanged::PathsChanged {
+        dir_id: dir_id.clone(),
+        paths: vec![path.clone()],
+    });
+    assert_eq!(
+        project_exact_file_event(
+            &path,
+            FsChanged::PathsChanged {
+                dir_id: dir_id.clone(),
+                paths: vec!["secret.txt".into(), path.clone()]
+            }
+        ),
+        expected
+    );
+    assert_eq!(
+        project_exact_file_event(&path, FsChanged::RescanRequired { dir_id }),
+        expected
+    );
+}

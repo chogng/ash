@@ -41,6 +41,8 @@ pub struct WebSessionInfo {
     pub token: String,
     pub workspace_id: String,
     pub workspace_root: String,
+    /// Current listener-owned workspace projection, restored after page reload.
+    pub workspace: WebWorkspaceState,
 }
 
 /// A browser may inspect directory names before choosing a workspace grant.
@@ -75,6 +77,41 @@ pub struct WebWorkspaceListResult {
 pub struct WebWorkspaceOpenRequest {
     pub path: String,
     pub approved: bool,
+}
+
+/// Workspace projection; authorization stays in the listener's isolated runtime.
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(rename_all = "camelCase")]
+pub struct WebWorkspaceState {
+    pub id: String,
+    pub configuration: Option<String>,
+    pub folders: Vec<WebWorkspaceFolder>,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(rename_all = "camelCase")]
+pub struct WebWorkspaceFolder {
+    pub id: String,
+    pub path: String,
+    pub name: Option<String>,
+}
+
+/// Explicit workspace replacement through the authenticated browser control boundary.
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize, TS)]
+#[serde(tag = "operation", rename_all = "camelCase", deny_unknown_fields)]
+#[ts(rename_all = "camelCase")]
+pub enum WebWorkspaceUpdateRequest {
+    #[serde(rename_all = "camelCase")]
+    Apply {
+        transaction: String,
+        configuration: Option<String>,
+        folders: Vec<WebWorkspaceDirectory>,
+        approved: bool,
+    },
+    #[serde(rename_all = "camelCase")]
+    Finish { transaction: String, accepted: bool },
 }
 
 #[cfg(test)]

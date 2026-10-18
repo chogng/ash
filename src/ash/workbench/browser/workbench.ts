@@ -1,6 +1,6 @@
 import { readDefaultLogLevels, DefaultLogLevelsService, IDefaultLogLevelsService } from '../services/log/common/defaultLogLevels.js';
 import '../services/configuration/common/jsonEditingService.js';
-import { IWorkspaceEditingService } from '../services/workspaces/common/workspaceEditing.js';
+import { IWorkspaceEditingService, WorkspaceTransitionCommittedError } from '../services/workspaces/common/workspaceEditing.js';
 import { IWorkspacesService } from '../../platform/workspaces/common/workspaces.js';
 import { IChannelService } from "../../platform/collaboration/common/channelService.js";
 import { TreeSitterLibraryService, TreeSitterSyntaxProviders, createTreeSitterSyntaxTokenBackend } from '../services/treeSitter/browser/treeSitterLibraryService.js';
@@ -567,6 +567,20 @@ export class Workbench extends Disposable {
 					},
 				} : webWorkspaceClient ? {
 					kind: 'server', client: webWorkspaceClient,
+					validateFolders: (folders: readonly URI[]) => services.get(IWorkspaceEditingService).validateFolders(folders),
+					updateWorkspace: async (next: IWorkspace, preserveEditors = false) => {
+						services.get(IWorkspaceEditingService).validateFolders(next.folders.map(folder => folder.uri));
+						try { await this.updateWorkspace(next, preserveEditors); }
+						catch (error) {
+							const current = this.workspaceContext.getWorkspace();
+							if (current.id === next.id && current.configuration?.toString() === next.configuration?.toString()
+								&& current.folders.length === next.folders.length
+								&& current.folders.every((folder, index) => folder.id === next.folders[index]!.id && folder.uri.toString() === next.folders[index]!.uri.toString())) {
+								throw new WorkspaceTransitionCommittedError(localize('workspace.committedRecovery', 'The workspace changed. Some window state still needs to be restored.'), error);
+							}
+							throw error;
+						}
+					},
 					prepareSwitch: async () => {
 						await this.workingCopyBackupTracker.flush();
 						if (!await this.editor.closeAllEditors({ reason: 'reset' })) return false;

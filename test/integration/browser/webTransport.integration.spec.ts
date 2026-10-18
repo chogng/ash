@@ -36,7 +36,7 @@ for (const status of [200, 401, 403]) {
 			expect(route.request().headers()['authorization']).toBe(`Bearer ${'a'.repeat(64)}`);
 			authorizations++;
 			await authentication;
-			await route.fulfill({ status, json: { token: 'a'.repeat(64), workspaceId: 'test', workspaceRoot: '/test' } });
+			await route.fulfill({ status, json: { token: 'a'.repeat(64), workspaceId: 'test', workspaceRoot: '/test', workspace: { id: 'test', configuration: null, folders: [{ id: 'test', path: '/test', name: null }] } } });
 		});
 		await page.goto('/webTransport.html');
 		await page.evaluate(() => window.ashWebTransportIntegration.start());

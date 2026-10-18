@@ -246,6 +246,7 @@ pub(crate) struct EnvRuntimeControl {
     text_document_host: Arc<crate::text_document_host::TextDocumentHost>,
     authority_gate: Arc<Mutex<()>>,
     runtime: Arc<RwLock<EnvRuntime>>,
+    web_configuration: Arc<RwLock<Option<super::browser_workspace::ConfigurationFile>>>,
     language: Arc<Mutex<super::language_runtime::AppServerLanguageRuntime>>,
     tools: Arc<EnvToolPorts>,
     threads: Arc<ThreadController>,
@@ -630,6 +631,11 @@ impl EnvRuntimeControl {
         &self,
         config: &ash_config::ResolvedConfig,
     ) -> Result<(), EnvRuntimeError> {
+        super::browser_workspace::ConfigurationFile::reconcile(
+            &self.web_configuration,
+            config,
+            &self.updates,
+        )?;
         let _authority = self
             .authority_gate
             .lock()
@@ -903,7 +909,7 @@ impl DirGrantPolicy {
     }
 }
 
-fn inspection_permissions() -> Permissions {
+pub(super) fn inspection_permissions() -> Permissions {
     Permissions::new([
         Permission::ReadFiles,
         Permission::WatchFiles,
@@ -1484,6 +1490,7 @@ impl AppServer {
             text_document_host: Arc::clone(&self.text_document_host),
             authority_gate: Arc::clone(&self.env_runtime_gate),
             runtime: Arc::clone(&self.env_runtime),
+            web_configuration: Arc::clone(&self.web_configuration),
             language: Arc::clone(&self.language),
             tools: Arc::clone(&host.tools),
             threads: self.threads.clone(),
@@ -3082,6 +3089,9 @@ impl AppServer {
         path: &std::path::Path,
     ) -> Result<FsResolvePathResult, RpcError> {
         use std::path::Component;
+        if let Some(route) = self.web_configuration_route(path) {
+            return Ok(route);
+        }
         if !path.is_absolute()
             || path
                 .components()
@@ -3201,6 +3211,9 @@ impl AppServer {
         &self,
         dir_id: Option<&str>,
     ) -> Result<Arc<dyn FileSystem>, RpcError> {
+        if let Some(files) = self.web_configuration_file_system(dir_id)? {
+            return Ok(files);
+        }
         let runtime = self.directory_runtime_for_request()?;
         if let Some(dir_id) = dir_id {
             return runtime

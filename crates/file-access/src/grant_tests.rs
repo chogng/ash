@@ -1,4 +1,5 @@
 use super::*;
+use std::path::Path;
 
 #[test]
 fn observed_read_paths_require_existing_containment_policy_and_a_live_read_proof() {
@@ -213,4 +214,35 @@ fn revocation_waits_for_admitted_operation_and_blocks_later_operations() {
     operation.join().unwrap();
     revocation.join().unwrap();
     assert!(grant.authorize(Permission::WriteFiles).is_err());
+}
+
+#[test]
+fn exact_file_ceiling_never_authorizes_parent_siblings_or_a_different_intersection() {
+    use crate::PathAccessPolicy;
+    use crate::PathOperation;
+    let file = Path::new("workspaces/current.ash-workspace");
+    let scope = PathAccessPolicy::for_exact_file(file).unwrap();
+    assert!(scope.allows(file, PathOperation::Read));
+    assert!(scope.allows(file, PathOperation::Write));
+    for path in [
+        ".",
+        "workspaces",
+        "workspaces/other",
+        "workspaces/current.ash-workspace/child",
+    ] {
+        assert!(!scope.allows(Path::new(path), PathOperation::Read));
+        assert!(!scope.allows(Path::new(path), PathOperation::Write));
+    }
+    for invalid in ["", ".", "../current", "/absolute"] {
+        assert!(PathAccessPolicy::for_exact_file(Path::new(invalid)).is_err());
+    }
+    let conflicting =
+        scope.intersect(&PathAccessPolicy::for_exact_file(Path::new("other")).unwrap());
+    assert!(!conflicting.allows(file, PathOperation::Read));
+    assert!(!conflicting.allows(Path::new("other"), PathOperation::Read));
+    assert!(
+        !scope
+            .intersect(&PathAccessPolicy::new(crate::PathAccess::ReadOnly, Vec::new()).unwrap())
+            .allows(file, PathOperation::Write)
+    );
 }

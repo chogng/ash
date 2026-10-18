@@ -61,6 +61,7 @@ pub type BrowserWorkspaceFuture = Pin<Box<dyn Future<Output = io::Result<String>
 pub struct BrowserWorkspaceOperations {
     pub list: Arc<dyn Fn(String) -> BrowserWorkspaceFuture + Send + Sync>,
     pub open: Arc<dyn Fn(String) -> BrowserWorkspaceFuture + Send + Sync>,
+    pub update: Option<Arc<dyn Fn(String) -> BrowserWorkspaceFuture + Send + Sync>>,
 }
 
 /// Listener lease. Dropping it closes connections; the launcher owns persisted authorization revocation.
@@ -335,7 +336,10 @@ where
     let result = if request.method() == Method::OPTIONS
         && matches!(
             request.uri().path(),
-            "/ash/session" | "/ash/workspace/list" | "/ash/workspace/open"
+            "/ash/session"
+                | "/ash/workspace/list"
+                | "/ash/workspace/open"
+                | "/ash/workspace/update"
         ) {
         let mut result = response(StatusCode::NO_CONTENT, "");
         result.headers_mut().insert(
@@ -390,7 +394,7 @@ where
         }
     } else if matches!(
         request.uri().path(),
-        "/ash/workspace/list" | "/ash/workspace/open"
+        "/ash/workspace/list" | "/ash/workspace/open" | "/ash/workspace/update"
     ) && request.method() == Method::POST
     {
         let token =
@@ -398,14 +402,17 @@ where
         if !token.is_some_and(|token| authorized(&boundary, token)) {
             response(StatusCode::UNAUTHORIZED, "Session expired")
         } else if let Some(workspace) = &boundary.workspace {
-            let operation = if request.uri().path() == "/ash/workspace/list" {
-                &workspace.list
-            } else {
-                &workspace.open
+            let operation = match request.uri().path() {
+                "/ash/workspace/list" => &workspace.list,
+                "/ash/workspace/open" => &workspace.open,
+                _ => match workspace.update.as_ref() {
+                    Some(update) => update,
+                    None => return Ok(response(StatusCode::NOT_FOUND, "Not found")),
+                },
             };
             match tokio::time::timeout(
                 HANDSHAKE_TIMEOUT,
-                Limited::new(request.into_body(), 4096).collect(),
+                Limited::new(request.into_body(), 1024 * 1024).collect(),
             )
             .await
             {
@@ -417,6 +424,8 @@ where
                                 io::ErrorKind::InvalidInput => StatusCode::BAD_REQUEST,
                                 io::ErrorKind::NotFound => StatusCode::NOT_FOUND,
                                 io::ErrorKind::PermissionDenied => StatusCode::FORBIDDEN,
+                                io::ErrorKind::WouldBlock => StatusCode::CONFLICT,
+                                io::ErrorKind::Interrupted => StatusCode::GONE,
                                 _ => StatusCode::INTERNAL_SERVER_ERROR,
                             },
                             &error.to_string(),

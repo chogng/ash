@@ -59,6 +59,9 @@ struct ProtocolSchema {
     web_workspace_list_request: crate::WebWorkspaceListRequest,
     web_workspace_list_result: crate::WebWorkspaceListResult,
     web_workspace_open_request: crate::WebWorkspaceOpenRequest,
+    web_workspace_state: crate::WebWorkspaceState,
+    web_workspace_folder: crate::WebWorkspaceFolder,
+    web_workspace_update_request: crate::WebWorkspaceUpdateRequest,
     client_request: JsonRpcRequest<ClientRequestSchema>,
     client_response: JsonRpcResponse<ClientResultSchema, AppServerError>,
     host_request: JsonRpcRequest<HostRequestSchema>,
@@ -322,7 +325,7 @@ pub fn typescript_files() -> Vec<(PathBuf, String)> {
     files.push((
         PathBuf::from("WebSessionInfo.ts"),
         format!(
-            "{GENERATED_TYPESCRIPT_HEADER}export {}\n",
+            "{GENERATED_TYPESCRIPT_HEADER}import type {{ WebWorkspaceState }} from './WebWorkspaceState.js';\nexport {}\n",
             <crate::WebSessionInfo as ts_rs::TS>::decl(&ts_rs::Config::default())
         ),
     ));
@@ -351,6 +354,15 @@ pub fn typescript_files() -> Vec<(PathBuf, String)> {
             <crate::WebWorkspaceOpenRequest as ts_rs::TS>::decl(&ts_rs::Config::default())
         ),
     ));
+    files.push((
+        PathBuf::from("WebWorkspaceFolder.ts"),
+        format!(
+            "{GENERATED_TYPESCRIPT_HEADER}export {}\n",
+            <crate::WebWorkspaceFolder as ts_rs::TS>::decl(&ts_rs::Config::default())
+        ),
+    ));
+    files.push((PathBuf::from("WebWorkspaceState.ts"), format!("{GENERATED_TYPESCRIPT_HEADER}import type {{ WebWorkspaceFolder }} from './WebWorkspaceFolder.js';\nexport {}\n", <crate::WebWorkspaceState as ts_rs::TS>::decl(&ts_rs::Config::default()))));
+    files.push((PathBuf::from("WebWorkspaceUpdateRequest.ts"), format!("{GENERATED_TYPESCRIPT_HEADER}import type {{ WebWorkspaceDirectory }} from './WebWorkspaceDirectory.js';\nexport {}\n", <crate::WebWorkspaceUpdateRequest as ts_rs::TS>::decl(&ts_rs::Config::default()))));
     files.sort_by(|left, right| left.0.cmp(&right.0));
     files
 }
@@ -407,6 +419,9 @@ fn generated_index() -> String {
          export type {{ RemoteTunnelHostInfo }} from './RemoteTunnelHostInfo.js';\n\
          export type {{ WebListenInfo }} from './WebListenInfo.js';\n\
          export type {{ WebSessionInfo }} from './WebSessionInfo.js';\n\
+         export type {{ WebWorkspaceState }} from './WebWorkspaceState.js';\n\
+         export type {{ WebWorkspaceFolder }} from './WebWorkspaceFolder.js';\n\
+         export type {{ WebWorkspaceUpdateRequest }} from './WebWorkspaceUpdateRequest.js';\n\
          export type {{ WebWorkspaceDirectory }} from './WebWorkspaceDirectory.js';\n\
          export type {{ WebWorkspaceListRequest }} from './WebWorkspaceListRequest.js';\n\
          export type {{ WebWorkspaceListResult }} from './WebWorkspaceListResult.js';\n\

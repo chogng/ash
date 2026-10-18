@@ -1,3 +1,5 @@
+import { WebWorkerService } from '../../platform/webWorker/browser/webWorkerServiceImpl.js';
+import { createAppServerFrameDecoder } from '../../platform/agentHost/browser/appServerFrameDecoder.js';
 import { addDisposableListener, windowOpenNoOpener } from '../../base/browser/dom.js';
 import { toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
 import { URI } from '../../base/common/uri.js';
@@ -20,6 +22,8 @@ export async function connectBrowserWorkbenchHost(rendererCapabilities: readonly
 		const ticket = parameters.get('ash-ticket');
 		if (ticket) { history.replaceState(history.state, '', window.location.pathname + window.location.search); }
 		transport = await authenticateWebAppServer(endpoint, sessionStorage, ticket);
+		const workspaceClient = new AppServerWebWorkspaceClient(endpoint, transport.sessionToken, window, transport.sessionWorkspace);
+		await workspaceClient.recoverPending();
 		const connected = await connectWebRendererApi(transport, {
 			externalOpener: {
 				openExternal: async href => {
@@ -28,11 +32,11 @@ export async function connectBrowserWorkbenchHost(rendererCapabilities: readonly
 				},
 			},
 			clipboardService: new BrowserClipboardService(window.navigator.clipboard),
-		}, { capabilities: { ...(textDocuments ? { textDocuments: { version: 2 } } : {}), ...(appTools ? { appTools: { version: 1, agents: true, desktop: false } } : {}) } }, rendererCapabilities);
+		}, { capabilities: { ...(textDocuments ? { textDocuments: { version: 2 } } : {}), ...(appTools ? { appTools: { version: 1, agents: true, desktop: false } } : {}) } }, rendererCapabilities, createAppServerFrameDecoder(new WebWorkerService()));
 		globalThis.ashWebWorkbenchHost = {
 			api: connected.api,
 			updateProvider: createWebUpdateProvider(window.document),
-			webWorkspaceClient: new AppServerWebWorkspaceClient(endpoint, transport.sessionToken, window),
+			webWorkspaceClient: workspaceClient,
 			workspace: Object.freeze({
 				id: connected.metadata.workspaceId,
 				uri: URI.file(connected.metadata.workspaceRoot),

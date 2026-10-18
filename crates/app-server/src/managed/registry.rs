@@ -135,6 +135,19 @@ impl ProfileAppServerRegistry {
         )
     }
 
+    /// A Web listener owns its directory set; it must never mutate the cached Desktop runtime.
+    pub(crate) fn open_web_workspace(
+        &self,
+        options: &ConnectionOptions,
+    ) -> Result<Arc<AppServer>, String> {
+        open_server_with_profile_runtime(
+            options,
+            Arc::clone(&self.profile_runtime),
+            self.diff_handler,
+        )
+        .map(AppServer::into_shared)
+    }
+
     fn local_options(&self, root: &Path) -> ConnectionOptions {
         ConnectionOptions::new(
             self.host.profile_root(),

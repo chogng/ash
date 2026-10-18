@@ -7,11 +7,20 @@ fn browser_session_metadata_has_no_daemon_authority() {
         token: "a".repeat(64),
         workspace_id: "workspace".into(),
         workspace_root: "/workspace".into(),
+        workspace: WebWorkspaceState {
+            id: "workspace".into(),
+            configuration: None,
+            folders: vec![WebWorkspaceFolder {
+                id: "workspace".into(),
+                path: "/workspace".into(),
+                name: None,
+            }],
+        },
     };
     let value = serde_json::to_value(session).unwrap();
     assert_eq!(
         value,
-        json!({ "token": "a".repeat(64), "workspaceId": "workspace", "workspaceRoot": "/workspace" })
+        json!({ "token": "a".repeat(64), "workspaceId": "workspace", "workspaceRoot": "/workspace", "workspace": { "id": "workspace", "configuration": null, "folders": [{ "id": "workspace", "path": "/workspace", "name": null }] } })
     );
     for name in ["directoryGrantsHost", "dirPermissionsHost"] {
         let mut injected = value.clone();
@@ -89,4 +98,26 @@ fn inbound_host_record_is_strict_and_keeps_the_web_ticket_private() {
     ] {
         assert!(serde_json::from_value::<RemoteTunnelHostInfo>(injected).is_err());
     }
+}
+
+#[test]
+fn workspace_transactions_are_tagged_and_cannot_inject_product_host_authority() {
+    let apply = json!({ "operation": "apply", "transaction": "11111111-1111-4111-8111-111111111111", "configuration": null, "folders": [{ "name": "Work", "path": "/work" }], "approved": true });
+    assert!(matches!(
+        serde_json::from_value::<WebWorkspaceUpdateRequest>(apply.clone()).unwrap(),
+        WebWorkspaceUpdateRequest::Apply { .. }
+    ));
+    let finish = json!({ "operation": "finish", "transaction": "11111111-1111-4111-8111-111111111111", "accepted": false });
+    assert!(matches!(
+        serde_json::from_value::<WebWorkspaceUpdateRequest>(finish.clone()).unwrap(),
+        WebWorkspaceUpdateRequest::Finish {
+            accepted: false,
+            ..
+        }
+    ));
+    for mut value in [apply, finish] {
+        value["directoryGrantsHost"] = json!(true);
+        assert!(serde_json::from_value::<WebWorkspaceUpdateRequest>(value).is_err());
+    }
+    assert!(serde_json::from_value::<WebWorkspaceUpdateRequest>(json!({ "operation": "finish", "transaction": "test", "accepted": false, "folders": [] })).is_err());
 }

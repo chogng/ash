@@ -17,7 +17,7 @@ let transport: AppServerWebSocketTransport | undefined;
 const messages: Array<{ event: string; payload: unknown; }> = [];
 window.ashWebTransportIntegration = {
 	start() {
-		transport = new AppServerWebSocketTransport(new URL(location.origin), { token: 'a'.repeat(64), workspaceId: 'test', workspaceRoot: '/test' });
+		transport = new AppServerWebSocketTransport(new URL(location.origin), { token: 'a'.repeat(64), workspaceId: 'test', workspaceRoot: '/test', workspace: { id: 'test', configuration: null, folders: [{ id: 'test', path: '/test', name: null }] } });
 		for (const event of [WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_CLOSED_EVENT]) {
 			transport.on(event, payload => messages.push({ event, payload }));
 		}

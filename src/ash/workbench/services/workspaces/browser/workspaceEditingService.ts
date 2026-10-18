@@ -15,7 +15,7 @@ import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { IHostService } from '../../host/browser/host.js';
 import { IWorkingCopyService } from '../../workingCopy/common/workingCopyService.js';
-import { IWorkspaceEditingService } from '../common/workspaceEditing.js';
+import { IWorkspaceEditingService, WorkspaceTransitionCommittedError } from '../common/workspaceEditing.js';
 import { AbstractWorkspaceEditingService } from './abstractWorkspaceEditingService.js';
 
 /** FileService owns metadata writes; the browser host accepts the resulting workspace. */
@@ -44,7 +44,7 @@ export class BrowserWorkspaceEditingService extends AbstractWorkspaceEditingServ
 			this.watch.clear();
 			const configuration = workspace.getWorkspace().configuration;
 			if (!configuration) return;
-			this.watch.add(files.watch(dirname(configuration), { recursive: false, excludes: [] }));
+			this.watch.add(files.watch(configuration, { recursive: false, excludes: [] }));
 			this.watch.add(files.onDidChangeFiles(event => {
 				if (!event.resources || event.resources.some(resource => extUriBiasedIgnorePathCase.isEqualOrParent(configuration, resource))) reload.schedule();
 			}));
@@ -110,16 +110,19 @@ export class BrowserWorkspaceEditingService extends AbstractWorkspaceEditingServ
 		catch (error) { if (!(error instanceof FileNotFoundError)) throw error; }
 		if (this.isDisposed || current !== this.workspace.getWorkspace()) throw new CancellationError();
 		if (current.configuration?.toString() === target.toString() && previous?.content !== source) throw new Error(localize('workspace.changedDuringEdit', 'Workspace file changed during editing'));
-		try { await this.files.stat(dirname(target)); }
-		catch (error) {
-			if (!(error instanceof FileNotFoundError)) throw error;
-			await this.files.createDirectory(dirname(target));
+		if (!previous) {
+			try { await this.files.stat(dirname(target)); }
+			catch (error) {
+				if (!(error instanceof FileNotFoundError)) throw error;
+				await this.files.createDirectory(dirname(target));
+			}
 		}
 		const written = await this.files.writeFile({ resource: target, content: output, expectedRevision: previous?.revision }, { create: true, overwrite: previous !== undefined });
 		try {
 			await this.hostService.openWindow([{ workspaceUri: target }], { forceReuseWindow: true, preserveEditors: true });
 			if (this.workspace.getWorkspace().configuration?.toString() !== target.toString()) throw new CancellationError();
 		} catch (error) {
+			if (error instanceof WorkspaceTransitionCommittedError) throw error;
 			try {
 				if (previous) await this.files.writeFile({ resource: target, content: previous.content, expectedRevision: written.revision }, { create: false, overwrite: true });
 				else {

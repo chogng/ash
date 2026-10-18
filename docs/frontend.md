@@ -109,7 +109,7 @@ Windows／Linux 和真实系统文件选择器仍待验证。文件与职责映�
 SSH 窗口同样支持多根：增根时输入当前远端主机上的绝对目录并逐根授权；工作区配置保存到本地文件，根以远端 URI 持久化。不能混入本地根或其他远端主机的根。关闭工作区保留 SSH authority，之后可重开保存文件。
 
 独立 Browser 的目录句柄模式支持多根元数据文件：临时配置保存在浏览器 profile，另存通过所选目录句柄写入 `.ash-workspace`／`.code-workspace`，刷新和重开从文件恢复目录集合。未保存草稿随身份迁移；目标草稿冲突会中止另存。保存文件中的虚拟 URI 依赖当前 profile 的授权句柄，不能作为跨浏览器配置文件使用。
-文件菜单和 Explorer 右键共用上述编辑链；真实 OpenSSH 与独立 Browser smoke 已验证。连接 App Server 的 Web 模式仍保留服务端单根会话边界。
+文件菜单和 Explorer 右键共用上述编辑链；真实 OpenSSH 与独立 Browser smoke 已验证。连接 App Server 的 Web 通过认证的工作区控制端口进入多根；每个 listener 的目录运行域与同根 Desktop 隔离，Browser 不取得 `directoryGrantsHost`。新增目录由服务端逐个确认，工作区文件继续由 FileService/working copy 处理。配置文件所在根移除后，仅保留该准确文件的独立读写与 watch proof；目录浏览、复制、重命名和删除不在该 proof 内。窗口转换使用 Apply/Finish，失败恢复原授权；已发布 UI 后的确认响应丢失由 sessionStorage 中的操作身份和结果在页面恢复时完成，不回滚已生效的配置。真实 Web 编辑器交互、平台文件选择器与跨机器验收仍见根 TODO。
 
 `--new-window` 强制新建窗口，`--reuse-window` 复用当前 Workbench 窗口，两者不能同时使用。`--goto` 支持 `文件:行:列`；`--wait` 让第二个启动进程等待所有请求文件关闭，关闭所属窗口也会结束等待。参数中的 `--` 后面按文件路径处理，可以打开名称以连字符开头的文件。
 

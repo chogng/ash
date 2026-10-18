@@ -14,3 +14,8 @@ export interface IWorkspaceEditingService {
 }
 
 export const IWorkspaceEditingService = createServiceIdentifier<IWorkspaceEditingService>('workspaceEditingService');
+
+/** The workspace model was published; callers must keep its saved metadata during recovery. */
+export class WorkspaceTransitionCommittedError extends Error {
+	constructor(message: string, cause: unknown) { super(message, { cause }); }
+}

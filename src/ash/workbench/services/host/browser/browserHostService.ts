@@ -1,3 +1,4 @@
+import type { URI } from '../../../../base/common/uri.js';
 import { parseJsonc } from '../../../../base/common/jsonc.js';
 import { basename } from '../../../../base/common/resources.js';
 import { IFileService, FileKind } from '../../../../platform/files/common/files.js';
@@ -7,6 +8,7 @@ import { IPathService } from '../../../../platform/path/common/pathService.js';
 import { localize } from '../../../../nls.js';
 import type { HTMLFileSystemProvider } from '../../../../platform/files/browser/htmlFileSystemProvider.js';
 import { workspaceFromIdentifier, type IWorkspace } from '../../../../platform/workspace/common/workspace.js';
+import { WorkspaceTransitionCommittedError } from '../../workspaces/common/workspaceEditing.js';
 import type { IWebWorkspaceClient } from '../../workspaces/browser/appServerWebWorkspaceClient.js';
 import { addDisposableListener, hasAppFocus } from '../../../../base/browser/dom.js';
 import { getWindows, onDidRegisterWindow, onDidUnregisterWindow } from '../../../../base/browser/window.js';
@@ -24,7 +26,7 @@ export const EMPTY_WORKSPACE_ID_KEY = 'ash.workbench.emptyWorkspaceId';
 export interface BrowserHostServiceOptions {
 	readonly workspaceProvider?:
 	| { readonly kind: 'local'; readonly provider: HTMLFileSystemProvider; readonly updateWorkspace: (workspace: IWorkspace, preserveEditors?: boolean) => Promise<void>; }
-	| { readonly kind: 'server'; readonly client: IWebWorkspaceClient; readonly prepareSwitch: () => Promise<boolean>; };
+	| { readonly kind: 'server'; readonly client: IWebWorkspaceClient; readonly prepareSwitch: () => Promise<boolean>; readonly updateWorkspace?: (workspace: IWorkspace, preserveEditors?: boolean) => Promise<void>; readonly validateFolders?: (folders: readonly URI[]) => void; };
 }
 
 export class BrowserHostService extends Disposable implements IHostService {
@@ -149,10 +151,33 @@ export class BrowserHostService extends Disposable implements IHostService {
 		const provider = this.options.workspaceProvider!;
 		if (options.forceNewWindow) throw new Error(localize({ bundle: 'ash', key: 'workbench.newWindowUnavailable' }, 'Opening a new window is unavailable in this host'));
 		if ('workspaceUri' in target) {
-			if (provider.kind !== 'local') throw new Error(localize('workspace.editUnavailable', 'Workspace editing is unavailable in this host.'));
 			const resource = target.workspaceUri;
 			const document = parseJsonc((await this.files.readFile(resource)).content, resource.toString());
 			const folders = toWorkspaceFolders(parseStoredWorkspaceFolders(document, resource.toString()), resource);
+			if (provider.kind === 'server') {
+				if (!provider.client.updateWorkspace || !provider.updateWorkspace) throw new Error(localize('workspace.editUnavailable', 'Workspace editing is unavailable in this host.'));
+				provider.validateFolders?.(folders.map(folder => folder.uri));
+				const selected = await Promise.all(folders.map(async folder => {
+					const path = await this.paths.getHostPath(folder.uri);
+					if (path === undefined) throw new TypeError(localize('path.platformUnavailable', 'Resource path platform is unavailable'));
+					return { path, name: folder.name };
+				}));
+				if (!options.preserveEditors && !await provider.prepareSwitch()) return;
+				const transition = await provider.client.updateWorkspace(resource, selected);
+				try { await provider.updateWorkspace(transition.workspace, options.preserveEditors); }
+				catch (error) {
+					if (error instanceof WorkspaceTransitionCommittedError) {
+						try { await transition.complete(true); } catch { /* The recorded outcome is recovered before the next page starts. */ }
+						throw error;
+					}
+					try { await transition.complete(false); }
+					catch (rollback) { throw new AggregateError([error, rollback], localize('workspace.rollbackFailed', 'Could not restore workspace authorization after the window transition failed.')); }
+					throw error;
+				}
+				try { await transition.complete(true); }
+				catch (error) { throw new WorkspaceTransitionCommittedError(localize('workspace.authorizationRecovery', 'The workspace changed. Authorization confirmation will be retried when this page reconnects.'), error); }
+				return;
+			}
 			for (const folder of folders) {
 				if (folder.uri.scheme !== 'file' || !folder.uri.path.startsWith('/@browser/')) throw new TypeError(localize('workspace.browserFoldersOnly', 'Browser workspaces require folders selected through the browser.'));
 				await provider.provider.openDirectory(folder.uri);

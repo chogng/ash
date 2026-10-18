@@ -174,6 +174,7 @@ fn workspace_control_requires_an_authenticated_same_origin_session() {
             BrowserOptions {
                 session_directory: None,
                 workspace: Some(BrowserWorkspaceOperations {
+                    update: None,
                     list: Arc::new(|body| Box::pin(async move { Ok(body) })),
                     open: Arc::new(|_| {
                         Box::pin(async {

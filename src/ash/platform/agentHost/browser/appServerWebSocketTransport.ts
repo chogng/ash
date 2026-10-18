@@ -36,6 +36,7 @@ export class AppServerWebSocketTransport extends AbstractDisposable implements A
 	constructor(private readonly endpoint: URL, private readonly session: WebSessionInfo) { super(); }
 
 	public get sessionToken(): string { return this.session.token; }
+	public get sessionWorkspace(): WebSessionInfo['workspace'] { return this.session.workspace; }
 
 	public on(event: string, listener: (payload: unknown) => void): void {
 		let listeners = this.listeners.get(event);

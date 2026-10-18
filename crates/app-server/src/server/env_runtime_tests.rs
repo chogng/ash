@@ -4418,3 +4418,262 @@ fn environment_directory_read_exposes_only_current_effective_grants_without_mana
         "PermissionRequired",
     );
 }
+
+#[test]
+fn browser_workspace_configuration_lease_survives_root_removal_without_directory_access() {
+    let first = TestDir::new("web-config", "current.ash-workspace");
+    let second = TestDir::new("web-secondary", "other.txt");
+    std::fs::write(first.path.join("secret.txt"), "private").unwrap();
+    let server = server().with_local_env_host(None, host_policy()).unwrap();
+    server
+        .activate_local_dirs(vec![(first.root().id().to_string(), first.authorization())])
+        .unwrap();
+    let configuration = first.path.join("current.ash-workspace");
+    let uri = url::Url::from_file_path(&configuration)
+        .unwrap()
+        .to_string();
+    let state = server
+        .bind_web_workspace(
+            Some(uri.clone()),
+            vec![
+                (first.root(), "First".into()),
+                (second.root(), "Second".into()),
+            ],
+        )
+        .unwrap();
+    assert_eq!(state.folders.len(), 2);
+    let route = server.resolve_file_path(&configuration).unwrap();
+    let FsDirectoryTarget::Environment { dir_id } = route.target else {
+        panic!("configuration must have an environment proof")
+    };
+    let files = server.file_system_service_for(Some(&dir_id)).unwrap();
+    assert_eq!(
+        files
+            .read_file(Path::new("current.ash-workspace"), 1024)
+            .unwrap(),
+        b"web-config"
+    );
+    server
+        .bind_web_workspace(Some(uri), vec![(second.root(), "Second".into())])
+        .unwrap();
+    assert!(
+        server
+            .resolve_file_path(&first.path.join("secret.txt"))
+            .is_err()
+    );
+    assert!(files.read_directory(Path::new(".")).is_err());
+    assert!(files.read_file(Path::new("secret.txt"), 1024).is_err());
+    files
+        .write_file(Path::new("current.ash-workspace"), b"updated", 1024)
+        .unwrap();
+    assert_eq!(std::fs::read(&configuration).unwrap(), b"updated");
+    server
+        .bind_web_workspace(None, vec![(second.root(), "Second".into())])
+        .unwrap();
+    assert!(
+        files
+            .read_file(Path::new("current.ash-workspace"), 1024)
+            .is_err()
+    );
+}
+
+#[test]
+fn browser_workspace_failed_configuration_keeps_current_grants() {
+    let first = TestDir::new("web-transaction", "current.txt");
+    let second = TestDir::new("web-next", "next.txt");
+    let server = server().with_local_env_host(None, host_policy()).unwrap();
+    let id = first.root().id().to_string();
+    server
+        .activate_local_dirs(vec![(id.clone(), first.authorization())])
+        .unwrap();
+    let files = server.file_system_service_for(Some(&id)).unwrap();
+    let missing = url::Url::from_file_path(first.path.join("missing.ash-workspace"))
+        .unwrap()
+        .to_string();
+    assert!(
+        server
+            .bind_web_workspace(Some(missing), vec![(second.root(), String::new())])
+            .is_err()
+    );
+    assert_eq!(
+        files.read_file(Path::new("current.txt"), 1024).unwrap(),
+        b"web-transaction"
+    );
+    assert!(
+        server
+            .resolve_file_path(&second.path.join("next.txt"))
+            .is_err()
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn browser_workspace_configuration_rejects_symlink_escape_and_revokes_on_server_drop() {
+    let first = TestDir::new("web-exact", "current.ash-workspace");
+    std::fs::write(first.path.join("secret.txt"), "private").unwrap();
+    let server = server().with_local_env_host(None, host_policy()).unwrap();
+    server
+        .activate_local_dirs(vec![(first.root().id().to_string(), first.authorization())])
+        .unwrap();
+    let configuration = first.path.join("current.ash-workspace");
+    let uri = url::Url::from_file_path(&configuration)
+        .unwrap()
+        .to_string();
+    server
+        .bind_web_workspace(Some(uri), vec![(first.root(), String::new())])
+        .unwrap();
+    let files = server
+        .file_system_service_for(Some("web-workspace-configuration"))
+        .unwrap();
+    std::fs::remove_file(&configuration).unwrap();
+    std::os::unix::fs::symlink(first.path.join("secret.txt"), &configuration).unwrap();
+    assert!(
+        files
+            .read_file(Path::new("current.ash-workspace"), 1024)
+            .is_err()
+    );
+    std::fs::remove_file(&configuration).unwrap();
+    std::fs::write(&configuration, "safe").unwrap();
+    drop(server);
+    assert!(
+        files
+            .read_file(Path::new("current.ash-workspace"), 1024)
+            .is_err()
+    );
+}
+
+#[test]
+fn browser_workspace_explicit_revocation_retires_exact_handles_and_narrows_rollback() {
+    let dir = TestDir::new("web-user-revocation", "team.ash-workspace");
+    let root = dir.root();
+    let config = Arc::new(ConfigStore::open(dir.path.join("permissions.sqlite3")).unwrap());
+    let trusted = config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("web-grant-write").unwrap(),
+            expected_revision: ConfigRevision::INITIAL,
+            command: UserConfigCommand::SetDirectoryGrant {
+                dir: root.id(),
+                permissions: host_directory_capabilities(),
+                display_path: None,
+            },
+        })
+        .unwrap();
+    let server = server()
+        .with_config_store(Arc::clone(&config))
+        .with_local_env_host(None, DirGrantPolicy::UserConfig(Arc::clone(&config)))
+        .unwrap();
+    server.switch_local_dir_root(dir.path.clone()).unwrap();
+    server.browser_workspace_id(&dir.path).unwrap();
+    let configuration = url::Url::from_file_path(dir.path.join("team.ash-workspace"))
+        .unwrap()
+        .to_string();
+    server
+        .bind_web_workspace(
+            Some(configuration.clone()),
+            vec![(root.clone(), String::new())],
+        )
+        .unwrap();
+    let previous = server
+        .file_system_service_for(Some("web-workspace-configuration"))
+        .unwrap();
+    let mut rollback = server.snapshot_web_workspace().unwrap();
+    // Removing a displayed root preserves only the independent, exact metadata proof.
+    server
+        .bind_web_workspace(Some(configuration), Vec::new())
+        .unwrap();
+    previous
+        .write_file(Path::new("team.ash-workspace"), b"before revocation", 1024)
+        .unwrap();
+    let restricted = config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("web-revoke-write").unwrap(),
+            expected_revision: trusted.revision,
+            command: UserConfigCommand::SetDirectoryGrant {
+                dir: root.id(),
+                permissions: Permissions::new([
+                    Permission::ReadFiles,
+                    Permission::BrowseFiles,
+                    Permission::WatchFiles,
+                ]),
+                display_path: None,
+            },
+        })
+        .unwrap();
+    // The actual file request reconciles current Config authority even when no background
+    // watcher or selected-root transition has run in this isolated fixture.
+    let readonly = server
+        .file_system_service_for(Some("web-workspace-configuration"))
+        .unwrap();
+    assert!(
+        previous
+            .write_file(Path::new("team.ash-workspace"), b"stale write", 1024)
+            .is_err()
+    );
+    assert_eq!(
+        readonly
+            .read_file(Path::new("team.ash-workspace"), 1024)
+            .unwrap(),
+        b"before revocation"
+    );
+    assert!(
+        readonly
+            .write_file(Path::new("team.ash-workspace"), b"new write", 1024)
+            .is_err()
+    );
+    let forgotten = config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("web-forget-explicit").unwrap(),
+            expected_revision: restricted.revision,
+            command: UserConfigCommand::ForgetDirectoryGrant { dir: root.id() },
+        })
+        .unwrap();
+    // An old pending transaction cannot reintroduce its pre-revocation write capability,
+    // or lose the ExplicitUser provenance when the current owner falls back to inspection.
+    server.restore_web_workspace(&mut rollback).unwrap();
+    let restored_root = server
+        .file_system_service_for(Some(root.id().as_str()))
+        .unwrap();
+    assert!(
+        restored_root
+            .write_file(Path::new("team.ash-workspace"), b"rollback write", 1024)
+            .is_err()
+    );
+    let restored_configuration = server
+        .file_system_service_for(Some("web-workspace-configuration"))
+        .unwrap();
+    assert!(
+        restored_configuration
+            .write_file(
+                Path::new("team.ash-workspace"),
+                b"rollback metadata write",
+                1024
+            )
+            .is_err()
+    );
+    config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("web-revoke-read").unwrap(),
+            expected_revision: forgotten.revision,
+            command: UserConfigCommand::SetDirectoryGrant {
+                dir: root.id(),
+                permissions: Permissions::default(),
+                display_path: None,
+            },
+        })
+        .unwrap();
+    server
+        .env_runtime_control()
+        .unwrap()
+        .reconcile_user_directory_grants(&config.read_snapshot().unwrap().values)
+        .unwrap();
+    assert!(
+        restored_configuration
+            .read_file(Path::new("team.ash-workspace"), 1024)
+            .is_err()
+    );
+    assert!(
+        server
+            .resolve_file_path(&dir.path.join("team.ash-workspace"))
+            .is_err()
+    );
+}

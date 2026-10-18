@@ -664,7 +664,7 @@ Main 已替换工作区而 Renderer 尚未收到事件时，旧配置读取返�
 `contrib/workspace/common/workspace.ts`、`platform/workspaces/common/workspaceIdentifier.ts` 与
 `platform/workspaces/electron-main/workspacesMainService.ts` 仍没有对应实现。
 它们涉及其他领域能力或尚未闭合的统一管理端口；当前本地命令链不以空壳实现这些文件。
-完整上游编辑 API、复制工作区到新窗口、连接 App Server 的 Web 多根会话，以及直接保存到远端机器的工作区配置文件仍未实现。
+连接 App Server 的 Web 多根由原 WorkspaceEditingService/BrowserHost 链提交到 listener 独立运行域，准确配置文件 proof 与目录授权分别释放。Apply/Finish 事务只在窗口接受后发布会话元数据；窗口提交前失败恢复原授权，已提交后的网络错误按记录的操作身份恢复。完整上游编辑 API、复制工作区到新窗口和直接保存到远端机器的工作区配置文件仍未实现。
 
 Remote 与独立 Browser 的扩展沿上述 owner 实现，没有新增平行 workspace 状态：
 
@@ -677,7 +677,7 @@ Remote 与独立 Browser 的扩展沿上述 owner 实现，没有新增平行 wo
 本轮定向回归通过 124 项单元／架构检查和 22 项 Chromium 集成测试。独立 Browser smoke 验证真实浏览器存储句柄的增根、JSONC 文件保存、草稿迁移／目标冲突、刷新恢复、键盘移根、关闭与重开；目录选择器使用受控句柄。
 macOS 系统菜单动作失败通过现有通知服务展示；用户取消保持静默，菜单实例随窗口服务作用域创建。
 真实 OpenSSH fixture 验证两根授权、第二根读写、脏文件移根拒绝及可见通知、跨根搜索、本地配置 URI 持久化、移除首根后的第二根终端存活及同一 SSH authority 下的关闭重开。此为同机隔离 SSH 服务，不代表 Windows／Linux 远端验证。
-日志与截图／trace 位于 `.build/remote-browser-evidence/`；连接 App Server 的 Web 仍保留现有单根服务端会话边界。
+日志与截图／trace 位于 `.build/remote-browser-evidence/`；上述证据早于 Web 多根控制与准确配置文件 proof；这些旧记录不能替代新链路的真实 Web、跨机器和系统选择器验收。
 
 执行目录、目录列表与权限的跨组件语义，以及本次 Codex 执行层核对与修复见
 [环境与目录访问 §9](environment-access.md#9-执行层实现核对codex-对照)。
