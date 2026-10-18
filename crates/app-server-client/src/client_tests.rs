@@ -431,6 +431,7 @@ fn client_reads_writes_and_versions_files_through_typed_contracts() {
 
     let read = client
         .read_file(FsReadFileParams {
+            read_access: None,
             dir_id: None,
             session_directory: None,
             path: "src/main.rs".into(),

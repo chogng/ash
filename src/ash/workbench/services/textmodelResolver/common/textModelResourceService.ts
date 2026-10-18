@@ -1,3 +1,4 @@
+import type { FileReadOperation } from '../../../../platform/files/common/files.js';
 import { createServiceIdentifier, type ServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import { type Event } from "../../../../base/common/event.js";
 import { type IDisposable } from "../../../../base/common/lifecycle.js";
@@ -32,6 +33,8 @@ export interface ITextModelSaveCompletionParticipant {
 export interface TextModelInput {
 	readonly resource: URI;
 	readonly initialText?: string;
+	/** Used only for this acquisition's disk resolution; never retained for background reloads. */
+	readonly readFile?: FileReadOperation;
 	/** Read-only initial content is a supplied snapshot, not a live file baseline. */
 	readonly readOnly?: boolean;
 	readonly encoding?: string;

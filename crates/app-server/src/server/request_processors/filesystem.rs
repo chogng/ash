@@ -60,11 +60,20 @@ use serde_json::Value;
 use std::time::Duration;
 
 const MAX_EDITOR_FILE_BYTES: usize = 50 * 1024 * 1024;
+// Matches the text model resolver's limit, without a separate broad editor stat.
+const MAX_DOCUMENT_FILE_BYTES: usize = 32 * 1024 * 1024;
 const BINARY_PREVIEW_RESOURCE_TTL: Duration = Duration::from_secs(300);
 
 /// Coordinates the existing owners needed by the filesystem adapter.
 /// This contract deliberately exposes no server object or unrestricted service registry.
 pub(super) trait FileSystemRequestProcessorContext: Send + Sync {
+    fn read_document_content(
+        &self,
+        owner: u64,
+        access: &str,
+        path: &std::path::Path,
+        maximum_bytes: usize,
+    ) -> Result<ash_file_system::FileContent, ash_file_system::FileSystemError>;
     fn resolve_file_path(&self, path: &std::path::Path) -> Result<FsResolvePathResult, RpcError>;
     fn file_system_service_for(
         &self,
@@ -175,7 +184,7 @@ impl<'ctx, C: FileSystemRequestProcessorContext + ?Sized> FileSystemRequestProce
         result(&FsReadDirectoryResult { entries })
     }
 
-    pub(super) fn fs_read_file(&self, params: &Value) -> Result<Value, RpcError> {
+    pub(super) fn fs_read_file(&self, owner: u64, params: &Value) -> Result<Value, RpcError> {
         let params: FsReadFileParams = decode(params)?;
         if (params.encoding.is_none()
             && (params.auto_guess_encoding.is_some() || params.candidate_guess_encodings.is_some()))
@@ -183,14 +192,22 @@ impl<'ctx, C: FileSystemRequestProcessorContext + ?Sized> FileSystemRequestProce
         {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
         }
-        let content = self
-            .file_system_for_request(
+        let content = if let Some(access) = &params.read_access {
+            if params.dir_id.is_some() || params.session_directory.is_some() {
+                return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+            }
+            self.context
+                .read_document_content(owner, access, &params.path, MAX_DOCUMENT_FILE_BYTES)
+                .map_err(file_system_error)?
+        } else {
+            self.file_system_for_request(
                 params.dir_id.as_deref(),
                 params.session_directory.as_ref(),
                 Permission::ReadFiles,
             )?
             .read_file_with_revision(&params.path, MAX_EDITOR_FILE_BYTES)
-            .map_err(file_system_error)?;
+            .map_err(file_system_error)?
+        };
         let (text, encoding) = if let Some(encoding) = params.encoding {
             let decoded = if let Some(auto_guess_encoding) = params.auto_guess_encoding {
                 decode_text_with_options(

@@ -194,12 +194,18 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 			resource,
 			languageId: input.languageId ?? this.options.languageService?.guessLanguageIdByFilepathOrFirstLine(resource) ?? undefined,
 			...(input.initialText === undefined ? {} : { bootstrapText: input.initialText }),
+			...(input.readFile === undefined ? {} : { readFile: input.readFile }),
 			...(input.encoding === undefined ? {} : { encoding: input.encoding }),
 		}, signal);
 		throwIfCancelled(signal, "Text model acquisition was cancelled");
 		this.ensureAlive();
 		const concurrent = this.findEntry(resource);
-		if (concurrent) return this.acquireReference(concurrent[0], concurrent[1], signal);
+		if (concurrent) {
+			// A concurrent editor load may have used a broader authority. Do not replace
+			// this operation's checked content with that newly published model.
+			if (input.readFile) throw new TextModelConflictError(resource);
+			return this.acquireReference(concurrent[0], concurrent[1], signal);
+		}
 		const languageSelection = this.options.languageService
 			? input.languageId !== undefined
 				? this.options.languageService.createById(input.languageId)

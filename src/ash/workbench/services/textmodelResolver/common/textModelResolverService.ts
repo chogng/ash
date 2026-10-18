@@ -1,3 +1,4 @@
+import type { FileReadOperation } from '../../../../platform/files/common/files.js';
 import { toDisposable, type IDisposable, type IReference } from '../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../base/common/uri.js';
 import type { ITextModel } from '../../../../editor/common/model.js';
@@ -21,8 +22,8 @@ export class TextModelResolverService implements ITextModelService {
 
 	constructor(@ITextModelResourceService private readonly models: ITextModelResourceServiceContract) { }
 
-	async createModelReference(resource: URI): Promise<IReference<IResolvedTextEditorModel>> {
-		const provider = this.contentProviders.get(resource.scheme);
+	async createModelReference(resource: URI, options?: { readonly readFile: FileReadOperation; }): Promise<IReference<IResolvedTextEditorModel>> {
+		const provider = options ? undefined : this.contentProviders.get(resource.scheme);
 		if (provider) {
 			const model = await provider.provideTextContent(resource);
 			if (!model) throw new ReferenceError(`Text model not found: ${resource.toString()}`);
@@ -31,7 +32,7 @@ export class TextModelResolverService implements ITextModelService {
 			const object = new TextResourceEditorModel({ object: model, ...release });
 			return this.createReference(object);
 		}
-		const reference = await this.models.acquire({ resource }, new AbortController().signal);
+		const reference = await this.models.acquire({ resource, ...(options ? { readFile: options.readFile } : {}) }, new AbortController().signal);
 		const object = new BaseTextEditorModel(reference.model, false);
 		return this.createReference(object, reference);
 	}

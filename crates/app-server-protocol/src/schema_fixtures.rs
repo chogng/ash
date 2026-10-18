@@ -41,6 +41,24 @@ fn generated_typescript() -> String {
 }
 
 #[test]
+fn document_reads_require_the_callback_proof_and_preserve_it_on_disk_reads() {
+    use crate::protocol::fs::FsReadFileParams;
+    use crate::protocol::text_document::TextDocumentReadParams;
+    let callback = serde_json::json!({"path":"/workspace/file", "readAccess":"operation-proof"});
+    let parsed: TextDocumentReadParams = serde_json::from_value(callback.clone()).unwrap();
+    assert_eq!(serde_json::to_value(parsed).unwrap(), callback);
+    assert!(
+        serde_json::from_value::<TextDocumentReadParams>(
+            serde_json::json!({"path":"/workspace/file"})
+        )
+        .is_err()
+    );
+    let read = serde_json::json!({"path":"/workspace/file", "readAccess":"operation-proof", "encoding":"utf8"});
+    let parsed: FsReadFileParams = serde_json::from_value(read.clone()).unwrap();
+    assert_eq!(serde_json::to_value(parsed).unwrap(), read);
+}
+
+#[test]
 fn filesystem_casing_preserves_directory_scopes_and_rejects_invalid_rules() {
     use crate::protocol::fs::FsReadPathCaseSensitivityParams;
     use crate::protocol::fs::FsReadPathCaseSensitivityResult;

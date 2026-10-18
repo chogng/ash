@@ -252,6 +252,17 @@ impl super::extension_host_operations::ExtensionHostRequestProcessorContext for 
 }
 
 impl super::fs_operations::FileSystemRequestProcessorContext for AppServer {
+    fn read_document_content(
+        &self,
+        owner: u64,
+        access: &str,
+        path: &std::path::Path,
+        maximum_bytes: usize,
+    ) -> Result<ash_file_system::FileContent, ash_file_system::FileSystemError> {
+        self.text_document_host
+            .read_content(owner, access, path, maximum_bytes)
+    }
+
     fn resolve_file_path(
         &self,
         path: &std::path::Path,

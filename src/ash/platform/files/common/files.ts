@@ -198,6 +198,9 @@ export interface IFileReadOptions {
 	readonly candidateGuessEncodings?: readonly string[];
 }
 
+/** Operation-scoped reader supplied by an authority narrower than the editor's file service. */
+export type FileReadOperation = (resource: URI, encoding: string, options: IFileReadOptions | undefined, signal: AbortSignal) => Promise<IFileContent>;
+
 /** Storage operations implemented by a runtime or virtual resource provider. */
 export interface IFileSystemProvider {
 	readonly capabilities: FileSystemProviderCapabilities;

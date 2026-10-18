@@ -1,3 +1,4 @@
+import type { FileReadOperation } from '../../../../platform/files/common/files.js';
 import { type Event } from "../../../../base/common/event.js";
 import { type URI } from "../../../../base/common/uri.js";
 
@@ -5,6 +6,8 @@ import { type URI } from "../../../../base/common/uri.js";
 export interface TextResourceResolveRequest {
 	readonly resource: URI;
 	readonly bootstrapText?: string;
+	/** Used only for this acquisition's disk resolution; never retained for background reloads. */
+	readonly readFile?: FileReadOperation;
 	readonly encoding?: string;
 	readonly languageId?: string;
 	readonly autoGuessEncoding?: boolean;

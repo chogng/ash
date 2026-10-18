@@ -1,3 +1,4 @@
+import type { FileReadOperation } from '../../../platform/files/common/files.js';
 import { Emitter, type Event } from '../../../base/common/event.js';
 import type { IMarkdownString } from '../../../base/common/htmlContent.js';
 import type { IDisposable, IReference } from '../../../base/common/lifecycle.js';
@@ -11,7 +12,7 @@ export const ITextModelService = createDecorator<ITextModelService>('textModelSe
 /** Resolves URI-backed text models without owning persistence or dirty state. */
 export interface ITextModelService {
 	readonly _serviceBrand: undefined;
-	createModelReference(resource: URI): Promise<IReference<IResolvedTextEditorModel>>;
+	createModelReference(resource: URI, options?: { readonly readFile: FileReadOperation; }): Promise<IReference<IResolvedTextEditorModel>>;
 	registerTextModelContentProvider(scheme: string, provider: ITextModelContentProvider): IDisposable;
 	canHandleResource(resource: URI): boolean;
 }

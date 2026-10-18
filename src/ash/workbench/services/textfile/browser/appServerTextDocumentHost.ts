@@ -7,7 +7,8 @@ import { Schemas } from '../../../../base/common/network.js';
 import type { LanguageWorkspaceEdit, LanguageWorkspaceEditEntry } from '../../../../editor/common/languages.js';
 import { ITextModelService, type ITextModelService as ITextModelServiceContract, type IResolvedTextEditorModel } from '../../../../editor/common/services/resolverService.js';
 import { AppServerProtocolClient } from '../../../../platform/agentHost/browser/appServerProtocolClient.js';
-import { APP_SERVER_SERVER_REQUESTS, type TextDocumentApplyParams, type TextDocumentApplyResult, type TextDocumentReadResult, type TextDocumentListResult } from '../../../../../../.build/protocol/typescript/index.js';
+import { APP_SERVER_METHODS, APP_SERVER_SERVER_REQUESTS, type TextDocumentReadParams, type TextDocumentApplyParams, type TextDocumentApplyResult, type TextDocumentReadResult, type TextDocumentListResult } from '../../../../../../.build/protocol/typescript/index.js';
+import { AppServerRemoteError } from '../../../../platform/agentHost/common/appServerError.js';
 import { FileNotFoundError } from '../../../../platform/files/common/files.js';
 import { WorkspaceEditConflictError } from '../../../../editor/browser/services/bulkEditService.js';
 import { IWorkingCopyService, type IWorkingCopyService as IWorkingCopyServiceContract } from '../../workingCopy/common/workingCopyService.js';
@@ -28,9 +29,9 @@ interface DocumentSnapshot extends IDisposable {
 export class AppServerTextDocumentHost extends Disposable {
 	private readonly snapshots = this._register(new DisposableMap<string, DocumentSnapshot>());
 
-	constructor(client: AppServerProtocolClient, private readonly review: DocumentEditReview, @ITextModelService private readonly models: ITextModelServiceContract, @IWorkingCopyService private readonly workingCopies: IWorkingCopyServiceContract) {
+	constructor(private readonly client: AppServerProtocolClient, private readonly review: DocumentEditReview, @ITextModelService private readonly models: ITextModelServiceContract, @IWorkingCopyService private readonly workingCopies: IWorkingCopyServiceContract) {
 		super();
-		this._register(client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['textDocument/read'], (params, context) => this.read(params.path, context.signal)));
+		this._register(client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['textDocument/read'], (params, context) => this.read(params, context.signal)));
 		this._register(client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['textDocument/list'], (params, context) => this.list(params.root, context.signal)));
 		this._register(client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['textDocument/apply'], (params, context) => this.apply(params, context.signal)));
 		this._register(client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['textDocument/release'], params => {
@@ -56,12 +57,26 @@ export class AppServerTextDocumentHost extends Disposable {
 		return { kind: 'documents', documents };
 	}
 
-	private async read(path: string, signal: AbortSignal): Promise<TextDocumentReadResult> {
+	private async read(params: TextDocumentReadParams, signal: AbortSignal): Promise<TextDocumentReadResult> {
 		let reference: IReference<IResolvedTextEditorModel> | undefined;
 		try {
 			throwIfCancelled(signal);
-			const resource = documentResource(path);
-			reference = await this.models.createModelReference(resource);
+			const resource = documentResource(params.path);
+			reference = await this.models.createModelReference(resource, {
+				readFile: async (target, encoding, options, readSignal) => {
+					throwIfCancelled(signal);
+					throwIfCancelled(readSignal);
+					const { candidateGuessEncodings, ...decoding } = options ?? {};
+					const result = await this.client.request(APP_SERVER_METHODS['fs/readFile'], {
+						path: params.path, readAccess: params.readAccess, encoding,
+						...decoding,
+						...(candidateGuessEncodings === undefined ? {} : { candidateGuessEncodings: [...candidateGuessEncodings] }),
+					});
+					throwIfCancelled(signal);
+					throwIfCancelled(readSignal);
+					return { resource: target, content: result.content, revision: result.revision, ...(result.encoding === undefined ? {} : { encoding: result.encoding }) };
+				},
+			});
 			// Resolution is not cancellable. Closing must also release a late result.
 			throwIfCancelled(signal);
 			this.assertNotDisposed();
@@ -77,7 +92,7 @@ export class AppServerTextDocumentHost extends Disposable {
 			return { kind: 'document', snapshot: id, text: model.getValue() };
 		} catch (error) {
 			if (isCancellationError(error)) { throw error; }
-			if (error instanceof FileNotFoundError) { return { kind: 'notFound' }; }
+			if (error instanceof FileNotFoundError || error instanceof AppServerRemoteError && error.errorName === 'FileSystemNotFound') { return { kind: 'notFound' }; }
 			return { kind: 'failed', message: String(error) };
 		} finally {
 			reference?.dispose();

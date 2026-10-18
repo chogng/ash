@@ -93,8 +93,24 @@ pub trait TextDocumentEditor: Send + Sync {
     ) -> Result<(), TextDocumentError> {
         self.apply_with_policy(changes, &PathAccessPolicy::default(), cancellation)
     }
-    /// Carries the current operation's policy to disk owners. Logical editor owners use
-    /// the caller's path checks; filesystem owners must enforce it on their final IO.
+    /// Retains the directory identity and revocable proof across an editor callback.
+    /// Owners that perform deferred filesystem IO must enforce this proof on that IO.
+    fn read_authorized(
+        &self,
+        path: &Path,
+        authorization: &ash_file_access::Authorization,
+        cancellation: &CancellationToken,
+    ) -> Result<Option<TextDocumentSnapshot>, TextDocumentError> {
+        authorization
+            .execute(
+                authorization.subject(),
+                authorization.dir(),
+                authorization.permission(),
+                || self.read_with_policy(path, authorization.path_policy(), cancellation),
+            )
+            .map_err(|error| TextDocumentError::Failed(error.to_string()))?
+    }
+    /// Carries the current operation's policy to the owner's final IO.
     fn read_with_policy(
         &self,
         path: &Path,
@@ -198,19 +214,29 @@ impl TextDocumentEditor for AuthorizedTextDocuments {
         cancellation: &CancellationToken,
     ) -> Result<Option<TextDocumentSnapshot>, TextDocumentError> {
         let policy = self.authorization.path_policy().intersect(policy);
-        self.admitted(|| {
-            let path = self.path(path, PathOperation::Read, &policy)?;
-            #[cfg(test)]
-            tests::after_authorized_path();
-            let snapshot = self.editor.read_with_policy(&path, &policy, cancellation)?;
+        let path = self.admitted(|| self.path(path, PathOperation::Read, &policy))?;
+        #[cfg(test)]
+        tests::after_authorized_path();
+        // Deferred editor IO admits this same proof itself. Do not hold its read lock
+        // across a callback: a queued revocation could deadlock the returning reader.
+        let snapshot = self.editor.read_authorized(
+            &path,
+            &self.authorization.clone().constrained_by(&policy),
+            cancellation,
+        )?;
+        if let Err(error) = self.authorization.ensure_active() {
             if let Some(snapshot) = &snapshot {
-                self.paths
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .insert(snapshot.id.clone(), path);
+                self.editor.release(vec![snapshot.id.clone()]);
             }
-            Ok(snapshot)
-        })
+            return Err(TextDocumentError::Failed(error.to_string()));
+        }
+        if let Some(snapshot) = &snapshot {
+            self.paths
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .insert(snapshot.id.clone(), path);
+        }
+        Ok(snapshot)
     }
 
     fn apply_with_policy(
@@ -329,6 +355,32 @@ impl FileTextDocuments {
         }
     }
 
+    /// Reads bytes through the policy-checked handle, for an editor's deferred resolution.
+    /// The caller must keep its directory authorization admitted for the entire operation.
+    pub fn read_content_with_policy(
+        &self,
+        path: &Path,
+        policy: &PathAccessPolicy,
+        maximum_bytes: usize,
+    ) -> Result<crate::FileContent, crate::FileSystemError> {
+        let relative = path.strip_prefix(self.dir.canonical_path()).map_err(|_| {
+            crate::FileSystemError::PermissionDenied("document is outside its directory".into())
+        })?;
+        let files = ScopedFiles::with_policy(self.dir.clone(), policy, PathOperation::Read);
+        let file = files.open_file(relative)?;
+        let mut bytes = Vec::new();
+        file.take((maximum_bytes as u64).saturating_add(1))
+            .read_to_end(&mut bytes)
+            .map_err(|error| crate::FileSystemError::Io(error.to_string()))?;
+        if bytes.len() > maximum_bytes {
+            return Err(crate::FileSystemError::ReadLimitExceeded { maximum_bytes });
+        }
+        Ok(crate::FileContent {
+            revision: file_revision(&bytes),
+            bytes,
+        })
+    }
+
     fn relative(&self, path: &Path) -> Result<PathBuf, TextDocumentError> {
         let relative = path
             .strip_prefix(self.dir.canonical_path())
@@ -352,22 +404,13 @@ impl TextDocumentEditor for FileTextDocuments {
             return Err(TextDocumentError::Cancelled);
         }
         let relative = self.relative(path)?;
-        let files = ScopedFiles::with_policy(self.dir.clone(), policy, PathOperation::Read);
-        let file = match files.open_file(&relative) {
-            Ok(file) => file,
+        let content = match self.read_content_with_policy(path, policy, 10 * 1024 * 1024) {
+            Ok(content) => content,
             Err(crate::FileSystemError::NotFound(_)) => return Ok(None),
             Err(error) => return Err(TextDocumentError::Failed(error.to_string())),
         };
-        let mut bytes = Vec::new();
-        file.take(10 * 1024 * 1024 + 1)
-            .read_to_end(&mut bytes)
-            .map_err(|e| TextDocumentError::Failed(e.to_string()))?;
-        if bytes.len() > 10 * 1024 * 1024 {
-            return Err(TextDocumentError::Failed(
-                "document exceeds the text size limit".into(),
-            ));
-        }
-        let revision = file_revision(&bytes);
+        let revision = content.revision;
+        let bytes = content.bytes;
         let text =
             String::from_utf8(bytes).map_err(|e| TextDocumentError::Failed(e.to_string()))?;
         if text.contains('\0') {

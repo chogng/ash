@@ -38,7 +38,7 @@ fn editor_encoding_requests_write_exact_bytes_and_protect_revisions() {
         assert_eq!(written["revision"], file_revision(&bytes));
         let read = server
             .fs_processor()
-            .fs_read_file(&json!({"path":"text","encoding":encoding}))
+            .fs_read_file(0, &json!({"path":"text","encoding":encoding}))
             .unwrap_or_else(|error| panic!("{error}"));
         assert_eq!(read["content"], text);
         assert_eq!(read["encoding"], encoding);
@@ -72,13 +72,13 @@ fn encoding_failures_do_not_publish_and_legacy_reads_remain_compatible() {
         .unwrap_or_else(|error| panic!("{error}"));
     let legacy = server
         .fs_processor()
-        .fs_read_file(&json!({"path":"text"}))
+        .fs_read_file(0, &json!({"path":"text"}))
         .unwrap_or_else(|error| panic!("{error}"));
     assert_eq!(legacy["content"], "\u{feff}hello");
     assert!(legacy.get("encoding").is_none());
     let editor = server
         .fs_processor()
-        .fs_read_file(&json!({"path":"text","encoding":"auto"}))
+        .fs_read_file(0, &json!({"path":"text","encoding":"auto"}))
         .unwrap_or_else(|error| panic!("{error}"));
     assert_eq!(editor["content"], "hello");
     assert_eq!(editor["encoding"], "utf8bom");
@@ -86,7 +86,7 @@ fn encoding_failures_do_not_publish_and_legacy_reads_remain_compatible() {
     assert_eq!(
         server
             .fs_processor()
-            .fs_read_file(&json!({"path":"text","encoding":"auto"}))
+            .fs_read_file(0, &json!({"path":"text","encoding":"auto"}))
             .unwrap_err()
             .message,
         AppServerErrorName::FileSystemInvalidText
@@ -115,22 +115,25 @@ fn automatic_encoding_read_uses_backend_bytes_and_validates_options() {
         encode_text(text, "cp950").unwrap(),
     )
     .unwrap();
-    let read = server.fs_processor().fs_read_file(&json!({"path":"text", "encoding":"utf8", "autoGuessEncoding":true, "candidateGuessEncodings":["utf8","cp950"]})).unwrap();
+    let read = server.fs_processor().fs_read_file(0, &json!({"path":"text", "encoding":"utf8", "autoGuessEncoding":true, "candidateGuessEncodings":["utf8","cp950"]})).unwrap();
     assert_eq!(read["content"], text);
     assert_eq!(read["encoding"], "cp950");
     assert!(
         server
             .fs_processor()
-            .fs_read_file(&json!({"path":"text", "encoding":"utf8", "autoGuessEncoding":false}))
+            .fs_read_file(
+                0,
+                &json!({"path":"text", "encoding":"utf8", "autoGuessEncoding":false})
+            )
             .is_err()
     );
     assert!(
         server
             .fs_processor()
-            .fs_read_file(&json!({"path":"text", "autoGuessEncoding":true}))
+            .fs_read_file(0, &json!({"path":"text", "autoGuessEncoding":true}))
             .is_err()
     );
-    assert!(server.fs_processor().fs_read_file(&json!({"path":"text", "encoding":"utf8", "autoGuessEncoding":true,"candidateGuessEncodings":["unknown"]})).is_err());
+    assert!(server.fs_processor().fs_read_file(0, &json!({"path":"text", "encoding":"utf8", "autoGuessEncoding":true,"candidateGuessEncodings":["unknown"]})).is_err());
     std::fs::write(
         directory.path().join("text"),
         encode_text("hello", "utf16be").unwrap(),
@@ -138,8 +141,122 @@ fn automatic_encoding_read_uses_backend_bytes_and_validates_options() {
     .unwrap();
     let read = server
         .fs_processor()
-        .fs_read_file(&json!({"path":"text", "encoding":"windows1252", "autoGuessEncoding":false}))
+        .fs_read_file(
+            0,
+            &json!({"path":"text", "encoding":"windows1252", "autoGuessEncoding":false}),
+        )
         .unwrap();
     assert_eq!(read["encoding"], "utf16be");
     assert_eq!(read["content"], "hello");
+}
+
+#[cfg(unix)]
+#[test]
+fn editor_forwarded_reads_keep_the_agent_proof_at_the_filesystem_rpc_boundary() {
+    use ash_async_utils::CancellationSource;
+    use ash_file_access::PathAccess;
+    use ash_file_access::PathAccessPolicy;
+    use ash_file_access::PathAccessRule;
+    use ash_file_system::AuthorizedTextDocuments;
+    use ash_file_system::TextDocumentEditor;
+    use ash_tools::TextDocumentEditorProvider;
+    use core_api::TurnReceipt;
+    let temp = tempfile::tempdir().unwrap();
+    let dir = Dir::open_local(temp.path()).unwrap();
+    let root = dir.canonical_path();
+    fs::create_dir(root.join("visible")).unwrap();
+    fs::create_dir(root.join("restricted")).unwrap();
+    fs::write(root.join("visible/file"), "public").unwrap();
+    fs::write(root.join("restricted/file"), "secret").unwrap();
+    let server = server(root);
+    let connection = server.connection();
+    let owner = connection.connection_id;
+    let outbound = crate::server::notification_queue::NotificationQueue::default();
+    server.client_host.register(owner, true, outbound.clone());
+    let thread = ash_protocol::ThreadId::new("scoped-reader").unwrap();
+    let turn = ash_protocol::TurnId::new("read-turn").unwrap();
+    server
+        .client_host
+        .submit_turn(
+            &thread,
+            Some(owner),
+            crate::client_host::TextDocumentMode::Client,
+            || {
+                Ok(TurnReceipt {
+                    turn_id: turn.clone(),
+                    sequence: 1,
+                })
+            },
+        )
+        .unwrap();
+    // The editor's ordinary filesystem grant covers the whole tree. Only the current
+    // document operation adds the Agent's denied subtree, beyond the directory grant.
+    let grant = Grant::for_environment(
+        dir.clone(),
+        GrantSource::ExplicitUser,
+        Permissions::new([Permission::ReadFiles]),
+    );
+    let documents = AuthorizedTextDocuments::new(
+        grant.authorize(Permission::ReadFiles).unwrap(),
+        server
+            .text_document_host
+            .for_turn(&thread, &turn)
+            .unwrap()
+            .unwrap(),
+        [],
+    );
+    let path = root.join("visible/file");
+    let worker_path = path.clone();
+    let policy = PathAccessPolicy::new(
+        PathAccess::ReadWrite,
+        vec![PathAccessRule {
+            pattern: "restricted".into(),
+            access: PathAccess::Denied,
+        }],
+    )
+    .unwrap();
+    let worker = std::thread::spawn(move || {
+        documents.read_with_policy(&worker_path, &policy, &CancellationSource::new().token())
+    });
+    let listener = outbound.listener();
+    assert!(listener.wait());
+    let request = listener.drain().into_iter().next().unwrap();
+    let params =
+        json!({"path":path, "readAccess":request["params"]["readAccess"], "encoding":"utf8"});
+    assert_eq!(
+        server.fs_processor().fs_read_file(owner, &params).unwrap()["content"],
+        "public"
+    );
+    assert!(
+        server
+            .fs_processor()
+            .fs_read_file(owner + 1, &params)
+            .is_err()
+    );
+    let mut other = params.clone();
+    other["path"] = json!(root.join("restricted/file"));
+    assert!(server.fs_processor().fs_read_file(owner, &other).is_err());
+    other = params.clone();
+    other["dirId"] = json!("editor");
+    assert!(server.fs_processor().fs_read_file(owner, &other).is_err());
+    fs::rename(root.join("visible"), root.join("old")).unwrap();
+    std::os::unix::fs::symlink("restricted", root.join("visible")).unwrap();
+    assert_eq!(
+        server
+            .fs_processor()
+            .fs_read_file(owner, &json!({"path":"visible/file"}))
+            .unwrap()["content"],
+        "secret"
+    );
+    assert!(server.fs_processor().fs_read_file(owner, &params).is_err());
+    server
+        .client_host
+        .handle_response(
+            owner,
+            json!({"jsonrpc":"2.0", "id":request["id"],
+        "result":{"kind":"failed", "message":"denied"}}),
+        )
+        .unwrap();
+    assert!(worker.join().unwrap().is_err());
+    assert!(server.fs_processor().fs_read_file(owner, &params).is_err());
 }

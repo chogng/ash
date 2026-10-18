@@ -4053,7 +4053,9 @@ impl AppServer {
             Some(ClientMethod::FsReadDirectory) => {
                 self.fs_processor().fs_read_directory(&request.params)
             }
-            Some(ClientMethod::FsReadFile) => self.fs_processor().fs_read_file(&request.params),
+            Some(ClientMethod::FsReadFile) => self
+                .fs_processor()
+                .fs_read_file(connection.connection_id, &request.params),
             Some(ClientMethod::BackupWorkspaces) => self
                 .backup_processor
                 .workspaces(connection.authority, &request.params),

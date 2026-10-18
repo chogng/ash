@@ -41,13 +41,20 @@ export class TextFileService extends Disposable implements ITextFileService {
 				encoding: preferredEncoding,
 			});
 		}
-		const stat = await raceCancellationError(this.files.stat(request.resource), signal, 'Text file resolution was cancelled');
-		if (stat.sizeBytes > MAX_SAFE_TEXT_FILE_BYTES) {
-			throw new TextFileTooLargeError(request.resource, stat.sizeBytes);
+		if (!request.readFile) {
+			const stat = await raceCancellationError(this.files.stat(request.resource), signal, 'Text file resolution was cancelled');
+			if (stat.sizeBytes > MAX_SAFE_TEXT_FILE_BYTES) {
+				throw new TextFileTooLargeError(request.resource, stat.sizeBytes);
+			}
 		}
 		let content;
 		try {
-			content = await raceCancellationError(this.files.readFile(request.resource, preferredEncoding, decoding), signal, 'Text file resolution was cancelled');
+			// The scoped reader owns both the size bound and the handle used for policy
+			// validation. A separate editor stat/read would use the broader window grant.
+			const read = request.readFile
+				? request.readFile(request.resource, preferredEncoding, decoding, signal)
+				: this.files.readFile(request.resource, preferredEncoding, decoding);
+			content = await raceCancellationError(read, signal, 'Text file resolution was cancelled');
 		} catch (error) {
 			if (toFileSystemProviderErrorCode(error as Error) === FileSystemProviderErrorCode.FileNotText || error instanceof TypeError) throw new TextFileBinaryError(request.resource, undefined, { cause: error });
 			throw error;

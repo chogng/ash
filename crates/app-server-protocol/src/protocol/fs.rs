@@ -141,6 +141,11 @@ pub struct FsReadDirectoryResult {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct FsReadFileParams {
+    /// A pending textDocument/read proof. Requires the exact absolute callback path
+    /// and excludes directory selectors; it cannot widen the initiating Agent's policy.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub read_access: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub dir_id: Option<String>,

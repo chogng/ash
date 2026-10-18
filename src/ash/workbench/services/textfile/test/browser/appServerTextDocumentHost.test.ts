@@ -20,7 +20,7 @@ import { Range } from '../../../../../editor/common/core/range.js';
 import { ITextModelService } from '../../../../../editor/common/services/resolverService.js';
 import { AppServerProtocolClient } from '../../../../../platform/agentHost/browser/appServerProtocolClient.js';
 import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, type AppServerTransport } from '../../../../../platform/agentHost/common/appServerTransport.js';
-import { APP_SERVER_SCHEMA_HASH, APP_SERVER_PROTOCOL_MAJOR, type InitializeResult, type ServerCapabilities, type AppServerServerRequestMethod, type ServerRequestParams, type ServerRequestResult } from '../../../../../../../.build/protocol/typescript/index.js';
+import { APP_SERVER_SCHEMA_HASH, APP_SERVER_PROTOCOL_MAJOR, type FsReadFileParams, type FsReadFileResult, type InitializeResult, type ServerCapabilities, type AppServerServerRequestMethod, type ServerRequestParams, type ServerRequestResult } from '../../../../../../../.build/protocol/typescript/index.js';
 import { FileKind, FileNotFoundError, FileRevisionConflictError, IFileService, type IFileWriteRequest, type FileExistingTargetBehavior } from '../../../../../platform/files/common/files.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { BrowserTextResourceStore } from '../../../../contrib/codeEditor/browser/browserTextResourceStore.js';
@@ -52,6 +52,8 @@ class Transport implements AppServerTransport {
 	private readonly listeners = new Map<string, Set<(value: unknown) => void>>();
 	private readonly replies = new Map<string, (result: unknown) => void>();
 	private sequence = 0;
+	public readonly fileReads: FsReadFileParams[] = [];
+	public readFile!: (params: FsReadFileParams) => Promise<FsReadFileResult>;
 	public on(event: string, listener: (value: unknown) => void): void {
 		const listeners = this.listeners.get(event) ?? new Set();
 		listeners.add(listener);
@@ -71,7 +73,7 @@ class Transport implements AppServerTransport {
 	public send(event: string, payload?: unknown): void {
 		if (event === WEB_APP_SERVER_CONNECT_EVENT) { this.emit(WEB_APP_SERVER_CONNECTED_EVENT, { protocolVersion: 1, workspaceId: 'test', workspaceRoot: '/workspace' }); return; }
 		if (event !== WEB_APP_SERVER_FRAME_EVENT) { return; }
-		const request = JSON.parse((payload as { frame: string; }).frame) as { id: number | string; method?: string; result?: unknown; error?: unknown; };
+		const request = JSON.parse((payload as { frame: string; }).frame) as { id: number | string; method?: string; params?: FsReadFileParams; result?: unknown; error?: unknown; };
 		if (request.method === 'initialize') {
 			let result: InitializeResult;
 			const capabilities = {
@@ -104,6 +106,12 @@ class Transport implements AppServerTransport {
 			result = { serverInfo: { name: 'ash-app-server', version: '1' }, protocolVersion: { major: APP_SERVER_PROTOCOL_MAJOR }, schemaHash: APP_SERVER_SCHEMA_HASH, capabilities: { ...capabilities, contracts: { memoryDiagnostics: { version: 1 } } }, slashCommands: [] } satisfies InitializeResult;
 
 			this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: request.id, result }) });
+		} else if (request.method === 'fs/readFile') {
+			this.fileReads.push(request.params!);
+			void this.readFile(request.params!).then(
+				result => this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: request.id, result }) }),
+				error => this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: request.id, error: { code: -32043, message: String(error), data: { kind: error instanceof FileNotFoundError ? 'FileSystemNotFound' : 'FileSystemPermissionDenied' } } }) }),
+			);
 		} else if (typeof request.id === 'string') {
 			this.replies.get(request.id)?.(request.result ?? request.error);
 			this.replies.delete(request.id);
@@ -190,6 +198,13 @@ async function fixture(options: { contents?: ReadonlyMap<string, string>; backen
 	services.registerInstance(IAccessibilitySignalService, { playSignal: async signal => { cues.push(signal.settingsKey); }, playSignalLoop: () => Disposable.None });
 	const editing = lifetime.add(services.createInstance(ChatEditingService));
 	const transport = new Transport();
+	transport.readFile = async params => {
+		assert.equal(params.readAccess, 'test-read-access');
+		assert.equal(params.dirId, undefined);
+		assert.equal(params.sessionDirectory, undefined);
+		const content = await fileService.readFile(URI.file(params.path), params.encoding, { autoGuessEncoding: params.autoGuessEncoding, candidateGuessEncodings: params.candidateGuessEncodings });
+		return { content: content.content, revision: content.revision, ...(content.encoding === undefined ? {} : { encoding: content.encoding }) };
+	};
 	const client = new AppServerProtocolClient(transport);
 	lifetime.add(toDisposable(() => client.dispose()));
 	lifetime.add(services.createInstance(AppServerTextDocumentHost, client, { applyEdits: editing.applyEdits.bind(editing), finishTurn: editing.finishTurn.bind(editing) }));
@@ -198,7 +213,7 @@ async function fixture(options: { contents?: ReadonlyMap<string, string>; backen
 }
 
 async function snapshot(transport: Transport, resource: URI): Promise<string> {
-	const result = await transport.call('textDocument/read', { path: resource.fsPath });
+	const result = await transport.call('textDocument/read', { path: resource.fsPath, readAccess: 'test-read-access' });
 	assert.equal(result.kind, 'document', JSON.stringify(result));
 	if (result.kind !== 'document') { throw new Error('Document was not resolved'); }
 	return result.snapshot;
@@ -756,7 +771,7 @@ for (const eol of ['\n', '\r\n']) {
 		using copy = workingCopy(reference);
 		using registered = host.workingCopies.register(copy);
 		reference.model.applyOperations([{ range: reference.model.getFullModelRange(), text: 'unsaved' + eol }]);
-		const read = await host.transport.call('textDocument/read', { path: resource.fsPath });
+		const read = await host.transport.call('textDocument/read', { path: resource.fsPath, readAccess: 'test-read-access' });
 		assert.equal(read.kind, 'document', JSON.stringify(read));
 		if (read.kind !== 'document') { throw new Error('Expected document'); }
 		assert.equal(read.text, 'unsaved' + eol);
@@ -863,7 +878,7 @@ test('a changed BOM document moves with its serialized format', async () => {
 });
 
 
-test('closing during model resolution releases the late model reference', async () => {
+test('closing during scoped model resolution discards the late read', async () => {
 	using host = await fixture();
 	const resource = URI.file('c:/workspace/late.txt');
 	host.files.contents.set(resource.toString(), 'original');
@@ -873,14 +888,19 @@ test('closing during model resolution releases the late model reference', async 
 	const gate = new Promise<void>(resolve => { allowRead = resolve; });
 	const readBytes = host.files.readFile.bind(host.files);
 	host.files.readFile = async value => { started(); await gate; return readBytes(value); };
-	let released!: () => void;
-	const removed = new Promise<void>(resolve => { released = resolve; });
-	using listener = host.models.onModelRemoved(released);
-	void host.transport.call('textDocument/read', { path: resource.fsPath });
+	const settled = new DeferredPromise<void>();
+	const modelService = host.services.get(ITextModelService);
+	const createReference = modelService.createModelReference.bind(modelService);
+	const resolver = mock.method(modelService, 'createModelReference', async (...args: Parameters<typeof createReference>) => {
+		try { return await createReference(...args); }
+		finally { settled.complete(); }
+	});
+	void host.transport.call('textDocument/read', { path: resource.fsPath, readAccess: 'test-read-access' });
 	await reading;
 	host.client.disconnect();
 	allowRead();
-	await removed;
+	await settled.p;
+	resolver.mock.restore();
 	assert.equal(host.models.getModel(resource), null);
 });
 
@@ -1082,4 +1102,50 @@ test('saving the editor releases an Agent rejection that previously failed to re
 	// Window shutdown joins the service's normal debounced persistence.
 	await host.lifecycle.shutdown('reload');
 	assert.equal(host.storage.get('chatEditing.sessions', StorageScope.WORKSPACE), undefined);
+});
+
+
+test('cold document resolution uses only the callback proof', async () => {
+	using host = await fixture();
+	const resource = URI.file('c:/workspace/scoped.txt');
+	host.files.contents.set(resource.toString(), 'editor grant must not supply these bytes');
+	const fallback = mock.method(host.files, 'readFile', async () => { throw new Error('Unexpected broad editor read'); });
+	host.transport.readFile = async params => {
+		assert.deepEqual(params, { path: resource.fsPath, readAccess: 'test-read-access', encoding: 'utf8', autoGuessEncoding: false, candidateGuessEncodings: [] });
+		return { content: 'authorized bytes', revision: 'agent-revision', encoding: 'utf8' };
+	};
+	try {
+		const id = await snapshot(host.transport, resource);
+		assert.ok(id);
+		assert.equal(host.models.getModel(resource)?.getText(), 'authorized bytes');
+		assert.equal(fallback.mock.callCount(), 0);
+		assert.equal(host.transport.fileReads.length, 1);
+	} finally { fallback.mock.restore(); }
+});
+
+test('denied scoped reads cannot fall back to the editor grant or publish a snapshot', async () => {
+	using host = await fixture();
+	const resource = URI.file('c:/workspace/denied.txt');
+	host.files.contents.set(resource.toString(), 'secret readable by editor');
+	host.transport.readFile = async () => { throw new Error('Agent access denied'); };
+	const result = await host.transport.call('textDocument/read', { path: resource.fsPath, readAccess: 'test-read-access' });
+	assert.equal(result.kind, 'failed');
+	assert.equal(host.models.getModel(resource), null);
+	assert.equal(host.transport.fileReads.length, 1);
+});
+
+
+test('a concurrent broad editor load cannot replace a scoped cold read', async () => {
+	using host = await fixture();
+	const resource = URI.file('c:/workspace/concurrent.txt');
+	host.files.contents.set(resource.toString(), 'content loaded with editor authority');
+	const reading = new DeferredPromise<void>();
+	const content = new DeferredPromise<FsReadFileResult>();
+	host.transport.readFile = async () => { reading.complete(); return content.p; };
+	const scoped = host.transport.call('textDocument/read', { path: resource.fsPath, readAccess: 'test-read-access' });
+	await reading.p;
+	using broad = await host.models.acquire({ resource }, new AbortController().signal);
+	content.complete({ content: 'authorized bytes', revision: 'scoped-revision', encoding: 'utf8' });
+	assert.equal((await scoped).kind, 'failed');
+	assert.equal(broad.model.getText(), 'content loaded with editor authority');
 });

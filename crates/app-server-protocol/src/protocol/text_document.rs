@@ -9,6 +9,9 @@ use serde::Serialize;
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TextDocumentReadParams {
     pub path: String,
+    /// Connection-bound proof valid only while this callback is pending. Cold model
+    /// resolution must return it to fs/readFile instead of using the editor's grant.
+    pub read_access: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
