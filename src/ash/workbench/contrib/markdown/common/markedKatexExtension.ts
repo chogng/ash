@@ -56,9 +56,17 @@ export namespace MarkedKatexExtension {
 			extensions: (['block', 'inline'] as const).map(level => ({
 				name: `ashMath${level}`, level,
 				start(source) {
-					for (let index = 0; index < source.length; index++) {
+					// Marked asks for the next extension before each ordinary inline token.
+					// Scan plain prose natively; slicing and checking every character here
+					// repeatedly walks the remaining paragraph as links/emphasis are consumed.
+					const candidates = /[$\\]/gu;
+					let candidate: RegExpExecArray | null;
+					while ((candidate = candidates.exec(source))) {
+						const index = candidate.index;
 						if (level === 'block' && source[index - 1] !== '\n') { continue; }
-						if (source[index] === '\\' && !['(', '['].includes(source[index + 1])) { index++; continue; }
+						// An ordinary escape consumes its next character, including a dollar
+						// or another backslash that would otherwise look like a delimiter.
+						if (source[index] === '\\' && !['(', '['].includes(source[index + 1])) { candidates.lastIndex++; continue; }
 						if (readMath(source.slice(index), source.slice(Math.max(0, index - 2), index))) { return index; }
 					}
 					return -1;

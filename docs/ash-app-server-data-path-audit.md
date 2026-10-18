@@ -1472,3 +1472,54 @@ signal 的用途是退休结果 payload，Promise 仍跟随原响应或原 deadl
 没有在本轮采集 Rust producer / writer 的运行数据，也没有跨进程单调时钟与 Renderer request identity 的配对实测；这些 TODO 保留。当前完成的取消切片也不覆盖所有 Thread/transcript refresh、通用 transport 中止或所有大内容按需资源读取。
 
 正文的分页／重连补充回归另有 12 项通过，覆盖有界分页、重叠尾部、旧页退休、较新 streaming revision，以及两个窗口／连接 Worker 注册入口；Renderer 类型检查通过。启动的四组真实场景、nonce 阶段和 CPU 证据见[启动复测](desktop-startup.md#2026-10-18-入口与连接复测)。
+
+## 20. 已实施：巨大段落的数学候选扫描减量（2026-10-18）
+
+第 18 节的巨大单段落不含公式，但 Chat 的标准 Markdown 与边界 lexer 都安装了数学扩展。
+`MarkedKatexExtension.start` 在 Marked 消费每个普通 inline token 前，逐字符扫描整个剩余段落；
+即使字符不可能开启公式，仍创建后缀与前文切片，再调用 `readMath`。
+反复链接、粗体与行内代码使这段 JavaScript 扫描在同一段落中反复执行。
+
+本次只在现有数学语法 owner 中改用原生正则定位 `$`、`\` 候选，再由原 `readMath` 判断
+Unicode 单词边界、完整公式和公式长度；普通反斜杠转义仍消费其后一个字符。
+没有切开段落、限制正文、合并 provider 更新或加入异步调度，完成、取消、选区、图片和代码模型的生命周期不变。
+相比先加入投递预算，直接去掉已定位的重复工作使这个已量化负载恢复到单次更新约一帧以内。
+
+复用第 18 节原 Chromium 消费者场景与断言：128 次完整累计更新，每 8 次等待一帧，
+末段可见标记与代码模型检查后再等待两帧；每组 1 次预热、7 次有效样本，GC 在计时之外。
+前后均由正常 owning runner 先通过 integration TypeScript 检查，再运行相同场景。
+以下是 7 次样本中位数；阶段计时存在嵌套，不能相加：
+
+| 场景              |  累计同步更新 ms，前 → 后 | 到末次更新后两帧 ms，前 → 后 | CDP TaskDuration ms，前 → 后 |
+| ----------------- | ------------------------: | ---------------------------: | ---------------------------: |
+| 800 行围栏        |               52.9 → 53.2 |                150.0 → 150.0 |                  79.3 → 80.3 |
+| 8,000 行围栏      |              100.9 → 96.9 |                150.3 → 151.2 |                147.6 → 144.9 |
+| 10,103 字节单段落 | 2,677.0 → 383.0（−85.7%） |    2,700.1 → 408.3（−84.9%） |              2,695.2 → 398.2 |
+
+单段落累计 lexer 时间 2,399.9 → 116.6 ms（−95.1%）；单次最大更新的样本中位数
+57.3 → 5.8 ms，所有 after 样本最慢单次为 6.2 ms。
+7 样本的 ≥50 ms 长任务合计 84 → 0，before 最长 450 ms。
+前后仍各调用标准 renderer 129 次、lexer 443 次，lexer 累计输入 1,883,501 个 UTF-16 code units；
+因此收益来自候选定位成本下降，不是跳过更新或少渲染正文。围栏结果处于原有量级。
+这些数据来自真实生产 ChatListWidget、标准 Markdown 与代码消费者，仍只覆盖浏览器组件，
+没有测量 App Server、Main IPC 或完整 Desktop 收益。
+
+公式语义回归将既有共享语料放在巨大富 Markdown 前缀后，另覆盖同段落中转义美元、双反斜杠与真实公式。
+新增 Chromium 用例在原单段落负载每 512 字符处比较完整 DOM，并覆盖完成、修正、缩短与清空。
+独立差分调查还对转义、美元、括号、换行及 Unicode 组成的短字符串穷举与固定种子长字符串，
+比较 242,222 次新旧 block/inline 候选起点，全部相同；这只证明语法候选行为，性能收益以上述消费者场景为准。
+
+本切片解决已测普通富 Markdown 段落的主要重复扫描成本；任意更大段落、候选密集公式、列表和表格
+仍可能超过单帧。原生候选查找也会随 Marked 消费 token 重复扫描剩余文本，不能称为严格线性分词，
+本次没有提供单次 lexer 或投递的硬时间预算。巨大尾部的通用预算与完整 Desktop 实测继续保留。
+
+复现性能命令：
+
+```sh
+ASH_MARKDOWN_BENCHMARK_LABEL=delivery-after pnpm test:browser:integration:prepared chatTranscript.integration.spec.ts --project=chromium --grep 'streaming Markdown remaining consumer costs'
+```
+
+验证：共享 Chat Markdown 单元文件 56 项通过（`.build/todo-selected-unit.log`）。真实 Chromium 的完成时节点／代码模型／选择／焦点保留、巨大段落全文语义比较、原消费者成本场景共 3 项通过（`.build/todo-selected-browser.log`，产物 `.build/desktop/playwright/editor-browser-Mu8JNe/`）。后者是追加的独立复跑，不混入上表前后样本。Renderer 类型检查和 3 个改动 TS 文件 formatter、whitespace 检查通过。
+
+原始前后日志、各 21 个有效样本、汇总、源码快照、manifest 与候选差分脚本位于
+`.build/investigations/markdown-delivery-budget-2026-10-18/`。

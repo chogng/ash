@@ -74,6 +74,18 @@ suite('Shared chat Markdown rendering', () => {
 		});
 	}
 
+	test('math candidates after long Markdown retain delimiter and escape semantics', () => {
+		using scope = services();
+		using renderer = scope.createInstance(ChatContentMarkdownRenderer);
+		const prose = '**strong** [link](https://example.com) `code` 中文😀 '.repeat(96);
+		for (const entry of corpus) {
+			using result = renderer.render({ value: `${prose}\n\n${entry.markdown}` });
+			assert.deepEqual([...result.element.querySelectorAll<HTMLElement>('.ash-katex-container')].map(element => ({ source: element.dataset.latex, display: element.dataset.mathDisplay })), entry.formulas, entry.name);
+		}
+		using inline = renderer.render({ value: prose + String.raw`\$escaped\$ \\(escaped\\) \\[escaped\\] $x$ \(y\)` });
+		assert.deepEqual([...inline.element.querySelectorAll<HTMLElement>('.ash-katex-container')].map(element => element.dataset.latex), ['x', 'y']);
+	});
+
 	for (const [name, source] of [
 		['paragraphs and incomplete inline syntax', 'First **bold** and `code`.\n\nSecond *unfinished\n\nThird [label](https://example.com).'],
 		['setext heading and rule', 'A title\n======\n\nA paragraph\n\n---\n\nTail.'],

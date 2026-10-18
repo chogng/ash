@@ -472,6 +472,21 @@ test('streaming Markdown remaining consumer costs', async ({ page }, testInfo) =
 	} finally { await cdp.detach(); }
 });
 
+test('streaming Markdown large paragraphs preserve inline semantics through corrections', async ({ page }) => {
+	await page.goto('/chatTranscript.html');
+	const prose = 'Streaming **Markdown** with [a link](https://example.com) and `inline code`. 中文内容保持完整。 '.repeat(96);
+	const source = prose + String.raw`\$escaped\$ \\(escaped\\) $x$ \(y\)` + '\n\nFinal visible marker.';
+	for (let end = 512; end < source.length; end += 512) {
+		const value = source.slice(0, end);
+		const state = await page.evaluate(value => window.ashChatTranscriptIntegration.compareStreamingMarkdown(value, false), value);
+		expect(state.actual, `prefix ${end}`).toBe(state.expected);
+	}
+	for (const value of [source, source.replace(/Markdown/gu, 'corrected'), 'Replaced.', '']) {
+		const state = await page.evaluate(value => window.ashChatTranscriptIntegration.compareStreamingMarkdown(value, true), value);
+		expect(state.actual).toBe(state.expected);
+	}
+});
+
 test('streaming Markdown fences, lists and corrections match a complete render at every boundary', async ({ page }) => {
 	await page.goto('/chatTranscript.html');
 	const sources = [
