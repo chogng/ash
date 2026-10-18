@@ -114,8 +114,16 @@ fn encrypted_storage_rpc_reports_each_state_and_sanitized_operation_error() {
         );
         let reply: serde_json::Value = serde_json::from_str(&reply).unwrap();
         assert!(reply.get("error").is_none(), "{reply}");
-        assert_eq!(reply["result"]["providers"], json!({}));
-        assert_eq!(reply["result"]["activeConnections"], json!({}));
+        // A failed keyring excludes credential-backed routes. The credential-free local
+        // provider remains selectable; the failure must not disable unrelated capabilities.
+        assert_eq!(
+            reply["result"]["providers"],
+            json!({"ollama":{"connection":"ollama","provider":"ollama"}})
+        );
+        assert_eq!(
+            reply["result"]["activeConnections"],
+            json!({"ollama":"ollama"})
+        );
         assert_eq!(
             reply["result"]["connections"]["openai"]["provider"],
             "openai"
