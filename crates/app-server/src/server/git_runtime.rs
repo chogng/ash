@@ -313,14 +313,23 @@ impl GitRuntime {
             .expect("Git discovery interests")
             .clone();
         for (dir_id, authorization) in &self.dirs {
-            let mut roots =
-                discover_repository_roots(authorization, &GitDiscoveryOptions::default(), scans);
+            let mut roots = discover_repository_roots(
+                authorization,
+                &GitDiscoveryOptions::default(),
+                scans,
+                cancellation,
+            )?;
             for options in interests
                 .values()
                 .flatten()
                 .filter(|options| options.dir_id.as_ref() == dir_id.as_ref())
             {
-                roots.extend(discover_repository_roots(authorization, options, scans));
+                roots.extend(discover_repository_roots(
+                    authorization,
+                    options,
+                    scans,
+                    cancellation,
+                )?);
             }
             roots.sort();
             roots.dedup();
@@ -477,7 +486,8 @@ impl GitRuntime {
                     authorization,
                     &options,
                     &mut scans,
-                ));
+                    &CancellationSource::new().token(),
+                )?);
             }
         }
         let ids = self
@@ -2651,6 +2661,9 @@ fn watch_repositories(
             break;
         }
         if let Err(error) = runtime.reconcile_with_notification(true, &cancellation) {
+            if cancellation.is_cancelled() {
+                break;
+            }
             log::warn!("Git repository discovery failed: {error:?}");
         }
         // A later replacement remains pending even if it occurs between reading
@@ -2873,7 +2886,12 @@ fn discover_repository_roots(
     authorization: &Authorization,
     options: &GitDiscoveryOptions,
     scans: &mut GitDiscoveryScans,
-) -> Vec<PathBuf> {
+    cancellation: &CancellationToken,
+) -> Result<Vec<PathBuf>, GitRuntimeError> {
+    use ash_async_utils::FutureCancellationExt;
+
+    let cancelled = |_| GitRuntimeError::Service(GitServiceError::Cancelled);
+    cancellation.check().map_err(cancelled)?;
     const MAX_REPOSITORIES: usize = 512;
     let dir_root = authorization.dir().canonical_path();
     let mut policy = options.clone();
@@ -2882,7 +2900,7 @@ fn discover_repository_roots(
     policy.dir_id = None;
     let scan_key = (dir_root.to_path_buf(), policy);
     if let Some(roots) = scans.get(&scan_key) {
-        return roots.clone();
+        return Ok(roots.clone());
     }
     let mut candidates = vec![dir_root.to_path_buf()];
     let mut builder = WalkBuilder::new(dir_root);
@@ -2907,6 +2925,7 @@ fn discover_repository_roots(
                         .any(|name| entry.file_name() == name.as_str())
         });
     for entry in builder.build().filter_map(Result::ok) {
+        cancellation.check().map_err(cancelled)?;
         if entry.file_type().is_some_and(|kind| kind.is_dir()) && entry.path().join(".git").exists()
         {
             candidates.push(entry.path().to_path_buf());
@@ -2917,6 +2936,7 @@ fn discover_repository_roots(
     }
     let mut explicit_roots = std::collections::BTreeSet::new();
     for path in &options.scan_repositories {
+        cancellation.check().map_err(cancelled)?;
         let path = Path::new(path);
         let path = if path.is_absolute() {
             path.to_path_buf()
@@ -2934,7 +2954,7 @@ fn discover_repository_roots(
         .enable_all()
         .build()
     else {
-        return vec![];
+        return Err(GitRuntimeError::Service(GitServiceError::Runtime));
     };
     let client = crate::git_service::current_client();
     let mut candidates = std::collections::VecDeque::from(candidates);
@@ -2942,7 +2962,16 @@ fn discover_repository_roots(
     let mut submodules = 0;
     let mut worktrees = 0;
     while let Some(candidate) = candidates.pop_front() {
-        let Ok(repository) = runtime.block_on(client.open_repository(&candidate)) else {
+        // Discovery belongs to the watcher/request lease too. Dropping the last probe
+        // releases its Git process tree, so shutdown never waits for a query timeout.
+        let repository = runtime
+            .block_on(
+                client
+                    .open_repository(&candidate)
+                    .with_cancellation(cancellation.clone()),
+            )
+            .map_err(cancelled)?;
+        let Ok(repository) = repository else {
             continue;
         };
         let root = if repository.worktree_root().starts_with(dir_root) {
@@ -2966,7 +2995,12 @@ fn discover_repository_roots(
             && repository.worktree_root().join(".git").is_file()
             && repository.kind() == ash_git::GitRepositoryKind::Standard
             && runtime
-                .block_on(client.is_submodule(&repository))
+                .block_on(
+                    client
+                        .is_submodule(&repository)
+                        .with_cancellation(cancellation.clone()),
+                )
+                .map_err(cancelled)?
                 .unwrap_or(false)
         {
             if !options.detect_submodules || submodules >= options.submodule_limit {
@@ -2977,7 +3011,12 @@ fn discover_repository_roots(
         roots.push(root);
         if options.detect_submodules {
             for path in runtime
-                .block_on(client.submodule_paths(&repository))
+                .block_on(
+                    client
+                        .submodule_paths(&repository)
+                        .with_cancellation(cancellation.clone()),
+                )
+                .map_err(cancelled)?
                 .unwrap_or_default()
             {
                 if submodules >= options.submodule_limit {
@@ -2992,7 +3031,12 @@ fn discover_repository_roots(
         }
         if options.detect_worktrees {
             for worktree in runtime
-                .block_on(client.worktrees(&repository))
+                .block_on(
+                    client
+                        .worktrees(&repository)
+                        .with_cancellation(cancellation.clone()),
+                )
+                .map_err(cancelled)?
                 .unwrap_or_default()
             {
                 if worktrees >= options.worktree_limit {
@@ -3012,8 +3056,9 @@ fn discover_repository_roots(
     roots.sort();
     roots.dedup();
     roots.truncate(MAX_REPOSITORIES);
+    cancellation.check().map_err(cancelled)?;
     scans.insert(scan_key, roots.clone());
-    roots
+    Ok(roots)
 }
 
 fn repository_descriptor(

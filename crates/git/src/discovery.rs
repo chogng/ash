@@ -16,7 +16,8 @@ use tokio::sync::Semaphore;
 
 const MAX_CONCURRENT: usize = 8;
 type Probe = BoxFuture<'static, GitResult<GitCommandOutput>>;
-type Pending = Arc<Mutex<HashMap<Key, Entry>>>;
+type PendingKey = (tokio::runtime::Id, Key);
+type Pending = Arc<Mutex<HashMap<PendingKey, Entry>>>;
 
 #[derive(Clone, Eq, Hash, PartialEq)]
 pub(crate) struct Key {
@@ -54,6 +55,10 @@ impl Coordinator {
         key: Key,
         probe: impl Future<Output = GitResult<GitCommandOutput>> + Send + 'static,
     ) -> Shared<Probe> {
+        // Process pipes, timeout timers and stderr tasks belong to the runtime that polls
+        // the probe. Another current-thread runtime cannot drive those resources after the
+        // first caller returns from block_on, even though it can poll the Shared future.
+        let key = (tokio::runtime::Handle::current().id(), key);
         let mut pending = self.pending.lock().expect("Git discovery registry");
         if let Some(future) = pending.get(&key).and_then(|entry| entry.future.upgrade()) {
             return future;
@@ -89,7 +94,7 @@ impl Coordinator {
 
 struct Cleanup {
     pending: Pending,
-    key: Key,
+    key: PendingKey,
     identity: Arc<()>,
 }
 

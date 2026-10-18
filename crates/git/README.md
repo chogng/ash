@@ -73,7 +73,7 @@ watch subscription、operation queue 或 wire DTO 放进上述 module，意味�
 - `GitClient::clone_repository` 解析父目录后，通过原子创建空目录领取 repository name 或其 `-1` 至 `-19` 后缀，再启动 Git。并发调用和父目录别名不会领取同一目录，也不需要全局网络操作锁。失败或 future 取消仅移除空的目录预留，保留部分克隆数据。
 - `GitClient::clone_repository_to` 使用调用方指定的绝对目标目录，原子领取新目录并拒绝已存在的目录。可选版本为分支、标签或完整提交 ID；提交 ID 会获取并验证，不能被同名分支替代。两种 clone 入口共用执行实现与取消生命周期，不承担插件来源或安装策略。
 - 普通命令的超时覆盖等待退出、写入 stdin 和读取 stdout/stderr。输出采集直接属于当前 future，取消时同步释放，避免读写任务脱离操作生命周期。
-- 仓库探测按规范化目录、Git 程序、查询 PATH 策略和执行限制合并；不同程序或限制不会混用结果。
+- 仓库探测仅在同一 Tokio runtime 内，按规范化目录、Git 程序、查询 PATH 策略和执行限制合并；进程管道、计时器与 stderr task 归首次轮询的 runtime 所有，不能依赖另一个暂停的 current-thread runtime 推进。不同 runtime、程序或限制不会混用进行中的任务。
 - 探测完成或全部调用方取消后立即移除记录，不缓存成功或失败结果。单个调用方取消不会中断其他调用方；排队等待不占用进程执行超时。
 - Unix 普通命令与流式查询各自使用独立进程组；超时、future 取消和错误结束整个组，包括主程序退出后仍持有管道的助手。完整成功后释放组的清理责任，保留正常启动的后台后代。
 - Windows 普通命令与流式查询均通过 `pty::JobObject::spawn_contained` 创建。Job 在完整操作期间存活，超时、取消或错误释放时结束进程树；成功后保留正常启动的后台后代。

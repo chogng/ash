@@ -95,6 +95,94 @@ fn discovery_reuses_equal_scans_within_one_request_but_observes_new_repositories
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn discovery_cancellation_stops_an_inflight_probe_without_caching_partial_roots() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let repository = TestRepository::init();
+    let scripts = tempfile::tempdir().unwrap();
+    let marker = scripts.path().join("started");
+    let gate = scripts.path().join("hold");
+    let executable = scripts.path().join("git");
+    let quote = |path: &Path| format!("'{}'", path.display().to_string().replace('\'', "'\\''"));
+    let git = ash_git::GitClient::system().executable().unwrap();
+    std::fs::write(&gate, "").unwrap();
+    std::fs::write(
+        &executable,
+        format!(
+            "#!/bin/sh\nfor arg do if [ \"$arg\" = rev-parse ] && [ -e {gate} ]; then printf '%s' \"$$\" > {marker}; while [ -e {gate} ]; do sleep 0.05; done; fi; done\nexec {git} \"$@\"\n",
+            gate = quote(&gate), marker = quote(&marker), git = quote(&git),
+        ),
+    ).unwrap();
+    std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let client = ash_git::GitClient::with_executable(
+        executable,
+        ash_git::GitExecutionLimits::new(
+            Duration::from_secs(30),
+            Duration::from_secs(30),
+            1024 * 1024,
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let authorization = inspection_authorization(repository.root());
+    let cancellation = ash_async_utils::CancellationSource::new();
+    let _cancel_on_exit = cancellation.cancel_on_drop();
+    let token = cancellation.token();
+    let (completed, result) = std::sync::mpsc::channel();
+    let (stopped_sender, stopped_result) = std::sync::mpsc::channel();
+    let (retry, retry_ready) = std::sync::mpsc::channel();
+    let worker = std::thread::spawn(move || {
+        crate::git_service::with_client(client, || {
+            let mut scans = super::GitDiscoveryScans::new();
+            let stopped = super::discover_repository_roots(
+                &authorization,
+                &super::GitDiscoveryOptions::default(),
+                &mut scans,
+                &token,
+            );
+            assert!(matches!(
+                stopped,
+                Err(super::GitRuntimeError::Service(
+                    crate::git_service::GitServiceError::Cancelled
+                ))
+            ));
+            assert!(
+                scans.is_empty(),
+                "a cancelled scan cannot publish partial discovery"
+            );
+            stopped_sender.send(()).unwrap();
+            retry_ready.recv().unwrap();
+            // Retry against the same cache and real repository with a fresh lease.
+            let roots = super::discover_repository_roots(
+                &authorization,
+                &super::GitDiscoveryOptions::default(),
+                &mut scans,
+                &ash_async_utils::CancellationSource::new().token(),
+            )
+            .unwrap();
+            completed.send(roots).unwrap();
+        });
+    });
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !marker.exists() {
+        assert!(Instant::now() < deadline, "discovery probe did not start");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    cancellation.cancel();
+    let stopped = stopped_result.recv_timeout(Duration::from_secs(3));
+    // Release the fixture even when the shutdown assertion fails.
+    std::fs::remove_file(gate).unwrap();
+    stopped.expect("shutdown must cancel the probe before its 30-second timeout");
+    retry.send(()).unwrap();
+    let roots = result
+        .recv_timeout(Duration::from_secs(3))
+        .expect("fresh discovery must complete after cancellation");
+    assert_eq!(roots, [repository.root().canonicalize().unwrap()]);
+    worker.join().unwrap();
+}
+
 #[test]
 fn published_startup_status_requires_live_post_registration_watch_coverage() {
     let repository = TestRepository::init();

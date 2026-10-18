@@ -151,3 +151,41 @@ async fn differing_executable_environment_and_limits_are_not_combined() {
     drop(calls);
     assert!(coordinator.pending.lock().unwrap().is_empty());
 }
+
+#[test]
+fn an_idle_runtime_cannot_stall_discovery_on_another_runtime() {
+    let directory = tempfile::tempdir().unwrap();
+    let coordinator = Coordinator::new(2);
+    let first_runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .unwrap();
+    let second_runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .unwrap();
+    let path = directory.path().to_path_buf();
+    let first = first_runtime.block_on(async {
+        let mut caller = coordinator.query(key(directory.path()), async move {
+            // Like a child process pipe, this timer belongs to the runtime that first polls it.
+            tokio::time::sleep(Duration::from_secs(60)).await;
+            Err(GitError::NotAWorkingTree { path })
+        });
+        assert!(poll!(&mut caller).is_pending());
+        caller
+    });
+    // Keep the first caller and its runtime alive without driving that runtime. Another
+    // caller must make progress even when repository identity and executable are identical.
+    second_runtime.block_on(async {
+        let path = directory.path().to_path_buf();
+        let second = coordinator.query(key(directory.path()), async move {
+            Err(GitError::NotAWorkingTree { path })
+        });
+        let result = tokio::time::timeout(Duration::from_millis(250), second)
+            .await
+            .expect("discovery must not depend on another runtime being driven");
+        assert!(matches!(result, Err(GitError::NotAWorkingTree { .. })));
+    });
+    drop(first);
+    assert!(coordinator.pending.lock().unwrap().is_empty());
+}
