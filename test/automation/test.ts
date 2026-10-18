@@ -215,7 +215,7 @@ export const test = base.extend<PlaywrightFixtures>({
 					},
 					deferRestart: async () => {
 						await expect.poll(async () => current.application.evaluate(() => Boolean((globalThis as RestartDialogGlobal).ashTestRestartDialog))).toBe(true);
-						await current.application.evaluate(() => (globalThis as RestartDialogGlobal).ashTestRestartDialog!.respond(1));
+						await current.application.evaluate(() => (globalThis as RestartDialogGlobal).ashTestRestartDialog!.respond('later'));
 					},
 					restartMessage: async () => current.application.evaluate(() => (globalThis as RestartDialogGlobal).ashTestRestartDialog?.message ?? ''),
 					restart: async () => {
@@ -233,7 +233,7 @@ export const test = base.extend<PlaywrightFixtures>({
 						const exited = new Promise<void>(resolve => childProcess.once('exit', () => resolve()));
 						const closed = current.application.waitForEvent('close');
 						await expect.poll(async () => current.application.evaluate(() => Boolean((globalThis as RestartDialogGlobal).ashTestRestartDialog))).toBe(true);
-						await current.application.evaluate(() => (globalThis as RestartDialogGlobal).ashTestRestartDialog!.respond(0));
+						await current.application.evaluate(() => (globalThis as RestartDialogGlobal).ashTestRestartDialog!.respond('restart'));
 						await exited;
 						// The daemon can retain inherited pipes after Main exits on Windows.
 						// Release the old fixture before awaiting Playwright's pipe-close event.
@@ -269,7 +269,7 @@ export const test = base.extend<PlaywrightFixtures>({
 });
 
 interface RestartDialogGlobal {
-	ashTestRestartDialog?: { message: string; respond(response: number): void; };
+	ashTestRestartDialog?: { message: string; respond(action: 'restart' | 'later'): void; };
 }
 
 async function captureRestartDialogs(application: import('@playwright/test').ElectronApplication): Promise<void> {
@@ -281,8 +281,10 @@ async function captureRestartDialogs(application: import('@playwright/test').Ele
 				? original(windowOrOptions as Electron.BrowserWindow, suppliedOptions) : original(options);
 			return new Promise<Electron.MessageBoxReturnValue>(resolve => {
 				(globalThis as RestartDialogGlobal).ashTestRestartDialog = {
-					message: options.message, respond(response) {
+					message: options.message, respond(action) {
 						delete (globalThis as RestartDialogGlobal).ashTestRestartDialog;
+						// Main has already reordered native buttons for the host platform.
+						const response = action === 'restart' ? options.defaultId ?? 0 : options.cancelId ?? 1;
 						resolve({ response, checkboxChecked: false });
 					}
 				};
