@@ -29,6 +29,7 @@ fn setup(root: &Path) -> (AppServer, Value) {
             InMemoryThreadStore::default(),
         ))),
         Arc::new(Model),
+        ash_app_server_diff::compute,
     );
     let thread = server
         .start_thread(StartThreadRequest {

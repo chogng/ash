@@ -15,6 +15,7 @@ fn an_unconfigured_gallery_is_reported_without_exposing_a_resource() {
             InMemoryThreadStore::default(),
         ))),
         Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
+        ash_app_server_diff::compute,
     );
     assert_eq!(
         server
@@ -57,6 +58,7 @@ fn a_changed_gallery_is_rejected_before_provider_io() {
             InMemoryThreadStore::default(),
         ))),
         Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
+        ash_app_server_diff::compute,
     )
     .with_plugins_manager(Arc::new(manager));
     let template =
@@ -148,6 +150,7 @@ fn extension_catalog_exposes_its_authorized_package_location_and_execution_platf
             InMemoryThreadStore::default(),
         ))),
         Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
+        ash_app_server_diff::compute,
     )
     .with_extension_roots(vec![ExtensionRoot::user(root.path())]);
     let catalog = server
@@ -202,6 +205,7 @@ fn extension_catalog_serves_built_in_language_pack_resources_from_the_rust_snaps
             InMemoryThreadStore::default(),
         ))),
         Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
+        ash_app_server_diff::compute,
     )
     .with_extension_roots(vec![ExtensionRoot::built_in(root.path())]);
     let catalog = server

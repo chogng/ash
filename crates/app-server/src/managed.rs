@@ -27,7 +27,11 @@ const IDLE_POLL_INTERVAL: Duration = Duration::from_millis(50);
 const IDLE_TIMEOUT_ENV: &str = "ASH_LOCAL_APP_SERVER_IDLE_TIMEOUT_MILLIS";
 const STOP_GRACE_TIMEOUT: Duration = Duration::from_secs(5);
 
-pub(crate) fn run(profile_root: PathBuf, product_services: Option<PathBuf>) -> Result<(), String> {
+pub(crate) fn run(
+    profile_root: PathBuf,
+    product_services: Option<PathBuf>,
+    diff_handler: crate::DiffRequestHandler,
+) -> Result<(), String> {
     let history = ash_state::SqliteThreadStore::open(profile_root.join("state.sqlite3"))
         .map_err(|error| error.to_string())?;
     // Once ownership transfers, this host is execution-only. Opening the profile services
@@ -44,6 +48,7 @@ pub(crate) fn run(profile_root: PathBuf, product_services: Option<PathBuf>) -> R
                 GrantSource::HostConfiguration,
                 product_services,
             ),
+            diff_handler,
         )?)),
     };
     drop(history);

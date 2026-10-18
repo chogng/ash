@@ -16,6 +16,7 @@ fn server(root: &std::path::Path) -> AppServer {
         Arc::new(crate::local::ProviderModelService::new(Arc::new(
             ash_model_provider::EchoModel,
         ))),
+        ash_app_server_diff::compute,
     )
     .with_ephemeral_env_state()
     .with_file_system(Arc::new(LocalFileSystem::new(Grant::for_environment(

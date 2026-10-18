@@ -64,6 +64,8 @@ members = [
     "crates/attachments",
     "crates/assets",
     "crates/app-server",
+    "crates/app-server-host",
+    "crates/app-server-diff",
     "crates/app-server-daemon",
     "crates/app-server-client",
     "crates/app-server-test-client",
@@ -222,7 +224,7 @@ members = [
     "crates/otel-trace-websocket",
     "crates/terminal",
 ]
-default-members = ["cli", "crates/app-server"]
+default-members = ["cli", "crates/app-server-host"]
 resolver = "3"
 
 [workspace.package]
@@ -454,7 +456,9 @@ agent-roles = { package = "ash-agent-roles", path = "crates/agent-roles" }
 attachment-store = { package = "ash-attachment-store", path = "crates/attachment-store" }
 ash-attachments = { path = "crates/attachments" }
 ash-ansi-escape = { path = "crates/ansi-escape" }
-ash-app-server = { path = "crates/app-server" }
+ash-app-server = { path = "crates/app-server-host" }
+ash-app-server-runtime = { path = "crates/app-server" }
+ash-app-server-diff = { path = "crates/app-server-diff" }
 ash-app-server-daemon = { path = "crates/app-server-daemon" }
 ash-app-server-client = { path = "crates/app-server-client" }
 ash-app-server-protocol = { path = "crates/app-server-protocol" }
@@ -609,6 +613,13 @@ opt-level = 1
 # The embedded App Server dominates unwind metadata in development builds.
 opt-level = "s"
 
+# Preserve the settings of the App Server code moved into this package.
+[profile.dev.package.ash-app-server-runtime]
+opt-level = "s"
+
+[profile.dev.package.ash-app-server-diff]
+opt-level = "s"
+
 [profile.dev.package.ash-app-server-client]
 # Keep the brokered client development graph small.
 opt-level = "s"
@@ -623,6 +634,12 @@ opt-level = 0
 
 [profile.test.package.ash-app-server]
 # Large App Server test binaries otherwise exceed macOS compact-unwind encoding limits.
+opt-level = "s"
+
+[profile.test.package.ash-app-server-runtime]
+opt-level = "s"
+
+[profile.test.package.ash-app-server-diff]
 opt-level = "s"
 
 [profile.test.package.ash-app-server-client]
@@ -649,6 +666,12 @@ codegen-units = 256
 
 [profile.dev-small.package.ash-app-server]
 # App Server source edits need the wider incremental partitioning as well.
+codegen-units = 256
+
+[profile.dev-small.package.ash-app-server-runtime]
+codegen-units = 256
+
+[profile.dev-small.package.ash-app-server-diff]
 codegen-units = 256
 
 [profile.dev-small.package.ash-app-server-protocol]

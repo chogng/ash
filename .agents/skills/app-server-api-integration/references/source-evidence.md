@@ -46,7 +46,7 @@ Sessions 是 Thread UI 的 adapter，不是 app-server 所有 API 的统一入�
 | 路径 | 已验证结论 |
 | --- | --- |
 | `../app-server/README.md` | 默认 stdio 是单路 JSONL；WebSocket 标记为 experimental/unsupported；Unix socket 用 WebSocket upgrade，面向本地 control-plane client。每条 connection 独立执行 `initialize` → `initialized`。 |
-| `../app-server/src/main.rs` | CLI 接受 `stdio://`、`unix://`、`ws://IP:PORT` 和 `off`；WebSocket auth 参数由 transport 层提供。 |
+| `../app-server-host/src/main.rs` | 产品进程入口：完成加固、运行包租约和内部 helper 分派后，调用装配了具体适配器的产品 `run`。 |
 | `../app-server-transport/src/transport/stdio.rs` | stdio 直接读取进程 stdin 并写 stdout，只形成一条进程级 connection。 |
 | `../app-server-transport/src/transport/unix_socket.rs` | Unix socket 能接受多个本地 connection，但不提供 Windows 对等 endpoint，因此不能单独完成三平台 desktop contract。 |
 | `../app-server-transport/src/transport/websocket.rs` | listener 为每个 upgrade 分配独立 connection、reader、writer 和有界 queue；当前只在 stderr 打印面向人的 endpoint/readyz 信息，`start_websocket_acceptor` 只返回 accept task。 |

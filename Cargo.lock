@@ -387,6 +387,139 @@ dependencies = [
 name = "ash-app-server"
 version = "0.1.0"
 dependencies = [
+ "ash-app-server-client",
+ "ash-app-server-daemon",
+ "ash-app-server-diff",
+ "ash-app-server-protocol",
+ "ash-app-server-runtime",
+ "ash-arg0",
+ "ash-cloud-codebase",
+ "ash-memories",
+ "ash-package-store",
+ "ash-process-hardening",
+ "ash-protocol",
+ "ash-remote",
+ "ash-remote-profile-store",
+ "ash-uds",
+ "dirs",
+ "dunce",
+ "futures",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "tokio",
+ "tokio-tungstenite 0.28.0",
+]
+
+[[package]]
+name = "ash-app-server-client"
+version = "0.1.0"
+dependencies = [
+ "ash-app-server",
+ "ash-app-server-diff",
+ "ash-app-server-protocol",
+ "ash-app-server-transport",
+ "ash-async-utils",
+ "ash-client",
+ "ash-core",
+ "ash-core-api",
+ "ash-diagnostics",
+ "ash-feedback-contract",
+ "ash-memories",
+ "ash-memory-diagnostics",
+ "ash-protocol",
+ "ash-queue",
+ "ash-queue-contract",
+ "ash-rollout-trace",
+ "ash-utils-pty",
+ "base64 0.22.1",
+ "serde",
+ "serde_json",
+ "zeroize",
+]
+
+[[package]]
+name = "ash-app-server-daemon"
+version = "0.1.0"
+dependencies = [
+ "ash-app-server-protocol",
+ "ash-app-server-transport",
+ "ash-build-info",
+ "ash-exec-server-protocol",
+ "ash-install-context",
+ "ash-package-store",
+ "ash-process-hardening",
+ "ash-product-update",
+ "ash-remote",
+ "ash-uds",
+ "ash-utils-home-dir",
+ "ash-utils-process",
+ "dunce",
+ "libc",
+ "rustix 1.1.4",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "signal-hook",
+ "tempfile",
+ "ureq 3.4.2",
+ "windows-sys 0.59.0",
+ "zip",
+]
+
+[[package]]
+name = "ash-app-server-diff"
+version = "0.1.0"
+dependencies = [
+ "ash-app-server-protocol",
+ "ash-diff",
+ "serde_json",
+]
+
+[[package]]
+name = "ash-app-server-protocol"
+version = "0.1.0"
+dependencies = [
+ "ash-analytics",
+ "ash-app-server-protocol-noop-macros",
+ "ash-build-info",
+ "ash-call-contract",
+ "ash-collab-contract",
+ "ash-diagnostics",
+ "ash-environment",
+ "ash-extension-items",
+ "ash-external-ext-protocol",
+ "ash-features",
+ "ash-feedback-contract",
+ "ash-file-access",
+ "ash-guardian-environment",
+ "ash-memories",
+ "ash-memory-diagnostics",
+ "ash-protocol",
+ "ash-queue-contract",
+ "ash-response-debug-context",
+ "ash-slash-commands",
+ "ash-task-delivery-contract",
+ "ash-thread-transcript",
+ "ash-utils-path-uri",
+ "schemars",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "ts-rs",
+ "url",
+ "zeroize",
+]
+
+[[package]]
+name = "ash-app-server-protocol-noop-macros"
+version = "0.1.0"
+
+[[package]]
+name = "ash-app-server-runtime"
+version = "0.1.0"
+dependencies = [
  "ash-action-policy",
  "ash-advisor",
  "ash-agent",
@@ -395,13 +528,12 @@ dependencies = [
  "ash-agent-message-board-client",
  "ash-agent-roles",
  "ash-analytics",
- "ash-app-server-client",
  "ash-app-server-daemon",
+ "ash-app-server-diff",
  "ash-app-server-protocol",
  "ash-app-server-transport",
  "ash-app-tools",
  "ash-apply-patch",
- "ash-arg0",
  "ash-assets",
  "ash-async-utils",
  "ash-attachment-store",
@@ -477,7 +609,6 @@ dependencies = [
  "ash-otel-trace-websocket",
  "ash-package-store",
  "ash-plugin",
- "ash-process-hardening",
  "ash-projects",
  "ash-prompts",
  "ash-protocol",
@@ -545,101 +676,6 @@ dependencies = [
  "worktree",
  "zeroize",
 ]
-
-[[package]]
-name = "ash-app-server-client"
-version = "0.1.0"
-dependencies = [
- "ash-app-server",
- "ash-app-server-protocol",
- "ash-app-server-transport",
- "ash-async-utils",
- "ash-client",
- "ash-core",
- "ash-core-api",
- "ash-diagnostics",
- "ash-feedback-contract",
- "ash-memories",
- "ash-memory-diagnostics",
- "ash-protocol",
- "ash-queue",
- "ash-queue-contract",
- "ash-rollout-trace",
- "ash-utils-pty",
- "base64 0.22.1",
- "serde",
- "serde_json",
- "zeroize",
-]
-
-[[package]]
-name = "ash-app-server-daemon"
-version = "0.1.0"
-dependencies = [
- "ash-app-server-protocol",
- "ash-app-server-transport",
- "ash-build-info",
- "ash-exec-server-protocol",
- "ash-install-context",
- "ash-package-store",
- "ash-process-hardening",
- "ash-product-update",
- "ash-remote",
- "ash-uds",
- "ash-utils-home-dir",
- "ash-utils-process",
- "dunce",
- "libc",
- "rustix 1.1.4",
- "semver",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "signal-hook",
- "tempfile",
- "ureq 3.4.2",
- "windows-sys 0.59.0",
- "zip",
-]
-
-[[package]]
-name = "ash-app-server-protocol"
-version = "0.1.0"
-dependencies = [
- "ash-analytics",
- "ash-app-server-protocol-noop-macros",
- "ash-build-info",
- "ash-call-contract",
- "ash-collab-contract",
- "ash-diagnostics",
- "ash-environment",
- "ash-extension-items",
- "ash-external-ext-protocol",
- "ash-features",
- "ash-feedback-contract",
- "ash-file-access",
- "ash-guardian-environment",
- "ash-memories",
- "ash-memory-diagnostics",
- "ash-protocol",
- "ash-queue-contract",
- "ash-response-debug-context",
- "ash-slash-commands",
- "ash-task-delivery-contract",
- "ash-thread-transcript",
- "ash-utils-path-uri",
- "schemars",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "ts-rs",
- "url",
- "zeroize",
-]
-
-[[package]]
-name = "ash-app-server-protocol-noop-macros"
-version = "0.1.0"
 
 [[package]]
 name = "ash-app-server-test-client"
@@ -2612,6 +2648,7 @@ dependencies = [
  "ash-app-server",
  "ash-app-server-client",
  "ash-app-server-daemon",
+ "ash-app-server-diff",
  "ash-app-server-protocol",
  "ash-arg0",
  "ash-async-utils",

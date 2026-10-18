@@ -12,7 +12,8 @@ fn message_history_keeps_local_profile_authority_with_remote_thread_origins() {
         ash_app_server_daemon::GrantSource::HostConfiguration,
         None,
     );
-    let registry = ProfileAppServerRegistry::open(options.clone()).unwrap();
+    let registry =
+        ProfileAppServerRegistry::open(options.clone(), ash_app_server_diff::compute).unwrap();
     let _server = registry.server_for(options).unwrap();
     let remote: RemoteSessionIndex = Arc::new(Mutex::new(BTreeMap::from([(
         "remote-thread".into(),
@@ -45,7 +46,8 @@ fn session_directory_file_requests_route_to_the_session_execution_authority() {
         ash_app_server_daemon::GrantSource::HostConfiguration,
         None,
     );
-    let registry = ProfileAppServerRegistry::open(options.clone()).unwrap();
+    let registry =
+        ProfileAppServerRegistry::open(options.clone(), ash_app_server_diff::compute).unwrap();
     let _server = registry.server_for(options).unwrap();
     let remote: RemoteSessionIndex = Arc::new(Mutex::new(BTreeMap::from([(
         "remote-session".into(),
@@ -112,7 +114,8 @@ fn resource_handles_keep_their_opening_session_runtime_for_reads_and_release() {
         ash_app_server_daemon::GrantSource::HostConfiguration,
         None,
     );
-    let registry = ProfileAppServerRegistry::open(options.clone()).unwrap();
+    let registry =
+        ProfileAppServerRegistry::open(options.clone(), ash_app_server_diff::compute).unwrap();
     let server = registry.server_for(options).unwrap();
     let target = SessionExecutionTarget::Local {
         root: directory.path().to_path_buf(),
@@ -224,7 +227,9 @@ fn imported_ssh_history_is_read_by_the_local_gateway_without_opening_a_remote_ag
         ash_app_server_daemon::GrantSource::HostConfiguration,
         None,
     );
-    let registry = Arc::new(ProfileAppServerRegistry::open(options.clone()).unwrap());
+    let registry = Arc::new(
+        ProfileAppServerRegistry::open(options.clone(), ash_app_server_diff::compute).unwrap(),
+    );
     let server = registry.server_for(options).unwrap();
     assert!(registry.remote_profiles().unwrap().is_empty());
     assert!(
@@ -366,12 +371,15 @@ fn gateway_with_ssh(
         .activate(&remote)
         .unwrap();
     let registry = Arc::new(
-        ProfileAppServerRegistry::open(ash_app_server_daemon::ConnectionOptions::new(
-            profile.path(),
-            None,
-            ash_app_server_daemon::GrantSource::HostConfiguration,
-            None,
-        ))
+        ProfileAppServerRegistry::open(
+            ash_app_server_daemon::ConnectionOptions::new(
+                profile.path(),
+                None,
+                ash_app_server_daemon::GrantSource::HostConfiguration,
+                None,
+            ),
+            ash_app_server_diff::compute,
+        )
         .unwrap(),
     );
     let server = Arc::new(crate::server::request_dispatch::tests::server());
@@ -586,12 +594,15 @@ fn agents_gateway_serves_the_catalog_while_another_request_is_running() {
     use crate::server::request_dispatch::tests::blocking_catalog_server;
     let root = tempfile::tempdir().unwrap();
     let registry = Arc::new(
-        ProfileAppServerRegistry::open(ash_app_server_daemon::ConnectionOptions::new(
-            root.path(),
-            None,
-            ash_app_server_daemon::GrantSource::HostConfiguration,
-            None,
-        ))
+        ProfileAppServerRegistry::open(
+            ash_app_server_daemon::ConnectionOptions::new(
+                root.path(),
+                None,
+                ash_app_server_daemon::GrantSource::HostConfiguration,
+                None,
+            ),
+            ash_app_server_diff::compute,
+        )
         .unwrap(),
     );
     let (server, entered, release) = blocking_catalog_server();
@@ -1065,7 +1076,9 @@ fn directory_resources_remain_on_their_creating_gateway_connection() {
         ash_app_server_daemon::GrantSource::HostConfiguration,
         None,
     );
-    let registry = Arc::new(ProfileAppServerRegistry::open(options.clone()).unwrap());
+    let registry = Arc::new(
+        ProfileAppServerRegistry::open(options.clone(), ash_app_server_diff::compute).unwrap(),
+    );
     let server = registry.server_for(options).unwrap();
     let start = || {
         let registry = Arc::clone(&registry);
@@ -1253,7 +1266,9 @@ fn voice_media_stays_in_profile_while_the_gateway_resolves_the_original_director
         ash_app_server_daemon::GrantSource::HostConfiguration,
         None,
     );
-    let registry = Arc::new(ProfileAppServerRegistry::open(options.clone()).unwrap());
+    let registry = Arc::new(
+        ProfileAppServerRegistry::open(options.clone(), ash_app_server_diff::compute).unwrap(),
+    );
     let server = registry.server_for(options).unwrap();
     let (mut client, stream) = crate::server::request_dispatch::tests::Client::pair();
     let served = thread::spawn(move || {
@@ -1393,7 +1408,8 @@ fn voice_gateway_real_room_records_directory_speech_and_stops_profile_media() {
         ash_app_server_daemon::GrantSource::HostConfiguration,
         None,
     );
-    let registry = Arc::new(ProfileAppServerRegistry::open(options).unwrap());
+    let registry =
+        Arc::new(ProfileAppServerRegistry::open(options, ash_app_server_diff::compute).unwrap());
     let server = Arc::new(
         crate::tests::server()
             .with_config_store(store)
@@ -1501,7 +1517,9 @@ fn ide_attachment_follows_one_gateway_connection_across_directory_routes() {
         ash_app_server_daemon::GrantSource::HostConfiguration,
         None,
     );
-    let registry = Arc::new(ProfileAppServerRegistry::open(options.clone()).unwrap());
+    let registry = Arc::new(
+        ProfileAppServerRegistry::open(options.clone(), ash_app_server_diff::compute).unwrap(),
+    );
     let server = registry.server_for(options).unwrap();
     let (mut client, stream) = crate::server::request_dispatch::tests::Client::pair();
     let served = thread::spawn(move || {

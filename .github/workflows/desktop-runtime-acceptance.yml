@@ -109,7 +109,7 @@ jobs:
       - name: Verify real Electron language-server initialization and shutdown
         run: just test-processes ash-lsp-server-provider --test electron_runtime --profile ci-test --locked -- --ignored
       - name: Verify real Electron extensions retain separate window lifetimes
-        run: just test ash-app-server --lib --profile ci-test --locked standard_extensions_keep_window_facts_callbacks_and_lifetimes_separate
+        run: just test ash-app-server-runtime --lib --profile ci-test --locked standard_extensions_keep_window_facts_callbacks_and_lifetimes_separate
       - name: Verify disabled MCP stays disabled across process restart
         run: just test-processes ash-app-server --test mcp_restart --profile ci-test --locked
       - name: Upload runtime and application diagnostics

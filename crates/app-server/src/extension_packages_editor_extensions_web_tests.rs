@@ -153,6 +153,7 @@ fn extension_packages_web_execution_requires_exact_persistent_consent_and_pins_t
             InMemoryThreadStore::default(),
         ))),
         Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
+        ash_app_server_diff::compute,
     )
     .with_plugins_manager(Arc::clone(&manager))
     .with_editor_extension_policy(Arc::clone(&policy));

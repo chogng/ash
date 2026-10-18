@@ -1124,18 +1124,23 @@ fn open_profile_secrets(profile_root: &Path) -> Result<Arc<dyn SecretStore>, Ope
 }
 
 /// Opens the App Server used by embedded clients and server process hosts.
-pub fn open_app_server(options: AppServerOptions) -> Result<AppServer, OpenAppServerError> {
-    open_app_server_with_codebase_providers(options, CodebaseProviders::default())
+pub fn open_app_server(
+    options: AppServerOptions,
+    diff_handler: crate::DiffRequestHandler,
+) -> Result<AppServer, OpenAppServerError> {
+    open_app_server_with_codebase_providers(options, CodebaseProviders::default(), diff_handler)
 }
 
 /// Opens an App Server with explicit cloud codebase provider adapters.
 pub fn open_app_server_with_cloud_providers(
     options: AppServerOptions,
     cloud_codebase_providers: CloudCodebaseProviderRegistry,
+    diff_handler: crate::DiffRequestHandler,
 ) -> Result<AppServer, OpenAppServerError> {
     open_app_server_with_codebase_providers(
         options,
         CodebaseProviders::new().with_cloud(cloud_codebase_providers),
+        diff_handler,
     )
 }
 
@@ -1151,6 +1156,7 @@ fn require_history_owner(path: &Path) -> Result<ash_state::SqliteThreadStore, Op
 pub fn open_app_server_with_codebase_providers(
     mut options: AppServerOptions,
     providers: CodebaseProviders,
+    diff_handler: crate::DiffRequestHandler,
 ) -> Result<AppServer, OpenAppServerError> {
     let product_services = options.product_services.take();
     let mut github_browser_configurations = product_services
@@ -1820,8 +1826,9 @@ pub fn open_app_server_with_codebase_providers(
             threads,
             agent_model.clone(),
             runtime.scoped_updates(update_dir)?,
+            diff_handler,
         ),
-        None => AppServer::new(threads, agent_model),
+        None => AppServer::new(threads, agent_model, diff_handler),
     }
     .with_ide_registry(
         profile_runtime

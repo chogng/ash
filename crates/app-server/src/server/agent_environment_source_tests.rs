@@ -103,6 +103,7 @@ fn inspection_only_directory_open_and_environment_move_do_not_run_repository_hel
             .with_profile_runtime(runtime)
             .with_user_config_dir_root(root.path())
             .without_built_in_skills(),
+        ash_app_server_diff::compute,
     )
     .unwrap();
     assert_eq!(

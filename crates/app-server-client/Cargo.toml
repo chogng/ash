@@ -38,6 +38,7 @@ workspace = true
 ash-utils-pty = { workspace = true }
 
 [dev-dependencies]
+ash-app-server-diff = { workspace = true }
 queue-runtime = { package = "ash-queue", path = "../ext/queue" }
 ash-app-server = { workspace = true }
 ash-client = { workspace = true }

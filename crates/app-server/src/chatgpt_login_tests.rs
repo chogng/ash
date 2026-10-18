@@ -16,6 +16,7 @@ fn chatgpt_login_entries_are_independent_in_local_app_server() {
             .with_model_operation_client(Arc::new(NoRequests))
             .without_built_in_skills()
             .with_session_state_mode(SessionStateMode::Ephemeral),
+        ash_app_server_diff::compute,
     )
     .unwrap();
     let mut connection = server.connection();

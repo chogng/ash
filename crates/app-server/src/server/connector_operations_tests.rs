@@ -46,6 +46,7 @@ fn server() -> AppServer {
     AppServer::new(
         threads,
         Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
+        ash_app_server_diff::compute,
     )
     .with_connector_service(service)
 }
@@ -126,6 +127,7 @@ fn oauth_server() -> AppServer {
     AppServer::new(
         threads,
         Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
+        ash_app_server_diff::compute,
     )
     .with_connector_service(service)
     .with_connector_oauth_service(oauth)
@@ -212,6 +214,7 @@ fn device_oauth_server() -> AppServer {
     AppServer::new(
         threads,
         Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
+        ash_app_server_diff::compute,
     )
     .with_connector_service(service)
     .with_connector_device_oauth_service(oauth)

@@ -2916,6 +2916,7 @@ fn sync_tag_conflicts_are_structured_and_replacement_is_explicit() {
         Arc::new(crate::local::ProviderModelService::new(Arc::new(
             ash_model_provider::EchoModel,
         ))),
+        ash_app_server_diff::compute,
     )
     .with_ephemeral_env_state()
     .with_git_root(mutation_authorization(target.root()))
@@ -2993,6 +2994,7 @@ fn git_version_reports_an_unsupported_installation_and_operations_require_an_upg
         Arc::new(crate::local::ProviderModelService::new(Arc::new(
             ash_model_provider::EchoModel,
         ))),
+        ash_app_server_diff::compute,
     )
     .with_ephemeral_env_state()
     .with_git_root(mutation_authorization(repository.root()))
@@ -3032,6 +3034,7 @@ fn reviewed_sync_pull_reaches_the_explicit_target_and_rejects_changed_tracking()
         Arc::new(crate::local::ProviderModelService::new(Arc::new(
             ash_model_provider::EchoModel,
         ))),
+        ash_app_server_diff::compute,
     )
     .with_ephemeral_env_state()
     .with_git_root(mutation_authorization(target.root()))
@@ -3096,6 +3099,7 @@ fn pull_sync_reads_the_current_shared_preference_without_changing_plain_pull() {
         Arc::new(crate::local::ProviderModelService::new(Arc::new(
             ash_model_provider::EchoModel,
         ))),
+        ash_app_server_diff::compute,
     )
     .with_ephemeral_env_state()
     .with_config_store(config)

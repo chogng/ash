@@ -271,6 +271,7 @@ fn development_task_tools_review_and_dispatch_on_the_bound_window() {
             .without_built_in_skills()
             .with_agent_model_service(model.clone())
             .with_dir_root(&root),
+        ash_app_server_diff::compute,
     )
     .unwrap()
     .into_shared();
@@ -397,6 +398,7 @@ impl TaskToolHarness {
                 .without_built_in_skills()
                 .with_agent_model_service(model)
                 .with_dir_root(root),
+            ash_app_server_diff::compute,
         )
         .unwrap()
         .into_shared();

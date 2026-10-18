@@ -11,6 +11,7 @@ fn server(root: &std::path::Path, database: &std::path::Path) -> AppServer {
             InMemoryThreadStore::default(),
         ))),
         Arc::new(crate::local::ProviderModelService::new(Arc::new(EchoModel))),
+        ash_app_server_diff::compute,
     )
     .with_ephemeral_env_state()
     .with_local_approval_environment(database)

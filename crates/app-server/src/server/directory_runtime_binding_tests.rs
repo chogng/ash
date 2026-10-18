@@ -96,6 +96,7 @@ fn run_directory_binding(kind: DirectoryKind, creation: CreationRuntime) {
                 .with_dir_root(directory)
                 .without_built_in_skills()
                 .with_agent_model_service(model.clone()),
+            ash_app_server_diff::compute,
         )
         .unwrap()
         .with_model_catalog(crate::model_catalog::unavailable_model_catalog())

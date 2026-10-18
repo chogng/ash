@@ -87,6 +87,7 @@ impl Drop for DirectoryAdmission {
 }
 
 pub(crate) struct ProfileAppServerRegistry {
+    diff_handler: crate::DiffRequestHandler,
     host: ConnectionOptions,
     profile_runtime: Arc<LocalProfileRuntime>,
     servers: Arc<Mutex<BTreeMap<DirRuntimeKey, Arc<DirRuntime>>>>,
@@ -94,7 +95,10 @@ pub(crate) struct ProfileAppServerRegistry {
 }
 
 impl ProfileAppServerRegistry {
-    pub(crate) fn open(host: ConnectionOptions) -> Result<Self, String> {
+    pub(crate) fn open(
+        host: ConnectionOptions,
+        diff_handler: crate::DiffRequestHandler,
+    ) -> Result<Self, String> {
         if let Some(path) = host.product_services() {
             LocalProductServicesConfig::load(path, host.profile_root())
                 .map_err(|error| error.to_string())?;
@@ -110,8 +114,10 @@ impl ProfileAppServerRegistry {
             host.clone(),
             Arc::clone(&profile_runtime),
             Arc::clone(&servers),
+            diff_handler,
         )?;
         Ok(Self {
+            diff_handler,
             host,
             profile_runtime,
             servers,
@@ -120,7 +126,13 @@ impl ProfileAppServerRegistry {
     }
 
     pub(crate) fn server_for(&self, prelude: ConnectionOptions) -> Result<Arc<AppServer>, String> {
-        server_for(&self.host, &self.profile_runtime, &self.servers, prelude)
+        server_for(
+            &self.host,
+            &self.profile_runtime,
+            &self.servers,
+            prelude,
+            self.diff_handler,
+        )
     }
 
     fn local_options(&self, root: &Path) -> ConnectionOptions {
@@ -403,6 +415,7 @@ impl DirectoryStartup {
         host: ConnectionOptions,
         profile: Arc<LocalProfileRuntime>,
         servers: Arc<Mutex<BTreeMap<DirRuntimeKey, Arc<DirRuntime>>>>,
+        diff_handler: crate::DiffRequestHandler,
     ) -> Result<Self, String> {
         let (input, incoming) = mpsc::sync_channel::<DirectoryRequest>(32);
         let incoming = Arc::new(Mutex::new(incoming));
@@ -429,7 +442,7 @@ impl DirectoryStartup {
                             {
                                 continue;
                             }
-                            open_queued_directory(&host, &profile, &servers, request);
+                            open_queued_directory(&host, &profile, &servers, request, diff_handler);
                         }
                     })
                     .map_err(|error| error.to_string())?,
@@ -579,6 +592,7 @@ fn server_for(
     profile_runtime: &Arc<LocalProfileRuntime>,
     servers: &Mutex<BTreeMap<DirRuntimeKey, Arc<DirRuntime>>>,
     prelude: ConnectionOptions,
+    diff_handler: crate::DiffRequestHandler,
 ) -> Result<Arc<AppServer>, String> {
     let (runtime, options) = resolve_directory(host, servers, prelude)?;
     let mut opening = runtime
@@ -602,7 +616,7 @@ fn server_for(
     drop(opening);
     finish_directory(
         &runtime,
-        open_server_with_profile_runtime(&options, Arc::clone(profile_runtime))
+        open_server_with_profile_runtime(&options, Arc::clone(profile_runtime), diff_handler)
             .map(AppServer::into_shared),
     )
 }
@@ -612,6 +626,7 @@ fn open_queued_directory(
     profile_runtime: &Arc<LocalProfileRuntime>,
     servers: &Mutex<BTreeMap<DirRuntimeKey, Arc<DirRuntime>>>,
     request: DirectoryRequest,
+    diff_handler: crate::DiffRequestHandler,
 ) {
     let (runtime, options) = match resolve_directory(host, servers, request.options) {
         Ok(resolved) => resolved,
@@ -660,7 +675,7 @@ fn open_queued_directory(
     if start {
         let _ = finish_directory(
             &runtime,
-            open_server_with_profile_runtime(&options, Arc::clone(profile_runtime))
+            open_server_with_profile_runtime(&options, Arc::clone(profile_runtime), diff_handler)
                 .map(AppServer::into_shared),
         );
     }
@@ -741,6 +756,7 @@ impl ash_automation::AutomationExecutor for ProfileAppServerRegistry {
 fn open_server_with_profile_runtime(
     host: &ConnectionOptions,
     profile_runtime: Arc<LocalProfileRuntime>,
+    diff_handler: crate::DiffRequestHandler,
 ) -> Result<AppServer, String> {
     let mut options = AppServerOptions::new(host.profile_root())
         .with_host_grok_auth()
@@ -765,7 +781,7 @@ fn open_server_with_profile_runtime(
                 .map_err(|error| error.to_string())?,
         );
     }
-    open_app_server(options).map_err(|error| error.to_string())
+    open_app_server(options, diff_handler).map_err(|error| error.to_string())
 }
 
 fn product_services_identity(

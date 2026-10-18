@@ -23,5 +23,5 @@
 ```sh
 just test ash-grep
 just test ash-tgrep
-just test ash-app-server --lib grep
+just test ash-app-server-runtime --lib grep
 ```

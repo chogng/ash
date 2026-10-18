@@ -88,6 +88,7 @@ fn directory_cleanup_does_not_retain_the_disposed_environment_runtime() {
         crate::AppServerOptions::new(profile.path())
             .without_built_in_skills()
             .with_dir_root(directory.path()),
+        ash_app_server_diff::compute,
     )
     .unwrap();
     assert!(server.dir_services.is_some());
@@ -112,7 +113,7 @@ fn clearing_directories_keeps_home_instructions_in_model_requests() {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
         InMemoryThreadStore::default(),
     )));
-    let server = AppServer::new(threads, model.clone())
+    let server = AppServer::new(threads, model.clone(), ash_app_server_diff::compute)
         .with_ephemeral_env_state()
         .with_home(home)
         .with_local_env_host(None, host_policy())
@@ -1331,6 +1332,7 @@ fn sandbox_settings_save_reconciles_command_policy_and_preserves_selected_profil
             crate::AppServerOptions::new(profile.path())
                 .without_built_in_skills()
                 .with_dir_root(directory.path()),
+            ash_app_server_diff::compute,
         )
         .unwrap();
         let store = server.config.as_ref().unwrap();
@@ -2414,6 +2416,7 @@ fn server() -> AppServer {
     AppServer::new(
         threads,
         Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
+        ash_app_server_diff::compute,
     )
     .with_ephemeral_env_state()
 }
@@ -3261,7 +3264,7 @@ fn permission_requests_follow_core_interaction_enforce_subset_and_expire_on_comp
     let threads = Arc::new(ThreadController::with_store(Arc::new(
         InMemoryThreadStore::default(),
     )));
-    let server = AppServer::new(threads, model.clone())
+    let server = AppServer::new(threads, model.clone(), ash_app_server_diff::compute)
         .with_ephemeral_env_state()
         .with_local_env_host(None, host_policy())
         .unwrap();
@@ -3452,7 +3455,7 @@ fn reusable_approvals_follow_core_and_bind_the_exact_action() {
         let threads = Arc::new(ThreadController::with_store(Arc::new(
             InMemoryThreadStore::default(),
         )));
-        let server = AppServer::new(threads, model)
+        let server = AppServer::new(threads, model, ash_app_server_diff::compute)
             .with_ephemeral_env_state()
             .with_config_store(store.clone())
             .with_local_env_host(None, host_policy())
@@ -3724,6 +3727,7 @@ fn remote_network_connections_require_the_exact_core_approval_before_upstream_io
                 url: format!("http://{address}/"),
                 step: Mutex::new(0),
             }),
+            ash_app_server_diff::compute,
         )
         .with_ephemeral_env_state()
         .with_config_store(store)

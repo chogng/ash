@@ -39,8 +39,12 @@ fn manual_pull_request_references_use_durable_rpc_state_and_notify_other_connect
         })
         .unwrap();
     let (sender, _) = mpsc::channel();
-    let server = AppServer::new(threads, Arc::new(CaptureModel(sender)))
-        .with_thread_pull_requests(store.clone());
+    let server = AppServer::new(
+        threads,
+        Arc::new(CaptureModel(sender)),
+        ash_app_server_diff::compute,
+    )
+    .with_thread_pull_requests(store.clone());
     let mut first = server.connection();
     let mut second = server.connection();
     for connection in [&mut first, &mut second] {
@@ -116,6 +120,7 @@ fn manual_pull_request_references_use_durable_rpc_state_and_notify_other_connect
     let restarted = AppServer::new(
         Arc::new(ThreadController::with_store(reopened.clone())),
         Arc::new(CaptureModel(sender)),
+        ash_app_server_diff::compute,
     )
     .with_thread_pull_requests(reopened);
     let mut connection = restarted.connection();
@@ -168,8 +173,12 @@ fn manual_issue_references_use_durable_rpc_state_and_notify_other_connections() 
         })
         .unwrap();
     let (sender, _) = mpsc::channel();
-    let server = AppServer::new(threads, Arc::new(CaptureModel(sender)))
-        .with_thread_pull_requests(store.clone());
+    let server = AppServer::new(
+        threads,
+        Arc::new(CaptureModel(sender)),
+        ash_app_server_diff::compute,
+    )
+    .with_thread_pull_requests(store.clone());
     let mut first = server.connection();
     let mut second = server.connection();
     for connection in [&mut first, &mut second] {
@@ -245,6 +254,7 @@ fn manual_issue_references_use_durable_rpc_state_and_notify_other_connections() 
     let restarted = AppServer::new(
         Arc::new(ThreadController::with_store(reopened.clone())),
         Arc::new(CaptureModel(sender)),
+        ash_app_server_diff::compute,
     )
     .with_thread_pull_requests(reopened);
     let mut connection = restarted.connection();
@@ -366,6 +376,7 @@ fn workflow_commands_run_dedicated_agents_through_rpc_and_require_user_acceptanc
             sender,
             std::sync::Mutex::new(result_admission),
         )),
+        ash_app_server_diff::compute,
     )
     .with_tool_service(Arc::new(CatalogTools), Arc::new(UnusedPolicy));
     server.model_catalog = Arc::new(TestModels);
@@ -610,16 +621,20 @@ fn session_role_is_atomic_replayable_and_applied_to_real_model_input() {
         },
     ])
     .unwrap();
-    let mut server = AppServer::new(threads.clone(), Arc::new(CaptureModel(tx)))
-        .with_model_instructions(catalog)
-        .unwrap()
-        .with_skill_runtime(
-            ash_skills_extension::BuiltInSkillSource::Root(root.path().to_owned()),
-            Arc::new(SkillConfig),
-            None,
-        )
-        .unwrap()
-        .with_tool_service(Arc::new(CatalogTools), Arc::new(UnusedPolicy));
+    let mut server = AppServer::new(
+        threads.clone(),
+        Arc::new(CaptureModel(tx)),
+        ash_app_server_diff::compute,
+    )
+    .with_model_instructions(catalog)
+    .unwrap()
+    .with_skill_runtime(
+        ash_skills_extension::BuiltInSkillSource::Root(root.path().to_owned()),
+        Arc::new(SkillConfig),
+        None,
+    )
+    .unwrap()
+    .with_tool_service(Arc::new(CatalogTools), Arc::new(UnusedPolicy));
     server.model_catalog = Arc::new(TestModels);
     let mut connection = server.connection();
     assert!(
@@ -726,7 +741,11 @@ fn missing_role_fails_before_a_session_is_created_and_default_never_routes_by_ti
         InMemoryThreadStore::default(),
     )));
     let (tx, _) = mpsc::channel();
-    let server = AppServer::new(threads.clone(), Arc::new(CaptureModel(tx)));
+    let server = AppServer::new(
+        threads.clone(),
+        Arc::new(CaptureModel(tx)),
+        ash_app_server_diff::compute,
+    );
     let mut connection = server.connection();
     call(
         &server,
@@ -782,7 +801,11 @@ fn fork_session_binds_extensions_and_delivers_approval_after_subscription() {
         InMemoryThreadStore::default(),
     )));
     let (tx, _) = mpsc::channel();
-    let mut server = AppServer::new(threads.clone(), Arc::new(CaptureModel(tx)));
+    let mut server = AppServer::new(
+        threads.clone(),
+        Arc::new(CaptureModel(tx)),
+        ash_app_server_diff::compute,
+    );
     let activation = Arc::new(SessionActivation(std::sync::atomic::AtomicUsize::new(0)));
     let mut extensions = ash_extension_api::ExtensionRegistryBuilder::new();
     extensions.skill_activation_contributor(activation.clone());
@@ -927,7 +950,11 @@ fn collaboration_modes_preserve_the_selected_base_in_rpc_turns_and_init() {
                 InMemoryThreadStore::default(),
             )));
             let (sender, requests) = mpsc::channel();
-            let server = AppServer::new(threads.clone(), Arc::new(CaptureModel(sender)));
+            let server = AppServer::new(
+                threads.clone(),
+                Arc::new(CaptureModel(sender)),
+                ash_app_server_diff::compute,
+            );
             let mut connection = server.connection();
             call(
                 &server,
@@ -1016,7 +1043,11 @@ fn analysis_modes_inspect_workflow_commands_without_launching_workflow_agents() 
             InMemoryThreadStore::default(),
         )));
         let (sender, requests) = mpsc::channel();
-        let server = AppServer::new(threads.clone(), Arc::new(CaptureModel(sender)));
+        let server = AppServer::new(
+            threads.clone(),
+            Arc::new(CaptureModel(sender)),
+            ash_app_server_diff::compute,
+        );
         let mut connection = server.connection();
         call(
             &server,
@@ -1066,7 +1097,11 @@ fn catalog_only_connections_observe_branch_management_and_full_reads_share_its_f
         })
         .unwrap();
     let (sender, _) = mpsc::channel();
-    let server = AppServer::new(threads.clone(), Arc::new(CaptureModel(sender)));
+    let server = AppServer::new(
+        threads.clone(),
+        Arc::new(CaptureModel(sender)),
+        ash_app_server_diff::compute,
+    );
     let mut connection = server.connection();
     call(
         &server,
@@ -1667,7 +1702,11 @@ fn thread_naming_updates_the_durable_catalog_and_other_windows_without_opening_d
         })
         .unwrap();
     let (sender, _) = mpsc::channel();
-    let server = AppServer::new(threads, Arc::new(CaptureModel(sender)));
+    let server = AppServer::new(
+        threads,
+        Arc::new(CaptureModel(sender)),
+        ash_app_server_diff::compute,
+    );
     let mut first = server.connection();
     let mut second = server.connection();
     for connection in [&mut first, &mut second] {

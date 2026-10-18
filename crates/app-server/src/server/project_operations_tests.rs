@@ -181,6 +181,7 @@ impl Fixture {
         let server = AppServer::new(
             Arc::clone(&threads),
             Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
+            ash_app_server_diff::compute,
         )
         .with_local_projects(&path)
         .unwrap();

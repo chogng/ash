@@ -312,7 +312,7 @@ def main(arguments: list[str] | None = None) -> int:
             cargo_arguments[0] == "test"
             and "--no-run" not in cargo_arguments
             and "ASH_MARKDOWN_MATH_BIN" not in environment
-            and "ash-app-server" in packages
+            and packages.intersection({"ash-app-server", "ash-app-server-runtime"})
         ):
             environment["ASH_MARKDOWN_MATH_BIN"] = prepare_test_executable(
                 args.cargo, cargo_arguments, environment, "ash-markdown-math"
@@ -321,7 +321,7 @@ def main(arguments: list[str] | None = None) -> int:
             cargo_arguments[0] == "test"
             and "--no-run" not in cargo_arguments
             and "ASH_DEBUG_LLDB_BIN" not in environment
-            and "ash-app-server" in packages
+            and packages.intersection({"ash-app-server", "ash-app-server-runtime"})
         ):
             environment["ASH_DEBUG_LLDB_BIN"] = prepare_test_executable(
                 args.cargo, cargo_arguments, environment, "ash-debug-lldb"

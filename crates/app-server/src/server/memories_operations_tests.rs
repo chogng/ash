@@ -17,6 +17,7 @@ fn memory_requests_forward_cancellation_and_only_notify_committed_writes() {
                 InMemoryThreadStore::default(),
             ))),
             Arc::new(crate::local::ProviderModelService::new(Arc::new(EchoModel))),
+            ash_app_server_diff::compute,
         )
         .with_ephemeral_env_state()
         .with_local_memories(&root.path().join("state.sqlite"))

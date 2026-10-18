@@ -86,6 +86,7 @@ fn real_hook_processes_publish_results_and_replay_without_reexecution() {
                 .without_built_in_skills()
                 .with_dir_root(directory.path())
                 .with_agent_model_service(Arc::new(ToolModel(AtomicUsize::new(0)))),
+            ash_app_server_diff::compute,
         )
         .unwrap();
         let thread = server
@@ -260,6 +261,7 @@ fn real_hook_processes_publish_results_and_replay_without_reexecution() {
             crate::AppServerOptions::new(profile.path())
                 .without_built_in_skills()
                 .with_dir_root(directory.path()),
+            ash_app_server_diff::compute,
         )
         .unwrap();
         let restored_snapshot = restored.threads.read_thread(&thread.thread_id).unwrap();

@@ -448,6 +448,7 @@ fn app_tool_rpc_uses_the_original_thread_approval_result_and_cancellation() {
                 ash_core::InMemoryThreadStore::default(),
             ))),
             Arc::new(NoAppModel),
+            ash_app_server_diff::compute,
         )
         .with_ephemeral_env_state()
         .with_tool_service(tools.clone(), tools.clone()),

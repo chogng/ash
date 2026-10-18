@@ -436,6 +436,7 @@ fn glob_server() -> AppServer {
             InMemoryThreadStore::default(),
         ))),
         Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
+        ash_app_server_diff::compute,
     )
     .with_ephemeral_env_state()
     .with_local_env_host(

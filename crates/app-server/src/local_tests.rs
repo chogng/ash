@@ -136,6 +136,7 @@ fn local_extension_sources_refresh_development_manifests_without_restarting() {
             Arc::new(ProviderModelService::new(Arc::new(
                 ash_model_provider::EchoModel,
             ))),
+            ash_app_server_diff::compute,
         )
         .with_extension_roots(roots);
         if let Some(root) = publication {
@@ -347,6 +348,7 @@ fn local_composition_reads_empty_subscription_accounts_before_sign_in() {
             .with_codex_home(profile.path().join("codex"))
             .without_built_in_skills()
             .with_session_state_mode(SessionStateMode::Ephemeral),
+        ash_app_server_diff::compute,
     )
     .unwrap();
     let mut connection = server.connection();
@@ -384,6 +386,7 @@ fn local_composition_starts_with_an_unreadable_glm_subscription() {
             .with_codex_home(profile.path().join("codex"))
             .without_built_in_skills()
             .with_session_state_mode(SessionStateMode::Ephemeral),
+        ash_app_server_diff::compute,
     )
     .unwrap();
     let mut connection = server.connection();
@@ -460,6 +463,7 @@ fn local_composition_reads_existing_grok_login_without_importing_it() {
             .with_model_operation_client(client.clone())
             .without_built_in_skills()
             .with_session_state_mode(SessionStateMode::Ephemeral),
+        ash_app_server_diff::compute,
     )
     .unwrap();
     let mut connection = server.connection();
@@ -602,6 +606,7 @@ fn local_account_rate_limits_use_the_signed_in_account_and_redact_failures() {
                 .with_model_operation_client(client.clone())
                 .without_built_in_skills()
                 .with_session_state_mode(SessionStateMode::Ephemeral),
+            ash_app_server_diff::compute,
         )
         .unwrap(),
     );
@@ -777,6 +782,7 @@ fn chatgpt_model_catalog_is_shared_by_login_picker_and_disk_cache() {
             .with_model_operation_client(client.clone())
             .without_built_in_skills()
             .with_session_state_mode(SessionStateMode::Ephemeral),
+        ash_app_server_diff::compute,
     )
     .unwrap();
     // Subscription observation warms the catalog independently of model/list.
@@ -1023,6 +1029,7 @@ fn local_codex_account_reconnects_without_oauth_and_observes_external_logout() {
             .with_codex_home(home.path())
             .without_built_in_skills()
             .with_session_state_mode(SessionStateMode::Ephemeral),
+        ash_app_server_diff::compute,
     )
     .unwrap();
     let mut connection = server.connection();
@@ -1119,6 +1126,7 @@ fn local_codex_expiration_reports_external_login_and_reconnects_after_renewal() 
             .with_model_operation_client(client.clone())
             .without_built_in_skills()
             .with_session_state_mode(SessionStateMode::Ephemeral),
+        ash_app_server_diff::compute,
     )
     .unwrap()
     .with_login_service(login);
@@ -1169,7 +1177,7 @@ fn local_git_turn_changes_seal_and_commit_a_shell_turn_through_rpc() {
             .without_built_in_skills()
             .with_dir_root(dir.path())
     };
-    let server = open_app_server(options()).unwrap();
+    let server = open_app_server(options(), ash_app_server_diff::compute).unwrap();
     let mut connection = server.connection();
     let initialized = local_call(
         &server,
@@ -1432,7 +1440,7 @@ fn local_git_turn_changes_seal_and_commit_a_shell_turn_through_rpc() {
     run_local_git(dir.path(), &["worktree", "unlock", checkout]);
     run_local_git(dir.path(), &["worktree", "remove", "--force", checkout]);
     run_local_git(dir.path(), &["gc", "--prune=now"]);
-    let server = open_app_server(options()).unwrap();
+    let server = open_app_server(options(), ash_app_server_diff::compute).unwrap();
     let mut connection = server.connection();
     local_call(
         &server,
@@ -1548,6 +1556,7 @@ fn windows_shell_turn_enforces_account_isolation_through_rpc() {
             .without_built_in_skills()
             .with_session_state_mode(SessionStateMode::Ephemeral)
             .with_dir_root(&work),
+        ash_app_server_diff::compute,
     )
     .unwrap();
     let mut connection = server.connection();
@@ -1736,6 +1745,7 @@ fn managed_network_approval_resumes_the_same_shell_process_through_rpc() {
             .without_built_in_skills()
             .with_session_state_mode(SessionStateMode::Ephemeral)
             .with_dir_root(dir.path()),
+        ash_app_server_diff::compute,
     )
     .unwrap();
     let mut connection = server.connection();
@@ -1904,6 +1914,7 @@ fn non_git_turns_keep_their_isolated_dir_without_creating_change_sets() {
             .without_built_in_skills()
             .with_session_state_mode(SessionStateMode::Ephemeral)
             .with_dir_root(dir.path()),
+        ash_app_server_diff::compute,
     )
     .unwrap();
     let mut connection = server.connection();
@@ -2022,6 +2033,7 @@ fn shared_profile_runtime_shares_sessions_across_env_hosts() {
                 .with_profile_runtime(Arc::clone(&runtime))
                 .with_dir_root(dir)
                 .without_built_in_skills(),
+            ash_app_server_diff::compute,
         )
         .unwrap()
     };
@@ -2152,6 +2164,7 @@ fn user_network_config_is_loaded_before_start_and_reconciled_on_edit() {
                 Dir::open_local(profile.path()).unwrap().id(),
             ))
             .without_built_in_skills(),
+        ash_app_server_diff::compute,
     )
     .unwrap();
     std::fs::write(&directory_config, "[broken").unwrap();
@@ -2216,6 +2229,7 @@ fn encrypted_storage_shared_profile_runtime_reuses_one_store_across_env_hosts() 
                 .with_codex_home(profile.path().join("codex"))
                 .with_dir_root(dir)
                 .without_built_in_skills(),
+            ash_app_server_diff::compute,
         )
         .unwrap()
     };
@@ -2347,6 +2361,7 @@ fn encrypted_storage_unavailable_keyring_keeps_local_composition_running() {
             .with_codex_home(profile.path().join("codex"))
             .with_model_operation_client(Arc::new(FixtureModel))
             .without_built_in_skills(),
+        ash_app_server_diff::compute,
     )
     .unwrap();
     let mut connection = server.connection();
@@ -2442,6 +2457,7 @@ fn shared_profile_hosts_observe_plugin_activation_and_revocation_commits() {
         AppServerOptions::new(profile.path())
             .with_profile_runtime(Arc::clone(&runtime))
             .without_built_in_skills(),
+        ash_app_server_diff::compute,
     )
     .unwrap();
     let sibling = open_app_server(
@@ -2449,6 +2465,7 @@ fn shared_profile_hosts_observe_plugin_activation_and_revocation_commits() {
             .with_profile_runtime(Arc::clone(&runtime))
             .with_dir_root(directory.path())
             .without_built_in_skills(),
+        ash_app_server_diff::compute,
     )
     .unwrap();
     let mut connections = [empty.connection(), sibling.connection()];
@@ -2526,7 +2543,7 @@ fn shared_profile_runtime_rejects_a_second_secret_store_authority() {
         .with_plugin_authority(authority, Arc::new(MemorySecretStore::default()))
         .unwrap();
 
-    let error = match open_app_server(options) {
+    let error = match open_app_server(options, ash_app_server_diff::compute) {
         Ok(_) => panic!("a second profile SecretStore authority must be rejected"),
         Err(error) => error,
     };
@@ -2621,7 +2638,7 @@ fn live_plugin_authority_reconciles_connectors_despite_invalid_configs() {
             .with_session_state_mode(SessionStateMode::Ephemeral)
             .with_plugin_authority(authority.clone(), Arc::new(MemorySecretStore::default()))
             .unwrap();
-        let server = open_app_server(options).unwrap();
+        let server = open_app_server(options, ash_app_server_diff::compute).unwrap();
         let mut connection = server.connection();
         let initialize = server.handle_json(
         &mut connection,
@@ -2712,6 +2729,7 @@ fn local_composition_installs_models_before_dir_activation() {
     let server = open_app_server_with_codebase_providers(
         options,
         CodebaseProviders::new().with_models(models),
+        ash_app_server_diff::compute,
     )
     .unwrap();
 
@@ -2734,6 +2752,7 @@ fn local_composition_restores_codebase_generation_after_reopen() {
                 .with_dir_root(dir.path())
                 .without_built_in_skills()
                 .with_session_state_mode(SessionStateMode::Ephemeral),
+            ash_app_server_diff::compute,
         )
         .unwrap()
     };
@@ -2841,7 +2860,7 @@ fn initial_dir_without_permissions_remains_restricted() {
         .without_built_in_skills()
         .with_session_state_mode(SessionStateMode::Ephemeral);
 
-    let server = open_app_server(options).unwrap();
+    let server = open_app_server(options, ash_app_server_diff::compute).unwrap();
 
     assert!(!server.selected_dir_allows(ash_file_access::Permission::ExecuteCommands));
 }
@@ -2877,6 +2896,7 @@ fn local_web_search_is_absent_by_default_and_registered_when_injected() {
         AppServerOptions::new(profile.path())
             .without_built_in_skills()
             .with_session_state_mode(SessionStateMode::Ephemeral),
+        ash_app_server_diff::compute,
     )
     .unwrap();
     assert!(
@@ -2894,6 +2914,7 @@ fn local_web_search_is_absent_by_default_and_registered_when_injected() {
             .without_built_in_skills()
             .with_session_state_mode(SessionStateMode::Ephemeral)
             .with_web_search_backend(Arc::new(UnusedSearchBackend)),
+        ash_app_server_diff::compute,
     )
     .unwrap();
     assert!(
@@ -3874,6 +3895,7 @@ fn directory_config_watcher_applies_late_grants_and_revocation() {
             .with_profile_runtime(runtime.clone())
             .with_user_config_dir_root(root.path())
             .without_built_in_skills(),
+        ash_app_server_diff::compute,
     )
     .unwrap();
     assert!(matches!(
@@ -3948,6 +3970,7 @@ fn directory_edit_before_watcher_start_is_applied_without_another_event() {
         Arc::new(ProviderModelService::new(Arc::new(
             ash_model_provider::EchoModel,
         ))),
+        ash_app_server_diff::compute,
     )
     .with_ephemeral_env_state()
     .with_config_store(config.clone())
@@ -4422,7 +4445,7 @@ fn message_restore_points_preserve_git_versions_after_restart() {
             .without_built_in_skills()
             .with_dir_root(repo.path())
     };
-    let server = open_app_server(options()).unwrap();
+    let server = open_app_server(options(), ash_app_server_diff::compute).unwrap();
     let mut connection = server.connection();
     let initialize_request = || serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"message-checkpoints","version":"1"},"capabilities":{}}});
     local_call(&server, &mut connection, initialize_request());
@@ -4569,7 +4592,7 @@ fn message_restore_points_preserve_git_versions_after_restart() {
         run_local_git(repo.path(), &["worktree", "remove", "--force", path]);
     }
     run_local_git(repo.path(), &["gc", "--prune=now"]);
-    let reopened = open_app_server(options()).unwrap();
+    let reopened = open_app_server(options(), ash_app_server_diff::compute).unwrap();
     let mut connection = reopened.connection();
     local_call(&reopened, &mut connection, initialize_request());
     let restored = local_call(
@@ -4617,6 +4640,7 @@ fn deleting_a_managed_worktree_deletes_its_session_and_discards_checkout_content
         AppServerOptions::new(profile.path())
             .without_built_in_skills()
             .with_dir_root(repo.path()),
+        ash_app_server_diff::compute,
     )
     .unwrap()
     .with_grep(search_root.clone(), Arc::clone(&grep));
@@ -5446,9 +5470,12 @@ fn remote_message_board_configuration_requires_host_credential() {
         "schemaVersion = {}\n[messageBoard]\ntype = \"remote\"\nendpoint = \"http://127.0.0.1:8092\"\ncredentialEnv = \"ASH_TEST_MISSING_BOARD_CREDENTIAL_987654321\"\n",
         ash_config::CONFIG_FILE_SCHEMA_VERSION,
     )).unwrap();
-    let error = open_app_server(AppServerOptions::new(profile.path()))
-        .err()
-        .expect("missing board credential must fail startup");
+    let error = open_app_server(
+        AppServerOptions::new(profile.path()),
+        ash_app_server_diff::compute,
+    )
+    .err()
+    .expect("missing board credential must fail startup");
     assert!(
         error.to_string().contains("message-board credential"),
         "{error}"
@@ -5543,6 +5570,7 @@ fn trace_settings_require_profile_owner_restart_and_are_shared_by_directory_host
                 .with_profile_runtime(Arc::clone(runtime))
                 .with_dir_root(dir)
                 .without_built_in_skills(),
+            ash_app_server_diff::compute,
         )
         .unwrap();
         let mut connection = server.connection();
@@ -5752,6 +5780,7 @@ fn shared_profile_runtime_owns_one_editor_extension_policy_across_real_env_hosts
                 .with_profile_runtime(runtime.clone())
                 .with_dir_root(dir)
                 .without_built_in_skills(),
+            ash_app_server_diff::compute,
         )
         .unwrap()
     };
@@ -5790,6 +5819,7 @@ fn ordinary_local_host_installs_standalone_mcp_oauth_without_provider_injection(
             .with_codex_home(profile.path().join("codex"))
             .with_dir_root(directory.path())
             .without_built_in_skills(),
+        ash_app_server_diff::compute,
     )
     .unwrap();
     let mut connection = server.connection();
@@ -5819,6 +5849,7 @@ fn shared_profile_owns_one_lazy_github_api_runtime_across_directory_hosts() {
                 .with_dir_root(dir)
                 .with_github_extension(&executable)
                 .without_built_in_skills(),
+            ash_app_server_diff::compute,
         )
         .unwrap()
     };

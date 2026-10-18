@@ -112,6 +112,7 @@ def boundary_errors(root: Path, metadata: dict) -> list[str]:
         for name, p in packages.items()
     }
     terminal = set(read_source_layout()["terminalCrates"])
+    server_packages = {"ash-app-server", "ash-app-server-runtime"}
     errors = []
     for start, parts in paths.items():
         queue = deque([(start, [start])])
@@ -138,15 +139,15 @@ def boundary_errors(root: Path, metadata: dict) -> list[str]:
                     )
                     or (
                         start == "ash-app-server-daemon"
-                        and dependency == "ash-app-server"
+                        and dependency in server_packages
                     )
                     or (
                         start in {"ash-core-api", "ash-hooks"}
-                        and dependency in {"ash-core", "ash-app-server"}
+                        and dependency in server_packages | {"ash-core"}
                     )
                     or (
                         start
-                        in {"ash-app-server", "ash-code-mode", "ash-code-mode-protocol"}
+                        in server_packages | {"ash-code-mode", "ash-code-mode-protocol"}
                         and dependency in {"ash-code-mode-runtime", "v8"}
                     )
                     or (

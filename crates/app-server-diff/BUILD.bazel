@@ -1,0 +1,6 @@
+load("//:defs.bzl", "ash_rust_crate")
+
+ash_rust_crate(
+    name = "app-server-diff",
+    crate_name = "ash_app_server_diff",
+)

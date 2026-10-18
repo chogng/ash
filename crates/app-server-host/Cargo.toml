@@ -1,0 +1,42 @@
+[package]
+name = "ash-app-server"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "ash-app-server"
+path = "src/main.rs"
+
+[lib]
+doctest = false
+
+[dependencies]
+ash-app-server-runtime = { workspace = true }
+ash-app-server-diff = { workspace = true }
+ash-cloud-codebase = { workspace = true }
+arg0 = { workspace = true }
+process-hardening = { workspace = true }
+ash-package-store = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+ash-app-server-daemon = { workspace = true }
+ash-remote-profile-store = { workspace = true }
+ash-remote = { workspace = true }
+memories = { workspace = true }
+dirs = { workspace = true }
+dunce = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "net"] }
+ash-app-server-protocol = { workspace = true }
+ash-protocol = { workspace = true }
+ash-app-server-client = { workspace = true }
+tokio-tungstenite = { workspace = true }
+futures = { workspace = true }
+ash-uds = { workspace = true }
+
+[lints]
+workspace = true

@@ -683,7 +683,7 @@ TurnExecutor
 手动运行真实缓存验证：
 
 ```bash
-just test ash-app-server --lib luna_cache_survives_fork_and_message_restore_after_restart -- --ignored --nocapture
+just test ash-app-server-runtime --lib luna_cache_survives_fork_and_message_restore_after_restart -- --ignored --nocapture
 ```
 
 该测试仅使用 Luna／low 和合成文本，读取已有 Codex 登录状态，不刷新或改写凭据。它经过 SQLite 历史、Core 执行循环和真实模型通道，比较原分支、fork、重新打开数据库后的消息前后恢复，并输出各次调用的输入、缓存读取、缓存写入、输出 token 和耗时。默认测试不发送这些真实模型请求；缓存未命中时保留测量结果并明确失败，不能把本地前缀相等当作服务端命中。

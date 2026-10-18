@@ -1277,6 +1277,7 @@ fn agent_shell_git_changes_refresh_every_connected_git_client() {
             InMemoryThreadStore::default(),
         ))),
         Arc::new(crate::local::ProviderModelService::new(Arc::new(EchoModel))),
+        ash_app_server_diff::compute,
     )
     .with_ephemeral_env_state()
     .with_git_root(dir.grant().authorize(Permission::MutateRepository).unwrap())

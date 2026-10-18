@@ -22,7 +22,7 @@ fn initial_directory_opens_before_recovered_tool_continuations_resume() {
                 options.with_dir_root(directory.path())
             }
         };
-        let server = open_app_server(options()).unwrap();
+        let server = open_app_server(options(), ash_app_server_diff::compute).unwrap();
         let thread = server
             .start_thread(StartThreadRequest {
                 agent_id: None,
@@ -89,7 +89,8 @@ fn initial_directory_opens_before_recovered_tool_continuations_resume() {
         );
         drop(server);
 
-        let recovered = open_app_server(options()).expect("recovered work must not block startup");
+        let recovered = open_app_server(options(), ash_app_server_diff::compute)
+            .expect("recovered work must not block startup");
         let mut connection = recovered.connection();
         let initialized = local_call(
             &recovered,
@@ -189,6 +190,7 @@ fn unavailable_keyring_allows_local_model_turns_and_queue_restart() {
                 .with_dir_root(directory.path())
                 .with_model_operation_client(client.clone())
                 .without_built_in_skills(),
+            ash_app_server_diff::compute,
         )
         .unwrap()
     };

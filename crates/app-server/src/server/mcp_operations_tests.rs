@@ -107,6 +107,7 @@ fn server() -> (AppServer, Arc<TestOAuthProvider>, tempfile::TempDir) {
     let server = AppServer::new(
         threads,
         Arc::new(crate::local::ProviderModelService::new(Arc::new(EchoModel))),
+        ash_app_server_diff::compute,
     )
     .with_config_store(config)
     .with_mcp_oauth_service(oauth);

@@ -70,3 +70,23 @@ fn service_features_do_not_make_protocol_depend_on_queue_execution() {
         "service features pull queue execution into protocol compilation: {tree}"
     );
 }
+
+#[test]
+fn shared_runtime_does_not_depend_on_the_product_diff_implementation() {
+    let runtime = dependency_tree(&["-p", "ash-app-server-runtime"]);
+    assert!(
+        !runtime
+            .lines()
+            .any(|line| { line.split_whitespace().next() == Some("ash-app-server-diff") }),
+        "a concrete adapter edit would invalidate the shared runtime: {runtime}"
+    );
+    let product = dependency_tree(&["-p", "ash-app-server"]);
+    for required in ["ash-app-server-runtime", "ash-app-server-diff"] {
+        assert!(
+            product
+                .lines()
+                .any(|line| line.split_whitespace().next() == Some(required)),
+            "the product must compose {required}: {product}"
+        );
+    }
+}

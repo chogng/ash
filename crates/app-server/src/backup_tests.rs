@@ -15,6 +15,7 @@ fn backup_rpc_preserves_content_across_connections_and_profile_restart() {
                 .with_agent_model_service(Arc::new(crate::local::ProviderModelService::new(
                     Arc::new(super::EchoModel),
                 ))),
+            ash_app_server_diff::compute,
         )
         .unwrap()
     };

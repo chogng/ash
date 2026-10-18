@@ -279,6 +279,29 @@ class CodeModeHostTests(unittest.TestCase):
         )
         self.assertIs(run.call_args.kwargs["env"], environment)
 
+    @patch.dict("scripts.cargo.os.environ", {}, clear=True)
+    @patch("scripts.cargo.subprocess.run")
+    @patch("scripts.cargo.prepare_test_executable", return_value="/runtime/helper")
+    @patch("scripts.cargo.cargo_command_packages")
+    def test_product_and_shared_runtime_tests_prepare_extension_helpers(
+        self, packages, prepare, run
+    ) -> None:
+        run.return_value = subprocess.CompletedProcess([], 0)
+        for package in ("ash-app-server", "ash-app-server-runtime"):
+            with self.subTest(package=package):
+                packages.return_value = {package}
+                prepare.reset_mock()
+                self.assertEqual(main(["test", "-p", package, "--lib"]), 0)
+                self.assertEqual(
+                    [call.args[3] for call in prepare.call_args_list],
+                    ["ash-markdown-math", "ash-debug-lldb"],
+                )
+                environment = run.call_args.kwargs["env"]
+                self.assertEqual(
+                    environment["ASH_MARKDOWN_MATH_BIN"], "/runtime/helper"
+                )
+                self.assertEqual(environment["ASH_DEBUG_LLDB_BIN"], "/runtime/helper")
+
     @patch("scripts.cargo.subprocess.run")
     def test_forwards_all_cargo_jobs_argument_forms(self, run) -> None:
         run.return_value = subprocess.CompletedProcess(

@@ -52,6 +52,7 @@ fn screen_calls_require_product_authority_before_accessing_devices_or_sessions()
             InMemoryThreadStore::default(),
         ))),
         Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
+        ash_app_server_diff::compute,
     );
     let mut connection = server.connection();
     let initialized: serde_json::Value = serde_json::from_str(&server.handle_json(&mut connection,

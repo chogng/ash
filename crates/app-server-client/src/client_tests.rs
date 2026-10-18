@@ -99,7 +99,7 @@ fn app_server() -> AppServer {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
         InMemoryThreadStore::default(),
     )));
-    AppServer::new(threads, Arc::new(TestModel))
+    AppServer::new(threads, Arc::new(TestModel), ash_app_server_diff::compute)
 }
 
 struct TestModel;

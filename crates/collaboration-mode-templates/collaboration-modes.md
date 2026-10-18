@@ -165,8 +165,8 @@ Ash 中统一选择 Multitask，由 Ash Core 管理委托、消息、取消和�
 | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
 | `just test ash-protocol`、`just test ash-collaboration-mode-templates`                                                              | 五种模式序列化；替换模式时共同规则和模型指导保持完整                      |
 | `just test ash-core --lib`、`just test ash-history`                                                                                 | 模型输入、重新加载、命令重试和旧分支记录的摘要兼容                        |
-| `just test ash-app-server --lib modes`                                                                                              | 普通请求、`/init`、Plan/Ask 下的工作流分析，以及排队模式恢复              |
-| `just test ash-app-server --lib queue_`                                                                                             | 队列恢复和交付；跨模式 Steer 被拒绝                                       |
+| `just test ash-app-server-runtime --lib modes`                                                                                      | 普通请求、`/init`、Plan/Ask 下的工作流分析，以及排队模式恢复              |
+| `just test ash-app-server-runtime --lib queue_`                                                                                     | 队列恢复和交付；跨模式 Steer 被拒绝                                       |
 | `just test ash-agent spawn_tool_uses_frozen_intent_parent_to_launch_private_investigator`、`just test ash-workflows`                | 实际委托的模式资产、Role 上限、工作流恢复和推理等级                       |
 | `just test ash-goal`                                                                                                                | 执行模式按原模式续接；Plan/Ask 不收到持续执行指令、不自动续接             |
 | ChatViewPane、ChatInputPart、WindowActions 与本地化测试；Browser/Electron 的 Chat 输入 Playwright 场景                              | 模式与 Agent 独立选择、排队、重试、草稿传递、菜单勾选和键盘操作           |

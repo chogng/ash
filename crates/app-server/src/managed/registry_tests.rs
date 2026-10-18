@@ -63,12 +63,10 @@ fn evicted_directory_releases_its_agent_tool_graph() {
     let roots = (0..7)
         .map(|_| tempfile::tempdir().unwrap())
         .collect::<Vec<_>>();
-    let registry = ProfileAppServerRegistry::open(ConnectionOptions::new(
-        profile.path(),
-        None,
-        GrantSource::HostConfiguration,
-        None,
-    ))
+    let registry = ProfileAppServerRegistry::open(
+        ConnectionOptions::new(profile.path(), None, GrantSource::HostConfiguration, None),
+        ash_app_server_diff::compute,
+    )
     .unwrap();
     let first = registry
         .server_for(ConnectionOptions::new(
@@ -151,7 +149,7 @@ fn open_rejects_invalid_product_services_before_managed_endpoint_startup() {
         Some(product_services),
     );
 
-    let Err(error) = ProfileAppServerRegistry::open(host) else {
+    let Err(error) = ProfileAppServerRegistry::open(host, ash_app_server_diff::compute) else {
         panic!("invalid product services were accepted");
     };
 
@@ -164,12 +162,10 @@ fn opening_one_directory_leaves_other_directories_and_profile_checks_available()
     let first = tempfile::tempdir().unwrap();
     let second = tempfile::tempdir().unwrap();
     let registry = Arc::new(
-        ProfileAppServerRegistry::open(ConnectionOptions::new(
-            profile.path(),
-            None,
-            GrantSource::HostConfiguration,
-            None,
-        ))
+        ProfileAppServerRegistry::open(
+            ConnectionOptions::new(profile.path(), None, GrantSource::HostConfiguration, None),
+            ash_app_server_diff::compute,
+        )
         .unwrap(),
     );
     let opening = Arc::new(DirRuntime::default());
@@ -226,12 +222,10 @@ fn concurrent_directory_openers_share_one_runtime() {
     let profile = tempfile::tempdir().unwrap();
     let directory = tempfile::tempdir().unwrap();
     let registry = Arc::new(
-        ProfileAppServerRegistry::open(ConnectionOptions::new(
-            profile.path(),
-            None,
-            GrantSource::HostConfiguration,
-            None,
-        ))
+        ProfileAppServerRegistry::open(
+            ConnectionOptions::new(profile.path(), None, GrantSource::HostConfiguration, None),
+            ash_app_server_diff::compute,
+        )
         .unwrap(),
     );
     let options = ConnectionOptions::new(
@@ -364,12 +358,10 @@ fn gateway_resolves_managed_files_across_conversations_without_granting_other_pa
         String::from_utf8_lossy(&cloned.stderr)
     );
     let registry = Arc::new(
-        ProfileAppServerRegistry::open(ConnectionOptions::new(
-            profile.path(),
-            None,
-            GrantSource::HostConfiguration,
-            None,
-        ))
+        ProfileAppServerRegistry::open(
+            ConnectionOptions::new(profile.path(), None, GrantSource::HostConfiguration, None),
+            ash_app_server_diff::compute,
+        )
         .unwrap(),
     );
     let mut gateway = Gateway::start(registry);
@@ -460,12 +452,10 @@ fn gateway_directory_startup_leaves_profile_and_other_routes_available() {
     let first = tempfile::tempdir().unwrap();
     let second = tempfile::tempdir().unwrap();
     let registry = Arc::new(
-        ProfileAppServerRegistry::open(ConnectionOptions::new(
-            profile.path(),
-            None,
-            GrantSource::HostConfiguration,
-            None,
-        ))
+        ProfileAppServerRegistry::open(
+            ConnectionOptions::new(profile.path(), None, GrantSource::HostConfiguration, None),
+            ash_app_server_diff::compute,
+        )
         .unwrap(),
     );
     registry
@@ -529,12 +519,10 @@ fn gateway_bounds_cold_directory_requests_and_drops_them_on_disconnect() {
     let profile = tempfile::tempdir().unwrap();
     let directory = tempfile::tempdir().unwrap();
     let registry = Arc::new(
-        ProfileAppServerRegistry::open(ConnectionOptions::new(
-            profile.path(),
-            None,
-            GrantSource::HostConfiguration,
-            None,
-        ))
+        ProfileAppServerRegistry::open(
+            ConnectionOptions::new(profile.path(), None, GrantSource::HostConfiguration, None),
+            ash_app_server_diff::compute,
+        )
         .unwrap(),
     );
     let opening = Arc::new(DirRuntime::default());
@@ -598,12 +586,10 @@ fn gateway_bounds_cold_directory_requests_and_drops_them_on_disconnect() {
 fn gateway_directory_startup_failure_completes_requests_and_preserves_the_connection() {
     let profile = tempfile::tempdir().unwrap();
     let registry = Arc::new(
-        ProfileAppServerRegistry::open(ConnectionOptions::new(
-            profile.path(),
-            None,
-            GrantSource::HostConfiguration,
-            None,
-        ))
+        ProfileAppServerRegistry::open(
+            ConnectionOptions::new(profile.path(), None, GrantSource::HostConfiguration, None),
+            ash_app_server_diff::compute,
+        )
         .unwrap(),
     );
     let mut gateway = Gateway::start(registry);
@@ -638,12 +624,10 @@ fn cancelling_one_directory_waiter_preserves_initialization_for_another_waiter()
     let profile = tempfile::tempdir().unwrap();
     let directory = tempfile::tempdir().unwrap();
     let registry = Arc::new(
-        ProfileAppServerRegistry::open(ConnectionOptions::new(
-            profile.path(),
-            None,
-            GrantSource::HostConfiguration,
-            None,
-        ))
+        ProfileAppServerRegistry::open(
+            ConnectionOptions::new(profile.path(), None, GrantSource::HostConfiguration, None),
+            ash_app_server_diff::compute,
+        )
         .unwrap(),
     );
     let opening = Arc::new(DirRuntime::default());
@@ -686,12 +670,10 @@ fn shared_directory_waiters_do_not_occupy_workers_needed_by_other_directories() 
     let profile = tempfile::tempdir().unwrap();
     let blocked = tempfile::tempdir().unwrap();
     let other = tempfile::tempdir().unwrap();
-    let registry = ProfileAppServerRegistry::open(ConnectionOptions::new(
-        profile.path(),
-        None,
-        GrantSource::HostConfiguration,
-        None,
-    ))
+    let registry = ProfileAppServerRegistry::open(
+        ConnectionOptions::new(profile.path(), None, GrantSource::HostConfiguration, None),
+        ash_app_server_diff::compute,
+    )
     .unwrap();
     let shared = blocked_directory(&registry, blocked.path());
     let cancellation = CancellationSource::new();
@@ -746,12 +728,10 @@ async fn wait_for_directory_waiters(directory: &DirRuntime, count: usize) {
 async fn cancelling_directory_wait_removes_registration_without_further_traffic() {
     let profile = tempfile::tempdir().unwrap();
     let root = tempfile::tempdir().unwrap();
-    let registry = ProfileAppServerRegistry::open(ConnectionOptions::new(
-        profile.path(),
-        None,
-        GrantSource::HostConfiguration,
-        None,
-    ))
+    let registry = ProfileAppServerRegistry::open(
+        ConnectionOptions::new(profile.path(), None, GrantSource::HostConfiguration, None),
+        ash_app_server_diff::compute,
+    )
     .unwrap();
     let directory = blocked_directory(&registry, root.path());
     let cancellation = ash_async_utils::CancellationSource::new();
@@ -777,12 +757,10 @@ async fn cancelling_directory_wait_removes_registration_without_further_traffic(
 async fn dropping_directory_wait_removes_registration_and_preserves_other_waiters() {
     let profile = tempfile::tempdir().unwrap();
     let root = tempfile::tempdir().unwrap();
-    let registry = ProfileAppServerRegistry::open(ConnectionOptions::new(
-        profile.path(),
-        None,
-        GrantSource::HostConfiguration,
-        None,
-    ))
+    let registry = ProfileAppServerRegistry::open(
+        ConnectionOptions::new(profile.path(), None, GrantSource::HostConfiguration, None),
+        ash_app_server_diff::compute,
+    )
     .unwrap();
     let directory = blocked_directory(&registry, root.path());
     let cancellation = ash_async_utils::CancellationSource::new();
@@ -811,12 +789,10 @@ async fn dropping_directory_wait_removes_registration_and_preserves_other_waiter
 async fn failed_directory_initialization_completes_waiters_and_allows_a_new_attempt() {
     let profile = tempfile::tempdir().unwrap();
     let root = tempfile::tempdir().unwrap();
-    let registry = ProfileAppServerRegistry::open(ConnectionOptions::new(
-        profile.path(),
-        None,
-        GrantSource::HostConfiguration,
-        None,
-    ))
+    let registry = ProfileAppServerRegistry::open(
+        ConnectionOptions::new(profile.path(), None, GrantSource::HostConfiguration, None),
+        ash_app_server_diff::compute,
+    )
     .unwrap();
     let directory = blocked_directory(&registry, root.path());
     let cancellation = ash_async_utils::CancellationSource::new();
@@ -861,12 +837,10 @@ fn ide_windows_are_discovered_across_real_profile_directory_runtimes() {
     let second = tempfile::tempdir_in(first.path()).unwrap();
     let active_file = second.path().canonicalize().unwrap().join("lib.rs");
     std::fs::write(&active_file, "disk").unwrap();
-    let registry = ProfileAppServerRegistry::open(ConnectionOptions::new(
-        profile.path(),
-        None,
-        GrantSource::HostConfiguration,
-        None,
-    ))
+    let registry = ProfileAppServerRegistry::open(
+        ConnectionOptions::new(profile.path(), None, GrantSource::HostConfiguration, None),
+        ash_app_server_diff::compute,
+    )
     .unwrap();
     let editor_server = registry
         .server_for(ConnectionOptions::new(

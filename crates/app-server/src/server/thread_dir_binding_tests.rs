@@ -42,6 +42,7 @@ fn archiving_more_than_the_keep_count_preserves_non_git_edits_until_explicit_che
             .without_built_in_skills()
             .with_session_state_mode(SessionStateMode::Ephemeral)
             .with_dir_root(source.path()),
+        ash_app_server_diff::compute,
     )
     .unwrap();
     let mut connection = server.connection();
@@ -166,6 +167,7 @@ fn parallel_spawn_without_intent_fails_before_allocating_a_directory() {
             .without_built_in_skills()
             .with_session_state_mode(SessionStateMode::Ephemeral)
             .with_dir_root(directory.path()),
+        ash_app_server_diff::compute,
     )
     .unwrap();
     let runtime = server.git_turn_changes.as_ref().unwrap();
@@ -214,6 +216,7 @@ fn parallel_spawn_uses_the_durable_frozen_tree_after_the_parent_changes() {
             .without_built_in_skills()
             .with_session_state_mode(SessionStateMode::Ephemeral)
             .with_dir_root(repository.path()),
+        ash_app_server_diff::compute,
     )
     .unwrap();
     let mut connection = server.connection();

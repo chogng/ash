@@ -458,7 +458,7 @@ fn server_with_model(model: Arc<dyn ModelService>) -> AppServer {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
         InMemoryThreadStore::default(),
     )));
-    AppServer::new(threads, model).with_ephemeral_env_state()
+    AppServer::new(threads, model, ash_app_server_diff::compute).with_ephemeral_env_state()
 }
 
 pub(crate) fn server() -> AppServer {
@@ -2680,7 +2680,7 @@ fn session_trace_diagnostics_rpc_pages_payloads_and_graph_preserve_attempt_ident
         ThreadController::with_store(Arc::new(InMemoryThreadStore::default()))
             .with_diagnostics(recorder.clone()),
     );
-    let server = AppServer::new(threads, model.clone())
+    let server = AppServer::new(threads, model.clone(), ash_app_server_diff::compute)
         .with_trace_recorder(recorder)
         .with_ephemeral_env_state();
     let mut connection = server.connection();

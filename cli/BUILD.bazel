@@ -31,7 +31,7 @@ rust_test(
     data = [
         "tests/support/issue_provider.py",
         ":ash",
-        "//crates/app-server:ash-app-server",
+        "//crates/app-server-host:ash-app-server",
         "//crates/app-server-daemon:ash-app-server-daemon",
     ] + glob(["tests/snapshots/**/*.snap"]),
     deps = all_crate_deps(normal = True, normal_dev = True) + [":cli"],
@@ -39,7 +39,7 @@ rust_test(
     env_inherit = ["PATH", "ASH_RG_PATH", "ASH_TGREP_PATH"],
     rustc_env = {
         "CARGO_BIN_EXE_ash": "$(rlocationpath :ash)",
-        "CARGO_BIN_EXE_ash-app-server": "$(rlocationpath //crates/app-server:ash-app-server)",
+        "CARGO_BIN_EXE_ash-app-server": "$(rlocationpath //crates/app-server-host:ash-app-server)",
         "CARGO_BIN_EXE_ash-app-server-daemon": "$(rlocationpath //crates/app-server-daemon:ash-app-server-daemon)",
     },
     rustc_env_files = ["//:workspace-version-env"],

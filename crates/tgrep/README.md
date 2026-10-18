@@ -44,8 +44,8 @@ Ash 文件工具写入后记录一份带版本的待确认路径，文件名和�
 
 ```sh
 just test ash-tgrep
-just test ash-app-server --lib grep
-just test ash-app-server --lib grep_rpc
+just test ash-app-server-runtime --lib grep
+just test ash-app-server-runtime --lib grep_rpc
 just test ash-install-context
 just test-python build scripts
 pnpm run test:build

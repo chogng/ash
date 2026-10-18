@@ -52,6 +52,7 @@ fn asset_rpc_uploads_are_isolated_but_committed_versions_survive_connection_clos
         Arc::new(crate::local::ProviderModelService::new(Arc::new(
             ash_model_provider::EchoModel,
         ))),
+        ash_app_server_diff::compute,
     )
     .with_local_assets(&temp.path().join("state.sqlite"))
     .unwrap();
@@ -127,6 +128,7 @@ fn asset_catalog_rpc_persists_organization_and_rejects_unknown_membership_atomic
         Arc::new(crate::local::ProviderModelService::new(Arc::new(
             ash_model_provider::EchoModel,
         ))),
+        ash_app_server_diff::compute,
     )
     .with_local_assets(&temp.path().join("state.sqlite"))
     .unwrap();

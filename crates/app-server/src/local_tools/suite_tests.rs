@@ -1391,6 +1391,7 @@ fn rpc_agent_tools_search_unsaved_content_and_persist_edits_through_the_originat
     let server = AppServer::new(
         Arc::clone(&threads),
         Arc::new(DocumentWorkflowModel { path: path.clone() }),
+        ash_app_server_diff::compute,
     );
     let suite = text_edit_suite(directory.path())
         .with_text_document_editor(server.text_document_host.clone());

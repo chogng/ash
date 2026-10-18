@@ -1130,15 +1130,21 @@ impl AppServer {
             .sum()
     }
 
-    pub fn new(threads: Arc<ThreadController>, model: Arc<dyn ModelService>) -> Self {
+    /// Constructs shared services with the stateless diff adapter selected by the product host.
+    pub fn new(
+        threads: Arc<ThreadController>,
+        model: Arc<dyn ModelService>,
+        diff_handler: crate::DiffRequestHandler,
+    ) -> Self {
         let updates = Arc::new(UpdateBroker::default());
-        Self::new_with_updates(threads, model, updates)
+        Self::new_with_updates(threads, model, updates, diff_handler)
     }
 
     pub(crate) fn new_with_updates(
         threads: Arc<ThreadController>,
         model: Arc<dyn ModelService>,
         updates: Arc<UpdateBroker>,
+        diff_handler: crate::DiffRequestHandler,
     ) -> Self {
         let mut builder = ash_extension_api::ExtensionRegistryBuilder::new();
         goal::install(&mut builder, &threads);
@@ -1267,7 +1273,7 @@ impl AppServer {
             resources,
             asset_processor: asset_operations::AssetsRequestProcessor::default(),
             backup_processor: backup_processor::BackupRequestProcessor::default(),
-            diff_processor: diff_operations::DiffRequestProcessor,
+            diff_processor: diff_operations::DiffRequestProcessor::new(diff_handler),
             memories: None,
             approval_environment: None,
             attachment_uploads: Mutex::new(AttachmentUploadStore::default()),

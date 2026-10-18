@@ -55,4 +55,4 @@ Queue 已持久接受任务才返回成功回执。丢失回执后重复投递�
 都由 `remote-profile-store` 持有；Git 对象传输由 `ash-git` 持有。没有额外的消息板服务或监听进程。
 
 验证入口：`just test ash-task-delivery --features runtime`、`just test ash-git transfer`、
-`just test ash-app-server --lib task_delivery`。
+`just test ash-app-server-runtime --lib task_delivery`。

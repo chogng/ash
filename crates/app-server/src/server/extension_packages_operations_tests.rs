@@ -19,6 +19,7 @@ fn app_server_exposes_only_the_manager_business_contract() {
     let server = AppServer::new(
         threads,
         Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
+        ash_app_server_diff::compute,
     )
     .with_plugin_package_service(Arc::new(FakeExtensionPackageManager));
     let mut connection = server.connection();
@@ -394,6 +395,7 @@ fn extension_packages_source_mutations_share_authenticated_client_authority_and_
     let server = AppServer::new(
         threads,
         Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
+        ash_app_server_diff::compute,
     )
     .with_plugins_manager(Arc::clone(&manager));
     let mut ordinary = server.connection();
@@ -521,6 +523,7 @@ fn built_in_provider_policy_checks_authority_revision_and_change_notifications()
             InMemoryThreadStore::default(),
         ))),
         Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
+        ash_app_server_diff::compute,
     )
     .with_editor_extension_policy(policy.clone())
     .with_built_in_extension_runtime(runtime);

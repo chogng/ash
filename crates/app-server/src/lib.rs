@@ -79,3 +79,12 @@ mod task_delivery_host;
 
 mod github_authentication;
 mod github_extension;
+
+/// Stateless diff protocol adapter supplied by the product composition boundary.
+///
+/// Keeping the function pointer here prevents business adapter edits from invalidating
+/// the shared runtime. It carries no connection, configuration, or domain state.
+pub type DiffRequestHandler =
+    fn(
+        &serde_json::Value,
+    ) -> Result<serde_json::Value, ash_app_server_protocol::protocol::error::AppServerError>;

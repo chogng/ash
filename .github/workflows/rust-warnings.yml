@@ -103,7 +103,7 @@ jobs:
         shell: bash
         run: |
           ${{ matrix.python }} -B scripts/cargo.py test -p ash-mxc-sandbox workspace_git_runs_with_a_continuous_env_denial --locked
-          ${{ matrix.python }} -B scripts/cargo.py test -p ash-app-server file_tools_read_a_large_workspace_without_scanning_every_entry --locked
+          ${{ matrix.python }} -B scripts/cargo.py test -p ash-app-server-runtime file_tools_read_a_large_workspace_without_scanning_every_entry --locked
 
   stdio-lifecycle:
     name: stdio and SSH lifecycle (${{ matrix.runner }})

@@ -13,6 +13,7 @@ fn closing_the_originating_connection_does_not_cancel_model_preparation() {
             InMemoryThreadStore::default(),
         ))),
         Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
+        ash_app_server_diff::compute,
     );
     let owner = server.product_host_connection();
     let owner_id = owner.connection_id;
@@ -72,6 +73,7 @@ fn model_operations_keep_resource_progress_private_and_broadcast_shared_snapshot
             InMemoryThreadStore::default(),
         ))),
         Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
+        ash_app_server_diff::compute,
     )
     .with_home(Arc::new(ash_home::AshHome::new(
         ash_utils_absolute_path::AbsolutePathBuf::from_absolute(root.path()).unwrap(),
@@ -160,6 +162,7 @@ fn dictation_requires_product_authority_and_rejects_invalid_resource_ids() {
             InMemoryThreadStore::default(),
         ))),
         Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
+        ash_app_server_diff::compute,
     );
     let mut client = server.connection();
     let mut host = server.product_host_connection();
@@ -187,6 +190,7 @@ fn unsupported_dictation_language_is_rejected_before_microphone_acquisition() {
             InMemoryThreadStore::default(),
         ))),
         Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
+        ash_app_server_diff::compute,
     );
     let owner = server.product_host_connection();
     for backend in [

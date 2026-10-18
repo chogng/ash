@@ -19,7 +19,10 @@ use ash_install_context::discovered_product_services_path;
 const DIR_GRANT_SOURCE: &str = "ASH_DIR_GRANT_SOURCE";
 
 /// Starts the App Server using explicit process arguments and environment configuration.
-pub fn run(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
+pub fn run(
+    arguments: impl IntoIterator<Item = String>,
+    diff_handler: crate::DiffRequestHandler,
+) -> Result<(), String> {
     let arguments = arguments.into_iter().collect::<Vec<_>>();
     match arguments.as_slice() {
         [command, receiver] if command == "history-export" => {
@@ -86,6 +89,7 @@ pub fn run(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
         return crate::managed::run(
             ash_utils_home_dir::find_ash_home().map_err(|error| error.to_string())?,
             discovered_product_services_path(),
+            diff_handler,
         );
     }
     if arguments.as_slice() == ["--version"] {
@@ -112,17 +116,22 @@ pub fn run(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
     };
     let options = StartupOptions::from_environment(product_services)?;
     match command {
-        Command::RemoteStdio => serve_remote_stdio(&options),
+        Command::RemoteStdio => serve_remote_stdio(&options, diff_handler),
         Command::Stdio => {
-            let server = open_server(&options)?.into_shared();
+            let server = open_server(&options, diff_handler)?.into_shared();
             let _queue = server.start_queue()?;
             server.serve_stdio().map_err(|error| error.to_string())
         }
-        Command::WebSocket(websocket) => serve_websocket(open_server(&options)?, websocket),
+        Command::WebSocket(websocket) => {
+            serve_websocket(open_server(&options, diff_handler)?, websocket)
+        }
     }
 }
 
-fn serve_remote_stdio(host: &StartupOptions) -> Result<(), String> {
+fn serve_remote_stdio(
+    host: &StartupOptions,
+    diff_handler: crate::DiffRequestHandler,
+) -> Result<(), String> {
     // Preserve the connector's process-scoped diagnostic mode: no shared profile lifecycle,
     // queue startup or additional local product discovery belongs to this entrypoint.
     let mut options = AppServerOptions::new(host.profile_root())
@@ -137,7 +146,7 @@ fn serve_remote_stdio(host: &StartupOptions) -> Result<(), String> {
                 .map_err(|error| error.to_string())?,
         );
     }
-    open_app_server(options)
+    open_app_server(options, diff_handler)
         .map_err(|error| error.to_string())?
         .serve_remote_jsonl(BufReader::new(std::io::stdin()), std::io::stdout())
         .map_err(|error| error.to_string())
@@ -392,7 +401,10 @@ pub(super) enum GrantSource {
     UserConfig,
 }
 
-pub(super) fn open_server(host: &StartupOptions) -> Result<AppServer, String> {
+pub(super) fn open_server(
+    host: &StartupOptions,
+    diff_handler: crate::DiffRequestHandler,
+) -> Result<AppServer, String> {
     let mut options = AppServerOptions::new(host.profile_root())
         .with_host_grok_auth()
         .with_host_zcode_credentials()
@@ -423,7 +435,7 @@ pub(super) fn open_server(host: &StartupOptions) -> Result<AppServer, String> {
             crate::execution_environments::load_environments(Path::new(&path))?,
         );
     }
-    open_app_server(options).map_err(|error| error.to_string())
+    open_app_server(options, diff_handler).map_err(|error| error.to_string())
 }
 
 #[cfg(test)]

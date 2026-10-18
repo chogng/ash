@@ -157,7 +157,12 @@ class DependencyTests(unittest.TestCase):
         )
 
     def test_code_mode_clients_cannot_link_v8_through_a_shared_dependency(self):
-        for name in ("ash-app-server", "ash-code-mode", "ash-code-mode-protocol"):
+        for name in (
+            "ash-app-server",
+            "ash-app-server-runtime",
+            "ash-code-mode",
+            "ash-code-mode-protocol",
+        ):
             for engine in ("ash-code-mode-runtime", "v8"):
                 with self.subTest(consumer=name, engine=engine):
                     consumer = self.package(
@@ -179,7 +184,7 @@ class DependencyTests(unittest.TestCase):
 
     def test_core_contract_consumers_cannot_reach_execution_through_an_adapter(self):
         for name in ("ash-core-api", "ash-hooks"):
-            for target in ("ash-core", "ash-app-server"):
+            for target in ("ash-core", "ash-app-server", "ash-app-server-runtime"):
                 with self.subTest(consumer=name, target=target):
                     consumer = self.package(
                         name,
@@ -212,21 +217,23 @@ class DependencyTests(unittest.TestCase):
         )
 
     def test_daemon_cannot_reach_server_through_client(self):
-        daemon = self.package(
-            "ash-app-server-daemon",
-            "crates/app-server-daemon",
-            deps=[{"name": "client", "kind": None}],
-        )
-        client = self.package(
-            "client", "crates/client", deps=[{"name": "ash-app-server", "kind": None}]
-        )
-        server = self.package("ash-app-server", "crates/app-server")
-        self.assertIn(
-            "ash-app-server-daemon -> client -> ash-app-server",
-            dependencies.boundary_errors(
-                self.root, self.metadata(daemon, client, server)
-            )[0],
-        )
+        for target in ("ash-app-server", "ash-app-server-runtime"):
+            with self.subTest(target=target):
+                daemon = self.package(
+                    "ash-app-server-daemon",
+                    "crates/app-server-daemon",
+                    deps=[{"name": "client", "kind": None}],
+                )
+                client = self.package(
+                    "client", "crates/client", deps=[{"name": target, "kind": None}]
+                )
+                server = self.package(target, "crates/app-server")
+                self.assertIn(
+                    f"ash-app-server-daemon -> client -> {target}",
+                    dependencies.boundary_errors(
+                        self.root, self.metadata(daemon, client, server)
+                    )[0],
+                )
 
     def test_agent_handlers_use_contracts_and_allow_core_in_server_assembly(self):
         server = self.root / "crates/app-server/src/server"

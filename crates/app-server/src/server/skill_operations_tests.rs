@@ -22,6 +22,7 @@ fn server(root: &std::path::Path) -> AppServer {
     AppServer::new(
         threads,
         Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
+        ash_app_server_diff::compute,
     )
     .with_skill_runtime(
         ash_skills_extension::BuiltInSkillSource::Root(root.to_path_buf()),

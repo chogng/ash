@@ -26,6 +26,7 @@ build-identity = { workspace = true }
 ash-app-server-daemon = { workspace = true }
 
 [dev-dependencies]
+ash-app-server-diff = { workspace = true }
 ash-app-server = { workspace = true }
 ash-state = { workspace = true }
 ash-protocol = { workspace = true }

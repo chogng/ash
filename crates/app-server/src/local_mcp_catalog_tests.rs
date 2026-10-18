@@ -295,7 +295,7 @@ fn mcp_notifications_refresh_code_mode_catalog_without_changing_model_tools() {
         InMemoryThreadStore::default(),
     )));
     let model = Arc::new(CatalogModel::default());
-    let server = AppServer::new(threads.clone(), model.clone())
+    let server = AppServer::new(threads.clone(), model.clone(), ash_app_server_diff::compute)
         .with_ephemeral_env_state()
         .with_config_store(config.clone())
         .with_env_config(&snapshot.values)

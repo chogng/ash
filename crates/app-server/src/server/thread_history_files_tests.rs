@@ -122,7 +122,7 @@ fn git_and_directory_history_restore_files_and_keep_the_same_thread_after_restar
                 .without_built_in_skills()
                 .with_dir_root(source.path())
         };
-        let server = open_app_server(options()).unwrap();
+        let server = open_app_server(options(), ash_app_server_diff::compute).unwrap();
         let mut connection = server.connection();
         initialize(&server, &mut connection);
         call(
@@ -269,7 +269,7 @@ fn git_and_directory_history_restore_files_and_keep_the_same_thread_after_restar
         assert!(changes["changeSets"].as_array().unwrap().is_empty());
         server.close_connection(connection);
         drop(server);
-        let server = open_app_server(options()).unwrap();
+        let server = open_app_server(options(), ash_app_server_diff::compute).unwrap();
         let mut connection = server.connection();
         initialize(&server, &mut connection);
         assert_eq!(
@@ -417,7 +417,7 @@ fn git_and_directory_history_restore_files_and_keep_the_same_thread_after_restar
             assert!(runtime_lifetime.upgrade().is_none());
             assert!(directory.starts_with(dunce::canonicalize(profile.path()).unwrap()));
             std::fs::remove_dir_all(directory.parent().unwrap()).unwrap();
-            let server = open_app_server(options()).unwrap();
+            let server = open_app_server(options(), ash_app_server_diff::compute).unwrap();
             let mut connection = server.connection();
             initialize(&server, &mut connection);
             let restored = call(

@@ -92,6 +92,7 @@ fn app_server_projects_and_mutates_distinct_plugin_authority_layers() {
     let server = AppServer::new(
         threads,
         Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
+        ash_app_server_diff::compute,
     )
     .with_plugin_authority(authority);
     let mut connection = server.connection();
@@ -391,6 +392,7 @@ fn plugin_server(profile: &std::path::Path) -> AppServer {
             InMemoryThreadStore::default(),
         ))),
         Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
+        ash_app_server_diff::compute,
     )
     .with_plugin_authority(PluginActivationAuthority::open(profile).unwrap())
 }

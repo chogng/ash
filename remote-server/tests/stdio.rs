@@ -78,6 +78,7 @@ fn remote_directories_share_a_backend_with_separate_authorities() {
 
     let read = |path: std::path::PathBuf| FsReadFileParams {
         dir_id: None,
+        read_access: None,
         session_directory: None,
         path,
         encoding: None,
@@ -210,6 +211,7 @@ fn empty_remote_connection_has_no_directory_authority() {
                 .client()
                 .read_file(FsReadFileParams {
                     dir_id: None,
+                    read_access: None,
                     session_directory: None,
                     path: outside,
                     encoding: None,

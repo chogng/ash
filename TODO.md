@@ -6,9 +6,14 @@
 
 ## Windows Rust 开发循环
 
-- 保存 Rust 到 App 可用的 15 秒目标尚未达到。已保留第二轮实测 42.15 → 29.10 秒的改进；后续候选均未证明完整流程收益并已撤回。完整数据、验证与公开项目实践核对见 `docs/build.md` 第三轮记录。
-- 后续重点：按既有领域职责缩小业务编辑失效的编译单元；若具备 Dev Drive，再测文件与新 exe 首次加载成本。尚无这些方案的性能结论。
-- 实验资源暂存目录 `.build/desktop/dev/app-server/.staging-c8813138-4733-4acc-8ebe-05eee0827ccd` 的 bin 为空；自动审批拒绝删除，目录仍保留，不影响正常构建。
+- 保存 Rust 到 App 可用的 15 秒目标尚未达到。第二轮保留的全流程改进仍在；第五轮在 `0ef650faa` 保持既有 profile 参数，将 diff 适配器通过薄产品入口注入共享运行时，编辑时只编译适配器和薄入口。最终三次完整实测 25.40 / 31.21 / 24.96 秒，中位数较本轮基线 29.97 秒缩短约 15.2%；核心 Cargo 组 13.92 → 6.80 秒。该收益只覆盖 diff 适配器编辑，不能推广至其他业务。原始长尾、自动缓存维护事件、无效的上游拆分对照和适用范围见 `docs/build.md` 第五轮记录。
+- 按用户要求结束本轮优化。15 秒是沿用的体验目标，并非测量推导的性能下限；若后续重新开启，需根据链接、发布、新映像加载和重连的实际成本选择方向。其他领域拆分尚无收益结论；本机卷均为 NTFS，没有 Dev Drive。
+- [ ] **验收** · 双窗口开发重启 smoke 尚未通过：两次均在替换之前，Agents 初始 `catalogSubscriptions` 预期 1、实际 0。后端日志显示两窗口连接 ready；独立正常代次诊断中 Agents 无 Renderer 错误，实际发出一次 catalog 订阅，同一探针计数也为 1，尚未定位隔离测试代次与正常代次的差异。未改探针、超时或产品逻辑来规避失败；保留 `round5-final-smoke.log`、`round5-final-smoke-retry.log` 和 `round5-agents-diagnostic*.log`。正常全部 21 个后端构建、相关 Rust 定向验证及脚本测试已完成，详细范围见 `docs/build.md` 第五轮记录。
+- 实验资源暂存目录 `.build/desktop/dev/app-server/.staging-c8813138-4733-4acc-8ebe-05eee0827ccd` 的 bin 为空；此前删除被自动审批策略阻止，仍保留。第四轮五个测量临时目录也因相同策略保留，准确路径见 `.build/perf-win-edit-20261018/round4-cleanup.json`；不影响正常构建。
+
+## Windows IDE 上下文 · TODO
+
+- [ ] **可做** · Windows IDE 上下文路径格式一致性：`managed::registry::tests::ide_windows_are_discovered_across_real_profile_directory_runtimes` 在正常目录根与标准库 `canonicalize` 返回的 `\\?\` 路径之间断言失败；仅改测试根预期后，现有 `server/request_processors/ide.rs::validate_context` 仍返回 `InvalidParams`。核对目录准入、IDE 根和文件访问授权的规范化 owner，修复后保留越权路径与策略验证。第五轮编译边界调整未改该生产逻辑；两处试探性测试修改已撤回。原始失败、后续诊断见 `.build/perf-win-edit-20261018/round5-runtime-registry*.log`；同组另 11 项通过。
 
 ## Remote / Browser 多根工作区 · TODO
 
@@ -40,7 +45,7 @@
 
 ## 浏览器文件上传 · TODO
 
-- [ ] **验收** · Windows 实机运行 `just verify ash-app-server --lib --filter browser_upload` 与 `just verify ash-file-system --lib`，确认硬链接替换和 opened-file link information 两个回归通过，记录源码 SHA、Windows 版本／架构及日志。macOS 已通过上传 6 项、文件系统 77 项及共享策略 1 项；Windows 文件系统交叉编译通过，App Server 因缺 SDK 头文件中止，不能代替实机结果。
+- [ ] **验收** · Windows 实机运行 `just verify ash-app-server-runtime --lib --filter browser_upload` 与 `just verify ash-file-system --lib`，确认硬链接替换和 opened-file link information 两个回归通过，记录源码 SHA、Windows 版本／架构及日志。macOS 已通过上传 6 项、文件系统 77 项及共享策略 1 项；Windows 文件系统交叉编译通过，App Server 因缺 SDK 头文件中止，不能代替实机结果。
 - [ ] **验收** · Linux 实机运行上传验证，覆盖符号链接叶节点、父目录替换及硬链接竞态并记录 SHA／日志。文件系统交叉编译通过，App Server 因缺 `x86_64-linux-gnu-gcc` 中止。
 
 测试步骤及平台边界见[浏览器上传文件访问验证](docs/browser-foundation.md#浏览器上传文件访问验证)。

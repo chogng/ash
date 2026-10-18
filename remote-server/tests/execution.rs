@@ -62,6 +62,7 @@ fn local_agent_uses_ssh_after_approval_and_keeps_history_local() {
     let server = ash_app_server::AppServer::new(
         Arc::new(ash_core::ThreadController::with_store(store.clone())),
         model.clone(),
+        ash_app_server_diff::compute,
     )
     .with_ephemeral_env_state()
     .with_execution_environments(vec![exec_server::ExecutionEnvironment::Remote(

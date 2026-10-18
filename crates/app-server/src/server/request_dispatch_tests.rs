@@ -327,6 +327,7 @@ pub(crate) fn server() -> AppServer {
         Arc::new(crate::local::ProviderModelService::new(Arc::new(
             ash_model_provider::EchoModel,
         ))),
+        ash_app_server_diff::compute,
     )
     .with_ephemeral_env_state()
 }

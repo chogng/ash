@@ -166,7 +166,7 @@ revision 与结构缓存变更。预览也使用独立 Rope/tree fork，通过�
 后端结构处理的手动性能夹具可运行：
 
 ```sh
-just test ash-app-server --lib shared_facts_latency_probe -- --ignored --nocapture
+just test ash-app-server-runtime --lib shared_facts_latency_probe -- --ignored --nocapture
 ```
 
 它在相同 profile 下分别测打开、连续改名和换行的 parse/update 与 facts 请求，覆盖 1 千、

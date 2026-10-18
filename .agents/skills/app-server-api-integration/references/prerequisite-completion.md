@@ -52,7 +52,7 @@ app-server 绑定成功后在 stdout 输出且只输出一条 UTF-8 JSONL 启动
 
 启动记录不含 token、PID、用户目录或其他秘密。stderr 只用于诊断，Main 不匹配 banner、端口文本或日志顺序。绑定失败、记录无效、记录重复、超时或子进程提前退出都使 starter 失败并清理进程。
 
-`start_websocket_acceptor` 需要返回包含实际 endpoint 与 accept task 的 typed started-listener，而不是只返回 task。`AppServerListenInfo` 在 `../app-server-protocol/src/listen_info.rs` 拥有启动记录的版本与序列化，并由同一 generator 产出 TypeScript 类型和 decoder；`../app-server/src/main.rs` 只能在 listener 成功绑定后写出该记录。
+`start_websocket_acceptor` 需要返回包含实际 endpoint 与 accept task 的 typed started-listener，而不是只返回 task。`AppServerListenInfo` 在 `../app-server-protocol/src/listen_info.rs` 拥有启动记录的版本与序列化，并由同一 generator 产出 TypeScript 类型和 decoder；`../app-server/src/startup.rs` 只能在 listener 成功绑定后写出该记录。
 
 后端文件位置：
 
@@ -61,7 +61,7 @@ app-server 绑定成功后在 stdout 输出且只输出一条 UTF-8 JSONL 启动
 ../app-server-transport/src/transport/auth.rs
 ../app-server-transport/src/lib.rs
 ../app-server-protocol/src/listen_info.rs
-../app-server/src/main.rs
+../app-server-host/src/main.rs
 ../app-server/src/lib.rs
 ../app-server/README.md
 ```

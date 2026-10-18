@@ -19,6 +19,7 @@ Measure whether the change helped. Follow the [measurement limits](../../../docs
    | Evidence | Change to evaluate |
    | --- | --- |
    | A small shared type pulls a service and its heavy dependencies into many consumers | Put the type in the appropriate contract owner and make consumers depend on that contract. |
+   | An extracted business implementation still invalidates a large runtime consumer | Remove the runtime's normal dependency on that implementation; compose it through the domain's narrow port in a downstream host. Keep state and lifecycle with their existing owners. |
    | Many instantiations of substantial generic or macro-generated work dominate one crate | Share the type-independent work; verify behavior and runtime cost. |
    | A sequential workflow recompiles the same graph under different profiles or targets | Align the build invocations where their requirements allow it. |
    | Compilation or linking dominates after dependency and source analysis | Test a profile or linker candidate on the real build and edit loop. |

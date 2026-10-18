@@ -175,6 +175,7 @@ fn trace_websocket_and_diagnostics_observe_the_same_local_rpc_without_content() 
             .with_codex_home(profile.path().join("codex"))
             .without_built_in_skills()
             .with_trace_exporter(exporter),
+        ash_app_server_diff::compute,
     )
     .unwrap();
     assert_trace_rpc(&server, address, &token);
@@ -201,8 +202,8 @@ fn trace_websocket_is_owned_once_by_the_shared_profile() {
         .with_codex_home(profile.path().join("codex"))
         .without_built_in_skills()
         .with_profile_runtime(runtime.clone());
-    let first = crate::open_app_server(options.clone()).unwrap();
-    let second = crate::open_app_server(options).unwrap();
+    let first = crate::open_app_server(options.clone(), ash_app_server_diff::compute).unwrap();
+    let second = crate::open_app_server(options, ash_app_server_diff::compute).unwrap();
     assert_trace_rpc(&first, address, &token);
     drop(first);
     assert_trace_rpc(&second, address, &token);
@@ -283,6 +284,7 @@ fn local_provider_diagnostics_reach_the_reviewed_feedback_bundle() {
             .with_codex_home(profile.path().join("codex"))
             .without_built_in_skills()
             .with_model_operation_client(Arc::new(Rejected)),
+        ash_app_server_diff::compute,
     )
     .unwrap();
     let mut connection = server.connection();
@@ -352,6 +354,7 @@ fn persistent_queue_recovers_after_backend_restart_without_duplicate_turns() {
                     Arc::new(ash_secrets::UnavailableSecretStore),
                 )
                 .unwrap(),
+            ash_app_server_diff::compute,
         )
         .unwrap()
     };

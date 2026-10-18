@@ -23,7 +23,14 @@ class CiImpactTests(unittest.TestCase):
         packages = [
             package("ash-tui", "crates/tui", "shared"),
             package("ash-cli", "ash-cli", "shared"),
-            package("ash-app-server", "crates/app-server", "shared"),
+            package(
+                "ash-app-server",
+                "crates/app-server-host",
+                "ash-app-server-runtime",
+                "ash-app-server-diff",
+            ),
+            package("ash-app-server-runtime", "crates/app-server", "shared"),
+            package("ash-app-server-diff", "crates/app-server-diff"),
             package("ash-app-server-daemon", "crates/app-server-daemon"),
             package("ash-remote-server", "remote-server"),
             package("shared", "crates/shared", "leaf"),
@@ -41,6 +48,8 @@ class CiImpactTests(unittest.TestCase):
             "remote-server/src/lib.rs",
             "crates/leaf/src/lib.rs",
             "crates/app-server/src/lib.rs",
+            "crates/app-server-host/src/main.rs",
+            "crates/app-server-diff/src/lib.rs",
             "crates/tui/src/view.snap",
         ):
             with self.subTest(path=path):

@@ -9,7 +9,12 @@ fn invalid_profile_config_is_rejected_before_daemon_socket_is_bound() {
     .unwrap();
     let endpoint = ash_app_server_daemon::daemon_endpoint_path(profile.path()).unwrap();
 
-    let error = super::run(profile.path().to_path_buf(), None).unwrap_err();
+    let error = super::run(
+        profile.path().to_path_buf(),
+        None,
+        ash_app_server_diff::compute,
+    )
+    .unwrap_err();
 
     assert!(error.contains("unknown field `unknownField`"));
     assert!(!endpoint.exists());
@@ -94,7 +99,7 @@ fn managed_stop_returns_after_connections_and_services_are_released() {
     const CHILD_PROFILE: &str = "ASH_TEST_MANAGED_STOP_PROFILE";
     if let Some(profile) = std::env::var_os(CHILD_PROFILE) {
         let profile = std::path::PathBuf::from(profile);
-        super::run(profile.clone(), None).unwrap();
+        super::run(profile.clone(), None, ash_app_server_diff::compute).unwrap();
         // A forced process exit cannot produce this acknowledgement. It is written
         // only after the real managed entrypoint has returned and dropped its owners.
         std::fs::write(profile.join("released"), b"released").unwrap();

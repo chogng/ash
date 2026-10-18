@@ -1,8 +1,8 @@
-load("//:defs.bzl", "ash_rust_binary", "ash_rust_crate")
+load("//:defs.bzl", "ash_rust_crate")
 
 ash_rust_crate(
     name = "app-server",
-    crate_name = "ash_app_server",
+    crate_name = "ash_app_server_runtime",
     data = glob(["templates/**"]) + ["//extensions:rust/package.json", "//extensions/debug-lldb:package.json", "//extensions/debug-lldb:package.nls.json", "//extensions/debug-lldb:package.nls.zh-CN.json", "//extensions/debug-lldb:src/lib.rs", "//extensions/debug-lldb:src/installer.rs", "//extensions/debug-lldb:runtime.json", "//sdk/rust:src/window.rs", "//sdk/rust:src/debug.rs", "//extensions/markdown-math:package.json", "//extensions/markdown-math:src/lib.rs", "//crates/utils/markdown-math:src/lib.rs", "//extensions/markdown-language-features:src/math.rs", "//crates/utils/audio:tests/fixtures/tone.wav", "//examples/extensions/inspect:.ash-plugin/plugin.json", "//examples/extensions/inspect:package.json", "//resources/extension-host:host.mjs", "//resources/extension-host:node.mjs", "//resources/extension-host:vscode.js", "//resources/extension-host:scm.js", "//extensions/remote-ssh:package.json", "//extensions/remote-ssh:src/main.rs", "//sdk/rust:src/workspace.rs", "//sdk/rust:src/scm.rs",
         "//sdk/rust:src/terminal.rs", "//extensions/git:package.json", "//extensions/git:src/lib.rs", "//extensions/git:src/api.rs", "//extensions/git:src/blame.rs",
         "//extensions/git:src/interaction.rs", "//extensions/git:src/model.rs", "//extensions/git:src/commands.rs", "//extensions/git:src/scm.rs", "//extensions/git:src/history.rs", "//extensions/git:src/changes.rs", "//extensions/markdown-language-features:package.json", "//extensions/markdown-language-features:src/lib.rs", "//extensions/markdown-language-features:src/parser.rs", "//extensions/markdown-language-features:src/language.rs", "//extensions/markdown-language-features:package.nls.json", "//extensions/markdown-language-features:package.nls.zh-CN.json", "//extensions/markdown-language-features:media/markdown.css", "//sdk/rust:src/editors.rs", "//sdk/rust:src/languages.rs"],
@@ -10,11 +10,4 @@ ash_rust_crate(
         "//crates/collaboration-mode-templates": "collaboration_mode_templates",
         "//crates/screen-capture": "screen_capture",
     },
-)
-
-ash_rust_binary(
-    name = "ash-app-server",
-    crate_name = "ash_app_server",
-    crate_root = "src/main.rs",
-    deps = [":app-server"],
 )

@@ -374,6 +374,7 @@ fn automation_uses_its_directory_after_another_profile_environment_opens() {
                     Arc::new(super::EchoModel),
                 )))
                 .without_built_in_skills(),
+            ash_app_server_diff::compute,
         )
         .unwrap()
     };

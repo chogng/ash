@@ -309,8 +309,12 @@ fn standard_local_composition_can_install_cloud_provider_registry_before_activat
     let options = crate::AppServerOptions::new(profile.path())
         .with_dir_root(dir.path())
         .without_built_in_skills();
-    let server =
-        crate::open_app_server_with_cloud_providers(options, providers).expect("local server");
+    let server = crate::open_app_server_with_cloud_providers(
+        options,
+        providers,
+        ash_app_server_diff::compute,
+    )
+    .expect("local server");
     let mut connection = server.connection();
 
     let initialize = call(
@@ -349,6 +353,7 @@ fn server() -> AppServer {
     AppServer::new(
         threads,
         Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
+        ash_app_server_diff::compute,
     )
     .with_ephemeral_env_state()
 }

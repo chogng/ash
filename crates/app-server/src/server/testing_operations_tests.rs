@@ -32,6 +32,7 @@ fn testing_rpc_discovers_runs_and_releases_only_the_issuing_connection() {
         Arc::new(crate::local::ProviderModelService::new(Arc::new(
             ash_model_provider::EchoModel,
         ))),
+        ash_app_server_diff::compute,
     )
     .with_ephemeral_env_state();
     server.env_runtime.write().unwrap().selected_grant = Some(Grant::for_environment(

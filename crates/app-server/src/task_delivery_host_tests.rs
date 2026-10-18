@@ -150,7 +150,7 @@ fn open(
     if let Some(shared) = shared {
         options = options.with_profile_runtime(shared);
     }
-    Arc::new(crate::open_app_server(options).unwrap())
+    Arc::new(crate::open_app_server(options, ash_app_server_diff::compute).unwrap())
 }
 
 fn task_runtime(
@@ -455,6 +455,7 @@ fn task_delivery_replays_one_remote_session_and_executes_after_source_disconnect
                     model.clone(),
                 )))
                 .without_built_in_skills(),
+            ash_app_server_diff::compute,
         )
         .unwrap(),
     );

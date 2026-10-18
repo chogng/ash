@@ -137,6 +137,7 @@ fn parser_sessions_reuse_one_document_per_connection_and_release_on_close() {
             InMemoryThreadStore::default(),
         ))),
         Arc::new(crate::local::ProviderModelService::new(Arc::new(EchoModel))),
+        ash_app_server_diff::compute,
     );
     let first = server.connection();
     let second = server.connection();
@@ -274,6 +275,7 @@ fn shared_syntax_queries_use_one_rust_tree_and_release_with_the_connection() {
             InMemoryThreadStore::default(),
         ))),
         Arc::new(crate::local::ProviderModelService::new(Arc::new(EchoModel))),
+        ash_app_server_diff::compute,
     );
     let first = server.connection();
     let second = server.connection();
@@ -358,6 +360,7 @@ fn viewport_brackets_use_utf16_columns_after_unicode_prefixes_near_eof() {
             InMemoryThreadStore::default(),
         ))),
         Arc::new(crate::local::ProviderModelService::new(Arc::new(EchoModel))),
+        ash_app_server_diff::compute,
     );
     let connection = server.connection();
     let cancellation = ash_async_utils::CancellationSource::new();
@@ -398,6 +401,7 @@ fn shared_facts_transmit_small_patches_and_reset_missing_or_changed_bases() {
             InMemoryThreadStore::default(),
         ))),
         Arc::new(crate::local::ProviderModelService::new(Arc::new(EchoModel))),
+        ash_app_server_diff::compute,
     );
     let connection = server.connection();
     let source = ash_async_utils::CancellationSource::new();
@@ -628,6 +632,7 @@ fn shared_facts_latency_probe() {
             InMemoryThreadStore::default(),
         ))),
         Arc::new(crate::local::ProviderModelService::new(Arc::new(EchoModel))),
+        ash_app_server_diff::compute,
     );
     let connection = server.connection();
     let source = ash_async_utils::CancellationSource::new();
@@ -768,6 +773,7 @@ fn shared_fact_patches_match_full_results_with_skipped_versions_and_unicode_boun
             InMemoryThreadStore::default(),
         ))),
         Arc::new(crate::local::ProviderModelService::new(Arc::new(EchoModel))),
+        ash_app_server_diff::compute,
     );
     let connection = server.connection();
     let cancellation = ash_async_utils::CancellationSource::new();
@@ -897,6 +903,7 @@ fn shared_markdown_snapshot_updates_send_only_effective_utf16_fact_edits() {
             InMemoryThreadStore::default(),
         ))),
         Arc::new(crate::local::ProviderModelService::new(Arc::new(EchoModel))),
+        ash_app_server_diff::compute,
     );
     let connection = server.connection();
     let cancellation = ash_async_utils::CancellationSource::new();

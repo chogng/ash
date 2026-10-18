@@ -1,5 +1,12 @@
 # `ash-app-server`
 
+本目录的共享实现编译为 `ash-app-server-runtime`；产品 crate 与可执行入口位于
+[`app-server-host`](../app-server-host)，包名和可执行文件仍为 `ash-app-server`。
+薄入口装配具体适配器，共享运行时不反向依赖它们：无状态 diff 的输入限制、编解码和 UTF-16
+转换由 `ash-app-server-diff` 实现，比较算法继续归 `ash-diff`；请求调度、连接和错误响应仍归本目录。
+`open_app_server*` 产品入口继续装配默认实现；直接构造 `AppServer::new` 的嵌入方须显式传入
+`DiffRequestHandler`。运行时的 diff 实现依赖只用于测试，不进入其普通构建图。
+
 `ash-app-server` 组合一个环境中的服务并实现 App Server 协议，具体职责如下：
 
 1. 分发类型化协议，管理请求取消、产品会话组织和通知订阅。
@@ -73,7 +80,7 @@ Agents 的 SSH 路由由 `managed/gateway/remote.rs` 拥有独立消息队列和
 
 后台通知独立于请求执行发送；一个请求直接产生的通知仅在该请求的响应入队后发布。Session 修改期间，该 Session 的后台事件也等待响应入队，保留 response-before-causal-notification 约定；其他 Session 的事件与宿主调用继续发送。响应与通知使用同一有界输出队列，最多 256 条消息、320 MiB；正在写入的消息也占用字节预算，写入失败唤醒等待容量的生产者。每条连接的通知源、请求因果事件和 Session 延后事件另共用 320 MiB 预算；耗尽时按已有约定清理临时事件并发布 transcript reset，无法容纳持久事件时关闭通知源。输出背压不保留跨连接共享的资源许可。Socket 断线时取消排队和运行中的请求，并唤醒待回复的宿主调用；有限的 stdio 输入结束后继续处理已接收请求，但不再等待宿主回复。
 
-RPC trace 从请求接收开始计时，记录资源等待、执行队列等待、执行和进入输出队列的等待；`rpc.outbound` 子 span 记录输出队列等待与实际写入耗时。并发回归可运行 `just test ash-app-server --lib request_dispatch`、`just test ash-app-server --lib github` 和 `just test ash-app-server --lib managed::gateway`。测试覆盖并发挂起 GitHub 请求时的查询与取消、断线清理、跨连接容量、路由副本字节计数和写入终态。
+RPC trace 从请求接收开始计时，记录资源等待、执行队列等待、执行和进入输出队列的等待；`rpc.outbound` 子 span 记录输出队列等待与实际写入耗时。并发回归可运行 `just test ash-app-server-runtime --lib request_dispatch`、`just test ash-app-server-runtime --lib github` 和 `just test ash-app-server-runtime --lib managed::gateway`。测试覆盖并发挂起 GitHub 请求时的查询与取消、断线清理、跨连接容量、路由副本字节计数和写入终态。
 
 交互式 PTY、输出缓存和重连租约由 [`ash-exec-server`](../exec-server/README.md) 管理；
 `src/server/terminal_operations.rs` 负责协议转换和调用，环境装配负责传入有效授权。
@@ -111,7 +118,7 @@ Windows 的后台进程生命周期集成测试使用 `just test-processes ash-a
 - 窗口未知或输出、压缩预留导致没有输入空间时，模型仍可列出；执行在调用 provider 前以 `ModelConfiguration` 失败，保留具体配置原因，不重试。
 - 每轮执行冻结配置和目录信息。后续配置修改或目录刷新不能改变正在执行的预算；辅助模型使用同一轮冻结的目录和配置。
 
-验证：`just test ash-app-server --lib local::tests`，覆盖单模型配置、未知容量、真实 Core 执行、输出预留与目录刷新隔离。
+验证：`just test ash-app-server-runtime --lib local::tests`，覆盖单模型配置、未知容量、真实 Core 执行、输出预留与目录刷新隔离。
 
 ## 执行环境
 
@@ -164,7 +171,7 @@ Windows 的后台进程生命周期集成测试使用 `just test-processes ash-a
 - Agent 工具只负责授权和模型输出（100 行、每行 500 字符）；编辑器使用分页任务与 UTF-16 高亮适配。
 - Codebase 检索服务消费文字匹配候选；源码与 chunk 管理不持有搜索引擎。
 - 搜索及索引管理使用 `grep/search/*`、`grep/index/*`；查询支持索引或当前磁盘模式，分页返回实际模式。
-- 验证命令：`just test ash-app-server --lib grep`。
+- 验证命令：`just test ash-app-server-runtime --lib grep`。
 
 ## 远端 Agent 消息板
 

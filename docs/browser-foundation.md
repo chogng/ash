@@ -449,7 +449,7 @@ events. Completion metadata follows active registrations and is not persisted.
 - 执行以下验证，记录完整结果；失败时保留命令输出：
 
 ```powershell
-just verify ash-app-server --lib --filter browser_upload
+just verify ash-app-server-runtime --lib --filter browser_upload
 if ($LASTEXITCODE -ne 0) { throw '浏览器上传验证失败' }
 just verify ash-file-system --lib
 if ($LASTEXITCODE -ne 0) { throw '文件系统验证失败' }
@@ -462,7 +462,7 @@ if ($LASTEXITCODE -ne 0) { throw '文件系统验证失败' }
 
 ### Linux 实机
 
-- 在具备 Linux C 编译工具链的环境执行 `just verify ash-app-server --lib --filter browser_upload`，确认符号链接叶节点、父目录替换和硬链接替换的竞态测试通过，并记录提交 SHA 与结果。
+- 在具备 Linux C 编译工具链的环境执行 `just verify ash-app-server-runtime --lib --filter browser_upload`，确认符号链接叶节点、父目录替换和硬链接替换的竞态测试通过，并记录提交 SHA 与结果。
 
 文件系统的 Linux 测试目标交叉编译已通过；App Server 的 Linux 交叉编译因缺少 `x86_64-linux-gnu-gcc`，在 `sha2-asm` 构建阶段中止。
 

@@ -108,6 +108,7 @@ fn explicit_product_turn_in_isolated_checkout_keeps_its_document_owner() {
                 .without_built_in_skills()
                 .with_dir_root(source.path())
                 .with_agent_model_service(model),
+            ash_app_server_diff::compute,
         )
         .unwrap();
         // The injected model executes locally; model discovery and authentication are
@@ -226,7 +227,8 @@ fn repeated_turn_wakeups_remain_interruptible_through_rpc_and_allow_a_new_turn()
         InMemoryThreadStore::default(),
     )));
     let mut server =
-        crate::AppServer::new(threads.clone(), model.clone()).with_ephemeral_env_state();
+        crate::AppServer::new(threads.clone(), model.clone(), ash_app_server_diff::compute)
+            .with_ephemeral_env_state();
     let executor = server
         .turn_executor_snapshot()
         .with_execution_observer(Arc::new(ExecutionFinishedSignal(finished_tx)));
@@ -347,7 +349,11 @@ fn root_agent_picker_lists_authorized_roles_and_creates_the_selected_session() {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
         InMemoryThreadStore::default(),
     )));
-    let mut server = crate::AppServer::new(threads.clone(), Arc::new(TextModel));
+    let mut server = crate::AppServer::new(
+        threads.clone(),
+        Arc::new(TextModel),
+        ash_app_server_diff::compute,
+    );
     let contributions = super::dir_contributions::DirContributions::discover(
         root.path(),
         server.env_runtime_mut().dir_grants.clone(),
@@ -414,7 +420,11 @@ fn recovered_spawn_with_document_context(documents: bool) {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
         InMemoryThreadStore::default(),
     )));
-    let server = crate::AppServer::new(Arc::clone(&threads), Arc::new(TextModel));
+    let server = crate::AppServer::new(
+        Arc::clone(&threads),
+        Arc::new(TextModel),
+        ash_app_server_diff::compute,
+    );
     let parent = threads
         .start_thread(
             &ash_core::NoThreadWorktreeBinder,
@@ -722,7 +732,11 @@ fn built_in_model_guidance_reaches_rpc_roots_and_default_workers_through_tool_ex
             "Shared imported instruction for every worker.",
         )
         .unwrap();
-        let server = crate::AppServer::new(threads.clone(), Arc::new(GuidanceModel(sender)));
+        let server = crate::AppServer::new(
+            threads.clone(),
+            Arc::new(GuidanceModel(sender)),
+            ash_app_server_diff::compute,
+        );
         // Defer only child scheduling so this test can inspect the durable spawn before running it.
         let service = MultiAgentToolService::new(
             server.multi_agent.clone(),
@@ -1001,7 +1015,11 @@ fn rpc_turn_executes_browser_tool_only_on_its_originating_window() {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
         InMemoryThreadStore::default(),
     )));
-    let server = crate::AppServer::new(threads.clone(), Arc::new(BrowserModel));
+    let server = crate::AppServer::new(
+        threads.clone(),
+        Arc::new(BrowserModel),
+        ash_app_server_diff::compute,
+    );
     let tools = Arc::new(crate::browser_tool::BrowserToolService::new(
         server.browser_host.clone(),
     ));
