@@ -50,35 +50,9 @@ impl AgentEnvironmentSource {
         dir_root: &Path,
         repository_inspection: RepositoryInspection,
     ) -> Result<Self, AgentEnvironmentError> {
-        let is_git_repo = matches!(repository_inspection, RepositoryInspection::Allowed)
-            && command_output(dir_root, "git", &["rev-parse", "--is-inside-work-tree"])
-                .is_some_and(|output| output.trim() == "true");
-        let branch = is_git_repo
-            .then(|| command_output(dir_root, "git", &["branch", "--show-current"]))
-            .flatten()
-            .filter(|value| !value.trim().is_empty());
-        let main_branch = is_git_repo
-            .then(|| {
-                command_output(
-                    dir_root,
-                    "git",
-                    &["symbolic-ref", "--short", "refs/remotes/origin/HEAD"],
-                )
-            })
-            .flatten()
-            .map(|value| value.trim_start_matches("origin/").trim().to_owned())
-            .filter(|value| !value.is_empty())
-            .or_else(|| branch.clone());
-        let repository = if is_git_repo {
-            let status = command_output(dir_root, "git", &["status", "--porcelain"])
-                .map(|value| truncate_lines(&value, MAX_GIT_STATUS_LINES))
-                .unwrap_or_else(|| "(none)".into());
-            let recent_commits = command_output(dir_root, "git", &["log", "--oneline", "-5"])
-                .filter(|value| !value.is_empty())
-                .unwrap_or_else(|| "(none)".into());
-            RepositoryEnvironment::git(branch, main_branch, status, recent_commits)?
-        } else {
-            RepositoryEnvironment::NotDetected
+        let repository = match repository_inspection {
+            RepositoryInspection::Allowed => capture_repository(dir_root)?,
+            RepositoryInspection::Omit => RepositoryEnvironment::NotDetected,
         };
         let host = HostEnvironment::new(
             dir_root.to_path_buf(),
@@ -120,22 +94,41 @@ fn truncate_lines(text: &str, maximum_lines: usize) -> String {
 }
 
 fn command_output(dir_root: &Path, program: &str, arguments: &[&str]) -> Option<String> {
-    let output = if program == "git" {
-        Command::new(program)
-            .args(["-C", &dir_root.to_string_lossy()])
-            .args(arguments)
-            .output()
-    } else {
-        Command::new(program)
-            .args(arguments)
-            .current_dir(dir_root)
-            .output()
-    }
-    .ok()?;
+    let output = Command::new(program)
+        .args(arguments)
+        .current_dir(dir_root)
+        .output()
+        .ok()?;
     if !output.status.success() {
         return None;
     }
     Some(String::from_utf8_lossy(&output.stdout).trim().to_owned())
+}
+
+fn capture_repository(dir_root: &Path) -> Result<RepositoryEnvironment, AgentEnvironmentError> {
+    // InspectRepository does not authorize executing repository-configured programs.
+    // Keep process identity, query hardening, and resource limits in the shared Git owner.
+    let summary = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .ok()
+        .and_then(|runtime| {
+            runtime
+                .block_on(crate::git_service::current_client().environment_summary(dir_root))
+                .ok()
+        });
+    let Some(summary) = summary else {
+        return Ok(RepositoryEnvironment::NotDetected);
+    };
+    RepositoryEnvironment::git(
+        summary.branch,
+        summary.main_branch,
+        summary
+            .status
+            .map(|value| truncate_lines(&value, MAX_GIT_STATUS_LINES))
+            .unwrap_or_else(|| "(none)".into()),
+        summary.recent_commits.unwrap_or_else(|| "(none)".into()),
+    )
 }
 
 fn platform_name() -> &'static str {
@@ -147,3 +140,7 @@ fn platform_name() -> &'static str {
         "linux"
     }
 }
+
+#[cfg(test)]
+#[path = "agent_environment_source_tests.rs"]
+mod tests;

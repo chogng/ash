@@ -5,6 +5,7 @@
 
 mod client;
 mod discovery;
+mod environment;
 mod error;
 mod fsmonitor;
 mod history;
@@ -21,6 +22,7 @@ pub use client::GitAskPass;
 pub use client::GitClient;
 pub use client::GitExecutionLimits;
 pub use client::GitVersion;
+pub use environment::GitEnvironmentSummary;
 pub use error::GitError;
 pub use error::GitResult;
 pub use history::GitBlameLine;
