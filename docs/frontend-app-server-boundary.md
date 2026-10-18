@@ -53,7 +53,7 @@ Web 页面使用另一条接入路径：浏览器直接连接经过认证的 App
 
 ## 与 VS Code 的关系
 
-`platform/agentHost` 是 Ash 前端的后端接入 owner，承接 Renderer 协议客户端、传输、Main 连接转发和 [App Server 文件 provider](../src/ash/platform/agentHost/browser/appServerFileSystemProvider.ts)。它使用 Rust 生成的 app-server 协议，不运行 VS Code 的 Node agent runtime，也不引入 AHP 的 action/state 协议。`AppServer*` 名称标明这项实现使用的后端；没有相同协议与状态语义的接口，不通过改名伪装成上游契约。
+`platform/agentHost` 是 Ash 前端的后端接入 owner，承接 Renderer 协议客户端、传输、Main 连接转发和 [App Server 文件 provider](../src/ash/platform/agentHost/common/agentHostFileSystemProvider.ts)。它使用 Rust 生成的 app-server 协议，不运行 VS Code 的 Node agent runtime，也不引入 AHP 的 action/state 协议。`AppServer*` 名称标明这项实现使用的后端；没有相同协议与状态语义的接口，不通过改名伪装成上游契约。
 
 Workbench 和 Agents 的文件操作继续经过同一个 `IFileService` 契约。文件 provider 将 URI 转为授权目录内的路径，保留 revision 条件写入、连接资源分块与释放，以及 `fs/changed` 失效通知；text model、dirty buffer、undo 和保存冲突仍由前端编辑器拥有。[Sessions 文件适配](../src/ash/sessions/contrib/providers/agentHost/browser/sessionFileService.ts)只绑定原 Session 目录和搜索目标，切换选中 Session 不会重定向已经打开文件的保存位置。Sessions Provider 仍使用后端 Session/Thread 身份，不建立另一份持久状态。
 

@@ -5,6 +5,7 @@ import { observableValue } from '../../../base/common/observable.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../platform/configuration/common/inMemoryConfigurationService.js';
+import { getRemoteAuthority, getRemoteWorkspacePath } from '../../../platform/remote/common/remote.js';
 import { TelemetryLevel, type ITelemetryService } from '../../../platform/telemetry/common/telemetry.js';
 import { ChatLayoutContext, ChatLayoutPresentation, SESSIONS_LAYOUT_SCOPE_SETTING, type IChatLayoutOwner } from '../../common/chatLayout.js';
 import { agentHostSessionWorkspaceKey, buildAgentHostSessionWorkspace } from '../../common/agentHostSessionWorkspace.js';
@@ -49,6 +50,31 @@ test('runtime workspace identities separate containers, hosts and ambiguous path
 	assert.notEqual(sessionWorkspaceUri(first).toString(), sessionWorkspaceUri(second).toString());
 	assert.equal(URI.parse(sessionWorkspaceUri(first).toString()).path, '/workspace');
 	assert.equal(buildAgentHostSessionWorkspace(null), null);
+});
+
+test('an SSH host named local retains its remote directory identity', () => {
+	const local = buildAgentHostSessionWorkspace({ type: 'local', root: '/workspace' })!;
+	const ssh = buildAgentHostSessionWorkspace({ type: 'ssh', host: 'local', root: '/workspace' })!;
+	const sameHost = buildAgentHostSessionWorkspace({ type: 'ssh', host: 'LOCAL', root: '/workspace' })!;
+	assert.notEqual(agentHostSessionWorkspaceKey(local), agentHostSessionWorkspaceKey(ssh));
+	assert.equal(agentHostSessionWorkspaceKey(ssh), agentHostSessionWorkspaceKey(sameHost));
+	assert.equal(ssh.authorityId, 'ssh+local');
+	const resource = sessionWorkspaceUri(ssh);
+	assert.equal(resource.scheme, 'ash-remote');
+	assert.equal(getRemoteAuthority(resource)?.host, 'local');
+	assert.equal(getRemoteWorkspacePath(resource), '/workspace');
+	assert.equal(sessionWorkspaceUri(local).scheme, 'file');
+});
+
+test('remote Session directories retain canonical Windows resource paths', () => {
+	for (const target of [
+		{ type: 'ssh' as const, host: 'build', root: 'C:\\source\\project' },
+		{ type: 'provider' as const, providerId: 'runtime', workspace: 'container', root: 'C:\\source\\project' },
+	]) {
+		const resource = sessionWorkspaceUri(buildAgentHostSessionWorkspace(target)!);
+		assert.equal(resource.path, '/C:/source/project');
+		assert.equal(getRemoteWorkspacePath(resource), 'C:/source/project');
+	}
 });
 
 test('application labels preserve unknown identities and explicit names', () => {

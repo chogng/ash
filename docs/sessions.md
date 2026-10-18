@@ -72,7 +72,8 @@ Host RPC v1 与 `sessionRuntime.v1` typed DataChannel。App Server 不链接其�
 `session/runtime/invoke` 和 `/cancel` 由 Rust 定义并生成；`sessionRuntimes:1`
 用于协商。Renderer 的领域 service 不导入生成传输类型，Main 不运行 Docker。
 
-领域边界在 `src/ash/platform/agentHost/common/agentService.ts`，转换在
+领域模型在 `src/ash/platform/agentHost/common/agent.ts`，服务契约在
+`src/ash/platform/agentHost/common/agentService.ts`，转换在
 `browser/appServerAgentService.ts`，线上连接仍由 `browser/appServerProtocolClient.ts`
 唯一拥有。Rust 源契约在 `crates/protocol/src/session/runtime.rs` 和
 `crates/app-server-protocol/src/protocol/session.rs`；生成类型、method map 和运行时

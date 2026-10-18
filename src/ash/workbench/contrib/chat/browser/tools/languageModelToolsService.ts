@@ -1,5 +1,5 @@
 import type { ToolProductProfile } from '../../../../../platform/agentHost/common/agentToolsApi.js';
-import type { ChatToolSource } from '../../../../../platform/agentHost/common/agentService.js';
+import type { ChatToolSource } from '../../../../../platform/agentHost/common/agent.js';
 import { IAgentToolsApi } from '../../../../../platform/agentHost/common/agentToolsApi.js';
 import { IAppServerApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { canceled, isCancellationError, onUnexpectedError } from '../../../../../base/common/errors.js';

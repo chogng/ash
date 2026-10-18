@@ -9,7 +9,7 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { FileService } from '../../../../../platform/files/common/fileService.js';
 import { FileKind, IFileService, FileOperationNotSupportedError, FileSystemProviderErrorCode, createFileSystemProviderError } from '../../../../../platform/files/common/files.js';
 import { createDisconnectedFileApi } from '../../../../../platform/files/browser/fileApi.js';
-import { AppServerFileSystemProvider } from '../../../../../platform/agentHost/browser/appServerFileSystemProvider.js';
+import { AgentHostFileSystemProvider } from '../../../../../platform/agentHost/common/agentHostFileSystemProvider.js';
 import { AppServerRemoteError } from '../../../../../platform/agentHost/common/appServerError.js';
 import type { FsWriteFileParams, FsWriteFileElevatedParams, FsWriteFileResult } from '../../../../../../../.build/protocol/typescript/index.js';
 import { TestWorkspaceService } from '../../../configuration/test/common/testServices.js';
@@ -35,7 +35,7 @@ function fixture(write: (request: FsWriteFileElevatedParams, signal?: AbortSigna
 	const workspace = new TestWorkspaceService({ id: 'project', uri: URI.file('/project') });
 	const configuration = new WorkbenchConfigurationService();
 	const policy = new FilesConfigurationService(configuration, workspace);
-	const provider = new AppServerFileSystemProvider({
+	const provider = new AgentHostFileSystemProvider({
 		directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 		resourceApi: { connectionGeneration: 1, metadata: async () => { throw new Error('Unexpected resource metadata'); }, read: async () => { throw new Error('Unexpected resource read'); }, release: async () => undefined },
 		api: { ...createDisconnectedFileApi(() => { throw new Error('Unexpected ordinary file operation'); }), readFile: async () => ({ content: 'old\r\n', revision: 'original-revision', encoding: 'utf8bom' }), writeFileElevated: write, ...(ordinary ? { writeFile: ordinary } : {}) },

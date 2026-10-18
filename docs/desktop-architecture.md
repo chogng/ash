@@ -448,7 +448,7 @@ Renderer 通过受信 IPC route 和 `workspace.getWorkspace()` 读取该身份�
 `parseWorkspaceIdentifier()` 校验和恢复 URI。`services/configuration/browser/configurationService.ts` 的 `WorkspaceService` 根据该标识构造当前
 `IWorkspace`，并从 `configuration` 或单根 `folders` 推导 `WorkbenchState`。Workbench
 contribution 不得通过该服务直接访问文件系统。单根 Folder 启动时，Electron Main 将该根
-配置给 App Server。Workbench 与 Agents 共用 `AppServerFileSystemProvider`，将资源 URI
+配置给 App Server。Workbench 与 Agents 共用 `AgentHostFileSystemProvider`，将资源 URI
 映射为已授权目录及根相对路径；未命中宿主环境目录的资源通过 `fs/resolvePath` 查询后端的
 Environment / Session 目录归属。路由不依赖当前 Workspace 或选中对话，打开的文件不会因切换
 对话而改写目标目录。解析结果不是授权凭据，每次读写仍由既有 filesystem endpoint 检查当前
@@ -507,7 +507,7 @@ Workbench 文本文件的共享服务标识与契约位于 `services/textfile/co
 唯一解析、保存实现位于 `services/textfile/browser/textFileService.ts`。Workbench 与 Sessions
 通过容器注入 `IFileService`、`IFilesConfigurationService` 和 `IElevatedFileService`，共享 BOM、取消、只读策略和
 revision 冲突行为。已确认保留 Ash 专属的 `services/textfile/common/textFileService.ts`
-请求、结果与错误类型，以及 `AppServerFileSystemProvider` 和 `files/{common,browser}/fileApi.ts`
+请求、结果与错误类型，以及 `AgentHostFileSystemProvider` 和 `files/{common,browser}/fileApi.ts`
 的 Rust 适配职责；旧 common 文件不再承载实现，也不转发新 owner 的导出。
 
 VS Code 的 `workbench/services/files` 按生产调用职责对齐：

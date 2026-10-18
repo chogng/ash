@@ -4,7 +4,7 @@ import { DeferredPromise } from '../../../../base/common/async.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { URI } from '../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
-import { AppServerFileSystemProvider } from '../../../agentHost/browser/appServerFileSystemProvider.js';
+import { AgentHostFileSystemProvider } from '../../../agentHost/common/agentHostFileSystemProvider.js';
 import { createDisconnectedRendererApi } from '../../../../workbench/browser/rendererApi.js';
 import { createSshRemoteWorkspaceUri } from '../../../remote/common/remote.js';
 import { IUriIdentityService } from '../../../uriIdentity/common/uriIdentity.js';
@@ -24,7 +24,7 @@ suite('App Server directory path identity', () => {
 		using workspace = new TestWorkspaceService({ id: 'project', uri: root });
 		const host = createDisconnectedRendererApi();
 		const requests: unknown[] = [];
-		using provider = new AppServerFileSystemProvider({
+		using provider = new AgentHostFileSystemProvider({
 			directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })), resourceApi: host.resource, api: {
 				...host.fs, readPathCaseSensitivity: async params => {
 					requests.push(params);
@@ -62,7 +62,7 @@ suite('App Server directory path identity', () => {
 		const remote = createSshRemoteWorkspaceUri('server', '/remote');
 		using workspace = new TestWorkspaceService({ id: 'multi', folders: [{ id: 'local', uri: local, name: 'local', index: 0 }, { id: 'remote', uri: remote, name: 'remote', index: 1 }] });
 		const host = createDisconnectedRendererApi();
-		using provider = new AppServerFileSystemProvider({ directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })), resourceApi: host.resource, api: { ...host.fs, readPathCaseSensitivity: async params => ({ scopes: [{ path: '.', sensitivity: params.dirId === 'local' ? 'insensitive' : 'unknown' }] }) } });
+		using provider = new AgentHostFileSystemProvider({ directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })), resourceApi: host.resource, api: { ...host.fs, readPathCaseSensitivity: async params => ({ scopes: [{ path: '.', sensitivity: params.dirId === 'local' ? 'insensitive' : 'unknown' }] }) } });
 		using files = new FileService();
 		using localRegistration = files.registerProvider(local.scheme, provider);
 		using remoteRegistration = files.registerProvider(remote.scheme, provider);
@@ -80,7 +80,7 @@ suite('App Server directory path identity', () => {
 		let generation = 1;
 		let response = new DeferredPromise<FsReadPathCaseSensitivityResult>();
 		const host = createDisconnectedRendererApi();
-		using provider = new AppServerFileSystemProvider({ directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })), resourceApi: host.resource, api: { ...host.fs, get connectionGeneration() { return generation; }, onDidChangeConnection: connection.event, readPathCaseSensitivity: () => response.p } });
+		using provider = new AgentHostFileSystemProvider({ directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })), resourceApi: host.resource, api: { ...host.fs, get connectionGeneration() { return generation; }, onDidChangeConnection: connection.event, readPathCaseSensitivity: () => response.p } });
 		using files = new FileService();
 		using registration = files.registerProvider('file', provider);
 		using services = new TestUriIdentityServices(files);
@@ -116,7 +116,7 @@ suite('App Server directory path identity', () => {
 		const response = new DeferredPromise<FsReadPathCaseSensitivityResult>();
 		let count = 0;
 		const host = createDisconnectedRendererApi();
-		using provider = new AppServerFileSystemProvider({ directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })), resourceApi: host.resource, onDidChange: changes.event, api: { ...host.fs, readPathCaseSensitivity: async () => ++count === 1 ? response.p : { scopes: [{ path: '.', sensitivity: 'sensitive' }] } } });
+		using provider = new AgentHostFileSystemProvider({ directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })), resourceApi: host.resource, onDidChange: changes.event, api: { ...host.fs, readPathCaseSensitivity: async () => ++count === 1 ? response.p : { scopes: [{ path: '.', sensitivity: 'sensitive' }] } } });
 		using files = new FileService();
 		using registration = files.registerProvider('file', provider);
 		using services = new TestUriIdentityServices(files);
@@ -141,7 +141,7 @@ suite('App Server directory path identity', () => {
 		using workspace = new TestWorkspaceService({ id: 'project', uri: root });
 		const host = createDisconnectedRendererApi();
 		const reads: string[] = [];
-		using provider = new AppServerFileSystemProvider({
+		using provider = new AgentHostFileSystemProvider({
 			directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 			api: {
 				...host.fs, readPathCaseSensitivity: async () => ({ scopes: [{ path: '.', sensitivity: 'insensitive' }] }),
@@ -170,7 +170,7 @@ suite('App Server directory path identity', () => {
 		let queries = 0;
 		const host = createDisconnectedRendererApi();
 		const reads: string[] = [];
-		using provider = new AppServerFileSystemProvider({
+		using provider = new AgentHostFileSystemProvider({
 			directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 			onDidChange: changes.event,
 			api: {
@@ -205,7 +205,7 @@ suite('App Server directory path identity', () => {
 		using changes = new Emitter<FsChanged>();
 		let missing = false;
 		const host = createDisconnectedRendererApi();
-		using provider = new AppServerFileSystemProvider({
+		using provider = new AgentHostFileSystemProvider({
 			directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })), resourceApi: host.resource, onDidChange: changes.event,
 			api: {
 				...host.fs, readPathCaseSensitivity: async params => ({
@@ -238,7 +238,7 @@ suite('App Server directory path identity', () => {
 		const root = URI.file('/workspace');
 		using workspace = new TestWorkspaceService({ id: 'project', uri: root });
 		const host = createDisconnectedRendererApi();
-		using provider = new AppServerFileSystemProvider({
+		using provider = new AgentHostFileSystemProvider({
 			directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })), resourceApi: host.resource,
 			api: { ...host.fs, readPathCaseSensitivity: async params => ({ scopes: [{ path: '.', sensitivity: 'sensitive' }, { path: params.path.split('/')[0], sensitivity: 'insensitive' }] }) },
 		});
@@ -262,7 +262,7 @@ suite('App Server directory path identity', () => {
 		using workspace = new TestWorkspaceService({ id: 'project', uri: root });
 		const host = createDisconnectedRendererApi();
 		const reads: string[] = [];
-		using provider = new AppServerFileSystemProvider({
+		using provider = new AgentHostFileSystemProvider({
 			directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 			api: {
 				...host.fs,
@@ -299,7 +299,7 @@ suite('App Server directory path identity', () => {
 		const response = new DeferredPromise<FsReadPathCaseSensitivityResult>();
 		const host = createDisconnectedRendererApi();
 		let queries = 0;
-		using provider = new AppServerFileSystemProvider({
+		using provider = new AgentHostFileSystemProvider({
 			directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })), resourceApi: host.resource, onDidChange: changes.event,
 			api: { ...host.fs, readPathCaseSensitivity: () => { queries++; return response.p; } },
 		});
@@ -321,8 +321,8 @@ suite('App Server directory path identity', () => {
 		using workspace = new TestWorkspaceService({ id: 'project', uri: root });
 		const response = new DeferredPromise<FsReadPathCaseSensitivityResult>();
 		const host = createDisconnectedRendererApi();
-		using predecessor = new AppServerFileSystemProvider({ directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })), resourceApi: host.resource, api: { ...host.fs, readPathCaseSensitivity: () => response.p } });
-		using replacement = new AppServerFileSystemProvider({ directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })), resourceApi: host.resource, api: { ...host.fs, readPathCaseSensitivity: async () => ({ scopes: [{ path: '.', sensitivity: 'sensitive' }] }) } });
+		using predecessor = new AgentHostFileSystemProvider({ directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })), resourceApi: host.resource, api: { ...host.fs, readPathCaseSensitivity: () => response.p } });
+		using replacement = new AgentHostFileSystemProvider({ directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })), resourceApi: host.resource, api: { ...host.fs, readPathCaseSensitivity: async () => ({ scopes: [{ path: '.', sensitivity: 'sensitive' }] }) } });
 		using files = new FileService();
 		using previousRegistration = files.registerProvider('file', predecessor);
 		using services = new TestUriIdentityServices(files);
@@ -341,7 +341,7 @@ suite('App Server directory path identity', () => {
 		const root = URI.file('/workspace');
 		using workspace = new TestWorkspaceService({ id: 'project', uri: root });
 		const host = createDisconnectedRendererApi();
-		using provider = new AppServerFileSystemProvider({
+		using provider = new AgentHostFileSystemProvider({
 			directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })), resourceApi: host.resource,
 			api: {
 				...host.fs, readPathCaseSensitivity: async () => ({

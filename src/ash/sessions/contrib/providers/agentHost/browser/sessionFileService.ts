@@ -3,12 +3,12 @@ import type { IContentSearchOptions, IContentSearchQuery, IContentSearchService 
 import type { IWorkspaceFolder } from '../../../../../platform/workspace/common/workspace.js';
 import type { FileFuzzyQuery, FileSearchDirectory, FileSearchQuery, FileSearchResult, IFileSearchService } from '../../../../../platform/search/common/fileSearch.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
-import { AppServerFileSystemProvider } from '../../../../../platform/agentHost/browser/appServerFileSystemProvider.js';
+import { AgentHostFileSystemProvider } from '../../../../../platform/agentHost/common/agentHostFileSystemProvider.js';
 import type { IFileSystemDirectory } from '../../../../../platform/files/common/fileApi.js';
 import type { IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
 
 /** Adds Session-scoped search to the shared filesystem provider; file routing never uses selection. */
-export class SessionFileService extends AppServerFileSystemProvider implements IFileSearchService, IContentSearchService {
+export class SessionFileService extends AgentHostFileSystemProvider implements IFileSearchService, IContentSearchService {
 	private readonly fileSearch: IFileSearchService;
 	private readonly contentSearch: IContentSearchService;
 	constructor(

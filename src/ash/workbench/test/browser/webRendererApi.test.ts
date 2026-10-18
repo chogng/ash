@@ -1,6 +1,6 @@
 import { AppServerAgentVoiceService } from '../../../platform/agentHost/browser/appServerAgentService.js';
 import { createAppServerAgentThreadService } from '../../../platform/agentHost/browser/appServerAgentService.js';
-import type { ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope } from '../../../platform/agentHost/common/agentService.js';
+import type { ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope } from '../../../platform/agentHost/common/agent.js';
 import { URI } from '../../../base/common/uri.js';
 import { createTestInitializeResult } from '../../../platform/agentHost/test/common/testAppServerProtocol.js';
 import { strict as assert } from "node:assert";

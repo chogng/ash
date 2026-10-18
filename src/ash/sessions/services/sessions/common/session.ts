@@ -1,5 +1,5 @@
-import type { AgentSessionActivity as SessionManagementInfo } from '../../../../platform/agentHost/common/agentService.js';
-export type { AgentSessionActivity as SessionManagementInfo } from '../../../../platform/agentHost/common/agentService.js';
+import type { AgentSessionActivity as SessionManagementInfo } from '../../../../platform/agentHost/common/agent.js';
+export type { AgentSessionActivity as SessionManagementInfo } from '../../../../platform/agentHost/common/agent.js';
 import type { ApprovalMode, ChatAgent, ModelRef, SessionId, ThreadId } from '../../../../workbench/services/chat/common/chatService.js';
 import type { TurnChangeFile, TurnChangeSetSummary } from '../../../../workbench/services/chat/common/chatService.js';
 import type { IObservable } from '../../../../base/common/observable.js';
@@ -136,6 +136,7 @@ export type SessionExecutionTarget = Extract<SessionWorkspaceSelection, { readon
 
 /** Execution directory supplied by the Session or hydrated Thread domain snapshot. */
 export interface ISessionWorkspace {
+	/** Local sentinel or canonical remote URI authority, never a bare SSH alias. */
 	readonly authorityId: string;
 	readonly root: string;
 	readonly runtime?: { readonly providerId: string; readonly workspace: string; };

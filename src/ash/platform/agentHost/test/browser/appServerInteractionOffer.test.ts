@@ -3,7 +3,7 @@ import { test } from 'mocha';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { AppServerProtocolClient } from '../../browser/appServerProtocolClient.js';
 import { createAppServerAgentThreadService } from '../../browser/appServerAgentService.js';
-import type { AgentInteractionOffer, ThreadUpdateEnvelope } from '../../common/agentService.js';
+import type { AgentInteractionOffer, ThreadUpdateEnvelope } from '../../common/agent.js';
 import { createTestInitializeResult } from '../common/testAppServerProtocol.js';
 import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION, type AppServerTransport } from '../../common/appServerTransport.js';
 

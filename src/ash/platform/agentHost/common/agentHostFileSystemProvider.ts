@@ -5,9 +5,9 @@ import { posix } from '../../../base/common/path.js';
 import { createFileSystemProviderError, FileSystemProviderErrorCode } from '../../files/common/files.js';
 import type { FsFileType, FsFileWriteMode, FsReadBinaryFileResult, FsReadDirectoryResult, ResourceMetadataResult, ResourceReadResult } from "../../../../../.build/protocol/typescript/index.js";
 import type { FsChanged, FsPathCaseSensitivity } from "../../../../../.build/protocol/typescript/index.js";
-import type { IResourceApi } from "../common/appServerApi.js";
-import { AppServerRemoteError } from "../common/appServerError.js";
-import { decodeBase64 } from "../../../base/common/buffer.js";
+import type { IResourceApi } from "./appServerApi.js";
+import { AppServerRemoteError } from "./appServerError.js";
+import { decodeBase64, encodeBase64, VSBuffer } from "../../../base/common/buffer.js";
 import { Emitter, Event } from "../../../base/common/event.js";
 import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
 import { CancellationToken, CancellationTokenSource } from '../../../base/common/cancellation.js';
@@ -43,7 +43,7 @@ import type { IFileApi, IFileSystemDirectory } from '../../files/common/fileApi.
 import type { ISystemFileTransferService } from '../../files/common/systemFileTransferService.js';
 import type { IWorkspaceConfigurationFileApi } from '../../workspace/common/workspaceIpc.js';
 
-export interface AppServerFileSystemProviderOptions {
+interface AgentHostFileSystemProviderOptions {
 	readonly configurationFiles?: IWorkspaceConfigurationFileApi;
 	/** Current window-owned metadata file, independent of backend-authorized directory roots. */
 	readonly configuration?: () => URI | undefined;
@@ -67,7 +67,7 @@ const MAX_TRANSIENT_PATH_RULES = 4096;
 /**
  * Routes resource URIs to backend-authorized directories independently of the visible Workspace.
  */
-export class AppServerFileSystemProvider extends Disposable implements IFileSystemProviderWithFileReadStreamCapability, IFileSystemProviderWithPathIdentity, ISystemFileTransferService {
+export class AgentHostFileSystemProvider extends Disposable implements IFileSystemProviderWithFileReadStreamCapability, IFileSystemProviderWithPathIdentity, ISystemFileTransferService {
 	// Unknown rules preserve spelling; confirmed rules are applied per directory below.
 	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy | FileSystemProviderCapabilities.FileReadStream | FileSystemProviderCapabilities.FileWriteElevated | FileSystemProviderCapabilities.FileWriteUnlock | FileSystemProviderCapabilities.PathCaseSensitive;
 	private readonly capabilityChanges = this._register(new Emitter<void>());
@@ -87,7 +87,7 @@ export class AppServerFileSystemProvider extends Disposable implements IFileSyst
 
 	readonly onDidChangeFiles = this.fileChanges.event;
 
-	constructor(options: AppServerFileSystemProviderOptions) {
+	constructor(options: AgentHostFileSystemProviderOptions) {
 		super();
 		this.api = options.api;
 		this.configurationFiles = options.configurationFiles;
@@ -652,11 +652,7 @@ const MAX_RESOURCE_READ_BYTES = 262_144;
 const MAX_FILE_READ_BYTES = 50 * 1024 * 1024;
 
 function encodeBinaryFile(bytes: Uint8Array): string {
-	let binary = '';
-	for (let offset = 0; offset < bytes.length; offset += 8192) {
-		binary += String.fromCharCode(...bytes.subarray(offset, offset + 8192));
-	}
-	return btoa(binary);
+	return encodeBase64(VSBuffer.wrap(bytes.slice()));
 }
 
 function decodeResourceChunk(chunk: ResourceReadResult, resourceId: string, expectedOffset: number, totalSize: number): Uint8Array {

@@ -4,7 +4,8 @@ import { CancellationToken, CancellationTokenSource } from '../../../base/common
 import { DeferredPromise } from '../../../base/common/async.js';
 import { isCancellationError } from '../../../base/common/errors.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
-import { IAgentSessionService, type SessionRuntimeResult } from '../../../platform/agentHost/common/agentService.js';
+import { IAgentSessionService } from '../../../platform/agentHost/common/agentService.js';
+import { type SessionRuntimeResult } from '../../../platform/agentHost/common/agent.js';
 import { DevContainerAgentHostService } from '../../browser/devContainerAgentHostService.js';
 
 test('Docker service uses the admitted backend capability and retires a cancelled preparation', async () => {

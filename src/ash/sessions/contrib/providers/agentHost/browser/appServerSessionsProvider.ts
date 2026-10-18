@@ -1,12 +1,7 @@
 import { IRendererHostService, type IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { AgentHostAutomationStore } from './agentHostAutomationStore.js';
-import type {
-	AgentExecutionNode,
-	AgentSession,
-	ThreadSubscription,
-	TurnStatus,
-} from '../../../../../platform/agentHost/common/agentService.js';
+import type { AgentExecutionNode, AgentSession, ThreadSubscription, TurnStatus } from '../../../../../platform/agentHost/common/agent.js';
 import { localize } from '../../../../../nls.js';
 import { Emitter } from "../../../../../base/common/event.js";
 import { canceled } from "../../../../../base/common/errors.js";

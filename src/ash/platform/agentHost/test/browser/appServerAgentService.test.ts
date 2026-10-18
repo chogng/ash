@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { Emitter } from '../../../../base/common/event.js';
 import type { ServerNotification, ToolOutputArtifact } from '../../../../../../.build/protocol/typescript/index.js';
-import type { ThreadTranscriptUpdateEnvelope } from '../../common/agentService.js';
+import type { ThreadTranscriptUpdateEnvelope } from '../../common/agent.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { AppServerRemoteError } from '../../common/appServerError.js';

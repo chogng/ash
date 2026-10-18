@@ -4,7 +4,8 @@ import { Emitter } from '../../../../../base/common/event.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
-import type { IAgentVoiceService, AgentVoiceSessionState, AgentVoiceSource, AgentVoiceTaskRequest } from '../../../../../platform/agentHost/common/agentService.js';
+import type { IAgentVoiceService } from '../../../../../platform/agentHost/common/agentService.js';
+import type { AgentVoiceSessionState, AgentVoiceSource, AgentVoiceTaskRequest } from '../../../../../platform/agentHost/common/agent.js';
 import { VoiceSessionController } from '../../browser/voiceClient/voiceSessionController.js';
 
 class Voice extends Disposable implements IAgentVoiceService {

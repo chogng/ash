@@ -191,7 +191,7 @@ test('review preparation refuses explicit, window and durable remote targets bef
 		} satisfies EnvironmentService);
 		services.registerInstance(INotificationService, {} as INotificationService);
 		services.registerInstance(ISessionsManagementService, {
-			sessions: [{ sessionId: 'remote', workspace: { authorityId: 'build-host', root: '/same-as-local' }, chats: [{ threadId: 'remote-thread' }] }],
+			sessions: [{ sessionId: 'remote', workspace: { authorityId: 'ssh+build-host', root: '/same-as-local' }, chats: [{ threadId: 'remote-thread' }] }],
 			untitledSessions: [{ untitledSessionId: 'chosen', workspace: scope === 'window' ? { type: 'current' } : { type: 'ssh', host: 'build-host', root: '/same-as-local' } }],
 		} as unknown as ISessionsManagementService);
 		using context = new TestWorkspaceService({ id: 'remote-workspace', folders: [{ id: 'folder', index: 0, name: 'Project', uri: createSshRemoteWorkspaceUri('build-host', '/same-as-local') }] });

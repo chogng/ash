@@ -20,6 +20,7 @@ export class RemoteAgentHostService extends Disposable {
 
 	public readonly client: AppServerProtocolClient;
 	public readonly recovery: AppServerConnectionRecovery;
+	private localConnectionEpoch = 0;
 
 	constructor(
 		private readonly options: RemoteAgentHostConnectionOptions,
@@ -35,7 +36,13 @@ export class RemoteAgentHostService extends Disposable {
 			() => this.open(),
 			(message, error) => this.logService.error('app-server', message, error),
 		));
-		this._register(options.onDidReconnectLocal(() => { void this.connect().catch(() => { }); }));
+		this._register(options.onDidReconnectLocal(() => {
+			if (this.isDisposed) return;
+			this.localConnectionEpoch++;
+			// Authority resolution and extension initialization belong to this local incarnation.
+			this.client.disconnect();
+			void this.connect().catch(() => { });
+		}));
 	}
 
 	public connect(): Promise<void> {
@@ -48,12 +55,23 @@ export class RemoteAgentHostService extends Disposable {
 	}
 
 	private async open(): Promise<void> {
-		this.assertNotDisposed();
-		this.client.disconnect();
-		await this.client.connect();
-		this.assertNotDisposed();
-		await this.options.initialize(this.client);
-		this.assertNotDisposed();
-		this.logService.debug('app-server', 'Remote App Server connection initialized');
+		for (; ;) {
+			this.assertNotDisposed();
+			const localConnectionEpoch = this.localConnectionEpoch;
+			this.client.disconnect();
+			try {
+				await this.client.connect();
+				this.assertNotDisposed();
+				if (localConnectionEpoch !== this.localConnectionEpoch) continue;
+				await this.options.initialize(this.client);
+				this.assertNotDisposed();
+				if (localConnectionEpoch !== this.localConnectionEpoch) continue;
+				this.logService.debug('app-server', 'Remote App Server connection initialized');
+				return;
+			} catch (error) {
+				if (this.isDisposed || localConnectionEpoch === this.localConnectionEpoch) throw error;
+				// Recovery callers share this task until the latest local incarnation is ready.
+			}
+		}
 	}
 }

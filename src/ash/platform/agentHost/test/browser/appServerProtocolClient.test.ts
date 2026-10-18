@@ -972,7 +972,13 @@ test('Web recovery retains its elapsed budget across attempts and excludes repor
 			client.disconnect();
 			if (offline) throw new Error('Web offline');
 			await client.connect();
-		}, () => { }, { delay: () => 500, maxElapsedTimeMs: 1_000 });
+		}, () => { }, {
+			autoRestore: true,
+			initialDelayMs: 500,
+			maxDelayMs: 500,
+			maxAttempts: Number.POSITIVE_INFINITY,
+			maxElapsedTimeMs: 1_000,
+		});
 		await recovery.connect();
 		offline = true;
 		transport.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: 'lost' });
@@ -990,6 +996,86 @@ test('Web recovery retains its elapsed budget across attempts and excludes repor
 		offline = false;
 		mock.timers.tick(500);
 		await recovery.whenConnected();
+		assert.equal(recovery.status, 'idle');
+	} finally { mock.timers.reset(); }
+});
+
+test('recovery uses capped exponential delays and resets the attempt limit after manual recovery', async () => {
+	mock.timers.enable({ apis: ['setTimeout'] });
+	try {
+		const transport = new ProtocolTransport();
+		const client = new AppServerProtocolClient(transport);
+		using cleanup = toDisposable(() => client.dispose());
+		let offline = false;
+		let opens = 0;
+		using recovery = new AppServerConnectionRecovery(client, async () => {
+			opens++;
+			client.disconnect();
+			if (offline) {
+				throw new Error('offline');
+			}
+			await client.connect();
+		}, () => { }, {
+			autoRestore: true,
+			initialDelayMs: 500,
+			maxDelayMs: 1_500,
+			maxAttempts: 3,
+		});
+		await recovery.connect();
+		offline = true;
+		transport.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: 'lost' });
+		for (const [index, delay] of [500, 1_000, 1_500].entries()) {
+			mock.timers.tick(delay - 1);
+			assert.equal(opens, index + 1);
+			mock.timers.tick(1);
+			await assert.rejects(recovery.whenConnected(), /offline/);
+		}
+		assert.equal(recovery.status, 'failed');
+		mock.timers.tick(60_000);
+		assert.equal(opens, 4);
+		offline = false;
+		await recovery.reconnect();
+		transport.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: 'lost again' });
+		mock.timers.tick(499);
+		assert.equal(opens, 5);
+		mock.timers.tick(1);
+		await recovery.whenConnected();
+		assert.equal(opens, 6);
+		assert.equal(recovery.status, 'idle');
+	} finally { mock.timers.reset(); }
+});
+
+test('a policy disabling automatic restore still allows explicit reconnect', async () => {
+	mock.timers.enable({ apis: ['setTimeout'] });
+	try {
+		const transport = new ProtocolTransport();
+		const client = new AppServerProtocolClient(transport);
+		using cleanup = toDisposable(() => client.dispose());
+		let opens = 0;
+		using recovery = new AppServerConnectionRecovery(client, async () => {
+			opens++;
+			client.disconnect();
+			await client.connect();
+		}, () => { }, {
+			autoRestore: false,
+			initialDelayMs: 500,
+			maxDelayMs: 1_500,
+			maxAttempts: 3,
+		});
+		await recovery.connect();
+		transport.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: 'lost' });
+		assert.equal(recovery.status, 'failed');
+		mock.timers.tick(60_000);
+		assert.equal(opens, 1);
+		recovery.suspend();
+		mock.timers.tick(60_000);
+		recovery.resume();
+		await recovery.whenConnected();
+		assert.equal(opens, 1, 'OS wake must keep waiting for explicit connection intent');
+		assert.equal(recovery.status, 'failed');
+		await recovery.reconnect();
+		assert.equal(opens, 2);
+		assert.equal(client.state, 'ready');
 		assert.equal(recovery.status, 'idle');
 	} finally { mock.timers.reset(); }
 });

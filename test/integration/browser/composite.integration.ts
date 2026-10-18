@@ -100,7 +100,7 @@ import { SessionGridLayout } from '../../../src/ash/sessions/browser/parts/sessi
 import type { IView } from '../../../src/ash/base/browser/ui/grid/grid.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
 import { IUriIdentityService } from '../../../src/ash/platform/uriIdentity/common/uriIdentity.js';
-import { AppServerFileSystemProvider } from '../../../src/ash/platform/agentHost/browser/appServerFileSystemProvider.js';
+import { AgentHostFileSystemProvider } from '../../../src/ash/platform/agentHost/common/agentHostFileSystemProvider.js';
 import { createDisconnectedFileApi } from '../../../src/ash/platform/files/browser/fileApi.js';
 import { TestWorkspaceService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { FileEditorInput } from '../../../src/ash/workbench/contrib/files/browser/editors/fileEditorInput.js';
@@ -635,7 +635,7 @@ window.ashCompositeIntegration = {
 	openFileAliases: async target => {
 		const workspace = resources.add(new TestWorkspaceService({ id: 'composite', uri: URI.file('/composite') }));
 		const unavailable = (): never => { throw new Error('Unexpected file operation in editor identity fixture'); };
-		const provider = resources.add(new AppServerFileSystemProvider({
+		const provider = resources.add(new AgentHostFileSystemProvider({
 			directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 			api: {
 				...createDisconnectedFileApi(unavailable), readPathCaseSensitivity: async params => {

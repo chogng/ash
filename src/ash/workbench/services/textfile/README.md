@@ -11,7 +11,7 @@ canonical in [`docs/editor-architecture.md`](../../../../../docs/editor-architec
 by Workbench and Sessions. `common/textFileService.ts` retains Ash's resource
 requests, content results and classified errors; it contains no service implementation
 or forwarding exports. Rust filesystem transport remains in
-`platform/agentHost/browser/appServerFileSystemProvider.ts` and
+`platform/agentHost/common/agentHostFileSystemProvider.ts` and
 `platform/files/{common,browser}/fileApi.ts`.
 
 | Concern                                                               | Owner                                                         | Status                                                    |

@@ -64,7 +64,7 @@ import { Disposable, DisposableStore, toDisposable, type IDisposable } from "../
 import { URI } from "../../../../../../base/common/uri.js";
 import { DeferredPromise } from '../../../../../../base/common/async.js';
 import { FileService } from '../../../../../../platform/files/common/fileService.js';
-import { AppServerFileSystemProvider } from '../../../../../../platform/agentHost/browser/appServerFileSystemProvider.js';
+import { AgentHostFileSystemProvider } from '../../../../../../platform/agentHost/common/agentHostFileSystemProvider.js';
 import type { FsReadPathCaseSensitivityResult } from '../../../../../../../../.build/protocol/typescript/index.js';
 import { BrowserTextModelService } from '../../../../../services/textmodelResolver/browser/browserTextModelService.js';
 import { TextModelSaveCompletionError, type TextModelReference } from '../../../../../services/textmodelResolver/common/textModelResourceService.js';
@@ -1638,7 +1638,7 @@ for (const target of ['activeGroup', 'sideGroup'] as const) {
 		try {
 			using workspace = new TestWorkspaceService({ id: 'project', uri: URI.file('/project') });
 			const host = createDisconnectedRendererApi();
-			using provider = new AppServerFileSystemProvider({
+			using provider = new AgentHostFileSystemProvider({
 				directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })), resourceApi: host.resource, api: {
 					...host.fs, readPathCaseSensitivity: async params => {
 						if (params.path === 'new.ts') { void entered.complete(); return gate.p; }
@@ -3321,7 +3321,7 @@ test('slow directory identity cannot replace a newer editor or ordinary content'
 		const replacement = new DeferredPromise<FsReadPathCaseSensitivityResult>();
 		delayed.set('old.ts', old);
 		delayed.set('replacement.ts', replacement);
-		using provider = new AppServerFileSystemProvider({ directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })), resourceApi: host.resource, api: { ...host.fs, readPathCaseSensitivity: async params => delayed.get(params.path)?.p ?? { scopes: [{ path: '.', sensitivity: 'unknown' }] } } });
+		using provider = new AgentHostFileSystemProvider({ directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })), resourceApi: host.resource, api: { ...host.fs, readPathCaseSensitivity: async params => delayed.get(params.path)?.p ?? { scopes: [{ path: '.', sensitivity: 'unknown' }] } } });
 		using files = new FileService();
 		using registration = files.registerProvider('file', provider);
 		using parent = new TestUriIdentityServices(files);

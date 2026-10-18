@@ -18,6 +18,8 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 	readonly automations = observableValue<readonly IAutomationDescriptor[]>(this, []);
 	readonly runs = observableValue<readonly IAutomationRun[]>(this, []);
 	private epoch = 0;
+	// Catalogue writes also advance epoch; only carrier replacement retires operation receipts.
+	private connectionEpoch = 0;
 	private refreshAgain = false;
 	private refreshing: Promise<void> | undefined;
 	private readonly backend: IAutomationBackendService;
@@ -33,6 +35,7 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 		this._register(this.backend.onDidChange(() => { void this.refresh().catch(() => { }); }));
 		this._register(connection.onDidChange(state => {
 			this.epoch++;
+			this.connectionEpoch++;
 			if (state === 'connected') void this.refresh().catch(() => { });
 			else transaction(tx => {
 				this.catalogueState.set(state === 'connecting' ? 'loading' : 'unavailable', tx);
@@ -119,8 +122,9 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 	async createAutomation(options: ICreateAutomationOptions): Promise<IAutomationDescriptor> {
 		this.assertReady();
 		this.assertTarget(options.target.providerId);
+		const connectionEpoch = this.connectionEpoch;
 		const value = await this.backend.save(generateUuid(), 0, definition(options), options.enabled === false ? 'paused' : 'enabled');
-		return this.acceptAutomation(value);
+		return this.acceptAutomation(value, connectionEpoch);
 	}
 
 	async updateAutomation(id: string, patch: IUpdateAutomationOptions): Promise<IAutomationDescriptor> {
@@ -136,14 +140,16 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 		if (!current || current.revision !== expected.revision) return { kind: 'conflict', current };
 		const options = { ...current, ...patch };
 		this.assertTarget(options.target.providerId);
+		const connectionEpoch = this.connectionEpoch;
 		const value = await this.backend.save(this.backendId(id), expected.revision, definition(options), options.enabled ? 'enabled' : 'paused');
-		return { kind: 'updated', automation: this.acceptAutomation(value) };
+		return { kind: 'updated', automation: this.acceptAutomation(value, connectionEpoch) };
 	}
 
 	async deleteAutomation(id: string): Promise<void> {
 		this.assertReady();
+		const connectionEpoch = this.connectionEpoch;
 		await this.backend.delete(this.backendId(id), this.requireAutomation(id).revision);
-		if (!this.isDisposed) {
+		if (this.isCurrentConnection(connectionEpoch)) {
 			this.epoch++;
 			transaction(tx => {
 				this.automations.set(this.automations.get().filter(item => item.id !== id), tx);
@@ -156,25 +162,32 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 	async runAutomation(id: string, token = CancellationToken.None): Promise<IAutomationRunRequestResult> {
 		this.assertReady();
 		if (token.isCancellationRequested) throw canceled();
+		const connectionEpoch = this.connectionEpoch;
 		const value = await this.backend.run(this.backendId(id));
 		const run = this.runDescriptor(value);
-		if (!this.isDisposed) {
+		if (this.isCurrentConnection(connectionEpoch)) {
 			this.epoch++;
 			this.runs.set([run, ...this.runs.get().filter(item => item.id !== run.id)], undefined);
+			void this.refresh().catch(() => { });
 		}
-		void this.refresh().catch(() => { });
-		const whenCompleted = this.observeRun(run.id);
+		const whenCompleted = this.observeRun(run.id, connectionEpoch);
 		// Observe rejection immediately, even when the caller is still processing admission.
 		void whenCompleted.catch(() => { });
-		return { kind: 'dispatched', run, whenCompleted, cancel: () => { void this.stopRun(run).catch(() => { }); } };
+		return {
+			kind: 'dispatched', run, whenCompleted,
+			cancel: () => {
+				if (this.isCurrentConnection(connectionEpoch)) void this.stopRun(run).catch(() => { });
+			},
+		};
 	}
 
 	async stopRun(run: IAutomationRun): Promise<void> {
 		this.assertReady();
 		this.assertTarget(run.providerId);
+		const connectionEpoch = this.connectionEpoch;
 		const value = await this.backend.stop(this.backendId(run.id));
 		const updated = this.runDescriptor(value);
-		if (!this.isDisposed) {
+		if (this.isCurrentConnection(connectionEpoch)) {
 			this.epoch++;
 			this.runs.set([updated, ...this.runs.get().filter(item => item.id !== run.id)], undefined);
 			void this.refresh().catch(() => { });
@@ -184,23 +197,29 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 	async readRunResult(run: IAutomationRun): Promise<IAutomationRunResult> {
 		this.assertReady();
 		this.assertTarget(run.providerId);
-		return this.backend.readResult({
+		const connectionEpoch = this.connectionEpoch;
+		const result = await this.backend.readResult({
 			...run,
 			id: this.backendId(run.id),
 			automationId: this.backendId(run.automationId),
 			definition: definition(run.definition),
 		});
+		if (!this.isCurrentConnection(connectionEpoch)) throw canceled();
+		return result;
 	}
 
-	previewSchedule(providerId: string, schedule: IAutomationSchedule): Promise<readonly number[]> {
+	async previewSchedule(providerId: string, schedule: IAutomationSchedule): Promise<readonly number[]> {
 		this.assertReady();
 		this.assertTarget(providerId);
-		return this.backend.preview(schedule);
+		const connectionEpoch = this.connectionEpoch;
+		const result = await this.backend.preview(schedule);
+		if (!this.isCurrentConnection(connectionEpoch)) throw canceled();
+		return result;
 	}
 
-	private acceptAutomation(value: Automation): IAutomationDescriptor {
+	private acceptAutomation(value: Automation, connectionEpoch: number): IAutomationDescriptor {
 		const automation = this.descriptor(value);
-		if (!this.isDisposed) {
+		if (this.isCurrentConnection(connectionEpoch)) {
 			// A successful write is final. Subsequent catalogue/history reads cannot turn it into a failed save.
 			this.epoch++;
 			this.automations.set([automation, ...this.automations.get().filter(item => item.id !== automation.id)].sort((a, b) => b.createdAt - a.createdAt), undefined);
@@ -209,7 +228,7 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 		return automation;
 	}
 
-	private observeRun(id: string): Promise<void> {
+	private observeRun(id: string, connectionEpoch: number): Promise<void> {
 		return new Promise((resolve, reject) => {
 			const watching = new DisposableStore();
 			let reading = false;
@@ -239,7 +258,7 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 			const update = (): void => {
 				if (watching.isDisposed) return;
 				const run = this.runs.get().find(item => item.id === id);
-				if (this.isDisposed || this.connection.get() !== 'connected') {
+				if (!this.isCurrentConnection(connectionEpoch)) {
 					watching.dispose();
 					reject(new Error(localize('automations.observationLost', 'The automation host is unavailable. Its run may still be active.')));
 				} else if (run && terminal(run)) {
@@ -308,6 +327,10 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 
 	private assertReady(): void {
 		if (this.isDisposed || this.connection.get() !== 'connected') throw new Error(localize('automations.hostUnavailable', 'Connect to the owning automation host and try again.'));
+	}
+
+	private isCurrentConnection(connectionEpoch: number): boolean {
+		return !this.isDisposed && this.connection.get() === 'connected' && connectionEpoch === this.connectionEpoch;
 	}
 
 	private assertTarget(providerId: string): void {

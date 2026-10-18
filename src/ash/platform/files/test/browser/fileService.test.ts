@@ -11,7 +11,7 @@ import { Emitter, Event } from "../../../../base/common/event.js";
 import { URI } from "../../../../base/common/uri.js";
 import { AppServerRemoteError } from "../../../agentHost/common/appServerError.js";
 import { createDisconnectedFileApi } from "../../../../platform/files/browser/fileApi.js";
-import { AppServerFileSystemProvider } from "../../../agentHost/browser/appServerFileSystemProvider.js";
+import { AgentHostFileSystemProvider } from "../../../agentHost/common/agentHostFileSystemProvider.js";
 import { workspaceResourceFromPath } from "../../../workspace/common/workspace.js";
 import { FileKind, FileNotFoundError, FileRevisionConflictError } from "../../../../platform/files/common/files.js";
 import type { FsChanged } from "../../../../../../.build/protocol/typescript/index.js";
@@ -30,10 +30,10 @@ test("disconnected file API declines system file paste without requiring App Ser
 	assert.equal(await api.pasteSystemFiles({ dirId: "root", path: ".", moveRequested: false }), false);
 });
 
-test("AppServerFileSystemProvider passes the paste destination and move request to App Server", async () => {
+test("AgentHostFileSystemProvider passes the paste destination and move request to App Server", async () => {
 	using workspace = new TestWorkspaceService({ id: 'project', uri: URI.file('/project') });
 	const requests: unknown[] = [];
-	using service = new AppServerFileSystemProvider({
+	using service = new AgentHostFileSystemProvider({
 		directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 		resourceApi: unavailableResourceApi(),
 		api: {
@@ -52,7 +52,7 @@ test('workspace configuration access follows the current metadata file without a
 	const reads: URI[] = [];
 	const writes: URI[] = [];
 	const stat = (resource: URI): IFileStat => ({ resource, kind: FileKind.File, sizeBytes: bytes.length, readonly: false, modifiedAtMillis: undefined });
-	using provider = new AppServerFileSystemProvider({
+	using provider = new AgentHostFileSystemProvider({
 		api: unavailableFileApi(),
 		resourceApi: unavailableResourceApi(),
 		configuration: () => configuration,
@@ -127,7 +127,7 @@ test('AppServer file operations and notifications preserve POSIX basenames on di
 	using workspace = new TestWorkspaceService({ id: 'project', uri: root });
 	using changes = new Emitter<FsChanged>();
 	const requests: unknown[] = [];
-	using provider = new AppServerFileSystemProvider({
+	using provider = new AgentHostFileSystemProvider({
 		directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 		resourceApi: unavailableResourceApi(),
 		onDidChange: changes.event,
@@ -154,12 +154,12 @@ test('AppServer file operations and notifications preserve POSIX basenames on di
 	assert.deepEqual(notifications, [[target.path]]);
 });
 
-test("AppServerFileSystemProvider maps wire entries back to resource URIs", async () => {
+test("AgentHostFileSystemProvider maps wire entries back to resource URIs", async () => {
 	const root = URI.parse("file:///C:/project");
 	const releasedResources: string[] = [];
 	using workspaceContextService: IWorkspaceContextService =
 		new TestWorkspaceService({ id: "workspace", uri: root });
-	const service = new AppServerFileSystemProvider({
+	const service = new AgentHostFileSystemProvider({
 		directories: () => workspaceContextService.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 		api: {
 			...unavailableFileApi(),
@@ -268,7 +268,7 @@ test('workspace stream cancellation releases a snapshot allocated after the call
 	using cancellation = new CancellationTokenSource();
 	const allocated = new DeferredPromise<{ resource: { resourceId: string; mimeType: string; size: number; sha256: string; }; revision: string; }>();
 	const released: string[] = [];
-	using provider = new AppServerFileSystemProvider({
+	using provider = new AgentHostFileSystemProvider({
 		directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 		api: { ...unavailableFileApi(), readBinaryFile: () => allocated.p },
 		resourceApi: {
@@ -291,7 +291,7 @@ test('workspace stream cancellation stops requesting chunks and releases its sna
 	using cancellation = new CancellationTokenSource();
 	const requested: number[] = [];
 	const released: string[] = [];
-	using provider = new AppServerFileSystemProvider({
+	using provider = new AgentHostFileSystemProvider({
 		directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 		api: { ...unavailableFileApi(), readBinaryFile: async () => ({ resource: { resourceId: 'chunks', mimeType: 'application/pdf', size: 600000, sha256: 'sha256:chunks' }, revision: 'revision' }) },
 		resourceApi: {
@@ -311,10 +311,10 @@ test('workspace stream cancellation stops requesting chunks and releases its sna
 	assert.deepEqual({ requested, released }, { requested: [0], released: ['chunks'] });
 });
 
-test("AppServerFileSystemProvider maps App Server revision conflicts to the file contract", async () => {
+test("AgentHostFileSystemProvider maps App Server revision conflicts to the file contract", async () => {
 	const resource = URI.parse("file:///C:/project/src/main.ts");
 	using workspaceContextService: IWorkspaceContextService = new TestWorkspaceService({ id: "workspace", uri: URI.parse("file:///C:/project") });
-	const service = new AppServerFileSystemProvider({
+	const service = new AgentHostFileSystemProvider({
 		directories: () => workspaceContextService.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 		resourceApi: unavailableResourceApi(),
 		api: {
@@ -338,12 +338,12 @@ test("AppServerFileSystemProvider maps App Server revision conflicts to the file
 	await assert.rejects(service.writeFile(resource, new TextEncoder().encode("local"), { create: true, overwrite: true, expectedRevision: "stale" }), FileRevisionConflictError);
 });
 
-test('AppServerFileSystemProvider reports missing entries through the file contract for every read operation', async () => {
+test('AgentHostFileSystemProvider reports missing entries through the file contract for every read operation', async () => {
 	using workspace = new TestWorkspaceService({ id: 'project', uri: URI.file('/project') });
 	const resource = URI.file('/project/missing');
 	let error: Error = new AppServerRemoteError(-32000, 'Missing entry', { kind: 'FileSystemNotFound' });
 	const missing = async (): Promise<never> => { throw error; };
-	using service = new AppServerFileSystemProvider({
+	using service = new AgentHostFileSystemProvider({
 		directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 		resourceApi: unavailableResourceApi(),
 		api: { ...unavailableFileApi(), getMetadata: missing, readDirectory: missing, readFile: missing, readBinaryFile: missing },
@@ -356,7 +356,7 @@ test('AppServerFileSystemProvider reports missing entries through the file contr
 	for (const read of reads) { await assert.rejects(read, value => value === error); }
 });
 
-test("AppServerFileSystemProvider reads connection-owned binary resources in bounded chunks", async () => {
+test("AgentHostFileSystemProvider reads connection-owned binary resources in bounded chunks", async () => {
 	const root = URI.parse("file:///C:/project");
 	const resource = URI.parse("file:///C:/project/large.pdf");
 	const bytes = new Uint8Array(17 * 1024 * 1024 + 1);
@@ -365,7 +365,7 @@ test("AppServerFileSystemProvider reads connection-owned binary resources in bou
 	const readOffsets: number[] = [];
 	const releasedResources: string[] = [];
 	using workspaceContextService: IWorkspaceContextService = new TestWorkspaceService({ id: "workspace", uri: root });
-	const service = new AppServerFileSystemProvider({
+	const service = new AgentHostFileSystemProvider({
 		directories: () => workspaceContextService.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 		api: {
 			...unavailableFileApi(),
@@ -410,11 +410,11 @@ test("AppServerFileSystemProvider reads connection-owned binary resources in bou
 	assert.deepEqual(releasedResources, ["resource-large"]);
 });
 
-test("AppServerFileSystemProvider maps App Server invalidations to workspace resources", () => {
+test("AgentHostFileSystemProvider maps App Server invalidations to workspace resources", () => {
 	const root = URI.parse("file:///C:/project");
 	using workspaceContextService: IWorkspaceContextService = new TestWorkspaceService({ id: "workspace", uri: root });
 	using changes = new Emitter<FsChanged>();
-	using service = new AppServerFileSystemProvider({
+	using service = new AgentHostFileSystemProvider({
 		directories: () => workspaceContextService.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 		resourceApi: unavailableResourceApi(),
 		api: unavailableFileApi(),
@@ -429,7 +429,7 @@ test("AppServerFileSystemProvider maps App Server invalidations to workspace res
 	assert.deepEqual(observed, [[URI.parse("file:///C:/project/src/main.ts"), URI.parse("file:///C:/project/README.md")], undefined]);
 });
 
-test("AppServerFileSystemProvider routes nested multi-root resources by Workspace folder id", async () => {
+test("AgentHostFileSystemProvider routes nested multi-root resources by Workspace folder id", async () => {
 	using workspaceContextService: IWorkspaceContextService = new TestWorkspaceService({
 		id: "multi-root",
 		folders: [
@@ -441,7 +441,7 @@ test("AppServerFileSystemProvider routes nested multi-root resources by Workspac
 	const requests: { readonly dirId?: string; readonly path: string; }[] = [];
 	const copies: unknown[] = [];
 	const pastes: unknown[] = [];
-	const service = new AppServerFileSystemProvider({
+	const service = new AgentHostFileSystemProvider({
 		directories: () => workspaceContextService.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 		resourceApi: { ...unavailableResourceApi(), release: async () => { } },
 		api: {
@@ -543,11 +543,11 @@ test('FileService decodes text from provider bytes without changing revisions or
 	await assert.rejects(service.readFile(binary), TypeError);
 });
 
-test('AppServerFileSystemProvider releases a byte resource when reading its content fails', async () => {
+test('AgentHostFileSystemProvider releases a byte resource when reading its content fails', async () => {
 	using workspace = new TestWorkspaceService({ id: 'read-failure', uri: URI.file('/workspace') });
 	const failure = new Error('Resource read failed');
 	const released: string[] = [];
-	using provider = new AppServerFileSystemProvider({
+	using provider = new AgentHostFileSystemProvider({
 		directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 		api: { ...unavailableFileApi(), readBinaryFile: async () => ({ resource: { resourceId: 'failed-read', mimeType: 'application/octet-stream', size: 1, sha256: 'sha256:failed' }, revision: 'raw-revision' }) },
 		resourceApi: { ...unavailableResourceApi(), read: async () => { throw failure; }, release: async request => { released.push(request.resourceId); } },
@@ -898,7 +898,7 @@ test('file text codec requests preserve logical text and backend encoding metada
 	using workspace = new TestWorkspaceService({ id: 'project', uri: URI.file('/project') });
 	const resource = URI.file('/project/encoding.txt');
 	const requests: unknown[] = [];
-	using provider = new AppServerFileSystemProvider({
+	using provider = new AgentHostFileSystemProvider({
 		directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })), resourceApi: unavailableResourceApi(),
 		api: {
 			...unavailableFileApi(),
@@ -918,7 +918,7 @@ test('file text codec errors retain their domain category and conflicts protect 
 	const { FileSystemProviderErrorCode, toFileSystemProviderErrorCode } = await import('../../common/files.js');
 	using workspace = new TestWorkspaceService({ id: 'project', uri: URI.file('/project') });
 	const resource = URI.file('/project/encoding.txt');
-	using provider = new AppServerFileSystemProvider({
+	using provider = new AgentHostFileSystemProvider({
 		directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })), resourceApi: unavailableResourceApi(),
 		api: {
 			...unavailableFileApi(),
@@ -936,7 +936,7 @@ test('shared resource routing keeps conversation files independent of Workspace 
 	let writable = true;
 	let resolutions = 0;
 	using changes = new Emitter<FsChanged>();
-	using provider = new AppServerFileSystemProvider({
+	using provider = new AgentHostFileSystemProvider({
 		directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 		resourceApi: unavailableResourceApi(),
 		onDidChange: changes.event,
@@ -986,7 +986,7 @@ test('resource discovery rejects stale connections and disposal before dispatchi
 	let generation = 1;
 	let resolve!: (root: IFileSystemDirectory) => void;
 	let writes = 0;
-	using provider = new AppServerFileSystemProvider({
+	using provider = new AgentHostFileSystemProvider({
 		resourceApi: unavailableResourceApi(),
 		api: {
 			...unavailableFileApi(),
@@ -1015,7 +1015,7 @@ test('resource discovery preserves host authority and reports invalid routes in 
 	setNlsMessages('zh-CN', translations);
 	try {
 		let discoveries = 0;
-		using provider = new AppServerFileSystemProvider({
+		using provider = new AgentHostFileSystemProvider({
 			resourceApi: unavailableResourceApi(),
 			api: {
 				...unavailableFileApi(),

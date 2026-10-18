@@ -1,6 +1,7 @@
 import { CancellationToken } from '../../base/common/cancellation.js';
 import { canceled } from '../../base/common/errors.js';
-import { IAgentSessionService, type SessionRuntimeRequest, type SessionRuntimeResult } from '../../platform/agentHost/common/agentService.js';
+import { IAgentSessionService } from '../../platform/agentHost/common/agentService.js';
+import { type SessionRuntimeRequest, type SessionRuntimeResult } from '../../platform/agentHost/common/agent.js';
 import { localize } from '../../nls.js';
 import { IDevContainerAgentHostService } from '../common/devContainerAgentHostService.js';
 import type { SessionExecutionTarget } from '../services/sessions/common/session.js';

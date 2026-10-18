@@ -65,7 +65,13 @@ export async function connectWebRendererApi(transport: AppServerTransport, conne
 	const recovery = new AppServerConnectionRecovery(connection, async () => {
 		connection.disconnect();
 		metadata = await connection.connect();
-	}, () => { }, { delay: attempt => Math.min(500 * 2 ** attempt, 10_000), maxElapsedTimeMs: 5 * 60_000 });
+	}, () => { }, {
+		autoRestore: true,
+		initialDelayMs: 500,
+		maxDelayMs: 10_000,
+		maxAttempts: Number.POSITIVE_INFINITY,
+		maxElapsedTimeMs: 5 * 60_000,
+	});
 	try {
 		await recovery.connect();
 		const instanceId = generateUuid();

@@ -7,7 +7,8 @@ import type { AgentTreeNodeProjection, ModelUsageSummary, ServerNotification, Se
 import { IAppServerApi, type AppServerConnectionState, IServerEventApi } from "../../../../../platform/agentHost/common/appServerApi.js";
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { IAgentSessionService, IAgentTurnService, type ThreadSubscription } from "../../../../../platform/agentHost/common/agentService.js";
+import { IAgentSessionService, IAgentTurnService } from "../../../../../platform/agentHost/common/agentService.js";
+import { type ThreadSubscription } from "../../../../../platform/agentHost/common/agent.js";
 import { IAgentModelsService } from "../../../../../platform/agentHost/common/agentModels.js";
 import { createDisconnectedRendererApi } from '../../../../../workbench/browser/rendererApi.js';
 import { SessionsManagementService } from "../../browser/sessionsManagementService.js";
@@ -237,7 +238,7 @@ for (const target of [{ type: 'local' as const, root: '/new' }, { type: 'ssh' as
 		fake.emit({ method: 'session/changed', params: { sessionId: 'session-1', agentTreeChanged: false } });
 		await waitFor(() => fake.readCatalogCount === 1);
 		await new Promise<void>(resolve => setImmediate(resolve));
-		assert.deepEqual({ workspace: service.active?.session.workspace, subscriptions: fake.subscribeCount }, { workspace: target ? { authorityId: target.type === 'ssh' ? target.host : 'local', root: target.root } : null, subscriptions });
+		assert.deepEqual({ workspace: service.active?.session.workspace, subscriptions: fake.subscribeCount }, { workspace: target ? { authorityId: target.type === 'ssh' ? 'ssh+new-host' : 'local', root: target.root } : null, subscriptions });
 	});
 }
 
@@ -558,7 +559,7 @@ test("a multi-root Workspace sends the selected folder as the execution target",
 	const active = await service.materializeUntitledSession(draft.untitledSessionId);
 	assert.deepEqual(receivedFolders, folders);
 	assert.deepEqual(executionTarget, folders[1]!.target);
-	assert.deepEqual(active.session.workspace, { authorityId: 'build', root: '/work/second' });
+	assert.deepEqual(active.session.workspace, { authorityId: 'ssh+build', root: '/work/second' });
 });
 
 test("closing the multi-root folder picker leaves the draft ready", async () => {

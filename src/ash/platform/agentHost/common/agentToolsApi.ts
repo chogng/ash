@@ -1,4 +1,4 @@
-import type { ChatToolSource } from './agentService.js';
+import type { ChatToolSource } from './agent.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 import type { Event } from '../../../base/common/event.js';
 

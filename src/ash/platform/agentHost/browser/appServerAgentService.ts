@@ -2,13 +2,14 @@ import { Disposable } from '../../../base/common/lifecycle.js';
 import { Emitter } from '../../../base/common/event.js';
 import { getNLSLanguage, localize } from '../../../nls.js';
 import type { VoiceStatus } from '../../../../../.build/protocol/typescript/index.js';
-import type { IAgentVoiceService, AgentVoiceSource, AgentVoiceSelection, AgentVoiceSessionState, AgentVoiceTaskRequest, AgentVoiceConnectionChoice } from '../common/agentService.js';
+import type { IAgentVoiceService } from '../common/agentService.js';
+import type { AgentVoiceSource, AgentVoiceSelection, AgentVoiceSessionState, AgentVoiceTaskRequest, AgentVoiceConnectionChoice } from '../common/agent.js';
 import { APP_SERVER_METHODS } from '../../../../../.build/protocol/typescript/index.js';
 import { createUuid } from '../../../base/common/uuid.js';
 import { canceled } from '../../../base/common/errors.js';
 import { createAppServerResourceApi, readAppServerResource } from './appServerApi.js';
 import { Event } from '../../../base/common/event.js';
-import type { AgentSession, AgentExecutionNode, SessionResult, SessionThreadResult } from '../common/agentService.js';
+import type { AgentSession, AgentExecutionNode, SessionResult, SessionThreadResult } from '../common/agent.js';
 import { AppServerRemoteError } from '../common/appServerError.js';
 import { AgentThreadHistoryConflictError } from '../common/agentService.js';
 import type {
@@ -33,7 +34,7 @@ import type {
 	ThreadTranscriptUpdateEnvelope,
 	ThreadUpdate,
 	ThreadUpdateEnvelope
-} from '../common/agentService.js';
+} from '../common/agent.js';
 import type {
 	SessionRequest,
 	SessionRequestParams,
@@ -50,12 +51,8 @@ import type {
 import type { AppServerProtocolClient } from './appServerProtocolClient.js';
 import { appServerRequest, voidResult } from './appServerRequest.js';
 import type { UnavailableOperation } from '../../renderer/browser/disconnectedHost.js';
-import type {
-	IAgentSessionService,
-	IAgentThreadService,
-	IAgentTurnService,
-	SessionMutationParams
-} from '../common/agentService.js';
+import type { IAgentSessionService, IAgentThreadService, IAgentTurnService } from '../common/agentService.js';
+import type { SessionMutationParams } from '../common/agent.js';
 
 export function createDisconnectedAgentSessionService(unavailable: UnavailableOperation): IAgentSessionService {
 	return {

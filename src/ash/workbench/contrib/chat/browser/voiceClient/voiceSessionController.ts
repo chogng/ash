@@ -3,7 +3,8 @@ import { Emitter } from '../../../../../base/common/event.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { canceled, isCancellationError } from '../../../../../base/common/errors.js';
 import { localize } from '../../../../../nls.js';
-import { IAgentVoiceService, type AgentVoiceSource, type AgentVoiceTaskRequest, type AgentVoiceSessionState, type AgentVoiceSelection, type AgentVoiceConnectionChoice } from '../../../../../platform/agentHost/common/agentService.js';
+import { IAgentVoiceService } from '../../../../../platform/agentHost/common/agentService.js';
+import { type AgentVoiceSource, type AgentVoiceTaskRequest, type AgentVoiceSessionState, type AgentVoiceSelection, type AgentVoiceConnectionChoice } from '../../../../../platform/agentHost/common/agent.js';
 
 /** Browser controller for one Chat widget. AgentHost owns the connection; Core owns every transcript. */
 interface IVoiceSessionController {

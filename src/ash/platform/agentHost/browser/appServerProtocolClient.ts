@@ -4,6 +4,7 @@ import { VSBuffer } from "../../../base/common/buffer.js";
 import { canceled, isCancellationError, toError } from "../../../base/common/errors.js";
 import { isRecord } from "../../../base/common/types.js";
 import type { AppServerConnectionState, IAppServerConnectionRecovery } from "../common/appServerApi.js";
+import { computeReconnectDelay, hasExhaustedReconnectAttempts, type IRemoteAgentHostReconnectPolicy } from "../common/reconnectPolicy.js";
 import { AppServerConnectionStoppedError, AppServerRemoteError } from "../common/appServerError.js";
 import type { DisposableHandle } from "../../ipc/common/ipc.js";
 import { checkAppServerInitializeCompatibility } from "../common/appServerProtocolCompatibility.js";
@@ -545,7 +546,7 @@ export class AppServerConnectionRecovery extends Disposable implements IAppServe
 		private readonly client: AppServerProtocolClient,
 		private readonly open: () => Promise<void>,
 		private readonly onFailure: (message: string, error: unknown) => void,
-		private readonly policy?: { readonly delay: (attempt: number) => number | undefined; readonly maxElapsedTimeMs: number; },
+		private readonly policy?: IRemoteAgentHostReconnectPolicy,
 	) {
 		super();
 		this._register(client.onStateChange((state, error) => {
@@ -594,6 +595,10 @@ export class AppServerConnectionRecovery extends Disposable implements IAppServe
 		if (this.startedAt) this.startedAt += Date.now() - this.suspendedAt;
 		if (!this.isActive || this.status === 'unavailable') return;
 		if (this.client.state === 'ready' && !this.task) { this.publish('idle'); return; }
+		if (this.policy && !this.policy.autoRestore) {
+			if (!this.task) { this.publish('failed'); }
+			return;
+		}
 		// Reset after a real wake, including a previously exhausted connection. An
 		// in-flight attempt retains ownership and schedules its successor on failure.
 		this.attempts = 0;
@@ -647,8 +652,13 @@ export class AppServerConnectionRecovery extends Disposable implements IAppServe
 	private schedule(): void {
 		if (this.isDisposed || !this.isActive || this.task || this.timer !== undefined || this.status === 'unavailable') return;
 		if (this.suspended) { this.publish('suspended'); return; }
-		const delay = this.policy ? this.policy.delay(this.attempts) : [100, 500, 2000][this.attempts];
-		if (delay === undefined || this.policy && Date.now() - this.startedAt >= this.policy.maxElapsedTimeMs) {
+		if (this.policy && (!this.policy.autoRestore || hasExhaustedReconnectAttempts(this.policy, this.attempts)
+			|| this.policy.maxElapsedTimeMs !== undefined && Date.now() - this.startedAt >= this.policy.maxElapsedTimeMs)) {
+			this.publish('failed');
+			return;
+		}
+		const delay = this.policy ? computeReconnectDelay(this.policy, this.attempts + 1) : [100, 500, 2000][this.attempts];
+		if (delay === undefined) {
 			this.publish('failed');
 			return;
 		}
