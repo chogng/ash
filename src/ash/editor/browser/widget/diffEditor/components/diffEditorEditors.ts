@@ -1,7 +1,6 @@
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
-import type { IEditorOptions } from '../../../../common/config/editorOptions.js';
-import { EditorExtensionsRegistry } from '../../../editorExtensions.js';
+import type { IDiffEditorOptions } from '../../../../common/config/editorOptions.js';
 import { CodeEditorWidget, type CodeEditorWidgetOptions } from '../../codeEditor/codeEditorWidget.js';
 import type { DiffEditorWidgetOptions } from '../diffEditorOptions.js';
 
@@ -9,6 +8,7 @@ import type { DiffEditorWidgetOptions } from '../diffEditorOptions.js';
 export class DiffEditorEditors extends Disposable {
 	public readonly original: CodeEditorWidget;
 	public readonly modified: CodeEditorWidget;
+	private codeLens: boolean;
 
 	constructor(
 		originalContainer: HTMLElement,
@@ -17,17 +17,19 @@ export class DiffEditorEditors extends Disposable {
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super();
-		const shared: Pick<CodeEditorWidgetOptions, 'contributions' | 'isSimpleWidget' | 'minimap' | 'lineHeight' | 'fontFamily' | 'fontSize' | 'fontLigatures' | 'lineNumbers' | 'wordWrap' | 'scrollBeyondLastLine'> = {
-			// Diff owns its comparison UI; line navigation uses the shared editor controller.
-			contributions: EditorExtensionsRegistry.getEditorContributions().filter(contribution => contribution.id === 'editor.contrib.quickAccess'),
-			isSimpleWidget: true,
+		this.codeLens = options.diffCodeLens ?? false;
+		const shared: CodeEditorWidgetOptions = {
+			...options,
+			container: originalContainer,
+			model: options.model.original,
+			isSimpleWidget: false,
+			inDiffEditor: true,
+			folding: false,
+			fixedOverflowWidgets: true,
 			minimap: { enabled: false },
-			lineHeight: options.lineHeight,
-			fontFamily: options.fontFamily,
-			fontSize: options.fontSize,
-			fontLigatures: options.fontLigatures,
-			lineNumbers: options.showLineNumbers === false ? 'off' : 'on',
-			wordWrap: options.wordWrap ? 'on' : 'off',
+			codeLens: this.codeLens,
+			lineNumbers: options.showLineNumbers === false ? 'off' : options.lineNumbers ?? 'on',
+			wordWrap: options.wordWrap ?? 'off',
 			scrollBeyondLastLine: options.scrollBeyondLastLine ?? true,
 		};
 		this.original = this._register(instantiationService.createInstance(CodeEditorWidget, {
@@ -43,7 +45,7 @@ export class DiffEditorEditors extends Disposable {
 			model: options.model.modified,
 			ariaLabel: options.modifiedAriaLabel,
 			readOnly: options.readOnly ?? false,
-			glyphMargin: options.renderMarginRevertIcon && !options.readOnly,
+			glyphMargin: options.glyphMargin,
 		}));
 	}
 
@@ -51,8 +53,10 @@ export class DiffEditorEditors extends Disposable {
 		return Math.max(this.original.getContentHeight(), this.modified.getContentHeight());
 	}
 
-	public updateOptions(options: IEditorOptions): void {
-		this.original.updateOptions({ ...options, readOnly: true });
-		this.modified.updateOptions(options);
+	public updateOptions(options: IDiffEditorOptions): void {
+		this.codeLens = options.diffCodeLens ?? this.codeLens;
+		const shared = { ...options, folding: false, fixedOverflowWidgets: true, minimap: { ...options.minimap, enabled: false }, codeLens: this.codeLens };
+		this.original.updateOptions({ ...shared, readOnly: true });
+		this.modified.updateOptions(shared);
 	}
 }

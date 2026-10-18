@@ -60,6 +60,7 @@ export interface MultiDiffEditorOptions {
 	readonly modelService: ITextModelResourceService;
 	readonly createComputationService: () => IDocumentDiffProvider & IDisposable;
 	readonly lineHeight?: number;
+	readonly wordWrapColumn?: number;
 	readonly fontFamily?: string;
 	readonly fontSize?: number;
 	readonly fontLigatures?: boolean;
@@ -297,7 +298,7 @@ class MultiDiffEditorSession extends Disposable {
 					|| event.affectsConfiguration(CodeEditorConfiguration.wordWrap)) {
 					this.editor?.setConfiguredWordWrap(getDiffWordWrap(configuration));
 				}
-				if ([CodeEditorConfiguration.lineHeight, CodeEditorConfiguration.fontFamily,
+				if ([CodeEditorConfiguration.wordWrapColumn, CodeEditorConfiguration.lineHeight, CodeEditorConfiguration.fontFamily,
 				CodeEditorConfiguration.fontSize, CodeEditorConfiguration.fontLigatures,
 				CodeEditorConfiguration.diffShowLineNumbers, CodeEditorConfiguration.diffShowInlineChanges,
 				CodeEditorConfiguration.diffLoopChanges].some(key => event.affectsConfiguration(key))) {
@@ -462,9 +463,10 @@ class MultiDiffEditorSession extends Disposable {
 		return resources;
 	}
 
-	private getEditorOptions(): Pick<MultiDiffEditorOptions, 'lineHeight' | 'fontFamily' | 'fontSize' | 'fontLigatures' | 'showLineNumbers' | 'showInlineChanges' | 'loopChanges'> {
+	private getEditorOptions(): Pick<MultiDiffEditorOptions, 'lineHeight' | 'fontFamily' | 'fontSize' | 'fontLigatures' | 'showLineNumbers' | 'showInlineChanges' | 'loopChanges' | 'wordWrapColumn'> {
 		return {
 			lineHeight: this.options.lineHeight ?? this.configuration.getValue(CodeEditorConfiguration.lineHeight),
+			wordWrapColumn: this.options.wordWrapColumn ?? this.configuration.getValue(CodeEditorConfiguration.wordWrapColumn),
 			fontFamily: this.options.fontFamily ?? (this.configuration.getValue<string>(CodeEditorConfiguration.fontFamily) || undefined),
 			fontSize: this.options.fontSize ?? this.configuration.getValue(CodeEditorConfiguration.fontSize),
 			fontLigatures: this.options.fontLigatures ?? this.configuration.getValue(CodeEditorConfiguration.fontLigatures),

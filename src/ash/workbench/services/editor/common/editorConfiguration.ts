@@ -1,8 +1,8 @@
+import type { IEditorOptions } from '../../../../editor/common/config/editorOptions.js';
 import { localize } from "../../../../nls.js";
 import { ConfigurationScope, Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../../../platform/configuration/common/configurationRegistry.js";
 import { Registry } from "../../../../platform/registry/common/platform.js";
 import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
-import { EditorLineWrapping } from "../../../../editor/common/config/editorOptions.js";
 import type { IDocumentDiffProviderOptions } from "../../../../editor/common/diff/documentDiffProvider.js";
 
 export type EditorAutoSaveMode = "off" | "afterDelay" | "onFocusChange" | "onWindowChange";
@@ -254,7 +254,8 @@ export function getDiffComputationOptions(configuration: IConfigurationService, 
 	};
 }
 
-export function getDiffWordWrap(configuration: IConfigurationService): boolean {
-	const value = configuration.getValue<"off" | "on" | "inherit">("diffEditor.wordWrap");
-	return value === "on" || (value === "inherit" && configuration.getValue<EditorLineWrapping>("editor.wordWrap") === EditorLineWrapping.On);
+export function getDiffWordWrap(configuration: IConfigurationService, languageId?: string): NonNullable<IEditorOptions['wordWrap']> {
+	const overrides = { overrideIdentifier: languageId };
+	const value = configuration.getValue<"off" | "on" | "inherit">("diffEditor.wordWrap", overrides);
+	return value === "inherit" ? configuration.getValue<NonNullable<IEditorOptions['wordWrap']>>("editor.wordWrap", overrides) : value;
 }

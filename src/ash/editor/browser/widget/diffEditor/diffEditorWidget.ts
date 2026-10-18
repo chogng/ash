@@ -14,7 +14,7 @@ import { LineDiffKind, type LineDiff, type LineDiffRow } from '../../../common/d
 import { LineRangeMapping, type RangeMapping } from '../../../common/diff/rangeMapping.js';
 import type { MovedText } from '../../../common/diff/linesDiffComputer.js';
 import { LineRange } from '../../../common/core/ranges/lineRange.js';
-import { EditorOption, type IDiffEditorOptions } from '../../../common/config/editorOptions.js';
+import { EditorOption, type IDiffEditorOptions, type IEditorOptions } from '../../../common/config/editorOptions.js';
 import { ScrollType, type IContentSizeChangedEvent } from '../../../common/editorCommon.js';
 import { type ICodeEditor, type IDiffEditor } from '../../editorBrowser.js';
 import { ICodeEditorService } from '../../services/codeEditorService.js';
@@ -74,7 +74,7 @@ export class DiffEditorWidget extends DelegatingEditor implements IDiffEditor {
 	private viewportHeight = 0;
 	private syncingScroll = false;
 	private accessibilityHelpHintEnabled = false;
-	private originalGlyphMargin: boolean;
+	private configuredGlyphMargin: boolean;
 	private modifiedLineNumbersMinChars: number;
 
 	constructor(
@@ -119,14 +119,14 @@ export class DiffEditorWidget extends DelegatingEditor implements IDiffEditor {
 
 		this.editors = this._register(instantiationService.createInstance(DiffEditorEditors, this.originalContainer, this.modifiedContainer, {
 			...options,
-			wordWrap: this.wordWrap,
+			wordWrap: this.diffOptions.wordWrap,
 			originalAriaLabel: this.originalLabel,
 			modifiedAriaLabel: this.modifiedLabel,
 			renderMarginRevertIcon: this.diffOptions.renderMarginRevertIcon,
 		}));
 		this.originalEditor = this.editors.original;
 		this.modifiedEditor = this.editors.modified;
-		this.originalGlyphMargin = this.originalEditor.getOption(EditorOption.glyphMargin);
+		this.configuredGlyphMargin = this.originalEditor.getOption(EditorOption.glyphMargin);
 		this.modifiedLineNumbersMinChars = this.modifiedEditor.getOption(EditorOption.lineNumbersMinChars);
 		this.diffDecorations = this._register(new DiffEditorDecorations(this.originalEditor, this.modifiedEditor));
 		this.viewModel = this._register(new DiffEditorViewModel(this.model, this.originalEditor, this.modifiedEditor));
@@ -216,7 +216,7 @@ export class DiffEditorWidget extends DelegatingEditor implements IDiffEditor {
 	}
 
 	public get wordWrap(): boolean {
-		return this.diffOptions.wordWrap;
+		return this.diffOptions.wordWrap !== 'off';
 	}
 
 	private get displayedDiff(): LineDiff | undefined {
@@ -351,8 +351,9 @@ export class DiffEditorWidget extends DelegatingEditor implements IDiffEditor {
 		this.updateAccessibilityLabel();
 	}
 
-	public setConfiguredWordWrap(enabled: boolean): void {
-		this.diffOptions.setConfiguredWordWrap(enabled);
+	public setConfiguredWordWrap(mode: NonNullable<IEditorOptions['wordWrap']>, column?: number): void {
+		this.diffOptions.setConfiguredWordWrap(mode);
+		if (column !== undefined) this.editors.updateOptions({ wordWrapColumn: column });
 		this.updateWordWrap();
 	}
 
@@ -375,9 +376,10 @@ export class DiffEditorWidget extends DelegatingEditor implements IDiffEditor {
 		if (options.hideUnchangedRegions) { this.hiddenRegions.setOptions(options.hideUnchangedRegions); }
 		this.showInlineChanges = options.showInlineChanges ?? this.showInlineChanges;
 		this.loopChanges = options.loopChanges ?? this.loopChanges;
-		this.originalGlyphMargin = options.glyphMargin ?? this.originalGlyphMargin;
+		this.configuredGlyphMargin = options.glyphMargin ?? this.configuredGlyphMargin;
 		this.modifiedLineNumbersMinChars = options.lineNumbersMinChars ?? this.modifiedLineNumbersMinChars;
-		this.editors.updateOptions(options);
+		this.element.classList.toggle('word-wrapped', this.wordWrap);
+		this.editors.updateOptions({ ...options, wordWrap: this.diffOptions.wordWrap });
 		this.diffDecorations.update(this.displayedDiff?.rows ?? [], this.showInlineChanges, this.diffOptions.renderIndicators);
 		this.updateFeatures();
 		this.layout({ width: this.viewportWidth, height: this.viewportHeight });
@@ -425,9 +427,12 @@ export class DiffEditorWidget extends DelegatingEditor implements IDiffEditor {
 		const headerHeight = this.movedBlocks.headerHeight;
 		const editorHeight = Math.max(0, size.height - headerHeight);
 		const centerWidth = this.gutter.width + this.movedBlocks.width;
-		const contentWidth = Math.max(0, size.width - this.overviewRuler.width - centerWidth);
+		const splitWidth = Math.max(0, size.width - this.overviewRuler.width);
+		const contentWidth = Math.max(0, splitWidth - centerWidth);
 		const sashHadFocus = this.sash.element === this.element.ownerDocument.activeElement;
-		const originalWidth = this.sash.layout(contentWidth, editorHeight, inlineView, headerHeight);
+		// The action gutter occupies the original half, leaving the modified half at the split ratio.
+		const originalSlot = this.sash.layout(splitWidth, editorHeight, inlineView, headerHeight, centerWidth);
+		const originalWidth = inlineView ? 0 : Math.max(0, originalSlot - centerWidth);
 		if (this.sash.element.hidden && sashHadFocus) this.modifiedEditor.focus();
 		this.element.style.setProperty('--stanza-diff-original-width', `${originalWidth}px`);
 		this.element.style.setProperty('--ash-diff-center-width', `${centerWidth}px`);
@@ -439,7 +444,7 @@ export class DiffEditorWidget extends DelegatingEditor implements IDiffEditor {
 		this.syncingScroll = true;
 		try {
 			const originalDigits = Math.max(this.originalEditor.getOption(EditorOption.lineNumbersMinChars), String(this.model.original.getLineCount()).length);
-			this.originalEditor.updateOptions({ glyphMargin: inlineView ? false : this.originalGlyphMargin });
+			this.originalEditor.updateOptions({ glyphMargin: inlineView ? false : this.configuredGlyphMargin });
 			this.modifiedEditor.updateOptions({ lineNumbersMinChars: this.modifiedLineNumbersMinChars + (inlineView ? originalDigits + 1 : 0) });
 			this.modifiedEditor.layout({ width: inlineView ? contentWidth : contentWidth - originalWidth, height: editorHeight });
 			const modifiedLayout = this.modifiedEditor.getLayoutInfo();
@@ -551,7 +556,7 @@ export class DiffEditorWidget extends DelegatingEditor implements IDiffEditor {
 
 	private updateWordWrap(): void {
 		this.element.classList.toggle('word-wrapped', this.wordWrap);
-		const wordWrap = this.wordWrap ? 'on' : 'off';
+		const wordWrap = this.diffOptions.wordWrap;
 		this.originalEditor.updateOptions({ wordWrap });
 		this.modifiedEditor.updateOptions({ wordWrap });
 		this.layout({ width: this.viewportWidth, height: this.viewportHeight });
@@ -580,7 +585,7 @@ export class DiffEditorWidget extends DelegatingEditor implements IDiffEditor {
 		this.gutter.update(this.diffOptions.renderGutterMenu && !this.movedTextToCompare, { renderRevert: this.diffOptions.renderMarginRevertIcon && !this.inlineView });
 		const marginEnabled = this.diffOptions.renderMarginRevertIcon && this.gutter.width === 0 && !this.movedTextToCompare;
 		this.revertButtons.update(marginEnabled);
-		this.modifiedEditor.updateOptions({ glyphMargin: this.hiddenRegions.isEnabled || (marginEnabled && !this.modifiedEditor.getOption(EditorOption.readOnly)) });
+		this.modifiedEditor.updateOptions({ glyphMargin: this.configuredGlyphMargin || this.hiddenRegions.isEnabled || (marginEnabled && !this.modifiedEditor.getOption(EditorOption.readOnly)) });
 		this.movedBlocks.update(this.diffOptions.showMoves && !this.inlineView, this.movedTextToCompare);
 		this.overviewRuler.setEnabled(this.diffOptions.renderOverviewRuler);
 	}

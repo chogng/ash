@@ -94,3 +94,13 @@ export const BreadcrumbsSymbolPathConfiguration = configurationRegistry.register
 		],
 	},
 });
+
+export const BreadcrumbsIconsConfiguration = configurationRegistry.registerConfiguration<boolean>({
+	key: 'breadcrumbs.icons', defaultValue: true,
+	parse: value => typeof value === 'boolean' ? value : true,
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize('breadcrumbs.icons.title', 'Breadcrumb icons'); },
+		get description() { return localize('breadcrumbs.icons.description', 'Show file and symbol icons in editor breadcrumbs.'); },
+	},
+});

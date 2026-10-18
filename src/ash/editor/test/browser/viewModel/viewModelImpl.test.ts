@@ -22,6 +22,41 @@ import { CursorStateChangedEvent, ModelTokensChangedEvent } from '../../../commo
 import { ViewEventHandler } from '../../../common/viewEventHandler.js';
 import { type ViewCursorStateChangedEvent, type ViewDecorationsChangedEvent, type ViewFlushedEvent, type ViewLanguageConfigurationEvent, type ViewLineMappingChangedEvent, type ViewRevealRangeRequestEvent, type ViewTokensChangedEvent } from '../../../common/viewEvents.js';
 
+test('ViewModel selects the configured wrapping strategy and recomputes when it changes', () => {
+	const dom = new JSDOM('<body><main></main></body>');
+	using cleanup = toDisposable(() => dom.window.close());
+	using resources = new DisposableStore();
+	const container = dom.window.document.querySelector('main')!;
+	const services = createConfigurationServices(resources, container);
+	using configuration = services.createInstance(EditorConfiguration, false, MenuId.EditorContext, {
+		wordWrap: 'wordWrapColumn', wordWrapColumn: 4, wrappingStrategy: 'simple',
+	}, container);
+	using languages = createTestLanguageConfigurationService();
+	using model = new TextModel('long wrapping paragraph', { languageConfigurationService: languages });
+	using theme = new TestThemeService(darkColorTheme);
+	const factory = MonospaceLineBreaksComputerFactory.create(configuration.options);
+	const calls: string[] = [];
+	const tracked = (strategy: string) => ({
+		createLineBreaksComputer: (...args: Parameters<typeof factory.createLineBreaksComputer>) => {
+			calls.push(strategy);
+			return factory.createLineBreaksComputer(...args);
+		},
+	});
+	using viewModel = new ViewModel(1, configuration, model, tracked('advanced'), tracked('simple'),
+		() => Disposable.None, languages, theme, { setVisibleLines: () => { } }, { batchChanges: callback => callback() });
+	assert.ok(viewModel.getLineCount() > 1);
+	assert.ok(calls.length > 0);
+	assert.deepEqual([...new Set(calls)], ['simple']);
+	calls.length = 0;
+	configuration.updateOptions({ wrappingStrategy: 'advanced' });
+	assert.ok(calls.length > 0);
+	assert.deepEqual([...new Set(calls)], ['advanced']);
+	calls.length = 0;
+	configuration.updateOptions({ wrappingStrategy: 'simple' });
+	assert.ok(calls.length > 0);
+	assert.deepEqual([...new Set(calls)], ['simple']);
+});
+
 class CapturedViewEvents extends ViewEventHandler {
 	readonly cursorEvents: ViewCursorStateChangedEvent[] = [];
 	readonly revealEvents: ViewRevealRangeRequestEvent[] = [];

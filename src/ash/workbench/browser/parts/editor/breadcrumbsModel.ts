@@ -20,13 +20,13 @@ export class SymbolElement {
 
 /** Builds the resource path displayed for one editor input. */
 export class BreadcrumbsModel {
-	constructor(readonly resource: URI, private readonly workspaceFolder: IWorkspaceFolder | null, private readonly fallbackLabel?: string) { }
+	constructor(readonly resource: URI, private readonly workspaceFolder: IWorkspaceFolder | null, private readonly fallbackLabel?: string, private readonly showWorkspaceRoot = false) { }
 
 	getElements(): readonly FileElement[] {
 		const segments = this.resource.toEncodedComponents().path.split("/").filter(Boolean);
 		const elements: FileElement[] = [];
 		const rootDepth = this.workspaceFolder?.uri.toEncodedComponents().path.split('/').filter(Boolean).length ?? 0;
-		if (this.workspaceFolder && rootDepth === 0) {
+		if (this.workspaceFolder && rootDepth === 0 && this.showWorkspaceRoot) {
 			elements.push(new FileElement(this.workspaceFolder.uri, FileKind.Directory, this.workspaceFolder.name));
 		}
 		if (this.resource.authority && !this.workspaceFolder) {
@@ -40,7 +40,7 @@ export class BreadcrumbsModel {
 		for (const [index, segment] of segments.entries()) {
 			currentPath += `/${segment}`;
 			// Trim display ancestors only; picker navigation still needs the complete URI.
-			if (index < rootDepth - 1) {
+			if (index < rootDepth - (this.showWorkspaceRoot ? 1 : 0)) {
 				continue;
 			}
 			const isWorkspaceRoot = this.workspaceFolder !== null && index === rootDepth - 1;

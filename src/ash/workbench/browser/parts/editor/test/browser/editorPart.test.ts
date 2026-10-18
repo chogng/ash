@@ -2512,7 +2512,7 @@ test('EditorPart diff breadcrumbs display and navigate the modified path without
 		using comparison = createDiffEditorInput(input('/old-project/old.ts'), modified, 'Renamed file');
 		await editor.openEditor(comparison, { pinned: true });
 		const navigation = editor.domNode.querySelector<HTMLElement>('.ash-editor-breadcrumbs')!;
-		assert.deepEqual([...navigation.querySelectorAll('.ash-breadcrumb-item')].map(element => element.textContent), ['Project', 'src', 'new name.ts']);
+		assert.deepEqual([...navigation.querySelectorAll('.ash-breadcrumb-item')].map(element => element.textContent), ['src', 'new name.ts']);
 		assert.equal(navigation.title, modified.resource.toString());
 		assert.equal(breadcrumbs.getWidget(editor.activeGroup.id)?.focus(), true);
 		const current = dom.window.document.activeElement as HTMLElement;
@@ -2523,7 +2523,7 @@ test('EditorPart diff breadcrumbs display and navigate the modified path without
 		assert.equal(editor.activeGroup.inputs.length, 1);
 
 		await editor.openEditor(input('/project/ordinary.ts'));
-		assert.deepEqual([...navigation.querySelectorAll('.ash-breadcrumb-item')].map(element => element.textContent), ['Project', 'ordinary.ts']);
+		assert.deepEqual([...navigation.querySelectorAll('.ash-breadcrumb-item')].map(element => element.textContent), ['ordinary.ts']);
 		await editor.closeAllEditors({ skipConfirmation: true });
 		assert.equal(navigation.hidden, true);
 	} finally {

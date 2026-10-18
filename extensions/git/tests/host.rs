@@ -865,6 +865,55 @@ fn verify_workspace_comparisons(supervisor: &host::ExtensionHostSupervisor, clie
             supervisor,
             client,
             invocation(
+                "ash.scm",
+                "scm",
+                json!({"method":"refresh","providerId":"root"}),
+            ),
+        );
+        for group in ["changes", "staged"] {
+            if (group == "changes" && stage && !modify_again) || (group == "staged" && !stage) {
+                continue;
+            }
+            execute(
+                supervisor,
+                client,
+                invocation(
+                    "ash.scm",
+                    "scm",
+                    json!({"method":"open","providerId":"root","resourceId":format!("{group}:file.txt")}),
+                ),
+            );
+            let requests = client.editor_requests.lock().unwrap();
+            let input = &requests
+                .iter()
+                .rev()
+                .find(|request| request["method"] == "open")
+                .unwrap()["input"];
+            let resource = url::Url::from_file_path(client.root.join("file.txt"))
+                .unwrap()
+                .to_string();
+            assert_eq!(input["original"]["preferredResource"], resource);
+            assert_eq!(input["original"]["readOnly"], true);
+            if group == "changes" {
+                assert_eq!(input["modified"]["resource"], resource);
+                assert!(input["modified"]["initialText"].is_null());
+                assert_ne!(input["modified"]["readOnly"], true);
+                assert_eq!(input["readOnly"], false);
+            } else {
+                assert!(
+                    input["modified"]["resource"]
+                        .as_str()
+                        .unwrap()
+                        .starts_with("git-change:/staged/")
+                );
+                assert_eq!(input["modified"]["preferredResource"], resource);
+                assert_eq!(input["modified"]["readOnly"], true);
+            }
+        }
+        execute(
+            supervisor,
+            client,
+            invocation(
                 "git.openWorkspaceChanges",
                 "execute",
                 json!({"arguments":[]}),

@@ -1,3 +1,4 @@
+import type { IEditorOptions } from '../../../common/config/editorOptions.js';
 import { getWindow, isHTMLElement } from '../../../../base/browser/dom.js';
 import { isFiniteNumber, isNonNegativeSafeInteger } from '../../../../base/common/numbers.js';
 import { type IMultiDiffEditorModel, validateDocumentDiffItems } from './model.js';
@@ -18,7 +19,8 @@ export interface IMultiDiffEditorWidgetOptions {
 	readonly showLineNumbers?: boolean;
 	readonly showInlineChanges?: boolean;
 	readonly loopChanges?: boolean;
-	readonly wordWrap?: boolean;
+	readonly wordWrap?: IEditorOptions['wordWrap'];
+	readonly wordWrapColumn?: number;
 	readonly overscanRowCount?: number;
 	readonly ariaLabel?: string;
 	readonly workbenchUIElementFactory?: IWorkbenchUIElementFactory;
@@ -41,7 +43,6 @@ export function validateMultiDiffEditorOptions(options: IMultiDiffEditorWidgetOp
 		['showLineNumbers', options.showLineNumbers],
 		['showInlineChanges', options.showInlineChanges],
 		['loopChanges', options.loopChanges],
-		['wordWrap', options.wordWrap],
 	] as const) {
 		if (value !== undefined && typeof value !== 'boolean') throw new TypeError(`Multi-diff editor option '${name}' must be boolean`);
 	}

@@ -1,3 +1,5 @@
+import { Lxicon } from '../../base/common/lxicons.js';
+import type { ThemeIcon } from '../../base/common/themables.js';
 import { Range, type IRange } from './core/range.js';
 import { type TextSnapshot, normalizeTextLineEndings } from './core/textChange.js';
 import { Position, type IPosition } from './core/position.js';
@@ -524,6 +526,27 @@ export interface LanguageColorProvider {
 }
 
 export type LanguageSymbolKind = string | number;
+
+/** Semantic artwork shared by symbol navigation surfaces. */
+export namespace SymbolKinds {
+	const names = [
+		'file', 'module', 'namespace', 'package', 'class', 'method', 'property', 'field', 'constructor',
+		'enum', 'interface', 'function', 'variable', 'constant', 'string', 'number', 'boolean', 'array',
+		'object', 'key', 'null', 'enumMember', 'struct', 'event', 'operator', 'typeParameter',
+	];
+
+	export function toIcon(kind: LanguageSymbolKind): ThemeIcon {
+		const name = typeof kind === 'number' ? names[kind] : kind;
+		switch (name) {
+			case 'file': return Lxicon.file;
+			case 'module': case 'namespace': case 'package': return Lxicon.folders;
+			case 'string': case 'number': case 'boolean': case 'null': return Lxicon.text;
+			case 'property': case 'field': case 'key': case 'variable': case 'constant': case 'enumMember': return Lxicon.tag;
+			default: return Lxicon.code;
+		}
+	}
+}
+
 
 export interface LanguageDocumentSymbol {
 	readonly name: string;

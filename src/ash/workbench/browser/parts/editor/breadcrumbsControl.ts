@@ -1,3 +1,9 @@
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { BreadcrumbsIconsConfiguration } from './breadcrumbs.js';
+import { IconLabel } from '../../../../base/browser/ui/iconlabel/iconlabel.js';
+import { SymbolKinds } from '../../../../editor/common/languages.js';
+import { IResourceLabelService, type ResourceLabels } from '../../labels.js';
+import { FileKind } from '../../../../platform/files/common/files.js';
 import { EditorResourceAccessor, SideBySideEditor, type IResourceEditorInput } from '../../../common/editor.js';
 import "./media/breadcrumbscontrol.css";
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
@@ -17,6 +23,8 @@ import { defaultBreadcrumbsWidgetStyles } from '../../../../platform/theme/brows
 export class EditorBreadcrumbsControl extends Disposable {
 	readonly domNode: HTMLElement;
 	private readonly widget: BreadcrumbsWidget;
+	private readonly labels: ResourceLabels;
+	private showIcons = true;
 	private readonly editorTypeButton: HTMLButtonElement;
 	private selectEditorType: ((anchor: HTMLElement) => void) | undefined;
 	private input: IResourceEditorInput | undefined;
@@ -29,8 +37,18 @@ export class EditorBreadcrumbsControl extends Disposable {
 		private readonly onSelect: ((element: FileElement) => void) | undefined,
 		private readonly onSelectSymbol: ((element: SymbolElement) => void) | undefined,
 		@IWorkspaceContextService private readonly workspaceContextService: IWorkspaceContextService,
+		@IResourceLabelService resourceLabels: IResourceLabelService,
+		@IConfigurationService configuration: IConfigurationService,
 	) {
 		super();
+		this.labels = this._register(resourceLabels.createGroup());
+		this.showIcons = configuration.getValue(BreadcrumbsIconsConfiguration);
+		this._register(configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(BreadcrumbsIconsConfiguration)) {
+				this.showIcons = configuration.getValue(BreadcrumbsIconsConfiguration);
+				this.render();
+			}
+		}));
 		this.domNode = h(container.ownerDocument, "nav");
 		this.domNode.className = "ash-editor-breadcrumbs empty";
 		this.domNode.setAttribute("aria-label", localize('breadcrumbs.editorLabel', "Editor breadcrumbs"));
@@ -112,11 +130,11 @@ export class EditorBreadcrumbsControl extends Disposable {
 			return;
 		}
 		const workspaceFolder = this.workspaceContextService.getWorkspaceFolder(resource);
-		const files = this.filePath === "off" ? [] : new BreadcrumbsModel(resource, workspaceFolder, this.input.label).getElements();
+		const files = this.filePath === "off" ? [] : new BreadcrumbsModel(resource, workspaceFolder, this.input.label, this.workspaceContextService.getWorkspace().folders.length > 1).getElements();
 		const visibleFiles = this.filePath === "last" ? files.slice(-1) : files;
 		const visibleSymbols = this.symbolPath === "off" ? [] : this.symbolPath === "last" ? this.symbols.slice(-1) : this.symbols;
 		const elements = [...visibleFiles, ...visibleSymbols];
-		this.widget.setItems(elements.map((element, index) => new EditorBreadcrumbItem(element, index === elements.length - 1)));
+		this.widget.setItems(elements.map((element, index) => new EditorBreadcrumbItem(element, index === elements.length - 1, this.labels, this.showIcons)));
 		this.domNode.title = resource.toString();
 		// Content emptiness is independent of configuration hiding a nonempty path.
 		this.domNode.classList.toggle("empty", elements.length === 0);
@@ -127,14 +145,21 @@ export class EditorBreadcrumbsControl extends Disposable {
 
 /** Keeps resource and outline identity in Workbench, outside the generic widget. */
 class EditorBreadcrumbItem extends BreadcrumbsItem {
-	constructor(public readonly element: FileElement | SymbolElement, private readonly current: boolean) {
+	private label: { dispose(): void; } | undefined;
+
+	constructor(
+		public readonly element: FileElement | SymbolElement,
+		private readonly current: boolean,
+		private readonly labels: ResourceLabels,
+		private readonly showIcons: boolean,
+	) {
 		super();
 	}
 
-	public override dispose(): void { }
+	public override dispose(): void { this.label?.dispose(); }
 
 	public override equals(other: BreadcrumbsItem): boolean {
-		if (!(other instanceof EditorBreadcrumbItem) || this.current !== other.current || this.element.label !== other.element.label) {
+		if (!(other instanceof EditorBreadcrumbItem) || this.current !== other.current || this.showIcons !== other.showIcons || this.element.label !== other.element.label) {
 			return false;
 		}
 		if (this.element instanceof FileElement && other.element instanceof FileElement) {
@@ -144,8 +169,21 @@ class EditorBreadcrumbItem extends BreadcrumbsItem {
 	}
 
 	public override render(container: HTMLElement): void {
-		container.textContent = this.element.label;
-		container.title = this.element.label;
+		if (this.element instanceof FileElement) {
+			const label = this.label = this.labels.create(container);
+			label.setResource({ resource: this.element.uri, name: this.element.label }, {
+				fileKind: this.element.kind,
+				hideIcon: !this.showIcons || this.element.kind === FileKind.Directory,
+				fileDecorations: { colors: true, badges: false },
+			});
+		} else {
+			this.label = new IconLabel(container, {
+				label: this.element.label,
+				icon: SymbolKinds.toIcon(this.element.symbol.kind),
+				hideIcon: !this.showIcons,
+				title: this.element.label,
+			});
+		}
 		if (this.current) {
 			container.classList.add("current");
 			container.setAttribute("aria-current", "page");

@@ -78,6 +78,7 @@ function serializeBaseEditorInput(input: IResourceEditorInput): unknown {
 	}
 	return Object.freeze({
 		resource: input.resource.toString(),
+		...(input.preferredResource === undefined ? {} : { preferredResource: input.preferredResource.toString() }),
 		...(input.editorId === undefined ? {} : { editorId: input.editorId }),
 		...(serializedIcon === undefined ? {} : { icon: serializedIcon }),
 		...(input.contentType === undefined ? {} : { contentType: input.contentType }),
@@ -93,6 +94,7 @@ function serializeBaseEditorInput(input: IResourceEditorInput): unknown {
 function deserializeBaseEditorInput(value: unknown): IResourceEditorInput {
 	const record = requireRecord(value, 'serialized editor input');
 	const resource = requireString(record.resource, 'serialized editor resource');
+	const preferredResource = optionalString(record.preferredResource, 'serialized preferred resource');
 	const editorId = optionalString(record.editorId, 'serialized editor ID');
 	const contentType = optionalString(record.contentType, 'serialized editor content type');
 	const languageId = optionalString(record.languageId, 'serialized editor language ID');
@@ -108,6 +110,7 @@ function deserializeBaseEditorInput(value: unknown): IResourceEditorInput {
 	const icon = deserializeIcon(record.icon);
 	return Object.freeze({
 		resource: URI.parse(resource),
+		...(preferredResource === undefined ? {} : { preferredResource: URI.parse(preferredResource) }),
 		...(editorId === undefined ? {} : { editorId }),
 		...(icon === undefined ? {} : { getIcon: () => icon }),
 		...(contentType === undefined ? {} : { contentType }),

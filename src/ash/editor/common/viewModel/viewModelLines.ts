@@ -89,6 +89,7 @@ export class ViewModelLinesFromProjectedModel extends Disposable implements ICur
 	private wrapping: EditorLineWrapping;
 	private wrapWidth: number;
 	private currentWrappingIndent: WrappingIndent;
+	private currentWrappingStrategy: 'simple' | 'advanced' = 'simple';
 	private currentWordBreak: 'normal' | 'keepAll' = 'normal';
 	private wrappingProjection: EditorVisualLineProjection;
 	private currentProjection: EditorVisualLineProjection;
@@ -151,17 +152,18 @@ export class ViewModelLinesFromProjectedModel extends Disposable implements ICur
 		return new ViewModelCoordinatesConverter(this.model, this);
 	}
 
-	setWrappingSettings(fontInfo: FontInfo, _wrappingStrategy: 'simple' | 'advanced', wrappingColumn: number, wrappingIndent: WrappingIndent, wordBreak: 'normal' | 'keepAll'): boolean {
+	setWrappingSettings(fontInfo: FontInfo, wrappingStrategy: 'simple' | 'advanced', wrappingColumn: number, wrappingIndent: WrappingIndent, wordBreak: 'normal' | 'keepAll'): boolean {
 		const nextWrapping = wrappingColumn > 0 ? EditorLineWrapping.On : EditorLineWrapping.Off;
 		const nextWidth = Math.max(0, wrappingColumn) * fontInfo.typicalHalfwidthCharacterWidth;
 		// Resizing can recompute an equivalent FontInfo object. Its identity must
 		// not trigger document-wide line-break measurement when metrics are unchanged.
-		const changed = !this.fontInfo.equals(fontInfo) || this.wrapping !== nextWrapping || this.wrapWidth !== nextWidth || this.currentWrappingIndent !== wrappingIndent || this.currentWordBreak !== wordBreak;
+		const changed = !this.fontInfo.equals(fontInfo) || this.wrapping !== nextWrapping || this.wrapWidth !== nextWidth || this.currentWrappingIndent !== wrappingIndent || this.currentWordBreak !== wordBreak || this.currentWrappingStrategy !== wrappingStrategy;
 		if (!changed) return false;
 		this.fontInfo = fontInfo;
 		this.wrapping = nextWrapping;
 		this.wrapWidth = nextWidth;
 		this.currentWrappingIndent = wrappingIndent;
+		this.currentWrappingStrategy = wrappingStrategy;
 		this.currentWordBreak = wordBreak;
 		this.refresh();
 		return true;

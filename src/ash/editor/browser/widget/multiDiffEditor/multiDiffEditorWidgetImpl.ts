@@ -66,7 +66,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 	private readonly layouts: MultiDiffSectionLayout[] = [];
 	private readonly measuredHeights = new Map<string, number>();
 	private hideUnchangedRegionsEnabled = true;
-	private editorOptions: Pick<DiffEditorWidgetOptions, 'lineHeight' | 'fontFamily' | 'fontSize' | 'fontLigatures' | 'showLineNumbers' | 'showInlineChanges' | 'loopChanges'>;
+	private editorOptions: Pick<DiffEditorWidgetOptions, 'lineHeight' | 'fontFamily' | 'fontSize' | 'fontLigatures' | 'showLineNumbers' | 'showInlineChanges' | 'loopChanges' | 'wordWrapColumn'>;
 	private rowLayouts = new WeakMap<DiffModel, DiffRowLayout>();
 	private lineHeight: number;
 	private readonly overscanRowCount: number;
@@ -74,8 +74,8 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 	private showLineNumbers: boolean;
 	private fontInfoSettings: ReturnType<typeof createBareFontInfoFromRawSettings>;
 	private fontInfo: FontInfo | undefined;
-	private configuredWordWrap: boolean;
-	private temporaryWordWrap: boolean | undefined;
+	private configuredWordWrap: NonNullable<DiffEditorWidgetOptions['wordWrap']>;
+	private temporaryWordWrap: 'on' | 'off' | undefined;
 	private viewportWidth = 0;
 	private projecting = false;
 	private viewportHeight = 0;
@@ -105,7 +105,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		this.overscanRowCount = options.overscanRowCount ?? DEFAULT_OVERSCAN_ROW_COUNT;
 		this.loopChanges = options.loopChanges ?? true;
 		this.showLineNumbers = options.showLineNumbers ?? true;
-		this.configuredWordWrap = options.wordWrap ?? false;
+		this.configuredWordWrap = options.wordWrap ?? 'off';
 		this.editorOptions = {
 			lineHeight: rawLineHeight,
 			fontFamily: options.fontFamily,
@@ -114,6 +114,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 			showLineNumbers: options.showLineNumbers,
 			showInlineChanges: options.showInlineChanges,
 			loopChanges: options.loopChanges,
+			wordWrapColumn: options.wordWrapColumn,
 		};
 		this.fontInfoSettings = createBareFontInfoFromRawSettings({
 			fontFamily: options.fontFamily,
@@ -199,7 +200,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 	}
 
 	public get wordWrap(): boolean {
-		return this.temporaryWordWrap ?? this.configuredWordWrap;
+		return (this.temporaryWordWrap ?? this.configuredWordWrap) !== 'off';
 	}
 
 	public focus(): void {
@@ -265,12 +266,12 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		this.project();
 	}
 
-	public setConfiguredWordWrap(enabled: boolean): void {
-		this.configuredWordWrap = enabled;
+	public setConfiguredWordWrap(mode: NonNullable<DiffEditorWidgetOptions['wordWrap']>): void {
+		this.configuredWordWrap = mode;
 		this.updateWordWrap();
 	}
 
-	public updateOptions(options: Pick<IMultiDiffEditorWidgetOptions, 'lineHeight' | 'fontFamily' | 'fontSize' | 'fontLigatures' | 'showLineNumbers' | 'showInlineChanges' | 'loopChanges'>): void {
+	public updateOptions(options: Pick<IMultiDiffEditorWidgetOptions, 'lineHeight' | 'fontFamily' | 'fontSize' | 'fontLigatures' | 'showLineNumbers' | 'showInlineChanges' | 'loopChanges' | 'wordWrapColumn'>): void {
 		this.editorOptions = { ...this.editorOptions, ...options };
 		this.loopChanges = this.editorOptions.loopChanges ?? true;
 		this.showLineNumbers = this.editorOptions.showLineNumbers ?? true;
@@ -290,7 +291,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 	}
 
 	public toggleWordWrap(): void {
-		this.temporaryWordWrap = this.temporaryWordWrap === undefined ? !this.wordWrap : undefined;
+		this.temporaryWordWrap = this.temporaryWordWrap === undefined ? (this.wordWrap ? 'off' : 'on') : undefined;
 		this.updateWordWrap();
 		this.accessibilityStatusDomNode.textContent = this.wordWrap
 			? localize('wordWrap.enabled', 'Word wrap on')
@@ -386,7 +387,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 
 	private updateWordWrap(): void {
 		this.domNode.classList.toggle('word-wrapped', this.wordWrap);
-		for (const section of this.sections.values()) section.editor?.setConfiguredWordWrap(this.wordWrap);
+		for (const section of this.sections.values()) section.editor?.setConfiguredWordWrap(this.temporaryWordWrap ?? this.configuredWordWrap);
 		this.rowLayouts = new WeakMap();
 		this.measuredHeights.clear();
 		this.refreshLayout();
@@ -436,7 +437,11 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 			const gutterWidth = this.showLineNumbers ? 52 : 0;
 			const cellWidth = Math.max(1, (this.viewportWidth - MULTI_DIFF_HORIZONTAL_INSET - SCROLLBAR_RESERVE - 30) / 2 - gutterWidth);
 			const fontInfo = this.fontInfo ??= FontMeasurements.readFontInfo(getWindow(this.domNode), this.fontInfoSettings);
-			wrapping = { fontInfo, column: Math.max(1, Math.floor(cellWidth / fontInfo.typicalHalfwidthCharacterWidth)) };
+			const viewportColumn = Math.max(1, Math.floor(cellWidth / fontInfo.typicalHalfwidthCharacterWidth));
+			const mode = this.temporaryWordWrap ?? this.configuredWordWrap;
+			const configuredColumn = this.editorOptions.wordWrapColumn ?? 80;
+			const column = mode === 'wordWrapColumn' ? configuredColumn : mode === 'bounded' ? Math.min(configuredColumn, viewportColumn) : viewportColumn;
+			wrapping = { fontInfo, column };
 		}
 		let top = SECTION_GAP;
 		this.layouts.length = 0;
@@ -498,7 +503,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 						modifiedAriaLabel: item.modifiedLabel,
 						readOnly: item.readOnly,
 						scrollBeyondLastLine: false,
-						wordWrap: this.wordWrap,
+						wordWrap: this.temporaryWordWrap ?? this.configuredWordWrap,
 						...this.editorOptions,
 					}));
 					section.editor!.updateOptions({ scrollbar: { vertical: 'hidden' }, renderOverviewRuler: false });

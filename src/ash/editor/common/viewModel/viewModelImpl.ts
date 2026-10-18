@@ -80,7 +80,7 @@ export class ViewModel extends Disposable implements IViewModel {
 		const wrappingInfo = options.get(EditorOption.wrappingInfo);
 		const lineBreaksComputerFactory: ILineBreaksComputerFactory = {
 			createLineBreaksComputer: (context, currentFontInfo, ...args) => (
-				currentFontInfo.isMonospace ? monospaceLineBreaksComputerFactory : domLineBreaksComputerFactory
+				configuration.options.get(EditorOption.wrappingStrategy) === 'advanced' ? domLineBreaksComputerFactory : monospaceLineBreaksComputerFactory
 			).createLineBreaksComputer(context, currentFontInfo, ...args),
 		};
 		this.lines = model.isTooLargeForTokenization()

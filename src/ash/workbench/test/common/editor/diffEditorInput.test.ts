@@ -52,6 +52,19 @@ suite('Comparison editor inputs', () => {
 		});
 	}
 
+	test('snapshot labels and navigation retain the real file through serialization', () => {
+		const preferredResource = URI.file('/project/TODO.md');
+		const snapshot = URI.parse('git-change:/unstaged/TODO.md?side=modified');
+		using comparison = createDiffEditorInput(
+			{ resource: URI.parse('git-change:/unstaged/TODO.md?side=original'), preferredResource },
+			{ resource: snapshot, preferredResource, initialText: '# Heading', readOnly: true },
+		);
+		const restored = EditorInputSerializers.deserialize(JSON.parse(JSON.stringify(EditorInputSerializers.serialize(comparison))));
+		assert.equal(EditorResourceAccessor.getOriginalUri(restored, { supportSideBySide: SideBySideEditor.PRIMARY })?.toString(), preferredResource.toString());
+		assert.ok(isResourceDiffEditorInput(restored));
+		assert.equal(restored.modified.resource.toString(), snapshot.toString());
+	});
+
 	test('nested comparisons resolve the requested leaf instead of a synthetic comparison resource', () => {
 		const before = { resource: URI.file('/project/before.bin') };
 		const after = { resource: URI.file('/project/after.bin') };

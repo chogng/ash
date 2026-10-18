@@ -12,6 +12,7 @@ export class DiffEditorSash extends Disposable {
 	private readonly sash: Sash;
 	private ratio: number | undefined;
 	private width = 0;
+	private leadingWidth = 0;
 	private startLeft = 0;
 
 	constructor(
@@ -29,8 +30,8 @@ export class DiffEditorSash extends Disposable {
 		this.updateLabel();
 		this._register(this.sash.onDidStart(() => { this.startLeft = this.left; }));
 		this._register(this.sash.onDidChange(event => {
-			if (this.width <= MINIMUM_EDITOR_WIDTH * 2) return;
-			const left = Math.max(MINIMUM_EDITOR_WIDTH, Math.min(this.width - MINIMUM_EDITOR_WIDTH, this.startLeft + event.delta));
+			if (this.width <= MINIMUM_EDITOR_WIDTH * 2 + this.leadingWidth) return;
+			const left = Math.max(MINIMUM_EDITOR_WIDTH + this.leadingWidth, Math.min(this.width - MINIMUM_EDITOR_WIDTH, this.startLeft + event.delta));
 			this.ratio = left / this.width;
 			this.onDidResize();
 		}));
@@ -44,21 +45,22 @@ export class DiffEditorSash extends Disposable {
 		const ratio = this.options.enableSplitViewResizing
 			? this.ratio ?? this.options.splitViewDefaultRatio
 			: this.options.splitViewDefaultRatio;
-		const desired = Math.round(ratio * this.width);
-		if (this.width <= MINIMUM_EDITOR_WIDTH * 2) return desired;
-		return Math.max(MINIMUM_EDITOR_WIDTH, Math.min(this.width - MINIMUM_EDITOR_WIDTH, desired));
+		const desired = Math.floor(ratio * this.width);
+		if (this.width <= MINIMUM_EDITOR_WIDTH * 2 + this.leadingWidth) return desired;
+		return Math.max(MINIMUM_EDITOR_WIDTH + this.leadingWidth, Math.min(this.width - MINIMUM_EDITOR_WIDTH, desired));
 	}
 
-	public layout(width: number, height: number, inlineView: boolean, top: number): number {
+	public layout(width: number, height: number, inlineView: boolean, top: number, leadingWidth = 0): number {
 		this.width = width;
+		this.leadingWidth = leadingWidth;
 		const left = this.left;
-		const visible = !inlineView && this.options.enableSplitViewResizing && width > MINIMUM_EDITOR_WIDTH * 2;
+		const visible = !inlineView && this.options.enableSplitViewResizing && width > MINIMUM_EDITOR_WIDTH * 2 + this.leadingWidth;
 		this.element.hidden = !visible;
 		this.element.style.left = `${left}px`;
 		this.element.style.top = `${top}px`;
 		this.element.style.height = `${height}px`;
 		this.sash.state = !visible ? SashState.Disabled
-			: left <= MINIMUM_EDITOR_WIDTH ? SashState.AtMinimum
+			: left <= MINIMUM_EDITOR_WIDTH + this.leadingWidth ? SashState.AtMinimum
 				: left >= width - MINIMUM_EDITOR_WIDTH ? SashState.AtMaximum : SashState.Enabled;
 		this.updateValue(left);
 		return left;
@@ -71,10 +73,12 @@ export class DiffEditorSash extends Disposable {
 
 	private updateValue(left: number): void {
 		const percent = this.width > 0 ? Math.round(left / this.width * 100) : Math.round(this.options.splitViewDefaultRatio * 100);
-		const minimumPercent = this.width > MINIMUM_EDITOR_WIDTH * 2
-			? Math.round(MINIMUM_EDITOR_WIDTH / this.width * 100) : 0;
+		const minimumPercent = this.width > MINIMUM_EDITOR_WIDTH * 2 + this.leadingWidth
+			? Math.round((MINIMUM_EDITOR_WIDTH + this.leadingWidth) / this.width * 100) : 0;
 		this.element.setAttribute('aria-valuemin', String(minimumPercent));
-		this.element.setAttribute('aria-valuemax', String(100 - minimumPercent));
+		const maximumPercent = this.width > MINIMUM_EDITOR_WIDTH * 2 + this.leadingWidth
+			? Math.round((this.width - MINIMUM_EDITOR_WIDTH) / this.width * 100) : 100;
+		this.element.setAttribute('aria-valuemax', String(maximumPercent));
 		this.element.setAttribute('aria-valuenow', String(percent));
 		this.element.setAttribute('aria-valuetext', localize('diffEditor.columnWidths', 'Original {0}%, modified {1}%', percent, 100 - percent));
 	}

@@ -233,3 +233,13 @@ test('syntax folds ending at a line start leave the following heading or propert
 	};
 	assert.deepEqual(projectAppServerSyntaxFoldingRanges(result, model.createVersionedSnapshot()), [{ startLineIndex: 0, endLineIndex: 1 }]);
 });
+
+test('Markdown syntax modules become heading symbols while code modules keep their kind', () => {
+	using model = new TextModel('# Heading\ntext', { languageId: 'markdown' });
+	const result = {
+		revision: model.version, hasErrors: false, tokens: [], foldingRanges: [], diagnostics: [],
+		symbols: [{ name: 'Heading', kind: 'module' as const, range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 1, columnIndex: 4 } }, selectionRange: { start: { lineIndex: 0, columnIndex: 2 }, end: { lineIndex: 0, columnIndex: 9 } } }],
+	};
+	assert.equal(projectAppServerSyntaxSymbols(result, model.createVersionedSnapshot(), 'markdown')[0].kind, 'string');
+	assert.equal(projectAppServerSyntaxSymbols(result, model.createVersionedSnapshot(), 'rust')[0].kind, 'module');
+});

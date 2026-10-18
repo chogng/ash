@@ -60,7 +60,7 @@ class AppServerSyntaxProvider extends Disposable implements SyntaxProvider, Lang
 
 	async provideDocumentSymbols(request: LanguageDocumentSymbolRequest, signal: AbortSignal): Promise<readonly LanguageDocumentSymbol[]> {
 		const result = await this.analyze(request.model, request.languageId, request.snapshot, signal);
-		return result ? projectAppServerSyntaxSymbols(result, request.snapshot) : Object.freeze([]);
+		return result ? projectAppServerSyntaxSymbols(result, request.snapshot, request.languageId) : Object.freeze([]);
 	}
 
 	async provideFoldingRanges(request: LanguageFoldingRangeRequest, signal: AbortSignal): Promise<readonly LanguageFoldingRange[]> {
@@ -206,10 +206,10 @@ export function projectAppServerSyntaxDiagnostics(result: SyntaxAnalyzeResult, s
 	});
 }
 
-export function projectAppServerSyntaxSymbols(result: SyntaxAnalyzeResult, snapshot: TextSnapshot): readonly LanguageDocumentSymbol[] {
+export function projectAppServerSyntaxSymbols(result: SyntaxAnalyzeResult, snapshot: TextSnapshot, languageId?: string): readonly LanguageDocumentSymbol[] {
 	assertMatchingRevision(result, snapshot);
 	const lines = snapshotLines(snapshot);
-	return nestDocumentSymbols(result.symbols.map(symbol => projectAppServerSyntaxSymbol(symbol, lines)));
+	return nestDocumentSymbols(result.symbols.map(symbol => projectAppServerSyntaxSymbol(symbol, lines, languageId)));
 }
 
 export function projectAppServerSyntaxSelectionRanges(result: SyntaxSelectionRangesResult, snapshot: TextSnapshot): readonly Range[] {
@@ -241,13 +241,13 @@ function projectAppServerSyntaxDiagnostic(diagnostic: SyntaxDiagnostic, lines: r
 	});
 }
 
-function projectAppServerSyntaxSymbol(symbol: SyntaxSymbol, lines: readonly string[]): LanguageDocumentSymbol {
+function projectAppServerSyntaxSymbol(symbol: SyntaxSymbol, lines: readonly string[], languageId?: string): LanguageDocumentSymbol {
 	if (typeof symbol.name !== "string" || symbol.name.trim().length === 0) {
 		throw new TypeError("App Server syntax symbol must have a non-empty name");
 	}
 	return Object.freeze({
 		name: symbol.name,
-		kind: symbol.kind,
+		kind: languageId === 'markdown' && symbol.kind === 'module' ? 'string' : symbol.kind,
 		range: projectRange(symbol.range, lines),
 		selectionRange: projectRange(symbol.selectionRange, lines),
 	});

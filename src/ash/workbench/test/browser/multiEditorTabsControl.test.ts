@@ -79,9 +79,9 @@ test('EditorTitleControl starts breadcrumbs at the owning workspace and refreshe
 		group.openEditor(file);
 		control.setEditors([descriptor(file)], file);
 		const labels = (): (string | null)[] => [...control.domNode.querySelectorAll('.ash-breadcrumb-item')].map(button => button.textContent);
-		assert.deepEqual(labels(), ['ash', '源 码', 'engine #1.ts']);
+		assert.deepEqual(labels(), ['源 码', 'engine #1.ts']);
 		assert.equal(control.domNode.querySelector<HTMLButtonElement>('.ash-breadcrumbs-editor-type')!.hidden, true);
-		control.domNode.querySelectorAll<HTMLButtonElement>('.ash-breadcrumb-item')[1]!.click();
+		control.domNode.querySelectorAll<HTMLButtonElement>('.ash-breadcrumb-item')[0]!.click();
 		assert.deepEqual([selected?.uri.toString(), selected?.kind], [URI.file('/Users/lx/Desktop/ash/源 码').toString(), FileKind.Directory]);
 
 		workspace.updateWorkspace({
@@ -112,13 +112,13 @@ test('Editor breadcrumbs respect URI segment boundaries for remote, Windows and 
 		const workspace = services.get(IWorkspaceContextService) as TestWorkspaceService;
 		using control = services.createInstance(EditorBreadcrumbsControl, dom.window.document.body, undefined, undefined);
 		const cases = [
-			{ root: 'vscode-remote://ssh-remote+host/home/lx/ash', file: 'vscode-remote://ssh-remote+host/home/lx/ash/src/main.ts', labels: ['ash', 'src', 'main.ts'] },
+			{ root: 'vscode-remote://ssh-remote+host/home/lx/ash', file: 'vscode-remote://ssh-remote+host/home/lx/ash/src/main.ts', labels: ['src', 'main.ts'] },
 			{ root: 'vscode-remote://ssh-remote+host/home/lx/ash', file: 'vscode-remote://ssh-remote+other/home/lx/ash/main.ts', labels: ['ssh-remote+other', 'home', 'lx', 'ash', 'main.ts'] },
-			{ root: 'file:///C:/Users/lx/ash', file: 'file:///C:/Users/lx/ash/src/main.ts', labels: ['ash', 'src', 'main.ts'] },
-			{ root: 'file://server/share/ash', file: 'file://server/share/ash/main.ts', labels: ['ash', 'main.ts'] },
+			{ root: 'file:///C:/Users/lx/ash', file: 'file:///C:/Users/lx/ash/src/main.ts', labels: ['src', 'main.ts'] },
+			{ root: 'file://server/share/ash', file: 'file://server/share/ash/main.ts', labels: ['main.ts'] },
 			{ root: 'file:///work/ash', file: 'file:///work/ash%2Fother/main.ts', labels: ['work', 'ash/other', 'main.ts'] },
-			{ root: 'file:///work/ash', file: 'file:///work/ash/src%2Fpart/main.ts', labels: ['ash', 'src/part', 'main.ts'] },
-			{ root: 'file:///', file: 'file:///main.ts', labels: ['ash', 'main.ts'] },
+			{ root: 'file:///work/ash', file: 'file:///work/ash/src%2Fpart/main.ts', labels: ['src/part', 'main.ts'] },
+			{ root: 'file:///', file: 'file:///main.ts', labels: ['main.ts'] },
 		];
 		for (const scenario of cases) {
 			workspace.updateWorkspace({ id: 'test', folders: [{ id: 'root', uri: URI.parse(scenario.root), name: 'ash', index: 0 }] });

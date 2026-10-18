@@ -1,7 +1,7 @@
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../../../platform/configuration/common/configurationRegistry.js";
 import { Registry } from "../../../../platform/registry/common/platform.js";
 import { EditorIndentationKind } from "../../../../editor/common/core/misc/indentation.js";
-import { EditorLineWrapping } from "../../../../editor/common/config/editorOptions.js";
+import { EditorLineWrapping, type IEditorOptions } from "../../../../editor/common/config/editorOptions.js";
 import '../../../../editor/common/config/editorConfigurationSchema.js';
 import { EDITOR_FONT_DEFAULTS } from '../../../../editor/common/config/fontInfo.js';
 import { localize } from '../../../../nls.js';
@@ -86,17 +86,36 @@ export const CodeEditorConfiguration = Object.freeze({
 			{ value: "on", label: "On" },
 		]),
 	}),
-	wordWrap: configurationRegistry.registerConfiguration<EditorLineWrapping>({
+	wordWrap: configurationRegistry.registerConfiguration<NonNullable<IEditorOptions['wordWrap']>>({
 		key: "editor.wordWrap",
-		defaultValue: EditorLineWrapping.Off,
-		parse(value: unknown): EditorLineWrapping {
-			if (value === EditorLineWrapping.Off || value === EditorLineWrapping.On) return value;
-			throw new TypeError(`editor.wordWrap must be off or on; received ${String(value)}`);
+		defaultValue: 'off',
+		parse: value => parseEnum(value, 'editor.wordWrap', ['off', 'on', 'wordWrapColumn', 'bounded']),
+		setting: {
+			valueType: 'select',
+			get title() { return localize('editor.wordWrap.title', 'Word wrap'); },
+			get description() { return localize('editor.wordWrap.description', 'Wrap long lines at the viewport, the configured column, or the smaller of both.'); },
+			get options() {
+				return [
+					{ value: 'off', label: localize('editor.wordWrap.off', 'Off') },
+					{ value: 'on', label: localize('editor.wordWrap.on', 'Viewport') },
+					{ value: 'wordWrapColumn', label: localize('editor.wordWrap.column', 'Word wrap column') },
+					{ value: 'bounded', label: localize('editor.wordWrap.bounded', 'Viewport or word wrap column') },
+				] as const;
+			},
 		},
-		setting: selectSetting("Word wrap", "Wrap long lines at the editor viewport instead of scrolling horizontally.", [
-			{ value: EditorLineWrapping.Off, label: "Off" },
-			{ value: EditorLineWrapping.On, label: "On" },
-		]),
+	}),
+	wordWrapColumn: configurationRegistry.registerConfiguration<number>({
+		key: 'editor.wordWrapColumn',
+		defaultValue: 80,
+		parse: value => {
+			if (typeof value === 'number' && Number.isSafeInteger(value) && value > 0) return value;
+			throw new TypeError(localize('editor.wordWrapColumn.invalid', 'Word wrap column must be a positive integer.'));
+		},
+		setting: {
+			valueType: 'number', minimum: 1, maximum: Number.MAX_SAFE_INTEGER,
+			get title() { return localize('editor.wordWrapColumn.title', 'Word wrap column'); },
+			get description() { return localize('editor.wordWrapColumn.description', 'Maximum column used by column and bounded word wrapping.'); },
+		},
 	}),
 	wrappingIndent: configurationRegistry.registerConfiguration<WrappingIndentSetting>({
 		key: "editor.wrappingIndent",
@@ -420,6 +439,16 @@ export const CodeEditorConfiguration = Object.freeze({
 	diffHideUnchangedRegionsContextLineCount: 'diffEditor.hideUnchangedRegions.contextLineCount',
 	diffHideUnchangedRegionsMinimumLineCount: 'diffEditor.hideUnchangedRegions.minimumLineCount',
 	diffHideUnchangedRegionsRevealLineCount: 'diffEditor.hideUnchangedRegions.revealLineCount',
+	diffCodeLens: configurationRegistry.registerConfiguration<boolean>({
+		key: 'diffEditor.codeLens',
+		defaultValue: false,
+		parse: value => parseBoolean(value, 'diffEditor.codeLens'),
+		setting: {
+			valueType: 'boolean',
+			get title() { return localize('diffEditor.codeLens.title', 'CodeLens in diff editor'); },
+			get description() { return localize('diffEditor.codeLens.description', 'Show provider actions and references in diff editors.'); },
+		},
+	}),
 	diffWordWrap: configurationRegistry.registerConfiguration<'off' | 'on' | 'inherit'>({
 		key: 'diffEditor.wordWrap',
 		defaultValue: 'inherit',

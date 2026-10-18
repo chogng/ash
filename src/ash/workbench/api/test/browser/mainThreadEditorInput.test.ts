@@ -49,3 +49,10 @@ test('extension editor inputs retain validated snapshot encodings', () => {
 		assert.throws(() => parseExtensionEditorInput({ resource: 'snapshot:/invalid', encoding }));
 	}
 });
+
+test('extension snapshots preserve preferred file identity and language independently of content identity', () => {
+	const input = parseExtensionEditorInput({ resource: 'git-change:/unstaged/TODO.md', preferredResource: 'file:///project/TODO.md', languageId: 'markdown', initialText: '# Heading' });
+	assert.equal(input.resource.toString(), 'git-change:/unstaged/TODO.md');
+	assert.equal(input.preferredResource?.toString(), 'file:///project/TODO.md');
+	assert.equal(input.languageId, 'markdown');
+});

@@ -1,3 +1,4 @@
+import { DiffEditorWidget } from '../../../../editor/browser/widget/diffEditor/diffEditorWidget.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import { h } from "../../../../base/browser/dom.js";
 import { localize } from '../../../../nls.js';
@@ -174,7 +175,8 @@ export class EditorHeaderControl extends Disposable {
 	}
 
 	private watchSymbols(pane: IEditorPane): void {
-		const control = pane.getControl?.() as Partial<{
+		const paneControl = pane.getControl?.();
+		const control = (paneControl instanceof DiffEditorWidget ? paneControl.modifiedEditor : paneControl) as Partial<{
 			getModel(): TextModel | null;
 			getPosition(): Position | null;
 			onDidChangeCursorSelection: Event<unknown>;
@@ -184,6 +186,7 @@ export class EditorHeaderControl extends Disposable {
 		if (!model) return;
 		const scheduler = this.symbolListeners.add(new RunOnceScheduler(() => void this.loadSymbols(model, control), 150));
 		this.symbolListeners.add(model.onDidChangeContent(() => scheduler.schedule()));
+		this.symbolListeners.add(model.onDidChangeLanguage(() => scheduler.schedule()));
 		this.symbolListeners.add(this.languageFeatures!.documentSymbolProvider.onDidChange(() => scheduler.schedule()));
 		this.symbolListeners.add(control.onDidChangeCursorSelection(() => this.updateCurrentSymbol(control.getPosition?.() ?? null)));
 		void this.loadSymbols(model, control);

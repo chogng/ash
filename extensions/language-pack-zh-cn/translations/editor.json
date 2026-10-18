@@ -1,5 +1,17 @@
 {
   "ash": {
+    "diffEditor.codeLens.title": "差异编辑器中的 CodeLens",
+    "diffEditor.codeLens.description": "在差异编辑器中显示提供程序操作和引用。",
+    "diffEditor.editing.help": "修改侧支持常规编辑器命令，包括查找、悬停，以及提供程序可用时的补全。原始侧保持只读。使用 <keybinding:editor.action.toggleWordWrap> 临时切换自动换行；按语言设置的编辑器和差异设置决定配置的模式。面包屑显示修改侧文件及当前符号。将焦点移到面包屑后，使用方向键选择项目，按 Enter 打开选择器。按 Escape 关闭选择器并返回焦点。",
+    "editor.wordWrapColumn.invalid": "自动换行列必须为正整数。",
+    "editor.wordWrapColumn.title": "自动换行列",
+    "editor.wordWrapColumn.description": "按列换行和限定范围换行使用的最大列数。",
+    "editor.wordWrap.title": "自动换行",
+    "editor.wordWrap.description": "在视口宽度、配置的列宽或两者中的较小宽度处换行。",
+    "editor.wordWrap.off": "关闭",
+    "editor.wordWrap.on": "视口宽度",
+    "editor.wordWrap.column": "自动换行列",
+    "editor.wordWrap.bounded": "视口宽度或自动换行列",
     "size.spacing": "标准 {0}px 间距。",
     "size.cornerRadius.xSmall": "极紧凑元素的圆角半径。",
     "size.cornerRadius.small": "控件的圆角半径。",

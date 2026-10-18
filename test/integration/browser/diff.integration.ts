@@ -1,3 +1,9 @@
+import { LanguageCompletionItemKind } from '../../../src/ash/editor/common/languages.js';
+import '../../../src/ash/editor/editor.all.js';
+import { ILanguageFeaturesService } from '../../../src/ash/editor/common/services/languageFeatures.js';
+import { WorkspaceContextService } from '../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js';
+import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
+import { BreadcrumbsSymbolPicker } from '../../../src/ash/workbench/browser/parts/editor/breadcrumbsPicker.js';
 import { IFileTextModelService } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResourceService.js';
 import { IWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/common/workingCopyService.js';
 import { Icon } from '../../../src/ash/base/common/icon.js';
@@ -48,7 +54,7 @@ import { IContextKeyService } from '../../../src/ash/platform/contextkey/browser
 import { IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
 import { createTestEditorServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
-import { EditorPart, IEditorPart } from '../../../src/ash/workbench/browser/parts/editor/editorPart.js';
+import { EditorPart, IEditorPart, type IEditorPartOptions } from '../../../src/ash/workbench/browser/parts/editor/editorPart.js';
 import { EditorPaneRegistry } from '../../../src/ash/workbench/browser/editor.js';
 import { EditorPaneMatch } from '../../../src/ash/workbench/browser/parts/editor/editorPane.js';
 import { TextDiffEditor } from '../../../src/ash/workbench/browser/parts/editor/textDiffEditor.js';
@@ -362,7 +368,7 @@ resources.add(registerAction2(ChangeEOLAction));
 resources.add(registerAction2(ChangeEncodingAction));
 
 const harness = {
-	async openTitleComparison(kind: 'diff' | 'history' | 'git' | 'writable' | 'binary' | 'encoding' = 'diff', gitComparison: 'staged' | 'unstaged' = 'unstaged', encoding: 'utf8' | 'utf8bom' = 'utf8'): Promise<void> {
+	async openTitleComparison(kind: 'diff' | 'history' | 'git' | 'writable' | 'binary' | 'encoding' | 'markdown' = 'diff', gitComparison: 'staged' | 'unstaged' = 'unstaged', encoding: 'utf8' | 'utf8bom' = 'utf8'): Promise<void> {
 		titleGitEncoding = encoding;
 		registerDiffEditorCommands();
 		const host = document.createElement('div');
@@ -376,6 +382,18 @@ const harness = {
 		const parentServices = resources.add(createTestEditorServices(titleConfiguration));
 		const services = resources.add(parentServices.createChild());
 		titleServices = services;
+		if (kind === 'markdown') {
+			services.registerInstance(ILanguageFeaturesService, editorServices.languageFeaturesService);
+			services.registerInstance(IWorkspaceContextService, resources.add(new WorkspaceContextService({ id: 'markdown', uri: URI.file('/fixture') })));
+			resources.add(editorServices.languageFeaturesService.documentSymbolProvider.register('markdown', {
+				provideDocumentSymbols: request => [{
+					name: 'Cross-machine Desktop acceptance', kind: 'string',
+					range: new Range(1, 1, request.model.getLineCount(), request.model.getLineMaxColumn(request.model.getLineCount())),
+					selectionRange: new Range(1, 1, 1, request.model.getLineMaxColumn(1)),
+				}],
+			}));
+			await titleConfiguration.updateValue('editor.wordWrap', 'on', { overrideIdentifier: 'markdown' });
+		}
 		if (kind === 'encoding') {
 			services.registerInstance(ITextFileService, {
 				onDidChangeFiles: Event.None, onDidSave: Event.None,
@@ -534,9 +552,11 @@ const harness = {
 		titleEditor = resources.add(services.createInstance(EditorPart, host, {
 			registry,
 			configurationService: titleConfiguration,
+			languageFeaturesService: kind === 'markdown' ? editorServices.languageFeaturesService : undefined,
+			showBreadcrumbSymbolPicker: (symbols, selected, reveal) => { resources.add(services.createInstance(BreadcrumbsSymbolPicker, symbols, selected, reveal)).show(); },
 			contextKeyService: contexts,
 			titleActions: { menuService: services.get(IMenuService), contextMenuProvider: services.get(IContextMenuService) },
-		}));
+		} satisfies IEditorPartOptions));
 		titleEditor.layout({ width: 1000, height: 300 });
 		const statusbar = resources.add(new StatusbarService());
 		resources.add(services.createInstance(StatusbarPart, host, statusbar));
@@ -559,6 +579,14 @@ const harness = {
 			await titleEditor.openEditor(writableTitleInput, { pinned: true });
 			return;
 		}
+		if (kind === 'markdown') {
+			const text = '# Cross-machine Desktop acceptance\n\n' + 'Markdown **content** with `inline code` and a [link](https://example.test). '.repeat(8);
+			await titleEditor.openEditor(createDiffEditorInput(
+				{ resource: URI.parse('git-change:/unstaged/docs/TODO.md?side=original'), preferredResource: URI.file('/fixture/docs/TODO.md'), initialText: text.replace('acceptance', 'verification'), languageId: 'markdown', readOnly: true },
+				{ resource: URI.parse('git-change:/unstaged/docs/TODO.md?side=modified'), preferredResource: URI.file('/fixture/docs/TODO.md'), initialText: text, languageId: 'markdown' },
+			), { pinned: true });
+			return;
+		}
 		if (kind === 'history') {
 			await titleEditor.openEditor(createMultiDiffEditorInput(
 				URI.parse('ash-multi-diff:/scm-history/repo_internal/parent/98246c6'),
@@ -576,6 +604,37 @@ const harness = {
 			{ resource: URI.file('/title/before.ts'), label: 'before.ts', initialText: 'before\nshared ' },
 			{ resource: URI.file('/title/after.ts'), label: 'after.ts', initialText: 'after\nshared' },
 		), { pinned: true });
+	},
+	prepareMarkdownEditing(): void {
+		const diff = (titleEditor!.activePane as TextDiffEditor).getControl()!;
+		resources.add(editorServices.languageFeaturesService.hoverProvider.register('markdown', {
+			provideHover: () => ({ range: new Range(1, 3, 1, 9), contents: ['Markdown hover from language provider'] }),
+		}));
+		resources.add(editorServices.languageFeaturesService.completionProvider.register({
+			id: 'markdown-diff-fixture', languageIds: ['markdown'],
+			provideCompletions: request => ({
+				items: [{ id: 'completed', label: 'completedMarkdown', kind: LanguageCompletionItemKind.Text, range: Range.fromPositions(request.position), insertText: 'completedMarkdown' }],
+				isIncomplete: false,
+			}),
+		}));
+		diff.modifiedEditor.getModel()!.setValue('# sample');
+		diff.modifiedEditor.setPosition({ lineNumber: 1, column: 9 });
+	},
+	readMarkdownComparison() {
+		const diff = (titleEditor!.activePane as TextDiffEditor).getControl()!;
+		return {
+			position: diff.modifiedEditor.getPosition(),
+			wordWrap: diff.modifiedEditor.getOption(EditorOption.wordWrap),
+			wrappingColumns: [diff.originalEditor, diff.modifiedEditor].map(editor => ({ column: editor.getOption(EditorOption.wrappingInfo).wrappingColumn, characterWidth: editor.getOption(EditorOption.fontInfo).typicalHalfwidthCharacterWidth, contentWidth: editor.getLayoutInfo().contentWidth, editorWidth: editor.getLayoutInfo().width, glyphMarginWidth: editor.getLayoutInfo().glyphMarginWidth, decorationsWidth: editor.getLayoutInfo().decorationsWidth })),
+			find: !!diff.modifiedEditor.getContribution('editor.contrib.findController'),
+			hover: !!diff.modifiedEditor.getContribution('editor.contrib.hover'),
+			suggest: !!diff.modifiedEditor.getContribution('editor.contrib.suggestController'),
+			originalReadonly: diff.originalEditor.getOption(EditorOption.readOnly),
+			modifiedReadonly: diff.modifiedEditor.getOption(EditorOption.readOnly),
+			codeLens: [diff.originalEditor, diff.modifiedEditor].map(editor => editor.getOption(EditorOption.codeLens)),
+			minimap: [diff.originalEditor, diff.modifiedEditor].map(editor => editor.getOption(EditorOption.minimap).enabled),
+			codeLensTitle: Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(CodeEditorConfiguration.diffCodeLens)?.setting?.title,
+		};
 	},
 	readTitlePersistence(): { dirty: boolean; copies: number; writes: { resource: string; text: string; encoding?: string; }[]; tabs: number; active: string | undefined; } {
 		return { dirty: titleEditor!.activeGroup.editors.some(editor => editor.isDirty), copies: titleServices!.get(IWorkingCopyService).getAll().length, writes: [...titleWrites], tabs: titleEditor!.activeGroup.inputs.length, active: titleEditor!.activeInput?.resource.toString() };
@@ -596,8 +655,8 @@ const harness = {
 		const editor = titleServices!.get(ICodeEditorService).listDiffEditors().find(candidate => candidate instanceof DiffEditorWidget) as DiffEditorWidget;
 		editor.modifiedEditor.setSelection(new Range(...range));
 	},
-	async updateTitleEditorConfiguration(key: string, value: unknown): Promise<void> {
-		await titleConfiguration!.updateValue(key, value);
+	async updateTitleEditorConfiguration(key: string, value: unknown, languageId?: string): Promise<void> {
+		await titleConfiguration!.updateValue(key, value, { overrideIdentifier: languageId });
 	},
 	updateTitleGit(paths: string[], revision: number, delay = 0, repositoryId = 'repo'): void {
 		titleGitDelay = delay;
@@ -1029,6 +1088,9 @@ const harness = {
 			originalScrollTop: single.originalEditor.getScrollTop(),
 			modifiedScrollTop: single.modifiedEditor.getScrollTop(),
 		};
+	},
+	setWrapping(mode: 'off' | 'on' | 'bounded' | 'wordWrapColumn', column: number): void {
+		single.setConfiguredWordWrap(mode, column);
 	},
 	toggleWordWrap(): void {
 		single.toggleWordWrap();

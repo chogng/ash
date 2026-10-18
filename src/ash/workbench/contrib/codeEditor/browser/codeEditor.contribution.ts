@@ -107,6 +107,8 @@ registerEditorPane({
 		return instantiationService.createInstance(TextDiffEditor, resourceStore, {
 			modelService: getBrowserTextModelService(resourceStore, instantiationService),
 			createComputationService: () => diffService.createComputationService(),
+			onOpenLocation: options.onOpenLocation,
+			onApplyWorkspaceEdit: options.onApplyWorkspaceEdit,
 			showLineNumbers: configuration?.getValue(CodeEditorConfiguration.diffShowLineNumbers),
 			showInlineChanges: configuration?.getValue(CodeEditorConfiguration.diffShowInlineChanges),
 			loopChanges: configuration?.getValue(CodeEditorConfiguration.diffLoopChanges),

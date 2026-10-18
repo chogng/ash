@@ -1707,7 +1707,7 @@ const editorOptions = {
 	wordWrap: register(new EditorOptionDefinition(EditorOption.wordWrap, 'wordWrap', 'off' as EditorWordWrap, input => enumValue(input, 'off' as EditorWordWrap, ['off', 'on', 'wordWrapColumn', 'bounded'] as const))),
 	lineNumbers: register(new EditorOptionDefinition(EditorOption.lineNumbers, 'lineNumbers', defaultLineNumbers(), validateLineNumbers)),
 	glyphMargin: register(new EditorOptionDefinition(EditorOption.glyphMargin, 'glyphMargin', true, input => booleanValue(input, true))),
-	lineDecorationsWidth: register(new EditorOptionDefinition(EditorOption.lineDecorationsWidth, 'lineDecorationsWidth', 10, validateLineDecorationsWidth, undefined, (environment, _options, value) => value < 0 ? boundedInteger(-value * environment.fontInfo.typicalHalfwidthCharacterWidth, 10, 0, 1000) : value)),
+	lineDecorationsWidth: register(new EditorOptionDefinition(EditorOption.lineDecorationsWidth, 'lineDecorationsWidth', 10, validateLineDecorationsWidth, undefined, (environment, _options, value) => value < 0 ? boundedInteger(Math.floor(-value * environment.fontInfo.typicalHalfwidthCharacterWidth), 10, 0, 1000) : value)),
 	rulers: register(new EditorOptionDefinition(EditorOption.rulers, 'rulers', Object.freeze([]) as readonly IRulerOption[], validateRulers)),
 	minimap: register(new EditorOptionDefinition(EditorOption.minimap, 'minimap', defaultMinimapOptions(), validateMinimapOptions)),
 	scrollbar: register(new EditorOptionDefinition(EditorOption.scrollbar, 'scrollbar', defaultScrollbarOptions(), validateScrollbarOptions)),
@@ -1957,7 +1957,7 @@ const stringCompatibilityDefaults = {
 	placeholder: undefined,
 	readOnlyMessage: undefined,
 	wordSeparators: `~!@#$%^&*()-=+[\\]{}\\\\|;:'\",.<>/?`,
-	wordWrapBreakAfterCharacters: ' \\t})]?|/&.,;!?:',
+	wordWrapBreakAfterCharacters: ' \t})]?|/&.,;!?:',
 	wordWrapBreakBeforeCharacters: '([{',
 } as const;
 

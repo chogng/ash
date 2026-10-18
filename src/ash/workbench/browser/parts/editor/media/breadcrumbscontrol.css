@@ -46,3 +46,13 @@
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: calc(-1 * var(--ash-strokeThickness));
 }
+
+.ash-editor-breadcrumbs .ash-icon-label {
+	min-width: 0;
+	font: inherit;
+}
+
+.ash-editor-breadcrumbs .ash-icon-label-icon {
+	width: var(--ash-lxiconFontSize);
+	height: var(--ash-lxiconFontSize);
+}

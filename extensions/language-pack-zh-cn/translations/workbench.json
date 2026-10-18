@@ -23,6 +23,8 @@
     "appServer.webAuthorizationExpired": "Web 授权已过期或被撤销。请打开新的授权链接。",
     "appServer.webWorkspaceChanged": "Web 工作区已改变。请打开新的授权链接。",
     "notifications.agentHostRecoveryHelp": "Agent Host 恢复失败时，使用 Tab 移到“重新连接”，按 Enter 或空格键重试。也可在命令面板中运行“Agent Host: 重新连接”。重新连接不会重发未完成的消息。若授权已过期，请打开新的授权链接。",
+    "breadcrumbs.icons.title": "面包屑图标",
+    "breadcrumbs.icons.description": "在编辑器面包屑中显示文件和符号图标。",
     "terminal.confirmKill": "要终止“{0}”中正在运行的进程吗？",
     "terminal.confirmKillDetail": "关闭此终端将停止其 Shell 和子进程。",
     "terminal.terminate": "终止",

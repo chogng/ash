@@ -49,6 +49,94 @@ for (const kind of ['diff', 'multidiff'] as const) {
 	});
 }
 
+test('diff wrapping preserves column modes and aligns the same Markdown lines after resize', async ({ page }) => {
+	await openDiffPage(page);
+	const markdown = '# Cross-machine Desktop acceptance\n\n' + 'Markdown **content** with `inline code` and a [link](https://example.test). '.repeat(8);
+	await page.evaluate(text => window.ashDiffIntegration.setComparisonText(text.replace('acceptance', 'verification'), text), markdown);
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+	const height = () => page.evaluate(() => {
+		const geometry = window.ashDiffIntegration.linePositions(3, 3);
+		return { original: geometry.originalBottom - geometry.originalTop, modified: geometry.modifiedBottom - geometry.modifiedTop };
+	});
+	await page.evaluate(() => window.ashDiffIntegration.setWrapping('off', 32));
+	const unwrapped = await height();
+	await page.evaluate(() => window.ashDiffIntegration.setWrapping('wordWrapColumn', 32));
+	await expect.poll(async () => (await height()).modified).toBeGreaterThan(unwrapped.modified * 5);
+	const column = await height();
+	expect(column.original).toBe(column.modified);
+	await page.locator('#single').evaluate(node => { node.style.width = '1200px'; });
+	await expect.poll(height).toEqual(column);
+	await page.evaluate(() => window.ashDiffIntegration.setWrapping('bounded', 32));
+	await expect.poll(height).toEqual(column);
+	await page.evaluate(() => window.ashDiffIntegration.setWrapping('on', 32));
+	await expect.poll(async () => (await height()).modified).toBeLessThan(column.modified);
+});
+
+for (const locale of ['en', 'zh-CN'] as const) {
+	test(`Markdown diff connects file navigation, symbols, icons and editing contributions (${locale})`, async ({ page }, testInfo) => {
+		await openDiffPage(page, locale);
+		await page.setViewportSize({ width: 1440, height: 900 });
+		await page.evaluate(() => window.ashDiffIntegration.openTitleComparison('markdown'));
+		await page.evaluate(async () => {
+			await window.ashDiffIntegration.updateTitleEditorConfiguration('editor.fontSize', 13);
+			await window.ashDiffIntegration.updateTitleEditorConfiguration('editor.lineHeight', 20);
+		});
+		await expect.poll(async () => (await page.evaluate(() => window.ashDiffIntegration.readMarkdownComparison())).wrappingColumns.map(info => info.glyphMarginWidth)).toEqual([20, 20]);
+		const wrapping = (await page.evaluate(() => window.ashDiffIntegration.readMarkdownComparison())).wrappingColumns;
+		expect(wrapping.map(info => info.glyphMarginWidth)).toEqual([20, 20]);
+		expect(wrapping.map(info => info.decorationsWidth)).toEqual(wrapping.map(info => Math.floor(info.characterWidth * 2)));
+		const host = page.locator('#title-comparison');
+		const breadcrumbs = host.locator('.ash-editor-breadcrumbs');
+		await expect(breadcrumbs).toContainText('Cross-machine Desktop acceptance');
+		await expect(breadcrumbs).not.toContainText('unstaged');
+		await expect(breadcrumbs.locator('.ash-breadcrumb-item')).toHaveText(['docs', 'TODO.md', 'Cross-machine Desktop acceptance']);
+		await expect(breadcrumbs.locator('.ash-icon-label-icon svg')).toHaveCount(1);
+		expect(await page.evaluate(() => window.ashDiffIntegration.readMarkdownComparison())).toMatchObject({ wordWrap: 'on', find: true, hover: true, suggest: true, originalReadonly: true, modifiedReadonly: false });
+		await breadcrumbs.locator('.ash-breadcrumb-item').last().focus();
+		await page.keyboard.press('Enter');
+		const picker = page.getByRole('combobox');
+		await expect(picker).toBeVisible();
+		await page.keyboard.press('Enter');
+		await expect(picker).toBeHidden();
+		expect((await page.evaluate(() => window.ashDiffIntegration.readMarkdownComparison())).position).toMatchObject({ lineNumber: 1, column: 35 });
+		await expect(host.locator('.modified .stanza-editor-input')).toBeFocused();
+		await page.evaluate(() => window.ashDiffIntegration.updateTitleEditorConfiguration('breadcrumbs.icons', false));
+		await expect(breadcrumbs.locator('.ash-icon-label-icon svg')).toHaveCount(0);
+		await page.evaluate(() => window.ashDiffIntegration.updateTitleEditorConfiguration('breadcrumbs.icons', true));
+		await expect(breadcrumbs.locator('.ash-icon-label-icon svg')).toHaveCount(1);
+		await page.evaluate(() => window.ashDiffIntegration.updateTitleEditorConfiguration('editor.wordWrap', 'bounded', 'markdown'));
+		expect((await page.evaluate(() => window.ashDiffIntegration.readMarkdownComparison())).wordWrap).toBe('bounded');
+		await page.evaluate(async () => {
+			await window.ashDiffIntegration.updateTitleEditorConfiguration('editor.minimap.enabled', true);
+			await window.ashDiffIntegration.updateTitleEditorConfiguration('diffEditor.codeLens', true, 'markdown');
+		});
+		expect(await page.evaluate(() => window.ashDiffIntegration.readMarkdownComparison())).toMatchObject({ codeLens: [true, true], minimap: [false, false] });
+		expect((await page.evaluate(() => window.ashDiffIntegration.readMarkdownComparison())).codeLensTitle).toBe(localized(locale, 'CodeLens in diff editor', '差异编辑器中的 CodeLens'));
+		await host.screenshot({ path: testInfo.outputPath(`markdown-diff-${locale}.png`) });
+		await page.evaluate(() => window.ashDiffIntegration.prepareMarkdownEditing());
+		const input = host.locator('.modified .stanza-editor-input');
+		await input.focus();
+		await page.keyboard.press('ControlOrMeta+k');
+		await page.keyboard.press('ControlOrMeta+i');
+		await expect(page.locator('.stanza-editor-hover:visible')).toContainText('Markdown hover from language provider');
+		await page.keyboard.press('Escape');
+		await input.focus();
+		await page.keyboard.press('Control+Space');
+		const suggestion = page.getByRole('option').filter({ hasText: 'completedMarkdown' });
+		await expect(suggestion).toBeVisible();
+		await suggestion.click();
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readTitleComparison().modified)).toBe('# samplecompletedMarkdown');
+		await input.focus();
+		await page.keyboard.press('ControlOrMeta+z');
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readTitleComparison().modified)).toBe('# sample');
+		const original = await page.evaluate(() => window.ashDiffIntegration.readTitleComparison().original);
+		await host.locator('.original .stanza-editor-input').focus();
+		await page.keyboard.insertText('blocked');
+		expect(await page.evaluate(() => window.ashDiffIntegration.readTitleComparison().original)).toBe(original);
+
+	});
+}
+
 test('sash dragging under CPU throttling retains inline diff zones and skips unaffected grid leaves', async ({ page }, testInfo) => {
 	await openDiffPage(page, 'zh-CN');
 	const shared = Array.from({ length: 200 }, (_, index) => `shared ${index}`).join('\n');
@@ -1310,7 +1398,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			const controls = [...node.querySelectorAll('.ash-diff-gutter button')].map(button => button.getBoundingClientRect());
 			return { leftGap: gutter.left - original.right, rightGap: modified.left - gutter.right, width: gutter.width, controlsFit: controls.every(button => button.top >= gutter.top && button.bottom <= gutter.bottom) };
 		});
-		expect(bounds).toEqual({ leftGap: 0, rightGap: 0, width: 36, controlsFit: true });
+		expect(bounds).toEqual({ leftGap: 0, rightGap: 0, width: 35, controlsFit: true });
 		await stage.focus();
 		await page.keyboard.press('Space');
 		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.gitGutterCalls)).toEqual([{

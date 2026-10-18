@@ -89,7 +89,7 @@ export class DiffEditorGutter extends Disposable {
 	}
 
 	public get width(): number {
-		return this.enabled && this.available ? 36 : 0;
+		return this.enabled && this.available ? 35 : 0;
 	}
 
 	public update(enabled: boolean, options: { renderRevert: boolean; }): void {

@@ -112,6 +112,8 @@ export interface IResourceEditorInput {
 	canMove?(sourceGroup: string, targetGroup: string): true | string;
 	readonly capabilities?: EditorInputCapabilities;
 	readonly resource: URI;
+	/** Resource used for labels and navigation while resource retains content identity. */
+	readonly preferredResource?: URI;
 	readonly contentType?: string;
 	readonly languageId?: string;
 	readonly label?: string;
@@ -177,8 +179,9 @@ class EditorResourceAccessorImpl {
 			}
 			return this.getOriginalUri(options.supportSideBySide === SideBySideEditor.SECONDARY ? editor.original : editor.modified, options);
 		}
+		const resource = editor.preferredResource ?? editor.resource;
 		const filter = options.filterByScheme;
-		return filter === undefined || (typeof filter === 'string' ? filter === editor.resource.scheme : filter.includes(editor.resource.scheme)) ? editor.resource : undefined;
+		return filter === undefined || (typeof filter === 'string' ? filter === resource.scheme : filter.includes(resource.scheme)) ? resource : undefined;
 	}
 }
 

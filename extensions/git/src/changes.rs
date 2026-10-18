@@ -111,8 +111,17 @@ impl GitRuntime {
             } else {
                 Comparison::Unstaged
             };
-            let (original, modified) =
+            let (original, mut modified) =
                 self.change_inputs(repository, status, change, comparison, token)?;
+            if comparison == Comparison::Unstaged
+                && change.worktree_status != "deleted"
+                && original["contentType"] != "application/octet-stream"
+                && modified["contentType"] != "application/octet-stream"
+            {
+                // Workbench owns the live working copy, including unsaved edits and Save.
+                modified =
+                    json!({"resource":file_uri(&repository.root_uri,&change.path)?,"label":path});
+            }
             if repository.configuration.boolean("openDiffOnClick", true) {
                 diff_input(original, modified, path)
             } else {
@@ -158,8 +167,14 @@ impl GitRuntime {
             .query_pairs_mut()
             .append_pair("side", "original");
         uri.query_pairs_mut().append_pair("side", "modified");
-        let original = content_input(&file.original, original_uri.to_string(), original_path);
-        let modified = content_input(&file.modified, uri.to_string(), &change.path);
+        let mut original = content_input(&file.original, original_uri.to_string(), original_path);
+        let mut modified = content_input(&file.modified, uri.to_string(), &change.path);
+        // Snapshot URIs own versioned contents; labels and navigation follow the file.
+        original["preferredResource"] = json!(file_uri(
+            &repository.root_uri,
+            &RepoPath::parse(original_path)?
+        )?);
+        modified["preferredResource"] = json!(file_uri(&repository.root_uri, &change.path)?);
         Ok((original, modified))
     }
     pub(crate) fn multi_diff(
@@ -672,7 +687,7 @@ impl GitRuntime {
                 .ok_or_else(|| invalid("Missing diff context"))?,
         )
         .map_err(|_| invalid("Invalid diff context"))?;
-        let query: std::collections::BTreeMap<_, _> = modified
+        let modified_query: std::collections::BTreeMap<_, _> = modified
             .query_pairs()
             .map(|(key, value)| (key.into_owned(), value.into_owned()))
             .collect();
@@ -685,21 +700,35 @@ impl GitRuntime {
         } else {
             Comparison::Unstaged
         };
+        let live_worktree = comparison == Comparison::Unstaged
+            && original_query.get("resource").map(String::as_str) == Some(modified.as_str());
+        let query = if live_worktree {
+            &original_query
+        } else {
+            &modified_query
+        };
         let prefix = format!("/{comparison}/");
         if original.scheme() != "git-change"
-            || modified.scheme() != "git-change"
-            || !modified.path().starts_with(&prefix)
             || !original.path().starts_with(&prefix)
             || query.get("repository") != Some(&repository.descriptor.id)
-            || query.get("side").map(String::as_str) != Some("modified")
             || original_query.get("side").map(String::as_str) != Some("original")
-            || ["repository", "stream", "revision"]
-                .iter()
-                .any(|key| query.get(*key) != original_query.get(*key))
+            || (!live_worktree
+                && (modified.scheme() != "git-change"
+                    || !modified.path().starts_with(&prefix)
+                    || query.get("side").map(String::as_str) != Some("modified")
+                    || ["repository", "stream", "revision"]
+                        .iter()
+                        .any(|key| query.get(*key) != original_query.get(*key))))
         {
             return Err(invalid(&self.api.text("git.reopenComparison", &[])));
         }
-        let path = RepoPath::parse(&percent_decode_path(&modified.path()[prefix.len()..])?)?;
+        // The original snapshot retains comparison provenance when the modified side is live.
+        let path = if live_worktree {
+            relative_resource(repository, modified.as_str())
+                .ok_or_else(|| invalid(&self.api.text("git.reopenComparison", &[])))?
+        } else {
+            RepoPath::parse(&percent_decode_path(&modified.path()[prefix.len()..])?)?
+        };
         let capture = || {
             self.api.editor(
                 json!({"method":"diffChange","context":context}),
@@ -712,7 +741,7 @@ impl GitRuntime {
         }
         let status = self.api.status(repository, Some(token))?;
         if query.get("stream") != Some(&status.stream_instance_id)
-            || query.get("revision") != Some(&status.revision.to_string())
+            || (!live_worktree && query.get("revision") != Some(&status.revision.to_string()))
         {
             return Err(invalid(&self.api.text("git.reopenComparison", &[])));
         }
@@ -831,7 +860,7 @@ fn content_input(content: &FileContent, resource: String, label: &str) -> Value 
     input
 }
 fn diff_input(original: Value, modified: Value, label: &str) -> Value {
-    json!({"kind":if original["contentType"]=="application/octet-stream" || modified["contentType"]=="application/octet-stream" {"binaryDiff"} else {"diff"},"resource":modified["resource"],"label":label,"original":original,"modified":modified,"readOnly":true})
+    json!({"kind":if original["contentType"]=="application/octet-stream" || modified["contentType"]=="application/octet-stream" {"binaryDiff"} else {"diff"},"resource":modified["resource"],"label":label,"original":original,"readOnly":modified["readOnly"]==true,"modified":modified})
 }
 pub(crate) fn relative_resource(
     repository: &Repository,

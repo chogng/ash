@@ -242,15 +242,18 @@ test('DiffEditorWidget applies the split ratio and disables its separator when r
 		container, model, splitViewDefaultRatio: 0.3, enableSplitViewResizing: false,
 	});
 	editor.layout({ width: 530, height: 80 });
-	assert.equal(editor.element.style.getPropertyValue('--ash-diff-center-width'), '36px');
-	assert.equal(editor.element.style.getPropertyValue('--stanza-diff-original-width'), '139px');
+	assert.equal(editor.element.style.getPropertyValue('--ash-diff-center-width'), '35px');
+	assert.equal(editor.element.style.getPropertyValue('--stanza-diff-original-width'), '115px');
 	const sash = editor.element.querySelector('.stanza-diff-sash');
 	assert.equal(sash?.getAttribute('aria-disabled'), 'true');
 	assert.equal(sash?.getAttribute('aria-valuenow'), '30');
 	assert.equal((sash as HTMLElement).hidden, true);
 	editor.setSplitViewOptions(true, 0.4);
-	assert.equal(editor.element.style.getPropertyValue('--stanza-diff-original-width'), '186px');
+	assert.equal(editor.element.style.getPropertyValue('--stanza-diff-original-width'), '165px');
 	assert.equal(sash?.getAttribute('aria-disabled'), 'false');
+	editor.setSplitViewOptions(true, 0.5);
+	editor.layout({ width: 531, height: 80 });
+	assert.equal(editor.element.style.getPropertyValue('--stanza-diff-original-width'), '215px');
 	assert.throws(() => editor.setSplitViewOptions(true, 1), /between 0.1 and 0.9/);
 });
 
@@ -262,7 +265,7 @@ test('DiffEditorWidget retains unwrapped alignment zones and accessible inline d
 	using model = new DiffModel({ original, modified, diffProvider: computation, diffOptions });
 	await waitForReady(model);
 	const container = browserEnvironment.window.document.createElement('main');
-	using editor = services.createInstance(DiffEditorWidget, { container, model, wordWrap: false, lineHeight: 20 });
+	using editor = services.createInstance(DiffEditorWidget, { container, model, wordWrap: 'off', lineHeight: 20 });
 	editor.layout({ width: 800, height: 200 });
 	const zone = editor.element.querySelector('.ash-diff-alignment-zone');
 	assert.ok(zone);
@@ -323,7 +326,7 @@ test('DiffEditorWidget inserts paired view space for added lines and navigates w
 		container,
 		model,
 		lineHeight: 20,
-		wordWrap: false,
+		wordWrap: 'off',
 		loopChanges: false,
 		readOnly: true,
 	});

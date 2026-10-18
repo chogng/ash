@@ -1,12 +1,13 @@
+import type { CodeEditorWidgetOptions } from '../codeEditor/codeEditorWidget.js';
 import { getWindow, isHTMLElement } from '../../../../base/browser/dom.js';
 import { isFiniteNumber } from '../../../../base/common/numbers.js';
 import { type HideUnchangedRegionsOptions, diffEditorDefaultOptions } from '../../../common/config/diffEditor.js';
 import { type DiffModel } from '../../../common/diff/diffModel.js';
-import type { IDiffEditorOptions } from '../../../common/config/editorOptions.js';
+import type { IDiffEditorOptions, IEditorOptions } from '../../../common/config/editorOptions.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { localize } from '../../../../nls.js';
 
-export interface DiffEditorWidgetOptions {
+export interface DiffEditorWidgetOptions extends IDiffEditorOptions, Pick<CodeEditorWidgetOptions, 'onOpenLocation' | 'onApplyWorkspaceEdit'> {
 	readonly container: HTMLElement;
 	readonly model: DiffModel;
 	readonly lineHeight?: number;
@@ -18,7 +19,8 @@ export interface DiffEditorWidgetOptions {
 	readonly loopChanges?: boolean;
 	readonly originalAriaLabel?: string;
 	readonly modifiedAriaLabel?: string;
-	readonly wordWrap?: boolean;
+	readonly wordWrap?: IEditorOptions['wordWrap'];
+	readonly wordWrapColumn?: number;
 	readonly readOnly?: boolean;
 	readonly scrollBeyondLastLine?: boolean;
 	readonly hideUnchangedRegions?: HideUnchangedRegionsOptions;
@@ -36,8 +38,9 @@ export interface DiffEditorWidgetOptions {
 
 /** Owns the mutable presentation choices shared by Diff layout and its editors. */
 export class DiffEditorOptions {
-	private configuredWordWrap: boolean;
-	private temporaryWordWrap: boolean | undefined;
+	private configuredWordWrap: NonNullable<IEditorOptions['wordWrap']>;
+	private diffWordWrap: NonNullable<IDiffEditorOptions['diffWordWrap']>;
+	private temporaryWordWrap: 'on' | 'off' | undefined;
 	private renderSideBySide: boolean;
 	private useInlineViewWhenSpaceIsLimited: boolean;
 	private inlineBreakpoint: number;
@@ -47,7 +50,8 @@ export class DiffEditorOptions {
 
 	constructor(options: DiffEditorWidgetOptions, @IConfigurationService private readonly configuration: IConfigurationService) {
 		validateOptions(options);
-		this.configuredWordWrap = options.wordWrap ?? false;
+		this.configuredWordWrap = options.wordWrap ?? 'off';
+		this.diffWordWrap = options.diffWordWrap ?? 'inherit';
 		this.renderSideBySide = options.renderSideBySide ?? true;
 		this.useInlineViewWhenSpaceIsLimited = options.useInlineViewWhenSpaceIsLimited ?? false;
 		this.inlineBreakpoint = options.renderSideBySideInlineBreakpoint ?? diffEditorDefaultOptions.renderSideBySideInlineBreakpoint;
@@ -83,11 +87,13 @@ export class DiffEditorOptions {
 	}
 
 	public updateOptions(options: IDiffEditorOptions): void {
+		if (options.wordWrap !== undefined) this.configuredWordWrap = options.wordWrap;
+		if (options.diffWordWrap !== undefined) this.diffWordWrap = options.diffWordWrap;
 		this.featureOptions = { ...this.featureOptions, ...options, experimental: { ...this.featureOptions.experimental, ...options.experimental } };
 	}
 
-	public get wordWrap(): boolean {
-		return this.temporaryWordWrap ?? this.configuredWordWrap;
+	public get wordWrap(): NonNullable<IEditorOptions['wordWrap']> {
+		return this.temporaryWordWrap ?? (this.diffWordWrap === 'inherit' ? this.configuredWordWrap : this.diffWordWrap);
 	}
 
 	public get enableSplitViewResizing(): boolean {
@@ -98,12 +104,12 @@ export class DiffEditorOptions {
 		return this.defaultSplitViewRatio;
 	}
 
-	public setConfiguredWordWrap(enabled: boolean): void {
-		this.configuredWordWrap = enabled;
+	public setConfiguredWordWrap(mode: NonNullable<IEditorOptions['wordWrap']>): void {
+		this.configuredWordWrap = mode;
 	}
 
 	public toggleWordWrap(): void {
-		this.temporaryWordWrap = this.temporaryWordWrap === undefined ? !this.wordWrap : undefined;
+		this.temporaryWordWrap = this.temporaryWordWrap === undefined ? (this.wordWrap === 'off' ? 'on' : 'off') : undefined;
 	}
 
 	public setViewMode(renderSideBySide: boolean, useInlineViewWhenSpaceIsLimited: boolean, inlineBreakpoint: number): void {
@@ -146,7 +152,6 @@ function validateOptions(options: DiffEditorWidgetOptions): void {
 		['showLineNumbers', options.showLineNumbers],
 		['showInlineChanges', options.showInlineChanges],
 		['loopChanges', options.loopChanges],
-		['wordWrap', options.wordWrap],
 		['readOnly', options.readOnly],
 		['scrollBeyondLastLine', options.scrollBeyondLastLine],
 		['renderSideBySide', options.renderSideBySide],
@@ -163,6 +168,9 @@ function validateOptions(options: DiffEditorWidgetOptions): void {
 	if (options.renderSideBySideInlineBreakpoint !== undefined
 		&& (!Number.isSafeInteger(options.renderSideBySideInlineBreakpoint) || options.renderSideBySideInlineBreakpoint < 0)) {
 		throw new RangeError('Diff editor inline breakpoint must be a non-negative integer');
+	}
+	if (options.wordWrap !== undefined && !['off', 'on', 'bounded', 'wordWrapColumn'].includes(options.wordWrap)) {
+		throw new TypeError('Invalid diff editor word wrap mode');
 	}
 	if (options.splitViewDefaultRatio !== undefined) validateSplitViewRatio(options.splitViewDefaultRatio);
 	if (options.container.ownerDocument.defaultView !== getWindow(options.container)) {

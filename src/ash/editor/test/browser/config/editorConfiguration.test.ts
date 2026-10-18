@@ -196,6 +196,27 @@ test('EditorConfiguration recomputes measured font options when the cache change
 	dom.window.close();
 });
 
+test('EditorConfiguration resolves character-sized decoration columns with fractional font widths', () => {
+	class FractionalConfiguration extends EditorConfiguration {
+		protected override _readFontInfo(font: BareFontInfo): FontInfo {
+			return measuredFont(font, 7.8);
+		}
+	}
+	const dom = new JSDOM('<div id="editor"></div>');
+	try {
+		const container = dom.window.document.querySelector<HTMLElement>('#editor')!;
+		using resources = new DisposableStore();
+		const services = createConfigurationServices(resources, container);
+		using configuration = services.createInstance(FractionalConfiguration, false, MenuId.EditorContext, { lineDecorationsWidth: '2ch', folding: false }, container);
+		assert.equal(configuration.options.get(EditorOption.lineDecorationsWidth), 15);
+		assert.equal(configuration.options.get(EditorOption.layoutInfo).decorationsWidth, 15);
+		configuration.updateOptions({ lineDecorationsWidth: '3.5ch' });
+		assert.equal(configuration.options.get(EditorOption.lineDecorationsWidth), 27);
+	} finally {
+		dom.window.close();
+	}
+});
+
 test('EditorConfiguration owns automatic container observation and stops it with the option', () => {
 	const observers: TestResizeObserver[] = [];
 	class TestResizeObserver implements ResizeObserver {

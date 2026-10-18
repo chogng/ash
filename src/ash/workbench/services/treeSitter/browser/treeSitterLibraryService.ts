@@ -133,7 +133,12 @@ export class TreeSitterSyntaxProviders extends Disposable {
 			for (const source of facts.symbols.slice(start, start + 4096)) {
 				let symbol = this.symbolItems.get(source);
 				if (!symbol) {
-					symbol = { ...source, kind: symbolKind(source.kind), range: Range.lift(source.range), selectionRange: Range.lift(source.selectionRange) };
+					symbol = {
+						...source,
+						kind: model.getLanguageId() === 'markdown' && source.kind === 'module' ? 'string' : symbolKind(source.kind),
+						range: Range.lift(source.range),
+						selectionRange: Range.lift(source.selectionRange),
+					};
 					this.symbolItems.set(source, symbol);
 				}
 				symbols.push(symbol);

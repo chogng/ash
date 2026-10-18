@@ -42,8 +42,20 @@ export function parseExtensionEditorInput(value: JsonValue): IResourceEditorInpu
 		const items: MultiDiffEditorInputItem[] = input.items.map(value => { const item = record(value); return { id: optionalText(item.id), label: text(item.label), original: parseExtensionEditorInput(item.original), modified: parseExtensionEditorInput(item.modified), ...(item.binary === undefined ? {} : { binary: binary(item.binary) }), actions: item.actions == null ? undefined : requireActions(item.actions), goToFile: item.goToFile == null ? undefined : parseExtensionEditorInput(item.goToFile) }; });
 		return createMultiDiffEditorInput(URI.parse(text(input.resource)), items, text(input.label), input.source as unknown as Parameters<typeof createMultiDiffEditorInput>[3]);
 	}
+	const preferredResource = optionalText(input.preferredResource);
+	const languageId = optionalText(input.languageId);
 	const initialText = optionalText(input.initialText);
 	const encoding = optionalText(input.encoding);
 	if (encoding !== undefined) assertEncoding(encoding);
-	return { resource: URI.parse(text(input.resource)), label: optionalText(input.label), contentType: optionalText(input.contentType), ...(encoding === undefined ? {} : { encoding }), ...(initialText === undefined ? {} : { initialText, readOnly: true }), ...(input.initialBytes === undefined ? {} : { initialBytes: bytes(input.initialBytes), readOnly: true }), ...(input.readOnly === true ? { readOnly: true } : {}) };
+	return {
+		resource: URI.parse(text(input.resource)),
+		...(preferredResource === undefined ? {} : { preferredResource: URI.parse(preferredResource) }),
+		...(languageId === undefined ? {} : { languageId }),
+		label: optionalText(input.label),
+		contentType: optionalText(input.contentType),
+		...(encoding === undefined ? {} : { encoding }),
+		...(initialText === undefined ? {} : { initialText, readOnly: true }),
+		...(input.initialBytes === undefined ? {} : { initialBytes: bytes(input.initialBytes), readOnly: true }),
+		...(input.readOnly === true ? { readOnly: true } : {}),
+	};
 }

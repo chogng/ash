@@ -985,7 +985,7 @@
         {
           "command": "git.diff.stageHunk",
           "group": "primary",
-          "when": "diffEditorOriginalUri =~ /^git-change:\\/unstaged\\// && diffEditorModifiedUri =~ /^git-change:\\/unstaged\\//"
+          "when": "diffEditorOriginalUri =~ /^git-change:\\/unstaged\\//"
         },
         {
           "command": "git.diff.unstageHunk",
@@ -995,14 +995,14 @@
         {
           "command": "git.diff.revertHunk",
           "group": "primary",
-          "when": "diffEditorOriginalUri =~ /^git-change:\\/unstaged\\// && diffEditorModifiedUri =~ /^git-change:\\/unstaged\\//"
+          "when": "diffEditorOriginalUri =~ /^git-change:\\/unstaged\\//"
         }
       ],
       "diffEditor/selectionToolbar": [
         {
           "command": "git.diff.stageSelection",
           "group": "primary",
-          "when": "diffEditorOriginalUri =~ /^git-change:\\/unstaged\\// && diffEditorModifiedUri =~ /^git-change:\\/unstaged\\//"
+          "when": "diffEditorOriginalUri =~ /^git-change:\\/unstaged\\//"
         },
         {
           "command": "git.diff.unstageSelection",
@@ -1012,7 +1012,7 @@
         {
           "command": "git.diff.revertSelection",
           "group": "primary",
-          "when": "diffEditorOriginalUri =~ /^git-change:\\/unstaged\\// && diffEditorModifiedUri =~ /^git-change:\\/unstaged\\//"
+          "when": "diffEditorOriginalUri =~ /^git-change:\\/unstaged\\//"
         }
       ],
       "git.commitMenu": [

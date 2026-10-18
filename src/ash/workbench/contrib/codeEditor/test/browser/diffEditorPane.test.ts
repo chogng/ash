@@ -152,7 +152,8 @@ test('Diff commands navigate and focus the active comparison through the Workben
 	const configuration = container.get(IConfigurationService);
 	await configuration.updateValue('diffEditor.splitViewDefaultRatio', 0.3);
 	const availableWidth = widget.originalEditor.getLayoutInfo().width + widget.modifiedEditor.getLayoutInfo().width;
-	assert.equal(widget.element.style.getPropertyValue('--stanza-diff-original-width'), `${Math.round(availableWidth * 0.3)}px`);
+	const centerWidth = Number.parseFloat(widget.element.style.getPropertyValue('--ash-diff-center-width'));
+	assert.equal(widget.element.style.getPropertyValue('--stanza-diff-original-width'), `${Math.floor((availableWidth + centerWidth) * 0.3) - centerWidth}px`);
 	const sash = widget.element.querySelector('.stanza-diff-sash') as HTMLElement;
 	sash.focus();
 	await configuration.updateValue('diffEditor.enableSplitViewResizing', false);
@@ -234,6 +235,9 @@ test("Stanza diff pane acquires both models, lays out the review view, and relea
 	assert.equal(editor.querySelectorAll('.stanza-editor').length, 2);
 	assert.equal(diffWidget.originalEditor.getOption(EditorOption.lineNumbers).renderType, RenderLineNumbersType.Off);
 	assert.equal(diffWidget.modifiedEditor.getOption(EditorOption.lineNumbers).renderType, RenderLineNumbersType.Off);
+	await container.get(IConfigurationService).updateValue('editor.fontSize', 16);
+	assert.equal(diffWidget.originalEditor.getOption(EditorOption.lineNumbers).renderType, RenderLineNumbersType.Off);
+	assert.equal(diffWidget.modifiedEditor.getOption(EditorOption.lineNumbers).renderType, RenderLineNumbersType.Off);
 	assert.equal(diffWidget.modifiedEditor.getOption(EditorOption.fontFamily), 'Test Mono');
 	assert.equal(diffWidget.modifiedEditor.getOption(EditorOption.fontSize), 15);
 	assert.match(diffWidget.modifiedEditor.getOption(EditorOption.fontLigatures), /"liga" on/);
@@ -292,6 +296,15 @@ test('Diff pane honors a readonly modified resource and preserves shared text wh
 		const widget = pane.getControl();
 		assert.ok(widget);
 		assert.equal(widget.modifiedEditor.getOption(EditorOption.readOnly), true);
+		await container.get(IConfigurationService).updateValue('editor.fontSize', 16);
+		assert.equal(widget.modifiedEditor.getOption(EditorOption.readOnly), true);
+		await container.get(IConfigurationService).updateValue('editor.minimap.enabled', true);
+		await container.get(IConfigurationService).updateValue('diffEditor.codeLens', true);
+		for (const editor of [widget.originalEditor, widget.modifiedEditor]) {
+			assert.equal(editor.getOption(EditorOption.minimap).enabled, false);
+			assert.equal(editor.getOption(EditorOption.folding), false);
+			assert.equal(editor.getOption(EditorOption.codeLens), true);
+		}
 		assert.equal(pane.workingCopy, undefined);
 		assert.equal(widget.modifiedEditor.getModel(), shared.model);
 		pane.clearInput();
@@ -481,6 +494,50 @@ test('Diff pane follows configured word wrap and keeps its temporary toggle in t
 	assert.equal(editor.classList.contains('word-wrapped'), true);
 	pane.dispose();
 	dom.window.close();
+});
+
+test('Diff pane preserves language-specific wrapping modes and columns through configuration and language changes', async () => {
+	const dom = createTestDom();
+	using resources = new DisposableStore();
+	const services = createDiffServices(resources);
+	const configuration = services.get(IConfigurationService);
+	const store = new BrowserTextResourceStore(new BootstrapTextFiles());
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, store, {});
+	await configuration.updateValue('editor.wordWrap', 'off');
+	await configuration.updateValue('editor.wordWrap', 'bounded', { overrideIdentifier: 'markdown' });
+	await configuration.updateValue('editor.wordWrapColumn', 36, { overrideIdentifier: 'markdown' });
+	using pane = services.createInstance(DiffEditorPane, store, {
+		modelService: models,
+		createComputationService: () => new PaneTestDiffComputationService(),
+	});
+	try {
+		pane.create(requiredElement<HTMLElement>(dom.window.document, 'main'));
+		pane.layout({ width: 1000, height: 300 });
+		await pane.setInput(createDiffEditorInput(
+			{ resource: URI.file('/before.md'), initialText: 'old ' + 'word '.repeat(50), languageId: 'markdown' },
+			{ resource: URI.file('/after.md'), initialText: 'new ' + 'word '.repeat(50), languageId: 'markdown' },
+		), new AbortController().signal);
+		const diff = pane.getControl()!;
+		for (const editor of [diff.originalEditor, diff.modifiedEditor]) {
+			assert.equal(editor.getOption(EditorOption.wordWrap), 'bounded');
+			assert.equal(editor.getOption(EditorOption.wordWrapColumn), 36);
+		}
+		await configuration.updateValue('editor.wordWrap', 'wordWrapColumn', { overrideIdentifier: 'markdown' });
+		assert.equal(diff.modifiedEditor.getOption(EditorOption.wordWrap), 'wordWrapColumn');
+		await configuration.updateValue('diffEditor.wordWrap', 'off', { overrideIdentifier: 'markdown' });
+		assert.equal(diff.modifiedEditor.getOption(EditorOption.wordWrap), 'off');
+		pane.toggleWordWrap();
+		assert.equal(diff.modifiedEditor.getOption(EditorOption.wordWrap), 'on');
+		await configuration.updateValue('diffEditor.wordWrap', 'inherit', { overrideIdentifier: 'markdown' });
+		assert.equal(diff.modifiedEditor.getOption(EditorOption.wordWrap), 'on');
+		pane.toggleWordWrap();
+		assert.equal(diff.modifiedEditor.getOption(EditorOption.wordWrap), 'wordWrapColumn');
+		diff.modifiedEditor.getModel()!.setLanguage('plaintext');
+		assert.equal(diff.modifiedEditor.getOption(EditorOption.wordWrap), 'off');
+	} finally {
+		pane.dispose();
+		dom.window.close();
+	}
 });
 
 test('Diff pane reveals its first change after layout and keeps an explicit selection on later layouts', async () => {

@@ -1,3 +1,4 @@
+import type { CodeEditorWidgetOptions } from '../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
 import { IWorkingCopyService, type IWorkingCopy } from '../../../services/workingCopy/common/workingCopyService.js';
 import { EditorWorkingCopy } from './textResourceEditor.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
@@ -30,9 +31,9 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { getDiffComputationOptions, getDiffWordWrap } from "../../../services/editor/common/editorConfiguration.js";
 import { toEditorPaneSelectionChangeReason } from './textEditor.js';
-import type { IEditorOptions } from '../../../../editor/common/config/editorOptions.js';
+import { editorOptionsRegistry, type IDiffEditorOptions, type IEditorOptions } from '../../../../editor/common/config/editorOptions.js';
 
-export interface DiffEditorPaneOptions {
+export interface DiffEditorPaneOptions extends Pick<CodeEditorWidgetOptions, 'onOpenLocation' | 'onApplyWorkspaceEdit'> {
 	readonly modelService: ITextModelResourceService;
 	readonly createComputationService: () => IDocumentDiffProvider & IDisposable;
 	readonly lineHeight?: number;
@@ -78,6 +79,13 @@ export class TextDiffEditor extends EditorPane implements IEditorPaneWithSelecti
 
 	getSelection(): Range | undefined {
 		return this.session.value?.editor.modifiedEditor.getSelection() ?? undefined;
+	}
+
+	revealRange(range: Range): void {
+		const editor = this.session.value?.editor.modifiedEditor;
+		editor?.setSelection(range);
+		editor?.revealRange(range);
+		editor?.focus();
 	}
 
 	restoreSelection(selection: Range, source: TextEditorSelectionSource): void {
@@ -237,32 +245,29 @@ class DiffEditorPaneSession extends Disposable {
 			diffProvider: computationService,
 			diffOptions: getDiffComputationOptions(configuration, modified.model.getLanguageId()),
 		}));
-		this._register(configuration.onDidChangeConfiguration(event => {
-			const fontOptions: {
-				fontFamily?: IEditorOptions['fontFamily'];
-				fontSize?: IEditorOptions['fontSize'];
-				lineHeight?: IEditorOptions['lineHeight'];
-				fontLigatures?: IEditorOptions['fontLigatures'];
-			} = {};
-			if (options.fontFamily === undefined && event.affectsConfiguration('editor.fontFamily')) {
-				fontOptions.fontFamily = configuration.getValue<string>('editor.fontFamily') || undefined;
-			}
-			if (options.fontSize === undefined && event.affectsConfiguration('editor.fontSize')) {
-				fontOptions.fontSize = configuration.getValue('editor.fontSize');
-			}
-			if (options.lineHeight === undefined && event.affectsConfiguration('editor.lineHeight')) {
-				fontOptions.lineHeight = configuration.getValue('editor.lineHeight');
-			}
-			if (options.fontLigatures === undefined && event.affectsConfiguration('editor.fontLigatures')) {
-				fontOptions.fontLigatures = configuration.getValue('editor.fontLigatures');
-			}
-			if (Object.keys(fontOptions).length > 0) {
-				this.editor.originalEditor.updateOptions(fontOptions);
-				this.editor.modifiedEditor.updateOptions(fontOptions);
-			}
+		const readEditorOptions = (): IDiffEditorOptions => {
 			const languageId = model.modified.getLanguageId();
-			if (event.affectsConfiguration("diffEditor.wordWrap") || event.affectsConfiguration("editor.wordWrap")) {
-				this.editor.setConfiguredWordWrap(getDiffWordWrap(configuration));
+			const configured = getEditorOptions(configuration, languageId);
+			return {
+				...configured,
+				readOnly: editorModel.isReadonly(),
+				lineNumbers: options.showLineNumbers === false ? 'off' : configured.lineNumbers,
+				lineNumbersMinChars: 3,
+				lineDecorationsWidth: '2ch',
+				fontFamily: options.fontFamily ?? (configured.fontFamily || undefined),
+				fontSize: options.fontSize ?? configured.fontSize,
+				lineHeight: options.lineHeight ?? configured.lineHeight,
+				fontLigatures: options.fontLigatures ?? configured.fontLigatures,
+				wordWrap: getDiffWordWrap(configuration, languageId),
+				diffCodeLens: configuration.getValue<boolean>('diffEditor.codeLens', { overrideIdentifier: languageId }) ?? false,
+			};
+		};
+		this._register(configuration.onDidChangeConfiguration(event => {
+			const languageId = model.modified.getLanguageId();
+			if (event.affectsConfiguration('editor', { overrideIdentifier: languageId })
+				|| event.affectsConfiguration('diffEditor.wordWrap', { overrideIdentifier: languageId })
+				|| event.affectsConfiguration('diffEditor.codeLens', { overrideIdentifier: languageId })) {
+				this.editor.updateOptions(readEditorOptions());
 			}
 			if (event.affectsConfiguration("diffEditor.ignoreTrimWhitespace", { overrideIdentifier: languageId })
 				|| event.affectsConfiguration("diffEditor.maxComputationTime", { overrideIdentifier: languageId })
@@ -296,23 +301,23 @@ class DiffEditorPaneSession extends Disposable {
 			}
 		}));
 		this._register(modified.model.onDidChangeLanguage(() => {
-			this.updateOptions(getDiffComputationOptions(configuration, model.modified.getLanguageId()));
+			const languageId = model.modified.getLanguageId();
+			this.updateOptions(getDiffComputationOptions(configuration, languageId));
+			this.editor.updateOptions(readEditorOptions());
 		}));
 		this.editor = this._register(instantiationService.createInstance(DiffEditorWidget, {
+			...readEditorOptions(),
 			container,
 			model,
+			onOpenLocation: options.onOpenLocation,
+			onApplyWorkspaceEdit: options.onApplyWorkspaceEdit,
 			readOnly: editorModel.isReadonly(),
-			wordWrap: getDiffWordWrap(configuration),
 			renderSideBySide: configuration.getValue('diffEditor.renderSideBySide'),
 			useInlineViewWhenSpaceIsLimited: configuration.getValue('diffEditor.useInlineViewWhenSpaceIsLimited'),
 			renderSideBySideInlineBreakpoint: configuration.getValue('diffEditor.renderSideBySideInlineBreakpoint'),
 			enableSplitViewResizing: configuration.getValue('diffEditor.enableSplitViewResizing'),
 			splitViewDefaultRatio: configuration.getValue('diffEditor.splitViewDefaultRatio'),
 			hideUnchangedRegions: getHideUnchangedRegionsOptions(configuration),
-			lineHeight: options.lineHeight ?? configuration.getValue<number>('editor.lineHeight'),
-			fontFamily: options.fontFamily ?? (configuration.getValue<string>('editor.fontFamily') || undefined),
-			fontSize: options.fontSize ?? configuration.getValue<number>('editor.fontSize'),
-			fontLigatures: options.fontLigatures ?? configuration.getValue<boolean>('editor.fontLigatures'),
 			showLineNumbers: options.showLineNumbers,
 			showInlineChanges: options.showInlineChanges,
 			loopChanges: options.loopChanges,
@@ -362,4 +367,12 @@ function getHideUnchangedRegionsOptions(configuration: IConfigurationService): H
 		minimumLineCount: configuration.getValue<number>("diffEditor.hideUnchangedRegions.minimumLineCount"),
 		revealLineCount: configuration.getValue<number>("diffEditor.hideUnchangedRegions.revealLineCount"),
 	};
+}
+
+/** Only editor-owned options cross into the widget; Workbench settings can share the namespace. */
+function getEditorOptions(configuration: IConfigurationService, languageId: string): IEditorOptions {
+	const values = configuration.getValue<Record<string, unknown>>('editor', { overrideIdentifier: languageId });
+	return Object.fromEntries(editorOptionsRegistry
+		.filter(option => values[option.name] !== undefined)
+		.map(option => [option.name, values[option.name]]));
 }
