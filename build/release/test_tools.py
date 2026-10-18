@@ -19,6 +19,7 @@ class BuildToolTests(unittest.TestCase):
             binary.touch()
             with (
                 patch.dict(os.environ, {"ASH_LLVM_BIN": temporary}),
+                patch.object(tools.sys, "platform", "win32"),
                 patch.object(tools, "windows_llvm_directories") as discover,
             ):
                 self.assertEqual(tools.tool("llvm-pdbutil"), str(binary))
@@ -31,6 +32,41 @@ class BuildToolTests(unittest.TestCase):
             ):
                 self.assertEqual(tools.tool("llvm-pdbutil"), "on-path")
                 discover.assert_not_called()
+
+    def test_platform_fallbacks_do_not_select_other_hosts_tools(self):
+        name = "llvm-dwarfdump"
+        for host in ("win32", "linux", "darwin"):
+            for source, expected_hosts in (
+                (Path("custom") / (name + ".exe"), {"win32"}),
+                (Path("/opt/homebrew/opt/llvm/bin") / name, {"darwin"}),
+                (Path("xcode-dwarfdump"), {"darwin"}),
+            ):
+                with (
+                    self.subTest(host=host, source=source),
+                    patch.object(tools.sys, "platform", host),
+                    patch.dict(os.environ, {"ASH_LLVM_BIN": "custom"}),
+                    patch.object(
+                        Path,
+                        "is_file",
+                        autospec=True,
+                        side_effect=lambda p: p == source,
+                    ),
+                    patch.object(
+                        tools.shutil,
+                        "which",
+                        side_effect=lambda n: (
+                            str(source)
+                            if n == "dwarfdump" and source == Path("xcode-dwarfdump")
+                            else None
+                        ),
+                    ),
+                    patch.object(tools, "windows_llvm_directories", return_value=()),
+                ):
+                    if host in expected_hosts:
+                        self.assertEqual(tools.tool(name), str(source))
+                    else:
+                        with self.assertRaisesRegex(RuntimeError, "missing"):
+                            tools.tool(name)
 
     def test_visual_studio_tools_are_found_without_path_changes(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -127,7 +163,9 @@ class BuildToolTests(unittest.TestCase):
             patch.object(tools, "tool", side_effect=locate),
             patch.object(tools, "run", return_value="\nASH_LLDB_PYTHON_OK\n") as run,
         ):
-            self.assertIn("atos", tools.check_build_tools())
+            resolved = tools.check_build_tools()
+            self.assertIn("atos", resolved)
+            self.assertIn("codesign", resolved)
             run.return_value = "error: Python scripting is disabled"
             with self.assertRaisesRegex(RuntimeError, "Python scripting support"):
                 tools.check_build_tools()

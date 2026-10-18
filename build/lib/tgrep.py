@@ -16,6 +16,11 @@ from build.lib.file_lock import exclusive_lock
 from build.lib.targets import default_target
 
 
+# tgrep ships as a self-contained search tool, without companion debug symbols.
+# Apply the same profile to every target and include it in the cache identity.
+_RELEASE_PROFILE = {"debug": "0", "strip": "symbols"}
+
+
 def resolve_tgrep(
     spec, lock_path, cache_root, explicit_binary=None, *, cargo="cargo"
 ) -> ExecutableResolution:
@@ -54,6 +59,7 @@ def resolve_tgrep(
                 },
                 "target": spec.target,
                 "toolchain": toolchain,
+                "profile": {"name": "release", **_RELEASE_PROFILE},
             },
             sort_keys=True,
         ).encode()
@@ -106,7 +112,14 @@ def resolve_tgrep(
             for name, path in shared_sources.items():
                 shutil.copy2(path, directory / f"tgrep-cli/src/ash_{name}.rs")
             target_directory = directory / "target"
-            environment = dict(os.environ, CARGO_TARGET_DIR=str(target_directory))
+            environment = dict(
+                os.environ,
+                CARGO_TARGET_DIR=str(target_directory),
+                **{
+                    f"CARGO_PROFILE_RELEASE_{name.upper()}": value
+                    for name, value in _RELEASE_PROFILE.items()
+                },
+            )
             subprocess.run(
                 [
                     cargo,

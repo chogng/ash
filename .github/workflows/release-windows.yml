@@ -19,7 +19,6 @@ jobs:
     env:
       ASH_BUILD_COMMIT: ${{ github.sha }}
       ASH_BUILD_ID: release-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}-${{ matrix.target }}
-      CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO: ${{ contains(matrix.target, 'apple-darwin') && 'packed' || 'off' }}
       ASH_UPDATE_PUBLIC_KEY: ""
       ASH_AZURE_CLIENT_ID: ""
       ASH_AZURE_TENANT_ID: ""

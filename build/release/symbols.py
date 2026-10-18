@@ -149,7 +149,7 @@ class SymbolStore:
                 "target": target,
                 "builder": "cargo",
                 "version": cargo["workspace"]["package"]["version"],
-                "rustc": run(["rustc", "-Vv"]).strip(),
+                "rustc": run([tool("rustc"), "-Vv"]).strip(),
                 "cargo": run(["cargo", "-V"]).strip(),
                 "profile": cargo["profile"]["release"],
                 "environment": {
@@ -263,7 +263,7 @@ class SymbolStore:
             ) as temporary:
                 work = Path(temporary)
                 if module["format"] == "macho":
-                    details = run(["codesign", "-dv", str(staged)])
+                    details = run([tool("codesign"), "-dv", str(staged)])
                     if "Signature=adhoc" not in details:
                         raise ValueError("Refusing to strip a signed Mach-O input")
                     source = Path(str(original) + ".dSYM")
@@ -296,7 +296,7 @@ class SymbolStore:
                         raise ValueError("dSYM UUID/architecture mismatch")
                     check_lines(objects[0])
                     symbol = objects[0].relative_to(work).as_posix()
-                    run(["strip", "-S", "-x", str(staged)])
+                    run([tool("strip"), "-S", "-x", str(staged)])
                 elif module["format"] == "elf":
                     symbol = original.name + ".debug"
                     debug = work / symbol

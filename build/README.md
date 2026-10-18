@@ -505,8 +505,16 @@ just test-python build
 
 ## Public grep runtime
 
-`lib/tgrep.py` and development `prepare.py` build the same pinned 1.2.2-ash.29b7e2e.1 source, Ash runtime patch and shared file-search ranking/admission sources from
+`lib/tgrep.py` and development `prepare.py` build the same pinned 1.2.3-ash.58629d2.1 source, Ash runtime patch and shared file-search ranking/admission sources from
 [`third_party/tgrep/runtime-lock.json`](../third_party/tgrep/runtime-lock.json).
+Source builds use the release profile with debug information disabled and symbols
+stripped on every target. The profile participates in the cache identity, so a
+policy change cannot reuse an executable built with the previous settings.
+WSL2 Ubuntu 24.04 x64 validation of 1.2.2-ash.29b7e2e.1 reduced the executable from
+21,882,856 to 14,084,552 bytes (35.64%) against the same source built without stripping.
+The stripped executable passed the real `ash-tgrep` search and process-lifetime tests;
+literal, regex, Unicode, case-insensitive, glob and no-match CLI queries agreed
+between disk scans and on-disk indexes, including writes followed by reindexing.
 All products and Remote runtimes include `ash-resources/tgrep/tgrep[.exe]` and its
 MIT license. The component digest and complete file manifest include tgrep; signing
 also covers this executable. `--tgrep-bin` is a build-time override, and

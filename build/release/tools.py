@@ -55,9 +55,13 @@ def windows_llvm_directories() -> tuple[Path, ...]:
 def tool(name: str) -> str:
     directory = os.environ.get("ASH_LLVM_BIN")
     candidates = [Path(directory) / name] if directory else []
-    candidates += [Path("/opt/homebrew/opt/llvm/bin") / name]
+    if sys.platform == "darwin":
+        candidates.append(Path("/opt/homebrew/opt/llvm/bin") / name)
     for candidate in candidates:
-        for path in (candidate, candidate.with_suffix(".exe")):
+        paths = (candidate,)
+        if sys.platform == "win32":
+            paths += (candidate.with_suffix(".exe"),)
+        for path in paths:
             if path.is_file():
                 return str(path)
     if found := shutil.which(name):
@@ -67,8 +71,9 @@ def tool(name: str) -> str:
             candidate = directory / (name + ".exe")
             if candidate.is_file():
                 return str(candidate)
-    if name == "llvm-dwarfdump" and shutil.which("dwarfdump"):
-        return shutil.which("dwarfdump")
+    if sys.platform == "darwin" and name == "llvm-dwarfdump":
+        if found := shutil.which("dwarfdump"):
+            return found
     raise RuntimeError(
         f"Required tool {name} missing; install LLVM or set ASH_LLVM_BIN"
     )
@@ -80,7 +85,7 @@ def check_build_tools() -> dict[str, str]:
     if sys.platform == "win32":
         names += ["llvm-pdbutil", "llvm-symbolizer"]
     elif sys.platform == "darwin":
-        names += ["nm", "dsymutil", "strip", "llvm-dwarfdump", "lldb"]
+        names += ["nm", "dsymutil", "strip", "codesign", "llvm-dwarfdump", "lldb"]
         # Match resolve_frame's supported Xcode fallback.
         names += ["llvm-symbolizer" if _has_symbolizer() else "atos"]
     else:

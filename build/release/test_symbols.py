@@ -24,6 +24,7 @@ from build.release.symbolicate import (
     apple_report,
     classic_report,
     load_report,
+    resolve_frame,
     symbolicate,
 )
 from build.release.symbols import (
@@ -34,6 +35,28 @@ from build.release.symbols import (
     extract_archive,
 )
 from build.release.tools import check_build_tools, run, tool
+
+
+class SymbolToolResolutionTests(unittest.TestCase):
+    def test_macos_fallback_executes_the_resolved_atos(self):
+        def locate(name):
+            if name == "llvm-symbolizer":
+                raise RuntimeError("not installed")
+            return "custom/" + name
+
+        with (
+            patch("build.release.symbolicate.sys.platform", "darwin"),
+            patch("build.release.symbolicate.tool", side_effect=locate),
+            patch(
+                "build.release.symbolicate.run",
+                return_value="fixture (in app) (crash.rs:10)\n",
+            ) as run_tool,
+        ):
+            frames = resolve_frame(
+                Path("symbols"), {"format": "macho", "arch": "aarch64"}, 42, None
+            )
+        self.assertEqual(frames[0]["Line"], 10)
+        self.assertEqual(run_tool.call_args.args[0][0], "custom/atos")
 
 
 class ReleaseSymbolsTests(unittest.TestCase):
@@ -50,7 +73,7 @@ class ReleaseSymbolsTests(unittest.TestCase):
         cls.binary = cls.root / ("fixture.exe" if cls.spec.is_windows else "fixture")
         cls.source = ROOT / "build/release/fixtures/crash.rs"
         command = [
-            "rustc",
+            tool("rustc"),
             str(cls.source),
             "--edition=2024",
             "-C",
@@ -76,7 +99,7 @@ class ReleaseSymbolsTests(unittest.TestCase):
         else:
             # Resolve the fixture before stripping. ASLR is introduced in the
             # crash report, independently of the link address used by nm.
-            nm = "nm" if sys.platform == "darwin" else tool("llvm-nm")
+            nm = tool("nm" if sys.platform == "darwin" else "llvm-nm")
             output = run([nm, "-n", str(cls.binary)])
             match = re.search(
                 r"^([a-fA-F0-9]+)\s+T\s+_?ash_symbol_fixture$", output, re.MULTILINE

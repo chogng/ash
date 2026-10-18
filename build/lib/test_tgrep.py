@@ -3,6 +3,7 @@
 import hashlib
 import io
 import json
+import os
 import tarfile
 import tempfile
 import subprocess
@@ -10,6 +11,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from build.lib import tgrep
 from build.lib.tgrep import resolve_tgrep
 from build.lib.targets import TARGETS
 
@@ -87,6 +89,64 @@ class TgrepTests(unittest.TestCase):
                 {path.name for path in first.executable.parent.iterdir()},
                 {"tgrep", "build.json", ".build.lock"},
             )
+
+    def test_release_profile_overrides_caller_and_participates_in_cache_identity(self):
+        for target in (
+            "x86_64-unknown-linux-gnu",
+            "x86_64-pc-windows-msvc",
+            "aarch64-apple-darwin",
+        ):
+            with (
+                self.subTest(target=target),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
+                root = Path(temporary)
+                lock = self.fixture(root)
+                data = json.loads(lock.read_text())
+                data["targets"] = [target]
+                lock.write_text(json.dumps(data))
+                spec = TARGETS[target]
+                profiles = []
+
+                def run(command, **kwargs):
+                    if command[1] == "build":
+                        environment = kwargs["env"]
+                        profiles.append(
+                            (
+                                environment["CARGO_PROFILE_RELEASE_DEBUG"],
+                                environment["CARGO_PROFILE_RELEASE_STRIP"],
+                            )
+                        )
+                        output = (
+                            Path(environment["CARGO_TARGET_DIR"])
+                            / target
+                            / "release"
+                            / ("tgrep" + spec.executable_suffix)
+                        )
+                        output.parent.mkdir(parents=True)
+                        output.write_bytes(b"search engine")
+
+                with (
+                    patch.dict(
+                        os.environ,
+                        CARGO_PROFILE_RELEASE_DEBUG="2",
+                        CARGO_PROFILE_RELEASE_STRIP="none",
+                    ),
+                    patch.object(tgrep.subprocess, "run", side_effect=run),
+                    patch.object(
+                        tgrep.subprocess, "check_output", return_value="toolchain"
+                    ),
+                    patch.object(tgrep, "default_target", return_value="other-target"),
+                ):
+                    stripped = resolve_tgrep(spec, lock, root / "cache")
+                    reused = resolve_tgrep(spec, lock, root / "cache")
+                    with patch.object(
+                        tgrep, "_RELEASE_PROFILE", {"debug": "0", "strip": "none"}
+                    ):
+                        unstripped = resolve_tgrep(spec, lock, root / "cache")
+                self.assertEqual(stripped, reused)
+                self.assertNotEqual(stripped.executable, unstripped.executable)
+                self.assertEqual(profiles, [("0", "symbols"), ("0", "none")])
 
     def test_reusing_a_published_binary_collects_legacy_compiler_outputs(self):
         with tempfile.TemporaryDirectory() as temporary:

@@ -254,7 +254,7 @@ def resolve_frame(
         arch = "arm64" if module["arch"] == "aarch64" else "x86_64"
         result = run(
             [
-                "atos",
+                tool("atos"),
                 "-o",
                 str(symbol),
                 "-arch",
