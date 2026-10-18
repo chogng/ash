@@ -1310,6 +1310,39 @@ test('terminal profile commands select, cancel and apply the saved default to th
 	expect(errors).toEqual([]);
 });
 
+for (const locale of ['en', 'zh-CN'] as const) {
+	for (const kind of ['newWithProfile', 'selectDefaultProfile'] as const) {
+		test(`terminal ${kind} picker retires on workspace change and the next command works in ${locale}`, async ({ page }) => {
+			await page.goto(`/terminal.html?pane&profiles&browser&locale=${locale}`);
+			await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
+			await page.evaluate(() => window.ashTerminalPaneIntegration.panel(true));
+			await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.counts().creates)).toBe(1);
+			const command = `workbench.action.terminal.${kind}`;
+			const label = kind === 'newWithProfile'
+				? locale === 'zh-CN' ? '选择终端配置' : 'Select a terminal profile'
+				: locale === 'zh-CN' ? '选择默认终端配置' : 'Select the default terminal profile';
+			const picker = page.getByRole('combobox', { name: label, exact: true });
+			await page.evaluate(id => { void window.ashTerminalPaneIntegration.command(id); }, command);
+			await expect(picker).toBeFocused();
+			await picker.fill('Bash');
+			await page.evaluate(() => window.ashTerminalPaneIntegration.workspace());
+			await expect(picker).toHaveCount(0);
+			expect(await page.evaluate(() => window.ashTerminalPaneIntegration.counts().creates)).toBe(1);
+			expect(await page.evaluate(() => window.ashTerminalPaneIntegration.defaultProfile())).toBe('shell');
+			await page.evaluate(id => { void window.ashTerminalPaneIntegration.command(id); }, command);
+			await expect(picker).toBeFocused();
+			await picker.fill('Bash');
+			await picker.press('Enter');
+			if (kind === 'newWithProfile') {
+				await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.createdProfiles())).toEqual(['shell', 'bash']);
+			} else {
+				await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.defaultProfile())).toBe('bash');
+			}
+			await page.evaluate(() => window.ashTerminalPaneIntegration.dispose());
+		});
+	}
+}
+
 test('configured terminal profile reaches the real picker and resolver with argv, env, cwd and themed metadata', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));

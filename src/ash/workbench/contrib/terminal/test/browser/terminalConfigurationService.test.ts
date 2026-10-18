@@ -327,6 +327,20 @@ suite('Terminal configuration and interactive profiles', () => {
 		assert.equal(configuration.getValue('terminal.integrated.defaultProfile.windows'), null);
 	});
 
+	test('profile quick pick requires its execution connection owner during construction', () => {
+		using owner = new DisposableStore();
+		const { services } = createServices(owner);
+		owner.add(installPicker(owner, services).picker);
+		using missing = new InstantiationService();
+		missing.registerInstance(ITerminalProfileService, services.get(ITerminalProfileService));
+		missing.registerInstance(IConfigurationService, services.get(IConfigurationService));
+		missing.registerInstance(IQuickInputService, services.get(IQuickInputService));
+		missing.registerInstance(IWorkspaceContextService, services.get(IWorkspaceContextService));
+		missing.registerInstance(IEditorService, services.get(IEditorService));
+		missing.registerInstance(ICommandService, services.get(ICommandService));
+		assert.throws(() => missing.createInstance(TerminalProfileQuickpick), /Unknown service: terminalProcessService/);
+	});
+
 	test('default selection persists the profile name at USER and updates available labels', async () => {
 		using owner = new DisposableStore();
 		const { services, profiles, configuration } = createServices(owner);
@@ -379,6 +393,47 @@ suite('Terminal configuration and interactive profiles', () => {
 		await waitFor(() => profiles.availableProfiles.length === 1);
 		assert.equal(profiles.getDefaultProfile()?.profileId, 'other');
 		assert.equal(calls(), 2);
+	});
+
+	for (const transition of ['workspace', 'reconnect'] as const) {
+		for (const kind of ['createInstance', 'setDefault'] as const) {
+			test(`${kind} profile selection stays retired after ${transition} restores the same profile IDs`, async () => {
+				using owner = new DisposableStore();
+				const { services, profiles, workspace, connection, configuration } = createServices(owner);
+				const ui = installPicker(owner, services);
+				using picker = services.createInstance(TerminalProfileQuickpick);
+				const result = picker.showAndGetResult(kind);
+				await waitFor(ui.shown);
+				if (transition === 'workspace') workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/other') });
+				else { connection.fire('crashed'); connection.fire('ready'); }
+				await profiles.refreshAvailableProfiles();
+				// The retired UI can still deliver an already queued accept callback.
+				ui.picker.items = profiles.availableProfiles.map(profile => ({ label: profile.title, profileId: profile.profileId }));
+				ui.accept(1);
+				assert.equal(await result, undefined);
+				assert.equal(configuration.getValue('terminal.integrated.defaultProfile.windows'), null);
+				assert.equal(ui.disposed(), 1);
+			});
+		}
+	}
+
+	test('default profile acceptance cannot write after a scope change during its final platform lookup', async () => {
+		using owner = new DisposableStore();
+		const { services, profiles, workspace, configuration } = createServices(owner);
+		const ui = installPicker(owner, services);
+		using picker = services.createInstance(TerminalProfileQuickpick);
+		const result = picker.showAndGetResult('setDefault');
+		await waitFor(ui.shown);
+		const platform = new DeferredPromise<'windows'>();
+		const requested = new DeferredPromise<void>();
+		profiles.getPlatformKey = () => { void requested.complete(); return platform.p; };
+		ui.accept(1);
+		await requested.p;
+		workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/other') });
+		await profiles.refreshAvailableProfiles();
+		await platform.complete('windows');
+		assert.equal(await result, undefined);
+		assert.equal(configuration.getValue('terminal.integrated.defaultProfile.windows'), null);
 	});
 
 	test('default selection exposes a write failure without changing the runtime default', async () => {

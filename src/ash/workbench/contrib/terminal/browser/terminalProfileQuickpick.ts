@@ -3,7 +3,7 @@ import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '..
 import { localize } from '../../../../nls.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
-import { TerminalSettingPrefix } from '../../../../platform/terminal/common/terminal.js';
+import { ITerminalProcessService, TerminalSettingPrefix } from '../../../../platform/terminal/common/terminal.js';
 import { ITerminalProfileService } from '../common/terminal.js';
 import { IWorkspaceContextService, type IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
@@ -24,24 +24,34 @@ export class TerminalProfileQuickpick extends Disposable {
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@IEditorService private readonly editors: IEditorService,
 		@ICommandService private readonly commands: ICommandService,
+		@ITerminalProcessService processes: ITerminalProcessService,
 	) {
 		super();
 		this._register(toDisposable(() => this.cancellation.dispose(true)));
+		// Profile IDs and platform names can be reused by a different execution scope.
+		// Retire the selection permanently rather than accepting an item after it returns.
+		const retire = (): void => { this.cancellation.cancel(); this.selection.clear(); };
+		this._register(this.workspace.onDidChangeWorkspace(retire));
+		this._register(processes.onConnectionState(retire));
 	}
 
 	async showAndGetResult(type: 'setDefault' | 'createInstance', dirId?: string): Promise<string | undefined> {
+		const isCurrent = (): boolean => !this.isDisposed && !this.cancellation.token.isCancellationRequested;
+		if (!isCurrent()) return undefined;
 		const folders = this.workspace.getWorkspace().folders;
 		if (!dirId && folders.length > 1) {
 			const active = this.editors.activeEditor?.resource;
 			const folder = (active && this.workspace.getWorkspaceFolder(active))
 				|| await this.commands.executeCommand<IWorkspaceFolder | undefined>(PICK_WORKSPACE_FOLDER_COMMAND_ID, [{ placeHolder: localize('terminal.selectFolder', 'Select a workspace folder for the terminal.') }, this.cancellation.token]);
-			if (!folder || this.isDisposed) return undefined;
+			if (!folder || !isCurrent()) return undefined;
 			dirId = folder.id;
 		}
 		await this.profiles.refreshAvailableProfiles(dirId);
 		if (this.isDisposed) throw new CancellationError();
+		if (!isCurrent()) return undefined;
 		const platform = await this.profiles.getPlatformKey();
 		if (this.isDisposed) throw new CancellationError();
+		if (!isCurrent()) return undefined;
 		const profileId = await new Promise<string | undefined>(resolve => {
 			const lifetime = new DisposableStore();
 			this.selection.value = lifetime;
@@ -71,14 +81,15 @@ export class TerminalProfileQuickpick extends Disposable {
 			lifetime.add(toDisposable(() => resolve(undefined)));
 			picker.show();
 		});
-		if (profileId === undefined || this.isDisposed) return undefined;
+		if (profileId === undefined || !isCurrent()) return undefined;
 		const currentPlatform = await this.profiles.getPlatformKey();
-		if (this.isDisposed || platform !== currentPlatform) return undefined;
+		if (!isCurrent() || platform !== currentPlatform) return undefined;
 		const profile = this.profiles.getAvailableProfiles(dirId).find(profile => profile.profileId === profileId);
 		const contributed = this.profiles.contributedProfiles.find(profile => profileId === `extension:${profile.extensionIdentifier}/${profile.id}`);
 		if (!profile && !contributed) return undefined;
 		if (type === 'setDefault') {
 			if (contributed) await this.profiles.registerContributedProfile({ ...contributed, options: contributed.options ?? {} });
+			if (!isCurrent()) return undefined;
 			const title = profile?.profileName ?? contributed!.title;
 			await this.configuration.updateValue(`${TerminalSettingPrefix.DefaultProfile}${platform}`, title, ConfigurationTarget.USER);
 			return title;
