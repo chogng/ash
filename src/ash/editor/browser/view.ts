@@ -1165,7 +1165,9 @@ export class View extends ViewEventHandler {
 		return true;
 	}
 
-	public override onFocusChanged(): boolean {
+	public override onFocusChanged(event: viewEvents.ViewFocusChangedEvent): boolean {
+		// JSON reveal and other callers can set a selection before the input receives focus.
+		if (event.isFocused) this.updateAccessibilityStatus();
 		return true;
 	}
 

@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page } from '@playwright/test';
+import { FileKind } from '../../src/ash/platform/files/common/files.js';
 import { QuickAccess } from './quickaccess.js';
 
 /** Reads the actual profile file through the same generic transport as Desktop editors. */
@@ -35,7 +36,7 @@ export async function readUserSettings(page: Page): Promise<{ resource: string; 
 /** Conditional raw-file save used by external-edit scenarios, without a configuration channel. */
 export async function writeUserSettings(page: Page, content: string, expectedRevision?: string): Promise<void> {
 	if (!await page.evaluate(() => document.querySelector<HTMLElement>('#app')?.dataset.runtime === 'electron')) {
-		await page.evaluate(async ({ content, expectedRevision }) => {
+		await page.evaluate(async ({ content, expectedRevision, fileKind }) => {
 			const database = await new Promise<IDBDatabase>((resolve, reject) => {
 				const request = indexedDB.open('ash-user-data-files', 1);
 				request.onsuccess = () => resolve(request.result);
@@ -49,14 +50,14 @@ export async function writeUserSettings(page: Page, content: string, expectedRev
 					const read = store.get(resource);
 					read.onsuccess = () => {
 						if (read.result?.revision !== expectedRevision) { transaction.abort(); return; }
-						store.put({ kind: 1, bytes: new TextEncoder().encode(content), revision: crypto.randomUUID(), modifiedAtMillis: Date.now() }, resource);
+						store.put({ kind: fileKind, bytes: new TextEncoder().encode(content), revision: crypto.randomUUID(), modifiedAtMillis: Date.now() }, resource);
 					};
 					transaction.oncomplete = () => resolve();
 					transaction.onerror = () => reject(transaction.error);
 					transaction.onabort = () => reject(transaction.error ?? new Error('Settings file revision conflict'));
 				});
 			} finally { database.close(); }
-		}, { content, expectedRevision });
+		}, { content, expectedRevision, fileKind: FileKind.File });
 		return;
 	}
 	const home = await page.evaluate(() => globalThis.ashTestMainProcess.call<string>('localFilesystem', 'userDataHome'));

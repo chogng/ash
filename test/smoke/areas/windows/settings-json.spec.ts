@@ -498,9 +498,7 @@ test('Settings JSON opens a pinned tab, reveals a value, saves immediately and p
 	const menu = row.getByRole('button', { name: /^More actions/ });
 	await menu.focus();
 	await menu.press('Enter');
-	await expect(page.getByRole('menuitem', { name: 'Edit in settings.json', exact: true })).toHaveCount(0);
-	await page.keyboard.press('Escape');
-	await settings.getByRole('button', { name: 'Open Settings (JSON)', exact: true }).press('Enter');
+	await page.getByRole('menuitem', { name: 'Edit in settings.json', exact: true }).click();
 	await expect(settings).toBeHidden();
 	let group = workbench.editors.groupAt(0);
 	const tab = group.tabs.filter({ hasText: 'User Settings (JSON)' });
@@ -508,6 +506,7 @@ test('Settings JSON opens a pinned tab, reveals a value, saves immediately and p
 	await expect(tab.locator('..')).not.toHaveClass(/preview/u);
 	await expect(group.editor.input).toBeFocused();
 	await expect(workbench.page.locator('[data-statusbar-item-id="ash.status.editor.cursor"]')).toContainText('2 selected');
+	await expect(group.content.locator('.stanza-editor-accessibility-status')).toContainText('2 characters selected');
 	await page.keyboard.insertText('23');
 	await group.editor.input.press('ControlOrMeta+S');
 	await expect(tab.locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
@@ -549,6 +548,7 @@ test('Settings JSON opens a pinned tab, reveals a value, saves immediately and p
 	await expect(group.tabs.filter({ hasText: '用户设置（JSON）' })).toHaveCount(1);
 	await expect(group.editor.input).toBeFocused();
 	await expect(page.locator('[data-statusbar-item-id="ash.status.editor.cursor"]')).toContainText('2');
+	await expect(group.content.locator('.stanza-editor-accessibility-status')).toContainText('2 characters selected');
 	await expect(diagnostics.consoleErrors.filter(error => /Failed to update working-copy backup|InvalidStateError|database connection is closing/u.test(error))).toEqual([]);
 });
 
@@ -750,6 +750,40 @@ test('Saving JSON token customization refreshes Markdown and the canonical profi
 	await file.click();
 	await expect(heading).toHaveCSS('color', 'rgb(101, 67, 33)');
 });
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`Appearance preserves an unavailable theme and allows returning to System (${locale})`, async ({ workbench, reloadWorkbench, runningApplication }) => {
+		const chinese = locale === 'zh-CN';
+		const saved = await readUserSettings(workbench.page);
+		const theme = 'missing-preferences-smoke-theme';
+		await writeUserSettings(workbench.page, JSON.stringify({
+			...parseJsonc(saved.content) as Record<string, unknown>,
+			'workbench.colorTheme': theme,
+			'workbench.locale': locale,
+		}), saved.revision);
+		({ workbench } = await reloadWorkbench());
+		await workbench.settingsEditor.openUserSettingsUI();
+		await workbench.settingsEditor.selectGroup('workbench');
+		await workbench.settingsEditor.selectCategory('appearance');
+		const settings = workbench.settingsEditor.element;
+		const row = settings.locator('[data-settings-item-id="workbench.colorTheme"]');
+		const control = row.getByRole('combobox');
+		await expect(control).toHaveText(chinese ? `当前不可用（${theme}）` : `Unavailable (${theme})`);
+		expect((parseJsonc((await readUserSettings(workbench.page)).content) as Record<string, unknown>)['workbench.colorTheme']).toBe(theme);
+		await control.focus();
+		await control.press('Enter');
+		const system = workbench.page.getByRole('option', { name: chinese ? '系统' : 'System', exact: true });
+		await workbench.page.keyboard.press('Home');
+		await expect(system).toBeFocused();
+		await system.press('Enter');
+		await expect(control).toHaveText(chinese ? '系统' : 'System');
+		await expect(control).toBeFocused();
+		await expect(row.locator('.ash-settings-indicators')).toHaveCSS('display', 'none');
+		await expect.poll(async () => (parseJsonc((await readUserSettings(workbench.page)).content) as Record<string, unknown>)['workbench.colorTheme']).toBeUndefined();
+		expect(runningApplication.diagnostics.errors).toEqual([]);
+		expect(runningApplication.diagnostics.consoleErrors.filter(error => /Unknown select option/u.test(error))).toEqual([]);
+	});
+}
 
 test('Settings JSON rejects invalid values and preserves dirty edits during a configuration conflict', async ({ application, workbench }) => {
 	const page = workbench.page;

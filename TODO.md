@@ -55,7 +55,6 @@
 
 ## Configuration / Preferences · TODO
 
-- [ ] **复核** · 闭合配置迁移后的真实窗口 smoke：定位程序设置选区后辅助 live 文本仍报告旧位置，以及 Appearance 的 `Unknown select option 'ash-dark'`；重跑外部文件更新／跨窗口重载、非法值保存、脏草稿保护与文件冲突。已有模型、文件链和 Chromium 迁移验证不代替端到端通过；旧 App Server 文件访问 API 类型阻塞已通过正常协议生成解除，当前前端构建通过。
 - [ ] **验收** · 在 macOS／Linux 验收真实系统 Policy 来源；用真实登录账户验证 GitHub managed settings 的读取、账户切换、撤回和失败保留。Windows 固定注册表只读探测和受控账户链已验证，不能代替其他 OS／真实账号结果。
 - [ ] **验收 · Preferences 上游窗口配对**：以本地 VS Code `a2acc8c864a` 对照用户／Workspace／Folder、`@lang:` 与 `@modified` 组合、重置、JSON 草稿、侧边／指定组和焦点语义。Ash 中英文真实 Chromium 已通过单根与多根读写、重载、高对比度和字号实际生效，macOS Desktop 的用户／单目录 Workspace 真实 App Server 文件链也已通过；本地 VS Code 尚无可运行构建，源码／上游测试核对不能代替窗口配对。当前实现与证据范围见 [Preferences](docs/preferences-and-settings.md#已有验证与限制)。
 - [ ] **验收 · 快捷键跨平台**：补 Windows／Linux 的录制、JSONC 保存、立即重载、完整组合恰好执行一次、失败重试与 pending-close；已有 macOS Web／Electron 严格场景不能代替这些平台结果。

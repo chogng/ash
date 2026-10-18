@@ -847,7 +847,8 @@ test('editor settings apply immediately, persist after reload and reset to their
 	await expect(numbers.first()).toHaveText('1');
 });
 
-test('Changing the color theme does not add a modified marker', async ({ target, workbench }) => {
+// Selectable built-in themes are contributed by the real extension host.
+test('Changing the color theme does not add a modified marker', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
 	await page.locator('[data-settings-group-id="workbench"]').click();

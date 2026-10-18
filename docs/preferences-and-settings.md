@@ -2,7 +2,7 @@
 
 > 适用范围：Ash TypeScript Workbench 与 Sessions 的偏好入口和编辑页面。配置存储背景见 [Browser foundation](browser-foundation.md#configuration-architecture)，设置接入规则见 [Preferences README](../src/ash/workbench/contrib/preferences/README.md)。
 
-Preferences 负责打开偏好资源，Settings 是其中一种内容。配置读写、用户设置 JSONC 和快捷键独立资源的主链已接通；图形设置已接通用户、Workspace / Folder 目标与语言覆盖入口；编辑器组选项和部分真实环境验收仍未完成。具体动作统一维护在 [Configuration / Preferences TODO](../TODO.md#configuration--preferences--todo)。本文描述当前架构，不作为全部 VS Code 契约已对齐或当前 HEAD 验收通过的声明。
+Preferences 负责打开偏好资源，Settings 是其中一种内容。配置读写、用户设置 JSONC 和快捷键独立资源的主链已接通；图形设置已接通用户、Workspace / Folder 目标、语言覆盖和编辑器组选项；真实系统 Policy、上游窗口配对和跨平台验收仍未完成。具体动作统一维护在 [Configuration / Preferences TODO](../TODO.md#configuration--preferences--todo)。本文描述当前架构，不作为全部 VS Code 契约已对齐或当前 HEAD 验收通过的声明。
 
 ## 打开路径
 
@@ -187,6 +187,12 @@ EditorGroupModel 是数字组 ID 的分配 owner；组操作、命令上下文�
 
 ## 已有验证与限制
 
+2026-10-18 在 `e6b5688e5` 加本批改动上闭合配置迁移窗口复核。修复设置值在编辑器获焦前被选中时辅助 live 文本滞后：View 在收到获焦事件时读取当前选区，失焦时不覆盖帮助提示。修正 Browser 外部写入测试辅助工具的文件类型，使用 `FileKind.File`，避免重载把设置文件识别为非文件。设置菜单的 JSON 编辑入口改由真实动作回归；选择内置主题的测试依赖真实扩展宿主，断开后端的 UI 测试不假设已加载内置主题。
+
+该批通过 55 项定向单测（4 文件）、5 项 Browser smoke（中英文 JSON 选区、外部更新／跨窗口重读、非法值保存、脏草稿／冲突与中英文缺失主题回退），以及 6 项 macOS Desktop App Server smoke（上述场景及已安装 Ash Dark 的选择）。缺失主题保留原 ID，返回 System 后删除默认值覆盖；没有重现 `Unknown select option`。Web／Desktop 构建、Renderer 4,205 文件及自动化 2,872 文件类型检查、formatter 和 Editor CSS ownership audit 通过。Browser 通过记录分布在 `.build/todo-preferences/current-browser-complete.log` 的 3 个未受后续测试断言修改影响的场景及 `current-browser-appearance-final.log` 的 2 个场景；Desktop 记录为 `current-desktop-complete.log`，单测为 `current-unit.log`。
+
+真实 macOS 27.0.1 arm64、Electron 44.4.5 的三步录制另外通过缺失主题恢复到已安装主题、JSON 选区／live 文本一致和实际 profile 文件保存／重载。证据目录为 `.build/ash-playwright-mcp/evidence/preferences-migration-review-2026-10-18T13-09-27-629Z/`，包含报告、PNG、trace、原始 WebM 和带步骤字幕的 MP4；已检查关键 PNG 与两份视频的逐秒画面。构建来源、版本、文件大小和 SHA-256 见 `.build/todo-preferences/current-evidence.json`，该录制 runner 使用 Node 25.2.1，最终 smoke 使用仓库要求的 Node 24.21.0。本批仅验证 live 区域 DOM，未进行物理屏幕阅读器验收；不替代系统 Policy、真实账号、其他 OS 或 VS Code 的窗口配对。
+
 2026-10-18 的目标／语言入口批次通过 161 项定向单测（9 文件）、5 项 Browser smoke、3 项 macOS Desktop UI smoke 和 2 项 macOS Desktop App Server smoke：中英文查询复用、用户／Workspace／多根 Folder 的语言覆盖读写和重置、原始文件隔离、重载、键盘目标菜单、高对比度焦点与窄窗口布局。真实编辑器按语言显示已保存字号，另一根修改不改变当前文件字号；单测另覆盖字体名、语言切换、工作区替换取消、JSON 草稿和嵌套字段保护。Browser 覆盖多根 Folder；Desktop App Server 覆盖单目录 Workspace 的真实文件链。日志位于 `.build/todo-preferences/` 的 `unit.log`、`browser.log`、`desktop-ui.log` 和 `desktop-scopes.log`。这些 Ash 结果不代替本地 VS Code 的窗口配对，也不覆盖其他内置设置尚未声明或尚未消费的作用域。
 
 编辑器组批次另覆盖指定组重开、侧边优先级、独立查询、保留焦点、关闭后重开、旧工作集嵌套布局转换与数字 ID 冲突，以及扩展请求边界。Browser 的中英文组切换和目标／语言场景共 6 项、Sessions 侧边入口 1 项，以及 macOS Desktop UI 的中英文组切换／查询和 Sessions 侧边入口 5 项均通过。日志在 `.build/preferences-groups/` 的 `browser-windows-final.log`、`browser-sessions.log` 和 `desktop-final.log`；下方验收限制仍然适用。
@@ -195,12 +201,12 @@ Web / Desktop 构建、Renderer 与自动化类型检查、formatter 和定向 C
 
 存储迁移与跨平台验收的历史范围如下；设置渲染的检查范围另列于表后：
 
-| 范围                        | 已有证据与适用限制                                                                                                                                                                                                                                  |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 配置文件与迁移              | 模型、文件 IPC、Sessions、Settings JSONC、层级边界和真实 Chromium 旧 IndexedDB 迁移已有定向验证，包含冲突、非法输入、中断重试；历史类型检查、构建与中英文回归不代表当前 HEAD 全部通过                                                               |
-| Workspace / Folder / Policy | 定向测试覆盖优先级、inspection、作用域、JSONC、切换、迟到读取、冲突与脏保护；系统 / 账户链和 Windows 固定注册表只读探测已有验证，macOS / Linux OS 来源及真实登录账户仍待验收                                                                        |
-| 快捷键录制                  | 保存一致性基线 `2cc6ab4e` 上通过 13 项 recorder 单测、macOS Web 7 项及 Electron 6 项严格场景，覆盖两段 / 四段、JSONC / 参数保留、立即重载、失败重试、中文、焦点与 pending-close；Windows / Linux 未运行                                             |
-| 验收未闭合                  | 配置迁移 smoke 曾出现辅助 live 选区文本滞后、Appearance `Unknown select option 'ash-dark'`，旧准备阶段的 App Server 文件访问 API 类型错误已通过重新生成协议解除；选区和 Appearance 场景仍须按 TODO 在当前 HEAD 复核，不能标作现存已复现故障或已通过 |
+| 范围                        | 已有证据与适用限制                                                                                                                                                                                                                              |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 配置文件与迁移              | 模型、文件 IPC、Sessions、Settings JSONC、层级边界和真实 Chromium 旧 IndexedDB 迁移已有定向验证，包含冲突、非法输入、中断重试；历史类型检查、构建与中英文回归不代表当前 HEAD 全部通过                                                           |
+| Workspace / Folder / Policy | 定向测试覆盖优先级、inspection、作用域、JSONC、切换、迟到读取、冲突与脏保护；系统 / 账户链和 Windows 固定注册表只读探测已有验证，macOS / Linux OS 来源及真实登录账户仍待验收                                                                    |
+| 快捷键录制                  | 保存一致性基线 `2cc6ab4e` 上通过 13 项 recorder 单测、macOS Web 7 项及 Electron 6 项严格场景，覆盖两段 / 四段、JSONC / 参数保留、立即重载、失败重试、中文、焦点与 pending-close；Windows / Linux 未运行                                         |
+| 配置迁移窗口复核            | 辅助 live 选区文本滞后已修复；缺失主题回退、已安装主题选择及文件更新／脏草稿／冲突场景已通过上方本批 Browser 与 macOS Desktop 验证。旧准备阶段的 App Server 文件访问 API 类型错误此前已通过重新生成协议解除；本批不扩展到其他 OS 或真实账号验收 |
 
 快捷键早期 Web 重载失败由 editor / backup owner 修复，原 recorder 场景与不打开 recorder 的对照随后通过；没有增加保存后等待备份删除或放宽文本断言。该批 Web / Electron 仍记录既有 Session catalog 与 syntax document 关闭期 console 错误，不能描述为所有 console 均无错误。
 
