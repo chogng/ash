@@ -3,11 +3,12 @@ import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { getErrorMessage, isCancellationError } from '../../../../base/common/errors.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import type { JsonValue } from '../../../../base/common/jsonValue.js';
+import type { PolicyValue } from '../../../../base/common/policy.js';
 import { IAccountService, type AccountState } from '../../../../platform/accounts/common/accountService.js';
 import { IGitHubService, GitHubError, GitHubErrorCode, type GitHubAccount } from '../../../../platform/github/common/githubService.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
-import { AbstractPolicyService, validatePolicyValues, type PolicyValue } from '../../../../platform/policy/common/policy.js';
+import { AbstractPolicyService, validatePolicyValues } from '../../../../platform/policy/common/policy.js';
 
 export type AccountPolicyRefreshState = {
 	readonly scope?: { readonly accountId: string; readonly host: string; readonly credentialRevision: bigint; };
