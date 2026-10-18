@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
 import { mock } from 'node:test';
-import { test } from 'mocha';
+import { suite, test } from 'mocha';
+import { DeferredPromise } from '../../../../base/common/async.js';
+import { isCancellationError } from '../../../../base/common/errors.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { VSBuffer } from '../../../../base/common/buffer.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import type { ISocket, SocketCloseEvent, SocketDiagnosticsEventType } from '../../../../base/parts/ipc/common/ipc.net.js';
 import { InstantiationService } from '../../../instantiation/common/instantiationService.js';
 import { ILogService, type LogEntry } from '../../../log/common/log.js';
@@ -226,4 +229,147 @@ test('a local restart during extension initialization completes only after fresh
 	assert.equal(client.generation, 2);
 	assert.equal(client.state, 'ready');
 	assert.equal(sockets[0].isDisposed, true);
+});
+
+suite('remote extension initialization retirement', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	for (const outcome of ['success', 'failure'] as const) {
+		test(`a local restart recovers before obsolete initialization returns ${outcome}`, async () => {
+			using services = new InstantiationService();
+			const errors: unknown[] = [];
+			using logger = new LogService({ sinks: [{ log: entry => { if (entry.error) errors.push(entry.error); } }] });
+			using localRestart = new Emitter<void>();
+			registerServices(services, logger);
+			const sockets: RemotePeer[] = [];
+			using registration = services.get(IRemoteSocketFactoryService).register(RemoteConnectionType.Managed, {
+				supports: () => true,
+				connect: async () => {
+					const socket = new RemotePeer();
+					sockets.push(socket);
+					return socket;
+				},
+			});
+			const entered = new DeferredPromise<void>();
+			const obsolete = new DeferredPromise<void>();
+			const fresh = new DeferredPromise<void>();
+			let initialized = 0;
+			using service = services.createInstance(RemoteAgentHostService, {
+				protocol: {},
+				getAddress: async () => ({ connectTo: new ManagedRemoteConnection(17), connectionToken: undefined }),
+				getMetadata: () => ({ protocolVersion: 1, workspaceId: 'remote', workspaceRoot: '/remote' }),
+				onDidReconnectLocal: localRestart.event,
+				initialize: async () => {
+					if (++initialized === 1) {
+						await entered.complete();
+						await obsolete.p;
+					} else {
+						await fresh.p;
+					}
+				},
+			} satisfies ConstructorParameters<typeof RemoteAgentHostService>[0]);
+			const connecting = service.connect();
+			void connecting.catch(() => { });
+			await entered.p;
+			localRestart.fire();
+			await new Promise<void>(resolve => setImmediate(resolve));
+			assert.equal(initialized, 2, 'fresh initialization must start without the obsolete reply');
+			assert.equal(service.whenConnected(), connecting);
+			assert.equal(service.recovery.status, 'recovering');
+			await fresh.complete();
+			await connecting;
+			if (outcome === 'success') { await obsolete.complete(); }
+			else { await obsolete.error(new Error('obsolete initialization failed')); }
+			await new Promise<void>(resolve => setImmediate(resolve));
+			assert.equal(service.client.state, 'ready');
+			assert.equal(service.client.generation, 2);
+			assert.equal(service.recovery.status, 'idle');
+			assert.deepEqual(errors, []);
+			assert.equal(sockets[0].isDisposed, true);
+			service.dispose();
+			assert.equal(sockets[1].isDisposed, true);
+			assert.equal(localRestart.hasListeners(), false);
+		});
+	}
+
+	test('transport loss during reinitialization releases the attempt so bounded recovery can retry', async () => {
+		mock.timers.enable({ apis: ['setTimeout'] });
+		try {
+			using services = new InstantiationService();
+			using logger = new LogService({ sinks: [] });
+			using localRestart = new Emitter<void>();
+			registerServices(services, logger);
+			const sockets: RemotePeer[] = [];
+			using registration = services.get(IRemoteSocketFactoryService).register(RemoteConnectionType.Managed, {
+				supports: () => true,
+				connect: async () => {
+					const socket = new RemotePeer();
+					sockets.push(socket);
+					return socket;
+				},
+			});
+			const entered = new DeferredPromise<void>();
+			const obsolete = new DeferredPromise<void>();
+			let initialized = 0;
+			using service = services.createInstance(RemoteAgentHostService, {
+				protocol: {},
+				getAddress: async () => ({ connectTo: new ManagedRemoteConnection(17), connectionToken: undefined }),
+				getMetadata: () => ({ protocolVersion: 1, workspaceId: 'remote', workspaceRoot: '/remote' }),
+				onDidReconnectLocal: localRestart.event,
+				initialize: async () => {
+					if (++initialized === 2) { await entered.complete(); await obsolete.p; }
+				},
+			} satisfies ConstructorParameters<typeof RemoteAgentHostService>[0]);
+			await service.connect();
+			localRestart.fire();
+			await entered.p;
+			const interrupted = assert.rejects(service.whenConnected(), isCancellationError);
+			sockets[1].end();
+			await interrupted;
+			assert.equal(service.recovery.status, 'recovering');
+			mock.timers.tick(100);
+			await service.whenConnected();
+			await obsolete.error(new Error('retired extension setup failed'));
+			await new Promise<void>(resolve => setImmediate(resolve));
+			assert.equal(initialized, 3);
+			assert.equal(service.client.generation, 3);
+			assert.equal(service.client.state, 'ready');
+			assert.equal(service.recovery.status, 'idle');
+			assert.deepEqual(sockets.map(socket => socket.isDisposed), [true, true, false]);
+		} finally { mock.timers.reset(); }
+	});
+
+	test('disposing during extension initialization rejects the connection wait before a late reply', async () => {
+		using services = new InstantiationService();
+		using logger = new LogService({ sinks: [] });
+		using localRestart = new Emitter<void>();
+		registerServices(services, logger);
+		const socket = new RemotePeer();
+		using registration = services.get(IRemoteSocketFactoryService).register(RemoteConnectionType.Managed, {
+			supports: () => true,
+			connect: async () => socket,
+		});
+		const entered = new DeferredPromise<void>();
+		const obsolete = new DeferredPromise<void>();
+		using service = services.createInstance(RemoteAgentHostService, {
+			protocol: {},
+			getAddress: async () => ({ connectTo: new ManagedRemoteConnection(17), connectionToken: undefined }),
+			getMetadata: () => ({ protocolVersion: 1, workspaceId: 'remote', workspaceRoot: '/remote' }),
+			onDidReconnectLocal: localRestart.event,
+			initialize: async () => { await entered.complete(); await obsolete.p; },
+		} satisfies ConstructorParameters<typeof RemoteAgentHostService>[0]);
+		let rejected = false;
+		const result = assert.rejects(service.connect(), error => {
+			rejected = true;
+			return isCancellationError(error);
+		});
+		await entered.p;
+		service.dispose();
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.equal(rejected, true, 'disposal must settle the wait independently of extension completion');
+		await result;
+		await obsolete.complete();
+		assert.equal(socket.isDisposed, true);
+		assert.equal(localRestart.hasListeners(), false);
+	});
 });

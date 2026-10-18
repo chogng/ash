@@ -3,9 +3,7 @@ import { localize } from '../../../nls.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { posix } from '../../../base/common/path.js';
 import { createFileSystemProviderError, FileSystemProviderErrorCode } from '../../files/common/files.js';
-import type { FsFileType, FsFileWriteMode, FsReadBinaryFileResult, FsReadDirectoryResult, ResourceMetadataResult, ResourceReadResult } from "../../../../../.build/protocol/typescript/index.js";
-import type { FsChanged, FsPathCaseSensitivity } from "../../../../../.build/protocol/typescript/index.js";
-import type { IResourceApi } from "./appServerApi.js";
+import type { IResourceApi, ResourceMetadataResult, ResourceReadResult } from "./appServerApi.js";
 import { AppServerRemoteError } from "./appServerError.js";
 import { decodeBase64, encodeBase64, VSBuffer } from "../../../base/common/buffer.js";
 import { Emitter, Event } from "../../../base/common/event.js";
@@ -43,6 +41,11 @@ import type { IFileApi, IFileSystemDirectory } from '../../files/common/fileApi.
 import type { ISystemFileTransferService } from '../../files/common/systemFileTransferService.js';
 import type { IWorkspaceConfigurationFileApi } from '../../workspace/common/workspaceIpc.js';
 
+type FileInvalidation = { readonly type: 'pathsChanged'; readonly dirId?: string; readonly paths: readonly string[]; }
+	| { readonly type: 'rescanRequired'; readonly dirId?: string; };
+type BinaryFile = Awaited<ReturnType<IFileApi['readBinaryFile']>>;
+type PathSensitivity = Awaited<ReturnType<IFileApi['readPathCaseSensitivity']>>['scopes'][number]['sensitivity'];
+
 interface AgentHostFileSystemProviderOptions {
 	readonly configurationFiles?: IWorkspaceConfigurationFileApi;
 	/** Current window-owned metadata file, independent of backend-authorized directory roots. */
@@ -51,12 +54,12 @@ interface AgentHostFileSystemProviderOptions {
 	readonly resourceApi: IResourceApi;
 	/** Environment roots known by the host, independent of the visible Explorer selection. */
 	readonly directories?: () => readonly IFileSystemDirectory[];
-	readonly onDidChange?: Event<FsChanged>;
+	readonly onDidChange?: Event<FileInvalidation>;
 }
 
 interface PathIdentityState {
 	readonly folder: IFileSystemDirectory;
-	readonly rules: Map<string, FsPathCaseSensitivity>;
+	readonly rules: Map<string, PathSensitivity>;
 	readonly requests: Map<string, Promise<void>>;
 	readonly retained: Map<string, { readonly resource: URI; users: number; }>;
 	epoch: number;
@@ -84,6 +87,7 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 	private readonly directoryRequests = new Map<string, Promise<IFileSystemDirectory>>();
 	private readonly fileChanges = this._register(new Emitter<IFileChangeEvent>());
 	private readonly reads = this._register(new DisposableMap<object, DisposableStore>());
+	private connectionEpoch = 0;
 
 	readonly onDidChangeFiles = this.fileChanges.event;
 
@@ -99,6 +103,8 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 		this.resourceApi = options.resourceApi;
 		this.directories = options.directories ?? (() => []);
 		this._register(this.api.onDidChangeConnection(() => {
+			this.connectionEpoch++;
+			this.reads.clearAndDisposeAll();
 			this.resolvedDirectories.clear();
 			this.directoryRequests.clear();
 			this.clearPathIdentity();
@@ -328,7 +334,7 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 	}
 
 	async readDirectory(resource: URI): Promise<readonly IFileEntry[]> {
-		let result: FsReadDirectoryResult;
+		let result: Awaited<ReturnType<IFileApi['readDirectory']>>;
 		try { result = await this.api.readDirectory(await this.fileTarget(resource)); }
 		catch (error) { if (isFileNotFound(error)) throw new FileNotFoundError(resource); throw error; }
 		return result.entries.map((entry) => ({
@@ -340,14 +346,31 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 
 	async readFile(resource: URI): Promise<IFileBytes> {
 		if (this.isConfiguration(resource)) return this.configurationFiles!.read(resource);
-		let result: FsReadBinaryFileResult;
-		try { result = await this.api.readBinaryFile(await this.fileTarget(resource)); }
+		const generation = this.resourceApi.connectionGeneration;
+		const epoch = this.connectionEpoch;
+		let result: BinaryFile;
+		try {
+			const target = await this.fileTarget(resource);
+			this.assertResourceConnection(generation, epoch);
+			result = await this.api.readBinaryFile(target);
+		}
 		catch (error) { if (isFileNotFound(error)) throw new FileNotFoundError(resource); throw error; }
 		try {
-			const bytes = await this.readResourceBytes(result.resource);
+			this.assertResourceConnection(generation, epoch);
+			const bytes = await this.readResourceBytes(result.resource, generation, epoch);
+			this.assertResourceConnection(generation, epoch);
 			return Object.freeze({ resource, bytes, revision: result.revision });
 		} finally {
-			await this.resourceApi.release({ resourceId: result.resource.resourceId });
+			// Closing a backend connection releases its resources. Opaque IDs from
+			// that lease must never be sent through a replacement connection.
+			try {
+				if (this.isCurrentResourceConnection(generation, epoch)) {
+					await this.resourceApi.release({ resourceId: result.resource.resourceId });
+				}
+			} finally {
+				// Release is asynchronous too; its obsolete result cannot complete the read.
+				this.assertResourceConnection(generation, epoch);
+			}
 		}
 	}
 
@@ -357,8 +380,7 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 			return { resource, content: new TextDecoder().decode(file.bytes), revision: file.revision, encoding: 'utf8' };
 		}
 		try {
-			const { candidateGuessEncodings, ...decoding } = options ?? {};
-			const result = await this.api.readFile({ ...await this.fileTarget(resource), encoding, ...decoding, ...(candidateGuessEncodings === undefined ? {} : { candidateGuessEncodings: candidateGuessEncodings.slice() }) });
+			const result = await this.api.readFile({ ...await this.fileTarget(resource), encoding, ...options });
 			return { resource, content: result.content, revision: result.revision, ...(result.encoding === undefined ? {} : { encoding: result.encoding }) };
 		} catch (error) {
 			if (isFileNotFound(error)) throw new FileNotFoundError(resource);
@@ -378,6 +400,8 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 			return stream;
 		}
 		const stream = newWriteableStream<Uint8Array>(null, { highWaterMark: 1 });
+		const generation = this.resourceApi.connectionGeneration;
+		const epoch = this.connectionEpoch;
 		const lifetime = new DisposableStore();
 		this.reads.set(lifetime, lifetime);
 		const cancellation = new CancellationTokenSource(token);
@@ -385,23 +409,34 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 		const destroy = stream.destroy;
 		stream.destroy = (): void => { this.reads.deleteAndDispose(lifetime); destroy(); };
 		void (async () => {
-			let snapshot: FsReadBinaryFileResult | undefined;
+			let snapshot: BinaryFile | undefined;
 			try {
 				if (cancellation.token.isCancellationRequested) { throw canceled(); }
 				// The allocation request has no backend cancel method; retain its late response so it can be released.
 				const known = this.knownDirectory(resource);
 				const target = known ? this.directoryTarget(known, resource) : await this.fileTarget(resource);
 				if (cancellation.token.isCancellationRequested) { throw canceled(); }
+				this.assertResourceConnection(generation, epoch);
 				snapshot = await this.api.readBinaryFile(target);
-				for await (const chunk of this.resourceChunks(snapshot.resource, options, cancellation.token)) {
+				this.assertResourceConnection(generation, epoch);
+				for await (const chunk of this.resourceChunks(snapshot.resource, options, cancellation.token, generation, epoch)) {
 					await raceCancellationError(Promise.resolve(stream.write(chunk)), cancellation.token);
 				}
 			} catch (error) {
 				stream.error(isFileNotFound(error) ? new FileNotFoundError(resource) : error instanceof Error ? error : new Error(String(error)));
 			} finally {
-				if (snapshot) {
-					try { await this.resourceApi.release({ resourceId: snapshot.resource.resourceId }); }
-					catch (error) { stream.error(error instanceof Error ? error : new Error(String(error))); }
+				if (snapshot && this.isCurrentResourceConnection(generation, epoch)) {
+					try {
+						await this.resourceApi.release({ resourceId: snapshot.resource.resourceId });
+						if (cancellation.token.isCancellationRequested) { throw canceled(); }
+						this.assertResourceConnection(generation, epoch);
+					} catch (error) {
+						if (cancellation.token.isCancellationRequested || !this.isCurrentResourceConnection(generation, epoch)) {
+							stream.error(canceled());
+						} else {
+							stream.error(error instanceof Error ? error : new Error(String(error)));
+						}
+					}
 				}
 				this.reads.deleteAndDispose(lifetime);
 				stream.end();
@@ -423,7 +458,7 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 			if (signal?.aborted) throw canceled();
 			return this.configurationFiles!.write(resource, typeof content === 'string' ? new TextEncoder().encode(content) : content, options);
 		}
-		let mode: FsFileWriteMode;
+		let mode: NonNullable<Parameters<IFileApi['writeFile']>[0]['options']>['mode'];
 		if (options.create) mode = options.overwrite ? 'createOrReplace' : 'create';
 		else if (options.overwrite) mode = 'replace';
 		else throw new FileOperationNotSupportedError(resource, 'writeFile');
@@ -569,20 +604,28 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 		return this.configurationFiles !== undefined && this.configuration()?.toString() === resource.toString();
 	}
 
-	private async readResourceBytes(resource: ResourceMetadataResult): Promise<Uint8Array> {
+	private isCurrentResourceConnection(generation: number, epoch: number): boolean {
+		return generation === this.resourceApi.connectionGeneration && epoch === this.connectionEpoch;
+	}
+
+	private assertResourceConnection(generation: number, epoch: number): void {
+		if (this.isDisposed || !this.isCurrentResourceConnection(generation, epoch)) { throw canceled(); }
+	}
+
+	private async readResourceBytes(resource: ResourceMetadataResult, generation: number, epoch: number): Promise<Uint8Array> {
 		if (!Number.isSafeInteger(resource.size) || resource.size < 0 || resource.size > MAX_FILE_READ_BYTES) {
 			throw new Error("Workspace binary resource size is invalid");
 		}
 		const bytes = new Uint8Array(resource.size);
 		let offset = 0;
-		for await (const chunk of this.resourceChunks(resource, {}, CancellationToken.None)) {
+		for await (const chunk of this.resourceChunks(resource, {}, CancellationToken.None, generation, epoch)) {
 			bytes.set(chunk, offset);
 			offset += chunk.byteLength;
 		}
 		return bytes;
 	}
 
-	private async *resourceChunks(resource: ResourceMetadataResult, options: IFileReadStreamOptions, token: CancellationToken): AsyncIterable<Uint8Array> {
+	private async *resourceChunks(resource: ResourceMetadataResult, options: IFileReadStreamOptions, token: CancellationToken, generation: number, epoch: number): AsyncIterable<Uint8Array> {
 		if (!Number.isSafeInteger(resource.size) || resource.size < 0 || resource.size > MAX_FILE_READ_BYTES) {
 			throw new Error('Workspace binary resource size is invalid');
 		}
@@ -591,6 +634,7 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 		const end = Math.min(resource.size, options.length === undefined ? resource.size : offset + options.length);
 		while (offset < end) {
 			if (token.isCancellationRequested) { throw canceled(); }
+			this.assertResourceConnection(generation, epoch);
 			const maxBytes = Math.min(MAX_RESOURCE_READ_BYTES, end - offset);
 			const chunk = await this.resourceApi.read({
 				resourceId: resource.resourceId,
@@ -598,6 +642,7 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 				maxBytes,
 			});
 			if (token.isCancellationRequested) { throw canceled(); }
+			this.assertResourceConnection(generation, epoch);
 			const chunkBytes = decodeResourceChunk(chunk, resource.resourceId, offset, resource.size);
 			if (chunkBytes.byteLength > maxBytes) { throw new Error('Workspace binary resource response exceeds the requested range'); }
 			offset += chunkBytes.byteLength;
@@ -606,7 +651,7 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 		if (token.isCancellationRequested) { throw canceled(); }
 	}
 
-	private acceptFileChange(change: FsChanged): void {
+	private acceptFileChange(change: FileInvalidation): void {
 		// File events retire earlier observations without discarding facts held by open documents.
 		const folders = [...this.directories(), ...this.resolvedDirectories.values()];
 		const matches = (folder: IFileSystemDirectory): boolean => folder.target.type === 'environment' && folder.target.dirId === change.dirId;
@@ -666,7 +711,7 @@ function decodeResourceChunk(chunk: ResourceReadResult, resourceId: string, expe
 	return bytes;
 }
 
-function fileKind(fileType: FsFileType): FileKind {
+function fileKind(fileType: Awaited<ReturnType<IFileApi['getMetadata']>>['fileType']): FileKind {
 	switch (fileType) {
 		case "directory":
 			return FileKind.Directory;

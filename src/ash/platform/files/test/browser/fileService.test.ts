@@ -20,7 +20,7 @@ import { TestWorkspaceService } from "../../../../workbench/services/configurati
 import { createSshRemoteWorkspaceUri } from "../../../../platform/remote/common/remote.js";
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { WorkspaceWatcher } from '../../../../workbench/contrib/files/browser/workspaceWatcher.js';
-import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
+import { CancellationToken, CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { consumeStream } from '../../../../base/common/stream.js';
 import { DeferredPromise } from '../../../../base/common/async.js';
 import { CancellationError } from '../../../../base/common/errors.js';
@@ -309,6 +309,90 @@ test('workspace stream cancellation stops requesting chunks and releases its sna
 	stream.on('data', () => cancellation.cancel());
 	await assert.rejects(consumeStream(stream), CancellationError);
 	assert.deepEqual({ requested, released }, { requested: [0], released: ['chunks'] });
+});
+
+suite('AgentHost file resource connection ownership', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	for (const mode of ['bytes', 'stream'] as const) {
+		for (const stage of ['allocation', 'chunk', 'release'] as const) {
+			for (const replacement of [false, true]) {
+				test(`${mode} discards a late ${stage} after ${replacement ? 'connection replacement' : 'close without a generation change'}`, async () => {
+					using changed = new Emitter<void>();
+					const entered = new DeferredPromise<void>();
+					const finish = new DeferredPromise<void>();
+					let generation = 1;
+					const requested: number[] = [];
+					const released: number[] = [];
+					using provider = new AgentHostFileSystemProvider({
+						directories: () => [{ uri: URI.file('/project'), target: { type: 'environment', dirId: 'root' } }],
+						api: {
+							...unavailableFileApi(),
+							get connectionGeneration() { return generation; },
+							onDidChangeConnection: changed.event,
+							readBinaryFile: async () => {
+								if (stage === 'allocation') { await entered.complete(); await finish.p; }
+								return { resource: { resourceId: 'reused-id', mimeType: 'application/pdf', size: 1, sha256: 'sha256:old' }, revision: 'old' };
+							},
+						},
+						resourceApi: {
+							get connectionGeneration() { return generation; },
+							metadata: async () => { throw new Error('Unexpected metadata read'); },
+							read: async ({ resourceId, offset }) => {
+								requested.push(generation);
+								if (stage === 'chunk') { await entered.complete(); await finish.p; }
+								return { resourceId, offset, dataBase64: 'QQ==', decodedLength: 1, eof: true };
+							},
+							release: async () => {
+								released.push(generation);
+								if (stage === 'release') { await entered.complete(); await finish.p; }
+							},
+						},
+					});
+					const resource = URI.file('/project/paper.pdf');
+					const reading = mode === 'bytes' ? provider.readFile(resource) : consumeStream(provider.readFileStream(resource, {}, CancellationToken.None));
+					const rejected = assert.rejects(reading, CancellationError);
+					await entered.p;
+					if (replacement) generation++;
+					changed.fire();
+					await finish.complete();
+					await rejected;
+					assert.deepEqual({ requested, released }, {
+						requested: stage === 'allocation' ? [] : [1],
+						released: stage === 'release' ? [1] : [],
+					});
+				});
+			}
+		}
+
+		for (const retired of [false, true]) {
+			test(`${mode} ${retired ? 'cancels an obsolete' : 'preserves a current'} resource release failure`, async () => {
+				using changed = new Emitter<void>();
+				const entered = new DeferredPromise<void>();
+				const finish = new DeferredPromise<void>();
+				const failure = new Error('Resource release failed');
+				using provider = new AgentHostFileSystemProvider({
+					directories: () => [{ uri: URI.file('/project'), target: { type: 'environment', dirId: 'root' } }],
+					api: {
+						...unavailableFileApi(),
+						onDidChangeConnection: changed.event,
+						readBinaryFile: async () => ({ resource: { resourceId: 'empty', mimeType: 'application/pdf', size: 0, sha256: 'sha256:empty' }, revision: 'old' }),
+					},
+					resourceApi: {
+						...unavailableResourceApi(),
+						release: async () => { await entered.complete(); await finish.p; throw failure; },
+					},
+				});
+				const resource = URI.file('/project/empty.pdf');
+				const reading = mode === 'bytes' ? provider.readFile(resource) : consumeStream(provider.readFileStream(resource, {}, CancellationToken.None));
+				const rejected = assert.rejects(reading, error => retired ? error instanceof CancellationError : error === failure);
+				await entered.p;
+				if (retired) { changed.fire(); }
+				await finish.complete();
+				await rejected;
+			});
+		}
+	}
 });
 
 test("AgentHostFileSystemProvider maps App Server revision conflicts to the file contract", async () => {

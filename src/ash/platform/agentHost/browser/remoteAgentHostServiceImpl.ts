@@ -1,3 +1,5 @@
+import { raceCancellationError } from '../../../base/common/async.js';
+import { throwIfCancelled } from '../../../base/common/cancellation.js';
 import type { Event } from '../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { IInstantiationService } from '../../instantiation/common/instantiation.js';
@@ -63,7 +65,14 @@ export class RemoteAgentHostService extends Disposable {
 				await this.client.connect();
 				this.assertNotDisposed();
 				if (localConnectionEpoch !== this.localConnectionEpoch) continue;
-				await this.options.initialize(this.client);
+				const initialization = new AbortController();
+				using subscription = this.client.onStateChange((state, error) => {
+					if (state !== 'ready') initialization.abort(error);
+				});
+				// Extension setup may outlive its socket. Retiring that socket must
+				// release recovery even if the old extension callback never settles.
+				await raceCancellationError(this.options.initialize(this.client), initialization.signal);
+				throwIfCancelled(initialization.signal);
 				this.assertNotDisposed();
 				if (localConnectionEpoch !== this.localConnectionEpoch) continue;
 				this.logService.debug('app-server', 'Remote App Server connection initialized');

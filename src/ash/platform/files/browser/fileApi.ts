@@ -66,7 +66,10 @@ export function createAppServerFileApi(connection: AppServerProtocolClient): IFi
 		},
 		getMetadata: (params) => appServerRequest(connection, "fs/getMetadata", params),
 		readDirectory: (params) => appServerRequest(connection, "fs/readDirectory", params),
-		readFile: (params) => appServerRequest(connection, "fs/readFile", params),
+		readFile: ({ candidateGuessEncodings, ...params }) => appServerRequest(connection, "fs/readFile", {
+			...params,
+			...(candidateGuessEncodings === undefined ? {} : { candidateGuessEncodings: [...candidateGuessEncodings] }),
+		}),
 		readBinaryFile: (params) => appServerRequest(connection, "fs/readBinaryFile", params),
 		writeFile: (params) => appServerRequest(connection, "fs/writeFile", params),
 		writeBinaryFile: (params) => appServerRequest(connection, "fs/writeBinaryFile", params),

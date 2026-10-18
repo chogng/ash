@@ -55,6 +55,7 @@ import { createRemoteConnectionApi } from "../../platform/remote/electron-browse
 import { SSH_REMOTE_INITIALIZE_TIMEOUT_MS } from '../../platform/remote/common/remote.js';
 import type { IWorkspaceTrustRequestService } from '../../platform/workspace/common/workspaceTrust.js';
 import { InstantiationService } from '../../platform/instantiation/common/instantiationService.js';
+import { CancellationError } from '../../base/common/errors.js';
 
 export type ElectronRendererCapabilityContribution = (client: AppServerProtocolClient, appServer: Parameters<RendererCapabilityContribution>[1], localClient: AppServerProtocolClient) => ReturnType<RendererCapabilityContribution>;
 
@@ -151,7 +152,10 @@ export async function createElectronRendererApi(contributions: readonly Electron
 					getMetadata: () => localConnection.connectionMetadata,
 					onDidReconnectLocal: localConnection.onDidReconnect,
 					initialize: async remoteClient => {
-						windowExtensions = await initializeRemoteExtensions(createAppServerExtensionHostApi(remoteClient), remoteConnection.authority);
+						const generation = remoteClient.generation;
+						const extensions = await initializeRemoteExtensions(createAppServerExtensionHostApi(remoteClient), remoteConnection.authority);
+						if (remoteClient.generation !== generation || remoteClient.state !== 'ready') { throw new CancellationError(); }
+						windowExtensions = extensions;
 					},
 				} satisfies ConstructorParameters<typeof RemoteAgentHostService>[0]));
 				connection = remote;

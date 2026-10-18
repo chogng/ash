@@ -1100,6 +1100,43 @@ test('a failed post-create subscription retries the same command and uses its ex
 	});
 });
 
+for (const rootState of ['missing', 'archived'] as const) {
+	test(`post-create ${rootState} root releases its detail lease before retrying the same creation`, async () => {
+		const fake = sessionHost([]);
+		const commands: string[] = [];
+		fake.host.session.create = async params => {
+			commands.push(params.commandId);
+			const created = fake.sessions[0] ?? session('durable', 'atomic-root');
+			if (fake.sessions.length === 0) fake.sessions.push(created);
+			return { session: created, agentTree: { roots: [] } };
+		};
+		const subscribe = fake.host.session.subscribe;
+		let first = true;
+		fake.host.session.subscribe = async params => {
+			const result = await subscribe(params);
+			if (!first) return result;
+			first = false;
+			return {
+				...result,
+				session: { ...result.session, threads: rootState === 'missing' ? [] : result.session.threads.map(thread => ({ ...thread, status: 'archived' as const })) },
+			};
+		};
+		const released: string[] = [];
+		fake.host.session.unsubscribe = async params => { released.push(params.sessionId); };
+		using provider = createProvider(fake);
+		await assert.rejects(provider.create('New', { type: 'current' }, undefined, 'creation'), /missing|new session has no active chat/i);
+		assert.deepEqual(released, ['durable']);
+		await provider.unsubscribe('durable');
+		assert.deepEqual(released, ['durable'], 'the failed creation must relinquish its lease');
+		const retried = await provider.create('New', { type: 'current' }, undefined, 'creation');
+		assert.deepEqual({ commands, sessions: fake.sessions.length, thread: retried.threadId }, {
+			commands: ['desktop-session-creation', 'desktop-session-creation'], sessions: 1, thread: 'atomic-root',
+		});
+		await provider.unsubscribe('durable');
+		assert.deepEqual(released, ['durable', 'durable']);
+	});
+}
+
 test('a Session creation response from a replaced connection cannot acquire details on the new connection', async () => {
 	const fake = sessionHost([]);
 	let release!: (value: Awaited<ReturnType<IAgentSessionService['create']>>) => void;

@@ -243,19 +243,20 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 			await this.unsubscribe(created.session.sessionId);
 			throw new Error(localize('sessions.create.noActiveChat', 'The new session has no active chat.'));
 		}
-		let session: ISession;
 		try {
-			session = await this.subscribe(toSession(created.session));
+			const session = await this.subscribe(toSession(created.session));
+			this.assertCurrentConnection(generation, epoch);
+			if (!session.chats.some(candidate => candidate.threadId === root.threadId && candidate.status === "active")) {
+				throw new Error(localize('sessions.create.noActiveChat', 'The new session has no active chat.'));
+			}
+			// First-Turn defaults belong to ChatService; the catalog only reports durable facts.
+			return { session, threadId: root.threadId };
 		} catch (error) {
+			// Hydration can race a root's removal or archival after atomic creation.
+			// Every failed preparation releases its lease while retaining the durable Session for retry.
 			if (generation === this.appServer.connectionGeneration && epoch === this.connectionEpoch) await this.unsubscribe(created.session.sessionId);
 			throw error;
 		}
-		this.assertCurrentConnection(generation, epoch);
-		if (!session.chats.some(candidate => candidate.threadId === root.threadId && candidate.status === "active")) {
-			throw new Error(`Created Thread is missing from subscribed Session snapshot: ${root.threadId}`);
-		}
-		// First-Turn defaults belong to ChatService; the catalog only reports durable facts.
-		return { session, threadId: root.threadId };
 	}
 
 	async setModel(model: ModelRef): Promise<void> {
