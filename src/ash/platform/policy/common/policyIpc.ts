@@ -1,7 +1,8 @@
 import { Emitter, type Event } from '../../../base/common/event.js';
 import { DisposableStore } from '../../../base/common/lifecycle.js';
 import type { IChannel, IServerChannel } from '../../../base/parts/ipc/common/ipc.js';
-import { AbstractPolicyService, validatePolicyDefinitions, validatePolicyValues, type IPolicyService, type PolicyValue } from './policy.js';
+import type { PolicyValue } from '../../../base/common/policy.js';
+import { AbstractPolicyService, validatePolicyDefinitions, validatePolicyValues, type IPolicyService } from './policy.js';
 
 /** Exposes definition registration and read-only policy snapshots through trusted Main IPC. */
 export class PolicyChannel implements IServerChannel {

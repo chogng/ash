@@ -6,6 +6,7 @@ import { localize } from '../../../nls.js';
 import type { JsonValue } from '../../../base/common/jsonValue.js';
 import { Registry } from '../../registry/common/platform.js';
 import type { PolicyDefinition } from '../../policy/common/policy.js';
+import type { IManagedSettingPolicyDefinition } from '../../../base/common/policy.js';
 
 type ConfigurationPolicy = Omit<PolicyDefinition, 'type'> & { readonly name: string; readonly minimumVersion?: string; };
 
@@ -264,7 +265,7 @@ function registeredPolicy(value: unknown, defaultValue: unknown, existing: Itera
 		throw new TypeError(localize('configuration.contributedValue', "Setting '{0}' does not match its declared schema.", 'policy'));
 	}
 	if (policy.value !== undefined && typeof policy.value !== 'function') throw new TypeError('Invalid account policy mapping');
-	const managedSettings: Record<string, { type: 'string' | 'number' | 'boolean'; }> = {};
+	const managedSettings: Record<string, IManagedSettingPolicyDefinition> = {};
 	if (policy.managedSettings !== undefined) {
 		if (!policy.managedSettings || typeof policy.managedSettings !== 'object' || Array.isArray(policy.managedSettings) || Object.keys(policy.managedSettings).length > 128) throw new TypeError('Invalid managed setting definitions');
 		for (const [path, definition] of Object.entries(policy.managedSettings)) {

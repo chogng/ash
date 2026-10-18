@@ -5,8 +5,9 @@ import type { AccountState, IAccountService } from '../../../../../platform/acco
 import { createDisconnectedGitHubService } from '../../../../../platform/github/browser/appServerGitHubService.js';
 import type { GitHubAccount, IGitHubService } from '../../../../../platform/github/common/githubService.js';
 import type { JsonValue } from '../../../../../base/common/jsonValue.js';
+import type { PolicyValue } from '../../../../../base/common/policy.js';
 import { NullLoggerService } from '../../../../../platform/log/common/log.js';
-import { AbstractPolicyService, type PolicyDefinition, type PolicyValue } from '../../../../../platform/policy/common/policy.js';
+import { AbstractPolicyService, type PolicyDefinition } from '../../../../../platform/policy/common/policy.js';
 import { MultiplexPolicyService } from '../../../../../platform/policy/common/multiplexPolicyService.js';
 import { ConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { PolicyConfiguration } from '../../../../../platform/configuration/common/configurations.js';

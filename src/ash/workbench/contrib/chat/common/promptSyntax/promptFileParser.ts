@@ -1,8 +1,8 @@
-import { isAlias, isMap, isNode, isScalar, isSeq, parseDocument, type Node } from 'yaml';
 import { localize } from '../../../../../nls.js';
 import { marked, type Token } from '../../../../../base/common/marked/marked.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { Schemas } from '../../../../../base/common/network.js';
+import { parse, type YamlNode, type YamlParseError } from '../../../../../base/common/yaml.js';
 import { Range } from '../../../../../editor/common/core/range.js';
 
 /** Keeps the exact document and separates its Markdown body for readonly snapshot consumers. */
@@ -137,7 +137,7 @@ export class PromptFileParser {
 	}
 }
 
-/** Converts the library AST without resolving aliases, tags or arbitrary JavaScript objects. */
+/** Applies Skill limits and editor coordinates to the shared YAML syntax tree. */
 function parseHeader(uri: URI, source: string, offset: number, end: number, range: Range, closed: boolean): PromptHeader {
 	const attributes: IHeaderAttribute[] = [];
 	const errors: ParseError[] = [];
@@ -171,28 +171,37 @@ function parseHeader(uri: URI, source: string, offset: number, end: number, rang
 		});
 		return new PromptHeader(range, uri, attributes, errors);
 	}
-	const convert = (node: Node | null | undefined, depth: number): IValue => {
-		const nodeRange = at(node?.range?.[0] ?? 0, node?.range?.[1] ?? 0);
-		if (depth > 8 || isAlias(node) || node?.tag || (node && 'anchor' in node && node.anchor)) {
+	const unsupported = new Set<string>();
+	const convert = (node: YamlNode | undefined, depth: number): IValue => {
+		const start = node?.startOffset ?? 0;
+		const end = node?.endOffset ?? 0;
+		const nodeRange = at(start, end);
+		if (depth > 8 || unsupported.has(`${start}:${end}`)) {
 			errors.push({ code: 'unsupportedYaml', range: nodeRange, message: localize('prompt.syntax.unsupported', 'Skill headers do not support YAML aliases, anchors, tags or deeply nested values.') });
 			return { type: 'scalar', value: '', format: 'none', range: nodeRange };
 		}
-		if (isMap(node)) return {
-			type: 'map', range: nodeRange, properties: node.items.flatMap(pair => {
-				const key = convert(isNode(pair.key) ? pair.key : undefined, depth + 1);
-				return key.type === 'scalar' ? [{ key, value: convert(isNode(pair.value) ? pair.value : undefined, depth + 1) }] : [];
+		if (node?.type === 'map') return {
+			type: 'map', range: nodeRange, properties: node.properties.flatMap(pair => {
+				const key = convert(pair.key, depth + 1);
+				return key.type === 'scalar' ? [{ key, value: convert(pair.value, depth + 1) }] : [];
 			})
 		};
-		if (isSeq(node)) return { type: 'sequence', range: nodeRange, items: node.items.map(item => convert(isNode(item) ? item : undefined, depth + 1)) };
-		const format = isScalar(node) ? ({ QUOTE_SINGLE: 'single', QUOTE_DOUBLE: 'double', BLOCK_LITERAL: 'literal', BLOCK_FOLDED: 'folded', PLAIN: 'none' } as const)[node.type ?? 'PLAIN'] : 'none';
-		return { type: 'scalar', value: isScalar(node) ? String(node.value ?? '') : '', format, range: nodeRange, ...(isScalar(node) && node.type === 'PLAIN' && ['', '~', 'null', 'Null', 'NULL'].includes(String(node.value ?? '')) ? { missing: true } : {}) };
+		if (node?.type === 'sequence') return { type: 'sequence', range: nodeRange, items: node.items.map(item => convert(item, depth + 1)) };
+		return { type: 'scalar', value: node?.value ?? '', format: node?.format ?? 'none', range: nodeRange, ...(node?.format === 'none' && ['', '~', 'null', 'Null', 'NULL'].includes(node.value) ? { missing: true } : {}) };
 	};
 	try {
-		const document = parseDocument(text, { schema: 'failsafe', prettyErrors: false, stringKeys: true });
-		for (const error of [...document.errors, ...document.warnings]) {
-			errors.push({ code: error.code, range: at(error.pos[0], error.pos[1]), message: localize('prompt.syntax.invalidYaml', 'Invalid YAML in the Skill header ({0}).', error.code) });
+		const syntaxErrors: YamlParseError[] = [];
+		const syntax = parse(text, syntaxErrors);
+		for (const error of syntaxErrors) {
+			if (error.code === 'YAML_ALIAS' || error.code === 'YAML_TAG' || error.code === 'YAML_ANCHOR') {
+				// Report unsupported syntax only when the bounded Skill traversal reaches
+				// its placeholder; deeper nodes remain behind the existing depth limit.
+				unsupported.add(`${error.startOffset}:${error.endOffset}`);
+			} else {
+				errors.push({ code: error.code, range: at(error.startOffset, error.endOffset), message: localize('prompt.syntax.invalidYaml', 'Invalid YAML in the Skill header ({0}).', error.code) });
+			}
 		}
-		const root = convert(document.contents, 0);
+		const root = convert(syntax, 0);
 		if (root.type === 'map') {
 			for (const property of root.properties) attributes.push({ key: property.key.value, keyRange: property.key.range, range: Range.fromPositions(property.key.range.getStartPosition(), property.value.range.getEndPosition()), value: property.value });
 		} else if (text.trim()) {

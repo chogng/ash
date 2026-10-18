@@ -4,11 +4,10 @@ import { equals } from '../../../base/common/objects.js';
 import type { IStringDictionary } from '../../../base/common/collections.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 import type { IPolicyData } from '../../../base/common/defaultAccount.js';
+import type { IManagedSettingPolicyDefinition, IManagedSettingsPolicyDefinitions, PolicyValue } from '../../../base/common/policy.js';
 
-export type PolicyValue = string | number | boolean;
-export interface PolicyDefinition {
-	readonly type: 'string' | 'number' | 'boolean';
-	readonly managedSettings?: Readonly<Record<string, { readonly type: 'string' | 'number' | 'boolean'; }>>;
+export interface PolicyDefinition extends IManagedSettingPolicyDefinition {
+	readonly managedSettings?: IManagedSettingsPolicyDefinitions;
 	readonly value?: (data: IPolicyData) => PolicyValue | undefined;
 }
 

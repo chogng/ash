@@ -100,3 +100,38 @@ test('YAML key ranges preserve quoted colons and missing scalars independently f
 	const metadata = header.getAttribute('metadata')!.value;
 	assert.equal(metadata.type === 'map' && metadata.properties[0].value.type === 'scalar' && metadata.properties[0].value.missing, undefined);
 });
+
+test('Prompt YAML keeps null-like scalars distinct from quoted values and unsupported syntax', () => {
+	const content = '---\r\nempty:\r\nnullValue: null\r\ntilde: ~\r\nquotedEmpty: ""\r\nquotedNull: \'null\'\r\ntagged: !!str null\r\nanchored: &name plain\r\nalias: *name\r\n---';
+	const header = new PromptFileParser().parse(URI.file('/work/SKILL.md'), content).header!;
+	const values = header.attributes.map(attribute => attribute.value);
+	assert.deepEqual(values.map(value => value.type === 'scalar' ? [value.value, value.format, value.missing] : undefined), [
+		['', 'none', true], ['null', 'none', true], ['~', 'none', true],
+		['', 'double', undefined], ['null', 'single', undefined],
+		['', 'none', undefined], ['', 'none', undefined], ['', 'none', undefined],
+	]);
+	assert.deepEqual(header.errors.filter(error => error.code === 'unsupportedYaml').map(error => error.range.startLineNumber), [7, 8, 9]);
+	assert.deepEqual(header.getAttribute('quotedEmpty')!.value.range, new Range(5, 14, 5, 16));
+});
+
+test('Prompt YAML applies its eight-level limit without exposing deeper syntax placeholders', () => {
+	const parser = new PromptFileParser();
+	const uri = URI.file('/work/SKILL.md');
+	const header = (nested: string) => parser.parse(uri, `---\nmetadata: ${nested}\n---`).header!;
+	const within = header('['.repeat(7) + 'leaf' + ']'.repeat(7));
+	assert.deepEqual(within.errors, []);
+	for (const count of [8, 9]) {
+		for (const leaf of ['leaf', '*missing', '!!str tagged']) {
+			const exceeded = header('['.repeat(count) + leaf + ']'.repeat(count));
+			assert.equal(exceeded.errors.filter(error => error.code === 'unsupportedYaml').length, 1, leaf);
+			const value = exceeded.getAttribute('metadata')!.value;
+			let current = value;
+			for (let depth = 0; depth < 8; depth++) {
+				assert.equal(current.type, 'sequence');
+				if (current.type !== 'sequence') throw new Error('Expected sequence');
+				current = current.items[0]!;
+			}
+			assert.deepEqual(current.type === 'scalar' && [current.value, current.missing], ['', undefined]);
+		}
+	}
+});

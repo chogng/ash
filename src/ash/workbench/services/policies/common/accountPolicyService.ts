@@ -2,10 +2,11 @@ import { CancellationTokenSource } from '../../../../base/common/cancellation.js
 import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { getErrorMessage, isCancellationError } from '../../../../base/common/errors.js';
 import type { JsonValue } from '../../../../base/common/jsonValue.js';
+import type { PolicyValue } from '../../../../base/common/policy.js';
 import type { IAccountService, AccountState } from '../../../../platform/accounts/common/accountService.js';
 import type { IGitHubService, GitHubAccount } from '../../../../platform/github/common/githubService.js';
 import type { ILogService } from '../../../../platform/log/common/log.js';
-import { AbstractPolicyService, validatePolicyValues, type PolicyValue } from '../../../../platform/policy/common/policy.js';
+import { AbstractPolicyService, validatePolicyValues } from '../../../../platform/policy/common/policy.js';
 
 /** Account identity and credentials belong to the provider; this service owns only UI policy resolution. */
 export class AccountPolicyService extends AbstractPolicyService {

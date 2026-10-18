@@ -1,4 +1,5 @@
-import { AbstractPolicyService, type IPolicyService, type PolicyValue } from './policy.js';
+import type { PolicyValue } from '../../../base/common/policy.js';
+import { AbstractPolicyService, type IPolicyService } from './policy.js';
 
 /** The first defined source wins. Desktop registers system policy before account policy. */
 export class MultiplexPolicyService extends AbstractPolicyService {
